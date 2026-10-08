@@ -116,7 +116,7 @@ try {
     const gone = await race(pg.evaluate(() => { const sp = document.getElementById('splash'); return !sp || sp.classList.contains('gone'); })).catch(() => false);
     if (ready && gone) break; await new Promise((r) => setTimeout(r, 250)); }
   const net = await race(pg.evaluate(() => ({ joined: !!globalThis.EW?.net?.joined, you: globalThis.EW?.net?.myId, role: globalThis.EW?.net?.myRights?.role })));
-  if (!check(`boot: the client finishes booting into the world, as its ${AS === 'Ann' ? 'owner' : 'visitor'}`, !!ready && net.joined && net.role === (AS === 'Ann' ? 'owner' : 'visitor'), { ready, net, errors: errors.slice(0, 3), tail: logs.slice(-5) })) throw new Error('boot gate failed');
+  if (!check(`boot: the client finishes booting into the world, as its ${AS === 'Ann' ? 'owner' : 'visitor'}`, !!ready && net.joined && net.role === (AS === 'Ann' ? 'owner' : 'visitor'), { ready, net, http4xx: http4xx.slice(0, 8), errors: errors.slice(0, 3), tail: logs.slice(-5) })) throw new Error('boot gate failed');
   // see
   let seen = false; for (let i = 0; i < 40 && !seen; i++) { seen = (await ents()).includes('crate-before'); if (!seen) await new Promise((r) => setTimeout(r, 250)); }
   check('see: the crate created through the authority before the visit is realized', seen, await ents());
@@ -265,7 +265,7 @@ try {
     await press('mouseup');
     const up = await gwait(() => (globalThis.EW.comps.get('hose')?.flowing === false && !globalThis.EW.physics.fx().includes('hose')) ? { flowing: false, fx: globalThis.EW.physics.fx(), use: globalThis.EW.myState.useHeld ?? null } : null, null, 20000);
     const acts5 = readLog(readFileSync(join(worlds, 'garden', 'world.jsonl'))).filter((e) => e.kind === 'act' && e.verb === 'use' && e.body?.request?.id === 'hose').map((e) => `${e.body.held?.phase}:${e.body.action}`);
-    check('grab: use while held: the left button on her hose is use.down (the authority sets it flowing; its fx draws while pressed), letting go is use.up (one act each)', h5?.ok && down && up && JSON.stringify(acts5) === '["down:spray","up:stop"]', { mk5: mk5?.ok ?? mk5?.refused, h5: h5?.ok ?? h5?.refused, down, up, acts5 });
+    check('grab: use while held: the left button on her hose is use.down (the authority sets it flowing; its fx draws while pressed), letting go is use.up (one act each)', h5?.ok && down && up && JSON.stringify(acts5) === '["down:spray","up:stop"]', { mk5: mk5?.ok ? true : (mk5?.refused ?? mk5), h5: h5?.ok ?? h5?.refused, down, up, acts5 });
     // (5b) review 10-06: put down with the button still pressed: the up goes anyway (the authority takes it from whoever
     //      pressed down) and the press stops riding her presence
     await race(pg.evaluate(() => globalThis.EW.physics.grab('hose')), 20000).catch(() => null); await gwait(() => !!globalThis.EW.physics.holds().hose);
@@ -274,6 +274,41 @@ try {
     const late = await gwait(() => (globalThis.EW.comps.get('hose')?.flowing === false && !globalThis.EW.myState.useHeld && !globalThis.EW.physics.fx().includes('hose')) ? true : null, null, 20000);
     await press('mouseup');
     check('grab: …and put down with the button still pressed, the up goes anyway: it stops flowing, its fx and her presence let go', late === true, { late, flowing: await gev(() => globalThis.EW.comps.get('hose')?.flowing).catch(() => null) });
+    // (5c) R 10-08: a held thing with NO use throws on the left button (HL2's hands): a CLICK in the cursor camera, a press
+    //      in mouselook; a left DRAG stays the camera's and throws nothing
+    const me5c = await gev(() => globalThis.EW.me().root.position.toArray());
+    const mk5c = await gdoor('create', { id: 'pebble', model: MODEL, components: { transform: { pos: [me5c[0] + 0.5, 0, me5c[2] - 0.4], scale: [0.04, 0.04, 0.04] }, grabbable: { who: 'visitor' }, physics: { kind: 'dynamic' } } });
+    await gwait((i) => !!globalThis.EW.entities.get(i), 'pebble');
+    // (the probe's garden runs physics, so a throw FLIES: an act:throw and a sim:launch, not a put)
+    const mouse = (type, x = 640, y = 360) => gev(([type, x, y]) => { const c = globalThis.EW.renderer.domElement; const o = { button: 0, buttons: type === 'mouseup' ? 0 : 1, bubbles: true, cancelable: true, clientX: x, clientY: y };
+      (type === 'mousedown' ? c : window).dispatchEvent(new MouseEvent(type, o)); return true; }, [type, x, y]);
+    const pebbleLog = (id = 'pebble') => readLog(readFileSync(join(worlds, 'garden', 'world.jsonl'))).filter((e) => JSON.stringify(e.body ?? e.args ?? {}).includes(`"${id}"`)).map((e) => `${e.kind}:${e.verb}${e.kind === "act" ? `[${Object.keys(e.body?.request ?? {}).join(",")}|${e.body?.how ?? ""}]` : ""}`).slice(-6);
+    const throws5c = (id = 'pebble') => readLog(readFileSync(join(worlds, 'garden', 'world.jsonl'))).filter((e) => e.kind === 'act' && e.verb === 'throw' && e.body?.request?.id === id && Array.isArray(e.body?.request?.v)).length;
+    const grab5c = async (id = 'pebble') => { for (let i = 0; i < 4; i++) {   // after a throw it's in flight: grab once it has come to rest
+      await race(pg.evaluate((id) => globalThis.EW.physics.grab(id), id), 20000).catch(() => null);
+      if (await gwait((id) => (globalThis.EW.physics.holds()[id] ? true : null), id, 15000).catch(() => null)) return true; await gsleep(500); } return null; };
+    const g5c = await grab5c(); const n5c0 = throws5c();
+    await mouse('mousedown'); for (let i = 1; i <= 4; i++) await mouse('mousemove', 640 + i * 15, 360); await mouse('mouseup', 700, 360);
+    await gsleep(1500);
+    const dragged = { throws: throws5c() - n5c0, held: await gev(() => !!globalThis.EW.physics.holds().pebble) };
+    await gev(() => { const c = globalThis.EW.renderer.domElement; const o = { button: 0, bubbles: true, cancelable: true, clientX: 640, clientY: 360 };
+      c.dispatchEvent(new MouseEvent('mousedown', { ...o, buttons: 1 })); window.dispatchEvent(new MouseEvent('mouseup', { ...o, buttons: 0 })); return true; });   // one click, as a real one arrives (the slow page's round trips would outlast CLICK_MS)
+    const clicked = await gwait(() => (!globalThis.EW.physics.holds().pebble ? true : null), null, 20000).catch(() => null);
+    const n5c1 = throws5c();
+    check('grab: a held thing with no use: a left DRAG stays the camera\'s (still held, nothing thrown); a left CLICK throws it (one throw act)', mk5c?.ok && g5c && dragged.throws === 0 && dragged.held && clicked && n5c1 - n5c0 === 1, { mk5c: mk5c?.ok ?? mk5c?.refused, dragged, clicked, throws: n5c1 - n5c0, log: pebbleLog() });
+    // a fresh thing (its own id): grabbing the one just thrown races her page's own landing of its flight, which drops the
+    // hold locally (thingphysics 'pose' change on a held id; finding 10-08, reported separately — not what this checks)
+    const mk5c2 = await gdoor('create', { id: 'pebble2', model: MODEL, components: { transform: { pos: [me5c[0] + 0.5, 0, me5c[2] - 0.4], scale: [0.04, 0.04, 0.04] }, grabbable: { who: 'visitor' }, physics: { kind: 'dynamic' } } });
+    await gwait((i) => !!globalThis.EW.entities.get(i), 'pebble2');
+    const g5c2 = await grab5c('pebble2');
+    await gev(() => { const c = globalThis.EW.renderer.domElement; Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => c }); return true; });
+    await mouse('mousedown');
+    const locked5c = await gwait(() => (!globalThis.EW.physics.holds().pebble2 ? true : null), null, 20000).catch(() => null);
+    let thrownL = 0; for (let i = 0; i < 40 && (thrownL = throws5c('pebble2')) < 1; i++) await gsleep(250);   // the act lands on disk a beat after the hand empties
+    await mouse('mouseup');
+    await gev(() => { delete document.pointerLockElement; return document.pointerLockElement ?? null; });
+    check('grab: …and in mouselook the left PRESS throws it (no click-or-drag wait: the camera follows the mouse there, not a drag)', g5c2 && locked5c && thrownL === 1, { g5c2, locked5c, throws: thrownL, log: pebbleLog('pebble2') });
+    await gdoor('remove', { id: 'pebble' }); await gdoor('remove', { id: 'pebble2' });
     // (6) the presence tier from someone else: Bob presses use on the nozzle he holds (his pose carries use; nothing is
     //     logged), and Ann's page draws its fx until his pose stops carrying it
     const BP6 = [me5[0] + 2.5, 0, me5[2] + 1];

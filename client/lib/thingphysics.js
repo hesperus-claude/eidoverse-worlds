@@ -493,6 +493,21 @@ if (typeof document !== 'undefined') {
     e.stopImmediatePropagation(); e.preventDefault(); void useHeld('down');
   }, true);
   addEventListener('mouseup', (e) => { if (e.button === 0 && pressing) void useHeld('up'); }, true);
+  // a held thing with NO use throws on the left button (HL2's hands; R 10-08). Mouselook: the press throws. The cursor
+  // camera: left-drag is the camera, so only a CLICK throws — released within CLICK_PX and CLICK_MS of the press.
+  const CLICK_PX = 5, CLICK_MS = 350;
+  let propDown = null;
+  const heldProp = () => (myHolds().length && !usable() ? myHolds()[0] : null);
+  addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || e.target?.tagName !== 'CANVAS' || hooks?.editing?.() || !replica.active || !heldProp()) return;
+    if (document.pointerLockElement === e.target) { e.stopImmediatePropagation(); e.preventDefault(); void throwHeld(); return; }
+    propDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  }, true);
+  addEventListener('mouseup', (e) => {
+    if (e.button !== 0 || !propDown) return;
+    const d = propDown; propDown = null;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) <= CLICK_PX && performance.now() - d.t <= CLICK_MS && heldProp()) void throwHeld();
+  }, true);
   // the phone's action button: shown while I hold something usable, labelled with what it does
   let btn = null;
   const sync = () => { const box = document.getElementById('touchbtns'); if (!box || !document.body.classList.contains('touch')) return;
