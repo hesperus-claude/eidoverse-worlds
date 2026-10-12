@@ -66,6 +66,7 @@ const store = new Map<string, string>();
 };
 
 const stub: any = await import('./lod-client-stub.mjs');
+const Mat: any = await import('../client/lib/realize/materialise.js');
 const M: any = await import('../client/lib/realize/models.js');
 const S: any = await import('../client/lib/state.js');
 const { emptyState } = await import('../shared/fold.js');
@@ -121,6 +122,10 @@ stub.camera.position.set(0, 0, 0);
   spawnAt('light', 70, false);   // far, but the sequencer has no variant — its "already light" refusal answers the original
   await settle();
   check('three placements realized', res().real === 3, JSON.stringify(res()));
+  // pretty loading (hep/pretty-loading): a thing that just arrived is tiny and growing; after the grow it wears its scale exactly
+  check('a thing that just arrived is (almost) nothing and growing (realize/materialise.js)', obj('near')?.scale.x < 0.01 && Mat.isGrowing(obj('near')), String(obj('near')?.scale.x));
+  Mat.drainMaterialise(performance.now() + 10_000);
+  check('…and after the grow it wears its own scale exactly', obj('near')?.scale.x === 1 && !Mat.isGrowing(obj('near')), String(obj('near')?.scale.x));
   check('near (5m) asked FULL — a plain ktx2 fetch', loadsOf('near')[0]?.tier === 'full' && loadsOf('near')[0]?.url === `${lib('near')}?ktx2=4`, loadsOf('near')[0]?.url);
   check('far (70m) asked LOD — the recipe rides the ktx2 negotiation on the wire', loadsOf('far')[0]?.tier === 'lod' && loadsOf('far')[0]?.url === `${lib('far')}?ktx2=4&lod=${enc}`, loadsOf('far')[0]?.url);
   check('far wears the served lod: asked lod, served lod', obj('far')?.userData.tierAsked === 'lod' && obj('far')?.userData.tier === 'lod');
@@ -148,6 +153,7 @@ stub.camera.position.set(0, 0, 0);
   check('"full detail" re-tiers far in place: a FULL load, the old lod proto released, the new object worn',
     last?.tier === 'full' && obj('far') !== farBefore && obj('far')?.userData.tierAsked === 'full'
     && stub.released.includes(`${lib('far')}#lod`), JSON.stringify({ last, retiers: res().retiers }));
+  check('…and a re-tier of a thing already on screen does NOT grow again (it keeps its full size at once)', obj('far')?.scale.x === 1 && !Mat.isGrowing(obj('far')), String(obj('far')?.scale.x));
   // light wore the original already, but its ASK was lod — under "full detail" the ask must be full,
   // so it re-asks once (a plain ktx2 fetch), and that is also how a provisional answer picks up a
   // later bake: the ask flips, the wire asks again. Two re-tiers: far and light.

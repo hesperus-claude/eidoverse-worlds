@@ -18,6 +18,7 @@ import { presence } from './lib/presence.js';
 import { initWorldQuad } from './lib/worldquad.js';
 import { foldParity } from './lib/parity.js';
 import { initModelsRealizer, reconcileModels, residencyDebug, setResidencyFocus, drainPromoteTail } from './lib/realize/models.js';
+import { drainMaterialise } from './lib/realize/materialise.js';
 import { initEnvironmentRealizer } from './lib/realize/environment.js';
 import { initSocialRealizer } from './lib/realize/social.js';
 import { initStructureRealizer } from './lib/realize/structure.js';
@@ -589,6 +590,7 @@ initPlates({ camera, canvas, scene, remotes, myPos: () => (getMe() ? myState.pos
 registerSystem('plates', (dt, t, now) => updatePlates(now));
 registerSystem('build', () => updateBuild());
 registerSystem('promote-tail', () => drainPromoteTail());        // §16.2.C: promote
+registerSystem('materialise', () => drainMaterialise());         // things that just arrived grow into place
                                  // boulders (colliders/lamps/casters/mount
                                  // re-checks) land ≤~4ms/frame, not six in one;
                                  // before 'debug' so F3 sees same-frame colliders

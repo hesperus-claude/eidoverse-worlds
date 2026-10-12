@@ -23,6 +23,7 @@
 
 import { THREE, scene, camera } from '../core.js';
 import { report, bus } from '../base.js';
+import { materialise, isGrowing, retarget } from './materialise.js';
 import { loadGLB, retainGLB, releaseGLB, evictIdleProtos, lodRecipeReady, gpuPressure,
   lodNegotiable, negotiationReady } from '../assets.js';
 import { makeModelQuality, chooseTier } from '../lod_policy.js';
@@ -291,6 +292,7 @@ function teardownRealized(id, obj) {
 
 function realizeModel(id, cur, obj) {
   const stand = entities.get(id);
+  const firstSight = !stand || isPlaceholder(stand);   // a tier swap of a thing already on screen keeps its size; a first arrival grows in
   if (stand && (isPlaceholder(stand) || stand.userData?.lib)) {
     // durable children attach to placeholders by design (execMount takes any
     // truthy parent) — step them out BEFORE the stand's subtree is removed,
@@ -331,6 +333,7 @@ function realizeModel(id, cur, obj) {
   entities.set(id, obj);
   entityMeta.set(id, { actor: cur.actor, lib: cur.lib, ts: cur.ts, ...(cur.placer ? { placer: cur.placer } : {}) });
   scene.add(obj);
+  if (firstSight) materialise(obj);   // grows into place over ~half a second (realize/materialise.js)
   bus.emit('entity', { id, kind: 'spawn' });
   // comps that folded while the GLB was in flight (or that rode the
   // snapshot) announce now — emitters and panels attach off these events
@@ -461,7 +464,7 @@ function refreshModel(id, ent) {
     if (ent.yaw != null) obj.rotation.y = ent.yaw;
     obj.userData.base = { pos: obj.position.toArray(), yaw: obj.rotation.y };
   }
-  if (ent.scale != null) obj.scale.setScalar(ent.scale);
+  if (ent.scale != null) { if (isGrowing(obj)) retarget(obj, new THREE.Vector3(ent.scale, ent.scale, ent.scale)); else obj.scale.setScalar(ent.scale); }   // an edit mid-grow sets where the grow ends
   if (!isPlaceholder(obj) && obj.userData.tier !== 'lod') refitCollider(id);   // placeholders and lod tiers own no collider
   bus.emit('entity', { id, kind: 'place' });
 }
