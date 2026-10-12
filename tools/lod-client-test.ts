@@ -123,9 +123,12 @@ stub.camera.position.set(0, 0, 0);
   await settle();
   check('three placements realized', res().real === 3, JSON.stringify(res()));
   // pretty loading (hep/pretty-loading): a thing that just arrived is tiny and growing; after the grow it wears its scale exactly
-  check('a thing that just arrived is (almost) nothing and growing (realize/materialise.js)', obj('near')?.scale.x < 0.01 && Mat.isGrowing(obj('near')), String(obj('near')?.scale.x));
-  Mat.drainMaterialise(performance.now() + 10_000);
-  check('…and after the grow it wears its own scale exactly', obj('near')?.scale.x === 1 && !Mat.isGrowing(obj('near')), String(obj('near')?.scale.x));
+  // pretty loading (hep/pretty-loading): a thing that just arrived is DRAWN growing; its true scale is never touched
+  check('a thing that just arrived is marked growing while its TRUE scale is already its own (1)', obj('near')?.scale.x === 1 && Mat.isGrowing(obj('near')), String(obj('near')?.scale.x));
+  Mat.beginDraw(); const drawnScale = obj('near')?.scale.x; Mat.endDraw();
+  check('…drawn small right now, and back to 1 the moment the draw ends', drawnScale < 1 && obj('near')?.scale.x === 1, `${drawnScale} → ${obj('near')?.scale.x}`);
+  Mat.beginDraw(performance.now() + 10_000); Mat.endDraw();
+  check('…and after 450 ms it is no longer growing', !Mat.isGrowing(obj('near')) && obj('near')?.scale.x === 1, String(obj('near')?.scale.x));
   check('near (5m) asked FULL — a plain ktx2 fetch', loadsOf('near')[0]?.tier === 'full' && loadsOf('near')[0]?.url === `${lib('near')}?ktx2=4`, loadsOf('near')[0]?.url);
   check('far (70m) asked LOD — the recipe rides the ktx2 negotiation on the wire', loadsOf('far')[0]?.tier === 'lod' && loadsOf('far')[0]?.url === `${lib('far')}?ktx2=4&lod=${enc}`, loadsOf('far')[0]?.url);
   check('far wears the served lod: asked lod, served lod', obj('far')?.userData.tierAsked === 'lod' && obj('far')?.userData.tier === 'lod');

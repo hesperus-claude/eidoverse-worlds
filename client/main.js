@@ -18,7 +18,7 @@ import { presence } from './lib/presence.js';
 import { initWorldQuad } from './lib/worldquad.js';
 import { foldParity } from './lib/parity.js';
 import { initModelsRealizer, reconcileModels, residencyDebug, setResidencyFocus, drainPromoteTail } from './lib/realize/models.js';
-import { drainMaterialise } from './lib/realize/materialise.js';
+import { beginDraw as materialiseBegin, endDraw as materialiseEnd } from './lib/realize/materialise.js';
 import { initEnvironmentRealizer } from './lib/realize/environment.js';
 import { initSocialRealizer } from './lib/realize/social.js';
 import { initStructureRealizer } from './lib/realize/structure.js';
@@ -590,7 +590,6 @@ initPlates({ camera, canvas, scene, remotes, myPos: () => (getMe() ? myState.pos
 registerSystem('plates', (dt, t, now) => updatePlates(now));
 registerSystem('build', () => updateBuild());
 registerSystem('promote-tail', () => drainPromoteTail());        // §16.2.C: promote
-registerSystem('materialise', () => drainMaterialise());         // things that just arrived grow into place
                                  // boulders (colliders/lamps/casters/mount
                                  // re-checks) land ≤~4ms/frame, not six in one;
                                  // before 'debug' so F3 sees same-frame colliders
@@ -600,7 +599,9 @@ registerSystem('send-pose', (dt, t, now) => sendPose(now));
 registerSystem('xr', (dt) => updateXR(dt));
 registerSystem('xrvignette', (dt) => tickXRVignette(dt));   // comfort tunnel, on the XR camera (Settings › VR)
 registerSystem('pixel-ratio', () => applyPendingPixelRatio());   // a resize clears the canvas: before the draw, never after
+registerSystem('materialise-draw', () => materialiseBegin());   // things that just arrived are DRAWN growing: eased scale on, draw, off
 registerSystem('render', renderWorld);
+registerSystem('materialise-undraw', () => materialiseEnd());   // …true scale back before anyone reads it
 registerSystem('xrmirror', () => tickXRMirror());           // desktop view while presenting (Settings › VR)
 // radial-menu actions: the ring speaks through the same flows the keyboard does
 bus.on('xr:sit', () => { if (!xrTrySitOn(null)) setPosture('sit'); });
