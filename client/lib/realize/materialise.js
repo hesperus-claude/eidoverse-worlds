@@ -30,12 +30,20 @@ export function beginDraw(now = performance.now()) {
 
 /** Right after the draw: the true scale is back before anyone else reads it. */
 export function endDraw() {
+  for (const obj of watched) { if (obj.parent) obj.userData.drawnOnce = true; }
+  watched.clear();
   for (const [obj, g] of growing) {
     if (!g.saved) continue;
     obj.scale.copy(g.saved); g.saved = null;
     obj.updateMatrixWorld(true);   // the draw propagated the eased matrix into matrixWorld (self and children): put the true one back
   }
 }
+
+/** A stand-in (placeholder) to watch: after the next draw it has been seen. Lets a real thing replacing a ghost the
+ *  visitor saw take its place at full size, while one replacing a ghost that never reached a draw grows in. */
+const watched = new Set();
+export function watchDrawn(obj) { if (obj) watched.add(obj); }
+export const wasDrawn = (obj) => obj?.userData?.drawnOnce === true;
 
 /** True while obj is still growing (tests; nothing in the client needs to ask, since the true scale is always there). */
 export const isGrowing = (obj) => growing.has(obj);

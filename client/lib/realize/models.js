@@ -23,7 +23,7 @@
 
 import { THREE, scene, camera } from '../core.js';
 import { report, bus } from '../base.js';
-import { materialise } from './materialise.js';
+import { materialise, wasDrawn, watchDrawn } from './materialise.js';
 import { loadGLB, retainGLB, releaseGLB, evictIdleProtos, lodRecipeReady, gpuPressure,
   lodNegotiable, negotiationReady } from '../assets.js';
 import { makeModelQuality, chooseTier } from '../lod_policy.js';
@@ -80,6 +80,7 @@ function makePlaceholder(id, ent, g) {
   grp.add(mesh);
   grp.userData.entityId = id;
   grp.userData.placeholder = true;
+  watchDrawn(grp);   // after its first draw the ghost has been seen (realize/materialise.js: decides whether the real thing grows in)
   grp.userData.noCamCollide = true;
   grp.position.set(...(ent.pos ?? [0, 0, 0]));
   grp.rotation.y = ent.yaw ?? 0;
@@ -292,7 +293,10 @@ function teardownRealized(id, obj) {
 
 function realizeModel(id, cur, obj) {
   const stand = entities.get(id);
-  const firstSight = !stand || isPlaceholder(stand);   // a tier swap of a thing already on screen keeps its size; a first arrival grows in
+  // a thing arriving where nothing has been SEEN grows in: nothing stood there, or a placeholder that never reached a
+  // draw. One replacing a 'coming' ghost the visitor has seen takes the ghost's place at full size — a ghost collapsing
+  // to nothing and regrowing is the opposite of R's wish (review S2.5). A tier swap of a thing already drawn keeps its size.
+  const firstSight = !stand || (isPlaceholder(stand) && !wasDrawn(stand));
   if (stand && (isPlaceholder(stand) || stand.userData?.lib)) {
     // durable children attach to placeholders by design (execMount takes any
     // truthy parent) — step them out BEFORE the stand's subtree is removed,

@@ -129,6 +129,13 @@ stub.camera.position.set(0, 0, 0);
   check('…drawn small right now, and back to 1 the moment the draw ends', drawnScale < 1 && obj('near')?.scale.x === 1, `${drawnScale} → ${obj('near')?.scale.x}`);
   Mat.beginDraw(performance.now() + 10_000); Mat.endDraw();
   check('…and after 450 ms it is no longer growing', !Mat.isGrowing(obj('near')) && obj('near')?.scale.x === 1, String(obj('near')?.scale.x));
+  // a ghost the visitor has SEEN is replaced at full size (review S2.5: a seen ghost collapsing to nothing and regrowing
+  // is the opposite of the wish); the load is held across one draw by stalling the loader
+  { stub.setHold(true); spawnAt('seen', 6); await settle();
+    check('(setup) a sized placeholder stands in while the load is held', obj('seen')?.userData?.placeholder === true, String(obj('seen')?.userData?.placeholder));
+    Mat.beginDraw(); Mat.endDraw();   // one draw with the ghost on screen
+    stub.setHold(false); for (const h of stub.held.splice(0)) h.release(); await settle();
+    check('the real thing replacing a ghost the visitor saw does NOT grow (it takes the ghost\'s place at full size)', obj('seen')?.userData?.lib && !Mat.isGrowing(obj('seen')), String(Mat.isGrowing(obj('seen')))); }
   check('near (5m) asked FULL — a plain ktx2 fetch', loadsOf('near')[0]?.tier === 'full' && loadsOf('near')[0]?.url === `${lib('near')}?ktx2=4`, loadsOf('near')[0]?.url);
   check('far (70m) asked LOD — the recipe rides the ktx2 negotiation on the wire', loadsOf('far')[0]?.tier === 'lod' && loadsOf('far')[0]?.url === `${lib('far')}?ktx2=4&lod=${enc}`, loadsOf('far')[0]?.url);
   check('far wears the served lod: asked lod, served lod', obj('far')?.userData.tierAsked === 'lod' && obj('far')?.userData.tier === 'lod');
