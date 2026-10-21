@@ -305,3 +305,5 @@ docs/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pi
   - readback act:*: {"fields":["request.label","request.id","request.component","request (a physics-engine build it typed)"],"unknown":"no label match; an unknown chooser of an engine build is the owner's: never restamped"} → {"fields":["request.label","request.id","request.component","request (a physics-engine version it typed)"],"unknown":"no label match; an unknown chooser of an engine version is the owner's: never restamped"}
 - 2026-10-22: normative: nothing-to-reset also covers a reset whose every target is skipped (each skip says why) or that names none
   - refusal nothing-to-reset: {"meaning":"everything is already home","when":"a reset whose targets are all at home"} → {"meaning":"nothing was reset: every target was already home or was skipped, each skip saying why","when":"a reset whose targets are all at home or all skipped, or that names none"}
+- 2026-10-25: video promoted from reserved to trial (projector design revision 2, approved by Mica 2026-10-20): a live stream from an operator-admitted source id
+  - video: status reserved → trial
