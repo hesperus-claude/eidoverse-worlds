@@ -247,3 +247,4 @@ docs/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pi
   - station.who: type string → any
   - physics.who: type string → any
   - grabbable.who: type string → any
+- 2026-10-21: video promoted from reserved to trial (projector design revision 2, approved by Mica 2026-10-20): a live stream from an operator-admitted source id
