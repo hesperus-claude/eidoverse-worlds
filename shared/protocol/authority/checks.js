@@ -12,6 +12,7 @@ import * as TR from "../sculpt.js";
 import * as R from "../roles.js";
 import { graphemes, cleanText } from "../../text.js";
 import { mediaTier } from "../../mediasrc.js";
+import { sourceIdProblem, isAdmittedSource, admittedSources } from "../../video.js";
 import { instanceProblem, ESSENTIAL_NAMES, LEGACY_FIELDS } from "../../particle_effects.js";
 import { worldPose } from "../simlayer.js";
 import { trustRefusal } from "../../drafts.js";
@@ -146,7 +147,7 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
       if (h.kind === "reset") { const gone = h.targets.filter((t) => !s.entities[t]); if (gone.length) refuse("not-found", `reactions.${act} (reset) names ${gone.join(", ")}, which ${gone.length > 1 ? "aren't" : "isn't"} here`, "", { didYouMean: guess(gone[0], Object.keys(s.entities)) }); }
       if (h.kind === "script" && !(typeof h.script === "string" && isComponent(`script:${h.script}`))) refuse("shape", `reactions.${act} (script) names the script: {kind: 'script', script: '<name>'} for the script:<name> on this thing`, "e.g. {ring: {kind: 'script', script: 'bell'}}");
       handlerCheck(at, act, h); effectCheck(s, id, act, h); } }
-  mediaCheck(s, id, comp, v, at, obj);
+  mediaCheck(s, id, comp, v, at, obj, carry);
   // a held kind (componentspec reservedKinds: terrain's raster, shape audit 10-16) is refused as reserved, in its own words
   if (comp === "terrain" && obj && !carry && Object.hasOwn(COMPONENTS.terrain.reservedKinds, v.kind)) refuse("reserved", `${at}.kind '${v.kind}' is reserved: ${COMPONENTS.terrain.reservedKinds[v.kind]}`, "terrain {kind: 'noise', seed, size, amplitude, …}; an image as the base is heightmap {grid, min, max}", { status: "reserved" });
   // the first protocol's particles bag (preset, origin, count…): its fields left the registry (shape audit 10-16), so say today's
@@ -174,12 +175,19 @@ const LOOK_WORDS = ["@viewer", "@nearest"];
 const ROTATING = new Set(["pendulum", "spin"]);
 const isLookAt = (k) => k === "look-at" || k.startsWith("look-at:");
 const nodeOf = (k, v) => (k.includes(":") ? k.slice(k.indexOf(":") + 1) : k === "motion" && typeof v?.part === "string" ? v.part : null);   // null = the whole thing
-function mediaCheck(s, id, comp, v, at, obj) {
+function mediaCheck(s, id, comp, v, at, obj, carry = false) {
   // where a picture's or a sound's bytes may come from (shared/mediasrc.js): this server's store, or an https link to a
   // public host. Who may FETCH a link is each viewer's browser's question (clientMayFetch); the authority refuses what nobody may
   if ((comp === "picture" || comp === "sound") && obj && v.src !== undefined) { const t = mediaTier(v.src, comp === "picture" ? "image" : "audio");
     if (t.tier === "bad") refuse("shape", `${at}.src: ${t.why}`, t.fix); }
-  if (comp === "sound" && obj && isNum(v.near) && isNum(v.radius) && v.near > v.radius) refuse("bounds", `${at}.near (${v.near}) is past radius (${v.radius})`, "near is where it's at full volume; radius is where it goes silent");
+  // a video's source is an id the operator admitted on THIS server (shared/video.js): the door refuses one it hasn't, so no
+  // world names a stream nobody here can serve. A fork's copy carries the value as written (carry): the copy keeps its
+  // bag, and a server that doesn't admit the id shows the screen's honest fallback instead of losing it
+  if (comp === "video" && obj && v.source !== undefined) { const bad = sourceIdProblem(v.source);
+    if (bad) refuse("shape", `${at}.source: ${bad}`, "schema {component: 'video'}");
+    if (!carry && !isAdmittedSource(v.source)) { const ids = admittedSources();
+      refuse("not-found", `${at}.source '${v.source}' isn't a stream this server's operator admitted`, ids.length ? `admitted here: ${ids.join(", ")}` : "this server admits no video sources yet: its operator lists them in the source registry", { didYouMean: guess(v.source, ids) }); } }
+  if ((comp === "sound" || comp === "video") && obj && isNum(v.near) && isNum(v.radius) && v.near > v.radius) refuse("bounds", `${at}.near (${v.near}) is past radius (${v.radius})`, "near is where it's at full volume; radius is where it goes silent");
   if (comp === "story" && obj && Array.isArray(v.marks)) { const seen = new Set();
     for (const m of v.marks) { if (typeof m !== "string") refuse("shape", `${at}.marks holds thing ids (strings)`, "");
       if (m === id) refuse("loop", `${id}'s story can't mark ${id} itself`, "marks names other things: what this one commemorates");
@@ -354,6 +362,8 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
   // a field's grammar narrows its pinned type (physics.shape is `any` in every value ever stored): spec/PHYSICS.md §3.1
   for (const [k, g] of Object.entries(def.grammar ?? {})) if (v[k] !== undefined && g === "sha256" && !(typeof v[k] === "string" && /^sha256:[0-9a-f]{64}$/.test(v[k])))
     refuse("shape", `${at}.${k} must be a content hash sha256:<64 hex>, got ${JSON.stringify(v[k]).slice(0, 40)}`, def.help);
+  for (const [k, g] of Object.entries(def.grammar ?? {})) if (v[k] !== undefined && g === "source-id") { const why = sourceIdProblem(v[k]);
+    if (why) refuse("shape", `${at}.${k}: ${why}`, def.help); }
   for (const [k, g] of Object.entries(def.grammar ?? {})) if (v[k] !== undefined && g === "shape") { const why = shapeError(v[k]);
     if (why) refuse("shape", `${at}.${k}: ${why}`, "PHYSICS §3.1: a box [[min], [max]] or {type: sphere|capsule|cylinder|box|convex|mesh|compound, …}; the authority stamps it from the model"); }
   for (const [k, r] of Object.entries(def.ranges ?? {})) { const x = v[k]; if (x === undefined) continue;
