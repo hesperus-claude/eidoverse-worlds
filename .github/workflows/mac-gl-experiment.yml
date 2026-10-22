@@ -56,7 +56,7 @@ jobs:
         env:
           EIDOVERSE_DIR: ${{ runner.temp }}/eidoverse-video
           EIDO_CHROME_ARGS: ${{ matrix.args }}
-                  run: |
+        run: |
           mkdir -p /tmp/g; export TMPDIR=/tmp/g
           sysctl -n machdep.cpu.brand_string hw.ncpu || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -20 || true
