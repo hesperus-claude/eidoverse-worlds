@@ -13,10 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arm: default,     args: "" }
-          - { arm: metal,       args: "--use-angle=metal" }
-          - { arm: swiftshader, args: "--use-angle=swiftshader --enable-unsafe-swiftshader" }
-          - { arm: swiftshader-small, args: "--use-angle=swiftshader --enable-unsafe-swiftshader --force-device-scale-factor=0.5" }
+          - { arm: default-lane-1, args: "" }
+          - { arm: default-lane-2, args: "" }
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -53,17 +51,15 @@ jobs:
           pin=$(grep -oE 'LIBRARY_PIN = "[0-9a-f]{40}"' tools/protocol/run.ts | grep -oE '[0-9a-f]{40}')
           git clone --filter=blob:none https://github.com/SkyeShark/eidoverse-video.git "$RUNNER_TEMP/eidoverse-video"
           git -C "$RUNNER_TEMP/eidoverse-video" checkout "$pin"
-      - name: client suite (${{ matrix.arm }})
+      - name: browser lane (${{ matrix.arm }})
         shell: bash
         env:
           EIDOVERSE_DIR: ${{ runner.temp }}/eidoverse-video
           EIDO_CHROME_ARGS: ${{ matrix.args }}
-          CDP_CALL_MS: "600000"
-          PROTOCOL_TIMEOUT_SCALE: "4"
-        run: |
+                  run: |
           mkdir -p /tmp/g; export TMPDIR=/tmp/g
           sysctl -n machdep.cpu.brand_string hw.ncpu || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -20 || true
-          start=$(date +%s); bun tools/protocol/run.ts client || true; echo "ARM ${{ matrix.arm }} took $(( $(date +%s) - start )) s"
+          start=$(date +%s); bun tools/protocol/run.ts --lane browser || true; echo "ARM ${{ matrix.arm }} took $(( $(date +%s) - start )) s"
           grep -h -oE '\[jank\] [0-9]+ms[^"]{0,140}' /tmp/g/eido-gate-*/**/*.jsonl 2>/dev/null | sort -t' ' -k2 -nr | head -15 || true
           grep -h -iE "gpu|angle|swiftshader|metal|webgl" /tmp/g/eido-gate-*/**/browser.stderr.log 2>/dev/null | head -20 || true
