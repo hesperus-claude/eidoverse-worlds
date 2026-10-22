@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arm: vsync-fixed-1, args: "" }
-          - { arm: vsync-fixed-2, args: "" }
+          - { arm: vsync-only, args: "--disable-gpu-vsync" }
+          - { arm: frame-limit-only, args: "--disable-frame-rate-limit" }
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
