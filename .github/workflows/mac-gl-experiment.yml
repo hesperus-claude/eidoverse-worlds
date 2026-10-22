@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arm: default-lane-1, args: "" }
-          - { arm: default-lane-2, args: "" }
+          - { arm: plain, args: "" }
+          - { arm: no-throttle, args: "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows" }
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -60,6 +60,17 @@ jobs:
           mkdir -p /tmp/g; export TMPDIR=/tmp/g
           sysctl -n machdep.cpu.brand_string hw.ncpu || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -20 || true
-          start=$(date +%s); bun tools/protocol/run.ts --lane browser || true; echo "ARM ${{ matrix.arm }} took $(( $(date +%s) - start )) s"
+          cat > /tmp/fps.mjs <<'JS'
+          const { scratchBench } = await import(process.cwd() + "/tools/harness.ts");
+          const b = await scratchBench("fpsprobe", {});
+          for (let i = 0; i < 40; i++) { const ok = await b.evalJson(`!!document.querySelector('.sec')`).catch(() => false); if (ok) break; await new Promise((r) => setTimeout(r, 500)); }
+          await new Promise((r) => setTimeout(r, 4000));
+          const out = await b.evalJson(`import('/lib/perf.js').then((m) => ({ fps: m.perf.fps, frameNo: m.perf.frameNo, hidden: document.hidden, vis: document.visibilityState, focus: document.hasFocus() }))`);
+          const out2 = await (async () => { await new Promise((r) => setTimeout(r, 2000)); return b.evalJson(`import('/lib/perf.js').then((m) => ({ fps: m.perf.fps, frameNo: m.perf.frameNo }))`); })();
+          console.log("FPSPROBE", JSON.stringify({ arm: "${{ matrix.arm }}", out, out2 }));
+          await b.cleanup(0); process.exit(0);
+          JS
+          bun /tmp/fps.mjs || true
+          STAGES=FC bun tools/protocol/shiplist-probe.ts 2>&1 | grep -E "FC[0-9a-z]* |passed" || true
           grep -h -oE '\[jank\] [0-9]+ms[^"]{0,140}' /tmp/g/eido-gate-*/**/*.jsonl 2>/dev/null | sort -t' ' -k2 -nr | head -15 || true
           grep -h -iE "gpu|angle|swiftshader|metal|webgl" /tmp/g/eido-gate-*/**/browser.stderr.log 2>/dev/null | head -20 || true
