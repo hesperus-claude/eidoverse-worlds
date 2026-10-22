@@ -4,7 +4,7 @@
 name: mac-gl-experiment
 on:
   push:
-    branches: [exp/mac-gl]
+    branches: [exp/mac-gl, exp/mac-structural]
 permissions:
   contents: read
 jobs:
