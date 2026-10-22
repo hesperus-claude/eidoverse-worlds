@@ -14,7 +14,8 @@ jobs:
       matrix:
         include:
           - { arm: plain, args: "" }
-          - { arm: no-throttle, args: "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows" }
+          - { arm: no-vsync, args: "--disable-gpu-vsync --disable-frame-rate-limit" }
+          - { arm: begin-frame, args: "--disable-gpu-vsync --disable-frame-rate-limit --enable-begin-frame-control" }
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -60,6 +61,6 @@ jobs:
           mkdir -p /tmp/g; export TMPDIR=/tmp/g
           sysctl -n machdep.cpu.brand_string hw.ncpu || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -20 || true
-          FC_RAF=1 bun tools/protocol/shiplist-probe.ts 2>&1 | grep -E "RAFPROBE|FC[0-9a-z]* |shiplist-probe\] [0-9]" || true
+          STAGES=FC FC_RAF=1 bun tools/protocol/shiplist-probe.ts 2>&1 | grep -E "RAFPROBE" || true
           grep -h -oE '\[jank\] [0-9]+ms[^"]{0,140}' /tmp/g/eido-gate-*/**/*.jsonl 2>/dev/null | sort -t' ' -k2 -nr | head -15 || true
           grep -h -iE "gpu|angle|swiftshader|metal|webgl" /tmp/g/eido-gate-*/**/browser.stderr.log 2>/dev/null | head -20 || true
