@@ -973,6 +973,7 @@ try {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`); await sleep(300);
   const st = () => evalJson(`Promise.all([import('/lib/controller.js'), import('/lib/core.js')]).then(([c, k]) => ({ free: c.isFreeCam(), focus: c.freeCamState().focus, body: c.myState.pos.toArray(), pose: !!c.myState.pose, cam: k.camera.position.toArray(), sw: [...document.querySelectorAll('.edit-camsw .edit-cam.on')].map((b) => b.dataset.cam) }))`);
   const hold = async (code: string, ms: number) => { await evalJson(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: '${code}', bubbles: true })), true)`); await sleep(ms); await evalJson(`(window.dispatchEvent(new KeyboardEvent('keyup', { code: '${code}', bubbles: true })), true)`); };
+  if (process.env.FC_RAF) console.log("RAFPROBE", JSON.stringify(await evalJson(`new Promise((r) => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 2000) requestAnimationFrame(f); else r({ rafIn2s: n, hidden: document.hidden }); }; requestAnimationFrame(f); setTimeout(() => r({ rafIn2s: n, timedOut: true }), 5000); })`).catch((e) => String(e))));
   const s0 = await st();
   await evalJson(`(document.querySelector('.edit-camsw .edit-cam[data-cam="free"]').click(), true)`); await sleep(500);
   const s1 = await st();
