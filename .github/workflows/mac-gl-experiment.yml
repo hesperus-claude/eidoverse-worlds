@@ -60,6 +60,6 @@ jobs:
           mkdir -p /tmp/g; export TMPDIR=/tmp/g
           sysctl -n machdep.cpu.brand_string hw.ncpu || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -20 || true
-FC_RAF=1 bun tools/protocol/shiplist-probe.ts 2>&1 | grep -E "RAFPROBE|FC[0-9a-z]* |shiplist-probe\] [0-9]" || true
+          FC_RAF=1 bun tools/protocol/shiplist-probe.ts 2>&1 | grep -E "RAFPROBE|FC[0-9a-z]* |shiplist-probe\] [0-9]" || true
           grep -h -oE '\[jank\] [0-9]+ms[^"]{0,140}' /tmp/g/eido-gate-*/**/*.jsonl 2>/dev/null | sort -t' ' -k2 -nr | head -15 || true
           grep -h -iE "gpu|angle|swiftshader|metal|webgl" /tmp/g/eido-gate-*/**/browser.stderr.log 2>/dev/null | head -20 || true
