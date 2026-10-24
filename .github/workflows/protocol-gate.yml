@@ -89,9 +89,11 @@ jobs:
           if [ "$arm" != new-real ]; then
             sed -i 's|^const timeoutOf = (name: string) => |const timeoutOf = (name: string) => name === "version-route" ? 8 : |' tools/protocol/run.ts
             grep -n "^const timeoutOf" tools/protocol/run.ts
+            sed -i -e 's|^process.on("exit", () => {|process.on("exit-disabled-by-probe", () => {|' -e 's|^process.on("SIGTERM", () => process.exit(143));|process.on("SIGTERM", () => {});|' tools/version-route-test.ts
+            grep -n '^process.on(' tools/version-route-test.ts
           fi
           set +e; bun tools/protocol/run.ts version-route; rc=$?
-          git checkout -- tools/protocol/run.ts
+          git checkout -- tools/protocol/run.ts tools/version-route-test.ts
           echo "== untracked after: $(git ls-files --others --exclude-standard | tr '\n' ' ')"
           echo "== arm $arm rc $rc"; exit 0
       - name: receipt
