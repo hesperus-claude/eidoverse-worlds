@@ -85,12 +85,14 @@ jobs:
           # Not on Windows: TEMP/TMP pointed elsewhere hung gov-reserved for 300 s with no output (cause unknown).
           if [ "$RUNNER_OS" != "Windows" ]; then mkdir -p /tmp/g; export TMPDIR=/tmp/g; fi
           arm="${{ matrix.arm }}"
-          [ "$arm" = old-forced ] && git show HEAD~1:tools/protocol/run.ts > tools/protocol/run.ts
+          [ "$arm" = old-forced ] && git show a2644dc1:tools/protocol/run.ts > tools/protocol/run.ts
           if [ "$arm" != new-real ]; then
             sed -i 's|^const timeoutOf = (name: string) => |const timeoutOf = (name: string) => name === "version-route" ? 8 : |' tools/protocol/run.ts
             grep -n "^const timeoutOf" tools/protocol/run.ts
             sed -i -e 's|^process.on("exit", () => {|process.on("exit-disabled-by-probe", () => {|' -e 's|^process.on("SIGTERM", () => process.exit(143));|process.on("SIGTERM", () => {});|' tools/version-route-test.ts
             grep -n '^process.on(' tools/version-route-test.ts
+            sed -i 's|^  return { port };|  if (process.env.CI) await new Promise(() => {});   // probe: hang after the first spawn, so only a kill ends it\n  return { port };|' tools/version-route-test.ts
+            grep -n "probe: hang" tools/version-route-test.ts
           fi
           set +e
           ( for i in 2 4 6; do sleep 2; echo "== during t+${i}s: $(ls client | grep -c vr-nonce) nonce(s); $(ls client | grep vr-nonce | tr '\n' ' ')"; done ) &
