@@ -1,0 +1,26 @@
+name: renderer-probe
+on: { push: { branches: [renderer-probe] }, workflow_dispatch: {} }
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy: { fail-fast: false, matrix: { v: [shipped, d3d11-only, chrome-default] } }
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - shell: bash
+        run: bun install --frozen-lockfile && bun node_modules/playwright/cli.js install chromium
+      - name: Chrome sandbox ACL (as the gate)
+        shell: bash
+        run: MSYS_NO_PATHCONV=1 icacls "$LOCALAPPDATA\\ms-playwright" /grant '*S-1-15-2-1:(OI)(CI)(RX)' /T /Q || true
+      - name: probe
+        shell: bash
+        env: { PROBE_V: "${{ matrix.v }}" }
+        run: |
+          case "$PROBE_V" in
+            d3d11-only) sed -i 's/\["--enable-unsafe-swiftshader", "--use-angle=d3d11"\]/["--use-angle=d3d11"]/' tools/protocol/chrome.ts ;;
+            chrome-default) sed -i 's/\["--enable-unsafe-swiftshader", "--use-angle=d3d11"\]/[]/' tools/protocol/chrome.ts ;;
+          esac
+          grep -n 'platform === "win32" ?' tools/protocol/chrome.ts
+          bun tools/probe/renderer-probe.ts
