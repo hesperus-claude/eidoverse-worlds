@@ -156,6 +156,13 @@ uploads a receipt (`--receipt <file>`): the head, whether the tree was dirty, OS
 every suite's result and a hash of its output, and one hash over all of them. That receipt, not a sentence in a PR
 comment, is the evidence of a pass.
 
+One exception, decided 10-23: on the **hosted Windows runner** the browser lane is informational. Core and main are
+required there; the browser lane runs after them, its red is investigated but does not block, and its receipt and logs are
+uploaded. The reason is that runner, not Windows: it has no GPU, so Chrome emulates one in software on a slow VM, an
+environment no player is ever in; and the Windows-specific browser bugs that exist live in GPU drivers, which that runner
+can't have. Windows browser is covered on real hardware (a contributor's native gate, receipt in the PR). What the lane
+found while it was required (unkillable tests, CRLF-hashed CSP, a cleanup that could kill the gate) was fixed and stays.
+
 Known gap, said plainly: the macOS and Windows paths were written and tested on Linux (the macOS process path against
 `ps`, the Windows tree walk on fixed tables, the no-`/proc` sandbox path by switching the reading off). Their first real
 runs are that workflow's.

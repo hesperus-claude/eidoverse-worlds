@@ -83,13 +83,34 @@ jobs:
           # socket-path limit: a CI-length path passes on Burrow. Cause unknown; /tmp/g is nearest the known-good setup.
           # Not on Windows: TEMP/TMP pointed elsewhere hung gov-reserved for 300 s with no output (cause unknown).
           if [ "$RUNNER_OS" != "Windows" ]; then mkdir -p /tmp/g; export TMPDIR=/tmp/g; fi
-          bun tools/protocol/run.ts --receipt "gate-receipt-${{ matrix.os }}.json" --scratch-out "$GITHUB_OUTPUT"
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            bun tools/protocol/run.ts --receipt "gate-receipt-${{ matrix.os }}.json" --scratch-out "$GITHUB_OUTPUT"
+          else
+            # Windows: core and main are required here; the browser lane runs in the next step and does not block (below)
+            bun tools/protocol/run.ts --lane core --receipt "gate-receipt-${{ matrix.os }}-core.json" --scratch-out "$GITHUB_OUTPUT"
+            bun tools/protocol/run.ts --lane main --receipt "gate-receipt-${{ matrix.os }}-main.json" --scratch-out "$GITHUB_OUTPUT"
+          fi
+      - name: browser lane on the hosted Windows runner (informational)
+        # Reclassified 10-23 by the lead engineer (Hesperus; the owner delegated the call): this runner has no GPU, so Chrome
+        # emulates one in software on a slow VM. No player is ever in that environment, and the Windows-specific browser
+        # bugs that do exist live in GPU drivers, which this runner cannot have. A red here is investigated, not ignored, but
+        # it does not block. Windows browser is covered on real hardware with a GPU: the native gate on a contributor's
+        # machine (receipts in the PR). The fixes this lane found on 10-23 (unkillable tests, CRLF CSP hashes, a cleanup that
+        # could kill the gate) were real bugs and stay; the lane keeps running so the next one is seen.
+        id: browser
+        if: runner.os == 'Windows' && always() && steps.gate.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          EIDOVERSE_DIR: ${{ runner.temp }}/eidoverse-video
+          PROTOCOL_KEEP: "1"
+        run: bun tools/protocol/run.ts --lane browser --receipt "gate-receipt-${{ matrix.os }}-browser.json" --scratch-out "$GITHUB_OUTPUT"
       - name: receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gate-receipt-${{ matrix.os }}
-          path: gate-receipt-${{ matrix.os }}.json
+          path: gate-receipt-${{ matrix.os }}*.json
           if-no-files-found: warn
       - name: scratch logs of failed suites
         # empty when the gate stopped before making its scratch (a preflight failure): the path would be "/**"
@@ -101,3 +122,12 @@ jobs:
             ${{ steps.gate.outputs.scratch }}/**/*.log
             ${{ steps.gate.outputs.scratch }}/**/*.jsonl
           if-no-files-found: ignore
+      - name: scratch logs of the informational Windows browser lane
+        if: always() && steps.browser.outcome == 'failure' && steps.browser.outputs.scratch != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-scratch-${{ matrix.os }}-browser
+          path: |
+            ${{ steps.browser.outputs.scratch }}/**/*.log
+            ${{ steps.browser.outputs.scratch }}/**/*.jsonl
+          if-no-files-found: warn
