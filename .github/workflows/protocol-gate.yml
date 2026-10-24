@@ -92,7 +92,12 @@ jobs:
             sed -i -e 's|^process.on("exit", () => {|process.on("exit-disabled-by-probe", () => {|' -e 's|^process.on("SIGTERM", () => process.exit(143));|process.on("SIGTERM", () => {});|' tools/version-route-test.ts
             grep -n '^process.on(' tools/version-route-test.ts
           fi
-          set +e; bun tools/protocol/run.ts version-route; rc=$?
+          set +e
+          ( for i in 2 4 6; do sleep 2; echo "== during t+${i}s: $(ls client | grep -c vr-nonce) nonce(s); $(ls client | grep vr-nonce | tr '\n' ' ')"; done ) &
+          bun tools/protocol/run.ts version-route; rc=$?
+          wait
+          echo "== client after: $(ls client | grep vr-nonce | tr '\n' ' ')"
+          git status --porcelain --untracked-files=all | head -5
           git checkout -- tools/protocol/run.ts tools/version-route-test.ts
           echo "== untracked after: $(git ls-files --others --exclude-standard | tr '\n' ' ')"
           echo "== arm $arm rc $rc"; exit 0
