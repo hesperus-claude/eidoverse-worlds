@@ -5,13 +5,13 @@ on:
   push:
     branches: [browser-probe]
 env:
-  PROBE_SUITE: scripts   # a suite name (bun tools/protocol/run.ts --manifest): it runs in the gate's own hermetic env
+  PROBE_SUITE: inplace   # a suite name (bun tools/protocol/run.ts --manifest): it runs in the gate's own hermetic env
 jobs:
   probe:
     strategy:
       fail-fast: false
       matrix:
-        chrome_args: [""]   # EIDO_CHROME_ARGS experiments only; each OS's needed flags are in tools/protocol/chrome.ts
+        chrome_args: ["", " ", "  ", "   ", "    ", "     ", "      ", "       "]   # EIDO_CHROME_ARGS experiments only; each OS's needed flags are in tools/protocol/chrome.ts
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
