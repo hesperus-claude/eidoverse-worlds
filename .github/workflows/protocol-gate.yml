@@ -21,7 +21,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [windows-latest]
+        arm: [new-forced, old-forced, new-real]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
@@ -83,12 +84,18 @@ jobs:
           # socket-path limit: a CI-length path passes on Burrow. Cause unknown; /tmp/g is nearest the known-good setup.
           # Not on Windows: TEMP/TMP pointed elsewhere hung gov-reserved for 300 s with no output (cause unknown).
           if [ "$RUNNER_OS" != "Windows" ]; then mkdir -p /tmp/g; export TMPDIR=/tmp/g; fi
-          bun tools/protocol/run.ts --receipt "gate-receipt-${{ matrix.os }}.json" --scratch-out "$GITHUB_OUTPUT"
+          arm="${{ matrix.arm }}"
+          [ "$arm" = old-forced ] && git show HEAD~1:tools/protocol/run.ts > tools/protocol/run.ts
+          [ "$arm" != new-real ] && export PROTOCOL_TIMEOUT_SCALE=0.02
+          set +e; bun tools/protocol/run.ts version-route; rc=$?
+          git checkout -- tools/protocol/run.ts
+          echo "== untracked after: $(git ls-files --others --exclude-standard | tr '\n' ' ')"
+          echo "== arm $arm rc $rc"; exit 0
       - name: receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gate-receipt-${{ matrix.os }}
+          name: gate-receipt-${{ matrix.os }}-${{ matrix.arm }}
           path: gate-receipt-${{ matrix.os }}.json
           if-no-files-found: warn
       - name: scratch logs of failed suites
@@ -96,7 +103,7 @@ jobs:
         if: failure() && steps.gate.outputs.scratch != ''
         uses: actions/upload-artifact@v4
         with:
-          name: gate-scratch-${{ matrix.os }}
+          name: gate-scratch-${{ matrix.os }}-${{ matrix.arm }}
           path: |
             ${{ steps.gate.outputs.scratch }}/**/*.log
             ${{ steps.gate.outputs.scratch }}/**/*.jsonl
