@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chrome_args: ["", " ", "  ", "   ", "    ", "     ", "      ", "       "]   # EIDO_CHROME_ARGS experiments only; each OS's needed flags are in tools/protocol/chrome.ts
+        chrome_args: ["", " "]   # EIDO_CHROME_ARGS experiments only; each OS's needed flags are in tools/protocol/chrome.ts
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -24,7 +24,6 @@ jobs:
           bun install --frozen-lockfile
           (cd client && bun install --frozen-lockfile)
           bun tools/protocol/run.ts --siblings
-          bun node_modules/playwright/cli.js install chromium
           bun tools/protocol/run.ts --library "$RUNNER_TEMP/eidoverse-video"
       - name: probe
         id: probe
@@ -36,8 +35,9 @@ jobs:
         run: |
           # as protocol-gate.yml (its comment says why)
           if [ "$RUNNER_OS" != "Windows" ]; then mkdir -p /tmp/g; export TMPDIR=/tmp/g; fi
-          bun -e 'const m = await import("./shared/protocol/sandbox.js"); console.log("SANDBOX available:", m.SANDBOX.available(), "isolated:", m.SANDBOX.isolated())' || true
-          bun tools/protocol/run.ts "$PROBE_SUITE" --scratch-out "$GITHUB_OUTPUT"
+          echo "TEMP=$TEMP RUNNER_TEMP=$RUNNER_TEMP"; mkdir -p "$RUNNER_TEMP/s"; export PROTOCOL_SCRATCH="$RUNNER_TEMP/s"
+          for k in 1 2 3; do bun tools/probe/calbench.ts; done
+          for k in 1 2 3; do bun tools/protocol/scale-check.ts --only S1,Q3,Q5 --verbose 2>&1 | grep -v "^ok\|^FAIL" || true; done
       - if: always() && steps.probe.outputs.scratch != ''
         uses: actions/upload-artifact@v4
         with:
