@@ -86,7 +86,10 @@ jobs:
           if [ "$RUNNER_OS" != "Windows" ]; then mkdir -p /tmp/g; export TMPDIR=/tmp/g; fi
           arm="${{ matrix.arm }}"
           [ "$arm" = old-forced ] && git show HEAD~1:tools/protocol/run.ts > tools/protocol/run.ts
-          [ "$arm" != new-real ] && export PROTOCOL_TIMEOUT_SCALE=0.02
+          if [ "$arm" != new-real ]; then
+            sed -i 's|^const timeoutOf = (name: string) => |const timeoutOf = (name: string) => name === "version-route" ? 8 : |' tools/protocol/run.ts
+            grep -n "^const timeoutOf" tools/protocol/run.ts
+          fi
           set +e; bun tools/protocol/run.ts version-route; rc=$?
           git checkout -- tools/protocol/run.ts
           echo "== untracked after: $(git ls-files --others --exclude-standard | tr '\n' ' ')"
