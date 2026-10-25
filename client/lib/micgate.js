@@ -428,7 +428,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
     if (lv <= 0) {
       // muted: close, do not learn — and DROP THE SPEAKING LATCH, or
       // info().speaking reports true forever while the gate is forced shut
-      _above = false; _openUntil = 0;
+      _above = false; _openUntil = 0; _hits = 0;
       apply(Date.now()); return;
     }
     if (_settle < 8) {
@@ -468,7 +468,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
      *  session would gate you out of a loud one. */
     start() {
       if (_timer) return;
-      _above = false; _hits = 0;
+      _above = false; _hits = 0; _openUntil = 0;   // a reacquired lane starts CLOSED, not inside the old hang
       _noise = 0.01; _settle = 0;
       _blocks = new Array(6).fill(Infinity); _blockIdx = 0; _blocksFilled = 0;
       _blockMin = Infinity; _blockStart = Date.now();
@@ -476,7 +476,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
     },
     stop() {
       if (_timer) { clearInterval(_timer); _timer = null; }
-      _above = false;
+      _above = false; _openUntil = 0;
     },
     /** Apply the current latch through the transport's authority — the
      *  external gateAudio (mute toggles call it directly). */

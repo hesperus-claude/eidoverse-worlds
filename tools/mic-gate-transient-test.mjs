@@ -33,7 +33,6 @@ Date.now = () => clock;
 globalThis.setInterval = (fn) => { tick = fn; return 1; };
 const g = makeOnsetGate({ level: () => lv, threshold: () => 0.25, drive() {}, announce() {} });
 g.start();
-globalThis.setInterval = realSI;
 t('setup: start() handed us its tick', typeof tick === 'function');
 const step = (level, n = 1) => { for (let i = 0; i < n; i++) { lv = level; clock += 20; tick(); } };
 step(0.001, 40);                                   // settle + learn a quiet room (800ms)
@@ -51,7 +50,15 @@ step(0.001, 20);                                   // 400ms of quiet: inside the
 t('the hang still holds through a pause', g.info().speaking === true);
 step(0.001, 30);
 t('and it closes after the hang', g.info().speaking === false);
-Date.now = realNow;
+step(0.001, 40);
+step(0.6, 1); step(0, 10); step(0.6, 1);           // click, mute 200ms, unmute straight into one click
+t('a click before a mute does not count toward one after it', g.info().speaking === false);
+step(0.001, 40);
+step(0.4, 2);
+t('setup: open before the restart', g.info().speaking === true);
+g.stop(); g.start();                               // release + reacquire inside the 700ms hang
+t('a restarted gate starts closed, not inside the old hang', g.info().speaking === false);
+Date.now = realNow; globalThis.setInterval = realSI; g.stop();
 
 // ── 2. the HUD glyph: gold under the line was the bug ────────────────────────
 document.body.innerHTML = '<div id="hud"></div>';
@@ -69,6 +76,13 @@ room = 0.08; await wait(400);                      // well above the old fixed 0
 t('glyph is NOT gold for a level under the sensitivity line', gold() === false && ms.micGateInfo().speaking === false);
 room = 0.5; await wait(400);
 t('glyph IS gold when the gate is open', gold() === true && ms.micGateInfo().speaking === true);
+room = 0.08; await wait(300);                      // back under the line, inside the 700ms hang
+t('glyph stays gold through the hang (it follows the gate, not a level)', gold() === true);
 
+vc.setPttMode(true); room = 0.5; await wait(400);
+t('PTT, key up: loud input does not turn the glyph gold', gold() === false);
+ms.setPttHeld(true); await wait(300);
+t('PTT, key down: gold', gold() === true);
+ms.setPttHeld(false); vc.setPttMode(false);
 console.log(`${ok} ok, ${bad} failed`);
 process.exit(bad ? 1 : 0);

@@ -148,7 +148,8 @@ import { readFileSync } from 'fs';
 const mt = readFileSync(new URL('../client/lib/mictoggle.js', import.meta.url), 'utf8');
 t('mictoggle: keyup releases the hold', /keyup[\s\S]{0,200}setPttHeld\(false\)/.test(mt));
 t('mictoggle: window blur releases the hold', /'blur'[\s\S]{0,200}setPttHeld\(false\)/.test(mt));
-t('mictoggle: badge gold is gated on the key under PTT', /!pttMode\(\) \|\| pttHeld\(\)/.test(mt));
+// executed in tools/mic-gate-transient-test.mjs (PTT key up/down); the badge now asks the gate, whose held() is the key
+t('mictoggle: badge gold is the gate decision (PTT-aware via held())', /micGateInfo\(\)\.speaking/.test(mt));
 // A focused CHECKBOX is not typing. The panel's push-to-talk box keeps focus
 // after the click, so a guard that skips V for any INPUT eats the first press
 // of the mode you just enabled (found by ear 2026-09-10). The guard must be

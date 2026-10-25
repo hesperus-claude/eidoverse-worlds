@@ -246,8 +246,9 @@ function micFloorRow() {
   meter.onpointermove = (ev) => { if (meter.hasPointerCapture?.(ev.pointerId)) setFromX(ev); };
   const beat = () => {
     if (!row.isConnected) return;
-    const level = micLevelNow();
-    lvl.style.width = `${meterPos(level) * 100}%`;   // the marker's dB scale (voiceconsent.js meterPos): one track, one coordinate system
+    // The gate's own RMS on the marker's dB scale (meterPos): micLevelNow() is a PEAK on SFU, so it crossed the line ungated.
+    const level = micLevelNow() > 0 ? micGateInfo().level : 0;
+    lvl.style.width = `${meterPos(level) * 100}%`;
     // Repaint only on a state
     // CHANGE — this runs at frame rate, and assigning a style every frame is
     // how you get a repaint storm behind a bar that already looks fine.
