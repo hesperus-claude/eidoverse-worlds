@@ -45,7 +45,8 @@ const micLive = () => {
 };
 import { bus } from './base.js';
 import { ttsSection } from './ttsrow.js';
-import { micOn, toggleMic } from './micstate.js';
+import { micOn, toggleMic, micGateInfo } from './micstate.js';
+import { meterPos } from './voiceconsent.js';
 // 🔴 CONFIG is needed by the mic row (toggleMic wants the actor NAME) and was
 // NOT imported — `CONFIG is not defined` threw inside the checkbox handler, so
 // the box flipped and nothing published. Third instance tonight of the same
@@ -210,11 +211,8 @@ function micFloorRow() {
   // The gold is INK.hot from mictoggle.js — the same value, because the badge
   // and this bar are read as one instrument.
   //
-  // "leave it gold until it goes off again" IS hysteresis: a bare `level >
-  // floor` strobes on every syllable boundary, because speech crosses its own
-  // threshold dozens of times a second. Release at 85% of the floor, so it
-  // latches through the gaps inside a word and drops on a real pause.
-  const REL = 0.85;
+  // "leave it gold until it goes off again" IS hysteresis: the gate's own (micgate.js makeOnsetGate), so this bar
+  // and the HUD glyph can't disagree with what the room gets (R 10-17).
   let hot = false;
   // 🔴 SIXTH INSTANCE OF THE SAME DEFECT (caught by tools/mic-meter-states.mjs,
   // 2026-08-16). micOn() reads voice.js's MESH micStream, which is null forever
@@ -249,12 +247,11 @@ function micFloorRow() {
   const beat = () => {
     if (!row.isConnected) return;
     const level = micLevelNow();
-    lvl.style.width = `${Math.min(100, (level / FS) * 100)}%`;
-    // Latch above the floor, release at REL× it. Repaint only on a state
+    lvl.style.width = `${meterPos(level) * 100}%`;   // the marker's dB scale (voiceconsent.js meterPos): one track, one coordinate system
+    // Repaint only on a state
     // CHANGE — this runs at frame rate, and assigning a style every frame is
     // how you get a repaint storm behind a bar that already looks fine.
-    const floor = micFloor();
-    const next = hot ? level > floor * REL : level > floor;
+    const next = level > 0 && !!micGateInfo().speaking;   // the gate's decision: its hysteresis and hang replace REL
     if (next !== hot) { hot = next; paintLive(); }
     requestAnimationFrame(beat);
   };
