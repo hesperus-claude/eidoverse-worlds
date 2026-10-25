@@ -1,5 +1,28 @@
 # Translating a first-protocol world — the operator's procedure
 
+## Quick start: do this, in order
+
+For an operator (person or agent) on the host, one world at a time. Run from the engine checkout; `<dir>` is the server's
+`WORLDS_DIR`, `<world>` the world's folder name.
+
+1. **Back up** `<dir>/<world>/` somewhere off the host. (The tool keeps the old log, but a copy you hold is the real undo.)
+2. **Dry run** (writes nothing):
+   `WORLDS_DIR=<dir> bun tools/protocol/world.ts translate <world> --dry-run --no-founder-key`
+   Read the report. If `deferred` lists anything, stop: that world uses a feature this protocol doesn't carry yet, so
+   ask the maintainers before translating. Its last lines are `report-hash <hash>` and the exact command for step 3.
+   (Use the `report-hash`, not the `sha256` inside the report: that one is the old log's.)
+3. **Translate in place:**
+   `WORLDS_DIR=<dir> bun tools/protocol/world.ts translate <world> --no-founder-key --approved <report-hash> --operator-only-no-owner`
+   It builds and verifies the new world beside the old one and swaps it in under the same name only if every check
+   passes; the old log stays as `log.original.jsonl`. On any failure the original is untouched and it says why.
+4. **Check it:** `WORLDS_DIR=<dir> bun tools/protocol/world.ts info <world>`, then boot the server, join, and look around.
+5. **If anything is wrong:** `WORLDS_DIR=<dir> bun tools/protocol/world.ts rollback <world>` puts the old files back.
+
+**Deploy and translate in the same sitting.** A server on this protocol refuses to load an untranslated world (visitors
+are told nothing is lost), so a world is closed from the moment the new server runs until it is translated.
+
+The rest of this page explains what each step checks and why.
+
 Informative (recut C19, 2026-10-21): how an operator translates a world, moved out of spec/PROTOCOL.md §14, which keeps
 only what a translated log must be. Where this and §14 disagree, §14 wins.
 
