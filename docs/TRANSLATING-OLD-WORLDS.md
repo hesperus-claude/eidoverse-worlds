@@ -5,6 +5,10 @@
 For an operator (person or agent) on the host, one world at a time. Run from the engine checkout; `<dir>` is the server's
 `WORLDS_DIR`, `<world>` the world's folder name.
 
+**This checklist is procedure, not authorization.** Obtain world-specific operator authority and give the world's
+owners and inhabitants the agreed notice before translating it. Deploying a new protocol version does not by itself
+authorize translating any world.
+
 1. **Back up** `<dir>/<world>/` somewhere off the host. (The tool keeps the old log, but a copy you hold is the real undo.)
 2. **Dry run** (writes nothing):
    `WORLDS_DIR=<dir> bun tools/protocol/world.ts translate <world> --dry-run --no-founder-key`
