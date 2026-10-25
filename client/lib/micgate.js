@@ -68,7 +68,7 @@ const RELEASE_TAU = 0.12;
 // and passes through the opening gain. Cost: 50ms of outbound latency, well
 // under the network's own jitter buffer; the close tail grows by the same
 // 50ms, which the 700ms hang-time already dwarfs.
-const LOOKAHEAD = 0.05;
+const LOOKAHEAD = 0.07;   // 50ms + one 20ms confirm tick (OPEN_TICKS below): the onset is still inside the delay line
 
 let _ctx = null, _src = null, _gain = null, _dest = null, _look = null;
 let _rawStream = null, _gatedStream = null, _level = () => 0;
@@ -402,8 +402,10 @@ export function makeLevelMeter(getMeasured) {
  *  - `speaking` reports threshold PLUS hang-time, or the bar flickers dark
  *    through every pause while the room still hears you;
  *  - 20ms tick: the interval is the worst-case clip on a word's attack. */
+// A key click is ~10ms, a vowel 50ms+: opening needs OPEN_TICKS consecutive ticks over the line (R 10-17: typing opened it at 80%).
+const OPEN_TICKS = 2;
 export function makeOnsetGate({ level, threshold, drive, announce, held = () => null }) {
-  let _timer = null, _above = false, _lastOnset = 0, _openUntil = 0;
+  let _timer = null, _above = false, _lastOnset = 0, _openUntil = 0, _hits = 0;
   let _openedAt = 0, _announced = false;
   let _noise = 0.01, _settle = 0;
   let _blocks = new Array(6).fill(Infinity), _blockIdx = 0, _blocksFilled = 0,
@@ -449,13 +451,15 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
     const on = threshold();
     const off = on * 0.7;                    // ~3 dB of hysteresis
     const now = Date.now();
-    if (lv >= on) {
+    if (lv >= on && !_above && ++_hits < OPEN_TICKS) { /* not yet: one tick over the line is a transient */ }
+    else if (lv >= on) {
       _openUntil = now + 700;                // hang-time
       if (!_above) { _above = true; _openedAt = now; _announced = false; }
       if (held() === null && !_announced && now - _openedAt >= 60 && now - _lastOnset > 1500) {
         _announced = true; _lastOnset = now; announce();
       }
     } else if (_above && lv < off && now > _openUntil) _above = false;
+    if (lv < on) _hits = 0;
     apply(now);
   }
 
@@ -464,7 +468,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
      *  session would gate you out of a loud one. */
     start() {
       if (_timer) return;
-      _above = false;
+      _above = false; _hits = 0;
       _noise = 0.01; _settle = 0;
       _blocks = new Array(6).fill(Infinity); _blockIdx = 0; _blocksFilled = 0;
       _blockMin = Infinity; _blockStart = Date.now();
@@ -479,7 +483,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
     apply,
     /** Drop the speaking latch without stopping the watch — unmute hands
      *  control back to the gate rather than reopening mid-latch. */
-    dropLatch() { _above = false; _openUntil = 0; },
+    dropLatch() { _above = false; _openUntil = 0; _hits = 0; },
     /** A push-to-talk press: announce the 🎙 as a declared gesture, under the
      *  same once-per-1.5s limit as a level onset. The caller applies the gate. */
     press(now = Date.now()) {

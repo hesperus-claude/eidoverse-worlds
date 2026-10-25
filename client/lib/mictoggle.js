@@ -181,7 +181,7 @@ function paint() {
 }
 // hot = your voice is actually registering: a tiny analyser on the mic track,
 // polled at 8Hz, drives the yellow glow in step with STT pickup
-import { micAnalyserLevel as meshMicLevel } from './micstate.js';
+import { micAnalyserLevel as meshMicLevel, micGateInfo } from './micstate.js';
 // 🔴 ASK THE LIVE TRANSPORT (seen in the HUD: the mic icon stopped turning
 // gold while transmitting). voice.js's
 // micAnalyserLevel() reads the MESH's micStream, which is null forever on an
@@ -202,7 +202,8 @@ setInterval(() => {
   // gate self-latches), so under PTT the level runs hot while nothing leaves
   // the machine. Gold means "the room is getting this"; gate the glow on the
   // key, or the badge claims transmission the release just ended.
-  const hot = lvl > 0.02 && (!pttMode() || pttHeld());
+  // Gold = the gate's own decision (threshold, hang, PTT, mute), never a level of our own (R 10-17: gold under the line).
+  const hot = lvl > 0 && !!micGateInfo().speaking;
   if (hot !== micHot) { micHot = hot; paint(); }
 }, 125);
 
