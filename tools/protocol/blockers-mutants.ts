@@ -25,8 +25,8 @@ const SUITE_FILE: Record<string, string> = {
 const M: Mutant[] = [
   // ---- B1–B10: the reviewer's blockers, in review order ----
   { id: "B1", what: "writeLine throws → the entry reached memory anyway (chain ahead of disk)", file: "shared/protocol/authority/storage.js",
-    find: '    durably("log", () => io.writeLine(line));   // on disk first; only then the live chain and fold see it\n    entries.push(posAt(parsed, seq));',
-    repl: '    entries.push(posAt(parsed, seq)); durably("log", () => io.writeLine(line));', suite: "authority", rows: ["ST1"], expect: 9 },
+    find: 'durably("log", () => io.writeLine(line));',   // the entry in memory first; a throw leaves it there (the push after is undone on success)
+    repl: 'entries.push(posAt(parsed, seq)); durably("log", () => io.writeLine(line)); entries.pop();', suite: "authority", rows: ["ST1"], expect: 9 },
   { id: "B2", what: "a batch op's args unchecked before any is built ({verb: delete, args: {id, componnent}} deletes the entity)", file: "shared/protocol/authority/verbs.js",
     find: "        if (bad) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch op ${i}", repl: "        if (false) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch op ${i}", suite: "authority", rows: ["BT1"], expect: 9 },
   { id: "B4", what: "a request whose connection was superseded while it awaited still writes", file: "server/reqcap.ts",
@@ -76,7 +76,7 @@ const M: Mutant[] = [
     find: '  if (n.blocking.length) return { code: "repair-needed",', repl: '  if (false) return { code: "repair-needed",', suite: "shape-repair", rows: ["RP15"], expect: 1 },
   // ---- review r14 (10-18) ----
   { id: "r14-H1", what: "maintain swallows a durable-write throw as a refused host (the repair reports ok while the disk is unknown)", file: "shared/protocol/authority/scriptrun.js",
-    find: "      } catch (x) { if (!(x instanceof Refusal)) throw x;   // r14 H1 (10-18)", repl: "      } catch (x) { if (false) throw x;   // r14 H1 (10-18)", suite: "shape-repair", rows: ["RP18"], expect: 1 },
+    find: "\n      } catch (x) { if (!(x instanceof Refusal)) throw x;", repl: "\n      } catch (x) { if (false) throw x;", suite: "shape-repair", rows: ["RP18"], expect: 1 },
   { id: "r14-M1", what: "voice-moderate writes through w.log.request directly (no capability, no queue, no meters)", file: "server/server.ts",
     find: '          void requestAs(c, ws, w, muted ? "mute" : "unmute",', repl: '          void w.log.request(actorIdOf(c), muted ? "mute" : "unmute",', suite: "txn", rows: ["T11"], expect: 1 },
   { id: "r14-M2", what: "the transaction outcome ignores the moderator log's wedge (a ban whose mod-log write threw is rolled-back)", file: "shared/protocol/authority/storage.js",
