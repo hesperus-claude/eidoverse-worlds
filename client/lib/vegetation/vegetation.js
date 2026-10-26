@@ -1,6 +1,7 @@
 // vegetation — asset-driven ground flora (tuft cards, shrub clusters, rosettes); maps under
 // eidoverse/assets/grass/<species>_{albedo,normal,roughness,translucency}.png (albedo alpha is the cutout).
 // Wind and pushers derived from CK42BB/procedural-grass-threejs (MIT): keep this credit.
+// Copyright (c) 2026 Kingsley, MIT licence; full notice in THIRD-PARTY.md.
 
 const T3 = globalThis.THREE;
 const {
