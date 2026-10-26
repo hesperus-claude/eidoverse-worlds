@@ -1,19 +1,6 @@
-// The MCPL door's keepalive must tolerate a THINKING agent.
-//
-// Regression test for the bug that cut Fable off five times in one evening:
-// the door pinged every 20s and terminated on a SINGLE missed pong, so an
-// agent host blocked in a long generation (or GC, or context assembly) was
-// reaped as "half-open" while very much alive. Each silent reconnect hid it
-// until an expired credential made the reconnect fail too.
-//
-// The peer here is a RAW socket: it completes the websocket upgrade and then
-// never answers a ping, which is exactly what a blocked event loop looks like
-// from the server's side. (A `ws` client cannot simulate this — `autoPong:
-// false` is not honoured under Bun, so the library pongs even when the app
-// would not. Ask me how we know.)
-//
-// Timings are scaled down via MCPL_PING_SEC/MCPL_PING_MISSES; the ratio under
-// test — survive a miss, die only after the full grace window — is the point.
+// The MCPL door's keepalive must tolerate a thinking agent: survive missed pongs, reap only after the full grace window.
+// The peer is a raw socket that completes the upgrade and never pongs (what a blocked event loop looks like); a `ws`
+// client can't do this under Bun, which ignores `autoPong: false`. MCPL_PING_SEC/MCPL_PING_MISSES scale the timings down.
 
 import { connect, type Socket } from "node:net";
 import { randomBytes } from "node:crypto";
