@@ -31,7 +31,9 @@ const serverWritten = (...a) => UP.serverWritten(...a);
 //   handle   — a settlement of something you hold (physics.who decides who may), transform/parent of that thing only;
 //   rest     — the engine's word on a launched body: transform/parent of that body, and it must equal the engine's;
 //   system   — the authority's own follow-up to physics (set down what lost its support, attach a rest, return a lost thing);
-//   founding — the `new` act's first write to @world, by an owner named in genesis, once.
+//   founding — the `new` act's first write to @world, by an owner named in genesis, once;
+//   script   — a script's write, on its sponsor's rights (scripts.js scriptRights);
+//   caption  — the caption request's write to a screen's captions, by one of its captioners.
 // A lock (§5) guards EVERYTHING on the locked thing and what hangs under it until lifted (throughLock acts through it).
 // USE stays open: a lock stops authoring, not using, so a handler may change state but never move, re-parent, swap or remove.
 const RELOCATES = new Set(["transform", "parent", "model"]);   // what even USE may not change on a locked thing (a lock covers everything else for authoring)
@@ -49,8 +51,8 @@ const bytesOf = (e) => e.bytes ?? utf8Len(JSON.stringify(e));   // UTF-8 bytes, 
 // FOLLOW_UP / followUp (the authority's own follow-up ops inside a person's write): authority/storage.js
 class Admitted { constructor(who, ops, after, notes = [], vacate = [], followUps = []) { this.who = who; this.ops = ops; this.after = after; this.notes = notes; this.vacate = vacate; this.followUps = followUps; Object.freeze(this); } }
 // L7 rate over EVERYTHING the actor makes the log hold (acts and says): admit calls it for state writes, and every word
-// that logs without one (say, lift, throw, drop, teleport) calls it before appending. A refused write is logged (R7,
-// authority.js logRefusal) inside the same budget.
+// that logs without one (say, use, a teleport, a lift, a return put, a volley punt) calls it before appending. A refused
+// write is logged (R7, authority.js logRefusal) inside the same budget.
 function rateCheck(w, actor, kind = "act", extra = 0) {
   if (w.leaving === actor) return; // a disconnect's settlement is the authority's duty, not the leaver's request: never rate-refused
   const r = rateOf(w, actor); const cap = w.kindOf?.(actor) === "anon" ? RATE.anonBytes : RATE.bytes;
@@ -200,7 +202,7 @@ function shapeOneOrRefuse(verb, op, i) {
 //   a thing          build when you make it or made it; editOthers when someone else made it
 //   @world.blueprints:*  build (publish);  @world.assets:*  generate
 //   the world's look  editWorld: about, sky (and weather), terrain, terrain-grid, terrain-tile:*, grass, terrain-paint:*,
-//                     bounds, spawn (EDIT_WORLD_PERMISSION; off = owner)
+//                     water, bounds, spawn (EDIT_WORLD_PERMISSION; off = owner)
 //   @world.roles:*    the grant rule (grantCheck): an owner, or grantRoles below your rank with only permissions you hold
 //   the rest of @world (role-defs, default-role, access, physics-engine, script-settings, schemas, imported records…): owner, never a permission
 const WORLD_LOOK = new Set(["about", "sky", "terrain", "terrain-grid", "grass", "water", "bounds", "spawn"]);
@@ -274,7 +276,7 @@ function rights(w, st, s, who, role, op, at, made, pause) {
 }
 // §5 / L7: an existing KEYED component (`<name>:<key>`) may be changed or deleted only by its creator (creatorOf) or an
 // owner; a new key needs only the component's ordinary rank. Follow-ups touch no one else's keys; founding makes
-// roles:<founder>. A whole-entity delete is NOT gated here.
+// roles:<founder>. A whole-entity delete comes through once per keyed component (admit).
 const isKeyed = (comp) => typeof comp === "string" && comp.includes(":");
 // §5: each keyed name's schema says which kind it is. INSTANCE keys (script:, blueprints:, roles:) carry the creator rule;
 // PARTITION keys (terrain-tile:, terrain-paint:) are pieces of one shared surface: ordinary rank rules only. A keyed name with

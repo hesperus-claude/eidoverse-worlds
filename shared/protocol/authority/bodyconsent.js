@@ -107,10 +107,10 @@ function deliver(w, from, to, kind, cls, extra, consent) {
   if (cls === "touch" || cls === "intimate") (P.reaches ??= {})[from] = { to, cls, point: extra.spec?.point ?? null, until: w.now() + C.REACH_GRANT_MS, ...(consent === "asked" ? { asked: true } : {}), ...sponsor };
   inboxPush(P, to, { type: "body", from, kind, cls, consent, ...(extra.spec ? { spec: extra.spec } : {}) }); w.presenceDirty = true;
 }
-// after any change to `to`'s table, what it now forbids ends NOW, told once (42 §4.6): an asked pose or drag ends only on
-// 'deny', a touch on anything but allow (`before` keeps other classes' yeses).
 // the world's body-default (accept | ask | refuse), read where a decision is made: absent or unknown = accept.
 function syncDefault(w) { const v = w.state?.()?.entities?.["@world"]?.c?.["body-default"]; if (C.SWITCHES.includes(v)) w.presence.bodyDefault = v; else delete w.presence.bodyDefault; }
+// after any change to `to`'s table, what it now forbids ends NOW, told once (42 §4.6): an asked pose or drag ends only on
+// 'deny', a touch on anything but allow (`before` keeps other classes' yeses).
 function revokeAfter(w, to, before = {}) { syncDefault(w); const P = w.presence, b = P.bodies[to], now = w.now(); if (!b) return [];
   const ended = []; const end = (actor, sponsor, cls, clear) => { if (decideAs(P, actor, sponsor, to, cls, now).mode !== "deny") return; clear(); ended.push({ actor, class: cls }); inboxPush(P, actor, { type: "body-revoked", by: to, class: cls }); };
   if (b.poseBy) end(b.poseBy, b.poseSponsor, "pose", () => { delete b.poseBy; delete b.poseSponsor; });

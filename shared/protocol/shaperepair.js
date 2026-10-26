@@ -140,7 +140,7 @@ export const RENAMED_COMPONENTS = Object.freeze({ "@world": Object.freeze({ trus
  *  (writes.js resolve) and the maintenance command; idempotent, and an old field stored as null is removed.
  *  → {value, renamed: [{field, from, to}]} */
 export const RENAMED_FIELDS = Object.freeze({ grabbable: Object.freeze({ pose: "anim", "grips.*.fingers": "grasp" }), station: Object.freeze({ pose: "anim" }),
-  // a VALUE renamed: a motion's old type is oscillate, on a whole motion and on every motion:<slot>
+  // a VALUE renamed: a motion's old type bob is oscillate, on a whole motion and on every motion:<slot>
   motion: Object.freeze({ "type=bob": "type=oscillate" }) });
 /** A part's motion (motion:<slot>) is a motion. */
 export const renamedFieldsKey = (comp) => (typeof comp === "string" && comp.startsWith("motion:") ? "motion" : comp);

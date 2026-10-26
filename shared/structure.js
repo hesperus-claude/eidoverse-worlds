@@ -1,6 +1,6 @@
 import { routeLevel, prepareWallCheck, routeGeometryFor, terrainCells, ROUTE_STEP_METRES, NON_FINITE_ENDPOINT } from './structure-route.js';
 export { ROUTE_STEP_METRES };
-// structure — the griddled building's pure half (§11.4: no THREE, no DOM, no scheduler): the boxes to draw and collide,
+// structure — the griddled building's pure half (TEL0S_NOTES §11.4: no THREE, no DOM, no scheduler): the boxes to draw and collide,
 // the rooms the walls enclose, and the doorways that join them. client/lib/realize/structure.js executes the plan;
 // tools/structure-field-test.ts holds it to the light. A grid writes topology down, so "you are in the kitchen; the hall
 // is through the south door" is a derivation, not a guess.
@@ -436,7 +436,7 @@ function levelBoxes(level, g) {
   }
   boxes.push(...cornerFills(level, g, floorY, floorY + g.wallH));
   // diagonal COLLISION is stair-stepped axis-aligned boxes (the collider entry has ONE yaw per building). Steps ~18 cm apart
-  // are well under a 32 cm body radius, so nothing slips between; the visual wall is a true mitre.
+  // are under the 20 cm body radius (MOVER.body), so nothing slips between; the visual wall is a true mitre.
   for (const [k, e] of level.walls) {
     if (e.axis < 2) continue;
     const [[sx, sz], [ex, ez]] = segmentEnds(e, g);
@@ -527,7 +527,7 @@ export function levelParts(level, g, floorY) {
 
   for (const [k, edge] of level.walls) {
     const ap = level.apertures.get(k) ?? null;
-    if (!ap) continue;                       // solid stretches ran above
+    if (!ap) continue;                       // solid stretches are swept (levelSweeps)
     // lintel/sill are SWEPT (levelSweeps): only the glass and the aperture's own trim remain box-shaped here
 
     const { axis, x, z } = edge;
@@ -536,10 +536,7 @@ export function levelParts(level, g, floorY) {
     const faces = facesOf(level, axis, x, z);
     const prof = APERTURES[ap];
 
-    // casing frames the opening from the NEIGHBOURING segments' faces, never inside it: an aperture spans its whole tile, so
-    // a jamb inside would narrow the hole the collider still says is open
     const oB = floorY + prof.bottom, oT = floorY + Math.min(prof.top, h);
-    // casing may only sit on wall that exists (a collinear neighbour), or it punches out through the wall the opening meets
     const prevK = axis === 0 ? edgeKey(0, x - 1, z) : edgeKey(1, x, z - 1);
     const nextK = axis === 0 ? edgeKey(0, x + 1, z) : edgeKey(1, x, z + 1);
     const cw0 = level.walls.has(prevK) ? TRIM.case.w : 0;

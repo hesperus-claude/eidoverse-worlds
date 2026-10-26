@@ -29,7 +29,7 @@ export const RESERVED_KEYS = COMPONENTS.grabbable.reservedFields;   // fx
 export const GRIP_KEYS = ['pos', 'q', 'hand', 'role', 'grasp', 'part'];
 // Who may carry or punt a thing that doesn't say (grabbable.who, physics.who absent): ONE value, read by the hand here and by
 // the authority's punt. Flipping it is this one line plus the cases that pin it: grab-check M2, G6, I1 and phys-check F.
-export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'inhabitant' (visitors may grab and throw; a world narrows it per thing with who)
+export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'inhabitant' (anyone may grab and throw; a world narrows it per thing with who)
 // the written defaults are the registry's (componentspec.js grabbable.defaults: what the authority writes into a bare
 // {grabbable: {}}); the rest is what a reader fills in for a field the authority leaves absent
 export const DEFAULTS = Object.freeze({ ...materialize('grabbable', {}).value, anim: null, grips: Object.freeze({}), home: null, fits: Object.freeze([]), use: null, prompt: null, fx: null });

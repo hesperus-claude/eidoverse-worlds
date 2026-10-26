@@ -56,7 +56,7 @@ function settleSim(w) {
     let plan = null, group = batch;
     try { plan = admit(w, st, { actor: "sim", cap: { kind: "rest", ids: batch.map((r) => r.id), comps: ["transform", "parent"], launch: batch[0].seq } }, batch.flatMap(opsFor)); }
     catch (e) { if (!(e instanceof Refusal)) throw e;
-      if (batch.length === 1) { w.unsettled.push({ id: batch[0].id, launch: batch[0].seq, refused: e.code, reason: e.reason }); skip.add(`${batch[0].id}@${batch[0].seq}`); continue; } // 33 F2: on
+      if (batch.length === 1) { w.unsettled.push({ id: batch[0].id, launch: batch[0].seq, refused: e.code, reason: e.reason }); skip.add(`${batch[0].id}@${batch[0].seq}`); continue; } // 33 F2
       group = [batch[0]];
       try { plan = admit(w, st, { actor: "sim", cap: { kind: "rest", ids: [batch[0].id], comps: ["transform", "parent"], launch: batch[0].seq } }, opsFor(batch[0])); }
       catch (e2) { if (!(e2 instanceof Refusal)) throw e2; w.unsettled.push({ id: batch[0].id, launch: batch[0].seq, refused: e2.code, reason: e2.reason }); skip.add(`${batch[0].id}@${batch[0].seq}`); continue; } }

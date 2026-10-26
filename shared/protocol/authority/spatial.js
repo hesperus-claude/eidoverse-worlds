@@ -1,5 +1,5 @@
 // shared/protocol/authority/spatial.js — the spatial index and the work budget. A leaf over math, the catalogue and storage:
-// the budget refuses through refuse.js, and the gate's enter() reads WORK_BUDGET/clockMs from here.
+// the budget refuses through refuse.js, and authority.js's enter() reads WORK_BUDGET/clockMs from here.
 import { offChain } from "../simlayer.js";
 import { CTX } from "./ctx.js";
 import { refuse } from "./refuse.js";

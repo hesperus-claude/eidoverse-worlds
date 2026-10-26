@@ -372,6 +372,6 @@ export function runIsolated(x) {
 // warm the sandbox once at load (the first QuickJS run in a process is several times slower)
 if (Q) try { runScript({ text: "", self: "warm", key: "script:warm", event: { on: "warm" }, now: 0, seed: "0".repeat(64), st: { entities: {} } }); } catch { /* the next run says what's wrong */ }
 /** What an authority injects as io.scripts. */
-// an authority runs activations isolated wherever it can (bun, node: Worker + SharedArrayBuffer); EIDO_SANDBOX=inprocess opts out
+// an authority runs activations isolated wherever it can (Bun with mkfifo: canIsolate); EIDO_SANDBOX=inprocess opts out
 export const SANDBOX = Object.freeze({ run: (x) => (canIsolate() ? runIsolated(x) : runScript(x)), checkSyntax, available: sandboxAvailable, warm, isolated: canIsolate });
 export { jcs };

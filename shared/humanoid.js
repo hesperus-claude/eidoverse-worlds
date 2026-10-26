@@ -62,7 +62,7 @@ export function canonicalBone(name) {
   return BY_KEY.get(key) ?? ALIASES[key] ?? null;
 }
 
-/** Bounded: only ever run over 55 short strings. */
+/** Run over the 55 humanoid names, or a rig's own bones (nearest); lengths more than four apart skip the table. */
 function distance(a, b) {
   const m = a.length, n = b.length;
   if (Math.abs(m - n) > 4) return 99;

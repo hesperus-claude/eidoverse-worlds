@@ -19,7 +19,7 @@ export function openAction(c) {
 
 /**
  * {name, description, can, state} for components c. opts: {name (fallback: its model's), heldBy (display name), lookup
- * (stored particle effects), sockets ([{name, sock}]: a thing's seats are children, never a component of its own)}.
+ * (stored particle effects), sockets ([{name, station}]: a thing's seats are children, never a component of its own)}.
  */
 export function readOut(c, { name = null, heldBy = null, lookup = () => null, sockets = null } = {}) {
   c = isObj(c) ? c : {};

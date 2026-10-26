@@ -122,7 +122,7 @@ const grassOp = (args) => (args == null ? OP.unset(WORLD_ID, 'grass') : OP.set(W
 
 const SKY_NUMS = [   // the sky panel's sliders (client/lib/skypanel.js SLIDERS): key, label, min, softMax, step, default, unit
   ['hours', 'time of day', 0, 24, 0.1, 12, 'h'], ['rate', 'rate', 0, 48, 0.5, 0, '×'],
-  // azimuth is stored in radians and shown in degrees; sun and fill were cut
+  // azimuth is stored in radians and shown in degrees
   ['azimuth', 'sun azimuth', 0, 360, 5, 180, '°'], ['ambient', 'ambient', 0, 2.5, 0.05, 1],
   ['exposure', 'exposure', 0.3, 1.8, 0.05, 1], ['fog', 'fog', 0, 3, 0.05, 1],
 ];
@@ -315,7 +315,7 @@ export function worldEditOps(st, edits, live = {}) {
  *    kind 'weather' v = one of WEATHERS                                          → weather
  *    kind 'shape' | 'tint'  v = a ground-palette name (ctx.pal)                  → terrain (only that dial changes)
  *    kind 'plant'   v = a planting name                                           → grass (height/density/tint kept)
- *    kind 'mow'                                                                   → grass {clear:true}
+ *    kind 'mow'                                                                   → delete grass
  *  ctx: { pal, presets, now, mayShape } */
 export function worldPick(st, kind, v, ctx = {}) {
   const { sky, terrain, grass } = worldState(st);

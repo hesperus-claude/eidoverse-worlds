@@ -512,7 +512,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
           imp(m.A, -1, d1, m.t1, m.cA); imp(m.B, 1, d1, m.t1, m.cB); imp(m.A, -1, d2, m.t2, m.cA); imp(m.B, 1, d2, m.t2, m.cB); }
       }
     }
-    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c, distance.c): static bodies only;
+    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c, distance.c): static and sleeping bodies only;
     // never defer a fast body to the solver (a speculative point can't stop a box at 20 m/s); t = 0 hits ignored; rotation
     // swept too; the time lost to the clamp gives back its gravity (timeLoss·g).
     for (const b of bodies) {

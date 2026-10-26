@@ -1,5 +1,5 @@
-// Presence (present / away / busy): one field on the pose packet, relayed as sent (server/posecheck.ts normalises only the voice
-// and body fields below) and remembered for late joiners. Shared by client and server so both agree on the vocabulary.
+// Presence (present / away / busy): one field on the pose packet, relayed as sent (server/posecheck.ts passes `presence` as sent
+// and normalises the voice and body fields below) and remembered for late joiners. Shared by client and server so both agree on the vocabulary.
 export const PRESENCE_STATES = ['present', 'away', 'busy'];
 
 export function presenceWire(state) {

@@ -31,7 +31,7 @@ const FOUNDING_VERBS = {
         refuse("shape", "create-world {from} names the world it came from: {world: sha256:<64 hex>, head: <64 hex>, seq? (a fork: the seq it was copied at), name?}", ""); }
     // genesis seeds no state (§13), it names the governance keys: tier 0 the founder's OWN key when they bring one (ownerKey;
     // this server never holds it), tier 1 the operator's custody key. Without one tier 0 can never be filled later (GOV-5)
-    // and the operator is the top key. rewind_window defaults to 1000 change entries.
+    // and the operator is the top key.
     if (a.ownerKey !== undefined && !keyOk(a.ownerKey)) refuse("shape", "ownerKey is your own governance key: ed25519:<base64url of 32 bytes> (PROTOCOL §13)", "make one on your own machine (openssl genpkey -algorithm ed25519; PROTOCOL §13, \"Whose key is tier 0\"); or leave ownerKey out");
     const cu = w.custody(); if (!cu) throw new Error("authority bug: founding needs io.custody (the sequencer and founder keys, §13)");
     if (a.ownerKey !== undefined && (a.ownerKey === cu.operator() || a.ownerKey === cu.sequencer())) refuse("shape", "ownerKey must be your own key, not this server's", "");
@@ -103,7 +103,7 @@ const BATCH_VERBS = {
   batch(w, actor, a) { return commit(w, actor, "batch", a, (ctx) => buildBatch(ctx, a, w)); },
   // a fork's copy of its parent (server/worldlog.ts forkWorld): an ordinary batch through the same gate, logged under its own
   // verb so a reader tells inherited things from births (PROTOCOL §13), carrying what the parent holds as it is. Only
-  // forkCopy() below reaches it: no request word does.
+  // authority.js forkCopy reaches it: no request word does.
   "fork-copy"(w, actor, a) {
     if (!CTX.forking) refuse("rights", "fork-copy is the server's own copy of a world into its fork; it isn't a request", "fork a world with the fork request (an owner of the source)");
     return commit(w, actor, "fork-copy", a, (ctx) => buildBatch(ctx, a, w));

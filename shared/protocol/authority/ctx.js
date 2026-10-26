@@ -1,6 +1,6 @@
 // shared/protocol/authority/ctx.js — the authority's per-call state, ONE object. enter() saves and restores it whole, so a
 // nested call never resets the outer call's; nothing in the authority awaits, so calls can't interleave. Imports nothing.
-//   cat      the world's model catalogue ({get, list}); authority.js sets the lab's at load, request() the world's
+//   cat      the world's model catalogue ({get, list}); catalogue.js sets the lab's at load, request() the world's
 //   through  the request's throughLock flag
 //   isAnon   is this identity a guest (the directory's kind "anon")? from w.kindOf
 //   knownId  the directory knows this identity (a world without a directory, as in the lab, knows everyone)

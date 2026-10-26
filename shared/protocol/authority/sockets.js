@@ -15,9 +15,9 @@ import { refuse } from "./refuse.js";
 const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v !== PURGED;
 export const isSocketC = (c) => bag(c?.socket);
 export { socketRole } from "../../sockbody.js";
-// what a socket may carry besides its pose and name: label/description, disabled/lock/hidden, its own motion, the blueprint mark
 // at most this many sockets per host (no setting raises it); each also counts in @world.capacity.entities
 export const SOCKETS_PER_HOST = 64;
+// what a socket may carry besides its pose and name: label/description, disabled/lock/hidden, its own motion, the blueprint mark
 export const ON_A_SOCKET = new Set(["transform", "parent", "socket", "station", "label", "description", "disabled", "lock", "hidden", "motion", "copy-of"]);
 const UNIT = (sc) => sc === undefined || (Array.isArray(sc) && sc.length === 3 && sc.every((x) => x === 1));
 
@@ -38,7 +38,6 @@ export function socketRules(s, ids) {
     const under = kidsOf(id).find((k) => isSocketC(s.entities[k].c));
     if (under) return { code: "shape", reason: `${under} is a socket under the socket ${id}: a socket hangs on a thing, never on another socket`, fix: `parent ${under} to ${host}` };
     hosts.add(host); }
-  // (the one-driver rule went with station.input, reserved for later)
   for (const h of hosts) { const socks = kidsOf(h).filter((k) => isSocketC(s.entities[k].c)); const byName = new Map();
     for (const k of socks) { const v = s.entities[k].c.socket; const n = v.name;
       if (byName.has(n)) return { code: "name-taken", reason: `${h} already has a socket called '${v.name}' (${byName.get(n)})`, fix: "a socket's name is unique among its host's sockets: give it another", taken: byName.get(n) };
@@ -234,8 +233,6 @@ export function liftOps(st, ops, ever = new Set()) {
 // ---------- the old spelling, lifted by the maintenance command (lift-sockets) ----------
 const modelSeatsDue = (st, ever, k) => { const c = st.entities[k].c; const ms = modelOf(c.model)?.sockets;
   return bag(ms) && !bag(c.sockets) && !Object.keys(ms).some((n) => ever.has(socketId(k, n))) && !Object.keys(st.entities).some((x) => st.entities[x].c.parent?.to === k && isSocketC(st.entities[x].c)); };
-/** legacyHosts: in id order, hosts storing a map, named as a slot by a parent or home, or whose model declares seats never
- *  given (none of their ids ever made, so a deleted seat stays deleted). */
 /** The subset of legacyHosts in the OLD STORED FORMAT (a sockets map, a parent or home naming a slot, a socket child with a
  *  body block), not a catalogue model that gained sockets later (modelSeatsDue: never a reason to refuse writes). */
 export function storedLegacyHosts(st) {
@@ -247,6 +244,8 @@ export function storedLegacyHosts(st) {
     if (isSocketC(c) && c.socket.body !== undefined && st.entities[c.parent?.to]) hosts.add(c.parent.to); }
   return [...hosts].sort();
 }
+/** In id order: hosts storing a map, named as a slot by a parent or home, or whose model declares seats never given (none
+ *  of their ids ever made, so a deleted seat stays deleted). */
 export function legacyHosts(st, ever = new Set()) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;

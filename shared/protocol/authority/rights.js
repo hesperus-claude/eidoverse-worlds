@@ -38,9 +38,9 @@ const modHolder = (st, who) => R.MOD_POWERS.some((k) => may(st, who, k));
 export const effectiveIn = (st, actor, { anon = false } = {}) => R.effectiveOf(wcOf(st) ?? {}, actor, { anon, owners: ownersOf(st).length > 0 });
 /** In a folded state (a view: what a client should be told it may do here). */
 export const roleIn = (st, actor, { anon = false } = {}) => roleOf(st, actor, anon);
-// ---------- views over the log: who did what (L2: derived, never stored) ----------
+// ---------- views over the log: who did what (derived, never stored) ----------
 const isScriptActor = (a) => typeof a === "string" && a.startsWith("script:");
-// ---------- sanctions: views over the moderator log (research §5) ----------
+// ---------- sanctions: views over the moderator log ----------
 // Each record has an optional `until` (authority clock); expiry is computed, never written. Records name identities. No
 // `until`: a permanent ban, no kick cooldown. Every in-force record since the last LIFT counts and the STRONGEST wins, so a
 // weaker record never cancels a stronger one. Lifting goes through personLift.
@@ -81,7 +81,7 @@ export function sanctionsNow(w) {
 function entryBy(w, e) {
   const c = w.entries[e.cause];
   const by = isE(c) && c.kind === "act" ? c.actor : e.actor;
-  // a behaviour's results were admitted with its SPONSOR's rights (L4). A purged cause act leaves the rights unknown:
+  // a behaviour's results were admitted with its SPONSOR's rights. A purged cause act leaves the rights unknown:
   // null, matching nobody; never `by`, which would hand the lever-puller the author's thing
   if (isE(c) && c.kind === "act") { const b = readback(w, e.cause);
     if (b === null) return { seq: e.seq, by, rights: null };

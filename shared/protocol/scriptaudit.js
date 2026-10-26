@@ -39,7 +39,7 @@ export function creatorAt(L, id, comp, upto) {
   return found === null ? null : by(L, found);
 }
 /** the latest write to (id, comp) in its current life, as of seq `upto`, that changed more than `paused` (§5 "Two views":
- *  pausing adopts nothing). The authority's own rule (authority.js sponsorOf). */
+ *  pausing adopts nothing). The authority's own rule (authority/scripts.js sponsorOf). */
 export function sponsorAt(L, id, comp, upto) {
   if (!creatorAt(L, id, comp, upto)) return null;
   const W = []; // newest first, current life only

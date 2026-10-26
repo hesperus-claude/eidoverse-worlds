@@ -1,4 +1,4 @@
-// Optional framing for a world snapshot (GET /snap's query, the `snap` message's `frame`, the agent `snapshot` tool's
+// Optional framing for a world snapshot (GET /snap's query, the `capture` message's `frame`, the agent `screenshot` tool's
 // arguments): one normaliser, three readers. An absent field always means today's fixed framing.
 //   dist   — third/selfie: metres between camera and body, measured flat (third behind, selfie in front). [0.5, 30]
 //   height — third/selfie: camera height above the body's feet. [0, 30]

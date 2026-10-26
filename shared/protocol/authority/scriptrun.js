@@ -256,7 +256,7 @@ export function settleOrphans(w, present = []) {
 // A world needing a step still LOADS, but refuses writes (`repair-needed`) where no reader serves the old shape:
 //   lift     un-lifted seats: BLOCKS writes
 //   rename   @world trusted, a motion's old type and a station's pose are served; a grabbable's pose or a grip's fingers
-//            are not (shared/grab.js reads anim and grasp only): BLOCKS writes
+//            block although shared/grab.js reads them (SERVED_RENAMES): BLOCKS writes
 //   repair   azimuth in degrees reads as radians, an address model reads as "thing": BLOCKS writes
 const needsCache = new WeakMap();
 const SERVED_RENAMES = (op) => !(op.comp === "grabbable" || op.comp.startsWith("grabbable:"));   // what no reader serves in the old spelling

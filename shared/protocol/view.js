@@ -3,8 +3,8 @@
 // no second fold, nothing a reader can't rebuild from the fold. Pure; browser, server and agent run the same code.
 //   viewOf(id, c)      one entity: its components, flat, in the protocol's own names — model, transform, sockets, label,
 //                      light, … — plus the DERIVED conveniences every reader wants: pos / q / yaw (q's heading) / scale
-//                      (one number) / scale3 (non-uniform, when it is) / parent {to, socket?, offset, q} (the local
-//                      transform said as an offset). DERIVED names the derived set; recordComponents(rec) is the rest.
+//                      (one number) / scale3 (non-uniform, when it is) / parent {to, offset, q} (the local transform
+//                      said as an offset). DERIVED names the derived set; recordComponents(rec) is the rest.
 //   tf(c) / parentOf(c) / compOf(c)  the shared accessors of a fold record: its transform, its parent, its bag
 //   viewState(folded) the whole world: {entities, sky, terrain, grass, assets, roles, bans, …}
 //   - ids, roles and parent targets come back through names.dec (an imported world's x-- escapes undone);
@@ -35,7 +35,7 @@ export function tf(c) {
   const uniform = s[0] === s[1] && s[1] === s[2];
   return { pos, q, yaw: qHeading(q), scale: uniform ? s[0] : s[1], ...(uniform ? {} : { scale3: s.slice() }) };
 }
-/** {to (names.dec'd), socket?}, or null when it stands on its own. */
+/** {to (names.dec'd)}, or null when it stands on its own (a legacy parent.socket is lifted at the door, never shown). */
 export function parentOf(c) {
   const p = c?.parent;
   return p && typeof p.to === "string" ? { to: idOut(p.to) } : null;

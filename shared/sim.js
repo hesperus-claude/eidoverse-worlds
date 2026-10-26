@@ -16,14 +16,14 @@ const SUBSTEPS = 4, DENSITY = 1000, FRICTION = 0.6, GRAVITY = [0, -9.81, 0];
 // a sphere's rolling resistance (torque = ROLLING × radius × normal force), or a thrown ball rolls until the backstop.
 // 0.05 stops a 2 m/s ball in ~6 s (decel μr·g/1.4 = 0.35 m/s²)
 const ROLLING = 0.05;
-const MAX_SPEED = 20;
+const MAX_SPEED = 20;   // m/s: launches are clamped by the authority (ENGINES[].maxSpeed); the sim trusts them
 // spin is capped as v is: a corner may not move faster than MAX_SPEED (|w|·|half| ≤ 20 m/s), else a spun throw rolls off
 // at any speed. + − × ÷ √ only.
 function spinCap(w, half) {
   const r = Math.sqrt(half[0] * half[0] + half[1] * half[1] + half[2] * half[2]), m = Math.sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
   if (!(r > 0) || m * r <= MAX_SPEED) return w;
   const k = MAX_SPEED / (m * r); return [w[0] * k, w[1] * k, w[2] * k];
-}             // m/s: launches are clamped by the authority (ENGINES[].maxSpeed); the sim trusts them
+}
 
 export const emptySim = () => ({ epoch: null, tick: 0, bodies: {}, terrain: null, boxes: {}, statics: {}, e2: null });
 

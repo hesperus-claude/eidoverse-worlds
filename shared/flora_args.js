@@ -55,7 +55,7 @@ export function presetStrokes(args, presets = null) {
   // the caller's density is a FACTOR over each stroke's authored fullness, or the sparse/lush dial does nothing on presets
   const k = args.density ?? 1;
   if (args.preset != null) {
-    // §24 defs: presets are DATA (defs/flora/_presets.json). One this instance lacks fails LOUDLY: a logged bag must never drift into a default lawn.
+    // presets are DATA (defs/flora/_presets.json). One this instance lacks fails LOUDLY: a logged bag must never drift into a default lawn.
     const p = presets?.[args.preset];
     if (!p?.strokes?.length) {
       throw new Error(`[flora] unknown preset '${args.preset}' — have: ${Object.keys(presets ?? {}).join(', ') || '(no presets hydrated)'}`);

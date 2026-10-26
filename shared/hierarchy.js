@@ -1,5 +1,5 @@
-// hierarchy — the scene tree as a pure function of the fold (design §3 "Children", §5 "Left: Hierarchy"). Dependency-free
-// beyond shared/rot.js; read by the Hierarchy panel, its VR quad, the inspector's Parent field and the agent's tools.
+// hierarchy — the scene tree as a pure function of the fold (design §3 "Children", §5 "Left: Hierarchy"). Pure (no DOM,
+// no renderer); read by the Hierarchy panel, its VR quad, the inspector's Parent field and the agent's tools.
 // `world` is the fold's entities map ({ id: record }). A record's `parent` ({ to, socket?, offset?, yaw?, q? }) is the only edge.
 // A child's transform is LOCAL to its parent, exactly as the renderer realizes it (client/lib/realize/models.js execMount):
 //   position = parent.offset ?? socket.pos ?? [0,0,0]   (carrier frame)

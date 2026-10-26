@@ -171,7 +171,6 @@ export function makeConfig(over = {}) {
     if (!(v >= lo && v <= hi)) bad.push(`'${name}' = ${v} is outside [${lo}, ${hi}]`);
   }
   if (bad.length) throw new Error(`flight config: ${bad.join('; ')}`);
-  // sinkAtBest is derived: recomputed unless the caller overrode it
   return out;
 }
 

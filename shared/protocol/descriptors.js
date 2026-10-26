@@ -25,7 +25,7 @@ export const rateOf = (m) => (Number.isFinite(m?.degPerSec) ? m.degPerSec : Numb
 
 const AXIS = { to: (v) => axisVector(v) ?? v, from: (v) => axisLetter(v) ?? v };
 const RATE = { to: (v) => v, from: (_, m) => rateOf(m) };
-const NOON = { to: (b) => (b ? 'full' : 'dim'), from: (d) => d === 'full' };   // daytime (was day: false)
+const NOON = { to: (b) => (b ? 'full' : 'dim'), from: (d) => d === 'full' };
 const UNIFORM = { to: (s) => (typeof s === 'number' ? [s, s, s] : s), from: (v) => (Array.isArray(v) && v[0] === v[1] && v[1] === v[2] ? v[0] : v) };
 const AMP = { to: (v) => v, from: (v, m) => v ?? m?.amplitude };   // the first protocol spelled a pendulum's amp `amplitude`
 
@@ -39,7 +39,7 @@ const RATE_UI = { t: 'num', step: 5, dp: 1 };
  *  absent, not what the authority writes), and none registered: registering one changes every new component on the wire
  *  (a pin regeneration), and no reader needs it. */
 const DECIDED = {
-  // the registry states these two now: read from it, never restated
+  // read from the registry, never restated
   'Pivot.pos': COMPONENTS.pivot.absentMeans.pos,
   'Collider.shape': COMPONENTS.collider.absentMeans.shape,
   'Pendulum.pivot': 'a whole thing swings about its Pivot component, else its origin [0, 0, 0] (before 10-16: [0, 2, 0], written as its pivot by a stored world\'s maintenance command); a part about its own origin',

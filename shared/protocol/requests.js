@@ -1,7 +1,7 @@
 // shared/protocol/requests.js — the authority requests an edit plans: {verb, args}, one per change, or one `batch` for a
 // gesture (= one act = one undo); every planner builds these and every sender sends them as they are. Ids and component
 // names arrive as the VIEW shows them and are encoded here, once. A transform is always written whole ({pos, q, scale});
-// for a child it is LOCAL to its parent (PROTOCOL §2.3). Pure; browser, server, agent.
+// for a child it is LOCAL to its parent (PROTOCOL §9.3). Pure; browser, server, agent.
 import { socketsIn } from "../sockbody.js";
 import { enc, encName } from "./names.js";
 import { isPlaceholder } from "./ids.js";
@@ -16,7 +16,7 @@ export const set = (id, component, value, { merge = false } = {}) =>
   ({ verb: "set", args: { id: E(id), component: encName(String(component)), value, ...(merge ? { merge: true } : {}) } });
 /** remove one component. */
 export const unset = (id, component) => ({ verb: "delete", args: { id: E(id), component: encName(String(component)) } });
-/** its children go free (the authority's rule). */
+/** its children go with it (the authority's rule). */
 export const remove = (id) => ({ verb: "delete", args: { id: E(id) } });
 /** a thing's reactions (a swing's push, a door's open). */
 /** With no action the authority does the thing's one action or names what it offers (never 'use' by default). */

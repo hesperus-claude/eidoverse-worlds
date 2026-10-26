@@ -1,6 +1,6 @@
 // shared/protocol/authority/blueprints.js — blueprints (publish, update, create {from}, duplicate) and the reads: describe
-// (a thing as an accessibility tree) and READ_VERBS (help, look, inspect, measure, find, lint, history). schema stays in
-// VERBS beside capacity.
+// (a thing as an accessibility tree) and READ_VERBS (help, look, inspect, measure, find, lint, history). schema is in
+// verbs.js (SCHEMA_VERBS).
 import { grabOf, describeGrab } from "../../grab.js";
 import { isEntityId, PURGED } from "../fold.js";
 import { COMPONENTS, mapRefs } from "../componentspec.js";
@@ -35,7 +35,7 @@ const warnings = (...a) => UP.warnings(...a);
 const BLUEPRINTS = "blueprints:";
 const blueprintKey = (h) => `${BLUEPRINTS}${String(h).replace(/^sha256:/, "")}`;
 const isPublished = (st, h) => !!st.entities["@world"]?.c[blueprintKey(h)];
-// References across a copy (RESEARCH-event-wiring §4.3): every typed reference in a components map (parent excepted: copies
+// References across a copy: every typed reference in a components map (parent excepted: copies
 // place parents themselves) through f(id, path) → new id | null (drop) | the same id (keep). → the components with dropped
 // references removed (a value whose required reference went is removed whole).
 function rebindAll(c, f) {

@@ -54,7 +54,7 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (id === "@world" && comp.startsWith("roles:") && obj) {
     for (const k of Object.keys(v)) if (!["role", "can", "note", "until"].includes(k)) refuse("schema", `${at}: unknown key '${k}'`, "roles:<id> is {role, can?, note?, until?}", { didYouMean: guessKey(k, ["role", "can", "note", "until"]) });
     // a timed grant (upstream #258): `until` is when it ends (epoch ms, the authority's clock); the authority writes its end
-    // (expire-roles) and warns the holder five minutes before. Ownership never ends by itself (an ownerless world would
+    // (expire-roles); the server warns the holder five minutes before (server/access.ts). Ownership never ends by itself (an ownerless world would
     // open), and a new end is in the future, at most a year out
     if (v.until !== undefined) {
       if (R.isOwner(v)) refuse("shape", `${at}: ownership never expires`, "give a timed grant a role below owner, or leave until out");
@@ -199,7 +199,7 @@ function mediaCheck(s, id, comp, v, at, obj) {
       refuse("conflict", `${node ? `${id}'s ${node}` : id} already turns by ${isLookAt(k) ? k : `${x.type} (${k})`}; one thing turns a node at a time`, `remove ${k} first, or put ${comp.split(":")[0]} on another part`); }
 }
 // L7 (research 40 T10): values are checked against their schema at admit. A KNOWN name with an unknown key is refused with
-// a "did you mean" (terrain {amp: 0} is not `amplitude`, and a flat world got 3 m hills). Unknown NAMES are still kept (L5).
+// a "did you mean" (terrain {amp: 0} is not `amplitude`, and a flat world got 3 m hills). Unknown namespaced NAMES are still kept (L5).
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const TYPES = { number: isNum, int: Number.isInteger, string: (x) => typeof x === "string", bool: (x) => typeof x === "boolean", any: () => true,
   sha256: (x) => typeof x === "string" && /^sha256:[0-9a-f]{64}$/.test(x),   // a content hash (model-hash; the one spelling, as copy-of.from's)
@@ -332,7 +332,7 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
     const gone = Object.keys(def.dropped ?? {}).find((k) => k in v);
     if (gone !== undefined) refuse("schema", `${at}.${gone} is gone: ${def.dropped[gone]}`, DROPPED_FIX[`${name}.${gone}`] ?? def.help, DROPPED_DYM[`${name}.${gone}`] ? { didYouMean: DROPPED_DYM[`${name}.${gone}`] } : undefined); }
   unknownKeys(at, v, carry ? [...fields, ...(def.reservedFields ?? []), ...Object.keys(def.dropped ?? {})] : fields, name);
-  const kind = v.kind ?? def.defaultKind; // an imported world's terrain never named its kind: it is noise
+  const kind = v.kind ?? def.defaultKind;
   if (def.byKind) { if (!def.byKind[kind]) refuse("schema", `${at}.kind must be one of ${Object.keys(def.byKind).join(" | ")}, got ${JSON.stringify(v.kind)}`, def.help, { didYouMean: guess(String(v.kind), Object.keys(def.byKind)) });
     unknownKeys(at, v, def.byKind[kind], `${name} {kind: '${kind}'}`); }
   for (const [k, t] of Object.entries(def.fields)) if (v[k] !== undefined && !(v[k] === null && def.nullable?.includes(k)) && !TYPES[t](v[k])) refuse("shape", `${at}.${k} must be ${t}, got ${JSON.stringify(v[k]).slice(0, 40)}`, def.help);

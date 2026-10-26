@@ -262,8 +262,6 @@ function clearRefsTo(ctx, gone) {
   if (cleared.length) ctx.notes.push({ cleared, ...(dropped.length ? { removed: dropped } : {}), why: `references to what you deleted were cleared in the same act${dropped.length ? " (a value that can't stand without its reference, or a reset left with nothing to send home, went with it)" : ""}` });
   return ops;
 }
-// physical checks on every write (A2): pairs from the spatial index, work counted; `strict` is refused past the budget, a
-// write's own warnings end with `unchecked` (a write is never refused after it lands)
 // a stored reference that names nothing (old log, import, merge): lint says where it is and what it names
 function danglingRefs(st, ids) {
   const out = [];
@@ -272,6 +270,8 @@ function danglingRefs(st, ids) {
       for (const r of refsOf(k, v)) if (!st.entities[r.id]) out.push({ id, kind: "dangling", at: `${id}.${r.path.replace(/^[^.[]*/, k)}`, names: r.id, fix: `nothing here is called '${r.id}': point it at something that is, or clear it` }); } }
   return out;
 }
+// physical checks on every write (A2): pairs from the spatial index, work counted; `strict` is refused past the budget, a
+// write's own warnings end with `unchecked` (a write is never refused after it lands)
 function warnings(st, ids, strict = false) {
   const out = []; const ix = spatial(st); const pairs = new Map();   // id → the things it was already said to overlap
   // the ground still loading: no sunk/floating advice; a strict check (a put's claim) has nothing to judge on and is refused

@@ -157,8 +157,9 @@ export function guestRoleOf(wc) {
   return g;
 }
 
-/** {role, name, rank, can: {<permission>: bool}, permissions: [names on]}: the role's permissions, then default-role.can,
- *  then the per-person `can` (last, as Discord's overwrites), closed over dependencies. Owners hold every permission;
+/** {role, name, rank, can: {<permission>: bool}, permissions: [names on]}: the role's permissions, then default-role.can
+ *  (only for someone with no roles:<id> entry who isn't a guest), then the per-person `can` (last, as Discord's overwrites),
+ *  closed over dependencies. Owners hold every permission;
  *  `can.fly: true` may still give an owner flight when OWNERS_FLY is off. */
 export function effectiveOf(wc, id, opts = {}) {
   const role = roleIdOf(wc, id, opts); const def = roleDef(wc, role) ?? roleDef(wc, "inhabitant");

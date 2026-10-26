@@ -16,7 +16,6 @@ export const DEFAULT_BINDS = {
 };
 
 /** Control authority per second at full deflection: config, so an albatross isn't flown like a fighter. */
-// levelReturn applies only with the stick CENTRED: always on, the wings fought a held bank
 export const DEFAULT_AUTHORITY = {
   bankRate: 2.6,        // rad/s toward the commanded bank
   maxBank: 1.15,        // ~66deg

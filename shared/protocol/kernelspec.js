@@ -1,12 +1,9 @@
 // shared/protocol/kernelspec.js — the KERNEL's shapes, pinned: what every reader of every log agrees on before a single
-// component is read (PROTOCOL §1–§3, §9.3, §13). componentspec.js pins components; this pins below it:
+// component is read (PROTOCOL §1–§3, §13). componentspec.js pins components; this pins below it:
 //   envelope   the entry's fields (§1 "The envelope") and its kinds
 //   fold       the four operations and their fields; the batch body (§3)
 //   identity   the grammar of an identity, an entity id and a component name (§3.1)
 //   version    {dialect, v} and the minors this reader knows (§13; genesis's fields)
-//   transform  the one placement component (§9.3: glTF's rule)
-//   parent     the one attachment component (§9.3)
-//   model      what a thing shows (its library path; §9.3)
 //   roles      who may do what (§7): the component's shape only; its vocabulary is the registry's (componentspec roles.vocab)
 //   access     who may come in (§7, access.js): the component's shape
 // Status `trial-kernel`: it may change in the alpha, but never by a plain re-pin. spec/kernel-pin.json holds the pin;
@@ -19,7 +16,7 @@ import { ENVELOPE, KINDS, IDENT, ENTITY, COMP, OP_FIELDS, BATCH_FIELDS, GENESIS_
 import { COMPONENTS, pinOf } from "./componentspec.js";
 
 export const TRIAL_KERNEL = "trial-kernel";
-/** What every reader rests on (status trial-kernel; #260): the kernel is what the fold reads (transform, parent and model left it). */
+/** What every reader rests on (status trial-kernel; #260): the kernel is what the fold reads. */
 export const KERNEL_COMPONENTS = Object.freeze(["roles", "access"]);
 /** The kernel's shapes that aren't components: the pin's other keys. */
 export const KERNEL_SHAPES = Object.freeze(["envelope", "fold", "identity", "version"]);

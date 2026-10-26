@@ -324,7 +324,7 @@ export function inspectSchema(ent, id, live = {}) {
   const mounted = !!ent.parent;
   const locked = !!c.lock;
   // a lock doesn't make the pose read-only: the authority refuses, and one who may lift it is asked (throughLock, PROTOCOL §5).
-  // The pose shown is LOCAL to the parent (design §3), as the renderer realizes it, never the fold's pre-mount pos
+  // The pose shown is LOCAL to the parent, as the renderer realizes it, never the fold's pre-mount pos
   const L = localOf(ent, live.world ?? null);
   const pv = L.mounted ? { ...ent, pos: L.pos, q: L.q ?? undefined, yaw: L.yaw } : ent;
   const groups = [];
@@ -352,7 +352,7 @@ export function inspectSchema(ent, id, live = {}) {
     transform.push({ t: 'num', k: 'scale', label: 'scale', value: round(S[1]), def: 1, step: 0.05, dp: 2, min: 0.01, softMax: 12, ...tf,
       alias: 'scale', hint: tf.hint ?? 'sets all three axes to one number (the channels are scale x / y / z)' });
     ['x', 'y', 'z'].forEach((a, i) => transform.push({ t: 'num', k: `s${a}`, label: `scale ${a}`, value: round(S[i]), def: 1, step: 0.05, dp: 2, min: 0.01, softMax: 12, ...tf }));
-    // the channel box's Rotate (design §5): Euler degrees read from q in the entity's order (shared/euler.js); live.euler,
+    // the channel box's Rotate: Euler degrees read from q in the entity's order (shared/euler.js); live.euler,
     // the triple this viewer last saw, picks the branch so channels don't jump while you work
     const order = rotOrderOf(live);   // this viewer's (live.rotOrder): Euler channels are a view (PROTOCOL §9.1)
     const q = pv.q ?? qFromYaw(pv.yaw ?? 0);
@@ -378,7 +378,7 @@ export function inspectSchema(ent, id, live = {}) {
   groups.push({ group: 'pos', label: 'Transform', verb: L.mounted ? 'mount' : 'place', fields: transform, ...(L.mounted ? { local: ent.parent.to } : {}) });
   if (rotation.length) groups.push({ group: 'rot', label: 'Rotate', verb: L.mounted ? 'mount' : 'place', fields: rotation, ...(gimbal ? { gimbal: true } : {}) });
 
-  // the hierarchy (design §3 "Children"): the ref picks a new parent and keeps the child where it stands; clearing it (or
+  // the hierarchy: the ref picks a new parent and keeps the child where it stands; clearing it (or
   // `unparent`) makes it a root. The same edit the Hierarchy's drag commits, so a headset and an agent can.
   const kids = live.world ? childrenOf(live.world, id) : null;
   groups.push({ group: 'parent', label: 'Parent', fields: [
@@ -405,7 +405,7 @@ export function inspectSchema(ent, id, live = {}) {
     { t: 'info', k: 'reads', label: 'reads as', value: (() => { const r = readOut(c, { name: typeof c.label === 'string' ? c.label : null, sockets: live.world ? socketsIn(live.world, id) : null }); return [r.name ? `«${r.name}»` : '(no name)', readLine(r, { max: 120 })].filter(Boolean).join(': ') || '—'; })() },
   ] });
 
-  // pivot (research 52): where it turns and scales from, in its own frame (before scale). The buttons snap it to the model's
+  // pivot: where it turns and scales from, in its own frame (before scale). The buttons snap it to the model's
   // own box (live.box, the client's measure of the model in its frame); reset = back to the origin.
   if (isBag(c.pivot) && Array.isArray(c.pivot.pos)) {
     const pp = c.pivot.pos; const box = live.box;
@@ -709,7 +709,7 @@ export function inspectSchema(ent, id, live = {}) {
     ] });
   }
 
-  // scripts (research 41): each script:<name> gets an on/off switch, `paused`, like Unity's `enabled`. Flipping it writes only
+  // scripts: each script:<name> gets an on/off switch, `paused`, like Unity's `enabled`. Flipping it writes only
   // {paused} (a merge), so it needs nothing of the script and adopts nothing: the sponsor stays who it was, and the
   // authority's `scripts` view says who paused it, from the log
   const scriptKeys = Object.keys(c).filter((k) => k.startsWith('script:') && isBag(c[k]));
@@ -821,7 +821,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
         else sec.info = [['shape', `${String(ent.collide)} (overridden by the collider component)`]];
         sec.removable = inst.key != null;
         break;
-      // on a socket: the socket is the parent (a child entity of its host, PLAN-sockets-entities), named with its host
+      // on a socket: the socket is the parent (a child entity of its host), named with its host
       case 'Parent': { const on = live.world?.[ent.parent?.to]; const sk = on?.c?.socket ?? on?.socket;
         sec.info = sk && typeof sk === 'object' ? [['socket', `${String(sk.name)} on ${String(on.parent?.to ?? on.c?.parent?.to ?? '?')}`]] : []; }
         sec.fields = refs('parent', (f) => f.k !== 'children'); break;   // children are the Hierarchy's; the Parent card is a component, named as engines name it
@@ -887,7 +887,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
     const rec = RECORDS.Parent;
     out.push({ type: 'Parent', key: null, title: 'Parent', hash: rec.hash, category: rec.category, summary: rec.summary, fields: refs('parent', (f) => f.k === 'to'), removable: false, present: false });
   }
-  // needs (design §3): an entry whose need has one sensible default says what it brings; one needing a choice says it will
+  // needs: an entry whose need has one sensible default says what it brings; one needing a choice says it will
   // ask; one whose need can't be met in place (a Model: placed from the Library) is blocked, saying why
   const add = addable(components, { unmet: true, met: (n) => needMet(n, ent) }).filter((a) => a.name !== 'Label' && a.name !== 'Hidden' && a.name !== 'Description' && !NOT_OFFERED.has(a.name))
     .map((a) => {
@@ -906,7 +906,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
     add.push({ name: d.name, label: d.title, category: trusted ? d.category : 'drafts', summary: d.summary, hash: null, draft: true, chip: trusted ? 'blue' : 'amber',
       ...(trusted ? { trusted: true } : { hint: UNPROVEN_HINT }) });
   }
-  // the header's `lib` line reads the Model component (design §5), so it can never disagree with the Model card; an Empty and
+  // the header's `lib` line reads the Model component, so it can never disagree with the Model card; an Empty and
   // a light say what they are
   const model = components.find((c) => c.type === 'Model')?.params.lib;
   const lib = model != null ? String(model) : null;
@@ -923,7 +923,7 @@ export function trustOp(name, live = {}) {
 }
 
 // ---------------------------------------------------------------- needs
-// what each need means here (design §3): one sensible default is added as real ops in the same undo step; otherwise a
+// what each need means here: one sensible default is added as real ops in the same undo step; otherwise a
 // `choice` prompt, resolved by adding again with an option. A choice with no options reads as a refusal that says why.
 const article = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
 const NEEDS = {
@@ -1045,7 +1045,7 @@ function addOwnOps(ent, id, name, value) {
   return { ops: [], errors: [`${name}: added by a gesture, not a value (${WIRE_BLOCKED[name]?.(new Set()) ?? 'see its card'})`] };
 }
 
-/** If another needs it (design §3) nothing is sent: `confirm` names the dependants, and removing again with value "both"
+/** If another needs it nothing is sent: `confirm` names the dependants, and removing again with value "both"
  *  removes them too, in one step. */
 export function removeOps(ent, id, key, value) {
   ent = recordOf(ent, id);
@@ -1138,7 +1138,7 @@ export function editOps(ent, id, edits, live = {}) {
   const quatSet = {};               // component index → value (the Quaternion row)
   let headingSet = false;
   let euler = null;                 // the triple a Rotate edit composed: the viewer's next hint
-  const asks = [];                  // needs (design §3): a choice to make, or a remove-both to confirm
+  const asks = [];                  // needs: a choice to make, or a remove-both to confirm
   const comps = new Map();          // type → next data (null = remove)
   const motions = new Map();        // key → next params (null = rest)
   const flagsComp = (type, data) => comps.set(type, data);
@@ -1227,7 +1227,7 @@ export function editOps(ent, id, edits, live = {}) {
         break;
       }
       case 'parent': {
-        // design §3: parent it (or make it a root) where it stands, the same edit the Hierarchy's drag commits (hierarchy.js parentOps)
+        // parent it (or make it a root) where it stands, the same edit the Hierarchy's drag commits (shared/hierarchy.js parentOps)
         if (k !== 'to' && k !== 'unparent') { errors.push(`${key}: no such field`); break; }
         if (!live.world) { errors.push(`${key}: parenting needs the world's records (live.world)`); break; }
         if (parented) { errors.push(`${key}: one parent edit at a time`); break; }
@@ -1446,7 +1446,7 @@ export function editOps(ent, id, edits, live = {}) {
       default: errors.push(`${key}: no such group`);
     }
   }
-  // Rotate / Quaternion edits compose into ONE q on the coalesced place (design §5): read q in the entity's order, set the typed channels, recompose
+  // Rotate / Quaternion edits compose into ONE q on the coalesced place: read q in the entity's order, set the typed channels, recompose
   if (Object.keys(quatSet).length || Object.keys(rotSet).length) {
     basePlace();
     const q0 = pv.q ?? qFromYaw(pv.yaw ?? 0);
@@ -1476,7 +1476,7 @@ export function editOps(ent, id, edits, live = {}) {
     if (!n.ok) { errors.push(`${type}: ${n.why}`); continue; }   // the rule, before any round-trip
     comps.set(type, type === 'picture' ? n.picture : n.sound);
   }
-  // the pivot (research 52; Maya's channel box): a rotate or scale edit goes ABOUT the pivot, so the position moves to keep the
+  // the pivot (Maya's channel box): a rotate or scale edit goes ABOUT the pivot, so the position moves to keep the
   // pivot where it was. A typed translate in the same edit wins. The same frame for a root and a child: pos/q/scale here are
   // the local pose.
   const pivp = Array.isArray(c.pivot?.pos) && c.pivot.pos.length === 3 ? c.pivot.pos : null;

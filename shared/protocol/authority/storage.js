@@ -21,7 +21,7 @@ export const posAt = (e, i) => { if (e && typeof e === "object") Object.definePr
  *   getBlob must verify a blob against its name and throw if it doesn't match (§2.2).
  *   writeLine appends one already-checked line (no trailing LF) to durable storage.
  *   now: the authority's clock in ms (§2.1 ts); pace (optional): a monotonic ms clock for the speed track (a stepped-back
- *   wall clock holds `now` still); presence: the unlogged presence plane (P1, P2).
+ *   wall clock holds `now` still); presence: the unlogged presence plane.
  */
 export function worldOf(io) {
   const { name, entries, getBlob, putBlob } = io;
@@ -33,7 +33,7 @@ export function worldOf(io) {
   w.now = io.now;
   // presence pacing (the speed track): elapsed ms no wall-clock step moves; null = pace by w.now
   w.pace = io.pace ?? null;
-  // scripts (research 41): the sandbox is injected ({run, checkSyntax, available}: shared/protocol/sandbox.js), never imported
+  // scripts: the sandbox is injected ({run, checkSyntax, available}: shared/protocol/sandbox.js), never imported
   // here (browsers import this file). No sandbox: scripts install, and every activation says "unavailable".
   w.scripts = io.scripts ?? null;
   // who is present beyond the authority's own bodies: () => [{id, at: [x,y,z] | null}]
@@ -42,7 +42,7 @@ export function worldOf(io) {
   // arrivals and admins): () => number | null. null = no floor (an admin, a lab, a replay). The log keeps every say; this
   // only gates who READS one back.
   w.sayFloor = io.sayFloor ?? null;
-  // the presence plane: bodies and holds. Transient, never logged (P1, P2)
+  // the presence plane: bodies and holds. Transient, never logged
   w.presence = io.presence ?? { bodies: {}, holds: {} };
   // an older presence file named who occupies what `seats`: read it as `occupants`, keep only the new key
   if (w.presence.seats && !w.presence.occupants) w.presence.occupants = w.presence.seats;

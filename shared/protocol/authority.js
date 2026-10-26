@@ -1,5 +1,5 @@
 // The authority. Every request is resolved here once; the log receives the request as sent (an `act` entry) and the plain
-// results it produced (one `state` entry, `cause` = the act's seq). Replay never runs this file.
+// results it produced (a `change` entry, `cause` = the act's seq). Replay never runs this file.
 // PROTOCOL L7: every state write, from every path (requests, use handlers, undo, put, create-from, rests, the authority's own
 // follow-ups), is admitted by ONE function, `admit`, keyed on who asks, which components change (old and new), locks, where
 // it lands, sanity and rate. Tool checks may only add to it. The only code that appends a change entry is `changeEntry`, and
@@ -75,14 +75,6 @@ export { TOUCH_HORIZON } from "./authority/followups.js";
 import { actEntry, actOf, boundsOf, buildCreate, buildDelete, buildPlace, buildSet, buildTurn, changeEntry, changeShape, commit, letGoEdited, mint, needThing, notAThing, offRefuse, outsideWorld, resolve, serverWritten } from "./authority/writes.js";
 import { BATCH_VERBS, FOUNDING_VERBS, SAY_VERBS, SCHEMA_VERBS, WRITE_VERBS } from "./authority/verbs.js";
 
-
-// ---------- storage: authority/storage.js ----------
-// ---------- math: authority/math.js ----------
-// ---------- the spatial index: authority/spatial.js ----------
-// ---------- rights, views over the log, sanctions: authority/rights.js ----------
-// ---------- the authority ----------
-// Refusal / refuse / said: authority/refuse.js
-// RESERVED (the authority's own identities): authority/rights.js
 
 // A request as sent must itself be I-JSON (it is logged as the act). -0 is normalised; non-finite is refused.
 function wire(args) {
@@ -279,26 +271,6 @@ function guess(s, opts) {
   return opts.map((o) => [o, d(String(s), o) - 2 * share(o)]).sort((a, b) => a[1] - b[1]).filter(([o, n]) => n <= 3 || share(o) >= Math.max(1, toks(s).length - 1)).slice(0, 3).map(([o]) => o);
 }
 
-// ---------- L7, the one gate: authority/gate.js ----------
-// ---------- occupyRights (a socket joining a host): authority/occupants.js ----------
-// ---------- how much a world holds: authority/capacity.js ----------
-// ---------- the gate's value checks: authority/checks.js ----------
-// ---------- the write path: authority/writes.js ----------
-// ---------- follow-ups, reference clears, history readers: authority/followups.js ----------
-
-
-// ---------- use (interaction): authority/use.js ----------
-// ---------- behaviours, standing: authority/scripts.js ----------
-// ---------- behaviours, running: authority/scriptrun.js ----------
-
-// ---------- the act index, undo: authority/undo.js ----------
-// ---------- blueprints, reads: authority/blueprints.js ----------
-// ---------- physics (design 20): authority/physics.js ----------
-// ---------- occupants: authority/occupants.js ----------
-// ---------- the verbs a body performs: authority/bodyverbs.js ----------
-// ---------- what a body does to a loose thing: authority/manipulate.js ----------
-// ---------- body consent: authority/bodyconsent.js ----------
-// ---------- acting on a person: authority/moderation.js ----------
 // ---------- the verb table's bodies: authority/verbs.js ----------
 const VERBS = {
   ...EMBODIED_VERBS,
@@ -313,13 +285,14 @@ const VERBS = {
   ...SCRIPT_VERBS,
   ...BATCH_VERBS,
 };
-/** The fork's copy acts (server/worldlog.ts copyInto): the batch request, logged as verb fork-copy. */
 /** Every verb the authority answers (VERBSPEC must have a row for each: scars-check's verb-row check). */
 export const VERB_NAMES = Object.freeze(Object.keys(VERBS));
+/** The fork's copy acts (server/worldlog.ts copyInto): the batch request, logged as verb fork-copy. */
 export function forkCopy(w, actor, args) { CTX.forking = true; try { return request(w, actor, "fork-copy", args); } finally { CTX.forking = false; } }
 /** A server operator's recorded repair. NARROW: set / delete of @world's door components (roles:<id>, access, default-role,
- *  role-defs) and unban; everything else is refused before the authority is entered. RECORDED as the operator's own act
- *  (`operator: true`); shape, value, roles and last-owner checks still apply. Server-only. */
+ *  role-defs), unban, and the maintenance command (repair / repair-shapes → maintain); everything else is refused before the
+ *  authority is entered. RECORDED as the operator's own act (`operator: true`); shape, value, roles and last-owner checks
+ *  still apply. Server-only. */
 export function operatorRepair(w, actor, verb, args = {}) {
   const door = (verb === "set" || verb === "delete") && args && args.id === "@world" && REPAIR_COMP(args.component);
   // the shape repair is a maintenance command, never the load's; an operator runs it here, recorded with the operator's id

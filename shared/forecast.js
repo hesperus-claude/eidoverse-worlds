@@ -177,8 +177,6 @@ export function effectiveSky(sky, nowMs, cursor = null) {
   };
 }
 
-// ---------------------------------------------------------------- fold
-
 // ---------------------------------------------------------------- spelling
 // What a sky or weather act may still SAY the old way, stored the one way (clock 'real' → tz, weatherSeconds → transition,
 // dwellSec/transitionSec, dormantRated re-anchored at the entry's ts). Today's spelling comes back unchanged.

@@ -4,7 +4,7 @@
 // (§2.2). A reader verifying a chain hashes once per entry (research 29): that must be a synchronous hash. Awaiting
 // WebCrypto's subtle.digest once per entry measured about 18× slower than a sync pure-JS hash (334 µs vs 18.5 µs per
 // entry), so the browser path is the sync pure-JS sha256hex from ../sha256.js (the same function blueprint and
-// record hashes already use). Bun has a native sync hasher; the server uses it. tools/protocol/run.ts proves both agree.
+// record hashes already use). Bun has a native sync hasher; the server uses it. tools/protocol/sweep.ts proves both agree.
 // No node: import here — the browser imports this file as-is.
 import { sha256hex, sha256hexBytes } from '../sha256.js';   // the leaf (components.js re-exports it): no cycle back through particle_effects
 

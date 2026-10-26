@@ -30,7 +30,7 @@ import { ratedHoursAt } from "../../forecast.js";
 const guess = (...a) => UP.guess(...a);
 
 function changeShape(plan, cause, w) {
-  // §2.4: in a chained log every set carries a salt (16 random bytes), so a purged value's commit can't be brute-forced;
+  // §2.4: every set carries a salt (16 random bytes), chained or not, so a purged value's commit can't be brute-forced;
   // added before fits() measures the entry. `followUps` names the authority's ops in the entry itself, so any reader can
   // tell them from the asker's and authorship skips them. Always a batch then.
   const ops = plan.ops.map((o) => (o.verb === "set" && "value" in o && o.salt === undefined ? { ...o, salt: nonce16(w) } : o));
@@ -46,7 +46,7 @@ function changeEntry(w, plan, cause) {
   // stand now (the authority's track of their body starts again there)
   for (const u of plan.vacate) if (w.presence.occupants?.[u.who]?.to === u.socket) { const at = vacateAt(w, pre, u.who, u.socket); clearOccupant(w, u.who);
     inboxPush(w.presence, u.who, { type: "vacated", socket: u.socket, ...(u.host ? { host: u.host } : {}), by: plan.who.actor, why: vacateWhy(u), ...(at ? { at } : {}) }); }
-  (w.changedQ ??= []).push(seq); // `changed:<comp>` events, drained after the request (scripts, below)
+  (w.changedQ ??= []).push(seq); // `changed:<comp>` events, drained after the request (scriptrun.js)
   return seq;
 }
 const actEntry = (w, actor, verb, body) => ({ kind: "act", actor, verb, body });

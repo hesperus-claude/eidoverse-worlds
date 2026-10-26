@@ -4,10 +4,9 @@
 /** <side>_Wing_<row> then _1, _2 outward (the rig tooling's sibling convention). Two rows per side, three deep. */
 export const WING_RE = /^([LR])_Wing_(Upper|Lower)(?:_(\d+))?$/;
 
-/** Bones flight DRIVES if they exist; the rest is the body's own business. */
+/** Nothing reads this table: inspectBody matches WING_RE and its own CORE list below. */
 export const WANTED = {
   wings: WING_RE,
-  // VRM guarantees these, so their absence means something is deeply wrong rather than merely different.
   core: /^(Hip|Spine01|Spine02|Head|NeckTwist01)$/,
 };
 

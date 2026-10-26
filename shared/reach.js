@@ -5,7 +5,7 @@
 
 import { qMul as qMulq, qConj, qRotate as qRot, qAxisAngle } from './rot.js';
 
-// ---- the four vector ops this needs ---------------------------------------
+// ---- vector ops ------------------------------------------------------------
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
@@ -71,7 +71,7 @@ export function clampBehind(v, fwd, minFwd) {
  * @param {number} o.L2        rest length mid->end
  * @param {number[]} o.pole    world-space hint for which way the elbow points
  * @param {number[]} [o.fwd]   body forward axis, for the frontal-plane stop
- * @param {number[]} [o.coneAxis] cone axis in WORLD space (lifted out of body-frame coords by joints.js coneAxisWorld)
+ * @param {number[]} [o.coneAxis] cone axis in WORLD space (joints.js coneAxisBody's answer, carried out of the body frame by the caller)
  * @param {object} [o.limits]  { coneHalf, behind, maxFlex, minFlex } radians
  * @returns {{ok: true, upper: number[], lower: number[], elbow: number[],
  *            hand: number[], reached: boolean, gap: number,
@@ -538,7 +538,7 @@ export function solveTwoBoneClear(o, guards) {
 
 // ---- and which way the palm faces ------------------------------------------
 // position IK leaves the hand's turn free, and touching is done with the palm. Most of the correction goes to the forearm
-// (pronation; TWIST.lowerArm in joints.js), the rest to the wrist, clamped to its range.
+// (pronation; TWIST.leftLowerArm / rightLowerArm in joints.js), the rest to the wrist, clamped to its range.
 
 /** Shorten a rotation to at most `maxAng`, keeping its axis. */
 export function qClampAngle(q, maxAng) {

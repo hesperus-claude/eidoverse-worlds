@@ -141,7 +141,7 @@ function lastRelease(w, id) {
 const sameHome = (st, id, home) => { const e = st.entities[id]; const t = e?.c.transform; if (!t || !home) return false;
   const near = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 1e-3);
   return near(t.pos, home.pos) && near(t.q, home.q) && (e.c.parent?.to ?? null) === (home.parent?.to ?? null); };
-// returnAfter (research §3): at the first request after a thing has been unheld that long since a hand or physics last moved
+// returnAfter: at the first request after a thing has been unheld that long since a hand or physics last moved
 // it, the authority sends it home, a lazy write like a rest. Once: a return is the last mover, and isn't a release.
 function returnDue(w) {
   if (!holdsCustody(w)) return;   // a server that can't sign for the world doesn't write to it: its reads still work
@@ -216,7 +216,7 @@ function flyingWorld(st) {
 // a thing with no stamped shape is no body in the engine (stampShapes): launched, it would never fly or rest
 function shaped(e, id, spec = null) {
   // a rotating engine finds a collider through its model (the epoch's boxes): modelless, it would fly nothing and never
-  // rest. The shape check below refuses it anyway (phys-check D6); this holds if a shape can ever be set without a model
+  // rest. The shape check below refuses it anyway; this holds if a shape can ever be set without a model
   const bodied = typeof e.c.model === "string" || e.c.mesh !== undefined;
   if (spec && ENGINES[spec.engine]?.rotates && !bodied) refuse("no-shape", `${id} has no model or mesh, so ${spec.engine} has no collider to fly`, "put it down instead (put {id}); give it a model first");
   if (spec && ENGINES[spec.engine]?.rotates && e.c.physics?.shape?.type === "sphere" && !shapeError(e.c.physics.shape)) return;   // a rigid engine flies a sphere
@@ -239,7 +239,7 @@ function launch(w, actor, a, verb, g = null) {
   if (a.w !== undefined && !(Array.isArray(a.w) && a.w.length === 3 && a.w.every((n) => Number.isFinite(n) && Math.abs(n) <= 1000))) refuse("shape", "w is [x, y, z]: spin in rad/s about world axes (each within ±1000)", "e.g. w: [0, 6.28, 0] turns once a second about up");
   if (a.t !== undefined && !Number.isFinite(a.t)) refuse("shape", "t is a time on the authority's clock (ms)", "leave it out if you don't know it");
   // q as let go (PHYSICS §4.2): the launch carries it, so a client predicting its own throw folds the same inputs bit for bit
-  // (DESIGN-physics-responsiveness §3). A unit quaternion, else refused.
+  // A unit quaternion, else refused.
   if (a.q !== undefined) { if (!(Array.isArray(a.q) && a.q.length === 4 && a.q.every(Number.isFinite) && Math.abs(Math.hypot(...a.q) - 1) < 1e-3)) refuse("shape", "q is the thing's orientation as let go: a unit quaternion [x, y, z, w]", "leave it out to use the hold's");
     h.pose.q = a.q.map(noNeg0); }
   else h.pose.q = heldQ(w, h);   // let go as it was carried: turned with the body since it was taken
@@ -247,7 +247,7 @@ function launch(w, actor, a, verb, g = null) {
   { const f = facingOf(w, actor); if (f !== null) h.facing = f; else delete h.facing; }
   // the release point is judged before it is written: a refused launch leaves the hold where every client draws it
   const relPos = a.pos !== undefined ? releasePos(me, a.pos) : h.pose.pos;
-  // L7 (33 F3): a launch writes no state now, but it decides a write (its rest): admit it as put does (your role and its
+  // 33 F3: a launch writes no state now, but it decides a write (its rest): admit it as put does (your role and its
   // locks NOW, rate). The plan is a check only; the rest will be the engine's value.
   { const st = w.state(); const t = worldT(st, a.id);
     admit(w, st, { actor, cap: { kind: "handle", ids: [a.id], comps: ["transform", "parent"] } }, [...(st.entities[a.id].c.parent ? [delOp(a.id, "parent")] : []), setOp(a.id, "transform", { pos: relPos.map(r3), q: t.q, scale: t.scale })]); }

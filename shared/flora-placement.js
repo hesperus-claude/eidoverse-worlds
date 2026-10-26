@@ -35,7 +35,7 @@ export function placeInstances(o, spec) {
     // a stand is never square: W×D is cut to a feathered ellipse; 'organic' adds low-frequency noise for a lobed patch
     const organic = o.footprint === 'organic';
     const sstep = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-    // no rim line: density feathers from 60% of the radius and stragglers run to 1.25R, so a low camera sees no stamped edge
+    // no rim line: density feathers from 82% of the radius and stragglers run to 1.25R, so a low camera sees no stamped edge
     const EXT = 1.25;
     for (let gx = -W * EXT / 2; gx < W * EXT / 2; gx += step) for (let gz = -D * EXT / 2; gz < D * EXT / 2; gz += step) {
         const x = cx + gx + (rng() - 0.5) * step, z = cz + gz + (rng() - 0.5) * step;
