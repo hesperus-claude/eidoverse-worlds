@@ -91,6 +91,7 @@ try {
     check("ST1 a click with the wall tool edits the SELECTED building (house-b), not the world's first: ONE act", one && req?.id === NODE.get("house-b") && req?.component === "structure", { acts: myActs().slice(n0).map((x) => [x.e.verb, x.e.body?.request?.id]), refused: await evalJson(`__refused.map((r) => r.text)`) });
     check("ST2 …with expect on the building as I saw it", JSON.stringify(req?.expect?.[0]?.value) === B0, req?.expect);
     check("ST3 …and house-a is untouched", JSON.stringify(disk().entities[NODE.get("house-a")].c.structure) === A0);
+    await waitDisk(() => JSON.stringify(disk().entities[NODE.get("house-b")].c.structure) !== B0);   // the act lands before its change entry; the fold reads the change
     const B1 = JSON.stringify(disk().entities[NODE.get("house-b")].c.structure);
     check("ST4 …a wall was added", B1 !== B0 && disk().entities[NODE.get("house-b")].c.structure.levels[0].walls.length === JSON.parse(B0).levels[0].walls.length + 1);
     await waitFor(`globalThis.__editWrites().undo.at(-1) === ${a?.seq}`);
