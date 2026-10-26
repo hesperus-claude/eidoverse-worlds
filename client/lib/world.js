@@ -1,6 +1,6 @@
 // world — the authored plane's scene registries and world-scope builders.
 //
-// The log's MEANING lives in shared/fold.js (state.js folds it; the
+// The log's MEANING lives in shared/protocol/fold.js (net.js folds it through replica.js; the
 // realizers in realize/ project it into the scene). What remains here is
 // what every consumer shares: the entity/comp/mount registries, the
 // world-build queue that gates arrival on ground, the world-scope

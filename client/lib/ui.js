@@ -99,10 +99,8 @@ export function setHud(parts) { el.hud.innerHTML = parts; }
 // The hint bar shows TEXT unless it is handed markup built with html`` (markup.js): a plain string — a person's name, a
 // thing's label, an error from anywhere — is shown as the characters it is, never parsed (security pass 3, H1: a guest
 // named <img onerror=…> ran script in the browser of anyone they knocked over).
-// ============================================================ ONE status bar (notes/eidoverse/DESIGN-status-bar.md)
-// R 10-11 23:24: "We're up to three status bars here and they all stack on/over each other… Maybe they all share one bar
-// and we just use a priority system to determine which displays? Lantern is the default if nothing is otherwise
-// drawing attention". So: #hintbar is the one bar at the lantern's spot, and everything CLAIMS it with a priority:
+// ============================================================ ONE status bar
+// #hintbar is the one bar at the lantern's spot, and everything CLAIMS it with a priority:
 //   1 attn      a refusal (attention colour, copy pill, holds while pointed at)
 //   2 keys      the engaged gesture's keys (keyhints `during`)
 //   3 flash     a moment's notice ("panels hidden · Tab", "locked", the authority's warnings on my own edit)
@@ -180,10 +178,8 @@ addEventListener('ew-keyhint', (e) => {
 });
 
 // ============================================================ cursors
-// The loupe cursor is inked with --fg (white — live 09-04: 'non-accent for now'). CSS url() cursors can't read
-// custom properties, so the tint is baked here and published as --cur-loupe
-// (index.html holds the rule and the native fallback). Rebuilt when the style
-// panel writes a new accent.
+// The loupe cursor is inked with --fg, baked into --cur-loupe because CSS url() cursors can't read custom
+// properties (index.html holds the rule and the native fallback); rebuilt when --fg changes.
 
 let _cursorBrand = null;
 function buildCursors() {
@@ -201,7 +197,7 @@ function buildCursors() {
 }
 buildCursors();
 // the style panel writes tokens straight onto the root element's style;
-// buildCursors is a no-op unless --brand actually changed, so our own
+// buildCursors is a no-op unless --fg actually changed, so our own
 // --cur-loupe write can't feed the observer back into itself
 new MutationObserver(buildCursors)
   .observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
@@ -1359,7 +1355,7 @@ export function openDoor({ roster = [], needsKey = false, login = null, onEnter 
 
   const go = () => {
     // A verified identity owns the name — the server would ignore an edit
-    // anyway (home-node.md §7), so don't offer one.
+    // anyway, so don't offer one.
     let name = CONFIG.name;
     if (!CONFIG.authed) {
       name = s.querySelector('#d-name').value.trim().slice(0, 48);

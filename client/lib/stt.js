@@ -41,8 +41,6 @@
 // │ A tally with speech×N and result:final×0 is the broken case; anything    │
 // │ with finals in it is the unreliable-but-working case.                    │
 // │                                                                          │
-// │ Full history, four options and why three are wrong:                      │
-// │   notes/DECISION-android-captions.md                                     │
 // │ Upstream: https://issues.chromium.org/issues/40324711                    │
 // └──────────────────────────────────────────────────────────────────────────┘
 //

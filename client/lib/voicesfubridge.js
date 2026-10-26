@@ -221,10 +221,9 @@ export function initVoiceSfu(name) {
   // object and spreads the speaker map every call (review F4).
   window.__sfuMicOn = sfuMicOn;
   // My own mic level, for my own mouth flap + the 🎙 glyph (voicemouths.js).
-  // The mesh reads voice.js's analyser; on this transport that is always 0.
   window.__sfuMyLevel = sfuMyLevel;
   window.sfuStats = sfuInboundStats;      // NetEq evidence for the spike report
-  // The mic badge (mictoggle.js → voice.js toggleMic) checks for this and hands
+  // The mic badge (mictoggle.js → micstate.js toggleMic) checks for this and hands
   // over when the SFU transport owns playback. Set LAST, so it is never visible
   // before the bridge can honour it.
   // Returns the RESULTING state so toggleMic can hand it back to the panel, and

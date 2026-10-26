@@ -760,12 +760,8 @@ let sessionNo = 0;   // per page: tee() folds byte-identical lines (repeats 2–
 const ringPanelsAct = () => { bus.emit('xr:panels'); tee('[xr] panels toggled (ring)'); };
 globalThis.__xrRingPanels = ringPanelsAct;   // harness: the ring's 'panels' slot, the real action (xr-quad-softswap probe)
 let entering = false;   // requestSession → setSession is a window of ~1–3 s; a second click (or a leave) inside it made two sessions fight (Basis: refuse enter/leave while in flight)
-// The busy-session retry (#197 review B1). `busyRetryFor` is the ENTRY INTENT that owns the pending
-// retry: a retry belongs to the click that scheduled it, so a later click — or a leave — makes it
-// stale and it must not fire. `busyTimer` is its cancellation handle. Without both, a retry armed by
-// an old visor click could request immersive VR 1.5 s after the user changed their mind.
-// Both live in the effect owner now, so the PRODUCT and its suite run the same scheduling code
-// (#197 round-two review: a mutation making every busy verdict retry kept the old suite green).
+// The busy-session retry (#197): a retry belongs to the entry intent that scheduled it (xr_entry_effects.js
+// pendingFor); a later click or a leave cancels it. Lives in the effect owner so product and suite share it.
 const entryEffects = makeEntryEffects({
   setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (t) => clearTimeout(t),
   tee: (m) => tee(m), toast: (m, kind, ms) => toast(m, kind, ms),
