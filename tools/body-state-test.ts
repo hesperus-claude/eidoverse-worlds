@@ -1,11 +1,13 @@
-// Owned server -> real WorldAgent -> shared MCP tool, plus independent FK
-// coordinates and read/replace races. No production world or renderer.
-// Run: bun tools/body-state-test.ts
+// Owned server -> real WorldAgent -> shared MCP tool, plus independent FK, read/replace races, and one field table
+// (bones, yaw, clip, scale, named pose) from both senders; body size's own rule is the last section.
+// Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/body-state-test.ts   mutations: bun tools/body-state-mutation-test.ts
 process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { handleTool, TOOLS } = await import("../mcpl/tools.ts");
 const { BodyStateReader } = await import("../mcpl/body-state.ts");
+const { bodyWire } = await import("../shared/presencewire.js");
+const { until: waitUntil, tryUntil } = await import("./protocol/wait.ts");
 const { scratchSequencer, mkCheck, sleep } = await import("./harness.ts");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
@@ -26,6 +28,7 @@ writeFileSync(join(lib, "fixtures/large-body.vrm"), fixture(2));
 writeFileSync(join(lib, "fixtures/old-body.vrm"), fixture(1, true));
 const h = await scratchSequencer("body-state", { worlds: ["body-test"], serverEnv: { EIDOVERSE_DIR: lib, DEFS_DIR: join(lib, "defs"), SKIP_OPT_SWEEP: "1" }, portFrom: 9300 });
 const agents: any[] = [];
+let ownerWs: WebSocket | null = null;
 async function agent(name: string, avatar = "fixtures/test-body.vrm") {
   const a = new WorldAgent({ name, avatar, world: "body-test", url: h.BASE.replace("http", "ws") + "/ws" });
   agents.push(a); await a.connect(); return a as any;
@@ -237,10 +240,182 @@ try {
     const result = await pending;
     check("posture is rechecked after an asynchronous skeleton load", !result.ok && result.geometry?.reason === "posture_not_evaluated" && !result.contacts);
   } finally { postureServer.stop(true); }
+
+  // ---- one pipe, every field: a sender -> the server -> a peer -> body_state ----
+  // The browser-shaped sender is a raw WS join plus the exact packet client/lib/net.js sendPose builds (body fields via
+  // the real bodyWire); the headless sender is a real WorldAgent's tick.
+  {
+    const WS = h.BASE.replace("http", "ws") + "/ws", AVATAR = "fixtures/test-body.vrm", OWNER = "scale-owner";
+    const call = (a: any, name: string, args: any = {}) => handleTool({ agent: a, canPush: () => false, heldActivity: [], cursor: { caughtUpTo: null } }, name, args);
+    async function readAll(a: any, args: any = {}) {
+      const r = await call(a, "body_state", { detail: "all", ...args });
+      return { wire: r, ...JSON.parse(r.content[0].text) };
+    }
+    const settle = (fn: () => boolean, what: string) => waitUntil(what, fn, { ms: 5000, step: 20 });
+    const sub = (a: number[], b: number[]) => a.map((v, i) => v - b[i]);
+    const add = (a: number[], b: number[]) => a.map((v, i) => v + b[i]);
+    const mul = (a: number[], k: number) => a.map(v => v * k);
+    const close = (a: number[] | undefined, b: number[] | undefined, e = 1e-6) => !!a && !!b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < e);
+    const show = (v: unknown) => JSON.stringify(v, (_k, x) => typeof x === "number" ? Math.round(x * 1e4) / 1e4 : x);
+    const ROOT = [3, 0, 4], YAW = Math.PI / 2;
+    const ws = ownerWs = new WebSocket(WS);
+    await new Promise<void>((res, rej) => {
+      const t = setTimeout(() => rej(new Error("owner join timed out")), 5000);
+      ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot") { clearTimeout(t); res(); } };
+      ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: "body-test", id: OWNER, avatar: AVATAR, replica: true }));
+    });
+    /** client/lib/net.js sendPose's packet, field for field; body fields ONLY through the real bodyWire, unless `raw`. */
+    function ownerPacket(scale: unknown, extra: Record<string, unknown> = {}, raw = false) {
+      const pose: Record<string, unknown> = { p: ROOT, yaw: YAW, speed: 0, clip: "idle", pitch: 0 };
+      Object.assign(pose, raw ? { scale } : bodyWire({ scale, plateY: 0 }));
+      Object.assign(pose, { clipTime: 0, clipTimeSlot: "idle", clipRate: 0 }, extra);
+      return { type: "pose", pose };
+    }
+    let sent = "";
+    function ownerSend(scale: unknown, extra: Record<string, unknown> = {}, raw = false) { sent = JSON.stringify(ownerPacket(scale, extra, raw)); ws.send(sent); }
+    /** Send, then wait until the PEER holds a sample with that wire scale (undefined = no key) and reach bag. */
+    async function ownerAt(peer: any, scale: unknown, wireScale: number | undefined, extra: Record<string, unknown> = {}, raw = false) {
+      ownerSend(scale, extra, raw);
+      const want = JSON.stringify(extra.reach ?? null);
+      await settle(() => {
+        const p = peer.people.get(OWNER)?.pose;
+        return !!p && p.scale === wireScale && ("scale" in p) === (wireScale !== undefined) && JSON.stringify(p.reach ?? null) === want;
+      }, `owner sample at scale ${String(scale)}`);
+    }
+    const peer = await agent("scale-peer");
+    await call(peer, "move", { to: [1.6, 0, 4] });
+    await ownerAt(peer, 1, undefined);
+
+    // the field table: what each sender sends, what the peer's sample holds, what body_state reports
+    const heldBones = { leftUpperArm: [0, 0, 0.2, Math.sqrt(0.96)], head: { t: [0, 0.1, 0] } };
+    const FIELDS: { field: string; agent: ((a: any) => void) | null; raw: Record<string, unknown> | null; arrived: (s: any) => boolean; atTool: (r: any) => boolean }[] = [
+      { field: "bones", agent: (a) => a.setPose(heldBones), raw: { pose: heldBones }, arrived: (s) => eq(s.pose, heldBones), atTool: (r) => eq(r.publishedRotations, heldBones) },
+      { field: "yaw", agent: (a) => { a.yaw = 1.25; }, raw: { yaw: 1.25 }, arrived: (s) => s.yaw === 1.25, atTool: (r) => r.root?.yaw === 1.25 },
+      { field: "clip", agent: (a) => { a.clip = "tread"; }, raw: { clip: "tread" }, arrived: (s) => s.clip === "tread", atTool: (r) => r.clip === "tread" && r.poseEvaluation?.source === "procedural_swim" },
+      { field: "scale", agent: null, raw: bodyWire({ scale: 2, plateY: 0 }), arrived: (s) => s.scale === 2, atTool: (r) => r.scale === 2 && r.summary.includes("2× size") },
+      { field: "named pose", agent: (a) => { a.wingsFolded = true; }, raw: { poses: ["wings-folded"] }, arrived: (s) => eq(s.poses, ["wings-folded"]), atTool: (r) => eq(r.poses, ["wings-folded"]) && r.wingsFolded === true },
+    ];
+    const sender = await agent("field-agent");
+    const rest = () => { sender.setPose(null); sender.yaw = 0; sender.clip = "idle"; sender.wingsFolded = false; };
+    for (const f of FIELDS) {
+      for (const col of ["browser", "agent"] as const) {
+        const who = col === "browser" ? OWNER : sender.name;
+        if (col === "browser") ws.send(JSON.stringify({ type: "pose", pose: { ...ownerPacket(1).pose, ...f.raw } }));
+        else if (f.agent) { f.agent(sender); sender.tick(); }
+        else {   // the headless body has no chosen size: its wire never carries the key, read as 1
+          sender.tick();
+          await settle(() => !!peer.people.get(who)?.pose, "agent sample");
+          check(`${f.field} × agent: never sent, read as the default`, !("scale" in peer.people.get(who).pose) && (await readAll(peer, { who })).scale === 1);
+          continue;
+        }
+        const arrived = await tryUntil(`${f.field} from the ${col} sender`, () => !!peer.people.get(who)?.pose && f.arrived(peer.people.get(who).pose), { ms: 3000, step: 20 });
+        const r = await readAll(peer, { who });
+        check(`${f.field} × ${col}: sent, relayed, and reported by body_state`, !!arrived && f.atTool(r), show({ sample: peer.people.get(who).pose, read: { root: r.root, clip: r.clip, scale: r.scale, poses: r.poses, rot: r.publishedRotations } }));
+        if (col === "agent") { rest(); sender.tick(); await settle(() => peer.people.get(who)?.pose?.clip === "idle" && !peer.people.get(who)?.pose?.pose, "agent at rest"); }
+      }
+    }
+    sender.close();
+    await ownerAt(peer, 1, undefined);
+
+    // ---- body size's own rule: the root carries position and yaw and is never scaled; the size lives below it ----
+    const plain = JSON.stringify({ type: "pose", pose: { p: ROOT, yaw: YAW, speed: 0, clip: "idle", pitch: 0, clipTime: 0, clipTimeSlot: "idle", clipRate: 0 } });
+    check("an unscaled body's packet is byte-identical to one that predates body size", sent === plain, sent);
+    check("…and arrives at the peer with no scale key", !("scale" in peer.people.get(OWNER).pose));
+    const base = await readAll(peer, { who: OWNER });
+    check("1×: the peer reads the owner's current body", base.ok && base.poseEvaluation?.source === "vrma" && base.scale === 1, show(base.error ?? base.geometry));
+    check("1×: hand-computed FK — leftHand at root + yaw·(0.8, 1.5, 0)", close(base.joints?.leftHand?.position, [3, 1.5, 3.2]), show(base.joints?.leftHand?.position));
+    await call(peer, "reach", { limb: "leftHand", who: OWNER, point: "hand_r", palm: false });
+    await call(peer, "reach", { limb: "rightHand", x: .3, y: 1.2, z: .5, space: OWNER, palm: false });
+    await peer.refreshReachReading();
+    const reach1 = structuredClone(peer.reachReading.reachEvaluation);
+    check("1×: the peer's reach aims at the owner's live hand_r, 2 cm off its surface",
+      close(reach1.leftHand?.target, add(base.contacts.hand_r.position, mul(base.contacts.hand_r.normal, .02))), show(reach1.leftHand));
+    // a point in the owner's ROOT frame, yaw π/2: (x, y, z) → (root.x + z, y, root.z − x)
+    check("1×: a point in the owner's root frame resolves by root position and yaw", close(reach1.rightHand?.target, [3.5, 1.2, 3.7]), show(reach1.rightHand));
+    for (const u of [0.5, 2]) {
+      await ownerAt(peer, u, u);
+      const r = await readAll(peer, { who: OWNER });
+      check(`${u}×: scale crosses owner → server → peer → body_state`, r.ok && r.scale === u && r.summary.includes(`${u}× size`), show(r.summary));
+      check(`${u}×: world root position and yaw stay exactly as sent`, r.root?.position?.every((v: number, i: number) => v === ROOT[i]) && r.root?.yaw === YAW, show(r.root));
+      check(`${u}×: hand-computed FK — leftHand at root + yaw·${u}·(0.8, 1.5, 0)`, close(r.joints?.leftHand?.position, [3, 1.5 * u, 4 - .8 * u]), show(r.joints?.leftHand?.position));
+      const joints = Object.keys(base.joints ?? {});
+      const badJ = joints.filter(n => !close(r.joints[n]?.position, add(ROOT, mul(sub(base.joints[n].position, ROOT), u))));
+      check(`${u}×: every joint (${joints.length}) is its 1× offset from the root, scaled by ${u}`, joints.length > 15 && !badJ.length, badJ.join(", "));
+      const badS = joints.filter(n => !close(r.joints[n]?.selfPosition, mul(base.joints[n].selfPosition, u)));
+      check(`${u}×: root-frame joint positions scale by ${u}`, !badS.length, badS.join(", "));
+      const points = Object.keys(base.contacts ?? {});
+      const badC = points.filter(n => !close(r.contacts[n]?.position, add(ROOT, mul(sub(base.contacts[n].position, ROOT), u))));
+      check(`${u}×: every contact (${points.length}) scales about the body root`, points.length > 10 && !badC.length, badC.join(", "));
+      check(`${u}×: contact normals are unchanged by a uniform size`, points.every(n => close(r.contacts[n].normal, base.contacts[n].normal)));
+      await peer.refreshReachReading();
+      const ev = peer.reachReading.reachEvaluation;
+      const surface = add(ROOT, mul(sub(base.contacts.hand_r.position, ROOT), u));
+      check(`${u}×: the peer's reach target is the scaled hand_r + the same 2 cm (absolute) standoff`,
+        ev.leftHand?.ok && close(ev.leftHand.target, add(surface, mul(base.contacts.hand_r.normal, .02))), show(ev.leftHand));
+      check(`${u}×: …and matches the body_state contact the peer would read itself`,
+        close(ev.leftHand?.target, add(r.contacts.hand_r.position, mul(r.contacts.hand_r.normal, .02))));
+      check(`${u}×: a point in the owner's root frame is the same metres at any size (browser: root.localToWorld, root unscaled)`,
+        ev.rightHand?.ok && close(ev.rightHand.target, reach1.rightHand.target), show(ev.rightHand?.target));
+    }
+    // persistence: a late joiner gets the size from the server's remembered pose
+    const lateScale = await agent("scale-late");
+    await settle(() => lateScale.people.get(OWNER)?.pose?.scale === 2, "late joiner's snapshot of the owner");
+    const lateRead = await readAll(lateScale, { who: OWNER, points: ["hand_r"] });
+    check("a late joiner's snapshot carries the size into geometry", lateRead.ok && lateRead.scale === 2
+      && close(lateRead.contacts?.hand_r?.position, add(ROOT, mul(sub(base.contacts.hand_r.position, ROOT), 2))), show(lateRead.contacts?.hand_r));
+    // never trust the wire: the fence clamps, the reader clamps, absence means 1
+    await ownerAt(peer, 7, 2, {}, true);
+    check("an out-of-range size is clamped to 2 by the relay and read as 2", (await readAll(peer, { who: OWNER, points: ["hand_r"] })).scale === 2);
+    await ownerAt(peer, "huge", undefined, {}, true);
+    const garbled = await readAll(peer, { who: OWNER });
+    check("a non-numeric size is dropped by the relay and reads as 1", garbled.scale === 1 && close(garbled.contacts?.hand_r?.position, base.contacts.hand_r.position));
+    peer.people.get(OWNER).pose.scale = 0.1;     // a sample that never met the fence (an older relay): the reader clamps
+    const tiny = await readAll(peer, { who: OWNER, points: ["hand_r"] });
+    check("the reader clamps what it is handed (0.1 → 0.5), in the geometry as well as the label", tiny.scale === 0.5
+      && close(tiny.contacts?.hand_r?.position, add(ROOT, mul(sub(base.contacts.hand_r.position, ROOT), .5))), show(tiny.contacts?.hand_r));
+    await ownerAt(peer, 1, undefined);
+    const back = await readAll(peer, { who: OWNER });
+    check("returning to 1 sends nothing and restores the 1× geometry exactly", !("scale" in peer.people.get(OWNER).pose)
+      && Object.keys(base.contacts).every(n => close(back.contacts[n].position, base.contacts[n].position)));
+    peer.releaseReach();
+    // a scaled REACHER: fixture right shoulder at (−0.2, 1.5, 0), arm 0.3 + 0.3; the target is out of reach at 1×, within at 2×
+    const selfReach = { rightHand: { t: { p: [-.4, 3, 1], space: "self" }, palm: false } };
+    const evals: Record<number, any> = {};
+    for (const u of [1, 2]) {
+      await ownerAt(peer, u, u === 1 ? undefined : u, { reach: selfReach });
+      const r = await readAll(peer, { who: OWNER });
+      evals[u] = r.reachEvaluation?.rightHand;
+      // root frame (−0.2u, 1.5u, 0) at yaw π/2 → world (root.x + 0, 1.5u, root.z + 0.2u)
+      check(`${u}× reacher: the shoulder scales about the root`, close(evals[u]?.shoulder, [3, 1.5 * u, 4 + .2 * u]), show(evals[u]));
+      check(`${u}× reacher: its self-frame target is the same metres`, close(evals[u]?.target, [4, 3, 4.4]), show(evals[u]?.target));
+    }
+    check("a 2× arm reaches a point a 1× arm falls short of", evals[1]?.ok && !evals[1].reached && evals[1].gap > .5
+      && evals[2]?.ok && evals[2].reached === true, show({ one: evals[1]?.gap, two: evals[2]?.gap }));
+    // the unjoined (legacy) agent path shares one ReachBody per avatar path between bodies
+    const solo = new WorldAgent({ name: "solo", avatar: AVATAR, world: "body-test", url: WS }) as any;
+    solo.pos = { x: 0, y: 0, z: 0 }; solo.yaw = 0;
+    const big = { id: "big", avatar: AVATAR, pose: { p: [1, 0, 0], yaw: 0, speed: 0, clip: "idle" } as any };
+    solo.people.set("big", big);
+    await solo.reach("leftHand", { who: "big", point: "hand_r", palm: false });
+    const legacy1 = solo.reachTargetPoint({ who: "big", point: "hand_r" });
+    big.pose = { ...big.pose, scale: 2 };
+    const legacy2 = solo.reachTargetPoint({ who: "big", point: "hand_r" });
+    const surf1 = sub(legacy1.pos, mul(legacy1.normal, .02));
+    check("unjoined path: a 2× body's contact target scales about its root, standoff absolute",
+      close(legacy2?.pos, add(add([1, 0, 0], mul(sub(surf1, [1, 0, 0]), 2)), mul(legacy1.normal, .02))), show({ legacy1, legacy2 }));
+    const shared = solo.reachBodySync(AVATAR);
+    shared.poseAt([0, 0, 0], 0, null, 1); const arm1 = shared.armLength("rightHand");
+    shared.poseAt([0, 0, 0], 0, null, 2); const arm2 = shared.armLength("rightHand");
+    shared.poseAt([0, 0, 0], 0, null);    const arm3 = shared.armLength("rightHand");
+    check("a reused stand-in re-measures its arm when its size changes (0.6 → 1.2 → 0.6 m)",
+      Math.abs(arm1 - .6) < 1e-6 && Math.abs(arm2 - 1.2) < 1e-6 && Math.abs(arm3 - .6) < 1e-6, show({ arm1, arm2, arm3 }));
+    solo.close();
+  }
 } catch (e) {
   process.exitCode = 1;
   throw e;
 } finally {
+  try { ownerWs?.close(); } catch { /* already closed */ }
   for (const a of agents) a.close();
   await h.cleanup(tally.failed || process.exitCode ? 1 : 0);
   rmSync(lib, { recursive: true, force: true });
