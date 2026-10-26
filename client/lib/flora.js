@@ -703,7 +703,7 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
       // sample; no relief/rough/SSS fetches a 4cm blade could never show).
       // ?grassshade=full restores upstream's four-fetch material for A/B.
       const shadeMode = CONFIG.params.get('grassshade') ?? 'fast';
-      // §22m (this branch): opaque geometry blades — Sol's silhouette via the
+      // §22m: opaque geometry blades — Sol's silhouette via the
       // fitted envelope, Sol's palette baked to vertex colors, zero alpha
       // test. ?grassgeo=cards boots the atlas-card meadow for the A/B.
       const geoMode = CONFIG.params.get('grassgeo') ?? 'opaque';

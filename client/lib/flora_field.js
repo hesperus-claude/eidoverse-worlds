@@ -1,5 +1,5 @@
 // flora_field — field lifecycle assembly, DOM-free (unit-tested in
-// spec/flora_field.test.ts). A "field" is the setGrass-shaped object the
+// tools/flora.test.ts). A "field" is the setGrass-shaped object the
 // grass verb owns: possibly several engine strokes composed under one group.
 
 import { ownHook, releaseHook } from './autohooks.js';
