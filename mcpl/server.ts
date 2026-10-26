@@ -1,23 +1,11 @@
-// eidoverse-worlds agent MCPL — MCP stdio server giving an agent embodied
-// presence: a body (WorldAgent), verbs, text-tier perception, and a retina
-// (first-person snapshots via a spectator browser session on a GPU host).
+// eidoverse-worlds agent MCPL — MCP stdio server giving an agent embodied presence: a body (WorldAgent), verbs,
+// text-tier perception, and a retina (first-person snapshots via a spectator browser session on a GPU host).
 //
 // Env: WORLD_URL (ws://127.0.0.1:8940/ws), AGENT_NAME (claude),
 //      WORLD_NAME (commons), AGENT_AVATAR (vrm library path).
 //
-// UNIFIED ONTO THE SHARED TABLE (survey §C, ruled §24r). This file used to
-// carry its own hand-copied 16-tool subset of net-server's table — drifted
-// descriptions, and a stale searchLibrary keeping the hardcoded-Mac-path bug
-// R0 had fixed on only one side. Now it is a TRANSPORT: the tool list is
-// tools.ts's TOOLS (so this door gains pose/reach/animate/measure/
-// world_history/world_debug/the library sheets and every future tool for
-// free), dispatch is tools.ts's handleTool, and the only local vocabulary is
-// pending_pings — the polling analog of the ping notification below, which a
-// channel host doesn't need (its pings arrive as channel messages) but a
-// plain-MCP host must be able to ask for.
-//
-// travel is NOT listed: it is session machinery (channel epochs, join
-// gates) that only the WS door carries — this door fronts one WORLD_URL.
+// A transport only: tools and dispatch are tools.ts's (TOOLS, handleTool); the one local tool is pending_pings,
+// the polling form of the ping notification, for plain-MCP hosts. No travel: this door fronts one WORLD_URL.
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -70,10 +58,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   return await handleTool(ctx, name, args) as { content: { type: string; text?: string }[] };
 });
 
-// Pushes: every ping (mention / approach) also goes out as an MCP notification
-// so runtimes that route notifications into agent wakes (connectome
-// network-mcpl, same pattern as discord-mcpl pings) get real-time embodiment;
-// plain MCP clients poll pending_pings instead.
+// every ping also goes out as an MCP notification for runtimes that wake on them; plain clients poll pending_pings
 agent.onPing = (p) => {
   server.notification({
     method: "notifications/eidoverse/ping",

@@ -1,8 +1,7 @@
 // What the eidoverse door DECLARES about itself: capabilities (MCPL SPEC §5.1),
 // feature sets (§6.1–§6.2), and the tag vocabulary + producer ontology (§16).
 //
-// Three rules govern everything in this file, and they are the reason it is a
-// file rather than three object literals inlined at the handshake:
+// Three rules govern everything in this file:
 //
 //  1. **Declaration is not authorization.** Everything here is an *input* to the
 //     host's decision (§5.4: "Advertisement is an input, never an authorization").
@@ -42,11 +41,8 @@ export const CHAT = {
   thread: "chat:thread",
 } as const;
 
-/** §16.2's sender facet, from the sender's own word. A sender who declares "agent" (PROTOCOL §6a: the word a door body
- *  declares unless told otherwise) is tagged chat:from-agent, the facet hosts' wake rules read so that an agent doesn't
- *  wake on another agent's speech; any other word, or none, gets no facet, and every declaration still rides along as
- *  metadata.declares, verbatim. Nothing is inferred: "ai" is not read as "agent" (review r11 L2). Dropping the tag would
- *  have changed who wakes whom for every host following the SPEC. */
+/** §16.2's sender facet: the word "agent" (PROTOCOL §6a) is tagged chat:from-agent, which hosts' wake rules read so
+ *  agents don't wake on each other; nothing is inferred ("ai" is not "agent"); metadata.declares carries any word. */
 export function senderFacet(declares: string | null | undefined): string | null {
   return declares === "agent" ? CHAT.fromAgent : null;
 }
@@ -77,15 +73,8 @@ const CLOSURE: Record<string, string[]> = {
   [CHAT.dm]: [CHAT.addressed, CHAT.private],
 };
 
-/**
- * Build a conforming tag set: deduplicated (§16.1 "tags are a set"), closed
- * under §16.3's core implications, and never self-contradictory.
- *
- * §16.3: `chat:addressed` and `chat:ambient` are opposites, and a host that
- * receives both MUST resolve it by dropping `chat:ambient`. Producers SHOULD NOT
- * emit the pair at all — so we resolve it here, identically, rather than shipping
- * a set whose meaning depends on the consumer's rule ordering.
- */
+/** A conforming tag set: deduplicated (§16.1), closed under §16.3's implications, and never carrying both
+ *  `chat:addressed` and `chat:ambient` (resolved here as §16.3 has hosts do, by dropping ambient). */
 export function tags(...list: (string | false | null | undefined)[]): string[] {
   const out = new Set<string>();
   for (const t of list) {
@@ -140,15 +129,8 @@ export const CAP = {
   channelsTyping: "channels.typing",
 } as const;
 
-/**
- * Does a granted path cover the capability being exercised?
- *
- * §5.4: matching is over FULL paths with `*` wildcards. A `*` matches exactly
- * one segment, so `channels.*` covers `channels.publish` and does not silently
- * reach into a deeper level the host never wrote. An ancestor prefix is NOT a
- * grant — `channels` alone does not confer `channels.publish`; absence is denial
- * and there is no unspecified state, so an ambiguous entry fails closed.
- */
+/** Does a granted path cover this capability? §5.4: full paths, `*` matches exactly one segment, and an ancestor
+ *  prefix is not a grant (`channels` doesn't confer `channels.publish`): ambiguity fails closed. */
 export function capabilityMatches(granted: string, path: string): boolean {
   const g = granted.split("."), p = path.split(".");
   if (g.length !== p.length) return false;
@@ -157,17 +139,8 @@ export function capabilityMatches(granted: string, path: string): boolean {
 
 // ---- producer ontology (§16.4) ---------------------------------------------
 
-/**
- * Suggested treatment (§16.5) — inspectable configuration, applied only on the
- * host's or operator's explicit acceptance, never automatically.
- *
- * Note what is NOT here: any rule with `immediate`. A producer that suggests
- * waking "purchases inference by declaration" (§16.5), and a host that wrongly
- * auto-applies a producer list would then be paying for our traffic on our say-so.
- * Every rule below is strictly quieting, so even the misbehaving-host case ends
- * up quieter than the status quo rather than louder. Being spoken to is left
- * where it belongs: the consumer's own rules, and the host default.
- */
+/** Suggested treatment (§16.5), applied only on the host's explicit acceptance. No rule says `immediate`: a
+ *  suggestion must not purchase a wake, so every rule only quiets; being spoken to is the consumer's rule. */
 const SUGGESTED_TREATMENT = [
   { tagsAny: [EIDO.presence], behavior: "mute" },
   { tagsAny: [EIDO.catchup], behavior: "mute" },
@@ -179,7 +152,7 @@ const TAG_ONTOLOGY = {
   // Descriptions of the reserved core are inherited from §16.2 — listing them
   // here says only "this server emits these", never what they mean (§16.4).
   coreTags: [
-    // (no chat:dm / chat:private: world chat has no private channel since whisper was removed, R 10-18)
+    // (no chat:dm / chat:private: world chat has no private channel since whisper was removed)
     CHAT.addressed, CHAT.mention, CHAT.ambient,
     CHAT.fromAgent,
   ],
@@ -191,10 +164,7 @@ const TAG_ONTOLOGY = {
     },
     [EIDO.depart]: {
       desc: "Someone who had walked up to you is no longer in your immediate surroundings. The closing bracket of eidoverse:approach — you only ever receive one for a person you were told had arrived. The wire text names who moved when there is evidence ('walked away' only when their own movement carried them out); otherwise it states the relation neutrally ('is no longer nearby' — you may be the one who left).",
-      // AMBIENT, not addressing: a departure is worth knowing and not worth
-      // waking for, and the whole point of this pair is fewer interruptions,
-      // not one more. Consumers who do want to wake on it can say so in their
-      // own rules — the reverse (unpicking a wake we declared) they cannot.
+      // ambient, not addressing: consumers can add a wake in their own rules, but can't unpick one we declare
       facet: "lifecycle",
     },
     [EIDO.reach]: {
@@ -255,18 +225,8 @@ export interface FeatureSetDecl {
   tagOntology?: unknown;
 }
 
-/**
- * Three feature sets rather than one, because §6.4's derivation disables a
- * feature set whole when any capability its `uses` names is denied. Bundling the
- * typing relay in with the world channel would mean losing the world over a
- * typing indicator; bundling the tools in would mean losing the body's hands
- * over a channel policy. The split IS the degradation report: each names exactly
- * what it cannot survive without.
- *
- * `uses` is honest about what the code actually exercises — not aspirational, and
- * not padded. §6.4.2: an undeclared use is caught by the grant anyway and earns a
- * declaration-mismatch diagnostic; security never depended on this list.
- */
+/** Three feature sets, because §6.4 disables a set whole when any of its `uses` is denied: the split is the
+ *  degradation report. `uses` lists what the code exercises, no more (§6.4.2 catches an undeclared use anyway). */
 export const FEATURE_SETS: Record<string, FeatureSetDecl> = {
   "eidoverse.world": {
     description:
@@ -306,22 +266,9 @@ for (const [name, fs] of Object.entries(FEATURE_SETS)) {
 
 // ---- the advertisement (§5.1) ----------------------------------------------
 
-/**
- * The manifest this door advertises under `capabilities.experimental.mcpl`.
- *
- * §5.1: the advertisement mirrors the capability paths, and a capability with
- * sub-capabilities is a nested object whose members are §6.2's leaves. `channels`
- * is therefore spelled out leaf by leaf rather than `true` — `true` would claim
- * `acknowledge`, which this door does not implement, and a claim it cannot
- * honour is a lie the host would have to discover by timeout. `streaming` isn't
- * claimed either: nothing here uses the generation stream (the typing dots come
- * from `channels/typing`), so a host has no reason to send it. The host's
- * speech reaches the world through `channels/publish`.
- *
- * No `revision` member: this door does not implement §17 manifest changes, and
- * §5.1 says a server that does not may omit it — its manifest is then fixed for
- * the life of the connection, which is true (it is a module constant).
- */
+/** The manifest under `capabilities.experimental.mcpl` (§5.1). `channels` is spelled leaf by leaf because `true`
+ *  would claim `acknowledge`, which this door doesn't implement; `streaming` is unused, so not claimed. No `revision`:
+ *  §5.1 lets a server without §17 changes omit it, and this manifest is a module constant. */
 export const MCPL_ADVERTISEMENT = {
   version: "0.5",
   pushEvents: false,

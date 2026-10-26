@@ -1,48 +1,16 @@
-// The REAL ragdoll for headless bodies.
+// Headless ragdoll: the browser's solver on a stand-in skeleton parsed from the VRM's GLB JSON (shared/rig.js), so a
+// pushed agent tumbles on its own side and streams the pose through its presence.
 //
-// A WorldAgent has no renderer, but the tumble never needed one: the Verlet
-// solver drives bone NODES and emits a sparse quaternion pose — the same pose
-// a browser body streams. The fleet test has run this exact solver against
-// every shipped VRM headless under Bun since the day it shipped; this module
-// gives that machinery to the agents themselves, so a pushed agent TUMBLES —
-// simulated on its own side, streamed through its own presence — instead of
-// being semantically informed that it fell.
+// client/lib/ragdoll.js builds a WebGPURenderer at import, so headless loads go through a Bun plugin: everything
+// here is lazy and async. Sim unavailable (plugin failure, unparseable VRM) is soft: the agent falls back to the slump.
 //
-// What the agent needs in-process is only its skeleton: joint rest positions
-// parsed straight from its VRM's GLB JSON chunk (shared/rig.js — no
-// meshes, no textures, no fs), wrapped in a stand-in Avatar whose normalized
-// bone nodes are exactly what Ragdoll drives.
+// The sim runs in world coordinates against setHeightField and registered supports: mesh-fitted where the model
+// decodes (registerMeshSupport, also the feet's standOn), else the server's /geom floors (registerSupport/
+// registerSupportGrid; see colliders.fitSupportBox). Per-axis and negative scales are fitted as drawn, unlike the
+// browser's colliders.
 //
-// The one piece of ceremony: client/lib/ragdoll.js imports './core.js', which
-// builds a WebGPURenderer at import time. Headless callers use the CPU
-// runtime adapter via a Bun loader plugin, registered before the dynamic
-// import, which is why everything here loads lazily and the module exports
-// only async doors. Sim unavailable (plugin failure, unparseable VRM) is a
-// soft state: the agent falls back to the slump.
-//
-// Frame convention: the sim runs in WORLD COORDINATES against the live ground.
-// It used to run on flat ground at zero, offset by ONE terrain sample taken at
-// the fall site — locally-flat, blind to slopes the body tumbles across and to
-// every placed structure, which is how a body released over an elevated floor
-// settled through it to the terrain underneath (issue #17). Now the caller
-// hands over its terrain height function (setHeightField — the same generator
-// the browsers run, replicated in agent.ts) and registers support boxes for
-// placed entities; Ragdoll's own _terrain()/_world() clamps then see exactly
-// what a browser's would, except for a thing stretched by different amounts
-// along its axes, which is fitted as it is drawn where a browser's colliders
-// read one scale for all three, and a thing with a negative scale, fitted at
-// its size where a browser's colliders keep the sign (registerSupport). Those
-// colliders are fitted from each model's own triangles where the agent can
-// decode them (registerMeshSupport — walls and furniture included, and the
-// walking feet use them too: standOn), and from the server's /geom summaries
-// otherwise (registerSupport/registerSupportGrid
-// — floors only; data boxes carry no architecture, see colliders.fitSupportBox).
-//
-// Declared seam: terrain and the collider map are MODULE state in the client
-// libs, so one process serves ONE world's geometry. Agents co-resident in a
-// process share it (every current harness runs one world per process); the
-// caller re-asserts its height field before each begin() so at least the
-// terrain is always the last faller's truth.
+// Terrain and colliders are module state in the client libs: one world's geometry per process; the caller re-asserts
+// its height field before each begin().
 
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
@@ -71,11 +39,7 @@ let simMods: {
   reachbone: { measureChain: any; solveChain: any };
 } | null = null;
 let simFailed = false;
-// The in-flight load, not just the finished one. A joining agent asserts its
-// height field and replays a world's worth of spawns in the same tick, so
-// dozens of callers reach loadSim() before any of them resolves — each one
-// registering the plugin again and racing the same imports. One promise,
-// awaited by everyone.
+// the in-flight load, shared: a join's burst of spawns reaches loadSim() many times before it resolves
 let simLoading: Promise<typeof simMods> | null = null;
 
 function loadSim(): Promise<typeof simMods> {
@@ -98,14 +62,7 @@ function loadSim(): Promise<typeof simMods> {
       // import cone is core.js + pure shared modules; tools/reachlive-test.ts
       // is the standing proof it runs headless)
       const reachbone = await import("../client/lib/reachbone.js");
-      // Bullet, not the Verlet floor. The browser has defaulted to ammo since
-      // it beat every other engine on live falls (bodysim.js), but a headless
-      // body hard-coded Ragdoll -- so a shoved agent tumbled under one solver
-      // while the human dragging it ran another, and every drag-release handed
-      // authority back to the SLOWER model mid-fall. That solver swap is what
-      // "the joints twist up and it doesn't fall naturally when I let go"
-      // actually is. ammodoll's ensureAmmo() already carries a bun branch and
-      // imports the same three modules the Verlet does; nothing needed inventing.
+      // Bullet, as the browser runs (bodysim.js): a different solver here swaps models mid-fall on every drag release
       let Body: any = rag.Ragdoll;
       let engine = "verlet";
       const want = process.env.AGENT_BODY_ENGINE ?? "ammo";
@@ -150,23 +107,14 @@ export async function setWaterField(f: { level: number; sample: (x: number, z: n
   m.terrain.setWaterField(f);
 }
 
-// Who is currently claiming each support box.
-//
-// Support ids are world/entity scoped, which is right — two agents in one
-// world are looking at ONE platform and should not each register their own
-// copy of it. But it means the registration is shared, and the first agent to
-// leave was deleting the floor out from under the one who stayed. Holders are
-// counted: the box lives while anyone claims it, and goes when the last
-// claimant lets go. A Set rather than a number so a holder that registers the
-// same id twice (a re-sync after a place) still counts once.
+// who claims each support box: ids are shared per world, so a box lives until its last holder lets go
+// (a Set, so a holder re-registering the same id still counts once)
 const holders = new Map<string, Set<string>>();
 
 /** A stretched thing's per-axis scale (shared/scale3.js); absent is uniform. */
 const finite3 = (v: unknown) => v == null || (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
-/** The per-axis scale a support is fitted at, as physics reads a scale (componentspec: a negative axis mirrors, and
- *  physics reads |scale|), when the thing is stretched; null when every axis is the same, so the one number serves.
- *  colliders.js's readers take one scale for all three axes, so a stretched support is fitted at scale 1 with the
- *  stretch already in its own numbers: its box, its grid, its triangles. */
+/** A stretched thing's per-axis |scale|, or null when uniform; colliders.js reads one scale, so a stretched support
+ *  is fitted at scale 1 with the stretch baked into its box, grid and triangles. */
 const stretchOf = (x: { scale3?: number[] }): [number, number, number] | null => {
   if (!Array.isArray(x.scale3)) return null;
   const [a, b, c] = x.scale3.map(Math.abs);
@@ -185,10 +133,7 @@ export async function registerSupport(
   holder: string, id: string, min: number[], max: number[],
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },
 ) {
-  // Last line of defense (#88): this runs detached (`void registerSupport`),
-  // so a throw here is an unhandled rejection that takes the WHOLE DOOR
-  // down — every agent in the process, not the one with the bad entity.
-  // A box or transform that is not finite geometry abstains instead.
+  // runs detached (`void registerSupport`), so a throw would take the whole door down (#88): non-finite geometry abstains
   if (![min, max, xform?.position].every(isFiniteVec3)
       || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !finite3(xform.scale3)) {
     console.error(`[physics] support ${id} abstained — non-finite geometry/transform`);
@@ -212,11 +157,8 @@ export async function registerSupport(
 export const supportHolders = (): Record<string, string[]> =>
   Object.fromEntries([...holders].map(([id, hs]) => [id, [...hs]]));
 
-/** Register HEIGHTFIELD support from a served topGrid (#84) — the sibling of
- *  registerSupport for floor-shaped assets whose box top is a known lie.
- *  Same holder discipline, same lifetime. Returns false when the payload is
- *  refused (validTopGrid, non-finite transform): the caller must then
- *  ABSTAIN — registering the box top instead is the bug this exists to fix. */
+/** Heightfield support from a served topGrid (#84), for floors whose box top lies. False when refused
+ *  (validTopGrid, non-finite transform): the caller must then abstain, never fall back to the box top. */
 export async function registerSupportGrid(
   holder: string, id: string, topGrid: unknown,
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },
@@ -248,16 +190,9 @@ export async function registerSupportGrid(
 // works root-local, so clones at any place/yaw/scale read the same arrays).
 const meshGeometries = new WeakMap<object, any>();
 
-/** Register a placed entity's REAL collider: fitted by colliders.js from its
- *  triangles (server/geometry.ts collisionTriangles), with the same `collide`
- *  override, scale and lib-sharing the browser's promote tail passes
- *  (client/lib/realize/models.js), but for a stretched thing, whose triangles are
- *  stretched as it is drawn, in a copy of its own, where the browser's colliders
- *  read one scale for all three axes, and a mirrored one, fitted at |scale| where
- *  the browser keeps the sign. decide() then makes the browser's choice —
- *  box, pillar or exact trimesh — so the walls of a room-scale interior hold
- *  an agent back and its floors hold it up, not just a ragdoll's beads.
- *  Same holder discipline and lifetime as registerSupport. */
+/** A placed entity's real collider, fitted from its triangles (server/geometry.ts collisionTriangles) as the browser
+ *  does (client/lib/realize/models.js), except stretched and mirrored things, fitted as drawn; decide() picks box,
+ *  pillar or trimesh. Same holders and lifetime as registerSupport. */
 export async function registerMeshSupport(
   holder: string, id: string, mesh: { positions: Float32Array; indices: Uint32Array },
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[]; collide?: string; model?: string },
@@ -345,11 +280,8 @@ export function collidersReady(): boolean {
 }
 let standProbe: any = null;
 
-/** Where the feet stand at `pos`, by the browser walking controller's rule
- *  (client/lib/controller.js): colliders.resolveColliders with the walking
- *  capsule, which also PUSHES pos.x/z out of anything solid. Returns the
- *  ground height, or null while the sim is not loaded — the caller keeps its
- *  terrain clamp then. Synchronous: the walk tick calls it every substep. */
+/** Where the feet stand at `pos`, by client/lib/controller.js's rule (resolveColliders; also pushes pos.x/z out of
+ *  solids). Null while the sim isn't loaded (keep the terrain clamp). Synchronous: called every walk substep. */
 export function standOn(pos: { x: number; y: number; z: number }, heightAt: (x: number, z: number) => number): number | null {
   if (!simMods) { void loadSim(); return null; }
   standProbe ??= new simMods.THREE.Vector3();
@@ -380,10 +312,8 @@ export function navProbe(heightAt: (x: number, z: number) => number): NavProbe |
     surfaceUnder: (x, z, maxY) => C.surfaceUnder(x, z, heightAt, maxY).y,
     stand: (x, y, z) => {
       v.set(x, y, z);
-      // the planner's capsule is wider than the feet's: the authority walks a SQUARE box of the mover's radius (shared/
-      // mover.js bodyBox, a centimetre of slack) whose corners reach r·√2, and navgrid accepts a push under NAV_NUDGE as
-      // standing room — so a route planned with the feet's own radius grazed a doorway jamb (1.3 cm) and a railing's end
-      // (1.6 cm), and the authority refused that stretch (protocol merge). PLAN_R clears the box everywhere
+      // plan wider than the feet: the authority walks a square box (shared/mover.js bodyBox) whose corners reach r·√2,
+      // and navgrid takes a push under NAV_NUDGE as standing room; PLAN_R clears that box everywhere
       const ground = C.resolveColliders(v, heightAt, PLAN_R, WALKING.tall, true);
       const push = Math.hypot(v.x - x, v.z - z);
       // ...and the authority's box reaches the body's full height (shared/mover.js bodyBox: a step above the feet to the
@@ -442,14 +372,7 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
     const P: Record<string, any> = {}, restAxes: Record<string, number[]> = {};
     for (const [b, n] of Object.entries(bones)) if (g.nodes[n as number]) { P[b] = wp(n); restAxes[b] = wr(n).toArray(); }
     if (!P.hips) throw new Error("no hips bone");
-    // Hair chains too, with their real parenting.
-    //
-    // The stand-in carried HUMANOID bones only, so a headless body had no
-    // Hair_<chain>_<idx> nodes — and that is exactly what ammodoll's hair block
-    // looks for. Agents therefore ran with NO hair simulation while the browser
-    // ran 75 locks of it, and the fleet suite never touched that code path
-    // either: a whole subsystem absent and untested in the process that is
-    // supposed to BE the body.
+    // hair chains with their real parenting: ammodoll's hair block looks for Hair_<chain>_<idx>, not humanoid bones
     const byName = new Map<string, number>();
     g.nodes.forEach((n: any, i: number) => { if (n.name) byName.set(n.name, i); });
     const parentOf = new Map<number, number>();
@@ -465,25 +388,8 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
       hairParent[name] = (pn && /^Hair_\d+_\d+$/.test(pn)) ? pn : "head";
     }
 
-    // WINGS, by the same argument and for the same reason the hair needed it.
-    //
-    // The stand-in is built from HUMANOID bones, and [LR]_Wing_* are not
-    // humanoid -- VRM has no slot for them. So a headless body arrived with no
-    // wing nodes at all, exactly as it once arrived with no hair: ammodoll's
-    // wing block traverses looking for those names, finds nothing, and an
-    // agent's ragdoll falls with no wings while the browser's has twelve.
-    // Measured on the shipped mythos-wings.vrm: 327 hair bones grafted, 12
-    // wing bones present in the file, 0 reaching the stand-in.
-    //
-    // It matters more than a missing decoration. Those twelve bodies are 63%
-    // of the doll's broadside DRAG AREA against 10% of its mass -- so a
-    // wingless stand-in is not merely unadorned, it is aerodynamically a
-    // different object, and any leaf-force model applied to it is measuring
-    // the wrong body.
-    //
-    // Chains hang off the CLAVICLE in the rig, which has no ragdoll body in
-    // this cut (the arms hang off 'chest' for the same reason), so a root wing
-    // bone is reparented to chest and the rest continue their own chain.
+    // wing bones aren't humanoid, so graft [LR]_Wing_* onto the stand-in (they're most of the doll's drag area); a root
+    // wing bone reparents to chest, since the clavicle has no body
     const wingParent: Record<string, string> = {};
     for (const [name, i] of byName) {
       if (!/^[LR]_Wing_(Upper|Lower)(_\d+)?$/.test(name)) continue;
@@ -527,11 +433,8 @@ export class HeadlessBody {
   private constructor(m: NonNullable<typeof simMods>, P: Record<string, any>) {
     this.m = m;
     this.vrm0 = !!(P as any).__vrm0;
-    // realParent carries the NON-HUMANOID chains -- hair, and now wings.
-    // Without it makeAvatar drops any bone that is not in its humanoid PARENT
-    // table, which is every one of them.
-    // vrm0: three-vrm's half-turn as the pivot the bones hang from, so a
-    // VRM0 body faces, holds its pose and falls in the browser's frame.
+    // realParent carries the non-humanoid chains (hair, wings), which makeAvatar would otherwise drop;
+    // vrm0: three-vrm's half-turn as the pivot, so a VRM0 body falls in the browser's frame
     const hp = (P as any).__hairParent;
     this.av = hp ? m.rig.makeAvatar(P, { vrm0: this.vrm0, realParent: { ...(m.rig as any).PARENT, ...hp } })
       : m.rig.makeAvatar(P, { vrm0: this.vrm0 });
@@ -550,12 +453,8 @@ export class HeadlessBody {
     return new HeadlessBody(m, P);
   }
 
-  /** Reset the stand-in to a pose at a place, standing on the live ground.
-   *  `pose` is a sparse bone map (a streamed pose — e.g. where a dragger's
-   *  hand left this body — or the pose it held); null means standing. Only
-   *  rotations: a limp body in the browser leaves out a held pose's
-   *  translations and scales too (avatar.js _applyRawPose doesn't run while
-   *  limp), except a hips drop, which begin() moves onto the root. */
+  /** Reset the stand-in to a sparse bone map (null = standing) on the live ground. Rotations only, as a limp
+   *  browser body draws (avatar.js _applyRawPose doesn't run while limp); begin() moves a hips drop to the root. */
   private pose(x: number, z: number, yaw: number, pose: Record<string, unknown> | null) {
     this.av.root.position.set(x, this.m.terrain.heightAt(x, z), z);
     this.av.root.rotation.y = yaw;
@@ -572,12 +471,8 @@ export class HeadlessBody {
 
   /** The world this body falls in: its ragdoll sees that world's colliders only. */
   scope: string | null = null;
-  /** Start a tumble: from standing (pose null), or from a given pose (the
-   *  pose held when the blow landed, or where a drag release left the body),
-   *  with a topple lean or falling free. Everything is WORLD y — `rootY`,
-   *  pins, the seed — and the sim clamps against the live height field and
-   *  registered supports as it runs. A held hips drop in `pose` lowers the
-   *  root from `rootY` (or the ground) before the sim starts. */
+  /** Start a tumble from standing or a given pose, leaning or free. Everything is world y (rootY, pins, seed);
+   *  a held hips drop lowers the root before the sim starts. */
   begin(opts: Parameters<HeadlessBody["beginIn"]>[0]) { return inWorld(this.scope, () => this.beginIn(opts)); }
   step(dt: number) { return inWorld(this.scope, () => this.stepIn(dt)); }
   private beginIn(opts: {
@@ -593,11 +488,7 @@ export class HeadlessBody {
       this.av.root.position.y = opts.rootY;
       this.av.root.updateMatrixWorld(true);
     }
-    // A held pose that lowers the hips (kneeling) hands its drop to the root,
-    // as the browser does before its own sim (avatar.js bakeHipsIntoRoot):
-    // the fall starts where the body was drawn, not at standing height. The
-    // drop is in the frame the normalized hips moves in: the pivot, vrm.scene,
-    // turned half round for a VRM0 body.
+    // a held hip drop (kneeling) moves to the root, as avatar.js bakeHipsIntoRoot does, in the pivot's frame
     const hipsT = poseChannels(opts.pose?.hips)?.t;
     if (hipsT) {
       const drop = new this.m.THREE.Vector3(hipsT[0], hipsT[1], hipsT[2]);
@@ -606,35 +497,15 @@ export class HeadlessBody {
     }
     const lean = Array.isArray(opts.lean) && opts.lean.length === 3
       ? new this.m.THREE.Vector3(opts.lean[0], opts.lean[1], opts.lean[2]) : null;
-    // The rest snapshot must be taken with the root WHERE IT IS NOW. It is a
-    // set of WORLD positions, and Ragdoll reads the hips' height out of it
-    // against the live root to learn how far the model origin sits below the
-    // pelvis. Cached once at construction — with the root on the ground, as it
-    // was — it is wrong by exactly the lift for any tumble that begins
-    // somewhere else, and `rootY` is precisely that: a body let go of in
-    // mid-air. The pelvis then renders a metre from where the sim has it.
-    // A handover carries the sim's own state — where each joint was and how
-    // fast — so this body CONTINUES what the other machine was running rather
-    // than restarting from the bones with the motion thrown away. Positions
-    // arrive in world y and the sim now RUNS in world y: no offset.
+    // the rest snapshot is world positions, so take it with the root where it is now (a mid-air rootY otherwise
+    // offsets the pelvis); a handover seed continues the other machine's sim, in world y like this one
     const seed = opts.sim && Array.isArray(opts.sim.j) ? { ...opts.sim } : null;
-    // Free the previous body FIRST. Every drag release begins a new one, and a
-    // Bullet body owns wasm: a world, its bodies and constraints, and up to
-    // 1089 ground tiles. The verlet owned nothing but JS, so dropping the
-    // reference was a complete release and this line never needed to exist —
-    // under ammo the same code leaked a whole world per release and killed the
-    // agent with Aborted(OOM) in `new AmmoRagdoll` after a few minutes of being
-    // dragged around. dispose() is idempotent (`_freed`), so this is safe even
-    // when the body already finished and freed itself.
+    // free the previous body first: a Bullet body owns wasm, leaked per drag release (OOM); dispose() is idempotent
     this.rd?.dispose?.();
     this.rd = new this.m.Body(this.av, lean, this.av.restBonePositions(), seed);
     if (this.rd) this.rd.waterSource = this.waterSource;   // its own world's water, read live each step
     for (const p of opts.pins ?? []) this.setPin(p.j, p.at);
-    // hipsOffset is how far the render root hangs below the hips — a property
-    // of the RIG, so it must read the same on every build of the same body.
-    // When it moves, everyone else sees this body float or sink by exactly the
-    // difference, and nothing on THIS side looks wrong, which is why it needs
-    // saying out loud. Only a handover can move it, so only log then.
+    // hipsOffset is a property of the rig: if a handover moves it, others see this body float or sink by the difference
     if (process.env.BODY_DEBUG && this.rd) {
       console.log(`[physics] ${opts.sim ? "handover" : "fresh"} build: `
         + `hipsOffset=${this.rd.hipsOffset?.toFixed(4)} `
@@ -653,21 +524,8 @@ export class HeadlessBody {
     this.rd.setPin(joint, new this.m.THREE.Vector3(at[0], at[1], at[2]), firm);
   }
 
-  /** Aerodynamic forces on every body this step, so a limp fall FLUTTERS.
-   *
-   *  Janus asked for this shape: "use the normal ragdoll physics for falling,
-   *  but add forces that cause it to fall like a leaf". The alternative --
-   *  scripting the path -- cannot be hit by a thrown prop, cannot catch a wing
-   *  on a rail, and cannot land badly. Bullet can do all three; it just needs
-   *  to be told what the air is doing.
-   *
-   *  Two terms, both real (shared/leafforce.js): drag along each plate's
-   *  NORMAL rather than along its motion, which makes a plate seek edge-on and
-   *  overshoot; and a centre of pressure forward of centre, which turns that
-   *  overshoot into a periodic tumble. The oscillation is emergent.
-   *
-   *  Silently a no-op on the Verlet fallback, which has no bodies to push.
-   */
+  /** Leaf forces (shared/leafforce.js): normal drag plus a forward centre of pressure gives emergent flutter; real
+   *  forces, not a scripted path, so it still collides. No-op on the Verlet fallback. */
   applyLeaf(cfg: any, t: number) {
     const rd: any = this.rd;
     const bodies = rd?._bodies;
@@ -726,12 +584,7 @@ export class HeadlessBody {
     const r = this.av.root.position;
     const out = { pose, p: [r.x, r.y, r.z], done: !!this.rd.done };
     if (this.rd.done && process.env.BODY_DEBUG) {
-      // Where did she actually COME TO REST? Build-time numbers say nothing
-      // about this: the question "does she settle above the floor" is about the
-      // sim's own ground plane and its lowest joint, and both are only knowable
-      // once it stops. groundY is what the solver believes the floor is; if
-      // that disagrees with the world's floor, everything else is downstream
-      // of it and no amount of root arithmetic will help.
+      // where the body came to rest: its lowest joint against groundY, the floor the solver believes in
       let lo = Infinity, who = "";
       for (const [j, v] of Object.entries(this.rd.p ?? {})) {
         const y = (v as any)?.y;
@@ -752,20 +605,8 @@ export class HeadlessBody {
 }
 
 // ---------------------------------------------------------------- reaching
-//
-// The same stand-in skeleton, driven by the reach solver instead of the
-// ragdoll. A headless body reaching for something needs two answers a browser
-// gets from its scene: "where is the target" (for a landmark, on the OTHER
-// body) and "does my arm get there" (measureChain/solveChain on its own).
-// Both run on normalized runtime rigs here — no mesh, no renderer.
-//
-// One honest limitation, stated rather than hidden: a browser derives
-// landmarks by raycasting the actual mesh (client/lib/landmarks.js); a
-// stand-in has no mesh, so contact() uses the derivation's own FALLBACK rule
-// (proportionally off the bone, along the approach direction). The two agree
-// to a few centimetres — good enough for "did my hand arrive" and for the
-// reply an agent reads, while every browser still renders against its own
-// mesh-derived truth.
+// ReachBody: the stand-in driven by the reach solver. No mesh, so contact() uses client/lib/landmarks.js's
+// fallback rule (proportional off the bone); within a few cm of the browser's
 
 /** A body the reach solver can pose and interrogate, per VRM. */
 export class ReachBody {
@@ -786,12 +627,8 @@ export class ReachBody {
     // still refuses a lower limb that is not its upper limb's direct child.
     this.av = m.rig.makeAvatar(P, { vrm0: !!(P as any).__vrm0, realParent });
     this.restAxes = (P as any).__restAxes ?? {};
-    // A node's local matrix carries the held pose's raw layer while it is
-    // drawn: a translation added to the bone's offset from its parent, and a
-    // scale in the bone's own rest axes, which a rig rarely aligns with the
-    // model's, so it can't ride Object3D.scale (always the node's normalized
-    // axes). It is applied after the bone's rotation, to everything hanging
-    // from it, as a raw bone's scale is.
+    // the held pose's raw layer goes in the local matrix: its scale is in the bone's rest axes, which Object3D.scale
+    // (normalized axes) can't carry; applied after the rotation, as a raw bone's is
     const body = this, at = new m.THREE.Vector3();
     const updateMatrix = function (this: any) {
       const raw = body.drawn ? this.userData : null;
@@ -830,13 +667,8 @@ export class ReachBody {
     return m ? new ReachBody(m, P, realParent) : null;
   }
 
-  /** Put the stand-in where the streamed presence says the body is. `pose` is
-   *  the sparse bone map off the wire (held pose / ragdoll frame), or null.
-   *  `scale` is the body's chosen size (wire `pose.scale`, absent = 1), composed
-   *  exactly as the browser does (avatar.js _applyBodyScale): on the pivot that
-   *  stands for vrm.scene, never the root — so the root keeps its position and
-   *  yaw, every joint and contact scales about it, and root-frame points
-   *  (reach `space`) stay in unscaled metres like reachnet.js's localToWorld. */
+  /** Put the stand-in where the streamed presence says. `scale` (wire pose.scale, absent = 1) goes on the pivot,
+   *  never the root, as avatar.js _applyBodyScale does, so root-frame points stay in unscaled metres. */
   poseAt(p: number[], yaw: number, pose: Record<string, unknown> | null, scale: unknown = 1, raw = true) {
     const u = clampBodyScale(scale);
     if (this.av.pivot.scale.x !== u) {
@@ -855,25 +687,9 @@ export class ReachBody {
     this.av.root.updateMatrixWorld(true);
   }
 
-  /** Lay a held pose over the stand-in as it stands, once, after poseAt and
-   *  after any clip. Its two layers are the renderer's (avatar.js):
-   *  - the normalized layer, which the reach solver sees, as _applyPoseSlot
-   *    lays it before the IK: `q` replaces the bone's rotation, and hips `t`
-   *    adds to the hips' offset in the frame the normalized hips moves in
-   *    (the pivot: vrm.scene, a VRM0 half-turn and the body's size included);
-   *  - the raw layer, which only what is drawn sees, as _applyRawPose lays it
-   *    after the IK and vrm.update: any other bone's `t` adds to its offset
-   *    from its parent, in the parent's rest axes turned by the parent's
-   *    pose, and `s` scales what hangs from the bone in its own rest axes.
-   *  Each bone is read as the renderer reads it (shared/humanoid.js
-   *  poseChannels): a rotation of no length normalizes to identity, the
-   *  bone's rest, and a scale at or below 0 collapses or mirrors what hangs
-   *  from the bone, as drawn. A limp body draws no raw layer (avatar.js:
-   *  _applyRawPose doesn't run while limp), so `raw: false` leaves it out. A
-   *  bone the stand-in lacks, a name an object inherits (`constructor`), or a
-   *  value with nothing usable in it, is skipped. body_state's reply names a
-   *  value with nothing usable in it (unreadableBones), and its bones detail
-   *  names a bone the stand-in lacks (unmappedBones). */
+  /** Lay a held pose once, as avatar.js does: the normalized layer (`q`, hips `t`) before IK, the raw layer (`t`, `s`)
+   *  after; channels via shared/humanoid.js poseChannels. `raw: false` for limp bodies. Unknown bones, inherited names
+   *  and unusable values are skipped (reported as unmappedBones / unreadableBones). */
   holdPose(pose: Record<string, unknown>, { raw = true } = {}) {
     const T = this.m.THREE;
     for (const [j, v] of Object.entries(pose)) {
@@ -890,11 +706,7 @@ export class ReachBody {
     }
   }
 
-  /** Run `fn` on the normalized layer alone, as the renderer's IK runs
-   *  before the raw layer is laid (avatar.js update: _applyReach, then
-   *  vrm.update, then _applyRawPose). Limb lengths and every solve see the
-   *  skeleton the browser's solver sees, whatever the held pose moves or
-   *  scales afterwards. */
+  /** Run `fn` on the normalized layer alone, as the browser's IK runs before the raw layer (avatar.js update). */
   private solverView<R>(fn: () => R): R {
     if (!this.drawn) return fn();
     this.drawn = false;
@@ -956,12 +768,8 @@ export class ReachBody {
     const mark = this.landmarks.get(point);
     if (!mark) return null;
     const p = mark.node.localToWorld(mark.offset.clone());
-    // A normal goes through the inverse transpose, which a held non-uniform
-    // scale makes differ from the bone's own matrix. A scale with a 0 in it,
-    // on this bone or above it, collapses the surface, and the inverse then
-    // says nothing about which way it faces: all zeros, or, a rounding away
-    // from that, the collapsed axis. Then it faces as it would unscaled,
-    // which is how the reach solver sees the bone.
+    // normals go through the inverse transpose; a zero scale collapses it, and then the mark faces as if unscaled,
+    // as the reach solver sees the bone
     const T = this.m.THREE;
     const facing = () => mark.normal.clone().applyMatrix3(new T.Matrix3().getNormalMatrix(mark.node.matrixWorld));
     const m = new T.Matrix3().setFromMatrix4(mark.node.matrixWorld), e = m.elements;

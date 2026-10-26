@@ -1,30 +1,13 @@
 /**
- * §17 server side for the eidoverse door (RFC-003 / SPEC 0.5, eidoverse#2).
+ * §17 server side for the eidoverse door (RFC-003 / SPEC 0.5, eidoverse#2): the canonical digest (§17.2), the
+ * complete-manifest answer (§17.4), and a per-connection announce seed taken from initialize, so a fresh connection
+ * doesn't re-announce what initialize carried.
  *
- * The canonical content digest (§17.2), the complete-manifest answer
- * (§17.4), and the per-connection announcement seed (§17 impl note: seed
- * last-announced from the initialize handshake, or a fresh connection fires
- * a redundant announce for a manifest initialize already carried).
+ * Digest rules follow the frozen mcpl conformance corpus (its conformance/README): revision = "sha256:" +
+ * base64url_unpadded(SHA-256(JCS(manifest minus root revision))); set semantics only for all-string arrays at the
+ * three set paths, everything else hashed verbatim; the sole refusal is identifier_charset.
  *
- * Digest rules exactly as adjudicated in the frozen 25-vector corpus
- * (mcpl main `2cdc7fb`+`a77be49` lineage — see conformance/README there):
- *  - revision = "sha256:" + base64url_unpadded(SHA-256(JCS(manifest minus
- *    root revision)));
- *  - JCS: member names sorted by UTF-16 code units, ES6 string escapes,
- *    ES6 Number::toString;
- *  - set semantics (sort by UTF-8 bytes + dedupe) ONLY for the three set
- *    paths in the object-keyed shape, ONLY when the array is all-strings;
- *    anything else — wrong-typed fields, mixed arrays, the array
- *    featureSets shape — is hashed VERBATIM (totality; validation is where
- *    non-conformance fails, never the digest);
- *  - the sole refusal is identifier_charset on the enumerated identifier
- *    positions, and only in the conforming all-string shape.
- *
- * This server's declared surface (declaration.ts) is compile-time static,
- * so mcpl/manifestChanged has no live trigger today. The announce helper
- * exists and is wired anyway (the dog-mcp pattern): a future mutating site
- * calls `announceIfChanged` and the plumbing already works, instead of a
- * dead code path being invented under pressure later.
+ * The declared surface is static, so nothing triggers mcpl/manifestChanged yet; announceIfChanged is wired anyway.
  */
 
 import { createHash } from "node:crypto";
@@ -110,10 +93,8 @@ const SET_PATHS = [
 
 const ROOT_NON_CAPABILITY = new Set(["version", "revision", "featureSets"]);
 
-/** Identifier positions, mirroring the vector corpus's identifierPositions:
- *  "#key" = the object's member names at that path, "[]" = array elements.
- *  Capability member names at EVERY depth are covered by the isCapMember
- *  branch in normalize(); these are the featureSets-subtree positions. */
+/** The featureSets-subtree identifier positions, as the corpus's identifierPositions: "#key" = member names, "[]" =
+ *  array elements. Capability member names at every depth are normalize()'s isCapMember branch. */
 const IDENT_PATHS = [
   ["featureSets", "#key"],
   ["featureSets", "*", "uses", "[]"],

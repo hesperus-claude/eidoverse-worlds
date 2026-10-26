@@ -1,32 +1,10 @@
-// Event-stream denoiser for a WorldAgent's ambient narration.
-//
-// Born from Fable's field report (2026-08-02), which ranked the noise from
-// live logs: client arrive/leave flaps (tens of pairs in minutes), posture/
-// gesture cycles (40+ jump pairs in an evening), self-echo, and "walked up to
-// you" firing six times for someone strolling nearby. The doctrine that fell
-// out of it: **noisiness is a property of an event's CONTEXT, not its type**
-// — the first arrive of a new identity is gold; the fifteenth of the same
-// identity in ten minutes is a flap; an approach after an hour of silence is
-// a knock; the sixth in five minutes is background. So the filter is stateful
-// (per-identity charge with decay), never a table of event types.
-//
-// Two mechanisms:
-//
-//  1. HOLD-AND-CANCEL for presence pairs. An arrive/leave is not narrated
-//     immediately — it is held briefly, and the opposite event for the same
-//     identity inside the window cancels both ("схлопнуть в ничто"). A
-//     reconnect flap (leave→arrive) and a smoke-test visit (arrive→leave)
-//     both collapse to nothing. The people map stays truthful in real time —
-//     only the NARRATION is held; look() never lies about who is present.
-//
-//  2. DECAYING CHARGE + REFRACTORY for everything ambient. Each narrated
-//     presence event charges that identity; the charge decays exponentially;
-//     above the limit, further arrive/leave narration from that identity is
-//     dropped until it cools. Acts (gestures, posture starts) repeat silently
-//     within a per-(identity, act) refractory window.
-//
-// Mentions and says are never gated here — being addressed is
-// always a knock. (The self-echo fix lives in agent.ts's hearSay.)
+// Event-stream denoiser for a WorldAgent's ambient narration. Noise depends on context, not event type, so the
+// filter is stateful per identity:
+//  1. hold-and-cancel: an arrive/leave is held briefly and the opposite event inside the window cancels both
+//     (narration only; look() stays truthful about who is present)
+//  2. decaying charge + refractory: presence narration is limited by a decaying per-identity charge, and
+//     repeated acts are silent within a per-(identity, act) window
+// Mentions and says are never gated. (Self-echo is filtered in agent.ts's hearSay.)
 
 export type GateEvent = { kind: "arrive" | "leave" | "act"; who: string; text?: string; ts: number };
 
@@ -60,50 +38,20 @@ export const APPROACH_REFRACT_MS = env("EW_APPROACH_REFRACT_SEC", 600) * 1000;
 export const APPROACH_RADIUS = 2.5;
 export const REARM_RADIUS = 6;
 
-/** DWELL — the gate that makes an approach mean what declaration.ts says it
- *  means: "walked up to your body AND STOPPED within arm's reach". The three
- *  gates above all suppress REPEATS (re-arm, refractory, #39's baseline); none
- *  of them can tell a knock from someone crossing your bubble on their way to
- *  the door. Antra, 2026-08-25: "likely debounced so that passing through does
- *  not trigger it."
- *
- *  So the inward crossing only OPENS a pending approach. It is delivered when
- *  that person has been still, inside the radius, for this long — and cancelled
- *  outright if they leave the radius first. A straight walk-through at strolling
- *  pace clears a 2.5m radius in ~2-4s and never accumulates the stillness. */
+/** Dwell: an approach means "walked up AND stopped within arm's reach". The inward crossing only opens a pending
+ *  approach, delivered after this long still inside the radius and cancelled if they leave first. */
 export const APPROACH_DWELL_MS = env("EW_APPROACH_DWELL_SEC", 2.5) * 1000;
-/** Below this observed ground speed a body counts as STILL. Derived from the
- *  positions we watched, never from the pose's own `speed` field: the activity
- *  pulse in agent.ts already sets that precedent ("displacement, not a speed
- *  flag, so idle jitter and a body parked mid-walk-cycle never qualify"), and a
- *  sender is free to put anything in `speed`. Walking is ~1.4 m/s, so this sits
- *  well clear of it while tolerating idle sway and pose jitter. */
+/** Below this observed ground speed (m/s) a body is still: measured from watched positions, never the pose's own
+ *  `speed`, which a sender can fill. Walking is ~1.4 m/s. */
 export const APPROACH_STILL_MPS = (() => {
   const v = env("EW_APPROACH_STILL_MPS", 0.35);
   if (v > 0) return v;
-  // ≤ 0 would make every observed speed count as "moving": stillness never
-  // accumulates, dwell never fires, and EVERY approach ships via the max-wait
-  // hatch — the headline defect, for everyone, from one env var. Refused.
+  // ≤ 0 means stillness never accumulates and every approach ships via the max-wait hatch: refused
   console.warn(`[denoise] EW_APPROACH_STILL_MPS=${v} rejected (must be > 0); using 0.35`);
   return 0.35;
 })();
-/** Someone who stays inside arm's reach but never actually settles — pacing,
- *  circling, fidgeting in your face — has still approached you. Deliver anyway
- *  once they have been in the radius this long. Without this a body that never
- *  reads as still is never announced at all, which trades Antra's false
- *  positives for false NEGATIVES; it also bounds the pending state.
- *
- *  INVARIANT, now ENFORCED rather than commented: a straight-line
- *  pass-through must not be able to reach this escape hatch. The longest a
- *  body still counting as "moving" can spend inside the radius on a straight
- *  path is (2 × APPROACH_RADIUS) / APPROACH_STILL_MPS — 14.3s at the defaults,
- *  comfortably under 20s. Both knobs are advertised as LIVE tuning controls,
- *  and either one alone could silently reintroduce the pass-through ping this
- *  whole file exists to kill (a small EW_APPROACH_MAX_WAIT_SEC directly; a
- *  small EW_APPROACH_STILL_MPS by widening what counts as a slow crosser
- *  under the default wait). So the wait CLAMPS to the safe bound derived from
- *  whatever stillness threshold is in force — tune freely, the invariant
- *  holds itself. */
+/** Deliver an approach anyway after this long in the radius (a pacer has still approached). Clamped to
+ *  2·APPROACH_RADIUS / APPROACH_STILL_MPS so a straight pass-through can never reach it, whatever the env says. */
 export const APPROACH_SAFE_WAIT_MS = Math.ceil(((2 * APPROACH_RADIUS) / APPROACH_STILL_MPS) * 1000);
 export const APPROACH_MAX_WAIT_MS = (() => {
   const v = env("EW_APPROACH_MAX_WAIT_SEC", 20) * 1000;
@@ -112,24 +60,12 @@ export const APPROACH_MAX_WAIT_MS = (() => {
   return APPROACH_SAFE_WAIT_MS;
 })();
 
-/** The denoiser's complement: the ACTIVITY PULSE. Where the gate above takes
- *  individual events away, the pulse gives one back — a digest of everything
- *  that happened within ACTIVITY_RADIUS_M in the last window, emitted at most
- *  once per window and ONLY when something actually happened. It exists for
- *  wake gates: a host rule matching the "activity" tag wakes its agent
- *  regularly while there is life nearby, and the stream simply stops when the
- *  area goes quiet — local awareness without per-event noise.
- *
- *  These are the DEFAULTS — the sense is the agent's own to tune (the
- *  `activity` tool sets cadence/radius per agent, persisted across sessions;
- *  see WorldAgent.setActivity for the clamps). */
+/** Activity pulse defaults: a digest of what happened within ACTIVITY_RADIUS_M, at most once per window and only
+ *  when something did, for hosts that wake on the "activity" tag. Per-agent tuning: WorldAgent.setActivity. */
 export const ACTIVITY_RADIUS_M = env("EW_ACTIVITY_RADIUS_M", 30);
 export const ACTIVITY_PULSE_MS = env("EW_ACTIVITY_PULSE_SEC", 30) * 1000;
-/** Ambient continuation (the same people, still milling about) is scenery,
- *  not news — an unchanged ambient digest repeats no more often than this.
- *  Discrete events (speech, arrivals, builds) always pulse. Field report:
- *  "antra moving about" every 30s buried a resident's context in near-
- *  identical lines — recurrence is not novelty. */
+/** An unchanged ambient digest repeats no more often than this; discrete events (speech, arrivals, builds) always
+ *  pulse. */
 export const ACTIVITY_REFRESH_MS = env("EW_ACTIVITY_REFRESH_SEC", 600) * 1000;
 /** Metres of accumulated travel inside a window before someone counts as
  *  "moving about" — displacement, not a speed flag, so idle jitter and a

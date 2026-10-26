@@ -156,10 +156,8 @@ export const ROOM_FLOOR_EPS = 0.1;
  *  plus the seat's half-width, which IS the model's and scales with it. */
 export const SEAT_STANDOFF = 0.7, SEAT_HALF = 0.3;
 
-/** Where to walk to reach a place. A region: anywhere on its floor, the
- *  middle preferred. A seat: the floor beside it (not the seat's own surface
- *  — the body sits by mounting it), the nearest floor below the seat. A door
- *  or point: there. */
+/** Where to walk to reach a place: a region's floor (middle preferred); for a seat, the nearest floor below it,
+ *  beside it (the body sits by mounting); a door or point: there. */
 export function destinationOf(e: PlaceHolder, p: Place): Destination {
   const s = scale3(e.scale);   // per axis: a stretched thing's room and seat are stretched with it
   const label = `${e.name ?? e.id}/${p.name}${p.label ? ` (${p.label})` : ""}`;
@@ -174,12 +172,8 @@ export function destinationOf(e: PlaceHolder, p: Place): Destination {
       inside: (x, z) => inRegion(e, room, [x, 0, z]) };
   }
   const w = toWorld(e, p.at!);
-  // a seat's point is where hips rest, at or a little above the seat's
-  // surface: the floor beside it is the nearest one below. The margin that
-  // keeps the seat's own surface out is the model's (an authoring error grows
-  // with the thing; never less than 5cm) — it only looks below the seat, so
-  // it can't pick another storey over the floor beside it.
-  // (a stretched seat's half-width: the wider of its two)
+  // a seat's point is where hips rest; the floor beside it is the nearest below, past a margin that keeps the
+  // seat's own surface out (scales with the model, at least 5cm); a stretched seat's half-width is its wider one
   if (p.kind === "seat") return { x: w[0], y: w[1] - 0.05 * Math.max(1, s[1]), z: w[2], reach: SEAT_STANDOFF + SEAT_HALF * Math.max(s[0], s[2]), label, above: 0 };
   return { x: w[0], y: w[1], z: w[2], reach: 0.6, label };
 }

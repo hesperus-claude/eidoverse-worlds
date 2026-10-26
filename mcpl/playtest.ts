@@ -20,11 +20,8 @@ const HOST_CAPS: McplHostCapabilities = {
   featureSets: true,
 };
 
-/** What this harness-host grants the door (§5.4 allowlist). The framework
- *  computes this from the masked advertisement in registerMcplServerFeatures;
- *  a raw-connection harness must do it by hand — a 0.5 host that never sends
- *  the §5.3 initial policy Request gets every channels/incoming refused at
- *  ITS OWN admission gate, and a 0.5 door holds fan-out until policy lands. */
+/** The grant this harness sends by hand (§5.4); the framework derives it in registerMcplServerFeatures. Without the
+ *  §5.3 initial policy a 0.5 door holds fan-out and the host's own gate refuses channels/incoming. */
 const GRANT = ["tools", "channels.register", "channels.lifecycle", "channels.publish", "channels.incoming"];
 
 let failures = 0;
@@ -197,10 +194,7 @@ const reopened = await conn.sendChannelsOpen({ channelId: "world:commons", type:
 check("reopen works", reopened?.channel?.id === "world:commons");
 
 console.log("\n━━ reconnect: missed mentions replay as CATCHUP, never as live traffic ━━");
-// the host sleeps; someone mentions it; the host returns. The replay must
-// carry eidoverse:catchup ALONGSIDE the original addressing (issue #39 —
-// these shipped as bare legacy ["mention"], matching no declared rule), and
-// a live mention on the reconnected session must NOT be catchup-tagged.
+// the replay carries eidoverse:catchup alongside the original addressing (#39); a live mention after reconnect must not
 await conn.close();
 await Bun.sleep(400);
 {

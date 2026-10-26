@@ -1,17 +1,8 @@
 /**
- * Storey-aware walking on a bare WorldAgent — the product half of ew#140.
+ * Storey-aware walking on a bare WorldAgent (ew#140). Run: bun mcpl/storey-walk-test.ts
  *
- * Run: bun mcpl/storey-walk-test.ts
- *
- * The planner tests (tools/structure-field-test.ts §13a) prove that a
- * storey's own walls route a walk when the router is told that storey. This
- * proves the door tells it: a body upstairs gives walkTo an identified-floor
- * support (walkSupport, from storeyUnder), so it is routed on that storey,
- * and its feet stay there while it walks, stands idle, stands up from a
- * tumble and begins or ends a flight (groundAt). The effective height is the
- * terrain unless the body stands on an upper storey's floor at its cell —
- * the body's own y only bounds which real floor qualifies, never becomes the
- * height.
+ * walkTo routes on the body's storey (walkSupport, from storeyUnder), and groundAt keeps the feet there through
+ * walk, idle, stand-up and flight; the body's y only picks which floor qualifies, never becomes the height.
  */
 import { WorldAgent } from "./agent.ts";
 import { tryUntil, pause } from "../tools/protocol/wait.ts";
@@ -176,10 +167,8 @@ console.log("\nstorey-aware walking\n");
 
 console.log("\na malformed house elsewhere in the world (Greptile on #200, finding 1)\n");
 {
-  // comp data is opaque to the server: `structure: "junk"` is accepted and
-  // folded. The agent's walk loop used to hold ONE try around every building,
-  // so a primitive that a WeakMap refuses as a key threw out of planOf and
-  // took the route through the sound house with it — straight through walls.
+  // comp data is opaque to the server, so a primitive `structure` (a WeakMap refuses it as a key) must not throw out
+  // of planOf and drop the walls of every other building
   for (const junk of ["junk", true, 7]) {
     const ag = agentIn(upperY, { before: { junk: { model: "junk", structure: junk } } });
     check(`structure: ${JSON.stringify(junk)} learned first: the upstairs walk still detours through the door`,
@@ -211,10 +200,7 @@ console.log("\na corner cut by a diagonal, floored on one half (findings 2 and 3
   check("a floor walk's probe stands on the cut cell's floored half",
     Math.abs(cornerProbe(1.8, 0.2) - up) < 1e-9, String(cornerProbe(1.8, 0.2)));
   check("…and over its hole finds a drop the grid won't take", up - cornerProbe(1.2, 0.8) > NAV_STEP, String(cornerProbe(1.2, 0.8)));
-  // finding 2, from the product side: the router only ever saw an upstairs
-  // start in an unfloored half because the standing clamp had held the body
-  // there. Once the feet read the half, a body over the hole is on the ground
-  // floor, and the ground plan is the right one to route on.
+  // a body over an unfloored half is on the ground floor, and routes on the ground plan
   const ag = agentIn(up, { house: CORNER });
   ag.pos = { x: 1.2, y: up, z: 0.8 };
   const legs = legsOf(ag, 0.5, 0.5);
@@ -262,10 +248,8 @@ console.log("\nwhich levels hold the feet: those raised above their building's b
   check("…and a walk from there is a terrain walk, free to step off", ag.walkSupport().kind === "terrain", JSON.stringify(ag.walkSupport()));
 }
 {
-  // a floor more than a route step but less than the walk grid's step above
-  // the terrain is the terrain's too: a floor walk's grid could step off it.
-  // The grid's step is the one walker's (NAV_STEP, shared/mover.js); a level's
-  // walk surface is 0.1 m over its declared y.
+  // a floor less than the grid's step (NAV_STEP, shared/mover.js) above the terrain is the terrain's; a level's walk
+  // surface is 0.1 m over its declared y
   const LOW = { levels: [{ y: NAV_STEP - 0.12, tiles, walls: [], apertures: [] }] };
   const lowY = planStructure(LOW).levels[0].y;
   const ag = agentIn(lowY, { house: LOW });
@@ -291,13 +275,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   check("…and the feet stay upstairs", Math.abs(ag.pos.y - upperY) < 1e-9, String(ag.pos.y));
 }
 {
-  // A destination whose height means another floor is refused, with the
-  // same reason whichever path would plan the walk and whatever gives the
-  // destination its height. The floor a height means is move's own rule
-  // for a y (floorMeant): the floor nearest it, no more than a step above it
-  // and within the destination's bounds, of the ground and the griddled
-  // storeys at the point. A walk the planner routes in legs used to go to
-  // the same x and z on its floor and report arriving.
+  // a destination whose height means another floor (floorMeant) is refused with the same reason, whichever path plans
+  // the walk and whatever gives the destination its height
   const { handleTool } = await import("./tools.ts");
   const walkTool = async (ag: any, args: Record<string, any>) => {
     // move takes its destination as `to`: [x, y, z], [x, z] or a name
@@ -373,13 +352,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
       fitted && (toShelf.setOff || toShelf.refusal !== "" && !/not on the floor you stand on/.test(toShelf.refusal)), JSON.stringify(toShelf));
     await removeSupport("storey-walk-test", shelf);
   }
-  // what placedNear counts: a placed top on this floor, under the next floor
-  // above, within the destination's bounds (a step each way unless given),
-  // in this world. From the middle floor, y 5.7 means the top floor (0.4 m
-  // up, at 6.10): a shelf just within a step below 5.7, or at 6.05, lets the
-  // walk go; one just past a step below doesn't, nor one at 6.2, which rests
-  // on the top floor, nor one in another world at 5.7, nor, for a destination
-  // whose floor lies no more than 0.1 m below its height, one at 5.2.
+  // placedNear counts a placed top on this floor, under the next floor up, within the destination's bounds (a step
+  // each way unless given), in this world; y 5.7 from the middle floor means the top floor (6.10)
   {
     const { boxMesh } = await import("../tools/two-storey-fixture.ts");
     const { registerMeshSupport, removeSupport } = await import("./physics.ts");
@@ -395,12 +369,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
       await removeSupport("storey-walk-test", id);
     }
   }
-  // a seat's height is where the hips rest, its floor no higher (above: 0):
-  // a perch 2.65 m above the middle floor is the middle floor's, not the top's.
-  // A places component names no seat (its kind is gone: shape audit 10-16; a
-  // seat is a model's or a socket's), so the seat's destination is built by
-  // destinationOf's seat branch (mcpl/places.ts) from a seat-kind place on an
-  // unscaled holder: 0.05 m under the hips, no floor above that.
+  // a seat's height is where the hips rest, its floor no higher (above: 0): a high perch is the middle floor's;
+  // built by destinationOf's seat branch (mcpl/places.ts), 0.05 m under the hips
   const perch = (_ag: any) => destinationOf({ id: "bench", pos: [0, 0, 0], yaw: 0, scale: 1 },
     { name: "perch", kind: "seat", at: [2.5, mid + 2.65, 1.5] } as any);
   const onTop = agentIn(top, { house: TALL }), dTop = perch(onTop);
@@ -423,13 +393,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
     check(`…while one from the upper floor ${what} walks there on the upper floor`,
       w.r === true && Math.abs(ag.pos.y - upperY) < 1e-9 && Math.hypot(ag.pos.x - 2.5, ag.pos.z - 1.5) < 0.06, `${String(w.r)} ${w.refusal ?? ""} at (${ag.pos.x}, ${ag.pos.y}, ${ag.pos.z})`);
   }
-  // People: presence carries the root. One standing, or held by a canned
-  // slump, has it on its floor; one a sim laid down, under clip "ragdoll" or
-  // a physics pose held under another, has it RAGDOLL_ROOT_DROP below the
-  // surface it lies on. Their floor lies no more than that drop (and 0.05 m)
-  // above the root: for the check, the highest griddled floor within it at
-  // their spot; for the navgrid, the place to stand nearest the root within
-  // it.
+  // a person's root is on their floor if standing or canned-slumped, RAGDOLL_ROOT_DROP below it if a sim laid them
+  // down; their floor is within that drop (+0.05 m) above the root
   for (const [what, clip, root] of [["lying limp, laid by a sim", "ragdoll", upperY - 0.7], ["in a canned slump, its root at its feet", "ragdoll", upperY],
     ["lying in a physics pose under another clip", "idle", upperY - 0.7], ["standing", "idle", upperY]] as const) {
     const ag = agentIn(upperY);
@@ -504,10 +469,7 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   const toRoof2 = await tryWalk(under2, 2.5, 1.5, 6);
   check("…and to another building's storey at the same level index is refused, naming another building",
     /is on a storey of another building, whose floor is at 6\.00m/.test(toRoof2.refusal), JSON.stringify(toRoof2));
-  // Where something placed on or above this floor stands at about the height
-  // asked for, the walk goes: a table upstairs is walked to. One on the floor
-  // below is no reason to go, and the height there is refused as it is where
-  // nothing is placed.
+  // a thing placed on this floor at the height asked for lets the walk go; one on the floor below doesn't
   const { boxMesh } = await import("../tools/two-storey-fixture.ts");
   const { registerMeshSupport, removeSupport } = await import("./physics.ts");
   const placeBox = async (ag: any, id: string, box: number[]) => {
@@ -534,12 +496,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   const toBed = await tryWalk(bedside, dBed.x, dBed.z, dBed.y, { reach: dBed.reach, above: dBed.above, below: dBed.below, bodyAt: dBed.bodyAt });
   check("from the upper floor, a walk to someone lying limp on a high bed upstairs sets off", bedFitted && toBed.setOff, JSON.stringify(toBed));
   await removeSupport("storey-walk-test", `${bedside.world}/bed`);
-  // a loft bed 1.8 m high: their body is on the upper floor's storey, so the
-  // check lets the walk go. The navgrid takes the bed's top, nearer their
-  // root than the floor beside it, finds no way up to it, and routes again
-  // within a step: the walk ends on the floor beside the bed.
-  // The walk runs along row 0's cell centres of an open upper floor, so the
-  // structure planner leaves it one leg, which the navgrid routes.
+  // a loft bed 1.8 m high: the navgrid finds no way up to its top and re-routes within a step, ending beside the bed
+  // (row 0's cell centres, so the planner leaves one leg for the navgrid)
   const loftside = agentIn(upperY, { house: { levels: [{ y: 0, tiles, walls: shell, apertures: [] }, { y: 3, tiles, walls: shell, apertures: [] }] } });
   const loftFitted = await placeBox(loftside, "loft", [2, upperY, 0.05, 3, upperY + 1.8, 0.95]);
   loftside.people.set("friend", { id: "friend", pose: { p: [2.5, upperY + 1.1, 0.5], yaw: 0, speed: 0, clip: "ragdoll" } });
@@ -551,12 +509,8 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   await removeSupport("storey-walk-test", `${loftside.world}/loft`);
 }
 {
-  // The same on a placed model's upper floor, where the navgrid takes the
-  // destination's height and bounds as the floor to arrive on (the place to
-  // stand nearest the height, within them). Taken from a limp person's root
-  // alone, 0.7 m below the floor they lie on, it named the hall beneath them,
-  // as on main. The two-storey fixture, placed away from the griddled house;
-  // the walker on its upper floor, the friend on it above the hall.
+  // the same on a placed model's upper floor: the navgrid arrives on the destination's height and bounds, not on a
+  // limp root 0.7 m below the floor (which would name the hall beneath)
   const { boxMesh, boxes, UPPER } = await import("../tools/two-storey-fixture.ts");
   const { registerMeshSupport, removeSupport } = await import("./physics.ts");
   const { pos, idx } = boxMesh(boxes);
@@ -735,10 +689,7 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   check("a flight that ends just above the upper floor leaves the feet on it", Math.abs(ag.pos.y - upperY) < 1e-9, String(ag.pos.y));
 }
 {
-  // A standing flyer's feet are its root: a flight that ends on the terrain
-  // under a deck a metre up leaves it there. Read as a laid body's,
-  // RAGDOLL_ROOT_DROP above the root, the feet would be within a route step
-  // of the deck and stand on it.
+  // a standing flyer's feet are its root: landing under a deck a metre up leaves it on the terrain, not on the deck
   const DECK1 = { levels: [{ y: 0.9, tiles, walls: [], apertures: [] }] };
   const flyer = agentIn(0, { house: DECK1 });
   flyer.flightEnd();
@@ -763,11 +714,7 @@ console.log("\na spot named by x/z upstairs is on the upper floor\n");
 
 console.log("\nwhat is placed on an upper storey is walked round, as it is on the ground\n");
 {
-  // navgrid routes round placed models; on a floor walk its probe stands on
-  // the walk's own floor (walkProbeGround), since the colliders don't hold a
-  // griddled floor. A chest in the middle of an open upper room, in
-  // the straight line between two cell centres of one row, from the
-  // south wall to past the row's middle, so the way round is north:
+  // on a floor walk the navgrid probe stands on the walk's own floor (walkProbeGround), and routes north round a chest
   const { boxMesh } = await import("../tools/two-storey-fixture.ts");
   const { registerMeshSupport, removeSupport } = await import("./physics.ts");
   const OPEN = { levels: [{ y: 0, tiles, walls: shell, apertures: [] }, { y: 3, tiles, walls: shell, apertures: [] }] };
@@ -792,19 +739,8 @@ console.log("\nwhat is placed on an upper storey is walked round, as it is on th
 }
 
 {
-  // A floor walk's grid stands on the whole of the walk's own floor, at its
-  // height, where the ground beneath is no more than a step above it, and on
-  // what's placed there, but not on the ground: beside a deck, ground within
-  // a step below it, and another building's floor at its height, are drops
-  // the grid won't take, so it can't leave the floor the walk holds the feet
-  // at. Where the ground under the deck itself rises to just below it (its
-  // last column, x 3-4, 0.3 m down), the deck is still the walk's floor: the walk
-  // crosses it at the deck's height,
-  // and once it ends the feet stand on the terrain there, as on a porch, and
-  // the next walk is the terrain's. Where the ground rises more than a step
-  // above the deck (x 1-2, z 1-2), the deck is buried, and no walk crosses
-  // it. The colliders are loaded by now (the chest above), so the walk is
-  // routed by the navgrid on this probe.
+  // a floor walk's grid stands on its own floor and what's placed there, never the ground beside it or another
+  // building's floor; ground just under the deck (x 3-4) is crossed at deck height; ground a step above (x 1-2) buries it
   const DECK = { levels: [{ y: 3, tiles, walls: [], apertures: [] }] };
   const deckY = planStructure(DECK).levels[0].y;
   const ag = agentIn(deckY, { house: DECK });
@@ -863,12 +799,8 @@ console.log("\nwhat is placed on an upper storey is walked round, as it is on th
   }
 }
 {
-  // A deck a step (NAV_STEP) above the terrain is one rule's edge
-  // for both standing (storeyUnder) and a destination's floor (floorMeant):
-  // just under a step up it is the terrain's, so a walk on it is the
-  // terrain's, and goes down; just over, it is a storey, which a walk from it
-  // can't leave. A walk from the ground isn't checked (#200 doesn't change
-  // ground walks).
+  // NAV_STEP is one edge for standing (storeyUnder) and destinations (floorMeant): just under it a deck is terrain,
+  // just over it a storey a walk can't leave; ground walks aren't checked
   for (const [h, storey] of [[+(NAV_STEP - 0.02).toFixed(2), false], [+(NAV_STEP + 0.02).toFixed(2), true]] as const) {
     const LOW = { levels: [{ y: h - 0.1, tiles, walls: [], apertures: [] }] };
     const lowY = planStructure(LOW).levels[0].y;
@@ -907,11 +839,7 @@ console.log("\nwhat is placed on an upper storey is walked round, as it is on th
     ag.walkRefusal == null && Math.abs(ag.pos.y - (deckY - 1)) < 1e-9, `${ag.pos.y}, ground ${deckY - 1} ${ag.walkRefusal ?? ""}`);
 }
 {
-  // Where the only way round something placed on a deck is off it, a floor
-  // walk is refused rather than routed over the ground beside the deck,
-  // however close below that ground is. A deck one row wide (z 0-1), and a
-  // chest across it from its south edge to 0.2 m short of its north edge,
-  // too narrow a gap for a body; the ground beside the deck is a step down.
+  // when the only way round a thing on a deck is off it, the floor walk is refused, never routed over the ground beside
   const { boxMesh } = await import("../tools/two-storey-fixture.ts");
   const { registerMeshSupport, removeSupport } = await import("./physics.ts");
   const ROW = { levels: [{ y: 3, tiles: [[0, 0], [1, 0], [2, 0], [3, 0]], walls: [], apertures: [] }] };
@@ -1002,10 +930,7 @@ console.log("\nwhat is placed on an upper storey is walked round, as it is on th
 
 console.log("\nGreptile's review of October 19: a floor walk's lowest ground, the storey's height, a laid body's feet\n");
 {
-  // A floor walk's feet go no lower than its floor's height, so its grid
-  // stands nowhere lower (onOrAboveFloor). On a one-row deck with a chest
-  // across it, each walk round the chest below is refused, where the grid
-  // used to route it with the feet held at the deck's height over the air.
+  // a floor walk's grid stands nowhere below its floor (onOrAboveFloor): a walk round the chest below the deck is refused
   const { boxMesh } = await import("../tools/two-storey-fixture.ts");
   const { registerMeshSupport, removeSupport } = await import("./physics.ts");
   const deckOf = (n: number) => ({ levels: [{ y: 3, tiles: Array.from({ length: n }, (_, i) => [i, 0]), walls: [], apertures: [] }] });
@@ -1031,10 +956,7 @@ console.log("\nGreptile's review of October 19: a floor walk's lowest ground, th
     return { walked, refusal: ag.walkRefusal ?? "", ys, end: { ...ag.pos } };
   };
   const chest: [string, number[][]] = ["chest", [[1.7, deckY, 0, 2.3, deckY + 1, 0.8]]];
-  // Greptile's case: stairs of placed slabs, 0.3 m a tread, beside the deck
-  // lead down to within a step of the drop walkProbeGround answers off it;
-  // the walk went down one stair, across the open air at that drop and up
-  // the other.
+  // slab stairs (0.3 m treads) beside the deck reach within a step of walkProbeGround's drop: no crossing the air between
   const stairs = (x0: number, x1: number) => [[x0, deckY - 0.35, 1.0, x1, deckY - 0.3, 1.6],
     [x0, deckY - 0.65, 1.6, x1, deckY - 0.6, 2.2], [x0, deckY - 0.95, 2.2, x1, deckY - 0.9, 2.8]];
   const down = await walkPast("stairs down", ROW, [chest, ["stairs-a", stairs(0.2, 1.4)], ["stairs-b", stairs(2.6, 3.8)]], 3.5);
@@ -1047,10 +969,7 @@ console.log("\nGreptile's review of October 19: a floor walk's lowest ground, th
     platform.walked === false && /no walkable way/.test(platform.refusal), `${String(platform.walked)} ${platform.refusal}`);
 }
 {
-  // A storey holds the feet from a route step below its floor to just under
-  // its height above it (the grid's wallH, 2.8 m by default): feet on
-  // something placed on the floor are on the storey. At 0.53 m above it they
-  // used to be the terrain's.
+  // a storey holds the feet from a route step below its floor to just under wallH (2.8 m default) above it
   const support = (y: number) => agentIn(y).walkSupport();
   const on = support(upperY + 0.53);
   check("feet on a top 0.53 m above the upper floor are on the upper storey", on.kind === "floor" && Math.abs(on.height - upperY) < 1e-9, JSON.stringify(on));
@@ -1110,10 +1029,7 @@ console.log("\nGreptile's review of October 19: a floor walk's lowest ground, th
     `${String(arrived)} ${ag.walkRefusal ?? ""} over the table ${overTable.map((y) => y.toFixed(3)).join(" ")}; lowest ${ys.length ? Math.min(...ys) : NaN}, end ${ag.pos.y}`);
   await removeSupport("storey-walk-test", table);
   ag.joined = false;
-  // What's placed above the floor stays standable for a floor walk's grid
-  // (onOrAboveFloor), where the feet stand: a body stood up on a stage 0.75 m
-  // tall upstairs walks along it on its top. The walk runs along row 0's
-  // cell centres, so the planner leaves it one leg, which the grid routes.
+  // what's placed above the floor stays standable (onOrAboveFloor): a body on a 0.75 m stage walks along its top
   const onStage = agentIn(up, { house: OPEN });
   const stageBox = boxMesh([[0.8, up, 0.1, 3.2, up + 0.75, 0.9]]);
   const stage = `${onStage.world}/upstairs-stage`;

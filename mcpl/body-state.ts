@@ -135,13 +135,9 @@ function missingPosture(out: any, o: BodyObservation, error: string) {
       reason: "posture_not_evaluated", currentBodyTargets: false } };
 }
 
-// The ROOT frame is unscaled metres in every tier. A chosen body size lives
-// below the root (browser: vrm.scene; here: the stand-in's pivot, applied by
-// ReachBody.poseAt), so joints and contacts grow about the root position while
-// a root-frame point — reach `space: 'self' | <id>`, a selfPosition — means the
-// same metres at any size, exactly as reachnet.js's root.localToWorld. These
-// two are inverses; neither may apply scale, or a selfPosition handed back as a
-// `space: 'self'` target would miss the joint it came from.
+// The root frame is unscaled metres at any body size (body scale lives below it, in ReachBody.poseAt), as
+// reachnet.js's root.localToWorld. These two are inverses; neither may apply scale, or a selfPosition handed
+// back as a `space: 'self'` target would miss the joint it came from.
 function rootPoint(p: number[], pose: PublicPose) {
   const c = Math.cos(pose.yaw), s = Math.sin(pose.yaw);
   return [pose.p[0] + p[0] * c + p[2] * s, pose.p[1] + p[1], pose.p[2] - p[0] * s + p[2] * c];
@@ -315,10 +311,8 @@ export class BodyStateReader {
       await Promise.all(Array.from({ length: Math.min(4, deps.size) }, async () => {
         for (let next = pendingBodies.next(); !next.done; next = pendingBodies.next()) {
           const o = next.value;
-          // A posture body_state doesn't evaluate has no clip to load, so it's passed over here, with
-          // the posture's reason. A limp body loads no clip, and a body with no sample has no posture
-          // yet, so each loads and is judged after the loads, when its bones or its first sample may
-          // have come.
+          // an unevaluated posture has no clip to load: pass it over with its reason; limp and unsampled
+          // bodies still load and are judged after, when bones or a first sample may have come
           if (o.who !== who && o.pose && o.pose.clip !== "ragdoll" && postureUnavailable(o)) { skipped.set(o.who, passedOver(o)); continue; }
           // Bound parallel VRM downloads even when a relation spans a crowd.
           try { await loadBody(o); } catch (e) {
@@ -458,10 +452,7 @@ export class BodyStateReader {
         return { ok: false, who, error: "body changed or left while its skeleton loaded; read again" };
       }
       out = base(latest);
-      // The load's own cause, not a posture's. The throws above are written
-      // to read as a clause after this colon, a model file the parser can't
-      // read and a posture's clip that can't be loaded among them. It's what
-      // this read met, whatever posture the body has taken since.
+      // the load's own cause, not a posture's: the throws above are worded to read as a clause after this colon
       const cause = e instanceof Error ? e.message : String(e);
       const error = `${whose(latest)} joints and contacts weren't read: ${cause}`;
       if (latest.pose?.clip !== "ragdoll") return { ...missingPosture(out, latest, error), detail: cause };

@@ -1,6 +1,6 @@
 /**
  * Denoise gate test — no servers needed. Exercises the four noise classes
- * from Fable's 2026-08-02 field report:
+ * a field report ranked:
  *   1. arrive/leave flaps collapse to nothing (both directions)
  *   2. posture/gesture cycles: refractory + short-stint "gets up" swallow
  *   3. self-echo: own say never fans out as an event
@@ -123,14 +123,8 @@ console.log("\n━━ agent: own say is not an event ━━");
 console.log("\n━━ agent: approach = knock once, not a metronome ━━");
 {
   const agent = new WorldAgent({ name: "claude" }); // agent at origin
-  // VIRTUAL CLOCK. An approach is now confirmed by DWELL, so every assertion
-  // here is a claim about time; driving it off real sleeps would make the
-  // block both slow and racy (the refractory is 300ms and the old version had
-  // no sleeps at all inside it, so added sleeps eat that margin). notePose
-  // takes `now` for exactly this reason.
-  // Offset from a real epoch, not from 0: `cooled` measures against a
-  // last-approach time that defaults to 0, so a clock starting near zero reads
-  // as "approached a moment ago" and refuses the very first knock.
+  // virtual clock (notePose takes `now`): approach is confirmed by dwell, and real sleeps would race the 300ms
+  // refractory. Offset from a real epoch: `cooled` compares to a last-approach time defaulting to 0
   const T0 = Date.now();
   const np = (id: string, x: number, z: number, t: number) =>
     (agent as any).notePose(id, { p: [x, 0, z], yaw: 0, speed: 0, clip: "walk" }, T0 + t);
