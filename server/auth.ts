@@ -10,7 +10,7 @@ import { JtiCache, verifyToken, aid1Slug, type Aid1Payload } from "./aid1.ts";
 import { ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 
-// ---- archipelago-home identity (docs/home-node.md §7) ----------------------
+// ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
 // The second door, alongside JOIN_TOKEN: humans log in with Discord at the
 // home node, arrive at /auth with an aid1 token in the URL fragment, swap it
 // for a session cookie here, and join with a VERIFIED identity. Verification

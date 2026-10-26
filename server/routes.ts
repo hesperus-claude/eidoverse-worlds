@@ -461,7 +461,7 @@ const ROUTES: Route[] = [
       return new Response("expected websocket", { status: 400 });
     },
   },
-  // ---- archipelago-home doors (docs/home-node.md §7) ----
+  // ---- archipelago-home doors (connectome docs/home-node.md §7) ----
   {
     match: (u) => u.pathname === "/authcfg",
     handler: () => new Response(
