@@ -1,13 +1,8 @@
-// seats — the server side of seat profiles (#101): storage, judgment, push.
-//
-// One judge, three readers: owns the profile store (assets/opt/seats/profiles.json + an append-only provenance log),
-// judges each profile against the CURRENT bytes (seatcore, the file every consumer evaluates), and ships the verdict
-// pre-judged, so no consumer rehashes a VRM or reads a stale value as fresh.
-//
+// Seat profiles (#101), server side: the store (assets/opt/seats/profiles.json + an append-only provenance log), judged
+// against the CURRENT bytes (seatcore) and shipped pre-judged, so no consumer rehashes a VRM or reads stale as fresh.
 // Writes need a NAMED actor (a tokens.json bearer or a home-vouched aid1), never the door token: a profile moves every
-// wearer and "?by=" is self-asserted. The countersign has no HTTP path (tools/seat-accept.ts; the server notices by
-// mtime watch). Bearer tokens are never logged or echoed.
-// Integrity: null-prototype maps with reserved keys refused; proposals name a ROSTER avatar; provenance first (log ⊇
+// wearer and "?by=" is self-asserted. The countersign has no HTTP path (tools/seat-accept.ts). Bearers never logged.
+// Integrity: null-prototype maps, reserved keys refused; proposals name a ROSTER avatar; provenance first (log ⊇
 // snapshot ⊇ memory: a log ahead folds forward, a snapshot ahead is quarantined); every mutation whole under one
 // cross-process lock with a forced reload; the countersign names the revision the operator reviewed.
 
@@ -25,8 +20,7 @@ type ProfileRec = Record<string, any>;
 type Slot = { accepted?: ProfileRec; proposed?: ProfileRec };
 type Store = { rev: number; profiles: Record<string, Record<string, Slot>> };
 
-// the injectable fs surface — production uses node:fs verbatim; the fault-
-// injection test replaces single calls to prove failure atomicity
+// injectable fs: the fault-injection test replaces single calls to prove failure atomicity
 export type SeatFs = {
   writeFileSync: typeof writeFileSync; renameSync: typeof renameSync;
   appendFileSync: typeof appendFileSync;
@@ -38,9 +32,7 @@ export type SeatVerdict = {
   clipSha256?: string;
 };
 
-/** null-prototype deep conversion for the two map layers — parsed JSON is
- *  plain-Object-rooted, and `obj[k] ??=` on a plain object READS inherited
- *  slots before assigning (that is the pollution door) */
+/** `obj[k] ??=` on plain-Object-rooted parsed JSON READS inherited slots before assigning: the pollution door */
 function inertProfiles(raw: any): Store["profiles"] {
   const out: Store["profiles"] = Object.create(null);
   if (raw && typeof raw === "object") {
@@ -77,8 +69,7 @@ export class SeatStore {
     this.logFile = join(this.dir, "profiles.log.jsonl");
     this.lockFile = join(this.dir, ".write-lock");
     // overlay wins, like the avatar roster scan
-    // the clip ladder must match what /library SERVES (patched fork first, as routes.ts), or a forked clip's profiles
-    // read "stale (clip bytes changed)" forever
+    // the clip ladder must match what /library SERVES, or a forked clip's profiles read "stale" forever
     this.clipBases = [patchDir, optDir, libraryDir].filter(Boolean).map((d) => join(d!, CLIP_REL));
     this.vrmDirs = [join(optDir, "eidoverse/assets/vrms"), join(libraryDir, "eidoverse/assets/vrms")];
     this.fs = { writeFileSync, renameSync, appendFileSync, ...fsOverride };
@@ -88,10 +79,9 @@ export class SeatStore {
 
   // ---- the write lock (one per store directory, shared by every process) ---
 
-  /** Lock = exclusive-create ("wx") of {pid, nonce, ts}; ownership is the nonce, never the path. Liveness is PID-checked
-   *  (`kill(pid, 0)`: only ESRCH means dead), never inferred from age; a reused pid is a live process, so it is waited on.
-   *  A dead lock is broken by rename-steal with a nonce re-check (a newer lock caught is restored). Acquisition is a bounded
-   *  spin whose timeout refuses with no state touched. The lock rides the REAL fs even under fault injection. */
+  /** Exclusive-create ("wx"); ownership is the nonce, never the path. Liveness: `kill(pid, 0)`, only ESRCH means dead,
+   *  never inferred from age. A dead lock is broken by rename-steal with a nonce re-check (a newer lock is restored).
+   *  A bounded spin whose timeout refuses with no state touched. The lock rides the REAL fs even under fault injection. */
   private lockNonce: string | null = null;
 
   private static pidAlive(pid: number): boolean {
@@ -132,23 +122,20 @@ export class SeatStore {
           } catch { /* another breaker won the rename: loop */ }
           continue;
         }
-        // live (or unknowable) holder: wait, however old its stamp — age is
-        // not proof of death, and exclusion outranks our patience
+        // live (or unknowable) holder: wait, however old its stamp; age is not proof of death
         if (Date.now() >= deadline) return false;
         Bun.sleepSync(25);
       }
     }
   }
 
-  /** True while the on-disk lock is still the one we minted — the commit
-   *  gates read this immediately before each irreversible step so that even
-   *  a pathological steal aborts a transaction instead of forking history. */
+  /** Read before each irreversible step, so even a pathological steal aborts instead of forking history. */
   private ownsLock(): boolean {
     return this.lockNonce !== null && this.readLockRecord()?.nonce === this.lockNonce;
   }
 
   private releaseLock() {
-    // release only what we minted — never a successor's lock (#105)
+    // release only what we minted, never a successor's lock (#105)
     if (this.lockNonce !== null) {
       if (this.readLockRecord()?.nonce === this.lockNonce) {
         try { unlinkSync(this.lockFile); } catch { /* vanished: nothing ours remains */ }
@@ -157,8 +144,7 @@ export class SeatStore {
     this.lockNonce = null;
   }
 
-  /** Every mutation runs WHOLE under the lock: forced reload (mtime is a hint), precondition re-check, provenance append,
-   *  snapshot rename, in-memory swap; a second writer waits or refuses. */
+  /** WHOLE under the lock: forced reload (mtime is a hint), re-check, append, rename, swap; a second writer waits or refuses. */
   private withLock<T>(fn: () => T): T | { ok: false; status: number; why: string } {
     if (!this.acquireLock())
       return { ok: false, status: 503, why: `another writer holds the seat-profile lock (waited ${this.lockTimeoutMs}ms) — nothing was written; retry after it releases` };
@@ -172,8 +158,7 @@ export class SeatStore {
 
   // ---- store I/O -----------------------------------------------------------
 
-  /** All valid log entries, in file order, and the monotonicity verdict: two records at one revision means the history
-   *  forked and no fold order is defensible, so quarantine. */
+  /** Two records at one revision means the history forked and no fold order is defensible: quarantine. */
   private readLog(): { entries: any[]; monotonic: boolean } {
     const entries: any[] = [];
     let monotonic = true, prev = 0;
@@ -210,16 +195,14 @@ export class SeatStore {
     }
     const logRev = log.entries.at(-1)?.rev ?? 0;
     if (snap.rev > logRev) {
-      // a snapshot with no receipt for its last write — the exact state the
-      // provenance boundary exists to forbid. Refuse to serve it as truth.
+      // a snapshot with no receipt for its last write: never served as truth
       this.quarantined = `profiles.json rev ${snap.rev} is AHEAD of its provenance log (rev ${logRev}) — serving no profiles until the operator reconciles`;
       console.error(`[seats] ${this.quarantined}`);
       this.store = { rev: snap.rev, profiles: Object.create(null) };
       return;
     }
     if (logRev > snap.rev) {
-      // crash between log append and snapshot rename: fold the receipted
-      // writes forward — the log is the truth the snapshot merely caches
+      // crash between append and rename: fold forward; the log is the truth the snapshot caches
       for (const e of log.entries) {
         if (e.rev <= snap.rev) continue;
         this.foldLogEntry(snap, e);
@@ -247,8 +230,7 @@ export class SeatStore {
     try { this.fileMtime = statSync(this.file).mtimeMs; } catch { /* next poll reloads harmlessly */ }
   }
 
-  /** Provenance-first write: build the next state without touching the live one, append the log line, rename the
-   *  snapshot, then swap memory. A failure after the append leaves the log AHEAD, which reload() folds forward. */
+  /** Provenance first: append, rename, then swap memory. A failure after the append leaves the log AHEAD (reload folds it). */
   private persist(action: string, actor: string, name: string, pose: string, record: ProfileRec, prior: ProfileRec | null,
     mutate: (s: Store) => void): { ok: true; rev: number } | { ok: false; why: string } {
     const next: Store = { rev: this.store.rev + 1, profiles: inertProfiles(JSON.parse(JSON.stringify(this.store.profiles))) };
@@ -265,16 +247,13 @@ export class SeatStore {
       return { ok: false, why: `provenance append failed — nothing was written: ${(e as Error).message}` };
     }
     if (!this.ownsLock())
-      // the log line stands (receipted); the snapshot must not race a successor. Recovery folds the receipt forward, or
-      // quarantines if a successor also appended
+      // the log line stands; the snapshot must not race a successor (recovery folds forward, or quarantines)
       return { ok: false, why: "lock ownership lost after provenance append — snapshot withheld; recovery will reconcile the receipt" };
     try {
       this.fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(next));
       this.fs.renameSync(`${this.file}.tmp`, this.file);
     } catch (e) {
-      // the log holds the receipt; the snapshot lags. The live store stays
-      // unchanged, this call reports failure, and the NEXT load folds the
-      // receipted write forward — never an applied state without a receipt.
+      // the snapshot lags: live store unchanged, failure reported, the NEXT load folds forward; never state without a receipt
       return { ok: false, why: `snapshot write failed (receipted in the log; recovery will fold it forward): ${(e as Error).message}` };
     }
     this.store = next;
@@ -302,7 +281,7 @@ export class SeatStore {
   get rev() { return this.store.rev; }
   get quarantineReason() { return this.quarantined; }
 
-  // ---- hashing (mtime-cached — the ?v= trick, applied to digests) ----------
+  // ---- hashing (mtime-cached) ----------------------------------------------
 
   private shaOf(path: string): string | null {
     let st; try { st = statSync(path); } catch { return null; }
@@ -320,8 +299,7 @@ export class SeatStore {
     return null;
   }
 
-  /** This slice profiles bodies the roster can serve — the bytes must exist
-   *  to be judged against (#105 review B2). */
+  /** The bytes must exist to be judged against. */
   rosterHas(name: string): boolean {
     return this.vrmDirs.some((d) => existsSync(join(d, `${name}.vrm`)));
   }
@@ -346,12 +324,10 @@ export class SeatStore {
 
   // ---- writes --------------------------------------------------------------
 
-  /** HTTP proposal (named actor already authenticated by the caller). May
-   *  only create/replace the PROPOSED slot; the accepted slot is inert to
-   *  this path by construction. */
+  /** Caller authenticated the named actor. Only the PROPOSED slot; the accepted slot is inert here by construction. */
   propose(record: ProfileRec, actor: string, { allowUnrostered = false } = {}):
     { ok: true; rev: number; name: string; pose: string } | { ok: false; status: number; why: string } {
-    // shape refusals need no lock — garbage never contends with real writers
+    // shape refusals need no lock
     const val = validateProfile(record);
     if (!val.ok) return { ok: false, status: 422, why: val.why };
     if (record.review && record.review.status !== "proposed")
@@ -372,14 +348,13 @@ export class SeatStore {
     });
   }
 
-  /** Operator countersign (tools/seat-accept.ts; no HTTP path reaches this). `expectedRev` is the revision the operator
-   *  LISTED and reviewed: if the store has moved since, it refuses rather than countersign a record nobody looked at. */
+  /** No HTTP path reaches this. `expectedRev`: the revision the operator reviewed; if the store moved since, it refuses. */
   accept(name: string, pose: string, receipt: string, by: string, expectedRev: number):
     { ok: true; rev: number } | { ok: false; why: string; status?: number } {
     if (!Number.isInteger(expectedRev)) return { ok: false, why: "expectedRev required — accept what you reviewed (run `list`, pass --expect-rev)" };
     return this.withLock(() => {
       if (this.quarantined) return { ok: false as const, why: `store quarantined: ${this.quarantined}` };
-      // the reload above happened UNDER the lock, so this compares against the disk at commit time
+      // the reload was UNDER the lock: this compares against the disk at commit time
       if (this.store.rev !== expectedRev)
         return { ok: false as const, why: `store moved (rev ${this.store.rev} ≠ reviewed ${expectedRev}) — re-list and re-review before countersigning` };
       const slot = this.store.profiles[name]?.[pose];
@@ -396,8 +371,7 @@ export class SeatStore {
     });
   }
 
-  /** Operator import (the no-attribution environments' path — local dev has
-   *  no home node to vouch for anyone, so the operator IS the provenance). */
+  /** No home node to vouch (local dev): the operator IS the provenance. */
   importProposal(record: ProfileRec, operator: string, opts: { allowUnrostered?: boolean } = {}) {
     return this.propose(record, `operator:${operator}`, opts);
   }
@@ -415,12 +389,10 @@ export class SeatStore {
 
 // ---- the server's one store + the update push -------------------------------
 
-/** The live sequencer's store, importable by the route table (which never imports server.ts) and the tick systems; the
- *  operator tool and tests build their own over the same directory, serialized by the on-disk lock. */
+/** The operator tool and tests build their own over the same directory, serialized by the on-disk lock. */
 export const seatStore = new SeatStore(OPT_DIR, LIBRARY_DIR, {}, { patchDir: PATCH_DIR });
 
-/** Announce one profile change to every connected client, whether it came through POST /seat-profile or the operator
- *  tool (seen by the 5s poll): one copy, so the two paths cannot drift. */
+/** One copy for POST /seat-profile and the operator tool (5s poll), so the two paths cannot drift. */
 export function announceProfileUpdate(name: string, pose: string, rev: number): number {
   const update = JSON.stringify({ type: "avatar-profile-updated", name, pose, rev });
   let notified = 0;

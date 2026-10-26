@@ -1,6 +1,5 @@
-// sfuadapter — the in-process SFU behind the relay-adapter surface server.ts depends on (mint, admit, consent, moderator
-// mute, revoke, diag); decisions stay in relaydecision.ts. In-process means no JWT (a one-shot nonce over the
-// authenticated world websocket), synchronous admission, and no API secret at all.
+// The in-process SFU behind server.ts's relay-adapter surface (mint, admit, consent, mute, revoke, diag); decisions
+// stay in relaydecision.ts. In-process: no JWT (a one-shot nonce over the world websocket), no API secret.
 import { currentIncarnation } from "./transport.ts";
 import { voiceServiceState, markVoiceLive } from "./sfusupervisor.ts";
 import { Sfu } from "./sfu.ts";
@@ -13,16 +12,16 @@ export type SfuWorldState = {
   legs: Map<string, { id: string; gen: number; primaryGen: number; nonce: string }>;
   consent: Map<string, { gen: number; consent: boolean }>;
   usedNonces: Set<string>;
-  /** listener → last answer, applied to speakers who arrive later. Room-level on purpose ("receive voice" = hear the
-   *  room). INVARIANT: it dies with the leg (revokeSfuLeg), so a reconnect starts fail-closed. */
+  /** listener → last answer, applied to later speakers; room-level on purpose ("receive voice" = hear the room).
+   *  INVARIANT: it dies with the leg (revokeSfuLeg), so a reconnect starts fail-closed. */
   standingConsent: Map<string, boolean>;
-  /** Legs that have already proven their credential; per-world, so it dies with its world. */
+  /** Legs that have proven their credential; dies with the world. */
   admitted: Set<string>;
 };
 
 const worlds = new Map<string, SfuWorldState>();
 
-/** Per-world SFU. Created on first use; a world with no voice never builds one. */
+/** Built on first use; a world with no voice never builds one. */
 export function sfuState(world: string): SfuWorldState {
   let s = worlds.get(world);
   if (!s) {
@@ -41,20 +40,18 @@ export function sfuState(world: string): SfuWorldState {
   return s;
 }
 
-/** The one per-world key everything module-global uses. */
 const wkey = (world: string, legId: string) => `${world}\u0000${legId}`;
 
-// legId → how to reach that leg's browser (the SFU never learns about websockets); registered by the call that creates
-// the leg. KEYED BY world+legId: two worlds hosting the same participant id are routine.
+// legId → how to reach its browser (the SFU never sees websockets). KEYED BY world+legId: two worlds may host the same id.
 const senders = new Map<string, (payload: unknown) => void>();
 export function registerSfuSender(world: string, legId: string, send: (payload: unknown) => void) {
   senders.set(wkey(world, legId), send);
 }
 
-/** Mint: same shape as mintRelayCredential, minus the JWT that has no analogue. */
+/** Same shape as mintRelayCredential, minus the JWT. */
 export function mintSfuCredential(world: string, id: string, primaryGen: number, mediaGen: number) {
-  // a mint retires the old leg via revokeSfuLeg first (consent, admission, pending answer), except consent given while
-  // no leg existed; revoke unregisters the sender, so registerSfuSender must come after the mint (server.ts does)
+  // a mint retires the old leg via revokeSfuLeg (keeping consent given while no leg existed); revoke unregisters the
+  // sender, so registerSfuSender must come after the mint
   const s0 = worlds.get(world);
   const hadLeg = !!s0?.legs.has(id);
   const preConsent = hadLeg ? undefined : s0?.standingConsent.get(id);
@@ -69,17 +66,15 @@ export function mintSfuCredential(world: string, id: string, primaryGen: number,
   // create the actual leg: a bookkeeping record of a peer connection is not one
   s.sfu.createLeg(id, mediaGen);
   applyStandingConsent(s, id);   // consent given before this leg existed still counts
-  // world/id/primaryGen ride along so the client can PRESENT the full claim set
-  // on its next authenticated act (amendment 1). Without them the client could
-  // only echo a nonce, and admitParticipant checks six things besides the nonce.
+  // world/id/primaryGen ride along so the client can PRESENT the full claim set (amendment 1): admitParticipant
+  // checks six things besides the nonce
   return { nonce, incarnation: s.incarnation, identity: relayIdentity(id, mediaGen),
            world, id, primaryGen, mediaGen,
            transport: "sfu" as const, iceServers: iceServers() };
 }
 
-/** ICE servers for the credential. STUN even in phase 1: every client dials out to one SFU and must learn its public
- *  address, or a client behind NAT can't be heard. TURN is deferred (symmetric NAT only). SFU_ICE_SERVERS = a JSON array
- *  to add one; `[]` forces host-only (tests: a loopback pair must not wait on a public STUN server). */
+/** STUN even in phase 1: a client behind NAT must learn its public address or it can't be heard; TURN deferred.
+ *  SFU_ICE_SERVERS = JSON array; `[]` forces host-only (tests: a loopback pair must not wait on public STUN). */
 function iceServers(): { urls: string; username?: string; credential?: string }[] {
   const raw = process.env.SFU_ICE_SERVERS;
   if (raw !== undefined) {
@@ -94,12 +89,11 @@ function iceServers(): { urls: string; username?: string; credential?: string }[
   return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
-/** Admission: amendment 1's seven refusals, decided by the shared decision layer; synchronous, as we are the SFU. */
-/** Add `useinbandfec=1`, keeping DTX off (a silence-suppressed stream and a dead one look the same to a listener).
- *  Idempotent: an fmtp line that already asks for FEC is left alone. */
+/** Admission: amendment 1's seven refusals, from the shared decision layer; synchronous, as we are the SFU. */
+/** Adds `useinbandfec=1`, DTX stays off (silence-suppressed and dead look the same to a listener). Idempotent. */
 export function withOpusFec(sdp: string): string {
   const pt = /a=rtpmap:(\d+)\s+opus\/48000/i.exec(sdp)?.[1];
-  if (!pt) return sdp;                       // no opus offered — nothing to ask for
+  if (!pt) return sdp;                       // no opus offered
   const fmtp = new RegExp(`a=fmtp:${pt} ([^\r\n]*)`);
   const m = fmtp.exec(sdp);
   if (!m) return sdp.replace(new RegExp(`(a=rtpmap:${pt}\\s+opus/48000[^\r\n]*)`),
@@ -108,7 +102,6 @@ export function withOpusFec(sdp: string): string {
   return sdp.replace(fmtp, `a=fmtp:${pt} ${m[1]};useinbandfec=1`);
 }
 
-/** The sequencer's live view of an identity, for the admission gate. */
 export function liveLegState(world: string, id: string, primaryGen?: number): LiveLegState {
   const s = sfuState(world);
   const leg = s.legs.get(id);
@@ -116,21 +109,18 @@ export function liveLegState(world: string, id: string, primaryGen?: number): Li
            mediaGen: leg?.gen, usedNonces: s.usedNonces };
 }
 
-/** Has this leg already proven its credential? A leg is admitted ONCE; later
- *  answers are ordinary renegotiation on an established session. Cleared by
- *  revokeSfuLeg, so a fresh leg must prove itself again. */
+/** A leg is admitted ONCE; later answers are renegotiation. Cleared by revokeSfuLeg, so a fresh leg proves itself again. */
 export const sfuLegAdmitted = (world: string, id: string) => !!worlds.get(world)?.admitted.has(id);
 export const markSfuLegAdmitted = (world: string, id: string) => { sfuState(world).admitted.add(id); };
 
 export function admitSfuLeg(world: string, claims: RelayClaims, live: LiveLegState) {
   const s = sfuState(world);
   const verdict = admitParticipant(claims, { ...live, usedNonces: s.usedNonces });
-  // Burn on FIRST admission — the removed-participant replay hole is real,
-  // and the nonce is what closes it.
+  // burn on FIRST admission: the nonce closes the removed-participant replay hole
   if (verdict.admit) {
     s.usedNonces.add(claims.nonce);
-    // BOUNDED: evicting the oldest nonce is safe, as a credential 4096 mints old has retired gens that admitParticipant
-    // refuses before the nonce matters (a Set iterates in insertion order)
+    // BOUNDED: evicting the oldest nonce is safe, a credential 4096 mints old has retired gens admitParticipant refuses
+    // first (a Set iterates in insertion order)
     if (s.usedNonces.size > 4096) {
       const oldest = s.usedNonces.values().next().value;
       if (oldest !== undefined) s.usedNonces.delete(oldest);
@@ -139,9 +129,7 @@ export function admitSfuLeg(world: string, claims: RelayClaims, live: LiveLegSta
   return verdict;
 }
 
-/** Listener consent. The decision is shared; only the enforcement is ours, and
- *  ours is a memory write rather than an SDP round trip (see sfu.ts's
- *  ensureRoute doc for why routes and consent are separate concepts). */
+/** Shared decision; our enforcement is a memory write, not an SDP round trip (routes vs consent: sfu.ts ensureRoute). */
 export function setSfuConsent(world: string, listenerId: string, listenerGen: number, recv: boolean) {
   const s = sfuState(world);
   const r = applyConsentUpdate(s.consent, listenerId, listenerGen, recv);
@@ -149,13 +137,13 @@ export function setSfuConsent(world: string, listenerId: string, listenerGen: nu
     // a refused revoke still stops the audio: idempotence may swallow a repeated YES, never a NO
     if (!recv) {
       for (const speakerId of s.legs.keys()) s.sfu.setConsent(listenerId, speakerId, false);
-      // …and clears the standing answer, or later speakers become audible. Deliberate: a stale revoke may clobber a
-      // newer yes; silence is the safe failure.
+      // …and clears the standing answer, or later speakers become audible; a stale revoke may clobber a newer yes:
+      // silence is the safe failure
       s.standingConsent.set(listenerId, false);
     }
     return r;
   }
-  // record the standing answer too, so joinSfuLeg honours it for speakers who join later
+  // standing answer too, so joinSfuLeg honours it for later speakers
   s.standingConsent.set(listenerId, recv);
   for (const speakerId of s.legs.keys()) {
     if (speakerId === listenerId) continue;
@@ -164,8 +152,7 @@ export function setSfuConsent(world: string, listenerId: string, listenerGen: nu
   return r;
 }
 
-/** Apply every listener's standing consent to a newly-arrived speaker, and the newcomer's to everyone here: consent is a
- *  standing answer about the room, not about who was present when it was given. */
+/** Both directions: consent is a standing answer about the room, not about who was present when it was given. */
 function applyStandingConsent(s: SfuWorldState, newLegId: string) {
   for (const [listenerId, recv] of s.standingConsent) {
     if (listenerId !== newLegId) s.sfu.setConsent(listenerId, newLegId, recv);
@@ -176,19 +163,18 @@ function applyStandingConsent(s: SfuWorldState, newLegId: string) {
   }
 }
 
-/** Moderator/global mute — a different state than consent (amendment 3),
- *  enforced at the SOURCE so one call silences a speaker for everyone. */
+/** Moderator mute: not consent (amendment 3); enforced at the SOURCE, so one call silences a speaker for everyone. */
 export function setSfuModeratorMute(world: string, speakerId: string, mutedFlag: boolean) {
   // ONE STORE: the SFU enforces the mute, so the SFU owns the fact; sfuDiag reads it back through diag().muted
   sfuState(world).sfu.setMuted(speakerId, mutedFlag);
 }
 
-/** Server-held deafness: the listener hears nobody, whatever its own consent says. No caller now; kept for the relay (sfu-test) and a future spectator role. */
+/** Server-held deafness, overriding the listener's consent. No caller now; kept for sfu-test and a spectator role. */
 export function setSfuDeafened(world: string, listenerId: string, deaf: boolean) {
   sfuState(world).sfu.setDeafened(listenerId, deaf);
 }
 
-/** Retirement funnel — the same one every other surface uses. */
+/** Retirement funnel, shared with every other surface. */
 export function revokeSfuLeg(world: string, id: string) {
   senders.delete(wkey(world, id));
   // a leg revoked mid-negotiation must not leave its resolver behind to feed an answer into a closed pc
@@ -199,17 +185,13 @@ export function revokeSfuLeg(world: string, id: string) {
   s.legs.delete(id); s.consent.delete(id);
   s.standingConsent.delete(id);
   s.admitted.delete(id);              // a new leg must prove its credential again
-  // A retired leg is not a muted one: a fresh leg with the same id must not
-  // inherit a moderation act aimed at its predecessor. (There is only ONE mute
-  // store now, so this cannot half-apply the way it used to.)
+  // a retired leg is not a muted one: a fresh leg with the same id must not inherit its predecessor's mute
   s.sfu.setMuted(id, false);
   s.sfu.closeLeg(id);
   return leg;
 }
 
-/** Diagnostics merged into /relay-diag. Reports DELIVERED and SUPPRESSED
- *  separately per #104's measurement hygiene — "a cheaper server that drops
- *  more is not healthier", so a single throughput number would be misleading. */
+/** Merged into /relay-diag. DELIVERED and SUPPRESSED are separate (#104 measurement hygiene): a cheaper server that drops more is not healthier. */
 export function sfuDiag(world: string) {
   const s = worlds.get(world);
   if (!s) return { transport: "sfu", active: false };
@@ -218,8 +200,7 @@ export function sfuDiag(world: string) {
   return {
     ...d,
     transport: "sfu", active: true, incarnation: s.incarnation,
-    // The supervisor's view belongs here too — A2 asks for voice service state
-    // to be observable, and /relay-diag is where an operator looks.
+    // voice service state must be observable (A2), and /relay-diag is where an operator looks
     service: voiceServiceState(),
     moderatorMuted: d.muted,          // one store, read back from the enforcement point
     deafened: d.deafened,
@@ -227,31 +208,27 @@ export function sfuDiag(world: string) {
 }
 
 // ── signaling: the server always OFFERS ───────────────────────────────────
-// One pending answer-resolver per leg (Sfu.negotiate() serialises offers per leg). KEYED BY world+legId, and cleared on
-// revoke (revokeSfuLeg).
+// one pending answer-resolver per leg (negotiate() serialises offers per leg); KEYED BY world+legId, cleared by revokeSfuLeg
 const waiting = new Map<string, (sdp: string) => void>();
 
-/** Create the offer for `legId` and hand it to `send`. The browser answers via
- *  the `sfu-answer` verb, which resolves the promise this awaits. */
+/** The browser answers via the `sfu-answer` verb, which resolves the promise this awaits. */
 export async function sfuNegotiate(world: string, legId: string,
   send: (payload: unknown) => void) {
   const s = worlds.get(world);
   if (!s) return;
-  // every leg needs a way to RECEIVE: without a recvonly/sendrecv transceiver the offer proposes no receive (alone: zero
-  // m-lines and ICE never starts; with others: ontrack never fires), so add a recvonly audio floor
+  // a recvonly audio floor: without a receiving transceiver, alone there are zero m-lines and ICE never starts; with
+  // others ontrack never fires
   const leg = s.sfu.getLeg(legId);
   if (leg && !leg.pc.getTransceivers().some((t: { direction?: string }) =>
         t.direction === "recvonly" || t.direction === "sendrecv")) {
     leg.pc.addTransceiver("audio", { direction: "recvonly" });
   }
   await s.sfu.negotiate(legId, async (pc) => {
-    // Tell the client which speaker each new track carries BEFORE the offer
-    // lands, so its ontrack can pair them in arrival order (see voicesfu.js).
+    // speaker per track BEFORE the offer lands, so ontrack pairs them in arrival order (voicesfu.js)
     for (const speakerId of s.sfu.routesFor(legId)) send({ type: "sfu-route", speaker: speakerId });
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    // ask for in-band FEC explicitly (#104 §8 item 4): the browser's encoder owns it end to end, and a default is not a
-    // contract; the client measures fecPacketsReceived
+    // ask for in-band FEC explicitly (#104 §8 item 4): a default is not a contract; the client measures fecPacketsReceived
     send({ type: "sfu-offer", sdp: withOpusFec(pc.localDescription!.sdp) });
     const sdp = await new Promise<string>((resolve, reject) => {
       const k = wkey(world, legId);
@@ -269,8 +246,7 @@ export async function sfuNegotiate(world: string, legId: string,
 }
 
 export function sfuAcceptAnswer(world: string, legId: string, sdp: string, claimedGen?: number) {
-  // an answer must name its leg's current generation (A2). Required, not opt-in: a stale predecessor is exactly the client
-  // that would omit it.
+  // an answer must name its leg's current generation (A2); required, not opt-in: a stale predecessor would omit it
   if (claimedGen == null) {
     console.warn(`[sfu] answer for ${legId} names no generation — dropped`);
     return;
@@ -283,21 +259,20 @@ export function sfuAcceptAnswer(world: string, legId: string, sdp: string, claim
     }
   }
   const resolve = waiting.get(wkey(world, legId));
-  if (!resolve) return;                 // no offer outstanding — stale answer, drop
+  if (!resolve) return;                 // no offer outstanding: stale answer
   waiting.delete(wkey(world, legId));
   resolve(sdp);
 }
 
 export function sfuAcceptIce(world: string, legId: string, candidate: unknown, claimedGen?: number) {
-  // ICE is generation-bound exactly as answers are, required not opt-in: a stale predecessor must not trickle candidates
-  // into its successor's pc
+  // ICE is generation-bound like answers, required: a stale predecessor must not trickle into its successor's pc
   if (claimedGen == null) return;                    // late/stale churn, drop quietly
   const leg = worlds.get(world)?.legs.get(legId);
   if (!leg || leg.gen !== claimedGen) return;        // predecessor's candidate, drop
   worlds.get(world)?.sfu.addIceCandidate(legId, candidate);
 }
 
-/** Feed the proximity gate. Optional — see the `sfu-pos` case in server.ts. */
+/** Feeds the proximity gate. Optional: see `sfu-pos` in server.ts. */
 export function sfuSetPosition(world: string, legId: string, x: number, y: number, z: number) {
   worlds.get(world)?.sfu.setPosition(legId, x, y, z);
 }

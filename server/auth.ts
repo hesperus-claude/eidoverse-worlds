@@ -1,8 +1,5 @@
-// eidoverse-worlds sequencer — identity doors (TEL0S_NOTES §15, step 7a).
-// Archipelago-home sessions (cookie ⇄ aid1 token), their persistence across
-// restarts, and the per-agent bearer roster from mcpl/tokens.json. Imported
-// by server.ts right after config, so the restore-at-boot block below runs
-// exactly where it always did in the boot sequence.
+// Identity doors (TEL0S_NOTES §15, step 7a): home-node sessions (cookie ⇄ aid1 token), persisted across restarts,
+// and the per-agent bearer roster from mcpl/tokens.json. server.ts imports it right after config: restore runs at boot.
 
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -11,8 +8,8 @@ import { ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 
 // ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
-// The second door beside JOIN_TOKEN: an aid1 token from the home node swaps for a session cookie at /auth.
-// Verification is offline (pinned key), so with the home node down sessions and JOIN_TOKEN keep working.
+// Second door beside JOIN_TOKEN: an aid1 token swaps for a session cookie at /auth. Verification is offline
+// (pinned key), so with the home node down sessions and JOIN_TOKEN keep working.
 //   HN_ISSUER_KEY (pinned `ed25519:…`, unset disables the door), HN_ISS, HN_AUD (staging: eidoverse2), HN_LOGIN_URL,
 //   HN_REQUIRE_LOGIN=1 (sessionless browser clients go to login; JOIN_TOKEN joins still pass)
 export const HN_ISSUER_KEY = process.env.HN_ISSUER_KEY ?? "";
@@ -30,9 +27,8 @@ export function aid1JoinIdentity(tok: string): { slug: string; payload: Aid1Payl
   return v.ok ? { slug: aid1Slug(v.payload), payload: v.payload } : null;
 }
 
-// `native`: issued to a native client by browser-approved pairing (native-login.ts). It is an ordinary session
-// for every world the account may join; the mark only stops it approving another native pairing. Sessions paired
-// before native sessions became ordinary ones carry `nativeWorld` instead, which means the same thing now.
+// `native`: from browser-approved pairing (native-login.ts); an ordinary session, but it may not approve another
+// pairing. Legacy `nativeWorld` means the same.
 export type HnSession = { sub: string; name: string; scopes: string[]; claims?: Record<string, unknown>; exp: number; native?: true; nativeWorld?: string };
 export const hnSessions = new Map<string, HnSession>();
 export const hnJti = new JtiCache();
@@ -47,7 +43,7 @@ export function sessionFromCookie(cookie: string | null): HnSession | null {
 
 // ---- session persistence ----------------------------------------------------
 // Sessions survive restarts; the file holds bearer-equivalent ids, so 0600 and gitignored (as mcpl/tokens.json).
-// SESSIONS_PATH (or HN_SESSIONS_FILE) keeps a self-contained test's sessions in its scratch dir
+// SESSIONS_PATH / HN_SESSIONS_FILE: a test's scratch dir
 export const SESSIONS_FILE = resolve(process.env.SESSIONS_PATH ?? process.env.HN_SESSIONS_FILE ?? join(ROOT, ".sessions.json"));
 export function saveSessions() {
   try {
@@ -66,9 +62,8 @@ try {
   }
 } catch (e) { console.log(`[auth] session restore failed (starting empty): ${e}`); }
 
-// Agent identity from the MCPL door's per-agent tokens (hot-reloaded by mtime): an agent's name is RESERVED against
-// plain browser joins, and a join with the right token is a verified agent.
-// AGENT_TOKENS_PATH lets a self-contained test own a scratch tokens.json; production leaves it unset.
+// MCPL per-agent tokens (hot-reloaded by mtime): an agent's name is RESERVED against plain browser joins; a join
+// with the right token is a verified agent. AGENT_TOKENS_PATH is for tests only.
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
 let agentTokCache: { mtime: number; byToken: Map<string, string>; names: Set<string>; bySub: Map<string, string> } | null = null;
 export function agentTokens() {
@@ -77,9 +72,8 @@ export function agentTokens() {
     if (!agentTokCache || agentTokCache.mtime !== mtime) {
       const byToken = new Map<string, string>();
       const names = new Set<string>();
-      // an enrolled agent may also arrive through the home node with an aid1 credential: `subs` lists the aid1 subjects
-      // that ARE this agent (a reserved name is satisfied by a proven subject, never by a
-      // display name that happens to slug the same)
+      // `subs`: aid1 subjects that ARE this agent; a reserved name is satisfied by a proven subject, never by a
+      // display name that slugs the same
       const bySub = new Map<string, string>();
       if (mtime) {
         const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { id?: string; subs?: string[] }>;

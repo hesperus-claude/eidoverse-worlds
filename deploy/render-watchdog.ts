@@ -1,13 +1,10 @@
-// render-watchdog — keep the /snap renderer alive AND current.
-//
-// Restarts on a hang, not just a crash: a leaking client keeps its websocket open while answering nothing.
-//
-// Restarts the renderer on any of:
+// Keeps the /snap renderer alive AND current (a leaking client keeps its websocket open while answering nothing).
+// Restarts it on any of:
 //   - crash        — Chrome process gone
 //   - hang         — main thread unresponsive to a trivial CDP eval
 //   - frozen       — booted but not joined, no frames, or no frame it can capture, for several checks
 //   - memory       — RSS over a cap, before it reaches the hang zone
-//   - stale code   — the served client changed (a deploy) — reload for new code
+//   - stale code   — the served client changed (a deploy)
 //   - old age      — a max uptime, as a backstop against slow leaks
 //
 // Env: SHOW_URL WORLD KEY (as run-mac-renderer.sh), plus PORT (devtools),
@@ -30,24 +27,21 @@ const STRIKES = Number(process.env.STRIKES ?? 3);           // consecutive bad c
 const BOOT_GRACE_SEC = Number(process.env.BOOT_GRACE_SEC ?? 45);
 const VERSION_URL = `${SHOW_URL}/client-version`;
 
-// ROAM=1: a roaming renderer — it starts in WORLD and the server sends it to any world a snapshot is asked of
-// where no renderer is serving (server/snapshots.ts). Its name says so: mac-gpu-roam-<WORLD>.
+// ROAM=1: starts in WORLD; the server sends it to any snapshot with no renderer serving (server/snapshots.ts)
 const ROAM = /^(1|true|yes)$/i.test(process.env.ROAM ?? "");
-// lite=0: early kills would trip the client's boot tripwire (index.html) and relaunch a lite client with no
-// renderer; the URL outranks the tripwire, even on a sequencer still serving an older client
+// lite=0: early kills would trip the boot tripwire (index.html) into a lite client with no renderer; the URL outranks it
 const URL = `${SHOW_URL}/?world=${WORLD}&renderer&lite=0&name=mac-gpu-${ROAM ? "roam-" : ""}${WORLD}` + (ROAM ? "&roam" : "") + (KEY ? `&key=${KEY}` : "");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const log = (m: string) => console.log(`[watchdog ${new Date().toISOString().slice(11, 19)}] ${m}`);
 const sh = async (cmd: string) => (await new Response(Bun.spawn(["bash", "-c", cmd]).stdout).text()).trim();
 
-/** Sum RSS (GB) of every Chrome process in this renderer's profile tree. */
+/** GB, every Chrome process in this profile's tree */
 async function rssGB(): Promise<number> {
   const out = await sh(`ps aux | grep 'user-data-dir=${PROFILE}' | grep -v grep | awk '{s+=$6} END{print s+0}'`);
   return (Number(out) || 0) / 1048576;
 }
 
-/** Fetch the served client's version marker (a deploy changes it). Absent/old
- *  server → null, which the caller treats as "can't tell, don't restart". */
+/** null (absent/old server) means "can't tell, don't restart". */
 async function clientVersion(): Promise<string | null> {
   try {
     const r = await fetch(VERSION_URL, { signal: AbortSignal.timeout(5000) });
@@ -62,14 +56,14 @@ async function killTree() {
 }
 
 async function launch() {
-  await killTree();                       // never leave a stray tree behind
+  await killTree();
   log(`launching renderer → ${WORLD}`);
   Bun.spawn([CHROME, "--headless=new", `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${PROFILE}`, "--no-first-run", "--disable-extensions", URL],
     { stdout: "ignore", stderr: "ignore" });
 }
 
-// graceful shutdown: don't leave an orphan renderer when the watchdog is killed
+// never leave an orphan renderer when the watchdog is killed
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => { log("shutting down — killing renderer"); await killTree(); process.exit(0); });
 }
@@ -97,8 +91,7 @@ for (;;) {
 
     const nowVersion = await clientVersion();
     if (bornVersion === null && nowVersion !== null) {
-      // Late baseline (see above). A deploy we could not observe is not a
-      // deploy we can act on — adopt what we can now read and watch from here.
+      // late baseline: a deploy we could not observe can't be acted on; adopt what we read now
       bornVersion = nowVersion;
       log(`client version readable again — baseline adopted`);
     } else if (bornVersion && nowVersion && nowVersion !== bornVersion) {

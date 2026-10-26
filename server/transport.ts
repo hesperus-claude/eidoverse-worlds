@@ -5,17 +5,16 @@ import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { nextIncarnation } from "./relaydecision.ts";
 
-/** Which voice transport is live: "sfu" (in-process, the flag alone enables it) or "off", which is NO VOICE AT ALL, not a
- *  mesh fallback (the mesh is gone since #132); the remedy for a failed cutover is the previous release
- *  (notes/CUTOVER-ROLLBACK.md). Default "off", opt-in. */
+/** "sfu" (in-process) or "off" (default), which is NO VOICE AT ALL, not a mesh fallback (gone since #132); a failed cutover rolls back
+ *  to the previous release (notes/CUTOVER-ROLLBACK.md). */
 export const voiceTransport = (): "sfu" | "off" =>
   process.env.VOICE_TRANSPORT === "sfu" ? "sfu" : "off";
 
 export const relayEnabled = () => voiceTransport() !== "off";
 
 // ---- durable incarnation ----------------------------------------------------
-// advanced atomically each boot (tmp + rename, entropy suffix): a restart strands every old credential. Process-unique
-// from import and upgraded when a server boots it, never a shared sentinel (a fixed value would collide across processes).
+// advanced atomically each boot (tmp + rename): a restart strands every old credential.
+// Process-unique from import, never a fixed sentinel (it would collide across processes).
 let incarnation = nextIncarnation(null, crypto.randomUUID().slice(0, 8));
 
 export function bootIncarnation(dir: string): string {

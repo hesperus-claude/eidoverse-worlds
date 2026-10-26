@@ -1,6 +1,5 @@
-// eidoverse-worlds sequencer — live asset ingestion (TEL0S_NOTES §15, 7c): POST /upload (models, avatars, pictures,
-// sounds, runtime scripts), the per-IP upload rate windows, and the store-optimization queue whose subprocess builds
-// each upload's shadows off the request path, plus the deferred boot sweeps. routes.ts delegates the endpoint here.
+// Live asset ingestion (TEL0S_NOTES §15, 7c): POST /upload (models, avatars, pictures, sounds, scripts), its per-IP
+// rate windows, and the optimize queue that builds each upload's shadows off the request path, plus the boot sweeps.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, rmSync } from "node:fs";
 import { addressOf } from "./peer.ts";
@@ -13,23 +12,20 @@ import { atomicWrite } from "./fsutil.ts";
 import { ingestHeightmap } from "./heightmap.ts";
 import { checkFile } from "./buildcheck-queue.ts";
 
-/** What the handler needs from Bun's server object, structurally: the
- *  socket address behind the nginx front. */
+/** The socket address behind the nginx front. */
 type UploadSrv = { requestIP(req: Request): { address: string } | null };
 
-const uploadWin = new Map<string, { t: number; n: number }>(); // per-IP upload rate windows
-let tripoImportBusy = false;   // one Tripo import at a time — they cost CPU-seconds
+const uploadWin = new Map<string, { t: number; n: number }>(); // per IP
+let tripoImportBusy = false;   // one at a time: they cost CPU-seconds
 
 // ---- store optimization -----------------------------------------------------
-// every uploaded GLB gets a draco+webp shadow in store-min/ and a KTX2 variant beside the original (store-variants.ts),
-// built by a SUBPROCESS one file at a time: draco is CPU-seconds of synchronous wasm that would freeze pose relay
+// a SUBPROCESS, one file at a time: draco is CPU-seconds of synchronous wasm that would freeze pose relay
 type OptItem = { src: string; dest: string; mode?: "--ktx2" | "--ktx2-vrm" | "--ktx2-img" | "--lod"; force?: boolean };
 const optQueue: OptItem[] = [];
 let optRunning = false;
-let ktx2Skip = false; // set when a --ktx2 run exits 3 (no encoder) — stop queuing variants this boot
-let lodEncoderWarned = false; // the --lod arm's own once-per-boot note; it never sets ktx2Skip
-/** An older recipe generation's files beside a lod outcome (variant, marker, deferral) are dead, as the recipe is in
- *  the URL and the name; pruned on a bake AND a refusal, so one generation stays on disk. */
+let ktx2Skip = false; // a --ktx2 run exited 3 (no encoder): stop queuing variants this boot
+let lodEncoderWarned = false; // never sets ktx2Skip
+/** Older recipe generations are dead (the recipe is in the URL): pruned on a bake AND a refusal. */
 function pruneOldLodGenerations(src: string, dest: string) {
   const base = basename(src), dir = dirname(dest);
   const keep = new Set([dest, `${dest}.failed`, `${dest}.deferred`, `${dest}.srcid`]);
@@ -40,8 +36,7 @@ function pruneOldLodGenerations(src: string, dest: string) {
   }
 }
 
-// items this host couldn't afford (estimate over budget, or the child died under the cap): informational for /version,
-// never blocking a retry; the count is this boot's, the markers persist (never listing entries, store-variants.ts)
+// items this host couldn't afford: informational for /version, never blocking a retry; the markers persist
 const optDeferred = new Set<string>();
 if (process.env.OPT_CMD) console.warn(`[optimize] OPT_CMD=${process.env.OPT_CMD} — a stand-in optimizer is in charge of every variant this boot`);
 export function optStatus() {
@@ -62,28 +57,24 @@ export function queueOptimize(absPath: string) {
     optQueue.push({ src: absPath, dest: join(STORE_MIN, basename(absPath)) });
     pushed = true;
   }
-  // the KTX2 shadow encodes from the ORIGINAL (the best bytes; store-min has been wrong before, #122); skipped once
-  // this boot has learned there is no encoder
+  // KTX2 encodes from the ORIGINAL (the best bytes; store-min has been wrong before, #122)
   if (!ktx2Skip && !optQueue.some((q) => q.src === absPath && q.mode === "--ktx2")) {
     optQueue.push({ src: absPath, dest: ktx2VariantPath(absPath), mode: "--ktx2" });
     pushed = true;
   }
-  // the geometry LOD too, NOT gated on ktx2Skip (an untextured object needs no encoder); the CLI fails closed on
-  // anything skinned, judged from the raw container, never a filename here
+  // NOT gated on ktx2Skip (an untextured object needs no encoder); the CLI fails closed on anything skinned, judged
+  // from the raw container, never a filename
   if (!optQueue.some((q) => q.src === absPath && q.mode === "--lod")) {
     optQueue.push({ src: absPath, dest: lodVariantPath(absPath), mode: "--lod" });
     pushed = true;
   }
   if (pushed) pumpOptimize();
 }
-/** Rebuild one placeable object's KTX2 + LOD variants (POST /rebuild). `rel` is `eidoverse/assets/models/<f>.glb`
- *  (variants in the OPT mirror) or `store/<hash>.glb`. Its verdict markers are cleared and the passes FORCED; a built
- *  variant keeps serving until the new one lands over it. null = not a rebuildable object. */
-// one forced rebuild per model per window (REBUILD_COOLDOWN_MS, read per call; 0 disables): the route's per-address
-// limit caps presses, not the ~2×9 s of encode each buys
+/** POST /rebuild. `rel`: `eidoverse/assets/models/<f>.glb` or `store/<hash>.glb`. A built variant keeps serving until
+ *  the new one lands over it. null = not a rebuildable object. */
+// per model (0 disables): the route's per-address limit caps presses, not the ~2×9 s of encode each buys
 const lastRebuild = new Map<string, number>();
-// the pump takes every upload / sweep item before a forced one, with at most REBUILD_WAIT_CAP forced passes waiting:
-// rebuild presses can delay other rebuilds, never uploads
+// forced passes wait behind every upload / sweep item: rebuild presses can delay other rebuilds, never uploads
 export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: number; busy?: boolean } | null {
   if (!/^(eidoverse\/assets\/models\/[^/]+|store\/[^/]+)\.glb$/.test(rel) || rel.includes("..")) return null;
   const store = rel.startsWith("store/");
@@ -95,9 +86,8 @@ export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: numbe
     : { "--ktx2": join(OPT_DIR, ktx2VariantPath(rel)), "--lod": join(OPT_DIR, lodVariantPath(rel)) };
   const cool = Number(process.env.REBUILD_COOLDOWN_MS ?? 600_000), last = lastRebuild.get(src) ?? -Infinity;
   if (cool > 0 && Date.now() - last < cool) return { queued: [], cooldownS: Math.ceil((cool - (Date.now() - last)) / 1000) };
-  // the cap bounds what WAITS after this ask, so count the forced passes it would add (Greptile #207: checking only the
-  // current count let 3 waiting + 2 new = 5 past a cap of 4). An ask never fits in part; an empty wait always takes one
-  // whole ask, so a cap below 2 can't lock a model's two passes out forever.
+  // the cap bounds what WAITS after this ask, its own passes counted. An ask never fits in part; an empty wait always
+  // takes one whole ask, so a cap below 2 can't lock a model's two passes out forever
   const cap = Number(process.env.REBUILD_WAIT_CAP ?? 4);
   const waitingForced = optQueue.filter((q) => q.force).length;
   const adds = (Object.keys(dests) as NonNullable<OptItem["mode"]>[])
@@ -105,7 +95,7 @@ export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: numbe
   if (cap > 0 && waitingForced > 0 && waitingForced + adds > cap) return { queued: [], busy: true };
   const queued: string[] = [];
   for (const [mode, dest] of Object.entries(dests) as [NonNullable<OptItem["mode"]>, string][]) {
-    if (mode === "--ktx2" && ktx2Skip) continue;   // no encoder this boot — the pass would only exit 3
+    if (mode === "--ktx2" && ktx2Skip) continue;   // it would only exit 3
     for (const m of [`${dest}.failed`, `${dest}.deferred`]) if (existsSync(m)) try { rmSync(m); } catch { /* best effort */ }
     optDeferred.delete(dest);
     const waiting = optQueue.find((q) => q.src === src && q.mode === mode);
@@ -116,7 +106,7 @@ export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: numbe
   return { queued };
 }
 let optPump: Promise<void> = Promise.resolve();
-/** Resolves when the pump has drained (a harness awaits this; the server never does). */
+/** A harness awaits this; the server never does. */
 export const optIdle = () => optPump;
 async function pumpOptimize() {
   if (optRunning) return;
@@ -126,39 +116,32 @@ async function pumpOptimize() {
     while (optQueue.length) {
       const next = optQueue.findIndex((q) => !q.force);
       const { src, dest, mode, force } = optQueue.splice(next < 0 ? 0 : next, 1)[0];
-      const base = basename(src);                      // <hash>.glb / <model>.glb
+      const base = basename(src);
       const failed = `${dest}.failed`;
-      // the file this pass is ABOUT (store-variants.ts freshOver): null for a content-addressed store original and for
-      // the store-min pass, whose shadows are done forever once they exist; the library/overlay file otherwise
+      // the file this pass is ABOUT (freshOver): null for store originals and store-min, done forever once they exist
       const source = !mode || dirname(src) === join(OPT_DIR, "store") ? null : src;
-      // a verdict stands only for the current recipe AND an unchanged source (library files are mutable; the route reads
-      // the same rule)
+      // a verdict stands only for the current recipe AND an unchanged source (as the route reads it)
       const refused = existsSync(failed)
         && (!mode || verdictStands(readFileSync(failed, "utf8"), mode === "--lod" ? LOD_RECIPE : KTX2_RECIPE))
         && freshOver(failed, source);
       // a FORCED item is a re-ask (↻): a verdict it finds was written after the press, by a run already in flight
       if (!existsSync(src) || (refused && !force)) continue;
-      // store shadows are content-addressed (existing = done); KTX2 variants shadow MUTABLE library files, so one built
-      // from another version of its source rebuilds
-      if (!force && existsSync(dest) && freshOver(dest, source)) { undefer(dest); continue; }   // done elsewhere: a stale .deferred must not outlive the variant
-      // the identity of what this pass reads, taken BEFORE it runs: a source rewritten mid-pass must not be recorded as
-      // the one the output was built from
+      // store shadows: existing = done; KTX2 variants shadow MUTABLE library files, so another version's rebuilds
+      if (!force && existsSync(dest) && freshOver(dest, source)) { undefer(dest); continue; }   // a stale .deferred must not outlive the variant
+      // taken BEFORE the run: a source rewritten mid-pass must not be recorded as the one the output was built from
       const srcId = source ? diskIdentity(source) : null;
-      // Budget gate: an item this host cannot afford is deferred, not failed,
-      // and the rest of the queue keeps going (config.ts OPT_MEM_BUDGET_MB).
+      // unaffordable is deferred, not failed, and the queue keeps going (config.ts OPT_MEM_BUDGET_MB)
       const estMB = Math.ceil(Bun.file(src).size * OPT_COST_FACTOR / 1_000_000);
       if (OPT_MEM_BUDGET_MB && estMB > OPT_MEM_BUDGET_MB) { defer(dest, `estimated ${estMB}MB > budget ${OPT_MEM_BUDGET_MB}MB`); continue; }
       mkdirSync(dirname(dest), { recursive: true });
-      // process.execPath: PATH under systemd has no bun. Under a budget (Linux only) the child runs beneath `ulimit -d`
-      // (KB), so an oversized encode dies as the child (exit ≥128, silent), never the server; not RLIMIT_AS (bun reserves
-      // far more address space than it touches). The wrapper's own failures are 126 (limit not set) and 127 (exec failed).
+      // process.execPath: systemd's PATH has no bun. `ulimit -d` (KB): an oversized encode dies as the child (≥128),
+      // never the server; not RLIMIT_AS (bun reserves far more than it touches). Wrapper: 126 no limit, 127 no exec.
       const capped = OPT_MEM_BUDGET_MB > 0 && process.platform === "linux";
-      // OPT_CMD: a harness may own the child (tools/optimize-pump-test.ts) — the real optimizer otherwise (logged at boot)
+      // OPT_CMD: a harness may own the child (tools/optimize-pump-test.ts)
       const cmd = [...(process.env.OPT_CMD ? [process.env.OPT_CMD] : [process.execPath, "run", join(ROOT, "server", "optimize.ts")]), ...(mode ? [mode] : []), src, dest];
       let proc: ReturnType<typeof Bun.spawn>;
       try {
-        // /bin/sh by absolute path: a harness PATH may have no shell, and a spawn that can't start throws here
-        // synchronously, rejecting the un-awaited pump and dropping the queue
+        // absolute: a harness PATH may have no shell, and a failed spawn throws synchronously, dropping the queue
         proc = Bun.spawn(capped
           ? ["/bin/sh", "-c", 'ulimit -d "$0" || exit 126; exec "$@"', String(OPT_MEM_BUDGET_MB * 1024), ...cmd]
           : cmd, { stdout: "pipe", stderr: "pipe" });
@@ -167,22 +150,19 @@ async function pumpOptimize() {
         optQueue.length = 0; break;
       }
       const code = await proc.exited;
-      // what a new variant was built FROM (freshOver), recorded the moment the child is gone — before anything else
-      // is awaited: until then the new bytes sit beside the previous build's sidecar and read stale (the safe
-      // direction: provisional, never old bytes answered as fresh). A store original's needs none.
+      // recorded before anything else is awaited; until then the new bytes read stale (the safe direction)
       if (code === 0 && existsSync(dest)) {
         if (srcId) try { writeFileSync(sourceSidecar(dest), JSON.stringify(srcId)); } catch { /* best effort: reads stale until rebuilt */ }
         else if (existsSync(sourceSidecar(dest))) try { rmSync(sourceSidecar(dest)); } catch { /* best effort */ }
       }
       const err = (await new Response(proc.stderr).text()).trim();
       if (capped && (code === 126 || code === 127)) {
-        // environmental, like a missing dep: no marker, and no point grinding on
+        // environmental: no marker, and no point grinding on
         console.error(`[optimize] cap wrapper failed (exit ${code}: ${err.split("\n").pop() || "sh"}) — set OPT_MEM_BUDGET_MB within this process's hard RLIMIT_DATA, or 0`);
         optQueue.length = 0; break;
       }
       if (capped && (proc.signalCode || code >= 128)) {
-        // OOM under the cap and a crash on a corrupt file look the same from
-        // here; both are retried next boot (a signal is never a stuck verdict).
+        // OOM and a crash on a corrupt file look the same here: retried next boot (a signal is never a stuck verdict)
         defer(dest, `child died (${proc.signalCode ?? `exit ${code}`}) under the ${OPT_MEM_BUDGET_MB}MB cap`);
         continue;
       }
@@ -194,11 +174,10 @@ async function pumpOptimize() {
         const ratio = (Bun.file(src).size / Math.max(1, Bun.file(dest).size)).toFixed(1);
         console.log(mode ? `[ktx2] ${base} → ${basename(dest)} (${ratio}x)` : `[store] optimized ${base} (${ratio}x)`);
       } else if (code === 2) {
-        // not suitable (bigger than source; --ktx2-img: non-POT or conflicted consumers): mark it so the sweep stops
-        // re-measuring. The marker is a RECORD (store-variants.ts verdictMarker), and for --lod it is read at serve time too
+        // not suitable: a RECORD (verdictMarker) so the sweep stops re-measuring; for --lod read at serve time too
         writeFileSync(failed, verdictMarker(err, 2, srcId)); undefer(dest);
-        // a variant built from OTHER content than this refusal measured would serve the old bytes forever, so drop it;
-        // a refusal on unchanged content keeps it (store-variants.ts classifyVariant); no recorded identity: drop if older
+        // a variant of OTHER content than this refusal measured would serve old bytes forever: drop it (no identity:
+        // drop if older); on unchanged content keep it
         try {
           if (srcId && existsSync(dest)) {
             const rec = recordedSource(dest, (p) => readFileSync(p, "utf8"));
@@ -207,48 +186,42 @@ async function pumpOptimize() {
               console.log(`[${mode ? "ktx2" : "store"}] ${base} — removed ${basename(dest)}: built from another version of its source, and the re-measure refused`);
             }
           }
-        } catch { /* best effort (the source may have vanished mid-run) */ }
+        } catch { /* the source may have vanished mid-run */ }
         if (mode === "--lod") pruneOldLodGenerations(src, dest);
         console.log(mode ? `[ktx2] ${base} — no variant (${readVerdict(err).kind}: ${readVerdict(err).reason})`
           : `[store] ${base} already lean — serving original`);
       } else if (code === 4) {
-        // the output failed its own image check (#122): ENVIRONMENTAL like code 3, so no .failed marker; loud, and retried
+        // failed its own image check (#122): ENVIRONMENTAL like code 3, so no .failed marker; loud, and retried
         console.error(`[${mode ? "ktx2" : "store"}] ${base} REFUSED — optimized output failed its image check, `
           + `serving the original: ${err.split("\n").filter((l) => l.includes("declares")).join(" | ") || err.split("\n").pop()}`);
       } else if (code === 3 && mode === "--lod") {
-        // a TEXTURED object met a box with no encoder — per-file and cheap
-        // (the CLI answers from the raw container before any transform), so
-        // no global skip and no purge: untextured objects keep reducing.
+        // a TEXTURED object with no encoder: per-file and cheap, so no global skip and no purge
         if (!lodEncoderWarned) { console.log("[lod] no KTX2 encoder — textured objects keep their originals until one lands (docs/ktx2-encoder.md)"); lodEncoderWarned = true; }
       } else if (code === 3 && mode) {
-        // no KTX2 encoder: ENVIRONMENTAL, never a .failed marker (it would skip every model forever); skip the rest this boot
+        // ENVIRONMENTAL, never a .failed marker (it would skip every model forever); skip the rest this boot
         console.log("[ktx2] no encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/ktx2-encoder.md); variants skipped this boot");
         ktx2Skip = true;
         for (let i = optQueue.length - 1; i >= 0; i--) if (optQueue[i].mode && optQueue[i].mode !== "--lod") optQueue.splice(i, 1);
       } else if (code === 5 && mode) {
-        // partial conversion: the CLI refused a variant whose name would lie about its contents. ENVIRONMENTAL: no marker
-        // (the next sweep retries) and no ktx2Skip (the encoder is there)
+        // partial conversion (its name would lie): ENVIRONMENTAL, no marker and no ktx2Skip
         console.error(`[ktx2] ${base} REFUSED — partial conversion, serving the original: ${err.split("\n").pop() ?? `exit ${code}`}`);
       } else {
-        // Environmental failures (deps not installed yet) must NOT mark the
-        // file — that would permanently skip every upload made before the
-        // first successful `bun install`. Only content failures stick.
+        // environmental failures must NOT mark the file (every upload before `bun install` would skip forever)
         const envFail = /cannot find module|cannot resolve|error: script not found/i.test(err);
         if (!envFail) { writeFileSync(failed, verdictMarker(err, code, srcId)); undefer(dest); }   // kind "failure": never final
         console.error(`[${mode ? "ktx2" : "store"}] optimize ${envFail ? "unavailable (deps?)" : `FAILED ${base}`}: ${err.split("\n")[0] || `exit ${code}`}`);
-        if (envFail) { optQueue.length = 0; break; } // no point grinding the rest
+        if (envFail) { optQueue.length = 0; break; }
       }
     }
   } finally { optRunning = false; done(); }
 }
-// boot sweep, deferred so boot stays about serving worlds; SKIP_OPT_SWEEP (config.ts) lets a memory-tight host skip it
-/** The store sweep (named so a harness can drive it; the boot timer below calls it). */
+// deferred so boot stays about serving worlds
+/** Named so a harness can drive it. */
 export function sweepStore() {
   if (SKIP_OPT_SWEEP) return;
   const dir = join(OPT_DIR, "store");
   if (!existsSync(dir)) return;
-  // isStoreOriginal, not endsWith(".glb"): KTX2 variants live here and end in .glb too, and must never queue as
-  // uploads (§20c); an original lacking EITHER shadow queues both
+  // isStoreOriginal, never endsWith(".glb"): KTX2 variants end in .glb too and must never queue (§20c)
   const pending = readdirSync(dir).filter((f) => {
     if (!isStoreOriginal(f)) return false;
     const m = storeShadowsMissing(join(dir, f), STORE_MIN);
@@ -259,10 +232,9 @@ export function sweepStore() {
   for (const f of pending) queueOptimize(join(dir, f));
 }
 setTimeout(sweepStore, 5000).unref?.();   // a harness that imports this must not be held open by the timer
-// Library KTX2 sweep (§20a, VRMs §20c, loose images §20d): <rel>.ktx2.glb, .ktx2.vrm (--ktx2-vrm only: textures
-// swapped, all else byte-preserved) and .ktx2 under OPT_DIR, served only on ?ktx2=<key>. PATH-PRESERVING (basenames
-// collide across rels); each avatar rel sourced from the base serving prefers (the overlay over the library).
-/** The library KTX2/LOD sweep — same seam. */
+// Library KTX2 (§20a, VRMs §20c, loose images §20d), served only on ?ktx2=<key>; .ktx2.vrm swaps textures, all else
+// byte-preserved. PATH-PRESERVING (basenames collide across rels); avatars sourced overlay over library.
+/** Same seam. */
 export function sweepLibrary() {
   if (SKIP_OPT_SWEEP) return;
   if (ktx2Skip) return;
@@ -274,40 +246,32 @@ export function sweepLibrary() {
       const p = join(dir, e.name);
       if (e.isDirectory()) { walk(base, p, exts, mode); continue; }
       const ext = exts.find((x) => e.name.toLowerCase().endsWith(x));
-      if (!ext) continue; // non-matching files (.json, _fit.json, audio, …) never queue
-      // never re-encode an encode: variants live beside overlay originals and share their extension
+      if (!ext) continue;
+      // never re-encode an encode: variants share their original's extension
       if (e.name.endsWith(`.ktx2${ext}`)) continue;
       const rel = relative(base, p);
       // keyed by (mode, rel): the ktx2 and lod walks cover the SAME rels on purpose
       if (seen.has(`${mode}:${rel}`)) continue;
       seen.add(`${mode}:${rel}`);
-      // GLB/VRM variants are themselves GLB/VRM containers (<rel>.ktx2.glb);
-      // a loose image's variant IS the ktx2 (<rel>.ktx2 — routes.ts serves it
-      // as image/ktx2)
+      // a loose image's variant IS the ktx2 (served as image/ktx2)
       const dest = join(OPT_DIR, mode === "--ktx2-img" ? `${rel}.ktx2` : mode === "--lod" ? lodVariantPath(rel) : `${rel}.ktx2${ext}`);
-      // a standing verdict skips — if it is about THIS version of the source
-      // (freshOver: mutable library files: an updated model is re-measured,
-      // exactly as an updated model's variant is rebuilt below)
+      // a standing verdict skips only if it is about THIS version of the source
       if (existsSync(`${dest}.failed`) && verdictStands(readFileSync(`${dest}.failed`, "utf8"), mode === "--lod" ? LOD_RECIPE : KTX2_RECIPE)
         && freshOver(`${dest}.failed`, p)) continue;
-      // identity, not mere existence: library files are mutable — an updated
-      // model/body/texture rebuilds its variant next boot
+      // identity, not existence: an updated library file rebuilds next boot
       if (existsSync(dest) && freshOver(dest, p)) continue;
-      // already waiting (a ↻ pressed before this sweep, or an earlier sweep): a second copy would run the same encode
-      // again, unforced first then forced, since the pump prefers unforced items (Greptile #207)
+      // already waiting: a second copy would run the same encode twice (unforced, then forced)
       if (optQueue.some((q) => q.src === p && q.mode === mode)) continue;
       items.push({ src: p, dest, mode });
     }
   };
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "models"), [".glb"], "--ktx2");
-  // the LOD sweep walks the same models (objects; the CLI's structural
-  // exclusion is the body gate, and library models are not bodies anyway)
+  // the same models (the CLI's structural exclusion is the body gate)
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "models"), [".glb"], "--lod");
-  // overlay first (it wins in routes.ts serving and the /avatars roster)
+  // overlay first, as serving and the /avatars roster
   walk(OPT_DIR, join(OPT_DIR, "eidoverse", "assets", "vrms"), [".vrm"], "--ktx2-vrm");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "vrms"), [".vrm"], "--ktx2-vrm");
-  // §20d loose images, CURATED dirs ONLY: --ktx2-img pre-bakes loadImageTexture's vertical flip, which would mirror
-  // any image not consumed that way
+  // §20d, CURATED dirs ONLY: --ktx2-img pre-bakes loadImageTexture's flip, mirroring any image not consumed that way
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "grass"), [".png"], "--ktx2-img");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "sky"), [".png", ".jpg", ".jpeg"], "--ktx2-img");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "particle_textures"), [".png"], "--ktx2-img");
@@ -320,8 +284,7 @@ setTimeout(sweepLibrary, 15_000).unref?.();
 
 // ---- the endpoint -----------------------------------------------------------
 
-/** Which image container these bytes are, by magic (the three the picture allow-list admits); null for anything else:
- *  the name someone typed is not evidence. */
+/** By magic; the name someone typed is not evidence. */
 export function sniffImage(b: Uint8Array): "png" | "jpg" | "webp" | null {
   if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47
     && b[4] === 0x0d && b[5] === 0x0a && b[6] === 0x1a && b[7] === 0x0a) return "png";
@@ -331,21 +294,16 @@ export function sniffImage(b: Uint8Array): "png" | "jpg" | "webp" | null {
   return null;
 }
 
-/** Which audio container these bytes are, by magic — the five the sound
- *  allow-list admits. `null` for anything else: the name is not evidence. */
-/** An image's pixel size from its header (PNG IHDR, JPEG SOFn, WebP VP8/VP8L/VP8X), or null when it can't be read. */
 export const MAX_IMAGE_PX = 8192;
-/** Why an upload's image is refused for its size: past MAX_IMAGE_PX on a side, or a size its header doesn't give: the cap
- *  holds only if every image's size is known. */
+/** The cap holds only if every image's size is known: an unreadable size is refused. */
 export function imageSizeRefusal(b: Uint8Array, kind: "png" | "jpg" | "webp"): { status: number; why: string } | null {
   const dims = imageDims(b, kind);
-  // the remedy is one any uploader can take (house 6340433633: "save it again from an image editor" assumed a person at one)
+  // a remedy any uploader can take, person or agent
   if (!dims) return { status: 415, why: `this ${kind === "jpg" ? "JPEG" : kind.toUpperCase()}'s header doesn't say its pixel size, so it can't be checked against the ${MAX_IMAGE_PX}-px cap; sending these bytes again won't change that. Upload a copy whose header gives its size: any encoder writes one (a PNG always has it), so re-encode it with whatever made it, or a library such as sharp or Pillow` };
   if (Math.max(dims[0], dims[1]) > MAX_IMAGE_PX) return { status: 413, why: `image is ${dims[0]}×${dims[1]} px; at most ${MAX_IMAGE_PX} on a side (viewers draw it at 2048)` };
   return null;
 }
-/** …a zero on either side is no size either (house 6340433633, the lead's decision): a 0×0 WebP header, a PNG with width 0
- *  or a JPEG whose height its SOF defers is an image whose size can't be known, so it's refused as one. */
+/** A zero side is no size either (a 0×0 WebP, a JPEG whose SOF defers height): refused as unknown. */
 export function imageDims(b: Uint8Array, kind: "png" | "jpg" | "webp"): [number, number] | null {
   const d = headerDims(b, kind);
   return d && d[0] > 0 && d[1] > 0 ? d : null;
@@ -357,7 +315,7 @@ function headerDims(b: Uint8Array, kind: "png" | "jpg" | "webp"): [number, numbe
     if (kind === "png") return b.length >= 24 ? [u32(16), u32(20)] : null;
     if (kind === "jpg") { let i = 2; while (i + 9 < b.length) { if (b[i] !== 0xff) { i++; continue; } const m = b[i + 1];
         if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [u16(i + 7), u16(i + 5)];
-        if (m === 0xff) { i++; continue; }   // a fill byte (any number may pad a marker): the marker is the byte after the last
+        if (m === 0xff) { i++; continue; }   // fill byte: the marker is the byte after the last
         if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; } i += 2 + u16(i + 2); } return null; }
     if (kind === "webp" && b.length >= 30) { const c = String.fromCharCode(b[12], b[13], b[14], b[15]);
       if (c === "VP8X") return [1 + le24(24), 1 + le24(27)];
@@ -377,25 +335,21 @@ export function sniffAudio(b: Uint8Array): "mp3" | "ogg" | "wav" | "webm" | "m4a
   return null;
 }
 
-/** POST /upload: models content-addressed into store/<hash>.glb (immutable); ?as=avatar&name= named into the overlay
- *  vrms dir. Auth: door token, mcpl bearer or home-vouched aid1, plus a per-IP rate limit; entering a world is still a
- *  role-gated door request. `?by=` is attribution only. */
+/** Auth: door token, mcpl bearer, aid1 or session, plus a per-IP rate limit; entering a world is still a role-gated
+ *  door request. `?by=` is attribution only. */
 export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Promise<Response> {
   const upTok = url.searchParams.get("token") ?? "";
   let upAgent = agentTokens().byToken.get(upTok);
-  // the aid1 leg the join door has (same derivation, no jti burn): an enrolled guest may build where a world lets them
+  // the join door's aid1 leg (no jti burn)
   if (!upAgent) upAgent = aid1JoinIdentity(upTok)?.slug;
-  // ...and the people who signed in through the home node: they carry a session cookie, not a door key (the
-  // join door takes the same cookie). Taken only from this site's own pages — SameSite=Lax lets the cookie
-  // ride requests from sibling subdomains — exactly as /rebuild takes it (routes.ts).
+  // a session cookie only from this site's own pages: SameSite=Lax lets it ride requests from sibling subdomains
   const session = sessionFromCookie(req.headers.get("cookie"));
-  // (embodied access, worlds:join — what the join door asks of a login that is not spectating)
   const upPerson = session && session.scopes.includes("worlds:join") && req.headers.get("sec-fetch-site") === "same-origin" ? session.name : null;
   if (JOIN_TOKEN && upTok !== JOIN_TOKEN && !upAgent && !upPerson)
     return new Response("sign in, or bring the door key (token required)", { status: 401 });
   // a signed-in person is who the session says, whatever ?by= claims
   const upBy = (upPerson ?? url.searchParams.get("by") ?? upAgent ?? "?").slice(0, 64);
-  // the client's address: X-Real-IP only from a trusted proxy (server/peer.ts)
+  // X-Real-IP only from a trusted proxy (server/peer.ts)
   const ip = addressOf(req, srv);
   const u = uploadWin.get(ip) ?? { t: 0, n: 0 };
   if (Date.now() - u.t > 60_000) { u.t = Date.now(); u.n = 0; }
@@ -404,23 +358,21 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
   const body = new Uint8Array(await req.arrayBuffer());
   if (body.length > UPLOAD_CAP) return new Response(`too large (${UPLOAD_CAP / 1e6}MB cap)`, { status: 413 });
   if (url.searchParams.get("as") === "image") {
-    // picture ingestion: PNG/JPEG/WebP content-addressed into store/images/<hash>.<ext>, no optimize pass. The kind comes
-    // from the BYTES (the extension is what /library and the allow-list key on); entering a WORLD is still the door's call
+    // pictures: store/images/<hash>.<ext>, no optimize pass; the kind comes from the BYTES
     if (body.length > IMAGE_CAP) return new Response(`image too large (${IMAGE_CAP / 1e6}MB cap)`, { status: 413 });
     const kind = sniffImage(body);
     if (!kind) return new Response("not a PNG, JPEG or WebP image (judged by content, not by name)", { status: 415 });
-    // batch 2: a decompression bomb (a tiny file that decodes to 16k × 16k) is refused before any viewer decodes it
+    // a decompression bomb is refused before any viewer decodes it
     { const no = imageSizeRefusal(body, kind); if (no) return new Response(no.why, { status: no.status }); }
     const ihash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
     const idir = join(OPT_DIR, "store", "images");
     mkdirSync(idir, { recursive: true });
     const irel = `store/images/${ihash}.${kind}`;
     if (!existsSync(join(OPT_DIR, irel))) writeFileSync(join(OPT_DIR, irel), body);
-    // the human name lives only here, same as models: content-addressed
-    // means the catalog would otherwise know this picture as a hash
+    // the human name lives only here: content-addressed, the catalog would know only a hash
     const iname = (url.searchParams.get("name") ?? "").replace(/\.[a-z0-9]+$/i, "").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 64).trim();
     {
-      // the FIRST arrival is the provenance (who, when, what name); a later upload fills a missing name, never re-attributes
+      // the FIRST arrival is the provenance; a later upload fills a missing name, never re-attributes
       const mp = join(idir, "manifest.json");
       let man: Record<string, { name?: string; by: string; ts: number }> = {};
       try { if (existsSync(mp)) man = JSON.parse(readFileSync(mp, "utf8")); } catch { /* fresh */ }
@@ -433,9 +385,7 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
     return new Response(JSON.stringify({ path: irel }), { headers: { "content-type": "application/json" } });
   }
   if (url.searchParams.get("as") === "heightmap") {
-    // Terrain as an image (server/heightmap.ts): a grayscale PNG, decoded HERE once into the integer grid
-    // the client, agents and sim all read. Content-addressed like everything in the store; what changes a
-    // WORLD is still the owner's `terrain` verb naming the grid.
+    // decoded HERE once (server/heightmap.ts); what changes a WORLD is still the owner's `terrain` verb
     if (body.length > IMAGE_CAP) return new Response(`heightmap too large (${IMAGE_CAP / 1e6}MB cap)`, { status: 413 });
     if (sniffImage(body) !== "png") return new Response("a heightmap must be a PNG (16-bit grayscale is best)", { status: 415 });
     const hhash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
@@ -445,8 +395,7 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
     return new Response(JSON.stringify(r), { headers: { "content-type": "application/json" } });
   }
   if (url.searchParams.get("as") === "audio") {
-    // sound ingestion: MP3/Ogg/WAV/WebM/M4A content-addressed into store/audio/<hash>.<ext>, no transcode; kind from
-    // the BYTES; playing in a WORLD is still the door's call
+    // sounds: store/audio/<hash>.<ext>, no transcode; the kind comes from the BYTES
     const kind = sniffAudio(body);
     if (!kind) return new Response("not an MP3, Ogg, WAV, WebM or M4A audio file (judged by content, not by name)", { status: 415 });
     const ahash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
@@ -475,13 +424,12 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
     const name = raw.replace(/\.vrm$/i, "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48) || "unnamed";
     const dir = join(OPT_DIR, "eidoverse/assets/vrms");
     mkdirSync(dir, { recursive: true });
-    // a RAW TRIPO RIG at the avatar door runs the import pipeline (detected by JSON peek: no VRM extension + Tripo bone
-    // names), in a SUBPROCESS, one at a time; the tool's PASS/FAIL exit is the gate into the roster
+    // a RAW TRIPO RIG (no VRM extension + Tripo bone names) runs the import in a SUBPROCESS; PASS/FAIL gates the roster
     let gjson: any = null;
     try {
       const dv = new DataView(body.buffer, body.byteOffset);
       gjson = JSON.parse(new TextDecoder().decode(body.subarray(20, 20 + dv.getUint32(12, true))));
-    } catch { /* unparseable chunk — treat as plain save, the client will complain */ }
+    } catch { /* plain save; the client will complain */ }
     const isVRM = !!(gjson?.extensions?.VRMC_vrm || gjson?.extensions?.VRM);
     const nodeNames = new Set((gjson?.nodes ?? []).map((n: any) => n.name));
     if (!isVRM && ["Hip", "L_Thigh", "L_Upperarm"].every((b) => nodeNames.has(b))) {
@@ -492,7 +440,7 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
       try {
         const tmpIn = join(OPT_DIR, `.import-${name}.glb`);
         writeFileSync(tmpIn, body);
-        // process.execPath, never "bun" (docs/INCIDENTS.md, the Windows shim)
+        // never "bun" (docs/INCIDENTS.md, the Windows shim)
         const spawnArgs = [process.execPath, "run", join(ROOT, "tools/import-tripo-avatar.ts"),
           tmpIn, "--name", name, "--out", OPT_DIR];
         if (process.env.EW_AVATAR_DONOR) spawnArgs.push("--donor", process.env.EW_AVATAR_DONOR);
@@ -514,9 +462,7 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
       writeFileSync(join(dir, `${name}.vrm`), body);
       console.log(`[upload] avatar "${name}" (${(body.length / 1e6).toFixed(1)}MB) by ${upBy}`);
     }
-    // Live cache invalidation: avatars are name-keyed and mutable (people
-    // iterate on their bodies), so every connected client — all worlds —
-    // learns the file changed; wearers hot-swap with the fresh version.
+    // avatars are name-keyed and mutable: every client in every world learns of the change; wearers hot-swap
     const rel = `eidoverse/assets/vrms/${name}.vrm`;
     const update = JSON.stringify({ type: "avatar-updated", name, path: rel, v: Date.now() });
     let notified = 0;
@@ -530,10 +476,8 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
   mkdirSync(dir, { recursive: true });
   const rel = `store/${hash}.glb`;
   if (!existsSync(join(OPT_DIR, rel))) writeFileSync(join(OPT_DIR, rel), body);
-  queueOptimize(join(OPT_DIR, rel)); // draco+webp shadow, built off the request path
-  // The store is content-addressed, so the human name arrives ONLY here —
-  // record it, or the catalog can never list this object as anything but
-  // a hash (an orrery send used to vanish into exactly that black hole).
+  queueOptimize(join(OPT_DIR, rel));
+  // the human name arrives ONLY here: record it, or the catalog lists this object as a hash
   const upName = (url.searchParams.get("name") ?? "").replace(/\.glb$/i, "").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 64).trim();
   {
     const mp = join(dir, "manifest.json");
@@ -543,8 +487,7 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
     atomicWrite(mp, JSON.stringify(man));
   }
   console.log(`[upload] model ${rel}${upName ? ` ("${upName}")` : ""} (${(body.length / 1e6).toFixed(1)}MB) by ${upBy}`);
-  // the build check starts now and never holds the upload up or refuses it:
-  // its report is advice, waiting at `check` (server/buildcheck.ts)
+  // never holds the upload up or refuses it: the report is advice, waiting at `check` (server/buildcheck.ts)
   void checkFile(join(OPT_DIR, rel), 1, body).catch((err) => console.warn(`[check] ${rel}: ${String(err?.message ?? err)}`));
   return new Response(JSON.stringify({ path: rel, check: `/check?lib=${encodeURIComponent(rel)}` }), { headers: { "content-type": "application/json" } });
 }

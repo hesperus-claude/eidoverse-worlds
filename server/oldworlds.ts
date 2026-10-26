@@ -1,12 +1,10 @@
-// server/oldworlds.ts — worlds saved in an old format, found and named. The server serves only worlds in this protocol; a
-// directory holding an old log is never opened. Instead:
+// Worlds saved in an old format, found and named; a directory holding an old log is never opened. Instead:
 //   - the OPERATOR is told at boot, one block per world, with the exact command (bootNotice);
 //   - a VISITOR is told in plain words that the world is safe and needs a one-time conversion (visitorText).
 // Two kinds, never confused:
-//   translatable  a log.jsonl of the first protocol's verbs: tools/protocol/world.ts translate <name> translates it in
-//                 place (the world keeps its name; the old log is renamed log.original.jsonl beside it, never written);
-//   pre-names     a log of this protocol's family saved before the names pass (livehost isPreNamesDir): it
-//                 can't be translated as it stands; it's re-translated from its ORIGINAL old log, or refounded.
+//   translatable  first-protocol log.jsonl: tools/protocol/world.ts translate <name>, in place (old log kept, never
+//                 written, as log.original.jsonl);
+//   pre-names     saved before the names pass (livehost isPreNamesDir): re-translated from its ORIGINAL log, or refounded.
 // Pure reads of the directory: nothing here writes, and nothing here loads the translator.
 import fs from "node:fs";
 import path from "node:path";
@@ -16,22 +14,21 @@ export type OldWorldKind = "translatable" | "pre-names";
 export type OldWorld = {
   name: string;
   kind: OldWorldKind;
-  /** the old log found (absolute path) */
+  /** absolute */
   file: string;
-  /** a world name that is free in this directory (nothing on disk under it): a pre-names world's re-translation goes there */
+  /** free on disk: a pre-names world's re-translation goes there */
   suggestedName: string;
-  /** the operator's first command (the dry run: the report and its hash, nothing written), WORLDS_DIR filled in */
+  /** the dry run: report and hash, nothing written */
   command: string;
-  /** the second: the translation, bound to the approved report hash, on the operator's countersignature alone (no owner can be attested) */
+  /** bound to the approved report hash, on the operator's countersignature alone (no owner can be attested) */
   approve: string;
-  /** pre-names only: refounding it empty under the suggested name, when its original log is gone */
+  /** pre-names only, when its original log is gone */
   refound?: string;
-  /** what a visitor is told: plain words, no command line */
+  /** plain words, no command line */
   visitor: string;
 };
 
-/** What a client that doesn't fold the log is told at join (server.ts, the 4005 refusal): a NATIVE session (isNativeSession)
- *  that it hasn't been ported to this protocol yet, since it has no page to reload; anyone else to reload or update. */
+/** The 4005 refusal (server.ts): a NATIVE session has no page to reload, so it's told it isn't ported yet. */
 export function noFoldRefusal(world: string, native: boolean): string {
   return native
     ? `"${world}" is a world of the current protocol, and the Unreal client hasn't been ported to it yet: it doesn't fold the world's log, so it can't join. Nothing is wrong with your sign-in or with the world; a browser client can join it now, and the Unreal client will when its port lands.`
@@ -45,10 +42,10 @@ const APPROVAL = "The dry run writes nothing: it prints what the translation wou
 const KEPT_IN_PLACE = "It keeps its name, so links to it keep working; the original log is kept untouched beside it as log.original.jsonl.";
 const KEPT = "the original log is kept untouched; translate into a new name, then point links at it (or rename the directories)";
 
-/** A shell word as typed (a directory with spaces or quotes is single-quoted). */
+/** single-quoted when it holds spaces or quotes */
 export const shellWord = (s: string): string => (/^[\w/.,:@%+=~-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
 
-/** `<name>-2`, `-3`, …: the first that nothing on disk holds (an empty directory counts as taken), within the name grammar. */
+/** `<name>-2`, `-3`, …; an empty directory counts as taken. */
 function freeName(dir: string, name: string): string {
   for (let k = 2; ; k++) {
     const tail = `-${k}`;
@@ -63,7 +60,7 @@ export function visitorText(name: string, kind: OldWorldKind): string {
     : `"${name}" was saved while this version of Eidoverse was still settling its names, and whoever runs this server needs to convert it again before it can open. Nothing is lost — the world's saved log is kept as it was.`;
 }
 
-/** The old world at `dir/name`, or null when that is a current world, holds no old log (an empty directory), or is missing. */
+/** null for a current world, an empty directory, or a missing one. */
 export function oldWorldAt(dir: string, name: string): OldWorld | null {
   if (!NAME.test(name)) return null;
   const d = path.join(dir, name);
@@ -85,13 +82,12 @@ export function oldWorldAt(dir: string, name: string): OldWorld | null {
     approve: `${head} translate ${name} --no-founder-key --approved ${HASH_PLACEHOLDER} --operator-only-no-owner`, visitor: visitorText(name, "translatable") };
 }
 
-/** Every old world in `dir`, by name. */
 export function oldWorldsIn(dir: string): OldWorld[] {
   let names: string[]; try { names = fs.readdirSync(dir).sort(); } catch { return []; }
   return names.map((n) => oldWorldAt(dir, n)).filter((o): o is OldWorld => !!o);
 }
 
-/** What the server logs at boot about `dir`'s old worlds: one block per world and one summary line ("" when there are none). */
+/** One block per world and a summary line; "" when there are none. */
 export function bootNotice(dir: string): string {
   const old = oldWorldsIn(dir);
   if (!old.length) return "";

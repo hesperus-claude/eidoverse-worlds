@@ -1,13 +1,10 @@
-// store-variants — the store's serving shadows, named in one place.
-//
-// A store upload (content-addressed: assets/opt/store/<hash>.glb, immutable) gets two shadows from upload.ts's
-// optimize pump, both served by routes.ts on the ORIGINAL's address:
+// The store's serving shadows, named in one place. A store upload (assets/opt/store/<hash>.glb, immutable) gets two
+// from upload.ts's pump, both served by routes.ts on the ORIGINAL's address:
 //   store-min/<hash>.glb        draco + webp@1024, the unflagged answer
 //   store/<hash>.glb.ktx2.glb   draco + KTX2, the ?ktx2=<key> answer (beside the original, as library variants are)
-// The KTX2 variant ends in .glb too: enumerate store/*.glb with isStoreOriginal and skip isKtx2Variant in listings, or
-// variants ghost-list and download twice (§20c). A flagged fetch that falls through to webp is served no-cache
-// (provisional), never immutable: content-addressing makes the address immutable, not the flagged answer.
-// DOM-free and side-effect-free: unit-tested in tools/store-variants-test.ts.
+// The KTX2 variant ends in .glb too: enumerate with isStoreOriginal, skip isKtx2Variant, or variants list and download
+// twice (§20c). A flagged fetch falling through to webp is served no-cache, never immutable: the address is immutable,
+// not the flagged answer. Side-effect-free (tools/store-variants-test.ts).
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
@@ -15,16 +12,14 @@ import { createHash } from "node:crypto";
 import { currentToolsDigest, toolVersions, toolsStamp } from "./tools-stamp.ts";
 import { R_BASE, DIAG_K, LOD_FRACTION, LOD_HYST } from "../shared/lod-distance.js";
 
-/** The variant suffix. `<hash>.glb` + this = the KTX2 shadow's file name. */
+/** `<hash>.glb` + this = the KTX2 shadow's file name. */
 export const KTX2_SUFFIX = ".ktx2.glb";
 
 // ---- the texel budget ------------------------------------------------------
-// the KTX2 arm keeps the webp shadow's 1024² house budget (optimize.ts), GPU-native: downscale only, longest side
-// KTX2_TEXEL_CAP, 4-aligned; toktx does it (--resize), never libvips. From full-res sources variants came out bigger.
+// the webp shadow's 1024² budget: downscale only, 4-aligned, by toktx --resize, never libvips
 export const KTX2_TEXEL_CAP = 1024;
 
-/** The resize a texture of `size` needs to fit the budget, or null when it
- *  already does. Aspect kept; both sides rounded to a multiple of 4. */
+/** null when it already fits. Aspect kept; both sides a multiple of 4. */
 export function capTexels(size: [number, number] | null | undefined, cap = KTX2_TEXEL_CAP): [number, number] | null {
   if (!size || !(size[0] > 0) || !(size[1] > 0)) return null;
   const [w, h] = size;
@@ -34,49 +29,41 @@ export function capTexels(size: [number, number] | null | undefined, cap = KTX2_
   return [r(w), r(h)];
 }
 
-// a size verdict ("not smaller") is only as durable as its RECIPE: the CLI stamps it, and a verdict without the
-// CURRENT stamp is re-measured once. Content verdicts (no raster images, a corrupt container) carry no stamp and stand.
+// a size verdict is only as durable as its RECIPE: one without the CURRENT stamp is re-measured once; content
+// verdicts carry no stamp and stand
 export const KTX2_RECIPE = "texel1024";
 export const recipeStamp = (recipe = KTX2_RECIPE) => `recipe=${recipe}`;
-/** Does `content` carry the stamp for exactly `recipe`? Delimited, never a prefix: `recipe=…-min12000` must not answer
- *  for `…-min120000`. */
+/** Delimited, never a prefix: `recipe=…-min12000` must not answer for `…-min120000`. */
 export const hasStamp = (content: string, recipe: string) => {
-  const v = structuredVerdict(content);   // a JSON marker / the CLI's [verdict] line: its recipe field, exactly
+  const v = structuredVerdict(content);
   if (v) return v.recipe === recipe;
   return new RegExp(`(^|\\s)${recipeStamp(recipe).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(content);
 };
 
 // ---- the geometry LOD (placeable objects only) ---------
-// `<rel>.lod.<recipe>.glb` beside the original: weld + meshopt-simplify at LOD_RATIO, ktx2 texel budget, draco; identity
-// in asset.extras. Bodies fail closed by structure (skins, VRM metadata, morphs) with a typed verdict; names, materials
-// and bounds are asserted unchanged after the reduce.
-// LOD_GEN: bump when weld/simplify semantics, the gates, the tool or the texel-density measure (optimize.ts
-// lodTexelCaps) change: 'light' verdicts are final, and nothing else in the URL re-asks them.
+// `<rel>.lod.<recipe>.glb` beside the original. Bodies fail closed by structure (skins, VRM metadata, morphs); names,
+// materials and bounds are asserted unchanged after the reduce.
+// LOD_GEN: bump when weld/simplify, the gates, the tool or lodTexelCaps change: 'light' verdicts are final, and
+// nothing else in the URL re-asks them.
 export const LOD_GEN = 3;
-export const LOD_RATIO = 0.25;      // meshopt-simplify target ratio: the floor it may reach, not a quota
-// screen-space budget at the closest distance 'auto' shows the LOD (shared/lod-distance.js lodNearest), at headset
-// density: geometry error ≤ LOD_PX px; textures ≥ LOD_TEXELS_PER_PX texels/px over the least densely mapped part, unused
-// mips dropped. 'eco' and pressure show it at half that distance (lod_policy.js PRESSURE_EDGE). Values measured on #207.
+export const LOD_RATIO = 0.25;      // the floor it may reach, not a quota
+// screen-space budget at the closest 'auto' distance (lod-distance.js lodNearest), headset density; textures over the
+// least densely mapped part. 'eco' and pressure show it at half that distance (lod_policy.js PRESSURE_EDGE). Measured on #207.
 export const LOD_PX = 2;
-export const LOD_PPD = 25;          // pixels per degree: a Quest 3's centre, stricter than a desktop 55° view
+export const LOD_PPD = 25;          // px/degree: a Quest 3's centre, stricter than a desktop 55° view
 export const LOD_TEXELS_PER_PX = 1;
-// texture-only LOD: a model whose vertices can't come under 0.6× still gets a LOD when its textures fall to at most this
-// share of the full tier's GPU texture memory
+// texture-only LOD when vertices can't come under 0.6×: textures at most this share of the full tier's GPU memory
 export const LOD_TEX_ONLY = 0.5;
-// Under this many vertices geometry is not simplified; textures still are (a texture-only LOD). The real geometry lever
-// is a LOD chain, a follow-up, not this floor.
+// under this many vertices only textures reduce
 export const LOD_MIN_VERTS = 12_000;
 
-/** The recipe string DERIVES from every parameter a variant or verdict depends on, and it is in the URL and every
- *  filename, so changing any of them is a new generation by construction (fresh names, a fresh sweep). */
+/** DERIVES from every parameter a variant or verdict depends on, and names the URL and every file: any change is a
+ *  new generation by construction. */
 export function lodRecipeFor({ gen = LOD_GEN, ratio = LOD_RATIO, px = LOD_PX, ppd = LOD_PPD, tpp = LOD_TEXELS_PER_PX,
   texOnly = LOD_TEX_ONLY, texel = KTX2_TEXEL_CAP, minVerts = LOD_MIN_VERTS,
-  // the DISTANCE the budget is taken at (shared/lod-distance.js lodNearest) is a parameter too: the client's residency
-  // radius and switch fraction live in a shared module, and tuning them re-budgets every LOD — so it re-names them
+  // the budget's DISTANCE (lod-distance.js) is a parameter too: tuning it re-budgets, so re-names, every LOD
   rBase = R_BASE, diagK = DIAG_K, fraction = LOD_FRACTION, hyst = LOD_HYST } = {}): string {
-  // the fraction's own decimal digits, every one of them — 0.25 → 25, 0.014 → 014: two settings the reducer tells
-  // apart must never share a string (a rounded percent read 0.014 as 0.01, and the sweep would have skipped every
-  // existing file under the unchanged address)
+  // every decimal digit (0.25 → 25, 0.014 → 014): two settings the reducer tells apart must never share a string
   const frac = (x: number, what: string) => {
     const s = x.toString();
     if (!(x > 0 && x < 1) || !/^0\.\d+$/.test(s)) throw new Error(`lod ${what} must be a plain decimal in (0, 1): ${s}`);
@@ -96,34 +83,28 @@ export function lodRecipeFor({ gen = LOD_GEN, ratio = LOD_RATIO, px = LOD_PX, pp
 export const LOD_RECIPE = lodRecipeFor();   // "lod3-r25-px2ppd25-tpp1-tx5-d80k4f45h25-texel1024-min12000"
 
 // ---- standing verdicts -------------------------------------------------------
-// refusals that depend only on content + recipe (both in the URL: structural, light) are final and cacheable;
-// ineffective, preservation and gpu depend on the reducer, encoder or host and stay provisional until LOD_GEN bumps;
-// anything unclassified stays provisional
+// structural and light (content + recipe only) are final and cacheable; ineffective, preservation, gpu and anything
+// unclassified stay provisional until LOD_GEN bumps
 export type LodVerdictKind = "structural" | "light" | "ineffective" | "preservation" | "gpu";
 const LOD_KINDS = new Set<string>(["structural", "light", "ineffective", "preservation", "gpu"]);
-/** Which class of typed refusal a lod `.failed` marker records — or null for anything else. Read through readVerdict,
- *  the ONE reader: the route (serve time) and classifyVariant (the catalog's card) both call it, so the wire and the
- *  card cannot disagree. */
+/** Through readVerdict, the ONE reader the route and classifyVariant share, so wire and card cannot disagree. */
 export function lodVerdictKind(content: string): LodVerdictKind | null {
   const k = readVerdict(content).kind;
   return LOD_KINDS.has(k) ? k as LodVerdictKind : null;
 }
-/** Does this marker make the original the FINAL answer under `recipe`? A
- *  content-only class (structural, light) stamped with the running recipe —
- *  the filename binds the recipe too; the stamp is the belt to that brace. */
+/** A content-only class stamped with the running recipe (the filename binds it too; the stamp is the belt). */
 export function lodVerdictFinal(content: string, recipe = LOD_RECIPE): boolean {
   const kind = lodVerdictKind(content);
   return (kind === "structural" || kind === "light") && hasStamp(content, recipe);
 }
 
 // ---- source identity: freshness by EQUALITY, never by mtime order ------------------------------------------------------
-// a derived file is fresh iff the source identity recorded when its pass STARTED equals the source's now: size +
-// mtimeMs + sha256 (cp -p and rsync -a restore mtimes). The sha is cached per path under (size, mtimeMs, ino, ctimeMs).
-// No sha: compare the stat pair; no identity: strictly newer than its source; `source` null (content-addressed): fresh.
+// fresh iff the source identity recorded when the pass STARTED equals the source's now (cp -p and rsync -a restore
+// mtimes). No sha: the stat pair; no identity: strictly newer; `source` null (content-addressed): fresh.
 export type SourceIdentity = { size: number; mtimeMs: number; sha?: string };
 export type StatFn = (p: string) => SourceIdentity | null;
 const digestCache = new Map<string, { key: string; sha: string }>();
-/** Bytes diskIdentity hashed since start (a harness checks a cache hit reads nothing). */
+/** A harness checks a cache hit reads nothing. */
 export const identityIo = { bytes: 0 };
 export const diskIdentity: StatFn = (p) => {
   try {
@@ -139,17 +120,16 @@ export const diskIdentity: StatFn = (p) => {
     return { size: s.size, mtimeMs: s.mtimeMs, sha: hit.sha };
   } catch { return null; }
 };
-/** Where a VARIANT's recorded source identity lives (a verdict marker carries its own, inline). */
+/** A verdict marker carries its own, inline. */
 export const sourceSidecar = (variant: string) => `${variant}.srcid`;
 export const sameIdentity = (a: SourceIdentity | null, b: SourceIdentity | null) => !!a && !!b && a.size === b.size && a.mtimeMs === b.mtimeMs
   && (a.sha == null || b.sha == null || a.sha === b.sha);
-/** The marker's token for a source identity — its own line, so no reader of the verdict line ever sees it. */
+/** Its own line, so no reader of the verdict line ever sees it. */
 export const sourceToken = (id: SourceIdentity) => `source=${id.size}:${id.mtimeMs}`;
 export function parseSourceToken(content: string): SourceIdentity | null {
   const m = /(?:^|\s)source=(\d+):(\d+(?:\.\d+)?)(?:\s|$)/.exec(content);
   return m ? { size: Number(m[1]), mtimeMs: Number(m[2]) } : null;
 }
-/** The identity a derived file recorded: a `.failed` marker's inline token, a variant's `.srcid` sidecar. */
 export function recordedSource(derived: string, read: (p: string) => string): SourceIdentity | null {
   if (derived.endsWith(".failed")) return readVerdict(read(derived)).source;
   try {
@@ -163,14 +143,13 @@ export function freshOver(derived: string, source: string | null,
   { read = readOrEmpty, stat = diskIdentity }: { read?: (p: string) => string; stat?: StatFn } = {}): boolean {
   if (source == null) return true;
   const cur = stat(source);
-  if (!cur) return false;                     // the source is gone: nothing current to be fresh over
+  if (!cur) return false;                     // the source is gone
   const rec = recordedSource(derived, read);
   if (rec) return sameIdentity(rec, cur);
-  const d = stat(derived);                    // legacy: no identity recorded — the old strictly-newer rule
+  const d = stat(derived);                    // legacy: no identity, strictly newer
   return !!d && d.mtimeMs > cur.mtimeMs;
 }
-/** The source a rel's variants and verdicts are ABOUT, the file the build read: null = content-addressed (store/); a GLB
- *  from the LIBRARY file (never the OPT mirror or PATCH copy); a VRM from the overlay if it has one, else the library. */
+/** null = content-addressed (store/); a GLB the LIBRARY file (never OPT or PATCH); a VRM the overlay, else library. */
 export function variantSource(rel: string, dirs: { opt: string; library: string }): string | null {
   if (rel.startsWith("store/")) return null;
   const inside = (base: string) => { const p = join(base, rel); return p.startsWith(base) ? p : null; };
@@ -178,24 +157,21 @@ export function variantSource(rel: string, dirs: { opt: string; library: string 
     const o = inside(dirs.opt);
     if (o && existsSync(o)) return o;
   }
-  return inside(dirs.library) ?? "";   // outside the tree: no file, so nothing is fresh over it
+  return inside(dirs.library) ?? "";   // outside the tree: nothing is fresh over it
 }
 
 // ---- the verdict RECORD: structured markers, one reader ---------------------------------------------------------
-// a marker's kind is a closed enum, its prose display only (RFC 9457 §3.1.4): the CLI names each refusal's kind where it
-// mints the phrase (`[verdict] {json}`), the pump writes JSON markers, and readVerdict is the ONE parser (JSON, else
-// `[verdict]`, else the legacy text). `failure` (a crash, any exit but 2) is never final and re-asked on a tool change.
+// kind is a closed enum, prose display only (RFC 9457 §3.1.4); readVerdict is the ONE parser (JSON, `[verdict]`,
+// legacy text). `failure` (any exit but 2) is never final and re-asked on a tool change.
 export type VerdictKind = LodVerdictKind | "size" | "nothing" | "unsupported" | "unsuitable" | "failure" | "unknown";
 const VERDICT_KINDS = new Set<string>(["structural", "light", "ineffective", "preservation", "gpu", "size", "nothing", "unsupported", "unsuitable", "failure", "unknown"]);
-/** The refusals a different tool could overturn (verdictStands re-asks them when the tools change). A content fact — a
- *  skinned body, under the floor, no raster images, a non-POT image — is not: it is about the file (tools-stamp.ts). */
+/** A content fact (skinned body, under the floor, no rasters, non-POT) is not one: it is about the file. */
 const TOOL_KINDS = new Set<string>(["size", "ineffective", "preservation", "gpu", "failure"]);
 export type Verdict = {
   kind: VerdictKind; reason: string; recipe: string | null; toolsDigest: string | null;
   tools: Record<string, string> | null; source: SourceIdentity | null; exit: number | null;
 };
 export const VERDICT_PREFIX = "[verdict] ";
-/** The CLI's machine line for a refusal it just printed: kind, display reason, the recipe and the tools it ran with. */
 export function verdictLine(kind: VerdictKind, reason: string, recipe: string | null): string {
   return VERDICT_PREFIX + JSON.stringify({ kind, reason, recipe, toolsDigest: currentToolsDigest(), tools: toolVersions() });
 }
@@ -211,7 +187,7 @@ function fromJson(j: any, exit: number | null = null): Verdict | null {
     tools: j.tools && typeof j.tools === "object" ? j.tools : null, source: asId(j.source), exit: Number.isInteger(j.exit) ? j.exit : exit,
   };
 }
-/** A structured verdict in `content` — a JSON marker (v 1), or the LAST `[verdict]` line of a CLI's stderr — or null. */
+/** A JSON marker (v 1), or the LAST `[verdict]` line of a CLI's stderr. */
 function structuredVerdict(content: string): Verdict | null {
   const t = content.trimStart();
   if (t.startsWith("{")) { try { const j = JSON.parse(t); if (j?.v === 1) return fromJson(j); } catch { /* not a record */ } }
@@ -219,12 +195,11 @@ function structuredVerdict(content: string): Verdict | null {
   if (line) { try { return fromJson(JSON.parse(line.slice(VERDICT_PREFIX.length))); } catch { /* malformed: the text reads it */ } }
   return null;
 }
-// ---- the legacy text grammar (markers written before the record; stand-in optimizers) — read HERE and nowhere else
+// ---- the legacy text grammar (old markers, stand-in optimizers): read HERE and nowhere else
 function textKind(content: string): VerdictKind {
   if (/\bunsupported: (skinned\/avatar asset|morph targets|animated object)/i.test(content)) return "structural";
   if (/\balready light \(\d+ verts < \d+(; textures \d+% of the full tier)?\)/i.test(content)) return "light";
-  // ", permissive too": the reducer tried the Permissive retry as well (optimize.ts reduce)
-  // "; textures N% of the full tier": gen 3 names the texture share a texture-only LOD would have needed
+  // ", permissive too": the Permissive retry ran as well; "; textures N%": the share a texture-only LOD would need
   if (/\breduction ineffective \(\d+ -> \d+ verts(, permissive too)?(; textures \d+% of the full tier)?\)/i.test(content)) return "ineffective";
   if (/\bpreservation failed:/i.test(content)) return "preservation";
   if (/\bnot lighter on the GPU \(textures /i.test(content)) return "gpu";
@@ -233,16 +208,13 @@ function textKind(content: string): VerdictKind {
   if (/unsupported:/i.test(content)) return "unsupported";
   return "unknown";
 }
-// the CLI's line: "[optimize] <pass>: <verdict> (<ms>ms) — <tail>" — keep the verdict, drop the log dressing. The verdict
-// is the LAST "[optimize]" line (the pump logs the same one): a warning printed before it (the no-sharp resize note, a
-// gltf-transform logger line) must not become the card's reason
+// "[optimize] <pass>: <verdict> (<ms>ms) — <tail>": the LAST such line, so an earlier warning never becomes the reason
 const textReason = (raw: string): string => {
   const ls = raw.split("\n").filter((l) => !l.startsWith("source=")), line = [...ls].reverse().find((l) => /^\[optimize\]/.test(l)) ?? ls[0] ?? "";
   return line.replace(/^\[optimize\]\s*(?:lod:\s*)?/, "").replace(/\s*\(\d+ms\).*$/, "").replace(/,\s*\d+ms\)/, ")").replace(/\s+—\s+.*$/, "")
     .replace(/\s*recipe=\S+/, "").replace(/\s*tools=\S+/, "").trim() || "refused (no reason recorded)";
 };
-/** THE reader of a verdict, whatever its vintage. Never null: unreadable content is kind `unknown` (not final, stands
- *  as the old rule did). */
+/** Any vintage. Never null: unreadable is kind `unknown` (not final). */
 export function readVerdict(content: string): Verdict {
   const v = structuredVerdict(content);
   if (v) return v;
@@ -252,9 +224,7 @@ export function readVerdict(content: string): Verdict {
     tools: null, source: parseSourceToken(content), exit: null,
   };
 }
-/** The marker the pump writes for a pass that exited `exit` with stderr `err`: the CLI's own record when it printed one,
- *  else its text read by the legacy grammar (an older or stand-in optimizer); a non-2 exit is a `failure`, stamped with
- *  THIS process's tools (the CLI printed no verdict). `source`: what the pass read (freshOver), null for a store hash. */
+/** A non-2 exit is a `failure`, stamped with THIS process's tools. `source`: what the pass read, null for a store hash. */
 export function verdictMarker(err: string, exit: number, source: SourceIdentity | null, now = new Date()): string {
   const v = readVerdict(err);
   const failure = exit !== 2;
@@ -267,26 +237,22 @@ export function verdictMarker(err: string, exit: number, source: SourceIdentity 
     tail: err.slice(-2000), at: now.toISOString() });
 }
 
-/** A geometry-LOD serving artifact — ANY recipe generation's, not only the
- *  current one (old generations must stay unlisted and uncatalogued too). */
+/** ANY recipe generation's: old ones must stay unlisted and uncatalogued too. */
 export function isLodVariant(name: string): boolean {
   return /\.lod\.[a-z0-9.-]+\.glb$/i.test(name);
 }
 
-/** Where the LOD shadow of an original lives: beside it, with the RECIPE IN THE NAME as in the URL, so a recipe change
- *  can never serve yesterday's reduction under today's address. */
+/** RECIPE IN THE NAME, so a recipe change never serves yesterday's reduction under today's address. */
 export function lodVariantPath(original: string, recipe = LOD_RECIPE): string {
   return `${original}.lod.${recipe}.glb`;
 }
 
-/** Is this verdict a REFUSAL a different tool could overturn (size gate, ineffective or unpreservable reduce, GPU gate)?
- *  A content fact (a skinned body, under the floor, no raster images) is about the file, whatever reads it. */
+/** A content fact is about the file, whatever reads it: never one. */
 export function toolDependent(content: string): boolean {
   return TOOL_KINDS.has(readVerdict(content).kind);
 }
-/** Does a `.failed` verdict still stand under the current recipe AND tools? Size verdicts need the current recipe,
- *  tool-dependent ones the current tools (re-asked once without renaming a variant URL, as is one from before the
- *  tools stamp); anything else stands. */
+/** Size verdicts need the current recipe, tool-dependent ones the current tools (re-asked once, URL unrenamed);
+ *  anything else stands. */
 export function verdictStands(content: string, recipe = KTX2_RECIPE, tools = currentToolsDigest()): boolean {
   const v = readVerdict(content);
   if (v.kind === "size" && !hasStamp(content, recipe)) return false;
@@ -294,32 +260,27 @@ export function verdictStands(content: string, recipe = KTX2_RECIPE, tools = cur
   return true;
 }
 
-/** Any KTX2 serving artifact: `<rel>.ktx2.glb` (models), `<rel>.ktx2.vrm` (bodies, §20c), `<img>.ktx2` (loose images,
- *  §20d). Reached only through the ORIGINAL's path + ?ktx2=<key>; never a listing entry. */
+/** `.ktx2.glb`, `.ktx2.vrm` (§20c), `<img>.ktx2` (§20d). Reached only via the ORIGINAL's path + ?ktx2=<key>; never listed. */
 export function isKtx2Variant(name: string): boolean {
   return /\.ktx2(\.glb|\.vrm)?$/i.test(name);
 }
 
-/** Anything the opt tree holds that a client doesn't address by name: a KTX2 or LOD variant, or a `.failed`, `.tmp`,
- *  `.deferred` or `.srcid` marker. None is a listing entry: the prefetcher fetches every listed store path. */
+/** Variants and markers: never a listing entry, since the prefetcher fetches every listed store path. */
 export function isServingArtifact(name: string): boolean {
   return isKtx2Variant(name) || isLodVariant(name) || /\.(failed|tmp|deferred|srcid)$/i.test(name);
 }
 
-/** Is this store/ entry an upload, not a variant of one? Every store/*.glb enumeration (catalog, boot sweep) must use it. */
+/** Every store/*.glb enumeration must use it. */
 export function isStoreOriginal(name: string): boolean {
   return name.endsWith(".glb") && !isKtx2Variant(name) && !isLodVariant(name);
 }
 
-/** Where the KTX2 shadow of a store original lives: beside it, `<path>.ktx2.glb`
- *  — routes.ts's own resolution for a flagged fetch (`${rel}.ktx2.glb` under
- *  OPT_DIR), so serving needs no change to find it. */
+/** routes.ts's own resolution for a flagged fetch. */
 export function ktx2VariantPath(original: string): string {
   return `${original}${KTX2_SUFFIX}`;
 }
 
-/** Which shadows a store original still lacks. A `.failed` marker counts as present (the pass answered), EXCEPT a KTX2
- *  size verdict from an older recipe (verdictStands). `exists`/`read` are injectable for tests. */
+/** A `.failed` marker counts as present, EXCEPT an older recipe's KTX2 size verdict. */
 export function storeShadowsMissing(
   original: string,
   minDir: string,
@@ -339,18 +300,15 @@ export function storeShadowsMissing(
 }
 
 // ---- status, for people: nothing may silently fail getting LODs ----------------------------------
-// storeShadowsMissing answers the SWEEP's question; this answers a person's: what each optimization looks like and why.
-// built · not-needed (too light, nothing to convert) · unsupported (by contract) · refused (failed a gate) · stale (older
-// recipe, or a changed source) · deferred (host couldn't afford it) · pending (not reached yet)
+// a person's question (the sweep's is storeShadowsMissing): built · not-needed · unsupported (by contract) · refused ·
+// stale (older recipe or changed source) · deferred (host couldn't afford it) · pending
 export type VariantState = "built" | "not-needed" | "unsupported" | "refused" | "stale" | "deferred" | "pending";
 export type VariantStatus = { state: VariantState; reason: string | null };
 
-/** Classify one variant from what is on disk beside it. `recipe` is the one its size verdicts are stamped with. */
-// (a legacy marker's reason is read by readVerdict: the verdict is the LAST "[optimize]" line, minus the log dressing)
+/** `recipe`: the one its size verdicts are stamped with. */
 
-/** How classifyVariant reads one pass. `lod`: read through lodVerdictKind, the route's own reader, so card and
- *  x-eidoverse-lod header agree. `source`: the MUTABLE file judged (variantSource); not freshOver it = `stale`. Store
- *  originals pass none. `stat` is injectable for tests. */
+/** `lod`: via lodVerdictKind, so card and x-eidoverse-lod header agree. `source`: the MUTABLE file judged; not
+ *  freshOver it = `stale`. */
 export type ClassifyOpts = { lod?: boolean; source?: string | null; stat?: StatFn };
 
 export function classifyVariant(path: string, exists: (p: string) => boolean, read: (p: string) => string, recipe?: string,
@@ -360,9 +318,7 @@ export function classifyVariant(path: string, exists: (p: string) => boolean, re
   const failedNow = exists(failed);
   if (exists(path)) {
     if (!fresh(path)) return { state: "stale", reason: "the model changed after this variant was built; the sweep rebuilds it" };
-    // A CURRENT-recipe verdict beside a variant can only be a forced rebuild that was refused (the pump never runs over
-    // one that stands, and ↻ clears it first): the old bytes still serve, and "built" would hide the refusal.
-    // An older recipe's verdict beside a variant is just history — a later build succeeded.
+    // a CURRENT-recipe verdict beside a variant is a refused forced rebuild: "built" would hide it. An older one is history.
     if (failedNow && recipe !== undefined) {
       const raw = read(failed);
       if (verdictStands(raw, recipe) && fresh(failed)) return { state: "refused", reason: `rebuild refused (${readVerdict(raw).reason}); the earlier variant still serves` };
@@ -375,10 +331,10 @@ export function classifyVariant(path: string, exists: (p: string) => boolean, re
     if (recipe !== undefined && !verdictStands(raw, recipe)) return { state: "stale", reason };
     if (!fresh(failed)) return { state: "stale", reason: `the model changed after this verdict: ${reason}` };
     if (opts.lod) {
-      switch (verdict.kind) {   // the LOD arm's grammar is the LOD kinds alone: a "nothing to" here is not a content verdict
+      switch (verdict.kind) {   // LOD kinds alone: a "nothing to" here is not a content verdict
         case "structural": return { state: "unsupported", reason: reason.replace(/^unsupported:\s*/i, "") };
         case "light": return { state: "not-needed", reason };
-        default: return { state: "refused", reason };   // ineffective / preservation / gpu, and anything unclassified
+        default: return { state: "refused", reason };
       }
     }
     switch (verdict.kind) {
@@ -391,8 +347,7 @@ export function classifyVariant(path: string, exists: (p: string) => boolean, re
   return { state: "pending", reason: null };
 }
 
-/** Every optimization's status for one store/library original. `source` is the mutable file the passes judge (the
- *  LIBRARY model — the one the sweep builds from and compares against); omit it for a content-addressed store upload. */
+/** `source`: the mutable LIBRARY file the passes judge; omitted for a content-addressed upload. */
 export function variantStatus(
   original: string,
   minDir: string,
@@ -404,8 +359,7 @@ export function variantStatus(
 ): { min: VariantStatus; ktx2: VariantStatus; lod: VariantStatus } {
   const lodPath = lodVariantPath(original);
   let lod = classifyVariant(lodPath, exists, read, LOD_RECIPE, { lod: true, source, stat });
-  // a Permissive LOD collapsed across UV/normal seams (optimize.ts): it serves, but it may read darker or faceted —
-  // say so in the hover rather than let it pass as an ordinary build
+  // a Permissive LOD may read darker or faceted: say so in the hover, not as an ordinary build
   if (lod.state === "built" && simplifyOf(lodPath) === "permissive") lod = { state: "built", reason: "permissive: collapsed across UV seams" };
   return {
     min: classifyVariant(join(minDir, basename(original)), exists, read),
@@ -415,8 +369,7 @@ export function variantStatus(
 }
 
 const simplifyCache = new Map<string, { key: string; v: string | null }>();
-/** asset.extras.simplify of a LOD variant, read from the GLB's JSON chunk only (the catalog asks per card); cached on
- *  (size, mtime). null = absent or unreadable. */
+/** JSON chunk only (the catalog asks per card); cached. null = absent or unreadable. */
 export function lodSimplifyOf(path: string): string | null {
   try {
     const st = statSync(path), key = `${st.size}:${st.mtimeMs}`, hit = simplifyCache.get(path);

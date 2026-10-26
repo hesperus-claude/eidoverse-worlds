@@ -1,5 +1,4 @@
-// glbparse — the GLB container and raster-header readers, dependency-free (moved out of optimize.ts so the catalog
-// route can rank models without importing gltf-transform/sharp).
+// GLB container and raster-header readers, dependency-free so the catalog route ranks models without gltf-transform/sharp.
 export const GLB_MAGIC = 0x46546c67;
 export const CHUNK_JSON = 0x4e4f534a;
 export const CHUNK_BIN = 0x004e4942;
@@ -34,9 +33,7 @@ export function parseGlb(bytes: Uint8Array): GlbParts {
   return { json, bin: binChunks[0]?.data ?? new Uint8Array(0), total };
 }
 
-/** PNG IHDR / JPEG SOFn dimensions, without decoding — there is no
- *  gltf-transform Texture here to ask, and sharp stays best-effort-only
- *  (the two-libvips hazard documented at ktx2CompressTextures). */
+/** PNG IHDR / JPEG SOFn dimensions without decoding; sharp stays best-effort (two-libvips hazard: ktx2CompressTextures). */
 export function rasterDims(bytes: Uint8Array, mime: string): [number, number] | null {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (mime === "image/png") {
