@@ -148,7 +148,7 @@ function hasFloor(bvh, box, s) {
 
 // ---- the uneven-top probe ---------------------------------------------------
 // Top lie = bbox top minus the median cell top of a vertex grid (#11); the math is supportclass.js's, shared with headless.
-// with headless. No BVH on purpose: the BVH is what decide() is pricing. Survey: tools/collider-survey.ts.
+// No BVH on purpose: the BVH is what decide() is pricing. Survey: tools/collider-survey.ts.
 export function topLie(obj, box) {   // exported for the classifier-parity fixture (#94)
   const w = box.max.x - box.min.x, d = box.max.z - box.min.z;
   const acc = gridAccumulator(box.min.x, box.min.z, w, d);

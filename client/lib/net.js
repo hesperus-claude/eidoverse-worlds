@@ -697,7 +697,7 @@ async function handle(msg, at) {
     case 'sfu-offer': bus.emit('sfu-offer', msg); break;
     case 'sfu-ice':   bus.emit('sfu-ice', msg);   break;
     case 'sfu-route': bus.emit('sfu-route', msg); break;
-    case 'relay-cred':          // #104: the minted media credential (voicerelay.js)
+    case 'relay-cred':          // #104: the minted media credential (voicesfubridge.js)
       window.__voiceRelayAbsent = false;   // a relay answered: an earlier "no relay" is over
       bus.emit('relay-cred', msg);
       break;
@@ -842,7 +842,7 @@ async function handle(msg, at) {
       bus.emit('roster');
       break;
 
-    case 'access-state':        // the world panel's 🔒 access tab (accesspanel.js)
+    case 'access-state':        // the world panel's 🔒 access tab reads these off the bus
     case 'access-directory':
       bus.emit(msg.type, msg);
       break;

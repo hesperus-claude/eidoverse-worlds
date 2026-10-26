@@ -129,7 +129,7 @@ async function paintBuild(body) {
     chip.onkeyup = (e) => { if (e.key === ' ') { e.stopPropagation(); e.preventDefault(); } };   // Space activates a button on keyup
     chipRow(card).appendChild(chip);
   };
-  // tooltips live ON the thing they explain; the card's names the model in full (the label truncates at 48)
+  // tooltips live ON the thing they explain; the card's names the model in full (the label clamps to two lines)
   const optBadge = (card, opt, perf, perfOriginal, path, rebuildable, fullName) => {
     if (fullName) card.title = fullName;
     if (perf) {

@@ -75,7 +75,7 @@ const MODE = { move: 'translate', rotate: 'rotate', scale: 'scale', pivot: 'tran
  *  thing's transform is read-only; a light has no orientation or scale to drag. */
 function editable(id, mode) {
   const rec = foldRecord(id); const obj = entities.get(id);
-  // a lock doesn't stop the drag: the release asks the door, and a person who may lift it is asked (§5, R's dialog).
+  // a lock doesn't stop the drag: the release asks the door, and a person who may lift it is asked (§5).
   // A thing riding another: three parents it (realize/models.js), so its position IS the local transform the schema's
   // pos.* edits, the frame the mesh drag already uses; a part socket (a moving node) stays out.
   const rides = !!rec?.parent;
@@ -102,7 +102,7 @@ function sync() {
   if (c.mode !== mode) c.setMode(mode);
   const sp = getSpace(getTool()) === 'object' ? 'local' : 'world';
   if (c.space !== sp) c.setSpace(sp);   // the tool's space (build.js SPACES)
-  // every axis: rotate commits q; scale is per axis (R 10-04)
+  // every axis: rotate commits q; scale is per axis
   c.showX = true; c.showZ = true; c.showY = true;
 }
 

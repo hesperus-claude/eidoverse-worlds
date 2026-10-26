@@ -1,4 +1,4 @@
-// dwell — ONE way for "the pointer has rested on this for a beat" (owner, 10-02). A mouse resting on a nameplate, a VR
+// dwell — ONE way for "the pointer has rested on this for a beat". A mouse resting on a nameplate, a VR
 // laser resting on a nameplate, on a panel control with a tooltip, on a panel's handle or resizer: each asks a dwell
 // tracker keyed on what the pointer rests on. The key changes → the clock restarts; the same key for DWELL_MS → ripe.
 //

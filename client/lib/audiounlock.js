@@ -1,32 +1,11 @@
 /** Autoplay unlock — one gesture, every pending audio element, both transports.
  *
- * 🔴 FOUND ON A REAL PHONE (R, 2026-08-16). Desktop→phone audio was silent
- * while phone→desktop worked, and STT worked in the failing direction — which
- * is what pinned it: SpeechRecognition holds its OWN microphone (stt.js:75) and
- * never touches playback, so a receive-side failure leaves it untouched.
- *
- * The server was fanning out correctly the whole time (forwarded=40734, both
- * legs publishing). The packets ARRIVED and did not PLAY.
- *
- * Cause: `audio.play()` rejects without a user gesture, and both transports
- * retried on `addEventListener('click', …, {once: true})`. Two things were
- * wrong with that:
- *
- *   1. ONE listener, ONE element, ONE shot. `{once: true}` fires for whichever
- *      speaker registered it and every other pending element stays silent —
- *      so even a lucky tap only unlocked one voice.
- *   2. It listened for `click` alone. Mobile browsers are far stricter about
- *      autoplay than desktop, and the gesture that satisfies them is not
- *      reliably a synthetic `click` — `touchend` and `pointerdown` land first,
- *      and a page that never receives a plain click never unlocks at all.
- *
- * And it failed SILENTLY: a caught promise rejection, no log, no UI. The person
- * holding the phone sees a working mic meter and concludes the app is broken in
- * a way they cannot describe. R had to tap a blank part of the page on a hunch.
- *
- * So: one shared queue, unlocked by ANY plausible gesture, retried for every
- * element at once, and — because a silent failure is the actual bug — it says
- * so in the chat line the person can see.
+ * `audio.play()` rejects without a user gesture. A per-element `{once: true}` click listener unlocks
+ * only the element whose listener fires; mobile browsers deliver `touchend`/`pointerdown` and may never
+ * send a plain `click`; and a caught rejection with no log or UI is indistinguishable from nobody talking.
+ * So: one shared queue, unlocked by any plausible gesture, retried for every element at once, and the
+ * refusal is said in chat. SpeechRecognition holds its own microphone (stt.js) and never touches playback,
+ * so a working mic meter says nothing about the receive side.
  */
 import { logChat } from './chat.js';
 

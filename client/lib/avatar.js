@@ -219,7 +219,7 @@ function wrap(text, n) {
   }
   return lines;
 }
-// speech caps at 4000 chars: the bubble shows an opening and says the rest is in chat
+// the bubble shows the first BUBBLE_LINES wrapped lines and says the rest is in chat
 const BUBBLE_LINES = 8;
 function makeBubble(text) {
   const all = wrap(text, 38);

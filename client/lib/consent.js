@@ -1,4 +1,4 @@
-// My body's one switch (recut A2, 10-20): accept | ask | refuse — the answer every act on my body gets from the
+// My body's one switch (recut A2): accept | ask | refuse — the answer every act on my body gets from the
 // authority, which is the only place it's decided (A1: no client gate). This module only remembers my choice
 // (localStorage, so it survives the session) and hands it to consentsync, which sends it on every arrival and change.
 // A leaf with zero lib imports. setPushable/setPosable stay as the old /pushable switch's meaning: on = accept.

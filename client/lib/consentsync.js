@@ -10,7 +10,7 @@ export const RETRY_MS = 5000;
 export function makeConsentSync({ table, send, toast, on, later = (fn) => setTimeout(fn, RETRY_MS), enabled = () => true }) {
   let failing = false, retryArmed = false;
   // ONE sync in flight: changes made while it runs collapse into a single follow-up that reads the latest table, so a
-  // burst of changes stays under the server's per-connection message cap (10-19), which would refuse some sets.
+  // burst of changes stays under the server's per-connection message cap, which would refuse some sets.
   let running = null, again = false;
   function sync() {
     if (running) { again = true; return running; }

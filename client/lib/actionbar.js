@@ -31,7 +31,7 @@ export function initActionBar() {
   // state.h is the CONTENT height (the body pads on top of it): rows + gaps only, no pad term
   const heightFor = (cols) => rowsFor(cols) * ROW_H + (rowsFor(cols) - 1) * GAP;
   let snapT = null;
-  const ALL = 9;   // 3 postures + 6 gestures: ONE bar
+  const ALL = 9;   // nine columns: one row by default
   const f = makeFrame('actions', {
     title: 'action bar', x: 'center', y: -10, w: widthFor(ALL), h: ROW_H,   // one row of nine across the bottom by default
       // windows.js's resize clamps at f.minW, so minW must be widthFor(1) or one column is unreachable by drag
@@ -126,7 +126,7 @@ export function initActionBar() {
   bus.on('animnames-updated', fill);
   setInterval(paint, 500);   // number keys set myState.anim elsewhere; the lit tile follows
   f.body.appendChild(grid);
-  // the same six gestures as a VR quad — one button per gesture, the same call
+  // the same postures and gestures as a VR quad — one button per act, the same call
   registerXRPanel({
     id: 'actions', title: 'action bar',
     // postures, then gestures; names, not emoji: canvas fillText of a missing glyph paints nothing

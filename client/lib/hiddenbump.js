@@ -1,4 +1,4 @@
-// hiddenbump — what my body bumps that I hid with the eye (R 10-12 17:33). A thing hidden in my view is not drawn and not
+// hiddenbump — what my body bumps that I hid with the eye. A thing hidden in my view is not drawn and not
 // pickable, but it stays SOLID: my body still collides with it. So walking into it is never a mystery: while my body
 // touches one, a hazy outline of its collider fades in with a crossed-out eye over it ("you hid this"), and it fades out
 // after the contact ends. Mine only: nothing here is sent or logged, and its sound is not touched.

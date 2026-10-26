@@ -1,5 +1,4 @@
-// capsulebody — the body you get when no body loads (owner, 09-11: "capsule avatar + hand capsules", assigned to
-// the VR PR; 09-19: arrived bodiless behind a flapping tunnel — "I thought we fixed this").
+// capsulebody — the body you get when no body loads.
 //
 // Not a bare mesh: a VRM-SHAPED puppet. A synthetic humanoid skeleton (hips → spine → chest → upperChest →
 // neck → head; shoulders → upperArm → lowerArm → hand, both sides) with a capsule on each bone, wrapped as

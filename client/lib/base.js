@@ -123,7 +123,7 @@ export function report(context, err) {
   const suppressed = now < rec.nextAt;
   if (rec.n === 1 || rec.n % 20 === 0) tee(`[report] ${context}: ${message} ×${rec.n} :: ${String(err?.stack ?? '').split('\n').slice(1, 4).join(' | ').slice(0, 600)}`);
   if (!suppressed) {
-    // 1st, then 2s, 10s, 60s… — enough to show a fault is ongoing, not enough to drown
+    // the next report waits 2 s × the count so far, capped at 60 s: enough to show a fault is ongoing, not enough to drown
     rec.nextAt = now + Math.min(60000, 2000 * rec.n);
     console.error(context, err, rec.n > 1 ? `(×${rec.n})` : '');
     errorSink?.(context, rec.n > 1 ? `${message} (×${rec.n})` : message);

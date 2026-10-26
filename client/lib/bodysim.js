@@ -1,4 +1,4 @@
-// bodysim — the body-physics engine is a CHOICE: Verlet or Bullet (ammo.js), one interface (contract: ammodoll.js header).
+// bodysim — the body-physics engine is a CHOICE: Verlet or Bullet (ammo.js), one interface (contract: bodyengine.js header).
 // Downstream (goLimp, drag, nails, presence) can't tell which answered; a world mod swaps engines through EW.bodysim.
 // Rapier is retired (§24j); its decaying tone motors survive in tools/rapier-spike.ts.
 

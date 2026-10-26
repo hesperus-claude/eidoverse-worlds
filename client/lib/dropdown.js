@@ -1,7 +1,6 @@
 // House dropdowns — every native <select> in the chrome becomes a button that
 // opens a list in the panel's own colours. Chromium paints its OWN blue hover
-// inside a native popup and nothing in CSS reaches it (live, 09-05: "that green +
-// that blue"); so the popup is ours. The <select> stays in the DOM, hidden,
+// inside a native popup and nothing in CSS reaches it; so the popup is ours. The <select> stays in the DOM, hidden,
 // as the value store: panels keep reading sel.value and listening for
 // 'change' exactly as before — this is a skin, not a rewrite. A
 // MutationObserver skins selects that panels build later.
@@ -30,7 +29,7 @@ export function skinSelect(sel) {
   sel.dataset.skinned = '1';
   const btn = document.createElement('button');
   btn.type = 'button'; btn.className = 'dd'; btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false');
-  // `set` = a non-default choice is live (live 09-07 23:25: a persistent mode should read as ON at a glance — the trigger outlines in accent)
+  // `set` = a non-default choice is live: a persistent mode reads as ON at a glance (the trigger outlines in accent)
   const paint = () => { btn.innerHTML = `<span class="dd-label"></span><span class="dd-caret">▾</span>`; btn.querySelector('.dd-label').textContent = label(sel); /* textContent: option labels may one day come from names */ btn.disabled = sel.disabled; btn.classList.toggle('set', sel.hasAttribute('data-mode') && sel.selectedIndex > 0 && !/^(off|none|default)$/i.test(sel.value)); };
   paint();
   sel.classList.add('dd-native');
