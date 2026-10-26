@@ -5,7 +5,7 @@
 // repair, and is marked), and the old-world oracle's mirror of the load. The rules that read an absent field may only
 // ever see values stored before the audit: that is the marker's job, not these functions' (review r7 F2).
 //
-// The rules (notes/eidoverse/shape-audit/physics-motion.md §4, §5, §7):
+// The rules:
 //   motion   a bare motion naming a `part` is that node's motion: motion:<partSlot(part)> {node: part} (a motion already on
 //            that node wins); a keyed motion with no node gets its key's tag (the node's name, before the node was data);
 //            amplitude → amp (amp wins); a letter axis (x, y, z, -x, -y, -z) → its vector;

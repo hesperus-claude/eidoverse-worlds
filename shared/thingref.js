@@ -1,4 +1,4 @@
-// shared/thingref.js — how a reader names a thing without its id (R 10-17 00:46, STAGING-TODO "ID HARDENING" (5)).
+// shared/thingref.js — how a reader names a thing without its id.
 // An id is opaque (26 base32: shared/protocol/ids.js) and never changes; what a thing is CALLED is its label, which anyone
 // may change and which two things may share (duplicate labels stay allowed: ambiguity is surfaced, never forbidden). So:
 //   handleOf   a short handle for reading: the shortest prefix of the id (at least 4 characters) no other id here starts

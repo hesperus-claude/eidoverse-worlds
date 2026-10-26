@@ -19,7 +19,7 @@
 // One consequence stated honestly: the CLIENT's rendered mesh and walking
 // heightAt still come from the toolkit's own function (vendored, eval-
 // loaded); this module is the SIM's ground truth. The two agree to ~1 ulp
-// everywhere (measured in tools/sim-test.ts), which is nanometres — but the
+// everywhere, which is nanometres — but the
 // covenant identity that matters (server sim ≡ client shadow sim ≡ any
 // replay, bit for bit) holds because ALL sim consumers use THIS law.
 //

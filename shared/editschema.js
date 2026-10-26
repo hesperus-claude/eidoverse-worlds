@@ -7,7 +7,7 @@
 //
 // This is the parity law made structural: anything a human can click, a
 // model can say — because both read ONE declaration and both commit through
-// editOps(). The fold (shared/fold.js) is the source of every value here;
+// editOps(). The fold (shared/protocol/fold.js) is the source of every value here;
 // a client with a realized object may layer live extras on top (is the light
 // actually casting) but never a different truth.
 //
@@ -998,7 +998,7 @@ const NEEDS = {
     plan: (ent, id, name) => ({ choice: { need: 'Model', options: [],
       prompt: `${article(name)} ${name.toLowerCase()} needs a model to act on (${id} has none) — place a model from the Library and add the ${name} to it, or put ${id} under one` } }),
   },
-  // reactions push the WHOLE entity's pendulum (server/reactions.ts): a part's
+  // a push (use {action: 'push'}, authority/use.js) swings the WHOLE entity's pendulum: a part's
   // pendulum does not count, and a whole-entity spin is in the way
   Pendulum: {
     met: (ent) => ent?.motion?.type === 'pendulum',

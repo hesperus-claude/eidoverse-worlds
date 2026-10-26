@@ -182,8 +182,7 @@ export function worldFlightProvider({ rights = null, label = 'world-grant' } = {
         return { enabled: false, reason: "your rights in this world haven't arrived, which counts as no: if you're still joining, try again once you've joined; if they never arrive, this server may not send them (an older version), so ask whoever runs it" };
       }
       if (r.fly !== true) {
-        // main #245's wording (why, and who can fix it), in this branch's shape: flight is a role's `fly` permission
-        // (server rightsFor; research roles S4), not a `grant` verb flag, so the fix it names is a roles:<id> set
+        // flight is a role's fly permission (server rightsFor), so the fix this names is a roles:<id> set
         return {
           enabled: false,
           reason: "this world hasn't given you flight; flight comes with a role's fly permission, which the world's owner " +

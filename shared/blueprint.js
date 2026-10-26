@@ -28,8 +28,8 @@
 // overridesOf / rebase compare copies against records; placing copies (6b) and
 // offering updates (6c) build on these.
 //
-// Pure: no DOM, no I/O. The door (server/verbs.ts), the fold (shared/fold.js),
-// the agent and the editor all ask the same questions here.
+// Pure: no DOM, no I/O. The editor asks these questions here; the authority's blueprint rules are
+// shared/protocol/authority/blueprints.js.
 
 import { canon, sha256hex, entityOf, componentsOf, compRefusal, RECORDS, socketQ } from './components.js';
 import { worldPose, childrenOf, socketOf } from './hierarchy.js';

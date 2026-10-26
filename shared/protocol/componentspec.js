@@ -196,8 +196,8 @@ export const COMPONENTS = {
       // batch 2: a doorbell plays its sound again from the top, whether or not it's playing (set can't restart it, toggle
       // would stop it): the authority writes sound {…, playing: true, t0: now}
       play: { args: {}, example: { ring: { kind: "play" } } },
-      // R 10-10: a reset button (VRChat's shape: each thing remembers a home, a button lists what it sends home; research
-      // notes/eidoverse/RESEARCH-grips-and-reset-2026-10-10.md). Each target goes back to its home component, out of any hand; a target with no home, gone or locked is skipped and named in the reply.
+      // a reset button (VRChat's shape: each thing remembers a home, a button lists what it sends home).
+      // Each target goes back to its home component, out of any hand; a target with no home, gone or locked is skipped and named in the reply.
       reset: { args: { targets: "the ids it sends home: 1 to 64 things. Each needs a home (stamped where it stands when the handler is written, if it has none)" }, example: { reset: { kind: "reset", targets: ["ball-0", "ball-1"] } } },
     },
     // held names: a handler of one of these kinds is refused (reserved), never read

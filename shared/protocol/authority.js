@@ -5,7 +5,7 @@
 // locks, where it lands, sanity and rate. Tool checks may only add to it. The only code that appends a change entry is
 // `changeEntry`, and it takes only what `admit` returned.
 // Ported from the protocol lab (the protocol lab's authority.js @ 11db981). Engine change: storage is injected. The lab's openWorld
-// read and wrote files here; that part is server/disk.js now, so this module has no node: imports and no
+// read and wrote files here; that part is server/filehost.ts now, so this module has no node: imports and no
 // process/Date of its own (callers pass the clock). Everything from `w.worldId` down is the lab's code unchanged.
 import { bodyOf, socketQ, ONE_PLACE } from "../components.js";
 import { MOVER, TRACK, bodyBox, bodyScale, floorStep, sweep, tokensAfter } from "../mover.js";
@@ -171,7 +171,7 @@ const UNSEEN_CODES = new Set();
 const noteCode = (c) => { if (!isRefusalCode(c)) UNSEEN_CODES.add(String(c)); };
 /** Refusal codes a reply carried that the registry doesn't list (tests read it; empty when the registry is whole). */
 export function unregisteredCodes() { return [...UNSEEN_CODES]; }
-// ---- ids: writers never choose them (R 10-17 00:46, STAGING-TODO "ID HARDENING" (2)) ----
+// ---- ids: writers never choose them ----
 // The authority mints every id (shared/protocol/ids.js: 26 base32, no slug). A writer that needs to name a thing it is
 // making — to parent something to it, place something on it, point at it — in the same request writes a request-local
 // placeholder ('$table', JSON:API's lid) as the create's id and wherever it refers to it; the authority mints an id for

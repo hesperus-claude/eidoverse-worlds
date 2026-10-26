@@ -29,7 +29,7 @@
 // The seven fields where RECORDS states a default the registry never writes (C5's yellows) are decided here, per field,
 // as `absent` on the descriptor (`absentMeans` prose: the record's `default` is a READING of absence, to become prose when
 // RECORDS is generated from this table) or as a registered default (none yet: each would be a registry change and a pin
-// regeneration, spec/fixtures/registry-pin.json D8). See DECIDED below.
+// regeneration, spec/registry-pin.json D8). See DECIDED below.
 
 import { COMPONENTS, materialize } from './componentspec.js';
 

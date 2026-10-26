@@ -1,7 +1,6 @@
 // grab — what a hand may do with a thing: the `grabbable` component, as data.
 //
-// One component for every way a person picks a thing up (research: notes/eidoverse/RESEARCH-grab-2026-10-06.md, "The
-// shape we build"). The cross-platform pattern it follows: grabbing is its OWN component, apart from dynamics (Meta's
+// One component for every way a person picks a thing up. The cross-platform pattern it follows: grabbing is its OWN component, apart from dynamics (Meta's
 // physics-less hand grab, Resonite Grabbable, Horizon's Interaction vs Motion); a grip is a named point in the thing's
 // frame (VRChat ExactGrip, Unity Attach Transform, Godot GrabPoint); no grip means it's held where it was grabbed
 // (Unreal Free); use-while-held is its own button with a down and an up (VRChat OnPickupUseDown/Up, Unity Activated);
