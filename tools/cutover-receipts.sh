@@ -20,6 +20,7 @@ run() {
 echo "── node-side ──"
 run mention-regex-test.mjs
 run channel-cap-gate-test.mjs
+run wiring-check.ts
 run door-media-whitelist-test.mjs
 run micstate-exec-test.mjs
 run micstate-release-test.mjs

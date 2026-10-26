@@ -1,5 +1,5 @@
 // locomotion-clip-test: the clip-selection policy the controller ships (#196). Drives the REAL
-// client/lib/locomotion_clip.js (the module controller.js imports) plus a check that controller.js calls it.
+// client/lib/locomotion_clip.js (the module controller.js imports; tools/wiring-check.ts checks that it calls it).
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/locomotion-clip-test.mjs
 // Each mutation of the PRODUCT must turn a named check red:
 //   selectClip: drop `wantMove &&`              → intent selection (walk→idle on release)
@@ -7,13 +7,9 @@
 //   selectClip: `jumped ? … : …` → one branch   → ditto, via opts
 //   selectClip: AIRBORNE_GRACE 0.04 → 0         → the stair-step guard
 //   selectClip: RUN_SPEED 2.6 → 99              → walk/run split
-//   controller.js: stop calling selectClip      → the wiring check (#180: removing the real wiring must go red)
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+//   controller.js: stop calling selectClip      → tools/wiring-check.ts (#180: removing the real wiring must go red)
 import { selectClip, AIRBORNE_GRACE, RUN_SPEED, FADE_PRESS, FADE_WALKOFF } from '../client/lib/locomotion_clip.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
 let fail = 0, n = 0;
 const check = (name, cond) => { n++; if (cond) { console.log(`✓ ${name}`); } else { fail++; console.log(`✗ ${name}`); } };
 
@@ -112,26 +108,12 @@ check('a 50% body walking (0.78 m/s) → walk',
   selectClip({ wantMove: true, speed: 0.78, scale: 0.5 }).clip === 'walk');
 check('no scale (an older caller) reads as 100%', selectClip({ wantMove: true, speed: 3.1 }).clip === 'run'
   && selectClip({ wantMove: true, speed: 3.1, scale: NaN }).clip === 'run');
-const ctlSrc = readFileSync(join(here, '../client/lib/controller.js'), 'utf8');
-check('controller.js hands selectClip the body\'s size', /selectClip\(\{[^}]*\bscale:\s*me\.userScale/.test(ctlSrc));
 
 // ---- only jump carries options
 check('non-jump clips carry no options (setClip defaults)',
   selectClip({ wantMove: true, speed: 1.2 }).opts === undefined && selectClip({}).opts === undefined);
 
-// ---- the wiring: an extracted policy nobody calls
-const ctl = readFileSync(join(here, '../client/lib/controller.js'), 'utf8');
-check('controller.js imports the real policy module',
-  /import\s*\{[^}]*\bselectClip\b[^}]*\}\s*from\s*'\.\/locomotion_clip\.js'/.test(ctl));
-check('controller.js CALLS selectClip in its tick',
-  /\bselectClip\s*\(/.test(ctl));
-check('controller.js passes the selected opts to setClip (not a re-derived literal)',
-  /setClip\([^)]*\.opts\s*\)/.test(ctl));
-// scoped to the LOCOMOTION setClip call (the one with options): a file-wide grep fails on innocent fades, and the
-// flight path's `me.setClip(clip, speed)` takes no options
-const setClipCall = ctl.split('\n').find((l) => /me\.setClip\([^)]*,[^)]*,/.test(l)) ?? '';
-check('the tick hands setClip the SELECTED opts, with no fade re-derived at the call site',
-  /\.opts\s*\)/.test(setClipCall) && !/fade:/.test(setClipCall), `call site: ${setClipCall.slice(0, 80)}`);
+// the wiring (controller.js imports, calls and feeds selectClip): tools/wiring-check.ts
 
 console.log(`\n${n - fail}/${n} passed`);
 process.exit(fail ? 1 : 0);

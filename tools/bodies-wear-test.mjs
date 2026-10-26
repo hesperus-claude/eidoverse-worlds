@@ -5,14 +5,11 @@
 // Mutations that must turn a named check red:
 //   bodies.js: `const onMe = n === cur && !!getMe() && !getMe()?.isCapsule;` → `n === cur`
 //   bodies.js: drop the `!getMe()?.isCapsule` clause
-//   mybody.js: restore the unconditional same-path early return in wireAvatarSwitch
+//   mybody.js: restore the unconditional same-path early return in wireAvatarSwitch (red in tools/wiring-check.ts)
 //   bodies.js: flushBodyPrefs drops the captured name (`setMyBodyPref(p.patch)`)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
-const dir = dirname(fileURLToPath(import.meta.url));
 
 // the body state the Profile reads: `me` is what's ACTUALLY on screen; `name` is what we intended
 const state = (globalThis.__bodyState ||= { me: null, name: null });
@@ -78,11 +75,7 @@ check('with no body, nothing is active', row?.active !== true);
 check('with no body, the row is still wearable', hasWear(row));
 
 // ---------------------------------------------------------------- the switch must not no-op
-// switchAvatar's same-path early return would make the restored button a no-op
-const mybody = readFileSync(join(dir, '../client/lib/mybody.js'), 'utf8');
-check('the same-path early return exempts the capsule',
-  /if \(path === myAvatarPath && !me\?\.isCapsule\) return;/.test(mybody),
-  'clicking wear on the failed body would silently do nothing');
+// switchAvatar's same-path early return exempts the capsule (else the restored button is a no-op): tools/wiring-check.ts
 
 // ---------------------------------------------------------------- THIS BODY: size and nameplate
 // the worn body's section: fields (so the VR profile quad renders the same sliders), shown only for a real body, writing

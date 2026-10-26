@@ -1,26 +1,15 @@
 // headset-seen-test: the stored headset bit is HISTORY, and says so (#197).
 // Nothing clears `ew-headset-seen` when a headset is unplugged, and isSessionSupported stays optimistic after a headset
 // is switched off, so a re-probe isn't honest either: the value carries WHEN, expires, and the copy claims only that a
-// headset has been USED here. Drives the REAL client/lib/headset_seen.js (no imports, nothing to stub); wiring checks
-// bind it to the boot backend choice and the panel copy.
+// headset has been USED here. Drives the REAL client/lib/headset_seen.js (no imports, nothing to stub); its wiring (the
+// boot backend choice, the panel copy, the time stamp's writers) is in tools/wiring-check.ts.
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/headset-seen-test.mjs
 // Mutations that must turn a named check red:
 //   headset_seen.js: headsetSeenRecently ignores the TTL (always true once seen)
 //   headset_seen.js: an unmigrated legacy '1' reads as recent again (the permanence defect)
-//   core.js: the migration stops writing back, so the marker never ages
-//   core.js: the boot choice reads the raw bit again instead of the predicate
-//   videopanel.js: the copy returns to "Right now: a headset is present"
-//   xr.js: a granted session writes '1' instead of the time
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+//   (core.js, videopanel.js and xr.js mutations go red in tools/wiring-check.ts)
 import { headsetSeenAt, migrateHeadsetSeen, headsetSeenRecently, HEADSET_SEEN_TTL_MS } from '../client/lib/headset_seen.js';
 
-const dir = dirname(fileURLToPath(import.meta.url));
-const read = (f) => readFileSync(join(dir, '..', f), 'utf8');
-const core = read('client/lib/core.js');
-const panel = read('client/lib/videopanel.js');
-const xr = read('client/lib/xr.js');
 
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => {
@@ -71,28 +60,8 @@ for (const [raw, label] of [['01', "'01'"], [1, 'the NUMBER 1'], ['0', "'0'"], [
 }
 check("'01' reads as the timestamp 1, not as the legacy marker", headsetSeenAt('01') === 1);
 check("'0' and undefined read as never-seen", headsetSeenAt('0') === null && headsetSeenAt(undefined) === null);
-{ const core = readFileSync(new URL('../client/lib/core.js', import.meta.url), 'utf8');
-  check('core.js MIGRATES on read and writes the stamp back, or the marker never ages',
-    /migrateHeadsetSeen/.test(core) && /setItem\(PREF_HEADSET_SEEN, migrated\)/.test(core)); }
 
-console.log('\nthe copy claims only what is known:');
-check('the Video panel no longer says a headset IS present',
-  !/headset is present/i.test(panel) && !/Right now: a headset/i.test(panel));
-check('…it says one has been USED here', /has been used here/i.test(panel));
-check('the no-headset branch is equally past-tense',
-  !/no headset sensed/i.test(panel) && /No headset has been used here recently/i.test(panel));
-check('the WebGPU warning is past-tense too',
-  !/⚠ A headset is present/.test(panel) && /A headset has been used here/.test(panel));
-check('the panel asks the PREDICATE, not the raw bit',
-  /headsetSeenRecently\(\)/.test(panel) && !/PREF_HEADSET_SEEN\) === '1'/.test(panel));
-
-console.log('\nthe wiring:');
-check('the boot backend choice asks the predicate',
-  /headsetSeen: headsetSeenRecently\(\)/.test(core));
-check('a granted session stamps the TIME, not a flag',
-  !/setItem\(PREF_HEADSET_SEEN, '1'\)/.test(xr) && !/setItem\('ew-headset-seen', '1'\)/.test(xr));
-check('…at every writer', (xr.match(/setItem\(PREF_HEADSET_SEEN, String\(Date\.now\(\)\)\)/g) ?? []).length === 2,
-  `${(xr.match(/setItem\(PREF_HEADSET_SEEN, String\(Date\.now\(\)\)\)/g) ?? []).length} writers stamp the time`);
+// the copy and the wiring (the panel's words, the predicate's callers, the time stamp's writers): tools/wiring-check.ts
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail ? 1 : 0);

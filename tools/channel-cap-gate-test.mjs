@@ -47,45 +47,7 @@ ok('legacy 0.4 MCPL host with no policy keeps everything',
 ok('0.5 host whose featureSets/update OMITS effectiveCapabilities stays denied (fail-closed, §5.4)',
    !capAllowed(true, '0.5', null, CAP.channelsPublish));  // update-without-grant leaves grant null
 
-// ---- the wiring: is the gate actually CALLED at each verb? ------------------
-// a predicate test passes while nothing invokes it: read the source and require a gate in each case block
-
-const src = await Bun.file(new URL('../mcpl/net-server.ts', import.meta.url)).text();
-
-const gatedCase = (caseName, capConst) => {
-  const at = src.indexOf(`case method.${caseName}:`);
-  if (at < 0) return { ok: false, why: `case ${caseName} not found` };
-  // the case body up to the next `case ` at the same level: enough to see whether a gate precedes the work
-  const body = src.slice(at, at + 700);
-  const gate = body.indexOf(`capAllowed(CAP.${capConst})`);
-  if (gate < 0) return { ok: false, why: `no capAllowed(CAP.${capConst}) in the case body` };
-  return { ok: true };
-};
-
-for (const [caseName, capConst] of [
-  ['CHANNELS_PUBLISH', 'channelsPublish'],
-  ['CHANNELS_OPEN', 'channelsLifecycle'],
-  ['CHANNELS_CLOSE', 'channelsLifecycle'],
-]) {
-  const r = gatedCase(caseName, capConst);
-  ok(`${caseName} is gated on ${capConst}`, r.ok, r.why);
-}
-
-// typing is a NOTIFICATION: the gate drops it silently (no refusal), before the relay starts
-{
-  const at = src.indexOf('private onTyping(');
-  const body = at >= 0 ? src.slice(at, at + 1400) : '';
-  const gate = body.indexOf('capAllowed(CAP.channelsTyping)');
-  const start = body.indexOf('this.typing.start(');
-  ok('channels/typing is gated on channelsTyping', gate >= 0);
-  ok('the typing gate precedes the relay starting', gate >= 0 && start >= 0 && gate < start);
-  ok('nothing acts on a chunk of the generation stream', !src.includes('method.CHANNELS_OUTGOING_CHUNK'));
-  // the signal is taken from the connection's notification event only: the serve loop also reads every notification
-  // from its queue and must not act on it twice
-  ok('the typing signal is handled in one place, the notification listener',
-     src.split('method.CHANNELS_TYPING').length === 2 && src.split('this.onTyping(').length === 2 &&
-     /this\.conn\.on\("notification"[\s\S]{0,200}method\.CHANNELS_TYPING[\s\S]{0,200}this\.onTyping\(/.test(src));
-}
+// ---- the wiring (every dispatch case's gate, typing gated before the relay, one listener, the say hook): tools/wiring-check.ts
 
 // a host sends channels/typing only under a channels.typing grant and grants only what's advertised, so the
 // advertisement and the feature set turn the dots on
@@ -96,28 +58,6 @@ for (const [caseName, capConst] of [
   ok('the door does not advertise channels.streaming', MCPL_ADVERTISEMENT.channels.streaming === false);
   ok('no feature set uses channels.streaming',
      Object.values(FEATURE_SETS).every((fs) => !fs.uses.includes('channels.streaming')));
-}
-
-// the body's speech ends the dots: each body gets a hook that stops the relay, and travel hands it on (no other test
-// drives a travelled body)
-{
-  const ctorAt = src.indexOf('this.channelId = `world:${this.agent.world}`;');
-  const ctor = ctorAt >= 0 ? src.slice(ctorAt, ctorAt + 400) : '';
-  ok('the session gives its first body a say hook that stops the relay',
-     ctor.includes('this.agent.onSaid = () => this.typing.stop();'));
-  const travelAt = src.indexOf('next.onEvent = old.onEvent;');
-  const travel = travelAt >= 0 ? src.slice(travelAt, travelAt + 1600) : '';
-  const handed = travel.indexOf('next.onSaid = old.onSaid;');
-  const taken = travel.indexOf('old.onSaid = null;');
-  ok('travel hands the say hook to the next body before taking it from the old one',
-     handed >= 0 && taken >= 0 && handed < taken);
-}
-
-// tools/list and tools/call were the original offenders: keep them pinned
-for (const m of ['tools/list', 'tools/call']) {
-  const at = src.indexOf(`case "${m}"`);
-  ok(`${m} consults toolsAllowed()`,
-     at >= 0 && src.slice(at, at + 600).includes('toolsAllowed()'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -29,13 +29,7 @@ const fnStart = src.indexOf('function sampleFingerCurl()');
 const fnEnd = src.indexOf('\n}', fnStart) + 2;
 check('sampleFingerCurl is found in xr.js', fnStart > 0 && fnEnd > fnStart);
 const fnSrc = src.slice(fnStart, fnEnd);
-check('the filter consults the elapsed time, not a fixed per-frame constant',
-  /performance\.now\(\)/.test(fnSrc) && /oneEuroAlpha\(/.test(fnSrc));
-check('the cutoff is driven by the smoothed SPEED, not a constant',
-  /CURL_MIN_CUTOFF \+ CURL_BETA \* Math\.abs\(st\.dx\)/.test(fnSrc));
-check('NO hard jump/threshold branch survives in the FILTER — that discontinuity read as "clicky"',
-  !/\? raw :/.test(fnSrc) && !/CURL_JUMP/.test(fnSrc));   // scoped to the FUNCTION: the file's header prose describes the old branch
-check('a stall cannot teleport the pose (dt is clamped)', /Math\.min\(0\.1,/.test(fnSrc));
+// the filter's shape (elapsed time, speed-driven cutoff, no jump branch, dt clamp): tools/wiring-check.ts
 
 // ---- build a runnable copy against fakes
 let clock = 0, buttons = { left: [], right: [] };
