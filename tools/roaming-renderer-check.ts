@@ -11,7 +11,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
 import { playwrightArgs } from './protocol/chrome.ts';
-const base = process.argv[2] ?? 'http://127.0.0.1:19347';
+const base = process.argv[2];
+// a manual check against a running server: without one, say so before a browser is launched
+if (!base) { console.log('usage: bun tools/roaming-renderer-check.ts http://127.0.0.1:<port> (needs a running server)'); process.exit(0); }
 const shot = process.env.SHOT;
 const world = `roam-build-${Date.now().toString(36)}`, lobby = `roam-lobby-${Date.now().toString(36)}`;
 const crates = ['blue', 'green', 'red', 'yellow'].map((c, i) => ({ verb: 'spawn', args: { id: `crate-${c}`, lib: `eidoverse/assets/models/crate_large_${c}.glb`, pos: [Math.cos(i * 1.57) * 4, 0, 6 + Math.sin(i * 1.57) * 4], yaw: 0 } }));

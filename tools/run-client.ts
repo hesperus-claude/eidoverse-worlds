@@ -89,8 +89,13 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
   // file swamps WMI), and a finished file's debris goes with the gate's own sweep
   const kill = (exited = false) => { void killSuiteAsync(ch.pid!, "SIGKILL", process.platform, { exited }).catch(() => {}); };
   // SIGTERM first, so a test with an exit handler cleans up what it wrote; whatever is left a moment later is killed
-  const timer = setTimeout(() => { timedOut = true; void killSuiteAsync(ch.pid!, "SIGTERM").catch(() => {}); setTimeout(() => kill(), 2000); }, TIMEOUT_S * 1000);
-  ch.on("close", (code) => {
+  // a grandchild that outlives the kill (a browser) still holds our pipes, and "close" never comes: let go of them
+  let settled = false;
+  const timer = setTimeout(() => { timedOut = true; void killSuiteAsync(ch.pid!, "SIGTERM").catch(() => {}); setTimeout(() => kill(), 2000);
+    setTimeout(() => { if (!settled) { ch.stdout?.destroy(); ch.stderr?.destroy(); finish(null); } }, 5000); }, TIMEOUT_S * 1000);
+  ch.on("close", (code) => finish(code));
+  function finish(code: number | null) {
+    if (settled) return; settled = true;
     clearTimeout(timer); if (process.platform !== "win32") kill(true); live.delete(ch.pid!);
     const ms = performance.now() - t0; const tail = out.trim().split("\n").slice(-3).join("\n");
     const dead = linkError(out);
@@ -104,7 +109,7 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
     const corpus = /ENOENT[^\n]*assets\/opt\/eidoverse|(\w+) fixture required/.exec(out);
     if (corpus) return done({ file, kind: "env", why: corpus[1] ? `the avatar corpus lacks ${corpus[1]}` : "no avatar corpus: ln -s <an asset root>/assets assets/opt/eidoverse/assets", ms, tail });
     done({ file, kind: "red", why: `exit ${code}`, ms, tail });
-  });
+  }
 });
 
 // a test killed at its time limit can't clean up: say what the run left in the tree (nothing here deletes it)
