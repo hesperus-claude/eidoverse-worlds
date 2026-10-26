@@ -1,9 +1,4 @@
-// terrainshape — the terrain you SHAPE, over the terrain you roll.
-//
-// The `terrain` verb's noise (terrainmath.js / the toolkit's makeTerrain)
-// gives a world hills, but not THESE hills: an author could pick how rough
-// and which random layout, never "a mountain here, a valley there". Two ways
-// to say where, both riding the same verb:
+// terrainshape — the terrain you SHAPE, over the noise you roll (terrainmath.js); both ride the `terrain` verb:
 //
 //   features   placed shapes, applied in order over the base:
 //                {type:'hill',    x, z, radius, height}         a round bump; negative height = a pit
@@ -15,13 +10,8 @@
 //              square (image x → world +x, image down → world +z). Features
 //              still apply on top.
 //
-// ONE implementation, three consumers: the client's mesh and walking
-// heightAt, the agents' heightAt, and the deterministic sim (via
-// terrainmath.js). They must agree or bodies stand in the air or in the
-// ground. So this file holds to the sim's blessed exact-op set (Covenant I):
-// + - * /, Math.sqrt, Math.floor, comparisons — no pow, no hypot, nothing
-// transcendental. A world with neither key never reaches this code, so no
-// existing world's ground moves by a bit.
+// One implementation for the client mesh, the agents and the sim (via terrainmath.js), so it holds to the sim's
+// exact-op set (Covenant I: + - * /, sqrt, floor; no pow or hypot). A world with neither key never reaches it.
 
 import { MOVER, waterStance, waterCost } from './mover.js';   // the water law (below): one walker, one law
 
@@ -64,17 +54,11 @@ export function shapeParams(a) {
 }
 
 // ---- heightmap grids ---------------------------------------------------------
-// A grid is {w, h, data: Uint16Array} — 0..65535 per sample, row-major from
-// the image's top-left. On the wire and on disk: {w, h, data: base64 of the
-// little-endian uint16s}, decoded once by the server at upload so every
-// consumer reads integers, never an image decoder's opinion of one.
+// A grid is {w, h, data: Uint16Array}, row-major from the image's top-left; on the wire base64 of little-endian uint16s,
+// decoded once by the server at upload so every consumer reads integers.
 
-// Grids are cached by ref, newest-used last, and only the last GRID_CACHE are kept: a world that has been
-// re-imaged many times does not hold every old image. A ref the disk loader could not find is remembered
-// for MISS_RETRY_MS, so a missing file is not re-read on every height sample. A FETCH that failed backs
-// off — FETCH_RETRY_MS, doubling to MISS_RETRY_MS — so a passing network fault costs seconds, not half a
-// minute. Nothing commits ground for a heightmap until its grid is here (shapeReady): browser and agent
-// keep the last ground they had, and rebuild once the grid lands (client/lib/world.js, mcpl/agent.ts).
+// grids cached by ref (last GRID_CACHE kept); a disk miss is remembered MISS_RETRY_MS, a failed fetch backs off from
+// FETCH_RETRY_MS. No ground commits for a heightmap until its grid is here (shapeReady).
 const GRID_CACHE = 8;
 const MISS_RETRY_MS = 30_000;
 const FETCH_RETRY_MS = 1_000;
@@ -209,20 +193,8 @@ export function shapeHeight(base, S, size) {
 }
 
 // ---- water ---------------------------------------------------------------------
-// One level per world, riding the terrain bag: `water: {level, color?, opacity?}`.
-// Every point of ground below `level` is under water, so one number makes every
-// low place a lake. It is presence-free world state like the ground itself:
-// rendered by every client, read by every agent, and (for now) ignored by the sim —
-// a thrown thing still lands on the lakebed.
-//
-// A body WADES until the water is at its chest, then SWIMS (waterStance): its feet leave the bed and it
-// floats with head and shoulders above the surface. Wading is slower the deeper it gets; swimming is
-// slower still. Nothing is walled off: the old 1 m wading wall is gone (wadeAllowed/waterBlocks now
-// always allow), and a planner prices water instead (waterCost). The client's controller and the agents'
-// walk both read these, from the body's own height.
-// THE LAW LIVES IN shared/mover.js (2026-10-15): the client's controller and the agents' walk step with the
-// one walker there, which reads the water through env.waterAt. These names are RE-EXPORTS of it, so a caller
-// that imported them from here reads the same numbers — never a second copy.
+// One level per world (`water: {level, color?, opacity?}`): ground below it is under water, drawn by every client and
+// read by agents; the sim ignores it. Wading and swimming live in shared/mover.js; these are re-exports, never a copy.
 export { waterStance, waterCost };
 export const SWIM_AT = MOVER.swim.at;         // of body height: deeper than this at the feet, the body floats (the chest)
 export const SWIM_SPEED = MOVER.swim.speed;   // m/s, a steady stroke

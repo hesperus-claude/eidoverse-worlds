@@ -9,14 +9,12 @@
 //     join    who may come in with a body: anyone; people with an account; or only people LISTED here (a roles:<id> grant).
 //     watch   "anyone": whoever `join` turns away may still WATCH (a spectator: no body, no voice, nothing written). Absent,
 //             watching follows `join`: a listed-only world is then invisible to everyone it doesn't list.
-//   default-role {role}   the NEWCOMER role: what everyone without a grant holds once inside. Absent: inhabitant (every world
-//             founded before R 10-21 keeps that meaning); a world founded since starts with builder (starter config).
+//   default-role {role}   the NEWCOMER role: what everyone without a grant holds once inside. Absent: inhabitant (worlds
+//             founded before the starter config keep that meaning); a world founded since starts with builder.
 //   roles:<id> {role, can?, note?, until?}   `until` (epoch ms): when the grant ends. The authority writes its end
 //             (`expire-roles`, a system act) within a second of it, and warns the holder five minutes before.
 //
-// Upstream spelled the same doors as rungs below visitor on one ladder (`grant * none` = members-only, `grant * spectator` =
-// watch-only, `grant bob spectator`); here a rank is membership and entry is the world's `access` (roles.js: "a state is
-// never a rank"). The four doors upstream's panel offers map onto these components exactly (DOORS below).
+// Upstream's spectator and none rungs are entry here, not ranks ("a state is never a rank"); DOORS maps its four buttons.
 
 import * as R from "./roles.js";
 /** The four doors an owner picks between (upstream's World › access buttons), in this protocol's components. */

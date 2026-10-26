@@ -1,23 +1,6 @@
-// flightpilot — turn a human's held keys into flight inputs, so the bench can
-// be FLOWN rather than only watched.
-//
-// Janus asked for this: "if it would ever be helpful for me to preview the
-// flight mechanics in eidoverse, i'd like to help do that, though you'd have to
-// give me an option to do flying as a human player through the UI."
-//
-// It is also the cheapest possible acceptance instrument. A clip proves the
-// leaf falls the way the spec says; a stick proves the SKY is a place, which is
-// the thing no test can assert. Mythos's §0 stance -- albatross, not
-// hummingbird, glide-biased, a body that is doing something honest between
-// verbs -- is a claim about how flying FEELS, and feel is measured by flying.
-//
-// The seam is deliberate and narrow: this converts intent into the same input
-// record a verb would produce, and the integrator cannot tell which one it got.
-// A pilot and an agent fly identical physics. If they did not, the bench would
-// be proving something about a bench.
-//
-// PURE, per shared/README.md: takes a set of held key codes and a dt, returns
-// an input record. No DOM, no listeners, no clock -- the caller owns all three.
+// flightpilot — turn a human's held keys into flight inputs, so the bench can be FLOWN rather than only watched.
+// It converts intent into the same input record a verb produces, so a pilot and an agent fly identical physics.
+// PURE, per shared/README.md: held key codes and a dt in, an input record out. No DOM, no listeners, no clock.
 
 /** Default bindings. Deliberately overlapping the walk controls (W/A/S/D +
  *  Space) so flying reads as a MODE of the same body rather than a second set
@@ -29,10 +12,8 @@ export const DEFAULT_BINDS = {
   bankRight: ['KeyD', 'ArrowRight'],
   flap:      ['Space'],                 // expensive; see spec §5
   spoil:     ['ShiftLeft', 'ShiftRight'],   // bleed altitude without gaining speed
-  // Rehearsal only. These EMIT the trusted events the Connectome adapter will
-  // one day emit for real -- they do not simulate a cut, they push the same
-  // button. See down-spec §4: the body cannot cry wolf, so there is no verb
-  // here, only the seam.
+  // rehearsal only: these EMIT the trusted events an adapter will emit for real; they push the same button, never
+  // simulate a cut (down-spec §4)
   rehearseDown:    ['KeyX'],
   rehearseRecover: ['KeyR'],
 };
@@ -40,18 +21,7 @@ export const DEFAULT_BINDS = {
 /** Control authority, per second, at the stick's full deflection. Config, like
  *  everything else -- an albatross is not a fighter and these numbers are how
  *  that is felt rather than said. */
-// Janus, flying it: "the avatar moves on a trajectory i can't really control".
-// The paper numbers looked reasonable and the FEEL did not, which is the whole
-// reason a stick exists next to the plots.
-//
-// The fault was levelReturn 0.7 against bankRate 1.2: holding a turn gave a NET
-// 0.5 rad/s, so the wings fought the hand the entire time and 60 degrees took
-// two seconds to reach and would not stay. A glider is stable, but stability
-// that overpowers the pilot is rails.
-//
-// levelReturn now applies only when the stick is CENTRED -- hands off she rolls
-// level, hands on she goes where she is put -- and the rates are roughly
-// doubled. An albatross is not a fighter, but it is not a tram either.
+// levelReturn applies only with the stick CENTRED: always on, it overpowered a held bank (the wings fought the hand)
 export const DEFAULT_AUTHORITY = {
   bankRate: 2.6,        // rad/s toward the commanded bank
   maxBank: 1.15,        // ~66deg
@@ -59,11 +29,7 @@ export const DEFAULT_AUTHORITY = {
   maxPitch: 0.7,        // ~40deg
   turnPerBank: 1.5,     // rad/s of yaw per radian of bank -- a banked wing turns
   levelReturn: 1.1,     // rad/s back to level -- ONLY with the stick centred
-  // spoilSink LIVED HERE and was dead: this module reports whether the spoiler
-  // is HELD, and how much sink that costs is physics, which stepPilot reads
-  // from cfg.pilot.spoilSink. Two 2.5s with nothing making them agree is the
-  // drift the cfg.pilot block was introduced to end, so the copy that nothing
-  // read is gone rather than left looking authoritative.
+  // no spoilSink here: this reports whether the spoiler is HELD; its sink is physics (cfg.pilot.spoilSink)
 };
 
 const held = (keys, list) => list.some((k) => keys.has(k));
@@ -108,10 +74,7 @@ export function pilotInput(keys, state, dt, opts = {}) {
   }
   pitch = clamp(pitch, -A.maxPitch, A.maxPitch);
 
-  // A banked wing turns. This is the whole of "flying" as far as heading is
-  // concerned -- there is no rudder, because an albatross does not have one
-  // worth modelling and a spec that says "glide-biased" should not grow a yaw
-  // stick by accident.
+  // a banked wing turns; there is no rudder (glide-biased, no yaw stick)
   const yawRate = A.turnPerBank * bank;
 
   const edges = [];
@@ -126,10 +89,7 @@ export function pilotInput(keys, state, dt, opts = {}) {
   };
 }
 
-// airspeedAfter lives in flight.js, with the rest of the physics: a verb-flown
-// climb must spend speed on exactly the same curve a hand-flown one does, and
-// two copies of that curve is two curves. Re-exported here so a caller wiring
-// up a stick has one import.
+// airspeedAfter lives in flight.js (a verb-flown climb spends speed on the same curve); re-exported for one import
 export { airspeedAfter } from './flight.js';
 
 /** Human-readable key hint for a HUD. */

@@ -2,9 +2,8 @@
 // replaces component values, deletes components and entities. It reads only the entry: never a blob, never the authority.
 // It is total: a malformed entry shapes nothing and is named in diagnostics, never in the world. A version it
 // doesn't implement gives "unknown version" and no world.
-// Ported from the protocol lab (the protocol lab's fold.js @ 11db981). Engine changes: sha256 comes from ./hash.js (sync, no
-// node: imports) so the browser imports this file as-is. Nothing else differs; the conformance suite (Python
-// reference reader vs this file) is tools/protocol/compare.ts.
+// sha256 comes from ./hash.js (sync, no node: imports) so the browser imports this file as-is. The conformance suite
+// (Python reference reader vs this file) is tools/protocol/compare.ts.
 import { sha256 } from "./hash.js";
 
 // §2.4: genesis says which log this is and which protocol reads it, in upstream's established shape: {dialect:
@@ -14,10 +13,9 @@ export const DIALECT = "eidoverse-log";
 export const VERSION = 4;
 export const MINORS = new Set([0]); // §3d H6: a reader that doesn't know the minor refuses the world (L1: no world)
 const MAX_LINE = 1 << 20, MAX_DEPTH = 64, BIG = 2 ** 53;
-// §2.1 + §2.4: `ts` is the authority's admission time; `head`/`sig` mark chain points (§2.1 still says `prev`; §2.4 and the reference reader say `head`)
-// The KERNEL (trial-kernel, PROTOCOL §4; shared/protocol/kernelspec.js pins these): the envelope, the kinds, the identity
-// grammar, the ops, genesis. A change to any of them is refused by the gate unless the same commit carries a translator,
-// a changelog line and old-reader/new-reader vectors (tools/protocol/kernel-check.ts)
+// §2.1 + §2.4: `ts` is the authority's admission time; `head`/`sig` mark chain points
+// The KERNEL (shared/protocol/kernelspec.js pins these): a change is refused unless the same commit carries a translator,
+// a changelog line and old/new-reader vectors (tools/protocol/kernel-check.ts)
 export const ENVELOPE = new Set(["world", "kind", "ts", "actor", "for", "grant", "by", "cause", "verb", "body", "head", "sig"]);
 export const KINDS = new Set(["genesis", "change", "act", "sim", "say", "purge", "sequencer"]);
 export const IDENT = "[a-z0-9-]{1,64}";
@@ -207,10 +205,8 @@ export function opsOf(e) {
   }
   return [shapeOne(verb, body, false, "")];
 }
-// `followUps` (review r9 H1 / scars M3): the indices of the ops in this batch that the AUTHORITY wrote as a consequence of the
-// asker's own ops (clearing the references to a thing the batch deleted; an undo putting such a reference back). The fold
-// applies them like any op; readers that derive authorship from the log (who set up a handler, who created a key) skip
-// them, so a follow-up never makes the asker the author of someone else's value. Strictly ascending, in range, non-empty.
+// `followUps`: indices of ops the AUTHORITY wrote as a consequence of the asker's (clearing refs to a deleted thing).
+// Folded like any op; authorship readers skip them, so a follow-up never makes the asker the author. Ascending, in range.
 function followUpsCheck(f, n) {
   if (!Array.isArray(f) || !f.length) bad("batch-followups", "not a non-empty array");
   f.forEach((k, i) => { if (!Number.isInteger(k) || k < 0 || k >= n || (i > 0 && k <= f[i - 1])) bad("batch-followups", JSON.stringify(k)); });
@@ -233,10 +229,9 @@ export function shapeOne(verb, b, inner, where) {
   return op;
 }
 
-// ---------- genesis (§2.4; §3d C1, H5, H6) ----------
-// body {dialect: "eidoverse-log", v: 4, minor, nonce, rewind_window?, parent?, owners: [[<key>…], …], quorum?, sequencer}. A malformed
-// genesis means "no world"; an unknown minor means "unknown version". The minor is read before the shape, so a later
-// minor may add fields; within a known minor the fields are exact (a typo such as `rewind_n` is not a default).
+// ---------- genesis (§2.4) ----------
+// body {dialect: "eidoverse-log", v: 4, minor, nonce, rewind_window?, parent?, owners: [[<key>…], …], quorum?, sequencer}.
+// Malformed = no world; unknown minor = unknown version (read first, so a later minor may add fields; known ones are exact).
 export const GENESIS_FIELDS = new Set(["dialect", "v", "minor", "nonce", "rewind_window", "parent", "owners", "quorum", "sequencer"]);
 // canonical unpadded base64url (one spelling per byte string), or null
 export function b64uDecode(s) {
@@ -333,10 +328,8 @@ function settledEntries(ok, worldId, d) {
     lastTs = t; }
   return ok;
 }
-// §12: a set written as {commit} with no value is a purge's work. One no purge names (none does, or the purge naming it is
-// one the fold refuses, as any aimed at a roles: value) was changed outside the one rule that changes the record. It folds
-// as absent(purged), unknown as every reader takes a purged value (§1), never as the value before it, and the diagnostic
-// says so (commit-unpurged: the line still shapes, so not malformed:). Said, not enforced: writes go on (house markup, #260 10-20).
+// §12: a set written as {commit} with no value is a purge's work; one no valid purge names folds as absent(purged),
+// never the value before it, with a commit-unpurged diagnostic (said, not enforced: writes go on)
 function unnamedStubs(ok, purged, d) {
   ok.forEach((e, seq) => { if (!e || e.kind !== "change") return;
     let ops; try { ops = opsOf(e); } catch (x) { if (x instanceof Malformed) return; throw x; }
@@ -405,10 +398,8 @@ export function applyCow(s, ops, seq = Infinity) {
 // op by index): a reader replaying a log a purge has touched writes PURGED where the strict fold does
 export function applyInPlace(s, ops, seq = Infinity, purged = null, batch = false) {
   const d = (q, code, detail = "") => s.diagnostics.push([q, code, detail]);
-  // a value stripped to its commit is a purge's work, and a caller with no purge map naming it (the authority's own
-  // appends, a live replica) can't read it: the line throws Malformed before any of its ops is applied, and the whole
-  // log is read instead (the authority's state re-folds it, whose unnamedStubs reads the line as unknown; a replica's
-  // purge resyncs it)
+  // a value stripped to its commit, with no purge map naming it, throws Malformed before any op applies, and the whole
+  // log is read instead (unnamedStubs reads it as unknown; a replica resyncs)
   const shaped = ops.map((o, i) => { const op = shapeOne(o.verb, o, true, "system"), by = purged?.get(`${seq}:${batch ? i : "-"}`);
     if ((o?.stripped || op.stripped) && by === undefined) bad("commit-unpurged", `${op.id}.${op.comp}`);
     return [op, by]; });

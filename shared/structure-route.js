@@ -8,10 +8,8 @@ export const ROUTE_MAX_CELLS = 16384;
 const EPS = 1e-9;
 const OPEN = new Set(['door', 'arch']);
 export const ROUTE_STEP_METRES = 0.5;
-/** Why an endpoint that isn't a finite point can't be routed. walk_to refuses
- *  a non-finite destination before it plans, so here the start (the body's
- *  own position) or the structure's placement, which carries both endpoints
- *  into its frame, wasn't finite. */
+/** Why an endpoint that isn't a finite point can't be routed: walk_to refuses a non-finite destination first, so here
+ *  the start or the structure's placement wasn't finite. */
 export const NON_FINITE_ENDPOINT = "an endpoint isn't a finite point in the structure's frame (the body's position or the structure's placement isn't finite), so it can't be routed, and calling again won't change that; if you need this walk, ask whoever runs this host";
 const cross = (ax, az, bx, bz) => ax * bz - az * bx;
 
@@ -38,10 +36,8 @@ function crossingRange(a, b, c, d) {
   return hi >= lo-EPS ? [lo,Math.max(lo,hi)] : null;
 }
 
-/** Cell bounds of authored geometry: every tile, and every wall's full cell
- * (which contains either diagonal and either axis), so a free-standing wall
- * without tiles still bounds the search. Empty geometry leaves minX at
- * Infinity. */
+/** Cell bounds of authored geometry: every tile and every wall's full cell, so a tile-less wall still bounds the
+ * search. Empty geometry leaves minX at Infinity. */
 function emptyBounds() { return { minX: Infinity, minZ: Infinity, maxX: -Infinity, maxZ: -Infinity }; }
 function includeLevel(bounds, level) {
   const include = (x, z) => {
@@ -65,11 +61,8 @@ const cellRange = (lo, hi, tile) => [Math.floor(lo / tile - BUCKET_MARGIN), Math
 // Weak keys retain neither replaced component revisions nor discarded plans.
 const routeGeometry = new WeakMap();
 
-/** What routing needs from one plan, derived once: every level's wall spans,
- * filed by the cells they touch so a check reads only the walls near its
- * segment; each cell's diagonals, which a terrain walker's graph chooses
- * among per walk (see terrainCells); and the bounds of all authored
- * geometry, which a terrain walker's search covers. */
+/** What routing needs from one plan, derived once: each level's wall spans filed by the cells they touch, each cell's
+ * diagonals (terrainCells chooses among them per walk), and the bounds of all authored geometry. */
 export function routeGeometryFor(plan) {
   let prepared = routeGeometry.get(plan);
   if (prepared) return prepared;
@@ -167,16 +160,9 @@ export function prepareWallCheck(plan, basis) {
   };
 }
 
-/** The cell graph a terrain walker searches: the diagonals that cut its
- * cells, chosen for this walk. Levels can cut one cell along different
- * diagonals, and the one that matters is the one a walker meets: the
- * diagonal whose span meets the feet-to-step band at the cell centre's
- * terrain height. When both do, the cell is cut both ways, which two halves
- * can't represent; ↘ is taken, and legs that would cross ↗ fail the wall check
- * and route elsewhere. A diagonal no level's band meets leaves the cell
- * whole. Only diagonals are carried: the node helpers read nothing else of a
- * level for a terrain walker (openings are in the spans, and half floors
- * don't bound one), and the search's bounds come from all levels. */
+/** The cell graph a terrain walker searches: per cell, the diagonal whose span meets the feet-to-step band at the cell
+ * centre's terrain height (both: ↘ is taken, and legs crossing ↗ fail the wall check); none leaves the cell whole. Only
+ * diagonals are carried; bounds come from all levels. */
 export function terrainCells(plan, heightAt, band) {
   const { diagonals } = routeGeometryFor(plan), g = plan.grid, walls = new Map();
   for (const [cell, options] of diagonals) {
@@ -189,10 +175,8 @@ export function terrainCells(plan, heightAt, band) {
   return { walls };
 }
 
-/** The result distinguishes a validated direct leg from a refused route.
- * A refused search is never permission to walk the direct leg. The search
- * covers `bounds` (a level's own when omitted), padded by one cell; `scale`
- * is world metres per local metre, for the refusal's figures. */
+/** A validated direct leg or a refused route; a refused search is never permission to walk the direct leg. Searches
+ * `bounds` (the level's own when omitted) padded by one cell; `scale` (world m per local m) is for the refusal's figures. */
 export function routeLevel(level, g, from, to, outdoors, clear, { bounds, scale = 1 } = {}) {
   const blocked = reason => ({ kind: 'blocked', reason, points: [] });
   if (![...from, ...to].every(Number.isFinite)) return blocked(NON_FINITE_ENDPOINT);

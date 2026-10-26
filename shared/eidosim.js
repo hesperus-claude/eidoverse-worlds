@@ -1,10 +1,10 @@
 // eidosim: our own rigid-body engine. Plain JS float64, no build.
-// COVENANT (DESIGN.md): only + − × ÷ Math.sqrt, comparisons, Math.abs/min/max/floor. No Math.hypot, no transcendentals
+// COVENANT (spec/PHYSICS.md): only + − × ÷ Math.sqrt, comparisons, Math.abs/min/max/floor. No Math.hypot, no transcendentals
 // (simmath.js when they're needed). Fixed iteration order everywhere: creation index, and pairs sorted (a, b).
 // Constants are the version.
-// Solver: Box3D's soft step, studied from source with credit (erincatto/box3d, MIT; Catto, "Solver2D", 2024; soft
-// constraint coefficients after Ross Nordby). Per substep: integrate velocities → warm start → push (normal only, soft)
-// → integrate positions → relax (normal rigid + friction). See DESIGN.md "Studied 2026-10-09".
+// Solver: Box3D's soft step, studied from source with credit (erincatto/box3d, MIT, THIRD-PARTY.md; Catto, "Solver2D";
+// soft constraint coefficients after Ross Nordby). Per substep: integrate velocities → warm start → push (normal only,
+// soft) → integrate positions → relax (normal rigid + friction).
 export const VERSION = "eidosim@1.0.0";
 export const _test = {};   // internals exposed to the engine's tests only
 
@@ -238,10 +238,8 @@ function collide(A, B, M) {
 }
 
 // ---- ground (a height field) ----
-// One normal per manifold, the field's slope under the body's centre (central differences, exact ops); each corner (box) or
-// the sphere's lowest point gives a point whose separation is its height above the field measured along that normal. The
-// speculative margin grows with how fast the body closes on the ground this step (its normal speed plus its spin's reach),
-// so a fast body meets the field before passing it: the field is continuous, so its tangent plane is no phantom.
+// One normal per manifold (the field's slope under the body's centre, exact ops). The speculative margin grows with the
+// body's closing speed this step, so a fast body meets the field before passing it.
 const FIELD_EPS = 0.01;
 function groundContact(height, b, dt) {
   const x = b.p[0], z = b.p[2];
@@ -337,11 +335,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     for (const b of bodies) updateInertia(b);
     manifolds = [];
     const jointed = new Set(joints.filter((j) => j.alive && j.a >= 0 && j.b >= 0).map((j) => `${Math.min(j.a, j.b)}:${Math.max(j.a, j.b)}`));
-    // WAKE WHOLE ISLANDS (as Box3D's persistent islands; review 10-09 #3): a sleeping island remembers its tag; if any
-    // member was woken (API) or an awake body reaches one (AABB pair or joint), the whole tagged island wakes BEFORE
-    // contacts are built, so its internal contacts exist this step and warm-start from their kept impulses
-    // wokeBy (transient, read by a host right after the step): the uid of the awake body whose reach woke this one,
-    // carried down a cascade to the body that started it; never exported, never an input
+    // wake whole islands (as Box3D's persistent islands) BEFORE contacts are built, so internal contacts exist this step and
+    // warm-start. wokeBy: transient uid of the waking body, carried down a cascade; never exported, never an input.
     for (const b of bodies) b.wokeBy = undefined;
     const wakeTag = (t, by) => { for (const b of bodies) if (b.sleepTag === t) { b.awake = true; b.sleepTime = 0; b.sleepTag = undefined; b.wokeBy = by; } };
     for (const b of bodies) if (!b.static && b.awake && b.sleepTag !== undefined) wakeTag(b.sleepTag, b.uid);
@@ -521,12 +516,9 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
           imp(m.A, -1, d1, m.t1, m.cA); imp(m.B, 1, d1, m.t1, m.cB); imp(m.A, -1, d2, m.t2, m.cA); imp(m.B, 1, d2, m.t2, m.cB); }
       }
     }
-    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c:556–611, distance.c:1709). Review
-    // round 2 (10-09): (1) sweep against STATIC bodies only (a dynamic one frozen at its end pose dragged formation flyers);
-    // (2) never defer to the solver for a fast body: one speculative edge point can't stop a box at 20 m/s (it pivots on
-    // the point and passes through), and collide() could even return nothing at 1.4 cm; skip only real overlap; (3) a sphere's target lets it sink one slop, so sliding over flush seams never "hits";
-    // a hit at t = 0 is ignored (Box3D's 0 < fraction); (4) rotation is swept too: q interpolated, and the advancement
-    // bound counts the arc a corner can travel; (5) the time lost to the clamp gives back its gravity (timeLoss·g).
+    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c, distance.c): static bodies only;
+    // never defer a fast body to the solver (a speculative point can't stop a box at 20 m/s); t = 0 hits ignored; rotation
+    // swept too; the time lost to the clamp gives back its gravity (timeLoss·g).
     for (const b of bodies) {
       if (!b.ccd || !live(b)) continue;
       const D = sub(b.p, b.p0), travel = len(D), qEnd = b.q, q0 = qconj(b.q0c);

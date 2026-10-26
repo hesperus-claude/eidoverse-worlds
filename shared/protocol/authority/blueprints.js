@@ -1,8 +1,6 @@
-// shared/protocol/authority/blueprints.js — blueprints (publish, update, create {from}, duplicate) and the reads: describe
-// (a thing as an accessibility tree) and the read verbs (help, look, inspect, measure, find, lint, history) as READ_VERBS,
-// which authority.js spreads into VERBS where they stood (refactor split, 2026-10-17; moved from authority.js's
-// "blueprints" and "reads" sections and the VERBS table unchanged). schema stays in VERBS beside the capacity it reports.
-// The write path's resolve/mint and the history readers are above it, reached through UP.
+// shared/protocol/authority/blueprints.js — blueprints (publish, update, create {from}, duplicate) and the reads:
+// describe (a thing as an accessibility tree) and READ_VERBS (help, look, inspect, measure, find, lint, history), which
+// authority.js spreads into VERBS. schema stays in VERBS beside capacity. resolve/mint and the history readers are UP.
 import { grabOf, describeGrab } from "../../grab.js";
 import { isEntityId, PURGED } from "../fold.js";
 import { COMPONENTS, mapRefs } from "../componentspec.js";
@@ -89,12 +87,9 @@ function publishGroup(ctx, a, w, roots) {
   const hash = w.putBlob(record); ctx.notes.push({ record: hash, parts: parts.length, roots: roots.length }); ctx.refs.add("@world");
   return [setOp("@world", blueprintKey(hash), { name: record.name, parts: parts.length })]; // who published it is a view (creatorOf), never stored (L2)
 }
-// A record's part keys, unique within it (review 10-07 N1: a table holding two copies of a published leg got the keys
-// [top, leg, leg], and no copy of it could ever be placed). A part keeps the key it was copied as (blueprint.key) only
-// when it comes from the same record as what's being published (`lineage`: re-publishing an edited copy, so update {copy,
-// to} still matches part to part); a part nested from another record (a leg inside the table) is keyed by its id. Those
-// come first, so a nested part never takes a key the lineage needs; a key already taken falls back to the id, then to the
-// id with a number. Returns id → key.
+// a record's part keys, unique within it: a part keeps its copied key only when from the same record (`lineage`, so
+// update {copy, to} still matches part to part); nested parts are keyed by id, after the lineage's, falling back to the
+// id, then id plus a number. Returns id → key.
 function partKeys(st, ids, lineage, reserved = []) {
   const taken = new Set(reserved); const out = new Map();
   const own = (id) => { const b = st.entities[id].c["copy-of"]; return lineage !== undefined && b?.from === lineage && typeof b.key === "string" ? b.key : null; };
@@ -120,10 +115,8 @@ function buildUpdate(ctx, a, w) {
   const have = new Map(); for (const id of [a.copy, ...descendants(ctx.st, a.copy)]) { const k = ctx.st.entities[id].c["copy-of"]?.key; if (k !== undefined && !have.has(k)) have.set(k, id); }
   const fresh = partIds(ctx.st, a.copy, base.root, theirs.parts.map((p) => p.key).filter((k) => !have.has(k)));
   const idOf = (key) => (key === base.root ? a.copy : have.get(key) ?? fresh.get(key));
-  // references are merged as values in this world's ids: a part key → its id here (an unknown key is unbound, as on copy).
-  // A part's parent too: it merges like any component, so a part reparented upstream is reparented here (Antra's review
-  // of f91840e5: the merge skipped parent for every existing part, leaving a reparented part's new local transform under
-  // its old parent, 3 m off). The copy's root has no parent in a record (where the copy sits is its own).
+  // references merge as values in this world's ids (unknown keys unbound), and a part's parent merges like any component,
+  // so a part reparented upstream is reparented here. The copy's root has no parent in a record.
   const inIds = (c) => { const o = rebindAll(clone(c), (x) => idOf(x) ?? null); if (o.parent) o.parent = { ...o.parent, to: idOf(o.parent.to) }; return o; };
   const B = Object.fromEntries(base.parts.map((p) => [p.key, inIds(p.components)])), T = Object.fromEntries(theirs.parts.map((p) => [p.key, inIds(p.components)]));
   const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
@@ -136,10 +129,8 @@ function buildUpdate(ctx, a, w) {
     const id = idOf(key), mineE = ctx.st.entities[id];
     if (!B[key]) { const c = clone(T[key]); c["copy-of"] = { from: a.to, key };   // its parent is already in ids (inIds)
       made.push(...createOps(id, c)); continue; }   // made first: an existing part may be reparented onto a new one
-    // a part the newer version drops goes only if this copy left it as it came: each component it came with unchanged, and
-    // none added since. What the authority stamps isn't this copy's change (house 6340433633): physics.shape is its measure
-    // of the model, and physics {kind: static | kinematic, shape} alone is what it gives every modelled thing in a world that
-    // runs physics (followups.js stampShapes)
+    // a part the newer version drops goes only if this copy left it as it came; the authority's own stamps (physics.shape,
+    // a static physics on a modelled thing: followups.js stampShapes) aren't this copy's change
     if (!T[key]) { if (mineE && Object.keys(B[key]).every((k) => skipComp.has(k) || eq(unstamp(k, B[key][k]), unstamp(k, mineE.c[k]))) && Object.keys(mineE.c).every((k) => skipComp.has(k) || Object.hasOwn(B[key], k) || onlyStamp(k, mineE.c[k]))) ops.push(delOp(id)); else if (mineE) orphaned.push(id); continue; }
     if (!mineE) { kept.push({ id, why: "you deleted it in this copy" }); continue; }
     for (const comp of new Set([...Object.keys(B[key]), ...Object.keys(T[key])])) {
@@ -172,10 +163,8 @@ function buildUpdate(ctx, a, w) {
       if (choice === "theirs") { const cur = ops.findLast((o) => o.id === id && o.comp === c.component)?.value ?? clone(ctx.st.entities[id].c[c.component]);
         const v = f ? { ...cur, [f]: c.theirs[f] } : c.theirs; ops.push(setOp(id, c.component, v)); } } }
   ops.push(setOp(a.copy, "copy-of", { ...root.c["copy-of"], from: a.to }));
-  // every part of this lineage still in the record advances with the root (Antra's review of f91840e5: only the root's
-  // copy-of.from moved, so re-publishing an updated copy keyed its parts by id — partKeys keeps a key only for parts from
-  // the root's record — and updating another copy to that record found two bulbs where there was one). A part nested
-  // from another record keeps its own lineage; one gone upstream (orphaned) is no longer the record's.
+  // every part of this lineage still in the record advances with the root, or a re-publish keys them by id; a part
+  // nested from another record keeps its own lineage
   const was = root.c["copy-of"].from;
   for (const [key, id] of have) { const c = ctx.st.entities[id]?.c["copy-of"];
     if (id !== a.copy && T[key] && c?.from === was) ops.push(setOp(id, "copy-of", { ...c, from: a.to })); }
@@ -213,11 +202,8 @@ function buildCreateFrom(ctx, a) {
   return ops;
 }
 
-// Duplicate (slice 3b; PARITY (b)3): create {from: <a live thing's id>} copies it and everything attached to it, as one
-// explicit batch (L1: the fold sees plain creates). The copy keeps the source's parent (a sibling of it), so its
-// transform stays local to that parent; `at` replaces fields of the root's transform (local to that parent too), and
-// without it the copy sits 0.5 m along x from the source. `lock` isn't copied: a copy is something you're about to
-// move. Who made the copy is the create entry's actor (a view, L2).
+// duplicate: create {from: <id>} copies it and everything attached as one explicit batch (L1). The copy keeps the
+// source's parent; `at` replaces root transform fields, else 0.5 m along x. `lock` isn't copied (you're about to move it).
 function buildDuplicate(ctx, a) {
   const st = ctx.st, src = a.from;
   if (src === "@world" || !st.entities[src]) refuse("not-found", `no thing called '${src}' to copy`, "from takes a blueprint hash (sha256:…) or the id of a thing here", { didYouMean: guess(String(src), Object.keys(st.entities)) });
@@ -245,10 +231,8 @@ function buildDuplicate(ctx, a) {
 // a thing in a refusal's words: its label and its id (R 10-17: an id is opaque; the label is what a reader calls it)
 const thingSaid = (st, id) => { const l = st?.entities?.[id]?.c?.label; return typeof l === "string" && l.trim() ? `${l.trim()} (${id})` : id; };
 // ---------- reads ----------
-// R 10-07: a thing reads like an accessibility tree (PROTOCOL §4): its name, its description (alt text; a look clips it,
-// inspect has it whole), then what it can do and its state, generated from its components by shared/a11y.js, the reading
-// mcpl's look and the inspector share
-// a surface's size as a placement reads it: a turned top's own rectangle (with its x axis on the ground), else its box
+// a thing reads like an accessibility tree (PROTOCOL §4): name, description, then what it can do and its state (shared/a11y.js)
+// a surface's size as a placement reads it: a turned top's own rectangle (x axis on the ground), else its box
 const surfaceSize = (s) => (s.rect ? { size: [r3(2 * s.rect.hx), r3(2 * s.rect.hz)], xAxis: s.rect.u.map(r3) } : { size: [r3(s.max[0] - s.min[0]), r3(s.max[1] - s.min[1])] });
 function describe(st, id, live = {}, holds = {}, { full = false, w = null } = {}) {
   const e = st.entities[id]; const t = worldT(st, id); const g = grabOf(e.c); const name = e.c.label ?? modelOf(e.c.model)?.label ?? e.c.model ?? id;
@@ -294,10 +278,8 @@ const READ_VERBS = {
     const kids = kidsMap(st); const order = []; const tree = (id, d, n = 0) => { if (n > 64) return; const sock = isSocketC(st.entities[id]?.c); if (!sock) order.push([id, d]); for (const k of kids.get(id) ?? []) tree(k, sock ? d : d + 1, n + 1); };
     ids.forEach((id) => tree(id, 0));
     const all = order.slice(0, lim).map(([id, d]) => ({ ...describe(st, id, live, w.presence.holds, { w }), depth: d })); const total = order.length;
-    // consent is each person's own (consent gaps 6a, R 10-17 02:45): a viewer sees THEIR table, and who poses, drags or touches
-    // them; of anyone else only where they stand, plus what the viewer is doing to them. Another body's stranger cells and
-    // pause would undo the uniform refusal words (a stranger who reads touch: everyone and is then refused learns they
-    // personally are denied), and who touches whom is nobody else's business
+    // consent is each person's own: a viewer sees THEIR table and who acts on them; of anyone else only where they stand.
+    // Another body's cells would undo the uniform refusal words, and who touches whom is nobody else's business.
     const P = w.presence; const bodies = Object.entries(P.bodies).map(([id, b]) => ({ id, at: b.at,
       ...(id === actor ? { shield: shieldOf(P, id) } : {}),
       ...(b.poseBy && (id === actor || b.poseBy === actor) ? { posedBy: b.poseBy } : {}), ...(b.draggedBy && (id === actor || b.draggedBy === actor) ? { draggedBy: b.draggedBy } : {}),

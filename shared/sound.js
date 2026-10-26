@@ -1,35 +1,16 @@
-// sound — what a `sound` component MEANS. Shared verbatim between the browser
-// host (client/lib/sounds.js) and the mcpl agent (text-tier perception), so
-// the two can never describe different sounds.
+// sound — what a `sound` component MEANS. Shared verbatim between the browser host (client/lib/sounds.js) and the
+// mcpl agent (text-tier perception), so the two can never describe different sounds.
 //
-//   comp {id, type: "sound", data: {src, playing?, loop?, volume?, pitch?, near?, radius?, spatial?, t0?, alt?}}   (batch 2: look → alt)
+//   comp {id, type: "sound", data: {src, playing?, loop?, volume?, pitch?, near?, radius?, spatial?, t0?, alt?}}
 //   comp {id, type: "sound", data: null}          # silence it
 //
-// A sound is an audio file playing FROM an entity: positional, in the world,
-// heard louder the closer you stand. The radio prop is the first carrier —
-// the music player of the projector ladder (anima_dev/eidoverse_projector_
-// design.md) with a file where the stream will be; the captions comp (#187)
-// rides the same entity and says what the words are.
-//
-// (Batch 2, R 10-07: an https link is a source too now; shared/mediasrc.js decides whose browser may fetch it,
-// and an untrusted host is fetched only for a viewer who opted in. What follows is the rule for the store paths.)
-// SOURCE ALLOW-LIST — the picture's rule, for audio: a library-relative path
-// under `eidoverse/assets/` (what the operator placed) or `store/audio/` (what
-// came in through `POST /upload?as=audio`, sniffed by bytes), never a URL. A
-// stream from the projector appliance is rung 3's business and arrives with
-// the clock plumbing; a file is a placed asset inside the log's trust boundary.
-//
-// THE CLOCK. `t0` is the authority's clock, in epoch milliseconds, when
-// playback (re)started, so every listener — and every late joiner — hears the
-// same place in the track: the playhead is (serverNow - t0) mod duration when
-// looping, serverNow() being each reader's estimate of the authority's clock
-// (client/lib/serverclock.js in a browser, mcpl/agent.ts serverNow() in an
-// agent). The authority stamps it when a sound starts playing; without it each
-// client starts from the top and they drift.
-//
-// THE LOOK LINE. A text-tier resident cannot hear. `look` says what is
-// playing (≤200 chars) and that sentence, with playing/paused, is what
-// look() carries. Nothing about the waveform is ever claimed.
+// An audio file playing FROM an entity: positional, louder the closer you stand.
+// SOURCES: a library path under `eidoverse/assets/` or `store/audio/` (sniffed by bytes), or an https link gated per
+// viewer by shared/mediasrc.js.
+// THE CLOCK. `t0` is the authority's clock (epoch ms) when playback (re)started, stamped by the authority, so every
+// listener and late joiner hears the same place: playhead = (serverNow - t0) mod duration when looping
+// (client/lib/serverclock.js, mcpl/agent.ts serverNow()).
+// ALT. A text-tier resident cannot hear: `alt` says what is playing (≤200 chars); nothing about the waveform is claimed.
 
 import { mediaTier } from './mediasrc.js';
 import { graphemes, graphemeList, quoted } from './text.js';

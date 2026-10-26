@@ -1,7 +1,6 @@
 // shared/protocol/authority/bodyconsent.js — body consent: every act on another body is gated here, before delivery, and
-// the BODY_VERBS (consent, body, reach, inbox) answer for it (refactor split, 2026-10-17; moved from authority.js's "body
-// consent" section unchanged). Presence only: nothing here is ever appended. The body's own track (body, dist, gripPoint)
-// lives in the physics section above it, reached through UP.
+// the BODY_VERBS (consent, body, reach, inbox) answer for it. Presence only: nothing here is ever appended. The body's
+// own track (body, dist, gripPoint) is reached through UP.
 import * as C from "../consent.js";
 import { REACH, BODY_REACH } from "../physconst.js";
 import { r3 } from "../round.js";
@@ -56,13 +55,9 @@ function bodyGate(w, from, to, kind, extra = {}) { syncDefault(w);
     return result("asked", { ok: true, asked: true, ask: id }); }
   return { ok: true, consent: d.standing === "allow" ? "allowed" : "standing", deliver: () => { ringPush(P, { ts: now, from, to, cls, verdict: "allowed" }); deliver(w, from, to, kind, cls, extra, "standing"); } };
 }
-// The relay's question about a reach DESCRIPTOR (shared/reachwire.js: a hand streamed in a pose toward another body, design
-// review 10-15 item 1): may `from`'s hand rest on `to` as `cls` (touch | intimate) right now? Asked per presence packet, so it
-// is presence only: nothing is appended, no ask is made (the relay can't wait; the `reach` verb asks), and the refusal
-// counter that leads to a moderator-log cool-down is NOT fed (a stream of frames is one attempt, not fifty). Admitted when
-// `to`'s table says allow (a standing allow included), or when the `reach` verb already admitted this touch (an ask
-// answered yes: P.reaches, which revokeAfter clears when the table closes). A refusal is said to the reacher in the body
-// inbox, and to the target's attempt ring, once per (from, to, cls) per C.REACH_NOTE_MS; `noted` says whether it was now.
+// the relay's per-packet question about a reach DESCRIPTOR (shared/reachwire.js): may `from`'s hand rest on `to` as
+// `cls` now? Presence only: no append, no ask, no refusal counter (a stream is one attempt). Admitted on allow or an
+// asked yes (P.reaches); a refusal is said once per (from, to, cls) per C.REACH_NOTE_MS (`noted`).
 export function reachAdmits(w, from, to, cls, { point = null, limb = null, quiet = false } = {}) { syncDefault(w);
   const P = w.presence, now = w.now();
   if (from === to) return { ok: true, consent: "self" };
@@ -116,11 +111,9 @@ function deliver(w, from, to, kind, cls, extra, consent) {
   if (cls === "touch" || cls === "intimate") (P.reaches ??= {})[from] = { to, cls, point: extra.spec?.point ?? null, until: w.now() + C.REACH_GRANT_MS, ...(consent === "asked" ? { asked: true } : {}), ...sponsor };
   inboxPush(P, to, { type: "body", from, kind, cls, consent, ...(extra.spec ? { spec: extra.spec } : {}) }); w.presenceDirty = true;
 }
-// After any change to `to`'s table: whatever someone is doing to them that the table now says nobody to ends NOW, and the
-// actor hears body-revoked once (42 §4.6). A pose or drag granted by an ask outlives a later 'ask' cell; only 'deny' ends
-// it. A touch is held to more (r2 holes F3 (c)): its cell moving to anything but allow is a change of mind, and ends it
-// (`before`: reachModes before the change, so a change to some other class leaves a yes standing).
-// The world's body-default (accept | ask | refuse), read where a decision is made: absent or unknown = accept.
+// after any change to `to`'s table, what it now forbids ends NOW, told once (42 §4.6): an asked pose or drag ends only on
+// 'deny', a touch on anything but allow (`before` keeps other classes' yeses).
+// the world's body-default (accept | ask | refuse), read where a decision is made: absent or unknown = accept.
 function syncDefault(w) { const v = w.state?.()?.entities?.["@world"]?.c?.["body-default"]; if (C.SWITCHES.includes(v)) w.presence.bodyDefault = v; else delete w.presence.bodyDefault; }
 function revokeAfter(w, to, before = {}) { syncDefault(w); const P = w.presence, b = P.bodies[to], now = w.now(); if (!b) return [];
   const ended = []; const end = (actor, sponsor, cls, clear) => { if (decideAs(P, actor, sponsor, to, cls, now).mode !== "deny") return; clear(); ended.push({ actor, class: cls }); inboxPush(P, actor, { type: "body-revoked", by: to, class: cls }); };

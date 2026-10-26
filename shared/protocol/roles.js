@@ -1,19 +1,9 @@
-// shared/protocol/roles.js — who may do what in a world (RESEARCH-roles-moderation-2026-10-06; PLAN decisions 10-06).
-// Pure data and pure functions: the authority (shared/protocol/authority.js) reads them to admit writes, the server reads them through
-// the authority to tell a client its rights, and the client reads them to draw badges, menus and the roles grid. No state
-// of its own, no clock, no imports: a browser and bun import the same file.
+// shared/protocol/roles.js — who may do what in a world. Pure data and functions, no state, clock or imports: the
+// authority admits by them, the server tells a client its rights through them, the client draws badges and menus.
 //
-// THE SANCTIONED SOCIETY. A world's people stand on one ranked ladder, and the ladder is MEMBERSHIP only:
-//   inhabitant 0 · builder 100 · moderator 200 · owner 255, and an owner's custom roles at any free rank in between.
-// (R 10-21: the base rung is `inhabitant`: you belong here and may make it home, without building it. It was `visitor`,
-// renamed because visitor sat too close to `guest`, which is the conventional word for a person without an account, and
-// the two are different axes: guest says whether we know you across visits, a role says what you may do. A guest holds
-// a role like anyone else, and a world may give guests any role it gives newcomers (default-role.guests).)
-// "Below you" is a total order on it (ranks are unique), and every rank comparison compares two members.
-// Outside the ladder sit explicit UNRANKED states, never rungs: Banned (not in the world at all; the moderator log
-// holds it: reason, by, until), and the timed ones (muted, kicked). A state is never compared as a rank, and a rank can't
-// express a state: that is why banned is not "rank -5". There is no rung below inhabitant (`none` is gone, R 10-21: a ban or
-// a mute does that job), so no gate can meet a sub-floor role.
+// One ranked ladder of MEMBERSHIP: inhabitant 0 · builder 100 · moderator 200 · owner 255, custom roles at any free rank
+// between; ranks are unique, so "below you" is a total order. Guest is a separate axis (known across visits or not),
+// not a role. Banned, muted and kicked are UNRANKED states, never rungs, so no gate can meet a sub-floor role.
 
 // ---------------- the five defaults R hasn't ruled on yet (one value each: flip it here) ----------------
 /** Q1: caption is a property of the SCREEN it captions, not a role switch (true = off the role list). */
@@ -168,11 +158,9 @@ export function guestRoleOf(wc) {
   return g;
 }
 
-/** A person's effective rights: {role, name, rank, can: {<permission>: bool}, permissions: [names on]}.
- *  The role's permissions, then the default role's `can` (default-role.can, for those who hold the default role: an imported
- *  world's grant to everyone), then the per-person `can` (applied last: Discord's member overwrites), then closed over dependencies. Owners hold every
- *  permission whatever `can` says (their column is locked); `can.fly: true` may still give an owner flight when OWNERS_FLY
- *  is off. */
+/** A person's effective rights: {role, name, rank, can: {<permission>: bool}, permissions: [names on]}. The role's
+ *  permissions, then default-role.can, then the per-person `can` (last, as Discord's overwrites), closed over dependencies.
+ *  Owners hold every permission; `can.fly: true` may still give an owner flight when OWNERS_FLY is off. */
 export function effectiveOf(wc, id, opts = {}) {
   const role = roleIdOf(wc, id, opts); const def = roleDef(wc, role) ?? roleDef(wc, "inhabitant");
   let can = { ...def.can };
@@ -241,10 +229,9 @@ export function guessSwitch(k) {
 }
 
 // ---------------- what one person may do to another (the person menu; pure, unit-tested) ----------------
-/** The items of the person menu `me` sees for `them`. me/them: {id, rank, permissions: [..], role?, name?} (from
- *  effectiveOf); state: {muted?: bool, banned?: bool}. Returns [{id, label}] in menu order, plus
- *  {id: 'rank-line', label, dim: true} when rank is the only reason nothing more shows. Never yourself beyond Mention
- *  (a public @name in chat; it was Message, a DM tab, until whisper left world chat, R 10-18). */
+/** The items of the person menu `me` sees for `them` (both {id, rank, permissions, role?, name?} from effectiveOf; state
+ *  {muted?, banned?}) → [{id, label}] in menu order, plus {id: 'rank-line', label, dim: true} when rank is the only reason
+ *  nothing more shows. Never yourself beyond Mention (a public @name in chat). */
 export function personActions(me, them, state = {}) {
   const out = [{ id: "mention", label: "Mention" }];
   if (!me || !them || me.id === them.id) return out;

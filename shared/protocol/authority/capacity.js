@@ -8,27 +8,19 @@ import { isE, opsQuiet } from "./storage.js";
 import { SOCKETS_PER_HOST, isSocketC } from "./sockets.js";
 import { RESERVED, entryBy } from "./rights.js";
 
-// How much a world holds (review 10-06 S0-2, security pass 2; ONE budget since R 10-15 22:48): at most
-// @world.capacity.entities entities, every one but @world, sockets included (a socket is a child entity); and the world's
-// account-less people TOGETHER at most capacity.guestEntities standing entities they made: a guest is a fresh identity
-// per connection, so no per-identity budget stopped one from filling a world. Only a write that adds entities is refused
-// (full); deleting, and every other change, stay open at the cap. capacity.avatar isn't enforced (no avatar trees yet).
-// CAPACITY is this server's default for each absent field, and CAPACITY_CEILING the most an owner may set: server policy
-// (PROTOCOL §9.2), reported by schema, never pinned in the registry. entities 10 000 is what scale-check C2 fills under
-// budget; 50 000 is the owner's ceiling, not measured.
+// how much a world holds, ONE budget: at most capacity.entities (sockets included, @world not), and the world's
+// account-less people TOGETHER at most capacity.guestEntities (a guest is a fresh identity per connection). Only adding
+// is refused (full). CAPACITY is the server's default, CAPACITY_CEILING an owner's maximum: policy (PROTOCOL §9.2), never
+// pinned. capacity.avatar isn't enforced yet.
 export const CAPACITY = { entities: 10000, guestEntities: 500, avatar: 2000 };
 export const CAPACITY_CEILING = { entities: 50000, guestEntities: 50000, avatar: 5000 };
 const capacityOf = (st) => { const ok = (x) => Number.isInteger(x) && x >= 0;
   // read through the registry's one versioned-name reader (§4); with no capacity@n registered it is plain `capacity`
   const { name, value: v } = resolveVersioned(st.entities["@world"]?.c, "capacity"); const D = CAPACITY;
   return { ...Object.fromEntries(Object.keys(D).map((k) => [k, ok(v?.[k]) ? v[k] : D[k]])), name }; };   // name: the registry key the world is read under, for refusals to cite
-// Whose rights made a thing count in the guests' pool: an identity the directory calls anonymous, or one it doesn't know
-// at all. The directory writes every account and imported identity (a translated world's are written with it) and never
-// an anonymous one, which lives only in the process that minted it. So after a restart an earlier guest is an id nobody
-// here knows, and what it made still counts. The rule rests on every other actor having a directory entry here: a
-// creator from before the directory, or from a world made on another server, counts too (said apart in the refusal).
-// The authority's own identities and an unknown author (a purged cause: null) are nobody's guest; with no directory,
-// nobody is. → "anon" | "unknown" | null
+// counts in the guests' pool: an identity the directory calls anonymous or doesn't know (guests aren't written, so after
+// a restart an old guest is unknown and still counts). The authority's own identities and an unknown author (a purged
+// cause) are nobody's guest; with no directory, nobody is. → "anon" | "unknown" | null
 const guestKind = (w, id) => { if (typeof id !== "string" || !w.kindOf || RESERVED.has(id)) return null; const k = w.kindOf(id);
   return k === "anon" ? "anon" : k == null ? "unknown" : null; };
 // how many entities in the guests' pool still stand in st, how many of those an unknown creator made, and how many of

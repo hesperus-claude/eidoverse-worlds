@@ -56,15 +56,11 @@ export function qAxisAngle(axis, angle) {
   return [axis[0] * s, axis[1] * s, axis[2] * s, cosT(h)];
 }
 
-/** The world pose of a parent chain, root first, each link a local { pos, q, scale: [x, y, z] } in its parent's frame.
- *  The protocol's rule is glTF's (PROTOCOL §9.3): local = T · R · S, world = parent's world × local. This returns a TRS,
- *  not a matrix, so it is exact for the position (parent pos + R·(S·pos)) and exact for q and scale whenever every
- *  ancestor's scale is uniform; under a non-uniformly scaled ancestor a rotated child's true world transform shears (no
- *  TRS holds it), and here its q is the plain product and its scale the component-wise product (Unity's lossyScale).
- *  The stored data had 0 such cases at the shape audit (10-16).
- *  The authority compares this as JSON text with the engine's rests (authority/checks.js) and the engine's conformance
- *  digests start from it, so its float order is pinned: no renormalization between links. */
-// TODO(shape audit 10-16): return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
+/** The world pose of a parent chain, root first, each link a local { pos, q, scale: [x, y, z] } (PROTOCOL §9.3, glTF:
+ *  world = parent × T·R·S). A TRS, exact for position and, under uniform ancestor scale, q and scale; under a
+ *  non-uniform one the true transform shears, and this gives the plain products (Unity's lossyScale). Its float order is
+ *  pinned (checks.js compares it as JSON with the engine's rests; conformance digests start here): no renormalization. */
+// TODO: return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
 export function composePose(chain) {
   let acc = chain[0];
   for (let i = 1; i < chain.length; i++) {
@@ -75,12 +71,8 @@ export function composePose(chain) {
   return acc;
 }
 
-/** Heading of an orientation: yaw = atan2(fx, fz) of where +Z ends up
- *  (PROTOCOL §9's definition). When the thing faces straight up or down
- *  that direction has no heading, so read it off the thing's TOP instead —
- *  the continuous limit: tip a chair onto its face and its top points where
- *  it was facing; onto its back, away. Turning about +Y therefore always
- *  moves the heading by exactly the turn, tipped or not. */
+/** Heading of an orientation: yaw = atan2(fx, fz) of where +Z ends up (PROTOCOL §9); facing straight up or down, read
+ *  off the TOP instead (the continuous limit), so a turn about +Y always moves the heading by exactly the turn. */
 export function qHeading(q) {
   const f = qRotate(q, [0, 0, 1]);
   if (f[0] * f[0] + f[2] * f[2] > 1e-12) return atan2T(f[0], f[2]);

@@ -1,7 +1,7 @@
 // shared/protocol/authority/checks.js — what the gate checks a value against: sanity and shape of what the authority's
 // own engine reads (valueCheck), media sources, the typed fields and the terrain's shape, unknown and dropped keys, the
 // registry's schema (schemaCheck, schemaRefusal), particle effects, handlers, and a rest's claim against the engine
-// (restCheck) (refactor split, 2026-10-17; moved from authority.js's gate section unchanged). guess is above it, through UP.
+// (restCheck). guess is reached through UP.
 import { ONE_PLACE } from "../../components.js";
 import { checkSockets, checkSocket, checkStation } from "../../sockbody.js";
 import { checkGrabbable } from "../../grab.js";
@@ -36,11 +36,9 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (on === "world" && id !== "@world") refuse("world-only", `${comp.split(":")[0]} is a world setting: it goes on @world, not on ${id}`, `set {id: '@world', component: '${comp}', value: …}`);
   if (on === "thing" && id === "@world") refuse("thing-only", `${comp} belongs to a thing; @world is the world itself`, "make a thing (create) and put it there");
   if (comp === "parent" && v?.to === "@world") refuse("thing-only", `@world isn't a thing to be inside: a thing with no parent already sits in the world`, `delete {id: '${id}', component: 'parent'}`);
-  // one place per thing (R 10-11 00:37; the answer: anything that needs its own place goes on a child): a light and a model
-  // never share an entity, so a light's pose is its own and the editor's gizmo moves one thing. Existing logs keep folding
-  // (the fold never refuses); the importer splits them; a carried value (an import) passes.
-  // a mesh is a body of its own, as a model is: never beside a model or a light on one thing. The words are shared with the
-  // Inspector (components.js ONE_PLACE), so a refusal reads the same from either
+  // one place per thing: a light, a model and a mesh never share an entity (anything needing its own place goes on a
+  // child), so the gizmo moves one thing. Old logs keep folding; a carried value passes. Words shared with the Inspector
+  // (components.js ONE_PLACE).
   if (!carry && (comp === "light" || comp === "model" || comp === "mesh")) { const c = s.entities[id]?.c ?? {};
     for (const has of ["model", "light", "mesh"]) if (has !== comp && c[has] !== undefined) refuse("one-place", ONE_PLACE.reason(id, has, comp), ONE_PLACE.fix(id, has, comp)); }
   if (id === "@world" && comp.startsWith("roles:") && (!isIdentity(comp.slice(6)) || !CTX.knownId(comp.slice(6))))
@@ -80,10 +78,8 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (id === "@world" && obj && !carry && (comp === "capacity" || comp === "script-settings")) { const top = comp === "capacity" ? CAPACITY_CEILING : scriptCeiling();
     for (const [k, n] of Object.entries(top)) if (Number.isFinite(v[k]) && v[k] > n) refuse("bounds", `${at}.${k} is ${v[k]}; this server allows at most ${n}`, `set it at ${n} or below (schema reports this server's defaults and ceilings)`, { ceiling: n }); }
   if (id === "@world" && comp === "access" && obj && v.soft !== undefined && v.max !== undefined && v.soft > v.max) refuse("bounds", `${at}.soft (${v.soft}) can't be above max (${v.max})`, "soft is the recommended capacity; max is the hard one");
-  // a who names a role this world has (a custom role too); a typo would open or close it to the wrong people
-  // a carried value (a fork's copy, the maintenance command's lift) keeps the who it was written with, even a role deleted since: the lift
-  // re-spells what the log holds and judges nothing new (review 10-12 S2-3); an unknown who reads as the strictest
-  // recut item 8: a who is a role id (that rank or above), {permission} or {roles: [...]}; every role it names must be this world's
+  // a who is a role id (that rank or above), {permission} or {roles: [...]}, naming this world's roles (a typo opens or
+  // closes it to the wrong people). A carried value keeps its who; an unknown who reads as the strictest.
   const whoOk = (x, where) => { if (carry || x === undefined) return;
     const fix = "who may: a role name (that rank or above), {permission: '<name>'} (anyone holding it), or {roles: ['<id>', …]} (exactly those)";
     if (typeof x === "string") { if (!R.roleDef(wcS, x)) refuse("shape", `${where}.who must be a role here (${roleIds().join(", ")}; got ${JSON.stringify(x)})`, fix, { didYouMean: guess(String(x), roleIds()) }); return; }
@@ -294,11 +290,9 @@ export function schemaRefusal(comp, v) { try { schemaCheck(comp, comp, v);
     return null; } catch (e) { if (e instanceof Refusal) return `${e.code}: ${e.reason}`; throw e; } }
 function schemaCheck(at, comp, v, { carry = false } = {}) {
   const base = baseOf(comp), name = registered(base) ?? base, def = COMPONENTS[name];
-  // PROTOCOL §4 (review 10-07 H1, R's ruling): a bare name is the registry's. An unregistered one is refused: a typo of
-  // a registered name says "did you mean"; a versioned one (light@2) says a new meaning is registered first; anything
-  // else is someone's own component, which carries a namespace (example.org/heart). Before this they were admitted, and
-  // the registry later promoting the same word (story) would have reread every old value in the new meaning.
-  // `carry`: a fork's copy of what its parent already holds (an old world's bare invention travels as it was).
+  // PROTOCOL §4: a bare name is the registry's; an unregistered one is refused ("did you mean" for a typo, "register
+  // first" for name@n), and anyone else's component carries a namespace, so a later promotion can't reread old values.
+  // `carry`: a fork's copy travels as it was.
   if (name === "door") refuse("schema", `${at}: the opening behaviour is called 'openable' (R 10-07: chests, gates, lids and hatches open too)`, "openable {open: false, locked?, angle?, slide?, time?}; schema {component: 'openable'} says the rest", { didYouMean: ["openable"] });
   if (name === "placer") refuse("derived", `${at}: who made a thing is a view over the log (§0 rule 2), never stored`, "inspect {id} → derived.madeBy");
   if (!def) { if (isNamespaced(base) || carry) return;   // someone's own: kept, replayed, shown honestly (must-ignore)
@@ -371,10 +365,8 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
   for (const [k, how] of Object.entries(def.clean ?? {})) if (typeof v[k] === "string") { const bad = cleanText(v[k], { lines: how === "lines" });
     if (bad) refuse("shape", `${at}.${k} ${bad.why}`, bad.fix); }
 }
-// N5 (review 10-07): a handler is checked when it's WRITTEN, not when the first visitor uses it. What it would write is
-// checked now as the authority would check that write (a light's intensity 'bright' was taken, and the visitor got "must be
-// number"); a field it changes must be inside a component the thing has (a toggle on a plain crate wrote an invisible
-// openable); toggle flips true/false fields; an impulse swings a pendulum. Rights stay a use-time question (reactionCap).
+// a handler is checked when WRITTEN, as the authority would check its write: a field it changes must be inside a
+// component the thing has; toggle flips booleans; an impulse swings a pendulum. Rights stay a use-time question (reactionCap).
 function effectCheck(s, id, act, h) {
   const c = s.entities[id]?.c ?? {}; const isObj = (x) => x && typeof x === "object" && !Array.isArray(x) && x !== PURGED;
   const where = `reactions.${act}`;

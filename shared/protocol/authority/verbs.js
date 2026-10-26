@@ -1,7 +1,7 @@
 // shared/protocol/authority/verbs.js — the verb table's own bodies, in the groups authority.js spreads into VERBS in
 // their table order: FOUNDING_VERBS (create-world), SCHEMA_VERBS (schema), WRITE_VERBS (create, set, delete, place,
 // turn, publish, update), SAY_VERBS (say, undo, caption), BATCH_VERBS (sky, weather, sculpt, batch, fork-copy), and
-// buildBatch (refactor split, 2026-10-17; moved from authority.js's VERBS table unchanged). Only schema's did-you-mean reads UP (its guess).
+// buildBatch. Only schema's did-you-mean reads UP (its guess).
 import { cowState, applyCow, DIALECT, VERSION, emptyState, keyOk } from "../fold.js";
 import { valueCheck } from "./checks.js";
 import { COMPONENTS, STATUSES, defOf } from "../componentspec.js";
@@ -25,18 +25,14 @@ const FOUNDING_VERBS = {
   "create-world"(w, actor, a) {
     if (w.exists) refuse("exists", `world '${w.name}' exists`, "you're in it already: look shows what's here; help shows your role");
     if (a.dry) return { ok: true, dry: true, would: { found: w.name, you: "owner", title: a.title ?? w.name } };
-    // a fork or a reset names the world it came from; that's provenance in the founding act, so its shape is checked
-    // a FORK names its parent with the seq it was copied at ({world, seq, head}): that's genesis.parent, part of the new
-    // world's id, the merge base a later merge folds from (PROTOCOL §13; review 10-07 H5). A reset names its predecessor
-    // without a seq: provenance in the founding act only (it copies nothing, so it has no merge base)
+    // a FORK names its parent with the seq it was copied at ({world, seq, head}): genesis.parent, part of the new world's
+    // id and the merge base (PROTOCOL §13); a reset names its predecessor without a seq (provenance only)
     if (a.from !== undefined) { const f = a.from, hex = (x) => typeof x === "string" && /^[0-9a-f]{64}$/.test(x);
       if (!f || typeof f !== "object" || !(typeof f.world === "string" && /^sha256:[0-9a-f]{64}$/.test(f.world)) || !hex(f.head) || (f.name !== undefined && typeof f.name !== "string") || (f.seq !== undefined && !(Number.isInteger(f.seq) && f.seq >= 0)) || Object.keys(f).some((k) => !["world", "head", "name", "seq"].includes(k)))
         refuse("shape", "create-world {from} names the world it came from: {world: sha256:<64 hex>, head: <64 hex>, seq? (a fork: the seq it was copied at), name?}", ""); }
-    // genesis seeds no state (§13): it names the governance keys. The founding act then writes @world, once.
-    // {dialect, v, minor, nonce (16 random bytes), owners: tiers of keys, sequencer}. Tier 0 is the founder's OWN key when
-    // they bring one (ownerKey: made on their machine; this server never holds its private half); the operator's custody
-    // key is tier 1. Without one tier 0 stays empty, and under §13's add-key rule (GOV-5) it can never be filled later:
-    // the operator is then the world's top governance key. rewind_window is left at its default (1000 change entries).
+    // genesis seeds no state (§13), it names the governance keys: tier 0 is the founder's OWN key when they bring one
+    // (ownerKey; this server never holds it), the operator's custody key tier 1. Without one, tier 0 can never be filled
+    // later (GOV-5) and the operator is the top key. rewind_window defaults to 1000 change entries.
     if (a.ownerKey !== undefined && !keyOk(a.ownerKey)) refuse("shape", "ownerKey is your own governance key: ed25519:<base64url of 32 bytes> (PROTOCOL §13)", "make one on your own machine (openssl genpkey -algorithm ed25519; PROTOCOL §13, \"Whose key is tier 0\"); or leave ownerKey out");
     const cu = w.custody(); if (!cu) throw new Error("authority bug: founding needs io.custody (the sequencer and founder keys, §13)");
     if (a.ownerKey !== undefined && (a.ownerKey === cu.operator() || a.ownerKey === cu.sequencer())) refuse("shape", "ownerKey must be your own key, not this server's", "");
@@ -60,12 +56,8 @@ const FOUNDING_VERBS = {
   },
 };
 const SCHEMA_VERBS = {
-  // particles names an effect: its schema also lists the Essentials and each one's params (the knobs an instance sets), so
-  // an agent can write one without a second question; effect {name} returns a whole document
-  // every definition carries its status (trial | reserved | stable); statuses says what each means
-  // and server: this server's policy numbers (PROTOCOL §9.2): the default an absent field means today, and the ceiling an owner may set
-  // one component is read through the registry's resolver (componentspec defOf): a keyed name or an alias answers its
-  // definition, and a name the registry doesn't have is refused, never answered ok with nothing
+  // the schema also lists the Essentials and their params, each definition's status, and this server's policy numbers
+  // (PROTOCOL §9.2); one component is read through defOf (a keyed name or alias answers; an unknown one is refused)
   schema(w, actor, a) { const one = a.component ? defOf(String(a.component)) : undefined;
     if (a.component && !one) refuse("not-found", `no component called '${a.component}'`, "schema {} lists every component", { didYouMean: UP.guess(String(a.component), Object.keys(COMPONENTS)) });
     return { ok: true, components: a.component ? { [a.component]: one } : COMPONENTS, statuses: STATUSES,
@@ -92,11 +84,8 @@ const SAY_VERBS = {
     const body = { text: a.text, ...(a.to ? { to: a.to } : {}), ...spokenOf(a, w.now()) };
     rateCheck(w, actor, "say", JSON.stringify(body).length); const seq = w.append({ kind: "say", actor, verb: "say", body }); (w.sayQ ??= []).push(seq); return { ok: true, seq }; }, // w.append refuses too-big before writing
   undo: (w, actor, a) => commit(w, actor, "undo", a, (ctx) => buildUndo(ctx, a, w)),
-  // ---- captions: one line of what a screen said (a captioner bot, live subtitles). Rights live on the SCREEN: its
-  // `captioners {ids}` names who may caption it (anyone who may edit the screen may too); nobody else, and no `set` by
-  // hand, writes `captions`. The rules are shared/captions.js's: a session, a strictly rising n within it, a leg
-  // generation (the server stamps `gen` from the connection: a superseded captioner can't write over its successor),
-  // and `end` to clear the screen. The bag keeps the newest lines (CAPTIONS_MAX_LINES). ----
+  // ---- captions: one line of what a screen said. Rights live on the SCREEN (`captioners {ids}`, or anyone who may edit
+  // it); no hand `set`. The rules are shared/captions.js's: session, rising n, the server-stamped leg `gen`, and `end`. ----
   caption: (w, actor, a) => commit(w, actor, "caption", a, (ctx) => {
     const n = normalizeCaptionArgs(a); if (!n.ok) refuse("shape", n.why, "caption {id, session, n, t0, t1, text, speaker?, title?} | {id, session, end: true}");
     const id = n.args.id; const e = ctx.st.entities[id]; if (!e) refuse("not-found", `nothing here called ${id}`, "look lists what's here");

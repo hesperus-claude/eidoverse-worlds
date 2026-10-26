@@ -1,24 +1,12 @@
-// shove — walking into a loose thing pushes it (R's queue: "body shove"). The walker's side: one body (mine, never a remote's;
-// an agent's process runs its own) finds the loose things its walking capsule is against and says which to punt, and how
-// hard. The punt itself is the authority's (punt {id, v, contact: true}: shoveGate in authority.js, its limits SHOVE in
-// physconst.js); nothing here writes anything.
+// shove — walking into a loose thing pushes it. The walker's side: one body (mine, never a remote's) finds the loose
+// things its capsule is against and says which to punt, and how hard; the punt is the authority's (shoveGate, limits
+// SHOVE in physconst.js). Nothing here writes anything.
 //
-// Contact: the thing's ORIENTED box (its physics.shape, in the world: what the authority measures to through obbs()) within
-// the body's radius + `slack` of the feet, the thing neither under the feet nor over the head (its axis-aligned box). The
-// push: the body's WALKING INTENT (speed along its heading: what the keys or walk_to ask for), not its motion, which the
-// collider has already stopped at the thing's face; only the part along the contact normal counts (and only when the walk
-// heads into it, within 60°: brushing a corner on the way past is no push). How hard is momentum (R 10-12, "avatars need a
-// presumptive mass, like presumptive reach"): a body of BODY_MASS walking at u gives a thing of mass m an elastic
-// 2·BODY_MASS/(BODY_MASS + m) · u, under the flat ceiling SHOVE.maxV, and keeps (BODY_MASS − m)/(BODY_MASS + m) · u itself
-// (a heavy crate stops you, a ball barely does). Lifted a little so it slides rather than grinds. Standing still sends
-// nothing. Never a shove that would move a body: not a thing someone sits on or stands on (or anything carrying it), not one
-// whose slide would run into someone.
-//
-// One punt per contact: a thing is shoved when contact begins, and again only after it has moved (`moved`) and `againMs`
-// has passed, so walking on behind a crate keeps pushing it while a wall of crates that won't budge hears one punt each.
-// Across every thing, at most `perSec` a second and `per10s` in ten (a third of the authority's act rate, RATE.n, so
-// walking about a warehouse never rate-limits a person's own edits). A refusal that stands (rights, a lock, a hand) quiets that thing for
-// `quietMs`; one that passes by itself (it was already moving, the track lagged, the rate) only for `againMs`.
+// Contact: the thing's ORIENTED box within radius + `slack` of the feet, neither underfoot nor overhead. The push is the
+// WALKING INTENT along the contact normal (within 60°), passed on elastically by mass (BODY_MASS), capped at SHOVE.maxV.
+// Never a shove that would move a body (a thing someone sits or stands on, or a slide into someone).
+// One punt per contact, again only after it moved and `againMs` passed; at most `perSec`/`per10s` overall, well under
+// the authority's act rate. A standing refusal quiets that thing for `quietMs`, a passing one for `againMs`.
 import { SHOVE, BODY_MASS } from "./protocol/physconst.js";
 import { worldPose, offChain } from "./protocol/simlayer.js";
 import { isBoxShape, shapeVolume } from "./protocol/shapes.js";

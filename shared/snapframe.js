@@ -16,10 +16,8 @@ export const SNAP_HEIGHT = [0, 30];
 export const SNAP_PITCH = [-85, 85];
 
 const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
-// Only finite numbers and non-blank numeric strings (HTTP query values) count.
-// Booleans, arrays and objects are dropped BEFORE conversion: Number(false) is 0,
-// which would silently move a camera to foot height, and an object without a
-// usable toString would throw and lose the whole snapshot.
+// only finite numbers and non-blank numeric strings count; non-numbers drop BEFORE conversion (Number(false) is 0,
+// which would move the camera to foot height)
 const num = (v) => {
   if (typeof v !== 'number' && typeof v !== 'string') return undefined;
   if (typeof v === 'string' && v.trim() === '') return undefined;

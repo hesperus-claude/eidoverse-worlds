@@ -1,68 +1,23 @@
-// captions — what the `caption` verb MEANS, and the bag it folds into. Shared
-// verbatim between the sequencer (validator + fold), the caption bot that
-// writes it (tools/captionbot), the mcpl agent that reads it (text-tier
-// perception), and any client overlay, so no two of them can describe a
-// different screen.
+// captions — what the `caption` verb MEANS, and the bag it folds into. Shared by the sequencer, the caption bot
+// (tools/captionbot), the mcpl agent and any client overlay, so no two describe a different screen.
 //
 //   caption {id, session, n, t0, t1, text, speaker?, title?}   # one line, once
 //   caption {id, session, end: true}                            # the screen goes quiet
 //
-// folds into the entity's comp bag, SERVER-WRITTEN (a client's `comp {type:
-// "captions"}` is refused, so the bag has one writer path):
+// folds into the entity's comp bag, SERVER-WRITTEN (a client's `comp {type: "captions"}` is refused):
 //
 //   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}
 //
-// Each write holds ITS line, once (shape audit 10-16, render-media-env §11; WebVTT and TTML store a cue once). Until then
-// the bag carried the newest twenty lines (`window`) and the playhead (`mediaTime`), so every caption change re-logged up to
-// twenty lines: the very cost the caption verb was made to remove. A reader that wants the last lines reads the last
-// captions changes (the log is the transcript); an older stored value's window still reads.
+// Each write holds ITS line, once (as WebVTT stores a cue); the log is the transcript, and an older value's `window`
+// still reads. RETENTION: captions are durable world testimony like `say`; `end` clears perception, not history.
 //
-// Rung 2 of the projector ladder (anima_dev/eidoverse_projector_design.md):
-// the music player — audio in, captions the models can read, no video yet.
-// This is the design note's `caption` verb, made as a protocol amendment
-// (AGENTS.md) after the comp door proved to carry the wrong contract: every
-// window write was a log entry, so the append-only log held each line up to
-// twenty times, and writing one screen's captions took builder standing
-// over the whole world (Mica, #187 review). One line per entry fixes the
-// first; the `caption` deed (a per-entity grant) fixes the second.
-//
-// RETENTION, stated truthfully: captions are durable world testimony like
-// `say`; `end` clears current perception, not history. The bot keeps no
-// transcript the world does not already hold.
-//
-// WHO IS THE CAPTIONER: the LIVE LEG. The sequencer issues every accepted
-// join a generation (World.legGen: the log seq the world was opened at,
-// times a million, plus the admission count — so it survives a sequencer
-// restart and never goes backwards; a same-identity join is a TAKEOVER that
-// retires the older leg), and vCaption stamps that generation onto every
-// caption entry — a client cannot supply it. The bag remembers the
-// generation that wrote it; a caption from a lower generation is refused as
-// a superseded leg, a higher one takes over. So supersession is the authority's
-// own fact, never a clock the bot claims: a restart under clock rollback
-// still takes over (its leg is newer), a stale predecessor cannot present a
-// "later" timestamp and win (its leg is older), and two captioners for one
-// screen resolve to whichever joined last — the owner's recovery is `end`
-// or `caption: null` (Mica, #187 round 2).
-//
-// SESSION is the bot's media-clock label, minted at attach (ISO time plus a
-// nonce, human-readable): it says which attach a `00:30` belongs to. Within
-// one session `n` is the bot's monotonic counter; the bag folds the
-// high-water mark, and a caption at or below it is refused BEFORE it
-// becomes history — a resend after a lost receipt is safe by construction,
-// and a reader never meets the same line twice under one clock. A caption
-// under a different session from the live leg starts a fresh window.
-//
-// TIMES. t0/t1 are MEDIA TIME in seconds: the stream's own clock, as far as
-// the bot can know it. In this rung that is seconds since the bot attached
-// to the stream (the source clock plumbing is phase 3); the field's meaning
-// does not change when the source improves, only its accuracy — and the
-// session says which attach a `00:30` belongs to.
-//
-// BOUNDS are in CHARACTERS (String.length, UTF-16 code units), not bytes: a
-// 240-character line of CJK is ~720 UTF-8 bytes and that is fine — the bag is
-// folded state, not a verb payload under the comp cap; and the authority keeps each
-// value under 64 KiB of UTF-8 (authority/gate.js), so a bag of 20 full lines plus
-// title and speakers stays well inside it in any script.
+// WHO IS THE CAPTIONER: the LIVE LEG. Every join gets a world-scoped generation (World.legGen, survives restarts; a
+// same-identity join takes over), stamped onto each caption by the door (server/requestwire.ts), never by the client.
+// A lower generation is refused as superseded, a higher one takes over: no clock the bot claims decides it.
+// SESSION is the bot's media-clock label, minted at attach; within it `n` is monotonic and a caption at or below the
+// high-water mark is refused before it becomes history (a resend is safe). TIMES t0/t1 are MEDIA seconds since attach.
+// BOUNDS are in CHARACTERS (UTF-16 code units), not bytes; the authority keeps each value under 64 KiB of UTF-8
+// (authority/gate.js), well above one line plus title and speakers in any script.
 
 import { shown } from './shown.js';
 
@@ -103,10 +58,8 @@ export function normalizeCaption(c) {
   return out;
 }
 
-/** The `caption` verb's args, shape-checked: `ok:false` carries WHY (the
- *  refusal the authority sends), `ok:true` the normalized args that become
- *  history. Pure — the sequencer's validator and the bot's own pre-check
- *  are the same function. */
+/** The `caption` verb's args, shape-checked: `ok:false` carries WHY (the refusal sent), `ok:true` the normalized args.
+ *  Pure: the authority and the bot's own pre-check are the same function. */
 export function normalizeCaptionArgs(a) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) return { ok: false, why: 'caption wants {id, session, n, t0, t1, text, speaker?, title?} or {id, session, end: true}' };
   const id = String(a.id ?? '').slice(0, 64);
@@ -133,12 +86,9 @@ export function normalizeCaptionArgs(a) {
   return { ok: true, args };
 }
 
-/** Why the folded bag refuses these (already normalized, server-stamped)
- *  args, or null. Lives HERE, before append, so a refusal never becomes
- *  history: a superseded leg (a lower generation than the one that wrote
- *  the bag), a duplicate or old `n` in the bag's session, or an `end` for a
- *  session that is not the current one. `gen` is the sequencer's stamp
- *  (vCaption); entries that predate it read as generation 0. */
+/** Why the folded bag refuses these (normalized, server-stamped) args, or null, decided before append so a refusal
+ *  never becomes history: a superseded leg (lower `gen`), a duplicate or old `n` in the session, or an `end` for another
+ *  session. `gen` is stamped by the door (server/requestwire.ts); entries without it read as generation 0. */
 export function captionRefusal(bag, args) {
   const cur = bag && typeof bag === 'object' ? bag : null;
   if (!cur) return args.end ? `"${args.id}" has no captions to end, so it's already quiet` : null;
@@ -225,10 +175,8 @@ export function describeCaptions(data) {
   return `a screen, ${showing}, ${clock(captions.mediaTime ?? last.t1)}, last line: ${line}`;
 }
 
-/** The `captions` detail level: the lines, oldest first, one each, at most
- *  `lines` of them. A value holds its current line (an older one its window);
- *  `earlier` is the screen's earlier captions values, oldest first (the log's
- *  captions changes), for a reader that wants the lines before it. */
+/** The `captions` detail level: the lines, oldest first, at most `lines`. A value holds its current line (an older one
+ *  its window); `earlier` is the screen's earlier captions values (the log's captions changes), oldest first. */
 export function captionsDetail(data, lines = CAPTIONS_MAX_LINES, earlier = []) {
   const n = normalizeCaptions(data);
   if (!n.ok) return [];

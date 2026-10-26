@@ -1,31 +1,13 @@
-// simmath — deterministic transcendentals for the sim covenant (PROTOCOL_v2
-// Covenant I: owned numerics).
+// simmath — deterministic transcendentals (Covenant I: owned numerics; spec/PHYSICS.md).
+// Host Math.sin/cos/atan2/exp may differ in the last bits between correct engines, a forked world under a deterministic
+// fold. Everything here is built only from IEEE-754-exact ops (+ − × ÷, sqrt, comparisons, floor/abs/min/max, explicit-
+// endian byte views) in a FIXED order, so results are bit-identical on every conforming engine.
 //
-// The host's Math.sin/cos/atan2/exp are IMPLEMENTATION-APPROXIMATED — two
-// correct engines may disagree in the last bits, which under a deterministic
-// fold is a forked world. Covenant I therefore bans them from sim code and
-// promised "a wasm kernel later". This module is that kernel, delivered in
-// the house's own no-build dialect instead: every function below is built
-// ONLY from operations the covenant already blesses as IEEE-754-exact on
-// every conforming engine — + − × ÷, sqrt, comparisons, floor/abs/min/max,
-// and explicit-endian byte views — evaluated in a FIXED order. Bit-identity
-// across engines is a property of the construction, not a hope; the wasm
-// form remains the named fallback if a host engine is ever caught breaking
-// IEEE exactness (that engine is nonconforming for eidosim wholesale, so
-// this module adds no new exposure).
+// THE COEFFICIENTS ARE THE VERSION (Covenant II): changing any constant, reduction word or evaluation order is an
+// epoch bump, never a patch.
 //
-// THE COEFFICIENTS ARE THE VERSION (Covenant II, same law as eidosim's
-// constants): editing any constant, coefficient, reduction word, or the
-// evaluation ORDER of a polynomial changes what old logs replay to under
-// any sim that uses this module — that is an epoch bump, never a patch.
-//
-// Accuracy, stated honestly: these are ~1–3 ulp implementations, NOT
-// correctly rounded — the covenant needs IDENTICAL, not perfect. Argument
-// reduction is two-word Cody–Waite, sized for world-scale arguments:
-// |x| ≤ ~1e6 rad keeps full accuracy; beyond that accuracy degrades
-// smoothly but IDENTICALLY on every engine (determinism never degrades).
-// Non-finite inputs: NaN in → NaN out; sinT/cosT(±∞) → NaN;
-// expT(−∞) → 0, expT(+∞) → +∞.
+// ~1–3 ulp, not correctly rounded (the covenant needs IDENTICAL, not perfect). Two-word Cody–Waite reduction: full
+// accuracy to |x| ≈ 1e6 rad, degrading identically beyond. NaN → NaN; sinT/cosT(±∞) → NaN; expT(−∞) → 0, expT(+∞) → +∞.
 
 export const SIMMATH_ID = 'simmath@0.1.0';
 
@@ -35,10 +17,8 @@ export const TAU = 2 * PI;
 
 // ---- exact building blocks --------------------------------------------------
 
-// π/2 split into two words (the classic Cody–Waite pair): PIO2_HI carries
-// ~33 leading bits so n·PIO2_HI is exact for |n| < 2^20-ish, and the tail
-// rides PIO2_LO. The decimal literals below round to the intended doubles
-// exactly (shortest-round-trip both ways).
+// π/2 as a Cody–Waite pair: PIO2_HI's ~33 leading bits keep n·PIO2_HI exact for |n| < ~2^20; the literals round to
+// the intended doubles exactly
 const PIO2_HI = 1.57079632673412561417e+00;
 const PIO2_LO = 6.07710050650619224932e-11;
 const TWO_OVER_PI = 2 / PI;
@@ -68,10 +48,8 @@ const A13 = 1 / 13, A15 = -1 / 15, A17 = 1 / 17, A19 = -1 / 19;
 // big-endian host; DataView with littleEndian pinned cannot).
 const _bv = new DataView(new ArrayBuffer(8));
 function pow2(k) {
-  // normal range only (callers split larger |k| into two steps). Under the
-  // pinned little-endian layout the SIGN/EXPONENT word is bytes 4..7; the
-  // low mantissa word is bytes 0..3. The self-check below refuses to serve
-  // a build where this assembly is ever wrong.
+  // normal range only (callers split larger |k|). Little-endian: the sign/exponent word is bytes 4..7; the self-check
+  // below refuses a build where this assembly is wrong.
   _bv.setUint32(0, 0, true);
   _bv.setUint32(4, (k + 1023) << 20, true);
   return _bv.getFloat64(0, true);

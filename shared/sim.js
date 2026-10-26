@@ -1,18 +1,12 @@
 // eidosim's adapter: the engine (./eidosim.js) behind the sim API the protocol's sim layer drives (emptySim, tickOf,
-// simEntry, advanceSim, simSnapshot, simPose). It replaced the first eidosim here (R 2026-10-09: "stomp the existing
-// eidosim engine"; "eidosim is eidosim").
+// simEntry, advanceSim, simSnapshot, simPose).
 //
-// What a body is here: a LAUNCHED thing flies; a dynamic thing at rest that no lock holds is a sleeping body, woken when
-// a moving body touches it, and flies under the launch that touched it (PHYSICS.md §1's widened rest rule); every other
-// modelled thing with a box is a static collider. A body that comes to rest is a collider (or a sleeper) again. The law
-// inside a flight: rigid boxes and spheres with full rotation (q, w), oriented-box statics, a height-field ground,
-// contacts solved with Box3D's soft step, swept against what rests (CCD).
+// A LAUNCHED thing flies; a dynamic thing at rest that no lock holds sleeps until a moving body touches it (PHYSICS.md
+// §1); every other modelled thing with a box is a static collider.
 //
-// STATE IS PLAIN JSON and is the truth. Readers clone it (restEta), hand it to joiners (simCutOf) and digest it; an
-// engine world is built from it for each advance and written back. Per body the truth is the CENTRE pose (c, q, v, w)
-// plus the engine's sleep record; `p` (the entity origin, what readers compare a rest against) is derived from it and never
-// read back, so any advance schedule reaching tick T gives the same bits (Covenant IV). No yaw is stored: readers
-// derive it from q (a host atan2 inside digested state could differ between runtimes).
+// STATE IS PLAIN JSON and is the truth: per body the CENTRE pose (c, q, v, w) plus the sleep record. `p` is derived and
+// never read back, and no yaw is stored (a host atan2 could differ), so any schedule reaching tick T gives the same
+// bits (Covenant IV).
 
 import { createWorld, VERSION } from './eidosim.js';
 import { terrainParams, makeHeightField } from './terrainmath.js';
@@ -183,13 +177,9 @@ export function advanceSim(sim, toTick) {
   if (!sim.epoch || sim.epoch.foreign || !sim.e2) { if (toTick > sim.tick) sim.tick = toTick; return sim; }
   const live = () => Object.keys(sim.bodies).filter((id) => !sim.bodies[id].resting);
   if (!live().length) { if (toTick > sim.tick) sim.tick = toTick; return sim; }
-  // the live world is exactly what hydrate(sim) would build, so long as nothing rests: a rest turns a body into a
-  // static in the JSON, so the world is rebuilt from the JSON before the next tick (else one jump would solve it as
-  // the sleeping dynamic body it was, and differ from tick-by-tick; review of 49d4fb0d #1)
-  // Each tick the world holds only the statics a flyer could reach in that tick (review of 49d4fb0d #4: hydrating
-  // every static cost 20 ms/tick at 3000). Exact by construction: contact pairs are found from the bodies' boxes at
-  // the start of the step, and the swept (continuous) test only looks inside each flyer's start→end box; after the
-  // step, if any static left out touches a flyer's swept box, the tick is redone with every static.
+  // rebuild the world from the JSON after a rest (a rest makes a body static), or a jump solves it as the sleeper it was.
+  // Each tick hydrates only the statics a flyer could reach (start→end box); if a left-out static touches a swept box,
+  // the tick is redone with every static, so it is exact.
   const dt = sim.epoch.tickMs / 1000; let W, ids, index;
   const save = () => { const ex = W.exportState(); sim.e2.stepNo = ex.stepNo; sim.e2.impulses = ex.impulses; sim.e2.manifolds = ex.manifolds; sim.e2.pairs = ex.pairs; };
   const sbox = (id) => { const row = sim.statics[id]; let b = SBOX.get(row); if (!b) SBOX.set(row, (b = staticBox(row))); return b; };

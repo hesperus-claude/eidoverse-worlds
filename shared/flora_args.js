@@ -1,14 +1,9 @@
-// flora_args — pure translation logic for the `grass` verb: legacy makeGrass
-// bags → createFlora options, and preset/variety stroke composition. No DOM,
-// no THREE — unit-tested in tools/flora.test.ts. Shared (shape audit 10-16): the
-// authority runs mapGrassArgs at write (shared/protocol/assetref.js) so a stored
-// grass holds one spelling, and checks a preset's name with presetStrokes; the
-// preset itself is stored by its name (R 10-17) and composed here on read.
+// flora_args — pure translation for the `grass` verb: legacy makeGrass bags → createFlora options, and preset/variety
+// stroke composition (tools/flora.test.ts). The authority runs mapGrassArgs at write (shared/protocol/assetref.js) so a
+// stored grass holds one spelling; a preset is stored by its name and composed here on read.
 
-// makeGrass's blade atlas replacement has a known opaque mean (documented in
-// vegetation.js: 91/138/35). A legacy hex color maps to the multiplier that
-// carries the atlas mean to that hex — the same field intent, spoken in the
-// new system's terms.
+// makeGrass's blade atlas has a known opaque mean (vegetation.js): a legacy hex colour maps to the multiplier that
+// carries that mean to the hex
 export const ATLAS_MEAN = [91, 138, 35];
 const LEGACY_KEYS = ['bladeHeight', 'spacing', 'perCell', 'colorTip',
   'windSpeed', 'lean', 'fade', 'fadeStart', 'fadeEnd', 'fadeColor', 'backlight'];
@@ -51,10 +46,7 @@ export function mapGrassArgs(a) {
   return out;
 }
 
-// The `grass` verb is a world singleton, but a real biome is several strokes
-// (the engine's field-approved Mojave recipe is galleta + three shrubs at
-// de-centred organic stands + yucca). `preset` bags compose those strokes
-// client-side under ONE field object, so the verb model stays untouched.
+// `grass` is a world singleton but a biome is several strokes: a `preset` composes them client-side under ONE field object
 export function presetStrokes(args, presets = null) {
   // stored strokes ARE the planting, drawn as they are (they win over a preset)
   if (Array.isArray(args.strokes) && args.strokes.length) return args.strokes.map((st) => ({ ...st }));
@@ -67,12 +59,8 @@ export function presetStrokes(args, presets = null) {
   // on the composed biomes, since every stroke carried a hardcoded density
   const k = args.density ?? 1;
   if (args.preset != null) {
-    // §24 defs: named presets are DATA (defs/flora/_presets.json), composed
-    // here from a small template vocabulary — species/variant/… literal,
-    // density × the caller's factor, inset in metres off both extents,
-    // offset in min(W,D) fractions from the caller's center, seedAdd off
-    // the caller's seed. A preset this instance lacks fails LOUDLY: a
-    // logged bag's meaning must never silently drift into a default lawn.
+    // §24 defs: named presets are DATA (defs/flora/_presets.json), composed from a small template vocabulary. A preset
+    // this instance lacks fails LOUDLY: a logged bag must never drift into a default lawn.
     const p = presets?.[args.preset];
     if (!p?.strokes?.length) {
       throw new Error(`[flora] unknown preset '${args.preset}' — have: ${Object.keys(presets ?? {}).join(', ') || '(no presets hydrated)'}`);
@@ -89,10 +77,7 @@ export function presetStrokes(args, presets = null) {
     });
   }
   if (args.species === 'corn' && !args.rows?.stride) {
-    // Honest agriculture, and VARIETY: one stroke = one plant variant cloned
-    // field-wide (a single rng roll decides every stalk's ears). The engine's
-    // field-approved recipe interleaves seeds by row stride — four husked
-    // variants plus every 5th row rolled heavily open.
+    // variety: one stroke clones one plant variant field-wide, so the recipe interleaves seeds by row stride
     const rows = { spacing: 0.9, plant: 0.26, ...(args.rows ?? {}) };
     const corn = args.corn ?? {};
     return [
@@ -106,10 +91,7 @@ export function presetStrokes(args, presets = null) {
     ];
   }
   if (args.species === 'sunflower' && !args.rows?.stride) {
-    // Same interleave trick, three plant variants through one grid. The
-    // shared `heading` is the signature look — a sunflower field faces one
-    // way together — and it must be identical across the strokes or the
-    // variants argue about where the sun is.
+    // the same interleave with three variants; the shared `heading` must match across strokes (a sunflower field faces one way)
     const rows = { spacing: 0.85, plant: 0.5, ...(args.rows ?? {}) };
     const heading = args.heading ?? -0.6;
     return [0, 1, 2].map((phase, i) => ({

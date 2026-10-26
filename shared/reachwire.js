@@ -1,17 +1,7 @@
 // shared/reachwire.js — the reach DESCRIPTOR: what a reach IS on the wire.
-//
-// A reach travels as a RELATION, not as solved bone angles: "right hand toward
-// mythos's shoulder_l", "left hand toward this point in my own frame". Every
-// client that receives the descriptor resolves the target against its own live
-// scene and re-solves the arm each frame — the solver is closed-form
-// (shared/reach.js) precisely so that independent solvers agree. What can NOT
-// travel is a function, which is why the descriptor grammar below exists.
-//
-// It rides the presence plane (spec/PROTOCOL.md §5): per-frame, lossy, never
-// persisted. The server relays the pose bag opaquely; everything in this file
-// runs at the two ends. Because the ends don't trust the middle — or each
-// other's versions — every reader normalizes: a malformed descriptor folds to
-// nothing rather than to a throw in somebody's frame loop.
+// A reach travels as a RELATION, not solved bone angles; each end re-solves with the closed-form shared/reach.js. It
+// rides the presence plane (spec/PROTOCOL.md §5), relayed opaquely, and every reader normalizes: a malformed
+// descriptor folds to nothing rather than a throw in somebody's frame loop.
 //
 // Two target shapes:
 //   { who: 'mythos', point: 'shoulder_l', standoff?: 0.02 }
@@ -26,23 +16,17 @@
 //
 // A limb entry wraps a target with its flags:
 //   { t: <target>, palm?: false, reached?: true }
-// `palm: false` opts out of turning the palm to meet the surface (name-form
-// targets orient the palm by default — see EW.reach's history for why).
-// `reached` is set by the REACHER's own solve when the hand arrives; the
-// rising edge is what a touch event fires on. It is an attestation, not a
-// measurement made by anyone else — same trust level as the pose stream that
-// carries it.
+// `palm: false` opts out of turning the palm to meet the surface (name-form targets orient it by default).
+// `reached` is set by the REACHER's own solve on arrival; its rising edge fires a touch. An attestation, as trusted as
+// the pose stream that carries it.
 
 import { canonicalPoint } from './contact.js';
 
 /** The limbs a reach can drive — mirror of shared/joints.js REACH_CHAINS. */
 export const REACH_LIMBS = ['leftHand', 'rightHand', 'leftFoot', 'rightFoot'];
 
-/** A hand "has arrived" when its solve leaves this little gap or less. The
- *  target already stands off the skin, so 0 is the ideal; the slack absorbs
- *  breathing, interpolation, and the retreat search settling nearby. One
- *  constant for every attester — browser and agent must agree on what a
- *  touch is, or the same hand touches in one process and hovers in another. */
+/** A hand "has arrived" at this gap or less (the target already stands off the skin; slack absorbs breathing and
+ *  settling). One constant, so browser and agent agree on what a touch is. */
 export const TOUCH_GAP = 0.05;
 
 /** Tolerant limb naming: 'right', 'right hand', 'right_hand' → 'rightHand'. */

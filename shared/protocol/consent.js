@@ -1,7 +1,6 @@
-// Ported from the protocol lab (2026-10-05); its words renamed before release (10-17, below).
-// Body consent (PROTOCOL L6 as revised 21:45; research 42 §4). PRESENCE ONLY: nothing here is ever appended to a
+// Body consent (PROTOCOL L6; research 42 §4). PRESENCE ONLY: nothing here is ever appended to a
 // log or written to world state. The authority keeps one table per body in its presence plane, refuses before delivery,
-// and the target's client has the final word (the lab has no clients; `inbox` stands in for delivery).
+// and the target's client has the final word.
 //   classes: near, follow, touch (social points), intimate (intimate points), pose, shove, displace, voice
 //   cells: allow | ask | deny, separately for everyone and for friends (friends = mutual, between authority-stamped ids:
 //          both named each other in their `friends` list)
@@ -9,12 +8,9 @@
 //   silence is no: a body that never sent a table gets Normal; an ask nobody answers within 20 s is a no.
 //   delegates: the people YOU named (a list apart from friends) may close your table (pause, deny); only you may open it,
 //          and only you add or remove a friend or a delegate (friend/unfriend, delegate/undelegate)
-// Renamed before release (protocol minor 0, R 10-17 14:41): tier `strangers` → `everyone`; cells everyone|ask|nobody →
-// allow|ask|deny; class `move` → `displace` (someone else displacing your body; `move` is your own walk); the one `friend`
-// list split into the mutual `friends` tier and `delegates`. The old words are still taken on the wire (LEGACY_* below), and
-// a presence file in the old shape is read and rewritten in the new (migratePresence; storage.js calls it at load).
-// The lab enforces touch/intimate, pose, shove and displace (what the lab can model: reach, pose, ragdoll, drag/grab of a
-// body). near, follow and voice are in the table and shown, but the lab has no fade, follow track or SFU to enforce.
+// The old words (strangers, everyone|ask|nobody, move, one friend list) are still read on the wire (LEGACY_*); an old
+// presence file is rewritten at load (migratePresence). Enforced: touch/intimate, pose, shove, displace; near, follow
+// and voice are in the table and shown, but not yet enforced.
 import { CONTACT_POINTS, canonicalPoint } from "../contact.js";
 export const CLASSES = ["near", "follow", "touch", "intimate", "pose", "shove", "displace", "voice"];
 export const ENFORCED = ["touch", "intimate", "pose", "shove", "displace"];
@@ -40,18 +36,14 @@ export const ASK_MS = 20000, COOL_MS = 600000;
 // (reacher, target, class) per this long: a stream of frames is one attempt, never one message a frame
 export const REACH_NOTE_MS = 15000;
 export const KIND_CLASS = { pose: "pose", anim: "pose", shove: "shove", drag: "displace", occupy: "displace", carry: "displace", touch: "touch" };
-// Touch is judged by where a hand is, not how it was aimed (42 P8): a named point is intimate if it is one of these, and
-// touch if it is any other contact point (shared/contact.js). ONE classifier, namedPointClass, for the relay
-// (server/reachgate.ts), the authority's reach verb and the agent (r2 holes F5: the verb kept its own 19-point list, so
-// cheek, eye, knee and foot, which the relay classes touch and tells you to ask for, could never be asked for).
+// touch is judged by where a hand is, not how it was aimed: ONE classifier, namedPointClass, for the relay
+// (server/reachgate.ts), the authority's reach verb and the agent, so every point the relay classes can be asked for
 export const INTIMATE_POINTS = new Set(["chest_front", "waist_l", "waist_r", "hip_l", "hip_r"]);
 export const REACH_POINTS = Object.keys(CONTACT_POINTS);
 /** a named contact point (any spelling canonicalPoint takes) → { point (canonical), cls: touch | intimate }; null if not a point */
 export function namedPointClass(name) { const point = canonicalPoint(name); return point ? { point, cls: INTIMATE_POINTS.has(point) ? "intimate" : "touch" } : null; }
-// An ask answered yes is ONE touch (r2 holes F3), and lasts at most this long even while the hand is held: the window a
-// no holds (COOL_MS) is the longest a yes holds. Long enough for a held hand on a walk or a slow dance, short enough that
-// a yes forgotten in a long session doesn't stand in for consent an hour on. Letting go, either person leaving, or the
-// target's cell moving off allow ends it sooner (authority.js reachLetGo, leave, revokeAfter).
+// a yes is ONE touch and lasts at most COOL_MS even while held (a forgotten yes mustn't stand an hour on); letting go,
+// leaving, or the cell moving off allow ends it sooner (reachLetGo, leave, revokeAfter)
 export const REACH_GRANT_MS = COOL_MS;
 // What the ASKER is told when a table refuses: the same words for a tier's deny, a per-person no, a pause, an ask
 // answered no and an ask nobody answered (10-13 consent research: the reason leaked a per-person deny). The real cause
@@ -107,10 +99,9 @@ export function setConsent(P, actor, a, now) {
     for (const c of cls) ((t.over ??= bag())[who] ??= bag())[c] = { mode: a.allow !== undefined ? "allow" : "deny", ...(until !== undefined ? { until } : {}) }; }
   return { ok: true, target: actor };
 }
-/** The presence plane's consent tables in today's shape. A table stored before 10-17 (cells.strangers, everyone/nobody,
- *  class move, one `friends` list that also closed the table) is rewritten: the old list stays the friends list AND becomes
- *  the delegates list (it did both jobs, so nobody gains or loses a power), and P.consentShape marks the plane as done so a
- *  delegates list emptied since is never refilled. Returns how many tables changed. In place; idempotent. */
+/** The presence plane's consent tables in today's shape: an old table (cells.strangers, everyone/nobody, class move,
+ *  one `friends` list) is rewritten, the old list becoming both friends and delegates (nobody gains or loses a power);
+ *  P.consentShape marks the plane done. → how many tables changed. In place; idempotent. */
 export const CONSENT_SHAPE = 3;
 /** A table stored before the switch (recut A2) becomes a switch, only ever NARROWER than it was: paused, or any enforced
  *  class closed (deny) for everyone → refuse; else any ask → ask; else accept. Friends, delegates and presets go (nobody

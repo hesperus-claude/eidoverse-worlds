@@ -1,23 +1,8 @@
 // shared/components.js — the component library, engine rung (RFC #208 steps 3–4, data-only).
-//
-// An entity is a Transform plus a list of components. Each component type is an
-// immutable, content-addressed RECORD: a name, a parameter schema (type, default,
-// range, unit), what it needs, what an old client shows instead, and the line a
-// text-tier resident reads. No record carries code; the realizers that give the
-// built-ins behaviour are the engine's own.
-//
-// Every spelling the wire has is an ALIAS here (design §2.4, §6): `lib`,
-// `collide`, `parent`, `comp.motion` with its `type` enum, `comp.sockets`, …,
-// `comp.light` on any entity, `comp.collider`, and the Empty — a spawn with no
-// `lib`. (The old protocol's `kind: "light"` light entity is gone from the view:
-// the importer rewrites it to comp.light; shared/protocol/kind.js kindOf names
-// what a thing is.) `componentsOf` reads any folded entity as a component list,
-// and `entityOf` writes a component list back to exactly those bytes; an
-// instance's `key` says which comp-bag key it came from. Nothing in an existing
-// world is rewritten (RFC: updates are offered, never applied);
-// tools/components-corpus-test.ts proves the round trip on every local world.
-//
-// Pure: no DOM, no three, no I/O. Server, browser, mcpl and tests import it.
+// Each component type is an immutable, content-addressed RECORD (name, param schema, needs, fallback, text line); no
+// record carries code. Every wire spelling is an ALIAS (design §2.4, §6): componentsOf reads a folded entity as a
+// component list and entityOf writes it back to exactly those bytes (tools/components-corpus-test.ts); nothing stored
+// is rewritten. Pure: no DOM, no three, no I/O.
 
 import { kindOf } from './protocol/kind.js';
 import { recordOf, recordComponents } from './protocol/view.js';
@@ -29,10 +14,8 @@ import { motionType } from './protocol/names.js';
 import { WEATHERS, CLOUDS } from './forecast.js';
 
 // ------------------------------------------------------------ canonical bytes
-// RFC 8785 (JCS) for the JSON this module produces: object keys sorted by UTF-16
-// code units, no whitespace, numbers in ECMAScript's shortest round-trip form
-// (which JSON.stringify already emits), strings JSON-escaped. Non-finite numbers
-// and undefined are refused, as JCS requires.
+// RFC 8785 (JCS): keys sorted by UTF-16 code units, no whitespace, ECMAScript shortest numbers; non-finite and
+// undefined refused.
 export function canon(v) {
   if (v === null || typeof v === 'boolean') return JSON.stringify(v);
   if (typeof v === 'number') {
@@ -53,17 +36,9 @@ import { sha256hex, sha256hexBytes } from './sha256.js';
 export { sha256hex, sha256hexBytes };
 
 // ------------------------------------------------------------ the records
-// Param types: num (unit, min, max), bool, vec3, color, text, asset (a library path), ref (another entity's id), choice (a
-// closed set that IS a set — a particle preset, a loop mode — not a type switch), list, json.
-//
-// ONE description (schema layers, 10-14): a registered component's params are DERIVED here from the registry
-// (shared/protocol/componentspec.js: fields, defaults, ranges, units, docs) through its descriptor (shared/protocol/
-// descriptors.js: which fields the card shows, the editor's spellings — rate, burnsAtNoon, slot — and its translations).
-// This file adds no type, limit, unit or doc of its own for a registered field: paramsOf() throws if a hand entry tries.
-// What a record may still say by hand is the ALIAS LAYER's own: a param the wire doesn't spell as a field (Transform's
-// yaw, a Model's lib, Sockets' slots, a card's whole-value json), and READS — the value a reader uses when
-// the key is absent and the registry writes nothing (a pendulum's pivot, a path's points): the descriptor's `absent` prose
-// says the same in words (tools/descriptor-defaults-test.ts), and `partDefault` where a part's reading differs.
+// Param types: num (unit, min, max), bool, vec3, color, text, asset, ref, choice (a closed set), list, json. A registered
+// component's params are DERIVED from componentspec.js via descriptors.js; paramsOf() throws on a hand-written type, limit,
+// unit or doc. By hand: only the alias layer's params and READS of absence (tools/descriptor-defaults-test.ts).
 const UNIT_OF = { vec3: 'vec3', bool: 'bool', number: 'num', int: 'num', string: 'text', array: 'json', object: 'json', ref: 'ref', refs: 'list', target: 'ref', axis: 'choice', any: 'json', people: 'list', person: 'ref' };
 const WIDGET_OF = { color: 'color', check: 'bool', enum: 'choice', ref: 'ref', text: 'text', num: 'num' };
 const AXIS_LETTERS = Object.keys(AXES);
@@ -213,13 +188,9 @@ const DEFS = [
     note: 'wire: comp.mesh {shape, size}; never beside a model or a light on one thing (give it a child). Its one material slot is \'surface\'' },
   { name: 'Annotation', category: 'Data', summary: 'any other data a world invents (recipe, notice, story…)',
     params: { type: { t: 'text', default: null, required: true }, data: { t: 'json', default: null } }, fallback: { text: 'components: <type>' } },
-  // The world entity's components (design §3, shared/worldentity.js): `@world`
-  // is ONE entity whose bag is these four, aliased both ways onto the fold's
-  // state.sky / state.terrain / state.grass. `world: true` keeps them off every
-  // other entity's Add Component; the world has exactly one of each. Their
-  // defaults are the renderer's READS of absence (the sky, terrain and grass
-  // verbs fold wholesale; the registry writes none); types, limits, units and
-  // docs are the registry's (worldParams).
+  // the world entity's components (shared/worldentity.js): `@world` is ONE entity with these four, aliased onto state.sky /
+  // terrain / grass; `world: true` keeps them off other entities. Defaults are the renderer's reads of absence; types,
+  // limits, units and docs are the registry's (worldParams).
   { name: 'Sky', category: 'World', world: true, summary: 'the time of day, the clock, clouds and light',
     params: worldParams('sky', { hours: {}, rate: {}, tz: { default: null },
       clouds: { options: [...CLOUDS] },
@@ -240,13 +211,8 @@ const DEFS = [
 ];
 
 function freeze(o) { if (o && typeof o === 'object') { Object.values(o).forEach(freeze); Object.freeze(o); } return o; }
-// A record's hash covers its MEANING, not its prose (design §6): `summary`,
-// `note`, every `hint` (on the record or any parameter) and `fallback.text`
-// are documentation, and rewording them must not mint a new version of the
-// component. Everything else — kind, v, name, params with their types,
-// defaults and ranges, needs, category, the fallback's visual — is hashed.
-// Exactly those places, so a parameter that happens to be NAMED note or hint
-// still counts.
+// a record's hash covers MEANING, not prose (design §6): summary, note, every hint and fallback.text are excluded by
+// place, so rewording mints no new version (a param NAMED note or hint still counts)
 function meaningOf(rec) {
   const { summary: _s, note: _n, hint: _h, hash: _x, ...out } = rec;
   if (out.params) out.params = Object.fromEntries(Object.entries(out.params).map(([k, p]) => {
@@ -282,11 +248,8 @@ const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefin
 const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
 
 const isBag = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
-// A comp-bag Light/Collider: the bag's keys map to the record's params by their
-// wire names (Light's `daytime: 'full'` is the record's burnsAtNoon, as an older
-// value's `day: false` was); any other daytime (or an older day) is kept verbatim in
-// `wire`, and keys the record has no param for ride `extra.unknown`, so the bytes
-// always come back.
+// a comp-bag Light/Collider maps keys to params by wire name; an unmapped daytime is kept in `wire`, unknown keys ride
+// `extra.unknown`, so the bytes always come back
 const COMP_WIRE = { Light: { color: 'color', intensity: 'intensity', range: 'range', decay: 'decay', important: 'important' }, Collider: { shape: 'shape' } };
 function compInstance(type, key, data) {
   const params = {}; const extra = {}; let wire;
@@ -309,11 +272,9 @@ function compBag(inst) {
   return Object.assign(bag, inst.extra?.unknown ?? {});
 }
 
-/** Read a folded entity (shared/protocol/fold.js) as { components, stamps }.
- *  Every key of the record lands in exactly one place: a component instance
- *  (`{ type, key?, params, extra? }`, `key` = the comp-bag key it came from),
- *  or `stamps`. `extra` holds a bag's keys the record has no parameter for, so
- *  nothing is dropped; tools/components-corpus-test.ts counts them. */
+/** Read a folded entity (shared/protocol/fold.js) as { components, stamps }. Every key lands in exactly one place: an
+ *  instance (`{ type, key?, params, extra? }`, `key` the comp-bag key) or `stamps`; `extra` keeps keys no parameter
+ *  takes (tools/components-corpus-test.ts counts them). */
 export function componentsOf(ent) {
   if (!ent || typeof ent !== 'object') return { components: [], stamps: {} };
   ent = recordOf(ent);
@@ -444,12 +405,8 @@ export function entityOf({ components, stamps = {} }) {
 /** Canonical-JSON equality with key order ignored (the corpus test's oracle). */
 export const sameRecord = (a, b) => canon(a) === canon(b);
 
-/** The library, grouped for an "Add Component" menu: what may be added to
- *  this entity now (needs met, not already present unless repeatable).
- *  { unmet: true } also lists the ones whose needs are NOT met, each with
- *  `unmet: [names]` — the editor decides whether such a need is added for
- *  you or asked about (shared/editschema.js). `met(need)` may override the
- *  plain "a component of that type is present" test. */
+/** The library grouped for an "Add Component" menu: what may be added now (needs met, not present unless repeatable).
+ *  { unmet: true } also lists the unmet ones with `unmet: [names]`; `met(need)` may override the presence test. */
 const REPEATABLE = new Set(['Pendulum', 'Spin', 'Orbit', 'Oscillate', 'Path', 'Annotation']);
 export function addable(components, { unmet = false, met = null } = {}) {
   const have = new Set(components.map((c) => c.type));
@@ -465,10 +422,8 @@ export function addable(components, { unmet = false, met = null } = {}) {
 }
 
 // ------------------------------------------------------------ one reading, every surface
-// The browser, the text tier and the inspector each need to ask "is this a
-// light, and with what?" of an entity that may use either spelling. They ask
-// HERE, so the answer (and its defaults, which are the fold's) is written once.
-// the registry's light (componentspec.js), the three fields every reading needs: what the authority writes into a bare {light: {}}
+// "Is this a light, and with what?" is asked HERE by browser, text tier and inspector, so the answer and its defaults
+// (the registry's, what the authority writes into a bare {light: {}}) are written once.
 export const LIGHT_DEFAULTS = Object.freeze((({ color, intensity, range }) => ({ color, intensity, range }))(materialize('light', {}).value));
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -498,10 +453,8 @@ export function lightOf(ent) {
   };
 }
 
-/** The collider preference the browser hands fitCollider: comp.collider.shape
- *  "mesh" (or the older "exact") as "exact", "box" as itself, else the legacy spawn `collide` verbatim (as
- *  the browser always passed it), else undefined (= decide by size). "sphere" is a physics request (PHYSICS §3.1): to
- *  walk on, a ball is what its size decides. */
+/** The collider preference the browser hands fitCollider: comp.collider.shape "mesh" (or "exact") as "exact", "box" as
+ *  itself, else the legacy `collide` verbatim, else undefined (by size). "sphere" is a physics request (PHYSICS §3.1). */
 export function colliderOf(ent) {
   const s = isBag(ent?.collider) ? ent.collider.shape : undefined;
   if (s === 'mesh' || s === 'exact') return 'exact';   // the walker's word for its triangles; `exact` is the stored word before 10-16

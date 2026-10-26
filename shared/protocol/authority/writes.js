@@ -1,8 +1,7 @@
 // shared/protocol/authority/writes.js — the write path: changeEntry (the only code that appends a change entry, and it
 // takes only what admit returned), actEntry/actOf, commit (a verb's build, admitted, appended, answered), and the builds
 // of the plain writes: create (with createAt and mint), set, delete, turn and place (with resolve), and the thing
-// lookups they share (needThing, notAThing, offRefuse, the world's bounds) (refactor split, 2026-10-17; moved from
-// authority.js's gate section unchanged). guess is above it, reached through UP.
+// lookups they share (needThing, notAThing, offRefuse, the world's bounds). guess is reached through UP.
 import { isEntityId, isComponent, utf8Len } from "../fold.js";
 import { mintId } from "../ids.js";
 import { COMPONENTS, defOf, isNamespaced, materialize, unitTransform } from "../componentspec.js";
@@ -33,11 +32,9 @@ import { ratedHoursAt } from "../../forecast.js";
 const guess = (...a) => UP.guess(...a);
 
 function changeShape(plan, cause, w) {
-  // §2.4: in a chained log every set carries a salt (base64url, 16 random bytes), so a purged value's commit can't be
-  // brute-forced from a guess. Added here, before fits() measures the entry. The fold ignores it.
-  // the authority's follow-ups are named in the entry itself (review r9 H1 / scars M3): `followUps` lists their indices, so any
-  // reader of the log alone (purged values or not, this code version or another) can tell them from the asker's own ops,
-  // and authorship (lastTouch {authored}, creatorOf, lastSetterOf, a script's sponsor) skips them. Always a batch then.
+  // §2.4: in a chained log every set carries a salt (16 random bytes), so a purged value's commit can't be brute-forced;
+  // added before fits() measures the entry. `followUps` names the authority's ops in the entry itself, so any log reader
+  // can tell them from the asker's and authorship skips them. Always a batch then.
   const ops = plan.ops.map((o) => (o.verb === "set" && "value" in o && o.salt === undefined ? { ...o, salt: nonce16(w) } : o));
   const fu = plan.followUps ?? [];
   const one = ops.length === 1 && !fu.length ? (({ verb, ...body }) => ({ verb, body }))(ops[0]) : { verb: "batch", body: { ops, ...(fu.length ? { followUps: [...fu] } : {}) } };
@@ -57,10 +54,8 @@ function changeEntry(w, plan, cause) {
 const actEntry = (w, actor, verb, body) => ({ kind: "act", actor, verb, body });
 const actOf = (w, actor, verb, args, extra) => actEntry(w, actor, verb, { request: stripDry(args), ...(extra ?? {}) });
 
-// house 6340433633 (the lead's decision): what an imported world's translation carried for the world's sky, terrain, grass
-// or water (imported:<it>) fills that slot in the view while it's empty (view.js). A request that sets or deletes the world's
-// own one deletes the leftovers in the same change, so a deleted sky leaves the slot empty instead of showing them. A
-// capability's writes are scoped to what they name, so a reaction's or script's write is left as it is.
+// an imported world's sky/terrain/grass/water (imported:<it>) fills the view's slot while it's empty (view.js); a request
+// that sets or deletes the native one deletes the leftovers too. A capability's scoped writes are left as they are.
 const NATIVE_WORLD = ["sky", "terrain", "grass", "water"];
 function dropImportedShadows(ctx, ops) {
   if (ctx.cap || !ops.length) return ops; const wc = ctx.st.entities["@world"]?.c; if (!wc) return ops;
@@ -85,10 +80,8 @@ function commit(w, actor, verb, args, build) {
   if (ops.some((o) => o.verb === "delete" && o.comp === undefined)) { const after = scratch(st, ops); const gone = new Set(ops.filter((o) => o.verb === "delete" && o.comp === undefined && !after.entities[o.id]).map((o) => o.id));
     if (gone.size) ops.push(...clearRefsTo({ ...ctx, st: after }, gone)); }
   const plan = admit(w, st, { actor, cap: ctx.cap, restores: ctx.restores, preLifted: pre.notes }, ops); ctx.notes.push(...plan.notes);
-  // the write's consequences (occupants re-dropped off a host whose shape changed) are planned and admitted HERE, against the
-  // state the write leaves, before anything is appended: a refusal refuses the whole request, never half of it (review of
-  // PR #260, followups.js:58: a throw after the commit left a saved edit nobody was sent). A dry run plans them too, and says
-  // what the write would do besides its own ops: who it would stand up, what it would re-drop, and what it would wake
+  // the write's consequences (occupants re-dropped off a reshaped host) are planned and admitted HERE, before anything is
+  // appended, so a refusal refuses the whole request. A dry run reports what it would stand up, re-drop and wake.
   const settle = planResettle(w, actor, plan.ops, st, plan.after);
   if (args.dry) { const woke = (ctx.launches ?? []).filter((b) => plan.after.entities[b.id]).map((b) => b.id);
     const lifted = liftsOf(w, ctx, plan).map((e) => e.body.id);
@@ -125,15 +118,9 @@ const liftsOf = (w, ctx, plan) => { const released = new Set(handsLetGo(w, plan,
   return (ctx.lifts ?? []).filter((id) => plan.after.entities[id] && w.presence.holds?.[id] && !released.has(id))
     .map((id) => ({ kind: "sim", actor: w.presence.holds[id].by, cause: w.entries.length, verb: "lift", body: { id } })); };
 
-// The hands a write's ops empty, by the rule the replay ends a lift by (simlayer's ends() and endsUnder()), so the two
-// agree on what is in a hand: a held thing it moves, re-parents or removes is where the edit put it now. (R, 10-10:
-// moved a held barrel in edit mode; her client let go, the authority didn't, and every throw after was refused from a
-// hand the two no longer agreed on.) Switching it off takes it out of the hand too (review 5d5eef5c #5): an off thing
-// can't be thrown, so it's set down where the record has it. …And switching off (or removing) a thing lets go of
-// whatever is held UNDER it (attack-editor S2-1: a held child of a switched-off parent could be neither put, dropped nor
-// thrown; only its parent's return freed the hand). Each once, in that order; `after` is the state the write leaves. (A
-// thing removed with what it hangs under is in the ops itself: buildDelete deletes every descendant.) A dry run reports
-// them as the write would.
+// the hands a write empties, by the replay's own rule (simlayer ends() and endsUnder()), so client and authority agree
+// on what is held: a held thing moved, re-parented, removed or switched off is let go, and so is whatever is held UNDER
+// a thing switched off or removed. `after` is the state the write leaves; a dry run reports them.
 function handsLetGo(w, plan, after) {
   const out = []; const seen = new Set(); const holds = w.presence.holds ?? {};
   for (const o of plan.ops) { const h = holds[o.id]; if (!h || seen.has(o.id) || !ends(o)) continue;
@@ -171,11 +158,8 @@ function needThing(ctx, id) {
   return e;
 }
 
-// Resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied. Shape and rights
-// are admit's; this only turns what was asked into a plain value.
-// @world.bounds as the readers use it: a malformed one already in a log (written before the authority checked it) is
-// treated as no bounds, never a crash in every create's reply (review T0d)
-// x, z and the sky; the floor is the terrain's (bounds.min[1] sits above the default heightfield)
+// resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights
+// are admit's. A malformed @world.bounds already in a log is treated as no bounds; the floor is the terrain's.
 const outsideWorld = (B, p) => p[0] < B.min[0] || p[0] > B.max[0] || p[2] < B.min[2] || p[2] > B.max[2] || p[1] > B.max[1];
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
@@ -247,10 +231,8 @@ function merge7396(target, patch) {
 function mint(st, also = null) { const ever = CTX.mintW?.everIds() ?? new Set(); let id;
   do id = mintId(); while (st.entities[id] || ever.has(id) || also?.has(id)); return id; }
 
-// create {at} without from (holes review 10-15 M1: it was never read, and the thing landed at the origin with ok):
-// [x, z] is on the ground there (place {at}: returned, for buildCreate to place); [x, y, z] is its origin exactly; {pos?,
-// yaw|q?, scale?} replaces those fields of its transform, as with from (resolve turns a yaw into q, as place does).
-// Anything else is a shape refusal, and so is at with place: one way of saying where.
+// create {at} without from: [x, z] is on the ground there, [x, y, z] the origin exactly, {pos?, yaw|q?, scale?} replaces
+// those transform fields. Anything else is a shape refusal, and so is at with place (one way of saying where).
 const AT_FIX = "at: [x, z] on the ground, [x, y, z] exactly, or {pos: [x, y, z], yaw} (or q); or place {…} instead";
 function createAt(a, comps) {
   const at = a.at; if (at === undefined) return null;
@@ -293,11 +275,9 @@ function buildSet(ctx, a) {
   const e = needThing(ctx, a.id); handWrite(ctx, a.id, a.component);
   if (!isComponent(a.component)) refuse("shape", `'${a.component}' isn't a component name`, "§3.1: [a-z][a-z0-9-]*, optionally <domain>/, @<n> and :<key> (ASCII only)", { didYouMean: guess(String(a.component), Object.keys(COMPONENTS)) });
   const lt = lastTouch(ctx.w, a.id, a.component); const base = a.base === undefined ? undefined : versionSeq(ctx.w, a.base, "base");
-  // No `current` here, for the same reason as expect's (attack-check H5a/H5c): buildSet runs inside commit's
-  // build(ctx) BEFORE admit, so before rights/lacks/lockCheck, and a dry request is never logged — a value echoed
-  // here is a direct read of any component of anything, through a lock, by anyone, with no trace. The fix line
-  // already sends them to `inspect`, which is rights-checked. `version`/`by` stay: history is READ_ONLY,
-  // so who-touched-what-when is public already.
+  // no `current` here, as with expect: buildSet runs BEFORE admit and a dry request is never logged, so an echoed value
+  // would read any component through a lock with no trace (the fix sends them to `inspect`). version/by stay: history is
+  // public (READ_ONLY).
   if (base !== undefined && lt && lt.seq > base) refuse("stale", `${a.id}.${a.component} changed since version ${base}: ${said(lt.actor)} set it at ${lt.seq}`, a.merge ? `inspect {id: '${a.id}'} for the current value and its new version, then re-send with that base` : `inspect {id: '${a.id}'} for the current value and version, then decide; or merge: true to change only your fields`, { version: lt.seq, by: lt.actor });
   if (a.base === undefined && !a.merge && lt && lt.actor !== ctx.actor && a.component in e.c) ctx.notes.push({ id: a.id, component: a.component, overwrote: { by: lt.actor, seq: lt.seq }, why: "you replaced someone else's value without a base version; send base (from inspect) to be refused instead if it changed" });
   let v = a.merge ? merge7396(e.c[a.component], a.value) : a.value;
@@ -357,13 +337,9 @@ function buildDelete(ctx, a) {
     const now = supportBelow(after, (b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, b.min[1], new Set([id]));
     const t = worldT(after, id); ops.push(followUp(setOp(id, "transform", { ...t, pos: [t.pos[0], r3(t.pos[1] - (b.min[1] - now.y)), t.pos[2]] }))); setDown.push({ id, onto: now.id }); ctx.refs.add(id); }
   if (setDown.length) ctx.notes.push({ setDown, why: "they were resting on what you deleted, so they were set down on what's below" });
-  // review of PR #260 (writes.js:296), as grab does (R 10-17 20:05, pyr-7 under pyr-9): under a carried engine, a dynamic thing
-  // the physics rested on TWO supports is parented to one and resting on the other all the same. Deleting that other one
-  // left it asleep in mid-air (the engine wakes a sleeper only when a moving body touches it, never when its support goes).
-  // So a dynamic thing parented to something that stays, whose box TOUCHES one of the deleted things' tops (the thin slab
-  // just over it), falls from rest: a zero-velocity launch, logged after the change; the engine decides whether the
-  // support it keeps still holds it. Held, flying, locked (or under a lock) things stay; so does everything while the
-  // ground is still loading (a fall would rest on a guessed height), said so.
+  // a dynamic thing rested on TWO supports is parented to one; deleting the other would leave it asleep in mid-air (the
+  // engine wakes sleepers only on touch). So one whose box touches a deleted thing's top falls from rest (a zero-velocity
+  // launch); held, flying and locked things stay, as does everything while the ground is still loading.
   const spec = ctx.st.entities["@world"]?.c["physics-engine"];
   if (spec) { const wake = [];
     const tops = [...gone].flatMap((g) => ixb.rec.get(g)?.surfs ?? []);
@@ -454,11 +430,8 @@ function buildPlace(ctx, a) {
       // the footprint's own corners, turned by yaw (house 6340433633: a turned top tested the box of them, so a long thing
       // laid along a turned top was refused where it fits)
       const fq = yawQ(yaw), foot = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => { const r = qrot(fq, [sx * S[0] / 2, 0, sz * S[2] / 2]); return [r[0], r[2]]; });
-      // the 2.5 cm grid as ever (positions by the same running sum), searched nearest-first: ring by ring out from the
-      // cell nearest `want`, stopping once no further ring can hold a nearer cell. The answer is the full scan's (the
-      // nearest free cell, ties to the earlier in its x-then-z order); the work is the cells near the answer, not the
-      // surface's (security pass 2 H-A: a table scaled 20× searched 600 000 cells, each against every thing). Past the
-      // work budget it's refused (too-costly), never minutes of every world's thread.
+      // the 2.5 cm grid, searched nearest-first ring by ring from the cell nearest `want`: the full scan's answer, at the cost
+      // of the cells near it. Past the work budget it's refused (too-costly), never minutes of the world's thread.
       if ((s.max[0] - s.min[0]) / 0.025 > 2e5 || (s.max[1] - s.min[1]) / 0.025 > 2e5) spend(Infinity, `finding room for ${a.id} on ${a.on} (${r3(s.max[0] - s.min[0])}×${r3(s.max[1] - s.min[1])} m at 2.5 cm)`);
       const xs = [], zs = []; for (let x = s.min[0] + hx; x <= s.max[0] - hx + 1e-9; x += 0.025) xs.push(x); for (let z = s.min[1] + hz; z <= s.max[1] - hz + 1e-9; z += 0.025) zs.push(z);
       const nx = xs.length, nz = zs.length; let lastIdx = -1;
@@ -470,9 +443,7 @@ function buildPlace(ctx, a) {
           if (best && (d > best.d || (d === best.d && idx > best.idx))) return;
           if (s.rect && !foot.every(([dx, dz]) => inRect(s, x + dx, z + dz))) return;   // off a turned top's own rectangle, though inside the box of its corners
           spend(4); const bl = free(x, s.y, z, yaw, NONE, local); if (!bl) best = { x, z, d, idx }; else if (idx > lastIdx) { lastIdx = idx; lastBlock = bl; } };
-        // the nearest any cell of a ring's side (columns i0..i1 of a row, or rows k0..k1 of a column) can be to `want`:
-        // a ring's cells are never nearer than its sides' clamp, and no ring is nearer than the one inside it (each of
-        // its cells has a neighbour a step toward the centre cell that is at least as near), so the search ends at the
+        // the nearest a ring's side can be to `want`: no ring is nearer than the one inside it, so the search ends at the
         // first ring whose sides are all further than the best found
         const side = (i0, i1, k0, k1) => Math.hypot(Math.min(Math.max(want[0], xs[i0]), xs[i1]) - want[0], Math.min(Math.max(want[1], zs[k0]), zs[k1]) - want[1]);
         for (let r = 0, R = Math.max(ci, nx - 1 - ci, ck, nz - 1 - ck); r <= R; r++) {

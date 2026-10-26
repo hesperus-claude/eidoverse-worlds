@@ -1,35 +1,27 @@
-// shared/protocol/authority/catalogue.js — the model catalogue and a thing's geometry (refactor C11, 2026-10-12; moved from
-// authority.js's "the model catalogue" section unchanged). A leaf: math and the spatial index read a thing's box through
-// geomE; nothing here reaches the gate. The load-time `CTX.cat = LAB_CATALOGUE` rides along: authority.js imports this
-// file, so an out-of-call reader (a test reading the index) still finds the lab's catalogue in force.
+// shared/protocol/authority/catalogue.js — the model catalogue and a thing's geometry. A leaf: math and the spatial
+// index read a thing's box through geomE; nothing here reaches the gate. The load-time `CTX.cat = LAB_CATALOGUE` rides
+// along so an out-of-call reader (a test reading the index) still finds a catalogue in force.
 import { PURGED } from "../fold.js";
 import { MODELS } from "../labmodels.js";
 import { COMPONENTS } from "../componentspec.js";
 import { collisionBoxes } from "../../structure.js";
 import { CTX } from "./ctx.js";
-// ---------- the model catalogue (engine, slice 2) ----------
-// The lab's authority read its own table (./labmodels.js). The engine's models are library paths measured from their GLBs
-// (server/modelcatalogue.ts), so the catalogue is injected: io.catalogue = { get(name) → entry | undefined,
-// list(query) → [name, entry][] }. An entry is { label, size?, box?, surfaces, solids?, sockets? }:
+// ---------- the model catalogue ----------
+// Injected (models are library paths measured by server/modelcatalogue.ts): io.catalogue = { get(name) → entry |
+// undefined, list(query) → [name, entry][] }. An entry is { label, size?, box?, surfaces, solids?, sockets? }:
 //   box      [[x,y,z], [x,y,z]] in the model's frame (a GLB's origin is wherever its author put it); absent → the lab's
 //            convention, a size-box with the origin at the base centre;
 //   surfaces [{y, x?: [min,max], z?: [min,max], inset?}] in the model's frame (measured flat zones carry x/z);
 //   size     absent → a model this server can name but not measure (no placement help, no collisions, said so).
-// request() sets CTX.cat for the duration of one synchronous call; nothing in the authority awaits, so calls can't interleave.
-// own keys only: MODELS["constructor"] is Object (the lab authority accepted model "constructor"; L1's no-prototype rule)
+// request() sets CTX.cat for one synchronous call. Own keys only (MODELS["constructor"] is Object; L1's no-prototype rule).
 export const LAB_CATALOGUE = Object.freeze({ get: (n) => (Object.hasOwn(MODELS, n) ? MODELS[n] : undefined), list: (q) => Object.entries(MODELS).filter(([k, m]) => k.includes(q) || m.label.includes(q)) });
 CTX.cat = LAB_CATALOGUE;
 const modelOf = (name) => (typeof name === "string" ? CTX.cat.get(name) : undefined);
 const geomOf = (name) => { const m = modelOf(name); return m && m.size ? m : undefined; };
 const boxOfM = (m) => m.box ?? [[-m.size[0] / 2, 0, -m.size[2] / 2], [m.size[0] / 2, m.size[1], m.size[2] / 2]];
-// A building (`structure`) is solid where its walls are, not where its placeholder model is (review 10-07 N2: the authority
-// never read `structure`, so bodies walked through Commons walls and things were put inside them). Its geometry is the
-// structure's own collision boxes (shared/structure.js collisionBoxes: the same derivation the browser's colliders use),
-// in the thing's frame, as a measured model's `solids` are; its floors are surfaces (a body steps over a slab, a thing
-// rests on one), and a doorway is the absence of a box, so it stays walkable. The anchor's model is ignored, as the
-// browser hides it. Cached per structure VALUE (a write replaces a value, never changes it in place), so the spatial
-// index's identity checks still hold. Past STRUCT_MAX solid boxes the building's whole box stands (conservative, as
-// server/solids.ts does past its limit).
+// a building (`structure`) is solid where its walls are, not its placeholder model: its geometry is shared/structure.js
+// collisionBoxes (as the browser's colliders), floors are surfaces, a doorway is the absence of a box. Cached per
+// structure VALUE; past STRUCT_MAX boxes its whole box stands (as server/solids.ts does).
 const STRUCT_MAX = 512; const STRUCTGEO = new WeakMap();
 function structGeom(v) {
   if (!v || typeof v !== "object" || Array.isArray(v) || v === PURGED) return undefined;

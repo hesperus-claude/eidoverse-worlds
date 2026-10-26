@@ -2,8 +2,7 @@
 // occupants resettled when a host's shape changes, the stamps a write gets (physics shapes, media, model hashes), the
 // references a deletion clears (refComps, holdsRefs, withoutRefs, clearRefsTo), who last touched what (lastTouch, which
 // reads follow-ups as no author's), touchedOf, historyDiff, and the physical warnings and dangling references a write or
-// lint reports (refactor split, 2026-10-17; moved from authority.js's gate section unchanged). admit, changeEntry and
-// the world's bounds are above it, reached through UP.
+// lint reports. admit, changeEntry and the world's bounds are reached through UP.
 import { PURGED } from "../fold.js";
 import { baseOf, mapRefs, refsOf, refFields } from "../componentspec.js";
 import { mediaTier, tierWords } from "../../mediasrc.js";
@@ -25,18 +24,9 @@ const boundsOf = (...a) => UP.boundsOf(...a);
 const changeEntry = (...a) => UP.changeEntry(...a);
 const outsideWorld = (...a) => UP.outsideWorld(...a);
 
-// review S2.4 (R 10-12): a geometry write moves a thing's top (a mesh resized, a model swapped, its scale changed), and what the
-// physics had stacked on it (its dynamic children, attached by their rest) kept their local pose: floating over a shrunk
-// plinth, or scaled with a model's new size. They are re-dropped: under a carried engine a zero-velocity launch from where
-// each stands (the engine logs where it lands, as a grab's fallen dependents are); with no engine, set straight down onto
-// what is under them. A held, locked or already flying child is left alone. A move or a turn is not a geometry write: the
-// stack rides along, as it always did.
-// The authority's consequence, not the asker's write (scars r10 M3): written by `system` under its own act, `resettle {hosts,
-// occupants}`, caused by the asker's act (as settle and return-lost are), so the entry never says the asker moved someone else's things.
-// Planned BEFORE the asker's write commits (review of PR #260, followups.js:58): every consequence is computed and admitted
-// against the state the write will leave (the asker's admitted preview), so a refusal refuses the whole request with nothing
-// written; after the commit, applyResettle only appends what was planned and can't refuse. A child the same write creates
-// has no pose before it: it is read from the new state (it was there before only if the old state has it).
+// a geometry write (mesh resized, model swapped, scale changed) re-drops what physics stacked on it: a zero-velocity
+// launch under an engine, else straight down; held, locked or flying children are left. Written by `system` (`resettle`),
+// caused by the asker's act, and planned BEFORE the commit against the admitted preview, so a refusal writes nothing.
 function planResettle(w, asker, ops, before, after0) { let after = after0; const actor = "system";
   // what a host's top depends on: its geometry (a mesh's size, a model's measured box, or none) and its scale. A write that
   // leaves these as they were (the same value re-asserted, a move, a turn) re-drops nothing (review r2 S2.1); a delete of the
@@ -56,10 +46,8 @@ function planResettle(w, asker, ops, before, after0) { let after = after0; const
     const flying = new Set(Object.keys(w.sim?.()?.launched ?? {}));
     const dropped = occupants.filter((k) => !flying.has(k));
     if (!dropped.length) return null;
-    // out from under the host first, standing where it stood in the world: its rest re-attaches it to whatever it lands on
-    // with a fresh local pose (a rest keeps a child's recorded scale, and that scale was compensation for the OLD host size)
-    // (as it stood BEFORE the write: a model host's new scale had already carried the child's world pose and size with it;
-    // a child this write creates stands where the write puts it)
+    // out from under the host, standing where it stood BEFORE the write; its rest re-attaches it with a fresh local pose
+    // (its recorded scale compensated for the OLD host size)
     const was = (k) => (before.entities[k] ? worldT(before, k) : null) ?? worldT(after, k);
     const free = dropped.flatMap((k) => { const t = was(k); return [delOp(k, "parent"), setOp(k, "transform", { pos: t.pos.map(r3), q: qr3(t.q), scale: t.scale.map(r3) })]; });
     const admitted = admit(w, after, { actor, cap: { kind: "system", ids: dropped, comps: ["transform", "parent"] } }, free);
@@ -101,15 +89,9 @@ function applyResettle(w, plan, cause, notes) {
   }
   notes.push(plan.note);
 }
-// P7 + Covenant III: a thing is in the sim by its `physics` component, and its geometry enters the sim only through the
-// log, as physics.shape: the AUTHORITY's measurement of its model (model-local box [[min], [max]]), never the asker's word.
-// The live server folds the sim with no catalogue of its own (livehost.ts: simModels {}), so a thing with no stamped shape
-// is no body at all: thrown, it never flew and never rested (found 10-06: every throw on a running server did nothing).
-// Stamped on every write of the asker's own (a capability's writes are scoped to what they name and are left alone):
-//   - a physics value written (create or set): its shape is the authority's, whatever was sent;
-//   - a model changed on a thing with physics: re-measured;
-//   - a modelled thing made while the world runs physics, and every standing thing when physics is turned on (or its
-//     engine changed): physics {kind: 'static', shape} unless it has physics already (translate-d3 writes the same).
+// P7 + Covenant III: geometry enters the sim only as physics.shape, the AUTHORITY's measurement, never the asker's (the
+// live server has no catalogue: an unstamped thing is no body). Stamped on a physics write, a model change under physics,
+// a modelled thing made while physics runs, and every standing thing when physics turns on (static unless it has physics).
 const r4 = (n) => Math.round(n * 1e4) / 1e4;
 // the authority's measurement of a model as a collider. A sphere is asked for with collider.shape "sphere" (PHYSICS §3.1:
 // the request vocabulary; the stamp is the tagged shape): fitted to the measured box, centred on it, radius its largest
@@ -161,10 +143,8 @@ function stampShapes(ctx, ops) {
   if (rounded.length) ctx.notes.push({ component: "physics", field: "shape", ids: rounded.length <= 12 ? rounded : rounded.length, why: "a cylinder or a capsule is stamped as its bounding BOX: no carried engine reads a cylinder, so it collides, stacks and measures as a box" });
   return out;
 }
-// batch 2: a sound starts on the authority's clock. When a write leaves a sound playing and it wasn't before (no sound, paused,
-// another file) or the request named no t0, the authority sets t0 = now and says so: a reaction, a script, an agent and the
-// editor all start it in step, and no client invents its own clock (as motion.t0). A pause keeps t0; a resume restarts.
-// And a link's reach is said once, when it's written: who will hear or see it (shared/mediasrc.js).
+// a sound starts on the authority's clock: when a write leaves it newly playing, or named no t0, t0 = now (as motion.t0),
+// so every writer starts it in step. A pause keeps t0. A link's reach is said once, when written (shared/mediasrc.js).
 function stampMedia(ctx, ops) {
   if (!ops.some((o) => o.verb === "set" && (o.comp === "sound" || o.comp === "picture"))) return ops;
   return ops.map((o) => {
@@ -179,11 +159,8 @@ function stampMedia(ctx, ops) {
     return { ...o, value: { ...v, t0 } };
   });
 }
-// R 10-17: a model is its library path; what its bytes were rides beside it as model-hash (sha256:<64 hex>), stamped by the
-// authority when its catalogue already knows the hash (server/modelcatalogue.ts measures it off the request path: warm, before
-// the authority sees the request) and never computed here. A model it can't hash carries none: the old one named other bytes,
-// so a change of model drops it. A capability (a handler, a script) never sets a server-written component, so under one the
-// stale hash is only dropped. A content address written as the model (one stored before 10-17) is its own hash.
+// model-hash is stamped only when the catalogue already knows it (server/modelcatalogue.ts, measured before the request),
+// never computed here; a model change it can't hash drops it. A capability never sets it. An eido address is its own hash.
 const hashOfModel = (m) => { if (typeof m !== "string") return null; const a = eidoHex(m); if (a) return `sha256:${a}`;
   let h = null; try { h = CTX.cat.get(m)?.sha256; } catch { h = null; } return typeof h === "string" && /^[0-9a-f]{64}$/.test(h) ? `sha256:${h}` : null; };
 function stampModelHash(ctx, ops) {
@@ -211,10 +188,8 @@ function touched(ops, st) {
 const stripDry = ({ dry, ...rest }) => rest;
 const warnOrNot = (ws) => (ws.length ? { warnings: ws } : {});
 
-// authored: who AUTHORED its current value (a handler's author, review r9 H1): the authority's follow-ups (a reference cleared
-// because what it named was deleted, or put back by that delete's undo; the entry's own `followUps`) are skipped, so an owner's
-// cleanup never re-authors a demoted builder's handlers with the owner's rights, nor a visitor's delete an owner's. A follow-up
-// that removed the component leaves no author (null). Without it: the last write of any kind (a version, a conflict check).
+// authored: skip the authority's follow-ups (the entry's `followUps`), so an owner's cleanup never re-authors someone
+// else's handler with the owner's rights. A follow-up that removed it leaves no author (null).
 function lastTouch(w, id, comp, { editsOnly = false, authored = false } = {}) {
   let restored = false;
   for (const i of backward(w, id)) { const e = w.entries[i]; if (!isE(e) || e.kind !== "change") continue;
@@ -264,11 +239,9 @@ function historyDiff(w, id, at, ops) {
   }
   return Object.keys(out).length ? out : null;
 }
-// R 10-17 (ID HARDENING (4)): a thing's deletion nulls the typed references to it (and to the children that go with it) in
-// the same act, as Unity, Unreal and Resonite do — a reference never outlives what it names. A list loses the entry; a single
-// reference's field goes, and with it a value that can't stand without it (look-at's target: the look-at goes); a reset
-// left with no targets is dropped from the reactions (it can't send nothing home); a home's parent goes (home under the
-// root). Parent links need nothing here: the children went with it. The reply's note lists every reference cleared.
+// a deletion nulls the typed references to it (and its children) in the same act: a reference never outlives what it
+// names. A list loses the entry; a value that can't stand without it goes (a look-at, an empty reset, a home's parent).
+// The reply's note lists every reference cleared.
 const refComps = new Map();   // component name → does it hold references (the registry's typed fields)
 const holdsRefs = (k) => { let v = refComps.get(k); if (v === undefined) { v = refFields(k).length > 0; refComps.set(k, v); } return v; };
 // v with its references to `gone` nulled, and what can't stand without them dropped; undefined when the whole value goes
@@ -295,12 +268,9 @@ function clearRefsTo(ctx, gone) {
   if (cleared.length) ctx.notes.push({ cleared, ...(dropped.length ? { removed: dropped } : {}), why: `references to what you deleted were cleared in the same act${dropped.length ? " (a value that can't stand without its reference, or a reset left with nothing to send home, went with it)" : ""}` });
   return ops;
 }
-// Physical checks on every write (A2).
-// The pairs come from the spatial index (each thing against what its box meets, never against the world), and the work
-// is counted: `strict` (check, a put's claim) is refused past the budget; a write's own advisory warnings, computed
-// after it's written, end with an `unchecked` entry instead (a write is never refused after it lands).
-// a stored reference that names nothing (R 10-17 ID HARDENING (4)): a write can't make one (every ref is checked) and a delete
-// clears them, but an old log, an import or a merge can hold one. lint says where it is and what it names.
+// physical checks on every write (A2): pairs from the spatial index, work counted; `strict` is refused past the budget,
+// a write's own warnings end with `unchecked` (a write is never refused after it lands)
+// a stored reference that names nothing (old log, import, merge): lint says where it is and what it names
 function danglingRefs(st, ids) {
   const out = [];
   for (const id of ids) { const e = st.entities[id]; if (!e) continue;

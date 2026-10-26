@@ -1,37 +1,9 @@
-// terrainmath — the terrain height law as owned numerics (Covenant I).
-//
-// A faithful port of the eidoverse toolkit's makeTerrain height function
-// (eidoverse-video/eidoverse/terrain.js: mulberry32 → 64×64 value-noise grid
-// → fBm → amplitude + flat-radius blend), re-expressed inside the blessed
-// exact-op set so the deterministic sim (eidosim) may ground bodies on
-// it. The toolkit's law was ALREADY almost covenant-clean — integer-hash
-// PRNG, lerp/smoothstep, floor; no transcendental anywhere — with exactly
-// two unblessed calls, substituted here:
-//
-//   - Math.pow(0.5, octaves) → the same value accumulated by halving (for
-//     the integer octaves in use the results are bit-identical);
-//   - Math.hypot(x, z) → Math.sqrt(x*x + z*z) (hypot is implementation-
-//     approximated and historically differs across engines; sqrt is the
-//     blessed op; at world scale the overflow guard hypot exists for is
-//     irrelevant, and the ~1-ulp difference in the flat-radius blend is
-//     nanometres of ground).
-//
-// One consequence stated honestly: the CLIENT's rendered mesh and walking
-// heightAt still come from the toolkit's own function (vendored, eval-
-// loaded); this module is the SIM's ground truth. The two agree to ~1 ulp
-// everywhere, which is nanometres — but the
-// covenant identity that matters (server sim ≡ client shadow sim ≡ any
-// replay, bit for bit) holds because ALL sim consumers use THIS law.
-//
-// THE CONSTANTS AND THE EVALUATION ORDER ARE THE VERSION (Covenant II):
-// this law is held by eidosim's conformance digests (engine-check: the onto-hills scenario): editing anything here that
-// moves a digest is a new engine version, never a patch.
-//
-// SHAPING (features, heightmap — shared/terrainshape.js) rides on top and is
-// carried ONLY when the args use it: for every world that does not, the
-// params object and every height are exactly what they were, so no existing
-// epoch's ground moves. A shaped world's sim grounds bodies on the same
-// shaped law the mesh and the agents use — through the same function.
+// terrainmath — the terrain height law as owned numerics (Covenant I): a port of the toolkit's makeTerrain (mulberry32
+// → 64² value noise → fBm → flat-radius blend) with Math.pow → repeated halving and Math.hypot → sqrt.
+// The client mesh still uses the toolkit's own function (agrees to ~1 ulp); every SIM consumer uses this one.
+// THE CONSTANTS AND EVALUATION ORDER ARE THE VERSION (Covenant II): moving an eidosim conformance digest
+// (tools/protocol/engine-check.ts) is a new engine version, never a patch. Shaping (terrainshape.js) applies only
+// when the args use it.
 
 import { shapeParams, shapeHeight } from './terrainshape.js';
 

@@ -1,35 +1,13 @@
-// shared/blueprint.js — blueprints: the record, its hash, and the copy link as
-// pure functions (design §3 "Blueprints", §7 step 6a).
-//
-// A blueprint is the master design of a thing — an entity with its components
-// and children — saved as ONE immutable, content-hashed record:
+// shared/blueprint.js — blueprints: the record, its hash, and the copy link as pure functions (design §3 "Blueprints").
 //
 //   { kind: "eido.blueprint", v: 1, name, parent?: <hash>, note?,
 //     root: { components: [...], children: [ { id, components, children }, … ] } }
 //
-// `components` are component instances exactly as shared/components.js reads
-// them (componentsOf / entityOf: `{ type, key?, params, wire?, extra? }`), so a
-// node expands to wire bytes with the same alias table every surface uses.
-// The root carries no placement: its Transform may say `scale`,
-// never `pos`/`q`/`yaw` (where a copy stands is the copy's). A child's
-// Transform is LOCAL to its parent node, as a child entity's is to its carrier
-// (design §3 "Children"); the nesting is the attachment, so no node carries an
-// Attachment. A child names itself with `id`, unique among its siblings — the
-// handle an update uses to find the same part in the next version.
-//
-// Editing a blueprint makes a NEW record naming the old one's hash as `parent`
-// (lineage). The hash covers meaning, not prose (design §6's rule for component
-// records): `note` is documentation and may be reworded without minting a new
-// version; everything else — `name` included, since it is what copies show — is
-// hashed.
-//
-// A COPY is an entity carrying `comp.blueprint = { hash, name }` and its full
-// expanded components (principle 1: every client renders it with no resolver).
-// overridesOf / rebase compare copies against records; placing copies (6b) and
-// offering updates (6c) build on these.
-//
-// Pure: no DOM, no I/O. The editor asks these questions here; the authority's blueprint rules are
-// shared/protocol/authority/blueprints.js.
+// Components are instances as shared/components.js reads them. The root carries no placement (scale only); a child's
+// Transform is LOCAL to its parent node; a child's `id` is unique among siblings (the handle an update uses).
+// Editing mints a NEW record naming `parent`; the hash covers meaning (note excluded, name included).
+// A COPY carries comp.blueprint = { hash, name } and its full expanded components (renders with no resolver).
+// Pure: no DOM, no I/O. The authority's blueprint rules are shared/protocol/authority/blueprints.js.
 
 import { canon, sha256hex, entityOf, componentsOf, compRefusal, RECORDS, socketQ } from './components.js';
 import { worldPose, childrenOf, socketOf } from './hierarchy.js';
@@ -67,10 +45,8 @@ function meaningOf(rec) {
   const { note: _n, ...out } = rec;
   return out;
 }
-/** The content hash of a blueprint record: SHA-256 (hex) of the RFC 8785
- *  canonical JSON of its meaning — the same canon() and sha256hex() as
- *  component records (shared/components.js). Throws on what canon refuses
- *  (non-finite numbers); blueprintRefusal says so first. */
+/** The content hash of a blueprint record: SHA-256 (hex) of the RFC 8785 canonical JSON of its meaning, as component
+ *  records (shared/components.js). Throws on what canon refuses; blueprintRefusal says so first. */
 export const blueprintHash = (rec) => sha256hex(canon(meaningOf(rec)));
 
 /** The identity of an instance within its node: type + comp-bag key. */
@@ -191,11 +167,8 @@ function designOf(components, isRoot) {
   return { comps, placement };
 }
 
-// Flatten a tree to one map of addressable facts, so overrides and rebase are
-// a field-by-field comparison. Keys are JSON arrays: [path, compId?, field?]
-// where path is the child ids from the root ("" = root). A node's presence is
-// [path], a component's [path, compId], a field [path, compId, field]; fields
-// are params/<name>, key, wire and extra (wire/extra compared whole).
+// flatten a tree to addressable facts for a field-by-field compare. Keys are JSON [path, compId?, field?] (path = child
+// ids from the root, "" = root); fields are params/<name>, key, wire, extra (wire/extra compared whole)
 const K = (...parts) => JSON.stringify(parts);
 function flatten(tree, isCopy) {
   const out = new Map();
@@ -233,13 +206,9 @@ function describe(key) {
   return { path: path ? path.split('/') : [], ...(comp !== undefined ? { comp } : {}), ...(field !== undefined ? { field } : {}) };
 }
 
-/** What a copy changes for itself, relative to the record it follows: one
- *  entry per differing fact — a field (`{path, comp, field, value, base}`), a
- *  component added or removed (`{path, comp, value: type | undefined, base}`),
- *  or a part added or removed (`{path, value: true | undefined, base}`).
- *  `copy` is a tree in the record's shape ({components, children[{id, …}]}),
- *  read from the world (componentsOf per entity); the root's placement, any
- *  Attachment and the link itself are not overrides. `path` is child ids. */
+/** What a copy changes for itself relative to its record, one entry per differing fact: a field `{path, comp, field,
+ *  value, base}`, a component `{path, comp, value: type | undefined, base}`, a part `{path, value: true | undefined, base}`.
+ *  `copy` is a tree in the record's shape; the root's placement, any Attachment and the link aren't overrides. */
 export function overridesOf(copy, rec) {
   const ours = flatten(copy, true).facts;
   const base = flatten(rec.root, false).facts;
@@ -251,15 +220,9 @@ export function overridesOf(copy, rec) {
   return out;
 }
 
-/** Bring a copy to a new version of its blueprint, keeping its overrides:
- *  a three-way merge of copy (ours) against oldRec (base) and newRec (theirs),
- *  fact by fact. A fact only one side changed takes that side; a fact both
- *  changed alike is fine; a fact both changed differently is a CONFLICT — an
- *  override on a field the update also changed — and so is removing a part
- *  or component the other side edited. With no conflicts:
- *    { ok: true, tree: {components, children} }   (the copy's placement kept)
- *  else { ok: false, conflicts: [{path, comp?, field?, ours, base, theirs}] }
- *  and nothing is guessed. */
+/** Bring a copy to a new version keeping its overrides: a three-way merge (copy ours, oldRec base, newRec theirs), fact
+ *  by fact; a fact both sides changed differently, or a removal of something the other side edited, is a CONFLICT.
+ *  → { ok: true, tree: {components, children} } or { ok: false, conflicts: [{path, comp?, field?, ours, base, theirs}] }. */
 export function rebase(copy, newRec, oldRec) {
   const O = flatten(copy, true), B = flatten(oldRec.root, false), T = flatten(newRec.root, false);
   const merged = new Map();
@@ -314,10 +277,7 @@ function nodeLives(merged, path) {
 }
 
 // ------------------------------------------------------------ one spelling per meaning
-// The comp-bag key each type is written under when an instance names none —
-// entityOf's own defaults, plus Lock/Guard/Hidden, which entityOf writes
-// under whatever key the instance carries (a keyless one would land under
-// "undefined").
+// The key each type is written under when an instance names none (entityOf's, plus Lock/Guard/Hidden, else "undefined").
 const DEFAULT_KEY = {
   Lock: 'lock', Guard: 'guard', Hidden: 'hidden', Label: 'label',
   Pendulum: 'motion', Spin: 'motion', Orbit: 'motion', Oscillate: 'motion', Path: 'motion',
@@ -326,19 +286,9 @@ const DEFAULT_KEY = {
 };
 const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: the stored word before 10-16 (the door stores mesh)
 
-/** A node's components in the spelling every NEW write uses (owner,
- *  2026-10-02: "everything should go out under the new comp system"):
- *  - a keyless Light (the legacy `kind:"light"` entity) becomes the Light
- *    component `comp.light` — unless the part also holds one, when the two
- *    spellings would collide (placeRefusal names it);
- *  - a keyless Collider (the spawn verb's legacy `collide`) becomes
- *    `comp.collider` when its shape is one the component speaks (exact | box);
- *    any other shape stays the legacy argument, the only way to write it;
- *  - every other comp-bag type with no key takes the key entityOf writes it
- *    under (a hand-written record may leave keys out).
- *  The same function decides what placement writes and what overridesOf /
- *  rebase compare, so a copy placed from a legacy record reads back as that
- *  record: one meaning, one identity, whatever the spelling it was saved in. */
+/** A node's components in the spelling every NEW write uses: a keyless Light becomes comp.light (unless the part holds
+ *  one: placeRefusal names it), a keyless Collider comp.collider when its shape is one the component speaks, any other
+ *  keyless type takes entityOf's key. Placement and overridesOf/rebase share it, so a legacy record reads back as itself. */
 function dropRateKey(c) {
   const { rateKey: _r, ...extra } = c.extra;
   const { extra: _e, ...rest } = c;
@@ -361,17 +311,8 @@ export function modernize(components) {
 }
 
 // ------------------------------------------------------------ placing a copy (6b)
-// A copy is placed as ORDINARY verbs (principle 1: the log records the result):
-// each part a `spawn` (an Empty when it has no Model), a child `mount`ed under
-// its parent at its LOCAL pose, every other component a `comp`, the link a
-// `comp blueprint`. Nothing on the wire is new except what the link says:
-//   root   comp.blueprint = { hash, name }   — this is a copy of record `hash`
-//   child  comp.blueprint = { part: <id> }   — this is the part `id` of the copy
-//                                              it rides (the record's child id)
-// The part marker is how a copy is read back as a tree whatever its entity ids
-// are (they are minted at placement), and how 6c's update finds "the bulb" in
-// the next version. It rides each part rather than a map on the root because a
-// comp is at most 8 KB and a record may hold 256 parts.
+// A copy is placed as ORDINARY verbs; only the link is new: root comp.blueprint = { hash, name }, child
+// comp.blueprint = { part: <id> }. The marker rides each part, not a root map, because a comp is ≤ COMPONENT_BYTES.
 export const LINK_KEY = 'blueprint';
 const isBagV = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 /** Is this comp.blueprint value a copy's link ({hash, name})? */
@@ -387,11 +328,8 @@ const slug = (s) => String(s).replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 24) || 
 const compEntries = (inst) => Object.entries(recordComponents(entityOf({ components: [inst] }))).filter(([k]) => k !== 'model' && k !== 'parent');
 const RULES = new Set(['lock', 'guard']);   // written last: a lock refuses the mount; guard last for symmetry
 
-/** Why this record cannot be placed as ordinary verbs, or null. The shape is
- *  blueprintRefusal's; on top of it, what the door would refuse one verb at a
- *  time — a light or collider the component contract refuses, a comp with no
- *  data, a key the door would truncate — is refused here for the whole copy,
- *  before anything is sent (a half-placed copy is worse than none). */
+/** Why this record can't be placed as ordinary verbs, or null: blueprintRefusal's shape plus what the door would refuse
+ *  one verb at a time, refused for the whole copy before anything is sent (a half-placed copy is worse than none). */
 export function placeRefusal(rec) {
   const shape = blueprintRefusal(rec);
   if (shape) return shape;
@@ -420,18 +358,10 @@ export function placeRefusal(rec) {
   return node(rec.root, 'root');
 }
 
-/** The verbs that place a copy of `rec`, and the verbs that take it away again
- *  — ONE undo step on every surface:
- *    { verbs, inverses, parts: { <path>: <entity id> }, errors }
- *  `at` is where the root stands: {id, pos, q?, yaw?, scale?} (q wins over a
- *  bare yaw; `scale` multiplies the record's own root scale, the ghost's
- *  R-drag). `taken(id)` says an entity id is already in use, so a minted part
- *  id never replaces something standing. Parts are named `<root>-<child id>`
- *  (made unique), so the Hierarchy reads like the design.
- *  Order: per part, `spawn` (parents first) → `mount` → its comps → its link;
- *  then every lock and guard, because a locked part refuses its own mount.
- *  The inverses unlock what the copy locked, then remove the parts leaves
- *  first (a removed carrier would otherwise stamp its occupants down first). */
+/** The verbs that place a copy of `rec` and their inverses, ONE undo step: { verbs, inverses, parts: { <path>: <id> },
+ *  errors }. `at` is the root's {id, pos, q?, yaw?, scale?} (q wins; scale multiplies the record's); `taken(id)` keeps
+ *  minted `<root>-<child id>` names unique. Per part spawn → mount → comps → link, then locks and guards (a locked part
+ *  refuses its own mount); inverses unlock, then remove leaves first. */
 export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
   const why = placeRefusal(rec);
   if (why) return { verbs: [], inverses: [], parts: {}, errors: [why] };
@@ -508,10 +438,8 @@ export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
 }
 
 // ------------------------------------------------------------ reading a copy back (6b)
-/** The copy `id` belongs to: { root, path } where `root` is the entity holding
- *  the link and `path` the part ids from it down to `id` ([] = the root
- *  itself) — or null when `id` is not in a copy. Walks the fold's parent edges
- *  up; a part whose chain no longer reaches a linked root is in no copy. */
+/** The copy `id` belongs to: { root, path } (path = part ids from the linked root, [] = the root), or null. Walks the
+ *  fold's parent edges up. */
 export function copyOf(world, id) {
   const path = [];
   const seen = new Set();
@@ -525,11 +453,8 @@ export function copyOf(world, id) {
   return null;
 }
 
-/** A child entity's components with its Transform made LOCAL (exported for
- *  6c's Save as Blueprint, which reads a selection's children the same way): the mount's
- *  offset and relative orientation (a slot's pose when the mount names a slot
- *  and no offset), its own scale. The fold's pos/q on a
- *  mounted thing is its pre-mount pose, not where it is (hierarchy.js). */
+/** A child entity's components with its Transform made LOCAL (the mount's offset and relative q, or its slot's pose),
+ *  its own scale; a mounted thing's fold pos/q is its pre-mount pose (hierarchy.js). Exported for Save as Blueprint. */
 export function localComponents(world, ent) {
   const { components } = componentsOf(ent);
   const rel = ent.parent ?? {};
@@ -547,19 +472,9 @@ export function localComponents(world, ent) {
   });
 }
 
-/** Read a placed copy back as a tree in the record's shape — what 6c hands
- *  overridesOf and rebase:
- *    { root, hash, name, tree: {components, children: [{id, …}]},
- *      parts: { <path>: <entity id> } }
- *  or null when `rootId` holds no link. The root's components are as the world
- *  holds them (its placement, any parent of its own and the link included —
- *  overridesOf leaves those out); every child's Transform is LOCAL. A child is
- *  named by its part marker; a child with none (something parented into the
- *  copy since) or with a marker a sibling already holds is an ADDED part, named
- *  by its entity id — so overridesOf reports it as added, never as the part it
- *  imitates. `rec`, when given, orders children as the record does. A child
- *  that is itself another copy's root is not descended into: it is an added
- *  part carrying its own link (nested copies are not v1). */
+/** Read a placed copy back as a tree in the record's shape: { root, hash, name, tree: {components, children: [{id, …}]},
+ *  parts: { <path>: <entity id> } }, or null with no link. Children's Transforms are LOCAL; a child without its own
+ *  part marker (or a duplicate) is an ADDED part named by its id; `rec` orders children; nested copies aren't descended. */
 export function copyTree(world, rootId, rec = null) {
   const root = world?.[rootId];
   const link = root?.[LINK_KEY];
@@ -607,11 +522,8 @@ export function copiesOf(world) {
  *  store holds (v1 = an original). 0 when the store lacks the record. */
 export const versionOf = (store, hash) => (store?.[hash] ? lineageOf(store, hash).filter((h) => store[h]).length : 0);
 
-/** One line a reader can act on — `a copy of "Lamp" (v2, 1a2b3c4d5e6f)` for a
- *  root, `part "bulb" of lamp-1, a copy of "Lamp" (v2, …)` for a part — or
- *  null when `id` is in no copy. The text tier, inspect and the panels say
- *  the same words. The name is the store's when it holds the record (the
- *  link's `name` is what it was called when placed). */
+/** One line a reader can act on (`a copy of "Lamp" (v2, 1a2b3c4d5e6f)`, `part "bulb" of lamp-1, …`), or null; the text
+ *  tier, inspect and the panels say the same. The name is the store's when it holds the record. */
 export function copyLine(world, id, store = null) {
   const c = copyOf(world, id);
   if (!c) return null;

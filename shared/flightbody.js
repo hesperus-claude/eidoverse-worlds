@@ -1,26 +1,7 @@
-// flightbody — what a body must HAVE to fly, checked by name and nothing else.
-//
-// Janus's constraint, and the right one: "the flying mechanics should continue
-// to work if I update the body as long as the load-bearing bits remain the
-// same (such as wing bones), or maybe even more compatible than that."
-//
-// So flight is not bound to an avatar hash. It is bound to a NAMING CONTRACT,
-// which is the same contract hair and wings already flow through in this
-// project (rigtest/EIDOVERSE-DEPLOY.md: "the pipeline recognises bones by NAME
-// and nothing else"). Re-export the body with the same bone names and flight
-// keeps working; rename them and this says so, loudly, instead of producing a
-// flier whose wings do not move.
-//
-// "More compatible than that" is the second half, and it is why this returns a
-// CAPABILITY REPORT rather than a boolean. A body with no wing bones can still
-// fly the physics -- the integrator moves a point through space and has never
-// heard of a skeleton -- it simply cannot ANIMATE the wings. That is a
-// degradation worth naming rather than a failure worth refusing, because the
-// physics bench is useful on a wingless stand-in and the falling-leaf is a
-// property of the body's trajectory, not of its feathers.
-//
-// PURE, per shared/README.md: no three, no DOM, no fetch. The caller passes a
-// list of bone names, however it happens to know them.
+// flightbody — what a body must HAVE to fly, checked by bone NAME and nothing else, not an avatar hash: re-export a
+// body with the same names and flight keeps working; rename them and this says so. It returns a CAPABILITY REPORT, not
+// a boolean: a wingless body still flies the physics, it just can't animate wings.
+// PURE, per shared/README.md: the caller passes a list of bone names.
 
 /** The wing chains, as authored by rigtest/hair_rig.py's sibling convention:
  *  <side>_Wing_<row> then _1, _2 outward. Two rows per side, three deep. */
@@ -60,19 +41,8 @@ export function inspectBody(boneNames) {
     chains[k].sort((a, b) => depthOf(a) - depthOf(b));
   }
   const wingCount = Object.values(chains).reduce((n, c) => n + c.length, 0);
-  // CORE BONES BY EITHER NAME. The rig ships Tripo names (Hip, Spine02, Head),
-  // but three-vrm NORMALISES a loaded body to the VRM humanoid vocabulary --
-  // so the browser sees `hips` where the file says `Hip`, and a check written
-  // against one is blind in the other runtime. That is exactly how human
-  // flight came to report "Hip absent" on a body with 48 perfectly good bones.
-  //
-  // Each entry is a set of acceptable spellings for the same joint.
-  // Three vocabularies reach this function and they disagree about everything
-  // except meaning: the Tripo rig ships `Hip`/`Spine02`, three-vrm's humanoid
-  // map says `hips`/`chest`, and a Mixamo-derived body in the same world says
-  // `Hips`/`Spine`. Case-insensitive matching over a set of spellings is the
-  // only check that is true in all three; a literal list was blind in two of
-  // them and reported "Hip absent" on a body with 48 perfectly good bones.
+  // core bones by any spelling: Tripo (`Hip`/`Spine02`), three-vrm's humanoid map (`hips`/`chest`) and Mixamo
+  // (`Hips`/`Spine`) reach this; case-insensitive matching over a set per joint is true in all three
   const CORE = [
     ['hip', 'hips'],
     ['spine02', 'spine01', 'spine', 'chest', 'upperchest'],

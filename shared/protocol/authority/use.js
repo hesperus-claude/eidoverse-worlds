@@ -1,7 +1,6 @@
 // shared/protocol/authority/use.js — use (interaction): what a thing offers (reactions, toggles, sockets a body may take,
-// the implicit open), buildUse that turns a use into ops or presence, and the use verb as USE_VERBS, which authority.js
-// spreads into VERBS where it stood (refactor split, 2026-10-17; moved from authority.js's "use (interaction)" section
-// and the VERBS table unchanged). The write path, scripts and seats it hands off to are above it, reached through UP.
+// the implicit open), buildUse that turns a use into ops or presence, and USE_VERBS, which authority.js spreads into
+// VERBS. The write path, scripts and seats it hands off to are reached through UP.
 import { bodyOf } from "../../components.js";
 import { inOccupyReach, OCCUPY_REACH } from "../../sockbody.js";
 import { grabOf } from "../../grab.js";
@@ -134,11 +133,8 @@ function buildUse(ctx, a) {
     reactionCap(ctx, a.id, "motion", action);
     ctx.refs.add(a.id); return [setOp(a.id, "motion", { ...mo, amp: r3(amp), phase: r3(phase), t0: now })];
   }
-  // §5: a thing's gameplay state lives inside its own component (a door is `openable: {open, locked}`), never as a top-level
-  // name beside the edit `lock`. A handler names its component and, for an object component, the field it changes.
-  // a handler that changes a field inside a component needs that component (it was there when the handler was written;
-  // someone has removed it since): say so, rather than write a component nothing draws (review 10-07: a toggle on a crate
-  // wrote an invisible door {open: true})
+  // §5: a thing's gameplay state lives inside its own component (a door is `openable: {open, locked}`), never beside `lock`.
+  // A handler changing a field needs that component: if it was removed since, say so rather than write one nothing draws.
   if ((h?.kind === "set" && h.field !== undefined) || (h?.kind === "toggle" && toggleOf(h).field !== undefined)) { const comp = h.kind === "set" ? h.component : toggleOf(h).comp;
     if (!(e.c[comp] && typeof e.c[comp] === "object" && !Array.isArray(e.c[comp]))) refuse("no-handler", `${a.id} has no ${comp} any more, so '${action}' has nothing to change`, "someone who may edit it can add it back, or set its reactions again"); }
   if (h?.kind === "set") { const comp = h.component; reactionCap(ctx, a.id, comp, action); ctx.refs.add(a.id);
@@ -168,11 +164,8 @@ const bodySockets = (st, id) => { const e = st.entities[id]; const host = isSock
 // 23:17: the gym door had only `openable`; clicking it did nothing, and inspect said "nothing here opens it"). It is barred
 // while openable.locked is on, as the registry's `locked` reads: "bars opening while on (an open handler with unless: 'locked')"
 const IMPLICIT_OPEN = Object.freeze({ kind: "toggle", component: "openable", field: "open", unless: "locked" });
-// the barred implicit open's remedy, saying only what it can see: the reactions on the thing that unlock it (a toggle of
-// openable.locked, a set of it to false, or a set of the whole openable that leaves it off) and that aren't barred
-// themselves, with who may use each; else the edit that unlocks it. A script may unlock it too, unseen here, so the remedy
-// never says nothing does. The open step is worded by state (on an open door the implicit open shuts it), except where a
-// named unlocker sets the whole openable, and with it whether it's open: then it says only that "open" opens or shuts it
+// the barred implicit open's remedy, saying only what it can see: unbarred reactions that unlock it (with who may use
+// each), else the edit that unlocks it (a script may too, unseen). The open step is worded by state.
 function unlockFix(e, id) {
   const q = (x) => JSON.stringify(String(x));
   const unlocks = (h) => (h?.kind === "toggle" && toggleOf(h).comp === "openable" && toggleOf(h).field === "locked" && !barredBy(e, h))
@@ -204,10 +197,8 @@ function offersFor(st, id, actor) {
 
 const USE_VERBS = {
   use(w, actor, a) {
-    // use while held (grabbable.use; research grab §3): the holder's use with no action fires the thing's own: its down,
-    // or its up with args.phase 'up' (a hose turns on, then off: each one act). The request is logged as sent; the act
-    // and the script's event say it was held, in which hand, and which phase. Rapid or continuous effects while pressed
-    // (a muzzle flash, a spray) are presence, never a stream of acts: grabbable.fx, drawn by every client.
+    // use while held: the holder's use fires the thing's own down, or its up with args.phase 'up', each one act noting hand
+    // and phase. Continuous effects while pressed are presence, never a stream of acts (grabbable.fx is reserved).
     const hold = w.presence.holds[a.id]; let held = null; const sent = a;
     // review 10-06: the up of a press is taken from whoever pressed down, even when the thing has left their hand since
     // (taken by someone, dropped with the button still down): a hose that was turned on gets turned off. Once.

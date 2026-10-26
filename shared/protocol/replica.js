@@ -1,18 +1,12 @@
-// shared/protocol/replica.js — a world as a CLIENT holds it (slice 3b). Pure; the browser (client/lib/net.js) and the
-// suites (tools/protocol/authority-check.ts) run the same code.
-//
-// The client folds the log itself, from the server's own log stream:
-//   adopt(snap)        the join snapshot's cut: {state: wireState(fold), head, worldId, mine?}, the fold as the
-//                      server holds it at `head` (a client can't refold the whole log on join; it adopts a cut);
+// shared/protocol/replica.js — a world as a CLIENT holds it. Pure; the browser (client/lib/net.js) and
+// tools/protocol/authority-check.ts run the same code.
+//   adopt(snap)        the join snapshot's cut: {state: wireState(fold), head, worldId, mine?} (a client can't refold
+//                      the whole log on join; it adopts a cut);
 //   ingest(entries, from, held)
-//                      the `log` message: the raw entries the authority just wrote, folded with the fold's own ops
-//                      (opsOf + applyInPlace, the strict reader's code). A gap, a purge (retroactive by law, L1) or a
-//                      genesis means this client can't continue its cut: it asks for a fresh snapshot (`resync`).
-//
-// What the renderer reads (slice 3c): the VIEW of this fold (view.js viewState), recomputed from the fold itself,
-// so there's nothing held beside it to drift; client/lib/state.js diffs successive views and tells the realizers
-// what changed, in the protocol's terms. `say` entries come back as chat lines ({seq, ts, actor, text,
-// to?}): chat isn't world state, it's the log's own kind.
+//                      the `log` message's raw entries, folded with the strict reader's ops (opsOf + applyInPlace). A
+//                      gap, a purge (retroactive, L1) or a genesis asks for a fresh snapshot (`resync`).
+// The renderer reads view.js's viewState of this fold (client/lib/state.js diffs successive views); `say` entries
+// come back as chat lines ({seq, ts, actor, text, to?}).
 import { opsOf, applyInPlace, emptyState, PURGED, Malformed } from "./fold.js";
 import { simFolder, simCutOf, advanceSim, tickOf, carried } from "./simlayer.js";
 import { viewState } from "./view.js";
@@ -57,11 +51,8 @@ const thawed = (e) => ({ born: e.born, c: Object.assign(Object.create(null), e.c
 export function makeReplica({ freeze = true } = {}) {
   const v = { active: false, st: null, head: -1, worldId: null, you: null, names: Object.create(null), stats: { ingested: 0, resyncs: 0 }, frozen: !!freeze };
   const freezeAll = () => { if (freeze && v.st) for (const id of Object.keys(v.st.entities)) freezeRecord(v.st.entities[id]); };
-  // The tree's edges, indexed from the records' own `parent` fields (ids as the fold spells them): rebuilt at adopt,
-  // kept at every ingest from the ops' ids (an op names the one record it touched; a parent edge lives on the child).
-  // One index for every reader — the realizer's carrier checks, the sockets re-seat, the Hierarchy — in place of
-  // the maps each kept by hand beside the fold (C12b, survey #11). A carrier that is gone while a child still names
-  // it keeps that child listed: the index answers what the records say, exactly as a scan would.
+  // the tree's edges, indexed from the records' own `parent` fields: rebuilt at adopt, kept at every ingest from the ops'
+  // ids. One index for every reader; a gone carrier keeps its children listed, exactly as a scan would answer.
   const kids = new Map(), par = new Map();
   const link = (id, to) => { let s = kids.get(to); if (!s) kids.set(to, (s = new Set())); s.add(id); par.set(id, to); };
   const unlink = (id) => { const was = par.get(id); if (was === undefined) return; const s = kids.get(was); if (s) { s.delete(id); if (!s.size) kids.delete(was); } par.delete(id); };
@@ -75,11 +66,9 @@ export function makeReplica({ freeze = true } = {}) {
   // actors are opaque ids (u-…); their display names come from the authority's directory, never from the log (§2.3)
   const learn = (names) => { if (names && typeof names === "object") { learnNames(names); for (const [k, n] of Object.entries(names)) if (typeof n === "string") v.names[k] = n; } };
   v.nameOf = (id) => actorName(id);
-  // The sim layer beside the fold (design 20 on the client): the SAME simFolder the authority runs, fed the same entries, with
-  // no catalogue of its own (geometry is the log's physics.shape, as on the server). Canonical: it advances only by the
-  // entries' own ts, never by this machine's clock (a fast clock would otherwise apply a later entry at the wrong tick).
-  // What the screen shows is a COPY of it advanced to display time (simAt / simClone): a flight on screen is the
-  // engine's flight, and it rests bit for bit where the authority will log the rest.
+  // the SAME simFolder the authority runs, fed the same entries, no catalogue of its own. It advances only by entries'
+  // ts, never this machine's clock; the screen shows a COPY advanced to display time (simAt / simClone), so a flight
+  // rests bit for bit where the authority will log it.
   let E = [], folder = null;
   v.sim = null; v.simVersion = 0;
   const startSim = (snap) => {

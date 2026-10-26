@@ -1,9 +1,8 @@
-// shared/protocol/authority/scriptrun.js — scripts, the running half (activation): one activation (activate),
-// withAuthority, the server's settle/tick/checkpoint beat, orphan settlement, liftWorld (the load's report) and maintain (the maintenance command), the presence
-// and hand events and their drains, the status view, and the script verbs (upload, effect, adopt, scripts) as SCRIPT_VERBS,
-// which authority.js spreads into VERBS where they stood (refactor split, 2026-10-17; moved from authority.js's
-// "behaviours" section and the VERBS table unchanged; the standing half is authority/scripts.js). The gate, the engine's
-// settle and the returns home are above it, through UP.
+// shared/protocol/authority/scriptrun.js — scripts, the running half: activate, withAuthority, the server's
+// settle/tick/checkpoint beat, orphan settlement, liftWorld (the load's report) and maintain (the maintenance command),
+// the presence and hand events and their drains, the status view, and SCRIPT_VERBS (upload, effect, adopt, scripts),
+// which authority.js spreads into VERBS. The standing half is authority/scripts.js; the gate, the engine's settle and
+// the returns home are reached through UP.
 import { grabOf } from "../../grab.js";
 import { isIdentity, PURGED } from "../fold.js";
 import { dec } from "../names.js";
@@ -41,10 +40,8 @@ const settleSim = (...a) => UP.settleSim(...a);
 // what an act records of its event: everything but what its trigger already holds (a say's text and `to`, a use's args),
 // so purging that say or that request purges it everywhere (an auditor reads it from the trigger: scriptaudit.js)
 const recorded = (ev) => { const { text, to, args, ...rest } = ev; return ev.seq !== undefined ? rest : ev; };
-// review r8 M4: an arrival or a departure is presence, and a signed, permanent act naming who came and went is an attendance
-// list the authority would keep for any script that listens. Its activation records no identity (no trigger actor, no
-// event.by); the script still hears `by` live, and what it writes itself is its own (and in its scope). The auditor re-runs
-// it with a stand-in arrival (scriptaudit.js)
+// an arrival or departure records no identity (no trigger actor, no event.by): a signed act naming who came and went
+// would be an attendance list. The script still hears `by` live; the auditor re-runs with a stand-in (scriptaudit.js).
 const ANON_EVENTS = new Set(["enter", "leave"]), GRIP_EVENTS = new Set(["grab", "release"]);
 const anonEvent = ({ by: _by, ...rest }) => rest;
 const overBudget = (st, B, cfg, key, sponsor, cost) => (B.mine >= cfg.rate ? `${key} logged ${B.mine} activations in the last minute; the rate is ${cfg.rate}`
@@ -115,10 +112,8 @@ function activate(w, id, name, ev) {
   if (dry) return { script: key, id, status: "would-run", would: plan?.ops ?? [], says: res.says, bodies: res.bodies, sponsor: sp.sponsor, fuel: res.fuel, note: "dry: nothing was written; body effects still meet each body's consent when it runs", ...logs };
   const gates = [];
   for (const b of res.bodies) { const g = bodyGate(w, `script:${id}`, b.to, b.kind, { spec: b.spec, script: key, sponsor: sp.sponsor }); if (!g.ok) return mark(g.code, g.reason); gates.push({ ...b, consent: g.consent, deliver: g.deliver }); }
-  // an arrival or departure, and a hand event whose own entry isn't on the record (an unlogged grab: presence), record no
-  // identity (review r9 claims O2): the log would otherwise hold who handled what only because a script listened. A hand
-  // event with an act of its own (a grab the sim had to be told of, a release's settlement) already names its actor there,
-  // so its activation keeps `trigger` (and the auditor its `by`)
+  // arrivals, departures and unlogged hand events (presence) record no identity; a hand event with an act of its own
+  // already names its actor there, so its activation keeps `trigger`
   const anon = ANON_EVENTS.has(ev.on) || (GRIP_EVENTS.has(ev.on) && ev.seq === undefined);
   const actE = { kind: "act", actor: `script:${id}`, verb: "script", ...(cause !== undefined ? { cause } : {}),
     body: { script: key, src: v.src, sponsor: sp.sponsor, sponsorAt: sp.sponsorAt, on: ev.on, ...(ev.by && !anon ? { trigger: { actor: ev.by, ...(ev.seq !== undefined ? { seq: ev.seq } : {}) } } : {}),
@@ -142,16 +137,12 @@ function withAuthority(w, fn) {
   try { return fn(); } finally { exit(); if (w.presenceDirty) { w.savePresence(); w.presenceDirty = false; } }
 }
 /**
- * Timers (authority practice): a due script with nobody present sleeps unless `always`; on its first due tick after someone
- * arrives it gets ONE `wake {slept}`, never a burst. Several missed periods while awake coalesce into one tick. A timer
- * act's cause is the entry that made its sponsor (its latest install). Then the cascades it set off. A host calls this on
- * its own clock (server: once a second); it never runs inside a request.
+ * Timers: a due script with nobody present sleeps unless `always`, then gets ONE `wake {slept}`; missed periods coalesce.
+ * A timer act's cause is its sponsor's latest install. A host calls this on its own clock, never inside a request.
  */
 /**
- * The engine's heartbeat (DESIGN-physics-responsiveness §1). Advances the sim toward the authority's clock, at most `maxTicks`
- * engine ticks a pass (a stall catches up over several passes, never by a longer step: the bits stay the law's), and logs
- * what came to rest, returns what is due back, expires asks. A host calls this at tick cadence; a request still settles
- * first (the fallback for a host without a heartbeat) and finds nothing left to do. Returns how many entries it wrote.
+ * The engine's heartbeat: advances the sim toward the authority's clock, at most `maxTicks` a pass (a stall catches up
+ * over passes, never by a longer step), logs rests, returns what is due back, expires asks. → entries written.
  */
 export function settle(w, { maxTicks = 8 } = {}) {
   // without the world's key nothing can be logged (storage's append refuses), so the heartbeat doesn't start what it can't write
@@ -167,12 +158,9 @@ export function settle(w, { maxTicks = 8 } = {}) {
     return w.entries.length - n0;
   });
 }
-// A checkpoint is a persisted joiner cut (DESIGN-physics-responsiveness §2; STRIKES PH-S1-1: boot re-simulated every flight
-// the world ever had, 6.5 s for the gym's 94 launches and growing). At a quiet moment (nothing in flight, nothing waiting to
-// be logged) after launches have happened, the authority writes one `sim:checkpoint` entry whose body names a blob holding
-// the sim cut exactly as a joiner gets it (simCutOf), with the cut's engine and digest beside it. A host that carries the
-// engine opens the world from the last valid checkpoint and feeds only the entries after it; any other reader folds past
-// an unknown sim verb unchanged. The fold itself is never checkpointed: it is cheap and always exact from genesis.
+// a checkpoint is a persisted joiner cut, so boot needn't re-simulate every flight: at a quiet moment after launches, one
+// `sim:checkpoint` entry names a blob of the sim cut (simCutOf) with its engine and digest. A carrying host opens from the
+// last valid one; other readers fold past it. The fold itself is never checkpointed (cheap and exact from genesis).
 const CHECKPOINT_QUIET_MS = 20000;
 function checkpointSim(w) {
   if (typeof w.putBlob !== "function" || !w.state().entities["@world"]?.c["physics-engine"]) return;
@@ -208,10 +196,8 @@ export function tick(w) {
     return ran;
   });
 }
-/** TIMED GRANTS end (upstream #258, PROTOCOL §7 Roles): every roles:<id> whose `until` has passed by the authority's clock
- *  is deleted, in one system act `expire-roles {ids}` and its change, so the end is in the log (a replay, a fork and an
- *  audit all see when someone's access ended). The host calls it about once a second; between `until` and that write the
- *  grant still stands. → the identities whose grant ended. */
+/** TIMED GRANTS end (PROTOCOL §7 Roles): every roles:<id> past its `until` is deleted in one system act `expire-roles
+ *  {ids}`, so the end is in the log. The host calls it about once a second. → the identities whose grant ended. */
 export function expireRoles(w) {
   if (!w.exists || w.state().status !== "ok" || !holdsCustody(w)) return [];
   return withAuthority(w, () => {
@@ -225,15 +211,9 @@ export function expireRoles(w) {
     return ids;
   });
 }
-/** A world opened after its host stopped without settling presence (a crash, a SIGKILL: no leave ran). Holds are
- *  presence. A host that persists presence (server/filehost.ts) still has the hold, with no one connected to let go: it's
- *  settled as `leave` settles it (a drop as the holder, which its grabbable may send home, into a socket or straight
- *  down; a drop the authority refuses becomes its return-held). A host that keeps presence in memory (server/livehost.ts)
- *  has lost the hold, but in a world that runs physics the grab's `lift` took the thing out of the engine and nothing
- *  put it back: it would stay a ghost (no body, no collider) until someone moved it. That is settled by the authority as
- *  leave's refusal is: a return-held act (cause: the lift) writing where the log last had it, which seats it in the
- *  engine again, or, for a grabbable that returns, a return-home. `present` = identities connected now (none, at
- *  load). Returns what it settled. */
+/** Settle holds a crashed host left: a persisted hold is dropped as `leave` would; a lost in-memory hold under physics
+ *  (the thing still lifted out of the engine, a ghost) is settled by a return-held act (cause: the lift) or a return-home.
+ *  `present` = identities connected now. Returns what it settled. */
 // Bounded (security pass 2 M-C): it runs at world load on the thread every world shares, so at most ORPHANS.holders
 // holders are settled as leave settles them and ORPHANS.lifts lifts returned; any holds past that simply end (presence),
 // and what the log still has lifted is settled at the next load. The result says how many waited ({deferred}).
@@ -271,31 +251,20 @@ export function settleOrphans(w, present = []) {
   if (out.length) w.savePresence();
   return out;
 }
-// ---------- maintenance (lead's ruling 2026-10-18: a LOAD NEVER WRITES TO THE LOG) ----------
-// Three rewrites of stored values exist, each a recorded system act: lift-sockets (a pre-socket world's `sockets` maps and
-// body blocks → socket children + stations), rename-components (names and fields renamed before release: shaperepair.js
-// RENAMED_COMPONENTS / RENAMED_FIELDS) and repair-shapes (the shape audit's one-way repair, marker-gated: shapesMarked). None
-// runs at load any more. One explicit command runs the three in that order (maintain; `bun tools/protocol/world.ts repair
-// <name>`, or a server operator's operator-repair {verb: "repair"}), each step its own act carrying `command: "repair"` and
-// `by`; the command's caller keeps the pre-repair log for a byte-identical rollback (server/repairfiles.ts).
-// A world that needs a step still LOADS. Whether it may be WRITTEN depends on whether today's readers serve the old shape:
-//   lift     no reader serves an un-lifted seat (sitting works on socket children only): BLOCKS writes
-//   rename   @world trusted (drafts.js trustedOf reads both), a motion's bob (names.js motionType), a station's pose
-//            (sockbody.js bodyOf) are read in the old spelling: served; a grabbable's pose or a grip's fingers are not
-//            (shared/grab.js reads anim and grasp only): BLOCKS writes
-//   repair   the sky's azimuth in degrees reads as radians, an address model reads as "thing": BLOCKS writes
-// A blocked world refuses every write (not the reads, not leave) with the registered code `repair-needed`, whose text names
-// the command (authority.js request). Never a silent wrong behaviour; never a write the operator didn't ask for.
+// ---------- maintenance: a LOAD NEVER WRITES TO THE LOG (docs/MAINTENANCE.md) ----------
+// Three recorded system rewrites, run only by the repair command in this order (maintain; `bun tools/protocol/world.ts
+// repair <name>` or operator-repair): lift-sockets, rename-components (shaperepair.js RENAMED_*), repair-shapes
+// (marker-gated: shapesMarked). The caller keeps the pre-repair log for rollback (server/repairfiles.ts).
+// A world needing a step still LOADS, but refuses writes (`repair-needed`) where no reader serves the old shape:
+//   lift     un-lifted seats: BLOCKS writes
+//   rename   @world trusted, a motion's bob and a station's pose are served; a grabbable's pose or a grip's fingers
+//            are not (shared/grab.js reads anim and grasp only): BLOCKS writes
+//   repair   azimuth in degrees reads as radians, an address model reads as "thing": BLOCKS writes
 const needsCache = new WeakMap();
 const SERVED_RENAMES = (op) => !(op.comp === "grabbable" || op.comp.startsWith("grabbable:"));   // what no reader serves in the old spelling
-/** Why the record itself stops a write now, or null: its old shapes wait for the maintenance command (lead's ruling 10-18:
- *  a load never writes; a world whose old shapes no reader serves refuses every write until the command runs). Reads work
- *  either way. A log changed outside the purge rule does NOT stop writes (house markup, #260 10-20): the fold names each such
- *  line (commit-unpurged) and reads its value as unknown, which is §12's rule; refusing everyone's writes until an operator
- *  restores it was a policy no world asked for. One function, so a request (authority.js) and a script the host sets off
- *  (activate) meet the same gates. The system's own sweeps (settle's rests and returns, expireRoles, settleOrphans) don't:
- *  what they write is derived from the clock and the engine, not anyone's act, and gating them would keep a timed grant open
- *  past its until. → {code, reason, fix, extra?} */
+/** Why the record itself stops a write now, or null: old shapes waiting for the maintenance command (a load never
+ *  writes). Reads work either way; a commit-unpurged line doesn't block (§12 reads it unknown). Requests and scripts meet
+ *  it; the system's own sweeps don't (they'd hold a timed grant past its until). → {code, reason, fix, extra?} */
 export function writeBlock(w) {
   const n = maintenanceNeeds(w);
   // the reader (an agent, a person in the editor) can't run the command, so the fix says who can and that asking again
@@ -338,10 +307,9 @@ export function liftWorld(w) {
   return [{ repairNeeded: { steps: n.steps, blocking: n.blocking, optional: n.optional, why, fix: n.fix } }];
 }
 
-/** The maintenance command: lift-sockets, then rename-components, then repair-shapes, each its own recorded system act
- *  (provenance: command: "repair", by, operator). Per host / per thing admission as before: what the door refuses is left
- *  as it was and named in the act's `failed`. Returns {steps: {lift, rename, repair}, repaired, failed, marked, seq?, dryRun?}
- *  (repaired/failed/marked/seq are the repair-shapes step's, for its callers). dryRun computes every step and writes nothing. */
+/** The maintenance command: lift-sockets, rename-components, repair-shapes, each a recorded system act (command: "repair",
+ *  by, operator); what the door refuses is named in `failed`. → {steps: {lift, rename, repair}, repaired, failed, marked,
+ *  seq?, dryRun?}; dryRun writes nothing. */
 export function maintain(w, { by = null, operator = false, dryRun = false } = {}) {
   if (!w.exists || w.state().status !== "ok") return { refused: { code: "no-world", reason: "the world doesn't fold to a state" } };
   if (w.custody()?.sign && w.custody().sequencer() !== w.entries[0]?.body?.sequencer) return { refused: { code: "custody", reason: "this server doesn't hold the key that signs this world" } };
@@ -419,10 +387,8 @@ function orphanLifts(w) {
     else if (e.kind === "sim" && e.verb === "launch") lifted.delete(readback(w, seq)?.id);
     else if (e.kind === "change") { const ops = opsQuiet(e);
       for (const o of ops) if (o.comp === "parent") parentOf.set(o.id, o.verb === "set" && typeof o.value?.to === "string" ? o.value.to : null);
-      // the same lifecycle as the engine's (simlayer ends() and endsUnder(), read after the whole entry as the replay reads
-      // them): what ends a hold is a write that moves it, re-parents it, switches it off or removes it, or switches off or
-      // removes a thing it hangs from; an engine change or an edit to its physics or model leaves it in the hand (review of
-      // 64d26822: the two disagreed, and a held thing came back into the engine as a ghost collider)
+      // the engine's own lifecycle (simlayer ends() and endsUnder()): a write that moves, re-parents, switches off or removes
+      // it (or what it hangs from) ends a hold; an engine, physics or model edit leaves it in the hand
       for (const o of ops) { if (o.verb === "create" || ends(o)) lifted.delete(o.id);
         if (endsUnder(o)) for (const k of [...lifted.keys()]) if (under(k, o.id)) lifted.delete(k); }
       for (const o of ops) if (o.verb === "delete" && o.comp === undefined) parentOf.delete(o.id); }
@@ -443,11 +409,9 @@ export function presenceEvent(w, kind, who) {
     return ran;
   });
 }
-// grab and release (grabbable; research grab §3): every script whose scope covers the thing and lists the event hears
-// it, once. A grab is presence (unlogged unless the sim had to be told): its activation's cause is the grab's own act
-// when there is one, else the entry that made the script's sponsor, as enter/leave. A release is the settlement, which
-// is logged: its act is the cause. Fields: by, id, hand, grip? (grab); by, id, how (put | drop | throw | stay | return |
-// snap), socket? and to? (release), seq (the act) when logged.
+// grab and release: every script whose scope covers the thing and lists the event hears it, once. A grab's cause is its
+// own act when logged, else the sponsor's entry; a release (logged) is its act. Fields: by, id, hand, grip? (grab); by,
+// id, how (put | drop | throw | stay | return | snap), socket?, to? (release); seq when logged.
 const heldEvent = (w, kind, id, ev) => { (w.heldQ ??= []).push({ kind, id, ev }); };
 // Everything a write set off, until nothing is left: a hand event's scripts may write (changed:, say), and a changed:
 // script's move may let go of a held thing (letGoEdited), which is a hand event again. So the two queues are drained in

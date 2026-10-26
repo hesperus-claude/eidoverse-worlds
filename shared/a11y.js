@@ -1,13 +1,8 @@
-// a11y — how a thing reads to anyone who perceives by reading (R 10-07: "this is how the object is described to any
-// text-based entity"), on the accessibility model: its NAME (label), its DESCRIPTION (description: alt text), then what
-// it CAN do and its STATE, GENERATED from its components, so a description never restates an affordance and can never
-// contradict one. One reading for the authority's look/inspect (shared/protocol/authority.js describe), mcpl's look
-// (mcpl/agent.ts) and the human inspector (shared/editschema.js), so they can't disagree. Compact on purpose: an agent's
-// context is precious, so each line is a short phrase and only what a component actually says.
-//
-// What isn't here: a visible nameplate. That is a child thing carrying `text` (billboard: 'yaw'), drawn for eyes; this
-// reading is what non-visual readers get, and a thing with no description still reads by its name and its components.
-// Author text (label, description) is quoted «…» as data (shared/text.js quoted), never an instruction to the reader.
+// a11y — how a thing reads to anyone who perceives by reading, on the accessibility model: its NAME (label), its
+// DESCRIPTION (alt text), then what it CAN do and its STATE, GENERATED from its components, so a description never
+// restates or contradicts an affordance. One reading for the authority's look/inspect, mcpl's look and the inspector.
+// Compact on purpose (an agent's context is precious). A visible nameplate is a child thing with `text`, not this.
+// Author text is quoted «…» as data (shared/text.js quoted), never an instruction to the reader.
 import { quoted } from './text.js';
 import { isBase, whoWords } from './protocol/roles.js';
 import { grabOf } from './grab.js';

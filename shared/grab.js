@@ -14,22 +14,22 @@
 //     range       1.5           m from the hand; past 1.5 it flies to the hand (0.1..10)
 //     priority    0             -10..10: wins over lower when several things are in reach (the key, not the table)
 //     hold        'auto'        auto (press-to-hold in VR, sticky on desktop and phone) | press | toggle
-//     anim        (by size)     how a body without tracked hands holds it: a pose or clip by NAME, open (R 10-17 15:09/15:11;
-//                               was pose, a closed enum): built in hand | carry | torch | pistol | shoulder (HOLD_POSES); a name
+//     anim        (by size)     how a body without tracked hands holds it: a pose or clip by NAME, open:
+//                               built in hand | carry | torch | pistol | shoulder (HOLD_POSES); a name
 //                               the body doesn't know is its default hold (by size), never a refusal. two-hand is twoHanded.
 //     grips       {}            {<name>: {pos, q?, hand?, role?, grasp?, part?}}: where the PALM goes, in the
 //                               thing's own frame (+Z out of the palm, +Y along the fingers' base)
 //     twoHanded   false         a second hand on a secondary grip steers it (false: a second hand takes it over)
-//     carries     (absent=false) a tray: what rests on it comes along when it is picked up (false: it falls off; R 10-10)
+//     carries     (absent=false) a tray: what rests on it comes along when it is picked up (false: it falls off)
 //     throw       1             0..3: scales the release velocity (0: it can only be dropped)
 //     release     'drop'        drop | stay (hangs where you let go) | return (goes home)
 //     returnAfter 0             s, 0..3600: goes home after this long unheld (0: never)
-//     (home)                    where it goes home to is the thing's own `home` component (shape audit 10-16: one home;
+//     (home)                    where it goes home to is the thing's own `home` component (one home;
 //                               the authority stamps it when a returning grabbable is written without one)
 //     fits        []            keywords: it snaps into a socket whose `accepts` shares one, released within its radius
 //     use         null          a reactions action, or {down, up}: what the use button fires while held
 //     prompt      null          hover text (≤ 40); absent: "Pick up <label>"
-//     (fx)                      reserved (shape audit 10-16): refused; presence-only particles while use is held come back
+//     (fx)                      reserved: refused; presence-only particles while use is held come back
 //                               as an addition if wanted. A grip's bone overrides (hold) are cut.
 //   }
 //
@@ -94,13 +94,9 @@ export function gripOf(g) {
 }
 
 /**
- * What a hand may do with a thing, read from its components (an entity's `c`) with every default filled in, or null
- * when it can't be held at all. The ONE reader: the authority's gates, the client and the agent all ask this.
- *
- * Migration (research §Decisions 5): a thing with `physics {kind: 'dynamic'}` and no `grabbable` reads as
- * {who: physics.who ?? 'builder'} plus the defaults, which reproduce what the authority did before grabbable existed: the
- * latest grab wins, reach 1.5 m from the hand, held by its centre in the right hand, dropped or thrown on release.
- * `source` says which it was ('grabbable' or 'physics').
+ * What a hand may do with a thing, from its components (`c`) with every default filled in, or null when it can't be held.
+ * The ONE reader (authority gates, client, agent). A dynamic `physics` thing with no `grabbable` reads as {who: physics.who
+ * ?? 'builder'} plus the defaults (the pre-grabbable behaviour); `source` says which ('grabbable' or 'physics').
  */
 export function grabOf(c) {
   if (!isObj(c)) return null;
@@ -184,10 +180,8 @@ export function holdWire(h) {
 export const offsetOk = (o) => isObj(o) && nums(o.pos, 3, 2) && unitQ(o.q) && Object.keys(o).every((k) => k === 'pos' || k === 'q');
 
 // ---------------------------------------------------------------- finger presets (VRM normalized bones)
-// A curl per segment in radians, as each finger bends toward the palm: [proximal, intermediate, distal]; the thumb's are
-// [metacarpal, proximal, distal]. Normalized VRM bones rest in a T-pose (identity), the right hand's fingers along -X and
-// the left's along +X, palms down: a finger bends toward the palm about +Z on the right and -Z on the left, and the thumb
-// folds in about Y. Every client poses fingers from the same table (presence: what the preset IS is data, never streamed).
+// A curl per segment in radians toward the palm: [proximal, intermediate, distal] (thumb: [metacarpal, proximal,
+// distal]); about +Z on the right hand, -Z on the left, thumb about Y. Every client poses from this table (never streamed).
 const CURL = {
   fist:    { f: [1.45, 1.55, 1.0], thumb: [0.35, 0.6, 0.6] },
   pinch:   { f: [0.55, 0.75, 0.45], thumb: [0.45, 0.5, 0.45], index: [0.8, 0.9, 0.6] },
@@ -210,12 +204,8 @@ export function fingerPose(preset, side, hold = {}) {
 }
 
 // ---------------------------------------------------------------- the body's hold pose (no tracked hands)
-// Where each arm points for a preset, in the body's frame (+Z forward, +Y up, the right arm's side is -X): the upper arm,
-// then the forearm. Every client turns these into normalized-bone rotations (shortest arc from the T-pose: a rest arm
-// lies along -X on the right, +X on the left), so a desktop or phone body visibly holds what it holds, the same for
-// everyone. Every direction is written for a RIGHT arm and mirrored for a left one; `other` is the other arm of a
-// two-armed preset (carry: both arms round it; both-hands, a twoHanded thing: the support hand forward on it). both-hands
-// is not a name an anim may give (twoHanded says it); the others are HOLD_POSES.
+// Upper arm then forearm directions per preset, in the body's frame (+Z forward, +Y up), written for a RIGHT arm and
+// mirrored; `other` is a two-armed preset's other arm. both-hands is not an anim name (twoHanded says it).
 const BOTH_HANDS = 'both-hands';
 const ARMS = {
   hand:       { hold: [[-0.12, -0.95, 0.28], [-0.05, -0.3, 0.95]] },

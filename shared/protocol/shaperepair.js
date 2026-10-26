@@ -1,9 +1,7 @@
-// shared/protocol/shaperepair.js — a value stored before the shape audit's wave 2 (physics-motion, 10-16), in today's
-// spelling, with the meaning its readers gave it. Pure: a thing's components in, the repaired components out. Three
-// callers, one rule set: the explicit repair command (authority repairShapes — never a load, reviewer item 9 10-18: one system
-// act, `repair-shapes`, ONCE per world: shapesMarked below), translate-v1@12's projection (so a translated world needs no
-// repair, and is marked), and the old-world oracle's mirror of the load. The rules that read an absent field may only
-// ever see values stored before the audit: that is the marker's job, not these functions' (review r7 F2).
+// shared/protocol/shaperepair.js — a value stored before the shape audit, in today's spelling, with the meaning its
+// readers gave it. Pure: components in, repaired components out. Callers: the explicit repair command (authority
+// repairShapes, never a load: one `repair-shapes` act ONCE per world, shapesMarked), translate-v1@12's projection, and
+// the old-world oracle. Rules that read an absent field may only see pre-audit values: the marker guards that.
 //
 // The rules:
 //   motion   a bare motion naming a `part` is that node's motion: motion:<partSlot(part)> {node: part} (a motion already on
@@ -11,28 +9,23 @@
 //            amplitude → amp (amp wins); a letter axis (x, y, z, -x, -y, -z) → its vector;
 //            a pendulum with no period read 3.5 s and with no damp 0 (motioneval.js): written down;
 //            a whole motion's `pivot` field → the thing's pivot component (when it has none);
-//            a whole PENDULUM with no pivot component swung about [0, 2, 0] (motioneval.js, before 10-16): that point is
-//            written as its pivot component, because a whole thing now turns about its origin when it has none.
+//            a whole PENDULUM with no pivot component swung about [0, 2, 0]: that point is written as its pivot
+//            component, because a whole thing now turns about its origin when it has none.
 //   collider exact → mesh (one vocabulary with shapes.js, KHR, Unity, Godot).
 //   physics  no kind read as the old materialized default, dynamic; material → surface (renamed); layers, mask, ccd
 //            (cut, never read) are dropped.
-// …and the render-media-env family (render-media-env.md §3, §4, §13–§15), the same callers:
 //   light      no decay fell off as the rig's three.js decay 1.7: written (a NEW light's default is 2); day → daytime
 //              (true dim, false full); shadows (read by nothing) dropped
-//   model      (R 10-17, v2) a content address eido:sha256/<hex> (translate-v1@8–@11 wrote them) → the library path this
-//              host's index names for it, with the address's hash beside it as model-hash sha256:<hex>; only with a resolver
-//              (the command passes the catalogue's pathOf: host-local, which is fine for a logged act every replica folds as
-//              written); an address no file here names is kept, and still loads
+//   model      a content address eido:sha256/<hex> → the library path this host's index names, its hash beside it as
+//              model-hash sha256:<hex>; only with a resolver (the catalogue's pathOf); an unknown address is kept
 //   @world (repairWorld):
 //   sky        clock 'real' + dormantRated {hours, rate, ts} → tz, with hours/rate/ts the parked clock (it is the fallback
 //              now); another clock → no tz; azimuth degrees → radians;
-//              weatherSeconds → transition; forecast dwellSec/transitionSec → dwell/transition; sun, fill, world (never
-//              stored on Burrow) dropped
+//              weatherSeconds → transition; forecast dwellSec/transitionSec → dwell/transition; sun, fill, world dropped
 //   terrain    layer colours "#rrggbb" → ints; the sim's defaults (terrainmath.js) written where absent; terrain.water →
 //              the water component (its colour an int)
-//   grass      the first protocol's makeGrass knobs → the flora spelling (mapGrassArgs, the reader's own mapping); a preset
-//              is kept by its name, as the door keeps one (R 10-17; Fable #4)
-// A particle Essential's name and a grass preset's name are stored as written (R 10-17): nothing rewrites them to an address.
+//   grass      the first protocol's makeGrass knobs → the flora spelling (mapGrassArgs); a preset is kept by its name
+// A particle Essential's name and a grass preset's name are stored as written: nothing rewrites them to an address.
 import { grassAtWrite } from "./assetref.js";
 import { eidoHex } from "../eido.js";
 import { COMPONENTS } from "./componentspec.js";
@@ -115,10 +108,8 @@ export function repairSky(sky) {
       const d = out.dormantRated; if (bag(d)) { if (Number.isFinite(d.hours)) out.hours = d.hours; if (Number.isFinite(d.rate)) out.rate = d.rate; if (Number.isFinite(d.ts)) out.ts = d.ts; } }
     else delete out.tz;   // a clock other than real: the rated clock governs
     delete out.clock; delete out.dormantRated; }
-  // a tz with no clock is today's spelling (it governs). The audit's pre-#65 case (a tz that meant nothing without clock) is
-  // indistinguishable from it, and no stored sky on Burrow held one (all 16 tz values sat beside clock: 'real'): kept
-  // degrees → radians, once (the repair's marker makes it once: shapesMarked). A turn more than a full one is the same bearing
-  // (400° is 40°), so it lands inside the registry's ±2π instead of refusing the world's whole repair (review r7 F5)
+  // a tz with no clock is today's spelling (it governs): kept. Degrees → radians once (the marker); a turn past a full
+  // one is the same bearing (400° is 40°), so it lands inside the registry's ±2π instead of refusing the whole repair
   if (typeof out.azimuth === "number" && Number.isFinite(out.azimuth)) { edit(); out.azimuth = (out.azimuth % 360) * Math.PI / 180; }
   // weatherSeconds → transition; a value today's range can't hold (0, or more than 600 s) is dropped: absent, the
   // renderer's own ease (review r7 F5)
@@ -130,10 +121,8 @@ export function repairSky(sky) {
   for (const k of ["sun", "fill", "world"]) if (k in out) { edit(); delete out[k]; }
   return out;
 }
-/** @world's components repaired: {c, set, del}, as repairComps. Only the world's look is touched. NOT idempotent on a sky:
- *  its azimuth is converted from degrees every time it is handed one. Each caller hands it a stored value once: the
- *  repair command runs once per world (repairShapes: the log's marker, shapesMarked), translate-v1@12 once per translation
- *  (and its output carries the marker), the oracle once per projection. */
+/** @world's components repaired: {c, set, del}, as repairComps; only the world's look. NOT idempotent on a sky (azimuth
+ *  converts every time), so each caller hands it a stored value once (the marker: shapesMarked). */
 export function repairWorld(c0) {
   if (!bag(c0)) return { c: c0, set: [], del: [] };
   const c = { ...c0 }; const set = new Set(), del = new Set();
@@ -151,21 +140,15 @@ export function repairWorld(c0) {
 }
 const withSkyDefaults = (sky) => { const out = { ...sky }; for (const [k, v] of Object.entries(COMPONENTS.sky.defaults)) if (out[k] === undefined) out[k] = v; return out; };
 
-/** The shape repair's version: carried by its act (repair-shapes {v}) and by a founding (create-world {shapes}). 2 (R 10-17):
- *  an old content address → its library path, and names (an Essential's, a grass preset's) kept rather than resolved. A log
- *  marked by any version is not repaired again: version 1 was only ever written by this branch's test and scratch worlds, and their
- *  addresses still load (the index) or read as "thing". */
+/** The shape repair's version, carried by its act (repair-shapes {v}) and a founding (create-world {shapes}). 2: an old
+ *  content address → its library path, names kept rather than resolved. A log marked by any version isn't repaired again. */
 export const SHAPES_VERSION = 2;
-/** Has this log been through the shape repair already, or been written in today's spelling from its start? True when it
- *  holds the repair's own act (any version: the first one, before 10-16's review, repaired everything before it or
- *  nothing), a founding stamped with `shapes` (a world founded since), or a translation by translate-v1@12 or later (which
- *  writes the repaired spelling). A pure view over the log, so every replica and every server answers the same. */
-// Review r8 M3: the marker is the system's repair-shapes act, read by verb and actor only (they stay in a purged entry's
-// skeleton). A founding writes one beside it, and translate-v1 one beside its `translated`. The two older markers (a
-// founding's `shapes`, a translation's translator) are read through `bodyOf`: the authority passes readback, so a purged
-// body is unknown, and unknown is MARKED. Never re-running a one-way rewrite on values written in today's spelling is the safe
-// side; the cost is a world founded before 10-16 whose founding was purged before its repair here, which keeps its old
-// values unrepaired (their readers' defaults) rather than having today's values rewritten as if old.
+/** Has this log been through the shape repair, or been written in today's spelling from its start? True for the
+ *  repair's own act (any version), a founding stamped with `shapes`, or a translation by translate-v1@12 or later. A pure
+ *  view over the log, so every replica answers the same. */
+// the marker is the system's repair-shapes act, read by verb and actor (they survive a purge); a founding and translate-v1
+// write one too. Older markers are read through `bodyOf` (readback): a purged body is unknown, and unknown is MARKED,
+// since never re-running a one-way rewrite on today's values is the safe side.
 export function shapesMarked(entries, bodyOf = (i) => entries?.[i]?.body ?? null) {
   const L = entries ?? []; let founded = false;
   for (let i = 0; i < L.length; i++) { const e = L[i];
@@ -178,17 +161,13 @@ export function shapesMarked(entries, bodyOf = (i) => entries?.[i]?.body ?? null
   return false;
 }
 
-/** Component names renamed before release (protocol minor 0), {old: new}, per the entity they live on ("@world" or "thing").
- *  Unlike the shape repair this is a pure rename, idempotent, so it is NOT marker-gated: the maintenance command renames what
- *  it finds (renameOps), as the system's `rename-components` act, and a world with nothing to rename writes nothing. A rename never
- *  overwrites a value already under the new name (that one wins; the old one is deleted). R 10-17 14:34: @world `trusted`
- *  read as a list of trusted PEOPLE (the consent table's delegates); it lists components. */
+/** Component names renamed before release, {old: new} per entity ("@world" or "thing"). A pure idempotent rename, so
+ *  NOT marker-gated: the maintenance command's `rename-components` act renames what it finds; a value already under the
+ *  new name wins. @world `trusted` lists components, not people. */
 export const RENAMED_COMPONENTS = Object.freeze({ "@world": Object.freeze({ trusted: "trusted-components" }) });
-/** Fields renamed before release (R 10-17 15:09/15:11): grabbable.pose and station.pose → anim (an open name of a pose or a
- *  clip; grabbable's 'two-hand' → twoHanded: true), a grip's fingers → grasp. One pure function for the door (a write in
- *  the old spelling is taken and stored in the new: writes.js resolve) and the maintenance command (renameOps). Idempotent; a value
- *  already spelled today is returned as the same object; an old field stored as null is removed, never renamed to a null
- *  (to: null in its note). {value, renamed: [{field, from, to}]} */
+/** Fields renamed before release: grabbable.pose and station.pose → anim ('two-hand' → twoHanded: true), a grip's
+ *  fingers → grasp. One function for the door (writes.js resolve) and the maintenance command; idempotent, and an old
+ *  field stored as null is removed. → {value, renamed: [{field, from, to}]} */
 export const RENAMED_FIELDS = Object.freeze({ grabbable: Object.freeze({ pose: "anim", "grips.*.fingers": "grasp" }), station: Object.freeze({ pose: "anim" }),
   // a VALUE renamed (R 10-17 21:40): a motion's type bob is oscillate, on a whole motion and on every motion:<slot>
   motion: Object.freeze({ "type=bob": "type=oscillate" }) });

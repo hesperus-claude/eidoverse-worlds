@@ -1,24 +1,9 @@
-// mover — ONE locomotion integrator for every body, in every runtime.
+// mover — ONE locomotion integrator for every body, in every runtime (agent, client, authority), so a step the mover
+// accepts is one the authority accepts, to the millimetre, and its refusal is the authority's. PURE, as shared/flight.js:
+// the caller owns state, world queries arrive as `env` callbacks, config carries the spec's numbers as defaults.
 //
-// Walking used to be written three times: the agent's stride (mcpl/agent.ts), the human client's stride
-// (client/lib/controller.js + colliders.js + bodyscale.js) and the authority's plausibility track
-// (shared/protocol/authority.js TRACK). Three copies of "how fast, how wide, how high a step" drift — a 3 cm
-// disagreement between two of them turned a test red (10-13) — and a wall one walker could step over was solid to
-// another. This file is the one place they all read, on the model of shared/flight.js: PURE, no THREE, no DOM,
-// no clock; every piece of state is a value the caller owns, and everything a world could disagree about comes in
-// as `env` callbacks.
-//
-// THE AUTHORITY ASKS THE MOVER WHERE A BODY MAY GO; the agent and the client STEP with it. The authority's
-// refusal of a step (too fast, into a solid, up a ledge) is therefore the mover's own answer about the same
-// input, and a step the mover accepts here is one the authority accepts there, to the millimetre.
-//
-// MODES. A body has one mover and the mover has modes. `walk` is implemented here; `fly` is shared/flight.js's
-// integrator (already one function for every runtime) and joins this table when its state moves in; `swim` and
-// `drive` are names reserved so they can join without renaming anything. A mode owns the body's position while it
-// lasts: stepping in a mode a body isn't in is a no-op with a reason, never a teleport.
-//
-// Style, as flight.js: config with the spec's numbers as DEFAULTS (tuning is a diff to a literal, never a hunt
-// through the integrator), typedefs, pure functions that take the config first.
+// MODES. `walk` is here; `fly` is shared/flight.js's and joins this table when its state moves in; `swim` and `drive`
+// are reserved names. Stepping a mode the body isn't in is a no-op with a reason, never a teleport.
 
 /** @typedef {[number, number, number]} P3 */
 /** @typedef {{min:P3, max:P3}} Box */
@@ -109,12 +94,9 @@ export function easeSpeed(prev, target, dt) {
   return v < 0.02 ? 0 : v;
 }
 
-/** The body as an axis-aligned box over its feet at p: from `step` up (a ledge below that is walked onto, not hit) to
- *  its height, `radius` either side. The authority tests this box against the world's solids.
- *  `level` (a water surface's y) is given while the WATER's rule holds for the step (floorStep's `swim`): a swimmer hauls
- *  out onto anything up to `climb` above the surface, so its box is the box of a body standing `step` below that line —
- *  what it can haul onto is exactly what a walker there steps onto, and a quay higher than `climb` is a wall (holes
- *  review H2: the dry box, a step above the float or the bed, met the quay's side before the haul-out). */
+/** The body as an axis-aligned box over its feet at p: from `step` up (a ledge below that is walked onto) to its height,
+ *  `radius` either side; the authority tests it against solids. With `level` (the water's rule holds), it is the box of
+ *  a body standing `step` below the surface, so a swimmer hauls out onto what a walker there would step onto. */
 export function bodyBox(p, scale = 1, level = null) {
   const s = scaleOf(scale), r = MOVER.body.radius * s;
   const feet = level != null && Number.isFinite(level) ? level + (MOVER.swim.climb - MOVER.body.step) * s : p[1];
@@ -161,12 +143,9 @@ export function sweep(from, to, spacing = MOVER.track.sweep) {
 }
 
 // ---------------------------------------------------------------- stepping
-/** One stride of a walk. `dir` is a ground-plane direction [dx, dz] (any length; zero = stand); `gain` scales the
- *  stride (a client's eased speed as a fraction of the mover's — 1 = a full stride; an agent's tick is 1); `cap` is
- *  the most this step may cover (the distance left to a target, the authority's permit). The floor under the new
- *  spot comes from env.floorAt (absent: y is kept); a floor more than a step up is a wall and the body stays put;
- *  env.blocked (absent: nothing blocks) is asked with the body's box at the new spot and refuses the step.
- *  → {pos, moved, blocked}. Never mutates its inputs. */
+/** One stride of a walk. `dir` is a ground-plane [dx, dz] (zero = stand); `gain` scales the stride (1 = full); `cap` is
+ *  the most this step may cover. The floor comes from env.floorAt (absent: y kept); a floor more than a step up is a wall;
+ *  env.blocked refuses the step at the body's new box. → {pos, moved, blocked}. Never mutates its inputs. */
 const sm01 = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 /** Where a body stands in water of surface `level` over ground `ground`: {y, depth, swimming, speedFactor}. speedFactor
  *  is the wading drag (1 dry, ~0.5 waist-deep); null when swimming (the stroke has its own speeds). `level` null = dry. */
@@ -182,11 +161,9 @@ export function waterStance(level, ground, height = MOVER.body.height) {
  *  coming up meets the float exactly (upstream's 3D swim floated its root 1.1 m under for a 100% body; it is this now). */
 export const floatDepth = (height = MOVER.body.height) => MOVER.swim.at * height;
 
-/** One step of the THREE-DIMENSIONAL swim (upstream #248 swimStep; diving under a water level, #254). The caller
- *  substeps it for collision. `input`: {direction:[x,y,z] (any length; > 1 is clamped), dive?, rise?, fast?, height? (m,
- *  the body's own stature; absent: MOVER.body.height)}. `water`: {speed (m/s, the stroke here), surfaceAt(x, z) → the
- *  surface's y this instant (the level plus its wave)}. Idle swimmers drift up gently; diving releases the surface
- *  latch, and releasing an ascent never jumps the body out. → {pos, velocity, mode: 'swim' | 'surface'}. Pure. */
+/** One step of the THREE-DIMENSIONAL swim (upstream #248, #254); the caller substeps it. `input`: {direction:[x,y,z],
+ *  dive?, rise?, fast?, height?}; `water`: {speed, surfaceAt(x, z)}. Idle swimmers drift up; diving releases the surface
+ *  latch; an ascent never jumps the body out. → {pos, velocity, mode: 'swim' | 'surface'}. Pure. */
 export function stepSwim(pos, velocity, input, water, dt) {
   const S = MOVER.swim, fin = (x, d) => (Number.isFinite(x) ? x : d);
   dt = Math.max(0, Math.min(0.1, fin(dt, 0)));
@@ -211,15 +188,10 @@ export function waterCost(level, ground, height = MOVER.body.height) {
   return s.swimming ? MOVER.walk.speed / MOVER.swim.speed : 1 / s.speedFactor;
 }
 
-/** THE FLOOR LAW for one step, in every runtime (the walker below, and the authority's check of a move: it calls this,
- *  never its own copy). A body with feet at `y`, standing on `ground0` in water of surface `level0` (null: dry), steps to
- *  where the floor is `f` and the water `level1`. → {y, stance, swim, blocked}: `y` where its feet end up (afloat: the float
- *  height); `stance` (waterStance) there; `swim`: the water's rule held for this step (bodyBox takes the level then);
- *  `blocked`: {by: "ledge", top} when the floor is a wall from here.
- *    afloat at the new spot: the ground under the water is no ledge;
- *    afloat where it was: it hauls out onto anything up to `climb` above the surface (any ground under it is land: it
- *      floats above it), higher is a wall (review 10-15 #1: judging it from the chest trapped swimmers in every dug pool);
- *    on its feet: a floor up to a step above them (floorOk). */
+/** THE FLOOR LAW for one step, in every runtime (the walker and the authority's move check call this, never a copy).
+ *  Feet at `y` on `ground0` in water `level0` (null: dry) step to floor `f`, water `level1` → {y, stance, swim, blocked}.
+ *  Afloat at the new spot: no ledge. Afloat where it was: hauls out onto up to `climb` above the surface, higher is a
+ *  wall. On its feet: a floor up to a step above them (floorOk). */
 export function floorStep({ y, ground0 = y, level0 = undefined, f, level1 = level0, height = undefined, scale = 1 }) {
   const s = scaleOf(scale), H = typeof height === "number" && height > 0 ? height : MOVER.body.height * s;
   // a stance is reported wherever the caller has a water law at all (level null there: dry), as stepWalk always did
@@ -233,11 +205,9 @@ export function floorStep({ y, ground0 = y, level0 = undefined, f, level1 = leve
   return { y: f, stance: st, swim: false, blocked: null, level: null };
 }
 
-/** env.waterAt(x, z) → the water surface's y there, or null where there is none. With it, a step in water wades (slower)
- *  or swims (floats at the chest, its own speed, never refused by a ledge); the reply's `stance` is what the renderer
- *  needs to pick a clip (swim / tread vs walk). Without it (no water law in this world), nothing here changes.
- *  `height` (m) is the body's own stature where the caller has measured it (a short avatar swims sooner); absent, the
- *  mover's body height for its `scale`. It moves only where the water reaches on the body, never the stride. */
+/** env.waterAt(x, z) → the surface's y or null: in water a step wades (slower) or swims (floats at the chest, never
+ *  refused by a ledge), and `stance` picks the clip. `height` (m) is the body's measured stature (absent: the mover's for
+ *  its `scale`); it changes where the water reaches, never the stride. */
 export function stepWalk({ pos, dir, dt, run = false, creep = false, scale = 1, gain = 1, cap = Infinity, mode = "walk", height = undefined }, env = {}) {
   const here = [pos[0], pos[1], pos[2]];
   if (mode !== "walk") return { pos: here, moved: 0, blocked: { by: `mode:${mode}` }, stance: null };

@@ -1,28 +1,14 @@
-// shared/protocol/scriptaudit.js — a READER's view of behaviour results (research 41 §3.6, §3.7, §7 #14, #15; ported from the
-// lab's audit.js). It needs only the log, the fold, the source blobs and the sandbox: never the authority. For every
-// `script:<id>` act (verb `script`) it checks
-//   sponsor — the act's `sponsor` / `sponsorAt` equal the sponsor view of `script:<name>` at that point (§5 "Two views":
-//             whose rights admitted the LATEST write to the key in its current life). An authority that names someone else is caught.
-//   depth   — the number of behaviour acts in its cause chain (41 §3.9), recomputed here, and the limit (8 by default).
+// shared/protocol/scriptaudit.js — a READER's view of behaviour results (research 41 §3.6, §3.7, §7 #14, #15). It needs
+// only the log, the fold, the source blobs and the sandbox, never the authority. For every `script:<id>` act it checks
+//   sponsor — `sponsor` / `sponsorAt` equal the sponsor view of `script:<name>` then (§5 "Two views").
+//   depth   — behaviour acts in its cause chain (41 §3.9), recomputed, and the limit (8 by default).
 //   seed    — seed = H(world ‖ act seq ‖ entity/script key).
-//   re-run  — fold to `head`, load `src`, re-run with the recorded event, ts (the frozen clock), seed and presence reads,
-//             drop no-ops (scriptrules.elide, the authority's own rule), and compare with the change entry the act caused and
-//             with its says. An authority that altered one op, or a script whose result depended on anything else, is caught.
-//   reads   — an act records what its presence reads ASKED and how much came back ({near: [{r, n}], count, names: k}), never
-//             who (consent gaps 6b): the ids near a script and display names stay out of the log. So a re-run answers each
-//             near() with n opaque stand-ins and each name() with null. The reads are inputs the auditor can't replay, and
-//             it treats them so: (1) the re-run must ask the SAME reads (radii, counts, how many names) — a different shape
-//             is flagged `reads`; (2) when the re-run's writes and says equal the logged ones, the act is verified (its
-//             result didn't depend on who was there); (3) when they differ and the act read who was near or what someone
-//             is called, the act is `skipped` with that reason, never flagged and never counted verified. An act with no
-//             such reads that differs is still flagged `rerun`. Soundness: everything but the identities is still checked
-//             (sponsor, depth, seed, src, the read shape), and an identity-independent result is checked in full.
-//   arrivals — an `enter` / `leave` activation records no identity (review r8 M4): the script heard `by` live, the act keeps
-//             neither a trigger actor nor event.by. A re-run gets a stand-in identity; a result that doesn't depend on who
-//             came is verified. One that differs from the log is re-run again with a SECOND stand-in of another shape (a minted-
-//             shaped one, then one of another valid shape; review r9 M2, r10 M3): if the two re-runs differ from each other it is
-//             `skipped`; if they agree, the mismatch is flagged `rerun-anon` (never `rerun`: two inputs can't prove a result is
-//             the same for every identity, so it is a mismatch to look at, not proof of a forgery).
+//   re-run  — fold to `head`, re-run with the recorded event, ts, seed and presence reads, drop no-ops (scriptrules.elide),
+//             and compare with the change entry and says the act caused.
+//   reads   — the log keeps what presence reads ASKED, never who: the re-run must ask the same read shape (else `reads`);
+//             a mismatch from an act that read identities is `skipped`, never flagged; one with no such reads is `rerun`.
+//   arrivals — enter/leave keep no identity: re-run with a stand-in, then a second of another shape; the two disagree →
+//             `skipped`; they agree but mismatch → `rerun-anon` (two inputs can't prove identity-independence).
 // Replay of the WORLD never runs code (L1); this re-run is an optional audit view.
 import { fold, opsOf, followUpsOf, jcs } from "./fold.js";
 import { elide, seedOf, stampMotions } from "./scriptrules.js";
@@ -77,10 +63,8 @@ const norm = (ops) => jcs(ops.map(({ verb, id, comp, value }) => ({ verb, id, ..
  */
 const readShape = (r) => ({ near: (r?.near ?? []).map((x) => [x.r, Array.isArray(x.ids) ? x.ids.length : x.n]), count: r?.count ?? [], names: Array.isArray(r?.names) ? r.names.length : r?.names ?? 0 });
 /** did these recorded reads ask who was near, or what someone is called? (inputs a re-run gets only as stand-ins) */
-// Two stand-ins of different SHAPES (review r10 M3, L3): a minted-shaped one (u- and 20 lowercase, as the directory mints) and
-// one of another valid shape (a short lowercase name, no u-: an imported name, another server's id). Both are valid
-// identities (§3.1) and nobody's, and neither says what holds it (§6a rule 2), so a script that treats ids of one shape
-// differently, or reads an identity's length or prefix, answers differently for the two and is listed as not re-runnable.
+// two stand-ins of different SHAPES (minted u-+20, and a short name), both valid and nobody's (§3.1, §6a rule 2), so a
+// script that branches on an id's shape answers differently and is listed as not re-runnable
 export const ARRIVAL_STAND_IN = "u-" + "a".repeat(20);
 export const ARRIVAL_STAND_IN_2 = "zq-stand-in";
 const whoReads = (r) => (r?.near ?? []).some((x) => !Array.isArray(x.ids) && x.n > 0) || (typeof r?.names === "number" && r.names > 0);

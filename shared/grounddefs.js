@@ -47,10 +47,8 @@ export function validateGroundPalette(t) {
 }
 
 // ------------------------------------------------------------ the verb args a choice writes
-// One recipe for "this palette choice → these terrain/grass args", read by the
-// world panel's 🌿 section (client/lib/groundpanel.js) and the Build tab's World
-// section (client/lib/editpanels.js) alike, so the two can never write
-// different args for the same pick.
+// One recipe for both the world panel (client/lib/groundpanel.js) and the Build tab (client/lib/editpanels.js), so
+// the two can never write different args for the same pick.
 
 /** The choice the panel starts from when nothing is dialled yet (the names
  *  groundpanel always preferred, else each table's first entry). */

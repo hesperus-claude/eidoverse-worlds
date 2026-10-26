@@ -7,7 +7,7 @@
 //   elide    PROTOCOL §3d: dropping no-op writes in a SCRIPT batch is a stated rule, not free authority practice,
 //            because an audit re-run must drop exactly the same writes. In order, against the batch so far, by JCS.
 //   paramKey a component's `param.<name>` field: a number a script writes for something else to read (seat poses
-//            that blend by signals read `param.<name>`; RESEARCH-socket-body 2026-10-06).
+//            that blend by signals read `param.<name>`).
 import { cowState, applyCow, jcs } from "./fold.js";
 import { sha256 } from "./hash.js";
 
@@ -70,10 +70,8 @@ export function elide(st, ops) {
   return out;
 }
 
-// A motion runs on the authority's clock from t0 (componentspec motion.t0): a request's motion is stamped at the door
-// (writes.js resolve), and a script's here, at its activation's clock (`now`, the act's ts: the same on a re-run, so the
-// auditor stamps alike). A re-set of the motion a thing already runs, differing only by the missing t0, keeps that t0, so
-// elide (above) drops it as a no-op and the motion doesn't restart. Pure; the ops are copied, never changed.
+// a script's motion is stamped t0 at its activation's clock (the act's ts, so the auditor stamps alike); a re-set
+// differing only by the missing t0 keeps that t0, so elide drops it and the motion doesn't restart
 const isMotion = (c) => c === "motion" || (typeof c === "string" && c.startsWith("motion:"));
 const plain = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 export function stampMotions(st, ops, now) {

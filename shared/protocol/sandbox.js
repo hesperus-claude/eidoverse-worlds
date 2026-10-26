@@ -1,34 +1,21 @@
-// shared/protocol/sandbox.js — the script sandbox: real JavaScript in QuickJS compiled to WASM (research 41 §3.13, §6:
-// a SEPARATE VM, never same-VM compartments; Figma's Realms scar). The authority never imports this file (browsers import the
-// authority); a host injects `runScript` as io.scripts (server/livehost.ts, server/filehost.ts), and an auditor calls it
-// directly to re-run an activation from what its act records (shared/protocol/scriptaudit.js).
+// shared/protocol/sandbox.js — the script sandbox: real JavaScript in QuickJS compiled to WASM, a SEPARATE VM, never
+// same-VM compartments (research 41 §3.13, §6). The authority never imports this file; a host injects `runScript` as
+// io.scripts (server/livehost.ts, server/filehost.ts), and an auditor calls it to re-run an activation (scriptaudit.js).
 //
-// One activation = one FRESH runtime and context: evaluate the source (which registers handlers with world.on), deliver
-// the one event, collect the proposed writes. Nothing survives between activations, so a re-run from the act's inputs
-// is the same run (41 §3.5: "a script must behave correctly if VM memory is lost": here it always is).
-// Deterministic inputs only (41 §3.7):
+// One activation = one FRESH runtime: evaluate the source, deliver the one event, collect the proposed writes; nothing
+// survives, so a re-run from the act's inputs is the same run. Deterministic inputs only (41 §3.7):
 //   clock    Date.now() and new Date() are frozen at `now` (the act's ts) for the whole activation;
 //   random   Math.random is a PRNG seeded from `seed` (H(world ‖ act seq ‖ script key), recorded in the act);
 //   world    reads see the folded head the activation was given, plus its own writes so far (read-your-writes);
-//   presence world.near(r) / world.count() answers, and world.name(id) (the authority's directory, outside the log), are
-//            RECORDED (`reads`) as what was asked and how much came back — never WHO (consent gaps 6b, R 10-17 02:45: a
-//            script's act is signed and permanent, so ids near it and display names made it an attendance log anyone with
-//            `scripts` could keep). The script itself still receives ids and names live: what it writes or says with them
-//            is its own act (review r8 M4), and the act's record of its reads never names who. `reads` = {near: [{r, n}], count: [n], names: <how many name() calls>}. A re-run gets
-//            n opaque stand-ins per near() and null per name(): an auditor re-runs with those and verifies the result when
-//            it doesn't depend on who was there, and says honestly that it can't when it does (scriptaudit.js `skipped`).
-//            An older act that recorded the ids ({r, ids}, [{id, name}]) still replays them;
+//   presence world.near(r) / world.count() / world.name(id) answer live, but are RECORDED (`reads`) as what was asked
+//            and how much came back, never WHO (a signed permanent act must not be an attendance log): {near: [{r, n}],
+//            count: [n], names: <how many>}. A re-run gets opaque stand-ins and null names (scriptaudit.js `skipped`);
+//            an older act that recorded ids still replays them;
 //   nothing else: no timers, no network, no filesystem, no other clock.
-// Metered by FUEL: QuickJS calls the interrupt handler every so many bytecode ticks; the count of calls is the fuel,
-// deterministic for one QuickJS build (LIMITS.fuel). A wall-clock deadline is the backstop (host calls can't be
-// interrupted); a run that hits it writes nothing, so an auditor never sees a partial result. Memory and native stack
-// are capped per runtime.
-//
-// Where it runs: an authority runs the VM side in a sandbox PROCESS (runIsolated, sandbox-child.js) that it SIGKILLs at the
-// deadline, because fuel and the wall clock bound BYTECODE only: QuickJS's interrupt handler never runs inside a native
-// builtin, and one such call (String#indexOf on crafted text, BigInt toString, an out-of-memory inside Array#fill) once
-// held the authority's thread for 1–13 s (review, 2026-10-06). The host side stays on the authority's thread, so an activation is
-// still one synchronous step. runScript (in-process) is for auditors and tools, which may take their time.
+// Metered by FUEL (interrupt-handler calls, deterministic per QuickJS build: LIMITS.fuel), with a wall-clock backstop; a
+// run that hits it writes nothing. Memory and native stack are capped per runtime.
+// Runs in a SIGKILLable child (runIsolated, sandbox-child.js): fuel bounds bytecode only, and a native builtin can hold
+// the thread for seconds. runScript (in-process) is for auditors and tools.
 import { fileURLToPath } from "node:url";
 import { jcs, isEntityId, isComponent } from "./fold.js";
 import { LIMITS, isParamName, API } from "./scriptrules.js";
@@ -122,19 +109,16 @@ const standIns = (k, n) => Array.from({ length: Number.isSafeInteger(n) && n > 0
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "thing";
 
 /**
- * The HOST side of one activation: everything the script can ask of the world, answered from the authority's state on the
- * authority's thread (reads see the head plus the activation's own writes; writes are recorded as proposals; presence and
- * names are recorded, or replayed from `x.reads`). `call(json) → json` is what the VM's world.* functions reach, in
- * this process or, isolated, through the relay. `finish(vm)` turns the VM's outcome into the activation's result.
+ * The HOST side of one activation, answered from the authority's state on its thread (reads see the head plus own writes;
+ * writes are proposals; presence and names recorded, or replayed from `x.reads`). `call(json) → json` is what world.*
+ * reaches; `finish(vm)` turns the VM's outcome into the result.
  */
 export function makeHost(x) {
   const L = { ...LIMITS, ...(x.limits ?? {}) };
   const logs = [], ops = [], says = [], bodies = [], reads = { near: [], count: [], names: 0 }; let nearAt = 0, countAt = 0, nameAt = 0;
   let calls = 0, minted = 0, stop = null;
-  // read-your-writes without copying the world: an overlay of the things this activation wrote (id → entity, or null if
-  // it deleted it), over the head it was given. Each write costs O(1); ids/children use indexes built once (a review
-  // found 32 writes then a read cloned a big world 32 times, on the authority's thread, past the deadline). The authority's
-  // admit still judges the real batch; this view is only what the script reads back.
+  // read-your-writes without copying the world: an overlay of this activation's writes over the given head, O(1) per
+  // write, indexes built once. admit still judges the real batch.
   const base = x.st.entities, ov = new Map(); let idsIdx = null, kidsIdx = null, idsAll = null;
   const entOf = (id) => (ov.has(id) ? ov.get(id) : base[id] ?? null);
   const writable = (id) => { if (ov.has(id)) return ov.get(id); const b = base[id]; if (!b) return null; const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };
@@ -248,8 +232,8 @@ export function vmRun(text, input, event, L, call, clock = () => performance.now
   }
 }
 /**
- * Run one activation IN THIS PROCESS (an auditor's re-run, tools). Never throws for anything the script does; returns
- * {ok, ...}. A slow native builtin can hold this thread: an authority runs activations isolated (runIsolated, below).
+ * Run one activation IN THIS PROCESS (auditors, tools); never throws for anything the script does. A slow native builtin
+ * can hold this thread, so an authority uses runIsolated.
  * @param {{text: string, self: string, key: string, event: object, knobs?: object, now: number, seed: string, st: any,
  *   near?: (r: number) => string[], count?: () => number, name?: (id: string) => string | null,
  *   reads?: {near?: {r, n, ids?}[], count?: number[], names?: number | {id, name}[]},
@@ -272,12 +256,9 @@ export function checkSyntax(text) {
   finally { try { ctx?.dispose(); } catch { /* already */ } try { rt?.dispose(); } catch { /* already */ } }
 }
 // ---------- isolated: the VM side in a killable process (sandbox-child.js) ----------
-// The authority's thread sends the job down a named pipe and reads the process's lines back without blocking, answering the
-// script's world.* calls itself (makeHost). So an activation stays one synchronous step of the authority (L7: one act + one
-// batch, admitted at the head it read), and the authority holds the process's handle: at `wallMs + GRACE` after the job was
-// sent it SIGKILLs the process (certain: a signal, not a request) and returns "time"; a warm spare takes the next job.
-// Nothing a script does, a native builtin included, can hold the authority's thread past that deadline.
-// (A Worker can't do this: worker.terminate() doesn't stop a thread inside WASM under Bun 1.3; measured 2026-10-06.)
+// The job goes down a named pipe; the authority answers world.* calls itself (makeHost), so an activation stays one
+// synchronous step (L7), and SIGKILLs the process at `wallMs + GRACE` (a warm spare takes the next job). A Worker can't:
+// terminate() doesn't stop a thread inside WASM under Bun 1.3.
 export const GRACE = 200;        // ms over the script's own wall-clock backstop: the pipes, a loaded host, and the kill
 const MAX = 2 << 20;             // bytes of one message (a job, a host call, an answer)
 const WARM_MS = 300;             // at most this long an activation waits for a warm process (after kills): then it's
@@ -287,10 +268,8 @@ const env = () => globalThis.process?.env ?? {};
 let fsm = null, osm = null, pathm = null; // node:fs etc., loaded only where isolation runs (never in a browser)
 try { if (globalThis.process?.versions) { fsm = await import("node:fs"); osm = await import("node:os"); pathm = await import("node:path"); } } catch { /* no isolation here */ }
 const canIsolate = () => !!(Q && fsm && typeof Bun !== "undefined" && !env().EIDO_SANDBOX_CHILD && env().EIDO_SANDBOX !== "inprocess" && fifoOk());
-// Windows: never. Git for Windows ships an `mkfifo` that succeeds, but what it makes is an MSYS emulation the OS's own file
-// calls can't open (ENOENT on the child's pipe, every install crashed: CI 10-19). There scripts run in-process — fuel and the
-// wall clock still bind script code, but a native builtin can hold the thread past the deadline (isolation's one extra
-// guarantee). Real isolation there needs Windows named pipes: post-ship.
+// Windows: never (Git for Windows' mkfifo makes an MSYS pipe the OS can't open). Scripts run in-process there, so a
+// native builtin can hold the thread past the deadline; real isolation needs Windows named pipes.
 let FIFO = null; const fifoOk = () => (FIFO ??= globalThis.process?.platform !== "win32" && (() => { try { return Bun.spawnSync(["mkfifo", "--help"]).exitCode !== null; } catch { return false; } })());
 const pool = []; let kills = 0, spawned = 0;
 const SLEEP = new Int32Array(new SharedArrayBuffer(4)); const nap = (ms) => Atomics.wait(SLEEP, 0, 0, ms);
@@ -353,10 +332,8 @@ export function warm() { if (canIsolate()) { refill(); pollReady(); } }
 /** A view for tests and status: is isolation on, how many processes were killed, how many were started. */
 export const isolationStats = () => (fsm && pollReady(), { isolated: canIsolate(), kills, spawned, warm: pool.filter((c) => c.ready || c.opened).length, next: pool.find((c) => c.ready || c.opened)?.proc.pid ?? null });
 if (globalThis.process?.on) process.on("exit", () => { for (const c of pool) closeChild(c, true); });
-// the CPU a process has used, ms (Linux /proc: utime + stime, clock ticks; null where there's no /proc: macOS and Windows fall
-// back to whether the process ever said `go`). At a deadline it
-// tells a script that kept its process busy (a loop, a native call: `time`, its failure) from a process the host never
-// got round to running (a loaded machine: `unavailable`, not the script's failure). The kill happens either way.
+// CPU a process has used, ms (Linux /proc utime + stime; null elsewhere, which falls back to whether it said `go`). At a
+// deadline it tells a busy script (`time`, its failure) from one never scheduled (`unavailable`); the kill happens either way.
 const TICK_MS = 10; // USER_HZ is 100 on Linux (getconf CLK_TCK)
 function cpuMs(pid) { if (globalThis.process?.env?.EIDO_SANDBOX_CPU === "none") return null; // tests: the macOS/Windows path on Linux
   try { const f = fsm.readFileSync(`/proc/${pid}/stat`, "utf8"); const r = f.slice(f.lastIndexOf(")") + 2).split(" ");

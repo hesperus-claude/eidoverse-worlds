@@ -12,8 +12,7 @@
 //   - imported:<field> (a field an imported world's translation carried) → that field;
 //   - @world: roles:<id> → roles, default-role → roles['*'], imported-bans:<id> → bans, assets:<k> → assets,
 //     sky/terrain/grass → themselves, imported:<k> → st[k]. Not shown: physics-engine, about, bounds, spawn, imported-behavior:<k>.
-// Until 2026-10-14 this record spoke the old protocol's names (model as `lib`, every other component inside a `comp`
-// bag): one vocabulary on the wire and another in every reader. tools/protocol/vocab-check.ts keeps the old one out.
+// tools/protocol/vocab-check.ts keeps the old protocol's names out.
 import { dec } from "./names.js";
 import { qNorm, qHeading } from "../rot.js";
 
@@ -58,17 +57,13 @@ export function compOf(c) {
   return comp;
 }
 
-/** The one-line adapter the editor's entry points stand behind (C7b): a fold record `c` ({transform?, model?, parent?,
- *  …components}) reads as its view; a view record (the suites' fixtures, an agent's foldRecord) passes through. A view
- *  is told by ITS invariant — viewOf always writes `pos` — never by the fold's spelling: the authority accepts
- *  `delete {component: "transform"}`, so a record may be {label} alone (review S2-1). The limit: a world naming a
- *  component `pos` (the door refuses the bare name: DERIVED) would be misread. */
+/** The adapter the editor's entry points stand behind: a fold record `c` reads as its view; a view record passes
+ *  through. A view is told by ITS invariant (viewOf always writes `pos`), since a fold record may be {label} alone. The
+ *  limit: a component named `pos` would be misread (the door refuses it: DERIVED). */
 export const isFoldRecord = (x) => !!x && typeof x === "object" && !Array.isArray(x) && x.pos === undefined;
-/** A record either way: a fold record (component keys flat on it) is projected through viewOf; anything else — the OLD test
- *  shape, {pos, yaw, lib, comp: {...}} — is returned as it is. This is a TEST-CORPUS adapter, not a protocol one: at 2026-10-14
- *  18 files under tools/ still build the old shape by hand, and this line is what keeps them loading (complexity sweep 10-14,
- *  "vocab-check skips tools/"). Retire it by flattening those fixtures, then deleting the fallback; nothing at runtime takes
- *  the old shape (vocab-check pins that for shared/ client/ server/ mcpl/). */
+/** A record either way: a fold record is projected through viewOf; anything else (the OLD test shape, {pos, yaw, lib,
+ *  comp}) is returned as is. A TEST-CORPUS adapter for fixtures under tools/: retire it by flattening them; nothing at
+ *  runtime takes the old shape (tools/protocol/vocab-check.ts). */
 export const recordOf = (x, id = "") => (isFoldRecord(x) ? viewOf(id, x) : x);
 
 /** One entity's components as the record readers use. */

@@ -74,15 +74,8 @@ export function rigMath(THREE) {
     const parent = new Map();
     g.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => parent.set(c, i)));
     const memo = new Map();
-    // Full matrices, because SCALE is load-bearing here. Composing only
-    // translation and rotation (and reading a matrix node's translation column
-    // while dropping its basis) silently drops any scale on an ancestor — and
-    // glb2vrm bakes a uniform scale on the Armature to bring a ~1m Tripo export
-    // to human height, so mythospaint's armature carries 1.651. The headless
-    // skeleton came out 0.86m tall while the browser rendered her at 1.65m.
-    // Bone quaternions are scale-free, so limbs still looked right and nothing
-    // complained; only the streamed ROOT was in the small frame, which put her
-    // ~0.46m — a foot and a half — above the floor for everyone watching.
+    // full matrices, because ancestor SCALE is load-bearing (glb2vrm bakes a uniform scale on the Armature):
+    // dropping it shrinks the headless skeleton and floats the streamed root above the floor
     const localMatrix = (n) => (n.matrix
       ? new THREE.Matrix4().fromArray(n.matrix)
       : new THREE.Matrix4().compose(
@@ -104,10 +97,7 @@ export function rigMath(THREE) {
   /** Build private normalized bone nodes from world rest positions. */
   function makeAvatar(P, { realParent = null, vrm0 = false } = {}) {
     const root = new THREE.Object3D();
-    // three-vrm's half-turn for VRM0, reproduced as a pivot the bones hang from,
-    // so every normalized bone reads a 180° world rotation against the root
-    // exactly as it does in the browser. Without it the harness silently models
-    // a VRM1 body and any frame error on the other six goes unseen.
+    // three-vrm's VRM0 half-turn, reproduced as a pivot, so normalized bones read the same 180° as in the browser
     const pivot = new THREE.Object3D();
     if (vrm0) pivot.rotation.y = Math.PI;
     root.add(pivot);
@@ -130,10 +120,8 @@ export function rigMath(THREE) {
     }
     root.updateMatrixWorld(true);
 
-    // `pivot` is this stand-in's vrm.scene: the node a chosen body size lives on
-    // (client/lib/avatar.js _applyBodyScale), between the unscaled root that
-    // carries position/yaw and the bones. Never aliased as vrm.scene — readers
-    // of that (landmarks.js) expect a mesh-bearing scene this has none of.
+    // `pivot` is this stand-in's vrm.scene, where body size lives (client/lib/avatar.js _applyBodyScale). Never aliased
+    // as vrm.scene: readers of that (landmarks.js) expect a mesh-bearing scene.
     const av = {
       root, pivot, nodes, poses: 0, limp: false,
       vrm: { meta: { metaVersion: vrm0 ? "0" : "1" }, humanoid: {

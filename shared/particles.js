@@ -54,10 +54,8 @@ function readsAs(effect, lookup) {
 }
 
 /**
- * How an emitter reads in prose, from the RAW component value (either spelling). Tolerant: an effect this reader doesn't
- * know still reads as an emitter rather than disappearing. Names the semantic thing on the owning entity — never a
- * sprite count, never a bare `components: particles`. Heat, light, sound and contact are NOT claimed: separate
- * authored components provide those, and a resident who reads "warm" acts on it.
+ * How an emitter reads in prose, from the RAW value (either spelling); an unknown effect still reads as an emitter. Names
+ * the semantic thing, never a sprite count. Heat, light, sound and contact are NOT claimed (other components say those).
  */
 export function describeParticles(data, { lookup = () => null } = {}) {
   const inst = instanceOf(data);

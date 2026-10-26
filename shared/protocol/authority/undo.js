@@ -1,7 +1,6 @@
 // shared/protocol/authority/undo.js — the act index (undo and wait without scanning the log) and undo by act, with the
-// sky, weather and sculpt builders that live beside it (refactor split, 2026-10-17; moved from authority.js's "the act
-// index" and "undo" sections unchanged). The inverse goes through admit like any write; the write path's helpers it
-// borrows (needThing, lastTouch, the reference clears) are above it, reached through UP.
+// sky, weather and sculpt builders beside it. The inverse goes through admit like any write; needThing, lastTouch and
+// the reference clears are reached through UP.
 import { fold, opsOf, isIdentity, jcs, PURGED } from "../fold.js";
 import { materialize, refsOf } from "../componentspec.js";
 import { foldSkyEntry } from "../../forecast.js";
@@ -22,10 +21,8 @@ const lastTouch = (...a) => UP.lastTouch(...a);
 const needThing = (...a) => UP.needThing(...a);
 const withoutRefs = (...a) => UP.withoutRefs(...a);
 
-// ---------- the act index (slice 3a): undo and wait without scanning the log ----------
-// A view over the log (L2), built once per world object and advanced per appended entry, so a live world (server,
-// where `w` lives as long as the world is open) pays for each entry once. A purge is retroactive (L1), so a purge entry
-// throws the index away and rebuilds it, as livehost.ts refolds the state. What it holds:
+// ---------- the act index: undo and wait without scanning the log ----------
+// A view over the log (L2), advanced per appended entry; a purge (retroactive, L1) rebuilds it. What it holds:
 //   actsOf    actor → their act seqs, in order          resultOf  act seq → the first change entry it caused
 //   undone    act seqs some `undo` act names (body.undoes)
 //   purged    seqs whose act/say/sim BODY is purged; purgedOps `${seq}:${op|-}` → a purged set value (as the fold keys it)
@@ -33,7 +30,6 @@ const withoutRefs = (...a) => UP.withoutRefs(...a);
 //   rests     change seqs that are rests (caused by a sim launch); restAfter: `${rest seq}:${body id}` → the authority's
 //             follow-up act for that body (a rest can carry several bodies, each with its own follow-up, as restsOf reads them)
 //   lastAct   the latest act that isn't an undo or the authority's (for "the latest change was X's")
-// A world object over a log that is re-read per request (the suites' disk worlds) rebuilds it per request, as before.
 function freshIndex() {
   return { n: 0, actsOf: new Map(), resultOf: new Map(), undone: new Set(), purged: new Set(), purgedOps: new Map(), changes: [], touch: new Map(),
     rests: [], restAfter: new Map(), lastAct: null };
@@ -115,19 +111,13 @@ function buildUndo(ctx, a, w) {
   const inverseOf = (target, res, now) => {
   const beforeOf = new Map(); const before = (id) => { if (!beforeOf.has(id)) beforeOf.set(id, entityBefore(w, id, target.seq, X)); return beforeOf.get(id); };
   const flat = opsOf(res);
-  // what others wrote since: a thing's own later history (touch), and, for the spatial check, every change entry since
-  // the result (bounded by what happened after the act, never the log before it)
-  // later work by anyone but the act's own author stands; the maintenance command's lift isn't work (it respells, and its old values
-  // are translated again on the way back in)
+  // what others wrote since (bounded by what happened after the act); the maintenance lift isn't work (it respells)
   const others = (i) => E[i].actor !== target.actor && E[E[i].cause]?.verb !== "lift-sockets";
   const touchedBy = (id, comp) => { const h = X.touch.get(id) ?? []; for (let k = firstAfter(h, res.seq); k < h.length; k++) { const e = E[h[k]]; if (!others(h[k])) continue;
     for (const o of opsQuiet(e)) if (o.id === id && (comp === undefined || o.comp === comp || o.comp === undefined || o.verb === "create")) return e.actor; } return null; };
   const later = X.changes.slice(firstAfter(X.changes, res.seq)).filter(others).map((i) => E[i]);
-  // a host's seats after the cut are its socket children, and nobody writes its `sockets` key (review 10-12 S2-2): later
-  // work by others on them (a socket made under it, or any write to one of its socket children, deleted ones included)
-  // is a change to what a pre-cut `sockets` edit set, so undoing that edit skips, as it did before the cut
-  // A socket made under it counts however its two halves were written: a change that sets either one counts when the
-  // thing it leaves (every op of the change applied, a batch's later re-parent included) is a socket under the host
+  // a host's seats after the cut are its socket children: later work by others on them (however a socket's halves were
+  // written) counts against a pre-cut `sockets` edit, so undoing that edit skips
   const socketWorkBy = (host) => {
     for (const i of X.changes.slice(firstAfter(X.changes, res.seq))) { if (!others(i)) continue; const ops = opsQuiet(E[i]);
       for (const o of ops) {
@@ -140,11 +130,8 @@ function buildUndo(ctx, a, w) {
   const groups = [], skipped = [];
   const keys = new Map();
   const madeHere = new Set(flat.filter((o) => o.verb === "create").map((o) => o.id)); // undone as one unit: the whole thing goes
-  // review r8 M1: what the act's delete cleared in others' things (clearRefsTo, the authority's follow-up) comes back as a
-  // follow-up too: a value that named a thing this act removed, put back exactly as it was (touchedBy has already skipped
-  // it if anyone changed it since), so the referrer's lock or key can't veto the undo any more than it could the delete
-  // Only an op the target entry itself marks as a follow-up (its `followUps`) is restored as one (review r9 holes L2): the
-  // asker's own write in the same batch is theirs, and putting it back meets their rights and the locks now, like any undo.
+  // what the act's delete cleared in others' things comes back as a follow-up, exactly as it was, so a referrer can't veto
+  // the undo; only ops the target entry marks `followUps` are restored so (the asker's own meet rights and locks now)
   const goneHere = new Set(flat.filter((o) => o.verb === "delete" && o.comp === undefined).map((o) => o.id));
   const fuHere = new Set([...followUpsOf(res)].map((k) => flat[k]).filter(Boolean));
   const refRestore = (o) => { if (!goneHere.size || !fuHere.has(o) || o.comp === undefined || o.verb === "create" || goneHere.has(o.id) || !holdsRefs(o.comp)) return false;
@@ -199,12 +186,8 @@ function buildUndo(ctx, a, w) {
       skipped.push({ id: o.id, component: o.comp, why: `putting it back would land it on ${hit}, which ${said(who)} has placed since`, by: who }); groups.splice(i, 1); } }
   return { groups, skipped }; };
   const pick = (pred) => { for (let k = mine.length - 1; k >= 0; k--) if (pred(mine[k])) return E[mine[k]]; return undefined; };
-  // an undo's depth along its `undoes` chain: 0 = an ordinary act, 1 = an undo of one, 2 = a redo (an undo of an undo)…
-  // A bare undo takes back my latest live act of EVEN depth: an ordinary act or a redo. Skipping only plain undos keeps
-  // Ctrl+Z walking back, while a redo is undone first (agent lab round 2, Hazel: a bare undo after a redo reached past
-  // it into older work).
-  // READBACK: the chain reads each undo's `undoes`; a purged undo is unknown, read as the index reads it (it undoes nothing
-  // we can name: the chain ends there, and its target isn't counted undone)
+  // undo depth along `undoes`: 0 an act, 1 an undo, 2 a redo… A bare undo takes back the latest live act of EVEN depth,
+  // so Ctrl+Z walks back and a redo is undone first. A purged undo is unknown: the chain ends there.
   const depthOf = (seq) => { let d = 0, q = seq; while (q !== undefined && E[q]?.verb === "undo" && d < 64) { d++; q = bodyOf(q)?.undoes; } return d; };
   const undoneBy = (seq) => { for (let k = mine.length - 1; k >= 0; k--) if (E[mine[k]].verb === "undo" && bodyOf(mine[k])?.undoes === seq) return mine[k]; return undefined; };
   // an owner's rollback (round-2 R11, CoreProtect's rollback by player and time): undo {actor, since} takes back every

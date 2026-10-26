@@ -6,12 +6,10 @@
 // is no annotation to trust: carriers compare the value the fold applies with where the engine has the body.
 // Time: the engine's clock is the envelope's `ts` (§2.1: the authority's admission time, the one clock readers trust),
 // never running backwards: an entry without one happens at the latest time stated before it.
-// The engine is eidosim (shared/sim.js, its adapter, over shared/eidosim.js, its core): rigid bodies that tumble and
-// roll, soft contacts after Box3D, swept against what rests, on terrain; things at rest that are dynamic and free can be
-// knocked. It is named name@version; a version is carried when this server reproduces its conformance digests
-// (spec/conformance/physics/, engine-check), and a change meant to alter results is a new version (Covenant II). The first eidosim (eidosim@0.1.0–0.5.0, PROTOCOL_v2 dialect 3) is no longer
-// carried at runtime (R 2026-10-09: "stomp the existing eidosim engine"); the old-world importer keeps its own copy, to
-// say where old punts came to rest, and writes those rests as plain changes.
+// The engine is eidosim (shared/sim.js over shared/eidosim.js), named name@version; a version is carried when this
+// server reproduces its conformance digests (spec/conformance/physics/, engine-check), and a change meant to alter
+// results is a new version (Covenant II). The first eidosim (0.1.0–0.5.0) is not carried at runtime; the old-world
+// importer keeps its own copy and writes its rests as plain changes.
 import { sha256 } from "./hash.js";
 import { fold, opsOf, applyOps, applyInPlace, emptyState, Malformed, PURGED, purgesIn } from "./fold.js";
 import { MODELS } from "./labmodels.js";
@@ -142,19 +140,9 @@ export function simFold(entries, now, opts = {}) {
   if (blind.status === "ok") for (let s = 0; s < entries.length; s++) if (isEntry(entries[s]) && !bad.has(s)) f.feed(s);
   return f.view(now);
 }
-// The sim layer as a running fold (engine, slice 2; the lab re-folded the whole log on every call, O(n) per request).
-// feed(seq) takes the next VALID entry (the caller decides validity: the strict fold on load, the authority's own re-read
-// on append), in log order; view(now) advances the engine to `now` and returns what simFold returned. `now` must not
-// run backwards relative to later entries' ts (the server's clock is monotonic and every ts it writes is ≥ it), so
-// advancing early for a read and then folding a later entry is the same as folding it first: advancement is
-// schedule-independent. opts.models: the catalogue whose models count as colliders (default the lab's; the server
-// passes {} so geometry enters the sim only through the log's physics.shape, Covenant III).
-// opts.from: start from a cut instead of the empty world ({st, clock, spec, foreign, sim, launched, lifted, unknownEpoch,
-// unknownHold}, simCutOf's shape):
-// a joining client can't refold the whole log, so it adopts the authority's sim where the authority's clock stood, then feeds
-// every later entry (their ts are never earlier than that clock). Advancement is schedule-independent, so this is exact.
-// opts.purged: the log's purges (purgesIn), so a replay writes PURGED where the strict fold does; a live host that sees a new purge
-// builds a fresh folder with them (a purge is retroactive), rather than feeding it.
+// a running fold: feed(seq) takes the next VALID entry (the caller judges); view(now) advances to `now`, exact whenever
+// read since ts never runs backwards. opts.models: colliders (the server passes {}: Covenant III); opts.from: a cut
+// (simCutOf) for a joiner; opts.purged: the log's purges (a new purge means a fresh folder).
 export function simFolder(entries, { models = MODELS, from = null, purged = null } = {}) {
   const st = from?.st ?? emptyState(); let clock = from?.clock ?? 0;
   const out = { st, spec: from?.spec ?? null, foreign: from?.foreign ?? false, sim: from?.sim ?? null, launched: from?.launched ?? {}, lifted: new Set(from?.lifted ?? []), rested: [], checks: { agree: 0, disagree: [] }, restTicks: {},
@@ -182,14 +170,9 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     }
   };
   const disagree = (x) => out.checks.disagree.push(x);
-  // Where a purge took what the engine read, the engine that wrote the log and this one differ from there on (a body skipped
-  // or seated otherwise moves what the engine allocates and what it collides with, and nothing later restores that), so
-  // nothing this engine computes is set beside the log: no digest, rest or in-flight check. out.unknownEpoch, until the
-  // next cut: a purged launch, or an engine view built while a body is lost to a purge (lostBody: a rest's transform
-  // purged, say, which the fold reads as gone where the engine that wrote the log kept it), the new epoch's own view
-  // included, so a cut leaves it unknown while such a body stands. out.unknownHold, to the log's end: a purged lift or
-  // catch hides which thing is held, and a hold outlives an epoch while its end can't be read from the log. Both ride in
-  // a cut (simCutOf), so a folder resumed from one judges what an uninterrupted one does
+  // past a purge of what the engine read, this engine and the log's may differ, so nothing computed is set beside the
+  // log: out.unknownEpoch until the next cut (a purged launch, or a body lost to a purge), out.unknownHold to the log's
+  // end (a purged lift or catch). Both ride in a cut (simCutOf).
   const unknown = () => out.unknownEpoch || out.unknownHold;
   // a value reads PURGED only where the feed's purge map names it (without one, applyInPlace refuses a stripped value) or in
   // the state a cut starts from, so with neither the lost-body scan below is skipped
@@ -282,10 +265,8 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
         for (const id of Object.keys(out.sim.statics ?? {})) if (!!out.sim.statics[id].dyn !== (view.entities[id]?.kind === "dynamic"))
           SE(out.sim, { seq, ts: clock, actor: e.actor, verb: view.entities[id] ? "place" : "remove", args: { id } }, view); }
     } else if (e.kind === "sim" && out.sim) {
-      // purged whole: the engine can't fly or lift what it can't read, so until the next cut the engine that read it and this
-      // one may differ, and what this one computes meanwhile is unknown here: a launch until the next cut (out.unknownEpoch), a
-      // lift or catch to the log's end (out.unknownHold). The authority's readback reads such a body as unknown too, for its own
-      // question: restampEngine counts a purged launch as a flight its cut ends (endedUnknown), which this needn't follow
+      // purged whole: unknown until the next cut (a launch) or the log's end (a lift or catch); restampEngine's own
+      // reading (endedUnknown) needn't match this
       const a = bodyIn(entries, purged, seq); if (!a) { if (e.verb === "launch") out.unknownEpoch = true; else if (e.verb === "lift" || e.verb === "catch") out.unknownHold = true; return; }
       if (e.verb === "launch" && st.entities[a.id] && Array.isArray(a.p) && Array.isArray(a.v)) {
         out.lifted.delete(a.id);   // thrown or dropped: out of the hand, into the engine (before the view, which hides lifted things)

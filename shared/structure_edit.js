@@ -1,19 +1,6 @@
-// structure_edit — the griddled-building editor's pure half.
-//
-// Every operation is DATA IN, DATA OUT: a `structure` component goes in, a new
-// one comes out, and nothing is mutated. That falls out of how a building is
-// stored — one `comp`, replaced wholesale — and it buys three things for free:
-//
-//   - UNDO is keeping the previous value. No inverse operations to get wrong,
-//     no replaying a log backwards.
-//   - A PREVIEW is just running the edit and drawing the result. The ghost and
-//     the commit cannot disagree, because they are the same function.
-//   - The whole editor is testable with no browser, no pointer, no scene.
-//
-// ⚠️ Wholesale replace also means LAST WRITE WINS. Two people editing one
-// building will clobber each other — not corrupt it, but silently lose an edit.
-// That is a real limitation of the storage choice, worth knowing before anyone
-// builds together rather than after.
+// structure_edit — the griddled-building editor's pure half: a `structure` component in, a new one out, nothing mutated.
+// Undo is keeping the old value; a preview is the same function as the commit, so the two can't disagree.
+// ⚠️ Wholesale replace means LAST WRITE WINS: two people editing one building silently lose an edit.
 
 import { cellKey, edgeKey, APERTURES, GRID_DEFAULTS } from './structure.js';
 
@@ -32,12 +19,8 @@ const sameCell = (t, x, z) => t[0] === x && t[1] === z;
 
 // ---- picking ----------------------------------------------------------------
 
-/** Every edge of the cell under a grid-local point, nearest first.
- *
- *  Distances are in metres along the surface, so a mode can simply take the
- *  first entry, or filter to the kinds it accepts — the wall tool wants edges
- *  and diagonals, the floor tool wants none of them. Returning the whole list
- *  rather than one winner is what lets the same pick serve every tool. */
+/** Every edge of the cell under a grid-local point, nearest first (metres), so each tool takes the first entry or
+ *  filters to the kinds it accepts. */
 export function pickEdges(g, lx, lz) {
   const t = g.tile ?? GRID_DEFAULTS.tile;
   const cx = Math.floor(lx / t), cz = Math.floor(lz / t);
@@ -59,12 +42,8 @@ export function pickEdge(g, lx, lz, { diagonals = true } = {}) {
   return all[0] ?? null;
 }
 
-/** The nearest edge that actually CARRIES a wall.
- *
- *  Geometric nearness is the wrong question for a door tool. The diagonals
- *  cross a cell's middle, so anywhere near the centre the nearest edge is a
- *  diagonal that usually has no wall in it — and the click silently does
- *  nothing. Asking for the nearest edge that exists is what the user meant. */
+/** The nearest edge that CARRIES a wall: near a cell's centre the nearest edge is an empty diagonal, and a door click
+ *  there would silently do nothing. */
 export function pickWalledEdge(data, lx, lz, level = 0) {
   const lv = data?.levels?.[level];
   if (!lv) return null;
@@ -119,12 +98,8 @@ export function removeTile(data, { x, z }, level = 0) {
   return d;
 }
 
-/** Draw a rectangular room: floor across the span, walls right round it.
- *
- *  This is the primary tool — in Sims you drag a room, you do not lay walls one
- *  at a time — and it is also where the edge model earns its keep. The
- *  perimeter is expressed as edges, so dragging a second room against the first
- *  SHARES their common wall instead of stacking two walls in one place. */
+/** Draw a rectangular room: floor across the span, walls right round it. The perimeter is edges, so a room dragged
+ *  against another SHARES their common wall. */
 export function drawRoom(data, a, b, level = 0, mat = 'wall') {
   let d = clone(data);
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);

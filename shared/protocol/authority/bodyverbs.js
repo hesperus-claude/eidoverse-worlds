@@ -107,10 +107,8 @@ const EMBODIED_VERBS = {
       if (mine.length >= MAX_HELD) refuse("hold-limit", `you are already holding ${mine.length} things (${mine.join(", ")}), and ${MAX_HELD} is the most you can carry here`, `put one down first: put {id: '${mine.at(-1)}'}`); }
     const live = livePoses(sf)[a.id]; const t = worldT(st, a.id); const eb = sf.launched[a.id] ? sf.sim?.bodies[a.id] : null;
     const here = held ? held.pose.pos : live ? live.pos : eb ? eb.p : t.pos; // where it IS: someone's hand, the air, the engine (rested, not yet logged: second review S2-1), or the log
-    // range (grabbable): from the hand; past arm's reach the authority grants it as a pull (the thing flies to the hand: a
-    // presence ease on every client), never a hold at a distance (the reach check is the anti-cheat)
-    // reach is to the NEAREST POINT of its box when it stands in the world, not to its origin (a barrel's origin is at its
-    // base: standing against it is in reach; R 10-11 23:27). In a hand or in the air: to where it is.
+    // range (grabbable) is from the hand; past arm's reach it's a pull (flies to the hand), never a hold at a distance.
+    // Reach is to the NEAREST POINT of its box when standing (a barrel's origin is its base), else to where it is.
     const hp = gripPoint(me), bx = !held && !live && !eb ? aabb(st, a.id) : null;
     const reachPt = bx ? [0, 1, 2].map((i) => Math.min(bx.max[i], Math.max(bx.min[i], hp[i]))) : here;
     const d = dist(hp, reachPt); if (d > g.range) refuse("out-of-reach", `${a.id} is ${r3(d)} m from you; you can reach ${g.range} m`, `move {to: [${r3(here[0])}, ${me.at[1]}, ${r3(here[2])}]} (your feet stay on the floor; your hand reaches ${HAND_Y} m up) first`);
@@ -123,14 +121,9 @@ const EMBODIED_VERBS = {
     const over = new Set(); if (!live) for (const s of spatial(st).rec.get(a.id)?.surfs ?? []) for (const k of near(st, [s.min[0], s.y - 0.02, s.min[1]], [s.max[0], Infinity, s.max[1]])) over.add(k);   // only what stands over its surfaces (the index)
     const dependents = live ? [] : Object.keys(st.entities).filter((k) => { if (fam.has(k) || !over.has(k)) return false; const b = aabb(st, k);
       return b && !st.entities[k].c.parent && supportUnder(st, b, familyOf(st, k)).id === a.id; });
-    // R 10-17 20:05 (the gym, pyr-7 under pyr-9): a thing the physics rested on TWO supports is parented to one of them (its
-    // settle picks one), and resting on the other all the same. Taken out from under it, that other support left it standing
-    // in mid-air: it is neither this thing's descendant nor unparented, and the engine wakes a sleeper only when a moving
-    // body touches it (PHYSICS "Waking and knocking"), never when what it rests on leaves. So under a carried engine, a
-    // dynamic thing parented elsewhere that TOUCHES one of its tops (its oriented box meets the thin slab just over that top)
-    // loses its support too, and falls from rest; the engine decides whether the support it keeps still holds it. A thing a
-    // hand rule fixes (locked, or under a lock) or someone holds is no sleeper (simlayer fixedSet) and stays.
-    // the world HAS an engine (carried here or not): what would fall is the same set either way; an uncarried one refuses it below
+    // a thing rested on TWO supports is parented to one; taking the other out from under it would leave it asleep in
+    // mid-air (the engine wakes sleepers only on touch). So a dynamic thing touching a taken thing's top falls from rest;
+    // locked or held things stay. Whether the world HAS an engine decides the set; an uncarried one refuses it below.
     const physW = !!st.entities["@world"]?.c["physics-engine"];
     if (physW && !live) for (const k of over) { const c = st.entities[k]?.c;
       if (!c || fam.has(k) || dependents.includes(k) || !c.parent || c.physics?.kind !== "dynamic" || w.presence.holds[k] || [k, ...ancestors(st, k)].some((x) => lockedC(st.entities[x]?.c))) continue;
@@ -235,13 +228,8 @@ const EMBODIED_VERBS = {
     if (pos === undefined && stay) pos = h.pose.pos.map(r3);
     if (a.at !== undefined && (!Array.isArray(a.at) || a.at.length !== 2 || a.at.some((n) => !Number.isFinite(n)))) refuse("shape", "put takes at: [x, z] (set it down there, on whatever is below)", "");
     if (pos === undefined) { // no pose given: onto what's below, the authority resolves the height. Where: `at` (the
-      // holder says where on the floor, e.g. in front of their feet: the hand is INSIDE the body's footprint, and a big
-      // thing set down there shoved the body aside, R 10-10), else straight down from the hand.
-      // Its BOTTOM rests on the support, not its origin: a ball's origin is its centre, and one put down by its origin
-      // sat half in the floor (R's gym, 10-10). The bottom is the thing's own box under its origin, as it last stood.
-      // What it lands on is what is under its CENTRE (a thing resting by a sliver of its footprint on a neighbour hung in
-      // the air beside it), and never a thing in someone's hand: a held thing is still in the log where it was picked
-      // up, and crates put down there floated on nothing (R's gym, 10-10; the second was so before `at` existed).
+      // set down where the holder says, else straight down from the hand. Its BOTTOM (its own box under its origin) rests on
+      // the support, which is what is under its CENTRE, never a thing in someone's hand (held things still stand in the log).
       const fam = new Set([a.id, ...descendants(st, a.id)]); const x = a.at ? a.at[0] : h.pose.pos[0], z = a.at ? a.at[1] : h.pose.pos[2];
       for (const k of Object.keys(w.presence.holds)) if (st.entities[k]) for (const d of [k, ...descendants(st, k)]) fam.add(d);
       const q = spatial(st).rec.get(a.id)?.q; const under = q ? Math.max(0, t.pos[1] - q.min[1]) : 0;
@@ -264,10 +252,8 @@ const EMBODIED_VERBS = {
     delete w.presence.holds[a.id]; w.savePresence(); heldEvent(w, "release", a.id, { by: actor, how: stay ? "stay" : how, seq: act });
     return { ok: true, seq, act, settled: { id: a.id, pos }, handled: h.handled, ...(stay ? { release: "stay" } : {}), ...(snap.notes.length ? { notes: snap.notes } : {}) };
   },
-  // research §Decisions 1: what flies is a dynamic thing in a world that runs physics. Anything else let go is set
-  // straight down, and a throw of it is a drop that says so: a VR hand lets go with its velocity whatever the world is
-  // (thingphysics.release sends throw when the hand moves), and refusing it left the thing stuck in the hand.
-  // grabbable.throw scales the velocity (0: it can only be dropped); release: return sends it home instead of flying.
+  // what flies is a dynamic thing in a world that runs physics; anything else is set straight down, a throw becoming a
+  // drop that says so (a VR hand lets go with velocity regardless). grabbable.throw scales it; release: return sends it home.
   throw(w, actor, a) {
     if (!Array.isArray(a.v) || a.v.length !== 3 || a.v.some((n) => !Number.isFinite(n))) refuse("shape", "throw needs v: [x, y, z] in m/s", "e.g. v: [0, 3, 4] tosses it up and forward (+z)");
     notAThing(w.state(), a.id, "thrown");
@@ -294,12 +280,9 @@ const EMBODIED_VERBS = {
       return EMBODIED_VERBS.put(w, actor, { id: a.id }, how); }
     return launch(w, actor, { ...a, v: [0, 0, 0] }, "drop", g);
   },
-  // a punt (/punt, an agent's punt request), as a sim intent (design 20, P4: "punt is a sim intent
-  // too"). A thing low beside the body (or in the air beside it: a volley) is launched with v, or with power along the line
-  // from where the body stands through it, lifted (physobj's 0.9 ratio: a knee-high hop at power 4). Its gates are grab's:
-  // dynamic, physics.who, its locks and its ancestors', and nobody's hand. A thing in flight is caught and re-launched (logged).
-  // `contact: true` is a moving body's push (shoveGate); `shove: true` is its old spelling, taken at the door and recorded
-  // as `contact` (R 10-17 14:34: one word, `shove`, stays for knocking a BODY over). Both at once is no request.
+  // a punt is a sim intent (design 20, P4): a thing low or in the air beside the body is launched with v, or with power
+  // through it, lifted. Its gates are grab's; a thing in flight is caught and re-launched. `contact: true` is a moving
+  // body's push (shoveGate; old spelling `shove: true`, recorded as contact). Both at once is no request.
   punt(w, actor, a) {
     if (a.shove !== undefined) { if (a.contact !== undefined) refuse("shape", "contact, or its old spelling shove: not both", "send contact: true");
       a = { ...a, contact: a.shove }; delete a.shove; }

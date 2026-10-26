@@ -10,7 +10,7 @@
 // Godot's ParticleProcessMaterial's. What is ours, and why:
 //   - local coordinates only: a particles component hangs off its thing and rides it (the first protocol's contract), so
 //     the emission transform is the identity and every radial/tangential force is about the emitter's own origin;
-//   - gravity alone is WORLD-down (Unity's convention, lead 10-17): the document's gravity is a world-space vector, and
+//   - gravity alone is WORLD-down (Unity's convention): the document's gravity is a world-space vector, and
 //     the renderer turns it into the emitter's frame every frame (setGravity(localGravity(…)): the inverse of the
 //     emitter's world rotation, its world scale undone), so a tipped brazier's smoke still rises. Godot's local_coords
 //     turns gravity with the node; here only velocity, linear/radial/tangential and the shape stay in the emitter's
@@ -105,11 +105,9 @@ export function sampleRamp(g, x, out = [1, 1, 1, 1]) {
 
 export { qRotate };
 /**
- * The document's gravity (a WORLD vector, m/s², lead 10-17) in an emitter's own frame, given the emitter's world rotation
- * q [x, y, z, w] and world scale s [x, y, z] (three's matrixWorld.decompose). The emitter's frame is scaled with its thing
- * (`scale`: every length in the effect, accelerations too, × the thing's scale), so the gravity that lands in the world is
- * the document's × the thing's mean scale (∛|sx·sy·sz|), pointing exactly where the document says: v = S⁻¹ · R⁻¹ · (k·g).
- * At identity it is g as written.
+ * The document's gravity (a WORLD vector, m/s²) in an emitter's frame, from its world rotation q [x, y, z, w] and scale s
+ * [x, y, z]: v = S⁻¹ · R⁻¹ · (k·g), k the mean scale (∛|sx·sy·sz|), so it points where the document says and scales with
+ * the thing. At identity it is g as written.
  */
 const _QI = [0, 0, 0, 1], _R = [0, 0, 0];   // scratch: the renderer calls this every frame per emitter
 export function localGravity(g, q = [0, 0, 0, 1], s = [1, 1, 1], out = [0, 0, 0]) {
@@ -148,11 +146,9 @@ function rampAt(R, x, out) {
 }
 
 /**
- * One emitter's simulation. `em` is a RESOLVED emitter (shared/particle_effects.js resolveEmitter: every module present,
- * every default written). `seed`: this instance's seed. Returns the sim: step(dt) advances it, and these arrays hold
- * what to draw (index i < amount): alive[i], pos[3i..], size[i], angle[i] (rad), color[4i..] (rgba, rgb may exceed 1
- * for additive), frame[i] (flipbook frame, a float). setEmitting(on) stops or restarts the spawning (Godot's emitting).
- * Structure of arrays, and nothing allocated per particle per frame: a viewer may run thousands of these.
+ * One emitter's simulation. `em` is a RESOLVED emitter (particle_effects.js resolveEmitter); `seed` this instance's.
+ * step(dt) advances it; alive[i], pos[3i..], size[i], angle[i] (rad), color[4i..] (rgba, rgb may exceed 1 for additive),
+ * frame[i] (flipbook, float) hold what to draw; setEmitting(on). Structure of arrays, nothing allocated per frame.
  */
 export function makeSim(em, { seed = 0 } = {}) {
   const n = em.spawn.amount | 0;

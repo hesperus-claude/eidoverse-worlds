@@ -54,11 +54,9 @@ export function transformOf(ent, patch = {}) {
 /** move/turn/scale a thing (local to its parent if it has one). */
 export const setTransform = (ent, id, patch) => set(id, "transform", transformOf(ent, patch));
 
-/** ride `to`: parent + the local pose (local to `to`). `socket` names one of `to`'s sockets (a socket child: PLAN-sockets-
- *  entities): the thing then rides THAT, and with no pose given lands on it (the socket's own frame: identity). So does
- *  a `to` that is itself a socket. Otherwise, with no pose, the carrier's origin. A socket name `to` doesn't have goes
- *  as the old spelling {to, socket}, which the door lifts (or refuses, in its words). Re-parenting to the parent it
- *  already has is just the pose. `world` is the view ({entities}). */
+/** ride `to`: parent + the local pose. `socket` names one of `to`'s socket children, ridden instead and, with no pose,
+ *  landed on (as is a `to` that is a socket); else the carrier's origin. An unknown socket name goes as the old
+ *  {to, socket}, which the door lifts or refuses. `world` is the view ({entities}). */
 export function parent(world, id, to, { socket = null, pos = null, q = null, yaw = null } = {}) {
   const E0 = world?.entities ?? {};
   const ent = E0[id] ?? null;

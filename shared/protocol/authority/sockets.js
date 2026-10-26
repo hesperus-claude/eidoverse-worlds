@@ -1,8 +1,6 @@
-// shared/protocol/authority/sockets.js — sockets as child entities (PLAN-sockets-entities 2026-10-12). A socket is
-// {transform, parent: {to: host}, socket: {name, part?, accepts?, radius?}, station?}: an attachment point with a pose of
-// its own (Godot's Marker3D, Unity's child Transform), and what a person's body does there, its station (shape audit
-// 10-16: once socket.body). What it is for is read from what it has, never stored: a seat if a station, a snap point if
-// accepts, else an attach point.
+// shared/protocol/authority/sockets.js — sockets as child entities. A socket is {transform, parent: {to: host}, socket:
+// {name, part?, accepts?, radius?}, station?}: an attachment point with its own pose (Godot Marker3D) and what a body does
+// there. What it is for is read, never stored: a seat if a station, a snap point if accepts, else an attach point.
 import { ONE_PLACE, socketQ } from "../../components.js";
 import { checkSockets } from "../../sockbody.js";
 import { COMPONENTS, materialize } from "../componentspec.js";
@@ -17,10 +15,8 @@ import { refuse } from "./refuse.js";
 const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v !== PURGED;
 export const isSocketC = (c) => bag(c?.socket);
 export { socketRole } from "../../sockbody.js";
-// what a socket may carry besides its pose and its name: what reads it (label, description), what switches or freezes it
-// (disabled, lock, hidden), a motion of its own (R 10-12 20:44), and the blueprint mark every placed part carries
-// one host holds at most this many sockets (review 10-12 S1-2): a seat map past it is several things. No setting raises it;
-// a socket is an entity, so it also counts in @world.capacity.entities (authority.js CAPACITY)
+// what a socket may carry besides its pose and name: label/description, disabled/lock/hidden, its own motion, the blueprint mark
+// at most this many sockets per host (no setting raises it); each also counts in @world.capacity.entities
 export const SOCKETS_PER_HOST = 64;
 export const ON_A_SOCKET = new Set(["transform", "parent", "socket", "station", "label", "description", "disabled", "lock", "hidden", "motion", "copy-of"]);
 const UNIT = (sc) => sc === undefined || (Array.isArray(sc) && sc.length === 3 && sc.every((x) => x === 1));
@@ -54,10 +50,9 @@ export function socketRules(s, ids) {
 export const toggleOf = (h) => { const comp = h.component ?? "openable"; return { comp, field: h.field ?? (comp === "openable" ? "open" : undefined) }; };   // toggling an openable opens/closes it, named or not (10-07 merge)
 // only a toggle of openable.open itself (toggleOf's own default) stands in for the implicit open: one of its lock doesn't
 export function implicitOpens(e) { return !!(e?.c.openable && typeof e.c.openable === "object") && !Object.values(e.c.reactions ?? {}).some((h) => { if (h?.kind !== "toggle") return false; const { comp: target, field } = toggleOf(h); return target === "openable" && field === "open"; }); }
-/** One action namespace per thing (shape audit 10-16, R's call 3): what `use {id, action}` names must mean one thing. A
- *  reaction key, or a name grabbable.use fires, never equals a station action of the thing's own sockets (several of its
- *  sockets may share one: a sofa's seats all sit). Over the state a write leaves; the hosts the write touches, directly or
- *  through one of their sockets. The first clash as {code: 'action-taken', reason, fix}, or null. */
+/** One action namespace per thing: a reaction key, or a name grabbable.use fires, never equals a station action of its own
+ *  sockets (several sockets may share one). Over the state a write leaves, for the hosts it touches. → the first clash as
+ *  {code: 'action-taken', reason, fix}, or null. */
 export function actionRules(s, ids) {
   const hosts = new Set();
   for (const id of ids) { const e = s.entities[id]; if (!e) continue; if (isSocketC(e.c) && e.c.parent?.to) hosts.add(e.c.parent.to); else hosts.add(id); }
@@ -98,10 +93,9 @@ export const socketPoint = (st, x) => worldT(st, x.id).pos;
 /** The names of the seats a catalogue entry declares (find's answer; they're made as children when the model is). */
 export const modelSocketNames = (m) => (bag(m?.sockets) ? Object.keys(m.sockets) : null);
 
-// ---------- the old spelling, lifted at the door (PLAN §3) ----------
-// Every write enters through admit, so admit is where `sockets` maps and parent {to, socket} edges become socket
-// children: requests, undo, a fork's copy, a blueprint's parts, a catalogue model's seats. Nothing after the door
-// stores the old spelling, so nothing after it reads it.
+// ---------- the old spelling, lifted at the door ----------
+// Every write enters through admit, so admit turns `sockets` maps and parent {to, socket} edges into socket children;
+// nothing after the door stores or reads the old spelling.
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 const base32 = (bytes) => { let out = "", bits = 0, v = 0; for (const b of bytes) { v = (v << 8) | b; bits += 8; while (bits >= 5) { out += B32[(v >>> (bits - 5)) & 31]; bits -= 5; } } if (bits) out += B32[(v << (5 - bits)) & 31]; return out; };
 const slugOf = (s, n) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, n).replace(/-+$/, "") || "socket";

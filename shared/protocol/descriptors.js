@@ -1,35 +1,15 @@
 // shared/protocol/descriptors.js — one descriptor per engine component, derived from componentspec.js.
-//
-// The registry (COMPONENTS) is the schema: every field a card can show, its type, its default and what its absence means
-// are read from there. What this table adds is the EDITOR'S VOCABULARY — the names and spellings the inspector, the
-// records (shared/components.js RECORDS) and the agent's `edit` tool use where they differ from the wire's:
-//   an axis is a letter to the editor (x, -y) and a unit vector on the wire ([1, 0, 0]);
-//   a spin's or an orbit's rate is one number to the editor (°/s) and degPerSec | period | rpm on the wire;
-//   a light's `burns at noon` (address light.daytime, a check: on = the wire's daytime: 'full', off = 'dim'; R 10-17: was light.noon); a uniform scale is one number to the editor, [s, s, s] on the wire;
-//   a Grabbable, a Sockets, a Reactions card is its whole value ({spec: {}}): the wire bag is the editor's own.
-// A descriptor is {key, card, type?, fields: [{k, param, t, path, wire?: {to, from}, ui?}], extra}: key is the registry name
-// the value lives under (comp.<key>), card the record name (RECORDS[card]), type the motion type when the key is shared,
-// k the inspector's address inside its group, param the record's parameter name (k when they agree), t the registry's
-// field type, path the key inside the wire value (null = the whole value), wire the translation (to: editor → wire,
-// from: wire → editor; both take (value, bag)). materialize(key, {type}) through `from` is what a field's default IS;
-// tools/descriptor-defaults-test.ts holds RECORDS and editschema to it.
-//
-// `ui` is the row's widget facts (C8): t the widget (num, check, enum, color, text), step/dp/softMin/softMax/deg as
-// panels.js reads them. A row's HARD limits (min, max) and its unit are never written here: build() reads them from the
-// registry's `ranges` and `units` (schema layers, 10-14: one description), and a soft slider end a card wants below or
-// above them is softMin/softMax (never enforced; the door's range is). def: false = the row offers no reset (the inspector never did); absent = what an UNWRITTEN value is
-// drawn as where it differs from the registry's default (a pendulum written before the authority materialized a period
-// swings at the first protocol's 3.5 s: client/lib/motioneval.js); sparse = written only off its default (a light's
-// important/day); clears = the wire's other spellings a write retires (degPerSec retires rpm and period); own = the card's
-// own code writes it (an axis: validated against the letters the authority takes, written as a letter). The prose
-// (labels, hints, option words) stays in shared/editschema.js, which builds every engine card's rows from this table
-// (rowOf) and claims a card's addresses from it (claims): a row no descriptor names is in no card, which
-// tools/components-inspector-test.ts reports. `extra` names the card's own derived rows (openable's `by`, text's `plate`).
-//
-// The seven fields where RECORDS states a default the registry never writes (C5's yellows) are decided here, per field,
-// as `absent` on the descriptor (`absentMeans` prose: the record's `default` is a READING of absence, to become prose when
-// RECORDS is generated from this table) or as a registered default (none yet: each would be a registry change and a pin
-// regeneration, spec/registry-pin.json D8). See DECIDED below.
+// The registry is the schema; this adds the EDITOR'S VOCABULARY where it differs from the wire's: axis letters vs unit
+// vectors, one rate in °/s vs degPerSec | period | rpm, light.daytime as a check, uniform scale vs [s, s, s], and
+// whole-value cards (Grabbable, Sockets, Reactions).
+// A descriptor is {key, card, type?, fields: [{k, param, t, path, wire?: {to, from}, ui?}], extra}: key the registry
+// name, card the record (RECORDS[card]), type the motion type when the key is shared, k the inspector address, param the
+// record's name, t the field type, path the key in the wire value (null = whole), wire the editor↔wire translation.
+// `ui` is widget facts only (t, step/dp/softMin/softMax/deg); HARD limits and units come from the registry, never here.
+// def: false = no reset; absent = how an UNWRITTEN value draws; sparse = written only off default; clears = spellings a
+// write retires; own = the card's own code writes it. Prose lives in editschema.js; tools/descriptor-defaults-test.ts and
+// tools/components-inspector-test.ts hold it. Fields where RECORDS states a default the registry never writes are
+// decided per field as `absent` (spec/registry-pin.json D8); see DECIDED below.
 
 import { COMPONENTS, materialize } from './componentspec.js';
 
@@ -71,14 +51,9 @@ const DECIDED = {
   'Text.outlineColor': 'the edge takes the colour that contrasts with the text colour: black behind light text, white behind dark (the registry says the same)',
 };
 
-// per card: the registry fields it shows (motion's are per type), and the editor's spellings and widgets where they differ
-// from the wire's. A card with `whole` edits its value as one JSON field named `whole`. `extra`: the card's own derived
-// rows, claimed by the card though no registry field is theirs. `floor`: the card IS its raw-JSON row on the inspector's
-// floor (Reactions, Captions, Stage), so the floor keeps the key. `writeDp`: the decimals an edit is rounded to on the wire
-// (a field's ui.wdp overrides it). `hand`: the card's rows and writes are editschema's own (HAND), not built from this table.
-// `ui.closed` is derived, never written here: an enum row is closed exactly where the registry names the field's enum
-// (componentspec `enums`; the authority refuses anything else), so an edit outside it is refused before it is sent; an enum
-// the registry leaves open (grabbable.who takes the world's own roles) is the door's to judge.
+// per card: the registry fields it shows and the editor's spellings and widgets. `whole`: one JSON field. `extra`: the
+// card's own derived rows. `floor`: the card IS its raw-JSON row. `writeDp`: wire decimals (ui.wdp overrides). `hand`:
+// editschema's own. `ui.closed` is derived: an enum row is closed exactly where the registry names the enum.
 const MOTION = {
   Pendulum: { type: 'pendulum', show: ['axis', 'amp', 'period', 'damp', 'maxAmp', 'phase', 'pivot'],
     editor: { amp: { wire: AMP, ui: { ...DEG, softMin: 0, softMax: Math.PI, def: false, clears: ['amplitude'] } }, period: { ui: { ...SEC, absent: 3.5 } }, damp: { ui: { t: 'num', step: 0.01, dp: 3, softMin: 0, softMax: 2, absent: 0 } }, phase: { ui: PHASE } } },

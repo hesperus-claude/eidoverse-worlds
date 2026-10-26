@@ -38,10 +38,8 @@ export function floatStep(s, surfaceY, H, dt, floor = -Infinity) {
 }
 
 // ---- floating bodies, part by part ------------------------------------------------
-// A ragdoll floats by the same law, applied to each of its parts (client/lib/ammodoll.js): every part
-// is buoyed in proportion to how much of it is under the surface, floating at rest with PART_FLOAT of
-// itself submerged (people float face near the surface), and dragged toward the WATER's own motion —
-// so a body drifts down a river with its current and is pushed in toward the shore by the surf.
+// A ragdoll (client/lib/ammodoll.js) floats by the same law per part, at rest PART_FLOAT submerged, dragged toward the
+// water's own motion so it drifts with a current and is pushed ashore by surf.
 
 export const PART_FLOAT = 0.82;
 export const WATER_DRAG = 2.0;       // 1/s, on what is under water, relative to the water's motion

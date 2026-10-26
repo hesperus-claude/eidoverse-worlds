@@ -1,22 +1,9 @@
-// floradefs — the flora def contract, as one pure module (charter §3:
-// content is declarative data; code is reserved for new KINDS of things).
-//
-// A flora species def is a JSON object in defs/flora/<name>.json. The server
-// validates each def against this module at load and refuses to serve one
-// that fails — so a typo becomes a boot log line, not a broken world. Same
-// constraints as everything in shared/ (README.md): pure, dependency-free,
-// no Date.now().
-//
-// The checks are TYPE-level, not taste-level: a def that would crash or
-// silently misbuild in the engine is an error; a strange tuning value is the
-// author's business. Unknown keys are PRESERVED, never dropped — the same
-// forward-compatibility rule the log protocol lives by (`doc` is the
-// conventional human-notes field).
+// floradefs — the flora def contract, as one pure module (charter §3: content is data; code is for new KINDS of things).
+// A def is defs/flora/<name>.json; the server validates each at load and refuses one that fails. Checks are type-level,
+// not taste-level. Unknown keys are PRESERVED, never dropped (`doc` is the conventional notes field).
 
-/** The engine's geometry builders. A def naming an archetype outside this
- *  set cannot be built by any current client — refused at load, like an
- *  unknown verb is refused at the door (new archetypes are engine code, so
- *  the set grows here in the same commit that grows the engine).
+/** The engine's geometry builders: a def naming another archetype can't be built by any client and is refused at
+ *  load (new archetypes are engine code, added here in the same commit).
  *  @type {string[]} */
 export const FLORA_ARCHETYPES = ['blades', 'shrub', 'yucca', 'corn', 'sunflower'];
 

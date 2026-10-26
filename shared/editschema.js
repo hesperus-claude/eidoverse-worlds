@@ -1,15 +1,7 @@
-// editschema — what can be edited on a thing, and how, as a PURE FUNCTION of
-// its folded record. Dependency-free, shared verbatim by three surfaces:
-//
-//   desktop inspector   client/lib/editpanels.js renders the fields (panels.js)
-//   VR quad             the same fields painted to a canvas (xrpanels.js)
-//   models              mcpl `inspect` prints them, `edit` commits them
-//
-// This is the parity law made structural: anything a human can click, a
-// model can say — because both read ONE declaration and both commit through
-// editOps(). The fold (shared/protocol/fold.js) is the source of every value here;
-// a client with a realized object may layer live extras on top (is the light
-// actually casting) but never a different truth.
+// editschema — what can be edited on a thing, and how, as a PURE FUNCTION of its folded record. Dependency-free,
+// shared by the desktop inspector (client/lib/editpanels.js), the VR quad (xrpanels.js) and mcpl inspect/edit, so
+// anything a human can click a model can say. Values come only from the fold (shared/protocol/fold.js); a client may
+// layer live extras, never a different truth.
 //
 // inspectSchema(ent, id)          → { groups: [{ group, verb, fields }] }
 //   fields are panels.js specs: { t, k, label, value, def?, … } with k a plain name (def: the
@@ -115,10 +107,9 @@ function axisName(m, def) {
   return def;
 }
 const isBag = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
-/** A card's row from its descriptor (shared/protocol/descriptors.js): the widget facts (ui), the value read through the
- *  wire translation with the registry's default (or the field's `absent` reading) behind it, and `def` where the row
- *  offers a reset. `over` is the prose and anything the card knows better (a softMax that follows the value). A field the
- *  descriptor doesn't name still draws (its value from `over`), and no card claims it: components-inspector-test says so. */
+/** A card's row from its descriptor (descriptors.js): widget facts (ui), the value through the wire translation with
+ *  the registry default (or `absent`) behind it, and `def` where it offers a reset; `over` is the prose and what the card
+ *  knows better. A field no descriptor names still draws, and components-inspector-test reports it unclaimed. */
 function rowOf(card, k, bag, over = {}) {
   const f = fieldOf(card, k); const { def: offersDef, absent, sparse: _s, clears: _c, own: _o, wdp: _w, ...widget } = f?.ui ?? {};
   const t = over.t ?? widget.t;
@@ -132,10 +123,8 @@ function rowOf(card, k, bag, over = {}) {
 // The light component (PROTOCOL §4, 2026-10-01): a lamp is a thing with a `light` component.
 const compLight = (ent) => isBag(ent?.light);
 const compMesh = (ent) => isBag(ent?.mesh) && ent.model == null && MESH_SHAPES.includes(ent.mesh.shape);
-// The reading a viewer with no hint gets: canonical (middle axis within ±90°,
-// shared/euler.js) — except an UPRIGHT thing with a q (a pure turn about +Y,
-// which every lease release and settle writes), which reads (0, yaw, 0) in
-// every order, exactly as the same thing without a q does.
+// no hint: the canonical reading (middle axis within ±90°, shared/euler.js), except an UPRIGHT thing with a q, which
+// reads (0, yaw, 0) in every order like one without a q
 const uprightHint = (ent) => (ent?.q && Math.abs(ent.q[0]) < 1e-12 && Math.abs(ent.q[2]) < 1e-12 ? [0, ent.yaw ?? 0, 0] : null);
 // A motion key is a Motion only when its value names a motion type. A `motion` holding something else — a reaction's
 // {cause, by} stamp with no `type` (components-inspector-test's swing1) — is not one: it falls to the raw-JSON floor, where
@@ -143,16 +132,9 @@ const uprightHint = (ent) => (ent?.q && Math.abs(ent.q[0]) < 1e-12 && Math.abs(e
 const motionKeys = (ent) => Object.keys(recordComponents(ent)).filter((k) => (k === 'motion' || k.startsWith('motion:')) && ent[k] && typeof ent[k] === 'object' && MOTION_TYPES.includes(motionType(ent[k])));
 
 // ---------------------------------------------------------------- the hand-written cards
-// The four the descriptor table marks `hand` (shared/protocol/descriptors.js HAND_CARDS): their rows are not built from
-// the table — a Transform's channels are an editor's reading of one pose, a Sockets' rows are per slot, a Material's are
-// the model's own slots, and a Grabbable's registry fields ride beside the hand's own (pose, carries, fits, use, prompt,
-// grips). Each keeps a `read` (its rows) and a `write` (its edits); the inspector and editOps call them where the card
-// stands. Transform's hooks are inline in inspectSchema/editOps (its edits coalesce into the one place every channel
-// shares); HAND.Transform names where.
-// A host's sockets are its socket children (PLAN-sockets-entities); until the Parts UI (PLAN §10 12b) the Sockets card
-// still reads and writes them as the one map it was built on: the children, read as `sockets.<name>` (shared/sockbody.js
-// socketMapIn); a write of the whole map is translated into the children at the door (authority/sockets.js liftOps).
-// Needs the world (live.world); without it a record shows the sockets it carries itself (none, after the cut).
+// `hand` cards (descriptors.js HAND_CARDS) keep their own `read` and `write`; Transform's are inline (HAND.Transform says
+// where). Sockets reads a host's socket children as one map (sockbody.js socketMapIn; the door lifts a whole-map write,
+// authority/sockets.js liftOps) and needs live.world, else it shows the record's own sockets.
 function withSocketMap(ent, id, live) {
   if (!ent || !live?.world || ent.sockets) return ent;
   const map = socketMapIn(live.world, id);
@@ -337,9 +319,7 @@ const HAND = {
 
 /** @param ent   the fold record (shared/protocol/fold.js `c`) — or, through recordOf, the view record (view.js viewOf) — or null
  *  @param id    its id
- *  @param live  optional viewer extras: { casting?: boolean,
- *               parts?: string[] (the model's named mesh parts — a picture's `part`
- *               becomes a dropdown and '+ picture' is offered), now?: number }
+ *  @param live  optional viewer extras: { casting?: boolean, parts?: string[] (the model's named mesh parts), now?: number }
  *               Who may change it is the authority's to decide (it refuses, saying why). */
 export function inspectSchema(ent, id, live = {}) {
   if (!ent) return { id, groups: [] };
@@ -347,18 +327,13 @@ export function inspectSchema(ent, id, live = {}) {
   const c = recordComponents(ent);
   const mounted = !!ent.parent;
   const locked = !!c.lock;
-  // a lock doesn't make the pose read-only here: the authority refuses the move, and a person (or agent) who may lift the lock
-  // is asked "This is locked. Move anyway?" — or answers it with throughLock (PROTOCOL §5). Same for every surface.
-  // the pose the channel box shows and edits: a child's is LOCAL to its parent
-  // (design §3) — the mount's offset and relative q, as the renderer realizes
-  // it — never the fold's pre-mount pos, which nothing draws while it rides
+  // a lock doesn't make the pose read-only: the authority refuses, and one who may lift it is asked (throughLock, PROTOCOL §5)
+  // the pose shown is LOCAL to the parent (design §3), as the renderer realizes it, never the fold's pre-mount pos
   const L = localOf(ent, live.world ?? null);
   const pv = L.mounted ? { ...ent, pos: L.pos, q: L.q ?? undefined, yaw: L.yaw } : ent;
   const groups = [];
 
-  // transform — the entity's LOCAL frame: a root's is the world (`place`), a
-  // child's is its parent's (`mount` with the new offset / relative q; scale
-  // stays the child's own, so it is still a `place`). Only a part socket's
+  // transform is the LOCAL frame: a root's `place`, a child's `mount` (scale stays the child's). Only a part socket's
   // occupant is read-only: its pose is baked at the moving part's phase.
   const partRide = mounted && L.part;
   const tf = { disabled: !!partRide, hint: locked ? 'locked — moving it asks first' : partRide ? `rides ${ent.parent.to}'s moving part ${L.part} — its pose is set where it mounted; unparent and parent it again to move it` : undefined };
@@ -382,10 +357,8 @@ export function inspectSchema(ent, id, live = {}) {
     transform.push({ t: 'num', k: 'scale', label: 'scale', value: round(S[1]), def: 1, step: 0.05, dp: 2, min: 0.01, softMax: 12, ...tf,
       alias: 'scale', hint: tf.hint ?? 'sets all three axes to one number (the channels are scale x / y / z)' });
     ['x', 'y', 'z'].forEach((a, i) => transform.push({ t: 'num', k: `s${a}`, label: `scale ${a}`, value: round(S[i]), def: 1, step: 0.05, dp: 2, min: 0.01, softMax: 12, ...tf }));
-    // the channel box's Rotate (design §5): Euler degrees READ from q in the
-    // entity's rotation order (shared/euler.js); a yaw-only thing reads exactly
-    // (0, yaw, 0) in every order. live.euler is the triple this viewer last
-    // saw — it picks the Euler branch, so channels don't jump while you work.
+    // the channel box's Rotate (design §5): Euler degrees read from q in the entity's order (shared/euler.js); live.euler,
+    // the triple this viewer last saw, picks the branch so channels don't jump while you work
     const order = rotOrderOf(live);   // this viewer's (live.rotOrder): Euler channels are a view (PROTOCOL §9.1)
     const q = pv.q ?? qFromYaw(pv.yaw ?? 0);
     rotation.push({ t: 'enum', k: 'order', label: 'rotate order', value: order, def: 'XYZ', options: ROT_MODES.map((v) => ({ v, label: v === QUAT_MODE ? 'quaternion' : v })),
@@ -411,10 +384,8 @@ export function inspectSchema(ent, id, live = {}) {
   groups.push({ group: 'pos', label: 'Transform', verb: L.mounted ? 'mount' : 'place', fields: transform, ...(L.mounted ? { local: ent.parent.to } : {}) });
   if (rotation.length) groups.push({ group: 'rot', label: 'Rotate', verb: L.mounted ? 'mount' : 'place', fields: rotation, ...(gimbal ? { gimbal: true } : {}) });
 
-  // the hierarchy (design §3 "Children"): who this rides, who rides it. The
-  // ref picks a new parent (a tree row, or the thing in the world) and keeps
-  // the child where it stands; clearing it — or `unparent` — makes it a root.
-  // The same edit the Hierarchy's drag commits, so a headset and an agent can.
+  // the hierarchy (design §3 "Children"): the ref picks a new parent and keeps the child where it stands; clearing it
+  // (or `unparent`) makes it a root. The same edit the Hierarchy's drag commits, so a headset and an agent can.
   const kids = live.world ? childrenOf(live.world, id) : null;
   groups.push({ group: 'parent', label: 'Parent', fields: [
     { t: 'ref', k: 'to', label: 'parent', value: mounted ? ent.parent.to : null,
@@ -453,13 +424,8 @@ export function inspectSchema(ent, id, live = {}) {
     ] });
   }
 
-  // look — the first user of the `ref` field: name ANOTHER entity for this one
-  // to face. The value is a target id (or null). The picker reuses attach's
-  // arming: arm, then click a row or the thing in the world. Only shown once a
-  // `look` comp exists (add it via + component) so we add no UI to things that
-  // don't use it — the field TYPE is the deliverable; this is its demonstrator.
-  // look-at (batch 2; the wire name, `look` is one letter off `lock` and the authority refuses it): a group per key, its
-  // fields addressed `look-at.<k>` for the whole thing and `look-at.<part>|<k>` for a part's
+  // look-at: a group per key, fields addressed `look-at.<k>` (whole thing) and `look-at.<part>|<k>` (a part). Not `look`:
+  // one letter off `lock`, and the authority refuses it.
   const laKeys = Object.keys(c).filter((k) => (k === 'look-at' || k.startsWith('look-at:')) && isBag(c[k]));
   if (laKeys.length) {
     // the door's axis letters (componentspec `axis`: x, y, z or a vector); a stored vector shows as itself
@@ -642,10 +608,8 @@ export function inspectSchema(ent, id, live = {}) {
   if (ent.model || compMesh(ent)) groups.push(HAND.Material.read(c, live));   // every thing with meshes: a model's, or a mesh thing's one 'surface'
 
   if (c.particles && typeof c.particles === 'object') {
-    // R 10-07: the instance is {effect, part?, at?, seed?, playing?, scale?, params?}; the knobs are the effect's own params
-    // (an Essential's: count, size, opacity, speed, lifetime, area, texture, quality). An older value (the first
-    // protocol's flat bag) is shown in today's shape and written back in it on the first edit
-    // an Essential is stored by its name (R 10-17); one stored as its address before is shown, and written, by its name too
+    // the instance is {effect, part?, at?, seed?, playing?, scale?, params?}; the knobs are the effect's own params. An
+    // older flat bag, or an Essential stored by address, is shown and written back in today's shape (by name).
     const inst0 = instanceOf(c.particles) ?? {}; const inst = essentialNameOf(inst0.effect) ? { ...inst0, effect: essentialNameOf(inst0.effect) } : inst0;
     const doc = effectFor(inst.effect, live.effects ?? (() => null)); const at = Array.isArray(inst.at) ? inst.at : [0, 0, 0];
     const effects = ESSENTIAL_NAMES.includes(inst.effect) ? ESSENTIAL_NAMES : [...ESSENTIAL_NAMES, inst.effect ?? '?'];
@@ -768,11 +732,8 @@ export function inspectSchema(ent, id, live = {}) {
     for (const type of g.types) if (c[type] != null) g.fields.push({ t: 'json', k: `json|${type}`, label: g.types.length > 1 ? type : '', value: JSON.stringify(c[type], null, 2), collapsed: true, commit: `comp.${type}`, hint: `the whole ${type} component — a saved edit replaces it wholesale` });
   }
 
-  // every type no group speaks for: raw JSON, the blind fold's UI twin —
-  // a type invented this morning is editable today
-  // the descriptor table's typed cards (CLAIMED_KEYS: the floor cards keep their key), their keyed spellings (motion:<part>,
-  // look-at:<part>), and the client's own flags and draft cards — a key here is a card's, never raw JSON. A light or
-  // collider that isn't a bag, a home with no pos, a physics that isn't a bag: raw, as the card didn't draw
+  // every type no group speaks for: raw JSON, so a type invented this morning is editable today. Claimed keys (typed
+  // cards, their keyed spellings, the client's flags and drafts) are a card's, unless the value is one the card can't draw.
   const claimed = new Set([...CLAIMED_KEYS.filter((k) => !(k === 'light' && !compLight(ent)) && !(k === 'mesh' && !compMesh(ent)) && !(k === 'collider' && !isBag(c.collider)) && !(k === 'motion' && !motionKeys(ent).includes('motion'))), 'disabled', 'clickthrough', ...(c.home && typeof c.home === 'object' && Array.isArray(c.home.pos) ? ['home'] : []), 'hesperus/material', LAYER_KEY, ...Object.keys(c).filter((k) => k.startsWith('hesperus/material:')), ...(c.physics && typeof c.physics === 'object' ? ['physics'] : []), ...laKeys, ...mk, ...scriptKeys]);
   const rest = Object.keys(c).filter((t) => !claimed.has(t) && t !== 'model' && t !== 'parent');   // flat on the record (view.js): the header's and the Parent card's, never raw JSON
   const fields = rest.map((type) => ({ t: 'json', k: type, label: type, value: JSON.stringify(c[type], null, 2), hint: 'raw JSON — a saved edit replaces this type\'s data wholesale' }));
@@ -788,11 +749,8 @@ export function inspectSchema(ent, id, live = {}) {
 }
 
 // ---------------------------------------------------------------- components (B)
-// The same fields, presented the way Unity/Godot/Resonite do: one card per
-// component instance on the entity (shared/components.js), each naming the
-// fields it owns by their unchanged `group.k` address — so editOps, the
-// agent's `edit` tool and the gizmo keep working — plus what may be added.
-// A component today's wire cannot express is listed with the reason, not hidden.
+// One card per component instance (shared/components.js), each naming its fields by their `group.k` address, so
+// editOps, the agent's `edit` and the gizmo keep working. A component the wire can't express is listed with the reason.
 const WIRE_BLOCKED = {
   // a lamp is a Model with a Light component; a model is swapped, not added, from the Library
   Model: () => 'swap the model from the Library',
@@ -823,10 +781,6 @@ export const libLabel = (lib) => modelWord(lib).split('_').slice(0, 3).join(' ')
 // says nothing to a person; anything else is the modeller's own word.
 const MACHINE_PART = [/^(tripo_)?(part|mesh|node|object|geometry|group|primitive|submesh)([_.\- ]?(fused|merged))?[_.\- ]?\d+$/i,
   /^(cube|sphere|cylinder|plane|mesh|object|node|empty)[._]?\d+$/i, /^\d+$/, /^[0-9a-f]{8}-?[0-9a-f]{4}/i];
-/** A part's name for a card title: the modeller's word when it is one
- *  ("seat plank"), else its place in the model ("part 2": its index in the
- *  model's named parts when the viewer knows them, else the name's own
- *  trailing number + 1, else its order among this entity's part motions). */
 /** A model material's name for a person: generator names ("Material.020", "material_3", "lambert2") become "material N"
  *  by its place on the model; real words ("Wood", "Brass_trim") stay. */
 export function matLabel(name, i = 0) {
@@ -834,6 +788,8 @@ export function matLabel(name, i = 0) {
   if (!n || /^(material|mat|lambert|phong|blinn|standard(surface)?|default(material)?|initialshadinggroup|tripo[_a-z]*|mesh|node)([_.\- ]?\d+)*$/i.test(n) || MACHINE_PART.some((re) => re.test(n))) return `material ${i + 1}`;
   return n.replace(/[_]+/g, ' ').replace(/\.\d+$/, '').trim().slice(0, 24);
 }
+/** A part's name for a card title: the modeller's word when it is one ("seat plank"), else its place in the model
+ *  ("part 2": its index among the model's named parts, else the name's trailing number + 1, else its order). */
 export function partLabel(name, parts = null, ordinal = 1) {
   const n = String(name);
   if (!MACHINE_PART.some((re) => re.test(n))) return n.replace(/[_]+/g, ' ').trim();
@@ -983,12 +939,8 @@ export function trustOp(name, live = {}) {
 }
 
 // ---------------------------------------------------------------- needs
-// What each need means on THIS entity, and how it is met when it is not
-// (design §3). A need with one sensible default is added for you, as real
-// ops, in the same undo step; a need that requires a choice returns a
-// `choice` the panel renders as a prompt (and an agent reads), resolved by
-// adding again with one of its option values. A choice with no options is a
-// need that cannot be met in place — it reads as a refusal that says why.
+// What each need means here (design §3): one sensible default is added as real ops in the same undo step; otherwise a
+// `choice` prompt, resolved by adding again with an option. A choice with no options reads as a refusal that says why.
 const article = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
 const NEEDS = {
   // a model is placed from the Library (spawn on the id would replace this
@@ -1037,10 +989,8 @@ export function planNeeds(ent, id, name, value) {
   return { ops, ...(brings.length ? { brings: brings.join('; ') } : {}) };
 }
 
-/** What adding a component writes, in today's ops, needs included (one
- *  call = one undo step on every surface). `value` is the part name for a
- *  part motion, the type name for an Annotation, or a need's choice. Returns
- *  { ops, errors, choice? } — a `choice` sends nothing and asks. */
+/** What adding a component writes, needs included, as one undo step. `value` is the part name for a part motion, the
+ *  type for an Annotation, or a need's choice. → { ops, errors, choice? } (a `choice` sends nothing and asks). */
 export function addOps(ent, id, name, value) {
   ent = recordOf(ent, id);
   if (readsDraft(name)) { if (ent?.[name] != null) return { ops: [], errors: [`${id} already has ${name}`] }; return { ops: [OP.set(id, name, draftsRead().find((d) => d.name === name).blank)], errors: [] }; }
@@ -1116,10 +1066,8 @@ function addOwnOps(ent, id, name, value) {
   return { ops: [], errors: [`${name}: added by a gesture, not a value (${WIRE_BLOCKED[name]?.(new Set()) ?? 'see its card'})`] };
 }
 
-/** What removing one component instance writes. When another component
- *  needs it (design §3) nothing is sent: the result names the dependants in a
- *  `confirm`, and removing again with value "both" removes them too, in the
- *  same step. */
+/** What removing one component instance writes. If another needs it (design §3) nothing is sent: `confirm` names the
+ *  dependants, and removing again with value "both" removes them too, in one step. */
 export function removeOps(ent, id, key, value) {
   ent = recordOf(ent, id);
   const c = recordComponents(ent);
@@ -1152,12 +1100,8 @@ function removeOwnOps(ent, id, key) {
   return { ops: [], errors: [`${id} has no component at ${key}`] };
 }
 
-/** What a viewport gesture (the gizmo) commits, as edits for editOps: the
- *  realized object's pose → the fields this thing HAS. mode 'move' sends the
- *  position, 'scale' the scale, 'rotate' the orientation: a full q
- *  (rot.qx…qw, normalized by editOps) — except a pure turn about +Y on a
- *  yaw-only thing, which stays a heading (pos.yaw, degrees) so its history
- *  keeps its bytes. */
+/** What a gizmo gesture commits, as edits for editOps: 'move' the position, 'scale' the scale, 'rotate' a full q
+ *  (rot.qx…qw), except a pure turn on a yaw-only thing, which stays pos.yaw (degrees) so its history keeps its bytes. */
 export function poseEdits(ent, id, mode, { pos, q, scale } = {}, live = {}) {
   ent = recordOf(ent, id);
   const sc = inspectSchema(ent, id, live);

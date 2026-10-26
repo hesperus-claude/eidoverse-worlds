@@ -9,20 +9,11 @@ import { aabb, boxToObb, inRect, obbs, overlap, rectMeets, satCost, satDepth, su
 import { VOLATILE } from "./storage.js";
 import { terrainParams, makeHeightField } from "../../terrainmath.js";
 import { shapeParams, shapeReady, waterParams, worldWater } from "../../terrainshape.js";
-// The authority is synchronous and every world on a server shares its one thread, so no request may cost the world's size
-// squared. Every hot path (support under a point, overlap warnings, a body's track, place's search, delete's set-down,
-// what rests on a thing picked up) asks the index "what could touch this box?" instead of every entity.
-//   Per thing: its world AABB, oriented boxes and surfaces, cached on its ENTITY OBJECT (a live world's states share every
-//   entity a write didn't touch: server/livehost.ts applyShared), valid while its model entry and every ancestor's entity
-//   object are the same ones. So a write re-measures only what it touched.
-//   Per folded state: a 4 m grid over those boxes (huge things on a list of their own), built on the state's first query.
-//   A state is never mutated once folded or previewed (admit's working copy is never queried), so neither is its index.
-// Every answer lists candidates in the state's key order, so a first-hit or best-so-far loop over them picks exactly what
-// the loop over Object.keys picked. The work budget (CTX.work, set per call by enter) bounds what one call may spend in these
-// searches, counted in units of about 0.1 µs of this laptop's time (measured: a candidate scanned ≈ 1, an axis-aligned
-// box test ≈ 1, a rotated one ≈ 80, a query ≈ 10): WORK_BUDGET.units ≈ 30 ms at rest, the same answer on any host. A
-// clock backstop (WORK_BUDGET.ms from the call's start, read every 64 units) bounds a host that is far slower. Past
-// either, a read or a solver is refused (too-costly) rather than holding every world's thread.
+// every world shares one synchronous thread, so no request may cost the world's size squared: hot paths ask the index
+// "what could touch this box?". Per thing: world AABB, oriented boxes and surfaces cached on its ENTITY OBJECT (valid
+// while its model entry and ancestors' objects are the same). Per folded state: a 4 m grid, built on first query; states
+// are never mutated once folded. Candidates come in key order, so loops pick what Object.keys did. CTX.work bounds a
+// call (units ≈ 0.1 µs; WORK_BUDGET.units ≈ 30 ms, plus a WORK_BUDGET.ms clock backstop); past either, too-costly.
 export const WORK_BUDGET = { units: 350000, ms: 150 };
 const clockMs = () => globalThis.performance?.now?.() ?? Date.now();
 const spend = (n, what = CTX.work.what ?? "this", fix = "ask about less at once: lint {id} checks one thing; place onto a smaller surface, or at a spot (at: [x, z])") => {
@@ -162,17 +153,9 @@ function hitsIx(st, box, id, eps, B = boxToObb(box)) {   // B: the box as an ori
 function familyOf(st, id) { const kids = kidsMap(st); const out = new Set([id]); const todo = [id];
   for (let n = 0; todo.length && n < 1e6; n++) { for (const k of kids.get(todo.pop()) ?? []) if (!out.has(k)) { out.add(k); todo.push(k); } } return out; }
 
-// THE GROUND (owner, 10-15 22:34): the authority stands things and bodies on the ground the walker walks on. @world's
-// terrain component through shared/terrainmath.js (terrainParams → makeHeightField: the sim's law, and the client's and the
-// agent's to ~1 ulp, features and heightmap included through terrainshape), and its water (terrainshape's waterParams, the
-// level the mover's water law reads). No terrain component: y 0 and no water, as every world stood before. The field is
-// built once per terrain VALUE (a write replaces the value, never changes it in place: the revision is the object), not
-// per call. A heightmap's grid comes through terrainshape's loader (the server's disk, server/heightmap.ts).
-// A heightmap whose grid isn't here yet (a world copied without its store/heightmaps file, a hash not uploaded, the loader's
-// miss window) is NOT READY (holes r3 F2/F3): the height law would fall back to the noise law, and nothing commits ground on
-// that (terrainshape's rule; the browser and the agent keep their last ground). Its ground is never cached, so it is built
-// the moment the grid lands, and any read of its height refuses with words: ground-seated placement, a walk, a put, a
-// set-down. Readers that only advise (warnings, the settle's rest-attach) ask groundReady first and skip.
+// THE GROUND: things and bodies stand on the walker's ground: @world terrain through shared/terrainmath.js (features and
+// heightmap via terrainshape) and its water level; no terrain is y 0, dry. Built once per terrain VALUE. A heightmap
+// whose grid isn't here is NOT READY: no ground commits on it, height reads refuse with words, advisers skip (groundReady).
 const GROUND = new WeakMap();
 const FLAT = Object.freeze({ terrain: false, ready: true, height: () => 0, level: null });
 const loading = () => refuse("ground-loading", "this world's ground is still loading: its heightmap's grid isn't on this server yet, and the authority won't stand anything (or judge a step) on a guessed height",

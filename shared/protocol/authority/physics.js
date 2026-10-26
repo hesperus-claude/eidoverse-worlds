@@ -1,8 +1,7 @@
 // shared/protocol/authority/physics.js — physics (design 20), the engine and the body: settleSim (the rests a request
 // logs), restampEngine, buildEpoch, a body's track and hand, what is solid, ground steps and blocked paths, a body's
-// size and law (refactor split, 2026-10-17; moved from authority.js's "physics" section unchanged; who rides what is
-// authority/occupants.js, what a body does to a loose thing authority/manipulate.js, the verbs a body performs
-// authority/bodyverbs.js). The gate and manipulate's returnPlan are above it, reached through UP.
+// size and law. Riders are authority/occupants.js, body-on-thing authority/manipulate.js, body verbs
+// authority/bodyverbs.js. The gate and manipulate's returnPlan are reached through UP.
 import { MOVER, bodyBox, bodyScale, floorStep, sweep } from "../../mover.js";
 import { COMPONENTS } from "../componentspec.js";
 import { livePoses, digestOf, restEta, ENGINES, carried, TICK_MS, engineName, stampOf } from "../simlayer.js";
@@ -28,10 +27,8 @@ const unknownKeys = (...a) => UP.unknownKeys(...a);
 // ---------- physics (design 20) ----------
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const gripPoint = (me) => [me.at[0], me.at[1] + HAND_Y, me.at[2]]; // reach is measured from the hand, not the feet
-// P5 + L3: the sequencer logs where unheld motion came to rest. The rest is the engine's value and nothing else: its
-// cause is the launch, it goes through admit like every write, and admit checks it against the engine. The engine
-// digest is its own `sim` entry. Whatever the authority then does about it (attach it to what it rests on, return a thing
-// that left the world) is a SEPARATE entry caused by a system act, so a rest and a correction never look alike.
+// P5 + L3: a logged rest is the engine's value only (caused by the launch, checked by admit); whatever the authority then
+// does about it is a SEPARATE system entry, so a rest and a correction never look alike
 const REST_COALESCE_TICKS = 15;   // ~0.5 s at 33 ms: PHYSICS §4.4's settlement window
 // a child of a NON-UNIFORMLY scaled parent is sheared unless its local rotation keeps the parent's axes (a crate on a flat
 // tray sits square: fine; a tumbled crate that rested on a fallen domino: "splortched", R 10-11 23:36)
@@ -82,12 +79,8 @@ function settleSim(w) {
         changeEntry(w, p2, w.append(actEntry(w, "system", "return-lost", { id: r.id, rest })));
         continue;
       }
-      // it rests ON something: name that as its parent, as place does, so it rides with it (the relation is the authority's word)
-      // ON = what its footprint touches (R 10-10: a pyramid's top crate sits over the gap between two crates; read under its
-      // centre, the gap led down to the crate a row lower, and the top crate was parented 0.5 m above it: carry that one
-      // and it rode along in mid-air). Nothing within 3 cm under its footprint: not parented.
-      // and never onto a HELD thing (R 10-10 evening): a held thing still stands in the log where it was picked up, so the
-      // crates that fell off it settled back onto it and were carried off in her hands
+      // it rests ON what its footprint touches (within 3 cm), parented as place does so it rides along; never onto a HELD
+      // thing, which still stands in the log where it was picked up
       const fam = new Set([r.id, ...descendants(st2, r.id)]); const bx = aabb(st2, r.id);
       for (const k of Object.keys(w.presence.holds)) if (st2.entities[k]) for (const d of [k, ...descendants(st2, k)]) fam.add(d);
       if (!groundReady(st2)) continue;   // the ground still loading (r3 F3): no rest-attach judged on a guessed height
@@ -103,21 +96,10 @@ function settleSim(w) {
     }
   }
 }
-// A deploy changes the versions a server carries (REVIEW-design-2026-10-15 "Deploying switches physics off"): a world the old
-// server stamped names a version this one may not carry, carried() calls it foreign, and nothing would fly until an owner
-// rewrote physics-engine. The authority restamps it itself, as system, at the first act or heartbeat after load, when all
-// of these hold:
-//   - this server carries an engine of that NAME, under another version (stampOf: the one it would stamp today);
-//   - that version was STAMPED (no version typed: by an authority, or by this restamp), never named by the owner: a
-//     version the owner chose is the owner's word (phys-check pc-k, R5), and stays foreign;
-//   - nothing is held in presence right now (a hand lets go soon; the cut tries again at the next act). A flight does NOT
-//     hold it back (house answer, #260 10-21): this server can't compute it, so the cut ends it where the fold has it, and
-//     the act names what it ended. The log is read from the epoch's start for those: a launch whose body has no rest under
-//     it is in flight; a purged launch (readback null) is a flight whose body is unknown, counted, not named.
-// Otherwise it does nothing and the world stays foreign (the owner can still restamp by hand, force: true). Checked once
-// per world object and spec (a heartbeat doesn't re-read the log), except while a hold is what blocks it.
-// What only the world's engine computes, refused when this server doesn't carry it (house answer, #260 10-21): never quietly
-// replaced by a settlement, and named, so the person knows what to change.
+// After a deploy, a world stamped with a version this server doesn't carry is restamped (system) at the first act or
+// heartbeat, if this server carries the engine NAME, the version was stamped (not named by the owner), and nothing is held;
+// in-flight launches end where the fold has them. Else it stays foreign (owner: force). Checked once per world and spec.
+// What only the world's engine computes is refused when this server doesn't carry it: named, never quietly replaced.
 export function refuseForeign(spec, what) {
   refuse("foreign-engine", `this world runs ${spec.engine}, which this server doesn't carry: ${what}, and only that engine computes it`,
     `put it down or leave it be; an owner can set one this server carries: set {id: '@world', component: 'physics-engine', value: {engine: '${engineName(spec.engine)}'}}`);
@@ -130,10 +112,8 @@ function restampEngine(w) {
   if (w.custody?.()?.sign && w.custody().sequencer() !== w.entries[0]?.body?.sequencer) return;   // a server that can't sign for the world doesn't write to it
   if (Object.keys(w.presence?.holds ?? {}).length) return;   // held right now: try again at the next act
   restampTried.set(w, key);
-  // Named by the owner? Each change's cause act carries the request as sent (L4). A later merge of tickMs types no engine,
-  // and leaves the named one in place (review r2 F7). A fork-copy is inherited, not chosen (review r2 F4: forkWorld's copy
-  // carries the source's stamped value), and system acts (restamps) never name.
-  // the engine word a request typed for physics-engine, or undefined when it typed none (a merge of tickMs alone)
+  // named by the owner? the cause act carries the request as sent (L4); a merge of tickMs alone names none, a fork-copy
+  // is inherited, and system acts never name
   const word = (v) => { if (!v || typeof v !== "object") return undefined; if (Array.isArray(v)) { for (const x of v) { const r = word(x); if (r !== undefined) return r; } return undefined; }
     if (v.component === "physics-engine" && typeof v.value?.engine === "string") return v.value.engine;
     for (const x of Object.values(v)) { const r = word(x); if (r !== undefined) return r; } return undefined; };
@@ -153,10 +133,8 @@ function restampEngine(w) {
     if (o.verb !== "set") break;
     const c = chose(e); if (c === "named") return; if (c === "stamped") break; }
   if (from < 0) return;
-  // what the cut ends (house answer, #260 10-21): this server can't compute the old version's flights, so a cut that waited
-  // for their rests would never come. Each flight is ended by the cut itself, left where the fold has it (the fold never
-  // moved it: only a rest would), and named in the act; that's the cut's change, not a rest. A lift on the record outlives
-  // an epoch (the sim layer keeps it), so it doesn't hold the cut back either. Only a hold in presence does, below.
+  // what the cut ends: this server can't compute the old version's flights, so each is ended where the fold has it and
+  // named in the act. A lift on the record doesn't hold the cut back; only a hold in presence does.
   const out = new Map();   // id → the launch seq it flies under, or "held"
   let unknownFlights = 0;
   for (let s = from + 1; s < E.length; s++) { const e = E[s]; if (!isE(e)) continue;
@@ -210,12 +188,8 @@ function body(w, actor) {
   if (!b) refuse("not-here", "your body isn't in the world yet", "move {to: [x, y, z]} puts it somewhere (bodies are presence: never logged)");
   return b;
 }
-// R 10-17 20:54 (the gym): "the crates always spin around to orient the same way no matter how I put them down". A carried
-// thing turns with its holder's body (every client draws it so: thingphysics placeHeld), and the hold kept only its world
-// rotation as taken, so a put landed it at that, and it spun back on release. The hold now also keeps the holder's facing
-// as taken; what it is let go at is that rotation turned about up by as far as the body has turned since (yaw only: its
-// tilt is as it was). The facing is what the server relays of the body's pose (its root's yaw about +y, as every client
-// draws it): presence, the same number everyone's drawn carry turns by. Unknown (no relayed pose): as taken, as before.
+// a carried thing turns with its holder's body, so the hold keeps the holder's facing as taken and lets go turned by
+// as far as the body has turned since (yaw only). Facing is the relayed pose's root yaw; unknown means as taken.
 function facingOf(w, actor) { for (const p of w.present?.() ?? []) if (p && p.id === actor && Number.isFinite(p.yaw)) return p.yaw; return null; }
 /** A held thing's world rotation now: as it was taken, turned about up by how far its holder has turned since. */
 function heldQ(w, h) { const y = facingOf(w, h.by); const q = h.pose?.q;
@@ -229,15 +203,9 @@ function gripOf(w, actor, id) {
   if (!h || h.by !== actor) refuse("not-holding", `you aren't holding ${id}${h ? ` (${said(h.by)} is)` : ""}`, `grab {id: '${id}'} first`);
   return h;
 }
-// L6 / 25d M3: the authority's own plausibility TRACK of each body (presence: unlogged). A body is where the authority last
-// ACCEPTED it, never where a client last claimed. Walking spends a token bucket (SPEED m/s sustained, CAP m of
-// burst) and may not enter a solid a body can't step over; a refused step leaves the body where it was (reverted for
-// its sender, visibly). Arriving, or `teleport: true`, is a teleport: an ACT on the record (it resets the track), refused
-// while holding anything, refused inside a solid, and (for visitors) refused away from @world.spawn when the world
-// declares one. Every settlement (grab, put, throw) measures reach from the track and records the presence it used.
-// The numbers and the body's box are the MOVER's (shared/mover.js): the one walker the agent and the client step with,
-// so a step the mover takes is one this track accepts, and this track's refusal is the mover's own answer.
-// both ask the spatial index: only what the body's box (or the whole step's swept box) meets is tested (review 10-06 S0-2)
+// L6: the authority's own plausibility TRACK of each body (presence, unlogged): where it last ACCEPTED it, never a claim.
+// Walking spends a token bucket and can't enter a solid; a teleport is an act (refused while holding, inside a solid, or
+// off @world.spawn for visitors). Numbers and box are shared/mover.js's, so a step the mover takes is one this accepts.
 function solidAt(w, st, p, except = new Set(), cands = null, box = bodyBox(p)) {
   const held = w.presence.holds; const ix = cands && spatial(st);
   if (cands) spend(1 + (cands.length >> 3));   // a sub-step filters the step's candidates by box first
@@ -249,28 +217,14 @@ function solidAt(w, st, p, except = new Set(), cands = null, box = bodyBox(p)) {
 // an open openable (a whole door, not a cabinet's part) is out of the way: the fix above says "through a door someone
 // opens", and every browser's collider follows the drawn leaf (client/lib/openable.js reindexes it at rest)
 const openNow = (st, id) => { const o = st.entities[id]?.c.openable; return !!o && typeof o === "object" && o.open === true && !o.part; };
-// THE GROUND under a body (owner 10-15 22:34; holes review H2). In a world with terrain (and water), each point of a step is
-// judged with the MOVER's floor law (shared/mover.js floorStep: the walker's own), on the ground the walker walks on: the
-// terrain heightfield, and any placed top the body could step (or haul out) onto from where it is. The law says where the
-// feet end up, whether the water's rule holds (then the box is the swimmer's: bodyBox with the level), and refuses a floor
-// that is a wall from here (a terrain bank too high above the water, a cliff). A move is longer than a stride (an agent asks
-// for 2 m at once), so its points are judged as a chain of sub-strides, each from the last; and a body that swam earlier in
-// the move may also be judged from where it last swam (one stride from there to here, the mover's haul-out), so a sweep
-// point that lands part-way up a rim doesn't refuse what the walker's stride over it accepts. A flat world (no terrain
-// component) skips all of this: its ground is y 0 and dry, as before.
-// The sub-strides are at least MOVER.track.sweep (5 cm) apart in the ground plane (the sweep's own points are closer
-// where y changes: its spacing is 3-D): the floor law is a stride's law, and a chain of millimetre steps would walk up
-// any wall the ground draws as steep-but-continuous (the terrain law's flatten edge is 1 cm wide, not 0).
+// THE GROUND under a body: each point of a step is judged by the mover's floor law (shared/mover.js floorStep) on terrain
+// and steppable tops, as a chain of sub-strides at least MOVER.track.sweep apart (a chain of millimetre steps would walk
+// up any steep-but-continuous wall). A flat world (no terrain) is y 0 and dry.
 function bodyAt(st, p) {   // where a body claimed at p stands: {y (feet), ground}
   const g = supportBelow(st, p[0], p[2], p[1]).y; return { y: Math.max(p[1], g), ground: g };
 }
-// THE BODY'S OWN SIZE (holes r3 F2): the mover judges water by the body's stature and a ledge by its scale, so the authority
-// judges each body with the height and scale it sends with its moves (kept on its presence record; absent, the mover's
-// 1.7 m at scale 1). Bounded as the walker bounds them: scale 0.5-2 (mover.js bodyScale, the size slider's range), height
-// 0.5-4 m (the browser's avatar.js bodyHeight and the agent's rigbones bodyHeightFor: measured at the body's size, so the
-// height bound is already on the product; the slider couples nothing further — a 0.25 m avatar at scale 2 is 0.5 m).
-// A claim buys only what that range of honest bodies may do: a step up to 1.6 m and a haul-out up to 1 m above the water (scale 2; its box then starts 1.6 m up and is 3.4 m tall and 0.8 m wide), a box 0.85 m tall and 0.2 m wide (0.5;
-// its step 0.4 m), and in water, swimming or wading where a body 0.5-4 m tall would.
+// the body's own size: judged with the height and scale it sends with its moves (absent: 1.7 m at scale 1), bounded as
+// the walker bounds them (scale 0.5-2, mover.js bodyScale; height 0.5-4 m), so a claim buys only what honest bodies may do
 const BODY_H = Object.freeze({ min: 0.5, max: 4 });
 function sizeOf(a, prev) {
   const out = { ...(prev ?? {}) };

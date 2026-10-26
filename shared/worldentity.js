@@ -14,10 +14,8 @@
 //   worldEditOps(st, edits)   → { ops, errors } — `edit @world`, as requests
 //   worldPick(st, kind, v)    → the Build tab's World tiles: a preset pick as one request
 //
-// "One sky per world" is not a rule here: Sky is one-per-entity, and there is
-// one world entity. Picking a sky preset REPLACES the Sky component's params
-// (pickSky); the Weather component is a different component and is carried
-// across the sky verb's wholesale fold. Pure: no DOM, no I/O, `now` passed in.
+// Sky is one-per-entity; picking a preset replaces Sky's params (pickSky), and Weather is carried across the sky fold.
+// Pure: no DOM, no I/O, `now` passed in.
 
 import * as OP from './protocol/requests.js';
 import { RECORDS } from './components.js';
@@ -50,10 +48,8 @@ export function worldState(st) {
 
 // ---------------------------------------------------------------- the alias
 
-/** Read the fold's world as an entity: { id, components: [{type, key, params}], stamps }.
- *  `key` names the fold slot a component lives in (sky / terrain / grass). Sky and
- *  Weather share state.sky and partition its keys; a slot holding something that is
- *  not an object (no verb writes one, but a log is a log) rides `raw`, verbatim. */
+/** Read the fold's world as an entity: { id, components: [{type, key, params}], stamps }. `key` is the fold slot; Sky
+ *  and Weather partition state.sky's keys; a non-object slot rides `raw`, verbatim. */
 export function worldComponents(st) {
   const { sky, terrain, grass } = worldState(st);
   const components = [];
@@ -89,12 +85,9 @@ export function worldOf({ components = [], stamps = {} } = {}) {
 
 // ---------------------------------------------------------------- re-issuing the existing verbs
 
-/** sky-verb args that re-author `sky` with `patch` applied (undefined in the
- *  patch deletes a key). The sky verb folds WHOLESALE, so everything standing
- *  rides along — the Weather component included — minus what the fold stamps
- *  itself (ts/seq/by, the override, a forecast's epoch/seq/by). A rated clock is
- *  re-anchored at `now` (unless the patch sets hours) so the day doesn't snap
- *  back to the hour it was last authored at — the weather fold's own rule. */
+/** sky-verb args re-authoring `sky` with `patch` applied (undefined deletes a key). The verb folds WHOLESALE, so all
+ *  standing keys ride along (Weather included) minus what the fold stamps; a rated clock is re-anchored at `now` (unless
+ *  the patch sets hours) so the day doesn't snap back. */
 // a tz present is the wall clock (shape audit 10-16); an older value said so with clock: 'real'
 const realClock = (sky) => isBag(sky) && (typeof sky.tz === 'string' || sky.clock === 'real');
 const DEG = 180 / Math.PI;
@@ -166,13 +159,9 @@ export function describeWorld(st, now = 0, { presets = null, clock = true } = {}
   return parts.join(' · ');
 }
 
-/** The world entity's inspector schema — the same shape inspectSchema returns
- *  ({ id, groups, sections }), so editpanels' cards, the VR quad, describeSchema
- *  and fieldAt all read it unchanged. Addresses: sky.* weather.state terrain.*
- *  grass.* (grass.mow mows).
- *  @param live { now?: number, mayShape?: boolean } — mayShape false = this viewer
- *  is known not to hold owner rank (sky/terrain/grass/weather are owner verbs);
- *  undefined = unknown: nothing is disabled on its account and the authority decides. */
+/** The world entity's inspector schema, in inspectSchema's shape ({ id, groups, sections }). Addresses: sky.*
+ *  weather.state terrain.* grass.* (grass.mow mows). live { now?, mayShape? }: mayShape false = known not owner;
+ *  undefined = unknown, nothing disabled (the authority decides). */
 export function worldSchema(st, live = {}) {
   const { sky, terrain, grass } = worldState(st);
   const now = live.now ?? 0;
@@ -265,10 +254,8 @@ export function worldSchema(st, live = {}) {
 
 // ---------------------------------------------------------------- edits → requests
 
-/** Turn `edit @world` edits into the fewest requests: every sky.* edit is
- *  ONE re-authored sky, weather.state ONE weather, terrain.* ONE terrain set, grass.*
- *  ONE grass set (grass.mow: delete @world grass). Relative math works on numbers, as
- *  on any entity. Pure: never sends, never mutates `st`. */
+/** Turn `edit @world` edits into the fewest requests: ONE sky, ONE weather, ONE terrain set, ONE grass set (grass.mow
+ *  deletes it). Pure: never sends, never mutates `st`. */
 export function worldEditOps(st, edits, live = {}) {
   const { sky, terrain, grass } = worldState(st);
   const now = live.now ?? 0;

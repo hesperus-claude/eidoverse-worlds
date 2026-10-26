@@ -1,16 +1,6 @@
-// shared/humanoid.js — the VRM humanoid bone vocabulary, and what counts as a
-// well-formed pose over it.
-//
-// Why this exists: `pose` is the one tool that lets a body be put in a shape
-// nothing else can express, and until now it accepted ANY object. A typo'd
-// bone name, a quaternion with three components, a [0,0,0,0] — all were taken
-// silently, rode the presence packet, and did nothing on every renderer. The
-// author's only feedback was a snapshot round-trip through a GPU host, which
-// is not a feedback loop anyone can pose a body with.
-//
-// So: one vocabulary, one validator, three runtimes. The bone list is VRM 1.0's
-// (three-vrm normalizes VRM0 rigs onto these names, so this is what
-// `getNormalizedBoneNode` answers to on both).
+// shared/humanoid.js — the VRM humanoid bone vocabulary, and what counts as a well-formed pose over it.
+// One vocabulary, one validator, three runtimes, so a malformed pose is refused instead of riding the presence
+// packet and doing nothing. Bone names are VRM 1.0's (three-vrm normalizes VRM0 onto them).
 
 /** Bones every humanoid rig has. */
 export const REQUIRED_BONES = [
@@ -54,10 +44,8 @@ const HUMANOID_SET = new Set(HUMANOID_BONES);
 const BY_KEY = new Map();
 for (const b of HUMANOID_BONES) BY_KEY.set(b.toLowerCase(), b);
 
-/** Names people reach for that the spec does not use. Kept deliberately short:
- *  this resolves genuine synonyms from other rig conventions (Mixamo, Blender
- *  Rigify, VRChat docs), not guesses. Anything not here gets a suggestion
- *  instead, so a wrong name is never silently turned into a different bone. */
+/** Genuine synonyms from other rig conventions (Mixamo, Rigify, VRChat docs), not guesses; anything else gets a
+ *  suggestion, so a wrong name never silently becomes a different bone. */
 const ALIASES = {
   leftarm: 'leftUpperArm', rightarm: 'rightUpperArm',
   leftforearm: 'leftLowerArm', rightforearm: 'rightLowerArm',
@@ -120,10 +108,8 @@ export function normalizeQuat(v) {
   if (!n.every(Number.isFinite)) return { why: 'has a non-finite component' };
   const len = Math.hypot(n[0], n[1], n[2], n[3]);
   if (len < EPS) return { why: 'zero length — a quaternion needs a direction' };
-  // Always normalize; only SAY so when the input was off unit by enough to
-  // mean something. Hand-written quaternions land a couple of thousandths
-  // out (this repo's own DOWNED_POSE does), and reporting that is noise
-  // that trains the reader to ignore the line the real problems arrive on.
+  // always normalize; only SAY so when off unit by enough to mean something (hand-written quaternions are
+  // a few thousandths out, and reporting that trains the reader to ignore the line)
   const off = Math.abs(len - 1);
   return { q: off <= 1e-9 ? n : n.map((c) => c / len), renormalized: off > 1e-2 };
 }
@@ -150,13 +136,8 @@ export function poseChannels(v) {
 }
 
 /**
- * Posing only the bones you name. `base` is the pose being held (or null),
- * `delta` the new bones; a bone whose value is null in `delta` is RELEASED
- * back to the clip. Returns a new object, or null when nothing is left held.
- *
- * Merge is what sitting already did for free — a sit is a clip, and a pose
- * composes over a clip — and what a held pose did not: posing an arm while
- * kneeling replaced the kneel, and the body stood up.
+ * Pose only the bones you name: `base` is the held pose (or null), `delta` the new bones; null in `delta` RELEASES a bone
+ * back to the clip. Merging keeps a pose composing over a clip (pose an arm while kneeling). → a new object, or null.
  */
 export function mergePose(base, delta) {
   const out = { ...(base && typeof base === 'object' ? base : {}) };
@@ -167,14 +148,8 @@ export function mergePose(base, delta) {
 }
 
 /**
- * What a request to pose SOMEONE ELSE carries, from either seat: the agent's
- * anim tool (joints, and {stop: true} to let go), and the browser console's
- * EW.pose and EW.clearPose. `replace` makes the named bones their whole pose;
- * otherwise they merge over what the target holds. A null pose releases
- * theirs whole, as anim {stop} does and as posing yourself with null does. It used to go
- * out as `pose: null`, which both receivers read as a request with no pose
- * in it, so someone letting go of another body that way got no release and
- * no error.
+ * What a request to pose SOMEONE ELSE carries (the agent's anim tool, EW.pose / EW.clearPose). `replace` makes the named
+ * bones their whole pose, else they merge; a null pose releases theirs whole (sent as an explicit release, never `pose: null`).
  */
 export function puppetPose(bones, replace = false) {
   if (bones == null) return { pose: {} };
@@ -228,16 +203,10 @@ function nearest(name, names) {
 }
 
 /**
- * Validate a sparse pose map, reporting everything it did rather than
- * silently keeping the good parts.
- *
- * Names resolve in this order: an exact VRM humanoid name; then an exact bone
- * of the rig (`opts.rig`) — a raw humanoid bone reads as its VRM name, any
- * other is kept as a CUSTOM bone; then humanoid synonyms ("forearm"). Exact
- * rig names outrank synonyms because rigs reuse them: mythos-alpha has a real
- * `Pelvis` below its hips, and folding that onto `hips` would pose the wrong
- * bone without a word. Bones ABOVE the hips are refused: the body's place
- * comes from hips every frame, so posing them would be undone.
+ * Validate a sparse pose map, reporting everything it did rather than silently keeping the good parts. Names resolve:
+ * an exact VRM humanoid name; then an exact rig bone (`opts.rig`; a raw humanoid bone reads as its VRM name, any other
+ * is a CUSTOM bone); then synonyms ("forearm"). Rig names outrank synonyms (a rig's own `Pelvis` isn't `hips`). Bones
+ * ABOVE the hips are refused: the body's place comes from hips every frame.
  *
  * @param {unknown} bones raw input, straight off the wire or a tool call
  * @param {{known?: string[]|null, rig?: {bones: string[], humanoidOf: Record<string,string>,
@@ -335,10 +304,8 @@ export function poseReport(v) {
 }
 
 /**
- * Validate keyframe tracks for a one-off animation — the same vocabulary
- * check as a pose, plus the time axis. Keys are sorted by `t`; a track whose
- * keyframes are all unusable is dropped with a reason rather than sent as an
- * empty track that plays as a freeze.
+ * Validate keyframe tracks for a one-off animation: the pose's vocabulary check plus the time axis. Keys sorted by `t`;
+ * a track with no usable keys is dropped with a reason (an empty track plays as a freeze).
  *
  * @param {unknown} tracks bone -> [{t, q:[x,y,z,w]}]
  * @param {{known?: string[]|null, maxKeys?: number}} [opts]

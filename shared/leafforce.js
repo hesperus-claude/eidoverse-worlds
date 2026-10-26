@@ -1,45 +1,13 @@
-// leafforce — make a REAL ragdoll fall like a leaf, by adding the forces a
-// leaf actually feels rather than by animating a leaf-shaped curve.
+// leafforce — make a REAL ragdoll fall like a leaf by adding the forces a leaf feels, rather than animating a curve:
+// flight.js's leafAt() is deterministic kinematics; this lets the body be hit, snag and land badly. Bullet integrates;
+// nothing here moves anything.
 //
-// Janus: "it would be cool if you somehow used the normal ragdoll physics for
-// falling, but added forces that caused it to fall like a leaf."
+//   1. NORMAL DRAG: drag scales with velocity ALONG the plate normal, so a plate seeks edge-on and overshoots.
+//   2. A DISPLACED CENTRE OF PRESSURE: forward of centre, a torque that turns the overshoot into a periodic tumble.
+// Together they flutter on their own; the period falls out of mass, area and speed, and `periodAssist` nudges it
+// toward the spec's 3.4 s (a thumb on the scale, on purpose).
 //
-// That is the better design and it is worth saying why. shared/flight.js's
-// leafAt() is KINEMATICS: a closed form that produces the right trajectory and
-// is deterministic to the bit, which is what the spec's acceptance tests and
-// the capture path need. But a scripted curve cannot be hit by a thrown prop,
-// cannot catch a wing on a rail, cannot land badly. The ragdoll can do all
-// three, and eidoverse already has one.
-//
-// So this is the other half: given any set of rigid bodies, return the force
-// each should feel this step so that the ASSEMBLY tumbles the way a falling
-// leaf does. Bullet integrates it; nothing here moves anything.
-//
-// THE PHYSICS, briefly, because the parameters mean something.
-//
-//   A flat plate falling is unstable. It does not settle nose-down; it stalls,
-//   slips sideways, sheds a vortex, and rolls the other way -- the "flutter"
-//   mode. Two terms reproduce it:
-//
-//   1. NORMAL DRAG. Drag on a plate scales with the component of velocity
-//      ALONG ITS NORMAL, not with speed. Broadside-on it is huge; edge-on it
-//      nearly vanishes. That asymmetry alone makes a plate seek edge-on --
-//      and overshoot, because it has inertia.
-//
-//   2. A DISPLACED CENTRE OF PRESSURE. The aerodynamic force does not act at
-//      the centre of mass; on a plate at an angle it acts forward of centre.
-//      That offset is a TORQUE, and it is what turns the overshoot into a
-//      periodic tumble instead of a damped wobble.
-//
-//   Together they oscillate on their own. The period is not authored; it falls
-//   out of mass, area and speed -- which is the appeal, and also the catch:
-//   the spec asks for 3.4s, and a physical leaf has whatever period its physics
-//   gives it. `periodAssist` bridges that gap, and is honest about being a
-//   thumb on the scale.
-//
-// PURE, per shared/README.md: no engine types, no globals. Callers pass plain
-// numbers and apply the returned vectors with whatever their engine calls
-// applyCentralForce / applyTorque.
+// PURE, per shared/README.md: plain numbers in, force/torque vectors out.
 
 /** @typedef {{x:number,y:number,z:number}} V3 */
 /** @typedef {{ rho:number, cdNormal:number, cdEdge:number, copOffset:number,
@@ -52,34 +20,21 @@ export const DEFAULT_LEAF_FORCE = {
   // the cheapest way to make a body fall faster without touching anything else.
   rho: 1.225,                 // kg/m^3
 
-  // Per-body plate model. A limb is not a plate, but a BODY is a box, and a
-  // box has three faces with three areas -- taking the largest as the plate
-  // and its normal as the plate normal is a good enough approximation for a
-  // tumble and needs no new authoring.
+  // per-body plate model: a body is a box; its largest face is the plate and its normal the plate normal
   cdNormal: 1.28,             // flat plate, broadside (classic value)
   cdEdge: 0.06,               // edge-on: nearly nothing
   copOffset: 0.42,            // centre of pressure, as a fraction of the plate's
                               // half-width, forward of centre. THE flutter term.
 
-  // Flutter shaping. These do not create the oscillation -- the two terms above
-  // do -- they set how much of it survives contact with a solver running at
-  // 60Hz on a 34-body doll.
-  // TURNED UP, on the evidence of a fall watched from the ground: "it mostly
-  // looked like a falling body". The per-plate numbers were defensible in
-  // isolation -- 79 rad/s^2 on a wing at 4 m/s -- but a wing is not free. It is
-  // bound into a joint chain that absorbs most of a torque before it becomes
-  // rotation, so the isolated figure overstates what the body actually does by
-  // a large factor. The dial has to be set against the assembly, not the plate.
+  // flutter shaping: these set how much oscillation survives the solver on a jointed doll; set against the assembly,
+  // not one plate (a joint chain absorbs most of a torque)
   swirl: 2.4,                 // torque gain, N.m per (m/s)^2 of normal flow
   damp: 0.06,                 // angular damping. LOWER is more flutter: this is
                               // what lets a swing survive into the next one
                               // instead of being eaten between beats.
 
-  // The spec wants 3.4s. Physics wants whatever it wants. This nudges the
-  // assembly toward the authored period WITHOUT scripting the path: a weak
-  // sinusoidal couple about the world vertical, phase-locked to a clock the
-  // caller owns. At 0 the fall is purely physical and the period is emergent;
-  // at 1 it is firmly herded. Read it as "how much of the leaf is authored".
+  // periodAssist: a weak couple about world-up, phase-locked to the caller's clock; 0 = purely physical, 1 = herded
+  // ("how much of the leaf is authored")
   periodAssist: 0.6,
   period: 3.4,                // s, the target when periodAssist > 0
 
@@ -139,11 +94,8 @@ export function leafForceFor(cfg, body, t) {
   let torque = cross(rv, fv);
   torque = scale(torque, cfg.swirl);
 
-  // PERIOD ASSIST: a weak couple about world-up, sinusoidal at the authored
-  // period. Not a trajectory -- it cannot place the body anywhere -- it only
-  // biases which way the tumble is currently being encouraged to go, so an
-  // emergent flutter tends to phase-lock near 3.4s instead of wherever mass
-  // and area happen to put it.
+  // PERIOD ASSIST: a sinusoidal couple about world-up at the authored period; it can't place the body, only bias the
+  // tumble so an emergent flutter phase-locks near 3.4 s
   if (cfg.periodAssist > 0) {
     const w = (2 * Math.PI) / Math.max(0.05, cfg.period);
     const bias = Math.sin(w * t) * cfg.periodAssist * body.mass * absVn * 0.5;

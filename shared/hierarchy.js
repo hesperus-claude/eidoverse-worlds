@@ -143,12 +143,9 @@ export function treeOf(world) {
   return { roots, kids };
 }
 
-/** The rows a tree view paints, in order: [{ id, depth, kids, open, dim }].
- *  `collapsed` folds a node's children away; `matches(id)` (when given) is the
- *  filter: a row shows if it matches or anything under it does, its
- *  non-matching ancestors show dimmed, and a match inside a FOLDED parent still
- *  shows — the filter opens the path to it. `extra(id)` lists non-entity rows
- *  under a node (seated people), as { id, match } — they count as children. */
+/** The rows a tree view paints, in order: [{ id, depth, kids, open, dim }]. `collapsed` folds children away;
+ *  `matches(id)` filters (non-matching ancestors dimmed; a match inside a folded parent still shows); `extra(id)` lists
+ *  non-entity rows under a node (seated people) as { id, match }, counted as children. */
 export function treeRows(world, { collapsed = new Set(), matches = null, extra = null } = {}) {
   const { roots, kids } = treeOf(world);
   const rows = [];
@@ -172,10 +169,9 @@ export function treeRows(world, { collapsed = new Set(), matches = null, extra =
   return rows;
 }
 
-/** Parent `id` under `to` (or make it a root when `to` is null) WHERE IT STANDS: the authority requests (shared/protocol/requests.js)
- *  for the Hierarchy's drag, the Parent card and the agent's edit. Its world pose is kept: under a parent the transform
- *  becomes local to it (pos, q and scale: the renderer composes a child's scale with its carrier's); as a root it is the
- *  world pose. One gesture, one batch, one act — the authority's undo is the way back. Locks are the authority's to ask about. */
+/** Parent `id` under `to` (null: a root) WHERE IT STANDS, as authority requests (shared/protocol/requests.js) for the
+ *  Hierarchy's drag, the Parent card and the agent: the world pose is kept (local pos, q and scale under a parent). One
+ *  gesture, one act; undo is the authority's, and so are locks. */
 export function parentOps(world, id, to) {
   const errors = [];
   const ent = world?.[id];

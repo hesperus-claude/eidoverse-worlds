@@ -1,7 +1,6 @@
-// shared/protocol/authority/manipulate.js — what a body does to a loose thing beyond the verbs themselves: the shove's own
-// gate, how a thing is held, the second hand, snap targets, returns home (after a release, by the system), homes stamped
-// and scaled, and a launch into the engine (refactor split, 2026-10-17; moved from authority.js's "physics" section
-// unchanged). The gate is above it, reached through UP.
+// shared/protocol/authority/manipulate.js — what a body does to a loose thing beyond the verbs themselves: the shove's
+// own gate, how a thing is held, the second hand, snap targets, returns home (after a release, by the system), homes
+// stamped and scaled, and a launch into the engine. The gate is reached through UP.
 import { MOVER, bodyBox } from "../../mover.js";
 import { grabOf, homeOf, wantsHome, fitsSocket, socketRadius, pickGrip } from "../../grab.js";
 import { COMPONENTS, unitTransform } from "../componentspec.js";
@@ -44,11 +43,8 @@ function recentRests(w, now) {
   return out.reverse();
 }
 // the punt's reach, from where the body stands: a thing low beside it, or in the air beside it (a volley)
-// A contact push (punt {contact: true}; shared/shove.js: a moving body ran into it) is a punt with its own gate, in place of
-// the punt's reach: a thing at rest, from a body standing against its footprint (SHOVE.reach from the body's origin, measured
-// to its box, not its origin: a wide crate's middle is far from the side you move into), neither beneath the body nor over
-// it, pushed away from the body along the ground at a walk's speed. Everything else is the punt's: physics.who, locks, a
-// hand on it, the engine's cap.
+// a contact push (shared/shove.js) has its own gate instead: a thing at rest, from a body against its footprint (SHOVE.reach
+// to its box), neither beneath nor over it, pushed along the ground. The rest is the punt's.
 function shoveGate(w, st, me, a, flying, actor) {
   if (a.contact !== true) refuse("shape", "contact is true or left out", "");
   if (!Array.isArray(a.v) || a.v.length !== 3 || a.v.some((n) => !Number.isFinite(n))) refuse("shape", "a contact push carries v: [x, y, z] in m/s (never power)", "e.g. punt {id, v: [1.5, 0.2, 0], contact: true}");
@@ -75,10 +71,8 @@ function shoveGate(w, st, me, a, flying, actor) {
   for (const [who, bd] of Object.entries(w.presence.bodies)) if (who !== actor && Array.isArray(bd?.at) && sweptCovers(b, a.v, bd.at))
     refuse("in-the-way", `${said(who)} is where ${a.id} would slide`, "push it another way, or wait till they move", { by: who });
 }
-// The hold record (research §3, presence): which hand, and by which grip (snapped to it: VRChat ExactGrip, Unity Attach
-// Transform) or at which offset (held where it was grabbed: Unreal Free, Unity dynamic attach). A thing with grips is held
-// by one; a named grip must exist and suit the hand. Every client derives where it's drawn from the holder's hand bone and
-// this record: nothing streams, nothing is logged.
+// the hold record (presence): which hand, by which grip (snapped: VRChat ExactGrip) or offset (held where grabbed). Every
+// client draws it from the holder's hand bone and this record: nothing streams, nothing is logged.
 function gripHow(a, g) {
   const names = Object.keys(g.grips);
   if (a.grip !== undefined) {
@@ -108,11 +102,8 @@ function secondGrip(w, actor, a, h, e) {
 }
 // a release flies (a sim launch) only for a dynamic thing in a world that runs physics; anything else is set down
 const fliesIn = (st, id) => !!st.entities["@world"]?.c["physics-engine"] && st.entities[id]?.c.physics?.kind === "dynamic";
-// The socket a released thing snaps into (research §3, Resonite Snapper with XRI's radius): the nearest socket, on
-// anything but itself or what it carries, whose `accepts` shares a keyword with its grabbable.fits and whose world point
-// is within the socket's radius of where it's let go. A socket something already sits in, or one on a locked thing, is
-// passed over (and said so). Its transform becomes the socket's pose in the host's frame (a child's transform is
-// local to its parent; the slot names which socket it's in).
+// the socket a released thing snaps into: the nearest free one on an unlocked thing (not itself or what it carries)
+// whose `accepts` shares a keyword with grabbable.fits, within its radius; its transform becomes the socket's pose
 function snapTarget(st, id, g, p, w = null) {
   const out = { to: null, notes: [] }; if (!g?.fits?.length || !Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite)) return out;
   const fam = new Set([id, ...descendants(st, id)]);
@@ -130,10 +121,8 @@ function snapTarget(st, id, g, p, w = null) {
   }
   return out;
 }
-// Home (research §3): where a returning thing goes. A system act (actor system, verb return-home) whose cause is the
-// release, then its change entry: the home transform (and the parent it had), at its home scale (homeScale: home.scale when
-// it has one, else its size in the world kept in the home parent's frame). Refused (a lock, a home parent that's gone) means
-// it stays where it is.
+// home: a system act (return-home) caused by the release, then its change entry: the home transform and parent at its
+// home scale (homeScale). Refused (a lock, a gone parent) means it stays where it is.
 function returnPlan(w, st, id, g) {
   const e = st.entities[id]; const hp = g.home.parent;
   if (hp && !st.entities[hp.to]) return { plan: null, why: `its home parent ${hp.to} is gone` };
@@ -176,12 +165,9 @@ function returnDue(w) {
       console.warn(`[authority] ${id} is due to go home (let go at seq ${r.release}) but its return is refused: ${why}; it stays where it is`); }
   }
 }
-// A home is stamped when a grabbable that returns is written without one (its transform and parent then), and an edit
-// that moves a thing whose home was where it stood carries the home with it (a builder moving the key moves its hook…
-// home). A builder may set home outright; one that isn't where the thing stands is left alone.
-// the scale a thing goes home at, in its home parent's frame (R 10-10: a settled crate is parented to the one under it
-// at a local scale of 1; sent home unparented with that 1, it came back four times its size). Its size in the world is
-// kept: its scale times every ancestor's now, divided by the home parent chain's.
+// a home is stamped when a returning grabbable is written without one, and an edit moving a thing whose home was where it
+// stood carries the home along; a home set elsewhere is left alone
+// home scale keeps its size in the world: its scale × every ancestor's now ÷ the home parent chain's
 const vec3s = (v) => (typeof v === "number" ? [v, v, v] : Array.isArray(v) && v.length === 3 ? v : [1, 1, 1]);
 const chainScale = (st, id) => { let k = [1, 1, 1], p = id, n = 0; while (p && n++ < 33) { const c = st.entities[p]?.c; if (!c) break; const sc = vec3s(c.transform?.scale); k = k.map((x, i) => x * sc[i]); p = c.parent?.to; } return k; };
 const homeScale = (st, id, home) => { if (home.scale !== undefined) return vec3s(home.scale).slice();
@@ -283,10 +269,8 @@ function launch(w, actor, a, verb, g = null) {
   // with the same velocity. Left as children they were carried rigidly by the thrown crate and sank with it into the ground.
   const occupants = []; { const st = w.state(); const t = worldT(st, a.id);
     const at = scratch(st, [...(st.entities[a.id].c.parent ? [delOp(a.id, "parent")] : []), setOp(a.id, "transform", { pos: h.pose.pos.slice(), q: h.pose.q ?? t.q, scale: t.scale })]);
-    // each occupant leaves with the tray's velocity at ITS spot (v + w × r: the rim of a tumbling tray moves faster than its
-    // middle), plus a small scatter (6% of the speed per axis) for the flick. The scatter is a hash of the act and the id,
-    // and the launch carries the result, so every client folds the same spray (R 10-10: "start to fly apart as soon as
-    // they're launched from your hand").
+    // each occupant leaves with the tray's velocity at ITS spot (v + w × r) plus a small scatter hashed from the act and id,
+    // carried in the launch, so every client folds the same spray
     const sp = Math.hypot(...v), wv = Array.isArray(a.w) ? a.w : [0, 0, 0], o = h.pose.pos;
     const jit = (k, i) => { let x = 2166136261; for (const ch of `${act}:${k}:${i}`) x = Math.imul(x ^ ch.charCodeAt(0), 16777619); return ((x >>> 0) / 4294967295) * 2 - 1; };
     for (const k of descendants(st, a.id)) { if (st.entities[k]?.c.physics?.kind !== "dynamic" || w.presence.holds[k]) continue; const tk = worldT(at, k);

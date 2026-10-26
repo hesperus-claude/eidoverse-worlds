@@ -1,8 +1,6 @@
-// shared/protocol/authority/storage.js — a world over injected storage, the chain, ops and previews (refactor C11,
-// 2026-10-12; moved from authority.js's "storage" section unchanged). A leaf below math and the spatial index (qr3 is the
-// rotation a log takes; scratch is the preview the index files). Two lines ride along from elsewhere because this is where
-// they are read: VOLATILE (the spatial section's "indexed whole" mark, which scratch propagates) and opsQuiet (the rights
-// section's quiet opsOf, which worldOf's presence fold uses).
+// shared/protocol/authority/storage.js — a world over injected storage, the chain, ops and previews. A leaf below math
+// and the spatial index. VOLATILE (the spatial index's "indexed whole" mark) and opsQuiet (worldOf's presence fold)
+// live here because this is where they are read.
 import { readLog, fold, opsOf, followUpsOf, applyInPlace, cloneState, cowState, applyCow, checkEntry, jcs, sha256, utf8Len, worldIdOf, Malformed, PURGED } from "../fold.js";
 import { sha256Bytes, hexBytes } from "../hash.js";
 import * as R from "../roles.js";
@@ -59,12 +57,9 @@ export function worldOf(io) {
   w.custody = () => io.custody ?? null;
   // §2.1: moderation lives in a SEPARATE moderator log with the authority's enforcement, never in the world log
   w.mod = io.mod ?? [];
-  // Persist before publishing (review of PR #260, storage.js:110): a line reaches memory only after durable storage took it.
-  // A failed write may have left part of a line on disk (open, write and sync are not one step), so the file's state is
-  // unknown: the world refuses every later write (fail closed) until it is reopened from what the disk actually holds.
-  // Each file is wedged on its own: a failed moderator-log write stops moderator-log writes, a failed log write stops log writes.
-  // wedgedAt: the log seq whose line's disk state is unknown (the one being written when the write threw), for the
-  // transaction outcome (txnOutcome below: the reply names it as `from`).
+  // persist before publishing: a line reaches memory only after durable storage took it. A failed write leaves the file's
+  // state unknown, so that file is wedged (fail closed) until reopened from disk. wedgedAt: the seq being written when it
+  // threw (txnOutcome's `from`).
   w.wedged = {}; w.wedgedAt = null;
   const durably = (what, write) => {
     // the wedge's own refusal says which file it is (`wedged`), so the reply can tell it from any other throw (txnOutcome)
@@ -137,26 +132,13 @@ export function worldOf(io) {
   };
   return w;
 }
-// The transaction outcome (PROTOCOL §7, "Every request ends in one of three outcomes"; reviewer item 1, 10-18). A request
-// ends in exactly one of:
-//   {outcome: "committed", from, to}       it was answered ok and every line it asked for is durable and in entries
-//                                          (to = the last seq + 1; a read writes nothing, from = to)
-//   {outcome: "rolled-back"}               none of what it asked for reached disk or entries: a refusal, or a throw before
-//                                          any line of it was written. The authority's own lines (a refused write's
-//                                          attempt record, rests that were due) may still be written; they are published
-//                                          like any line and are not the asker's.
-//   {outcome: "ambiguous", from, wedged}   the asker can't treat it as either: a durable write threw (its bytes may be on
-//                                          disk: open, write, sync and close are not one step; the file is wedged, B1), or
-//                                          the request was cut off after part of it was written. Lines below `from` stand
-//                                          (they were durable and are published); from `from` on, history says what holds.
-// An ambiguous request is never reported as ok, nor as a plain failure. `wedgedBefore`: wedgedOf(w) when the request began,
-// which files were already wedged. A throw that wedged no new file is the old wedge's refusal, before any write: rolled
-// back; one that wedged a file not wedged before is ambiguous, whichever file was wedged first. The MODERATOR log counts too (review r14 M2, 10-18): a ban, mute or kick writes world.mod.jsonl only, so a throw
-// from that durable write is as ambiguous as one from the world log's (its bytes may be on disk; the file is wedged).
 /** whether this authority may write this world: it holds the sequencer key genesis names (or can't sign at all) */
 export const holdsCustody = (w) => !w.custody?.()?.sign || w.custody().sequencer() === w.entries[0]?.body?.sequencer;
 export const anyWedged = (w) => !!(w.wedged?.log || w.wedged?.["moderator log"]);
 export const wedgedOf = (w) => ({ log: !!w.wedged?.log, mod: !!w.wedged?.["moderator log"] });
+// txnOutcome (PROTOCOL §7, "Every request ends in one of three outcomes"): committed {from, to} (durable and in
+// entries); rolled-back (none of it reached disk); ambiguous {from, wedged} (a durable write threw, world or moderator
+// log, or it was cut off mid-write). Never reported as ok or a plain failure; a throw that wedges no new file rolls back.
 export function txnOutcome(w, from, { threw = false, error = null, refused = false, wedgedBefore = { log: false, mod: false } } = {}) {
   const grew = w.entries.length > from;
   if (!threw) return refused ? { outcome: "rolled-back" } : { outcome: "committed", from, to: w.entries.length };
@@ -180,12 +162,8 @@ export function txnRefusal(o) {
   if (o.wedged) return { ok: false, txn: "rolled-back", refused: { code: "server-error", reason: `nothing it asked for was written: an earlier write to this world's ${o.file ?? "log"} failed, so what is on disk is unknown, and the world refuses ${o.file ? "moderation writes" : "writes"} until it is reopened from disk (reads still work)`, fix: REOPEN_FIX } };
   return { ok: false, txn: "rolled-back", refused: { code: "server-error", reason: "the server failed while handling the request; nothing it asked for was written", fix: "send it again; if it keeps failing, whoever runs this server can find why in its log" } };
 }
-// READBACK (verbclasses.js; engine-scars 4/6c, R 10-17 02:45): the act fields the authority reads back for meaning (an
-// undo's chain, a use's capability, a script's sponsor, a sculpt's brush, the request that named an engine build…). §12
-// lets the WHOLE body of an act, say or sim entry be purged, so every such read goes through readback(): the body, or
-// null when it is purged — named by a purge entry later in the log (the authority's in-memory entry still holds it), or
-// already rewritten to its {commit} stub on disk. Null is UNKNOWN, and each reader says what unknown means for it (never
-// "the default": a purged cause act must not make an owner's chosen build look stamped, or a handler's write the visitor's).
+// READBACK (verbclasses.js): §12 may purge an act's whole body, so every read of one goes through readback(): the body,
+// or null when purged. Null is UNKNOWN, and each reader says what unknown means for it, never "the default".
 const purgeIx = new WeakMap();   // entries array → {n, seqs}: purge targets whose whole body is gone, kept incrementally
 export function purgedSeqs(w) {
   const E = w.entries; let c = purgeIx.get(E); if (!c) purgeIx.set(E, (c = { n: 0, seqs: new Set() }));
@@ -218,8 +196,7 @@ function skeleton(e) {
 }
 const chainStep = (prevHex, e) => { const b = new Uint8Array(64); b.set(hexBytes(prevHex), 0); b.set(hexBytes(sha256(jcs(skeleton(e)))), 32); return sha256Bytes(b); };
 /** Seal a whole log the authority didn't write line by line (a translation): the same salts and chain points render gives
- *  each line it appends (§2.4; round-2 review R3). entries[0] is genesis (never a chain point: the world id is its
- *  hash); every later entry gets a salt on each set and on its act/say/sim body, then {head, sig}. Returns new objects;
+ *  (§2.4). entries[0] is genesis (never a chain point); every later entry gets salts, then {head, sig}. Returns new objects;
  *  `sign(msg)` is the sequencer key's, `random(n)` optional. */
 export function seal(entries, { sign, random } = {}) {
   if (typeof sign !== "function") throw new Error("seal needs the sequencer's sign()");
@@ -249,10 +226,8 @@ function versionSeq(w, v, what) {
 }
 const versionOf = (w, seq) => (seq === undefined || seq === null ? null : { seq, head: w.headAt(seq) });
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-// PROTOCOL §5 (locks: decided): `lock` keeps the first protocol's meaning, so an imported log's locks carry over
-// untranslated. A lock is on when its value is truthy; the authority stores `true` (recut B2: an old log's {rank} still
-// reads as on, its rank ignored: strength is the setter's rank, gate.js).
-// A purged value is absent(purged), not a lock. The lab's `pinned` and top-level `locked` are retired.
+// PROTOCOL §5: `lock` keeps the first protocol's meaning (on when truthy; the authority stores `true`, an old {rank}
+// reads as on). A purged value is absent, not a lock.
 const lockedC = (c) => { const v = c?.lock; return v !== undefined && v !== PURGED && !!v; };
 // a rotation written to the log: rounded like a position, then made unit again (0.707 per axis is not a unit quaternion,
 // and a reader composing it through a parent drifts off unit: review of b398d7e3 #1)
@@ -268,15 +243,9 @@ const scratch = (st, ops) => { const s = applyCow(cowState(st), ops); if (VOLATI
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "thing";
 
 const opsQuiet = (e) => { try { return opsOf(e); } catch { return []; } };
-// (refactor split, 2026-10-17: moved here from authority.js's gate section, beside CHANGE: the gate admits these ops, the
-// write path and undo mark them, and a leaf can't reach the gate)
-// The authority's own follow-up ops inside a person's write (review r8 M1 / scars M5): clearing the references to what a
-// delete removed, and an undo putting back the references that delete cleared. Marked on the op object (a request's JSON
-// can't carry a symbol), and admitted like the authority's other follow-ups (rest, system): no rights, key, seniority,
-// lock or in-flight check, and no capability scope, so a third party's keyed reference or lock can't veto your delete or
-// your undo, and a script deleting what it made isn't refused for a reference outside its scope. Shape and value checks
-// still apply. Unity, Unreal and Resonite null such references at read time, attributed to nobody; this is the same rule
-// written eagerly (ids are never reused, so it is tidiness, never a resurrection guard).
+// the authority's follow-up ops inside a person's write (clearing refs a delete removed, an undo putting them back),
+// marked by a Symbol (request JSON can't carry one): admitted with no rights, key, seniority, lock or scope check, so a
+// third party's reference can't veto your delete or undo. Shape and value checks still apply.
 const FOLLOW_UP = Symbol("follow-up");
 const followUp = (o) => { o[FOLLOW_UP] = true; return o; };
 export { followUpsOf };

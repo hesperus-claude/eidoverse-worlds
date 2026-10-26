@@ -10,11 +10,9 @@ import { followUpsOf, isE, opsQuiet, readback } from "./storage.js";
 const RANK = R.RANK;
 const wcOf = (st) => st.entities?.["@world"]?.c;
 const ownersOf = (st) => { const c = st.entities?.["@world"]?.c ?? {}; return Object.keys(c).filter((k) => k.startsWith("roles:") && R.isOwner(c[k])); };
-// §2.3: an empty owner list means NOBODY above inhabitant. A world may declare a default role for strangers
-// (`default-role`, what an imported world's `roles['*']` becomes); absence means inhabitant (a world founded since R 10-21 writes builder at founding).
-// a guest (no account) is never given the world's default role: it's for people who proved who they are. An owner
-// may still grant a guest a role by its id (H4: an anonymous connection was a builder wherever default-role was)
-// …unless the world opts guests in (`default-role.guests`, R 10-06): explicit, default inhabitant, never above the default role
+// §2.3: an empty owner list means NOBODY above inhabitant. `default-role` is the strangers' role (an imported
+// `roles['*']`); absent means inhabitant (newer worlds write builder at founding). A guest never gets it unless
+// `default-role.guests` opts guests in (never above it); an owner may still grant a guest a role by id.
 function roleOf(st, actor, anon = CTX.isAnon(actor)) {
   const c = wcOf(st); if (!c) return "inhabitant";
   return R.roleIdOf(c, actor, { anon, owners: ownersOf(st).length > 0 });
@@ -45,13 +43,9 @@ export const roleIn = (st, actor, { anon = false } = {}) => roleOf(st, actor, an
 // ---------- views over the log: who did what (L2: derived, never stored) ----------
 const isScriptActor = (a) => typeof a === "string" && a.startsWith("script:");
 // ---------- sanctions: views over the moderator log (research §5) ----------
-// Every sanction is a record with an optional `until` (the authority's clock, ms). Expiry is computed, never written: a view
-// reads the latest record of its pair and asks whether it's still in force NOW (w.now(): the authority's clock). Records
-// name identities, never display names. A record without `until` (an imported world's ban, an owner's ban "until lifted",
-// an old kick) is permanent for a ban and no cooldown for a kick.
-// Every record since the last LIFT of its kind (unban, unmute) that is still in force counts, and the STRONGEST
-// wins: a weaker record never cancels a stronger one (independent review 10-07: a moderator's 0.0001-day ban under an
-// owner's permanent one used to replace it, the newest record alone being read). Lifting goes through personLift.
+// Each record has an optional `until` (authority clock); expiry is computed, never written. Records name identities.
+// No `until`: a permanent ban, no kick cooldown. Every in-force record since the last LIFT counts and the STRONGEST
+// wins, so a weaker record never cancels a stronger one. Lifting goes through personLift.
 const latestOf = (w, who, verbs) => { let r = null; for (const m of w.mod) if (m.who === who && verbs.includes(m.verb)) r = m; return r; };
 const inForce = (w, m) => !!m && (m.until === undefined || m.until > w.now());
 const sinceLift = (recs, verb, lifts) => { let out = []; for (const m of recs) { if (lifts.includes(m.verb)) out = []; else if (m.verb === verb) out.push(m); } return out; };
@@ -91,19 +85,15 @@ export function sanctionsNow(w) {
 function entryBy(w, e) {
   const c = w.entries[e.cause];
   const by = isE(c) && c.kind === "act" ? c.actor : e.actor;
-  // a behaviour's results were admitted with its SPONSOR's rights (L4), which its act names (checkable from sponsorAt)
-  // READBACK: a purged cause act no longer says whose rights admitted it (a handler's author? a script's sponsor?), so the
-  // rights are unknown: null, which matches nobody. Never `by`: that would hand the visitor who pulled the lever the
-  // handler author's thing (engine-scars 4, consent gaps G1 d)
+  // a behaviour's results were admitted with its SPONSOR's rights (L4). A purged cause act leaves the rights unknown:
+  // null, matching nobody; never `by`, which would hand the lever-puller the author's thing
   if (isE(c) && c.kind === "act") { const b = readback(w, e.cause);
     if (b === null) return { seq: e.seq, by, rights: null };
     return { seq: e.seq, by, rights: b.capability?.author || (isScriptActor(c.actor) && b.sponsor) || by }; }
   return { seq: e.seq, by, rights: by };
 }
-// The creator of a thing (comp undefined), or of component `comp` on it, in its CURRENT life: the entry that made it
-// present after it was last absent. null if it isn't present now. { seq, by, rights }.
-// The change entries that may touch `id`, newest first. A live world (server) keeps an index id → seqs so these
-// views cost the thing's own history, not the whole log's; without one (the suites) every entry is a candidate.
+// the creator of a thing (or component) in its CURRENT life: the entry that made it present after it was last absent
+// the change entries that may touch `id`, newest first: a live world keeps an id → seqs index; the suites scan all
 function* backward(w, id) {
   if (w.touching) { const a = w.touching(id); for (let k = a.length - 1; k >= 0; k--) yield a[k]; return; }
   for (let i = w.entries.length - 1; i >= 0; i--) yield i;

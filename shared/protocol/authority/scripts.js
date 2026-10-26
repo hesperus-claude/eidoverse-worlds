@@ -1,8 +1,7 @@
-// shared/protocol/authority/scripts.js — scripts, the standing half (settings and registration): the server's script
-// settings and an owner's @world.script-settings, a script's rights and install checks, particles and effect uploads, the
-// runtime console ring, sponsors and pauses, the per-state script memo, and the budgets (rate, duty, CPU) an activation is
-// held to (refactor split, 2026-10-17; moved from authority.js's "behaviours" section unchanged; the running half is
-// authority/scriptrun.js). The gate's rights words (lacks, needWords, nearMiss) are above it, reached through UP.
+// shared/protocol/authority/scripts.js — scripts, the standing half (settings and registration): the server's and an
+// owner's script settings, a script's rights and install checks, particles and effect uploads, the console ring,
+// sponsors and pauses, the per-state memo, and the budgets (rate, duty, CPU). The running half is authority/scriptrun.js;
+// the gate's rights words are reached through UP.
 import { isEntityId, isComponent, jcs, utf8Len, PURGED } from "../fold.js";
 import { COMPONENTS, registered, baseOf } from "../componentspec.js";
 import * as SR from "../scriptrules.js";
@@ -20,20 +19,13 @@ const lacks = (...a) => UP.lacks(...a);
 const nearMiss = (...a) => UP.nearMiss(...a);
 const needWords = (...a) => UP.needWords(...a);
 
-// ---------- behaviours (L4, L7 as revised; research 41; the lab's slice, the protocol lab's authority.js @ 2300bae, on a real sandbox) ----------
-// A script is a keyed component `script:<name>` naming a source blob ({lang: "js", api, text}, by its sha256 name) and a
-// declared SCOPE. Its sponsor is whose rights admitted the LATEST write to that key in its current life (§5 "Two views"):
-// a view, never a stored field. Every activation is a fresh admission with capability {kind: "script"}: the sponsor's
-// rights NOW, narrowed to the scope. The visitor who triggers it adds nothing. An activation that changes something is
-// ONE act (actor script:<id>, verb script, naming script, src, sponsor, sponsorAt, on, trigger, event, head, seed, depth,
-// reads) plus ONE all-or-nothing batch caused by it, plus its says. Replay never runs code: the fold reads the batch.
-// Stated rule (§3d): no-op writes in a script batch are dropped (SR.elide, shared with the auditor). Authority practice: timers
-// sleep in an empty world unless `always`; a per-script rate, a per-sponsor fair share of a per-world hourly budget, a
-// cascade depth, and a pause after repeated failures.
-// This server's script configuration (shape audit 10-16): run, max, budget and cpu are what an owner may set in
-// @world.script-settings (absent: scriptDefaults(), which schema reports), max, budget and cpu never above scriptCeiling() (an owner
-// tightens the budgets, never raises them past the server's); rate, depth, fails and runs are the server's alone
-// (setScriptConfig, an operator's). A stored value of a field the owner no longer sets (an old install, rate…) is ignored.
+// ---------- behaviours (L4, L7; research 41) ----------
+// A script is a keyed component `script:<name>` naming a source blob and a SCOPE. Its sponsor is whose rights admitted
+// the LATEST write to the key in its current life (§5 "Two views"), a view, never stored. Each activation is a fresh
+// admission with the sponsor's rights NOW, narrowed to the scope; the triggering visitor adds nothing. A change is ONE
+// act plus ONE all-or-nothing batch caused by it, plus its says; replay never runs code. No-op writes are dropped (SR.elide).
+// Owners set run, max, budget, cpu (@world.script-settings), never above scriptCeiling(); rate, depth, fails, runs are
+// the server's (setScriptConfig).
 const SCRIPTS = { max: 12, budget: 600, rate: 6, depth: 8, fails: 5, run: true, cpu: SR.LIMITS.cpu, runs: SR.LIMITS.runs };
 const OWNER_SCRIPT_FIELDS = ["run", "max", "budget", "cpu"];
 /** This server's defaults for script-settings' fields, and the most an owner may set (live: an operator may change SCRIPTS). */
@@ -68,13 +60,10 @@ function scriptRights(w, st, cap, op, at, made) {
   const r = roleOf(st, cap.sponsor); const need = lacks(w, st, cap.sponsor, op, new Set([...(made ?? []), ...(cap.made ?? [])]), { viaCap: true });
   if (need) refuse("rights", `${cap.key}'s sponsor ${said(cap.sponsor)} can't change ${at} any more (${r} now; it needs ${needWords(need)})`, "dormant: a behaviour has its sponsor's rights now, never more (§8). An owner may adopt it: adopt {id, script}");
 }
-// At install (any set of script:<name>), by whoever's rights carry the write: the install rank, a scope within those
-// rights NOW (a builder can't install a script that writes roles:*: promotion by proxy), a clean source that parses, the
-// timer floor, `always` only by an owner, the world's script count.
-// R 10-07 (particles): the instance names an effect (an Essential, or a document stored in this world's blobs), and its
-// params are ones that document declares, within their bounds, with the effect still within EFFECT_LIMITS once they're
-// applied. The first protocol's flat bag is read in older values (PROTOCOL §4: a stored value is read forever) and never
-// taken in a write: its spelling would be a second way to say one thing. A held thing's fx carries a particles value too.
+// at install, by whoever's rights carry the write: the install rank, a scope within those rights NOW (no promotion by
+// proxy), a clean parsing source, the timer floor, `always` only by an owner, the world's script count
+// particles: an effect's params must be ones it declares, within bounds and EFFECT_LIMITS; the first protocol's bag is
+// read in older values, never taken in a write
 function particlesCheck(w, op) {
   const one = (v, at) => { if (!v || typeof v !== "object" || Array.isArray(v)) return;
     const b = isEssential(v.effect) ? null : effectBlobName(v.effect); let doc = null;   // an Essential's address is its own document (shape audit 10-16), not this world's blob
@@ -199,10 +188,8 @@ function budgetOf(w, st, now, id, key, sponsor, cfg) {
     if (e.kind === "act" && e.actor === `script:${id}` && e.body?.script === key && now - e.ts <= 60000) mine++; }
   return { mine, all, bySponsor: bySp, sponsors: sponsors.size, share: Math.floor(cfg.budget / Math.max(1, sponsors.size)) };
 }
-// The authority's thread is shared by every world in this process, so script time is capped for the PROCESS, not only per
-// world or sponsor: in any rolling second, activations may use at most DUTY.maxMs of it. Past that they're refused
-// ("busy", never the script's failure). With the sandbox's per-activation deadline (wallMs + GRACE), no request, tick or
-// chain of cascades can hold the thread longer than about DUTY.maxMs + one deadline (I2).
+// script time is capped for the PROCESS (every world shares one thread): at most DUTY.maxMs per rolling second, then
+// "busy". With the per-activation deadline nothing holds the thread past ~DUTY.maxMs + one deadline (I2).
 export const DUTY = { windowMs: 1000, maxMs: 500, worldShare: 0.6 }; // one world gets at most worldShare of it (fairness between worlds)
 /** A host sets the process's script duty (a big server may give scripts more of each second; a test that fires a thousand
  *  activations in a tight loop opens it wide). Returns the previous setting. */
