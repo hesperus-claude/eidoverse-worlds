@@ -16,7 +16,7 @@ import { ENGINE, scratch } from "./common.ts";
 type Mutant = { id: string; what: string; file: string; find: string; repl: string; suite: string; rows: string[]; expect: number };
 // suite: the gate's name for it (run.ts) → the file to run, relative to the scratch root
 const SUITE_FILE: Record<string, string> = {
-  authority: "tools/protocol/authority-check.ts", access: "tools/protocol/access-check.ts", "reset-race": "tools/protocol/reset-race-check.ts",
+  authority: "tools/protocol/authority-check.ts", access: "tools/protocol/access-check.ts",
   r10: "tools/protocol/r10-check.ts", "dismount-height": "tools/dismount-height-test.ts", inplace: "tools/protocol/inplace-check.ts",
   settle: "tools/protocol/settle-check.ts", txn: "tools/protocol/txn-check.ts", identity: "tools/protocol/identity-check.ts",
   kernel: "tools/protocol/kernel-check.ts", "gov-reserved": "tools/protocol/gov-reserved-check.ts", "shape-repair": "tools/shape-repair-test.ts",
@@ -30,7 +30,7 @@ const M: Mutant[] = [
   { id: "B2", what: "a batch op's args unchecked before any is built ({verb: delete, args: {id, componnent}} deletes the entity)", file: "shared/protocol/authority/verbs.js",
     find: "        if (bad) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch op ${i}", repl: "        if (false) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch op ${i}", suite: "authority", rows: ["BT1"], expect: 9 },
   { id: "B4", what: "a request whose connection was superseded while it awaited still writes", file: "server/reqcap.ts",
-    find: "  if (!(c.world === w && !c.superseded && w.clients.has(c) && (c.gen ?? null) === cap.gen))", repl: "  if (false)", suite: "reset-race", rows: ["SR1"], expect: 1 },
+    find: "  if (!(c.world === w && !c.superseded && w.clients.has(c) && (c.gen ?? null) === cap.gen))", repl: "  if (false)", suite: "txn", rows: ["SR1"], expect: 1 },
   { id: "B5", what: "WORLD_ADMIN's repair is not narrow: any verb through the operator door", file: "shared/protocol/authority.js",
     find: '  if (!(door || verb === "unban"))\n    return { ok: false, refused: { code: "rights", reason: `an operator\'s repair covers', repl: '  if (false)\n    return { ok: false, refused: { code: "rights", reason: `an operator\'s repair covers', suite: "authority", rows: ["OP4"], expect: 9 },
   { id: "B6", what: "a created child's pose is read from before the write (resettle planned against the wrong state)", file: "shared/protocol/authority/followups.js",
@@ -94,7 +94,7 @@ const M: Mutant[] = [
     find: "      const reservedAs = [...at.names].find((n) => foldName(n) === foldName(c.id)) ?? null;", repl: "      const reservedAs = [...at.names].find((n) => n === c.id.toLowerCase()) ?? null;", suite: "identity", rows: ["C2f"], expect: 42 },
   // ---- the control: a comment changed, nothing else; its suite must stay green ----
   { id: "CONTROL", what: "no-op (a comment): must stay green", file: "shared/protocol/authority/storage.js",
-    find: "// persist before publishing: a line reaches memory", repl: "//  persist before publishing: a line reaches memory", suite: "reset-race", rows: [], expect: 1 },
+    find: "// persist before publishing: a line reaches memory", repl: "//  persist before publishing: a line reaches memory", suite: "txn", rows: [], expect: 1 },
 ];
 
 const argv = process.argv.slice(2);

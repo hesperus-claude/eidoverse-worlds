@@ -89,7 +89,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
   ["identity", "identity-check.ts", 1], // who a joiner is: C1-C3, H1, H3-H5, one identity per account
   ["fork-reset", "fork-reset-check.ts", 1], // world fork (a new world naming its source) and reset (archived, re-founded by its owners)
-  ["reset-race", "reset-race-check.ts", 1], // a request awaiting warm() across a reset refuses instead of writing the old log's line into the new file
   ["txn", "txn-check.ts", 1],           // every request ends committed | rolled-back | ambiguous (persist before publish, publish in a finally, ambiguous never ok); one immutable request capability rechecked at both await→commit seams (liveness, identity, operator, the door, role)
   ["txn-mutants", "txn-check.ts --mutants", 1], // …and each of its rows turns red under the mutation it exists to catch (a scratch copy of the tree per mutant; the control stays green)
   ["blockers-mutants", "blockers-mutants.ts", 1], // the RED side of every blocker's row: one mutation of each fix (B1–B10, M1–M9, r14) in a scratch tree turns its named row red; the control stays green
@@ -176,7 +175,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
 
 // ---- lanes ----
 // CORE runs first, in this order, and a failure there stops the gate
-export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reserved", "diffcheck", "hygiene", "procgroup", "nov1", "vocab", "authority", "access", "identity", "scars", "reset-race", "txn", "txn-mutants"];
+export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reserved", "diffcheck", "hygiene", "procgroup", "nov1", "vocab", "authority", "access", "identity", "scars", "txn", "txn-mutants"];
 // every suite that launches a Chromium (directly, via playwright or tools/harness.ts scratchBench; client-tools through
 // run-client.ts). The gate checks this list against the files (browserMarkers), so a browser suite can't hide in MAIN
 export const BROWSER = ["browser", "client", "refusedjoin", "client-b2", "build-client", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "client-tools"];

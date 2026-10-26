@@ -1,12 +1,13 @@
 // tools/protocol/txn-check.ts: the transaction service and the request capability (docs/DESIGN-txn-capability.md).
 // Real World, WorldLog, authority, files and REQUEST_MESSAGES; storage faults are injected at node:fs (the calls
-// server/durable.ts makes), and a slow warm() is a gate held in front of the real WorldLog.request (as in reset-race-check).
+// server/durable.ts makes), and a slow warm() is a gate held in front of the real WorldLog.request.
 //   T1  a durable write throws on the 2nd line of a commit → ambiguous, `from` = that line; the 1st line is published
 //   T2  fsync throws after the bytes were written → ambiguous, wedged, no ok to anyone; reopen finds the line; later writes rolled back
 //   T3  a refusal is rolled back and publishes nothing; every published line was on disk when it was published
-//   T4  banned (the door) or re-roled while the request waited → refused, nothing written by the asker
-//   T5  the door closes (members only) while the request waits, the asker unlisted → refused
-//   T6  the connection becomes someone else while the request waits → refused; nothing under either identity
+//   T4–T6, SR, RR2  one table (WAITED): banned, kicked, re-roled, the door closed, someone else, a re-join in flight,
+//       superseded, closed, reset while the request waited → refused with its code and the request's id, nothing written;
+//       RR1/RR3/RR5 the reset's files; SR3 the control writes
+//   RR6, PR  a reset that fails partway: what the owner is told, the registry, a world that takes no writes until put back
 //   T7  static: no await in the authority; none between worldlog's recheck and the synchronous commit
 //   T8  a short write is looped to the end, and a write that takes nothing throws
 //   T8c a log's or blob's first write into directories just made: each new directory's name is synced in its parent too,
@@ -32,6 +33,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["unknown called failure: a throw from a durable write reported rolled-back", "shared/protocol/authority/storage.js", "  if (newLog || newMod) return { outcome: \"ambiguous\"", "  if (false) return { outcome: \"ambiguous\"", ["T2"]],
   ["persist before publish: entries before the disk", "shared/protocol/authority/storage.js", "durably(\"log\", () => io.writeLine(line));", "entries.push(posAt(parsed, seq)); durably(\"log\", () => io.writeLine(line)); entries.pop();", ["T3c", "T3d"]],
   ["the door decided at join only: recheck without it", "server/reqcap.ts", "  if (door) return", "  if (false) return", ["T4", "T5"]],
+  ["the door's kick not rechecked: a kick mid-request still writes", "server/access.ts", "    const k = actorId ? kickedHere(actorId) : null;", "    const k = null as any;", ["T4k"]],
   ["recheck without the role", "server/reqcap.ts", "  if (role && w.log.roleOf(cap.actorId) !== cap.role) return", "  if (false) return", ["T4b"]],
   ["identity read after the await: recheck without it", "server/reqcap.ts", "  if (c.actorId !== cap.actorId ||", "  if (false &&", ["T6", "T6b"]],
   ["an await in the authority's commit", "shared/protocol/authority/writes.js", "function commit(w, actor, verb, args, build) {", "async function __m() { await 0; }\nfunction commit(w, actor, verb, args, build) {", ["T7"]],
@@ -186,45 +188,116 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(t.replies[2]?.txn === "ambiguous" && X.w.log.live.entries.length === n1 && !said(X, "lost") && t.logs.length === 1,
     "T3c a line whose write threw never reaches memory or anyone (persist before publish)", { r: t.replies[2], logs: t.logs.length }); }
 
-// ---------------- T4 ----------------
-{ const X = world("t4"); const vic = idOf("local:vic", "vic"); const t = tab(X, vic, { account: "local:vic" }); const n0 = X.w.log.live.entries.length;
-  X.g.hold(); let e0 = X.g.entered; send(t, "say", { text: "from-the-banned" }); await tryUntil('"from-the-banned" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "ban", { who: vic, reason: "test" })?.ok === true, "(T4 setup) the owner bans the asker while its request waits");
-  X.g.release(); await tryUntil('the reply to "from-the-banned"', () => t.replies.length, { ms: 3000, step: 10 });
-  const r = t.replies[0];
-  ok(r?.reply?.refused?.code === "superseded" && /door/.test(r?.reply?.refused?.reason ?? "") && r?.txn === "rolled-back" && !said(X, "from-the-banned"),
-    "T4 banned while the request waited: refused at the seam by the door (superseded), nothing written", r);
-  // re-roled while waiting: an inhabitant made a builder mid-request is refused (admitted under the old role), never silently promoted
-  const bea = idOf("local:bea", "bea");
-  // she starts an inhabitant (a new world's newcomers are builders, and promoting a builder to builder changes nothing)
-  ok(ownerDo(X, "set", { id: "@world", component: `roles:${bea}`, value: { role: "inhabitant" } })?.ok === true, "(T4b setup) the asker starts an inhabitant");
-  const b = tab(X, bea, { account: "local:bea" });
-  X.g.hold(); e0 = X.g.entered; send(b, "create", { components: { description: "under-the-old-role" } }); await tryUntil('"under-the-old-role" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "set", { id: "@world", component: `roles:${bea}`, value: { role: "builder" } })?.ok === true, "(T4b setup) the owner makes the asker a builder while its request waits");
-  X.g.release(); await tryUntil('the reply to "under-the-old-role"', () => b.replies.length, { ms: 3000, step: 10 });
-  ok(b.replies[0]?.reply?.refused?.code === "superseded" && /role/.test(b.replies[0]?.reply?.refused?.reason ?? "") && !described(X, "under-the-old-role"),
-    "T4b the role changed while the request waited: refused (superseded), nothing written", b.replies[0]); }
+// ---------------- T4–T6, SR, RR: what changed while the request waited ----------------
+// One held-gate fixture per row: the request is inside the await, `while` changes the world or the connection, the gate
+// opens. Each row is refused with its code and words, and nothing is written under any identity; the control writes.
+const WAITED = [
+  { id: "T4", what: "banned (the door)", code: "superseded", reason: /door/, while: (X, t) => ok(ownerDo(X, "ban", { who: t.c.actorId, reason: "test" })?.ok === true, "(T4 setup) the owner bans the asker while its request waits") },
+  { id: "T4k", what: "kicked (the door)", code: "superseded", reason: /door.*kicked|kicked/, while: (X, t) => ok(ownerDo(X, "kick", { who: t.c.actorId, minutes: 5 })?.ok === true, "(T4k setup) the owner kicks the asker while its request waits") },
+  { id: "T4b", what: "re-roled (an inhabitant made a builder: admitted under the old role, never silently promoted)", asker: "bea", verb: "create", code: "superseded", reason: /role/,
+    setup: (X, who) => ok(ownerDo(X, "set", { id: "@world", component: `roles:${who}`, value: { role: "inhabitant" } })?.ok === true, "(T4b setup) the asker starts an inhabitant"),
+    while: (X, t) => ok(ownerDo(X, "set", { id: "@world", component: `roles:${t.c.actorId}`, value: { role: "builder" } })?.ok === true, "(T4b setup) the owner makes the asker a builder while its request waits") },
+  { id: "T5", what: "the door closed (members only, the asker unlisted: the same decision as join)", code: "superseded", reason: /no-access/,
+    while: (X) => ok(ownerDo(X, "set", { id: "@world", component: "access", value: { join: "listed" } })?.ok === true, "(T5 setup) the door becomes members-only while the request waits") },
+  { id: "T6", what: "the connection became someone else (a re-join resolved another identity)", code: "superseded", reason: /someone else/, while: (X, t) => { t.c.actorId = idOf("local:bea", "bea"); } },
+  { id: "T6b", what: "a re-join in flight (actorId reset before the new one resolves): refused with the request's id, not an id-less server error", code: "superseded", reason: /./, while: (X, t) => { t.c.actorId = undefined; } },
+  { id: "SR1", what: "superseded by the same account's new tab", code: "superseded", reason: /taken over/, while: (X, t) => { t.c.superseded = true; X.w.clients.delete(t.c); tab(X, t.c.actorId, { account: t.c.account }); } },
+  { id: "SR2", what: "closed (out of the world's clients, c.world still set)", code: "superseded", reason: /closed/, while: (X, t) => { X.w.clients.delete(t.c); } },
+  { id: "RR2", what: "the world was reset (the old log retired, a fresh one founded)", code: "reset", reason: /reset/, while: (X) => { X.old = X.w.log; X.n0 = X.w.log.live.entries.length; X.arch = X.w.resetWorld(); X.before = lines(X.name).length; } },
+];
+for (const row of WAITED) {
+  const X = world(`w-${row.id.toLowerCase()}`); const who = idOf(`local:${row.asker ?? "vic"}`, row.asker ?? "vic"); row.setup?.(X, who);
+  const t = tab(X, who, { account: `local:${row.asker ?? "vic"}` }); const n0 = X.w.log.live.entries.length;
+  const label = `while-${row.id}`, rid = `q-${row.id}`, args = row.verb === "create" ? { components: { description: label } } : { text: label };
+  X.g.hold(); const e0 = X.g.entered;
+  REQUEST_MESSAGES.request({ c: t.c, ws: t.c.ws, now: Date.now(), expel: () => {}, sweep: () => {} }, { id: rid, verb: row.verb ?? "say", args });
+  await tryUntil(`${row.id}'s request is held at the await`, () => X.g.entered > e0, { ms: 3000, step: 10 });
+  row.while(X, t);
+  X.g.release(); await tryUntil(`the reply to ${row.id}'s request`, () => t.replies.length, { ms: 3000, step: 10 });
+  const r = t.replies[0], log = X.w.log.live, wrote = said(X, label) || described(X, label) || (X.old && (X.old.live.entries.some((e) => e?.body?.text === label)));
+  const by = log.entries.slice(row.id === "RR2" ? 0 : n0).map((e) => e.actor);
+  ok(r?.id === rid && r?.ok === false && r?.txn === "rolled-back" && r?.reply?.refused?.code === row.code && row.reason.test(r?.reply?.refused?.reason ?? "") && !wrote
+    && (row.id === "RR2" || (!by.includes(who) && !by.includes(idOf("local:bea", "bea")))),
+    `${row.id} ${row.what} while the request waited: refused (${row.code}), with the request's id, nothing written under any identity`, { r, wrote, by });
+  if (row.id === "RR2") {   // the reset's own files: the old log archived, the fresh one untouched by the straggler, the old one retired for good
+    ok(log !== X.old.live && fs.existsSync(path.join(X.arch, "world.jsonl")), "RR1 reset swapped the log and archived the old file", { arch: X.arch });
+    ok(lines(X.name).length === X.before && !log.state().entities[label] && log.entries.length === X.before, "RR3 the new world's file (and its fresh log) gained no line from the old one", { before: X.before, after: lines(X.name).length });
+    ok(X.old.requestSync(X.owner, "say", { text: "late" })?.refused?.code === "reset", "RR5 the old log stays retired for every later request"); }
+}
+{ const X = world("w-control"); const t = tab(X, X.owner, { account: "local:olive" });
+  X.g.hold(); send(t, "create", { components: { description: "from-a-live-tab" } }); X.g.release();
+  await tryUntil("the live tab's request is answered", () => t.replies.length, { ms: 3000, step: 10 });
+  ok(t.replies[0]?.ok === true && described(X, "from-a-live-tab"), "SR3 (control) a connection that is still in the world writes", t.replies[0]); }
 
-// ---------------- T5 ----------------
-{ const X = world("t5"); const vic = idOf("local:vic", "vic"); const t = tab(X, vic, { account: "local:vic" });
-  X.g.hold(); const e0 = X.g.entered; send(t, "say", { text: "through-a-closed-door" }); await tryUntil('"through-a-closed-door" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "set", { id: "@world", component: "access", value: { join: "listed" } })?.ok === true, "(T5 setup) the door becomes members-only while the request waits");
-  X.g.release(); await tryUntil('the reply to "through-a-closed-door"', () => t.replies.length, { ms: 3000, step: 10 });
-  ok(t.replies[0]?.reply?.refused?.code === "superseded" && /no-access/.test(t.replies[0]?.reply?.refused?.reason ?? "") && !said(X, "through-a-closed-door"),
-    "T5 members-only while it waited, the asker unlisted: refused by the door (the same decision as join), nothing written", t.replies[0]); }
+// ---------------- RR6, PR: a reset that fails partway (moved from reset-race-check) ----------------
+// RR6: a failure after the fresh log is in place has erased the world; the owner is told it was, not that nothing changed
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const { owner } = foundWorld(path.join(W, "reopen"), "reopen", "olive");
+  const rw = new World("reopen"); rw.openLog = () => { throw new Error("injected: the fresh log won't open"); };
+  (await import("../../server/world.ts")).worlds.set("reopen", rw);   // registered, as getWorld leaves a loaded world
+  const erasedId = rw.log.live.worldId;
+  const casts = []; rw.broadcast = (m) => casts.push(m);   // what everyone present is sent
+  const sent = []; const c = { id: "olive", world: rw, actorId: owner, spectator: false, ws: { send: (d) => sent.push(JSON.parse(d)) } };
+  REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws }, { name: "reopen" });
+  const e = sent.find((m) => m.type === "error")?.error ?? "";
+  const archived = fs.readdirSync(path.join(W, "reopen")).some((n) => n.startsWith("reset-"));
+  // (review of the house's PR #9: "stays closed" wasn't true: the World stayed registered and a reload was served the erased
+  // world's state from memory) it leaves the registry, everyone present reloads, and the next join opens the fresh world from disk
+  const { worlds, getWorld } = await import("../../server/world.ts");
+  const gone = !worlds.has("reopen"); const next = gone ? getWorld("reopen") : null;
+  const fresh = !!next && next !== rw && !next.log.retired && !!next.log.live.worldId && next.log.live.worldId !== erasedId;   // the fresh world, not the erased one
+  ok(/was erased/.test(e) && /next join/.test(e) && /whoever runs this server/.test(e) && /Resetting again erases nothing more/.test(e) && !/nothing changed/.test(e) && !/stays closed/.test(e)
+    && archived && casts.some((m) => m.type === "world-reset") && gone && fresh,
+    "RR6 the fresh log doesn't open after the reset swapped it: the owner is told the world was erased and opens at the next join (who to ask if not), resetting again erases nothing more; everyone present reloads, and the next join opens the fresh world from disk, never the erased one from memory", { e, archived, gone, fresh, casts: casts.map((m) => m.type) }); }
+// RR6b: once the fresh log is open the reset stands: a failure starting the fresh world's scripts (it has none) is the
+// server log's, and everyone present is told of the reset as usual
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts"); const { WorldScripts } = await import("../../server/scripts.ts");
+  const { owner } = foundWorld(path.join(W, "scripted"), "scripted", "olive");
+  const sw = new World("scripted"); const sync = WorldScripts.prototype.sync;
+  const sent = []; const c = { id: "olive", world: sw, actorId: owner, spectator: false, ws: { send: (d) => sent.push(JSON.parse(d)) } }; sw.clients.add(c);
+  WorldScripts.prototype.sync = () => { throw new Error("injected: the scripts won't start"); };
+  try { REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws }, { name: "scripted" }); } finally { WorldScripts.prototype.sync = sync; }
+  const fresh = sw.log.live.entries.length, err = sent.find((m) => m.type === "error")?.error;
+  ok(!err && sent.some((m) => m.type === "world-reset") && sw.log.requestSync(owner, "create", { components: { description: "after" } })?.ok === true,
+    "RR6b the fresh log opened but the scripts didn't start: the reset stands, everyone present is told, and the fresh world takes requests", { err, sent: sent.map((m) => m.type), fresh }); }
 
-// ---------------- T6 ----------------
-{ const X = world("t6"); const vic = idOf("local:vic", "vic"), bea = idOf("local:bea", "bea"); const t = tab(X, vic, { account: "local:vic" }); const n0 = X.w.log.live.entries.length;
-  X.g.hold(); let e0 = X.g.entered; send(t, "say", { text: "whose-line" }); await tryUntil('"whose-line" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  t.c.actorId = bea;   // a re-join over the same socket resolved another identity (server.ts admitJoin), its leg not yet re-issued
-  X.g.release(); await tryUntil('the reply to "whose-line"', () => t.replies.length, { ms: 3000, step: 10 });
-  const by = X.w.log.live.entries.slice(n0).map((e) => e.actor);
-  ok(t.replies[0]?.reply?.refused?.code === "superseded" && /someone else/.test(t.replies[0]?.reply?.refused?.reason ?? "") && !said(X, "whose-line") && !by.includes(vic) && !by.includes(bea),
-    "T6 the connection became someone else while the request waited: refused; nothing under either identity", { r: t.replies[0], by });
-  t.c.actorId = vic; X.g.hold(); e0 = X.g.entered; send(t, "say", { text: "mid-rejoin" }); await tryUntil('"mid-rejoin" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  t.c.actorId = undefined;   // a re-join in flight (server.ts resets actorId before resolving the new one)
-  X.g.release(); await tryUntil('the reply to "mid-rejoin"', () => t.replies.length > 1, { ms: 3000, step: 10 });
-  ok(t.replies[1]?.reply?.refused?.code === "superseded" && !said(X, "mid-rejoin"), "T6b a re-join in flight: refused with the request's id (was an id-less server error)", t.replies[1]); }
+// ---- PR (house 6340433633): a reset that fails after the old log was moved aside. The old log stayed live in memory and kept
+// taking writes, which appendDurable (it opens by path) put in a NEW world.jsonl holding only the tail: a broken chain on disk.
+// The failure is injected at the last rename (the fresh world's log into place); the rest is the real wire handler and reset.
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const dir = path.join(W, "half"); const { owner } = foundWorld(dir, "half", "olive");
+  const hw = new World("half"); const n0 = hw.log.live.entries.length;
+  const errs = []; const c = { id: "olive", world: hw, actorId: owner, gen: 0, legGen: 0, ws: { send: (d) => { const m = JSON.parse(d); if (m.type === "error") errs.push(m.error); } } };
+  const rename = fs.renameSync;
+  fs.renameSync = function (a, b) { if (String(a).includes(".refound-")) throw new Error("EIO: injected (the fresh log into place)"); return rename.call(fs, a, b); };
+  try { REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half" }); } finally { fs.renameSync = rename; }
+  const said = errs[0] ?? "";
+  const w1 = hw.log.requestSync(owner, "say", { text: "after the failed reset" });
+  const file = fs.existsSync(path.join(dir, "world.jsonl"));
+  ok(!w1?.ok && !file, "PR1 after a reset that failed partway a write is refused and no world.jsonl appears", { w1: w1?.ok ?? w1?.refused, file, lines: file ? lines("half").length : 0, n0 });
+  ok(/takes no writes until the server's operator puts it back/.test(said) && /resetting again is safe/i.test(said) && /takes no writes/.test(w1?.refused?.reason ?? ""),
+    "PR2 the answer and the refusal say the world takes no writes until the operator puts its log back, and whether resetting again is safe", { said, refused: w1?.refused });
+  // resetting again finishes the erase; the old log stays in the first attempt's archive
+  REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half" });
+  const archives = fs.readdirSync(dir).filter((f) => f.startsWith("reset-")); const kept = archives.filter((a) => fs.existsSync(path.join(dir, a, "world.jsonl")));
+  const w2 = hw.log.requestSync(owner, "say", { text: "in the fresh world" });
+  ok(errs.length === 1 && fs.existsSync(path.join(dir, "world.jsonl")) && kept.length === 1 && w2?.ok === true,
+    "PR3 resetting again finishes the erase (a fresh world that takes writes); the old log stays in the first archive", { errs, archives, kept, w2: w2?.ok ?? w2?.refused }); }
+// PR4 (review of the house fixes): a failure at the SECOND rename (poses.json), twice. The second attempt finds no world.jsonl to
+// move, so "did this attempt move the log" is no; the world is still retired, and the answer must say so, not "goes on as before"
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const dir = path.join(W, "half2"); const { owner } = foundWorld(dir, "half2", "olive");
+  fs.writeFileSync(path.join(dir, "poses.json"), "{}");
+  const hw = new World("half2");
+  const errs = []; const c = { id: "olive", world: hw, actorId: owner, gen: 0, legGen: 0, ws: { send: (d) => { const m = JSON.parse(d); if (m.type === "error") errs.push(m.error); } } };
+  const rename = fs.renameSync; const reset = () => REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half2" });
+  fs.renameSync = function (a, b) { if (String(a).endsWith("poses.json")) throw new Error("EIO: injected (poses.json)"); return rename.call(fs, a, b); };
+  try { reset(); reset(); } finally { fs.renameSync = rename; }
+  const w1 = hw.log.requestSync(owner, "say", { text: "after two failed resets" });
+  ok(errs.length === 2 && errs.every((e) => /takes no writes/.test(e)) && !/goes on as before/.test(errs[1]) && !w1?.ok,
+    "PR4 a second failed attempt, with the log already moved by the first, still says the world takes no writes (and it doesn't)", { errs, w1: w1?.ok ?? w1?.refused });
+  reset(); const w2 = hw.log.requestSync(owner, "say", { text: "fresh" });
+  ok(errs.length === 2 && w2?.ok === true, "PR4 …and a third attempt that succeeds leaves a fresh world that takes writes", { errs, w2: w2?.ok ?? w2?.refused }); }
 
 // ---------------- T7 ----------------
 { const strip = (s) => s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
