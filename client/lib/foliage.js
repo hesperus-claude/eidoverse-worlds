@@ -1,14 +1,12 @@
-// foliage — alpha-blended, TEXTURED see-through surfaces drawn as two passes in 'fast' mode (Video › textured
-// transparency). Named for the case that motivated it; it applies to every qualifying surface, not only leaves.
+// foliage — alpha-blended TEXTURED see-through surfaces (any, not only leaves) drawn as two passes in 'fast' mode.
+// A blended leaf writes no depth, so every canopy layer is shaded in full.
 //
-// A blended leaf writes no depth, so every canopy layer is shaded in full (EW.overdraw: ~3 layers/px on two palms).
-// fast = the classic foliage split: a CUTOUT twin (alphaTest 0.999, writes depth, no blend) draws each leaf's solid
-// interior in the opaque pass, then the original blend draws with depthFunc Less and only fills the soft edges
-// (−45% layers/px; 0.999 rather than 0.98 halves the centre speckles; pure cutout buys no more fill).
-// soft = the original single blended pass. auto = fast while presenting in a headset, soft on the desktop.
+// fast: a CUTOUT twin (alphaTest 0.999, writes depth, no blend) draws the solid interior in the opaque pass, then the
+// original blend draws with depthFunc Less, filling only the soft edges (−45% layers/px; 0.999 halves the speckles
+// 0.98 leaves). soft = the single blended pass. auto = fast while presenting in a headset, soft on the desktop.
 //
-// Who qualifies: world models (prepareObject kind 'model'), not skinned, one material, transparent, textured, opacity
-// ≥ 0.99 — foliage keeps its see-through in the TEXTURE; glass and tinted panels (uniform opacity) are left alone.
+// Qualifies: world models (prepareObject 'model'), not skinned, one material, transparent, textured, opacity ≥ 0.99;
+// glass and tinted panels (uniform opacity) are left alone.
 import { THREE, renderer, scene, camera } from './core.js';
 import { warm, P_AMBIENT } from './warmqueue.js';
 
@@ -19,13 +17,12 @@ const lsGet = () => { try { return localStorage.getItem(KEY); } catch { return n
 const lsSet = (v) => { try { localStorage.setItem(KEY, v); } catch { /* private mode */ } };
 
 let mode = FOLIAGE_MODES.includes(lsGet()) ? lsGet() : 'auto';
-// per SOURCE MATERIAL, not per mesh: placed models are skeletonClones sharing the prototype's materials. Each
-// instance gets its own core mesh (no raycasts); the family's shared cutout material's `visible` switches them all.
+// per SOURCE MATERIAL (placed skeletonClones share it); the shared cutout's `visible` switches every instance's core
 const byMat = new Map();            // source material → { m, depthFunc, cut, warmed, warming, cores }
 const noRaycast = () => {};
 
 export const getFoliageMode = () => mode;
-/** What auto resolves to right now. */
+
 export const foliageEffective = () => (mode === 'auto' ? (renderer.xr?.isPresenting ? 'fast' : 'soft') : mode);
 
 export function qualifiesAsFoliage(o) {

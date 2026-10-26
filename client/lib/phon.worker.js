@@ -1,5 +1,5 @@
-/** The phonemizer in a Worker: piper's loader uses synchronous XHR (guarded by ENVIRONMENT_IS_WORKER), legal and
- *  fast only in a Worker; on the main thread the build measured ~480x slower. The 17 MB data isn't the cause.
+/** The phonemizer in a Worker: piper's loader uses synchronous XHR, legal and fast only in a Worker (~480x slower
+ *  on the main thread; the 17 MB data isn't the cause).
  *
  *  PROTOCOL (the seam is piperphon.js's phonemize / warmPhonemizer / phonReady):
  *      → { id, op: 'warm',      wasmPaths }         ← { id, ok }
@@ -10,8 +10,7 @@
 
 let _mod = null;
 let _building = null;
-// Where the CURRENT call's stdout goes: Emscripten captures Module.print once at construction, so the handler is
-// permanent and the sink swappable.
+// Emscripten captures Module.print once at construction: the handler is permanent, the sink swappable.
 let _sink = null, _errSink = null;
 
 async function build(wasmPaths) {
@@ -34,7 +33,7 @@ async function build(wasmPaths) {
 function run(mod, text, voice) {
   let ids = null;
   _sink = (data) => { try { ids = JSON.parse(data).phoneme_ids; } catch { /* not our line */ } };
-  // stderr is chatter (espeak warnings/info), not failure: collect it; it becomes the diagnostic only if no ids come back.
+  // stderr is espeak chatter, not failure: it becomes the diagnostic only if no ids come back
   const errLines = [];
   _errSink = (msg) => { errLines.push(String(msg)); };
   try {
@@ -43,8 +42,7 @@ function run(mod, text, voice) {
   } catch (e) {
     // callMain throws its exit code even on success; a real failure is an Error.
     if (typeof e !== 'number' && e?.status === undefined) throw e;
-    // exit-code throws are normal; real failures fall through to the ids
-    // check below, where collected stderr becomes the message.
+    // a failing exit code falls through to the ids check, where stderr becomes the message
   } finally {
     _sink = null; _errSink = null;
   }

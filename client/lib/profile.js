@@ -1,7 +1,5 @@
-// profile — the PERSON noun's home (four-noun taxonomy, 08-29): who you are,
-// where you are, what you're wearing, what you carry, who you know.
-// Today: identity up top (portrait = presence control, header), and four tabs.
-// satchel / worlds / friends have no server surface yet — R, 2026-09-11: "I would make them fully clickable panels ... aspirational so someone (maybe us!) can build it some day".
+// profile — the PERSON noun's home: who you are, where you are, what you wear, carry, and who you know.
+// Identity up top (portrait = presence control), four tabs; satchel/worlds/friends are deliberate placeholders.
 
 import { CONFIG, bus, colorFor, setName } from './base.js';
 import { registerXRPanel } from './xrpanels.js';
@@ -15,8 +13,7 @@ import { net } from './net.js';
 
 let frame = null;
 
-// the profile as a VR quad: who you are, your presence, and the bodies list
-// (folded in from bodies.js — one declaration, shown here on both surfaces).
+// the profile as a VR quad, with the bodies list (one declaration, shown on both surfaces)
 function profileFields() {
   return [
     { t: 'info', label: 'name', value: CONFIG.name ?? '—' },
@@ -33,7 +30,7 @@ function profileDispatch(k, v) {
 export function initProfile() {
   registerXRPanel({ id: 'profile', title: 'profile', fields: profileFields, dispatch: profileDispatch });
   frame = makeFrame('profile', {
-    title: 'profile', x: 64, y: 60, w: 420, h: 440, minW: 320, minH: 300, hidden: true,   // portrait + header + tabs + pane
+    title: 'profile', x: 64, y: 60, w: 420, h: 440, minW: 320, minH: 300, hidden: true,
   });
   frame.body.classList.add('profile-body');
   paint();
@@ -44,7 +41,7 @@ export function initProfile() {
 }
 
 // ---- the body: portrait (= presence control) · header · tabs · one pane
-// The portrait is the presence control; tabs across the top (side tabs fight 420 px), the last one remembered (ew-profile-tab).
+// tabs across the top (side tabs fight 420 px); the last one remembered in ew-profile-tab
 const TABS = [
   ['avatars', 'person-arms-spread', 'bodies you have worn'],
   ['satchel', 'backpack', 'personal inventory'],
@@ -58,8 +55,7 @@ const PRESENCE_WORD = { present: 'present · here and active', away: 'away · id
 function paint() {
   if (!frame?.visible && frame?.body.dataset.painted) return;
   frame.body.dataset.painted = '1';
-  // getMyAvatarName() is intent and never clears on a failed load; getMe() is the real signal (set after makeAvatar
-  // resolves). Both panels repaint on `avatar-worn`.
+  // getMyAvatarName() is intent and never clears on a failed load; getMe() is the real signal
   const avatar = getMe() ? (getMyAvatarName() || 'default') : 'None';
   const st = presence();
   frame.body.innerHTML = `
@@ -102,12 +98,9 @@ function paint() {
     dismissRef = dismiss;
   };
 
-  // the name is the control (R 10-11: "make the display name an invisible field that you can click on… a popup window and a
-  // warning to pick carefully because you can only rename yourself every so often"). The account stays (base.js
-  // CONFIG.account); the door enforces the cooldown and says when the next change is allowed (net.renameAfter).
+  // the name is the control; the account stays (CONFIG.account), and the door enforces the cooldown (net.renameAfter)
   frame.body.querySelector('.pf-name').onclick = () => openRenameDialog();
 
-  // tabs
   frame.body.querySelectorAll('.pf-tab').forEach((b) => {
     b.onclick = () => { tab = b.dataset.tab; try { localStorage.setItem(TAB_KEY, tab); } catch {} paint(); };
   });
@@ -126,7 +119,7 @@ function paintPane(pane) {
     return;
   }
 
-  // Empty by design says so (an empty box reads as broken): satchel/worlds/friends have no server surface yet.
+  // an empty box reads as broken, so a pane with no server surface says so
   const STUB = {
     satchel: 'a stub — what you carry, once there is somewhere to carry it from.',
     worlds: 'a stub — places you know, once the server keeps a list.',

@@ -1,18 +1,16 @@
-// flora_field — field lifecycle assembly, DOM-free (unit-tested in
-// tools/flora.test.ts). A "field" is the setGrass-shaped object the
-// grass verb owns: possibly several engine strokes composed under one group.
+// flora_field — field lifecycle assembly, DOM-free (tools/flora.test.ts). A "field" is the setGrass-shaped object
+// the grass verb owns: possibly several engine strokes under one group.
 
 import { ownHook, releaseHook } from './autohooks.js';
 import { densityCount } from './grass_quality.js';
 
-// ---- applied truth (#74): reports read the LIVE instanced count, never the policy arithmetic, since
-// wireDensityDial can silently no-op on vegetation.js version skew
+// applied truth (#74): read the LIVE instanced count, never the policy arithmetic (wireDensityDial can silently no-op on skew)
 
 /** One stroke's draw truth for a requested density factor. */
 export function strokeApplied(f, eff, i = 0) {
   const stroke = f.strokeLabel ?? `stroke ${i}`;
   const total = f.count ?? 0;
-  // a stroke that planted nothing draws nothing — any factor is vacuously on
+  // planted nothing: any factor is vacuously on
   if (!total) return { stroke, total: 0, drawn: 0, expected: 0, dial: false, ok: true, why: 'empty' };
   const drawn = f.mesh?.count ?? total;
   const stemDrawn = f.stemMesh?.count;
@@ -56,9 +54,8 @@ export function fieldApplied({ fields, groupVisible }, eff) {
   return { status, via: 'count', strokes };
 }
 
-/** Compose stroke fields (createFlora results) + a clearing mask handle into
- *  ONE setGrass-shaped field. The caller supplies the parent group (THREE
- *  lives with the caller) and appends any host hooks (pushers) to autoHooks. */
+/** Compose createFlora results + a clearing mask into ONE field. The caller supplies the parent group (THREE lives
+ *  with the caller) and appends host hooks (pushers) to autoHooks. */
 export function composeField({ group, fields, mask }) {
   return {
     mesh: group,
@@ -66,8 +63,7 @@ export function composeField({ group, fields, mask }) {
     update: fields[0]?.update,
     setPushers: (list) => { for (const f of fields) f.setPushers?.(list); },
     setDensity: (k) => { for (const f of fields) f.setDensity?.(k); },
-    /** live draw truth for a requested factor (#74) — group.visible read at
-     *  call time so `off` reports what the scene actually shows */
+    /** group.visible read at call time, so `off` reports what the scene shows */
     applied: (eff) => fieldApplied({ fields, groupVisible: group.visible }, eff),
     // marks the meadow as these hooks' owner, so a subsystem diffing the global hook array can't adopt them (autohooks.js)
     autoHooks: fields.map((f) => ownHook(f.update)).filter(Boolean),
@@ -78,8 +74,7 @@ export function composeField({ group, fields, mask }) {
   };
 }
 
-/** Retire a field completely. Prefers the field's own dispose() (engine fields know their textures), else the
- *  single-mesh teardown. Safe against double-removal. */
+/** Prefers the field's own dispose() (engine fields know their textures), else single-mesh teardown. Double-removal safe. */
 export function retireField(field, autos, scene) {
   if (!field) return;
   const hooks = field.autoHooks ?? (field.update ? [field.update] : []);

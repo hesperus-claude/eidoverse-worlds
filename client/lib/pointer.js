@@ -1,8 +1,6 @@
-// The VR pointer: porch-old's FADING beam (2026-07-14) — a subdivided line whose alpha ramps
-// from bright at the hand to nothing at the tip, so it dissolves into space instead of ending in a
-// hard dot. porch rode LineBasicMaterial.onBeforeCompile for the per-vertex alpha; node materials
-// have no onBeforeCompile, so the fade is an opacityNode read straight off the attribute.
-// Geometry runs 0 → -1 on z; the caller scales z to the hit distance (same convention as before).
+// The VR pointer: a subdivided line whose alpha fades from the hand to nothing at the tip, plus the surface dot.
+// The fade is an opacityNode read off a vertex attribute (node materials have no onBeforeCompile).
+// Geometry runs 0 → -1 on z; the caller scales z to the hit distance.
 import * as THREE from 'three';
 import { attribute, color, uniform } from 'three/tsl';
 
@@ -22,9 +20,8 @@ export function makePointerLine({ segments = 24, tint = 0x8fb0d6, opacity = 0.85
   return line;
 }
 
-// THE SURFACE DOT: a mark where the laser meets its target, on the surface and constant in angular size; drawn
-// whenever there is a target, whatever the visibility setting. xr.js only calls make/setKind/place/hideSurfaceDot.
-// It becomes an icons.js glyph for what a press would do (click, type, scroll, move, resize); a plain dot elsewhere.
+// THE SURFACE DOT: constant angular size, drawn whenever there is a target, whatever the visibility setting.
+// An icons.js glyph for what a press would do; a plain dot elsewhere. xr.js only calls make/setKind/place/hideSurfaceDot.
 import { stroke, fillPath } from './icons.js';
 export const DOT_RAD = 0.007;      // its diameter as an angle at the eye: ≈0.4°, 6 mm at arm's length, 2 cm at 3 m
 export const ICON_RAD = 0.014;     // an icon's diameter: ≈0.8°, 11 mm at arm's length — a glyph needs about twice a dot
@@ -47,8 +44,7 @@ function iconTexture(kind) {
 }
 export function makeSurfaceDot({ tint = 0xf2f7f5, edge = 0x0b1414 } = {}) {
   const g = new THREE.Group(); g.name = 'xr-dot';
-  // a light core in a dark rim: it reads on a dark panel, a white plate and a bright sky alike. Unit diameter; the
-  // group's scale is the diameter in metres.
+  // a light core in a dark rim reads on a dark panel, a white plate and a bright sky; group scale = diameter in metres
   const mat = (c, o) => new THREE.MeshBasicNodeMaterial({ color: c, transparent: true, opacity: o, depthWrite: false });
   const rim = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), mat(edge, 0.75));
   const core = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20), mat(tint, 0.95));
@@ -69,11 +65,10 @@ export function setSurfaceDotKind(dot, kind = 'dot') {
   icon.visible = k !== 'dot';
   if (icon.visible) { icon.material.map = iconTexture(k); icon.material.needsUpdate = true; }
 }
-/** every icon texture drawn now (the hands' warm compiles the icon with one on) */
+/** every icon texture, drawn now (the hands' warm compiles the icon with one on) */
 export const warmDotIcons = () => Object.keys(DOT_KINDS).forEach(iconTexture);
 const _dn = new THREE.Vector3(), _de = new THREE.Vector3(), _dz = new THREE.Vector3(0, 0, 1);
-/** Put the dot at world `point` on a surface with world `normal`, sized for an eye at world `eye`. The normal is turned
- *  to face the eye's side, and the dot is lifted off the surface by a hair (scaled with distance) so it never z-fights. */
+/** Sized for an eye at world `eye`; lifted off the surface by a distance-scaled hair so it never z-fights. */
 export function placeSurfaceDot(dot, point, normal, eye) {
   const dist = Math.max(0.05, _de.subVectors(eye, point).length());
   _dn.copy(normal).normalize();

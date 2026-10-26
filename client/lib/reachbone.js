@@ -1,13 +1,5 @@
-// reachbone — the frame algebra between a target in the world and two bone
-// rotations. Split out of avatar.js so it can be TESTED: avatar.js's import
-// cone reaches the whole client (assets, voice, renderer) and will not load
-// headless, and geometry that cannot be run against the shipped rigs is
-// geometry nobody has checked.
-//
-// What stays in avatar.js is the bookkeeping — weight ramps, compose guards,
-// which layer owns which bone — because that is structurally the same as the
-// held-pose path already there. What lives here is the part that can be
-// silently, plausibly wrong.
+// reachbone — the frame algebra between a world target and two bone rotations, apart from avatar.js so it loads
+// headless and is tested against the shipped rigs. avatar.js keeps the bookkeeping (weight ramps, which layer owns a bone).
 
 import { THREE } from './core.js';
 import { solveTwoBone, solveTwoBoneClear, penetration, chainLocalQuats, orientPalm,
@@ -32,10 +24,7 @@ const dirLen = (u, v) => {
   return { l, u: l > 1e-9 ? [w[0] / l, w[1] / l, w[2] / l] : [1, 0, 0] };
 };
 
-/**
- * Palm normal in the root frame at rest: wrist->middle × little->index where the rig has fingers; otherwise the VRM
- * T-pose convention (palms down), which every finger rig agrees with.
- */
+/** Palm normal in the root frame at rest: wrist->middle × little->index, else the VRM T-pose palms-down. */
 function palmRestNormal(P, F, side) {
   const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -53,9 +42,7 @@ function palmRestNormal(P, F, side) {
   return [-F.u[0], -F.u[1], -F.u[2]];
 }
 
-/** Each chain bone's orientation, and its parent's, in the avatar root's frame
- *  with the rig held at rest. Measured the same way restBonePositions does:
- *  identity every humanoid rotation, look, put it all back. */
+/** Each chain bone's orientation and its parent's, root frame, at rest (every humanoid rotation identity, then restored). */
 function restOrientations(avatar, nodes) {
   const h = avatar?.vrm?.humanoid;
   if (!h) return null;
@@ -78,10 +65,7 @@ function restOrientations(avatar, nodes) {
   return out;
 }
 
-/**
- * One chain's fixed facts, in the avatar ROOT's frame (where rest has identity rotations; shared/reach.js's algebra).
- * Measured from the REST skeleton, never the live one, or the limits depend on the walk-cycle frame.
- */
+/** One chain's fixed facts, root frame. From the REST skeleton, never the live one, or limits follow the walk cycle. */
 export function measureChain(avatar, key) {
   const spec = REACH_CHAINS[key];
   const h = avatar?.vrm?.humanoid;
@@ -92,11 +76,10 @@ export function measureChain(avatar, key) {
     end: h.getNormalizedBoneNode(spec.end),
   };
   if (!nodes.upper || !nodes.lower || !nodes.end) return null;
-  // The conversion assumes lower hangs directly off upper (true on a normalized VRM); refuse rather than draw a wrong arm.
+  // assumes lower hangs directly off upper (true on a normalized VRM); refuse rather than draw a wrong arm
   if (nodes.lower.parent !== nodes.upper) return null;
 
-  // The bones' REST ORIENTATIONS in the root frame, not just positions: rest is not identity on Mixamo-derived rigs,
-  // and assuming it silently reaches the mirror image.
+  // rest ORIENTATIONS too: rest is not identity on Mixamo-derived rigs, and assuming it reaches the mirror image
   const restQ = restOrientations(avatar, nodes);
   const restW = avatar.restBonePositions();
   if (!restW || !restQ) return null;
@@ -110,11 +93,9 @@ export function measureChain(avatar, key) {
   if (!(up.l > 1e-5) || !(lo.l > 1e-5)) return null;
   const lim = limitsFor(spec.root);
 
-  // ---- what this limb must not pass through.
-  // Thicknesses are the ragdoll's measured model, so a reach and a fall agree on how thick this body is.
+  // ---- what this limb must not pass through: the ragdoll's thicknesses, so a reach and a fall agree
   const torsoR = torsoRadius(P);
-  // Front-to-back vs side-to-side ratio, measured off the mesh (a round torso puts a forearm across the belly inside it).
-  // No mesh (a headless stand-in) → the ratio real bodies show, not round, or the harness is harsher than the browser.
+  // depth/width off the mesh (a round torso puts a forearm across the belly inside it); no mesh → a real body's ratio
   const DEPTH_RATIO_FALLBACK = 0.75;
   const measured = torsoHalfDepth(avatar);
   const halfDepth = (measured && measured > 1e-3) ? measured : torsoR * DEPTH_RATIO_FALLBACK;
@@ -130,8 +111,7 @@ export function measureChain(avatar, key) {
     const torsoCol = TORSO_COLUMN.has(ga) && TORSO_COLUMN.has(gb);
     const g = { na, nb, r: (boneRadius(ga, torsoR) + boneRadius(gb, torsoR)) / 2,
                 ...(torsoCol && warpK ? { warpK } : {}) };
-    // Drop pairs already overlapping at REST (a shoulder inside the chest capsule), as the ragdoll does, or the arm
-    // reads as permanently stuck and swivels forever.
+    // drop pairs overlapping at REST (shoulder in chest), or the arm reads as stuck and swivels forever
     const restPen = penetration(a, b, c, rUpper, rLower, [{ a: P[ga], b: P[gb], r: g.r }]);
     if (restPen > 0) continue;
     guards.push(g);
@@ -146,9 +126,7 @@ export function measureChain(avatar, key) {
     key, spec, nodes, L1: up.l, L2: lo.l, dRestU: up.u, dRestL: lo.u, lim,
     fwd: F.f, up: F.u, right: F.r, rUpper, rLower, guards, restQ, halfDepth,
     palmRest: palmAnchor ? qRot(restQ.qH, palmAnchor.normal.toArray()) : palmRestNormal(P, F, side),
-    // toward the body's midline from THIS shoulder: the rest direction points
-    // laterally outward, so the midline is the other way along the body's
-    // lateral axis
+    // toward the midline from THIS shoulder: opposite the rest direction along the lateral axis
     inward: (() => { const sg = Math.sign(up.u[0] * F.r[0] + up.u[1] * F.r[1] + up.u[2] * F.r[2]) || 1;
                      return [-sg * F.r[0], -sg * F.r[1], -sg * F.r[2]]; })(),
     coneAxis: fromBody(coneAxisBody(toBody(up.u, F), lim.coneTilt ?? 0), F),
@@ -156,8 +134,7 @@ export function measureChain(avatar, key) {
 }
 
 /**
- * Solve one chain for a world-space target, now. The shoulder's limits are read live through the bone's PARENT
- * (the clip rotates it every frame); the rest frame drifts once the torso turns.
+ * Solve one chain for a world target. Limits are read live through the bone's PARENT (the clip turns it every frame).
  *
  * @param {object} chain from measureChain
  * @param {object} avatar needs .root
@@ -168,8 +145,7 @@ export function solveChain(chain, avatar, targetWorld, poleHint = null, opts = {
   if (!opts.palm || !chain.palmOffset) return solveWristChain(chain, avatar, targetWorld, poleHint, opts);
   const target = avatar.root.worldToLocal(new THREE.Vector3(...targetWorld));
   let wrist = target.clone(), best = null;
-  // Wrist orientation changes the palm offset. Re-solve a bounded number of
-  // times from the same target each frame, without history-dependent drift.
+  // the wrist's turn moves the palm offset: a bounded re-solve from the same target, no history drift
   for (let i = 0; i < 5; i++) {
     const world = avatar.root.localToWorld(wrist.clone()).toArray();
     const out = solveWristChain(chain, avatar, world, poleHint, opts);
@@ -193,12 +169,10 @@ function solveWristChain(chain, avatar, targetWorld, poleHint = null, opts = {})
   const target = root.worldToLocal(_v.set(targetWorld[0], targetWorld[1], targetWorld[2])).toArray();
   const shoulder = root.worldToLocal(chain.nodes.upper.getWorldPosition(_v2)).toArray();
   const qParentNow = qMulq(qRootInv, chain.nodes.upper.parent.getWorldQuaternion(_q2).toArray());
-  // Everything measured at rest is carried into the current pose by how far
-  // the parent has TURNED since rest — not by the parent's absolute
-  // orientation, which is only the same thing when rest happens to be identity.
+  // carry rest facts by how far the parent has TURNED since rest, not its absolute orientation (equal only at identity rest)
   const qParent = qMulq(qParentNow, qConj(chain.restQ.qP));
 
-  // guards, live and in the same frame the solve happens in — the torso moves
+  // guards live, in the solve's frame: the torso moves
   const guards = [];
   for (const g of chain.guards ?? []) {
     guards.push({
@@ -219,9 +193,7 @@ function solveWristChain(chain, avatar, targetWorld, poleHint = null, opts = {})
     lastElbow: poleHint, lastGap: opts.lastGap,
     root: shoulder, target, L1: chain.L1, L2: chain.L2,
     rUpper: chain.rUpper, rLower: chain.rLower,
-    // The rest direction carried by the parent, a pure function of the current pose: NOT last frame's elbow (feeding the
-    // output back in made self-touch oscillate); the previous elbow is tested separately as an incumbent (solveTwoBoneClear).
-    // a caller's hint (a socket's reach.hint) replaces it as the bend plane's pole: shoulder → hint, in the root frame
+    // a pure function of the pose, NOT last frame's elbow (feedback made self-touch oscillate); a caller's hint replaces it
     pole: (() => { const hw = opts.hintWorld; if (!hw) return qRot(qParent, chain.dRestU);
       const h = root.worldToLocal(_v3.set(hw[0], hw[1], hw[2])).toArray(); const d = [h[0] - shoulder[0], h[1] - shoulder[1], h[2] - shoulder[2]];
       const n = Math.hypot(...d); return n > 1e-6 ? d.map((x) => x / n) : qRot(qParent, chain.dRestU); })(),
@@ -237,15 +209,13 @@ function solveWristChain(chain, avatar, targetWorld, poleHint = null, opts = {})
   const q = chainLocalQuats(chain.dRestU, chain.dRestL, res.upper, res.lower,
     { ...chain.restQ, qPnow: qParentNow });
 
-  // ---- and turn the palm to face what is being touched.
-  // Only when the caller says which way; a reach with no surface has no business inventing a wrist angle.
+  // ---- turn the palm to the surface, only when the caller says which way: never invent a wrist angle
   let lower = q.lower, hand = null, handFrame = null, palmResidual = null, palmTwist = null;
   if (palmWant) {
     const op = orientPalm({
       lowerFrame: q.lowerFrame, dLower: res.lower, palmRest: chain.palmRest,
       qL0: chain.restQ.qL, qH0: chain.restQ.qH,
-      // ⚠ INTO THE ROOT'S FRAME: everything else here is root-local while a surface normal arrives in world space; the
-      // two only agree at zero yaw.
+      // ⚠ INTO THE ROOT'S FRAME: the normal arrives in world space; the two agree only at zero yaw
       want: qRot(qRootInv, palmWant.dir), twistMax: chain.lim.foreTwistMax,
       lastTwist: opts.lastTwist, lastWrist: opts.lastWrist, dt: opts.dt,
     });

@@ -1,6 +1,5 @@
-// Rows for the editor's History (and, later, its Credits facet): pure, so they can be tested without a browser.
-// A refused write is on the record as an act whose body carries refused {code} (authority.js logRefusal, R7): it reads as
-// an attempt, never as a deed (Commons parity audit, 10-06: "refused acts print as done").
+// Rows for the editor's History and Credits: pure, testable without a browser.
+// A refused write is an act whose body carries refused {code} (authority.js logRefusal, R7): an attempt, never a deed.
 import { phraseOf } from '../../shared/credits.js';
 export function worldHistoryRows(entries, nameOf) {
   return entries.filter((e) => e.kind === 'act').reverse().map((e) => {
@@ -13,7 +12,7 @@ export function worldHistoryRows(entries, nameOf) {
   });
 }
 
-// Credits are History's filter modes: the same rows seen four ways; a refused attempt is shown but is never a deed.
+// Credits are History's filter modes over the same rows.
 // top = people ranked by deeds (acts that changed something); kind = grouped by component, or the verb if it names none
 export const HISTORY_MODES = [['time', 'by time'], ['person', 'by person'], ['top', 'biggest contributors'], ['kind', 'by what changed']];
 const asRows = (list, nameOf) => (list.length && list[0]?.kind !== undefined ? worldHistoryRows(list, nameOf) : list);
@@ -37,9 +36,9 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** Merge a `history {id, limit, before?}` reply (rows by seq; next = last row's seq or null) into the panel's rows
- *  (client-check HT4-HT6). An Older… read (`more`) appends and marks `paged`; a refresh shows the newest page unless
- *  paged, then keeps the read pages where they meet it (else starts over). Returns {entries, next, paged}. */
+/** Merge a `history {id, limit, before?}` reply (next = last row's seq or null); client-check HT4-HT6. An Older… read
+ *  (`more`) appends and marks `paged`; a refresh of a paged list keeps the read pages where they meet it, else starts over.
+ *  Returns {entries, next, paged}. */
 export function mergeHistory({ entries, next, paged = false }, rows, rNext, more) {
   const sorted = (xs) => { const m = new Map(); for (const e of xs) m.set(e.seq, e); return [...m.values()].sort((a, b) => b.seq - a.seq); };
   if (more) return { entries: sorted([...entries, ...rows]), next: rNext, paged: true };

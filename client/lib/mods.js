@@ -1,7 +1,6 @@
-// mods — LOCAL, TRUSTED client modules: full EW access (they can act as you), like a browser extension; stored in
-// IndexedDB. Trust model: docs/MODDING-UI.md. A world doesn't offer client mods; world scripts run server-side (docs/SCRIPTS.md).
-// Contract: the default export gets { name, world, EW, ui, onTick, onDispose }; five consecutive tick throws pause it;
-// disabling can't unload a module (globals persist until reload).
+// mods — LOCAL, TRUSTED client modules in IndexedDB: full EW access (they can act as you), like a browser extension.
+// Trust model: docs/MODDING-UI.md. A world never offers client mods; world scripts run server-side (docs/SCRIPTS.md).
+// Five consecutive tick throws pause a mod; disabling can't unload a module (globals persist until reload).
 
 import { bus, CONFIG, report } from './base.js';
 import { makeSection, toast, flashHint } from './ui.js';
@@ -120,9 +119,8 @@ export default ({ EW, ui, onTick }) => {
 };
 `;
 
-/** The scriptable face of the mod system (same acts as the panel buttons). put and run need transient user activation,
- *  so code that merely holds EW can't plant a mod that outlives it. Defence in depth: the walls are
- *  tools/protocol/modhole-check.ts and the page's CSP. */
+/** put and run need transient user activation, so code that merely holds EW can't plant a mod that outlives it.
+ *  Defence in depth only: the walls are tools/protocol/modhole-check.ts and the page's CSP. */
 const byHand = (what) => {
   if (globalThis.navigator?.userActivation && !navigator.userActivation.isActive) throw new Error(`EW.mods.${what} needs a click or key press from you (installing or running a mod is your decision)`);
 };
@@ -139,7 +137,6 @@ export function initMods() {
     let editing = null;      // name being edited, '' = new
     const render = async () => {
       const mine = await listScripts();
-      // Every entry is one .mod-row (name, a quiet line saying what it is, controls), grouped under the pane's captions.
       const rows = mine.map((s) => {
         const on = running.has(s.name);
         return `<div class="mod-row stacked">
@@ -172,8 +169,7 @@ export function initMods() {
         const b = e.target.closest('button');
         if (!b) return;
         const d = b.dataset;
-        // The built-in toggles answer BEFORE any await: listScripts() can reject in this catch-less handler and would
-        // otherwise kill every button silently.
+        // built-in toggles answer BEFORE any await: a listScripts() rejection here would silently kill every button
         if (d.bodyeng) {
           const names = listBodyEngines();
           setBodyEngine(names[(names.indexOf(currentBodyEngine()) + 1) % names.length]);

@@ -1,7 +1,6 @@
-// prefetch — once arrival settles, streams likely-next assets (roster bodies, catalog, store assets, other skies)
-// into the HTTP cache so the next spawn is a disk read.
+// prefetch — once arrival settles, streams likely-next assets into the HTTP cache so the next spawn is a disk read.
 //   1. Demand wins: a real load (assets.js 'demand') ABORTS the in-flight prefetch and parks the queue until quiet.
-//   2. Storage only: bytes are drained and dropped, never parsed; fetchBytes hits the cache via the server's headers.
+//   2. Storage only: bytes are drained and dropped, never parsed.
 //   3. Budgeted: a per-session cap plus a quota floor; the browser's LRU is the eviction policy.
 
 import { negotiate } from '../../shared/ktx2.js';
@@ -16,8 +15,7 @@ const QUOTA_FLOOR = 300e6;  // leave at least this much storage quota untouched
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Aborts the in-flight prefetch stream. Wired to the demand event permanently:
-// preemption must not wait for the prefetcher's next turn around its loop.
+// wired to 'demand' permanently: preemption must not wait for the prefetcher's next turn around its loop
 let abortNow = null;
 bus.on('demand', () => abortNow?.());
 
@@ -33,8 +31,7 @@ async function quietWindow() {
   }
 }
 
-/** Stream one URL through to the HTTP cache; resolves to bytes drained.
- *  Throws {preempted:true} when a demand load kicked us off the wire. */
+/** Resolves to bytes drained; throws {preempted:true} when a demand load took the wire. */
 async function pull(url) {
   const ctl = new AbortController();
   let preempted = false;
@@ -63,18 +60,15 @@ async function quotaTight() {
   } catch { return false; }
 }
 
-// The queue is discovered, not hardcoded, ordered by how soon a miss is felt: roster bodies, catalog previews,
-// everything spawnable (smallest first), then sky + weather sprites.
+// ordered by how soon a miss is felt: roster bodies, catalog previews, spawnables (smallest first), sky + weather
 async function buildQueue() {
   const q = [];
   const seen = new Set();
-  // the running sequencer's key, or null — the same answer every demand
-  // fetch gets, so warmth lands in the same cache entry (assets.js)
+  // the same key every demand fetch gets (assets.js), so warmth lands in the same cache entry
   const key = ktx2Capable() ? await ktx2KeyReady : null;
   const push = (path, size = 0) => {
     let url = path.startsWith('/') ? path : `/library/${path}`;
-    // Warm the SAME cache key demand will use (§20c): .glb/.vrm get ?ktx2=<key>; loose images only where the file layer
-    // negotiates (primeFiles). A different key is warmth in a different HTTP-cache entry, i.e. waste.
+    // warm the SAME cache key demand uses (§20c): .glb/.vrm get ?ktx2=<key>; loose images only where primeFiles negotiates
     const bare = url.split('?')[0];
     if (key && (/\.(glb|vrm)$/.test(bare)
       || (/^\/library\/eidoverse\/assets\/(grass|sky|particle_textures)\//.test(bare) && /\.(png|jpe?g)$/i.test(bare)))) {
@@ -89,8 +83,7 @@ async function buildQueue() {
   const store = (await listLibrary('store')) ?? [];
   const glbs = [...store, ...models.filter((f) => f.path.endsWith('.glb'))]
     .sort((a, b) => a.size - b.size);
-  // Clips from /animations (like avatars from /avatars): its paths carry the ?v=<mtime> vrmaBytes requests, and it
-  // resolves upstream-patched over library, so this warms the fork.
+  // /animations paths carry the ?v=<mtime> vrmaBytes requests, and resolve upstream-patched over library
   const clips = await fetch('/animations').then((r) => r.json()).catch(() => []);
   for (const c of clips) push(c.path, c.size);
   for (const f of glbs) push(f.path, f.size);
@@ -104,8 +97,7 @@ export async function startPrefetch() {
   if (CONFIG.params.get('prefetch') === '0') return;  // escape hatch
   if (navigator.connection?.saveData) return;         // respect data saver
   await whenBooted();
-  // Speculative stream waits for calm (§16.2.D: the governor's 5 smooth seconds); real loads never wait on prefetch,
-  // and the 'demand' abort preempts it.
+  // waits for calm (§16.2.D: the governor's 5 smooth seconds); real loads never wait on prefetch
   await whenCalm();
   await quietWindow(); // let the join's own warm-fetches drain first
   const queue = await buildQueue().catch((e) => { report('prefetch', e); return []; });

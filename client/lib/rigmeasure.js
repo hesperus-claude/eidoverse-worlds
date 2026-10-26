@@ -1,7 +1,6 @@
-// rigmeasure — what the body engines MEASURE and how they SPEAK. The Verlet (ragdoll.js) and Bullet (ammodoll.js)
-// engines stay different machines; this holds only what they must agree on: the 12-segment body cut, the
-// segment-vs-segment closest-point solve, the rest rig frame, and the {j,p,v} handover snapshot. That snapshot is a
-// wire format across engines and machines, so pack and parse stay one. Shared lifecycle: bodyengine.js.
+// rigmeasure — what the Verlet (ragdoll.js) and Bullet (ammodoll.js) body engines must agree on: the 12-segment cut,
+// the segment closest-point solve, the rest rig frame, and the {j,p,v} handover snapshot (a wire format, so pack and
+// parse stay one).
 
 import { THREE } from './core.js';
 
@@ -9,8 +8,7 @@ import { THREE } from './core.js';
 // the body cut
 // ---------------------------------------------------------------------------
 
-// Which bones a body engine drives, each as (bone -> the child joint it points at): a reduced set, stable and small on
-// the wire. Order matters: parents before children (verlet drive walk and limit sweep, bullet build order).
+// (bone -> the child joint it points at). Parents before children: both engines walk this order.
 // Driving the PELVIS is what lets a body lie down. The one place a segment is added or renamed.
 export const SEGMENTS = [
   ['hips', 'spine'],
@@ -21,10 +19,10 @@ export const SEGMENTS = [
   ['rightUpperLeg', 'rightLowerLeg'], ['rightLowerLeg', 'rightFoot'],
 ];
 
-// Every joint tracked as a particle / segment endpoint (bones + leaf children).
+// bones + leaf children
 export const JOINTS = [...new Set(SEGMENTS.flat())];
 
-// The bones an engine writes; everything else is the locomotion mixer's and is parked by avatar.setLimp around this list.
+// everything else is the locomotion mixer's, parked by avatar.setLimp
 export const DRIVEN_BONES = SEGMENTS.map(([bone]) => bone);
 
 // ---------------------------------------------------------------------------
@@ -38,8 +36,7 @@ const _p1 = new THREE.Vector3();
 const _p2 = new THREE.Vector3();
 const _sd = { s: 0, t: 0 };
 
-/** Closest points between two segments, as parameters along each (clamped-parametric; a zero-length segment falls back
- *  to an endpoint). Both engines' self-collision builds run this. */
+/** Closest points between two segments, as parameters along each (a zero-length segment falls back to an endpoint). */
 export function closestParams(p1, q1, p2, q2, out) {
   _a.copy(q1).sub(p1); _b.copy(q2).sub(p2); _c.copy(p1).sub(p2);
   const A = _a.dot(_a), E = _b.dot(_b), F = _b.dot(_c);
@@ -60,7 +57,6 @@ export function closestParams(p1, q1, p2, q2, out) {
   out.s = s; out.t = t;
 }
 
-/** Distance between two segments — closestParams, evaluated. */
 export function segDistance(p1, q1, p2, q2) {
   closestParams(p1, q1, p2, q2, _sd);
   _p1.copy(p1).lerp(q1, _sd.s);
@@ -72,8 +68,8 @@ export function segDistance(p1, q1, p2, q2) {
 // the rig frame
 // ---------------------------------------------------------------------------
 
-/** The rig's anatomical frame from rest WORLD positions: up the trunk, lateral across the shoulders (hips fallback),
- *  forward their cross product (right for VRM 0.x and 1.0 alike). Every value is a fresh vector; callers own them. */
+/** From rest WORLD positions: lateral across the shoulders (hips fallback); forward is right for VRM 0.x and 1.0
+ *  alike. Fresh vectors: callers own them. */
 export function rigFrameOf(restP) {
   const up = (restP.neck ?? restP.chest ?? restP.spine ?? restP.head)
     ?.clone().sub(restP.hips ?? new THREE.Vector3()).normalize() ?? new THREE.Vector3(0, 1, 0);
@@ -93,15 +89,13 @@ export function rigFrameOf(restP) {
 // the handover format
 // ---------------------------------------------------------------------------
 
-/** Builder for the {j,p,v} handover snapshot: joint names, world positions and velocities, flat-packed and rounded to
- *  mm (it rides presence). Both engines' snapshot() speak through it so the format can't fork. */
+/** {j,p,v}: joint names, world positions and velocities, flat-packed. Both engines speak through it so it can't fork. */
 export function snapshotPacker() {
   const j = [], p = [], v = [];
   return {
     add(name, pos, vel) {
       j.push(name);
-      // FULL PRECISION: a handover is the same chaotic body on another machine, and rounding diverges by cm within
-      // eighty steps (§24t-8). JSON's shortest round-trip formatting is exact.
+      // FULL PRECISION: the same chaotic body on another machine; rounding diverges by cm within eighty steps (§24t-8)
       p.push(pos.x, pos.y, pos.z);
       v.push(vel.x, vel.y, vel.z);
     },
@@ -109,8 +103,7 @@ export function snapshotPacker() {
   };
 }
 
-/** Iterate a handover snapshot ({j,p,v}, optional dy height shift): yields { name, px,py,pz, vx,vy,vz } per joint,
- *  dy applied. The parse half of snapshotPacker. */
+/** The parse half of snapshotPacker: { name, px,py,pz, vx,vy,vz } per joint, the optional dy height shift applied. */
 export function* seedJoints(seed) {
   const { j: names, p: pos, v: vel, dy = 0 } = seed;
   for (let i = 0; i < names.length; i++) {

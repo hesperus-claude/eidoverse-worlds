@@ -1,12 +1,11 @@
-/** Piper as a voice-engine plugin: every piper specific (the two-file shape, OPFS cache seeding, PATH_MAP) lives
- *  here; voiceengines.js and the panel know none of it. WASM latency is dominated by the HiFi-GAN vocoder (stacked
- *  transposed convolutions); INT8 is slower here and WebGPU is opt-in (see the WEBGPU block below). */
+/** Piper as a voice-engine plugin: every piper specific (the two-file shape, OPFS seeding, PATH_MAP) lives here.
+ *  WASM latency is the HiFi-GAN vocoder's; INT8 is slower here and WebGPU is opt-in. */
 import { registerEngine } from './voiceengines.js';
 import { setTtsSource } from './tts.js';
 import { decodeWavToPcm } from './wavpcm.js';
 
 let engine = null;
-let _phonCost = 0;   // measured once: see speak()
+let _phonCost = 0;
 const runtime = async () => (engine ??= await import('@mintplex-labs/piper-tts-web'));
 
 registerEngine({
@@ -14,20 +13,17 @@ registerEngine({
   label: 'Piper',
   accept: ['.onnx', '.json'],
 
-  // OPFS is not optional: local files reach the runtime only through its cache.
+  // OPFS is not optional: local files reach the runtime only through its cache
   supported: () => typeof WebAssembly === 'object' && !!navigator.storage?.getDirectory,
 
-  // Score, not boolean. A lone .onnx might belong to another ONNX engine, so
-  // that scores 1; a matching .onnx + .onnx.json pair is unmistakably Piper and
-  // scores 3. Whoever recognises MORE of the selection wins.
+  // a score: a lone .onnx may be another engine's (1), a .onnx + .onnx.json pair is Piper (3); the highest wins
   match: (files) => {
     const onnx = files.find((f) => f.name.toLowerCase().endsWith('.onnx'));
     if (!onnx) return 0;
     const want = `${onnx.name.toLowerCase()}.json`;
     const paired = files.some((f) => f.name.toLowerCase() === want);
     if (paired) return 3;
-    // A .json that looks like a piper config (phoneme_id_map) is also decisive,
-    // even if its name does not follow the convention.
+    // any .json beside it: probably the config under another name
     return files.some((f) => f.name.toLowerCase().endsWith('.json')) ? 2 : 1;
   },
 
@@ -35,16 +31,13 @@ registerEngine({
     const onnx = files.find((f) => f.name.toLowerCase().endsWith('.onnx'));
     const cfg = files.find((f) => f.name.toLowerCase().endsWith('.json'));
     if (!onnx) throw new Error('Piper needs the .onnx model file');
-    // Say WHY, not just what: the config carries the phoneme→id map, the sample
-    // rate and the espeak language — none of it recoverable from the model.
+    // the config's phoneme map, sample rate and espeak language aren't recoverable from the model
     if (!cfg) throw new Error(`Piper also needs ${onnx.name}.json — it holds the phoneme map and sample rate`);
 
-    // phases, not percentages: the runtime's progress callback only fires while downloading, and the long silent
-    // wait is InferenceSession.create() over a 63 MB graph; a fake percentage would lie
+    // phases, not percentages: the long silent wait is InferenceSession.create(), and a fake percentage would lie
     onProgress({ phase: 'runtime', text: 'loading runtime…' });
     const e = await runtime();
-    // the OPFS cache key carries BOTH digests (model and config, #91): two voices sharing a filename, or one model
-    // with two configs, must never serve each other's cached bytes
+    // the cache key carries BOTH digests (#91): two voices sharing a filename, or one model with two configs, never share bytes
     const hex = (buf, n) => Array.from(new Uint8Array(buf).slice(0, n))
       .map((b) => b.toString(16).padStart(2, '0')).join('');
     const [modelBuf, cfgBuf] = await Promise.all([
@@ -52,13 +45,10 @@ registerEngine({
       crypto.subtle.digest('SHA-256', await cfg.arrayBuffer()),
     ]);
     const base = `${onnx.name.replace(/\.onnx$/i, '')}-${hex(modelBuf, 6)}-${hex(cfgBuf, 4)}`;
-    // the friendly half of the identity: `base` carries the digest because it's a cache key; the panel shows the
-    // filename (hover for the full identity)
+    // the panel shows the filename; `base` (with digests) stays the cache key
     const humanName = onnx.name.replace(/\.onnx$/i, '');
 
-    // the runtime has no seam for local bytes (TtsSession fetches HuggingFace via PATH_MAP), but getBlob() reads the
-    // OPFS cache first, keyed by basename: seed it under those names and it never hits the network. The copy is
-    // streamed in chunks so this phase reports real percentages.
+    // no seam for local bytes, but getBlob() reads OPFS first, by basename: seeded there, it never hits the network
     const root = await navigator.storage.getDirectory();
     const dir = await root.getDirectoryHandle('piper', { create: true });
     const totalMb = Math.round(onnx.size / 1e6);
@@ -86,20 +76,12 @@ registerEngine({
     let sr = null;
     try { sr = JSON.parse(await cfg.text())?.audio?.sample_rate ?? null; } catch { /* label only */ }
 
-    // predict() doesn't forward wasmPaths (it builds against hardcoded CDNs, so no offline use): build the session
-    // ourselves. TtsSession is a singleton that ignores voiceId and wasmPaths after the first construction, so drop the
-    // instance or a second voice keeps speaking in the first.
+    // TtsSession is a singleton that ignores voiceId after its first construction: drop it, or a second voice speaks as the first
     if (e.TtsSession._instance) e.TtsSession._instance = null;
-    // InferenceSession.create() reports nothing for 30+ s: count elapsed seconds UP (true and visibly alive) rather
-    // than invent a fraction or leave a static label that reads as a hang
 
-
-    // our own ORT session, bypassing predict(): the library rebuilds the phonemizer module on every call and keeps its
-    // factory and session private (see piperphon.js). Predict and decode are timed separately; they fail for
-    // different reasons (slow predict = inference, slow decode = a main-thread sample copy).
+    // our own ORT session, bypassing predict() (hardcoded CDNs; rebuilds the phonemizer every call)
     const hasGpu = typeof navigator !== 'undefined' && 'gpu' in navigator;
-    // the importmap maps only "onnxruntime-web", so a bare 'onnxruntime-web/webgpu' import throws before `ort` is set:
-    // resolve the webgpu bundle by PATH (node_modules is served, as in piperphon.js) and fall back to the mapped default
+    // the importmap maps only "onnxruntime-web": the webgpu bundle goes by PATH, falling back to the mapped default
     const ort = await (async () => {
       if (hasGpu) {
         try {
@@ -119,8 +101,7 @@ registerEngine({
       piperData: new URL('../vendor/piper/piper_phonemize.data', import.meta.url).href,
       piperWasm: new URL('../vendor/piper/piper_phonemize.wasm', import.meta.url).href,
     };
-      // report what we got, not what we asked for: ORT ships only threaded builds, and without cross-origin isolation
-      // (SharedArrayBuffer) it silently runs single-threaded while numThreads still reads high. Its default caps at 4.
+      // report what we got: without cross-origin isolation ORT silently runs single-threaded while numThreads reads high
       const cores = navigator.hardwareConcurrency || 4;
       const isolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
       const sab = typeof SharedArrayBuffer !== 'undefined';
@@ -131,26 +112,21 @@ registerEngine({
         + `SharedArrayBuffer=${sab} · numThreads=${ort.env.wasm.numThreads}`
         + (isolated && sab ? '' : '  ⚠️ SINGLE-THREADED — isolation headers missing'));
 
-      // graphOptimizationLevel 'all': ORT fuses and folds the graph once at load, free at run time. WASM SIMD can't
-      // reach native AVX/NEON speeds, so the gap to native Piper is structural; WebGPU is opt-in (below).
       const buf = await onnx.arrayBuffer();
-      // the ticker must WRAP the work: start it here and clear it in a finally around InferenceSession.create()
+      // create() is silent for 30+ s: count seconds UP, never a fake fraction; the finally below must clear it
       const compileT0 = performance.now();
       const ticker = setInterval(() => {
         const s = Math.round((performance.now() - compileT0) / 1000);
         onProgress({ phase: 'compile', elapsed: s, text: `compiling voice model — ${s}s` });
       }, 1000);
       onProgress({ phase: 'compile', elapsed: 0, text: 'compiling voice model…' });
-      // declared outside the try: speak() closes over these. executionMode stays sequential: parallel measured ~21%
-      // slower (a VITS graph is one long dependency chain); 'all' optimization measured ~28% faster than 'basic'.
+      // speak() closes over these. Sequential: parallel measured ~21% slower; 'all' measured ~28% faster than 'basic'
       const opts = { graphOptimizationLevel: 'all' };
       let ortSession = null, usedEP = 'wasm';
       try {
-      // localStorage.eidoTtsBackend = 'wasm' | 'webgpu' | 'auto' (default): measure, don't assume the GPU wins
+      // localStorage.eidoTtsBackend = 'wasm' | 'webgpu' | 'auto' (default): measure with ttsBench(), don't assume the GPU wins
       const pref = (() => { try { return localStorage.getItem('eidoTtsBackend'); } catch { return null; } })();
-      // WebGPU is opt-in (eidoTtsBackend = 'webgpu', measure with ttsBench()): some VITS kernels fail at inference time,
-      // not load, and WASM often wins on short speech; the run() fallback below still catches a kernel failure.
-      // env.debug + verbose logging prints which ops run on GPU and which fall back.
+      // opt-in: some VITS kernels fail at inference, not load, and WASM often wins on short speech; verbose logs the ops
       if (hasGpu && pref === 'webgpu') {
         ort.env.debug = true;
         ort.env.logLevel = 'verbose';
@@ -172,16 +148,13 @@ registerEngine({
       } finally { clearInterval(ticker); }
 
     const { phonemize, phonReady, warmPhonemizer } = await import('./piperphon.js');
-    // BUILD THE PHONEMIZER NOW, not on the first word. It is ~27s and depends on
-    // nothing but the wasm paths, so it belongs inside the load the user is
-    // already watching rather than in front of their first utterance.
+    // BUILD THE PHONEMIZER NOW (~27 s): inside the load being watched, not in front of the first utterance
     await warmPhonemizer(wasmPaths, onProgress);
 
     const speak = async (text) => {
       const t0 = performance.now();
       const warm = phonReady();
-      // short utterances need terminal punctuation (rhasspy/piper#252): VITS is trained on sentences, so a bare
-      // "hello" is out of distribution; one character puts it back, at no latency cost
+      // short utterances need terminal punctuation (rhasspy/piper#252): a bare "hello" is out of distribution for VITS
       const spoken = /[.!?…,;:]\s*$/.test(text.trim()) ? text : `${text.trim()}.`;
       const ids = await phonemize(spoken, espeakVoice, wasmPaths);
       const t1 = performance.now();
@@ -189,16 +162,14 @@ registerEngine({
         input: new ort.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, ids.length]),
         input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)])),
         scales: new ort.Tensor('float32', Float32Array.from([
-          // noise_w is duration noise: lower is steadier rhythm (the default 0.8 varies length ~6% on identical ids).
-          // length_scale sets pace and inference cost together (cost tracks output duration); it's a voice choice
-          // (.onnx.json), and localStorage.eidoTtsLengthScale overrides it for A/B.
+          // noise_w: duration noise (0.8 varies length ~6% on identical ids). length_scale sets pace AND cost.
+          // localStorage.eidoTtsLengthScale overrides the voice's length_scale for A/B.
           inf.noise_scale ?? 0.667,
           (() => { try { const v = parseFloat(localStorage.getItem('eidoTtsLengthScale')); return Number.isFinite(v) ? v : (inf.length_scale ?? 1.0); } catch { return inf.length_scale ?? 1.0; } })(),
           inf.noise_w ?? 0.8,
         ])),
       };
-        // the WebGPU fallback must cover run(), not just create(): an op can fail at inference time after a clean
-        // create. Rebuild once on WASM and retry; a slow voice beats a dead one, and the rebuild is paid once per session.
+        // the fallback covers run(), not just create(): an op can fail at inference after a clean create
         let res;
         try {
           res = await ortSession.run(feeds);
@@ -222,13 +193,9 @@ registerEngine({
         + ` · RTF ${((t2 - t0) / 1000 / Math.max(secs, 1e-6)).toFixed(3)}` + ` · ${usedEP}`);
       return { pcm: pcmData, sampleRate: rate };
     };
-    // Label = what a person calls this voice. `base` (with its digest) remains
-    // the cache/PATH_MAP key and is unchanged; only the DISPLAY loses the hex.
     const label = `Piper: ${humanName}${sr ? ` (${sr} Hz)` : ''}`;
     setTtsSource(speak, label);
-    // `base` travels alongside so a caller that needs the exact identity — a
-    // bug report, a tooltip, telling two same-named voices apart — still has
-    // it. Removing it from the label must not remove it from the program.
+    // the exact identity (two same-named voices) travels as id
     return { speak, label, id: base };
   },
 });

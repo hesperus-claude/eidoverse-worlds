@@ -1,14 +1,8 @@
-// piperphon — build the phonemizer ONCE, not once per word. @mintplex-labs/piper-tts-web's predict() rebuilds the
-// espeak-ng emscripten module on every call (~30 s per utterance) and keeps the factory private, so we make that
-// call ourselves and keep the (re-entrant) module.
+// piperphon — build the phonemizer ONCE: piper-tts-web's predict() rebuilds the espeak-ng module per call (~30 s per
+// utterance), so we make that call ourselves and keep the (re-entrant) module.
 
-// 🔴 THE BUILD RUNS IN A WORKER, AND THAT IS WHAT MAKES IT FAST (2026-08-09).
-// Measured: 57ms in Bun vs 27,551ms on the browser main thread, SAME BYTES — so
-// the 17 MB data package was never the problem. piper-o91UDS6e.js loads via
-// `xhr.open(url, false)` (synchronous XHR), guarded by ENVIRONMENT_IS_WORKER:
-// legal and fast in a worker, deprecated and glacial on the main thread.
-// See phon.worker.js. Everything below keeps its old signature; only the place
-// the work happens changed.
+// 🔴 THE BUILD RUNS IN A WORKER (phon.worker.js): its loader is synchronous XHR, fast there and ~500× slower on the
+// main thread (57 ms vs 27.5 s, same bytes).
 let _worker = null, _seq = 0;
 const _pending = new Map();
 let _ready = false;
@@ -23,9 +17,7 @@ function worker() {
     _pending.delete(id);
     ok ? p.resolve(ids) : p.reject(new Error(error || 'phonemizer failed'));
   };
-  // A worker that dies takes every in-flight call with it — fail them loudly
-  // rather than leaving promises that never settle (silent hang > visible error
-  // is exactly backwards for a voice path).
+  // a dead worker fails every in-flight call loudly: a silent hang is the worst outcome on a voice path
   _worker.onerror = (e) => {
     const err = new Error(`phonemizer worker died: ${e.message || 'unknown'}`);
     for (const p of _pending.values()) p.reject(err);
@@ -34,9 +26,7 @@ function worker() {
   return _worker;
 }
 
-/** The chunk URL must be resolved HERE, not in the worker: import.meta.url
- *  differs inside a worker, and a path that resolves on the main thread would
- *  silently 404 there. */
+/** Resolve the chunk URL HERE: import.meta.url differs in a worker, where it would silently 404. */
 function wasmBundle(wasmPaths) {
   return {
     js: new URL('../node_modules/@mintplex-labs/piper-tts-web/dist/piper-o91UDS6e.js',
@@ -62,16 +52,14 @@ function ask(op, payload, timeoutMs = 120_000) {
 }
 
 
-/** Text → phoneme ids. Same signature as before; the work now happens in the
- *  worker, where the library's synchronous loader is legal and fast. */
+/** Text → phoneme ids, in the worker. */
 export async function phonemize(text, voice, wasmPaths) {
   const ids = await ask('phonemize', { text, voice, wasmPaths: wasmBundle(wasmPaths) });
   _ready = true;
   return ids;
 }
 
-/** Build the module now, inside the load the user is already watching, not in front of their first utterance:
- *  the build is the expensive part and needs nothing but the wasm paths. */
+/** Build during the load the user is already watching, not in front of their first utterance. */
 export async function warmPhonemizer(wasmPaths, onProgress = () => {}) {
   if (_ready) return true;
   const t0 = performance.now();

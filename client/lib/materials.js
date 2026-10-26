@@ -1,12 +1,11 @@
 // materials — the factory. Every world material is wrapped at CREATION, before its first compile, with its final
-// shader-graph shape (wetness, cloud shade, shadow-receive policy), so weather and sky only ever write uniforms: on
-// three's WebGPU renderer a graph-shape change recompiles the pipeline (TEL0S_NOTES §12). The wraps are client-owned
-// and driven by folded state (effectiveSky), not by upstream systems that arrive seconds later.
+// shader-graph shape (wetness, cloud shade, shadow-receive policy), so weather and sky only ever write uniforms: a
+// graph-shape change recompiles the pipeline (TEL0S_NOTES §12). Driven by folded state (effectiveSky), not upstream.
 //   wetness     — a shape-identical port of upstream's weather wrapMaterial, driven by our uniforms
-//   cloud shade — our own cheap field (two taps of a boot-made tileable noise, wind-scrolled, sun-projected);
-//                 upstream's needs textures that don't exist before the sky modules do
+//   cloud shade — our own field (two taps of a seeded tileable noise, wind-scrolled, sun-projected); upstream's needs
+//                 textures that don't exist before the sky modules do
 // Prepared meshes are marked userData.noWet + noCloudShadow so upstream sweeps skip them; unprepared ones (mods)
-// still get swept. The noise is seeded, so every client sees the same clouds.
+// still get swept.
 
 import { THREE, TSL, sun, ground, renderer } from './core.js';
 import { report, CONFIG, bus } from './base.js';
@@ -20,19 +19,16 @@ const {
   materialColor, materialRoughness, materialMetalness, screenCoordinate, bool,
 } = TSL;
 
-// ---- the caster fade: a caster entering or leaving the budget dithers in over ~300 ms. Materials are shared across
-// clones, so the amount is read per OBJECT in the shadow pass from one module-level node (one WGSL shape for every
-// depth pass); a non-node material hard-flips.
+// ---- the caster fade (~300 ms dither): materials are shared across clones, so the amount is read per OBJECT from one
+// module-level node (one WGSL shape for every depth pass); a non-node material hard-flips.
 const uShadowFade = uniform(1).onObjectUpdate(({ object }) => object?.userData?.shadowFade ?? 1);
 const FADE_MASK = fract(float(52.9829189).mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715))))).lessThan(uShadowFade);
 
 // ---- the shared uniform state -----------------------------------------------
-// One set for the whole scene, exactly like upstream's: every wrapped
-// material's subtree points at these. Writing them costs nothing per material.
+// one set for the whole scene, like upstream's: writing them costs nothing per material
 
 const U = {
-  // wetness (the upstream trio — wetTint is never written upstream either,
-  // but it is part of the wrapped graph's shape, so it is part of ours)
+  // wetness: wetTint is never written, but it is part of the wrapped graph's shape
   wet: uniform(0),
   wetTint: uniform(new THREE.Color(1, 1, 1)),
   puddleK: uniform(1),
@@ -45,8 +41,8 @@ const U = {
   scroll2: uniform(new THREE.Vector2(0, 0)),
 };
 
-// ---- the cloud noise texture: tileable value noise generated once at boot. The graphs bind the texture OBJECT,
-// so its identity never changes. Seeded (mulberry32): same field on every client.
+// ---- the cloud noise texture: the graphs bind the texture OBJECT, so its identity never changes. Seeded
+// (mulberry32): same field on every client.
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -97,21 +93,18 @@ function makeCloudNoise(size = 256) {
 }
 
 const noiseTex = makeCloudNoise();
-// Primed once at init (§16.1c): this texture rides inside every wrap's colorNode, where assets.js collectTextures
-// can't see it. core.js top-level-awaits renderer.init(), so the device exists here.
+// primed here (§16.1c): it rides inside every colorNode, where collectTextures can't see it; the device exists already
 try { renderer.initTexture(noiseTex); } catch { /* first bind will get it */ }
-// world-meters per texture tile, two octaves at different scales/speeds so
-// the field boils instead of sliding as one rigid sheet
+// world-metres per tile; two octaves at different scales/speeds so the field boils instead of sliding as one sheet
 const CLOUD_SCALE1 = 1 / 420;
 const CLOUD_SCALE2 = 1 / 97;
 const CLOUD_H = 300;   // nominal cloud-base height the sun projection assumes
 
 // ---- the wetness wrap (ported shape-identical from weather_system.js) -------
-// Structure kept 1:1 with upstream's wrapMaterial (hash2/vnoise2 included)
-// so the LOOK is the look worlds already have — only the uniforms are ours.
+// kept 1:1 with upstream's wrapMaterial (hash2/vnoise2 included), so the look matches; only the uniforms are ours
 
-// Fn() layouts, not plain closures: a layout-less TSL function is inlined at every call site, so hash2 was re-emitted
-// ~20× per material (seconds of NodeBuilder source-gen). With a layout each compiles once. Types: vec2→float.
+// Fn() layouts, not plain closures: a layout-less TSL function is inlined at every call site (~20× per material,
+// seconds of NodeBuilder source-gen). Types: vec2→float.
 const hash2 = Fn(([p]) => {
   const a = fract(vec3(p.x, p.y, p.x).mul(0.1031));
   const d = dot(a, vec3(a.y, a.z, a.x).add(33.33));
@@ -126,9 +119,7 @@ const vnoise2 = Fn(([p]) => {
   return mix(mix(a, b, sm.x), mix(c, d, sm.x), sm.y);
 }, { name: 'ewVnoise2', type: 'float', inputs: [{ name: 'p', type: 'vec2' }] });
 
-/** The cloud-shade factor for one material: 1.0 where the sky is open,
- *  dipping toward (1 - strength) under a cloud. Fresh subtree per material
- *  (matching how upstream builds per-wrap), shared uniforms + texture. */
+/** 1.0 under open sky, dipping toward (1 - strength) under a cloud. Fresh subtree per material, shared uniforms. */
 function cloudShade() {
   const p = positionWorld.xz.add(U.cloudOff);
   const n1 = texture(noiseTex, p.add(U.scroll1).mul(CLOUD_SCALE1)).r;
@@ -149,15 +140,13 @@ function pnUngated() {
 
 function wrapMaterial(mat, receiver, pbr) {
   const upMask = clamp(normalWorld.y, 0, 1).pow(2).mul(U.wet);
-  // crossed-card foliage carries upward normals for clump lighting, so
-  // receivers can opt out of the ground-only puddle replacement path
+  // crossed-card foliage carries upward normals for clump lighting, so it can opt out of puddles
   const puddleGate = (mat.userData?.noPuddles || receiver?.userData?.noPuddles)
     ? float(0) : float(1);
   const flat = smoothstep(0.985, 0.998, normalWorld.y);
-  // puddle mask: threshold value noise near its middle, the coarse octave warping the fine one. Cost gates (value-exact):
-  // a no-puddles material never builds the 16-hash noise (GLSL can't fold x*0), and the taps run only above
-  // wet 0.35, where the puddle factor leaves 0, in a uniform branch
-  const gates = CONFIG.params.get('pudgate') !== '0';   // ?pudgate=0 builds the pre-gate graph (tools/puddle-gate-probe.mjs A/B)
+  // value-exact cost gates: a no-puddles material never builds the 16-hash noise (GLSL can't fold x*0), and the taps
+  // run only above wet 0.35 (below it the factor is 0), in a uniform branch
+  const gates = CONFIG.params.get('pudgate') !== '0';   // ?pudgate=0: the pre-gate graph (tools/puddle-gate-probe.mjs)
   const noPud = gates && (!pbr || !!(mat.userData?.noPuddles || receiver?.userData?.noPuddles));
   const pnNode = noPud ? null : !gates ? pnUngated() : Fn(() => {
     const pnv = float(0).toVar();
@@ -172,31 +161,26 @@ function wrapMaterial(mat, receiver, pbr) {
     });
     return pnv;
   })();
-  // distance-faded: procedural noise has no mips. Non-PBR (MToon) bodies never build the puddle term, and the eye
-  // distance is view-space length, not positionWorld − cameraPosition: under per-view (stereo) rendering
-  // cameraPosition has no camera, the program fails to build, and the object draws nothing in VR.
+  // distance-faded (procedural noise has no mips). Eye distance is view-space length, never positionWorld −
+  // cameraPosition: under stereo rendering cameraPosition has no camera and the object draws nothing in VR.
   const pDist = pbr ? length(positionView) : null;
-  // shape × gate, always: sharpening after the wetness multiply would zero
-  // all puddles in any state below full wet
+  // shape × gate, always: sharpening after the wetness multiply would zero all puddles below full wet
   const pShape = (pbr && !noPud)
     ? smoothstep(0.97, 1.13, pnNode).mul(flat).mul(U.puddleK).mul(puddleGate).mul(float(1).sub(smoothstep(160, 450, pDist)))
     : float(0);
   const puddle = pbr ? smoothstep(0.25, 0.6, pShape).mul(smoothstep(0.35, 0.9, U.wet)) : float(0);
-  // normalize color roots to RGBA once — alpha must survive for cutout
-  // silhouettes (foliage cards)
+  // RGBA once: alpha must survive for cutout silhouettes (foliage cards)
   const baseColor4 = vec4(mat.colorNode ?? materialColor);
   const baseRgb = baseColor4.rgb;
   // wetness reads through gloss, not blackness — mild darkening only
   const darkened = baseRgb.mul(mix(float(1), float(0.68), upMask.mul(0.85)));
   const wetCol = darkened.mul(mix(vec3(1, 1, 1), U.wetTint, upMask.mul(0.6)));
-  // pseudo-depth from the shape mask: shallow rims barely change the
-  // ground, centers deepen + cool — the see-through read
+  // pseudo-depth from the shape mask: shallow rims, centres deepen and cool
   const pDepth = smoothstep(0.3, 1.0, pShape);
   const waterFloor = wetCol.mul(mix(float(0.96), float(0.62), pDepth))
     .mul(mix(vec3(1, 1, 1), vec3(0.84, 0.91, 1.0), pDepth.mul(0.7)));
   const finalWetRgb = mix(wetCol, waterFloor, puddle);
-  // cloud shade rides the same colorNode (PBR surfaces only — matching the
-  // upstream cloud sweep's own selection)
+  // cloud shade: PBR surfaces only, matching upstream's cloud sweep
   const rgb = pbr ? finalWetRgb.mul(cloudShade()) : finalWetRgb;
   mat.colorNode = vec4(rgb, baseColor4.a);
   if (pbr) {
@@ -215,7 +199,7 @@ const preparedMats = new WeakSet();
 const stats = { meshes: 0, wrapped: 0, unlit: 0 };
 
 /** Upgrade a transmissive material to MeshPhysicalNodeMaterial, or WebGPU draws it as nothing. Copies by property
- *  name (no hand-kept subset); textures shared; non-transmissive materials left alone (costlier compile). */
+ *  name; textures shared; non-transmissive materials left alone (costlier compile). */
 // source → replacement, memoised (WeakMap, weak both sides) so meshes sharing a material share one replacement
 const TRANSMISSIVE_REPLACEMENT = new WeakMap();
 const TRANSMISSIVE_UPGRADED = new WeakSet();
@@ -229,12 +213,9 @@ function upgradeTransmissive(mesh, m) {
   let nm;
   try {
     nm = new Node();
-    // every own enumerable property the source defines, minus the identity
-    // and internals that must not be carried across
     const SKIP = new Set(['uuid', 'id', 'type', 'version', 'isMeshPhysicalMaterial',
                           'isMeshStandardMaterial', 'isMaterial', '_listeners']);
-    // own properties AND prototype accessors: `transmission` is a prototype getter/setter, so Object.keys() alone
-    // dropped the one value that mattered
+    // prototype accessors too: `transmission` is a prototype getter/setter, invisible to Object.keys()
     const keys = new Set(Object.keys(m));
     for (let proto = Object.getPrototypeOf(m); proto && proto !== Object.prototype;
          proto = Object.getPrototypeOf(proto)) {
@@ -246,18 +227,14 @@ function upgradeTransmissive(mesh, m) {
       if (SKIP.has(k) || k.startsWith('is') || k.startsWith('_')) continue;
       const v = m[k];
       if (v === undefined) continue;
-      // three's Color/Vector types need copying into the target's instance,
-      // not assigning over it -- assigning shares the object with the old
-      // material, so a later tweak to one silently moves the other.
+      // copy Color/Vector into the target's instance: assigning shares it, so a tweak to one moves the other
       if (nm[k]?.isColor && v?.isColor) nm[k].copy(v);
       else if (nm[k]?.isVector2 && v?.isVector2) nm[k].copy(v);
       else if (nm[k]?.isVector3 && v?.isVector3) nm[k].copy(v);
       else nm[k] = v;
     }
     nm.name = m.name;
-    // Transmission composites against the backdrop, so the material must be in
-    // the transparent pass. warmqueue.js already treats transmission > 0 as
-    // transparent when pre-warming; this makes the real material agree.
+    // transmission composites against the backdrop: transparent pass, as warmqueue.js already pre-warms it
     nm.transparent = true;
     nm.needsUpdate = true;
   } catch (e) {
@@ -270,16 +247,12 @@ function upgradeTransmissive(mesh, m) {
   return nm;
 }
 
-/** Wrap one material, once. Basic (unlit) materials are skipped — a stand-in
- *  box and a light gizmo have no business getting wet. Returns whether the
- *  material was wrapped. */
+/** Wrap one material, once; Basic (unlit) materials are skipped. Returns whether it was wrapped. */
 export function prepareMaterial(mat, receiver = null) {
   if (!mat?.isNodeMaterial || preparedMats.has(mat)) return false;
   preparedMats.add(mat);
   if (mat.isMeshBasicNodeMaterial) { stats.unlit++; return false; }
-  // upstream's own PBR duck test (its wrapCloudShadows): real PBR gets
-  // cloud shade + roughness/metalness terms; other lit node materials (MToon
-  // bodies) get the wetness color term only — exactly what the sweeps did
+  // upstream's PBR duck test: PBR gets cloud shade + roughness/metalness; other lit (MToon) gets the wet colour only
   const pbr = mat.isMeshStandardNodeMaterial || mat.isMeshPhysicalNodeMaterial
     || (mat.roughness !== undefined && mat.metalness !== undefined);
   // a clone of a prepared material (matoverride) copies the wrapped colour/roughness nodes and userData: wrapping it again
@@ -295,14 +268,12 @@ export function prepareMaterial(mat, receiver = null) {
   return true;
 }
 
-// No-cast body meshes: kintsugi seams (threaded through the skin, they self-shadow into scratches) and wings (one
-// mesh, and castShadow is per object: the only way to drop wing-on-wing shadow, at the cost of wings shadowing body
-// and ground). Exported because the body shadow decision is made in setBodyShadows below.
+// no-cast body meshes: kintsugi seams (they self-shadow into scratches) and wings (castShadow is per object: the only
+// way to drop wing-on-wing shadow, at the cost of wings shadowing body and ground)
 export const BODY_NO_CAST = /^(GOLD|wings)/;
 
-// Opt-in body shadows: avatar.js calls this only for a body with a lamp (lamps are found after prepareObject runs,
-// hence a separate pass). receiveShadow IS in the pipeline key, so flipping it compiles lit + depth pipelines per
-// material unless warmed (warmqueue warmLit/warmDepth). GOLD and wings: BODY_NO_CAST.
+// only for a body with a lamp (found after prepareObject, hence a separate pass). receiveShadow IS in the pipeline
+// key: flipping it compiles lit + depth pipelines per material unless warmed (warmqueue warmLit/warmDepth).
 export function setBodyShadows(root, on = true) {
   if (!root?.traverse) return 0;
   let n = 0;
@@ -315,9 +286,7 @@ export function setBodyShadows(root, on = true) {
   return n;
 }
 
-// MY BODY CASTS A REAL SHADOW — a Video setting, own avatar only. The lamp gate above stays
-// the default for everyone; this is the one body the viewer pays for by choice. Remotes never pass through here:
-// mybody.js calls it from setMe (the own-body hook), and a remote's pref value is not this browser's.
+// own avatar only (a Video setting): remotes never pass through here, a remote's pref is not this browser's
 export const PREF_MY_SHADOW = 'ew-my-shadow';
 export function myShadowPref() { try { return localStorage.getItem(PREF_MY_SHADOW) === '1'; } catch { return false; } }
 export function setMyShadowPref(on) {
@@ -345,26 +314,22 @@ export async function applyOwnBodyShadow(av, { pref = myShadowPref, warm = null,
   return want;
 }
 
-/** Pass a whole object through the factory: marks every mesh so upstream's
- *  sweeps skip it, applies the shadow-receiving policy for its kind, and
- *  wraps every material. Idempotent; call before the first compile. */
+/** Marks every mesh so upstream's sweeps skip it, applies its kind's shadow-receive policy, wraps every material.
+ *  Idempotent; call before the first compile. */
 export function prepareObject(root, { kind = 'model', foliage = true } = {}) {
-  // a missing root is a no-op: the module-init call passes `ground`, null before terrain (and in harnesses), and a
-  // throw at import takes the whole client down
+  // a missing root is a no-op: module init passes `ground` (null before terrain), and a throw at import kills the client
   if (!root?.traverse) return;
   const receive = kind === 'model' || kind === 'terrain';
-  // Bodies aren't shadowed here (unwarmed depth pipelines, outside the caster budget): see setBodyShadows(). The blob
-  // stays: it's the contact cue.
+  // bodies aren't shadowed here (unwarmed depth pipelines): see setBodyShadows(); the blob stays as the contact cue
   const grass = kind === 'grass';
   root.traverse((o) => {
     if (!o.isMesh) return;
     stats.meshes++;
-    o.userData.noWet = true;           // the upstream sweeps' skip markers —
-    o.userData.noCloudShadow = true;   // this mesh is already dressed
+    o.userData.noWet = true;           // upstream sweeps' skip markers
+    o.userData.noCloudShadow = true;
     // explicit both ways: upstream vegetation ships receiveShadow=true (§13.1: intent is not behavior)
     o.receiveShadow = receive;
-    // grass never casts: shrub wood ships castShadow TRUE upstream, five depth pipelines nothing pre-warms (§16.2.B).
-    // castShadow is in no cache key (§12.1) and this runs before the field's warm, so clearing it is free.
+    // grass never casts: shrub wood ships castShadow TRUE upstream, five depth pipelines nothing pre-warms (§16.2.B)
     if (grass) o.castShadow = false;
     // transmission first: it replaces the material object, and the wrap below skips non-node materials
     if (Array.isArray(o.material)) {
@@ -378,26 +343,23 @@ export function prepareObject(root, { kind = 'model', foliage = true } = {}) {
     }
     const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
     for (const m of mats) {
-      // grass never puddles: blade normals are forced up for clump lighting and would pass the flatness gate. The gate is
-      // compile-time (§12.2), so it costs nothing; wet darkening and cloud shade stay.
+      // grass never puddles: blade normals are forced up and would pass the flatness gate (compile-time, §12.2)
       if (grass) m.userData.noPuddles = true;
       prepareMaterial(m, o);
     }
   });
-  // blended textured leaves get the two-pass twin in 'fast' foliage mode (foliage.js; Video › foliage)
-  // (a loaded PROTOTYPE passes foliage:false and each placed clone registers itself: assets.js)
+  // blended textured leaves get the two-pass twin in 'fast' foliage mode (foliage.js)
+  // a loaded PROTOTYPE passes foliage:false: each placed clone registers itself (assets.js)
   if (kind === 'model' && foliage) registerFoliage(root);
   return root;
 }
 
-// ---- the driver: folded state in, uniform writes out. Weather targets derive at ~1Hz (sky.js clock cadence);
-// easing runs per frame. Ground wets fast and dries slow.
+// ---- the driver: folded state in, uniform writes out. Targets derive at ~1 Hz (sky.js clock); easing runs per frame.
 
 const WET = { clear: 0, fair: 0, sunshower: 0.55, overcast: 0.15, rain: 0.85, storm: 1, cyclone: 1, darkstorm: 1 };
 const WX_COVER = { clear: 0, fair: 0.18, sunshower: 0.35, overcast: 0.85, rain: 0.9, storm: 0.92, cyclone: 0.96, darkstorm: 1 };
 const CLOUD_COVER = { clear: 0, cumulus: 0.38, stratus: 0.6, cirrus: 0.15 };
-// wind directions (unit-ish) for the two octaves — different headings so the
-// field evolves instead of translating
+// unit-ish wind directions, different headings so the field evolves instead of translating
 const WIND1 = { x: 1.9, y: 0.55 };
 const WIND2 = { x: -0.7, y: 1.3 };
 
@@ -421,8 +383,7 @@ function deriveTargets() {
 
 const approach = (cur, goal, dt, tau) => cur + (goal - cur) * Math.min(1, dt / tau);
 
-/** Per-frame: ease the weather uniforms toward folded state and keep the
- *  cloud field moving. Cheap — a handful of uniform writes. */
+/** Per-frame: ease the weather uniforms toward folded state and keep the cloud field moving. */
 export function updateMaterials(nowMs) {
   const dt = lastTick ? Math.min(0.25, (nowMs - lastTick) / 1000) : 0.016;
   lastTick = nowMs;
@@ -438,16 +399,12 @@ export function updateMaterials(nowMs) {
   U.scroll2.value.x += WIND2.x * windK * dt;
   U.scroll2.value.y += WIND2.y * windK * dt;
 
-  // sun projection: a cloud shadows the point the sun-ray through it hits.
-  // sun.position is driven by whichever sky is live (and swaps to moonlight
-  // at night, which shadows exactly as it should)
+  // a cloud shadows the point the sun-ray through it hits; sun.position is the live sky's (moonlight at night)
   _dir.copy(sun.position).normalize();
   const off = CLOUD_H / Math.max(0.25, _dir.y);
   U.cloudOff.value.set(_dir.x * off, _dir.z * off);
 
-  // coverage moves the threshold window (more sky covered → more ground
-  // shaded); full overcast flattens the patchiness — uniform grey sky casts
-  // no travelling shadows, it just dims (which sunDim already does)
+  // coverage moves the threshold window; full overcast flattens patchiness (a grey sky only dims, which sunDim does)
   const cover = approach(smoothTargetCover, target.cover, dt, 15);
   smoothTargetCover = cover;
   const lo = 1.02 - 0.72 * cover;
@@ -458,10 +415,10 @@ export function updateMaterials(nowMs) {
   U.cloudStrength.value = 0.5 * sunUp * patchy * Math.min(1, cover * 3);
 }
 
-/** Debug surface (EW.materials). */
 /** Test seam: the shared material uniforms (probes pin wet/cloud for a deterministic render). */
 export const materialUniforms = () => U;
 
+/** Debug surface (EW.materials). */
 export const materialsDebug = () => ({
   ...stats,
   wet: +U.wet.value.toFixed(3),
@@ -470,7 +427,5 @@ export const materialsDebug = () => ({
   target: { ...target },
 });
 
-// The stage floor exists before any verb lands and compiles on the first
-// frame — it goes through the factory at module init, same as everything
-// after it. (core.js cannot import us: core imports nothing.)
+// the stage floor compiles on the first frame, so it goes through the factory here (core.js imports nothing)
 prepareObject(ground, { kind: 'terrain' });

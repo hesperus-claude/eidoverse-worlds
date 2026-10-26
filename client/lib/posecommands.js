@@ -1,7 +1,5 @@
-// The browser console's posing verbs (EW.pose, EW.clearPose, EW.animate in
-// client/main.js), the same verbs an agent's tools have. Kept apart from
-// main.js so a test can drive them without a browser: they take what they
-// act through as arguments.
+// The browser console's posing verbs (EW.pose, EW.clearPose, EW.animate), the same an agent's tools have; apart from
+// main.js so a test drives them headless (they take what they act through as arguments).
 //
 //   EW.pose({ leftUpperArm: [...] })          only these bones, over what you hold; null releases one
 //   EW.pose({ ... }, { replace: true })       the WHOLE pose: every bone not named goes back to normal
@@ -18,19 +16,13 @@
 //
 // A value per bone is [x,y,z,w] or {q, t, s} (shared/humanoid.js poseChannels).
 //
-// Each verb throws a TypeError naming what it wants rather than guess at a
-// call it can't read, above all one meant for someone else that would land on
-// the caller: a target given but empty or not a name, an option it doesn't
-// know, options passed as undefined or null or followed by more, a name where
-// the bones or the animation go, or a target among them.
+// Each verb throws a TypeError naming what it wants rather than guess, above all at a call meant for someone else
+// that would land on the caller (an empty target, unknown or null options, a name where the bones go).
 import { mergePose, puppetPose } from '../../shared/humanoid.js';
 
 const name = (t) => typeof t === 'string' && t.length > 0;
 
-/** The options of a verb that can act on someone else: { replace, target },
- *  or a name alone as the target. Called with the verb's arguments after its
- *  first, so options passed as undefined or null throw instead of reading as
- *  none, and so does anything after them. */
+/** { replace, target } or a name alone, from the args after the first: undefined/null options throw, never read as none. */
 function consoleOptions(verb, rest) {
   const keys = ['replace', 'target'];
   const want = `the second argument is { replace, target }, or a target's name; leave it out to act on yourself`;
@@ -49,10 +41,7 @@ function consoleOptions(verb, rest) {
   return opts;
 }
 
-/** The verbs, acting through `state` (the caller's own held pose, as
- *  state.pose), `sendPuppet(target, request)` (a request to pose someone
- *  else, client/lib/net.js) and `play(anim)` (an animation on the caller's
- *  own body, played and sent). */
+/** `state.pose`: the caller's held pose; `sendPuppet(target, request)`: pose someone else; `play(anim)`: on my body. */
 export function poseCommands({ state, sendPuppet, play }) {
   return {
     pose: (bones, ...rest) => {
@@ -61,11 +50,10 @@ export function poseCommands({ state, sendPuppet, play }) {
         throw new TypeError("EW.pose: the first argument is a map of bone name to value, or null to release; a target's name goes second");
       }
       if (bones && ('target' in bones || 'replace' in bones)) throw new TypeError("EW.pose: target and replace go in the second argument, not among the bones");
-      // Nothing named changes nothing, unless it replaces: a whole pose of no
-      // bones sends every bone back, which is a release.
+      // nothing named changes nothing, unless it replaces (a release)
       if (bones === undefined && !replace) return target ? undefined : state.pose;
       if (target) {
-        // No bones merged over theirs is no request: the pose tool sends none either.
+        // no bones merged over theirs is no request, as with the pose tool
         if (bones && !replace && !Object.keys(bones).length) return undefined;
         return sendPuppet(target, puppetPose(bones, replace));
       }
@@ -80,7 +68,7 @@ export function poseCommands({ state, sendPuppet, play }) {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new TypeError("EW.animate: the first argument is the animation, { dur, tracks }; a target's name goes second");
       if ('target' in data) throw new TypeError("EW.animate: target goes in the second argument, not in the animation");
       if (data.replace !== undefined && typeof data.replace !== 'boolean') throw new TypeError("EW.animate: replace is true or false");
-      const { replace = data.replace === true, target = null } = consoleOptions('EW.animate', rest);   // replace may ride in the data too
+      const { replace = data.replace === true, target = null } = consoleOptions('EW.animate', rest);   // replace may be in the data too
       const a = { ...data, replace: !!replace };
       if (target) return sendPuppet(target, { anim: a });
       if (replace) state.pose = null;

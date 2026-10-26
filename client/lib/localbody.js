@@ -1,12 +1,7 @@
-// My body in the world's physics — ragdoll, seats, being dragged, pins,
-// shoves. Extracted from main.js (§14 6c). The invariant every section here
-// shares: MY client owns MY body. Everything that happens to it — a tumble, a
-// seat, someone's hand, a nail, a blast — is applied HERE and rebroadcast
-// through ordinary presence, so nobody else ever needs code to simulate me.
-//
-// logChat arrives through initLocalBody rather than an import: chat.js sits
-// in the world→flora→controller→chat→net→world knot, and this module must
-// not add another edge into it (§14.2).
+// localbody — my body in the world's physics: ragdoll, seats, being dragged, pins, shoves (§14 6c).
+// MY client owns MY body: everything that happens to it is applied HERE and rebroadcast through ordinary presence,
+// so nobody else ever simulates me.
+// logChat is injected by initLocalBody: importing chat.js would add an edge to the net→world knot (§14.2).
 
 import { bodyOf } from '../../shared/components.js';
 import { mayLeave, vacatedFromMine, vacatedAt, OCCUPY_REACH, ESCAPE_HOLD_S, ESCAPE_REPEAT_S } from '../../shared/sockbody.js';
@@ -39,16 +34,14 @@ import { getMe } from './mybody.js';
 
 let logChat = () => {};
 
-// Ragdoll: only this client simulates its own body; the result rides the pose field (remotes need no ragdoll code)
-// and the settled bones stay as a held pose, so a late joiner gets the result, not a replay of the flop.
+// the settled bones stay as a held pose, so a late joiner gets the result, not a replay of the flop
 let ragdoll = null;
 let downed = false;
 
 export function isDowned() { return downed; }
 export function activeRagdoll() { return ragdoll; }
 
-// Fall the way you were facing, harder the faster you moved: a body dropped straight down folds its knees into
-// their stops and kicks them back out.
+// fall the way you faced, harder the faster you moved: dropped straight down, the knees kick back out of their stops
 const _fall = new THREE.Vector3();
 function toppleVelocity() {
   return _fall.set(Math.sin(myState.yaw), 0, Math.cos(myState.yaw))
@@ -59,9 +52,9 @@ export function goLimp(lean = null) {
   const me = getMe();
   if (!me || downed) return;
   downed = true;
-  // Park the undriven bones and stop the clip BEFORE constructing the sim: it reads both its rest and live skeletons here.
+  // park the undriven bones and stop the clip BEFORE the sim: it reads both rest and live skeletons here
   me.setLimp(true);
-  clearMyReach();   // a knocked-over body's reach is gone — descriptor AND arm (mirrors agent.ts knockDown)
+  clearMyReach();   // descriptor AND arm (mirrors mcpl/agent.ts knockDown)
   ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
   myState.clip = 'ragdoll';
   flashHint('limp — move to get up');
@@ -69,34 +62,32 @@ export function goLimp(lean = null) {
 export function getUp() {
   if (!downed) return;
   const me = getMe();
-  revokeDragged();                 // if someone is dragging me, I take myself back
+  revokeDragged();                 // I take myself back from a dragger
   clearPins();                     // standing up tears every nail out
   downed = false; ragdoll?.dispose?.(); ragdoll = null;
   myState.pose = null; me?.clearPose();
   me?.setLimp(false);
   myState.clip = 'idle';
-  // resume from where the body ended up
   myState.pos.copy(me.root.position);
   myState.pos.y = 0;
 }
 // ---------------------------------------------------------------- mounted
-// Seated, my body is derived from the parent's live transform + socket (occupybody.js, same math remotes use).
-// Getting off is the socket's to allow (shared/sockbody.js mayLeave) and emits no verb: the next frame just carries no seat.
+// seated, my body derives from the parent's live transform + socket (occupybody.js, as remotes do)
+// getting off is the socket's to allow (shared/sockbody.js mayLeave) and emits no verb: the next frame carries no seat
 const _seatP = new THREE.Vector3();
 let leaving = null;            // {from, to, yaw, clip, t0, dur}: carried off the seat while a leave clip plays
 export const seatLeaving = () => !!leaving;
-/** My seat's socket body (shared/sockbody.js bodyOf), or null when I'm not seated. */
+/** shared/sockbody.js bodyOf, or null when not seated. */
 export function occupiedBody() {
   const m = avatarMounts.get(CONFIG.name);
   return m ? bodyOf(seatSocket(m.to)?.station) : null;
 }
-/** Get off my seat, if the socket lets this kind of leaving through ('move' | 'jump' | 'menu' | 'script'). True when
- *  I'm off (or on my way off, with a leave clip). */
-// The escape (review r9 scars M1): a seat that lets you go only when the world does still can't hold you. The explicit
-// get-up pressed again within ESCAPE_REPEAT_S of its refusal, or X held for ESCAPE_HOLD_S, always gets you up.
+// the escape: no seat can hold you. Get-up pressed again within ESCAPE_REPEAT_S of a refusal, or X held for
+// ESCAPE_HOLD_S, always gets you up.
 let escapeArmedAt = -Infinity, escapeHeld = 0, escapeTile = false;
-bus.on('escape-hold', (on) => { escapeTile = !!on; });   // the stand tile pressed and held (actionbar.js), as X held
-// at: where the authority let me go ([x, y, z], its `vacated.at`: claims r10 O1): I stand there, so my body and its track start together
+bus.on('escape-hold', (on) => { escapeTile = !!on; });   // the stand tile held (actionbar.js) counts as X held
+/** Off my seat, if the socket allows this kind ('move' | 'jump' | 'menu' | 'script'); true when off or leaving.
+ *  `at`: the authority's `vacated.at` [x, y, z]; I stand there, so my body and its track start together. */
 export function dismountMe(kind = 'menu', at = null) {
   const m = avatarMounts.get(CONFIG.name);
   if (!m) return false;
@@ -113,28 +104,28 @@ export function dismountMe(kind = 'menu', at = null) {
   const yaw = sw?.yaw ?? myState.yaw;
   const off = sw ? _seatP.clone() : myState.pos.clone();
   let exitYaw = yaw;
-  // the socket's exit (its own frame), where it names one: off a horse to the side, out of a car door
+  // the socket's own exit, where it names one (off a horse to the side, out of a car door)
   const ex = body?.exit;
-  const host = seatSocket(m.to)?.host;   // the exit is in the thing's frame
+  const host = seatSocket(m.to)?.host;
   if (ex && host != null && entities.get(host)) {
     const obj = entities.get(host); obj.updateWorldMatrix(true, false);
     off.set(ex[0], ex[1], ex[2]).applyMatrix4(obj.matrixWorld);
     if (ex.length === 4) { const f = new THREE.Vector3(Math.sin(ex[3]), 0, Math.cos(ex[3])).transformDirection(obj.matrixWorld); exitYaw = Math.atan2(f.x, f.z); }
   } else { off.x += Math.sin(yaw) * 0.7; off.z += Math.cos(yaw) * 0.7; }
   if (at) off.set(at[0], at[1], at[2]);
-  sitTicket++;                           // an answer still on its way for an earlier sit is stale now
-  setBodySeat(CONFIG.name, null);        // presence: my next frame carries no seat, and everyone stands me up
+  sitTicket++;                           // an earlier sit's answer is stale now
+  setBodySeat(CONFIG.name, null);        // my next frame carries no seat
   const from = me ? me.root.position.clone() : off.clone();
   const leaveClip = me ? body?.leave ?? null : null;
   releaseOccupied(me);
   if (leaveClip && me) {
-    // carried off while the leave clip plays, its time locked to the carry (the same warp that carries you on)
+    // the leave clip's time is locked to the carry
     const a = me.ensureClip(leaveClip);
     leaving = { from, to: new THREE.Vector3(off.x, off.y, off.z), yaw: exitYaw, clip: leaveClip, t0: performance.now(), dur: a ? a.getClip().duration : 1.2 };
     myState.clip = leaveClip;
   } else {
-    me?.root.rotation.set(0, exitYaw, 0);  // stand upright again (a rocket seat may have had me on my back)
-    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the height I'm let go at: a seat upstairs stands me upstairs (review of PR #260)
+    me?.root.rotation.set(0, exitYaw, 0);  // a rocket seat may have had me on my back
+    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the release height: a seat upstairs stands me upstairs
     setPosture('stand');
   }
   return true;
@@ -155,7 +146,7 @@ function stepLeaving(dt) {
   }
   if (u >= 1) {
     me?.setSeatBlend(null); me?.root.rotation.set(0, leaving.yaw, 0);
-    myState.pos.copy(leaving.to); myState.clip = 'idle'; leaving = null;   // where the carry ended, its height kept (never reset to 0)
+    myState.pos.copy(leaving.to); myState.clip = 'idle'; leaving = null;   // its height kept, never reset to 0
     setPosture('stand');
   }
 }
@@ -170,23 +161,23 @@ export function updateMountedMe(dt) {
   const m = avatarMounts.get(CONFIG.name);
   if (!m || !me) return;
   const body = occupiedBody();
-  if (!body) {   // the socket went away under me (removed, or a script took the seat away): that is how a script lets go
+  if (!body) {   // the socket went away under me: that is how a script lets go
     dismountMe('script');
     return;
   }
-  // my input, where the socket routes it: published as signals on my seat frame (net.js), never as physics here
+  // routed input is published as signals on my seat frame (net.js), never as physics here
   const seatYaw = lastSeat?.yaw ?? myState.yaw;
   const inp = {};
   if (body.input.move !== 'none') {
     inp.throttle = Math.max(-1, Math.min(1, (held(MOVE.fwd) ? 1 : 0) - (held(MOVE.back) ? 1 : 0) + (xrIntent.active ? xrIntent.fwd : 0)));
     inp.steer = Math.max(-1, Math.min(1, (held(MOVE.right) ? 1 : 0) - (held(MOVE.left) ? 1 : 0) + (xrIntent.active ? xrIntent.strafe : 0)));
   }
-  if (body.input.look !== 'locked') {   // where I look, relative to the seat: the camera looks back along camYaw
+  if (body.input.look !== 'locked') {   // the camera looks back along camYaw
     inp.aimYaw = Math.atan2(Math.sin(camYaw + Math.PI - seatYaw), Math.cos(camYaw + Math.PI - seatYaw));
     inp.aimPitch = Math.max(-1.5, Math.min(1.5, -(camPitch - 0.32)));
   }
   m.in = inp;
-  me.pitch = 0;   // the seat turns the head (setSeatLook); the walking head pitch stays off while seated
+  me.pitch = 0;   // the seat turns the head (setSeatLook)
   const r = driveOccupied(me, CONFIG.name, { dt, nowMs: serverNow(), local: true });
   if (!r) { updateFollowCamera(dt, me); return; }   // parent still downloading
   lastSeat = r;
@@ -195,12 +186,11 @@ export function updateMountedMe(dt) {
   myState.speed = 0;
   myState.clip = r.clip;
   me.root.position.copy(r.pos);
-  me.root.quaternion.copy(r.q);   // the socket's whole rotation: upright on a chair, on your back in a rocket
-  // look locked: the view faces the way the seat does (the camera sits behind it)
+  me.root.quaternion.copy(r.q);   // the socket's whole rotation
   if (body.input.look === 'locked') setCamYaw(r.yaw + Math.PI);
-  // updateMe (which owns the camera) is skipped while seated, so drive the camera here or it freezes on the seat (#75).
+  // updateMe (the camera's owner) is skipped while seated: drive it here or it freezes (#75)
   updateFollowCamera(dt, me);
-  // look.up 'socket': the view rolls with the thing (a rocket, a loop-the-loop); 'world' keeps the horizon level
+  // look.up 'socket' rolls with the thing; 'world' keeps the horizon level
   if (body.look.up === 'socket') {
     _camQ.fromArray(r.sw.socketQ); const f = new THREE.Vector3(0, 0, 1).applyQuaternion(_camQ);
     const tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(f.x, f.z)).invert().premultiply(_camQ);   // the socket's rotation without its heading
@@ -211,50 +201,47 @@ export function updateMountedMe(dt) {
     camera.up.copy(_camUp.set(0, 1, 0).applyQuaternion(tilt));
     camera.lookAt(_camO.copy(camera.position).add(_camD.applyQuaternion(tilt)));
   } else camera.up.set(0, 1, 0);
-  // getting off, as the socket allows: movement keys (only when the seat doesn't take them), jump
+  // movement keys leave only when the seat doesn't take them
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].some((k) => keys.has(k)) && body.input.move === 'none') { if (mayLeave(body, 'move')) { camera.up.set(0, 1, 0); dismountMe('move'); } }
   else if (keys.has('Space') || (xrIntent.active && xrIntent.jump)) { if (mayLeave(body, 'jump')) { camera.up.set(0, 1, 0); dismountMe('jump'); } }
-  // the escape: X (or the stand tile) held, on a seat that otherwise lets you go only when the world does
   if ((keys.has('KeyX') || escapeTile) && !mayLeave(body, 'menu')) { escapeHeld += dt; if (escapeHeld >= ESCAPE_HOLD_S) { camera.up.set(0, 1, 0); dismountMe('escape'); } }
   else escapeHeld = 0;
 }
 
-/** Nearest declared seat, by the SOCKET's world point (not the entity origin); every slot competes. `arg` narrows by
- *  case-insensitive id prefix. An occupied seat is taken; the seat I'm on doesn't count. */
+/** By the SOCKET's world point, not the entity origin; every slot competes. `arg` narrows by case-insensitive id
+ *  prefix. Occupied seats and my own don't count. */
 const _sitV = new THREE.Vector3();
-// R 10-11 00:47: X near the crates lifted her ~5 m: a seat declared on a sign 3 m up counted as 'near' (only the ground
-// distance was read). A plain X offers only a seat you could climb onto; naming one (/sit <name>) still reaches any.
-// (one source with the authority's sit check, shared/sockbody.js OCCUPY_REACH: review r10 M1)
+// a plain X offers only seats within climbing reach (ground distance alone lifted a body to a seat 3 m up); /sit
+// <name> reaches any. One source with the authority's check: shared/sockbody.js OCCUPY_REACH.
 const SEAT_RISE = { up: OCCUPY_REACH.up, down: OCCUPY_REACH.down };
 function nearestSeat(arg, reach) {
   const want = arg ? String(arg).toLowerCase() : null;
   const mine = avatarMounts.get(CONFIG.name);
   const taken = new Set([...avatarMounts].filter(([id]) => id !== CONFIG.name).map(([, o]) => o.to));
   let best = null, bestD = reach;
-  // every socket child in the world (a seat is a socket with a body block): its host is what you name and see
+  // a seat is a socket with a body block; its host is what you name and see
   for (const [sid, c] of bags()) {
     if (!c?.socket || typeof c.socket !== 'object' || c.disabled === true) continue;
     const body = bodyOf(c.station);
-    if (!body) continue;   // an attachment point for things, not a seat
+    if (!body) continue;   // an attachment point, not a seat
     const id = parentIdOf(sid);
     if (id == null) continue;
     if (want && !id.toLowerCase().startsWith(want) && !sid.toLowerCase().startsWith(want)) continue;
-    if (!want && entities.get(id) && outOfMyView(entities.get(id))) continue;   // a seat I hid is not offered; naming it still sits
+    if (!want && entities.get(id) && outOfMyView(entities.get(id))) continue;   // a hidden seat isn't offered; naming it still sits
     if (mine && mine.to === sid) continue;
     if (taken.has(sid)) continue;
     const p = socketWorldPos(sid, _sitV);
     if (!p) continue;
     const d = Math.hypot(p.x - myState.pos.x, p.z - myState.pos.z);
-    if (!want && (p.y - myState.pos.y > SEAT_RISE.up || myState.pos.y - p.y > SEAT_RISE.down)) continue;   // out of climbing reach
+    if (!want && (p.y - myState.pos.y > SEAT_RISE.up || myState.pos.y - p.y > SEAT_RISE.down)) continue;
     if (d < bestD) { bestD = d; best = { id, sock: sid, slot: c.socket.name, d, body }; }
   }
   return best;
 }
 
-/** Sit ON the nearest socket in reach (or a named entity from anywhere); with a seat only further out, say so rather
- *  than ground-sit silently. In a world the authority is asked first (`use {id, action, args: {slot}}`, not logged);
- *  already seated, I may move straight to a socket that allows fromSeat. */
-let sitTicket = 0;   // the latest sit ask; getting up (or asking again) makes every earlier answer stale
+/** With a seat only further out, say so rather than ground-sit silently. The authority is asked first (`use`, not
+ *  logged); already seated, I may move straight to a socket that allows fromSeat. */
+let sitTicket = 0;   // getting up or asking again makes every earlier answer stale
 export function trySitOn(arg, slot = null) {
   const mine = avatarMounts.get(CONFIG.name);
   const best = nearestSeat(arg, arg ? Infinity : OCCUPY_REACH.r);
@@ -267,22 +254,21 @@ export function trySitOn(arg, slot = null) {
   if (mine && !best.body.fromSeat) { logChat('*', `get up first — ${called(best.id)} (${best.slot}) doesn't take you straight from another seat`); return true; }
   const ticket = ++sitTicket;
   const take = () => {
-    // only the latest ask may seat me, and only if I haven't sat, moved or stood since asking: a late answer (a slow
-    // door, X pressed twice) must never put me back on a seat I already left
+    // a late answer must never put me back on a seat I already left
     if (ticket !== sitTicket || avatarMounts.get(CONFIG.name) !== mine) return;
     if (mine) releaseOccupied(getMe());
-    setBodySeat(CONFIG.name, { to: best.sock });   // presence: my frames carry the seat, the socket's id (world.js)
+    setBodySeat(CONFIG.name, { to: best.sock });   // my frames carry the socket's id
     const lb = best.body.leaveBy;
     logChat('*', `you ${best.body.action} on ${called(best.id)} (${best.slot}) — ${lb === 'script' ? 'it lets you go when the world does (hold X to get up anyway)' : lb === 'menu' ? 'X to get up' : lb === 'jump' ? 'Space or X to get up' : 'X or move to get off'}`);
   };
   sendRequest('use', { id: best.sock, action: best.body.action }).then((r) => {
-    if (r?.ok) take(); else logChat('*', plain(`${best.body.action} on ${best.id}`, r));   // a person's words (plainwords.js)
+    if (r?.ok) take(); else logChat('*', plain(`${best.body.action} on ${best.id}`, r));
   });
   return true;
 }
 
-// While my camera is free of my body in edit mode, the body holds a working pose (arms forward, palms out, head
-// bent) so people nearby see I've stepped out; it ends when the camera returns and doesn't restore a prior pose.
+// camera free in edit mode: the body holds a working pose so people nearby see I've stepped out; it doesn't restore a
+// prior pose
 const WORKING_POSE = { leftUpperArm: [0.0772, -0.5863, -0.1053, 0.7995], rightUpperArm: [0.0772, 0.5863, 0.1053, 0.7995], leftLowerArm: [0, -0.3007, 0, 0.9537], rightLowerArm: [0, 0.3007, 0, 0.9537],
   leftHand: [0, 0, 0.6428, 0.766], rightHand: [0, 0, -0.6428, 0.766], head: [0.0872, 0, 0, 0.9962] };
 let working = false;
@@ -292,12 +278,9 @@ bus.on('edit-freecam', (on) => {
   else if (!on && working) { working = false; if (myState.pose === WORKING_POSE) { myState.pose = null; me.clearPose(); } }
 });
 
-// The world's standing offer, kept current at a walk: when a declared seat
-// is within reach the hint bar says so — an affordance nobody can discover
-// is indistinguishable from one that doesn't exist. Checked ~2×/s.
+// a seat in reach says so in the hint bar (~2×/s): an undiscoverable affordance doesn't exist
 let _hintAcc = 0;
-// builder mode has its own keys (build.js: X and Del remove, E rotates): the world's play offers ("X — sit", "E open")
-// would advertise a delete key as a seat (review 10-07 B5). The bar carries the builder's hints there instead.
+// builder mode's keys differ (build.js: X deletes): play offers there would advertise a delete key as a seat
 let _building = false;
 bus.on('edit-mode', (on) => { _building = !!on; _hintAcc = 1; });
 export function updateSeatHint(dt) {
@@ -311,9 +294,9 @@ export function updateSeatHint(dt) {
     hint = !b || b.leaveBy === 'any' ? (b?.input.move !== 'none' && b ? html`<kbd>X</kbd> get up · <kbd>WASD</kbd> drive` : html`<kbd>X</kbd> get up · <kbd>WASD</kbd> hop off`)
       : b.leaveBy === 'script' ? html`this seat lets you go when the world does · hold <kbd>X</kbd> to get up anyway` : b.leaveBy === 'jump' ? html`<kbd>Space</kbd> or <kbd>X</kbd> get up` : html`<kbd>X</kbd> get up`; }
   else if (!downed && nearestSeat(null, OCCUPY_REACH.r)) hint = html`<kbd>X</kbd> — sit`;
-  // my hands come first: what I hold and how to let go (it must never be a secret), else what's in reach to pick up
+  // what I hold and how to let go comes first (never a secret), else what's in reach
   if (!downed) { const hh = handsHint(); if (hh && (myHoldsNow() || !hint)) hint = hh; }
-  if (!hint && !downed) hint = usePromptHint();   // E: what's in front of you to use (useprompt.js)
+  if (!hint && !downed) hint = usePromptHint();   // E (useprompt.js)
   setAmbientHint(hint);
 }
 
@@ -321,23 +304,21 @@ export function stepRagdoll(dt) {
   const me = getMe();
   if (ragdoll) {
     const pose = ragdoll.step(dt);
-    if (pose) myState.pose = pose;               // stream it through presence
-    myState.pos.copy(me.root.position);          // streamed root tracks the sim
+    if (pose) myState.pose = pose;
+    myState.pos.copy(me.root.position);
     if (ragdoll.done) { myState.pose = ragdoll.finalPose; ragdoll = null; }
   }
-  // The camera lives in updateMe, which we skip while limp — so drive it here
-  // too, or it freezes on the frame you fell (which is what it did).
+  // updateMe is skipped while limp: drive the camera here or it freezes on the fall
   if (me) updateFollowCamera(dt, me);
 }
 
 // ---------------------------------------------------------------- dragged
-// Someone else's sim drives my limp body (bodydrag.js holds the protocol); my client stays the authority, applying
-// the stream to itself and rebroadcasting it as ordinary presence.
+// someone else's sim drives my limp body (bodydrag.js); my client still applies the stream and rebroadcasts it
 
 function beginDraggedMode(by) {
   const me = getMe();
   if (!me) return;
-  ragdoll?.dispose?.(); ragdoll = null;   // the dragger's sim owns the tumble now
+  ragdoll?.dispose?.(); ragdoll = null;
   downed = true;
   me.setLimp(true);
   myState.clip = 'ragdoll';
@@ -359,7 +340,7 @@ function applyDraggedSample({ pose, p, yaw }) {
   myState.speed = 0;
 }
 
-// A dragged body's velocity exists only as the difference between arriving frames; sampled so release keeps it.
+// velocity is only the difference between arriving frames: sampled so release keeps it
 let dragSnap = null, dragVel = null;
 function noteDraggedMotion() {
   const me = getMe();
@@ -380,9 +361,7 @@ function noteDraggedMotion() {
 function endDraggedMode(msg) {
   const me = getMe();
   if (!me || !downed) return;
-  // land on their final frame, then settle under MY OWN sim from wherever the
-  // hand let go — dropped from a height, the body falls; the takeover was
-  // only ever the moving part
+  // land on their final frame, then settle under MY OWN sim (dropped from a height, the body falls)
   if (msg?.pose || msg?.p) applyDraggedSample(msg);
   me.root.updateMatrixWorld(true);
   // the hand's own sim state outranks anything we sampled from its stream
@@ -393,8 +372,8 @@ function endDraggedMode(msg) {
 }
 
 // ---------------------------------------------------------------- pins
-// Pins through my body (bodydrag.js): my state, enforced by my sim, streamed in my presence. My movement key tears
-// them all out; session-scoped on purpose: pins are presence, not history.
+// pins (bodydrag.js): enforced by my sim, streamed in my presence; my movement key tears them out
+// session-scoped on purpose: pins are presence, not history
 const myPins = new Map();            // joint -> [x, y, z]
 const _pinV = new THREE.Vector3();
 const MAX_PINS = 8;
@@ -404,7 +383,7 @@ function syncPins() {
 }
 function applyMyPins() {
   if (!ragdoll) return;
-  // Every pin here is a nail: firm=true, matching the dragger's takeover sim (bodydrag.js), or physics depends on whose machine simulates.
+  // firm=true, as the dragger's sim, or physics depends on whose machine simulates
   for (const [j, at] of myPins) ragdoll.setPin(j, _pinV.set(at[0], at[1], at[2]), true);
 }
 function addPin(j, at) {
@@ -418,8 +397,7 @@ function removePin(j) {
   if (!myPins.delete(j)) return;
   ragdoll?.setPin(j, null);
   syncPins();
-  // freed of a nail while lying with no live sim (and nobody's hand on me):
-  // wake my own sim so the body sags from what remains and settles honestly
+  // freed of a nail while lying with no sim: wake mine so the body sags from what remains
   const me = getMe();
   if (downed && !ragdoll && me && !beingDragged()) {
     me.root.updateMatrixWorld(true);
@@ -437,27 +415,23 @@ function clearPins() {
 
 // ---------------------------------------------------------------- shove
 
-// The hard ceiling on any shove that arrives over the wire, in m/s. The sim
-// has its own stability cap; this one is about the WORLD — nobody gets to
-// launch a body across the map no matter what numbers they put in a message.
+// m/s, on any shove over the wire: nobody launches a body across the map whatever a message says
 const MAX_PUSH = 6;
 const _shove = new THREE.Vector3();
 
-/** Every external force on my body lands here, and I simulate: standing → a sim starts with this lean; mid-tumble →
- *  an impulse; settled-but-down → a fresh sim from the lying pose. */
+/** Every external force lands here: standing → a sim with this lean; mid-tumble → an impulse; down → a fresh sim. */
 function applyShove(lean, by) {
   const me = getMe();
   if (!me) return;
-  if (avatarMounts.has(CONFIG.name)) return;      // braced on a seat: a seat holds you through a knock
-  if (beingDragged()) return;                     // a held body answers to the hand, not the blast
+  if (avatarMounts.has(CONFIG.name)) return;      // a seat holds you through a knock
+  if (beingDragged()) return;                     // a held body answers to the hand
   if (lean && lean.lengthSq() > MAX_PUSH * MAX_PUSH) lean.setLength(MAX_PUSH);
   if (downed) {
     if (ragdoll) ragdoll.impulse(lean ?? toppleVelocity());
     else {
-      // still limp from the last fall (getUp is what clears it) — the new sim
-      // reads the lying pose as its start and the neutral rest as its limits
+      // still limp: the new sim starts from the lying pose, limited by the neutral rest
       ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
-      applyMyPins();               // a nailed body shoved is a nailed body swinging
+      applyMyPins();               // a nailed body swings
       myState.clip = 'ragdoll';
     }
   } else {
@@ -471,23 +445,19 @@ function applyShove(lean, by) {
 export function initLocalBody({ logChat: logChatFn }) {
   logChat = logChatFn;
 
-  // my whole consent table (every class × everyone/friends) as the authority takes it (consentsync.js: a set for every
-  // cell, no preset): every arrival, every change; a refusal
-  // is a toast and a retry
+  // the whole consent table, every cell, on every arrival and change (consentsync.js); a refusal toasts and retries
   const consentSync = makeConsentSync({ table: bodyTable, send: sendRequest, toast, on: (ev, fn) => bus.on(ev, fn), enabled: () => !(CONFIG.renderer || CONFIG.spectate) });
   onConsentChange(consentSync.sync);
 
-  // X reaches the socket system through the controller's hook: mounted → get
-  // up; a declared seat in reach → mount it; anything else falls through to
-  // the controller's own layers (geometry seat pans, then the ground sit).
+  // X: mounted → get up; a seat in reach → occupy it; else the controller's own layers (seat pans, ground sit)
   setMountedHook(() => avatarMounts.has(CONFIG.name));
-  // sitting is consent, standing up is the exit (scars r8 M1): someone else's edit moved the seat I sat on, and the
-  // authority let me go (its `vacated` inbox message, authority/occupants.js vacatesFor). Get off as when the world lets go.
+  // sitting is consent, standing up the exit: an edit that moves my seat vacates me
+  // (shared/protocol/authority/occupants.js vacatesFor)
   bus.on('body-inbox', (msg) => {
-    // only from the seat I'm on now (review r9 L4): a late message (after a reconnect) never stands me up from a seat taken since
+    // only from the seat I'm on now: a late message never stands me up from a seat taken since
     const u = Array.isArray(msg?.messages) ? msg.messages.find((m) => m?.type === 'vacated') : null;
     if (u && vacatedFromMine(u, avatarMounts.get(CONFIG.name)) && dismountMe('script', vacatedAt(u))) toast(`${typeof u.by === 'string' ? u.by : 'someone'} moved what you were occupying, so you stood up`, 'info', 5000);
-    // an act the authority delivered (an ask I said yes to: house review of #260, client/lib I1) is applied as a puppet is
+    // an act I said yes to, delivered by the authority, applies as a puppet
     for (const m of Array.isArray(msg?.messages) ? msg.messages : []) {
       const p = bodyActAsPuppet(m); if (!p) continue;
       const by = typeof m.from === 'string' ? ([...identities].find(([, a]) => a === m.from)?.[0] ?? m.from) : 'someone';
@@ -516,11 +486,9 @@ export function initLocalBody({ logChat: logChatFn }) {
 }
 
 function applyPuppet({ by, pose, merge, anim, ragdoll: rag }) {
-  // A ragdoll request runs the sim on MY body — I own it, so I simulate and
-  // stream. That is the sync guarantee: the requester never simulates me.
-  // The authority already decided (server/messages.ts puppet: bodyRefusal for shove and pose) — what arrives applies.
+  // the requester never simulates me: I do, and stream. The authority already decided (server/messages.ts bodyRefusal).
   if (rag) {
-    // rag is true (undirected — old wire, old clients) or {lean:[x,y,z]} m/s
+    // rag is true (undirected, old clients) or {lean:[x,y,z]} m/s
     const l = Array.isArray(rag?.lean) && rag.lean.length === 3 && rag.lean.every(Number.isFinite)
       ? _shove.set(rag.lean[0], rag.lean[1], rag.lean[2]) : null;
     applyShove(l, by);

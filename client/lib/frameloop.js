@@ -1,6 +1,5 @@
-// frame — the loop as an explicit system list (TEL0S_NOTES §6, §14.2 6b): systems register and the loop runs the
-// list, each timed (EW.frame()), stride-able by the governor, and fenced so one throw can't stop rAF.
-// Registration order is execution order and carries constraints (TEL0S_NOTES §14.1).
+// frame — the loop as an explicit system list (TEL0S_NOTES §6, §14.2 6b): each system timed (EW.frame()), stride-able
+// by the governor, fenced so one throw can't stop rAF. Registration order is execution order (§14.1).
 // startFrame() is explicit: a module that self-started on import would silently change boot order.
 
 import { report, bus } from './base.js';
@@ -8,7 +7,7 @@ import { renderer, XR_BOOT } from './core.js';
 import { BC } from './breadcrumbs.js';
 import { perf } from './perf.js';
 import { tick as budgetTick } from './framebudget.js';
-globalThis.__perf = perf;   // harness: xr-lifecycle-probe reads frameNo to prove the desktop loop TICKS after a session ends (the 09-07 22:41 bug), same pattern as __ewEngineUp
+globalThis.__perf = perf;   // harness: xr-lifecycle-probe reads frameNo to prove the desktop loop ticks after a session ends
 
 const systems = [];
 let frameNo = 0;
@@ -44,9 +43,7 @@ let windowWorst = 0;
 let windowDoubled = 0;
 let windowSpikes = 0;
 function frame(now) {
-  // The first tick after an XR session ends arrives with a non-finite `now` (three re-arms the loop; 09-07 00:20,
-  // emulated headset): dtMs went NaN straight through the guard below, the follow camera lerped by NaN once and
-  // stayed NaN forever — R's BLACK DESKTOP AFTER LEAVING VR (09-06 12:46 → 23:43). A frame with no clock is a resume.
+  // a non-finite `now` (first tick after XR exit) is a resume: a NaN dt would leave the follow camera NaN forever
   if (!Number.isFinite(now)) now = performance.now();
   budgetTick(now);   // background work's frame opens here — this loop is the one that keeps ticking in XR
   let dtMs = now - last;
@@ -55,9 +52,7 @@ function frame(now) {
   if (dtMs < 0 || dtMs > 2000) dtMs = 0;
   const dt = Math.min(0.1, dtMs / 1000);
   last = now;
-  // A hidden tab suspends rAF; the resume gap is a suspension, not a frame —
-  // it must not read as a 5000ms jank spike. Real frames feed the ms EWMA
-  // and the window's worst.
+  // a hidden-tab resume gap is a suspension, not a jank spike: only real frames feed the EWMA and the worst
   if (dtMs < 2000) {
     perf.ms += (dtMs - perf.ms) * 0.1;
     if (dtMs > windowWorst) windowWorst = dtMs;
@@ -73,10 +68,10 @@ function frame(now) {
     BC(s.name);
     const t0 = performance.now();
     try { s.tick(dt, t, now); } catch (e) { report(`frame ${s.name}`, e); }
-    s.ms += (performance.now() - t0 - s.ms) * 0.05;   // rolling average
+    s.ms += (performance.now() - t0 - s.ms) * 0.05;
   }
   frameNo++;
-  perf.frameNo = frameNo;   // lifetime tick count — the after-exit probe reads it (perf.frames never existed; that field teed 0 since 09-06)
+  perf.frameNo = frameNo;   // lifetime tick count; the after-exit probe reads it
 
   frames++;
   if (now - fpsAt > 1000) {
@@ -93,12 +88,11 @@ function frame(now) {
   if (!onXRLoop) requestAnimationFrame(frame);
 }
 
-// who drives the loop: hand frame to three's Animation BEFORE setSession (xr:loop fires just ahead): setSession wraps
-// the saved app loop in _onAnimationFrame, the only place the eye framebuffer is bound, so after it XR renders into
-// the canvas. Once handed over it stays there; re-arming window.rAF on exit would run frame twice.
+// hand frame to three's Animation BEFORE setSession (xr:loop fires just ahead): setSession wraps the saved loop in
+// _onAnimationFrame, the only place the eye framebuffer is bound. Never re-arm window.rAF on exit: frame would run twice.
 let onXRLoop = XR_BOOT;
 bus.on('xr:loop', () => { if (onXRLoop) return; onXRLoop = true; renderer.setAnimationLoop(frame); });
-bus.on('xr:rearm', () => renderer.setAnimationLoop(frame));   // after-exit recovery: the loop three restarted never ticked (xr.js probe)
+bus.on('xr:rearm', () => renderer.setAnimationLoop(frame));   // after-exit recovery: the loop three restarted never ticked
 
 /** Start the loop. Called once from boot, AFTER identity resolves. */
 export function startFrame() {

@@ -1,25 +1,19 @@
 // fp_view — first-person eye placement and own-body exclusion; reuse it rather than guess a head height (#75).
-// The eye anchors on the LIVE rig (head bone, else mesh bounds), so it follows a moving socket; the avatar's whole
-// own visual root is hidden for the frame and nobody else's is; a rig with neither anchor fails naming the rig.
+// The eye anchors on the LIVE rig (head bone, else bounds) so it follows a moving socket; only this avatar is hidden.
 // DOM-free and import-free so tools/fp-view-test.ts can pin it under bun.
 
-// Eye placement. FORWARD matches the local first-person eye (controller.js
-// places the eye 0.16 ahead of the head so geometry behind the eye plane
-// can't clip); LIFT raises the head JOINT (a bone at the neck's top) to eye
-// height. GAZE_* reproduce the standing snap framing: level look, dropped
-// 0.6 over 8m so the frame holds ground and horizon both.
+// FORWARD matches controller.js's eye (0.16 ahead of the head, so nothing behind the eye plane clips); LIFT raises
+// the head JOINT (neck top) to eye height. GAZE_*: level look dropped 0.6 over 8 m, holding ground and horizon.
 export const FP_FORWARD = 0.16;
 export const FP_EYE_LIFT = 0.06;
 export const FP_GAZE_AHEAD = 8;
 export const FP_GAZE_DROP = 0.6;
 
-// Bounds-anchored rigs put the eye at BOUNDS_EYE of the mesh's height —
-// near the top, where a head would be, without claiming to know the anatomy.
+// bounds-anchored eye: a fraction of mesh height, without claiming to know the anatomy
 export const FP_BOUNDS_EYE = 0.85;
 
-/** The rig's first-person eye in world space, from the LIVE head bone position (so a seated or mounted eye follows)
- *  or, failing that, the mesh bounds. Returns { eye, mode:"head"|"bounds" }; throws naming the rig when neither
- *  exists, rather than render from inside the mesh. */
+/** Returns { eye, mode:"head"|"bounds" } in world space; throws naming the rig when neither exists, rather than
+ *  render from inside the mesh. */
 export function resolveFirstPersonAnchor({ head, bounds, name = "this body" } = {}) {
   if (head && head.length === 3 && head.every(Number.isFinite)) {
     return { eye: [head[0], head[1] + FP_EYE_LIFT, head[2]], mode: "head" };
@@ -40,9 +34,8 @@ export function resolveFirstPersonAnchor({ head, bounds, name = "this body" } = 
     `${name}: rig has no head bone and no measurable mesh bounds — first-person view unsupported for this avatar`);
 }
 
-/** One first-person frame. yaw is root.rotation.y (for a mounted body, the socket's, so gaze follows the seat).
- *  render must be synchronous (a thenable is rejected); the own body is hidden only around it and restored in
- *  finally, or a throw would hide it from every other viewer. */
+/** yaw is root.rotation.y (mounted: the socket's). render must be synchronous (a thenable is rejected); the body is
+ *  restored in finally, or a throw would hide it from every other viewer. */
 export function composeFirstPerson({ camera, yaw, pitch, head, bounds, name, setOwnVisible, render }) {
   const { eye } = resolveFirstPersonAnchor({ head, bounds, name });
   const fx = Math.sin(yaw), fz = Math.cos(yaw);

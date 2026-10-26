@@ -1,15 +1,11 @@
-// seatbody — a body at a socket, every frame: where it is, how it got there, and what it does there.
+// occupybody — a body at a socket, every frame: where it is, how it got there, and what it does there.
 //
-// One driver for every seated body — mine (localbody.js) and everyone else's (remotes.js) — so an occupant looks the same
-// on every screen: the same transform (world.js mountTransform: the socket, its part's motion, the anchor), the same
-// signals (client/lib/socksignals.js: closed forms of the thing's motion, the occupant's input from their presence), the
-// same pose evaluation (shared/sockbody.js evalPose) and the same reach targets. What the socket says is data
-// (shared/sockbody.js); this module only realizes it on an Avatar (avatar.js: setSeatBlend, setSeatHold,
-// setSeatLook, setAnchorWant, setReach).
+// One driver for every seated body, mine and everyone's, so an occupant looks the same on every screen: the same
+// transform (mountTransform), signals (socksignals.js), pose evaluation and reach targets. The socket's data is
+// shared/sockbody.js's; this module only realizes it on an Avatar.
 //
-// Getting on: with no approach and no enter clip the body eases onto the seat (0.35 s). An `approach` point (socket
-// frame) brings it there first, walking; an `enter` clip then plays with its time locked to the carry, so the clip's
-// own motion lands on the seat (motion warping, Unreal's name for it, done as a time-lock rather than root motion).
+// Getting on: with no approach and no enter clip the body eases on (0.35 s). An `approach` point (socket frame) walks
+// it there first; an `enter` clip then plays time-locked to the carry, so the clip's own motion lands on the seat.
 
 import { THREE } from './core.js';
 import { avatarMounts, mountTransform, bagOf, entities, findPart, seatSocket } from './world.js';
@@ -27,23 +23,23 @@ const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const _p = new THREE.Vector3(), _a = new THREE.Vector3(), _q = new THREE.Quaternion(), _qa = new THREE.Quaternion();
 const _m = new THREE.Matrix4(), _mv = new THREE.Vector3(), _mq = new THREE.Quaternion();
 
-/** The pose choices that bear on one occupant: their own, and (in a sync group) every occupant's of the same thing
- *  whose socket shares the group — all from presence, so every client gathers the same list. */
+/** Their own pose choice and, in a sync group, every occupant's in that group; all from presence, so every client
+ *  gathers the same list. */
 export function occupyChoices(occupantId, m, body) {
   if (!body?.sync) return m?.pose ? [{ name: m.pose, at: m.at ?? 0 }] : [];
   const host = seatSocket(m.to)?.host;
   const out = [];
   for (const [id, o] of avatarMounts) {
     if (!o.pose) continue;
-    const s = o.to === m.to ? null : seatSocket(o.to);   // another seat on the same thing, in the same group
+    const s = o.to === m.to ? null : seatSocket(o.to);
     if (id !== occupantId && (!s || s.host !== host || bodyOf(s.station)?.sync !== body.sync)) continue;
     out.push({ name: o.pose, at: o.at ?? 0 });
   }
   return out;
 }
 
-/** A point given in a thing's frame, live in the world: through the thing's transform and, when it names a part, that
- *  part's displacement from rest (the same rule a socket's pos follows). Also carries a rotation when `q` is given. */
+/** A point in a thing's frame, live in the world, plus a named part's displacement from rest (as a socket's pos);
+ *  also a rotation when `qIn` is given. */
 function thingPoint(id, at, part, out, qIn = null, qOut = null) {
   const obj = entities.get(id);
   if (!obj) return null;
@@ -61,22 +57,19 @@ function thingPoint(id, at, part, out, qIn = null, qOut = null) {
   return out;
 }
 
-/** Drive one seated body for one frame. Returns {pos, q, yaw, clip, sw, signals, stage} — the root's world pose to set,
- *  the clip name presence should carry, and how far into getting on it is — or null when it isn't seated (or its seat
- *  isn't live yet: the thing is still loading). `xr` is a remote occupant's tracked-hands sample (presence `xr`); the
- *  local occupant's hands are read from the headset. */
+/** → {pos, q, yaw, clip, sw, signals, stage}, or null when not seated (or the seat is still loading). `xr`: a remote
+ *  occupant's tracked hands from presence; the local occupant's are read from the headset. */
 export function driveOccupied(av, occupantId, { dt, nowMs, path = null, local = false, xr = null }) {
   const m = avatarMounts.get(occupantId);
   if (!m || !av) return null;
-  const seat = seatSocket(m.to);   // m.to is the socket; what it hangs on carries the motion, the reach and exit frames
+  const seat = seatSocket(m.to);   // m.to is the socket; its host carries the motion, reach and exit frames
   const sock = seat?.sock;
   const body = bodyOf(seat?.station);
   if (!body || seat.host == null) return null;
   const comp = bagOf(seat.host);
   const obj = entities.get(seat.host);
   const base = obj?.userData?.base ?? (obj ? { pos: obj.position.toArray(), yaw: obj.rotation.y } : null);
-  // the occupant's input counts only where the socket routes it: movement (throttle/steer) when input.move takes the
-  // keys, the look (aimYaw/aimPitch) unless the view is locked — the same filter on every client
+  // input counts only where the socket routes it, the same filter on every client
   const inp = m.in ? { ...(body.input.move !== 'none' ? { throttle: m.in.throttle, steer: m.in.steer } : {}), ...(body.input.look !== 'locked' ? { aimYaw: m.in.aimYaw, aimPitch: m.in.aimPitch } : {}) } : null;
   const signals = socketSignals({ comp, sock, base, nowMs, input: inp });
   const chosen = choosePose(body, occupyChoices(occupantId, m, body));
@@ -84,7 +77,7 @@ export function driveOccupied(av, occupantId, { dt, nowMs, path = null, local = 
   const sw = mountTransform(occupantId, _p, { path, av }, ev.offset);
   if (!sw) return null;
 
-  // ---- getting on (the transition starts the first frame this client sees the body on this seat)
+  // ---- getting on, from the first frame this client sees the body on this seat
   const key = m.to;
   let st = av._seatState;
   if (!st || st.key !== key) {
@@ -95,21 +88,20 @@ export function driveOccupied(av, occupantId, { dt, nowMs, path = null, local = 
       const ap = body.approach;
       st.A = new THREE.Vector3(ap[0], ap[1], ap[2]).applyQuaternion(_q.fromArray(sw.socketQ)).add(_a.fromArray(sw.socketPos));
       const f = new THREE.Vector3(0, 0, 1).applyQuaternion(_q.fromArray(sw.socketQ).multiply(_qa.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ap[3])));
-      st.AQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(f.x, f.z));   // standing upright there
+      st.AQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(f.x, f.z));   // upright
       const d = st.from.distanceTo(st.A);
       st.da = d < 0.05 ? 0 : Math.min(4, d / WALK);
     } else st.da = 0;
-    // a body first seen already far from its seat (a late joiner's view of someone seated, a body still loading at the
-    // origin) is simply there: a glide across the world would be a lie about how they got on
+    // first seen far from its seat (a late joiner, a body loading at the origin): simply there, never a glide
     st.instant = st.from.distanceTo(_p) > 6;
   }
-  // the socket's data changed under the occupant (an edit, a script): re-read hold and reach
+  // the socket's data changed under the occupant: re-read hold and reach
   const sig = JSON.stringify(sock);
   if (st.sig !== sig) { st.sig = sig; releaseLimbs(av, st); av.setSeatHold(body.hold); }
 
-  st.now = nowMs;   // the clock this frame's pose was read at (a probe compares the closed forms at exactly this time)
-  // the enter and leave clips load as soon as the body heads for the seat; the enter waits for its clip (up to
-  // ENTER_WAIT s at the approach point), so the carry and the clip start together
+  st.now = nowMs;   // for a probe comparing the closed forms at exactly this time
+  // clips load as the body heads for the seat; the enter waits for its clip (up to ENTER_WAIT s), so carry and clip
+  // start together
   const enterAction = body.enter ? av.ensureClip(body.enter) : null;
   if (body.leave) av.ensureClip(body.leave);
   const de = st.de = body.enter ? (enterAction ? enterAction.getClip().duration : 1.2) : EASE_ON;
@@ -132,9 +124,9 @@ export function driveOccupied(av, occupantId, { dt, nowMs, path = null, local = 
     av.setSeatBlend(ev.clips, ev.time === 'phase' ? signals.phase : null);
   }
   st.stage = stage;
-  av.postureSlot = body.clip;   // the plate reads posture from it (seated plates hang lower)
+  av.postureSlot = body.clip;   // the plate reads posture from it
 
-  // ---- the head: where the occupant looks (their aim, from presence), within the socket's limits and a neck's
+  // ---- the head: their aim, within the socket's limits and a neck's
   const aim = m.in;
   if (body.input.look === 'locked') av.setSeatLook({ yaw: 0, pitch: 0 });
   else if (aim && Number.isFinite(aim.aimYaw)) {
@@ -143,7 +135,7 @@ export function driveOccupied(av, occupantId, { dt, nowMs, path = null, local = 
     av.setSeatLook({ yaw: Math.min(y1, Math.max(y0, wrap(aim.aimYaw))), pitch: Math.min(p1, Math.max(p0, aim.aimPitch ?? 0)) });
   } else av.setSeatLook(null);
 
-  // ---- the limbs: IK targets in the thing's frame (or riding a part), with the VR hand policy
+  // ---- the limbs: IK targets in the thing's frame (or on a part), with the VR hand policy
   av._seatArms ??= {};
   for (const [limb, r] of Object.entries(body.reach)) {
     const side = limb === 'leftHand' ? 'left' : limb === 'rightHand' ? 'right' : null;
@@ -183,7 +175,7 @@ function releaseLimbs(av, st) {
   av._seatArms = null;
 }
 
-/** Everything a seat put on a body, let go: the pose layer, held bones, the head's turn, the hands, the anchor. */
+/** Let go of everything a seat put on a body. */
 export function releaseOccupied(av) {
   if (!av) return;
   const st = av._seatState;

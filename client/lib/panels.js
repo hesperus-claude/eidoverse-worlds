@@ -1,18 +1,14 @@
 // panels — schema-driven edit surfaces.
 //
-// A panel is a FRAME on desktop and a laser-clickable QUAD in VR, and the way
-// that stays true is that a panel never owns bespoke DOM: it declares FIELDS —
-// a serializable schema — and a renderer builds them. Two renderers live here,
-// one target each, sharing the schema and a single action dispatcher:
+// A panel is a FRAME on desktop and a laser-clickable QUAD in VR, so it never owns bespoke DOM: it declares FIELDS
+// (a serializable schema) and one of two renderers builds them, sharing a single action dispatcher:
 //
 //   renderDOM(body, fields, edit)              → frame body (desktop)
 //   renderCanvas(canvas, fields) → hit regions → quad texture (VR); a laser
 //     UV-hit resolves to a region and dispatches the SAME edit(action, payload)
 //
-// Field design rule: every field must be operable with no keyboard —
-// numbers are steppers, actions are buttons, lists are rows. Free-text exists
-// on desktop (rename, comp JSON) and degrades to display-only in VR rather
-// than summoning a keyboard nobody wants to float-type on.
+// Every field must be operable with no keyboard: numbers are steppers, actions buttons, lists rows. Free text is
+// desktop-only and degrades to display-only in VR (no floating keyboards).
 //
 // field specs (plain JSON, no closures — actions are string keys):
 //   { t:'info',   label, value }
@@ -46,35 +42,25 @@
 //                 menu?:[{k, label, danger?}] }   right-click a row → its menu (row.menu wins)
 //                 rename?: current label — double-click / menu 'rename' edits it inline → edit('rename', id, f, {value})
 //                 kids>0 draws a disclosure → edit('open', id)   → edit(k, id) / edit('lock', id) / edit(item.k, id)
-// Every field also takes { disabled?, driven?, hint?, vrOnly?, def? } (def: the value ↺ reverts to) (vrOnly: painted on the VR quad, skipped
-// on desktop — a button standing in for a key a headset lacks). Of the rest: disabled draws it
-// read-only (a locked thing's pose); driven names what owns the value (a
-// motion comp composes onto this rest pose) and marks the FIELD — edit chrome
-// draws an amber edge and a `~` on the value, so an axis label keeps its x/y/z
-// colour (provenance and axis both readable at once).
+// Every field also takes { disabled?, driven?, hint?, vrOnly?, def? }: def is the value ↺ reverts to; vrOnly is painted
+// on the VR quad only (a stand-in for a key a headset lacks); disabled draws it read-only; driven names what owns the
+// value and marks the FIELD (amber edge, `~` on the value), so an axis label keeps its x/y/z colour.
 //
-// The dispatcher is edit(k, value, field?, opts?). `field` is Godot's third
-// signal arg (an axis index for vec3) so multi-select can assign one component
-// without clobbering the others. `opts.live` is true while a drag is in
-// progress: PREVIEW locally, no log traffic; a call without it is the gesture
-// ending — commit ONE verb.
+// The dispatcher is edit(k, value, field?, opts?). `field` is an axis index for vec3, so multi-select can assign one
+// component without clobbering the others. `opts.live` (mid-drag): PREVIEW locally, no log traffic; a call without
+// it ends the gesture: commit ONE verb.
 //
-// num entry (desktop): drag the number to scrub — Godot's EditorSpinSlider
-// shape (editor_spin_slider.cpp:108-136): the value is ALWAYS start + step ×
-// distance, never accumulated, so a drag that wanders comes back to exactly
-// where it began (Blender's #37453 drift is the failure this avoids). Shift =
-// 0.1×, Ctrl = snap to whole units, Esc mid-drag restores the start value.
-// Click without travel focuses the box to type; typed entry takes Maya's
-// relative math: `+=2`, `-=.5`, `*=-1`, `/=2`, `+=10%`. Soft limits bound the
-// drag; hard limits bound everything.
+// num entry (desktop): drag to scrub. The value is ALWAYS start + step × distance, never accumulated, so a drag that
+// wanders comes back to exactly where it began (Blender #37453 drift). Shift = 0.1×, Ctrl = whole units, Esc mid-drag restores the start.
+// Click without travel types; typed entry takes relative math: `+=2`, `-=.5`, `*=-1`, `/=2`, `+=10%`.
+// Soft limits bound the drag; hard limits bound everything.
 
 import { makeFrame } from './windows.js';
 import { parseEntry } from '../../shared/editschema.js';
 import { paintEdit } from './editpaint.js';
 import { WIDGETS, FACTS, paintFields, el, put, trimNum, R2D } from './widgets.js';
 export { trimNum, WIDGETS } from './widgets.js';
-// a name from either set: the line icons (24 grid) or the filled ones (the eye, R 10-10: the Hierarchy's eye drew nothing,
-// 'eye' being a filled-set name the line-set function didn't know)
+// a name from either set: the line icons (24 grid) or the filled ones ('eye' is filled-set only)
 import { KEYHINTS, engage, release } from './keyhints.js';
 export { parseEntry };
 
@@ -84,8 +70,7 @@ export function makeSchemaFrame(key, opts) {
   const frame = makeFrame(key, opts);
   frame.body.classList.add('schema-panel');
   const ro = { icons: /\bedit\b/.test(opts?.className ?? '') };   // edit chrome draws pictographs as icons.js glyphs (edittheme.PICTO_ICON)
-  // inner scroller — see .schema-scroll in index.html: a scrollbar on the body
-  // itself steals the edge-resize band's pixels
+  // inner scroller (.schema-scroll, index.html): a scrollbar on the body itself steals the edge-resize band's pixels
   const scroll = document.createElement('div');
   scroll.className = 'schema-scroll';
   frame.body.append(scroll);
@@ -95,22 +80,19 @@ export function makeSchemaFrame(key, opts) {
 
   function set(fields, edit) {
     lastFields = { fields, edit };
-    // Same shape as on screen → update values in place: no node destroyed, hover and scroll hold (Godot's editor_property_map).
+    // same shape as on screen → update values in place: no node destroyed, hover and scroll hold
     const key = shapeKey(fields);
     if (live && live.key === key) {
       live.box.edit = edit;
       // a hint is not shape either: provenance (who set it, when) arrives a moment after the paint and must reach the tooltip
       fields.forEach((f, i) => { const r = live.rows[i]; r?.update?.(f); if (r && f.t === 'group' && (r.title ?? '') !== (f.hint ?? '')) r.title = f.hint ?? ''; });
-      // a focused input's update() skips itself (caret safety) — without this the
-      // value it skipped was lost until some unrelated repaint came along
+      // a focused input's update() skips itself (caret safety); without this its value is lost until a later repaint
       holdUntilBlur();
       return;
     }
-    // Rebuilding under a focused input eats the caret mid-edit; hold the
-    // refresh until focus leaves the panel, then paint the queued state.
+    // rebuilding under a focused input eats the caret: hold until focus leaves the panel, then paint the queued state
     if (holdUntilBlur()) return;
-    // keep what is in view where it is (R 10-11 01:00: hiding a thing with the eye added a line above the Hierarchy's rows,
-    // and every row jumped down, then back up on showing it): the first row in view, by its id, sits at the same height
+    // keep what is in view where it is: the first row in view, by its id, sits at the same height after a rebuild
     const top = scroll.getBoundingClientRect().top; let anchor = null;
     if (scroll.scrollTop > 0) for (const e of scroll.querySelectorAll('[data-id]')) { const t = e.getBoundingClientRect().top; if (t >= top) { anchor = { id: e.dataset.id, at: t }; break; } }
     live = { key, ...renderDOM(scroll, fields, edit, ro) };
@@ -134,9 +116,7 @@ export function makeSchemaFrame(key, opts) {
   return { frame, set };
 }
 
-/** What makes two paints the same SHAPE: types, keys, fold state, options,
- *  and list membership. Values and labels are not shape — they update in
- *  place. */
+/** Types, keys, fold state, options and list membership; values and labels are not shape (they update in place). */
 export function shapeKey(fields) {
   return fields.map((f) => [f.t, f.k ?? '', f.disabled ? 1 : 0, f.driven ?? '',
     f.t === 'group' ? (f.open !== false ? 'o' : 'c') : '',
@@ -148,13 +128,12 @@ export function shapeKey(fields) {
   ].join('|')).join('\n');
 }
 
-/** A drag that BEGINS on a button must scroll, never fire it (Resonite #707 / Neos #1040). Measured from pointerdown; a
- *  click that travelled is swallowed at capture, before any onclick. */
+/** A drag that BEGINS on a button must scroll, never fire it (Resonite #707 / Neos #1040): a click that travelled from pointerdown is swallowed at
+ *  capture, before any onclick. */
 function guardActions(root) {
   let down = null;
   root.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; }, true);
-  // a release outside the scroller never clicks it: forget the origin, or the
-  // next keyboard activation (clientX/Y 0) reads as travel and is swallowed
+  // forget the origin on a release outside, or the next keyboard activation (clientX/Y 0) reads as travel
   for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { setTimeout(() => { down = null; }, 0); }, true);
   root.addEventListener('click', (e) => {
     if (!down) return;
@@ -211,8 +190,7 @@ export function closeContextMenu() {
 }
 
 
-// scrub feel: per viewer, never logged. speed: slow/medium/fast; accel: the further you drag the faster it goes.
-// Shift = 10× finer, Ctrl = whole numbers; said in every number's tooltip, since a hidden modifier doesn't exist.
+// scrub feel: per viewer, never logged. Shift/Ctrl are said in every number's tooltip: a hidden modifier doesn't exist.
 export const SCRUB_SPEEDS = { slow: 0.3, medium: 1, fast: 3 };
 let scrubFeel = { speed: 'medium', accel: true };
 try { scrubFeel = { ...scrubFeel, ...JSON.parse(localStorage.getItem('ew-scrub-feel') ?? '{}') }; } catch { /* defaults */ }
@@ -238,13 +216,13 @@ function stepper(value, f, commit) {
   const soft = (w) => Math.min(cur.softMax ?? cur.max ?? Infinity, Math.max(cur.softMin ?? cur.min ?? -Infinity, w));
   let wire = +value;
   let shownFace = '';   // the text show() last put in the field (onchange: the same text is no edit)
-  // mixed: the selection disagrees on this value, so the field says — (Unity's multi-object convention; R, gym 10-17 20:39)
-  // until an edit makes them one; a drag or an arrow starts from the value shown on the active thing
+  // mixed: the selection disagrees, so the field says — until an edit makes them one; a drag or an arrow starts from
+  // the active thing's value
   const show = (w) => { num.value = cur.mixed ? '—' : toFace(w); shownFace = num.value; };
   show(wire);
   const send = (w, o) => { cur.mixed = false; wire = hard(w); show(wire); commit(wire, o); };
-  // typed: written AS TYPED. The row's min/max are the slider's, not the door's: the editor's own check (editschema
-  // editOps, D4a) refuses what the door would refuse and says why, so nothing here clamps (tools/editor-range-test.ts)
+  // typed: written AS TYPED, never clamped: min/max are the slider's; editschema editOps refuses what the door would
+  // (tools/editor-range-test.ts)
   const sendTyped = (w) => { cur.mixed = false; wire = w; show(wire); commit(wire); };
 
   // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter commits
@@ -270,9 +248,7 @@ function stepper(value, f, commit) {
   // drag-to-scrub: absolute from origin, on the FACE scale, soft limits
   const perPx = () => cur.drag ?? cur.step * 0.2;
   let drag = null;
-  // Esc while scrubbing: the input was BLURRED when the drag armed (so the
-  // caret never fights the pointer), which means the key lands on the
-  // document, not here — listen there, only while a drag is armed
+  // the input is BLURRED once a drag arms, so Esc lands on the document: listen there, only while armed
   const onDragKey = (e) => { if (e.key === 'Escape' && drag?.armed) { e.stopImmediatePropagation(); e.preventDefault(); cancelDrag(); } };   // immediate: the global key router (controller.js) must not also see it and deselect
   const cancelDrag = () => {
     if (!drag) return;
@@ -299,9 +275,7 @@ function stepper(value, f, commit) {
     if (!drag || drag.src !== src) return;
     if (src._ranging) { drag = null; return; }   // a channel name dragged UP or DOWN selects channels (below), never scrubs
     const dx = e.clientX - drag.lastX; drag.lastX = e.clientX;
-    // accumulate BEFORE the arm check (Godot :113 then :117): the pixels
-    // inside the click slop still count, or a drag that wanders back lands
-    // short of where it began — the drift this whole shape exists to avoid
+    // accumulate BEFORE the arm check: pixels inside the slop count, or a drag that wanders back lands short
     drag.dist += dx * (e.shiftKey ? 0.1 : 1);   // keys: scrub
     if (!drag.armed) {
       if (Math.abs(e.clientX - drag.x0) < 4) return;           // click-vs-drag slop
@@ -371,8 +345,7 @@ function openPop(anchor, f, pick) {
   popOpen?.close();
   const LS = `ew-recent-${f.recentKey ?? 'pop'}`;
   let recent = []; if (!f.plain) try { recent = JSON.parse(localStorage.getItem(LS) ?? '[]'); } catch { /* none */ }   // plain: a short menu of switches, no search box, no recents
-  // opaque, inside the viewport, one row lit (review 10-07 S10: it drew over the fields behind it, ran off the right and
-  // bottom edges, and every row wore the brand-green button look). Its look is index.html's .sp-pop rules.
+  // opaque, inside the viewport, one row lit; its look is index.html's .sp-pop rules
   const box = el('div', 'sp-pop');
   const W = 260, H = 360, M = 8;
   Object.assign(box.style, { position: 'fixed', zIndex: 10000, width: `${W}px`, maxHeight: `${Math.min(H, innerHeight - 2 * M)}px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' });
@@ -483,8 +456,7 @@ function fieldDOM(f, edit, ro = {}) {
         else if (k === 'path') { fieldClip = { value: live.path }; try { navigator.clipboard?.writeText?.(live.path); } catch { /* ok */ } }
         else if (k === 'reset') edit(live.k, live.def);
         else if (k === 'resetsel') void (async () => {
-          // one after another: each write names the value it replaces, so the next must see the last one land (two at once
-          // and the authority refuses the second as 'changed'; seen in the probe: x reset, z did not)
+          // one after another: each write names the value it replaces, so two at once and the authority refuses the second
           for (const r of [...(row.parentElement?.querySelectorAll('.sp-row.chan-sel') ?? [])]) {
             if (!r._reset?.()) continue;
             for (let t = 0; t < 30 && r._reset?.(true); t++) await new Promise((z) => setTimeout(z, 50));
@@ -510,11 +482,9 @@ function fieldDOM(f, edit, ro = {}) {
 }
 
 // ---------------------------------------------------------------- canvas renderer
-// The VR seam: same fields painted to a 2D canvas, returning hit regions (canvas px) so xr.js maps a laser hit to edit().
-// Text fields render display-only here on purpose (no floating keyboards).
+// the VR seam: fields painted to a 2D canvas, returning hit regions (canvas px) that xr.js maps a laser hit through
 
-// The quad wears the panels' tokens, read at paint time; a quad has no alpha, so the ground is the solid --panel-rgb.
-// Fallbacks keep a tokenless page painting the old palette.
+// the panels' tokens, read at paint time; a quad has no alpha, so the ground is the solid --panel-rgb
 function tokens() {
   let cs = null;
   try { cs = getComputedStyle(document.documentElement); } catch { /* no DOM */ }
@@ -579,9 +549,7 @@ function paintStepper(g, regions, C, f, val, x, y, rowH, k, axis, dp = 2, w = 15
   regions.push({ x: x + bump + mid, y: y + 7, w: bump, h: rowH - 14, action: k, payload: { axis, delta: +d } });
 }
 
-/** A canvas stepper reports { axis, delta } (it has no value to add to); a
- *  dispatcher that expects the NUMBER the DOM path sends resolves it here
- *  against the painted field. Numbers pass through untouched. */
+/** A canvas stepper reports { axis, delta }; resolve it to the NUMBER the DOM path sends, against the painted field. */
 export function resolveDelta(fields, k, payload) {
   if (!(typeof payload === 'object' && payload && 'delta' in payload)) return payload;
   const f = fields.find((x) => x.k === k);
@@ -589,9 +557,8 @@ export function resolveDelta(fields, k, payload) {
   if (f.t === 'vec3') { const v = [...(f.value ?? [0, 0, 0])]; const i = payload.axis ?? 0; v[i] = +v[i] + payload.delta; return v; }
   return +(f.value ?? 0) + payload.delta;
 }
-/** resolveDelta over a multi-selection: each id steps from its OWN value (fieldOf(id), its schema field), not the
- *  painted (active) thing's, or every selected thing would be set to the active one's value plus the delta. A thing with
- *  no field of its own falls back to the painted row. Map id → value (null: nothing to step). */
+/** Each id steps from its OWN value (fieldOf(id)), never the painted thing's, or every selection would get the active
+ *  one's value plus the delta. No field of its own: the painted row. Map id → value (null: nothing to step). */
 export function resolveDeltaEach(ids, k, payload, fieldOf, painted) {
   const out = new Map();
   for (const id of ids) { const f = fieldOf(id); out.set(id, resolveDelta(f ? [{ ...f, k }] : painted, k, payload)); }

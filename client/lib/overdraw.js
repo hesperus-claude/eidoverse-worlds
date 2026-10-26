@@ -1,7 +1,7 @@
 // overdraw — how many times each pixel is shaded in one frame, and by whom (debug; EW.overdraw())
 //
-// Renders the live scene once with every material cloned to output a constant 1, additive into a half-float target:
-// red = fragments shaded per pixel. Clones keep the vertex stage (scene.overrideMaterial would lose meadow placement).
+// Every material is cloned to output a constant 1, additive into a half-float target. Clones keep the vertex stage
+// (scene.overrideMaterial would lose meadow placement).
 //   mode 'actual' — real depth state and draw order: fragments that pass depth (alpha-tested ones count).
 //   mode 'raw'    — depth test off: every fragment rasterised. raw − actual is what early-Z already saves.
 // perTag adds one pass per category (that category counts, the rest write depth only); the passes sum to the total
@@ -58,8 +58,7 @@ function heatURL(counts, w, h) {
 
 /** One overdraw capture of the live view. Returns totals, a histogram, per-category fragment shares and (heat) a
  *  PNG data URL: black 0 · blue 1 · green 2 · yellow 3-4 · orange 5-8 · red 9-16 · white 17+. */
-// ONE capture at a time: two overlapping captures swap each other's temporary counting materials in and out and either
-// can lift the world hold while the other still draws (Greptile #206). A second call answers busy instead.
+// ONE capture at a time (a second answers busy): overlapping ones swap each other's materials and lift each other's hold
 let capturing = false;
 export async function overdrawCapture(opts) {
   if (capturing) return { error: 'busy: an overdraw capture is already running' };
@@ -67,8 +66,7 @@ export async function overdrawCapture(opts) {
   try { return await captureOnce(opts); } finally { capturing = false; }
 }
 async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = false, camera: srcCam = camera, debugCounts = false } = {}) {
-  // ONE frozen viewpoint for compile and every pass: the world keeps ticking while the clones compile (the visitor
-  // walks, tiles re-budget) — a live camera read per pass measured each category from a different place
+  // ONE frozen viewpoint for every pass: the world keeps ticking while the clones compile
   srcCam.updateMatrixWorld(true);
   const cam = srcCam.isPerspectiveCamera ? new THREE.PerspectiveCamera(srcCam.fov, srcCam.aspect, srcCam.near, srcCam.far) : srcCam.clone();
   srcCam.matrixWorld.decompose(cam.position, cam.quaternion, cam.scale);
@@ -117,8 +115,7 @@ async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = fal
     // every clone compiles ASYNC before the first synchronous draw (never a render-path compile)
     swap(() => 'count'); await renderer.compileAsync(scene, cam);
     if (perTag && tags.length > 1) { swap(() => 'depth'); await renderer.compileAsync(scene, cam); }
-    // every pass in ONE synchronous block (nothing ticks between them: same frame, same tile counts, same poses),
-    // each into its own target; the readbacks come after
+    // every pass in ONE synchronous block so nothing ticks between them; the readbacks come after
     for (const [name, roleOf] of passes) {
       swap(roleOf);
       const rt = new THREE.RenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: true });
@@ -142,7 +139,7 @@ async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = fal
     for (const [o, m] of orig) o.material = m;
     scene.background = saved.bg;
     for (const [l, a] of shadowLights) l.shadow.autoUpdate = a;
-    reassertShadowPref();   // a shadows toggle mid-measure wins over the saved value (review 7, L5)
+    reassertShadowPref();   // a shadows toggle mid-measure wins over the saved value
     renderer.setClearColor(saved.cc, saved.ca);
     setWorldHold(false);
     for (const [, rt] of rts) rt.dispose();

@@ -1,8 +1,5 @@
-// My identity and my body's handle — the avatar path resolution, the `me`
-// avatar every module reads through getMe(), and the swap/update wiring that
-// replaces it. Extracted from main.js (§14 6c): `me` was closed over by ~18
-// sites; now there is one owner and everyone else holds the getter. Nothing
-// here may import main.js.
+// My identity and my body's handle: avatar path resolution, the `me` every module reads through getMe() (one owner,
+// §14 6c), and the swap/update wiring. Nothing here may import main.js.
 
 import { CONFIG, bus, report, tee } from './base.js';
 import { releaseBodyGate } from './bodygate.js';
@@ -17,8 +14,7 @@ import { warmDepth, warmLit } from './warmqueue.js';
 
 // ---------------------------------------------------------------- identity
 
-// No boot-blocking roster fetch: a bare name resolves from the cached last resolution or the join snapshot's roster.
-// UI that wants the full roster (first-run door, avatar panel) fetches it lazily at open.
+// no boot-blocking roster fetch: a bare name resolves from the cache or the join snapshot's roster
 const want = CONFIG.params.get('avatar') || localStorage.getItem('ew-avatar-name') || 'claude';
 let myAvatarName = want.includes('/') ? want.split('/').pop().replace(/\.vrm.*$/, '') : want;
 let myAvatarPath = want.includes('/') ? want : null;
@@ -26,14 +22,13 @@ if (!myAvatarPath) {
   try {
     const c = JSON.parse(localStorage.getItem('ew-avatar-path') ?? 'null');
     if (c?.name === want && typeof c.path === 'string') myAvatarPath = c.path;
-  } catch { /* cold cache — the snapshot roster resolves it */ }
+  } catch { /* cold cache */ }
 }
 if (myAvatarPath) setMyAvatarPath(myAvatarPath);
 export const rosterLazy = () => fetch('/avatars').then((r) => r.json()).catch(() => []);
-// Cold cache only: start the roster fetch now and never await it, so it rides in parallel with parse and GPU init.
+// cold cache only: started now, never awaited, in parallel with parse and GPU init
 const rosterEarly = myAvatarPath ? null : rosterLazy();
-// Warm boots still refresh the stored resolution: the cached path carries a frozen ?v= stamp, so a redeployed avatar
-// would replay from HTTP cache forever. The cached path wins this boot; the next reload wears the new version.
+// warm boots refresh the cache too: its frozen ?v= stamp would replay a redeployed avatar forever; next reload wears it
 if (myAvatarPath) {
   rosterLazy().then((list) => {
     const fresh = (list ?? []).find((a) => a.name === myAvatarName)?.path;
@@ -43,8 +38,7 @@ if (myAvatarPath) {
     }
   });
 }
-/** The body path: cache, else whichever of (early fetch | snapshot roster)
- *  lands first. Nothing here ever blocked the module graph. */
+/** The body path: cache, else whichever of (early fetch | snapshot roster) lands first. */
 export async function resolveMyAvatarPath() {
   if (myAvatarPath) return myAvatarPath;
   const fromBus = new Promise((res) => {
@@ -58,17 +52,13 @@ export async function resolveMyAvatarPath() {
   return myAvatarPath;
 }
 
-/** What the wire announces as my body: the resolved path, or the bare name —
- *  the server resolves names for everyone else's view either way. */
+/** The resolved path, or the bare name (the server resolves names for others either way). */
 export function getMyAvatarPath() { return myAvatarPath ?? want; }
 export function getMyAvatarName() { return myAvatarName; }
-// the bodies panel (bodies.js) lists what you have worn; the Avatar object itself carries neither name nor path,
-// so the two sites that know both announce it: the initial body (main.js) and a switch (wireAvatarSwitch below)
+// the Avatar carries neither name nor path, so the two sites that know both announce it (main.js, the switch below)
 export function announceWorn(name, path) { if (name) bus.emit('avatar-worn', { name, path: path ?? null }); }
 
-/** The door (and the bad-key re-door) hands a choice here. `remember` is the
- *  first-run door's cache write; the bad-key path never persisted, and still
- *  doesn't. */
+/** `remember`: the first-run door's cache write; the bad-key re-door never persists. */
 export function chooseAvatar(path, name, { remember = false } = {}) {
   myAvatarPath = path; myAvatarName = name; setMyAvatarPath(path);
   if (remember) {
@@ -82,7 +72,7 @@ let me = null;
 let seenFirstBody = false;
 export function getMe() { return me; }
 // ---------------------------------------------------------------- this body's size / plate lift
-// Per body name, per browser (bodyscale.js: ew-body-prefs), applied on every setMe; net.js sendPose reads it off the Avatar.
+// per body name, per browser, applied on every setMe
 let lsRef = null;
 try { lsRef = globalThis.localStorage ?? null; } catch { lsRef = null; }
 export function myBodyPrefs() { return loadBodyPrefs(lsRef, getMyAvatarName()); }
@@ -94,8 +84,7 @@ function applyMyBodyPrefs(av) {
   applyOwnBodyShadow(av, { warm: warmDepth, lit: warmLit, still: () => me === av }).catch((e) => report('my shadow', e));
 }
 bus.on('my-shadow', () => { if (me) applyMyBodyPrefs(me); });
-/** Profile › Avatar writes here: { scale?, plateY? } for the body you have on, saved and worn at once. `name` is for a
- *  write that outlived its body (bodies.js's rest-timer save after a switch): saved under it, worn only if still on. */
+/** { scale?, plateY? }, saved and worn at once. `name`: a write that outlived its body is saved, worn only if still on. */
 export function setMyBodyPref(patch, name = getMyAvatarName()) {
   const p = saveBodyPrefs(lsRef, name, patch);
   if (name !== getMyAvatarName()) return p;
@@ -109,9 +98,7 @@ export function setMe(av) {
   applyMyBodyPrefs(av);
   if (me) {
     releaseBodyGate('body on screen');
-    // ONE '[body] on screen' per page — it is the load metric. Later setMe calls
-    // are body CHANGES (09-05: three swaps in the avatars tab read as +291 s
-    // 'loads' on the tee and corrupted the series).
+    // ONE '[body] on screen' per page (the load metric); later calls are CHANGES, or swaps corrupt the series
     if (!seenFirstBody) { seenFirstBody = true; tee(`[body] on screen +${(performance.now() / 1000).toFixed(1)}s`); }
     else tee(`[body] changed → ${getMyAvatarName()}`);
   }
@@ -120,8 +107,7 @@ export function setMe(av) {
   armFlightFor(av);
 }
 
-/** Arm (or disarm) human flight for the body worn now. Re-run on every swap, never cached: the capability binds to
- *  the RIG (the agent side's action-time rule too). */
+/** Re-run on every swap, never cached: flight binds to the RIG. */
 function armFlightFor(av) {
   try {
     if (!av?.vrm?.scene) return;
@@ -129,22 +115,20 @@ function armFlightFor(av) {
     av.vrm.scene.traverse((o) => { if (o.isBone && o.name) bones.push(o.name); });
     const ok = armFlight(bones, 'me');
     if (ok) toast?.('flight available on this body — press F');
-  } catch { /* a body that cannot be inspected simply cannot fly */ }
+  } catch { /* uninspectable: cannot fly */ }
 }
 
 // ---------------------------------------------------------------- avatar swap
 
 wireAvatarSwitch(async (path, name) => {
-  // Same path is a no-op, except on the capsule: myAvatarPath survives a failed load, and re-wearing is the retry (#196).
+  // same path is a no-op, except on the capsule: the path survives a failed load, and re-wearing is the retry (#196)
   if (path === myAvatarPath && !me?.isCapsule) return;
   toast(`changing into ${name}…`, 'info', 3000);
   try {
-    // Switch order is load-bearing (§19b): the new body is fully ready before the old one sheds; dispose() returns its
-    // VRM to the pool, so switching back is a pool-hit.
-    const next = await makeAvatar(CONFIG.name, path, { urgent: true }); // build before shedding the old
+    // order is load-bearing (§19b): the new body is ready before the old sheds (to the pool: switching back is a hit)
+    const next = await makeAvatar(CONFIG.name, path, { urgent: true });
     me?.dispose();
-    // name and path FIRST: setMe announces 'avatar-worn' with the current name,
-    // and My Avatars / the profile read it — set after, they heard the old body
+    // name and path FIRST: setMe announces 'avatar-worn' with the current name
     myAvatarPath = path;
     myAvatarName = name;
     announceWorn(name, path);
@@ -153,16 +137,14 @@ wireAvatarSwitch(async (path, name) => {
     localStorage.setItem('ew-avatar-name', name);
     contributeThumbnail(name, next.vrm, CONFIG.token, { path });
     if (net.joined) {
-      // re-announce: everyone rebuilds my remote with the new body
+      // everyone rebuilds my remote with the new body
       const { sendJoin } = await import('./net.js');
       sendJoin();
     }
   } catch (e) { report(`avatar switch ${name}`, e); }
 });
 
-// The `?.` on myAvatarPath is load-bearing (§14.1 found bug): on a cold cache
-// the path is still null when an avatar-updated event can already arrive —
-// the old handler threw before resolve had run.
+// `?.` is load-bearing (§14.1): on a cold cache the path is still null when this can arrive
 bus.on('avatar-updated', ({ path, name, fresh }) => {
   if (myAvatarPath?.split('?')[0] === path) {
     toast(`your body "${name}" was updated — refreshing`, 'info');

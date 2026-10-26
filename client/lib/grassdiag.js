@@ -10,7 +10,7 @@ import { governorDebug } from './governor.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Sample fps/ms/worst over ~secs (1Hz pulses drive perf). */
+/** 1 Hz pulses drive perf. */
 async function sample(secs) {
   await sleep(1200);                       // settle: one full pulse past the toggle
   const fps = [], ms = [], worst = [];
@@ -26,9 +26,7 @@ async function sample(secs) {
     fps: fps[Math.floor(fps.length / 2)],
     ms: +ms[Math.floor(ms.length / 2)].toFixed(1),
     worst: Math.round(Math.max(...worst)),
-    // §22p: pacing vs stutter, separated. doubled/s is EXPECTED to be
-    // nonzero whenever fps < refresh (vsync arithmetic); spikes/s > 0 is
-    // the only line that means a real hitch.
+    // §22p: doubled/s is EXPECTED nonzero whenever fps < refresh (vsync); only spikes/s > 0 means a real hitch
     doubledPerSec: +(doubled / n).toFixed(1),
     spikesPerSec: +(spikes / n).toFixed(1),
   };
@@ -47,8 +45,7 @@ export async function grassDiag({ secsPer = 4 } = {}) {
     out.push({ phase: name, ...(await sample(secsPer)) });
     off();
   };
-  // §22m: print the regime, and scene-level phases attribute the non-grass draw too, so "grass hidden barely helps"
-  // is an answer
+  // §22m: scene-level phases attribute the non-grass draw too, so "grass hidden barely helps" is an answer
   const g = governorDebug();
   const size = renderer.getDrawingBufferSize?.(new THREE.Vector2()) ?? null;
   const strokes = grassTiles().strokes;
@@ -85,8 +82,7 @@ export async function grassDiag({ secsPer = 4 } = {}) {
     await run('blades far-LOD everywhere', () => forceBladeLod('far'), () => forceBladeLod(null));
     await run('density 35%', () => field.setDensity?.(0.35),
       () => field.setDensity?.(savedDensity));
-    // §22c second round — the full-window Air run acquitted blade volume and
-    // convicted something density-shaped: these three split WHERE and WHAT.
+    // §22c: blade volume was acquitted, something density-shaped convicted; these three split WHERE and WHAT
     await run('near ring only @35%', () => setDiagDensityScope({ near: 0.35, far: 1 }),
       () => setDiagDensityScope(null));
     await run('far sea only @35%', () => setDiagDensityScope({ near: 1, far: 0.35 }),
@@ -97,7 +93,7 @@ export async function grassDiag({ secsPer = 4 } = {}) {
     await run('grass hidden', () => { field.mesh.visible = false; },
       () => { field.mesh.visible = true; });
   } finally {
-    // belt & braces — a throw mid-phase must not leave the world frozen
+    // a throw mid-phase must not leave the world frozen
     skyObjs.forEach((o, i) => { o.visible = skyVis[i]; });
     if (terrain) terrain.visible = true;
     for (const f of getGrassField()?._strokes ?? []) if (f.mesh) f.mesh.visible = true;

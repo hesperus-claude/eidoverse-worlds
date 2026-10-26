@@ -1,14 +1,13 @@
 // grass_quality — the resident's local meadow budget, DOM-free (tools/grass-quality-test.ts).
-// Drawn density = min(cap, shed): the resident's persisted cap (#60) is a ceiling the session governor's shed can
-// only go below. Neither is a verb: blade count is per machine, not world state.
+// Drawn density = min(cap, shed): the persisted cap (#60) is a ceiling the governor's shed only goes below.
+// Neither is a verb: blade count is per machine, not world state.
 
 export const GRASS_QUALITY = ['full', 'medium', 'low', 'off'];
 export const QUALITY_DENSITY = { full: 1, medium: 0.6, low: 0.35, off: 0 };
 
 const KEY = 'ew-grass-quality';
 
-/** The dial state. `store` is localStorage in the browser, anything with
- *  getItem/setItem in tests, or absent (state then lives for the session). */
+/** `store`: localStorage, any getItem/setItem in tests, or absent (state lives for the session). */
 export function makeGrassQuality(store) {
   const saved = store?.getItem?.(KEY);
   let quality = GRASS_QUALITY.includes(saved) ? saved : 'full';
@@ -20,7 +19,7 @@ export function makeGrassQuality(store) {
     get shed() { return shed; },
     /** the resident's cap as a density factor */
     get cap() { return QUALITY_DENSITY[quality]; },
-    /** what the field should actually draw */
+    /** what the field draws */
     effective() { return Math.min(QUALITY_DENSITY[quality], shed); },
     /** choose a level; unknown names are refused, the current level stands */
     setQuality(q) {

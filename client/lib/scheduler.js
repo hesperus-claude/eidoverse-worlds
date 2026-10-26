@@ -3,8 +3,7 @@
 // DOM/THREE-free (tools/scheduler-test.ts); in-job budget slicing stays loadwork's.
 // Lane caps are measured (cpu/gpu 2, net 6 = assets.js's pool): change them only with a new measurement.
 
-/** Priority bands. FIFO within a band; a function priority is re-read at
- *  dequeue so "near" can follow the camera without rescheduling. */
+/** FIFO within a band; a function priority is re-read at dequeue, so "near" follows the camera. */
 export const P = Object.freeze({
   BODY_SELF: 100,   // your own body — nothing outranks a person's legs
   BODY: 80,         // anyone else's body
@@ -23,11 +22,8 @@ let pumping = false;
 
 const prioOf = (job) => (typeof job.priority === 'function' ? Number(job.priority()) || 0 : job.priority ?? 0);
 
-/** Schedule work. Returns {cancel(), done}. Re-scheduling a queued key
- *  keeps ONE job at the higher of the two priorities (the newer run wins —
- *  the caller re-scheduling knows more than the one that queued first);
- *  a key currently running is left to finish, and the new job queues
- *  behind it under the same key. */
+/** Returns {cancel(), done}. Re-scheduling a queued key keeps ONE job: the newer run, at the higher priority.
+ *  A running key is left to finish; the new job queues behind it. */
 export function schedule({ key, owner = null, lane = 'cpu', priority = P.VISIBLE, run }) {
   if (!LANES[lane]) throw new Error(`[scheduler] unknown lane "${lane}"`);
   if (typeof run !== 'function') throw new Error('[scheduler] run must be a function');
@@ -41,14 +37,11 @@ export function schedule({ key, owner = null, lane = 'cpu', priority = P.VISIBLE
     resolve: null, reject: null,
   };
   job.done = new Promise((res, rej) => { job.resolve = res; job.reject = rej; });
-  // Swallowed-by-default: cancellation is a normal outcome, not an unhandled
-  // rejection storm. Callers who care await handle.done themselves.
+  // cancellation is a normal outcome, not an unhandled rejection; callers who care await done
   job.done.catch(() => {});
 
   if (prev) {
-    // keep one: the newer run, at the higher of the two priorities — and the
-    // replaced job's `done` follows the newcomer's outcome, so no caller's
-    // await is orphaned by a re-schedule
+    // the replaced job's `done` follows the newcomer's, so no caller's await is orphaned
     job.priority = Math.max(prioOf(prev), prioOf(job));
     job.done.then(prev.resolve, prev.reject);
   }
@@ -69,14 +62,13 @@ function cancelJob(job, why) {
   if (running.get(job.key) === job) job.ctrl.abort(why);   // run() honours the signal
 }
 
-/** Cancel everything under an owner — entity removed, world switched. */
+/** e.g. entity removed, world switched. */
 export function cancelOwner(owner) {
   for (const job of [...queued.values()]) if (job.owner === owner) cancelJob(job, `owner ${owner} cancelled`);
   for (const job of [...running.values()]) if (job.owner === owner) job.ctrl.abort(`owner ${owner} cancelled`);
 }
 
-/** Outstanding jobs at or above a band (queued + running). The curtain
- *  asks pending(P.BODY) === 0; the loading tray reads the rest. */
+/** Queued + running at or above a band; the curtain waits for pending(P.BODY) === 0. */
 export function pending(minPriority = -Infinity) {
   let n = 0;
   for (const j of queued.values()) if (prioOf(j) >= minPriority) n++;
@@ -84,9 +76,7 @@ export function pending(minPriority = -Infinity) {
   return n;
 }
 
-/** Resolves (once) when everything at or above the band has drained.
- *  Fires immediately if already idle. Replaces every whenBooted()-style
- *  timeout with an observation. */
+/** Fires once when everything at or above the band has drained (at once if idle): an observation, never a timeout. */
 export function onIdle(fn, minPriority = -Infinity) {
   if (pending(minPriority) === 0) { queueMicrotask(fn); return; }
   idleWaiters.push({ fn, minPriority });
@@ -142,7 +132,7 @@ function start(L, job) {
     });
 }
 
-/** Test/debug introspection — counts only, never the jobs. */
+/** Counts only, never the jobs. */
 export function laneStats() {
   const out = {};
   for (const [name, L] of Object.entries(LANES)) {

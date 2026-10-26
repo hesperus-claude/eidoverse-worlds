@@ -1,19 +1,15 @@
-// particlefx — draws one resolved particles emitter (shared/particle_effects.js): the sim is shared/particlesim.js
-// on this viewer's clock; this file is the GPU half. One InstancedMesh per emitter, CPU-written instance attributes,
-// a TSL billboard in the mesh's own frame (faces the viewer however its thing turns); WebGL 2 and WebGPU, no compute.
+// particlefx — the GPU half of one resolved emitter (shared/particle_effects.js; sim: shared/particlesim.js): one
+// InstancedMesh, CPU-written attributes, a TSL billboard in the mesh's frame; WebGL 2 and WebGPU, no compute.
 // Cost bounded by EFFECT_LIMITS (at the door), the governor's tier (drawn count only), and FAR (neither stepped nor drawn).
 import { THREE, TSL, camera } from './core.js';
 import { makeSim, localGravity } from '../../shared/particlesim.js';
 
 export const FAR = 90;   // m: past this an emitter sleeps (its quads would be sub-pixel long before)
-const _qa = [0, 0, 0, 1], _sa = [1, 1, 1], _ga = [0, 0, 0];   // scratch for localGravity (nothing allocated per frame)
+const _qa = [0, 0, 0, 1], _sa = [1, 1, 1], _ga = [0, 0, 0];   // scratch: nothing allocated per frame
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 
-/**
- * Build the mesh for one resolved emitter. opts: {map (a texture or null), seed, name, budget () => 0..1 (the share
- * of particles this viewer draws)}. Returns {mesh, sim, update(nowMs), setEmitting(on), dispose()}; update is what the
- * frame loop calls.
- */
+/** opts: {map (texture|null), seed, name, budget () => 0..1, the share drawn}. Returns {mesh, sim, update(nowMs),
+ *  setEmitting(on), dispose()}. */
 export function buildEmitter(em, { map = null, seed = 0, name = 'particles', budget = () => 1 } = {}) {
   const { Fn, vec2, vec3, vec4, float, attribute, uniform, uv, texture, positionLocal, clamp, max, smoothstep, sin, cos, floor, mod } = TSL;
   const sim = makeSim(em, { seed });
@@ -25,9 +21,7 @@ export function buildEmitter(em, { map = null, seed = 0, name = 'particles', bud
   const additive = em.render.blend === 'add';
   const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: !additive });
-  // no mrtNode: the builder set one (to keep quads out of an MRT pass's normals) only where its global THREE had mrt, which
-  // this client's never did; here a merged MRT output drew nothing at all on the WebGL 2 backend (measured 10-07: no
-  // mrtNode, the smoke is there; with it, an empty frame). The client renders no MRT pass for particles to smear.
+  // never set an mrtNode: on WebGL 2 a merged MRT output draws nothing at all, and the client has no MRT pass to protect
   const uRight = uniform(new THREE.Vector3(1, 0, 0)), uUp = uniform(new THREE.Vector3(0, 1, 0));
   const fb = em.render.flipbook, frames = fb.h * fb.v;
   mat.positionNode = Fn(() => {
@@ -67,8 +61,8 @@ export function buildEmitter(em, { map = null, seed = 0, name = 'particles', bud
     const cam = camera;
     if (!mesh.parent || _p.distanceTo(cam.getWorldPosition(_v)) > FAR) { mesh.visible = false; return; }
     mesh.visible = true;
-    // how the emitter stands in the world: its gravity is the document's WORLD-down vector turned into its frame (lead
-    // 10-17: a tipped brazier's smoke still rises), set before the step so the preprocess sees it too
+    // gravity is WORLD-down turned into the emitter's frame (a tipped brazier's smoke still rises), set before the step
+    // so the preprocess sees it too
     mesh.matrixWorld.decompose(_p, _q, _s); _qi.copy(_q).invert();
     _qa[0] = _q.x; _qa[1] = _q.y; _qa[2] = _q.z; _qa[3] = _q.w; _sa[0] = _s.x; _sa[1] = _s.y; _sa[2] = _s.z;
     sim.setGravity(localGravity(em.forces.gravity, _qa, _sa, _ga));

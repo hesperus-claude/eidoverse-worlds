@@ -1,7 +1,6 @@
-// conjure — the Orrery panel: prompt → image candidates (you pick one) → 3D mesh → into the world, queue and progress
-// visible in-world. Talks to Orrery cross-origin with credentials; GLBs go from Orrery to the sequencer's /upload,
-// never through this client. Placing a result is an @world `assets:<path>` set, admitted only with the generate
-// permission (gate.js). The image pick is Orrery's chain pause (select: "starred").
+// conjure — the Orrery panel: prompt → image candidates (you pick; Orrery's "starred" chain pause) → 3D mesh → world.
+// GLBs go Orrery → the sequencer's /upload, never through this client; placing is an @world `assets:<path>` set,
+// admitted only with the gen permission (shared/protocol/authority/gate.js).
 // ?orrery=<http(s) base> (or localStorage ew-orrery-url) overrides the service; a MOCK_APIS Orrery works offline.
 
 import { enc } from '../../shared/protocol/names.js';
@@ -14,11 +13,11 @@ import { net } from './net.js';
 import { holdGhost } from './build.js';
 import { logChat } from './chat.js';
 
-// ?orrery= takes only an http(s) BASE (origin + plain path segments, as the URL parser re-serialises it): the value is
-// interpolated into markup and fetches, so a sent link must not smuggle markup or a javascript: URL (it persists).
+// only an http(s) BASE (origin + plain path segments): it is interpolated into markup and fetches and persists, so a
+// sent link must not smuggle markup or a javascript: URL
 export const originOf = (v) => {
   try { const u = new URL(String(v ?? '')); if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
-    const path = u.pathname.replace(/\/$/, ''); return /^(\/[A-Za-z0-9._-]+)*$/.test(path) ? u.origin + path : u.origin; }   // a path of plain segments rides; anything else is dropped to the origin
+    const path = u.pathname.replace(/\/$/, ''); return /^(\/[A-Za-z0-9._-]+)*$/.test(path) ? u.origin + path : u.origin; }   // any other path drops to the origin
   catch { return null; }
 };
 const asked = originOf(CONFIG.params.get('orrery'));
@@ -38,8 +37,7 @@ const api = async (path, opts = {}) => {
 };
 
 // ---------------------------------------------------------------- job store
-// Jobs are chains; the list is local (your queue, not the world's). Survives
-// reloads so a 10-minute mesh doesn't need the tab babysat.
+// your queue, not the world's; persisted so a 10-minute mesh survives a reload
 
 const JOBS_KEY = 'ew-conjure-jobs';
 let jobs = [];
@@ -109,14 +107,12 @@ function progressOf(j) {
 }
 
 function imageCandidates(j) {
-  // the chain's first group = the image_gen siblings. Thumbnails are private per-user assets, so crossorigin=
-  // "use-credentials" is required: under COEP credentialless a plain <img> is sent without credentials and fails.
+  // thumbnails are private: they need crossorigin="use-credentials" (COEP credentialless strips a plain <img>'s)
   return (j.nodes ?? [])
     .filter((n) => n.op_type === 'image_gen' && n.status === 'completed')
     .map((n) => ({
       node: n,
-      // image_gen output is a 'grid' (the 2x2 turnaround); accept plain
-      // 'image' too so image_edit branches would render as well
+      // image_gen output is a 'grid' (2x2 turnaround); plain 'image' covers image_edit branches
       img: (n.assets ?? []).find((a) => a.kind === 'grid' || a.kind === 'image'),
     }))
     .filter((c) => c.img);
@@ -140,10 +136,9 @@ async function paint(body) {
         const cfg = await api('/api/auth/config');
         if (!isHttpUrl(cfg.login_url)) throw new Error('orrery sent a login link that is not http(s)');
         const w = window.open(cfg.login_url, 'orrery-auth', 'width=520,height=680');
-        // Don't depend on postMessage from the popup: under COOP same-origin a cross-origin popup has no opener, and
-        // `w.close()` is a no-op. The message path is a fast path over POLLING /api/auth/me (cors mode; COEP leaves it alone).
+        // never depend on the popup's postMessage (under COOP it has no opener): it only speeds up POLLING /api/auth/me
         let done = false;
-        // ONE teardown, idempotent, shared by every exit, so the listener can't accumulate across retries
+        // ONE idempotent teardown for every exit, so listeners can't accumulate across retries
         const cleanup = () => {
           if (done) return false;
           done = true;
@@ -164,13 +159,12 @@ async function paint(body) {
           paint(body).catch((e) => report('conjure', e));
         };
         const onMsg = (ev) => {
-          // the data string alone is not identity (any window with a reference could post it): origin must match the Orrery
+          // the data string is not identity (any window could post it): the origin must match
           if (ev.origin !== new URL(ORRERY).origin) return;
           if (ev.data === 'orrery:signed-in') finish();
         };
         addEventListener('message', onMsg);
-        // 90s at 2s intervals: long enough for a slow Discord sign-in, bounded
-        // so a user who abandons the popup does not leave a timer running.
+        // 90 s at 2 s: a slow sign-in fits, an abandoned popup leaves no timer
         let tries = 0;
         const poll = setInterval(async () => {
           if (done) return;

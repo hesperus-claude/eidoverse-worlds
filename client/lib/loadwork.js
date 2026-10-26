@@ -1,42 +1,36 @@
 // loadwork — labels heavy materializations (long tasks are attributed to them) and spreads/serializes their
 // main-thread work on a per-frame budget.
 //
-// ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one
-// compile). Never call serialize() from inside a serialized function and never
-// wrap a caller that itself awaits a serialized callee — that is a deadlock,
-// the chain waits on itself.
+// ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one compile). Never call it from inside a
+// serialized function or around a caller that awaits a serialized callee: the chain deadlocks on itself.
 
 import { bus } from './base.js';
 import { nextFrame as budgetFrame, ask, spent, reportPending } from './framebudget.js';
 
 // ---- yields -----------------------------------------------------------------
 
-/** Wait for the next frame (framebudget: window rAF, which xr_frame_clock routes to the session clock in XR; a
- *  macrotask when the tab is hidden, where an avatar load must still finish; never longer than its watchdog). */
+/** The next frame: rAF (the session's clock in XR), a macrotask in a hidden tab (a load must still finish), never
+ *  past its watchdog. */
 export const nextFrame = budgetFrame;
 
-/** Wait for browser idle time (bounded — loading must finish even on a busy
- *  frame loop), for background work like clip hydration. */
+/** Browser idle time, bounded: loading must finish even on a busy frame loop. */
 export const idleYield = () => new Promise((res) => {
   if (typeof requestIdleCallback === 'function' && !document.hidden) {
     requestIdleCallback(() => res(), { timeout: 400 });
   } else setTimeout(res, 32);
 });
 
-// The slice size is framebudget's: one budget per frame shared with the warm conductor and the sky (bigger bites
-// under the splash, a governor-set share of the frame once someone is walking around).
 
 // ---- work records -----------------------------------------------------------
 
 const active = new Set(); // in-flight records, for long-task attribution
 const LOG_THRESHOLD_MS = 120;
-// Mirrors of the console lines, reachable from automation (Safari's console
-// can't be read over WebDriver) and from a quick `__loadJank` in any console.
+// console mirrors for automation (Safari's console can't be read over WebDriver)
 const loadLog = (globalThis.__loadLog = []);
 const jankLog = (globalThis.__loadJank = []);
 
-/** Start a labelled piece of load work: phase(name), tick() (yields only when over budget), yield(), end() (logs
- *  heavy work). Wall time includes awaited downloads: give them their own phases so the summary tells the truth. */
+/** phase(name), tick() (yields only when over budget), yield(), end(). Wall time includes awaited downloads: give
+ *  them their own phases so the summary tells the truth. */
 export function beginWork(label) {
   const t0 = performance.now();
   const phases = [];
@@ -45,7 +39,7 @@ export function beginWork(label) {
   let sliceStart = t0;
   let frames = 0;
   let ended = false;
-  let grant = null;   // this record's current framebudget grant (its hold is released when the slice reports)
+  let grant = null;   // its hold is released when the slice reports
 
   const closePhase = () => {
     if (phaseName !== null) phases.push([phaseName, performance.now() - phaseStart]);
@@ -69,7 +63,7 @@ export function beginWork(label) {
       sliceStart = performance.now();
     },
     async yield() {
-      // a whole frame, then the same grant as tick(): the work after a yield is budgeted like any other slice
+      // a whole frame, then a grant: the work after a yield is budgeted like any other slice
       spent('load', performance.now() - sliceStart, sliceStart, grant);
       grant = null;
       let waited = 0;
@@ -79,7 +73,7 @@ export function beginWork(label) {
     end() {
       if (ended) return;
       ended = true;
-      spent('load', performance.now() - sliceStart, sliceStart, grant);   // the last slice, and its hold released
+      spent('load', performance.now() - sliceStart, sliceStart, grant);
       grant = null;
       closePhase();
       active.delete(rec);
@@ -91,15 +85,14 @@ export function beginWork(label) {
         .join(' · ');
       const line = `${label}: ${parts} — ${Math.round(total)}ms over ${frames + 1} frame(s)`;
       console.log(`[load] ${line}`);
-      if (loadLog.length < 300) loadLog.push(line); // reachable without a console (webdriver, evals)
+      if (loadLog.length < 300) loadLog.push(line);
     },
   };
   active.add(rec);
   return rec;
 }
 
-/** Record a one-line load fact outside any work record: beginWork logs only >120 ms, which hides the wins (a ~0 ms
- *  VRM pool hit, §19b). Same console tag, mirror and cap. */
+/** A load fact outside any record: beginWork logs only >120 ms, which hides the wins (a ~0 ms pool hit, §19b). */
 export function loadNote(line) {
   console.log(`[load] ${line}`);
   if (loadLog.length < 300) loadLog.push(line);
@@ -107,10 +100,9 @@ export function loadNote(line) {
 
 // ---- serialization ----------------------------------------------------------
 
-/** Queue heavy LEAF work (see the invariant up top); errors reach the caller, the lanes never break. Lanes: cpu
- *  (parses) and gpu (pipeline compiles), two in flight each because their wall time is mostly awaits. Priority
- *  2 own body > 1 bodies > 0 objects; reorders waiting work only. */
-// cpu at 2: a parse's wall time is mostly awaits (draco workers, image decode), so two in flight overlap them
+/** Queue heavy LEAF work (the invariant up top); errors reach the caller, the lanes never break. Two in flight per
+ *  lane: wall time is mostly awaits (draco workers, image decode). Priority 2 own body > 1 bodies > 0 objects;
+ *  reorders waiting work only. */
 const lanes = {
   cpu: { jobs: [], running: 0, max: 2 },
   gpu: { jobs: [], running: 0, max: 2 },
@@ -136,33 +128,31 @@ function pumpLane(l) {
     })();
   }
 }
-/** Whether any lane holds running or queued work (checkIdle()'s truth), for the governor's loading grace (§16.2.D). */
+/** Any lane running or queued, for the governor's loading grace (§16.2.D). */
 export const laneBusy = () => Boolean(
   lanes.cpu.running || lanes.gpu.running
   || lanes.cpu.jobs.length || lanes.gpu.jobs.length);
 const reportLanes = () => reportPending('lanes',
   lanes.cpu.running + lanes.gpu.running + lanes.cpu.jobs.length + lanes.gpu.jobs.length);
-/** Queue depths per lane — the 8e debug shape (EW.lanes). */
+/** Queue depths per lane (EW.lanes). */
 export const laneStats = () => ({
   cpu: { running: lanes.cpu.running, queued: lanes.cpu.jobs.length, max: lanes.cpu.max },
   gpu: { running: lanes.gpu.running, queued: lanes.gpu.jobs.length, max: lanes.gpu.max },
 });
-// 'lanes-idle' fires when every queued load has finished. (Its one historic
-// consumer — the deferred shadow drain — is gone; the event stays as the
-// generic "all loadwork settled" signal.)
+// 'lanes-idle': all loadwork settled
 function checkIdle() {
   if (!lanes.cpu.jobs.length && !lanes.gpu.jobs.length
     && !lanes.cpu.running && !lanes.gpu.running) {
     bus.emit('lanes-idle');
   }
 }
-/** Back-compat shape used by early call sites. */
+/** Back-compat shape. */
 export function serialize(fn, { urgent = false, lane = 'cpu', priority } = {}) {
   return enqueue(fn, { lane, priority: priority ?? (urgent ? 2 : 0) });
 }
 
 // ---- long-task attribution --------------------------------------------------
-// the browser measures every main-thread stall over 50ms; this names whose it was (unattributed ones log as such)
+// names whose each main-thread stall was
 
 const activeLabels = () => [...active]
   .map((w) => w.phaseName ? `${w.label}[${w.phaseName}]` : w.label)
@@ -177,9 +167,9 @@ try {
   }).observe({ type: 'longtask', buffered: true });
 } catch { /* not supported — the frame-gap watchdog below still measures */ }
 
-// Frame-gap watchdog: Safari has no longtask observer, so any frame held >150ms logs with the same attribution.
-// ---- perf beacon: a POST to the sequencer's /perflog at 40s (load window) and 120s (Safari compile tail), with a
-// recent fps median from the watchdog's rAF ticks (a steady low fps never shows as >150ms gaps)
+// Frame-gap watchdog (Safari has no longtask observer): any frame held >150ms logs with the same attribution.
+// ---- perf beacon: /perflog at 40s (load window) and 120s (Safari compile tail), with an fps median (a steady low
+// fps never shows as gaps)
 const fpsWindow = [];
 let fpsTick = 0;
 setInterval(() => {

@@ -1,7 +1,6 @@
-// gpulost — when the GPU takes the page's context away, go back to the live world.
-// On WebGL context loss (e.g. a TDR reset), reload into the same world: three can't rebuild its resources in place,
-// the server keeps the pose, and ?xr=1 is dropped so a VR crash lands on the desktop. Loop guard: no auto-reload on a
-// second loss inside GPU_LOST_WINDOW_MS, or a third inside GPU_LOST_LONG_MS (a boot-then-crash loop outlasts the short one).
+// gpulost — on GPU context loss, reload into the same world (three can't rebuild in place; the server keeps the pose).
+// ?xr=1 is dropped so a VR crash lands on the desktop. No auto-reload on a second loss inside GPU_LOST_WINDOW_MS or a
+// third inside GPU_LOST_LONG_MS (a boot-then-crash loop outlasts the short one).
 
 export const GPU_LOST_KEY = 'ew-gpu-lost';           // sessionStorage: ms timestamps of recent losses
 export const GPU_RECOVERED_KEY = 'ew-gpu-recovered'; // sessionStorage: the reason, read once by the next boot's notice
@@ -18,7 +17,7 @@ export function gpuLostAction(now, recent) {
   return { reload: true, recent: next };
 }
 
-/** The URL to come back on: same world, same everything, minus the XR boot flag. */
+/** Same URL minus the XR boot flag. */
 export function recoveryUrl(href) {
   const u = new URL(href);
   u.searchParams.delete('xr');
@@ -39,11 +38,9 @@ export function installGpuLostRecovery({ canvas, renderer, tee = () => {}, onSto
     tee(`[gpu] LOST (${why}) — ${act.reload ? 'reloading into the live world' : `${act.why}, not reloading again`}`);
     if (!act.reload) { onStop(why, act.why); return; }
     try { store?.setItem(GPU_RECOVERED_KEY, why); } catch {}
-    // This reload is deliberate, not a crash: disarm the lite tripwire (index.html) or the
-    // recovery lands the person in the phone client — a boot that armed it and has not yet
-    // reached its disarm (pagehide or the 60 s dwell) reads as "the last full boot died".
+    // disarm the lite tripwire (index.html), or this deliberate reload reads as a dead boot and lands in the phone client
     try { win.localStorage?.removeItem(win.__ewTripKey?.(new URLSearchParams(win.location.search)) ?? 'ew-boot-attempt'); } catch {}
-    // a beat for the tee's beacon to leave; the page is drawing nothing anyway
+    // a beat for the tee's beacon to leave
     win.setTimeout(() => win.location.replace(recoveryUrl(win.location.href)), 400);
   };
   // preventDefault: the spec's "we intend to handle this"; without it no restore event is ever offered
@@ -59,13 +56,12 @@ export function installGpuLostRecovery({ canvas, renderer, tee = () => {}, onSto
 
 /** Read once by the boot after a recovery: the reason, or null. */
 export function takeGpuRecovered(win = globalThis) {
-  // The page whose context just died must not consume it: a loss during boot can race that
-  // page's own late notice init inside the reload's 400 ms, and the flag is for the NEXT page.
+  // the dying page must not consume it: a boot-time loss can race its late notice init; the flag is for the NEXT page
   if (win.__gpuLost?.fired) return null;
   try { const v = win.sessionStorage?.getItem(GPU_RECOVERED_KEY); if (v) win.sessionStorage.removeItem(GPU_RECOVERED_KEY); return v || null; } catch { return null; }
 }
 
-/** How many losses this tab has recorded inside the long window (GPU_LOST_KEY) — the count a notice can show. */
+/** Losses this tab recorded inside the long window. */
 export function recentGpuLosses(win = globalThis, now = Date.now()) {
   try {
     const recent = JSON.parse(win.sessionStorage?.getItem(GPU_LOST_KEY) || '[]');

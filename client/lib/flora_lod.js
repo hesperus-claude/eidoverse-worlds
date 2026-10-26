@@ -1,13 +1,11 @@
-// flora_lod — far-LOD index subsets for tiled 'blades' strokes, DOM-free (tools/flora.test.ts). §17b.
-// Keeps whole 24-entry blade runs over the SHARED vertex buffers (one small index buffer per stroke, no copied
-// vertices). The layout is re-verified at runtime: vegetation.js skew degrades to null (no LOD), never a torn tuft.
+// flora_lod — far-LOD index subsets over the SHARED vertex buffers of tiled 'blades' strokes, DOM-free (tools/flora.test.ts). §17b.
+// The layout is re-verified at runtime: vegetation.js skew degrades to null (no LOD), never a torn tuft.
 
 export const BLADE_VERTS = 10;    // (LOOPS+1) × 2 — vegetation.js LOOPS = 4
 export const BLADE_INDICES = 24;  // LOOPS × 6
 
 /** Far-LOD index subset: keep ceil(blades × keep) whole blades, strided across the tuft (every kth, NOT the first k:
- *  construction order scatters blades radially). Returns a same-typed index array, or null when the geometry isn't
- *  blade-shaped or nothing would drop. */
+ *  construction order scatters blades radially). Null when the geometry isn't blade-shaped or nothing would drop. */
 export function bladeLodIndex(index, vertexCount, keep) {
   if (!index || !(keep > 0) || keep >= 1) return null;
   const blades = index.length / BLADE_INDICES;
@@ -36,8 +34,7 @@ export function bladeLodIndex(index, vertexCount, keep) {
 export const BLADE_COARSE_INDICES = 12;   // 2 quads: loops 0→2→4
 const COARSE_QUADS = [0, 1, 4, 1, 5, 4, 4, 5, 8, 5, 9, 8];  // original winding, loops skipped
 
-/** Coarse far index: every blade at 2 segments instead of 4. Same structural
- *  proof as bladeLodIndex — version skew degrades to null, never a torn tuft. */
+/** Coarse far index: every blade at 2 segments instead of 4; skew degrades to null, as in bladeLodIndex. */
 export function bladeCoarseIndex(index, vertexCount) {
   if (!index) return null;
   const blades = index.length / BLADE_INDICES;

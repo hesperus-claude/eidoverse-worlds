@@ -1,13 +1,12 @@
-// occupants — the browser's seat-profile cache and gate assembly (#101). The cache holds server-judged verdicts
-// from /avatars, refreshed on connect and on the update events, generation-guarded (seatcore.makeGenerationGuard).
-// seatGate also needs two local truths: the mixer slot actually playing (a fallback must never let "sit" consume a chair
-// profile) and the digest of the clip bytes loaded (assets.js; a filename is not an identity).
+// occupants — the browser's seat-profile cache (server verdicts from /avatars, generation-guarded) and gate assembly (#101).
+// seatGate adds two local truths: the slot actually playing (a fallback must never let "sit" consume a chair profile)
+// and the digest of the loaded clip bytes (assets.js; a filename is not an identity).
 
 import { bus } from './base.js';
 import { vrmaShaLoaded } from './assets.js';
 import { makeVerdictCache, seatGate, occupantScalar, nameFromAvatarPath, SEAT_CLIP_FILE } from './seatcore.js';
 
-// The cache logic lives once in seatcore.makeVerdictCache (shared with the headless agent); this is the browser's transport.
+// cache logic: seatcore.makeVerdictCache (shared with the headless agent); this is the browser's transport
 const cache = makeVerdictCache(async () => {
   const res = await fetch('/avatars', { cache: 'no-store' });
   if (!res.ok) throw new Error(`roster ${res.status}`);
@@ -19,23 +18,21 @@ let started = false;
 export function initOccupants() {
   if (started) return;
   started = true;
-  // note() bumps BEFORE its refetch departs and demotes the held verdict to
-  // pending immediately — the order is the whole guarantee
+  // note() bumps BEFORE its refetch departs and demotes the verdict to pending at once: the order is the guarantee
   bus.on('avatar-updated', ({ name }) => cache.note(name, NaN));
   bus.on('avatar-profile-updated', ({ name, rev }) => cache.note(name, Number(rev)));
   cache.init();
 }
 
-/** The full gate for one mounted occupant: served verdict plus this page's runtime truths. `occ` is {path, av}.
- *  Returns {applied:true, contactY, scale} or {applied:false, reason}; the reason is shared verbatim with other readers. */
+/** `occ` is {path, av}. Returns {applied:true, contactY, scale} or {applied:false, reason}; the reason is shared
+ *  verbatim with other readers. */
 export function occupyCorrectionFor(occ, sock) {
   if (!occ || !occ.path) return { applied: false, reason: 'no occupant context' };
   if (!occ.av) return { applied: false, reason: 'body loading' };
   const name = nameFromAvatarPath(occ.path);
   if (!name) return { applied: false, reason: 'no occupant context' };
   const verdict = cache.get(name);
-  // body scaling shipped (Profile › Avatar, bodyscale.js) — on vrm.scene, not the root (the root carries the
-  // screen-sized plate). The body's own multiplier × whatever the root may carry is the occupant's effective scale.
+  // body scale (bodyscale.js) is on vrm.scene, not the root (the root carries the plate); effective = body × root
   const bs = occ.av.bodyScale?.() ?? 1;
   const sc = occupantScalar([occ.av.root.scale.x * bs, occ.av.root.scale.y * bs, occ.av.root.scale.z * bs]);
   if (!sc.ok) return { applied: false, reason: sc.why };
@@ -50,7 +47,6 @@ export function occupyCorrectionFor(occ, sock) {
   return { applied: true, contactY: g.contactY, scale: sc.s };
 }
 
-// ---- declaration bookkeeping ------------------------------------------------
 // One console line per state CHANGE per occupant; standing up clears the key so the next sit declares afresh.
 
 const declared = new Map(); // occupantId → last declared "to/slot state reason"
