@@ -118,7 +118,8 @@ async function runSelf(tree: string, only: string[] | null, extra: string[] = []
 function mutantTree(tag: string) {
   const d = scratch(tag);
   for (const sub of ["shared", "server", "tools", "defs"]) if (fs.existsSync(path.join(ENGINE, sub))) copyTree(path.join(ENGINE, sub), path.join(d, sub));
-  for (const sub of ["client", "mcpl"]) if (fs.existsSync(path.join(ENGINE, sub))) fs.symlinkSync(path.join(ENGINE, sub), path.join(d, sub), "junction");   // B1 reads them as text
+  for (const sub of ["client", "mcpl"]) if (fs.existsSync(path.join(ENGINE, sub)))   // B1 reads their code as text: dirs and .js/.ts only
+    fs.cpSync(path.join(ENGINE, sub), path.join(d, sub), { recursive: true, filter: (p) => !p.split(/[\\/]/).includes("node_modules") && (fs.statSync(p).isDirectory() || /\.(js|ts)$/.test(p)) });
   for (const f of ["package.json", "tsconfig.json", "bunfig.toml"]) if (fs.existsSync(path.join(ENGINE, f))) fs.copyFileSync(path.join(ENGINE, f), path.join(d, f));
   fs.symlinkSync(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
   return d;
