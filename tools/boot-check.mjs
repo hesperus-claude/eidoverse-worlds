@@ -4,7 +4,7 @@
 // the phase reads 'welcome', and the body settled (its path on the ok line). The splash rays worker is asserted
 // started+released only where index.html has a .sp-rays canvas, else reported DORMANT. On failure it prints the
 // stalled phase and what it was waiting for.
-// 🔴 OWNS ITS SERVER: spawns a child bound to a per-run nonce (as isolation-headers-test), so a stale server can't buy
+// 🔴 OWNS ITS SERVER: spawns a child bound to a per-run nonce (as served-routes-test), so a stale server can't buy
 // a green. `bun tools/boot-check.mjs http://host:port` probes a LIVE deployment instead, identity checks skipped.
 // Recipe: `bun tools/boot-check.mjs` (needs `bun install` in root + client and a Playwright Chromium). Knobs:
 //   BOOT_CHECK_QUERY='&xr=1' (appended to the boot URL; the asserted decisions follow from it)
