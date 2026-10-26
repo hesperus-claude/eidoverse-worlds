@@ -187,11 +187,9 @@ function liftPlain(P, ever, repair = true) {
   return { lifted: v4comps(st), hosts };
 }
 
-/** C, independent of the translator's projection (so a bug in `project` itself, which side A shares, still shows): the
- *  fields the old engine's snapshot states plainly, read straight off it — every thing's id, its model (its lib as written)
- *  and model-hash (the sha256 of that lib's bytes on this host, else none), its pose (pos; q, else a yaw turn; scale, uniform) when it rides
- *  nothing, and what it rides (parent.to, and the slot as parent.socket); the world's terrain and grass as they are (with
- *  any key v4's component doesn't define read from imported:<k> beside it, the translator's documented carry). */
+/** C, independent of the translator's projection (so a bug in `project`, which side A shares, still shows): the fields
+ *  the old snapshot states plainly: id, model and model-hash, pose when it rides nothing, what it rides (parent.to,
+ *  slot as parent.socket), and the world's terrain and grass (an undefined key read from imported:<k>). */
 function coreCheck(snapState, newA, content) {
   const diffs = []; const push = (id, field, o, n) => diffs.push({ id, field, old: o, new: n });
   const yq = (y) => [0, Math.sin(y / 2), 0, Math.cos(y / 2)];
@@ -218,10 +216,8 @@ function coreCheck(snapState, newA, content) {
   return diffs;
 }
 
-// declared (translate-v1@12, the shape audit's render-media-env family), written here independently of shared/protocol/shaperepair.js:
-// a terrain's layer colours are ints, the sim's defaults (shared/terrainmath.js) are written where absent, and its water is
-// the world's water component (its colour an int); grass is read in the flora spelling (the grass READER's own mapping:
-// flora_args), a preset kept by its name (R 10-17)
+// written independently of shared/protocol/shaperepair.js: terrain layer colours are ints, terrainmath's defaults fill gaps,
+// its water is the world's water component; grass is read in the flora spelling (flora_args), a preset kept by its name
 function declaredGround(snap) {
   const isO = (v) => !!v && typeof v === "object" && !Array.isArray(v); const hx = (x) => (typeof x === "string" && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);
   const out = { terrain: snap.terrain ?? null, grass: snap.grass ?? null, water: null };

@@ -1,5 +1,5 @@
-// tools/protocol/scripts-check.ts — scripts (research 41; the lab's 46 B-cases, ported from its toy language to real
-// JavaScript in the QuickJS sandbox), through the real authority, plus `use` → script and a timer through a real server.
+// tools/protocol/scripts-check.ts — scripts (JavaScript in the QuickJS sandbox) through the real authority, plus `use` →
+// script and a timer through a real server.
 //   bun tools/protocol/scripts-check.ts                 every case (the server cases start a scratch sequencer)
 //   bun tools/protocol/scripts-check.ts --only B2,B5    just those
 //   bun tools/protocol/scripts-check.ts --tree <dir>    run the authority cases against another checkout's shared/ (a mutant, a base)
@@ -7,8 +7,8 @@
 //   bun tools/protocol/scripts-check.ts --mutants       remove each gate in turn (a copy of shared/): its cases must go red; a
 //                                                 no-op control mutation must stay green
 // Cases:
-//   B   behaviours on sponsor rights (41 §7, lab 46 B1–B20)        D   determinism and the reader's audit (41 §3.7)
-//   R   runaway work: fuel, stack, memory, reads (41 §7 #9)       U   `use` → script: who did what, in the log
+//   B   behaviours on sponsor rights                               D   determinism and the reader's audit
+//   R   runaway work: fuel, stack, memory, reads                   U   `use` → script: who did what, in the log
 //   E   events: say, enter/leave, changed, wake                    P   params (seat poses read param.<name>)
 //   C   a script's body effects meet each body's consent (L6)      V   translated v1 behaviours say they need re-installing
 //   H   source hygiene and syntax at upload and install            S   the server: no v1 BehaviorHost; timers tick; use → script
@@ -230,10 +230,8 @@ function bell(s: any, who: string) { s.call(who, "create", { id: "bell1", model:
   s.call(who, "set", { id: "bell1", component: "reactions", value: { ring: { kind: "script", script: "bell" } } }); return r; }
 const NAMES: Record<string, string> = { vic: "Vic" }; // a stand-in for the authority's directory (M1)
 const onUse = (body: string) => `world.on("use", (e) => {\n${body}\n});\n`;
-// A sponsor's cpu limit, reached by the time the runs actually record, not by a count a host's speed decides: vic says
-// until the script's run is refused (at most 90 says, 54 s of the clock, inside the minute the limit counts), and the
-// refusal must quote exactly the milliseconds the sponsor's runs recorded. Returns each say's outcome, the why, the
-// milliseconds it quotes and the milliseconds recorded.
+// a sponsor's cpu limit, reached by recorded run time, not a count a host's speed decides: say until refused (at most 90,
+// inside the limit's minute); the refusal must quote exactly the recorded milliseconds. → each outcome, why, quoted, recorded
 function grindToCpu(s: any, id: string, sponsor: string, tag: string) {
   const last = () => s.call("olive", "scripts", {}).scripts.find((x: any) => x.id === id).last.at(-1);
   const out: string[] = [];

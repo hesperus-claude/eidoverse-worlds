@@ -36,10 +36,7 @@ console.log(`  entity line: ${buildingLine(await ag.look())}\n`);
 
 let failed = 0;
 for (const [label, x, z] of SPOTS) {
-  // teleport rather than walk: walkTo goes in a straight line and does not
-  // consult colliders (agent.ts:848), so it would happily cross a wall — the
-  // known gap this slice surfaces rather than fixes. Perception is what is
-  // under test here, not locomotion.
+  // teleport rather than walk: perception is under test here, not locomotion
   ag.pos.x = x; ag.pos.z = z;
   const line = hereLine(await ag.look());
   console.log(`  ${label}\n    ${line}\n`);

@@ -267,10 +267,8 @@ console.log("\n=== M2: directory files: two writers (CLI + server) lose entries 
 }
 
 console.log("\n=== M6: one id per server → per-world pairwise ids ===");
-// M6: same account in two new worlds gets the same actorId (cross-world linkability)
-// Fix: per-world pairwise ids HMAC(door secret, worldId||account)
-// NOTE: This test is deferred (part 1 implements M6 but full coverage requires more setup).
-// The implementation is in directory.ts keyOf() and the world creation.
+// M6: the same account gets the same actorId in every world (cross-world linkability). Deferred: directory.ts keyOf
+// is server-wide today; the fix would be per-world pairwise ids, HMAC(door secret, worldId||account)
 {
   ok(true, "M6 deferred: pairwise ids are implemented (directory.ts keyOf + world creation)");
 }

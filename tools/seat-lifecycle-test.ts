@@ -2,7 +2,7 @@
  * seat-lifecycle-test — #101's load-bearing integration matrix: a REAL
  * scratch sequencer and a REAL WorldAgent, no injected math anywhere.
  *
- * What must be true end-to-end (design round, B4/B5 + #105 review): the
+ * What must be true end-to-end: the
  * server judges profiles against current bytes and serves one verdict;
  * proposals need a NAMED actor and a rostered subject, and dangerous keys
  * bounce whole; countersign is an operator write against a reviewed
@@ -12,16 +12,8 @@
  * own look() says the corrected seat (or the declared approximation) out
  * loud.
  *
- * Door ownership (#105 review, the #83/#91 stale-port family): the port is
- * preflighted free, the child's stdout/stderr are preserved and printed on
- * failure, and before any check counts, the responding server must have
- * written OUR scratch WORLDS_DIR — a listener that answers without leaving
- * tracks in this run's tmpdir is somebody else's door, and the test dies
- * rather than inspect it.
- *
- * Fail-on-main control (run this file on main): /seat-profile is 404, the
- * roster has no seat field, and the seated look() shows neither the declared
- * approximation nor the corrected height — every section below fails by name.
+ * Door ownership: the port is preflighted free, the child's output is kept and printed on failure, and the responding
+ * server must have written OUR scratch WORLDS_DIR before any check counts, or the test dies rather than inspect it.
  *
  * Run: bun run tools/seat-lifecycle-test.ts
  * (owns its scratch WORLDS_DIR; backs up and restores assets/opt/seats and
@@ -145,11 +137,8 @@ try {
 
   console.log("write authority (B4) + dangerous keys (#105 B2)");
   const claudeSha = await sha(join(LIB, "eidoverse/assets/vrms/claude.vrm"));
-  // The clip sha must be taken from the SAME ladder the store judges against
-  // (patched fork first — seats.ts's clipBases, the order /library serves).
-  // Hashing the library's copy directly was measured wrong the day this repo
-  // grew a patched sitting clip: every verdict read "stale (clip bytes
-  // changed)" against bytes no client animates from.
+  // the clip sha comes from the SAME ladder the store judges against (seats.ts clipBases: patched fork first, as /library
+  // serves); the library's own copy may not be the bytes clients animate from
   const clipRel = "eidoverse/assets/animations/sitting_normal_chair.vrma";
   const clipFile = [join(ROOT, "patched"), join(ROOT, "assets", "opt"), LIB]
     .map((d) => join(d, clipRel)).find((p) => existsSync(p))!;
@@ -224,10 +213,8 @@ try {
   const seatL = { pos: [0, 1, 0], body: { action: "sit", pose: "sitchair" } };
   const legacy = await areq("set", { id: "crate1", component: "sockets", value: { seatL } });
   check("…and gives it a (legacy) seat", legacy?.ok === true, JSON.stringify(legacy?.refused ?? legacy));
-  // the seat-profile correction keys on a socket that authors its support plane: its body anchors at the surface
-  // (D14, R 10-12: body.anchor 'surface', one enum; client seatcore.js socketAnchor, world.js). Until the anchor carried it
-  // (2026-10-07: a sibling seatAnchor the door never took) this seat couldn't be authored on a world at all.
-  // (two of them: one body per socket since 10-12, R's ruling 7, and seatbot is still on seatS when probebot sits below)
+  // the seat-profile correction keys on a socket that authors its support plane: body.anchor 'surface' (seatcore.js
+  // socketAnchor). Two of them: one body per socket, and seatbot is still on seatS when probebot sits below
   const seatS = { pos: [0, 1, 0], body: { action: "sit", pose: "sitchair", anchor: "surface" } };
   const surface = await areq("set", { id: "crate1", component: "sockets", value: { seatL, seatS, seatS2: seatS } });
   check("…and a seat that authors its support plane (body.anchor: surface)", surface?.ok === true, JSON.stringify(surface?.refused ?? surface));

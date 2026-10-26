@@ -62,11 +62,8 @@ try {
   const backend = await ev(async () => (await import('./lib/core.js')).backendName());
   console.log(`  · backend: ${backend}`);
 
-  // ── dimmed, a REAL control: Settings › Audio's mic-sensitivity row, which push-to-talk dims to .45 (audiopanel.js
-  // dimFloor) — the state made through the UI's own path (the PTT checkbox). Dimming is measured as the row's mean
-  // contrast against its own background, dimmed ÷ live: blending is linear in sRGB on both paths, so that ratio IS the
-  // effective alpha whatever each renderer draws for a slider. Desktop: Chrome's compositor (panel made opaque for the
-  // shot, so both sit on the same ground). VR: the quad's raster. ──
+  // ── dimmed, a REAL control: the mic-sensitivity row push-to-talk dims to .45 (audiopanel.js dimFloor), via the PTT
+  // checkbox; contrast dimmed ÷ live is the effective alpha (blending is linear in sRGB on both paths) ──
   const CONTRAST = `(d) => { const h = new Map(); for (let i = 0; i < d.length; i += 4) { const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]; h.set(k, (h.get(k) ?? 0) + 1); }
     let mk = 0, mn = -1; for (const [k, n] of h) if (n > mn) { mk = k; mn = n; } const bg = [mk >> 16, (mk >> 8) & 255, mk & 255];
     let sum = 0; for (let i = 0; i < d.length; i += 4) sum += Math.max(Math.abs(d[i] - bg[0]), Math.abs(d[i + 1] - bg[1]), Math.abs(d[i + 2] - bg[2]));
@@ -269,9 +266,8 @@ try {
     caps.caps.length > 0 && caps.caps.every((c) => c.first ? c.strokes.length === 0 : c.strokes.length === 1), JSON.stringify(caps.caps.map((c) => [c.text, c.first, c.strokes])));
 
   // ── dimmed: partial opacity, desktop (Chrome's own compositor) vs the quad's raster, pixel for pixel ──
-  // A: one element at .5 · B: a .5 GROUP whose child covers its own background (per-paint alpha would let the parent's
-  // amber bleed through the child) · C: .5 inside .5 = .25 · D: a dead row at .42 (the house `.mrow.dead`) · E: an
-  // inline <svg> icon with its own inline opacity .5 (the layer applies it; the serialised clone must not apply it again)
+  // A: one element at .5 · B: a .5 GROUP over a child covering its own background (no parent bleed) · C: .5 in .5 = .25
+  // · D: a dead row at .42 (`.mrow.dead`) · E: an inline <svg> at .5 (the serialised clone must not apply it again)
   const fx = await ev(() => {
     const d = document.createElement('div'); d.id = 'dimfx';
     d.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;width:310px;height:60px;background:rgb(5,20,20);display:flex;gap:10px;padding:10px;box-sizing:border-box';
@@ -308,12 +304,8 @@ try {
   check('dimmed: every partial-opacity case lands on the quad as on the desktop (Δ ≤ 3 of 255)', dimRows.every((r) => r.d <= 3), dimRows.map((r) => `${r.k} Δ${r.d}`).join(', '));
 
   // ── exit, then #2: the quad material through the real renderer's output pass ──
-  // EXIT IS SLOW HERE, NOT HUNG (09-30, chased): session.end() resolves at once, then the desktop's first frames
-  // rebuild its pipelines (the TSL warning burst) on a headless main thread already at ~0.7 s/frame, and the page can
-  // stay unresponsive for more than ev()'s 30 s. Through the product's own leaveVR (scratch exit-diag, with and without
-  // PTT toggled in VR) the session ended ~10 s after the call either way, getUserMedia was never called, and the page
-  // answered every 5 s poll after. So: wait for the page to answer again (up to 3 min, measured and printed); if it
-  // never does, pause it over CDP and print the JS stack it is stuck in.
+  // EXIT IS SLOW HERE, NOT HUNG: the desktop's first frames rebuild its pipelines on a slow headless thread, so wait up
+  // to 3 min for the page to answer (printed); if it never does, pause it over CDP and print the stuck stack
   { const t0 = Date.now();
     await pg.evaluate(() => { window.__iwerDevice.activeSession?.end(); });
     let ok = false;

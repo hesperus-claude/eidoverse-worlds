@@ -1,6 +1,5 @@
-// tools/protocol/scale-check.ts — the authority at scale, and what the 10-06 reviews found there (the 10-06 top-down review
-// S0-2, S0-3 and S3's request globals; the 10-06 security review pass 2, H-A and M-C). Every world on a server shares
-// ONE thread, and every request goes through shared/protocol/authority.js on it: no request may hold it for long.
+// tools/protocol/scale-check.ts — the authority at scale: every world on a server shares ONE thread, and every request
+// goes through shared/protocol/authority.js on it, so no request may hold it for long.
 //   bun tools/protocol/scale-check.ts                 every case
 //   bun tools/protocol/scale-check.ts --only S2,I1    just those
 //   bun tools/protocol/scale-check.ts --tree <dir>    run the cases against another checkout (a mutant, a base)
@@ -34,10 +33,8 @@ import { labClock, pinned } from "./clock.ts";
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "d374d2ef";
-// The bound: 50 ms per request on this laptop at rest (the review's target). A host busy with other work runs everything
-// slower, the authority included, so the bound is scaled by how much slower a fixed piece of door-shaped work runs right now
-// than at rest (CAL_REF_MS, its median at rest here), at most 4×: an authority that grows with the world's size misses it by
-// ten to a thousand times (--control). Each op is timed best of 5. The factor is printed with each timing case.
+// 50 ms per request at rest, scaled (at most 4×) by how much slower a fixed door-shaped job runs now than CAL_REF_MS: a busy
+// host isn't a failure, while an authority that grows with the world misses by 10–1000× (--control). Each op: best of 5
 const BOUND_MS = 50, CAL_REF_MS = 5;
 function calibrate() { const one = () => { const t0 = performance.now(); const m = new Map(); let acc = 0;
     for (let i = 0; i < 20000; i++) { const a = [i % 7, i % 11, i % 13].map((v) => v * 1.5); m.set(i, a); acc += Math.hypot(a[0], a[1], a[2]); if (i % 50 === 0) acc += JSON.stringify(a).length; }
@@ -46,11 +43,8 @@ function calibrate() { const one = () => { const t0 = performance.now(); const m
 let LOAD = 1; const bound = () => BOUND_MS * LOAD;
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-// [name, file (under the tree), find, replace, cases that must turn red]: an exact replacement found exactly once.
-// (find may instead be a list of [find, replace] pairs: one gate written in two places.) Not listed, because no case can
-// catch them by design: the exact world-axis reject before the 15-axis test and the charge for every cell a place search
-// visits are defences (the first proven to give satDepth's own answer, the second a bound the exact ring stop already
-// keeps); G3 and the reviewers' differential runs check they change no answer.
+// [name, file, find, replace, cases that must turn red]: an exact replacement found once (or a list of pairs). Not listed:
+// the world-axis reject and the per-cell place-search charge are defences no case can catch; G3 checks they change no answer
 const MUTANTS: [string, string, string | [string, string][], string, string[]][] = [
   ["supportBelow asks the index", "shared/protocol/authority.js", "  for (const id of near(st, [x, -Infinity, z], [x, Infinity, z])) {\n    if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) {\n    if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
   ["supportUnder asks the index", "shared/protocol/authority.js", "  for (const id of near(st, [b.min[0], -Infinity, b.min[2]], [b.max[0], Infinity, b.max[2]])) { if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) { if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
@@ -201,11 +195,8 @@ function scaleCase(n: number) {
     op("set", (i) => s.call("olive", "set", { id: `c-${20 + i}`, component: "label", value: "x" }, 20000));
     op("batch", (i) => s.call("olive", "batch", { ops: Array.from({ length: 50 }, (_, k) => ({ verb: "create", args: { model: "crate", components: { transform: T0([X - 60 - k, 0, -20 - 4 * i]) } } })) }, 20000));
     s.call("vic", "move", { to: [X - 20.7, 0, 39.4], teleport: true }, 20000);
-    // grab a tray WITH its cup on it (so grab's "what rested on it loses support" pass is timed: the cup is set down), walk
-    // it — untimed — to its own clear spot and drop it there straight down (timed). The op is grab + drop, as before. (It
-    // used to drop every tray at vic's feet: they stacked, the third claimed an overlap (implausible) and stayed held, and
-    // the fifth grab met hold-limit. A fast host never repeats grab — best() stops under the bound — so only a slow one hit
-    // it: fork run 40067199839, Windows, grab "hold-limit".)
+    // grab a tray WITH its cup on it (so the "loses support" pass is timed), walk it untimed to its own clear spot and drop
+    // it (timed): trays dropped in one place stack and a slow host's repeats then hit hold-limit
     { let bestG: any = null;
       for (let i = 0; i < 5; i++) { const t = `tray-${i}`;
         s.call("vic", "move", { to: [X - 20.7, 0, 39.4], teleport: true }, 20000);
@@ -553,10 +544,8 @@ async function sameAsBase() {
     if ((k === "who" || k === "role") && v === "visitor") return "inhabitant";
     if (!v || typeof v !== "object" || Array.isArray(v)) return v;
     return Object.fromEntries(Object.entries(v).map(([key, x]) => [Object.hasOwn(RENAMED_KEYS, key) ? RENAMED_KEYS[key] : key, x])); });
-  // R 10-07: look and inspect read a thing as its name, description, what it can do and its state (shared/a11y.js): those
-  // fields are additions the base never wrote, generated from components it also had. Compared without them, on both sides
-  // 2026-10-09 (review of b398d7e3): a rotation the authority writes is made unit after rounding (the base wrote 0.707 per
-  // axis, which isn't): compared as the rotation it means, normalised then rounded, on both sides
+  // the a11y fields (shared/a11y.js) are additions the base never wrote: compared without them, on both sides; a rotation
+  // is compared as the rotation it means (normalised then rounded), since the authority makes it unit after rounding
   const unitQ = (v: any) => { const n = Math.hypot(...v); return v.map((x: number) => Math.round((x / n) * 1e6) / 1e6); };
   // the rotations this tree WROTE: a transform's q (in after / would), not a value a request carried and a reply echoes
   const qs: number[][] = []; JSON.stringify(a, (k, v) => { if (k === "transform" && v && Array.isArray(v.q) && v.q.length === 4) qs.push(v.q);
@@ -564,12 +553,8 @@ async function sameAsBase() {
   if (!qs.length) return { same: false, replies: a.length, why: "no written rotation to check (the scan would be vacuous)" };
   const notUnit = qs.find((q) => Math.abs(Math.hypot(...q) - 1) > 1e-9);   // ours must BE unit, not merely compare as one
   if (notUnit) return { same: false, replies: a.length, notUnit };
-  // 2026-10-14: a refusal's code and its fix's shape are the contract; the metres inside its prose are a measurement of
-  // where a body ended up ('mug is 6.316 m from you' here vs 6.349 at the base — put-down-in-front-of-the-body, 2fdadb70,
-  // moved it 3 cm). Prose is compared with its decimals blanked, so a changed number in a reason is not a changed reply.
-  // 2026-10-14 (sockets → child entities, feat/sockets-entities LS4): a create that lands a model with sockets also mints
-  // the socket children, and `after` carries them; the base minted none. Compared without any `after` entry that IS a
-  // socket (a minted id, a `socket` component) — the host's own record still has to match the base's exactly.
+  // a refusal's code and fix shape are the contract, not the metres in its prose: decimals are blanked. Minted socket
+  // children in `after` are left out (the base minted none); the host's own record must still match exactly
   const noA11y = (x: any) => JSON.stringify(x, (k, v) => (k === "can" || k === "state" || k === "description" || k === "sockets" || (k === "order" && v === "a0") ? undefined   // parent.order: cut by the shape audit 10-16 (nothing read it)
       // `sockets` on a look row: the children, listed (same addition)
     : k === "after" && v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, e]: any) => !(e && typeof e === "object" && "socket" in e)))

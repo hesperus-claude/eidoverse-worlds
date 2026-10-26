@@ -53,10 +53,8 @@ for (const t of ["test_reader.py", "test_chain.py", "test_gov.py", "ed25519/test
 }
 const drift = files.filter((f) => fs.readFileSync(here + f, "utf8") !== before.get(f));
 if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${drift.join(", ")} differently (fixtures no longer what the reader's builders make)`); }
-// The engine's OWN output against the spec's readers (review F1, 2026-10-05: the conformance run checked the lab's
-// logs but never what this server writes). Found a world through the engine authority, write a few kinds of request, then
-// the reference reader must say ok with 0 malformed, the Python chain verifier must accept every head and signature,
-// and a value altered after the fact must break the chain.
+// The engine's OWN output against the spec's readers: the reference reader says ok with 0 malformed, the Python chain
+// verifier accepts every head and signature, and a value altered after the fact breaks the chain
 { const { openLive } = await import("../../server/livehost.ts"); const { request } = await import("../../shared/protocol/authority.js");
   const os = await import("node:os"); const path = await import("node:path");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "engine-conf-")); let T = 1800000000000;

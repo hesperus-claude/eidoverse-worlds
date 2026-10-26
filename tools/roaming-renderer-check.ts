@@ -29,10 +29,8 @@ try {
     try { dbg = Number(readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]) || 0; } catch { await Bun.sleep(100); }
   }
   assert.ok(dbg > 0, `Chrome wrote no DevToolsActivePort in ${profile}`);
-  // The lobby must exist before the renderer comes: a renderer is a spectator, and there is nothing to watch in a world
-  // nobody has founded (server.ts, 4011, retried forever). Production's lobbies were founded once; found this one.
-  // A refusal (a sequencer that wants JOIN_TOKEN, a founding cap) fails the check with the server's reason, and so
-  // does silence: this must never hang with the browser above left open.
+  // found the lobby first: a renderer is a spectator, and an unfounded world is a 4011 retried forever. A refusal fails
+  // the check with the server's reason, and so does silence: never hang with the browser open
   {
     const f = new WebSocket(base.replace('http', 'ws') + '/ws');
     try {
@@ -51,10 +49,8 @@ try {
     } finally { f.onclose = null; f.close(); }
   }
   const page = await browser.newPage();
-  // TRIPPED (default on; TRIPPED=0 skips): the roamer's profile carries what its watchdog's kills leave behind, a
-  // boot tripwire for its lobby and a spent retry. Before index.html's rule 0 that loaded the LITE client, which still
-  // joined as a renderer, was sent to the agent's world, and answered every snapshot "this client has no renderer"
-  // (2026-10-24). The renderer must boot full anyway, and serve.
+  // TRIPPED (default on; TRIPPED=0 skips): the profile carries a watchdog kill's leftovers (a boot tripwire for its lobby,
+  // a spent retry); the renderer must still boot the full client, not the lite one (index.html rule 0), and serve
   const tripped = process.env.TRIPPED !== '0';
   if (tripped) await page.addInitScript((w) => {
     try { localStorage.setItem(`ew-boot-attempt:${w}`, '1'); localStorage.setItem(`ew-boot-retried:${w}`, '1'); } catch { /* storage blocked */ }
@@ -109,10 +105,8 @@ try {
   await plain.goto(`${base}/version?probe=plain`);
   const notClient = await health(dbg, (u) => u.includes('/version?probe=plain'));
   assert.ok(!notClient.healthy && notClient.reason === 'not joined', `a page with no client is not joined: ${JSON.stringify(notClient)}`);
-  // THE ROAMER RESTARTS (its watchdog does this every few hours, and on every client deploy): it comes back as a new page
-  // in its lobby, with the agent's world left unserved. The sweep (server/snapshots.ts) must send it straight back
-  // without a snapshot being asked, so the agent's next snapshot is served at once (2026-10-24: "failing on first try
-  // is bad").
+  // THE ROAMER RESTARTS (watchdog, deploys) as a new page in its lobby: the sweep (server/snapshots.ts) must send it back
+  // unasked, so the agent's next snapshot is served at once
   await page.close();
   const again = await browser.newPage();
   await again.goto(`${base}/?world=${lobby}&renderer&roam&name=roam-check`);

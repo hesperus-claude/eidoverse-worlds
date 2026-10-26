@@ -1,21 +1,8 @@
-// seatlab — #101's measuring instrument, now a tools harness (Phase B
-// evidence hygiene: a laboratory bench must not ship as client runtime, so
-// it lives here and the client never imports it).
+// seatlab — #101's measuring bench, in tools/ because a bench must not ship as client runtime.
 //
-// Browser-loaded: import specifiers are ABSOLUTE (/lib/...), so the module
-// works served from anywhere — in practice POST /upload?as=script and
-// `await import('/library/eidoverse/assets/opt/store/scripts/<hash>.js')`,
-// the same receipts pipeline Phase A used. Pure math lives in
-// /lib/seatcore.js where bun tests pin it; this file only observes scenes
-// and lab instances.
-//
-// The _v lesson (design-round evidence amendment, conceded): the passive
-// instrument used to compute the seat claim through shared scratch
-// registers, and the forward-vector reuse clobbered the socket position
-// before its Y was read — invisible at y≈0, corrupt everywhere else. The
-// seat claim is now seatcore.seatClaim (pure arguments cannot alias), the
-// registers below are single-purpose, and the nonzero-Y regression in
-// tools/seatcore-test.ts pins the function the instrument leans on.
+// Browser-loaded: import specifiers are ABSOLUTE (/lib/...), so it works served from anywhere (POST /upload?as=script,
+// then import its store path). Pure math is /lib/seatcore.js (seatClaim, pinned in tools/seatcore-test.ts); the
+// registers below are single-purpose, since shared scratch once clobbered the socket position before its Y was read.
 //
 // All quantities in WORLD metres. Signed gaps are (landmark − seat surface):
 // positive = the landmark floats above the authored seat.
@@ -110,25 +97,13 @@ export function measureAllSeats(opts = {}) {
   return [...avatarMounts.keys()].map((id) => measureSeat(id, opts));
 }
 
-// ---- the detached lab (Phase A rev 2, carried whole) ------------------------
-// Measurements happen on instances the lab OWNS — constructed, pulled
-// off-scene, measured, disposed. No live resident is ever posed, re-clipped
-// or moved: the passive measureSeat above only reads, and everything below
-// touches only lab-created bodies (Phase A review B1).
+// ---- the detached lab ------------------------
+// measures only instances the lab OWNS (constructed off-scene, disposed): no live resident is ever posed, re-clipped
+// or moved; measureSeat above only reads
 
-/** Measure one avatar instance's sit-pose geometry, with full animation
- *  receipts (Phase A review B2) and a MEASURED contact candidate (review
- *  B3): the lowest skinned vertex among those weighted ≥ minWeight to the
- *  pelvis bone set, under the settled pose — an actual support surface, not
- *  a joint origin. Root is neutralized to the origin, so every Y is
- *  root-local = the signed gap above an authored seat once mounted.
- *
- *  Phase B evidence amendment: the winner is RECORDED (mesh, vertex index,
- *  coordinate) alongside its support patch — the pelvis-set vertices within
- *  radiusXZ of it and within the contact band above it. A healthy underside
- *  is a cluster; a skirt hem or loose accessory is an isolated winner, and
- *  the patch statistics are how validation (seatcore.validateProfile) and a
- *  human reviewer both see the difference. No minimum is auto-promoted. */
+/** Measure one avatar instance's sit-pose geometry: animation receipts and a MEASURED contact (the lowest skinned
+ *  vertex weighted ≥ minWeight to the pelvis set, root at the origin, so Y = the gap above a seat), recorded with its
+ *  support patch so validation (seatcore.validateProfile) can tell a cluster from a stray hem. Nothing auto-promoted. */
 export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, radiusXZ = 0.1 } = {}) {
   if (!av?.root) return { error: 'no avatar' };
   const vrm = av.vrm ?? null;
@@ -224,10 +199,8 @@ async function sha256hex(buf) {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Run the lab on an avatar and assemble the full seat-profile record the
- *  server's door accepts — content-bound to the exact bytes this page holds,
- *  review.status "proposed" (the only status the door will take; the tool
- *  proposes, a human countersigns). Returns {profile} or {error, scan}. */
+/** Run the lab on an avatar and assemble the seat-profile record the door accepts: bound to the bytes this page holds,
+ *  review.status "proposed" (the tool proposes, a human countersigns). Returns {profile} or {error, scan}. */
 export async function deriveSeatProfile(avatarPath, { pose = 'sitchair', runs = 3 } = {}) {
   const scan = await labRig(avatarPath, { pose, runs });
   const name = nameFromAvatarPath(avatarPath);

@@ -32,11 +32,8 @@ export function idAliases() {
   };
 }
 
-/** The same names, inside a browser page (the headless probes): source to evaluate once in the page, after which every
- *  request any page code sends (net.js sendRequest, editwrites.send, a raw socket) goes out with its create ids as
- *  placeholders and its names as minted ids, every reply's ids map is kept before the reply is handled, and
- *  globalThis.__id(name) reads a name as its id for the probe's own page code. Installed once per page (a second
- *  evaluation is a no-op); sockets opened before or after the install are both covered. */
+/** The same names inside a browser page: source to evaluate once (idempotent), after which every request the page sends,
+ *  on any socket, goes out with names as minted ids, reply id maps are kept, and globalThis.__id(name) reads a name's id. */
 export function pageIds(): string {
   return `(() => { if (globalThis.__eidoIds) return true;
   const IDS = (${idAliases.toString()})(); globalThis.__eidoIds = IDS; globalThis.__id = (n) => IDS.of(n);
@@ -52,10 +49,8 @@ export function pageIds(): string {
   return true; })()`;
 }
 
-/** A probe's page code, ready for the page: the install (pageIds, idempotent) runs first, then the expression, in which
- *  each quoted scene name ('tbl', "cup") is read as its id — the node side's id where the probe's own node client made
- *  it (`node`: an idAliases map), else __id('<name>') in the page (a thing the page itself made). `names` lists the
- *  scene's names; anything else quoted is left alone. */
+/** A probe's page code: pageIds first, then `expr` with each quoted name in `names` read as its id (from `node`, an
+ *  idAliases map, else __id('<name>') in the page); anything else quoted is left alone. */
 export function inPage(expr: string, names: string[], node?: Map<string, string>): string {
   const alt = [...names].sort((a, b) => b.length - a.length).map((n) => n.replace(/[-]/g, "\\-")).join("|");
   const body = alt ? expr.replace(new RegExp(`(['"])(${alt})\\1`, "g"), (m, q, n) => (node?.has(n) ? `${q}${node.get(n)}${q}` : `__id(${q}${n}${q})`)) : expr;

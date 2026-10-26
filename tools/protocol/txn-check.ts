@@ -1,5 +1,5 @@
-// tools/protocol/txn-check.ts — the transaction service and the request capability (reviewer items 1 and 2, 10-18;
-// docs/DESIGN-txn-capability.md). Real World, real WorldLog, real authority, real files; the wire handler is the
+// tools/protocol/txn-check.ts — the transaction service and the request capability
+// (docs/DESIGN-txn-capability.md). Real World, real WorldLog, real authority, real files; the wire handler is the
 // real REQUEST_MESSAGES. Storage faults are injected at node:fs (the calls server/durable.ts makes), and a slow warm() is a
 // gate held in front of the real WorldLog.request (the same stub reset-race-check uses).
 //   T1  a durable write throws on the 2nd line of a commit → ambiguous, `from` = that line; the 1st line is published
@@ -13,13 +13,13 @@
 //   T8c a log's or blob's first write into directories just made: each new directory's name is synced in its parent too,
 //       a founded world's own directory included (and nothing is synced on win32, where the server can't sync a directory)
 //   T8d the keys file a mint writes is synced before it's renamed into place
-//   T8f a person's founding, a fork (its copied blobs too) and a reset sync each directory a new name lands in (house 6344940039)
+//   T8f a person's founding, a fork (its copied blobs too) and a reset sync each directory a new name lands in
 //   T8e …and the directory that holds its name is synced after, as are directories made for it (none on win32, where the
 //       server can't sync a directory)
 //   T9  operator-repair: operator status revoked while queued → refused
 //   T9f operator-repair from an account that isn't an operator: refused, pointed to whoever runs the server, not the world's owners
 //   T10 no false refusals: 100 serial requests from an unchanged guest connection all committed
-//   T11 (r14 M1) server.ts writes only through requestwire (voice-moderate via requestAs); no direct w.log.request caller
+//   T11 server.ts writes only through requestwire (voice-moderate via requestAs); no direct w.log.request caller
 // usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/txn-check.ts
 //        … --mutants   each row's mutation, applied to a scratch copy of the tree: every one must turn its rows red
 // @ts-nocheck
@@ -251,10 +251,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
 // every one of those entries is synced, the topmost new directory's parent included
 { const { putBlobFile } = await import("../../server/durable.ts");
   const base = path.join(root, "t8c"); fs.mkdirSync(base, { recursive: true });
-  // a world founded in a worlds directory that already exists: its own directory is the only new name, in that directory.
-  // The directory's keys exist already, as for any founding after its first, so the first founding is made before the
-  // syncs are watched: it mints the keys, and saving the keys file syncs this directory too, which would hide whether
-  // founding synced the world's own name
+  // founding in an existing worlds directory: its own directory is the only new name. A first founding runs before the syncs
+  // are watched, since minting the keys file syncs this directory too and would hide whether founding synced the world's name
   const worlds = path.join(base, "worlds"); fs.mkdirSync(worlds); foundWorld(path.join(worlds, "t8c-first"), "t8c-first", "olive");
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync }; const dirFds = new Map(); const synced = [];
   nodefs.openSync = function (p, flags, ...r) { const fd = o.openSync.call(nodefs, p, flags, ...r); if (flags === "r") dirFds.set(fd, path.resolve(String(p))); return fd; };
@@ -267,7 +265,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(!missing.length && (process.platform !== "win32" || !synced.length) && fs.readFileSync(path.join(base, "a", "b", "c", "world.jsonl"), "utf8") === '{"n":1}\n',
     "T8c a first write into directories just made syncs each new directory's name in its parent, up to the parent of the first one made, a founded world's directory too (none on win32)", { missing: missing.map((d) => path.relative(root, d)), synced: synced.map((d) => path.relative(root, d)) }); }
 
-// ---------------- T8f (house 6344940039) ----------------
+// ---------------- T8f ----------------
 // a person's founding, a fork and a reset each move new names into place: each is answered only once those names are durable
 // (the directory they land in synced AFTER the rename; a fork's copied blobs synced before its directory moves). None on
 // win32, where the server can't sync a directory

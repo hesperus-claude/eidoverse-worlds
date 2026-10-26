@@ -4,45 +4,16 @@
 //   bun tools/store-variants-test.ts
 //   KTX2_TOKTX=/path/to/toktx bun tools/store-variants-test.ts   # + one real encode
 //
-// The contract under test: a store upload gets a KTX2 variant BESIDE the
-// original (store/<hash>.glb.ktx2.glb — the library's <rel>.ktx2.glb
-// convention, which is the path /library?ktx2=<key> already resolves); the
-// variant is built from the ORIGINAL and is really KTX2, ALL of it — the
-// optimizer refuses a partial or empty conversion rather than write a
-// .ktx2.glb whose name lies (the #122 class), and refuses it RETRYABLY (exit
-// 5, no .failed marker; exit 2 + marker only when there was nothing to
-// convert); the ghost-listing rule — a variant, a marker, a .tmp is never
-// enumerated as an asset, not by the store catalog (/library-models), not by
-// the listing the prefetcher warms from (/library-list), not by the boot
-// sweep; the negotiation key is a GENERATION (shared/ktx2.js): the current
-// key negotiates, a retired one is an unflagged fetch, and a browser only
-// ever uses the key the RUNNING sequencer published on /version — none
-// published, none used — and section 8 replays the collision itself as a canary:
-// a pull landing under a running sequencer cannot poison the next key; the KTX2
-// arm keeps the shadow's TEXEL BUDGET (1024², capTexels → toktx --resize) so a
-// variant is never a 1.5× quality upgrade the size gate refuses, and a size
-// verdict carries its recipe (verdictStands) so a new recipe re-measures the
-// old refusals at the next boot; and a flagged fetch
-// answered by the webp shadow is PROVISIONAL — no-cache, never immutable —
-// so the variant's bytes get through the moment it exists, which the
-// If-None-Match round-trip here demonstrates.
-//
-// No encoder is needed for any of it: a FAKE toktx (a bun script behind a
-// platform wrapper, driven by FAKE_TOKTX_MODE) emits a canned real KTX2, or
-// fails, or fails on its second call, or writes bytes that are not KTX2 —
-// the seams the review asked to see exercised. Section 3 also runs the real
-// encoder once if the box has one (the exit-3 doctrine: none → skipped).
-// Sections 4-7 spawn the real sequencer (the deps-route-test pattern:
-// verified-free port, fixture-as-nonce ownership) with the fake encoder in
-// its environment and drive it through POST /upload, the boot sweep, and
-// the fetches a browser makes.
-//
-// Negative control: on the branch base this file dies at import
-// (server/store-variants.ts, shared/ktx2.js do not exist). Of the serving
-// checks, main fails "flagged → variant" (nothing ever wrote that path) and
-// "fall-through is provisional" (the show box, 2026-08-24: every store
-// ?ktx2=1 answer immutable, every one webp); of the optimizer checks, main
-// writes the partial and the empty variant (review of #142, reproduced).
+// The contract:
+//   · a store upload gets a KTX2 variant BESIDE the original (store/<hash>.glb.ktx2.glb), built from the original
+//   · all of it KTX2, or a RETRYABLE refusal (exit 5, no .failed marker; exit 2 + marker only with nothing to convert)
+//   · a variant, marker or .tmp is never listed as an asset (/library-models, /library-list, the boot sweep)
+//   · the negotiation key is a GENERATION a browser reads from the RUNNING sequencer's /version (section 8: a pull
+//     landing under it can't poison the key)
+//   · the texel budget (1024², capTexels → toktx --resize); a size verdict carries its recipe (verdictStands)
+//   · a flagged fetch answered by the webp shadow is PROVISIONAL: no-cache, never immutable
+// A FAKE toktx (FAKE_TOKTX_MODE) covers the seams; the real encoder runs once if present. Sections 4-7 spawn the real
+// sequencer (verified-free port, fixture-as-nonce ownership).
 
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, rmdirSync, chmodSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -88,10 +59,8 @@ console.log("\nthe store's KTX2 shadow (store-variants.ts, shared/ktx2.js):\n");
 
   check("the variant lives beside the original", ktx2VariantPath(original) === join(OPT, `store/${hash}.glb.ktx2.glb`),
     ktx2VariantPath(original));
-  // The serving contract, stated the way routes.ts states it — a flagged
-  // fetch for rel resolves join(OPT_DIR, `${rel}.ktx2.glb`). The two files
-  // must agree on that path WITHOUT importing each other; this is the check
-  // that names the gap on main (routes resolved it, nothing wrote it).
+  // the serving contract as routes.ts states it (a flagged fetch resolves join(OPT_DIR, `${rel}.ktx2.glb`)): the two
+  // files must agree on that path WITHOUT importing each other
   const routesResolution = join(OPT, `${rel}.ktx2.glb`);
   check("…which is exactly the path /library?ktx2=<key> resolves (routes.ts)", ktx2VariantPath(original) === routesResolution,
     `wrote ${ktx2VariantPath(original)}, routes reads ${routesResolution}`);
@@ -257,10 +226,8 @@ console.log("\nthe store's KTX2 shadow (store-variants.ts, shared/ktx2.js):\n");
 
 // ---------------------------------------------- 2. the ghost-listing rule
 {
-  // What readdirSync(store/) returns once variants exist. The catalog and the
-  // boot sweep both filter with isStoreOriginal; endsWith(".glb") — what
-  // they used to do — lists the variant as a second "conjured 305ea800…"
-  // and queues it for shadows of its own.
+  // readdirSync(store/) once variants exist: the catalog and boot sweep filter with isStoreOriginal, since endsWith(".glb")
+  // would list the variant as a second model and queue shadows for it
   const listing = ["305ea80018ad4dbf.glb", "305ea80018ad4dbf.glb.ktx2.glb", "305ea80018ad4dbf.glb.ktx2.glb.failed",
     "a1b2c3d4e5f60718.glb", "manifest.json", "manifest.json.tmp", "scripts"];
   const originals = listing.filter(isStoreOriginal);
@@ -284,12 +251,8 @@ console.log("\nthe store's KTX2 shadow (store-variants.ts, shared/ktx2.js):\n");
 }
 
 // ---------------------------------------------- fixtures
-// Varying textures — prune() folds a solid one into baseColorFactor and drops
-// it. 4-aligned PNGs, so optimize.ts hands them to the encoder as-is (no
-// sharp in the loop: one-libvips-test.ts owns that story). The node name
-// carries a per-run nonce, so each fixture's content hash — its store path
-// — is unique to THIS run: the fixture is its own ownership proof against a
-// spawned server (only the tree we spawn from has it).
+// varying, 4-aligned PNG textures (prune() drops a solid one; no sharp in the loop); a per-run nonce in the node name
+// makes each fixture's store path unique, so it proves the spawned server is ours
 const NONCE = crypto.randomUUID();
 function pngBytes(seed: number, W = 64): Uint8Array {
   const png = new PNG({ width: W, height: W });
@@ -348,10 +311,8 @@ const isKtx2Glb = (bytes: Uint8Array) => {
 };
 
 // ---------------------------------------------- the fake encoder
-// A real 4×4 ETC1S KTX2 (toktx v4.4.2, 506 bytes) — what "ok" emits. The
-// optimizer checks the container magic on every encoder output, so the fake
-// has to produce the genuine article to be accepted; "garbage" is the
-// control for that check.
+// a real 4×4 ETC1S KTX2 (toktx v4.4.2, 506 bytes) for "ok": the optimizer checks the container magic, and "garbage" is
+// that check's control
 const CANNED_KTX2 = Uint8Array.from(atob(
   "q0tUWCAyMLsNChoKAAAAAAEAAAAEAAAABAAAAAAAAAAAAAAAAQAAAAMAAAABAAAAmAAAACwAAADEAAAAeAAAAEABAAAAAAAAtwAAAAAAAAD5AQAAAAAAAAEAAAAAAAAAAAAAAAAAAAD4AQAAAAAAAAEAAAAAAAAAAAAAAAAAAAD3AQAAAAAAAAEAAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAIAKACjAQIAAwMAAAgAAAAAAAAAAAA/AAAAAAAAAAAA/////xIAAABLVFhvcmllbnRhdGlvbgByZAAAACcAAABLVFh3cml0ZXIAdG9rdHggdjQuNC4yIC8gbGlia3R4IHY0LjQuMgAALgAAAEtUWHdyaXRlclNjUGFyYW1zAC0tZW5jb2RlIGV0YzFzIC0tcWxldmVsIDEyOAAAAAAAAAADAAMALwAAAA0AAAArAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAALABIAAAAAAACIIEDVAAAAAGBQMu0EYGABMAAAAAAAAIBCAKQAAAAAAEGiR9GgYpPr//4cqVf9XVVVVBQDBRAAAAAAAAPJfbQCYAAAAAAAAQUYATAAQAAAAgEBxADABAAAAAACAAAIMBgo="),
   (c) => c.charCodeAt(0));
@@ -482,19 +443,15 @@ console.log("\n  the optimizer, against the fake encoder:");
 }
 
 // ---------------------------------------------- the real sequencer
-// OPT_DIR is this checkout's assets/opt (gitignored) — the only tree the
-// server reads, so fixtures go there under their content hashes and come out
-// again in cleanup (including their manifest entries). An EMPTY library for
-// the child, so its library sweep has nothing to encode.
+// fixtures go in this checkout's assets/opt (the only tree the server reads) and come out in cleanup, manifest entries
+// too; the child gets an EMPTY library, so its sweep has nothing to encode
 const OPT = join(ROOT, "assets", "opt");
 const STORE = join(OPT, "store"), STORE_MIN = join(OPT, "store-min");
 const madeStore = !existsSync(STORE), madeMin = !existsSync(STORE_MIN);
 mkdirSync(STORE, { recursive: true }); mkdirSync(STORE_MIN, { recursive: true });
 const EMPTY_LIB = mkdtempSync(join(tmpdir(), "ew-empty-lib-"));
-// "No encoder" has to be TRUE for the child: KTX2_TOKTX pointing nowhere is
-// not enough when PATH holds the fake — Bun.which("toktx") resolves toktx.cmd
-// through PATHEXT on Windows (this file's own first run found it that way).
-// An empty dir for PATH and HOME (the ~/.local/ktx fallback) makes it true.
+// "no encoder" must be TRUE for the child: Bun.which("toktx") finds toktx.cmd through PATHEXT on Windows, so PATH and
+// HOME (the ~/.local/ktx fallback) point at an empty dir
 const NOWHERE = mkdtempSync(join(tmpdir(), "ew-nowhere-"));
 const NO_ENCODER = { KTX2_TOKTX: join(NOWHERE, "no-such-toktx"), PATH: NOWHERE, HOME: NOWHERE, USERPROFILE: NOWHERE };
 const DOOR = "test-door";
@@ -659,10 +616,8 @@ console.log("\n  the boot sweep — a partial conversion is refused, retryably:"
 }
 
 // ---------------------------------------------- 5b. the boot sweep re-measures a stale verdict — and only a stale one
-// The show box holds sixteen `not smaller` markers from the native-source
-// recipe. Under the texel budget they are questions again: the first boot
-// after this lands retries them, with no operator step. A verdict that
-// carries the current stamp is not retried.
+// a `not smaller` marker without the current stamp is a question again under the texel budget: the boot retries it,
+// with no operator step; one carrying the current stamp stands
 console.log("\n  the boot sweep — a stale size verdict is re-measured, a current one stands:");
 {
   const stale = await fixtureGlb("stale", 1);
@@ -743,14 +698,9 @@ console.log("\n  the swap a browser makes when the variant lands:");
 }
 
 // ---------------------------------------------- 8. the canary — pull before restart cannot poison
-// The =2 incident, replayed: a sequencer is RUNNING, then `git pull` lands a
-// shared/ktx2.js with a new key on its disk. The old process keeps serving
-// that new file (/shared/ktx2.js) while its own key — the one it imported at
-// boot — is unchanged. A client that read the key off the served file asked
-// with the new key and got pinned; a client that reads /version asks with
-// the running key and is answered correctly. Both fetches are made here, so
-// the poison is demonstrated, not assumed. The served file is rewritten IN
-// PLACE for the duration and restored byte-for-byte (finally + exit hook).
+// a pull lands a new shared/ktx2.js key under a running sequencer: a client reading the served file asks with a key the
+// process doesn't hold, one reading /version is answered right; both fetches are made, and the file is restored
+// byte-for-byte (finally + exit hook)
 console.log("\n  the canary — a pull lands under a running sequencer:");
 {
   const SHARED = join(ROOT, "shared", "ktx2.js");

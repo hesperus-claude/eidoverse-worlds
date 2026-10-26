@@ -2,14 +2,9 @@
 //
 //   bun tools/support-test.ts
 //
-// The headless settle sim used to run on flat ground at zero, offset by ONE
-// terrain sample taken at the fall site: every placed floor was invisible to
-// it, and a body released above an elevated deck settled through the deck to
-// the dirt underneath (Mythos, under the bell — issue #17). The repair has
-// two parts, and this suite pins both: the sim clamps against the LIVE height
-// field (setTerrain with a heightAt-bearing object, under the headless stub),
-// and against support boxes registered from data (colliders.fitSupportBox —
-// the /geom-fed door agents use, no loaded mesh required).
+// The headless settle sim clamps against the LIVE height field (setTerrain with a heightAt-bearing object, under the
+// headless stub) and against support boxes registered from data (colliders.fitSupportBox, the /geom-fed door agents
+// use, no loaded mesh required).
 //
 // Everything here is in-process against the same modules the agent's
 // physics.ts drives; the live-server agent plumbing rides knockdown-test.
@@ -17,11 +12,8 @@
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 
-// Bun 1.3.x caches transpiled module graphs globally by content. A failed
-// plugin-resolved path can therefore survive into a later checkout and bypass
-// onResolve entirely. Tests need deterministic resolver behavior; production
-// runtime keeps Bun's normal cache. Re-exec once because this setting is read
-// at process startup. (Same guard as the rest of the suite — see #13.)
+// Bun's global transpiler cache can keep a stale plugin-resolved path and bypass onResolve, so re-exec once with it
+// off (read at startup; #13)
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -159,9 +151,7 @@ removeCollider('deck');
 }
 
 // ---- 6. live terrain, not one sample: a blast across a slope --------------
-// heightAt rises 1m per 4m of x. A body toppled downhill from the high side
-// must rest ON the local slope at its landing site — the single-groundY
-// convention embedded it in the hill (or floated it) by the height difference.
+// heightAt rises 1 m per 4 m of x: a body toppled downhill must rest ON the slope at its landing site, not at one groundY
 setTerrain({ mesh: null, heightAt: (x: number) => Math.max(0, x / 4) });
 {
   const av = synth([8, 2 + 0.95 - 0.95, 0]);  // standing at x=8 → ground 2.0

@@ -13,25 +13,15 @@ check('a refused leg is revoked, not left half-open', /revokeSfuLeg\(c\.world\.n
 
 // The client must PRESENT the claim, or the gate has nothing to check.
 const cli = readFileSync(new URL('../client/lib/voicesfu.js', import.meta.url), 'utf8');
-// 🔴 This asserted `cred: _cred` — the exact TYPO it was written alongside.
-// `_cred` was never declared, so sfu-answer threw ReferenceError on every
-// client and the gate was never reached; this test passed the whole time,
-// because a grep for a string cannot tell a bound identifier from a free one.
-// Assert the SHAPE that has to reach the server instead.
+// 🔴 assert the SHAPE that must reach the server: a grep for a string can't tell a bound identifier from a free one
 check('client returns its credential on sfu-answer',
   /cred: cred && \{/.test(cli) && /nonce: cred\.nonce/.test(cli));
 check('the credential the client sends carries all six claims',
   ['world:', 'id:', 'primaryGen:', 'mediaGen:', 'incarnation:', 'nonce:']
     .every((f) => new RegExp(f.replace(':', ':\\s*cred\\.')).test(cli)));
 
-// A2 — supervision exists, and peer churn no longer kills the world server.
-// (The first cut of this row asserted "never calls process.exit" — pinning the
-// pre-review guard the #130 review REJECTED. The approved v3 contract is the
-// opposite pair: benign werift-owned transport errnos are contained at the
-// OWNERSHIP seam (UdpTransport.init patch), while the process-scope handlers
-// are pure fatal reporters — an unowned error must still die. The behavioral
-// proof is tools/sfu-test.ts's owned/unowned vectors; what a source check can
-// honestly pin is that both halves of that contract are present.)
+// A2 — both halves of the contract are present: benign werift-owned errnos contained at the OWNERSHIP seam
+// (UdpTransport.init), process handlers pure fatal reporters. The behaviour is tools/sfu-test.ts's owned/unowned vectors
 const guard = S('sfuguard.ts');
 check('guard contains benign errnos at the werift ownership seam (UdpTransport.init patch)',
   /UdpTransport/.test(guard) && /benign/i.test(guard));

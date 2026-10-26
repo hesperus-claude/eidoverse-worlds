@@ -23,19 +23,8 @@ export { worldPositions };
 
 export const VRM_DIR = fileURLToPath(new URL('../assets/opt/eidoverse/assets/vrms/', import.meta.url));
 
-/** Every shipped rig, as { name, P } where P maps humanoid bone -> world rest
- *  position. Rigs without a humanoid extension or without hips are skipped
- *  loudly rather than silently. */
-/** The rigs the WORLD offers that assets/opt does not hold.
- *
- *  The optimized store and the avatar roster are not the same set: the world
- *  serves claude, claude_suit, aletheia and aporia straight from the library,
- *  and claude is the DEFAULT body. Every suite here ran on the 14 optimized
- *  rigs and none of them on the body most people are actually wearing, which
- *  is how a cross-body reach shipped looking wrong on it. Opt-in so the
- *  ragdoll's measured baseline is not silently re-based; the reach suites take
- *  it. Returns [] if the library is not on disk.
- */
+/** The rigs the WORLD serves straight from the library (the default body among them) that assets/opt does not hold.
+ *  Opt-in, so the ragdoll's measured baseline isn't silently re-based; [] if the library is not on disk. */
 export function libraryRigs(dir = process.env.EIDOVERSE_DIR
   ? `${process.env.EIDOVERSE_DIR}/eidoverse/assets/vrms/`
   : fileURLToPath(new URL('../../eidoverse-video/eidoverse/assets/vrms/', import.meta.url))) {
@@ -79,6 +68,8 @@ export function fixtureRig(name) {
   return { ...rigFromGltf(name, g), fixture: true };
 }
 
+/** Every shipped rig, as { name, P } where P maps humanoid bone -> world rest position; rigs without a humanoid
+ *  extension or hips are skipped loudly. */
 export function rigs() {
   const out = [];
   for (const f of readdirSync(VRM_DIR).filter((n) => n.endsWith('.vrm') && !n.endsWith('.ktx2.vrm')).sort()) {
@@ -90,11 +81,8 @@ export function rigs() {
     const P = {};
     for (const [b, n] of Object.entries(bones)) if (g.nodes[n]) P[b] = wp(n);
     if (!P.hips) { out.push({ name, err: 'no hips bone' }); continue; }
-    // The REAL parent chain, as the VRM has it: each humanoid bone's nearest
-    // humanoid ANCESTOR. On 6 of the 14 shipped rigs that is not the simplified
-    // chain — leftUpperArm hangs off leftShoulder, which hangs off upperChest —
-    // and the ragdoll's `d.parent` is whatever the rig really says, so a
-    // harness that assumes the simple chain is testing a skeleton nobody ships.
+    // the REAL parent chain (each humanoid bone's nearest humanoid ANCESTOR): on some rigs leftUpperArm hangs off
+    // leftShoulder off upperChest, and the ragdoll's `d.parent` follows the rig
     const nodeOf = new Map(Object.entries(bones).map(([b, n]) => [n, b]));
     const up = new Map();
     g.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => up.set(c, i)));
@@ -114,16 +102,8 @@ export function makeAvatar(P, { stride = 0, ...options } = {}) {
   const av = makeRuntimeAvatar(P, options);
   const { root, nodes } = av;
   if (stride) {
-    // A plausible mid-walk frame: thighs split, one knee up, arms counterswung.
-    //
-    // About the RIG'S OWN axes, not the world's. 6 of the 14 shipped rigs
-    // (meebit, orion, shino, victoria, vroid_fem, vroid_masc) carry
-    // leftUpperArm on -X — they face -Z, the VRM 0.x convention, which the
-    // raw GLB read here does not normalise away. Rotating those about world X
-    // bent the knee FORWARD: not a mid-walk pose but a hyperextension no leg
-    // can reach, so a solver with real limits was correct to fight it and a
-    // fixture that produced it was testing an impossible body. Derived per
-    // rig, the pose is the same walk on every skeleton.
+    // a plausible mid-walk frame about the RIG'S OWN axes: VRM 0.x rigs face -Z (not normalised in a raw GLB read), and
+    // rotating those about world X would bend the knee forward into an impossible pose
     const up = (P.neck ?? P.chest ?? P.spine).clone().sub(P.hips).normalize();
     const lat = (P.leftUpperArm && P.rightUpperArm)
       ? P.leftUpperArm.clone().sub(P.rightUpperArm)
@@ -142,10 +122,8 @@ export function makeAvatar(P, { stride = 0, ...options } = {}) {
 
 // ---- geometry helpers shared by the measuring tools -----------------------
 
-/** The lean goLimp actually passes: you fall the way you are facing, harder
- *  the faster you were moving. Tests must use this, or they measure a path
- *  production never takes — which is exactly how the old parameter study came
- *  to be tuned against launch impulses nothing ever sent. */
+/** The lean goLimp actually passes: you fall the way you face, harder the faster you moved. Tests must use this, or
+ *  they measure a path production never takes. */
 export function toppleLean(yaw = 0, speed = 0) {
   return new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     .multiplyScalar(0.9 + Math.min(1.2, speed * 0.35));
@@ -189,11 +167,8 @@ export function segDist(p1, q1, p2, q2) {
   return p1.clone().addScaledVector(d1, s).sub(p2.clone().addScaledVector(d2, t)).length();
 }
 
-/** Worst shaft-vs-shaft interpenetration among a ragdoll's own bone capsules,
- *  as a fraction of the separation those capsules should have kept. This is
- *  what colliding joint SPHERES could never see. Pairs that already overlap in
- *  the rest pose are excluded, exactly as the solver excludes them — a chest
- *  capsule genuinely does overlap a neck capsule on every real body. */
+/** Worst shaft-vs-shaft interpenetration among a ragdoll's own bone capsules, as a fraction of the separation they
+ *  should keep; pairs overlapping at rest (chest and neck) are excluded, as the solver excludes them. */
 export function worstOverlap(rd) {
   let worst = 0, name = '';
   for (const { A, B, min } of rd.pairs) {

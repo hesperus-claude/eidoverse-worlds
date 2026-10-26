@@ -1,26 +1,26 @@
-// tools/protocol/identity-check.ts — who a joiner is, against a real sequencer (security review 2026-10-06). Scratch port,
+// tools/protocol/identity-check.ts — who a joiner is, against a real sequencer. Scratch port,
 // scratch WORLDS_DIR, its own tokens.json and a test aid1 issuer; never 8968/8970. usage: bun tools/protocol/identity-check.ts
 //   C1  a credential proven on one join never carries to a second join on the same socket
 //   C2  an aid1 credential is an agent only if its kind says agent; an enrolment's listed aid1 subject is that agent;
-//       C2f (10-18 L11) a reserved name is matched folded ("Wre n", "wren." are Wren) and refused without the enrolment's proof
+//       C2f a reserved name is matched folded ("Wre n", "wren." are Wren) and refused without the enrolment's proof
 //   C3  WORLD_ADMIN naming a bare display name refuses to boot
 //   H1  typing someone's name doesn't kick them, take over their session, or show as them; a guest is named a guest
 //   H3  a world name nobody founded is refused, and nothing appears on disk
 //   H4  a guest is never given the world's default role; a door ban removes the person now; a guest's ban names the
 //       connection, so reconnecting as a fresh guest is refused
 //   H5  an owner can't demote the founder; default-role can't be owner; an owner can't be banned
-//   ID  one account is the same identity in every world on the authority (per-world ids, review M6, withdrawn: R 10-06)
-//   HB  presence is keyed by identity, never a display name (pass 2 H-B): a second account asking to be "Marigold" is shown
-//       with a disambiguator (pass 3 H2), and doesn't get the first one's remembered pose; the real one does
+//   ID  one account is the same identity in every world on the authority (no per-world ids)
+//   HB  presence is keyed by identity, never a display name: a second account asking to be "Marigold" is shown
+//       with a disambiguator, and doesn't get the first one's remembered pose; the real one does
 //   MA  a pose past the size cap isn't relayed or remembered; one websocket message past the cap closes the socket
 //   LC  on a box with a JOIN_TOKEN, /worlds, /snap and /geom?world need a key a join would take
-//   RS  roles and moderation at the server (research roles S4): your-rights from the authority, voice-moderate as the authority's
+//   RS  roles and moderation at the server: your-rights from the authority, voice-moderate as the authority's
 //       identity-keyed logged mute (surviving a reconnect), a kick's cooldown at join, ghost hidden server-side, warn and
 //       mute notices, access (listed / max with the moderator bypass); RS7 reset is the most senior owner's, fork is rate-limited;
-//       RS8 whisper is removed (R 10-18: refused `removed`, delivered to nobody); RS9 ghost history/presence, the ban list,
+//       RS8 whisper is removed (refused `removed`, delivered to nobody); RS9 ghost history/presence, the ban list,
 //       a guest's kick by address; RS10 speech is arrival-only: no say before you arrived reaches a non-admin by either
 //       history route or the join, a moderator included; an owner who joins later reads the master log
-//   GG  a guest's mute and ghost carry by hashed address to the next guest from it (R 10-07: reconnecting sheds nothing);
+//   GG  a guest's mute and ghost carry by hashed address to the next guest from it (reconnecting sheds nothing);
 //       lifting them lifts the address record; a signed-in person is untouched
 //   AG  @world.access.minAccountDays: a Discord account's age from its snowflake (pure), and the join gate (young human
 //       refused with when they qualify, a guest refused, an enrolled agent exempt, a moderator's bypass, the range)
@@ -452,10 +452,8 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok(huge.closed != null, "MA one websocket message past 2 MiB closes the socket (Bun's default took 16 MB)", huge.closed);
   a.close(); b.close(); }
 
-// ---- NM: a name with markup in it is refused at the door (security pass 3, H1's belt-and-braces) ----
-// The client shows names as text now (client/lib/markup.js); a name that IS markup is still refused, so no other reader
-// of the presence plane (an agent's page, a bot, a future sink) ever has to be careful with one. < > and " — the three
-// that open a tag or close an attribute; & and ' stay (Tom & Jerry, O'Brien are names, and escape cleanly).
+// ---- NM: a name with markup in it is refused at the door, so no reader of the presence plane must be careful ----
+// < > and " open a tag or close an attribute; & and ' stay (Tom & Jerry, O'Brien are names, and escape cleanly)
 { for (const bad of [`<img src=x onerror="alert(1)">`, "Ann<b>", "x>y", `Ro"wan`]) {
     const g = await sock(srv.port); const j = await g.join("garden", bad);
     ok(!j.snapshot && j.errors.some((e) => /name/i.test(e) && /</.test(e)) && !/[{}]/.test(j.errors.join(" ")), `NM a name with markup characters is refused, in words (${JSON.stringify(bad)})`, j.errors);

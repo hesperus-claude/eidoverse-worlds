@@ -285,10 +285,8 @@ const cases = [
       const r = s.call("bob", "batch", { ops: Array.from({ length: 600 }, (_, i) => ({ verb: "set", args: { id: "c", component: "description", value: `${i} ` + "d".repeat(490) } })) }, 10000);
       return { r: show(r), code: code(r), written: s.world().entries.length - before }; },
     nowGood: (o) => o.code === "rate" && o.written === 0 },
-  // H1 (holes review 10-15): the cap above kept the authority's array at 200, and forwardInbox forwarded by array LENGTH,
-  // so a browser that never drains its queue stuck at 200 and heard nothing more, ever (every ask to it expired "silence is
-  // no"). This row reads DELIVERY: a real WorldLog (server/worldlog.ts) with a toActor sink that never calls `inbox`.
-  // Mutation (must go red): forward by msgs.length again in forwardInbox, or drop the `n` stamp in authority.js inboxPush.
+  // a capped inbox must not stop delivery to a browser that never drains it: a real WorldLog (server/worldlog.ts), a sink
+  // that never calls `inbox`. Goes red if forwardInbox forwards by msgs.length or inboxPush drops its `n` stamp
   { id: "G3h", guard: true, what: "300 allowed body acts: at most 200 kept in the target's inbox, and all 300 reach their socket (a browser never drains it)", run() {
       const name = `g3h-${++g3hRuns}`; const { owner } = WL.foundWorld(`${WL_DIR}/${name}`, name, "olive");
       const log = new WL.WorldLog(name); const got = [];

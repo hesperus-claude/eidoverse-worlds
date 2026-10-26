@@ -109,11 +109,8 @@ console.log("\n— B. git-driven identity (dev checkout case) —");
   const body = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
   check("sha resolved from git (not unknown)", body.sha !== "unknown" && body.sha.length >= 7, body.sha);
   check("commitTime resolved from git", body.commitTime !== "unknown" && !Number.isNaN(Date.parse(body.commitTime)));
-  // The nonce file this harness plants in client/ is UNTRACKED, so during
-  // any spawned-server's lifetime the checkout is guaranteed dirty — which
-  // makes this the executable proof of the git-derived TRUE path (a
-  // hardcoded `dirty: false` fails here; review caught that the boolean
-  // check alone could not tell them apart).
+  // the planted nonce file is UNTRACKED, so the checkout is dirty while the server runs: a hardcoded `dirty: false`
+  // fails here
   check("git-derived dirty is TRUE while the tree holds the nonce (real detection, not a hardcode)",
     body.dirty === true, String(body.dirty));
 }

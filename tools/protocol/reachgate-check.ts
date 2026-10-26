@@ -1,4 +1,4 @@
-// tools/protocol/reachgate-check.ts — touch consent on the REAL path (design review 10-15, "spec vs code" item 1). A reach
+// tools/protocol/reachgate-check.ts — touch consent on the REAL path. A reach
 // streams as a descriptor inside the presence packet (shared/reachwire.js); the relay (server/messages.ts "pose") is the one
 // place every packet passes, so that is where a hand on another body is held to that body's table: the real World, its real
 // authority (consent verb, reach verb, the presence plane) and the real pose handler. Nothing here is a mock of the gate.
@@ -306,7 +306,7 @@ live.now = wall;
 let skipped = null; const SKIP = Symbol("skip");
 // ---- AG: an agent's reach through a real server (a real mcpl/agent.ts WorldAgent): the reply says what the world showed ----
 //   AG1  a stranger agent's hand on a person's chest_front: no frame the person receives carries it, and the reach reply
-//        says it wasn't shown and why (it used to say the hand was reaching)
+//        says it wasn't shown and why
 //   AG2  once the person opens touch, a hand on their shoulder relays and the reply doesn't claim a refusal
 { const { ENGINE } = await import("./common.ts");
   const W = path.join(root, "ag"), OPT = path.join(root, "agopt"); fs.mkdirSync(W, { recursive: true }); fs.mkdirSync(OPT, { recursive: true });

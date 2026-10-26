@@ -25,33 +25,12 @@
 //   --only <world>       just one world
 //   --headed             a window you can watch
 //
-// PREPARE, DON'T PRETEND. Headless Chromium is easy to get half-working, so this script asserts every prerequisite BY
-// NAME before it takes a frame, and a run that cannot take frames exits 2 saying which step failed — never a green. The
-// named steps, in order: browser binary · old tree · world copies · memory · old server · new server · world opens
-// (both trees, every world, as the spectator the browser will be) · browser page target · client ready (frames drawn) ·
-// camera honoured. A red (exit 1) is a pixel verdict; exit 2 is "could not look"; exit 3 is "looked, but the noise
-// floor is too high to call it".
-//
-// WHAT IS COMPARED, AND WHAT IS NOT. The browser joins as a SPECTATOR (`?spectate`: client/lib/base.js:42 → net.js:266
-// `spectate: true`; localbody.js:335 spawns no local body for a spectator) in a scratch COPY of each world that nobody
-// else is in. So there are no bodies, name tags or chat bubbles in frame — presence-only regions are absent rather than
-// masked, and the harness asserts that from the server's own snapshot (people[] empty) before each frame. By default the
-// DOM chrome over the canvas is hidden too (particles-shots.ts:185 does the same): panels carry names and clocks, and a
-// panel regression is a UI diff, not a surface one. --keep-ui puts it back.
-//
-// PROBE HOOKS (not features): the camera is placed by Runtime.evaluate on client/lib/core.js's exported `camera`
-// (particles-shots.ts:189 does the same). There is no URL parameter for a fixed camera; a spectator's camera is only
-// moved by controller.js updateSpectator (:1035) when it follows a remote with an avatar, and with nobody present it
-// stays where we put it — which the harness verifies by reading it back after a few frames. And Date.now() is pinned
-// to the old tree's commit time inside the page (sky.js:385/:416 derive the sun and the forecast's weather from
-// Date.now(), so two runs minutes apart would otherwise light the world differently; serverclock.js reads
-// performance.timeOrigin, so motion phases and clock sync are untouched). --no-pin-clock turns it off.
-//
-// Browser hygiene it leans on: teardown in finally and on signals; every gate prints
-// its stage on green and red; waits are on conditions (frames drawn, loads idle) not clocks; evaluate is raced against
-// a clock (harness.ts cdpOn: 60 s); frames are PROVED (a renderer.render call counter advances) not assumed; the sky guard
-// (ew-cloud-quality=off) and the GPU-loss guard (sessionStorage ew-gpu-lost) from tools/harness.ts:220-226 are applied
-// to every page. Run one headless browser at a time: the script checks memory but takes no lock.
+// Every prerequisite is asserted BY NAME before the first frame. Exit 1 = a pixel verdict, 2 = could not look (names the
+// step), 3 = the noise floor is too high to call it.
+// The browser joins as a SPECTATOR in a scratch COPY of each world nobody else is in (asserted: people[] empty), so no
+// presence is in frame; DOM chrome is hidden unless --keep-ui. Probe hooks: the camera is set on core.js's exported
+// `camera` and read back; Date.now() is pinned to the old tree's commit time (the sky derives from it). One headless
+// browser at a time: the script checks memory but takes no lock.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, cpSync, copyFileSync, mkdtempSync, rmSync, symlinkSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
@@ -176,9 +155,8 @@ const PIN_MS = Number(opt("pin-clock", String(Number(Bun.spawnSync(["git", "-C",
 if (PIN && !(PIN_MS > 0)) await missing("clock pin", `could not read the old tree's commit time for the clock pin (git log -1 --format=%ct in ${OLD})`, `pass --pin-clock <epoch ms> or --no-pin-clock`);
 
 // ---- 3. the world copies -------------------------------------------------------------------------------------------
-// A world this server serves is a directory holding world.jsonl whose line 0 is a genesis {dialect:"eidoverse-log", v}
-// with the current protocol's v (server/livehost.ts:141). Anything else — an older log under another name, a v1
-// `log.jsonl` — is refused at the door (server.ts:351) on BOTH trees, so it is named here, before any server starts.
+// a served world is world.jsonl whose line 0 is a genesis {dialect:"eidoverse-log", v} at the current v (server/livehost.ts);
+// anything else is refused at the door on BOTH trees, so it is named here, before any server starts
 const genesisOf = (file: string) => { try { return JSON.parse(readFileSync(file, "utf8").split("\n", 1)[0]); } catch { return null; } };
 const entriesOf = (file: string) => { try { return readFileSync(file, "utf8").split("\n").filter(Boolean).length; } catch { return 0; } };
 for (const w of SELECTED) {
@@ -242,9 +220,8 @@ const oldS = await spawnServer(OLD, "old"); ok("old server", `:${oldS.port} (${O
 const newS = await spawnServer(NEW, "new"); ok("new server", `:${newS.port} (${NEW_HEAD})`);
 
 // ---- 7. both world copies open on both trees — as the spectator the browser will be ---------------------------------
-// A join that gets a snapshot is the server saying "this is a world I serve"; its people[] is the presence roster, which
-// must be EMPTY for a parity frame (bodies/tags/bubbles are presence-only and would differ run to run). The entity count
-// is the non-vacuity receipt: a green over an empty world is two blank frames agreeing.
+// a snapshot means "a world I serve"; its people[] must be EMPTY for a parity frame (presence differs run to run), and the
+// entity count is the non-vacuity receipt: a green over an empty world is two blank frames agreeing
 async function spectate(s: Server, world: string): Promise<{ entities: number; people: number }> {
   return new Promise((res, rej) => {
     const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws`);
@@ -316,10 +293,8 @@ async function boot(s: Server, world: string): Promise<string> {
   /* a timer-driven counter beside the rAF one: if timers advance while frames stand still, rAF is paused (a hidden/occluded
      headless page), not the page; if both stand still the main thread is pinned */
   await page(`if (globalThis.__spTicks === undefined) { globalThis.__spTicks = 0; setInterval(() => { globalThis.__spTicks++; }, 100); } return true;`);
-  // the frame counter (probe hook): render.js's renderCensus only ticks in XR (xr.js:1174) and frameloop.js keeps its
-  // frameNo private, so the probe counts renderer.render calls itself — batches.render → renderer.render once per drawn
-  // frame on both trees and both backends. Installed once per page; a lost GPU draws nothing (render.js:112) and the
-  // count then stands still, which is the honest reading.
+  // the frame counter: renderCensus only ticks in XR and frameloop.js keeps frameNo private, so the probe counts
+  // renderer.render calls (once per drawn frame on both trees and backends); a lost GPU leaves it standing still
   await page(`globalThis.__spFrames = async () => { const { renderer } = await import('/lib/core.js');
     if (renderer.__spCount === undefined) { renderer.__spCount = 0; const o = renderer.render.bind(renderer); renderer.render = function (...a) { renderer.__spCount++; return o(...a); }; }
     return renderer.__spCount; }; return true;`);

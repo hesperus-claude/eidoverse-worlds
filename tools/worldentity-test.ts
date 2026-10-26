@@ -16,8 +16,8 @@
 //    whatever was used last
 // 5. the text tier: inspect / edit / hierarchy speak @world (the agent's edit sent to a real door)
 //
-// the protocol port (2026-10-06): the world is read from the view (shared/protocol/view.js viewState); every result is the
-// door's (tools/protocol/scratchworld.ts). worldInverse is gone: undo is the door's `undo`, checked as such.
+// the world is read from the view (shared/protocol/view.js viewState); results are the door's
+// (tools/protocol/scratchworld.ts), and undo is the door's `undo`.
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -80,10 +80,8 @@ console.log('1. the alias both ways, through the real door:');
   step(...grassReq({ preset: 'mojave', width: 90, depth: 80, center: [0, 0], density: 1.4 }));
   step('weather', { weather: 'clear', keepSky: false });                         // discards the standing sky
   step('sky', {});
-  // KNOWN BUG (reported 2026-10-06, a door/catalogue mismatch, not fixed here): a weather pick under a forecast is a
-  // manual override; the door's own skyValue (shared/forecast.js foldSkyEntry) writes sky.override, and the door's sky
-  // schema (shared/protocol/componentspec.js) has no `override` key, so the door refuses its own value: "unknown key 'override'".
-  // The Build tab's weather tile and weather.state are refused in any world with a forecast.
+  // a weather pick under a forecast is a manual override (sky.override, shared/forecast.js foldSkyEntry), which the
+  // door's sky schema (shared/protocol/componentspec.js) must take
   check('the door takes every request of the synthetic world (KNOWN BUG: a weather under a forecast is refused)', refusals.length === 0, refusals.join(' | '));
   check(`the alias round-trips exactly after every request of a synthetic world (${n} states)`, bad.length === 0, bad.join(' | '));
   const W2 = scratchWorld('worldentity');
@@ -284,13 +282,9 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   check('…even under a filter that matches nothing else', /^\[@world\]/.test(filtered) && /no placed thing matches "zzz"/.test(filtered), filtered);
 }
 
-// ------------------------------------------------------------ house review of #260, client/lib I95
-// Removing Weather (the Hierarchy row's ✕, editpanels.js removeEnv) wrote `weather.state: clear`: under a forecast that is
-// a manual override the next segment undoes (and the door refuses a weather pick under a forecast: section 1's KNOWN BUG),
-// so the Weather never went. `weather.remove` takes the weather off: the forecast stops too (a sky request that keeps
-// every sky field but the weather's), and Ctrl+Z (the door's undo) brings the forecast back. With no forecast it is the
-// clear weather it always was.
-// Mutation (must go red): in shared/worldentity.js make weather.remove send weatherOp('clear') under a forecast too.
+// ------------------------------------------------------------ I95 (#260)
+// removing Weather (editpanels.js removeEnv) takes the forecast too, and Ctrl+Z brings it back; `clear` would be an
+// override the next segment undoes. Goes red if weather.remove sends weatherOp('clear') under a forecast
 console.log('\nI95. removing the Weather removes it, forecast and all:');
 {
   const W = scratchWorld('worldentity');

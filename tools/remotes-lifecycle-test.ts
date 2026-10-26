@@ -3,19 +3,10 @@
  * nothing but an AUTHORITY (arrive, roster) may bring a body into being.
  * Presence — pose, frame, RTC — updates generations; it never creates them.
  *
- * Drives net.js's dispatch directly (the server's per-socket FIFO — proven
- * in the #95 inventory: synchronous handler, interval-driven frames, FIFO
- * ws sends — is the license to sequence messages by hand). Avatar loads are
- * held open and resolved by the test, so every race is forced, never timed.
+ * Drives net.js's dispatch by hand (the server's per-socket FIFO licenses it), with avatar loads held open, so every
+ * race is forced, never timed. Each vector is named in its check.
  *
  * Run: bun run tools/remotes-lifecycle-test.ts
- *
- * Fail-on-main vectors (each named in the checks): leave→straggler frame /
- * pose (the default-avatar sunflower ghost, and #56's stand-forever race),
- * takeover buffer inheritance, predecessor cleanup vs successor, frame-
- * before-legitimate-arrive, reconnect roster seed, custody-before-dispose
- * ordering. leave→delayed-load and takeover→old-load ride the stale-load
- * guard, asserted here as regressions.
  */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -38,10 +29,7 @@ const netMod = await import("../client/lib/net.js");
 const { remotes, dropRemote, ensureRemote, pushPose } = remotesMod as any;
 const { _dispatch, teardownParticipant, stalePresenceCount } = netMod as any;
 
-// ---- pre-#95 head: net exports no dispatch seam. Fail by name, with the
-// ghost visible in each detail — the control stays a control (assert the
-// FIXED contracts against the components main actually exports; main's
-// pose path is literally `ensureRemote(id, null)`, net.js:359).
+// ---- a net with no dispatch seam (pre-#95): fail by name, asserting the FIXED contracts against what it exports
 if (typeof _dispatch !== "function") {
   console.log("\n━━ pre-#95 head detected — component receipts ━━");
   check("net exposes the participant-teardown funnel", false, "teardownParticipant absent");

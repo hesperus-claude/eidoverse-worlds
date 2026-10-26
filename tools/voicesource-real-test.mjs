@@ -13,15 +13,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
 GlobalRegistrator.register({ url: "http://localhost/?world=test&name=probe" });
 
-// voicesource.js needs exactly ONE thing from core.js — `report` — but core.js
-// constructs a THREE.WebGPURenderer at module scope, which cannot initialise
-// headlessly. That single edge is the real reason the earlier version of this
-// test re-typed the logic instead of importing it.
-//
-// Mocking the MODULE (not the logic) keeps the thing under test real: the
-// decision code executing below is the shipped code, byte for byte. Revert the
-// micWanted fix in voicesource.js and this goes red — which is the whole
-// property the transcription version could never have.
+// voicesource.js needs only `report` from core.js, which builds a WebGPURenderer at import: mock the MODULE, not the
+// logic, so the decision code below is the shipped code
 mock.module('../client/lib/core.js', () => ({
   report: (...a) => console.error('[report]', ...a),
   bus: { on() {}, emit() {} },
@@ -34,11 +27,7 @@ Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true
   return { kind: 'microphone', getTracks: () => [{ kind: 'audio', stop() {} }] };
 }}});
 class FakeNode { connect() { return this; } disconnect() {} }
-// 🔴 THE STUB MUST BE AS STRICT AS THE BROWSER. A permissive stub hides real
-// bugs: `new MediaStream([null])` throws TypeError in Chrome, but a stub that
-// stores the array happily let mutation M4 (provider.start() returning null)
-// pass 8/8. A test double looser than the thing it doubles is a source of false
-// green — the same defect as a test that imports nothing, wearing a disguise.
+// 🔴 THE STUB MUST BE AS STRICT AS THE BROWSER: `new MediaStream([null])` throws TypeError in Chrome
 globalThis.MediaStream = class {
   constructor(t) {
     const tracks = t || [];
@@ -72,24 +61,12 @@ let s = await voiceSource();
 check('mic available and wanted → microphone', s.kind === 'microphone' && gumCalls === 1);
 
 // 2. THE FIX: mic switched off + provider available → synth, WITHOUT opening a device.
-// The REAL provider contract (voicesource.js:104): start() returns a TRACK,
-// which synthStream() wraps in a MediaStream and marks .synthetic. The
-// transcription version had this as stream() → an object, and was green anyway
-// — it was asserting against its own invented interface.
+// the real provider contract: start() returns a TRACK, which synthStream() wraps in a MediaStream marked .synthetic
 setSynthProvider({ available: () => true, start: () => ({ kind: 'audio', stop() {} }) });
 gumCalls = 0;
 s = await voiceSource({ micWanted: false });
-// 🔴 ASSERT THE POSITIVE. This read `s.kind !== 'microphone'` — a NEGATIVE, so
-// a stream that is neither a mic nor marked synthetic sailed through. An
-// adversarial mutation (strip `.synthetic = true` from synthStream()) left this
-// file 6/6 GREEN. That flag drives five live branches — voicesfu.js:290,294,300
-// (the mic-resume-after-synth guard) and voice.js:614 (whether the WebAudio
-// gate wraps the stream at all) — so a source that loses it is silently treated
-// as a microphone by every consumer.
-//
-// This is the same class of error the transcription version made, one level
-// down: I fixed the invented INTERFACE and kept asserting the absence of the
-// wrong thing instead of the presence of the right one.
+// 🔴 ASSERT THE POSITIVE (.synthetic === true), not "not a microphone": consumers such as voicesfu.js's
+// mic-resume-after-synth guard branch on the flag
 check('mic OFF + provider → synthetic source', !!s && s.synthetic === true);
 check('mic OFF source is NOT a microphone', s.kind !== 'microphone');
 check('mic OFF does not call getUserMedia', gumCalls === 0);
@@ -100,9 +77,7 @@ s = await voiceSource();
 check('default (micWanted omitted) still takes the mic', s.kind === 'microphone' && gumCalls === 1);
 
 // 3b. The provider contract itself: start() must yield a usable track.
-//     (Mutation M4: start() returning null left the old version green, because
-//     `new MediaStream([null])` is tolerated by the stub while a real browser
-//     throws. Assert the track exists rather than trusting the wrapper.)
+//     assert the track exists rather than trusting the wrapper (start() returning null)
 const tracks = typeof s.getTracks === 'function' ? s.getTracks() : [];
 check('synthetic stream carries a real track', tracks.length === 1 && tracks[0] != null);
 

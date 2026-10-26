@@ -120,10 +120,8 @@ for (const verb of ["throw", "drop"]) { const W = `ride-${verb}`; call(W, "rowan
   ok(del.ok && (del.notes ?? []).some((n) => n.fell?.includes("crate")) && !(del.notes ?? []).some((n) => n.stamped) && !c5.parent && c5.transform.pos[1] < 0.05, "SE16 deleting the plinth's mesh re-drops the crate (it lands on the floor, unparented); the reply says unstamped, not stamped (r2 S2.3)", { notes: del.notes, pos: c5.transform.pos, parent: c5.parent ?? null });
   ok(q3.ok && on && sc.ok && (sc.notes ?? []).some((n) => n.fell?.includes("crate3")) && Math.abs(w4 - 0.3) < 0.05 && ws.every((v) => Math.abs(v - 1) < 1e-3), "SE13 shrinking a MODEL plinth's scale under a resting crate re-drops it too (its own scale stays 1, it is not sheared): lands at world y = 0.3", { walk, punt: q3.ok ? true : q3.refused, on, set: sc.ok ? sc.notes : sc.refused, pos: c4.transform.pos, worldScale: ws, parent: c4.parent ?? null }); }
 
-// R 10-17 20:05 (the gym log, pyr-7): a crate came to rest leaning across two crates and the settle parented it to ONE of
-// them (pyr-6). She took the OTHER one out from under it (pyr-7), and it stayed in mid-air: a grab let fall only its own
-// descendants and the unparented things over it, so a thing resting on it but parented elsewhere was never launched, and
-// the engine wakes a sleeper only when a moving body touches it (PHYSICS "Waking and knocking"), not when a support leaves.
+// a crate resting across two supports is parented to ONE; taking the other away must still drop it: the engine wakes a
+// sleeper only when a moving body touches it (PHYSICS "Waking and knocking"), not when a support leaves
 { const W = "straddle"; call(W, "rowan", "create-world", { title: W }); call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG }); call(W, "rowan", "set", { id: "@world", component: "access", value: { join: "anyone" } });
   box(W, "l", [-0.36, 0, 0]); box(W, "r", [0.36, 0, 0]); box(W, "top", [0, 0.6, 0]);
   call(W, "vic", "move", { to: [0, 0, -0.6] }); const p = call(W, "vic", "punt", { id: "top", v: [0, 1.2, 0] }); clock.t += 6000; call(W, "vic", "look", {});
@@ -148,11 +146,8 @@ for (const verb of ["throw", "drop"]) { const W = `ride-${verb}`; call(W, "rowan
   ok(p.ok && ["l", "r"].includes(on) && d.ok && (d.notes ?? []).some((n) => n.fell?.includes("top")) && !s.entities[other] && wy < y0 - 0.2,
     "SE18 deleting the crate a straddling crate is NOT parented to lets it fall (it rested on both); the engine decides, from rest", { punt: p.ok ?? p.refused, on, other, del: d.ok ?? d.refused, notes: d.notes, y0, worldY: wy }); }
 
-// house answer on #260 (10-21): under an engine version this server doesn't carry (the owner named it), what only the engine
-// computes is refused, naming the engine and version, never quietly replaced. A straddler settled under the carried engine;
-// then the owner names a version this server doesn't carry. Deleting or grabbing the support it isn't parented to would set
-// it falling, which only that engine computes. Before: the delete skipped the wake and left it asleep in mid-air, the grab
-// set it down kinematically as if the world had no physics.
+// under an engine version this server doesn't carry (#260), what only that engine computes is refused, naming it, never
+// quietly replaced: deleting or grabbing a straddler's other support would set it falling, so both are refused
 for (const verb of ["delete", "grab"]) { const W = `straddle-foreign-${verb}`; call(W, "rowan", "create-world", { title: W }); call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG }); call(W, "rowan", "set", { id: "@world", component: "access", value: { join: "anyone" } });
   box(W, "l", [-0.36, 0, 0]); box(W, "r", [0.36, 0, 0]); box(W, "top", [0, 0.6, 0]);
   call(W, "vic", "move", { to: [0, 0, -0.6] }); call(W, "vic", "punt", { id: "top", v: [0, 1.2, 0] }); clock.t += 6000; call(W, "vic", "look", {});

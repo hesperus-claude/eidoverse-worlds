@@ -21,42 +21,21 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-// 🔴 CUTOVER NOTE (2026-08-16). Twelve assertions were REMOVED here, not
-// weakened: they pinned MESH mechanics — transceiver-direction consent, the
-// rtc relay, mesh ontrack fail-closed behaviour — and the mesh is deleted.
-// Every property they protected still holds, enforced SERVER-side and pinned
-// in tools/sfu-test.ts (fail-closed consent is mutation-tested there), which
-// is a stronger place for them: the SFU enforces consent rather than trusting
-// a client to set a direction.
+// consent and fail-closed routing are enforced SERVER-side now, pinned in tools/sfu-test.ts
 const main = read("client/main.js");
 const mouths = read("client/lib/voicemouths.js");   // 6c: the mouth/glyph driver moved out of main.js
-// 🔴 voice.js (the mesh) was DELETED in the #104 phase-1 cutover. Its
-// transport-neutral half — the gate, the analyser, mute, device release, and
-// the one micOn() answer — lives in micstate.js, which is what these
-// assertions were really about: that the mic surface is wired, not that a
-// particular transport owns it.
+// the transport-neutral mic surface (gate, analyser, mute, device release, micOn()) lives in micstate.js
 const voice = read("client/lib/micstate.js");
 const consent = read("client/lib/voiceconsent.js");
 const mictoggle = read("client/lib/mictoggle.js");
 const net = read("client/lib/net.js");
 const server = read("server/server.ts");
 
-// --- entry point imports everything it calls (the bug this file was born from)
-// The mouth/amplitude driver lives in lib/voicemouths.js now (§14 6c); the
-// same per-file check follows it there — main.js must still bind what it
-// calls itself (updateVoiceMouths, from the frame-system list).
+// --- entry point imports everything it calls; the same check follows the mouth driver into lib/voicemouths.js
 for (const [label, src] of [["main.js", main], ["voicemouths.js", mouths]] as const) {
   for (const fn of ["updateVoiceMouths", "micOn", "isMuted", "micAnalyserLevel"]  /* initVoice + peerLevels were mesh-only (cutover 2026-08-16) */) {
     const called = new RegExp(`\\b${fn}\\s*\\(`).test(src);
-    // 🔴 A DESTRUCTURED DYNAMIC IMPORT IS A BINDING TOO (fixed 2026-08-15).
-    // `const { toggleMic, micOn } = await import('./lib/micstate.js')` binds both
-    // names, but the old regex required `<name> … from` or `import … <name>`
-    // ON ONE LINE, so it saw neither — this check had been RED for micOn and
-    // toggleMic on main.js since the TTS path moved to a dynamic import, and
-    // "34 passed, 1 failed" was the normal state of this suite. I nearly
-    // rewrote correct client code to satisfy it; `git show HEAD:client/main.js`
-    // proved the failure predated my edit. A test that has always failed is
-    // not a test, it is a warning label nobody reads.
+    // 🔴 a destructured dynamic import is a binding too: `const { toggleMic, micOn } = await import(...)` binds both
     const bound = new RegExp(`\\b${fn}\\b[^\\n]*from|function ${fn}|import[^\\n]*\\b${fn}\\b`).test(src)
       // destructured dynamic import: `{ …, name, … } = await import(…)`
       || new RegExp(`\\{[^}]*\\b${fn}\\b[^}]*\\}\\s*=\\s*await\\s+import`).test(src);

@@ -159,9 +159,7 @@ const G = { tile: 1 };
 
 // 8. picking a wall to put a door in
 //
-// Geometric nearness is the wrong question here. The diagonals cross a cell's
-// middle, so anywhere near the centre the nearest edge is a diagonal that
-// usually has no wall — and a door click silently did nothing.
+// not geometric nearness: the diagonals cross a cell's middle, so near the centre the nearest edge is a wall-less diagonal
 {
   const d = drawRoom(emptyStructure(), { x: 0, z: 0 }, { x: 2, z: 1 });
   const mid = pickEdge(d, 1.5, 0.5)!;

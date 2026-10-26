@@ -42,11 +42,8 @@ check(scaled.kind==="blocked"&&scaled.reason.includes("(10×6554 m)"),"a scaled 
 const empty=prepareRouteLocal(planStructure({levels:[{y:0,tiles:[],walls:[]},{y:3,tiles:[],walls:[]}]}),{kind:"floor",level:1,height:3.1,step:.5}).route(.5,.5,1.5,.5);
 check(empty.kind==="blocked"&&empty.reason==="the identified floor has no cells","a walk on an empty floor is refused as one, not as over the limit");
 
-// The worst case the cap admits: a 126×126 field of short walls, padded to the
-// 16,384-cell limit, and a sealed destination, so the search visits every cell
-// it can reach. Each wall check reads only the walls filed under the cells its
-// leg touches, so the search costs about its cells (this took 38 s when every
-// check read every wall).
+// the cap's worst case: 126×126 short walls padded to 16,384 cells and a sealed destination, so every reachable cell is
+// visited; each wall check reads only the walls filed under the cells its leg touches
 const field:number[][]=[];
 for(let x=0;x<126;x+=2)for(let z=0;z<126;z+=2)field.push([0,x,z]);
 field.push([0,63,63],[0,63,64],[1,63,63],[1,64,63],[1,125,125]);

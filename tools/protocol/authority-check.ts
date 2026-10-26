@@ -1302,8 +1302,7 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
 // SR2 (review 10-12 S1-2, re-cut by R 10-15 22:48): a socket is an entity, so it meets the one entity budget like any
 // other: capacity.entities for the world, capacity.guestEntities for all account-less people together (a guest is a fresh
 // identity per connection), and at most SOCKETS_PER_HOST on one host. Only a write that adds is refused (full).
-// review of #260: the byte limits count the UTF-8 bytes the log stores, not JavaScript's UTF-16 string length, so a value
-// whose characters take two bytes each meets the same cap as ASCII
+// the byte limits count the UTF-8 bytes the log stores, not UTF-16 string length (#260)
 { const W = () => openWorld(root, "utf8cap"); const R = (actor, verb, args) => { clock.advance(20000); const w = W(); w.kindOf = (id) => (id.startsWith("g") ? "anon" : "human"); return request(w, actor, verb, args); };
   R("ann", "create-world", { title: "utf8cap" }); R("ann", "set", { id: "@world", component: "default-role", value: { role: "builder", guests: "builder" } });
   R("ann", "create", { id: "u1", model: "crate" });
@@ -1481,11 +1480,9 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   const OLD = /\bc\??\.sockets\b|\bparent\??\.socket\b|\bhome\??\.parent\??\.socket\b|\.sockets\?\.\[|modelOf\([^)]*\)\??\.sockets\b|\bm\??\.sockets\b/;
   const hits = files.flatMap((f) => fs.readFileSync(dir + f, "utf8").split("\n").map((l, i) => [f, i + 1, l.replace(/^\s*\/\/.*$/, "").replace(/\s\/\/ .*$/, "")]).filter(([, , l]) => OLD.test(l)));
   ok(!hits.length, `LG1 no reader of the old spelling outside authority/sockets.js (${files.length} files)`, hits.map(([f, n, l]) => `${f}:${n}: ${String(l).trim().slice(0, 100)}`)); }
-// LG1b (review 10-12 S3-4): …nor anywhere a client, an agent or a shared reader looks: shared/, client/lib, mcpl. The few
-// that read a map on purpose are named, each with why: the Inspector's Sockets card reads (and writes) the map that
-// socketMapIn builds FROM the children until the Parts UI (12b); a blueprint's own records keep their spelling (11/12);
-// hierarchy.js socketOf/localOf read a record in the old spelling (a v1 fold's: the M checks draw v1 by it; a blueprint's
-// parts); grab.js's home shape check accepts the old field (the door lifts it first)
+// LG1b: …nor anywhere a client, an agent or a shared reader looks (shared/, client/lib, mcpl). ON_PURPOSE: the Sockets
+// card's map built FROM the children (editschema), a blueprint's own records, hierarchy.js reading a v1 fold's
+// spelling, grab.js's home check (the door lifts it first)
 { const root = fileURLToPath(new URL("../../", import.meta.url));
   const walk = (d) => fs.readdirSync(root + d, { withFileTypes: true }).flatMap((x) => x.isDirectory() ? (x.name === "node_modules" || x.name === "vendor" ? [] : walk(`${d}/${x.name}`)) : /\.(js|mjs|ts)$/.test(x.name) ? [`${d}/${x.name}`] : []);
   const files = [...walk("shared"), ...walk("client/lib"), ...walk("mcpl")].filter((f) => f !== "shared/protocol/authority/sockets.js");

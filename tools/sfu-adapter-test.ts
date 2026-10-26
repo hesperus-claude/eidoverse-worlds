@@ -41,13 +41,8 @@ check("moderator mute is a DIFFERENT state than consent",
 // measurement hygiene: delivered and suppressed reported separately
 const d = sfuDiag(W) as any;
 check("diag separates forwarded from suppressed", typeof d.forwarded === "number" && typeof d.suppressed?.gated === "number");
-// 🔴 ASSERT OPACITY, NOT LENGTH. This read `.length > 20`, which pinned the old
-// full-UUID suffix rather than the property it names — and went red when the
-// incarnation moved to the DURABLE implementation (transport.ts), whose suffix
-// is 8 hex chars. 8 hex is ~4 billion values, plenty to make a lost-file
-// counter reuse non-colliding, which is the entropy suffix's actual job.
-// What matters is: prefixed counter + a non-empty entropy suffix that a caller
-// cannot predict — never that it is long.
+// 🔴 ASSERT OPACITY, NOT LENGTH: a prefixed counter + a non-empty unpredictable suffix (transport.ts uses 8 hex, enough
+// to keep a lost-file counter reuse from colliding)
 check("incarnation is opaque, not a claimed-monotonic counter",
   /^i\d+-[0-9a-f]{6,}$/.test(d.incarnation));
 
@@ -55,16 +50,9 @@ revokeSfuLeg(W, "alice");
 check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length === 0);
 
 // ── THE REVOCATION FAMILY ─────────────────────────────────────────────────
-// The live smoke caught ONE ordering ("audio survived revocation"). A privacy
-// guarantee has to hold under EVERY ordering, so this pins the whole family:
-// stale gen, newer gen, double revoke, reconnect, and a speaker who arrives
-// after consent was given.
-//
-// 🔴 These assert `allows()`, NOT route existence. Routes and consent are
-// deliberately separate — the transceiver stays negotiated and gets STARVED,
-// which is what makes revocation a memory write instead of an SDP round trip.
-// The first version of these tests counted pendingRoutes as "can hear" and
-// reported four false failures on correct code.
+// a privacy guarantee must hold under EVERY ordering: stale gen, newer gen, double revoke, reconnect, a late speaker.
+// 🔴 These assert `allows()`, NOT route existence: a revoked route stays negotiated and is STARVED (a memory write,
+// not an SDP round trip)
 {
   const allowed = (w: string, l: string, sp: string) =>
     (sfuState(w).sfu as unknown as { allows(a: string, b: string): boolean }).allows(l, sp);
@@ -112,20 +100,9 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 
 }
 
-// ── RECONNECT MUST NOT RESURRECT CONSENT (live-path bug, 2026-08-14) ──────
-// A reviewer found this by reconnecting a real websocket against a live server:
-// retireRelayLeg never routed to the SFU, so revokeSfuLeg was imported and
-// NEVER CALLED. The old leg lingered, standingConsent survived, and a fresh
-// voice leg inherited a yes it never gave.
-//
-// 🔴 THESE TESTS STILL CANNOT CATCH THE ORIGINAL BUG, and saying so is the
-// point. Verified by mutation: deleting the SFU branch in server.ts's
-// retireRelayLeg — the exact defect that shipped — leaves this file at 25/25,
-// because these tests CALL revokeSfuLeg themselves, which is precisely the call
-// the live path was missing. What they pin is that retirement CLEARS
-// everything; what no unit test here can pin is that retirement is REACHED.
-// That gap belongs to tools/sfu-browser-smoke.mjs and to live probes.
-// If you add a new per-listener map, add it below AND check the live path.
+// ── RECONNECT MUST NOT RESURRECT CONSENT ──────
+// 🔴 these call revokeSfuLeg themselves, so they pin that retirement CLEARS everything, not that server.ts
+// retireRelayLeg REACHES it (tools/sfu-browser-smoke.mjs does). A new per-listener map: add it here AND check the live path
 {
   const W = "reconnect";
   const st = sfuState(W);
@@ -144,25 +121,14 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 
   revokeSfuLeg(W, "spk");
   mintSfuCredential(W, "spk", 1, 8);            // the MUTED speaker reconnects
-  // Was "cleared in BOTH stores" — the duplication is gone, so there is one
-  // store to clear and the divergence it guarded against is now unrepresentable.
-  // The BEHAVIOUR it protected still matters and is still asserted: a fresh leg
-  // must not inherit a moderation act aimed at its predecessor.
+  // a fresh leg must not inherit a moderation act aimed at its predecessor
   check("a reconnected speaker does not inherit its predecessor's mute",
     !st.sfu.diag().muted.includes("spk"),
     `muted=${JSON.stringify(st.sfu.diag().muted)}`);
 }
 
-// 🔴 senders is world-keyed. The SAME listener id in two worlds is routine
-// (ids are per-identity, not per-world), and bare-id keying failed BOTH ways:
-// the world registered last clobbered the first's sender, and revoking the leg
-// in one world deleted the other's. `waiting` in this same file was fixed for
-// this class first; this pins the second map.
-//
-// Ordering matters: the cross-world revoke happens BEFORE any negotiation, so
-// with bare-id keying the surviving entry is deleted and world A's offer has
-// nowhere to go — wsA=0. (A second negotiation round can't be observed here:
-// sfuNegotiate serialises per leg behind a 15s answer wait, by design.)
+// 🔴 senders is world-keyed: the SAME listener id in two worlds is routine, and bare-id keying clobbers or revokes the
+// other world's. The cross-world revoke comes BEFORE any negotiation, so bare-id keying shows as wsA=0
 {
   const wsA: unknown[] = [], wsB: unknown[] = [];
   const WA = "senders-a", WB = "senders-b";
@@ -258,9 +224,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 }
 
 // ── #130 item 2: DEGRADED NEVER AGES INTO GREEN; RECOVERY IS A RECEIPT ─────
-// The reviewer's clocked repro: fault at t=0 and t=20 reported LIVE at t=31
-// under the old 30s silence timer. There is no timer now — degraded is sticky
-// until a POSITIVE receipt (a completed negotiation calls markVoiceLive).
+// degraded is sticky (no silence timer) until a POSITIVE receipt: a completed negotiation calls markVoiceLive
 {
   const { markVoiceDegraded, markVoiceLive, voiceServiceState } =
     await import("../server/sfusupervisor.ts");

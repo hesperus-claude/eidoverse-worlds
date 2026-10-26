@@ -67,11 +67,8 @@ for (let tick = 0; tick < ticks; tick++) {
   }
   await sleep(PTIME_MS);
 }
-// 🔴 TWO WINDOWS, REPORTED SEPARATELY (#130 review). `elapsed` used to include
-// this drain, understating sustained CPU/egress (reviewer's check: reported
-// 3.48 Mbps where the active-send arithmetic gives ~4.86). The drain still
-// exists — delivery accounting needs in-flight packets to land — but rates are
-// computed over the ACTIVE send window and the drain is reported as itself.
+// 🔴 TWO WINDOWS (#130): rates over the ACTIVE send window; the drain (in-flight packets landing for delivery
+// accounting) is reported as itself, or it understates sustained CPU/egress
 const activeSec = (Date.now() - t0) / 1000;
 await sleep(1000);
 

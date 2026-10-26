@@ -320,10 +320,8 @@ await tryRow('RP18', () => {
   let threw: any = null, r: any = null; try { r = maintain(w, { by: 'olive' }); } catch (x) { threw = x; }
   check('RP18 a durable-write throw inside lift-sockets propagates out of maintain (not swallowed into steps.lift.failed as code "error" while the rest runs on)', !!threw && /EIO/.test(String(threw?.message)) && r === null, [String(threw?.message).slice(0, 200), r?.steps?.lift]);
 });
-// RP19: the repair moves an old amplitude to amp as the old reader read it (Number(m.amp ?? m.amplitude)): a numeric
-// string is that number, null and '' are 0 as Number reads them (house 6340433633: null was dropped, so the motion took
-// today's default amp where the old reader stood it still), an amp of null gave way to the amplitude, and a value the
-// old reader couldn't read is dropped, as before
+// RP19: an old amplitude moves to amp as the old reader read it (Number(m.amp ?? m.amplitude)): a numeric string is that
+// number, null and '' are 0, an amp of null gives way to the amplitude, an unreadable value is dropped
 { const { repairMotion } = await import('../shared/protocol/shaperepair.js');
   const r = (amplitude: any) => repairMotion({ type: 'pendulum', amplitude, period: 2 });
   check('RP19 a numeric-string amplitude is kept as amp, null and empty are 0; a non-number one goes, as the old reader read none', r('0.4').amp === 0.4 && r(0.3).amp === 0.3 && r('wide').amp === undefined && r(null).amp === 0 && r('').amp === 0 && !('amplitude' in r('0.4')) && !('amplitude' in r(null)) && repairMotion({ amp: 0.2, amplitude: '0.9' }).amp === 0.2 && repairMotion({ amp: null, amplitude: '0.9' }).amp === 0.9,

@@ -7,11 +7,8 @@ import fs from "node:fs";
 import { readLog, fold, digest } from "../../shared/protocol/fold.js";
 import { ENGINE } from "./common.ts";
 
-// The lab's own digest was 22a27ab0…7f663b (bun replay-check.js in the lab @ 11db981; unchanged by the §3d genesis
-// migration, lab 62301b8). The names pass (2026-10-07) rewrote two things in the fixture: genesis states {dialect, v}
-// (so the world id moved; the digest leaves it out), and @world.about's text no longer names the protocol's number,
-// which IS state. The new pin is that state's digest, confirmed independently by the Python reference reader (hashlib):
-// python3 spec/conformance/reader.py spec/conformance/lab-cottage.jsonl --json → the same digest.
+// the fixture's state digest, confirmed independently by the Python reference reader:
+// python3 spec/conformance/reader.py spec/conformance/lab-cottage.jsonl --json → the same digest
 const PINNED_DIGEST = "b17bf98f909347df1024b39ad4cc044b5f08a713f2d4765fb0d3c767253971b8";
 const raw = fs.readFileSync(ENGINE + "spec/conformance/lab-cottage.jsonl");
 const entries = readLog(raw);
@@ -32,9 +29,8 @@ const fails = [
 console.log(fails.length ? `FAIL ${fails.join("; ")}` : "replay: ok (status ok, self-agrees, 0 malformed, digest pinned)");
 
 // ---- RL: a world stored before sockets were entities, lifted by the maintenance command (authority.js maintain) ----
-// Replay is untouched (the log up to its head folds byte-identically; the fold reads no socket); the REPAIRED world gains
-// one system act and change per host. Every log in spec/, plus the copies in RL_WORLDS (a scratch dir of world logs,
-// never a live world dir: copy the Commons and the gym there), is lifted in memory and checked.
+// Replay is untouched (the fold reads no socket); the REPAIRED world gains one system act and change per host. Every log in
+// spec/, plus copies in RL_WORLDS (a scratch dir of world logs, never a live world dir), is lifted in memory and checked
 const { worldOf, posAt, liftWorld, maintain, request } = await import("../../shared/protocol/authority.js");
 const { worldPose, simFold, digestOf } = await import("../../shared/protocol/simlayer.js");
 const { translate } = await import("./import-v1/translate-v1.js");

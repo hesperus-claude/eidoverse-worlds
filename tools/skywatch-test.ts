@@ -1,6 +1,6 @@
 // skywatch-test — the ambient sky percept, serverless.
 //
-// The contract (issue #29 follow-up): resting agents must HEAR the sky change,
+// The contract: resting agents must HEAR the sky change,
 // not merely be able to ask. One ambient event per meaningful boundary —
 // forecast segment change, manual override landing/expiring, coarse day-phase
 // crossing — deduped by signature, derived from the same pure oracle look()
@@ -8,11 +8,8 @@
 //
 // Run: bun tools/skywatch-test.ts
 //
-// Worktree reproduction note (#65 review N4): importing mcpl/agent.ts pulls
-// three/webgpu, so a bare worktree needs the NESTED node_modules symlinks —
-// client/node_modules and mcpl/node_modules — from the main checkout, not
-// just the top-level one, or this suite dies at import and looks broken
-// when it isn't.
+// A bare worktree also needs client/node_modules and mcpl/node_modules linked (mcpl/agent.ts pulls three/webgpu),
+// or this dies at import.
 
 import { WorldAgent } from "../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../shared/forecast.js";
@@ -28,10 +25,8 @@ const T0 = 1_754_000_000_000;
 const MIN = 60e3, HOUR = 3600e3;
 const policyArgs = { seed: 7, states: ["clear", "overcast", "rain"], dwellSec: [300, 900], transitionSec: 20 };
 
-// The sky is @world's, written through the authority's `sky` / `weather` tools (tools/agent-scratch.ts: a scratch door with a
-// pinned clock, the agent fed its own fold's views). The door stamps the sky's ts with ITS clock: each rig's door
-// stands at T0 when the sky is set. Provenance (which entry, by whom) is the LOG's: the door strips seq/by from the
-// value, so the agent must read them from the entry that wrote it.
+// the sky is @world's, set through `sky` / `weather` on a pinned-clock scratch door (tools/agent-scratch.ts) at T0;
+// provenance is the LOG's: the door strips seq/by from the value, so the agent reads them from the entry
 async function rig(args: any, who = "antra") {
   const ag = new WorldAgent({ name: "skywatch" });
   const events: any[] = [];
@@ -162,11 +157,7 @@ async function rig(args: any, who = "antra") {
 }
 
 // ---------------------------------------------------------------- F: look()'s World.sky stays a structured object
-// (postdeploy regression, Sill: #37 briefly replaced the object with a bare
-//  description string, silently breaking every consumer of {hours, clouds,
-//  ts, …}. Type stability is now pinned: folded fields preserved, derivation
-//  ADDED — currentHour/currentWeather/source/description alongside, never
-//  instead.)
+// folded fields preserved; currentHour/currentWeather/source/description ADDED alongside, never instead
 
 {
   const AZ = 200 * Math.PI / 180;   // radians (shape audit 10-16: azimuth was degrees)
@@ -194,10 +185,8 @@ async function rig(args: any, who = "antra") {
 }
 
 // ---------------------------------------------------------------- F: clock contract in look() (#65)
-// The issue's receipt was look() itself: one sky object carrying stale
-// hours/rate beside clock:'real'. The agent plane must serialize the
-// normalized bag plus the canonical effectiveClock, and ambient day-phase
-// perception must keep working with no top-level rate at all.
+// look() serializes the normalized bag plus the canonical effectiveClock (no stale hours/rate beside clock:'real'), and
+// ambient day-phase perception works with no top-level rate
 
 {
   // accelerated commons shape, then the owner flips to real time re-issuing

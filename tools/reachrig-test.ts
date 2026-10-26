@@ -1,23 +1,11 @@
 /**
  * Reach-on-real-rigs test — the solver wired to the SHIPPED VRMs, headless.
  *
- *   EIDOVERSE_DIR=~/connectome-local/eidoverse-video bun tools/reachrig-test.ts
+ *   EIDOVERSE_DIR=<library checkout> bun tools/reachrig-test.ts
  *
- * EIDOVERSE_DIR is not optional in a worktree: without it the library rigs
- * resolve to <worktree>/../eidoverse-video and silently do not load, and the
- * suite quietly drops to the 14 optimized ones. Check the rig count it prints.
- *
- * tools/ragdoll-test.ts learned this lesson the expensive way: a synthetic
- * T-pose humanoid passed 18/18 while every real rig in the fleet was broken,
- * because the rigs are the variable the maths is most sensitive to. So the
- * geometry suite (tools/reach-test.ts) isolates the solver, and THIS one runs
- * it on all 14 bodies people actually wear.
- *
- * The check that matters is INDEPENDENT: the solver returns directions, the
- * conversion turns them into bone quaternions, and then forward kinematics
- * rebuilds the hand position FROM THOSE QUATERNIONS. If the rebuilt hand and
- * the requested target disagree, the conversion is wrong — and no amount of
- * the solver agreeing with itself would have told us.
+ * EIDOVERSE_DIR is required in a worktree, or the library rigs silently don't load: check the printed rig count.
+ * tools/reach-test.ts isolates the solver; this runs it on the shipped bodies. The check is INDEPENDENT: forward
+ * kinematics rebuilds the hand FROM the output quaternions and must meet the requested target.
  */
 
 import { rigs, libraryRigs } from "./rig-load.mjs";
@@ -119,10 +107,8 @@ console.log("\njoint limits actually bind on real rigs");
     const lim = limitsFor(U);
     const dRestU = nrm(sub(P[M], P[U]));
     const coneAxisW = nrm(fromBody(coneAxisBody(toBody(dRestU, F), lim.coneTilt ?? 0), F));
-    // 95% of full extension: at 80% the elbow bends and the upper bone stays
-    // legitimately inside the stop (you CAN reach behind your back), so that
-    // would be testing nothing. Near full extension the arm straightens and
-    // the shoulder must take the whole angle.
+    // 95% of full extension: nearer, the elbow bends and the upper bone stays legitimately inside the stop, so the
+    // shoulder must take the whole angle only near full extension
     const target = add(P[U], mul(nrm(mul(F.f, -1)), (L1 + L2) * 0.95));
     const r: any = solveTwoBone({
       root: P[U], target, L1, L2, pole: sub(P[M], P[U]), fwd: F.f, coneAxis: coneAxisW,
@@ -167,10 +153,8 @@ console.log("\njoint limits actually bind on real rigs");
 
 console.log("\nwith the torso turned (the walking case)");
 {
-  // The chest is rotated by the clip every frame. A conversion that assumes
-  // the arm's parent is at rest is correct in T-pose and wrong the moment the
-  // body turns — so drive the parent with real rotations and demand the hand
-  // still lands on target, rebuilt by FK through parent ∘ local.
+  // the clip rotates the chest every frame: drive the parent with real rotations and demand the hand, rebuilt by FK
+  // through parent ∘ local, still lands on target
   let worstGap2 = 0, worstLen2 = 0, worstFrame = 0, n = 0;
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
@@ -205,11 +189,8 @@ console.log("\nwith the torso turned (the walking case)");
         limits: { coneHalf: lim.coneHalf, behind: lim.behind, maxFlex: lim.maxFlex },
       });
       if (!r.ok) continue;
-      // makeAvatar builds its bones with identity rotations, so rest IS
-      // identity here and only the parent has moved. On a real rig the rest
-      // orientations are whatever the VRM says — orion's normalized hierarchy
-      // sits 180° from the root — which is why this argument became a record
-      // rather than a bare quaternion.
+      // makeAvatar's rest is identity, so only the parent has moved; a real rig's rest is whatever the VRM says (a
+      // VRM0 hierarchy sits 180° from the root), which is why this argument is a record
       const q: any = chainLocalQuats(dRestU, dRestL, r.upper, r.lower,
         { qP: [0, 0, 0, 1], qU: [0, 0, 0, 1], qL: [0, 0, 0, 1], qPnow: qParent });
 

@@ -27,10 +27,8 @@ mock.module(base+'core.js', () => ({
   sun: new THREE.DirectionalLight(), ground: new THREE.Mesh(), hemi: new THREE.HemisphereLight(), grid: new THREE.Group(),
   BASE_PIXEL_RATIO: 1,
 }));
-// rimward: bus/CONFIG/report live in base.js (the renderer-free substrate,
-// TEL0S_NOTES §24s seam move 2) and the controller listens on THAT bus — so
-// the bench's bus must be the one base.js hands out, or a pressed G reaches
-// nobody. The real module's other exports ride along untouched.
+// bus/CONFIG/report live in base.js and the controller listens on THAT bus, so the bench's bus must be the one base.js
+// hands out; the real module's other exports ride along untouched
 mock.module(base+'base.js', () => ({ ...realBase, CONFIG: BENCH_CONFIG, bus, report() {} }));
 mock.module(base+'terrain.js', () => ({ heightAt:()=>0, setWaterField() {}, setEnvironmentFloor() {}, rainSurfaceAt:()=>0 }));   // water.js (upstream #242) hands the water to terrain.js; watervolumes.js its floor
 mock.module(base+'colliders.js', () => ({ resolveColliders:()=>{}, lastBlockedTop:0, findSeat:()=>null, raySegment:()=>null,

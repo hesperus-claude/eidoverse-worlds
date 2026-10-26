@@ -56,10 +56,8 @@ export function killSuite(root: number, sig: NodeJS.Signals, platform: NodeJS.Pl
   for (const pid of (members.length ? members : [root]).reverse()) spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", timeout: 15_000 });
 }
 
-// ---- the gate's kill path, asynchronous end to end (CI 10-21: on Windows a synchronous WMI query or taskkill can block forever
-// when a grandchild holds its pipe, whatever timeout it was given; the gate's event loop froze, and with it every timer that
-// could have moved on, until the job's two-hour limit). These never block: each child call has a bound, and past it we
-// give up on the answer (an empty table, a kill that may not have landed) and say so, rather than wait.
+// ---- the gate's kill path, asynchronous end to end: on Windows a synchronous WMI query or taskkill can block forever when a
+// grandchild holds its pipe. Each child call has a bound; past it we give up on the answer and say so, rather than wait.
 
 /** Run a command, give back its stdout, or null past `ms` (the command is killed and left behind; never waited on). */
 function outputOf(cmd: string, args: string[], ms: number): Promise<string | null> {
@@ -88,9 +86,8 @@ export async function suiteMembersAsync(root: number, platform: NodeJS.Platform 
 /** killSuite, without blocking: POSIX signals the group (a signal never blocks); Windows kills the tree it can find, children
  *  first, then the root's own tree with taskkill /T, each call bounded. */
 /** Which Windows processes to kill for a suite started as `root`, deepest first, each one by its own id (never `/T`).
- *  Windows reuses process ids (CI 10-22: the runner "lost communication" mid-gate, with a tree kill aimed at an exited
- *  suite's id on every suite): once the suite has `exited`, an id that is in the table again belongs to someone else, so
- *  nothing is killed; if the id is free, only its orphans are, and the dead root's id never is. */
+ *  Windows reuses process ids: once the suite has `exited`, an id in the table again belongs to someone else, so nothing
+ *  is killed; if the id is free, only its orphans are, and the dead root's id never is. */
 export function winKillPlan(root: number, table: Row[], exited: boolean, self: number = process.pid): number[] {
   if (exited && table.some((r) => r.pid === root)) return [];
   // never ourselves or an ancestor: a parent id on Windows is only a number, and once the dead root's id is reused a

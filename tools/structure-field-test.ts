@@ -195,10 +195,7 @@ const HOUSE = {
   const slab = plan.boxes.find((x) => x.kind === "floor")!;
   const walk = plan.levels[0].y;
 
-  // THE Z-FIGHT REGRESSION. A level-0 floor whose top sits at y=0 is exactly
-  // coplanar with terrain of height 0, and the whole floor shimmers. The slab
-  // must rest ON its level's base and put its top ABOVE it — then no floor, at
-  // any level, on any terrain, can ever be coplanar with the ground it sits on.
+  // Z-FIGHT: the slab rests ON its level's base with its top ABOVE it, so no floor is ever coplanar with its ground
   check("the foundation rests on the level base, top above it",
     slab.y0 === 0 && slab.y1 === g.slabT, `${slab.y0}..${slab.y1}`);
   check("the walk surface is the slab's top, never the ground plane",
@@ -212,10 +209,8 @@ const HOUSE = {
 {
   const plan = planStructure(HOUSE);
   const n = (k: string) => plan.boxes.filter((b) => b.kind === k).length;
-  // 8 floors + 5 wall RUNS + 1 door lintel + (window sill + lintel).
-  // Collinear segments merge: the 12 solid segments are 5 stretches of wall,
-  // which is what they are in the world. Fewer boxes, no interior seams, and a
-  // skirting that is one board instead of several that happen to abut.
+  // 8 floors + 5 wall RUNS + 1 door lintel + (window sill + lintel): collinear segments merge, so the 12 solid
+  // segments are 5 runs with no interior seams
   check("20 boxes total", plan.boxes.length === 20, `got ${plan.boxes.length}`);
   check("8 floor slabs", n("floor") === 8, `got ${n("floor")}`);
   check("12 solid segments merge to 5 runs", n("wall") === 5, `got ${n("wall")}`);
@@ -295,10 +290,8 @@ const HOUSE = {
     planStructure(unknown).boxes.filter((b) => b.kind === "wall").length === 1);
 }
 
-// 13a. multi-storey perception and routing (ew#140) — the storey a body stands
-// on must be the storey the describer and the router reason about. Both bugs
-// only show with two levels: cell keys are x,z, so a first-match level lookup
-// always answers with the ground floor.
+// 13a. multi-storey perception and routing (ew#140): the describer and router must use the storey the body stands on
+// (cell keys are x,z, so a first-match level lookup would always answer the ground floor)
 {
   // Identical footprints. Ground: kitchen|hall with a door in the divider.
   // Upstairs: the same divider with NO aperture — two sealed rooms.
@@ -418,11 +411,7 @@ const HOUSE = {
     ? Math.abs((p.z0 + p.z1) / 2 - z * g.tile) < 0.2 && p.x0 >= x * g.tile - 0.01 && p.x1 <= (x + 1) * g.tile + 0.01
     : Math.abs((p.x0 + p.x1) / 2 - x * g.tile) < 0.2 && p.z0 >= z * g.tile - 0.01 && p.z1 <= (z + 1) * g.tile + 0.01));
 
-  // the window sits on edge (0,0,0); only cell (0,0) is floored, so one face
-  // The skirting is a step in the swept PROFILE now, not a box — so it mitres
-  // by construction and cannot come apart from its wall. Boxes standing proud
-  // of a swept surface could never agree with it, which is what made the
-  // panels around openings look stuck on.
+  // the skirting is a step in the swept PROFILE, not a box, so it mitres by construction and can't come apart from its wall
   void at; void base;
   const prof0 = wallProfile(g);
   check("the skirting lives in the profile", Math.min(...prof0.map((q) => q[0])) < -g.wallT / 2);
@@ -439,12 +428,8 @@ const HOUSE = {
 
 // 16. EXTERNAL CORNERS ARE SOLID — the notch bug
 //
-// A wall straddles its edge, so an X-edge covers z ∈ [-t/2, +t/2] and its
-// perpendicular neighbour covers x ∈ [-t/2, +t/2]. Their INNER quadrant is
-// covered twice; the OUTER one is covered by neither, leaving a t/2 square
-// notch the full height of every external corner. It reads in-world as a
-// vertical groove down the outside of the building, and no test above could
-// see it — every one of them asked about a single segment in isolation.
+// a wall straddles its edge, so two perpendicular walls cover their INNER quadrant twice and the OUTER one not at all:
+// a t/2 notch down every external corner, invisible to single-segment checks
 {
   const g = normalize(HOUSE);
   const lv = g.levels[0];
@@ -472,10 +457,7 @@ const HOUSE = {
   check("solid up the corner's whole height",
     [0.1, 0.9, 1.8, 2.7].every((dy) => solidAt(withJoin, cx, floorY + dy, cz)));
 
-  // NOTHING MAY REACH PAST ANY OUTER FACE, and the check must cover VISUAL
-  // parts too. Watching one plane is how an interior door's casing punched out
-  // through the north face while the test guarded the south; watching only
-  // collision boxes would have missed it regardless, since casing is visual.
+  // NOTHING MAY REACH PAST ANY OUTER FACE, on every face and for VISUAL parts too (a door casing is visual)
   const shell = { x0: -h, x1: 4 + h, z0: -h, z1: 2 + h };
   const vis = levelParts(lv, g, floorY).filter((b: any) => b.kind !== "roof");
   const escapes = [...withJoin, ...vis].filter((b: any) =>
@@ -521,9 +503,8 @@ const HOUSE = {
 
 // 17. ROUTING — the grid is the navigation graph
 //
-// This is what makes the monolith-vs-griddled comparison mean anything. Without
-// it an agent told "go to the kitchen" arrives in BOTH houses by walking through
-// the dividing wall: both arms pass, and the experiment measures nothing.
+// without it an agent told "go to the kitchen" walks through the dividing wall in BOTH houses, and the
+// monolith-vs-griddled comparison measures nothing
 {
   const g = normalize(HOUSE);
   const lv = g.levels[0];
@@ -642,10 +623,8 @@ const HOUSE = {
   check("the top is chamfered, not square",
     prof.filter((q) => Math.abs(q[1] - g.wallH) < 1e-9).length === 2);
 
-  // THE MITRE. At a 90° corner the outer face must reach exactly the corner
-  // point — 1/cos(45°) = √2 times the half-thickness. A naive (unmitred) sweep
-  // falls short by that factor and leaves a notch, which is the whole defect
-  // the box model kept reproducing.
+  // THE MITRE: at a 90° corner the outer face reaches exactly the corner point, √2 × the half-thickness (an unmitred
+  // sweep falls short and leaves a notch)
   const L = [[0, 0], [2, 0], [2, 2]];
   const sw = sweepProfile(L, [[-g.wallT / 2, 0], [g.wallT / 2, 0]], 0);
   const xs: number[] = [], zs: number[] = [];
@@ -677,12 +656,8 @@ const HOUSE = {
 
 // 20. NORMALS FACE OUT
 //
-// Every geometric test above passed while the entire building was inside-out:
-// they all asked about POSITIONS, and winding is not a position. A swept
-// surface has no natural orientation — the lateral offset is the left normal
-// of travel, so the obvious quad order puts u=-t/2 faces back into the wall —
-// and the failure does not read as "normals are flipped", it reads as the
-// whole thing being cursed.
+// winding is not a position, so the tests above can't see an inside-out building: a swept surface has no natural
+// orientation (the obvious quad order puts u=-t/2 faces back into the wall)
 {
   const g = normalize(HOUSE);
   const faceNormals = (sw: any) => {
@@ -699,11 +674,8 @@ const HOUSE = {
     }
     return out;
   };
-  // SIGNED VOLUME is the honest test. A centroid heuristic cannot judge a
-  // stepped profile — the plinth's top ledge faces up but sits below the mesh
-  // centre, so it reads as inward every time. For a CLOSED surface, consistent
-  // outward winding gives positive volume and inside-out gives negative, with
-  // no heuristic anywhere. Closing the profile makes the sweep a closed solid.
+  // SIGNED VOLUME, not a centroid heuristic (which misjudges a stepped profile): a closed profile makes the sweep a closed
+  // solid, so outward winding is positive volume and inside-out negative
   const closedProf: [number, number][] = [[-0.075, 0], [-0.075, 2.8], [0.075, 2.8], [0.075, 0], [-0.075, 0]];
   const solid = sweepProfile([[0, 0], [3, 0]], closedProf, 0);
   const volume = (x: any) => {
@@ -761,12 +733,8 @@ const HOUSE = {
 
 // 21. SHADING CONTINUITY AT OPENINGS
 //
-// The panels over doors and under windows read as stuck on even though they
-// were already merged into one mesh — it was never a mesh-count problem. The
-// bake is sampled per VERTEX and interpolated between, and the shading is
-// strongly non-linear in height, so a wall quad spanning the whole storey shows
-// lerp(shade(0), shade(H)) at 2.1 while the lintel starting there samples
-// shade(2.1) directly. Same point, two colours, a step at the opening.
+// the bake is sampled per VERTEX and shading is non-linear in height, so a storey-tall quad shows lerp(shade(0),
+// shade(H)) at 2.1 where the lintel samples shade(2.1): a colour step at the opening
 {
   const g = normalize(HOUSE);
   const prof = wallProfile(g);
@@ -810,9 +778,7 @@ const HOUSE = {
 
 // 22. DIAGONALS — Sims-style walls corner to corner across a cell
 //
-// Geometry needed nothing: a swept profile mitres at any angle, which is why
-// the sweep had to land first. What diagonals break is the assumption that a
-// CELL IS ATOMIC — a diagonal cuts one in two, and the halves are rooms.
+// a swept profile mitres at any angle; what diagonals break is "a CELL IS ATOMIC": a diagonal cuts one in two rooms
 {
   // one 2×1 space, cut by a ↘ diagonal in the left cell
   const D = { levels: [{ tiles: [[0, 0], [1, 0]], walls: [[2, 0, 0]] }] };

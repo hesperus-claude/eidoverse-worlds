@@ -15,11 +15,9 @@ try {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
     const errors: string[] = []; page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('401')) errors.push(m.text()); });
-    // The ground builder is upstream's engine module (/library/eidoverse/terrain.js), not in this repo; a test
-    // preview's library may not carry it. Stand in with this repo's own height law (shared/terrainmath.js — the
-    // law the server and agents use), so the water fills real lows; never fetched from any other server.
-    // ENGINE_LIB=<dir of upstream eidoverse/*.js> runs the REAL engine modules (terrain, sky, weather — the weather
-    // system wraps transparent materials, which a stand-in would never exercise); otherwise a stand-in ground.
+    // the ground builder is upstream's (/library/eidoverse/terrain.js), not in this repo: stand in with shared/terrainmath.js,
+    // never fetched elsewhere. ENGINE_LIB=<dir of upstream eidoverse/*.js> runs the REAL engine modules (the weather
+    // system wraps transparent materials, which a stand-in never exercises)
     const engine = process.env.ENGINE_LIB;
     if (engine) await page.route('**/library/eidoverse/*.js', (route) => {
       const f = `${engine}/${new URL(route.request().url()).pathname.split('/').pop()}`;

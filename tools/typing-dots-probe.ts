@@ -70,13 +70,8 @@ const WPORT = await freePort(), MPORT = await freePort();
 const scratch = mkdtempSync(join(tmpdir(), "eido-dots-"));
 const tokensPath = join(scratch, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({ "dots-probe-token": { id: "claude", name: "Claude", world: "commons" } }));
-// Every child is registered before it can be lost, and keeps its stderr's tail for a failed run's report. The world
-// and the door take their settings from this run alone. Of the environment they get only what the runtime itself
-// reads: where programs, home and temporary files are, the locale, and Bun's own settings. The world also gets where
-// this machine keeps the asset library (below). And Bun loads no .env for them, though they start in the checkout. A
-// setting meant for a real world, from the shell or the checkout's .env, would otherwise reach them: a join token the
-// viewer and the watcher don't carry, a login the viewer doesn't, an address to listen on, a directory outside the
-// scratch.
+// every child is registered before it can be lost and keeps its stderr's tail; world and door get only the runtime's
+// own environment (paths, locale, Bun settings, the asset library) and no .env, so a real world's settings can't leak in
 const kids: Array<{ p: ChildProcess; name: string; err: () => string }> = [];
 const RUNTIME = /^(PATH|HOME|TMPDIR|LANG|LC_[A-Z_]+|TZ|BUN_[A-Z0-9_]+)$/;
 const runtimeEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => RUNTIME.test(k)));
@@ -105,12 +100,9 @@ const waitFor = async (what: string, probe: () => Promise<boolean>, ms = 30000) 
   throw new Error(`timed out: ${what}`);
 };
 
-// The world's own files are the run's too: by default it checks agents' tokens against the checkout's mcpl/tokens.json,
-// which can reserve the agent's name for a token this run doesn't have (server/auth.ts), and keeps its relay's
-// incarnation in the checkout's assets/opt (server/server.ts). The asset library stays this machine's: EIDOVERSE_DIR,
-// which the README sets for a world to find it, passes through, as in tools/harness.ts.
-// The world is founded before it's served: a server never founds one on join (tools/harness.ts foundWorlds). On this
-// private bench a typed name is its account (TRUST_NAMES), so the page's viewer is the world's owner.
+// the world's token and incarnation files are the run's too (the checkout's could reserve the agent's name); only
+// EIDOVERSE_DIR passes through. Founded before it's served (tools/harness.ts foundWorlds); with TRUST_NAMES the viewer
+// is the owner
 foundWorlds(scratch, ["commons"], "viewer");
 const world = child("world", ["server/server.ts"], { PORT: String(WPORT), WORLDS_DIR: scratch, OPT_DIR: join(scratch, "opt"), TRUST_NAMES: "1",
   AGENT_TOKENS_PATH: tokensPath, SKIP_OPT_SWEEP: "1", WORLD_INSTANCE_NONCE: NONCE,
@@ -122,11 +114,8 @@ const door = child("door", ["mcpl/net-server.ts"], { MCPL_PORT: String(MPORT), W
 let hbLast = Date.now();
 const hb: Array<[number, number]> = [];
 const heartbeat = setInterval(() => { const now = Date.now(); if (now - hbLast > 100) hb.push([now, now - hbLast - 100]); hbLast = now; }, 100);
-// The stall a stamp at `b` was read in. A frame that arrives while this side is stalled is read when the stall
-// ends, in the same backlog as the late tick that ends it, within a few milliseconds of it (with Bun 1.4.3 on
-// Linux, stalled for about a second by a busy loop or by SIGSTOP, each held frame was read between 0.6 ms before
-// that tick and 6.8 ms after it): so the tick ran within 20 ms of `b`. A stall that ended earlier delayed
-// nothing, so it isn't allowed.
+// the stall a stamp at `b` was read in: a frame held by a stall is read within a few ms of the late tick that ends it,
+// so only a stall ending within 20 ms of `b` counts
 const waitedIn = (b: number) => Math.max(0, ...hb.filter(([end]) => Math.abs(b - end) <= 20).map(([, excess]) => excess));
 let browser: { close(): Promise<void> } | null = null;
 const pageLoads: string[] = [], pageSaid: string[] = [], pageBeforeLoad: string[] = [];
@@ -253,10 +242,8 @@ try {
         return r;
       };
     };
-    // Each typing frame for the agent the page's socket received. The client applies a typing frame
-    // synchronously in its socket's onmessage (client/lib/net.js), so this listener logs it in the same task.
-    // That onmessage was set when the socket opened (by client/index.html's boot script for its early socket,
-    // which net.js reassigns, keeping its place), so this listener, added later, runs just after it.
+    // each typing frame the page's socket received: net.js applies it synchronously in onmessage, set at open, so this
+    // listener, added later, logs it in the same task just after
     const listen = (sock: any) => sock?.addEventListener("message", (ev: MessageEvent) => {
       if (typeof ev.data !== "string" || !ev.data.includes('"typing"')) return;
       let m: any; try { m = JSON.parse(ev.data); } catch { return; }
@@ -308,10 +295,8 @@ try {
     check(name, false, last ? "no update after the last signal found the window shut" : "the page applied no signal to judge a window by");
   };
 
-  // A turn as agent-framework runs it: start, and again every 7 s until stop. It walks, speaks, and goes on
-  // after the speech until the dots are back.
-  // Long enough for the client's longest bubble (avatar.js say: 2500 ms and 45 ms a character, at most 22 s),
-  // so the bubble is still up for about 15 s after the host's next start opens a window under it.
+  // a turn as agent-framework runs it: start, again every 7 s until stop; it walks, speaks, and goes on until the dots
+  // are back. The speech fills the longest bubble (avatar.js: at most 22 s), so it outlasts the host's next start
   const SAY = "Here now. I came over to see the frame you were building by the water, and to ask whether the beams on the east side are meant to meet the deck or to stop just short of it, as the drawing seems to show. If they stop short, I'd like to know how wide the gap is meant to be, and whether the rail along the edge runs on past it or ends at the last post. I can hold the far end while you measure, if that helps, and then we can walk the rest of the frame together.";
   if (2500 + SAY.length * 45 < 22000) throw new Error(`the speech is too short for a 22 s bubble: ${SAY.length} characters`);
   // A founded world's bounds are x and z -20…20 (shared/protocol/authority/verbs.js, create-world), so the turn's 30 m
@@ -325,10 +310,8 @@ try {
   const walkId = walk(15);   // a walk the door answers on arrival, about 19 s on
   await sleep(15000);
   const walkPending15 = !responses.has(walkId);
-  // The door reads a request only once it has answered the one before (mcpl/net-server.ts), so a speech sent during
-  // the walk would be read, and logged, only when the walk ended. So the speech waits for the walk's reply, and goes
-  // 300 ms after the next start: the host's next start is then about 6.7 s after it, long enough to see that the
-  // door's relay stopped at the speech, since it would otherwise signal every 2.5 s.
+  // the door reads one request at a time (mcpl/net-server.ts), so the speech waits for the walk's reply and goes 300 ms
+  // after a start: ~6.7 s to the next one shows the relay stopped (it would otherwise signal every 2.5 s)
   await waitFor("the walk's reply", async () => responses.has(walkId), 30000).catch(() => {});
   const walkReply = responses.get(walkId);
   await nextStart(); await sleep(300);
@@ -388,13 +371,9 @@ try {
   check("from the first start to the speech, the world sent a typing frame at least every 4 s, the window each one opens, less the stall each waited in",
     turnFrames.length > 0 && sayEntry !== null && steps.every((s) => s.step - s.stall < 4000),
     sayEntry === null ? "the world logged no speech" : `${turnFrames.length} frames; the start to the first ${steps[0]?.step} ms, the last to the speech ${steps.at(-1)?.step} ms; the longest step less its stall ${slowest.step - slowest.stall} ms (${slowest.step} ms, ${slowest.stall} ms of it a stall)`);
-  // By order and by this side's own send times: a frame that came after the speech's log entry, and before the
-  // host's next start was even sent, can only be the relay's. The window runs from when the world logged the
-  // speech, as this side read it, not from when this side sent it, so a speech the door read late can't leave a
-  // window with nothing in it to judge. A stall makes a frame look later, never sooner, and only a frame held in
-  // the same stall as the next start's send can be stamped after that send. A relay that went on signals within
-  // 2.5 s of the log entry (starts don't reset its phase), so only a stall longer than the window less 2.5 s could
-  // hide its first frame. The run prints the window and this side's longest stall.
+  // a frame after the speech's log entry (as read) and before the host's next start was sent can only be the relay's;
+  // a stall only makes frames look later, and a relay that went on signals within 2.5 s, so only a stall longer than the
+  // window less 2.5 s could hide it. The run prints the window and the longest stall
   const nextAfterSay = sayEntry === null ? null : starts.find((s) => s > sayEntry!.t) ?? null;
   const relayed = sayEntry === null || nextAfterSay === null ? null : frames.filter((f) => f.seq > sayEntry!.seq && f.t < nextAfterSay);
   check("the speech ends the door's relay: no typing frame comes after the world logs it and before the host's next start is sent",

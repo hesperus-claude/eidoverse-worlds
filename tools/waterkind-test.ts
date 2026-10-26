@@ -69,10 +69,8 @@ console.log("\na river that narrows");
 
 console.log("\nthe biggest grid, forced to the costliest kind");
 {
-  // A world-filling flat sea authored `kind: "river"` — lawful (the override is documented), and the worst
-  // case for the river passes: every cell is river, and no shore is near. The budget (shared/waterkind.js
-  // header): the 513² maximum grid analyses in about a third of a second on a laptop; this test allows 1.2 s.
-  // A per-cell neighbourhood scan of the old kind (≈1100 cells looked at per cell) is several times that.
+  // a world-filling flat sea authored `kind: "river"`, the river passes' worst case: the 513² maximum grid must
+  // analyse within 1.2 s (shared/waterkind.js header)
   analyzeWater(() => -1, 64, { level: 0, kind: "river" }, 64);   // warm the JIT
   const t0 = performance.now();
   const A = analyzeWater(() => -1, 512, { level: 0, kind: "river" }, 512);

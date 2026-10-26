@@ -72,10 +72,9 @@ export function unacknowledged(root: string, files: string[], changelog: string,
   return { judged: e.out.map((o) => `${o.rev.slice(0, 8)} (${o.why})`), base: e.base?.slice(0, 8) ?? null, out };
 }
 
-/** "A change meant to alter results is a new version" (the conformance files): for each law {law, versionOf, data} of a vector
- *  file, an earlier version of the file (the base's, the previous) whose versionOf(file) is the same string as now's must pin
- *  the same output in `data` (compared through `norm`, so a relabelled row is the same output). Each offence: {rev, law,
- *  version, field}. An earlier file that names no version for a law is no version, so there is nothing to hold it to. */
+/** "A change meant to alter results is a new version": for each law {law, versionOf, data}, an earlier file (base's,
+ *  previous) with the same versionOf must pin the same `data` (through `norm`). Each offence: {rev, law, version, field};
+ *  an earlier file naming no version for a law holds nothing. */
 export function sameVersionChanged(root: string, file: string, readNow: (f: string) => string | null, laws: { law: string; versionOf: (x: any) => any; data: string[] }[], norm: (field: string, x: any) => any = (_f, x) => x, argv?: string[]) {
   const t = readNow(file); const now = t == null ? null : JSON.parse(t); const e = earlier(root, [file], readNow, argv);
   const j = (f: string, x: any) => JSON.stringify(norm(f, x));

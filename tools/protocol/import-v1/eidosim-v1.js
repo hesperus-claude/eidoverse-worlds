@@ -140,10 +140,8 @@ const vec3ok = (a) => Array.isArray(a) && a.length === 3
 const boxOk = (b) => Array.isArray(b) && b.length === 2 && vec3ok(b[0]) && vec3ok(b[1])
   && b[0][0] <= b[1][0] && b[0][1] <= b[1][1] && b[0][2] <= b[1][2];
 
-/** The body-frame extents of a scaled, yaw-rotated local box: horizontal
- *  center offset (cx, cz) and half-extents (hx, hz) of its world AABB, and
- *  the bottom/top offsets (y0, y1) from the entity origin. Yaw through the
- *  owned kernel — the first shipped use of simmath (Covenant I). */
+/** A scaled, yaw-rotated local box's world AABB: centre offset (cx, cz), half-extents (hx, hz), and bottom/top
+ *  offsets (y0, y1) from the origin. Yaw goes through simmath (Covenant I). */
 function extentsOf(box, scale, yaw) {
   const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
   const cx = (box[0][0] + box[1][0]) * 0.5 * s, cz = (box[0][2] + box[1][2]) * 0.5 * s;
@@ -238,11 +236,8 @@ export function advanceSim(sim, toTick) {
   const law = lawOf(sim.epoch.sim);
   const v2 = law >= 2, v3 = law >= 3, v4 = law >= 4, v5 = law >= 5;
   const hf = v2 && sim.terrain ? heightFieldOf(sim) : null;
-  // No live body: nothing a tick could change but the counter — jump. Every
-  // tick used to be walked even with every body at rest (a 30-day gap over
-  // 69 resting bodies: ~4.7s, synchronously, on the heartbeat and on every
-  // returning browser — PR #160 review). Keep a live count so settling the
-  // last body during a restart catch-up also jumps over the remaining gap.
+  // no live body: only the counter could change, so jump (a long gap must not be walked tick by tick); the live count
+  // lets settling the last body mid catch-up jump the rest too
   let live = 0;
   for (const id in sim.bodies) if (!sim.bodies[id].resting) live++;
   if (!live) { if (toTick > sim.tick) sim.tick = toTick; return sim; }
@@ -401,11 +396,7 @@ export function advanceSim(sim, toTick) {
   return sim;
 }
 
-// The compiled height function for a sim's terrain params — cached by the
-// PARAMS OBJECT's identity (a new terrain entry installs a new object), and
-// deliberately outside the sim state: SimState stays plain JSON (snapshots
-// serialize it directly), and any consumer holding an equal state compiles
-// an identical field.
+// compiled height functions, keyed by the terrain PARAMS OBJECT's identity and kept outside SimState so it stays plain JSON
 const _fields = new WeakMap();
 function heightFieldOf(sim) {
   let f = _fields.get(sim.terrain);
@@ -431,13 +422,8 @@ export function simEntry(sim, entry, st) {
   const a = /** @type {any} */ (entry.args);
   if (entry.verb === 'epoch') {
     if (a && a.sim === null) {
-      // LEAVING (ruling tel0s 2026-09-01 — explicit, never a toggle): an
-      // epoch entry whose `sim` is literally null ENDS the sim epoch. The
-      // sequencer released every live body into the fold first (the same
-      // epoch-release places a re-epoch commits) and folds the barrier; from
-      // here the log keeps v1 semantics whole. With no epoch to leave this is
-      // inert (the sequencer refuses it pre-log; a replay is total). A MISSING
-      // or malformed `sim` is not an exit — it shapes nothing, as ever.
+      // `sim: null` (literally) ENDS the epoch, after the sequencer released every body into the fold; a missing or
+      // malformed `sim` is not an exit and shapes nothing
       if (!sim.epoch) return;
       sim.epoch = null; sim.tick = 0; sim.bodies = {}; sim.terrain = null;
       delete sim.boxes; delete sim.statics;
@@ -446,10 +432,8 @@ export function simEntry(sim, entry, st) {
     const simName = typeof a?.sim === 'string' ? a.sim : null;
     const tickMs = a?.tickMs;
     if (!simName || !Number.isInteger(tickMs) || tickMs < MIN_TICK_MS || tickMs > MAX_TICK_MS) return;
-    // A new epoch REPLACES — bodies of the old epoch are released to
-    // wherever the last snapshot barrier (or the sequencer's epoch-release
-    // places) left them; the barrier fold around the entry is what makes
-    // this safe (PROTOCOL_v2 §3).
+    // a new epoch REPLACES: old bodies are released where the last barrier (or the sequencer's epoch-release places) left
+    // them; the barrier fold around the entry makes that safe (PROTOCOL_v2 §3)
     sim.epoch = { sim: simName, tickMs, ts: entry.ts, seq: entry.seq,
       ...(CARRIED.has(simName) ? {} : { foreign: true }) };
     sim.tick = 0;
@@ -479,20 +463,14 @@ export function simEntry(sim, entry, st) {
   if (!sim.epoch || sim.epoch.foreign) return;   // pre-epoch logs keep v1 semantics whole
   const v3 = lawOf(sim.epoch.sim) >= 3;
   if (entry.verb === 'terrain' && sim.epoch.sim !== V1) {
-    // the ground moved wholesale: adopt the new law and release EVERY body
-    // to the instant fold — the authored word re-seats entities on the new
-    // terrain (the client already re-seats ground-level things on a
-    // terrain landing; the sim must not keep flying over a floor that no
-    // longer exists)
+    // the ground moved wholesale: adopt the new law and release EVERY body to the instant fold, which re-seats them on
+    // the new terrain (the sim must not keep flying over a floor that no longer exists)
     advanceSim(sim, tickOf(sim, entry.ts));
     sim.terrain = terrainParams(a ?? {});
     sim.bodies = {};
     if (sim.statics) {
-      // …and the statics are rebuilt from the instant fold, as the epoch
-      // branch does: a rested body had become a static at its SIM-rest pose,
-      // which the fold does not know — left standing it is an invisible box
-      // metres from the rendered thing, persisted by every snapshot (PR #160
-      // review, B2)
+      // …and the statics are rebuilt from the instant fold: a rested body's static sits at its SIM-rest pose, which
+      // the fold doesn't know, so left standing it would be an invisible box away from the rendered thing
       sim.statics = {};
       const ents = st?.entities ?? {};
       for (const id in ents) setStatic(sim, id, ents[id]);
@@ -552,11 +530,8 @@ export function simPose(sim, id) {
   return b ? { p: b.p, yaw: b.yaw, resting: b.resting } : null;
 }
 
-/** Deterministic serialization for digests and wire — plain JSON is exact
- *  (ECMA number formatting is shortest-round-trip), keys in insertion
- *  order, which the fold makes deterministic. `terrain`, `boxes` and
- *  `statics` ride so a restored snapshot grounds and collides exactly as the
- *  live fold did; older laws carry none of them, so their JSON is unchanged. */
+/** Deterministic serialization for digests and wire: plain JSON is exact, keys in the fold's insertion order.
+ *  `terrain`, `boxes` and `statics` ride so a restored snapshot collides as the live fold did; older laws carry none. */
 export const simSnapshot = (sim) => ({ epoch: sim.epoch, tick: sim.tick, bodies: sim.bodies,
   ...(sim.terrain ? { terrain: sim.terrain } : {}),
   ...(sim.boxes ? { boxes: sim.boxes } : {}),

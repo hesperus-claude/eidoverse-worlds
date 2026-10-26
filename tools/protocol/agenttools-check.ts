@@ -1,7 +1,6 @@
 // tools/protocol/agenttools-check.ts — the agent's tools (mcpl/tools.ts HANDLERS on a real mcpl/agent.ts WorldAgent) against a
-// real sequencer: scratch port, scratch WORLDS_DIR/OPT_DIR, TRUST_NAMES, never 8968/8970. Edit mode v1's worst tool bugs
-// (AUDIT-tools-vs-protocol 2026-10-07, AUDIT-human-agent-parity 2026-10-07). usage: bun tools/protocol/agenttools-check.ts
-//   AT1  E1 "two bodies": the agent's move walks the AUTHORITY's body (move steps, as a person's client streams them), so
+// real sequencer: scratch port, scratch WORLDS_DIR/OPT_DIR, TRUST_NAMES, never 8968/8970. usage: bun tools/protocol/agenttools-check.ts
+//   AT1  "two bodies": the agent's move walks the AUTHORITY's body (move steps, as a person's client streams them), so
 //        a wall the authority calls solid stops it, and the hand verbs find it where it stands (grab/put after a walk)
 //   AT2  create {from: <a thing's id>} duplicates from the tool (at as a point; with no at, beside its source), and its
 //        description carries an example
@@ -9,15 +8,11 @@
 //        says agents are performers by default (every body is Normal)
 //   AT4  every advertised tool carries a title and honest MCP annotations (readOnly / destructive / idempotent / openWorld)
 //   AT5  look points at a real tool where one exists (lock and hidden are edit fields), not at the act hatch
-//   AT6  the surface after the fold (REPOINT-PLAN 10-14 §4; R's standard 09:47: a name intuitive to everyone AND useful in
-//        general situations, or it is an alias): ~30 tools; the flight nine are move {mode: "fly"} + act land; the body
-//        sugar is pose {posture|wings|clear} / reach {release} / act shove; three library tools are one; moderation is
-//        act {kick|ban|unban|bans}; light/remove/blueprint_place are create / act delete / create {from}; a folded name
-//        still answers, teaching where it went
-//   AT8  a dropped agent dials again on shared/redial.js's schedule (reset by the join), not a fixed 1.5 s (review r5 F4)
+//   AT6  the folded surface (~30 tools): flight is move {mode: "fly"} + act land; body sugar is pose/reach/act shove;
+//        moderation is act {kick|ban|unban|bans}; a folded name still answers and says where it went
 //   AT7  an agent is a body under the same consent as a person (its table on join; no `pushable`; say takes `to`)
-//   AT9  an alias runs the new tool with the OLD argument shape (walk_to, spawn, world_verb, snapshot); renumbered from a
-//        second AT7 (claims r10 O4)
+//   AT8  a dropped agent dials again on shared/redial.js's schedule (reset by the join), not a fixed 1.5 s
+//   AT9  an alias runs the new tool with the OLD argument shape (walk_to, spawn, world_verb, snapshot)
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
@@ -269,11 +264,8 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   const letgo = await call("reach", { release: true });
   ok(!letgo.isError && /releas|let go|weren't reaching/.test(T(letgo)), "AT6g reach {release: true} lets go (clear_reach folded; nothing held: said)", T(letgo));
   // the library
-  // the sequencer's search walks eidoverse/assets/models only (server/routes.ts /library-models): under the library checkout
-  // (EIDOVERSE_DIR, ../eidoverse-video by default) when the host has one, and this scratch OPT_DIR has none. With no
-  // library the honest answers are "no matches" and the sheet's own words for nothing ("there are no models to show
-  // yet": Antra's run of f91840e5 had no library and this read "0 models", wording the tool never printed). The dispatch
-  // is what this bench can prove; EIDOVERSE_DIR=<an empty dir> runs the no-library branch
+  // search walks the library checkout's assets/models only (server/routes.ts /library-models); with no library the
+  // answers are "no matches" and the sheet's "there are no models to show yet". EIDOVERSE_DIR=<an empty dir> runs that branch
   const lib = await call("library", { query: "cup" });
   ok(!lib.isError && /no matches|\.glb/.test(T(lib)), "AT6h library {query} searches models (list_library folded)", T(lib));
   const sheet = await call("library", { kind: "models" });

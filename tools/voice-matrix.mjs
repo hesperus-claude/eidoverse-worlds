@@ -16,11 +16,8 @@ const browser = await chromium.launch({ args: [
   '--autoplay-policy=no-user-gesture-required', '--use-angle=swiftshader',
 ] });
 const RTC_MODE = process.env.RTC_MODE ?? "";
-// 127.0.0.1 is a TRAP here: the matrix browsers run Windows-side while
-// coturn lives in WSL, and WSL's localhost forwarding does not carry UDP —
-// candidates gather but every check fails with zero coturn allocations
-// (2026-08-07, cost a morning). Bind coturn to the mirrored gateway and
-// point TURN_URL at it:
+// 127.0.0.1 is a TRAP: the browsers run Windows-side, coturn in WSL, and WSL's localhost forwarding carries no UDP.
+// Bind coturn to the mirrored gateway and point TURN_URL at it:
 //   turnserver --lt-cred-mech --user hep:crucible --realm burrow \
 //     --listening-ip 10.255.255.254 --relay-ip 10.255.255.254 ...
 const TURN_URL = process.env.TURN_URL ?? "turn:10.255.255.254:3478";

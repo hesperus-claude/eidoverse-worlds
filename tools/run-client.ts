@@ -1,4 +1,4 @@
-// tools/run-client.ts — every tools/*-{test,check} and tools/protocol/*-{test,check}, one command (refactor plan 2, D5).
+// tools/run-client.ts — every tools/*-{test,check} and tools/protocol/*-{test,check}, one command.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/run-client.ts --import-only    each file loads: no SyntaxError, no
 //                                                                                 "Export named … not found", no missing module
@@ -6,10 +6,9 @@
 //                                                                                 dead at import / timed out / env / skipped
 //   … --jobs 4  --timeout 90  --slow (run the SLOW table too)  --unreached (list only)  <name-fragment> … (only those)
 //
-// A test whose stub or import graph broke dies before its first check and says nothing a person reads (six "stub missing
-// export X" commits on 10-12 alone; settings-panels-test was dead for a day). Bun fails the import loudly, so loading each
-// file is the whole stub-contract test. Exit 1 on any dead-at-import file (and, in the full mode, on any red or timed-out one:
-// a hang is usually a broken feature, #260 review I65; a file that is merely long belongs in the SLOW table).
+// A test whose stub or import graph broke dies before its first check, silently; Bun fails the import loudly, so loading
+// each file is the whole stub-contract test. Exit 1 on any dead-at-import file (and, in the full mode, on any red or
+// timed-out one; a file that is merely long belongs in the SLOW table).
 // Every run lists the files no other runner reaches (tools/protocol/run.ts, package.json scripts): this one is theirs.
 // gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some tools/*-test files start a headless
 // Chromium at their top level. So the files that launch one (the file or a local module it imports calls scratchBench,
@@ -89,10 +88,8 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
   const ch = spawn("bun", [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   live.add(ch.pid!); let out = ""; let timedOut = false;
   ch.stdout.on("data", (d) => { out += d; }); ch.stderr.on("data", (d) => { out += d; });
-  // killSuiteAsync, not process.kill(-pid): a negative pid throws on Windows, so a child past its budget was never killed,
-  // its pipes stayed open, "close" never came and the lane wedged (client-tools, windows-latest, 10-23).
-  // On Windows a kill costs a process-table (WMI) query, so only a timed-out file pays it: sweeping after every one of
-  // 424 files, six at a time, swamped WMI and the run died (10-23). A finished file's debris goes with the gate's own sweep.
+  // killSuiteAsync, not process.kill(-pid), which throws on Windows; only a timed-out file pays its WMI query (a sweep per
+  // file swamps WMI), and a finished file's debris goes with the gate's own sweep
   const kill = (exited = false) => { void killSuiteAsync(ch.pid!, "SIGKILL", process.platform, { exited }).catch(() => {}); };
   // SIGTERM first, so a test with an exit handler cleans up what it wrote; whatever is left a moment later is killed
   const timer = setTimeout(() => { timedOut = true; void killSuiteAsync(ch.pid!, "SIGTERM").catch(() => {}); setTimeout(() => kill(), 2000); }, TIMEOUT_S * 1000);

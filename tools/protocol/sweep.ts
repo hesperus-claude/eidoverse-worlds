@@ -9,10 +9,9 @@
 //   - the projection loses nothing: an independent inverse (components → old field names), compared with the
 //     REAL engine fold, entry by entry (every 250th past 2,000 entries), aligned by act. Only representation is
 //     normalised (yaw ↔ q, scalar scale ↔ vector, light spelling) and only translate-v1's DROPPED list may differ.
-//     (Kept from the phase-1 test, b05715f9: the lab sweep had no such check. Without it a translator that silently
-//     dropped grass passed.)
-// Plus: her four dialect-3 fixtures through translate-d3 (her goldens reproduce; 0 world/flight divergences; every
-// launch rests where hers rests, re-checked by a carrier; deterministic; strict read-back clean); the sim build pin;
+//     (Without this check, a translator that silently dropped grass passed.)
+// Plus: the four dialect-3 fixtures through translate-d3 (the goldens reproduce; 0 world/flight divergences; every
+// launch rests where the golden rests, re-checked by a carrier; deterministic; strict read-back clean); the sim build pin;
 // the hash shim (native = portable = the reference vectors).
 import { schemaRefusal } from "../../shared/protocol/authority.js";
 import { hexColor } from "./import-v1/translate-v1.js";
@@ -82,28 +81,22 @@ const yq = (y: number) => [0, Math.sin(y / 2), 0, Math.cos(y / 2)];
 const LIGHT_KEYS = ["color", "intensity", "range", "keep", "day"];
 const dec = (s: string) => (s.startsWith("x--") ? Buffer.from(s.slice(3), "hex").toString("utf8") : s); // h--: a hash, not invertible; a mismatch shows
 const DROP_ENTITY = ["actor", "ts", "born", "placer"]; // DROPPED: entity.actor / entity.ts, entity.born, placer
-// DROPPED (translate-v1@16; local: and account-keyed entries since @19): a value never carries an account, a sub or *Sub whose
-// string starts human:, agent:, aid1: or local:, nor an entry keyed by one (human:, agent: or aid1:, the shapes a name can
-// be) (written here independently of translate-v1's withoutAccounts); any other string under such a name is data and stays.
-// A role or ban kept by its account isn't a value: it stays, keyed by its person (the sweep's translation runs with no
-// identity mapper, so by its account, encoded, which the inverse reads back). A ban's `by` that is an account is dropped.
+// DROPPED (independently of translate-v1's withoutAccounts): a value never carries an account (a sub or *Sub starting
+// human:, agent:, aid1: or local:, or an entry keyed by one); a role or ban keyed by its account stays, keyed by its person;
+// a ban's `by` that is an account is dropped
 const noAccounts = (v: any): any => Array.isArray(v) ? v.map(noAccounts)
   : v && typeof v === "object" ? Object.fromEntries(Object.entries<any>(v).filter(([k, x]) => !/^(human|agent|aid1):/.test(k) && !((k === "sub" || k.endsWith("Sub")) && typeof x === "string" && /^(human|agent|aid1|local):/.test(x))).map(([k, x]) => [k, noAccounts(x)]))
   : v;
 const DROP_WORLD = ["entities", "mounts", "recentChat", "chatTotal"]; // DROPPED: mounts, recentChat / chatTotal
-// translate-v1@2 (slice 3a): a riding thing's pose is where the RENDERER puts it, read here through shared/hierarchy.js
-// localOf (the client's own reading, not the translator's rideOf): offset, else its socket's pos; parent.q, else yaw,
-// else the socket's yaw. Its own v1 pos/yaw/q while it rides are DROPPED ("a mounted thing's own pos/yaw/q"), and the
-// parent keeps {to, slot?} plus anything that isn't pose. A v1 guard is a lock (DROPPED "comp.guard").
+// a riding thing's pose is where the RENDERER puts it (shared/hierarchy.js localOf, not the translator's rideOf); its own
+// v1 pos/yaw/q while it rides are DROPPED, the parent keeps {to, slot?} and non-pose fields; a v1 guard is a lock
 const POSE = new Set(["offset", "yaw", "q"]);
 // v1's parent.slot is today's parent.socket: shared/hierarchy.js (the renderer's reading) speaks the protocol
 const asSocketParent = (e: any) => (e?.parent && "slot" in e.parent ? { ...e, parent: (({ slot, ...p }) => ({ ...p, socket: slot }))(e.parent) } : e);
 const v1Shim = (ents: any) => (ents ? Object.fromEntries(Object.entries<any>(ents).map(([k, e]) => [k, asSocketParent(e)])) : ents);   // per call: the v1 fold mutates its state in place
-// A physics-epoch log (translate-v1@10): the old world is her instant fold COMPOSED with her sim, so the reference here
-// runs her sim beside the v1 fold (independently of the translator's bookkeeping): a body stands where it last came to
-// rest in her sim while her sim still holds it (resting, or flying again), and a thing whose lib has a box in her sim's
-// stamped table carries that box as physics.shape. Declared: the epoch is @world physics-engine {engine, build, tickMs};
-// its ts and seq are where its change entry stands in the new log, and build is the authority's engine stamp.
+// a physics-epoch log: the reference runs the first eidosim beside the v1 fold (independently of the translator): a body
+// stands at its last sim rest while the sim holds it, a stamped box is physics.shape, and the epoch is @world
+// physics-engine {engine, build, tickMs}, ts/seq where its change stands, build the authority's engine stamp
 function oldNorm(st: any, phys: any = null) {
   const ents: any = {}; let shim: any = null;
   for (const [id, e0] of Object.entries<any>(st.entities ?? {})) {
@@ -127,10 +120,8 @@ function oldNorm(st: any, phys: any = null) {
     // declared (translate-v1@5 DROPPED motion.rpm): a spin's rpm is degPerSec = rpm × 6 (degPerSec wins when both were written)
     if (n.comp) for (const [k, m] of Object.entries<any>(n.comp)) if ((k === "motion" || k.startsWith("motion:")) && m && typeof m === "object" && "rpm" in m) {
       const { rpm, ...r } = m; n.comp[k] = r.degPerSec !== undefined || typeof rpm !== "number" ? r : { ...r, degPerSec: rpm * 6 }; }
-    // declared (translate-v1@12, the shape audit's physics-motion family), written independently of shared/protocol/shaperepair.js:
-    // a bare motion naming a part is motion:<part> (a keyed one already there wins); amplitude is amp; a letter axis its
-    // vector; a pendulum with no period or damp read 3.5 s and 0; a whole motion's pivot is the thing's pivot; a whole
-    // pendulum with no pivot swung about [0, 2, 0]; collider exact is mesh
+    // independently of shared/protocol/shaperepair.js: motion:<part> (a keyed one wins), amp, axis vectors, a pendulum's
+    // 3.5 s / 0 defaults and [0, 2, 0] pivot, a whole motion's pivot is the thing's, collider exact is mesh
     if (n.comp) { const C = (n.comp = { ...n.comp }), isB = (v: any) => !!v && typeof v === "object" && !Array.isArray(v), AX: any = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };
       // (review r7 F1) a node's name is data: a keyed motion carries node (its tag, when it was the name), and a bare one naming
       // a part becomes motion:<partSlot(part)> {node: part} (a motion already on that node wins)
@@ -175,11 +166,8 @@ function oldNorm(st: any, phys: any = null) {
   if (world.sky && typeof world.sky === "object") { const { seq, by, ...sky } = world.sky;
     if (sky.forecast && typeof sky.forecast === "object") { const { seq: _s, by: _b, ...fc } = sky.forecast; sky.forecast = fc; }
     world.sky = sky; }
-  // declared (translate-v1@12, the shape audit's render-media-env family), written independently of shared/protocol/shaperepair.js:
-  // the sky's clock is a tz (clock 'real' + its parked clock as hours/rate/ts; no clock, no tz), azimuth radians, transition
-  // and the forecast's dwell/transition, sun/fill/world gone, the registry's defaults written; the terrain's layer colours
-  // ints, the sim's defaults (terrainmath.js) written, its water the water component; grass through the reader's mapping,
-  // a preset kept by its name (R 10-17)
+  // independently of shaperepair.js: the sky's clock is a tz, azimuth radians, sun/fill/world gone, registry defaults
+  // written; terrain layer colours ints, terrainmath defaults, its water the water component; grass via the reader's mapping
   const isO = (v: any) => !!v && typeof v === "object" && !Array.isArray(v);
   if (isO(world.sky)) { const k: any = { ...world.sky };
     if (k.clock === "real") { k.tz = typeof k.tz === "string" && k.tz ? k.tz : "America/Los_Angeles"; const d = k.dormantRated; if (isO(d)) { for (const f of ["hours", "rate", "ts"]) if (Number.isFinite(d[f])) k[f] = d[f]; } }

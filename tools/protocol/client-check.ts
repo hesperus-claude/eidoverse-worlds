@@ -1,4 +1,4 @@
-// tools/protocol/client-check.ts — slice 3b in a real browser: edit mode in a world sends requests, folds the log and
+// tools/protocol/client-check.ts — in a real browser: edit mode in a world sends requests, folds the log and
 // waits for the authority. One headless Chromium against a scratch sequencer (tools/harness.ts scratchBench: scratch port,
 // scratch WORLDS_DIR, its own profile; never 8968/8970). Run it under the house guards:
 //   code/scripts/eido-probe.sh -C <worktree> -t 400 tools/protocol/client-check.ts      (test:protocol's `client` suite does this)
@@ -6,7 +6,7 @@
 //   B   boot: the page knows it's in a world; its own fold of the log stream = the log on disk (digest)
 //   P   place from the Build tab's ghost: one `create` act, the page waited for the authority
 //   G   a gizmo drag is presence until release: ONE act, `set transform` with expect on where it started
-//   KU  U opens People Here; Ctrl+U (the browser's view-source) does not (review r3 F9)
+//   KU  U opens People Here; Ctrl+U (the browser's view-source) does not
 //   U   Ctrl+Z is the authority's undo {act} of MY act; Ctrl+Shift+Z redoes (undo of my undo)
 //   C   undo refused when someone changed it since: nothing written, the refusal shown in the agents' words
 //   X   Esc mid-drag: the thing goes back, and nothing is written (0 acts)
@@ -348,10 +348,8 @@ try {
     check("V3 an owner's are clickable again", await waitFor(`${lockBtn(crate)}?.disabled === false`)); }
 
   // ---- F: the mesh drag of a mounted child moves it in the world's frame (the old frame bug) ----
-  // A low plinth (below eye level, so its top is what the pointer meets), turned 90° and scaled 0.6×, with a pebble
-  // riding it. The drag keeps its grab offset in WORLD space, so the pebble's world displacement equals the pointer's
-  // on the plinth's top. The old code added a world point to a local offset and set it as the local position (so the
-  // pebble moved by R·0.6·that, the wrong way), and its ray could hit the pebble itself (it is drawn inside the plinth).
+  // A low plinth turned 90° and scaled 0.6×, a pebble riding it: the grab offset is kept in WORLD space, so the pebble
+  // moves exactly as the pointer does on the plinth's top (and the ray must not hit the pebble drawn inside it)
   { const roots = Object.keys(disk().entities).filter((k) => k !== "@world" && !disk().entities[k].c.parent);
     check("(setup) the owner clears the field (everything placed so far, through its locks: some are the owner's, owners-only since recut B2), so only the plinth is under the pointer", await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('batch', { ops: ${JSON.stringify(roots)}.map((id) => ({ verb: 'delete', args: { id } })), throughLock: true })).ok;`), roots);
     // the view must hold still while the test aims (the body may still be settling, and the camera chases it)
@@ -722,19 +720,15 @@ try {
   const hrows = async () => evalJson(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].map((x) => x.textContent)`);
   check("HT3 it lists this thing's acts, newest first, with who and what (pt's motion set and deleted above)", await waitFor(`(() => { const t = [...document.querySelectorAll('[data-frame="history"] .sp-info')].map((x) => x.textContent); const i = t.findIndex((x) => /delete.*motion/.test(x)), j = t.findIndex((x) => /set.*motion/.test(x)); return i >= 0 && j > i; })()`, 5000), await hrows());
   // enough acts to page: 25 label sets on pt, then Older… must reach back to the motion set
-  // each set must land: the authority's rate (60 entries per actor per 10 s; a set is an act and a change) refuses a burst
-  // with code 'rate' and no trace, which left a hole in the history ('"pt 22" → "pt 24"'); a refused set waits out the window
-  // and is sent again, as the refusal says (slow down)
+  // each set must land: the rate (60 entries per actor per 10 s) refuses a burst with code 'rate', so a refused set waits
+  // out the window and is sent again
   const landed = await page(`const n = await import('/lib/net.js'); let ok = 0, waited = 0;
     for (let k = 0; k < 25; k++) for (let t = 0; t < 15; t++) { const r = await n.sendRequest('set', { id: 'pt', component: 'label', value: 'pt ' + k });
       if (r?.ok) { ok++; break; } if (r?.refused?.code !== 'rate') return { ok, k, refused: r?.refused ?? null }; waited++; await new Promise((z) => setTimeout(z, 1000)); }
     return { ok, waited };`);
   check("(setup) all 25 label sets land (a rate refusal waits out the window and is sent again)", landed?.ok === 25, landed);
-  // the panel re-reads its newest page when the thing changes: HT4/HT5 read it once it has caught up with the last set
-  // (a real condition, not a fixed wait: an 800 ms sleep read a page taken mid-stream, motion still on it)
-  // the ROW for the last set ('→ "pt 24"'), not just the words: the panel's own title says "pt 24" as soon as the label
-  // lands, so /pt 24/ was true while the page on screen was still one taken mid-stream (HT5 failed 3 of 5, 10-23, its
-  // first row "pt 22 → pt 23")
+  // HT4/HT5 wait for the ROW of the last set ('→ "pt 24"'), not a fixed sleep or the words: the panel's title says
+  // "pt 24" as soon as the label lands, while the page on screen may still be one taken mid-stream
   const caught = await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].some((x) => /→ "pt 24"/.test(x.textContent))`, 8000);
   if (!caught) throw new Error(`HT4 setup: the panel never showed the last set's row: ${JSON.stringify((await hrows() as string[]).slice(0, 3))}`);
   check("HT4 a long history shows a page and an Older… button", await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-btn')].some((b) => /Older/.test(b.textContent))`, 5000), await hrows());
@@ -744,10 +738,8 @@ try {
   await waitFor(`(() => { const b = [...document.querySelectorAll('[data-frame="history"] .sp-btn')].find((x) => /Older/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`, 5000);
   if (process.env.SHOT_DIR) { const r = await cdp.send('Page.captureScreenshot', { format: 'png' }); (await import('node:fs')).writeFileSync(`${process.env.SHOT_DIR}/history-tab.png`, Buffer.from(r.data, 'base64')); }
   check("HT6 …Older… reads further back and finds it", await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].some((x) => /set.*motion/.test(x.textContent))`, 5000), (await hrows() as string[]).length);
-  // HT7: a history read the authority refuses (or that times out) said "reading the log…" forever, and nothing asked again
-  // (client-b2 HIS1, 10-22). The page answers this thing's first history read with a refusal itself; the panel must say so,
-  // and the next change must read again.
-  // its setup failing fails HT7, not the whole run (a throw here used to abort every check after it)
+  // HT7: a refused (or timed-out) history read must be said, and the next change must read again (client-b2 HIS1);
+  // its setup failing fails HT7, not the whole run
   try { const made: any = await page(`return (await import('/lib/net.js')).sendRequest('create', { components: { transform: { pos: [3, 0, 3] }, label: 'ht7 stone' } });`);
     const hid = made?.refs?.[0]?.id; if (!hid) throw new Error(`HT7 setup: the stone wasn't created: ${JSON.stringify(made)}`);
     await waitFor(`import('/lib/world.js').then((m) => m.entities.has(${JSON.stringify(hid)}))`);
@@ -763,11 +755,8 @@ try {
     check("HT7b …and once the authority answers again, the panel reads it by itself (no change needed)", await waitFor(`/created/.test(document.querySelector('[data-frame="history"]')?.textContent ?? '')`, 6000),
       await evalJson(`(document.querySelector('[data-frame="history"]')?.textContent ?? '').slice(0, 200)`));
   } catch (e) { check("HT7 (setup)", false, String((e as Error)?.message ?? e)); }
-  // HT8: a re-read still queued for the thing you just left stole the panel from the one you selected (client-b2 HIS1,
-  // 10-23, measured: the world's deferred re-read ran after the selection moved to a thing, took a newer generation, and
-  // both replies were dropped as stale: "reading the log…" until the next change). The page holds back stone A's history
-  // reads (1.5 s × the wait scale) and B's longer (3 s ×), so A's re-read (A changed while its read was out) runs after B's read went out and before
-  // B's answer came back — the order HIS1 recorded; B's history must still arrive.
+  // HT8: a re-read queued for the thing you just left must not steal the panel (client-b2 HIS1). A's reads are held
+  // 1.5 s and B's 3 s (× the wait scale), so A's re-read lands between B's ask and B's answer; B's history must still arrive
   const holdA = Math.round(1500 * WAIT_SCALE), holdB = Math.round(3000 * WAIT_SCALE);   // in-page holds stretch with the waits
   try { const mk = async (label: string, at: number[]) => { const made: any = await page(`return (await import('/lib/net.js')).sendRequest('create', { components: { transform: { pos: ${JSON.stringify(at)} }, label: ${JSON.stringify(label)} } });`);
       const id = made?.refs?.[0]?.id; if (!id) throw new Error(`HT8 setup: ${label} wasn't created: ${JSON.stringify(made)}`);
@@ -947,10 +936,8 @@ try {
         const hs = (b) => [...b.querySelectorAll(':scope > .rp-part')].filter((d) => !d.hidden).map((d) => d.querySelector('.rp-h')?.textContent ?? '(untitled)');
         const out = { people: hs(P), worldParts: [...W.querySelectorAll(':scope > .rp-part')].filter((d) => !d.hidden).length, worldTotal: W.querySelectorAll(':scope > .rp-part').length, peopleFilled: [...P.querySelectorAll('.rp-box')].every((b) => b.childElementCount > 0) }; P.remove(); W.remove(); return out;`);
       check("WS4 World Settings: People & roles shows Roles + Who may come in, both filled; World hides 'Carried over' on a fresh world", JSON.stringify(r?.people) === '["Roles","Who may come in"]' && r?.peopleFilled && r?.worldParts === 1 && r?.worldTotal === 2, r); }
-    // A1 (recut A, #260 21:51Z): the authority decides an act on a body for every kind of body, so what arrives APPLIES — a
-    // browser body doesn't decide again. Today the client refused a shove the authority had allowed (it read only the
-    // everyone row, so a friend's allowed shove never landed). With my pushable switch off locally, an arriving shove
-    // still knocks me over; then I get up.
+    // A1 (#260): the authority decides an act on a body, so what arrives APPLIES and a browser body doesn't decide again:
+    // with my pushable switch off locally, an arriving shove still knocks me over; then I get up
     { const r = await page(`const C = await import('/lib/consent.js'), L = await import('/lib/localbody.js'), { bus } = await import('/lib/base.js');
         const was = C.pushable(); C.setPushable(false);
         bus.emit('puppet', { by: 'pal', ragdoll: { lean: [2, 0, 0] } });

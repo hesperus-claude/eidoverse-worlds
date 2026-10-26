@@ -1,5 +1,5 @@
-// tools/protocol/inplace-check.ts — translating an old world IN PLACE (R 10-17 13:36: "translating should leave the world
-// under its ORIGINAL name, so links keep working, with the old log kept beside it").
+// tools/protocol/inplace-check.ts — translating an old world IN PLACE: it keeps its ORIGINAL name, so links keep working,
+// with the old log kept beside it.
 //   `bun tools/protocol/world.ts translate <world> --no-founder-key …` translates into a temporary
 //   sibling, verifies (the importer's checks, the result opened as the server opens it, and the snapshot oracle where the
 //   old server left a snapshot.json), and only then swaps: world.jsonl takes the original directory's name, and the old
@@ -20,7 +20,7 @@
 //   IP10 a name with no old log refuses with that reason
 //   IP12 the snapshot oracle re-runs on a translated world's kept originals (log.original.jsonl, snapshot.original.json)
 //   IP13 the process dies between swap steps (WORLD_TS_DIE_AT_STEP, no rollback): a re-run sees the half-swapped
-//        directory and finishes the swap, saying so (review r11 L4)
+//        directory and finishes the swap, saying so
 //   IP14 an old log written to during the translation (a server still running): the swap refuses and moves nothing
 //   IP15 a write that slips in mid-swap (injected: WORLD_TS_TOUCH_SOURCE_AT_STEP) undoes the swap
 //   IP16 finishing an interrupted swap refuses when the old log changed since the translation read it
@@ -28,13 +28,13 @@
 //   IP18 the recovery of an interrupted swap writes the identities the interrupted run planned
 //   IP11 a snapshot.json the oracle can't compare (a fold of part of the log) doesn't block the translation: it says,
 //        in its output, that the snapshot was NOT compared and why, and keeps it as snapshot.original.json
-//   —— review of PR #260 (Mica) item 6: the approval is bound to the dry-run report's hash; rollback is tested ——
+//   —— the approval is bound to the dry-run report's hash; rollback is tested ——
 //   IP19 `--dry-run` writes nothing and prints a report whose hash is the same on a second run (nothing random in it)
 //   IP19t the report carries the trial-period line (hash-bound) and --dry-run prints it
 //   IP20 `translate` with no --approved refuses, names the dry run, and changes nothing
 //   IP21 an approval of a report that is no longer the world's (the old log changed since) is refused, both hashes named,
 //        nothing moved
-//   —— #260 rereview blocker 1: nothing can yet bind a key to the v1 world's owner, so a translation names no founder ——
+//   —— nothing can yet bind a key to the v1 world's owner, so a translation names no founder ——
 //   IP21b the bytes translated are the bytes the approved report hashed (a write between the approval and the
 //        importer's read is refused, both forms)
 //   IP22 `--founder-key` (dry run, or with --approved and the key's GOOD signature) and `--approve-sig` are REFUSED, truthfully
@@ -49,13 +49,13 @@
 //   IP31 FOUNDING a brand-new world is a different path: create-world still takes the founder's own ownerKey for tier 0, and
 //        `world.ts found` still founds
 //   IP24b rollback keeps an identity another world's log names (the second world reused the first one's id)
-//   IP30 (r14 M3) a world.mod.jsonl the server made after the translation blocks rollback without --discard-changes, is removed with it, and the world translates again
+//   IP30 a world.mod.jsonl the server made after the translation blocks rollback without --discard-changes, is removed with it, and the world translates again
 //   IP24 `rollback <world>` restores the WHOLE operational set: the renamed originals back (same bytes, inode, mtime), the
 //        made files (world.jsonl, poses.json, world.mod.jsonl, translation.json) removed, the minted identities forgotten: the
 //        world directory and the shared directory are byte-identical to before the translation, and it translates again
 //   IP25 a rollback that would lose history (the server wrote to world.jsonl since) refuses unless --discard-changes; a
 //        directory with no manifest refuses with that reason
-//   —— item 7: truthful refusals ——
+//   —— truthful refusals ——
 //   IP26 a world using features this protocol doesn't carry yet (a water volume, air boxes, a climb route, a vehicle, a collision
 //        toggle) is REFUSED, naming each feature and where it was used (seq, entity, actor); the dry run lists them under
 //        `deferred`, and an approval of that report can't override the refusal; nothing is written. The world's water
@@ -445,12 +445,9 @@ const waiting = oldWorld("waiting");
   ok(r.code === 0 && /snapshot\.json NOT compared: snapshot\.seq \d+ ≠ the log's last seq/.test(r.out) && isWorldDir(d) && same(fingerprint(d)["snapshot.original.json"], fp["snapshot.json"]),
     "IP11 a partial snapshot.json is reported as NOT compared (with the oracle's reason), and kept as snapshot.original.json", r.out.slice(-700)); }
 
-// ================= IP13: the process dies between swap steps; a re-run finishes the swap (review r11 L4) =================
-// WORLD_TS_DIE_AT_STEP=k (tests only) exits the process after k renames, with no rollback: a death, not a thrown error
-// (IP6 covers those). k=1: world.jsonl has landed (the directory is a world) and log.jsonl is still beside it; k=3: the
-// old snapshot is renamed and poses.json is not. The re-run notices (log.jsonl beside world.jsonl, or the temporary
-// directory still there), finishes the renames and moves the rest of the translated files in, and says so; the original
-// log is the untouched file throughout, and a third run says it's already translated
+// ================= IP13: the process dies between swap steps; a re-run finishes the swap =================
+// WORLD_TS_DIE_AT_STEP=k (tests only) exits after k renames with no rollback (k=1: world.jsonl landed, log.jsonl beside it;
+// k=3: snapshot renamed, poses.json not); the re-run finishes and says so, the original log untouched throughout
 for (const k of [1, 3]) { const name = `halfway${k}`; const d = oldWorld(name); const fp = fingerprint(d);
   const died = xlate([name], { WORLD_TS_DIE_AT_STEP: String(k) }); const mid = fingerprint(d); const midTemps = temps().filter((t) => t.includes(name)).length;
   const r = tool(["translate", name, "--no-founder-key"]); const after = fingerprint(d);   // a recovery needs no new approval: it finishes the approved one
@@ -496,10 +493,9 @@ for (const k of [1, 3]) { const name = `halfway${k}`; const d = oldWorld(name); 
   ok(died.code !== 0 && r.code !== 0 && /changed while it was being translated/.test(r.out) && same(after, mid) && temps().some((t) => t.includes(name)),
     "IP16 finishing an interrupted swap refuses when the old log changed since it was read, and moves nothing", { died: died.code, code: r.code, out: r.out.slice(-500), same: same(after, mid) }); }
 
-// ================= IP17–IP18: identities are written only once the world is in place (review of PR #260, import-v1/world.ts:86) =================
-// IP17 with no TRUST_NAMES, Ann and Bob are imported people with no account: each attempt mints them anew. A failure before,
-//      during or after the renames (injected at step 0, 2 and 6 — 6 is after the last rename) and a concurrent writer each
-//      leave the shared directory exactly as it was; the clean run then adds them once
+// ================= IP17–IP18: identities are written only once the world is in place (#260) =================
+// IP17 a failure at step 0, 2 or 6 (6 is after the last rename) and a concurrent writer each leave the shared directory
+//      as it was; the clean run then adds the imported people once
 const actorsOf = (d: string) => [...new Set(fs.readFileSync(path.join(d, "world.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).actor).filter((a: string) => /^u-/.test(a)))];
 { const name = "nameless"; const d = oldWorld(name); const before = fs.readFileSync(dirf, "utf8");
   const runs = [0, 2, 6].map((k) => { const r = xlate([name], { TRUST_NAMES: "", WORLD_TS_FAULT_AT_STEP: String(k) });

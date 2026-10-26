@@ -36,10 +36,8 @@ function anat(rd, from, to) {
     side: d.dot(r),                  // + = toward the body's left
   };
 }
-// How far IN FRONT of the body's frontal plane the limb points: + forward,
-// − behind, and it never wraps. atan2(fwd, down) does wrap — it reads an arm
-// held straight overhead as 180° "behind the body", which is not a pose
-// problem at all, and sent me looking for a shoulder bug that did not exist.
+// how far IN FRONT of the frontal plane the limb points (+ forward, − behind); asin never wraps, where atan2(fwd, down)
+// would read an arm straight overhead as 180° "behind"
 const sagittal = (a) => Math.asin(THREE.MathUtils.clamp(a.fwd, -1, 1)) * DEG;
 const lateral = (a) => Math.asin(THREE.MathUtils.clamp(a.side, -1, 1)) * DEG;
 

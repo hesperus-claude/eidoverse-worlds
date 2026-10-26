@@ -151,10 +151,7 @@ try {
     check("partial trio (utt without spoken): refused, zero says", saysSeen().length === 0, `${saysSeen().length}`);
     check("partial trio: result.isError === true",
       rp?.result?.isError === true, JSON.stringify(rp?.result)?.slice(0, 120));
-    // COERCION vectors (adversarial review): Number(null)===0, Number(true)===1
-    // used to SNEAK a fabricated utt/t0 past the guard. Type-exact validation
-    // must refuse these outright — a fabricated utterance is worse than a
-    // refused one.
+    // COERCION vectors: Number(null)===0, Number(true)===1 must not sneak a fabricated utt/t0 past type-exact validation
     for (const bad of [
       { text: "utt null", spoken: true, utt: null },
       { text: "utt bool", spoken: true, utt: true },

@@ -80,14 +80,8 @@ let up2 = false;
 for (let i = 0; i < 60 && !up2; i++) { try { await fetch(`http://127.0.0.1:${PORT}/worlds`, KEY); up2 = true; } catch { await Bun.sleep(200); } }
 if (!up2) { console.error("FATAL: scratch sequencer never came up (bun install in the repo root?)"); process.exit(2); }
 
-// fake renderer legs: each answers every snap with a 1×1 PNG. They record each
-// snap's view and frame, and any framing value also copied to the message's top
-// level, where it could be read as framing or collide with a field such as an
-// image size. Other fields aren't compared, so a sender can add its own.
-// There are ten, more than the snapshots this test takes, because the broker
-// rests each renderer for 2 s from the request it sends it, and answers 429 at
-// once when no renderer it could use is free. Each joins before the next, and
-// the test goes on once the sequencer has answered all ten joins.
+// fake renderer legs answer every snap with a 1×1 PNG, recording view, frame and any framing copied to the top level;
+// ten, more than the snapshots taken, because the broker rests a renderer 2 s per request and answers 429 when none is free
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const asked: Record<string, unknown>[] = [];
 const renderers: WebSocket[] = [];

@@ -1,16 +1,10 @@
 /**
  * seatcore fixture — #101 Phase B: the seat-profile contract as hand math.
  *
- * Pins, in order: profile schema validation (including the review amendment
- * that placeholder-shaped patch evidence is INVALID evidence), the serve-time
- * status verdict, the B1 socket-anchor rule (nothing infers intent), the B3
- * runtime gate (the action that actually ran, the exact clip bytes), the B5
- * occupant-scale definition (uniform-or-abstain), the B2 world-up correction
- * with the pitch/roll DISCRIMINATOR (hand-computed lateral term that fails a
- * parent-normal implementation by name), the seat-claim purity regression
- * (the _v alias lesson — nonzero-Y socket), and the generation guard (a slow
- * fetch from before an acceptance may never roll the acceptance back — the
- * #95 lesson generalized).
+ * Pins, in order: profile schema validation (placeholder-shaped patch evidence is INVALID), the serve-time status
+ * verdict, the socket-anchor rule (nothing infers intent), the runtime gate (the action that ran, the exact clip bytes),
+ * occupant scale (uniform-or-abstain), the world-up correction with the pitch/roll DISCRIMINATOR, seat-claim purity
+ * (a nonzero-Y socket), and the generation guard (a slow fetch may never roll an acceptance back).
  *
  * Run: bun run tools/seatcore-test.ts   (no servers, no clock, all injected)
  */
@@ -66,10 +60,8 @@ console.log("schema");
   const unsup = { avatar: "crow", avatarSha256: A_SHA, pose: "sitchair", unsupported: { refusal: "no humanoid mapping — no seat landmark derivable" } };
   check("unsupported record with refusal validates", validateProfile(unsup).ok === true && validateProfile(unsup).kind === "unsupported");
   check("unsupported without refusal refused", !validateProfile({ ...unsup, unsupported: {} }).ok);
-  // #105 review B2: these strings index rights-bearing maps
-  // #105 review B2: legal syntax is not enough — the language's reserved
-  // names are refused at the schema, and the store's null-prototype maps
-  // refuse them again (tools/seats-store-test.ts)
+  // these strings index rights-bearing maps: reserved names are refused at the schema, and the store's null-prototype
+  // maps refuse them again (tools/seats-store-test.ts)
   check("avatar '__proto__' refused", !validateProfile({ ...good(), avatar: "__proto__" }).ok);
   check("avatar 'constructor' refused", !validateProfile({ ...good(), avatar: "constructor" }).ok);
   check("avatar 'prototype' refused", !validateProfile({ ...good(), avatar: "prototype" }).ok);
@@ -235,10 +227,8 @@ console.log("verdict cache (shared browser/agent implementation)");
     { name: "aletheia", seat: { pose: "sitchair", status: "accepted", contactY: 0.2791 } },
   ] });
 
-  // 1 — initial EMPTY-cache fetch, update arrives mid-flight, and the OLD
-  // response resolves LAST carrying the pre-event snapshot. This is the exact
-  // hole the review named: nothing was cached, so nothing was stamped, and
-  // the per-name-stamp guard read the post-bump generation at response time.
+  // 1 — an EMPTY-cache fetch, an update mid-flight, and the OLD response resolving LAST with the pre-event snapshot:
+  // nothing cached means nothing stamped, so a per-name stamp would read the post-bump generation
   const first = cache.init();                       // fetch A departs (cache empty)
   const noted = cache.note("claude", 6);            // event lands mid-flight → fetch B departs
   const resolveA = pendingResolves.shift()!;

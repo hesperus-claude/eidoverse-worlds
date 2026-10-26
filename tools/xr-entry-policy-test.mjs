@@ -1,4 +1,4 @@
-// xr-entry-policy-test — what a failed immersive-session request means (#197 review B1).
+// xr-entry-policy-test — what a failed immersive-session request means (#197).
 //
 // Drives the REAL client/lib/xr_entry_policy.js (it has no imports, so there is nothing to stub and
 // nothing a stub could invent), plus wiring checks that xr.js actually consults it and that the
@@ -7,7 +7,7 @@
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xr-entry-policy-test.mjs
 //
 // Each of these mutations must turn a named check red:
-//   policy: `isRetry ? give-up : retry-once` → always retry-once   (the infinite retry, as shipped)
+//   policy: `isRetry ? give-up : retry-once` → always retry-once   (infinite retry)
 //   policy: busy detection drops the message test                  (any InvalidStateError retries)
 //   policy: absent detection dropped                               (no headset reads as unknown)
 //   policy: the gpu branch moved AFTER the absent branch           (a WebGPU refusal marks a present headset absent)
@@ -65,10 +65,8 @@ console.log('\nthe other outcomes:');
   check('no device: absent, no retry', a.action === 'absent' && a.retry === false && a.markAbsent === true);
   const b = decideEntryFailure(notSupported(), { isRetry: false });
   check('not supported: absent, no retry', b.action === 'absent' && b.retry === false);
-  // EACH ARM OF isAbsent ON ITS OWN (#197 review, 2026-09-20). Both fixtures above carry a matching
-  // NAME *and* a matching MESSAGE, so the two arms masked each other: deleting the message regex
-  // entirely passed green. The message arm exists for runtimes that throw a generic name with a
-  // descriptive message — the case that was never constructed.
+  // EACH ARM OF isAbsent ON ITS OWN (#197): the fixtures above match both name and message, so a generic-name error
+  // with a descriptive message drives the message arm alone
   const genericRuntime = Object.assign(new Error('no XR runtime available'), { name: 'Error' });
   check('an absent-shaped MESSAGE is absent even under a generic error name',
     decideEntryFailure(genericRuntime, { isRetry: false }).action === 'absent');
@@ -97,12 +95,8 @@ console.log('\nthe other outcomes:');
   const gBusy = decideEntryFailure(busy(), { isRetry: false, gpu: true });
   check('a BUSY session on WebGPU still retries — busy outranks the backend',
     gBusy.action === 'retry-once', `action=${gBusy.action}`);
-  // THE GPU/ABSENT INTERSECTION — the ordering this suite's mutation list protects (#197 review,
-  // 2026-09-20). It is only observable for an error that is BOTH absent-shaped AND on a WebGPU
-  // backend, and no check drove that pair, so a swap of the two branches passed green.
-  // The order is NOT arbitrary: 'webgpu' is a REQUIRED feature (xr.js:527), and the spec rejects an
-  // ungrantable requiredFeature with NotSupportedError — which isAbsent matches. So absent-first
-  // would read every WebGPU refusal as "no headset" and permanently mark a PRESENT headset absent.
+  // THE GPU/ABSENT INTERSECTION (#197): 'webgpu' is a REQUIRED feature, and an ungrantable one is rejected with
+  // NotSupportedError, which isAbsent matches; absent-first would mark a PRESENT headset absent
   for (const [label, err] of [['NotFoundError', noDevice()], ['NotSupportedError', notSupported()]]) {
     const ga = decideEntryFailure(err, { isRetry: false, gpu: true });
     check(`a WebGPU refusal reloads even when the error is absent-shaped (${label})`,

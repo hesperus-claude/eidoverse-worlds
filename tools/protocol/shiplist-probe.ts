@@ -72,15 +72,9 @@ try {
   check("D1 the hint bar offers it: E open “Gate”", await waitFor(`/E\\s*open\\s*“Gate”/.test(${hint})`, 6000), await evalJson(hint));
   const q0 = await evalJson(`import('/lib/world.js').then((m) => m.entities.get('gate').quaternion.toArray())`);
   const uses0 = entries().filter((e: any) => e.kind === "act" && e.verb === "use").length;
-  // an in-page sampler (CDP round trips are too slow to time a 1.2 s swing): how open the tween says, and the angle the
-  // gate is DRAWN at, once per animation frame for 4 s from just before E. Per frame, not per 40 ms: the gate is only drawn
-  // on frames (tickOpenables), and a starved CI runner once drew none for ~3 s while a timer kept sampling the shut gate
-  // (anima 40067204678, ubuntu) — that is "no frames", not "drawn wrong", and D3 now says which. A page that draws no frame at
-  // all still ends at 4.5 s (the timer races each frame), so D3 fails with a reason ("the tween never started" when no frame came at all, "starved" when too few did) rather than the stage timing out.
-  // A runner that draws no frames for the whole swing is INCONCLUSIVE, not a failure ("starved", below): the swing is closed
-  // and tried again, up to 3 times, each retry printed. Any other reason fails at once, so a gate drawn wrong (frames, but
-  // never part-way) or never moved still goes red the first time. Diagnosis of the one CI failure: anima 40067204678 — timers
-  // sampled 100× on time while the frame-only angle stayed frozen 1.2 s (no frames), Fable 5.1 review 10-24.
+  // an in-page sampler, once per animation frame for 4 s (the gate is only drawn on frames, tickOpenables), ending at 4.5 s
+  // even with no frames. No frames through the swing is "starved", INCONCLUSIVE: retried up to 3 times; any other reason
+  // (drawn wrong, never moved) fails at once
   let samp: any[] = [], moving: any[] = [], first: any, last: any, rest: any, drawnMid = 0, framesInSwing: number | null = null, why = "", tries = 0;
   for (;;) {
     tries++;
@@ -658,12 +652,8 @@ try {
   check("PR1 with prediction the crate leaves the hand at least 150 ms sooner than without, under the same lag", real?.ok && real.left !== null && control?.left !== null && real.left < control.left - 150, { real: real?.left, control: control?.left });
   check("PR2 …and when the real entry lands no single frame moves it more than 35 cm (the guess and the truth agree, or the difference decays)", real?.ok && real.jump < 0.35, real);
   check("PR3 …and nothing is left pending once the entry is in", real?.ok && Object.keys(real.pending ?? {}).length === 0, real?.pending);
-  // PR4: the page's clock STEPS (10-18: this box's wall clock jumps +1.6 s every ~32 s against the page's monotonic one, and
-  // the shiplist went red — PR0 "left": null — whenever a jump fell between clock asks: the estimate kept the old offset,
-  // the replica folded the launch at the authority's tick, and the screen drew it ~50 ticks early, i.e. not at all). Here
-  // the step is made on purpose: performance.timeOrigin (read only by serverclock.js) moves back 1.6 s, so the page's
-  // "now" is 1.6 s behind the authority's, as after a real jump. No prediction, no lag: the throw must still leave the hand
-  // within half a second (the launch's own stamp floors the clock and the client re-measures at once)
+  // PR4: the page's clock STEPS: performance.timeOrigin (read only by serverclock.js) moves back 1.6 s; the throw must still
+  // leave the hand within half a second (the launch's own stamp floors the clock and the client re-measures at once)
   const stepped = await (async () => { await mk('prbox2'); return page(`const t = await import('/lib/thingphysics.js'), w = await import('/lib/world.js'), T = (await import('/lib/core.js')).THREE;
     const r = await t.physicsApi.grab('prbox2'); if (!r?.ok) return { grab: r }; await new Promise((res) => setTimeout(res, 900));
     const o0 = performance.timeOrigin; Object.defineProperty(performance, 'timeOrigin', { value: o0 - 1600, configurable: true });

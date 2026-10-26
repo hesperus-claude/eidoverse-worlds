@@ -79,10 +79,8 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
     spoken.filter((s) => s.text === "unreceipted line").length === 1, JSON.stringify(spoken));
 }
 
-// ── 2b. a receipt cancels on the right author and a NON-stale generation (B2):
-//        wrong actor → no cancel (falls back); predecessor gen → no cancel
-//        (a retired leg's late frame); successor gen → DOES cancel (a takeover
-//        leg legitimately performed the inherited say). gen is matched `>=`. ──
+// ── 2b. a receipt cancels on the right author and gen >= (wrong actor or a retired leg's late frame: no cancel;
+//        a takeover leg's successor gen: cancels) ──
 {
   // hold three says while gen 7 is live, then fire receipts that differ on one
   // composite member each.
@@ -169,12 +167,8 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
     spoken.length === 1, JSON.stringify(spoken));
 }
 
-// ── 7. B2 (re-review): `spoken` is DISPLAY metadata, never performance truth.
-//    #100's typed say door exposes {spoken,utt,t0} as author-controlled fields,
-//    so an agent can send spoken:true — and before this recut that skipped the
-//    receipt path entirely: a live leg that never attested left SILENCE, the
-//    exact presence-derived hole #57 exists to remove. Three vectors, per the
-//    review: no leg / live leg + no receipt / live leg + matching receipt.
+// ── 7. `spoken` is DISPLAY metadata, never performance truth: an author-sent spoken:true must not skip the receipt
+//    path (#57). No leg / live leg + no receipt / live leg + matching receipt.
 {
   // (a) spoken:true with NO voice leg → speaks immediately (the flag alone
   //     must not suppress local speech)
@@ -204,12 +198,8 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
   bus.emit("surface-transition", { actor: "miri", surface: "voice", gen: null, retired: 21 });
 }
 
-// ── 8. receipt SUCCESS still performs visually (review finding 9) ───────────
-//    A cancel-only receipt made the system look broken exactly when it worked:
-//    fallback drew bubble+mouth, success drew nothing. A matching receipt
-//    re-emits 'speech' with performed:true — display consumers draw, TTS
-//    consumers skip. Not for spoken:true says: that field owns display/caption
-//    continuation, so a caption-paced bubble is never drawn twice.
+// ── 8. receipt SUCCESS still performs visually: a matching receipt re-emits 'speech' with performed:true (display
+//    draws, TTS skips); not for spoken:true says, whose caption-paced bubble must not be drawn twice
 {
   bus.emit("surface-transition", { actor: "vex", surface: "voice", gen: 31, retired: null });
   spoken.length = 0;

@@ -100,11 +100,8 @@ const headOf = (dir: string) => { const r = spawnSync("git", ["-C", dir, "rev-pa
 // Declared like Chrome: required for the browser lane, fetched only by --library, never read from a guessed path.
 const LIBRARY_REPO = "https://github.com/SkyeShark/eidoverse-video.git";
 const LIBRARY_PIN = "9acc1528b2febac11338107645ef500a95985ca5";   // the library's PUBLIC head (10-19: e9f80d02 was a local snapshot, unfetchable by CI)
-// mcpl's package.json takes two sibling repos by path (file:../../<dir>, i.e. beside this checkout). The gate owns that
-// closure (Mica, #260 r3): ONE place pins them; --siblings fetches them there; the preflight refuses a missing or
-// wrong-commit sibling rather than testing whatever happens to sit next to the repo.
-// build: whether the gate's suites import it (its package main is dist/, which only `tsc` makes). agent-framework is only
-// resolved by bun install, never imported by a gate suite, so it isn't built.
+// mcpl's sibling repos (file:../../<dir>), pinned in ONE place: --siblings fetches them, the preflight refuses a missing or
+// wrong-commit one. build: whether a gate suite imports it (its main is dist/, which only `tsc` makes)
 const SIBLINGS: [dir: string, url: string, commit: string, build: boolean][] = [
   ["agent-framework", "https://github.com/anima-research/agent-framework.git", "2f05c28e1923b7d07c6c6322b871303bd0d2d8d5", false],
   ["mcpl-core-ts", "https://github.com/anima-research/mcpl-core-ts.git", "e17f773a9247c41d5c872d760aac7f243748d134", true],

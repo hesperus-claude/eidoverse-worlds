@@ -24,11 +24,8 @@ const freePort = () => new Promise<number>((resolve, reject) => {
 const WPORT = await freePort(), MPORT = await freePort();
 const worldsDir = mkdtempSync(join(tmpdir(), "eido-typing-"));
 foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
-// 🔴 post-hardening (anima merge): the token registry REJECTS any key that
-// appears in the tracked example — and "dev-token" is in the example, so it
-// can never authorize on any machine. Upstream's copy of this suite still
-// uses it and is structurally red (flagged for them). A scratch registry
-// with a test-only token is the honest fixture.
+// 🔴 the token registry REJECTS any key in the tracked example ("dev-token" among them), so a scratch registry with a
+// test-only token is the fixture
 const tokensPath = join(worldsDir, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({
   "typing-test-token": { id: "claude", name: "Claude", world: "commons" },
@@ -197,10 +194,8 @@ try {
   await throttleClear();
   await control("after a chunk");
 
-  // A long tool call. The door serves the host's requests one at a time, and
-  // walk_to answers only when the body arrives, so the host's refreshes come
-  // in while the walk runs. They must keep the dots up past the overdue
-  // window, rather than wait unread until the walk ends.
+  // a long tool call: walk_to answers only on arrival, so the host's refreshes arrive mid-walk and must keep the dots up
+  // past the overdue window, not wait unread
   await throttleClear();
   seen.length = 0;
   typingFor("world:commons", "start");

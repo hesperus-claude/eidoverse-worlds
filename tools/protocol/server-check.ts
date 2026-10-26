@@ -597,10 +597,8 @@ srv.proc.kill();
   bob.close(); r.close(); srvB.proc.kill(); }
 
 // ================= SK: the server is killed while someone holds a thing (no clean close: no leave, no drop) =================
-// The live server keeps presence in memory, so the hold is gone after a restart, but in a world that runs physics the
-// grab's `lift` took the thing out of the engine, and nothing settles it: it would stay a ghost (no body, no collider)
-// until someone moved it. At load, the authority settles what the log still has lifted with nobody holding it, as leave does
-// (door return-held: where the log last had it; a grabbable that returns goes home).
+// the hold dies with the process, but the grab's `lift` left the thing out of the engine (no body, no collider): at load
+// the authority settles whatever is lifted with nobody holding it, as leave does (return-held)
 { ok(tool(["found", "crash", "--owner", "Ann"]).code === 0, "SK found a physics world");
   const srvA = await startServer(ENGINE, W4, OPT, "sk");
   const a = await client(srvA.port, "crash", "Ann", REPLICA); await sleep(100);
@@ -622,10 +620,9 @@ srv.proc.kill();
   ok(!Object.keys(c.snapshot?.cut?.holds ?? {}).length && bodies.includes(IDS.of("ball")) && bodies.includes(IDS.of("torch")), "SK2 …nobody holds them, and a joiner's engine has them back (colliders again)", [c.snapshot?.cut?.holds, bodies]);
   c.close(); srvB.proc.kill(); }
 
-// ================= SL: the load's socket lift, per host, said to the flight recorder (review 10-12 S2-3) =================
-// A world stored in the old spelling, by hand, with one host the door can't lift (a slot called "front seat": a socket's
-// name is one word, and the name is a shape, not a value the lift carries) before a healthy one. WorldLog lifts at construction: the healthy host lifts, the bad one is
-// left as it was, and attaching the world says it to its flight recorder (world_debug, /debug), with the host's id.
+// ================= SL: the load's socket lift, per host, said to the flight recorder =================
+// an old-spelling world with one unliftable host (a slot "front seat": a socket name is one word) before a healthy one:
+// the healthy one lifts, the bad one is left as it was and named to the flight recorder (world_debug, /debug)
 { const WS = scratch("srvlift"); const script = path.join(WS, "lift.ts");
   fs.writeFileSync(script, `// @ts-nocheck
 import fs from "node:fs"; import path from "node:path";

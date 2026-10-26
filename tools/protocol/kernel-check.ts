@@ -1,6 +1,6 @@
-// tools/protocol/kernel-check.ts — the kernel is trial-kernel (reviewer item 5, 2026-10-18): a change to the log envelope, the
+// tools/protocol/kernel-check.ts — the kernel is trial-kernel: a change to the log envelope, the
 // kinds, the fold's operations, the identity grammar, the version, transform, parent, model, roles or access (each as its
-// component shape; the ladder's vocabulary is the registry's since recut C11) is IMPOSSIBLE to land unless the same
+// component shape; the ladder's vocabulary is the registry's) is IMPOSSIBLE to land unless the same
 // change carries (a) a translator change, (b) a REGISTRY-CHANGELOG.md line and (c) vectors an old reader refuses and the new
 // reader folds. shared/protocol/kernelspec.js is the pure half; spec/kernel-pin.json the pin.
 //   bun tools/protocol/kernel-check.ts                         the gate's check (CORE lane)
@@ -9,7 +9,7 @@
 //                                                              re-pin a CHANGED kernel: refused unless every companion is present and
 //                                                              the vectors run red on the old reader (snapshotted from git at --base,
 //                                                              default: the commit that last pinned) and green on the new
-//   bun tools/protocol/kernel-check.ts --pin --ack "<why>"     a SCOPE EXTENSION only (10-18: model, roles, access joined the kernel):
+//   bun tools/protocol/kernel-check.ts --pin --ack "<why>"     a SCOPE EXTENSION only:
 //                                                              every change is a kernel component entering the pin with the shape
 //                                                              spec/registry-pin.json already pinned for it; no byte changes meaning, so
 //                                                              no translator or vectors are asked; the ack is, and the pin records the names
@@ -17,10 +17,6 @@
 // command's alone, which refuses without the companions and RECORDS them in the pin; K3 then verifies them at every gate run
 // (the changelog line is in the file, the translator moved, the vectors still run old-red/new-green), so dropping a companion
 // after the re-pin is red too. Every row here was red before its code.
-// Live proof (2026-10-18, on c36fc283): ENVELOPE + "note" → K2 red; `--pin` and `--pin --ack` refused naming the missing
-// companions; with TRANSLATOR @14 → @15 and spec/kernel-vectors/proof-note (an act carrying note: old reader
-// malformed:unknown-field, new reader ok) the re-pin wrote the `kernel:` changelog line and recorded the companions, and the
-// check was 10/10; then the changelog line dropped → K3 red; the translator bump reverted → K3 red; everything reverted → 10/10.
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
@@ -61,11 +57,9 @@ function snapshotOldReader(dir: string, base: string) {
     fs.writeFileSync(path.join(d, dst), r.stdout.replace('from "./hash.js"', 'from "./old-hash.js"').replace("from '../sha256.js'", "from './old-sha256.js'")); }
 }
 
-/** A scope trim (recut C11, C11b): what leaves the kernel. A `grammar` leaving is accounted key by key: HELD when
- *  spec/registry-pin.json keeps the same value as `<name>.vocab.<key>`. Any other path leaving (a whole component, or a key of
- *  one) is HELD when the registry pin keeps the same value at that path (a whole component: its registry pin, less status and
- *  vocab, has every key the kernel pinned, same value). So re-pin the registry first. Anything else is DROPPED by a repeatable
- *  --drop "<path>=<why>". */
+/** A scope trim: what leaves the kernel. A leaving path (a `grammar` key as `<name>.vocab.<key>`, a component, a key) is
+ *  HELD when spec/registry-pin.json keeps the same value there (so re-pin the registry first); anything else is DROPPED
+ *  by a repeatable --drop "<path>=<why>". */
 function trimOf(now: any, rp: any) {
   if (!pin) return {};
   const units = KS.kernelDiff(pin.kernel, now).map((d: string) => /^([a-z][a-z0-9-]*)((?:\.[A-Za-z]+)?): [\s\S]* → absent$/.exec(d)).filter(Boolean) as RegExpExecArray[];

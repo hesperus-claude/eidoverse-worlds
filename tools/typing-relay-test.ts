@@ -50,10 +50,8 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   check("with no refresh, it stops by itself once the refresh is overdue", await waitUntil(() => !r.active, DEADLINE));
   const took = performance.now() - t0;
   check("no sooner than the overdue window", took >= OVERDUE, `stopped after ${took.toFixed(0)} ms`);
-  // The overdue check runs at each re-assert, so the stop comes at the first
-  // one past the window: the start's signal and one per interval inside it.
-  // A loaded machine only delays ticks, which lowers the count; a stop checked
-  // less often raises it.
+  // the stop comes at the first re-assert past the window (a loaded machine only lowers the count; a stop checked less
+  // often raises it)
   check("at the first re-assert past the window", b.signals <= OVERDUE / REASSERT + 1, `signals=${b.signals}`);
   const after = b.signals;
   await sleep(REASSERT * 3);
@@ -76,10 +74,8 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
 }
 
 {
-  // A host that keeps refreshing: the relay must stay up through the whole
-  // window, not lapse at each overdue and come back at the next start. The
-  // window here is ten refresh intervals wide, so only a missed refresh, not
-  // a slow one, can end it.
+  // a refreshing host keeps the relay up through the whole window (ten refresh intervals wide, so only a missed
+  // refresh can end it)
   const WIDE = 1000, REFRESH = 100;
   const r = new TypingRelay(REASSERT, WIDE), b = body();
   r.start(b);

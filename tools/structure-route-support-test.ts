@@ -110,10 +110,8 @@ try{
  const a=body(e,()=>1,transform(e,.5,.5));
  check((await walk(a,transform(e,2.5,.5))).arrived,"real ground body walks beneath translated/scaled overhead floor without confinement");
 
- // The obstruction band is 0.5 WORLD metres, not 0.5 local units. The wall
- // stands on its level's slab top, 0.1 local metres up, so at scale 2 on an
- // entity at y 0.4 its base is 0.4 + 0.1×2 = 0.6 m above the terrain at 0:
- // over a 0.5 m band, though a 0.5-local (1 m) band would reach it.
+ // the obstruction band is 0.5 WORLD metres: at scale 2, y 0.4, the wall's base is 0.4 + 0.1×2 = 0.6 m up, over a
+ // 0.5 m band though a 0.5-local (1 m) band would reach it
  const raised={id:"band",pos:[0,.4,0],yaw:0,scale:2,structure:wall};
  const b=body(raised,()=>0,[0,1]);
  const r=await walk(b,[4,1]);

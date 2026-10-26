@@ -334,12 +334,9 @@ const file = path.join(tmp, "worlds", ".directory.json");
   const fresh = path.join(tmp, "fresh"); fs.mkdirSync(fresh);
   ok(custodyFileIn(fresh) === path.join(fresh, CUSTODY_FILE) && fs.readdirSync(fresh).length === 0, "K5 a fresh worlds dir: the current name, and nothing created by asking", fs.readdirSync(fresh)); }
 
-// ---- EP: a v1 log with a physics epoch (dialect 3) translates with her sim's outcomes (2026-10-08). The live Commons has
-// eidosim@0.5.0 from seq 15641; translate-v1@9 kept each punt as an `imported` record and left the punted thing where it
-// was punted FROM, reporting "0 divergences" because it compared only against the instant fold (her sim rests it
-// elsewhere). The importer refused such logs until translate-v1@10 ran her sim beside the v1 fold. Each case goes
-// through the real importer (translateV1World, in a child with a scratch library: epoch-probe.ts), tier 0 empty (a translation names no founder),
-// directory identities and content addresses, and is compared with HER sim (shared/sim.js beside the v1 fold, as sweep §3).
+// ---- EP: a v1 log with a physics epoch (dialect 3) translates with the first eidosim's outcomes, not the instant fold's.
+// Each case runs the real importer (translateV1World in a child with a scratch library: epoch-probe.ts), tier 0 empty,
+// and is compared with that sim run beside the v1 fold (as sweep §3).
 { const { emptyState: v1Empty, foldEntry } = await import("./import-v1/fold.js");
   const eidosim = await import("./import-v1/eidosim-v1.js");   // HER engine: what the v1 log means
   const { simFold, DEFAULT_ENGINE } = await import("../../shared/protocol/simlayer.js");
@@ -445,13 +442,9 @@ const file = path.join(tmp, "worlds", ".directory.json");
     const g: any = facts(u, Y, { addresses: addrOf(lib), launches: 4 }); delete g.rests;
     report("EP2", "leaving the epoch with no release places: what her sim held goes back to the instant fold's word, as her composed fold has it", g); }
 
-  // EP3: an epoch entered mid-log after thousands of instant-fold entries: the local Commons copy (commons-0927, 15k
-  // entries, no epoch) with her eidosim-0.5 epoch and punts appended, their ids remapped onto real Commons things, models
-  // addressed from this host's real library. The thousands before the epoch must come out exactly as they did without it.
-  // The copy is the repo's own unless a host names its real one: a Commons-sized v1 log made here (deterministic: 40 things
-  // on six stand-in library models, then ~3000 instant-fold entries of moves, components, says, removals and respawns), its
-  // models stand-in bytes in the probe's scratch library. PROTOCOL_COMMONS=<commons-0927 log.jsonl> (models from
-  // PROTOCOL_COMMONS_LIBRARY, else this server's library) runs it on the real one; without it, an OPTIONAL line says so.
+  // EP3: an epoch entered mid-log after thousands of instant-fold entries, which must come out exactly as without it. The
+  // log is a deterministic Commons-sized one made here; PROTOCOL_COMMONS=<log.jsonl> (models from PROTOCOL_COMMONS_LIBRARY,
+  // else this server's library) runs it on a real one instead
   { const syntheticCommons = () => {
       const models = ["crate.glb", "ball.glb", "wall.glb", "deck.glb", "lamp.glb", "bench.glb"], lib: Record<string, Buffer> = {};
       for (const m of models) lib[m] = Buffer.from(`a stand-in model for ${m} (synthetic Commons)`);

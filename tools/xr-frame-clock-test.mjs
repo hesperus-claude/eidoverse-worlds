@@ -1,9 +1,9 @@
-// xr-frame-clock-test — who owns window.requestAnimationFrame across a session (#197 review B2).
+// xr-frame-clock-test — who owns window.requestAnimationFrame across a session (#197).
 //
 // This is the teardown/re-entry half of the session lifecycle, and it needs no renderer and no real
 // XRSession: the shim touches exactly three members (requestAnimationFrame, cancelAnimationFrame,
 // and an 'end' that flips a latch), so the stand-in below cannot invent product shape — there is
-// almost no shape to invent. The compile/curtain/pose half is disclosed headset-only in the PR body.
+// almost no shape to invent. The compile/curtain/pose half is headset-only.
 //
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xr-frame-clock-test.mjs
 //
@@ -41,11 +41,7 @@ function fakeSession({ throwOnRaf = false } = {}) {
   s.cancelAnimationFrame = (id) => { s.cancelled.push(id); };
   s.addEventListener = (type, cb) => { if (type === 'end') s._endCbs.push(cb); };
   s.end = () => { s.ended = true; s._endCbs.splice(0).forEach((cb) => cb()); };
-  // Actually DRIVE the queued callbacks (#197 review, 2026-09-20). Without this the suite only ever
-  // collected them, so makeFrameShim's `(t) => cb(t)` wrapper — the only reason the shim is not a
-  // bare pass-through — was never exercised: dropping the timestamp, or swapping time and XRFrame,
-  // both passed green. A render loop handed an XRFrame where it expects a DOMHighResTimeStamp is a
-  // real failure mode.
+  // actually DRIVE the queued callbacks, so makeFrameShim's `(t) => cb(t)` wrapper is exercised (#197)
   s.tick = (t, frame) => s.calls.splice(0).forEach((cb) => cb(t, frame));
   return s;
 }
@@ -63,12 +59,8 @@ console.log('one session, start to finish:');
   check('while presenting, a frame request goes to the SESSION clock',
     win.requestAnimationFrame(() => {}) === 'ses-1' && ses.calls.length === 1);
   check('…and not to the window', win.calls.length === 0);
-  // What the callback RECEIVES, not merely that it was queued (#197 review, 2026-09-20). The suite
-  // only ever collected callbacks and never invoked them, so the shim's `(t) => cb(t)` wrapper was
-  // untested: dropping the timestamp, or passing (frame, t), both passed green.
-  // The wrapper drops the XRFrame ON PURPOSE — the shim stands in for window.requestAnimationFrame,
-  // whose callback takes one argument, and no desktop consumer reads a second. Pinned both ways so
-  // neither half can drift.
+  // what the callback RECEIVES: the timestamp, and no XRFrame (dropped ON PURPOSE: the shim stands in for
+  // window.requestAnimationFrame, whose callback takes one argument). Pinned both ways
   { let gotT, gotF; const frame = { pose: 'x' };
     win.requestAnimationFrame((t, f) => { gotT = t; gotF = f; });
     ses.tick(1234.5, frame);
@@ -130,10 +122,8 @@ console.log('\nre-entry — the failure that save-once exists to prevent:');
   check('the native clock was captured exactly once', clockIsRestored(win, saved));
 }
 
-// The save-once rule only BITES when a second entry installs its shim while the first is still in
-// place — a re-enter before teardown completed, which is exactly the window a user produces by
-// clicking the visor again the moment a session drops. Restoring between entries (as the loop above
-// does) hides it: the re-capture then reads an already-native clock and looks harmless.
+// save-once only BITES on a re-enter before the first teardown completes (the loop above restores between entries,
+// which hides it)
 console.log('\nre-enter BEFORE the first teardown — where double-capture actually bites:');
 {
   const win = fakeWindow();

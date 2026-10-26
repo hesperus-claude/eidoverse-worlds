@@ -2,18 +2,12 @@
  * Live reach test — the solver driving REAL bone nodes on the shipped rigs,
  * frame after frame, with the target moving under it.
  *
- *   EIDOVERSE_DIR=~/connectome-local/eidoverse-video bun tools/reachlive-test.ts
+ *   EIDOVERSE_DIR=<library checkout> bun tools/reachlive-test.ts
  *
- * EIDOVERSE_DIR is not optional in a worktree: without it the library rigs
- * (claude, claude_suit, aletheia, aporia — claude is the DEFAULT body) do not
- * load and the suite silently drops to the 14 optimized ones.
+ * EIDOVERSE_DIR is not optional in a worktree: without it the library rigs (the default body among them) silently drop out.
  *
- * tools/reach-test.ts checks the geometry and tools/reachrig-test.ts checks
- * the conversion against rig data. Neither writes a bone. This one does: it
- * puts the produced quaternions onto a real three.js hierarchy built from each
- * shipped rig, calls updateMatrixWorld the way a frame would, and then asks
- * the HAND NODE where it ended up. That is the only question that matters, and
- * it is the one a scene graph can answer and arithmetic cannot.
+ * reach-test and reachrig-test never write a bone; this one puts the solver's quaternions on a real three.js hierarchy
+ * of each shipped rig, updates matrices as a frame would, and asks the HAND NODE where it ended up.
  */
 
 import { plugin } from 'bun';
@@ -106,33 +100,8 @@ console.log("\nand it KEEPS going where it is sent (the moving target)");
   }
   check(`the hand stays on a moving target every frame (${frames} frames, <0.1mm)`, worst < 1e-4,
     `worst ${(worst * 1000).toFixed(4)}mm`);
-  // Continuity, stated as the absence of a DISCONTINUITY rather than as a
-  // speed limit.
-  //
-  // Honest scope: this proves the solver is SMOOTH, which is the property you
-  // can see. It does NOT prove the pole hint earns its keep — mutation-tested
-  // by feeding `null` every frame instead, and the result was just as smooth
-  // (1.02x). The fallback pole is deterministic and continuous across the
-  // reachable set; its one singularity is a target exactly along -forward,
-  // which the frontal stop already refuses. The hint is kept because it costs
-  // nothing and guards that case, not because anything here demonstrates it. The elbow legitimately swings fast when the arm is near full
-  // extension — its position on the circle round the shoulder-hand axis is
-  // ill-conditioned there, and on some rigs that reaches 5x the median frame
-  // step. What a lost bend plane looks like is different in kind: one isolated
-  // frame far outside the run of its neighbours. So compare the worst step to
-  // the 99th percentile, which is what an absolute threshold would have hidden
-  // (and would have been measuring my choice of orbit speed, not the solver).
-  // ⚠ RATCHET. Was 1.11x before the elbow-side constraint went in; it is now
-  // ~66x, a real ~380mm snap during ORDINARY moving-target tracking. That is
-  // the measured cost of making the side constraint hard, and it is the honest
-  // trade on the table:
-  //     no constraint : smooth, 34% of elbows bend backwards
-  //     hard constraint: 0 bend backwards, ~380mm elbow snaps while tracking
-  // Neither is right. The snap is not a sampling artefact — refining the
-  // swivel to convergence does not remove it — it is the feasible ARC itself
-  // rotating until the nearest edge switches ends, so the pose crosses in one
-  // step. Fixing it needs the arc edge chosen with continuity across frames,
-  // which is the piece that is not built.
+  // continuity = no outlier step: worst frame step vs p99 (elbows legitimately swing fast near full extension). Proves
+  // smoothness only: a null pole hint is as smooth; the hint stays for the -forward singularity
   check(`the elbow never SNAPS: worst step is no outlier (max/p99 ${spike.toFixed(2)}x on ${spikeRig})`,
     spike <= 6, `worst frame step overall ${(worstJump * 1000).toFixed(2)}mm`);
 }
@@ -202,12 +171,8 @@ console.log("\nthe limits hold on live bones");
 
 console.log("\nnot through your own body");
 {
-  // antra, looking at it: "heavy self-intersection, arms passing through torso".
-  // Targets across the body are what provoke it — reaching the LEFT hand at
-  // points on the RIGHT side drags the forearm through the chest.
-  //
-  // Baseline first, with the guards switched off, so the improvement is
-  // measured against a number and not against an impression.
+  // arms through the torso: the LEFT hand at points on the RIGHT side drags the forearm through the chest; baseline
+  // first, guards off, so the improvement is measured against a number
   let before = 0, after = 0, worstAfter = 0, cases = 0, cleared = 0, gapWorst = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -255,16 +220,8 @@ console.log("\nnot through your own body");
 
 console.log("\nself-touch does not hunt");
 {
-  // antra, reaching for their own shoulder: "enter endless oscillations ...
-  // pretty close to success". The elbow flipped between adjacent swivel steps
-  // on up to 54 frames out of 54.
-  //
-  // Cause: the solve was fed its own previous elbow as the pole hint, so it
-  // depended on its own output, and the discrete swivel search gave that loop
-  // something to bounce between. A static body reaching a static point must
-  // produce the SAME arm every frame — an oscillator needs state, so the
-  // solver keeps none. This test exists because a user found this and the
-  // suite did not.
+  // a static body reaching a static point must produce the SAME arm every frame: fed its own elbow as the pole hint,
+  // the discrete swivel search oscillates, so the solver keeps no state
   let worstFlips = 0, worstRig = '', tested = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -275,10 +232,7 @@ console.log("\nself-touch does not hunt");
     const lu = av.nodes.leftUpperArm.getWorldPosition(new THREE.Vector3());
     const target = [lu.x + 0.03, lu.y + 0.04, lu.z + 0.02];
     const seen: number[] = [];
-    // Feed the elbow back in as the caller used to. That is the loop that
-    // oscillated, so the test has to CLOSE it — passing null here would be a
-    // check that cannot see the bug it was written for (it passed against the
-    // reintroduced bug on the first attempt, which is how this was caught).
+    // feed the elbow back in: the test must CLOSE the loop that oscillated, or it can't see the bug (null here would pass)
     let pole: number[] | null = null;
     for (let f = 0; f < 60; f++) {
       const out: any = step(chain, av, target, pole);
@@ -299,18 +253,8 @@ console.log("\nself-touch does not hunt");
 
 console.log("\nthe elbow does not sweep as the body turns");
 {
-  // antra: "depending on where the camera is (and where the head is looking)
-  // the elbow either looks fine or slowly inverts into an unnatural position."
-  //
-  // The camera has nothing to do with the arm — but turning it turns the BODY,
-  // which turns the chest, which turns the pole that picks the bend plane. As
-  // the pole approached parallel with the reach direction its useful component
-  // vanished, and normalizing a vanishing vector amplifies whatever is left:
-  // the elbow swings around the arm. Slowly, because the body turns slowly.
-  //
-  // Stated without reference to cameras: with the target held in BODY space,
-  // yawing the body must move the elbow smoothly in body space. A sweep shows
-  // up as one step far outside the run of its neighbours.
+  // with the target held in BODY space, yawing the body must move the elbow smoothly in body space: a pole near parallel
+  // to the reach direction, normalised, swings the elbow round the arm (one step far outside its neighbours)
   let spike = 0, spikeRig = '', tested = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -323,13 +267,8 @@ console.log("\nthe elbow does not sweep as the body turns");
       av.root.updateMatrixWorld(true);
       const q = av.root.getWorldQuaternion(new THREE.Quaternion());
       const sh = chain.nodes.upper.getWorldPosition(new THREE.Vector3());
-      // The target sweeps a cone AROUND the arm's own rest direction, so the
-      // reach direction passes straight through it. That is the degenerate
-      // case: the pole is the rest direction, and where it is parallel to the
-      // aim its perpendicular component vanishes. Aiming somewhere merely
-      // convenient never gets near it — the first version of this test swept a
-      // forward-across target, never came within 60° of the singularity, and
-      // passed identically with the fix removed.
+      // the target sweeps a cone AROUND the arm's rest direction, so the aim passes through the degenerate case (pole
+      // parallel to aim); a merely convenient target never comes near the singularity
       const restW = new THREE.Vector3(...chain.dRestU).applyQuaternion(q).normalize();
       const side = new THREE.Vector3(0, 1, 0).cross(restW).normalize();
       const up2 = restW.clone().cross(side).normalize();
@@ -354,24 +293,8 @@ console.log("\nthe elbow does not sweep as the body turns");
     const mx = steps[steps.length - 1];
     if (mx / p99 > spike) { spike = mx / p99; spikeRig = rig.name; }
   }
-  // ⚠ RATCHET, and the number is honest about a real remaining jump.
-  //
-  // Typical frame step is ~5mm; once per full revolution of this sweep one
-  // step is ~330mm. That is not a ratio artefact — it is a genuine snap, and
-  // it is the price of the elbow-side constraint being HARD. The feasible
-  // swivel is a contiguous arc, the pose taken is the point in that arc
-  // nearest the natural one, and when the arc rotates far enough that the
-  // nearest edge switches ends, the elbow crosses in one step.
-  //
-  // This sweep is deliberately the worst case: the target orbits the arm's own
-  // axis through 360°, which drags the arc through a full turn. Ordinary
-  // motion does not — measured live in the browser, a body-anchored target
-  // through a full body yaw moves the elbow 0.1mm median / 0.9mm max.
-  //
-  // Removing it is a rewrite: the arc edge would have to be chosen with
-  // memory (which reintroduces the state that made the solver oscillate), or
-  // the constraint softened (which lets elbows invert again). Ratcheted so it
-  // cannot get worse while it is still wrong.
+  // ⚠ RATCHET (≤64x): the hard elbow-side constraint snaps once per full turn of this worst-case sweep (the feasible arc's
+  // nearest edge switches ends). The fix needs a continuity-aware arc edge; ratcheted so it can't worsen
   check(`elbow sweep does not worsen (${tested} rigs, worst max/p99 ${spike.toFixed(2)}x on ${spikeRig})`,
     spike <= 64);
   check("...and the sweep actually ran", tested >= 14, `${tested}`);
@@ -415,22 +338,7 @@ console.log("\nelbows bend the way elbows bend (where that is knowable)");
       }
     }
   }
-  // ⚠ A RATCHET, NOT A PASS. 440 of 1296 elbows currently bend backwards where
-  // the rule is measurable, and that is almost certainly the artefact antra
-  // reported ("the elbow slowly inverts into an unnatural position"). It is
-  // not fixed: every fix tried costs more than it buys.
-  //
-  //   - scoring the wrong side as a flat penalty in the swivel search: 0
-  //     inversions, but the winning swivel then HOPS between 10° steps as the
-  //     body turns and the elbow snaps across at 14x the normal frame step —
-  //     the same artefact by another route.
-  //   - making that cost a continuous ramp instead of a step: identical 14x.
-  //     The cost being smooth does not help, because the SEARCH is discrete;
-  //     the argmin over 10° samples jumps whenever two candidates swap rank.
-  //
-  // The real fix is to solve the swivel continuously — refine around the best
-  // sample rather than return one of them — so the output moves as smoothly as
-  // the objective does. Until then this guards against getting WORSE.
+  // no elbow bends backwards where the rule is measurable (the hard side constraint; its cost is the ratcheted snap above)
   check(`no elbow bends backwards where the rule applies (${inverted}/${checked}, ${skipped} adducted and skipped)`,
     inverted === 0);
   check("...and the sweep actually ran", checked > 500, `${checked}`);
@@ -438,15 +346,8 @@ console.log("\nelbows bend the way elbows bend (where that is knowable)");
 
 console.log("\nthe forearm, crossing the body");
 {
-  // The bug antra can see and the harness could not, until it learned that six
-  // of the eighteen rigs are VRM0 and sit a half-turn from the root.
-  //
-  // Reaching the opposite hip drags the forearm across the torso. The upper
-  // bone is pushed clear (that works); nothing acts on the FOREARM, whose
-  // path is fixed once the elbow is placed, so it crosses through the body.
-  // Measured against the browser before this test existed: orion forearm 57mm
-  // from the spine column where 162mm is required — and the headless numbers
-  // now agree (48/55/123 vs the browser's 4/57/147).
+  // reaching the opposite hip: the upper bone is pushed clear, but nothing acts on the FOREARM once the elbow is placed,
+  // so it crosses the body (VRM0 rigs sit a half-turn from the root, which the harness must honour)
   const segDist = (p1: any, q1: any, p2: any, q2: any) => {
     const d1 = q1.clone().sub(p1), d2 = q2.clone().sub(p2), r = p1.clone().sub(p2);
     const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r); let s: number, t: number;
@@ -487,24 +388,15 @@ console.log("\nthe forearm, crossing the body");
     }
   }
   console.log(`  ${tested} rigs, worst forearm shortfall ${worstDeficitMM.toFixed(0)}mm on ${worstRig || '-'}`);
-  // ⚠ RATCHET at the measured value. This is the open bug, not a pass: the
-  // forearm crosses through the torso because nothing acts on it once the
-  // elbow is placed. Lower this number when that is fixed; it exists so the
-  // number cannot quietly grow while the fix is pending.
+  // ⚠ RATCHET at the measured value (the open forearm bug above): lower it when that is fixed
   check(`forearm-through-torso does not worsen (${worstDeficitMM.toFixed(0)}mm)`, worstDeficitMM <= 45);
   check('...and it actually ran', tested >= 14, `${tested}`);
 }
 
 console.log("\ntouching with the palm, not the back of the hand");
 {
-  // Position IK says nothing about how a hand is turned, so before this a hand
-  // arrived at a shoulder back-first as often as not — measured in the browser
-  // at 148° off for shoulder_l and upper_back, which is very nearly inside-out.
-  //
-  // No mesh here, so no derived surface normals: the normal is synthesised
-  // (pointing from the target back toward the shoulder, i.e. the hand meets it
-  // head-on), which exercises the same machinery — forearm pronation first,
-  // then a clamped wrist.
+  // position IK says nothing about how a hand is turned; with no mesh the surface normal is synthesised (target back toward
+  // the shoulder, head-on), exercising the same forearm pronation then clamped wrist
   let worstOff = 0, worstRig = '', tested = 0, sumBefore = 0, sumAfter = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -519,12 +411,7 @@ console.log("\ntouching with the palm, not the back of the hand");
     const palmNow = () => aPalm.clone().applyQuaternion(
       chain.nodes.end.getWorldQuaternion(new THREE.Quaternion()));
     for (let i = 0; i < 6; i++) {
-      // ⚠ TURN THE BODY. The palm target arrives as a WORLD direction while
-      // everything else is in the root's frame, and those two agree exactly
-      // when the yaw is zero — which is the only case this test used to run,
-      // so it passed happily while a turned avatar put the BACK of its hand on
-      // whatever it touched. antra: "the orientation of the palm changes as i
-      // turn the avatar."
+      // ⚠ TURN THE BODY: the palm target is a WORLD direction and the rest is in the root's frame, which agree only at yaw 0
       av.root.rotation.y = (i / 6) * Math.PI * 2;
       av.root.updateMatrixWorld(true);
       const q = av.root.getWorldQuaternion(new THREE.Quaternion());
@@ -562,12 +449,8 @@ console.log("\ntouching with the palm, not the back of the hand");
 
 console.log("\nno flicker between two poses");
 {
-  // antra: "hip_r does not converge and flickers between two poses rapidly."
-  //
-  // The body is never perfectly still — an idle clip breathes — and a pose
-  // sitting exactly on a decision boundary flips with it. Measured at 18-64mm
-  // of elbow movement per frame on four rigs while the input moved half a
-  // millimetre. A sub-millimetre input must not produce a centimetre of output.
+  // an idle clip breathes, and a pose on a decision boundary flips with it: a sub-millimetre input must not produce a
+  // centimetre of output
   let worstMM = 0, worstRig = '', tested = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });

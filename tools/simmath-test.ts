@@ -80,10 +80,8 @@ console.log("\nedges and identities:");
 }
 
 // ---- 3. the cross-engine sweep ---------------------------------------------
-// One deterministic sweep (an LCG over the full working domain), outputs
-// packed as raw float64 bytes, digested. The SAME module file runs under
-// each engine on this machine; a differing digest is a nonconforming engine
-// (or a broken kernel) and fails loudly.
+// one LCG sweep over the working domain, raw float64 bytes digested; the same module under each engine here must give
+// the same digest
 console.log("\ncross-engine identity (the covenant itself):");
 
 const SWEEP = `

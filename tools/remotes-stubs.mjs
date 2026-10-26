@@ -63,9 +63,8 @@ export const toast = () => {};
 export const flashHint = () => {};
 
 // ---- the avatar factory, instrumented --------------------------------------
-// makeAvatar receives the RESOLVED path (remotes.js substitutes its default
-// for null), so `avatarCalls` is a direct detector for "a default-avatar
-// body was constructed" — the sunflower, in a list.
+// makeAvatar receives the RESOLVED path (remotes.js substitutes its default for null), so `avatarCalls` detects a
+// default-avatar body being constructed
 export const avatarCalls = [];
 export let disposeCount = 0;
 export const resetAvatarLog = () => { avatarCalls.length = 0; disposeCount = 0; pendingLoads.length = 0; };

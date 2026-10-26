@@ -1,41 +1,23 @@
 // bun tools/xr-lifecycle-probe.mjs — THE SHIPPING DELEGATION, IN A BROWSER.
 //
-// Required by the #197 round-three review. The seam modules are executable and well covered, but the
-// LINE IN xr.js THAT CALLS THEM is not: rewriting it as `false ? seam(...) : 'throw'` keeps every
-// source regex satisfied and leaves the bun suites green. xr.js imports 21 modules including three
-// and the renderer, so no bun suite can import it — binding that last line needs the real client.
-//
-// So: IWER installs a synthetic XRDevice before the client boots, the probe CLICKS THE REAL VISOR,
-// and the real enterVR runs. The two mutations the review named must turn this red:
+// The seam modules are covered, but the LINE IN xr.js THAT CALLS THEM can only be bound in the real client (no bun
+// suite can import xr.js). IWER installs a synthetic XRDevice before boot, the probe CLICKS THE REAL VISOR, and the
+// real enterVR runs. These mutations must turn it red:
 //   1. bypass the handleEntryFailure() call in shipping xr.js
 //   2. bypass the installEntryClock() call in shipping xr.js
 //
-// SwiftShader is fine for these claims. It proves ORCHESTRATION, not rendering quality, foveation,
-// controller ergonomics, or the desktop mirror. Those stay with the named real-headset receipt.
-// The 'reload' verdict (WebGPU refusal → ?webgl=1) is NOT bound here by design: the probe boots ?xr=1 on a
-// host with no XRGPUBinding, and decideBackend (backend_choice.js) gives such a boot WebGL, so gpu is false.
-// A host WITH the WebGPU-XR flags rides WebGPU-XR under the same boot — that is the product's intent (R
-// 09-07: ONE renderer control) and this probe does not exercise it. Binding 'reload' needs a WebGPU desktop
-// boot plus a navigation intercept — a separate probe, not a premise about the host.
+// SwiftShader proves ORCHESTRATION, not rendering quality, foveation or ergonomics (those stay with a real headset).
+// The 'reload' verdict (WebGPU refusal → ?webgl=1) isn't bound here: ?xr=1 without XRGPUBinding boots WebGL
+// (backend_choice.js decideBackend); binding it needs a WebGPU boot plus a navigation intercept, its own probe.
 //
 // Usage: bun tools/xr-lifecycle-probe.mjs [origin]
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { readFileSync } from 'node:fs';
 
 const { check, done } = checker();
-// A REAL HEADSET'S RUNTIME DOES NOT RUN ITS FRAME LOOP ON window.rAF — that is the entire reason the
-// product shims window.rAF onto the session while presenting. IWER's does: its device loop reschedules
-// itself with `globalThis.requestAnimationFrame(onDeviceFrame)`, looked up at CALL time
-// (lib/session/XRSession.js:81). So once the product installs the shim, that lookup hits the shim,
-// routes to session.requestAnimationFrame, and the session dispatches it SYNCHRONOUSLY inside the
-// frame it is already in: onDeviceFrame re-enters itself, every level rendering stereo under
-// SwiftShader, until V8's stack overflows — then no native frame was ever rescheduled at any level and
-// the emulated session goes silently dead. That is why the first cut of this probe printed two checks
-// and hung for 420 s with no output (and it is the bench crash the xr_frame_clock header dates 09-07
-// 19:15). Pin the emulator's own loop to the NATIVE clock, captured before anything runs, and it does
-// what a hardware runtime does: dispatch session callbacks from a clock that is not window.rAF. (Not a
-// full hardware model — here both clocks run at 60 Hz, so the probe proves the SWAP happens and is
-// undone, not that it helps against a throttled window clock. That claim stays with the headset.)
+// IWER's device loop reschedules on globalThis.requestAnimationFrame, which the product's shim would make re-enter
+// itself until the stack overflows: pin the emulator to the NATIVE clock, as a headset runtime is. Both clocks run at
+// 60 Hz here, so this proves the swap happens and is undone, not that it helps a throttled window clock
 const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
 const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
 if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
@@ -60,18 +42,11 @@ await pg.addInitScript(() => {
   if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   const device = new XRDevice(metaQuest3);
   window.__probeDeviceKept = true;
-  // forceInstall IS REQUIRED. Headless Chromium ships a navigator.xr stub, and IWER declines to
-  // clobber an existing runtime — installRuntime() returns early with only a console.warn, so the
-  // install silently no-ops and every isSessionSupported('immersive-vr') answers false against
-  // Chromium's stub rather than the emulator. (XRDevice.js:340.)
+  // forceInstall IS REQUIRED: headless Chromium ships a navigator.xr stub, and IWER otherwise declines to replace it
   device.installRuntime({ forceInstall: true });
   window.__probe_installed = navigator.xr?.constructor?.name;
-  // THE NON-EMULATED PRODUCT PATH, which is what the review asked the probe to bind. installEntryClock
-  // abstains when it sees an IWER on globals — correctly, because IWER drives the session clock ON
-  // window.rAF and shimming would feed it to itself. But then the shim install is never exercised.
-  // So the emulator stays as the XR RUNTIME and stops advertising itself as an emulator: navigator.xr
-  // is synthetic, `globalThis.IWER` is gone, and the product takes exactly the branch a real headset
-  // takes. The device object is kept privately for the probe to drive.
+  // THE NON-EMULATED PRODUCT PATH: installEntryClock abstains when it sees an IWER, so the emulator stays the runtime but
+  // hides itself (no `globalThis.IWER`) and the product takes a real headset's branch; the device is kept privately
   window.__iwerDevice = device;
   try { delete window.IWER; } catch { window.IWER = undefined; }
   // The instrumentation the probe reads. Nothing in the product writes these; they are observations
@@ -105,10 +80,8 @@ await pg.addInitScript(() => {
 
 const errs = [];
 pg.on('pageerror', (e) => errs.push(String(e)));
-// THE IMPORT GRAPH. Mica's red reads xrbtn:false — mictoggle.js never evaluated (its module-load ensure()
-// makes the button) — so the stall is a module fetch that never resolved or a top-level await upstream of
-// it, and the console is silent about that. Track every request; at an early stop, print what never
-// finished and what failed. That is the instrument for "boot stalled before initXR".
+// THE IMPORT GRAPH: a boot that stalls before initXR is a module fetch or top-level await the console is silent about,
+// so track every request and, at an early stop, print what never finished and what failed
 const pending = new Map(), failed = [];
 pg.on('request', (r) => pending.set(r, Date.now()));
 pg.on('requestfinished', (r) => pending.delete(r));
@@ -118,11 +91,8 @@ try {
 // hands it to report(), which console.error()s `context, err` (base.js:128) — tee() goes to the network,
 // NOT the console, so a '[report]' filter here measured nothing and read green. Capture console errors.
 const reports = [], artifacts = [], consoleTail = [];
-// KNOWN EMULATOR ARTIFACT, disclosed not hidden: IWER's XRWebGLLayer.framebuffer returns null by design
-// (lib/layers/XRWebGLLayer.js:44-46 — it draws to the default framebuffer); a real runtime returns an opaque
-// WebGLFramebuffer. three's WebGL backend keys a WeakMap on that object (WebGLState.drawBuffers) and throws
-// on null. FIXED 09-30 (client/lib/xr_nullfb.js; asserted by tools/xr-render-errors-probe.mjs, which also showed the
-// throw left renderer.xr.enabled off). Still counted and printed here, so a count above 0 is now a regression.
+// IWER's XRWebGLLayer.framebuffer is null by design, and three keys a WeakMap on it (WebGLState.drawBuffers):
+// handled by client/lib/xr_nullfb.js (tools/xr-render-errors-probe.mjs), so a count above 0 here is a regression
 const ARTIFACT = /Invalid value used as weak map key.*WebGLState\.drawBuffers/;
 pg.on('console', (m) => {
   consoleTail.push(`${m.type()}: ${m.text().replace(/\s+/g, ' ').slice(0, 200)}`); if (consoleTail.length > 40) consoleTail.shift();
@@ -131,22 +101,15 @@ pg.on('console', (m) => {
   if (/status of 401 .*\/whoami/.test(t)) return;   // net.js:254 treats a non-OK /whoami as "not signed in" by design; Chrome logs the fetch anyway
   (ARTIFACT.test(t) ? artifacts : reports).push(t);
 });
-// ?xr=1 IS THE BOOT MODE, NOT A HOST ACCIDENT (Mica, review host, 2026-09-21). Without it the product
-// picks its backend from the host — Chrome on her Mac boots WebGPU — and the first click takes the
-// product's reload-to-WebGL branch, navigating away from the probe's state: 8/14 with requests=0. Under
-// ?xr=1, decideBackend gives a host WITHOUT XRGPUBinding WebGL (enter in place) and a host WITH it
-// WebGPU-XR — either way the click enters without a reload, which is what makes the receipt portable. The
-// earlier disclosure "headless is WebGL-only" was a fact about my Linux box, written down as a premise;
-// and my first correction misquoted a stale core.js comment as the rule. The rule is backend_choice.js.
+// ?xr=1 IS THE BOOT MODE: without it a WebGPU host's first click reloads to WebGL and leaves the probe's state; with it
+// the click enters in place on any host (client/lib/backend_choice.js decideBackend)
 await pg.goto(`${world.origin}/?world=staging&name=xrprobe&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
 // Wait for the glyph to be VISIBLE: mictoggle shows it only once the product's own isSessionSupported has
 // answered and the XR hook is registered (mictoggle.js:214). Forcing display and clicking early was
 // clicking before the product said it was ready.
 await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 60000 }).catch(() => {});
-// WHEN THIS GATE FAILS, SAY WHICH LINK BROKE (Mica, round six: intermittent "glyph never visible" on her
-// host with no error anywhere). The chain is main.js: await initIdentity() → startFrame() → initXR() →
-// isSessionSupported → makeHand×2 → registerXrGlyph → ensure() (needs #hud) → display if pinned && hook.
-// Each stage leaves a mark the page can read; a red here names the last one that did.
+// WHEN THIS GATE FAILS, SAY WHICH LINK BROKE: initIdentity → startFrame → initXR → isSessionSupported → makeHand×2 →
+// registerXrGlyph → ensure() (needs #hud) → display; a red names the last stage that left its mark
 const glyphStage = () => ev(async () => {
   const b = document.querySelector('#xrbtn');
   let pin = null; try { pin = localStorage.getItem('ew-xr-pinned'); } catch {}
@@ -202,18 +165,11 @@ const afterEnter = await ev(() => ({
   rafIsNative: window.requestAnimationFrame === window.__probe.nativeRAF,
   rafSrc: String(window.requestAnimationFrame).slice(0, 60),
 }));
-// WHAT "RESTORED" MEANS. captureNative saves a BOUND copy of the window clock (xr_frame_clock.js:27), so
-// a correct restore leaves `bound requestAnimationFrame` — native code, but not `===` the original. The
-// first cut of this probe tested identity against the original and called a correct restore a failure.
-// The discriminating test: the clock is no longer the shim we watched it become, and it is native code
-// (the shim prints as an arrow function; a bound native prints `function () { [native code] }`).
+// WHAT "RESTORED" MEANS: captureNative saves a BOUND copy (xr_frame_clock.js), never `===` the original, so restored
+// = no longer the shim we watched, and native code (a bound native prints `function () { [native code] }`)
 await ev(() => { window.__probe.shim = window.requestAnimationFrame; });
-// `bind()` of ANYTHING — including the shim — prints as [native code], so that regex alone would accept
-// the exact regression save-once guards against (a bound SHIM captured as "native"). Two sharper facts:
-// the product binds native exactly once per page, so the restored object must be IDENTICAL across exits
-// and named `bound requestAnimationFrame` (a re-capture yields `bound bound …`); and the desktop loop
-// must actually TICK afterwards — the 09-07 22:41 bug left window.rAF native AND the loop dead, because
-// three's 'end' listener restarted it through a shim that still pointed at the ended session.
+// a bound shim prints as [native code] too, so also: the restored object is IDENTICAL across exits and named
+// `bound requestAnimationFrame` (a re-capture is `bound bound …`), and the desktop loop must actually TICK afterwards
 const restoredState = async () => {
   await pg.waitForFunction(() => !window.__iwerDevice?.activeSession, null, { timeout: 10000 }).catch(() => {});
   const a = await ev(() => ({ f0: globalThis.__perf?.frameNo ?? -1, t: performance.now() }));

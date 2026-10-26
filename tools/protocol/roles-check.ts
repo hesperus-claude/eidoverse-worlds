@@ -1,5 +1,5 @@
-// tools/protocol/roles-check.ts — roles, permissions and moderation through the real authority (RESEARCH-roles-moderation-2026-10-06;
-// PLAN decisions 10-06: the Sanctioned Society — ranked membership only, banned and ghost as states outside it).
+// tools/protocol/roles-check.ts — roles, permissions and moderation through the real authority: ranked membership only,
+// banned and ghost as states outside it.
 //   bun tools/protocol/roles-check.ts                 every case
 //   bun tools/protocol/roles-check.ts --only R1,S2    just those
 //   bun tools/protocol/roles-check.ts --tree <dir>    against another checkout's shared/ (a mutant, a base)
@@ -446,10 +446,8 @@ const cases: Case[] = [
       return { v: w["@world"][key], bo: w["@world"][bo], imported: Object.keys(w["@world"]).filter((k) => k.startsWith("imported:roles")), sw: RL.effectiveOf?.(w["@world"], id)?.permissions, tag: TV1.TRANSLATOR }; },
     good: (o) => o.v?.role === "builder" && o.v.can?.fly === true && o.v.can?.generate === true && !("gen" in o.v) && !("fly" in o.v) && !("fly" in (o.bo ?? {})) && o.imported.length === 0 && o.sw?.includes("fly") && o.sw?.includes("generate") && o.tag?.startsWith("eidoverse/translate-v1@") && +o.tag.split("@")[1] >= 7 },   // @4 brought fly → can.fly, @7 gen → can.generate
   { id: "T2", what: "the Commons (its v1 governance lines, the repo fixture or V1_COMMONS=<a v1 Commons log>, translated here): a stranger is still a builder and now builds and generates by its default-role can.generate; a guest is an inhabitant", run() {
-      // PROTOCOL_COMMONS: an already-translated world log; else the v1 Commons translated in process (R 10-07: the Commons is
-      // re-translated from its latest v1 log at merge time, so a saved translation would only test an older importer)
-      // With neither, the repo's own fixture: the Commons' governance lines alone (its founder's grant, a builder's, and
-      // the `*` gen grant), so the row always runs; the real log is an optional, louder test (V1_COMMONS=<its log.jsonl>).
+      // PROTOCOL_COMMONS: an already-translated log; V1_COMMONS: a v1 log translated in process (a saved translation would
+      // test an older importer); with neither, the repo's fixture of the Commons' governance lines, so the row always runs
       const commonsLog = process.env.PROTOCOL_COMMONS, v1f = process.env.V1_COMMONS ?? path.resolve(ENGINE, "tools/protocol/fixtures/v1-commons-shape.jsonl");
       if (!commonsLog && !fs.existsSync(v1f)) throw new Error(`T2: no Commons log at ${v1f} (V1_COMMONS)`);
       const st = commonsLog ? F.fold(F.readLog(fs.readFileSync(commonsLog)))

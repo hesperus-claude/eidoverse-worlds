@@ -2,8 +2,8 @@
  * Support heightfield probe — #84's matched browser/headless receipt.
  *
  * For each asset: the SERVED summary (server/geometry.ts summarizeGlb,
- * imported directly — no network) against a BVH raycast ground truth (the
- * survey's honest metric, tools/collider-survey.ts machinery). Asserts, for
+ * imported directly — no network) against a BVH raycast ground truth
+ * (tools/collider-survey.ts machinery). Asserts, for
  * every asset the shared classifier calls floor-shaped + uneven:
  *
  *   - the summary carries a validTopGrid-accepted grid;
@@ -12,12 +12,10 @@
  *   - the OLD box top's error at the same columns — the float a body
  *     suffered before this fix — is recorded as the receipt.
  *
- * Assets that are NOT in the class (both rubble piles at scale 1 — the
- * height gate excludes them, in the browser and here alike) are reported
- * with the scale at which they WOULD enter it, for the agent-level test.
+ * Assets NOT in the class (the height gate excludes them) are reported with the scale at which they WOULD enter it.
  *
  * Run:
- *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/eidoverse-video \
+ *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/library \
  *     bun run tools/support-heightfield-probe.ts [extra.glb ...]
  */
 
@@ -112,11 +110,8 @@ async function probe(label: string, path: string, scale = 1) {
   if (!validTopGrid(sum.topGrid)) return;
   const g = sum.topGrid!;
 
-  // raycast truth per OFFERED cell, 4×4 within-cell subsample — a body may
-  // stand anywhere in a cell, so the bound is per SUBPOINT, in WORLD metres
-  // at the tested scale, not a median over cell centres (#94 review B1).
-  // The 4×4 pattern deliberately differs from certification's 3×3: the
-  // probe must not sample the exact points generation certified.
+  // raycast truth per OFFERED cell, 4×4 subsample: the bound is per SUBPOINT in WORLD metres (a body may stand anywhere
+  // in a cell), and 4×4 differs from certification's 3×3 so the probe never samples the certified points
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(v, 3));
   const bvh = new MeshBVH(geo);

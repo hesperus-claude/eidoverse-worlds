@@ -73,13 +73,9 @@ console.log("\n━━ validTopGrid: versioned, finite, bounded, or refused ━�
   check("null and undefined refused outright", !validTopGrid(null) && !validTopGrid(undefined) && !validTopGrid("grid"));
 }
 
-// ---- #94 review B2: the two adapters agree AT the strict gate --------------
-// The browser computes lie in full precision; a served lie must reach the
-// decision in full precision too, or a true 0.1004 flips verdicts across
-// runtimes. Calibrated fixture: a dense sheet at y=0 with a small bump of
-// EXACTLY the gate-straddling height — lie = bump height by construction —
-// pushed through BOTH adapters: colliders.js topLie (a duck-typed mesh over
-// real three) and the raw accumulator (the server's path).
+// ---- #94: the two adapters agree AT the strict gate --------------
+// a served lie must reach the decision in full precision, or 0.1004 flips across runtimes: a sheet with a bump of the
+// gate-straddling height through colliders.js topLie and the raw accumulator (the server's path)
 console.log("\n━━ B2: browser and server verdicts agree at the 0.10 gate ━━");
 {
   // colliders.js imports the browser's core.js — route it to the headless

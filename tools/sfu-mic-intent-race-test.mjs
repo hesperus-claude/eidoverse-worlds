@@ -103,9 +103,7 @@ t('2: the synth is what got published', lastPublished(pc) === syn2 && pc.added.l
 t('2: a synth is not a live device', ms.micDeviceLive() === false && sfu.sfuMicWanted() === false);
 
 // ── 3. the mirror image: ON while a synth acquisition is in flight ────────
-// First bring a real device live the ordinary way (ON after a synth swap
-// re-acquires — the 2026-08-16 rule), then OFF with the provider present so a
-// synth acquisition parks, then ON before it resolves.
+// bring a real device live (ON after a synth swap re-acquires), OFF so a synth acquisition parks, then ON before it resolves
 p1 = sfu.sfuMic(true);
 await flush();
 t('3: ON after a synth re-acquires the mic', acquisitions.length === 4 && acquisitions[3].micWanted === true && syn2.track.stopped === true);

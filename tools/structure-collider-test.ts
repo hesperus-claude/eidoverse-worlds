@@ -3,20 +3,9 @@
 //   bun tools/structure-collider-test.ts
 //
 // A griddled building declares its boxes instead of having a shape inferred
-// from its bounding box. Two inherited behaviours would silently ruin that, and
-// both are pinned here against a live control rather than asserted from taste:
-//
-//  - THE PILLAR RULE. fitSupportBox turns anything over 2.4m tall into a 0.5m
-//    centre post (so you can walk under a canopy). A 2.8m wall is exactly that
-//    tall. The control below pushes the SAME box through both doors and shows
-//    they disagree — if fitStructureBoxes ever starts inheriting the rule, this
-//    test stops being able to tell them apart.
-//  - `interior`. flora reads it to clear grass; physobj and both ragdoll
-//    engines read it to SKIP the entry. A floor slab wearing it is a floor
-//    bodies fall through.
-//
-// Plus the claim the whole aperture design rests on: a doorway is walkable
-// because there is NO BOX there, with no change to the movement solver.
+// from its bounding box. It must not inherit fitSupportBox's PILLAR RULE (over 2.4 m becomes a 0.5 m post; control:
+// the same box through both) or `interior` (bodies would fall through the slab). A doorway is walkable because there
+// is NO BOX there.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -141,11 +130,8 @@ const WALK = PLAN.levels[0].y;
     Math.abs(atDoor.z - before.z) < 1e-6 && Math.abs(atDoor.x - before.x) < 1e-6,
     `moved to (${atDoor.x.toFixed(3)}, ${atDoor.z.toFixed(3)})`);
 
-  // The opening must not leak into its neighbour. Assert the body ends up
-  // OUTSIDE the solid segment's volume rather than naming an axis: near a
-  // segment's end the nearest way out is legitimately sideways (a 15cm wall is
-  // thinner than a 32cm body), and demanding a z-push there would be asserting
-  // the solver's arithmetic rather than the wall's solidity.
+  // the opening must not leak into its neighbour: assert the body ends OUTSIDE the solid segment, not a push axis
+  // (near a segment's end the way out is legitimately sideways: the wall is thinner than the body)
   const atEdge = new THREE.Vector3(1.05, WALK, 0);
   resolveColliders(atEdge, flat);
   const insideWall = atEdge.x > 1 && atEdge.x < 2 && Math.abs(atEdge.z) < 0.075;

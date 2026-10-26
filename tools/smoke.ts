@@ -5,7 +5,7 @@
 //
 // This covers the wire, not the renderer: join and the cut, door requests and
 // their order, presence batching, the NON-logged channels (drag, typing),
-// identity takeover, and speech's rule (R 10-18): the world's log keeps every
+// identity takeover, and speech's rule: the world's log keeps every
 // say, people receive speech only for the time they were present (no backscroll
 // on join), and only an admin (the world's owner, an operator) reads the master
 // log back. There is no private channel: whisper was removed (a whisper is
@@ -103,12 +103,8 @@ async function startServer() {
   foundWorlds(worldsDir, [WORLD, `${WORLD}-hist`, `${WORLD}-noise`, `${WORLD}-pose`], "alice");
   foundWorlds(worldsDir, [`${WORLD}-ground`], "groundskeeper");
   foundWorlds(worldsDir, [`${WORLD}-light`], "lampsmith");
-  // process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd
-  // shim that exits the moment it has launched the real bun.exe, so the pid
-  // we hold is dead within milliseconds and `server?.kill()` below reaps
-  // nothing — the sequencer is orphaned and keeps this port. That survivor
-  // then answers the NEXT run's readiness poll, and the suite reports on a
-  // build it never started (this is the 72/85 ghost).
+  // process.execPath, not "bun": on Windows PATH "bun" is a .cmd shim that exits at once, so kill() would reap nothing
+  // and the orphan would answer the next run's readiness poll
   server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
     env: {
       ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, JOIN_TOKEN: "", SKIP_OPT_SWEEP: "1",
@@ -142,10 +138,8 @@ const logText = (world = WORLD) => { const p = join(worldsDir, world, "world.jso
 try {
   console.log(`\nsmoke: ${URL_}  world=${WORLD}\n`);
 
-  // Parse every client module before anything else. A syntax error in one of
-  // them takes the whole client down with a blank page, and `node --check` on
-  // the files you THINK you edited will happily miss it — which is exactly how
-  // a stray duplicate `const` shipped once.
+  // parse every client module first: one syntax error blanks the whole client, and checking only the files you edited
+  // misses it
   {
     const dir = join(import.meta.dir, "..", "client");
     const files = [join(dir, "main.js")];

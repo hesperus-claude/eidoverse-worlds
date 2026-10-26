@@ -1,43 +1,9 @@
 /**
- * Server clock test: the server sends its time (the world's authority clock)
- * just before every snapshot to a join that asks (`clock: true`), and the
- * browser takes it as its server clock until its first round trip lands
- * (client/lib/serverclock.js), so a shared sound's playhead is seeked in
- * server time from the first snapshot on.
- *
- * The server half joins a real server three ways that ask (embodied,
- * spectating, and travelling to a second world on the same socket) and
- * checks that the message just before each snapshot is `{type: "clock", t}`,
- * with `t` the server's Date.now() at the join; then two ways that don't
- * (spectating and embodied), which get no clock, the spectator's first
- * message being the snapshot. It also checks that an agent (mcpl/agent.ts),
- * which keeps its own estimate of the server's clock, on a machine whose
- * clock runs 5 s behind, takes its first sample from the clock message it
- * received, that message's t less its own clock, so its serverNow() lies
- * between that t and the server's time; that a sample taken late brings the
- * estimate down by the leak since its previous sample, and its serverNow()
- * reads the kept estimate; that it folds a frame's stamp, as the server sent it,
- * as that frame's own sample; that its own clock
- * is the monotonic one and its serverNow() doesn't follow a step of the wall
- * clock; and that its re-join on an avatar change asks too. The
- * browser half checks the rule every estimate keeps (shared/clockoffset.js:
- * the largest sample wins, it comes down by at most 2 ms a second and 100 ms
- * at once, and a sample that isn't finite isn't one), then
- * runs net.js's handler under happy-dom with the stubs remotes-lifecycle-test
- * uses: it checks that the early socket's join and net.js's join ask, that a
- * `clock` message moves serverNow() to the server's time on a machine whose
- * own clock is behind it, both as it arrives and when the early socket
- * (client/index.html's boot script) buffered it and connect() drains it
- * later, a frame too, and that a late sample brings the browser's estimate,
- * and the lite client's, down by the leak for the time between the two
- * samples' handling, the `at` each is given (the browser's raw estimate,
- * before serverclock.js slews what the screen shows toward it), the lite
- * client's being the same clock. Where a check
- * finer than a millisecond reads a clock, it reads it with performance.now()
- * held still or brackets each read with reads just before and after, so a
- * stalled process can't fail it. It checks that remote bodies are drawn on the
- * one time base, serverNow() less INTERP_MS (spec/PHYSICS.md §5.1: the clock
- * flights are drawn on too), and that a pose with no t is stamped on it.
+ * Server clock: a join that asks (`clock: true`) gets {type: "clock", t} just before each snapshot; the browser
+ * (client/lib/serverclock.js), the lite client and the agent (mcpl/agent.ts) seed their server clock from it, and every
+ * estimate keeps shared/clockoffset.js's rule (largest sample wins; down by ≤2 ms/s, ≤100 ms at once). Sub-millisecond
+ * checks hold performance.now() still or bracket each read, so a stalled process can't fail them. Remote bodies are
+ * drawn on the one time base, serverNow() less INTERP_MS (spec/PHYSICS.md §5.1).
  *
  * Run: bun run tools/server-clock-test.ts
  */
@@ -131,12 +97,8 @@ try {
   check("an embodied join that doesn't ask gets no clock either",
     wr.got.some((m) => m.type === "snapshot") && !wr.got.some((m) => m.type === "clock"), wr.got.map((m) => m.type).join(","));
   walker.ws.close();
-  // An agent keeps its own estimate of the server's clock (mcpl/agent.ts
-  // serverNow) and takes the same message. Nobody in this world has sent a
-  // pose, so the server has sent no frame, and only the clock message can
-  // have set the estimate by the time the agent's snapshot lands. The
-  // agent's own clock (localNow) is set 5 s behind the server's while it
-  // joins, so the estimate has to come from the server's `t`.
+  // an agent's estimate (mcpl/agent.ts serverNow) takes the same message: with no pose sent there is no frame, and the
+  // agent's localNow is 5 s behind, so the estimate can only come from the clock message's `t`
   const { WorldAgent } = await import("../mcpl/agent.ts");
   const agent: any = new WorldAgent({ url: WS_URL, name: "clocky", world: WORLD });
   // the agent's own clock (localNow, monotonic) runs 5 s behind the server's
@@ -173,19 +135,14 @@ try {
   check("an agent's first sample is the t of the clock message it received, less its own clock",
     atJoin != null && clockOnWire.length > 0 && atJoin.t === clockOnWire[0].t && atJoin.after >= atJoin.low - 1e-6 && atJoin.after <= atJoin.high + 1e-6,
     atJoin ? `folded t ${atJoin.t}, the clock message's ${clockOnWire[0]?.t}; estimate ${atJoin.after}, the sample ${atJoin.low} to ${atJoin.high}` : "no sample during the join");
-  // what its motion evaluation (eff), its sim and its water read:
-  // serverNow(), its own clock plus the estimate: no earlier than the clock
-  // message's t, and no later than the server's time now. The server runs on
-  // this machine, so its Date.now() is this one's, to the millisecond it
-  // truncates to.
+  // what its motion, sim and water read: serverNow(), no earlier than the clock message's t and no later than the
+  // server's now (same machine, so the same Date.now())
   const agentNow = agent.serverNow(), serverAfter = Date.now();
   check("…so its serverNow() lies between the clock message's t and the server's time now",
     atJoin != null && agentNow >= atJoin.t - 1e-6 && agentNow <= serverAfter + 1,
     `serverNow ${agentNow}, the clock message's t ${atJoin?.t}, the server's time ${serverAfter}`);
-  // a frame handled 20 s late reads the server's clock 20 s early, and the
-  // estimate keeps the earlier, quicker sample: it comes down by the leak for
-  // the time since its previous sample, which the agent's clock read just
-  // before and just after the fold bracket (shared/clockoffset.js)
+  // a frame handled 20 s late reads the clock 20 s early: the estimate keeps the quicker sample and comes down only by the
+  // leak since its previous one, bracketed by clock reads around the fold (shared/clockoffset.js)
   const agentSettled = agent.clock.offset, agentSince = agent.clock.at;
   const lateFrom = agent.localNow();
   agent.noteServerTime(lateFrom + agentSettled - 20_000);
@@ -200,15 +157,9 @@ try {
   const kept = keptNow - agent.clock.offset;
   check("…nor its serverNow(), which reads the kept offset", kept >= keptFrom - 1e-3 && kept <= keptTo + 1e-3,
     `serverNow - offset = ${kept}, its clock ${keptFrom} to ${keptTo}`);
-  // A frame's stamp is folded in too (mcpl/agent.ts, case "frame"). With its
-  // estimate set an hour low, the first frame folded brings it up to that
-  // frame's own sample, its t less the agent's clock when the frame was
-  // handled, which a clock read just before the fold and just after it
-  // bracket, so long as the frame was handled less than an hour after the
-  // server stamped it. The server serializes each frame once for every
-  // client in the world (server.ts, the frame tick), so the frame that
-  // carries the posing body's own pose, sent after the estimate was set low,
-  // reaches that body and the agent with the same t.
+  // a frame's stamp is folded in too (mcpl/agent.ts, case "frame"): with the estimate set an hour low, the first frame
+  // brings it up to that frame's sample (t less the agent's clock, bracketed around the fold); the server serializes each
+  // frame once per world, so the poser and the agent see the same t
   const poser = await connect();
   await joinWorld(poser, { world: WORLD, id: "poser" });
   const lowered = agent.clock.offset - 3_600_000;
@@ -310,10 +261,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   await netMod._dispatch({ type: "clock", t: machine() + 5_000 });   // this machine runs 5 s behind the server
   const ahead = remotesMod.serverNow() - machine();
   check("after the clock message, serverNow() reads the server's time", Math.abs(ahead - 5_000) < MARGIN, `serverNow - machine = ${ahead} ms`);
-  // The rule every estimate keeps (shared/clockoffset.js), on its own: the
-  // largest sample wins, so a late one moves it by no more than the leak: it
-  // comes down by at most 2 ms for each second since the previous sample,
-  // 100 ms at once.
+  // the rule every estimate keeps (shared/clockoffset.js): the largest sample wins, and it comes down by at most 2 ms per
+  // second since the previous sample, 100 ms at once
   const { foldOffset, LEAK_MS_PER_S, LEAK_MAX_MS, STREAM_BLEND } = await import("../shared/clockoffset.js");
   const s0 = foldOffset(null, 5_000, 0);
   const show = (s: any) => JSON.stringify(s);
@@ -333,14 +282,9 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   check("…and blends each sample in at 0.08, a late one included, as the one estimate did before",
     STREAM_BLEND === 0.08 && foldOffset(s0, -15_000, 1_000).stream === 5_000 * 0.92 - 15_000 * 0.08, show(foldOffset(s0, -15_000, 1_000)));
 
-  // The early socket: the boot script opens the socket and buffers what comes
-  // while the module graph loads, and connect() drains it later. Run the boot
-  // script itself, twice, as two page loads. Each buffered message must be
-  // sampled at the time its own message's handler ran (the boot script's
-  // performance.now() reads `lag` behind): sampled at the drain, with another
-  // message's stamp, or not at all, the estimate lands tens of seconds off.
-  // Each load's server is further ahead than the last, so each right sample
-  // raises the estimate and a wrong one can't hide behind an earlier sample.
+  // the early socket buffers while modules load and connect() drains it later: run the boot script twice (two loads);
+  // each buffered message must be sampled when its own handler ran, not at the drain. Each load's server is further
+  // ahead, so a wrong sample can't hide behind an earlier one
   const { CONFIG } = await import("../client/lib/base.js");
   const html = await Bun.file(join(import.meta.dir, "..", "client", "index.html")).text();
   const boot = html.match(/<script>\s*\n\/\/ The early socket[\s\S]*?<\/script>/)?.[0];
@@ -432,11 +376,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
       check("…and the replaced socket's late close changes nothing", netMod.net.status === "retrying", String(netMod.net.status));
     }
   }
-  // heldStill runs fn with performance.now() held at one instant, so every
-  // clock read inside it reads that instant, however long the process stalls.
-  // From here on an estimate is read that way, as serverNow() or streamNow()
-  // less that instant: exact to the 2^-12 ms a double keeps near 1.8e12 ms.
-  // NaN for a reader that has no such function.
+  // heldStill runs fn with performance.now() held at one instant, so an estimate (serverNow() or streamNow() less that
+  // instant) is exact to the 2^-12 ms a double keeps near 1.8e12 ms, however long the process stalls; NaN with no such reader
   const heldStill = <T>(fn: (p: number) => T): T => {
     const real = performance.now, p = real.call(performance);
     performance.now = () => p;
@@ -446,13 +387,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     typeof read === "function" ? heldStill((p) => read() - (performance.timeOrigin + p)) : NaN;
   const held = estimateAt(() => { const a = performance.now(), b = performance.now(); return a === b ? performance.timeOrigin + a : NaN; });
   check("setup: performance.now() holds still while an estimate is read", held === 0, `read ${held}`);
-  // A frame handled late, after the page was blocked, reads the server's
-  // clock early: the browser's estimate keeps the quicker sample, and comes
-  // down only by the leak for the time between the two samples' handling,
-  // the `at` each is given. They're given 20 s apart, a 40 ms leak, so a fold
-  // that timed the leak on another clock, or took the whole cap, or none,
-  // comes down by tens of ms more or less. The late one's `at` is 20 s ahead
-  // of the page's own clock, so the folds after it here take no leak.
+  // a late frame reads the clock early: the browser keeps the quicker sample and comes down only by the leak between the
+  // two samples' `at` (20 s apart: 40 ms), so a leak timed on another clock, the whole cap, or none, is off by tens of ms
   const LATE_LEAK = Math.min(LEAK_MAX_MS, LEAK_MS_PER_S * 20);
   const kept = estimateAt(rawNow);
   const keptAt = performance.now(), lateAt = keptAt + 20_000;
@@ -469,12 +405,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   check("a t that isn't finite leaves the browser's estimates as they were", afterOdd.every((v, i) => Number.isFinite(v) && Math.abs(v - beforeOdd[i]) < 0.01),
     `before ${beforeOdd.join(", ")}, after ${afterOdd.join(", ")}`);
 
-  // Remote bodies are drawn on the one time base (spec/PHYSICS.md §5.1): the
-  // estimated server clock, serverNow(), the clock flights and every other
-  // authority stamp are drawn on, less INTERP_MS (110 ms). (main's #201 drew
-  // them on a separate stream clock, the old 0.08 blend; here a sample carries
-  // its sender's capture time on the authority's clock, and serverNow() is
-  // measured by round trips, so bodies and flights share one clock.)
+  // remote bodies are drawn on the one time base (spec/PHYSICS.md §5.1): serverNow(), the clock flights and every authority
+  // stamp use, less INTERP_MS (110 ms); a sample carries its sender's capture time on the authority's clock
   {
     // A pose with no `t` (the snapshot's, once a body loads: net.js) is
     // stamped at serverNow().
@@ -506,10 +438,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     // (serverNow() may still be slewing from the checks above: the expected point is read off the two stamps it gave)
     const [ta, tb] = drawn.buf.slice(-2).map((s: any) => s.t), want = 10 * (1 - 110 / (tb - ta));
     check("a remote body whose samples arrive on time is drawn 110 ms behind serverNow()", Math.abs(x - want) < 1e-6 && Math.abs(want - 7.8) < 0.3, `x = ${x}, want ${want} (10 with no buffer)`);
-    // house review of #260, client/lib I46: a fixed 110 ms starved the buffer on a slow link (samples arriving 300 ms
-    // after their capture were all newer than the render point: the body froze at its newest pose, then jumped). The
-    // delay follows the observed lateness: up fast, down slowly, never under 110 ms nor over the cap.
-    // Mutation (must go red): make interpDelay return INTERP_MS always.
+    // the delay follows observed lateness (a fixed 110 ms starves the buffer on a slow link): up fast, down slowly, never
+    // under 110 ms nor over the cap. Goes red if interpDelay returns INTERP_MS always
     const ID: any = await import("../client/lib/interpdelay.js");
     let est: number | null = null;
     check("no samples yet: the floor", ID.interpDelay(est) === ID.INTERP_MS);

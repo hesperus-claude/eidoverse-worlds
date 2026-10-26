@@ -177,11 +177,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
 // ---- lanes ----
 // CORE runs first, in this order, and a failure there stops the gate
 export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reserved", "diffcheck", "hygiene", "procgroup", "nov1", "vocab", "authority", "access", "identity", "scars", "reset-race", "txn", "txn-mutants"];
-// every suite that launches a Chromium (directly, through playwright, or through tools/harness.ts scratchBench). The
-// gate checks this list against the files themselves (browserMarkers), so a new browser suite can't hide in MAIN.
-// refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
-// at a time) once
-// sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
+// every suite that launches a Chromium (directly, via playwright or tools/harness.ts scratchBench; client-tools through
+// run-client.ts). The gate checks this list against the files (browserMarkers), so a browser suite can't hide in MAIN
 export const BROWSER = ["browser", "client", "refusedjoin", "client-b2", "build-client", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "client-tools"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 

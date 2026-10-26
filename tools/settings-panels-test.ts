@@ -7,12 +7,6 @@
 //   · presence dispatch not reaching setPresence (profile.js) → "presence() is busy" / "dock dot"
 //   · announceWorn not emitting avatar-worn (mybody.js)          → "announceWorn emits avatar-worn with the name (the switch site and the initial body call it)"
 //
-// RED AT HEAD 1fd6af8 (a product finding, kept honest rather than skipped): mybody.setMe emits
-// avatar-worn with a `{ name, path }` payload, but bodies.js's `noteWorn(name)` — its only consumer —
-// treats the payload as the name string, so `worn` fills with objects, the roster filter never matches,
-// and the list stays "nothing worn yet" no matter what you put on. One of the two files must change
-// (noteWorn accepting `{name}`, or setMe emitting the name); the five BODIES list checks turn green then.
-//
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/settings-panels-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
@@ -234,11 +228,8 @@ console.log('BODIES — the list populates on avatar-worn, which setMe emits');
   bus.emit('avatars', net.avatars);
   const pane = () => b.querySelector('.pf-pane[data-tab=avatars] .pf-bodies') as HTMLElement;
   check('the avatars tab hosts the bodies list', !!pane());
-  // NO BODY IS IN THE SCENE in this block — the suite never calls setMe. That
-  // is exactly the state R photographed: the header said "wearing claude"
-  // while the list below said "nothing worn yet". getMyAvatarName() is INTENT
-  // (module-load default, never cleared on a failed load); getMe() is fact.
-  // These two assertions used to encode the bug. (2026-09-11)
+  // NO BODY IS IN THE SCENE here (setMe is never called): getMyAvatarName() is INTENT (never cleared on a failed load),
+  // getMe() is fact, and the header must say the fact
   check('with no body in the scene the HEADER says None, not the intended name', /wearing <b>None<\/b>/.test(document.body.innerHTML), (document.body.innerHTML.match(/wearing <b>[^<]*<\/b>/) ?? ['(no header)'])[0]);
   check("...and the bodies panel agrees — no 'claude' beside 'nothing worn yet'", pane().querySelector('.sp-f-info .sp-info')?.textContent === 'None', pane().querySelector('.sp-f-info .sp-info')?.textContent ?? '');
   check('nothing worn yet', pane().querySelector('.sp-empty')?.textContent?.startsWith('nothing worn yet') === true, pane().querySelector('.sp-list')?.textContent ?? '');

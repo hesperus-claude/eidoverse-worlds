@@ -1,10 +1,7 @@
 // bun tools/xr-quad-softswap-probe.mjs — THE VR PANELS' SOFT SWAP, IN THE REAL CLIENT.
 //
-// domquad.js (the default VR panels) used to build an HTMLMesh per frame at EVERY entry — each one
-// rasterising its whole frame synchronously on the main thread, for quads that start hidden — and throw
-// them all away at exit. Now: staged every session, built on first show, kept across sessions. And the
-// ring's 'panels' slot was dead on this path (its xr:panels listener was registered only below the domquad
-// return in xrPanelsEnter). What this binds, each with the mutation that must turn it red:
+// domquad.js (the default VR panels): quads staged each session, built on first show, kept across sessions. What this
+// binds, each with the mutation that must turn it red:
 //   lazy        — no quad is built at entry            (mutate: setVisible(q, true) at entry)
 //   ring        — the ring's real 'panels' act shows them  (mutate: subscribe below the domquad return)
 //   kept        — a re-entry reuses the SAME meshes    (mutate: drop(q) at exit)
@@ -13,8 +10,8 @@
 // NOT covered here: whether xrPanelsExit drops the ring subscription (on this path a leaked toggle after exit is inert
 // by construction — exit nulls the staged quads — so no observable here could fail); the ?canvasquads fallback path (kept/disposePanel/stale repaint) and domquad's resize rebuild
 // (builtAt) — the default path above is what ships; the fallback is a debug flag.
-// SwiftShader + IWER prove orchestration, not what a headset feels. The entry time a headset sees is the
-// '[xr] panels enter N ms' tee line (printed by xr.js's entry wiring, added in the last commit of this series).
+// SwiftShader + IWER prove orchestration, not what a headset feels; a headset's entry time is xr.js's
+// '[xr] panels enter N ms' tee line.
 //
 //   xrctx       — the boot's XR-ready context is the one three draws into, antialias as three wants it
 //                 (whether the RUNTIME says xrCompatible is a headset-machine fact; printed, not asserted)
@@ -64,10 +61,8 @@ try {
   const ctx = await ev(() => globalThis.__xrCtx ?? null);
   console.log(`  · __xrCtx: ${JSON.stringify(ctx)}`);
   check('an XR boot on WebGL created its context up front', !!ctx, 'no __xrCtx — the gate never fired');
-  // NOT a discriminating check on its own: a second getContext('webgl2') on a canvas returns the FIRST context,
-  // so three lands in ours even without parameters.context (that mutant stayed green, 09-23). What binds the
-  // feature is the check above — the context exists before three's init. This one guards a future three that
-  // makes its own canvas/context and would silently strand ours.
+  // not discriminating alone (a second getContext returns the FIRST context; the check above binds the feature): it
+  // guards a future three that makes its own canvas/context
   check('…and three renders into THAT context (not one of its own)', ctx?.used === true, JSON.stringify(ctx));
   check("…with the antialias three derives itself (ACES → internal target → canvas MSAA off)", ctx && ctx.antialias === ctx.threeWanted, JSON.stringify(ctx));
   const q = () => ev(() => globalThis.__domQuads());

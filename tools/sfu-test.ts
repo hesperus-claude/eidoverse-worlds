@@ -8,10 +8,8 @@ import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, 
 import { Sfu } from "../server/sfu.ts";
 import { installSfuTransportGuard } from "../server/sfuguard.ts";
 
-// Run the ENTIRE suite guarded (review 2026-08-18): the negotiation vectors
-// below are the receipt that the ownership patch is transparent under real
-// RTCPeerConnection gathering — a receipt that only exists if the guard is ON
-// in the main process, not just inside the child vectors.
+// the ENTIRE suite runs guarded: the negotiation vectors below then prove the ownership patch is transparent under real
+// RTCPeerConnection gathering
 installSfuTransportGuard();
 
 const CODEC = new RTCRtpCodecParameters({ mimeType: "audio/opus", clockRate: 48000, channels: 2, payloadType: 111 });
@@ -44,25 +42,8 @@ class FakePeer {
   }
 }
 
-/** Full offer/answer, BROWSER-OFFERS direction.
- *
- *  🔴 THIS IS THE OPPOSITE OF PRODUCTION, and the comment here used to say "the
- *  SFU always answers" as though it were the contract. It is not: sfu.ts:394-398
- *  is emphatic that THE SERVER MUST OFFER, because a browser's re-offer arrives
- *  `sendonly` and an answer cannot add a receive direction the offer never
- *  proposed — "answering a browser re-offer silently produces a route that
- *  forwards packets into a track nobody is receiving."
- *
- *  So this helper exercises a direction production never uses. It is fine for
- *  the POLICY assertions it serves (consent, caps, leaks — none of which depend
- *  on who offered), and the tests that care about direction drive
- *  `room.negotiate(...)` themselves. But it means a green run here says NOTHING
- *  about SDP direction handling, and the stale comment was itself evidence that
- *  production flipped without anyone revisiting this file.
- *
- *  Found by a second-agent audit, 2026-08-16. Left in place rather than
- *  rewritten mid-audit: changing negotiation direction under 57 passing
- *  assertions is its own change, with its own review. */
+/** Browser-offers negotiation: 🔴 the OPPOSITE of production (the server must offer; server/sfu.ts). Fine for policy
+ *  checks (consent, caps, leaks); says nothing about SDP direction, so those tests drive room.negotiate themselves. */
 async function negotiate(browser: RTCPeerConnection, sfuPc: RTCPeerConnection) {
   const offer = await browser.createOffer();
   await browser.setLocalDescription(offer);
@@ -88,10 +69,8 @@ check("both legs negotiated", !!sfu.getLeg("alice") && !!sfu.getLeg("bob"));
 await alice.speak(15);
 await sleep(300);
 check("fail-closed: 0 packets to bob before consent", bob.heard === 0, `heard=${bob.heard}`);
-// 🔴 E1: the assertion above is satisfied by route ABSENCE, so it survives
-// deleting the consent check entirely (proven by mutation testing in review).
-// This one cannot: the route EXISTS and is negotiated, and only the consent
-// check stands between alice's mic and bob's ear.
+// 🔴 E1: the check above passes on route ABSENCE; here the route EXISTS and is negotiated, so only the consent check
+// stands between alice's mic and bob's ear
 {
   const armed = new Sfu();
   const a2 = new FakePeer(), b2 = new FakePeer();
@@ -122,10 +101,8 @@ await sleep(10);
 check("consent asked the caller to renegotiate", renegotiations.includes("bob"));
 check("…exactly once, however many routes were added",
   renegotiations.filter((r) => r === "bob").length === 1, `${renegotiations.filter(r=>r==="bob").length}×`);
-// The SFU OFFERS here, it does not answer: bob's browser offered sendonly (his
-// mic), and an answer cannot add a receive direction the offer never proposed.
-// Adding a track server-side therefore makes the SERVER the offerer — which is
-// why createLeg's caller gets onNegotiationNeeded rather than a re-answer.
+// the SFU OFFERS here: an answer can't add a receive direction bob's sendonly offer never proposed, which is why
+// createLeg's caller gets onNegotiationNeeded rather than a re-answer
 await negotiate(sfu.getLeg("bob")!.pc, bob.pc);
 await sleep(600);
 const before = bob.heard;
@@ -134,10 +111,8 @@ await sleep(400);
 check("consent ON → bob hears alice", bob.heard > before, `heard=${bob.heard}`);
 
 // ── consent OFF → audio stops, WITHOUT renegotiating ───────────────────────
-// NOTE: this shares the top-level `sfu`/`alice`/`bob` with earlier sections,
-// which made it intermittently read a doubled count (heard 20→40) from
-// accumulated state rather than from a real leak. Isolated below in its own
-// room; the shared version stays only as the no-renegotiation check.
+// the shared top-level `sfu`/`alice`/`bob` accumulate state, so the leak check is isolated in its own room below; this
+// one stays only as the no-renegotiation check
 const renegCount = renegotiations.length;
 sfu.setConsent("bob", "alice", false);
 await sleep(250);                                    // let in-flight packets land
@@ -185,12 +160,8 @@ sfu.closeLeg("alice");
 const revokeMs = Date.now() - t0;
 check("revoke is synchronous (<50ms, vs LiveKit's ~4700ms webhook path)", revokeMs < 50, `${revokeMs}ms`);
 check("revoked leg is gone", sfu.getLeg("alice") === undefined);
-// 🔴 #130 item 3 changed the mechanism here: routes now SURVIVE speaker
-// retirement (deleting them leaked the transceiver — the only handle werift
-// keeps — one per reconnect). The safety property was never route absence;
-// it is that nobody HEARS a corpse: the corpse's fanout stops at from.closed,
-// and consent for the retired id is wiped so a same-id successor is starved
-// until it is granted afresh. Pin THAT.
+// 🔴 routes SURVIVE speaker retirement (werift keeps the transceiver); the property is that nobody HEARS a corpse:
+// fanout stops at from.closed and the retired id's consent is wiped, so a same-id successor is starved until granted
 check("…and consent to the corpse is wiped (retained route is starved)",
   (sfu as any).allows("bob", "alice") === false);
 
@@ -237,9 +208,8 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
 }
 
 // ── CRASH PATH: a listener dying mid-fanout must not take the process down ──
-// werift binds "message" on its UDP socket but never "error", so a dead peer's
-// ICMP port-unreachable surfaces as an unhandled ECONNREFUSED. Measured before
-// sfuguard: 8 uncaught exceptions from closing 6 listeners during fanout.
+// werift binds "message" on its UDP socket but never "error", so a dead peer's ICMP port-unreachable surfaces as an
+// unhandled ECONNREFUSED (server/sfuguard.ts)
 {
   const { transportErrorsSwallowed } = await import("../server/sfuguard.ts");
   const room = new Sfu();
@@ -290,9 +260,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
 }
 
 // ── REGRESSION B2: a route whose exchange FAILED must be re-asked ──────────
-// Old behaviour: outbound.has() → return false, so one failed exchange
-// silenced that pair forever while diag reported it healthy (forwarded=15,
-// heard=0, diag green).
+// one failed exchange must not silence the pair forever while diag reports it healthy
 {
   const asks: string[] = [];
   const room = new Sfu({ onNegotiationNeeded: (id) => asks.push(id) });
@@ -320,9 +288,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
 }
 
 // ── REGRESSION: a route added AFTER the offer was created (B2, one level in) ─
-// Marking every route negotiated on success looked right and resurrected the
-// bug: a latecomer cannot be in an SDP that already exists, but got marked as
-// if it were — silent forever, diag reporting it as heard.
+// a latecomer can't be in an SDP that already exists, so success must not mark it negotiated
 {
   const asks: string[] = [];
   const room = new Sfu({ onNegotiationNeeded: (id) => asks.push(id) });
@@ -355,18 +321,8 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
 }
 
 // ── MUTATION-DERIVED TESTS ─────────────────────────────────────────────────
-// Review ran mutants of fanout()'s four guards against the then-37 tests; five
-// survived. M4 is the one that mattered and IS now killed (verified: inverting
-// `!this.allows(...)` to a denylist turns this suite red in 3 places).
-//
-// HONEST NOTE on the others: M1 (source-closed), M5 (route check) and M7
-// (self-echo) STILL survive, and that is defensible rather than a hole —
-// each is redundant with a guard that runs first. A closed leg's routes are
-// deleted by closeLeg, so M1 cannot leak; self-consent never builds a route,
-// so M7 cannot either; and `route?.track` is semantically identical to the
-// early-continue. The assertions below pin the BEHAVIOUR either way, which is
-// what a reader cares about, but they are not discriminating tests and this
-// comment exists so nobody mistakes them for coverage they are not.
+// M4 (inverting `!this.allows(...)`) turns this red; M1 (source-closed), M5 (route check) and M7 (self-echo) survive,
+// each redundant with a guard that runs first, so these pin BEHAVIOUR but don't discriminate those guards
 {
   const room = new Sfu();
   const a = new FakePeer(), b = new FakePeer(), c = new FakePeer();
@@ -424,14 +380,8 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
 }
 
 // ── PROXIMITY GATE (Basis BasisDistanceJob.cs:74-84) ───────────────────────
-// An efficiency hint applied AFTER consent, so it can only ever subtract.
-// Measured motivation: two conversation groups 40m apart waste 55%% of fanout;
-// people scattered over 100m waste 100%%; a huddle wastes 0%% (gating costs
-// nothing exactly when it cannot help).
-// The mechanism is HYSTERESIS, not a fixed margin — my first version invented
-// MARGIN_M=10 from a sprint-speed story, and reading Basis showed the real
-// shape: exit threshold 10%% further than enter, keyed on previous state. A
-// margin does not stop flapping; two thresholds with memory cannot flap.
+// an efficiency hint applied AFTER consent, so it can only subtract. HYSTERESIS, not a margin: exit 10% further than
+// enter, keyed on previous state, so it can't flap
 {
   const room = new Sfu();
   const s = room as unknown as { inEarshot(a: string, b: string): boolean };
@@ -461,11 +411,8 @@ check("stale position → forwards (fail-open)", s.inEarshot("a","b")===true);
 }
 
 // ── SPEAKER CAP + STICKINESS (Basis BasisAudioCapJob) ──────────────────────
-// Distance gating alone is not enough: forty people in one plaza are all within
-// 20m of each other, so every pair passes the gate and we are back to N².
-// A per-listener cap bounds the worst case at N x MAX. Stickiness (an incumbent's
-// distance is discounted when competing for a slot) is what stops two speakers
-// at near-equal distance from swapping the last slot every tick and stuttering.
+// a crowd all within the gate is N² again: a per-listener cap bounds it at N x MAX, and stickiness (an incumbent's
+// distance discounted) stops near-equal speakers swapping the last slot every tick
 {
   const room = new Sfu(); const s = room as any;
 
@@ -507,11 +454,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
 }
 
 // ── #130 item 6: STALE POSITIONS MUST NOT BE CAP-RANKED ────────────────────
-// inEarshot forwards on stale (fail-open), and withinCap used to rank the same
-// stale coordinates through d2() and suppress — the two stages disagreed
-// silently. One staleness rule now lives in d2(): a position too old to gate
-// on is too old to rank on. Reviewer's probe: 10s-old positions, cap=1 →
-// {forwarded:1, capped:1}; must be forwarded with capped:0.
+// one staleness rule in d2(): a position too old to gate on (inEarshot fails open) is too old to rank on
+// (10 s-old positions, cap=1 → forwarded, capped:0)
 {
   const room = new Sfu(); const s = room as any;
   for (const id of ["L","a","b"]) room.createLeg(id, 1);
@@ -535,10 +479,7 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
 }
 
 // ── #130 item 3: SAME-ID RECONNECT MUST NOT GROW TRANSCEIVERS ──────────────
-// closeLeg used to delete the listener's route entry — the only reference to a
-// transceiver werift keeps forever — so every reconnect allocated another one
-// (reviewer measured 20 transceivers, 0 routes, after 20 cycles). Routes now
-// survive speaker retirement and a same-id successor reuses them.
+// werift keeps every transceiver forever, so routes survive speaker retirement and a same-id successor reuses them
 {
   const room = new Sfu();
   room.createLeg("listener", 1);
@@ -571,9 +512,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
 }
 
 // ── #130 item 1: CONTAINMENT IS BOUND TO OWNED WERIFT TRANSPORT ────────────
-// (round 2, antra): the guard must swallow only errors from werift-owned
-// sockets, not any process-global error that happens to look UDP-shaped.
-// Proven in child processes because the fatal contract IS process-level.
+// the guard swallows only errors from werift-owned sockets, not any UDP-shaped process error; proven in child
+// processes because the fatal contract IS process-level
 {
   const run = (code: string) => Bun.spawnSync(["bun", "-e", code], { cwd: import.meta.dir + "/.." });
   const unrelated = run(`
@@ -587,10 +527,7 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check("…and the original crash site is on stderr, not this file's",
     unrelated.stderr.toString().includes("unrelated world-state bug"));
 
-  // The discriminating sibling: the EXACT synthesized errno/syscall shape that
-  // v2 swallowed at process scope — with no werift ownership — must now die.
-  // This was v2's own positive test; the review's point is that it passing
-  // WAS the bug.
+  // the discriminating sibling: the exact errno/syscall shape, with no werift ownership, must die
   const shapedButUnowned = run(`
     const { installSfuTransportGuard } = await import("./server/sfuguard.ts");
     installSfuTransportGuard();

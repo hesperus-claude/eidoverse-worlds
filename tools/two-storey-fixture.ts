@@ -48,12 +48,9 @@ export function boxMesh(list: Box[]) {
   return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
 }
 
-/** A GLB whose one mesh sits under a parent node lifted `lift` (and the mesh
- *  itself shifted `shift` along x — both default 0), with an orphan mesh node
- *  outside the scene. `building`: a description the model carries of itself
- *  (rooms, portals, seats, arrivals), stored in the root node's extras as a
- *  JSON string — the way Blender exports a custom property — where
- *  mcpl/places.ts reads named places from. */
+/** A GLB whose one mesh sits under a parent lifted `lift` (the mesh shifted `shift` along x), plus an orphan mesh node.
+ *  `building` (rooms, portals, seats, arrivals) goes in the root node's extras as a JSON string, as Blender exports a
+ *  custom property, where mcpl/places.ts reads named places. */
 export async function buildGlb(list: Box[], { draco = false, lift = 0, shift = 0, building = null as unknown } = {}) {
   const doc = new Document();
   const buf = doc.createBuffer();

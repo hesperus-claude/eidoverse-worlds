@@ -2,22 +2,20 @@
  * Uneven-support agent test — #84 end to end, through the REAL spawn path:
  * a scratch sequencer serves /geom (with the new lie/topGrid), a WorldAgent
  * folds the spawns and registers support, and the shared collider state is
- * queried exactly where the physics would ask. Covers, per the review:
+ * queried exactly where the physics would ask. Covers:
  *
  *   - the blanket at NONZERO YAW and NON-UNIT SCALE: ground at an occupied
  *     cell equals the composed cell top (world→model-local round trip);
  *   - stepping from an occupied cell into an adjacent EMPTY one: terrain,
  *     not interpolated air;
  *   - a rubble pile brought INTO the class by an in-world scale;
- *   - a crate keeps its honest box (no regression);
- *   - fail-on-main: on a pre-#84 checkout the blanket registers its box and
- *     the ground floats by the documented lie.
+ *   - a crate keeps its honest box (no regression).
  *
  * The blanket is the commons' actual store/9a9d0239eca609b3.glb, copied to
- * the LOCAL store dir — no production networking (review amendment 4).
+ * the LOCAL store dir — no production networking.
  *
  * Run:
- *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/eidoverse-video \
+ *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/library \
  *     bun run tools/uneven-support-test.ts
  */
 
@@ -66,9 +64,7 @@ const blanketSum = (await summarizeGlb(blanketDst))!;
 const rubbleSum = (await summarizeGlb(join(process.env.EIDOVERSE_DIR, RUBBLE_LIB)))!;
 
 // ---- scratch sequencer ------------------------------------------------------
-// process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
-// whose pid dies immediately, orphaning the real sequencer on this port where
-// it poisons the next run.
+// process.execPath, not "bun": on Windows PATH "bun" is a .cmd shim whose pid dies at once, orphaning the sequencer
 const server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: mkdtempSync(join(tmpdir(), "ew-uneven-")), JOIN_TOKEN: "" },
   stdio: "ignore",
@@ -182,10 +178,8 @@ console.log("\n━━ rubble: scaled into the class (yaw 0.7, scale 0.88) ━━
 
 console.log("\n━━ interior hole: an empty cell inside the footprint is AIR ━━");
 {
-  // Real cloth covers its footprint, so the interior-empty-cell semantics are
-  // pinned at the colliders tier with a synthetic grid (the pipeline cases
-  // above all ride the real spawn path; this one pins fitSupportGrid's own
-  // contract: occupied neighbors must not bleed across a hole).
+  // real cloth covers its footprint, so fitSupportGrid's own contract (occupied neighbours must not bleed across a
+  // hole) is pinned with a synthetic grid
   const n = 24, cells: (number | null)[] = new Array(n * n).fill(0.4);
   cells[12 * n + 12] = null;                            // one hole, dead centre
   const ok = typeof colliders.fitSupportGrid === "function" && colliders.fitSupportGrid("synthetic-hole", {
@@ -201,11 +195,8 @@ console.log("\n━━ interior hole: an empty cell inside the footprint is AIR �
 
 console.log("\n━━ the old worst cell: max-y's 21cm float is behaviorally gone ━━");
 {
-  // Rebuild what the max-y implementation WOULD have offered (the vertex
-  // grid) and ray truth per cell, independently; find the cell where the
-  // old float was worst; assert the agent's ground there is truth-or-
-  // terrain — never the old vertex top. On the max-y head this fails by
-  // ~0.21m (#94 review B1's behavioral requirement).
+  // rebuild the max-y vertex grid and ray truth per cell independently; where the vertex top floats worst, the agent's
+  // ground must be truth or terrain, never that top (#94)
   const { gridAccumulator } = await import("../client/lib/supportclass.js");
   const { MeshBVH }: any = await import("../client/node_modules/three-mesh-bvh/src/index.js");
   const io = await (async () => {

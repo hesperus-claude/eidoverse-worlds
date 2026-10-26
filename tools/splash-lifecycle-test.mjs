@@ -93,10 +93,8 @@ console.log('SPLASH — startRays twice');
   stopRays();
   check('one stop each, nothing left', stops(a) === 1 && stops(b) === 1 && resizeListeners.size === 0 && !globalThis.__raysWorker); }
 
-// antra-tess #185 B4 (exact-head rereview): the boot receipt used to be main-thread-only —
-// __raysStarted is set on the line after new Worker(), and constructing a Worker whose module
-// fails to parse does NOT throw synchronously, so a dead worker read as healthy. The worker now
-// posts {type:'ready'} after its first real drawArrays, and the three outcomes must stay APART.
+// a Worker whose module fails to parse doesn't throw synchronously, so the receipt is the worker's {type:'ready'} after
+// its first real drawArrays (#185), and the three outcomes must stay APART
 const rays = () => ({ ack: globalThis.__raysAck === true, nogl: globalThis.__raysNoGl === true });
 const clearRays = () => { globalThis.__raysAck = false; globalThis.__raysNoGl = false; };
 

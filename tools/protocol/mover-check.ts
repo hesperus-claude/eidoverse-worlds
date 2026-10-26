@@ -1,28 +1,24 @@
 // tools/protocol/mover-check.ts — ONE walker (shared/mover.js) for the agent, the human client and the authority.
 // usage: bun tools/protocol/mover-check.ts
-//   D   drift guard: no caller carries locomotion numbers or stride math of its own; each reads shared/mover.js.
-//       Before the port this was red with three answers to "is a 0.7 m ledge a floor?": the agent had no floors at all
-//       (terrain only), the authority said yes (TRACK.step 0.8), the client said no (colliders STEP 0.55) — and three
-//       radii/heights (none / 0.2 × 1.7 / 0.32 × 1.9).
+//   D   drift guard: no caller carries locomotion numbers or stride math of its own; each reads shared/mover.js
 //   M   the mover alone: a stride's length (walk, run, a cap), the floor rule (onto 0.7, onto 0.8, not 0.9), a wall
 //       (env.blocked refuses the step and the body stays put), arrival (tolerance, its bounds, no overshoot)
 //   A   agreement: every spot the mover walks an agent-shaped body to is a `move` the real authority accepts at the
 //       same millimetre; the ledge and the wall the mover refuses are the ones the authority refuses; the client's
 //       capsule and mantle are the mover's body
 //   W   water in the one walker (wade, swim, haul out), the mover alone
-//   G   THE GROUND (10-15, holes review H2): the same strides through stepWalk AND the real authority's move, on terrain and
+//   G   THE GROUND: the same strides through stepWalk AND the real authority's move, on terrain and
 //       in water — a terrain hill (up, over, down at a run), wading (and into a stone a wader's box meets), swimming (and
 //       standing up on a sunk rock), hauling out onto a dock 0.5 m above the surface (both accept) / 0.6 m (both refuse,
 //       same stride), a dug pit's rim at the waterline (both accept) / a terrain bank 0.6 m above the water (both refuse);
 //       each with the mover's y and with the bed's (the agent's permit). GP: place {at}, create {at: [x, z]} and the spawn
-//       alias seat a model's bottom on the heightfield (±1 cm), y 0 on a flat world. Red first: before the fix 19 G rows
-//       failed (G3 bed, G4, G5 bank, GP1-3, GP5); G1/G2-stone/G5-rim/GP4 were seen red under mutations (see the commit)
-//   G6  the body's own size (holes r3 F2): 1.2 m / 2.2 m / scale 2 / scale 0.5 bodies, the same verdict from stepWalk and from
+//       alias seat a model's bottom on the heightfield (±1 cm), y 0 on a flat world
+//   G6  the body's own size: 1.2 m / 2.2 m / scale 2 / scale 0.5 bodies, the same verdict from stepWalk and from
 //       the authority (which is sent the height and scale with the moves); a size's bounds
-//   G7  the teleport's swimmer box beside a dock, and a stride up a sloped rim judged from where it last swam (holes r3 F8:
-//       each red with its branch removed)
-//   GH  a heightmap whose grid isn't here: no ground committed (refused with words, nothing logged); seated once it lands (F3);
-//       nothing launched (throw, drop, punt, shove) and no put {pos} judged on it (r4 F2/F3)
+//   G7  the teleport's swimmer box beside a dock, and a stride up a sloped rim judged from where it last swam (each red
+//       with its branch removed)
+//   GH  a heightmap whose grid isn't here: no ground committed (refused with words, nothing logged); seated once it lands;
+//       nothing launched (throw, drop, punt, shove) and no put {pos} judged on it
 // @ts-nocheck
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
@@ -154,11 +150,8 @@ if (M) {
     ok(near(c1.r, m1.r) && near(c1.tall, m1.tall) && near(c2.r, m2.r) && near(c2.tall, m2.tall) && near(c1.r, 0.2) && near(c1.tall, 1.7), "A5 the client's walking capsule is the mover's body (0.2 × 1.7, scaled)", { c1, m1 });
     ok(BS.canMantle === canMantle && canMantle(0.8, 1) === false && canMantle(0.81, 1) === true && canMantle(1.7, 1) === true && canMantle(1.71, 1) === false, "A5 the client's mantle starts where the mover's step ends (0.8 m) and reaches its height (1.7 m)");
   }
-  // A6 the speed track is paced by elapsed time, not by the wall clock (gate 18 navgrid/places too-fast): a host whose wall
-  // clock is stepped back (WSL2's sync pulls it back ~1.4 s every ~30 s on Burrow; NTP does it anywhere) froze the running
-  // server's clock — never backwards — and with it the bucket's refill, so a run's permits were refused too-fast. Run as the
-  // real server opens a world (openLive with no clock of its own), the wall stepped back 1.5 s after the arrival; 2 m every
-  // 0.4 s (5 m/s: under the track's 6) must each be accepted. Red before the fix at the third step (0.0 m left).
+  // A6 the speed track is paced by elapsed time, not the wall clock (NTP may step it back): with the wall stepped back 1.5 s
+  // after the arrival, 2 m every 0.4 s (5 m/s, under the track's 6) must each be accepted
   { const { request } = await import(ENGINE + "shared/protocol/authority.js");
     const { openLive } = await import(ENGINE + "server/livehost.ts");
     const root = scratch("mover-pace"), dir = path.join(root, "worlds", "pace"); fs.mkdirSync(dir, { recursive: true });
@@ -243,10 +236,9 @@ if (M) {
     ...(level != null ? { waterAt: () => level } : {}),
     blocked: (box) => solids.find((s) => hits(box, s.box))?.id ?? null,
   });
-  // walk from `from` toward `target`, one stride per authority move; claim: "mover" sends the mover's y, "bed" the ground's
-  // (the agent's permit: heightAt, never the float). → {strides, accepted (all at the same mm), agree, moverRef, authRef, seen}
-  // body: {height?, scale?} — the body's own stature and size, handed to the mover AND sent with every move (the clients do);
-  // once: sent with the arrival only (the authority keeps it on the body's record)
+  // walk from `from` toward `target`, one stride per authority move; claim "mover" sends the mover's y, "bed" the ground's
+  // (heightAt). body {height?, scale?} goes to the mover and with every move (`once`: with the arrival only)
+  // → {strides, accepted (all at the same mm), agree, moverRef, authRef, seen}
   function agree(world, actor, from, target, env, { claim = "mover", run = false, max = 400, h, body = {}, once = false } = {}) {
     const B = { ...(body.height !== undefined ? { height: body.height } : {}), ...(body.scale !== undefined ? { scale: body.scale } : {}) };
     const y0 = claim === "bed" ? h(from[0], from[1]) : env.floorAt(from[0], from[1]);
@@ -331,11 +323,9 @@ if (M) {
       `G5 [${claim}] a terrain bank 0.6 m above the water: the mover refuses the stride (a ledge) and so does the authority`, bank);
   }
 
-  // ---- G6 THE BODY'S OWN SIZE (holes r3 F2): the mover judges water by the body's stature and ledges by its scale; so does the
-  // authority, from the height and scale the body sends with its moves. A 1.2 m body in 1.0 m of water by a bank 0.5 m above
-  // the surface swims and hauls out (the reviewer's case: before, the authority judged a 1.7 m wader and refused every stride);
-  // a 2.2 m body in 1.5 m wades and the same bank is a wall to both; a scale-2 body steps a 1.2 m terrain ledge and onto a
-  // 1.2 m crate (a 1.6 m step, its box 1.6 m up), a scale-0.5 body is refused a 0.6 m ledge (a 0.4 m step)
+  // ---- G6 THE BODY'S OWN SIZE: mover and authority judge water by the stature and ledges by the scale the body sends.
+  // 1.2 m body in 1.0 m water by a 0.5 m bank: swims and hauls out; 2.2 m in 1.5 m: wades, bank is a wall; scale 2 steps
+  // a 1.2 m ledge and crate, scale 0.5 is refused a 0.6 m ledge
   const SHALLOW = { amplitude: 0, size: 80, features: [{ type: "flatten", x: 0, z: 0, radius: 4, height: -1.5, edge: 0.01 }], water: { level: -0.5 } };
   const DEEP = { amplitude: 0, size: 80, features: [{ type: "flatten", x: 0, z: 0, radius: 4, height: -2.0, edge: 0.01 }], water: { level: -0.5 } };
   const SHELF = { amplitude: 0, size: 80, features: [{ type: "flatten", x: 10, z: 0, radius: 4, height: 1.2, edge: 0.01 }, { type: "flatten", x: -10, z: 0, radius: 4, height: 0.6, edge: 0.01 }, { type: "flatten", x: 0, z: 10, radius: 4, height: 2.0, edge: 0.01 }] };
@@ -379,12 +369,9 @@ if (M) {
   { const r = call("shelf", "lia", "move", { to: [0, 0, 5.5], teleport: true, height: 0.1 }), kept = openWorld(root, "shelf").presence.bodies.lia?.size?.height;
     ok(r.ok && kept === 0.5, "G6 a claimed height of 0.1 m is kept as 0.5 m: the walker's own floor (the browser's bodyHeight and the agent's rigbones bound 0.5-4) (review r4 F7)", { r: r.refused, kept }); }
 
-  // ---- G7 the two branches no row reached (holes r3 F8). (a) A teleport into the water beside the 0.5 m dock (where a swim
-  // to its side is accepted, G4): the swimmer's box (from 0.5 m above the surface) passes; a walker's box at the claim would
-  // meet the dock's side. (b) One stride from swimming up a sloped rim (a 20 cm edge, the bank 0.5 m above the water):
-  // the mover takes it in one stride (a swimmer hauls out up to 0.5 m above the surface); the authority's sweep judges a
-  // point part-way up (ground -1.5, wading), from which the bank is a 1.5 m ledge: judged from where it last swam, as the
-  // mover's one stride is, it is accepted
+  // ---- G7 (a) a teleport into the water beside the 0.5 m dock passes on the swimmer's box (a walker's would meet the dock);
+  // (b) one stride from swimming up a sloped rim is judged from where it last swam, as the mover's one stride is, so it is
+  // accepted (the sweep's part-way point would see a 1.5 m ledge)
   for (const [claim, y] of [["mover", -1.275], ["bed", r3(hP(1.9, 0))]]) {
     const tp = call("pool", "max", "move", { to: [1.9, y, 0], teleport: true });
     ok(tp.ok, `G7 [${claim}] a teleport into the water 0.1 m from the dock's side: the swimmer's box, accepted (a walker's box meets the dock)`, tp.refused);
@@ -402,10 +389,8 @@ if (M) {
     }
   }
 
-  // ---- GH a heightmap whose grid isn't here (holes r3 F3): the height law would fall back to noise (amplitude 3 here: a
-  // phantom metre and more), so the authority commits NO ground until the grid is here (terrainshape's own rule; the
-  // browser and the agent keep their last ground): ground-seated placement and a walk are refused with words, nothing is
-  // logged; an arrival on dry ground (no ground read) still lands. Once the grid is registered: seated on the heightmap.
+  // ---- GH a heightmap whose grid isn't here: the law would fall back to noise, so the authority commits NO ground until it
+  // is (terrainshape's rule): seated placement and a walk are refused with words, a dry arrival still lands; then seated on it
   { const { registerGrid } = await import(ENGINE + "shared/terrainshape.js");
     const REF = "store/heightmaps/f3f3f3f3f3f3f3f3.json", HM = { amplitude: 3, size: 80, heightmap: { grid: REF, min: 0, max: 0.01 } };
     call("hm", "olive", "create-world", { title: "hm" });

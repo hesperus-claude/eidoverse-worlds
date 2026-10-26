@@ -122,12 +122,8 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
   const e3 = weird();
   check('an unknown error on WebGL surfaces', eff.apply(decideEntryFailure(e3, { gpu: false }), { intent: 1, error: e3 }) === 'surface');
   check('…and surfacing schedules nothing', !eff.hasPending);
-  // hasPending is what leaveVR gates on, so it must track the TIMER (mutation sweep: rewiring it to
-  // pendingFor survived, and with the bookkeeping fix above the two now genuinely differ).
-  // hasPending must read the TIMER, not pendingFor. After a normal fire both are null, so that case
-  // cannot tell them apart — the distinguishing state is a DROPPED retry: the timer is gone while
-  // pendingFor still names the newer intent. leaveVR gates on this, so wiring it to pendingFor would
-  // make a leave believe a retry is pending and swallow the leave.
+  // hasPending (what leaveVR gates on) must read the TIMER, not pendingFor: a DROPPED retry has no timer while pendingFor
+  // still names the newer intent, and reading that would swallow the leave
   { const { eff: e2, fire: f2, timers } = rig();
     e2.apply(onBusy(false), { intent: 101 });
     check('hasPending is true while a timer is armed', e2.hasPending === true);
@@ -147,10 +143,7 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
 
 console.log('\n— 5. THE SEAM, executed: decide → act → what the caller must do —');
 {
-  // handleEntryFailure IS the catch body. The round-three mutation rewrote the shipping line as
-  //   const did = false ? entryEffects.apply(...) : 'surface';
-  // keeping the text for every regex while disabling retry, absence and reload. There is now nothing
-  // between the product and this function for such a rewrite to hide in.
+  // handleEntryFailure IS the catch body, so no rewrite of the shipping line can hide between product and function
   const mk = () => { const r = rig(); return { ...r,
     run: (error, { intent = 101, retryOf = null, gpu = false } = {}) =>
       handleEntryFailure({ effects: r.eff, decide: decideEntryFailure, error, intent, retryOf, gpu }) }; };
