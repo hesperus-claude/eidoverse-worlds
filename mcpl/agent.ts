@@ -1885,7 +1885,7 @@ export class WorldAgent {
     void p.finally(() => this.supportPending.delete(p));
   }
 
-  /** Any motion on this entity (a motion:<part> included)? Its support boxes are measured at the authored pose, so we
+  /** Any motion (pendulum/spin/orbit/oscillate/path, a motion:<part> included)? Its support boxes are measured at the authored pose, so we
    *  abstain rather than invent a ghost floor until headless evaluates motion. */
   private hasActiveMotion(e: Entity | undefined): boolean {
     if (!e) return false;

@@ -63,7 +63,7 @@ const norm = (ops) => jcs(ops.map(({ verb, id, comp, value }) => ({ verb, id, ..
  */
 const readShape = (r) => ({ near: (r?.near ?? []).map((x) => [x.r, Array.isArray(x.ids) ? x.ids.length : x.n]), count: r?.count ?? [], names: Array.isArray(r?.names) ? r.names.length : r?.names ?? 0 });
 /** did these recorded reads ask who was near, or what someone is called? (inputs a re-run gets only as stand-ins) */
-// two stand-ins of different SHAPES (minted u-+20, and a short name), both valid and nobody's (§3.1, §6a rule 2), so a
+// two stand-ins of different SHAPES (minted-shaped u-+20, and a short name), both valid and nobody's (§3.1, §6a rule 2), so a
 // script that branches on an id's shape answers differently and is listed as not re-runnable
 export const ARRIVAL_STAND_IN = "u-" + "a".repeat(20);
 export const ARRIVAL_STAND_IN_2 = "zq-stand-in";
