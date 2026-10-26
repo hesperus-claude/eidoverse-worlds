@@ -1,8 +1,5 @@
-// The action menu. Gestures were number keys and a slash command — invisible
-// unless you read the help. On a performance platform the gestures should be
-// somewhere you can see them: six tiles, the gesture as content, its name, and
-// the key that fires it. The tile this bar fired stays lit ~1.5 s (long enough to read). House .tile/.tiles rules
-// only — no private layout here (live, 09-04: this file had been hand-rolled).
+// The action menu: postures and gestures as visible tiles, the one this bar fired lit ~1.5 s.
+// House .tile/.tiles rules only: no private layout here.
 
 import { makeFrame, chromeCost } from './windows.js';
 import { bus } from './base.js';
@@ -16,29 +13,25 @@ const POSTURES = ['sit', 'stand', 'lie'];
 // through the same flows the ring used: a nearby seat wins for sit, stand dismounts
 function posture(k) {
   // the desktop body: sit runs the controller's seat search (a nearby seat wins, else sit where you stand),
-  // stand leaves seat and posture. The xr:* events are for the VR entry (part 4) — no listener at this rung.
+  // stand leaves seat and posture; the xr:* events have no listener yet
   if (k === 'sit') { sitHere(); bus.emit('xr:sit'); }
   else if (k === 'stand') { standUp(); bus.emit('xr:stand'); }
   else setPosture('lie');
 }
 let litAnim = null, litUntil = 0;   // net.js clears myState.anim on the first pose send, so the bar remembers its own
 
-// emoji here are CONTENT (the gesture itself), not chrome — the fill-icon set
-// has no gesture glyphs beyond a wave; the def-hydrated ANIM_ICONS table wins,
-// this map is the fallback for a vocabulary that ships no icon.
+// emoji are CONTENT here, not chrome; ANIM_ICONS wins, this is the fallback for a vocabulary with no icon
 const GLYPH = { wave: '👋', cheer: '🙌', dance: '💃', point: '👉', salute: '🫡', clap: '👏' };
 
 export function initActionBar() {
-  // geometry the CSS owns too: .tiles.fixed → 68px tiles, 6px gap, 8px body pad
-  const TILE = 32, GAP = 6, PAD = 7, ROW_H = 32;   // 09-05 22:00: slim buttons, real gutters — must match .tiles.fixed in index.html   // glyph-only tiles; name + key are the tooltip (live, 09-04)
+  const TILE = 32, GAP = 6, PAD = 7, ROW_H = 32;   // must match .tiles.fixed in index.html; name + key are the tooltip
   const widthFor = (cols) => cols * TILE + (cols - 1) * GAP + PAD * 2 + 2;   // +2: frame edges
-  const POSTURE_TILES = 3;   // sit / stand / lie lead the grid (live, 09-05) — they count toward the rows
+  const POSTURE_TILES = 3;   // sit / stand / lie lead the grid and count toward the rows
   const rowsFor = (cols) => Math.ceil((POSTURE_TILES + ANIM_ORDER.length) / cols);
-  // state.h is the body's CONTENT height (windows.js paints body.style.height; the body
-  // pads 7px top+bottom on top of it) — so rows + gaps only, no pad term
+  // state.h is the CONTENT height (the body pads on top of it): rows + gaps only, no pad term
   const heightFor = (cols) => rowsFor(cols) * ROW_H + (rowsFor(cols) - 1) * GAP;
   let snapT = null;
-  const ALL = 9;   // 3 postures + 6 gestures: ONE bar (live 09-06 23:34: '9×1')
+  const ALL = 9;   // 3 postures + 6 gestures: ONE bar
   const f = makeFrame('actions', {
     title: 'action bar', x: 'center', y: -10, w: widthFor(ALL), h: ROW_H,   // one row of nine across the bottom by default
       // windows.js's resize clamps at f.minW, so minW must be widthFor(1) or one column is unreachable by drag
@@ -48,19 +41,15 @@ export function initActionBar() {
   });
 
   const snapTo = (w) => {
-    // the gesture list arrives async; snapping against an empty list clamped cols to the 3 postures and
-    // SHRANK a saved 9×1 bar to 3×3 on every reload (two exported layouts: 352×32 → 124×108)
+    // the gesture list arrives async: snapping against an empty list would shrink a saved 9×1 bar to 3×3
     if (!ANIM_ORDER.length) return;
-    // Columns come from width; rows follow by wrapping, so height is an output, never an input
-    // (windows.js onResize always passes h).
+    // columns come from width, rows from wrapping: height is an output, never an input (onResize always passes h)
     const cols = Math.max(1, Math.min(POSTURE_TILES + ANIM_ORDER.length, Math.floor((w - PAD * 2 - 2 + GAP) / (TILE + GAP))));
     f._state.w = widthFor(cols); f._state.h = heightFor(cols);
-    // through _fit, not _paint: a reflow to more rows can push the bar past the
-    // bottom edge, and _paint alone skips every viewport clamp (#185 review).
+    // through _fit, not _paint: more rows can push past the bottom edge, and _paint skips every viewport clamp
     if (f._fit) f._fit(); else f._paint();
   };
-  // a saved size from an older layout (or any drift) refits the moment the menu is on screen — onShow, not a
-  // wrapped show(): the viewport auto-restore brings the bar back without show()
+  // a stale saved size refits onShow, not a wrapped show(): the viewport auto-restore skips show()
   // Only at default (!_placed): open at a width that fits the viewport; a hand-sized bar keeps its size.
   // Obstacles declare their anchor side (windows.js CHROME_ANCHOR): computed style resolves both left and right.
   const roomFor = () => {
@@ -76,14 +65,12 @@ export function initActionBar() {
       }
     }
     const clearRight = costL;
-    // Floor at one column, not a stand-down: a bar left under higher-z chrome is unpressable.
-    // Not a reachability guarantee below ~48px of room.
+    // floor at one column, not a stand-down: a bar under higher-z chrome is unpressable (no guarantee below ~48px)
     const room = innerWidth - 8 - Math.max(clearRight + 8, 8) - costR;   // right-anchored chrome eats from the RIGHT
     if (!Number.isFinite(room)) return null;   // keep the width rather than paint NaN
     return Math.max(widthFor(1), room);
   };
-  // A hand-placed bar keeps its SIZE, but must not open under #micbtn/#earbtn/#dock: frames cap at Z_HI=25 and
-  // that chrome sits higher, so a bar left there can't win by stacking.
+  // a hand-placed bar keeps its SIZE but must not open under #micbtn/#earbtn/#dock: they stack above Z_HI=25
   f.onShow(() => {
     // Re-derive, never min(state.w, room): a stored width would ratchet. Unplaced: width is the room now; placed: null.
     const room = f._placed ? null : roomFor();
@@ -94,18 +81,14 @@ export function initActionBar() {
   const grid = document.createElement('div');
   grid.className = 'tiles fixed';
   const tiles = new Map();
-  // a rebuild re-registers from scratch: register() merges and skips undefined fields,
-  // so writing over the old entries would keep a moved gesture's old key and a removed one's row
+  // re-register from scratch: register() merges, so overwriting would keep a moved key or a removed row
   let unregs = [];
-  // built from the def-hydrated vocabulary (§24l) and rebuilt when a defs
-  // push re-hydrates it — icons ride the same table as the names now
+  // built from the def-hydrated vocabulary (§24l), rebuilt when a defs push re-hydrates it
   const fill = () => {
     grid.innerHTML = ''; tiles.clear();
     for (const off of unregs) off();
     unregs = [];
-    // postures lead the row as tiles like the rest — EMOJI, same as the gestures
-    // (live, 09-05 16:41: "STILL have phosphor icons instead of emojis"); the same
-    // measured fallback: a platform without the glyph gets the word
+    // postures are EMOJI tiles like the gestures, with the same measured word fallback
     for (const [k, em] of [['sit', '🪑'], ['stand', '🧍'], ['lie', '🛏️']]) {
       const b = document.createElement('button');
       b.className = 'tile posture';
@@ -113,7 +96,7 @@ export function initActionBar() {
       b.title = k;
       b.innerHTML = emojiRenders(em) ? `<span class="tile-glyph">${em}</span>` : `<span class="tile-word">${k}</span>`;
       b.onclick = () => { posture(k); paint(); };
-      // the stand tile held is the seat escape, as X held is (claims r10 R6: touch and phone parity; localbody.js 'escape-hold')
+      // the stand tile held is the seat escape, as X held is, for touch parity (localbody.js 'escape-hold')
       if (k === 'stand') { b.onpointerdown = () => bus.emit('escape-hold', true); b.onpointerup = b.onpointerleave = b.onpointercancel = () => bus.emit('escape-hold', false); }
       grid.appendChild(b);
       tiles.set(`posture:${k}`, b);
@@ -123,9 +106,7 @@ export function initActionBar() {
       b.className = 'tile';
       b.dataset.anim = name;
       b.title = `${name} — key ${i + 1}`;
-      // emoji are content here (the gesture itself) — but a platform missing the
-      // glyph paints a tofu box or nothing, so the tile falls back to the word
-      // when the emoji measurably does not render (live, 09-05)
+      // a platform missing the glyph paints tofu or nothing: fall back to the word when it measurably doesn't render
       const em = ANIM_ICONS[name] ?? GLYPH[name] ?? '✨';
       b.innerHTML = emojiRenders(em) ? `<span class="tile-glyph">${escapeHtml(em)}</span>` : `<span class="tile-word">${escapeHtml(name)}</span>`;   // names and glyphs come from the world's defs: text
       b.onclick = () => { getMe()?.playOnce(name); myState.anim = name; litAnim = name; litUntil = performance.now() + 1500; paint(); };
@@ -143,15 +124,12 @@ export function initActionBar() {
   const paint = () => { const lit = myState.anim ?? (performance.now() < litUntil ? litAnim : null); for (const [n, b] of tiles) b.classList.toggle('on', n.startsWith('posture:') ? (myState.clip === n.slice(8) || (n === 'posture:sit' && myState.clip === 'sitchair')) : lit === n); };
   fill();
   bus.on('animnames-updated', fill);
-  // (postures are tiles in the grid above — one row, one grammar)
   setInterval(paint, 500);   // number keys set myState.anim elsewhere; the lit tile follows
   f.body.appendChild(grid);
   // the same six gestures as a VR quad — one button per gesture, the same call
   registerXRPanel({
     id: 'actions', title: 'action bar',
-    // postures lead (live, 09-04 22:02: sit/lie belong to the action menu, not the
-    // ring); then the gestures — names, not emoji: a canvas fillText of a
-    // missing glyph paints nothing
+    // postures, then gestures; names, not emoji: canvas fillText of a missing glyph paints nothing
     fields: () => [...POSTURES.map((k) => ({ t: 'btn', k, label: k })), ...ANIM_ORDER.map((name) => ({ t: 'btn', k: name, label: name }))],
     dispatch: (k) => { if (POSTURES.includes(k)) posture(k); else if (ANIM_ORDER.includes(k)) { getMe()?.playOnce(k); myState.anim = k; } },
   });

@@ -1,19 +1,8 @@
-// editpanels — the hierarchy and the inspector as FIELDS (panels.js), so one
-// declaration is a desktop frame and a VR quad. Every action here is a verb
-// scenegraph.js already speaks; this file only decides what the rows are.
-//
-// At parity with the World›Scene section it retires: transform, lock, every registered component
-// editor (inspect.js), raw JSON for the rest, add/remove component, find /
-// attach / detach / remove, script badges and a Behaviors group.
-//
-// The inspector is two lanes, Maya's shape:
-//   CHANNELS  every numeric value on the selection in one dense column —
-//             pos/yaw/scale plus every `num` a component editor declares.
-//             Drag to scrub, click to type, `+=` `*=` math. The fast lane.
-//   GROUPS    the full editors: colours, toggles, lists, and the same
-//             numbers again next to their meaning. The complete lane.
-// A number a motion comp drives shows its REST pose, tinted: `place` moves
-// the base the motion composes onto, which is the honest thing to edit.
+// editpanels — the hierarchy and the inspector as FIELDS (panels.js): one declaration is a desktop frame and a VR quad.
+// Every action is a verb scenegraph.js already speaks; this file only decides what the rows are.
+// The inspector has two lanes: CHANNELS, every numeric value in one dense column (drag to scrub, click to type, `+=` `*=`),
+// and GROUPS, the full editors (colours, toggles, lists, the same numbers beside their meaning).
+// A number a motion comp drives shows its REST pose, tinted: `place` moves the base the motion composes onto.
 
 import * as OP from '../../shared/protocol/requests.js';
 import { worldHistoryRows, historyView, HISTORY_MODES, mergeHistory } from './historyrows.js';
@@ -61,14 +50,13 @@ import { isMineHidden, toggleMineHidden, showAllMine, myHiddenCount } from './my
 import { agoWords, touchWords } from '../../shared/protocol/refusal.js';
 import { recordComponents } from '../../shared/protocol/view.js';
 import { RANK, lockWord } from '../../shared/protocol/roles.js';
-import { KEYHINTS, withKeys } from './keyhints.js';   // slice 3b: these panels' writes are requests
+import { KEYHINTS, withKeys } from './keyhints.js';   // these panels' writes are requests
 import { called } from './plainwords.js';
 
 const _wp = new THREE.Vector3();
 const round = (v, dp = 3) => +(+v).toFixed(dp);
 
-// collapsed groups remembered per LIB (a chair's Components stays open for
-// every chair) — Godot folds per object; per lib is the eidoverse shape
+// collapsed groups remembered per LIB (a chair's Components stays open for every chair), not per object
 const FOLD_LS = 'ew-insp-fold';
 let folds = {};
 try { folds = JSON.parse(localStorage.getItem(FOLD_LS) || '{}'); } catch { /* fresh */ }
@@ -79,22 +67,15 @@ function toggleFold(id, g) {
   try { localStorage.setItem(FOLD_LS, JSON.stringify(folds)); } catch { /* fine */ }
 }
 let arming = null;   // the child id waiting for a row click to name its parent
-// a ref field waiting for a target: { id, key } — the entity being edited and
-// the schema key (e.g. 'look.target'). The next thing picked (a tree row or the
-// thing in the world) commits that id into the field. Reuses attach's pick path.
+// a ref field awaiting a target, { id, key } (e.g. 'look.target'): the next pick, tree row or world, commits that id
 let armingRef = null;
-// a need waiting on the viewer (design §3, shared/editschema.js): { id, ask } —
-// a choice for an Add Component, or a remove-both for a Remove. Shown as a
-// prompt at the top of the cards; answering re-commits the same address.
+// a need awaiting the viewer (design §3, shared/editschema.js), { id, ask }: answering re-commits the same address
 let pendingAsk = null;
 let filter = '';     // the hierarchy's filter text: non-matches hide, ancestors of a match stay (dimmed)
-// ids whose children are folded — this viewer's, per world, never on the wire
-// (design §5: folding is a view, not the world). A selection unfolds its
-// ancestors so the selected row is always on screen.
+// ids whose children are folded: this viewer's, per world, never on the wire (design §5); a selection unfolds its ancestors
 const HFOLD_LS = () => `ew-hier-fold:${CONFIG.world ?? ''}`;
 const collapsed = new Set((() => { try { const v = JSON.parse(localStorage.getItem(HFOLD_LS()) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })());
-// R 10-10 00:03: with 'list components' on, every thing would open on its component rows; there, things start FOLDED, and
-// opening one is remembered here (per viewer, like the folds)
+// with 'list components' on, things start FOLDED; opening one is remembered here (per viewer, like the folds)
 const openComps = new Set((() => { try { const v = JSON.parse(localStorage.getItem('ew.hierarchy.opencomps') || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })());
 const isFolded = (id) => (hopts.comps ? !openComps.has(id) : collapsed.has(id));
 const setFolded = (id, shut) => { if (hopts.comps) { if (shut) openComps.delete(id); else openComps.add(id); } if (shut) collapsed.add(id); else collapsed.delete(id); };
@@ -135,8 +116,7 @@ function loadWorldDefs() {
 }
 // the world's display name: @world's about.name, else the name in its address
 const worldName = () => replica.st?.entities?.['@world']?.c?.about?.name || CONFIG.world || 'World';
-// R, 10-10: "make it clear what the 'World' is in the Hierarchy. Either World: (gym, in this case) or at least tooltip
-// the world entity, or maybe put the 'world' icon in-line with it": all three.
+// the World row says which world: 'World: <name>', the globe icon and a tooltip
 const worldRowFields = () => ({ t: 'list', k: 'wsel', rows: [{ id: WORLD_ID, icon: 'globe', kind: 'World', label: worldName(), sub: describeWorld(state.st, Date.now(), { presets: skyPresets, clock: false }), active: worldSel(),
   title: 'the world itself: its sky, weather, rules and settings. Click to edit them in the Inspector.' }, ...envRows()] });
 // @world's components hang under the World row so they can be found and removed: a click opens the card, ✕ removes.
@@ -151,7 +131,7 @@ const wxOf = () => state.st.sky?.weather ?? state.st.sky?.override?.weather ?? n
  *  button and the card's remove button (mow, for grass). */
 function removeEnv(key) {
   const e = ENV.find((x) => x.key === key); if (!e) return;
-  // weather.remove, not a clear pick: under a forecast a pick is an override its next segment undoes (house review I95)
+  // weather.remove, not a clear pick: under a forecast a pick is an override its next segment undoes
   const path = key === 'grass' ? 'grass.mow' : `${key}.remove`;
   const r = commitEdit(WORLD_ID, path, true);
   flashHint(r.errors?.length ? r.errors.join(' · ') : `${e.label} removed: ${e.gone} (Ctrl+Z brings it back)`, r.errors?.length ? 5000 : 2600, r.errors?.length ? 'attn' : undefined);
@@ -165,12 +145,10 @@ function envRows() {
     title: `the world's ${e.label.toLowerCase()}: click to edit it in the Inspector${may ? `; ✕ removes it (${e.gone})` : ''}`,
     actions: may ? [{ k: 'envdel', label: '✕', danger: true, hover: true, title: `remove: ${e.gone}` }] : [] }));
 }
-// HIERARCHY VIEW OPTIONS (R, 10-10: "the list in the hierarchy is still hella busy. I would only have the name in the
-// list proper, more info (like id) when you hover over it, and a drop-down ... 'display by id', checkboxes for 'list
-// components'"). Off by default; kept per browser.
+// HIERARCHY VIEW OPTIONS: a row is its name, the rest on hover or by switch. Off by default; kept per browser.
 const HOPTS = { ids: 'show ids', kinds: 'show kinds', comps: 'list components' };
 let hopts = { ids: false, kinds: false, comps: false, only: null };
-// the row filters (R 10-12 10:58: the three row surfaces come with filters); a match keeps its ancestors, like the text filter
+// the row filters: a match keeps its ancestors, like the text filter
 const ONLY = {
   all: { label: 'show every row', test: null },
   off: { label: 'only switched off', none: 'is switched off', test: (id, w) => w[id]?.disabled === true },
@@ -205,11 +183,10 @@ export function selection() {
   return s.kind === 'things' ? s.ids.filter((id) => entities.get(id)) : [];
 }
 /** …and for a delete, every selected thing the fold holds: a switched-off (or not yet loaded) thing has no realized object
- *  but is still in the Hierarchy, and must still be removable (house review I30). */
+  *  but is still in the Hierarchy, and must still be removable. */
 const removable = () => { const s = Sel.selection(); return s.kind === 'things' ? s.ids.filter((id) => state.st.entities?.[id]) : []; };
-/** Shift-click in the Hierarchy: every displayed row from the anchor (the last row clicked; else the active thing) to
- *  `id`, replacing the selection (Ctrl+Shift: added to it). The anchor stays where it is, so a second Shift-click re-ranges
- *  from it; the row clicked is active. false when there is no anchor among the displayed rows (the caller selects `id`). */
+/** Shift-click: every displayed row from the anchor (last row clicked, else the active thing) to `id` replaces the
+  *  selection (Ctrl+Shift adds). The anchor stays put for re-ranging; false when it isn't displayed (caller selects `id`). */
 let hAnchor = null;
 function rangeSelect(id, add) {
   const rows = visibleRows.filter((r) => entities.get(r));
@@ -236,8 +213,7 @@ function syncOutlines() {
 }
 
 // ---------------------------------------------------------------- scripts roster
-// the behavior runtime, for 📜 badges in the tree and the Behaviors group —
-// the same world_debug an agent reads, polled while the panels are up
+// the behavior runtime for 📜 badges and the Behaviors group: the same world_debug an agent reads, polled while up
 let behaviors = [];   // the world's scripts (the authority's status view, via world_debug {behaviors}): {id: "<thing>/<name>", attach, status, …}
 /** The authority ops that remove one script: script:<name> on its thing, or an imported world's carried behaviour record. */
 const unbindOps = (id) => { const s = String(id); const i = s.indexOf('/');
@@ -270,16 +246,15 @@ function badgesFor(id) {
 let claimsByOthers = {};   // id -> name, from build.js's drag claims (bus 'claims')
 bus.on('claims', (c) => { claimsByOthers = c ?? {}; repaintAll(); });
 function hierarchyFields() {
-  // the tree is the FOLD's (shared/hierarchy.js): a child whose model is still
-  // loading sits under its parent, not at the root; seated people show as rows
+  // the tree is the FOLD's (shared/hierarchy.js): a still-loading child sits under its parent; seated people are rows
   const { occupants } = treeData();
   const world = state.st.entities ?? {};
   const sel = sceneSelected();
   const q = filter.trim().toLowerCase();
   // a socket's row is its name (a seat, a hook: kindHint says which), unless someone labelled it
   const nameOnly = (id) => { const c = bagOf(id); const l = c?.label; return typeof l === 'string' && l ? l : typeof c?.socket?.name === 'string' ? c.socket.name : null; };
-  // R 10-17 (ID HARDENING 3): ids are hidden by default. A row is its label; an unlabelled one says what it is (its kind),
-  // never its id ('show ids' adds the id). Siblings that read the same get a dim short handle, only those twins
+  // ids are hidden by default: a row is its label, else its kind, never its id ('show ids' adds it).
+  // Siblings that read the same get a dim short handle, only those twins.
   const shownName = (id) => nameOnly(id) ?? (kindHint(world[id]) || 'thing');
   const labelOf = (id) => { const l = shownName(id); return hopts.ids ? `${l}  (${id})` : l; };
   const twinOf = (() => { if (hopts.ids) return () => null; const all = Object.keys(world).filter((k) => k !== WORLD_ID); const groups = new Map();
@@ -288,7 +263,7 @@ function hierarchyFields() {
   const only = ONLY[hopts.only]?.test ?? null;
   const textHit = (id) => [id, world[id]?.label ?? '', world[id]?.model ?? '', world[id]?.model != null ? modelName(world[id].model) : '', kindHint(world[id]), ...Object.keys(recordComponents(world[id]))].join(' ').toLowerCase().includes(q);
   const matches = q || only ? (id) => (!q || textHit(id)) && (!only || only(id, world)) : null;
-  // an occupant's or a component's row matches only where its thing passes the row filter too (review 10-12 S3-2)
+  // an occupant's or a component's row matches only where its thing passes the row filter too
   const underOk = (id) => !only || only(id, world);
   const occupantsOf = (id) => (occupants.get(id) ?? []).map((r) => ({ id: `${OCC_ROW}${r}`, match: (q ? r.toLowerCase().includes(q) : !only) && underOk(id) }));
   // with 'list components' on, a thing's components are greyed rows under it (they fold with it, like its children)
@@ -308,8 +283,7 @@ function hierarchyFields() {
     if (off && !selfOff) badges.push('off (above)');   // its own box is ticked; what it hangs under is not
     const bpLink = world[id]?.['copy-of'];
     const sub = bpLink && typeof bpLink === 'object' ? `${kindHint(world[id])} · ${bpLink.hash ? `${bpLink.name ?? 'blueprint'} copy` : `part ${bpLink.part}`}` : kindHint(world[id]);
-    // a child of a locked thing is held by that lock (the authority refuses moving it: "it rides X, which is locked"), so
-    // its row says so instead of showing an open padlock (review 10-07 S3)
+    // a child of a locked thing is held by that lock (the authority refuses moving it): its row says so, not an open padlock
     let heldBy = null; for (let p = world[id]?.parent?.to, n = 0; p && n < 32 && !heldBy; p = world[p]?.parent?.to, n++) if (bagOf(p)?.lock) heldBy = p;
     // the row says the name; the rest is on hover (and in the row with 'show ids' / 'show kinds')
     const title = [nameOnly(id) ? `${nameOnly(id)}  (id ${id})` : `id ${id}`, sub].filter(Boolean).join(' — ');
@@ -340,20 +314,14 @@ function hierarchyFields() {
   visibleRows = rows.filter((r) => !String(r.id).startsWith(OCC_ROW) && !String(r.id).startsWith('comp:')).map((r) => r.id);
   return [
     { t: 'text', k: 'filter', label: '', value: filter, placeholder: 'filter — id, label, lib, component ⏎', hint: 'non-matches hide; a match keeps its ancestors' },
-    // Options ▾ (R, 10-10: the 'View: ids' face was drawn twice and the list carried a search box and a 'recent'
-    // group for three switches; Maya's Outliner calls its two menus Display and Show, which read as one thing: one menu here)
-    // an active row filter says so on the bar: a filter nobody can see is the trap research 51 R3 names (review 10-12 S3-3)
+    // Options ▾: one menu for every view switch; an active row filter says so on the bar (a filter nobody sees is a trap)
     { t: 'pop', k: 'hopts', label: only ? `Options ▾ · ${ONLY[hopts.only].label}` : 'Options ▾', plain: true, deskOnly: true, bar: true, hint: 'what each row shows: names only, unless you turn more on',
       items: [...Object.keys(HOPTS).map((k) => ({ k: `hopt:${k}`, label: `${hopts[k] ? '✓' : ' '} ${HOPTS[k]}` })),
         ...Object.entries(ONLY).map(([k, o]) => ({ k: `honly:${k}`, label: `${(hopts.only ?? 'all') === k ? '✓' : ' '} ${o.label}` })),
         { k: 'fold:all-open', label: '  expand all' }, { k: 'fold:all-shut', label: '  collapse all' }] },
-    // never lose track of what you hid (research 51 R3: Unity's eye confuses because nothing says it's on). On the Options
-    // line, not a line of its own: appearing and vanishing with the first and last hidden thing, a line of its own pushed
-    // every row down and back (R 10-11 01:00: "the scroll jumps up and if I click it again the scroll jumps down")
+    // never lose track of what you hid. On the Options line, not its own: a line that comes and goes jumps the scroll
     ...(myHiddenCount() ? [{ t: 'btn', k: 'myshowall', label: `${myHiddenCount()} hidden in your view · show all`, bar: true, hint: 'things you hid with the eye: only your view, nobody else is affected' }] : []),
-    // pinned: the world entity, the first row of the list itself and never filtered out (design §3). Below the filter
-    // since R 10-11 ("move the 'world' in the Hierarchy under the filter line, just to make it more clear that you can
-    // interact with it like an ordinary entity"): Blender's Outliner starts its tree with the Scene Collection the same way
+    // pinned: the world entity, first row under the filter, never filtered out (design §3), like Blender's Scene Collection
     worldRowFields(),
     { t: 'tree', k: 'sel', rows, settle: enabledSettle, rootDrop: 'drop here: no parent', empty: q ? `nothing matches "${filter}"` : only ? `nothing ${ONLY[hopts.only].none}` : 'nothing placed yet — press B in the world to place things' },
   ];
@@ -385,8 +353,8 @@ function hierarchyDispatch(action, payload, _field, opts = {}) {
       if (String(payload).startsWith('comp:')) payload = payload.slice(5, payload.lastIndexOf(':'));   // a component's row selects its thing
       if (armingRef && completeRefPick(payload)) break;   // a row click names a ref target
       if (arming && payload !== arming) { const child = arming; arming = null; reparent(child, payload); sceneSelect(child); break; }
-      // R, gym 10-17 20:41: Shift selects the RANGE from the last row clicked to this one, in the rows as displayed (folded
-      // branches and the filter respected); Ctrl/Cmd toggles one; a plain click selects one. Older callers send only `extend`
+      // Shift selects the RANGE from the last row clicked, in the rows as displayed; Ctrl/Cmd toggles one; a plain click selects.
+      // Older callers send only `extend`.
       if (opts.range && rangeSelect(payload, !!opts.toggle)) return;
       if (opts.toggle || (opts.extend && !opts.range)) { extendSelection(payload); hAnchor = payload; return; }
       sceneSelect(payload); hAnchor = payload;
@@ -484,11 +452,10 @@ function findSelected() {
   flashHint(html`<b>${sel}</b> is ${p.distanceTo(myState.pos).toFixed(0)}m away at (${p.x.toFixed(0)}, ${p.z.toFixed(0)})`, 5000);
 }
 
-/** Reset the selection's transform to its defaults (R, 10-10, after Rhythm and Hues' `g`): 'pos' → translate 0,
- *  'rot' → rotate 0, 'scale' → scale 1, 'all' → the three. The keys follow the tools': G move, E rotate, R scale, so
- *  Alt+G / Alt+E / Alt+R; Ctrl+G is all of it. One request per thing, so one Ctrl+Z each. */
+/** Reset the selection's transform: 'pos' → translate 0, 'rot' → rotate 0, 'scale' → 1, 'all' → the three. Keys follow
+  *  the tools (G move, E rotate, R scale): Alt+G/E/R, Ctrl+G all. One request per thing, so one Ctrl+Z each. */
 const RESET = { pos: { 'pos.x': 0, 'pos.y': 0, 'pos.z': 0 }, rot: { 'rot.x': 0, 'rot.y': 0, 'rot.z': 0 }, scale: { 'pos.sx': 1, 'pos.sy': 1, 'pos.sz': 1 } };
-// quaternion order shows no rotate x/y/z: rotate 0 is the identity quaternion there (house review I90)
+// quaternion order has no rotate x/y/z: rotate 0 is the identity quaternion there
 const RESET_Q = { 'rot.qx': 0, 'rot.qy': 0, 'rot.qz': 0, 'rot.qw': 1 };
 function resetTransform(what) {
   const ids = selection(); if (!ids.length) { flashHint('select something first: Alt+G resets its translate, Alt+E rotate, Alt+R scale, Ctrl+G all three', 3500); return; }
@@ -589,22 +556,20 @@ function pushCards(f, schema, id, opts = {}) {
   const { locked = false, afterTransform = [], away = null } = opts;
   const touched = id !== WORLD_ID ? authorityInspect(id)?.touched ?? {} : {};
   for (const sec of schema.sections.list) {
-    if (sec.type === 'Parent' && !opts.withParent) continue;   // R 10-10: parenting is the Hierarchy's (and Attributes')
+    if (sec.type === 'Parent' && !opts.withParent) continue;   // parenting is the Hierarchy's (and Attributes')
     const key = `c:${sec.key ?? sec.type}`;
     const prov = sec.present !== false ? touchLine(touched[wireOf(sec)]) : null;
     const acts = sec.removable && sec.key ? [{ k: `ed:remove.${sec.key}`, icon: 'x', title: `remove ${sec.title}`, danger: true }] : [];
-    // provenance (R 10-10: 'a colored dot'): amber = a draft this client reads (docs/COMPONENT-LADDER.md), hollow = a
-    // namespaced component nothing here reads; a core component has none
+    // provenance dot: amber = a draft this client reads (docs/COMPONENT-LADDER.md), hollow = a namespaced component nothing
+    // here reads; a core component has none
     const dot = sec.trusted ? 'trusted' : sec.draft ? 'draft' : (sec.key && String(sec.key).includes('/') ? 'foreign' : null);
     f.push({ t: 'group', k: key, actions: acts, ...(dot ? { dot } : {}), label: `${sec.title}${locked && sec.type === 'Transform' ? ' 🔒' : ''}${sec.present === false ? (sec.type === 'Parent' ? ' · none' : ' · default') : ''}`, ...(away && sec.type === 'Transform' ? away : {}), hint: `${prov ? `${prov}\n` : ''}${sec.summary} — ${sec.category} · engine record ${(sec.hash ?? 'draft').slice(0, 12)}${sec.status ? ` · ${sec.status}${sec.status === 'trial' ? ' (its shape may change during the alpha)' : ''}` : ''}${sec.part ? ` · part: ${sec.part}` : ''}`, open: isOpen(id, key), ...(prov ? { prov } : {}) });
     for (const [label, value] of sec.info ?? []) f.push({ t: 'info', label, value });
-    // the channel box: an alias (pos.yaw, the heading) stays addressable for
-    // agents but is not drawn; the Quaternion row folds under its own header,
-    // closed unless the entity is in quaternion mode (then it IS the rotation)
+    // an alias (pos.yaw) stays addressable for agents but isn't drawn; the Quaternion row folds shut except in quaternion mode
     const quat = [];
     for (const addr of sec.fields) {
       const r = cardRow(schema, id, addr); if (!r || r.alias) continue;
-      if (r.row === 'quat' || addr === 'rot.order') quat.push(r); else f.push(r);   // R, 10-04: rarely needed until rigs
+      if (r.row === 'quat' || addr === 'rot.order') quat.push(r); else f.push(r);   // rarely needed until rigs
     }
     // groups are FLAT markers, so a folded Transform omits its sub-header (unless the filter opens it). Rotation
     // order and the quaternion live in Attributes, except in quaternion mode, where they ARE the rotation.
@@ -614,7 +579,7 @@ function pushCards(f, schema, id, opts = {}) {
       f.push(...quat);
     }
     if (sec.removable && sec.key) f.push({ t: 'btn', k: `ed:remove.${sec.key}`, label: `remove ${sec.title}`, danger: true, vrOnly: true });   // desktop: the ✕ on the title line
-    // R 10-10: Add Component and New Script sit right under Transform (Blender's Add Modifier), not at the foot of a long list
+    // Add Component and New Script sit right under Transform, not at the foot of a long list
     if (sec.type === 'Transform' && afterTransform.length) f.push(...afterTransform);
   }
 }
@@ -630,7 +595,7 @@ function worldFields() {
   ];
   if (mayShape() === false) f.push({ t: 'info', label: '', value: 'shaping the world is the owner\'s — read-only for you' });
   pushCards(f, schema, WORLD_ID);
-  // no terrain yet: the card's only row pointed elsewhere (review 10-07 S15). Put Build ▸ World's ground shapes in it
+  // no terrain yet: the card's only row pointed elsewhere; put Build ▸ World's ground shapes in it
   if (!state.st.terrain) {
     const at = f.findIndex((x) => x.t === 'info' && /no terrain authored/.test(String(x.value ?? '')));
     const shapes = Object.keys(groundPal?.shapes ?? {}).filter((k) => k !== 'doc');
@@ -642,9 +607,8 @@ function worldFields() {
   return shown;
 }
 
-// who made it: no thing stores it (L2: a view over the log, never stored), so ask the authority once per thing, the same `inspect` an agent uses (derived.madeBy), and repaint when it answers
-// the authority's inspect, per thing, re-asked whenever its components change (the key): who made it, and who last changed
-// each component and when (touched: R 10-04, "where a value came from"; within a recent window, beyond = older)
+// who made it is never stored (L2: a view over the log): ask the authority's `inspect`, as an agent does (derived.madeBy),
+// per thing, re-asked when its components change (the key); it also says who last changed each component, and when
 const inspectCache = new Map();
 const pacedRead = latestRead(250);   // the Inspector's and the History's re-reads: one in flight per thing, the newest wins
 function authorityInspect(id) {
@@ -670,9 +634,9 @@ function lastChange(id) {
   return v.created ? `made by ${Edits.nameOf(v.by)} · ${ago(v.ts)}` : `${Edits.nameOf(v.by)} · ${sec?.title ?? comp} · ${ago(v.ts)}`;
 }
 
-const thingName = (id) => { const l = bagOf(id)?.label; return typeof l === 'string' && l ? l : (kindHint(state.st.entities?.[id]) || 'thing'); };   // never the id (R 10-17)
-/** The ENABLED box that leads every thing's Inspector header (Unity's and Resonite's convention; R 10-12): ticked = on.
- *  It is the `disabled` component (5d5eef5c) read the other way round, so it is there whether the thing is on or off. */
+const thingName = (id) => { const l = bagOf(id)?.label; return typeof l === 'string' && l ? l : (kindHint(state.st.entities?.[id]) || 'thing'); };   // never the id
+/** The ENABLED box leading every thing's Inspector header: ticked = on. It is the `disabled` component read inverted,
+  *  so it is there whether the thing is on or off. */
 const enabledBox = (id) => { const on = state.st.entities[id]?.disabled !== true;
   const words = on ? 'Enabled. Untick to switch it off for everyone: it stays in the Hierarchy, but nobody downloads, sees or touches it, and it has no physics (what hangs under it goes with it).'
     : 'Switched off for everyone: nobody downloads, sees or touches it. Tick to switch it back on.';
@@ -691,12 +655,9 @@ function inspectorFields() {
   const ids = selection();
   if (ids.length > 1) return multiFields(ids);
   const obj = entities.get(id); const bag = bagOf(id) ?? {};
-  // the fold knows the thing before its model arrives: entities holds null
-  // while the GLB loads (scenegraph guards the same seam)
+  // the fold knows the thing before its model arrives: entities holds null while the GLB loads
   const schema = schemaFor(id);           // ONE declaration: shared/editschema.js
-  // R 10-17 20:30: no show-id button (awkward, under the attributes); the name line carries the thing's short handle, dim,
-  // after the name: the same #handle the Hierarchy shows twins by and agents use (computed over every id, as hierarchyFields
-  // does, so the two agree). Click it to copy the full id.
+  // the name line's dim #handle, computed over every id as hierarchyFields does so the two agree; click copies the full id
   const handleRow = idHandleRow(id);
   if (!obj && offIn(state.st.entities, id)) {   // switched off: nothing loaded, so no transform to show; the way back on
     const self = state.st.entities[id]?.disabled === true; let up = id; if (!self) for (let k = state.st.entities[id]?.parent?.to; k; k = state.st.entities[k]?.parent?.to) if (state.st.entities[k]?.disabled === true) { up = k; break; }
@@ -705,8 +666,7 @@ function inspectorFields() {
       ...(self ? [] : [{ t: 'btn', k: `selup:${up}`, label: `select ${thingName(up)}` }])]; }
   if (!obj) return [{ t: 'info', label: 'state', value: 'loading…', hint: 'its model is still downloading' }];
   const locked = !!bag.lock;
-  // R 10-17 20:34: no 'world' row; how far it is rides the Transform card's title line, dim ('Transform · 12 m away'),
-  // its world coordinates on that line's tooltip. The ticker below repaints it as you move.
+  // distance rides the Transform card's title line, dim ('Transform · 12 m away'), world coordinates on its tooltip
   const wp = obj.getWorldPosition(_wp); const awayM = Math.round(wp.distanceTo(myState.pos)); lastAway = { id, m: awayM };
   const away = { sub: `${awayM} m away`, subHint: `${awayM} m from you; in the world at (${wp.x.toFixed(1)}, ${wp.y.toFixed(1)}, ${wp.z.toFixed(1)})` };
 
@@ -714,11 +674,9 @@ function inspectorFields() {
     { t: 'info', label: 'placed by', value: placedBy(id), hint: 'who first made it' },
   ];
 
-  // B: one card per component (shared/components.js via schema.sections), each
-  // owning its fields by their unchanged group.k address, then Add Component.
+  // one card per component (schema.sections), each owning its fields by group.k address, then Add Component
   if (schema.sections) {
-    // the name line: the name as a title, the id under it, then the eye (my view only; same switch as the
-    // Hierarchy's) and the padlock
+    // the name line: title, id, then the eye (my view only, the Hierarchy's switch) and the padlock
     let nameRow = null;
     for (const a of schema.sections.header ?? []) { const r = cardRow(schema, id, a); if (r && !a.startsWith('parent.') && a !== 'flags.hidden' && a !== 'flags.disabled') { if (a === 'flags.label') nameRow = r; else f.push(r); } }   // flags.disabled: the ENABLED box leads the header (one switch, one place)
     { const mine = isMineHidden(id), lk = bagOf(id)?.lock;
@@ -730,7 +688,7 @@ function inspectorFields() {
         { t: 'btn', k: 'hlock', icon: lk ? 'lock' : 'lockOpen', label: '', on: !!lk, bar: true, deskOnly: true, cls: 'sp-iconbtn',
           hint: lk ? 'Locked: nobody moves, replaces or removes it until it is unlocked. Click to unlock.' : 'Lock it: nobody moves, replaces or removes it until it is unlocked (sitting on it and content edits stay open).' },
       ];
-      f.unshift(...line); }   // parenting is the Hierarchy's job (R, 10-04); agents keep parent.* in edit
+      f.unshift(...line); }   // parenting is the Hierarchy's job; agents keep parent.* in edit
     if (pendingAsk?.id === id) {
       const q = pendingAsk.ask;
       f.push({ t: 'group', k: 'c:ask', label: q.kind === 'confirm' ? `Remove ${q.type}?` : `${q.component} needs a choice`, open: true });
@@ -741,7 +699,7 @@ function inspectorFields() {
     }
     const adds = [];
     if (schema.sections.add.length) {
-      // desktop: ONE button that opens a searchable list (R, 10-04); the VR quad keeps the flat rows below
+      // desktop: ONE button opening a searchable list; the VR quad keeps the flat rows below
       const keyOf = (a) => ({ Picture: 'ed:comp.add:picture', Sound: 'ed:comp.add:sound', Sockets: 'ed:sockets.add' }[a.name] ?? `ed:add.${a.name}`);
       adds.push({ t: 'pop', k: 'c:+pop', label: 'Add Component…', icon: 'plus', cls: 'sp-add', deskOnly: true, unfold: true, bar: true, recentKey: 'components', hint: 'add a light, motion, sound, collider…',
         items: schema.sections.add.map((a) => ({ k: keyOf(a), label: `${a.label ?? a.name}${a.asks ? '…' : ''}`, category: a.category, disabled: !!a.blocked, keywords: ADD_WORDS[a.name] ?? [], ...(a.chip ? { chip: a.chip } : {}),
@@ -761,8 +719,7 @@ function inspectorFields() {
     if (id !== WORLD_ID) { const at = adds.findIndex((r) => r.vrOnly && r.t === 'group'); adds.splice(at < 0 ? adds.length : at, 0, { t: 'btn', k: 'newscript', label: 'Add Script…', icon: 'scrollText', cls: 'sp-add', deskOnly: true, unfold: true, bar: true, disabled: !mayScript(),
       hint: mayScript() ? 'write a script that runs when someone uses this, or on a timer' : 'making scripts needs the scripts switch (the owner gives it)' }); }
     pushCards(f, schema, id, { locked, afterTransform: adds, away });
-    // the foot of the cards: the latest change to this thing, in one line (research 56: history lives beside the
-    // Inspector, not in it; this line is the doorway)
+    // the cards' foot: this thing's latest change in one line, the doorway to History (which lives beside the Inspector)
     const lc = lastChange(id);
     if (lc) f.push({ t: 'btn', k: 'history', label: `last change: ${lc} — History ›`, hint: 'the most recent change to this thing, from the world log. History lists them all, newest first; each card\'s tooltip says who last set it' });
   } else {
@@ -795,9 +752,8 @@ function inspectorFields() {
   }
 
   const mine = behaviors.filter((b) => b.attach === id);
-  // Scripts: the ones on this thing, and (desktop: it's a card with a source box) a new one (scriptnew.js: upload, then
-  // one act). Its own group, so it never folds under the VR-only Add Component rows above.
-  // the new-script button sits under Transform with Add Component; this card lists the scripts there are
+  // Scripts: its own group, so it never folds under the VR-only Add Component rows above. The new-script button sits
+  // under Transform when the schema has sections, else here (scriptnew.js)
   const scriptsUp = !!schema.sections && id !== WORLD_ID;
   if (mine.length || (id !== WORLD_ID && !scriptsUp)) f.push({ t: 'group', k: 'behaviors', label: mine.length ? `Scripts (${mine.length})` : 'Scripts', open: isOpen(id, 'behaviors') });
   if (mine.length) f.push({ t: 'list', k: 'scripts', rows: mine.map((b) => ({ id: b.id, label: `${running(b) ? '▶' : '⏸'} ${b.id}`, sub: `${b.timers ? `${b.timers}⏲ ` : ''}${b.status ?? ''}`, actions: [{ k: 'unbind', label: 'remove', danger: true }] })) });
@@ -824,7 +780,7 @@ function inspectorDispatch(action, payload, field, opts = {}) {
   const id = worldSel() ? WORLD_ID : sceneSelected(); const obj = entities.get(id);
   if (action === 'fold') { toggleFold(id, payload); repaintAll(); return; }
   // a scrubbed RUN of channels (Maya's channel box): one edit for all of them, FACE values, one Ctrl+Z (panels.js commitRun)
-  // the whole selection, or the world (house review I23: only the primary thing was edited, and a World run was dropped)
+  // the whole selection, or the world: never only the primary, and a World run commits too
   if (action === '__run' && id && payload && typeof payload === 'object') {
     const edits = Object.fromEntries(Object.entries(payload).map(([k, v]) => [String(k).replace(/^(ch|ed):/, ''), v]));
     const ids = id === WORLD_ID ? null : selection();
@@ -847,8 +803,8 @@ function inspectorDispatch(action, payload, field, opts = {}) {
   if (action === 'copyid' && id) { const cid = selection().includes(Sel.active()) ? Sel.active() : id;   // the name line's thing: the active one when several are selected
     try { void navigator.clipboard?.writeText(String(cid)); flashHint(`copied its id: ${cid}`); } catch { /* no clipboard: the tooltip shows it */ } return; }
   if (action === 'ed:grabbable.gripedit') { openGripEditor(id); return; }
-  if (action === 'ed:home.sethere') { void Edits.setHomeHere([id]); return; }   // the Home card's button: where it is now (editwrites)   // the grip editor (gripedit.js)
-  if (id === WORLD_ID && WORLD_PICKS[action]) { pickWorld(action, payload); repaintAll(); return; }   // the Terrain card's shape tiles (S15)
+  if (action === 'ed:home.sethere') { void Edits.setHomeHere([id]); return; }   // the Home card's button: where it is now (editwrites)
+  if (id === WORLD_ID && WORLD_PICKS[action]) { pickWorld(action, payload); repaintAll(); return; }   // the Terrain card's shape tiles
   if (id === WORLD_ID) {   // the world's cards: every field commits through inspect.js's @world path
     if (!action.startsWith('ed:') && !action.startsWith('ch:')) return;
     const isDelta = typeof payload === 'object' && payload && 'delta' in payload;   // a VR stepper
@@ -904,8 +860,7 @@ function inspectorDispatch(action, payload, field, opts = {}) {
     const k = action.slice(7);
     const driven = drivenBy(id, obj);
     const before = gesture?.before ?? restPose(id, obj);
-    // from the pose the channels SHOW (a run scrubs several at once: each channel's preview keeps the others', and the
-    // leader's release carries them all; R 10-11 23:13: "scrubbing on then only affects one still")
+    // from the pose the channels SHOW: a run scrubs several, each preview keeps the others', the leader's release carries all
     const shown = gesture?.cur ?? before;
     const next = { ...shown, pos: [...shown.pos] };
     const val = (cur) => (typeof payload === 'object' && payload && 'delta' in payload ? cur + payload.delta : payload);
@@ -930,7 +885,7 @@ function inspectorDispatch(action, payload, field, opts = {}) {
     repaintAll();
     return;
   }
-  // Add Component › Text on a model: a sign on its front face, its own child (facemedia.js, review 10-07 S4)
+  // Add Component › Text on a model: a sign on its front face, its own child (facemedia.js)
   if (action === 'ed:add.Text' && !live && frontOf(id)) { addOnFace(id, 'text', { text: 'Hello' }); repaintAll(); return; }
   // every other field, from either lane: ch:<group.k> / ed:<group.k> → the shared commit path
   if (action.startsWith('ch:') || action.startsWith('ed:')) {
@@ -1071,8 +1026,7 @@ function worldBuildFields() {
     { t: 'group', k: 'world', label: 'World', open: !buildFolds.world },
     worldRowFields(),
     ...(owner ? [] : [{ t: 'info', label: '', value: 'shaping the world is the owner\'s — these are read-only for you' }]),
-    // remove what's there, from the world's own section too (R 10-11 23:05: "allow the sky/weather/terrain/grass to be
-    // deleted/disabled from the World entity"): the same edit as the Hierarchy row's ✕ and the card's remove button
+    // remove what's there from the world's own section too: the same edit as the Hierarchy row's ✕ and the card's button
     ...(owner ? envRows().map((r) => ({ t: 'btn', k: `envdel-${r.id.slice(4)}`, label: `✕ remove ${r.label.toLowerCase()}`, icon: r.icon, hint: `remove: ${ENV.find((e) => e.key === r.id.slice(4))?.gone} (Ctrl+Z brings it back)` })) : []),
     { t: 'info', label: 'sky', value: ch.sky ? `${ch.sky} — a pick replaces the sky; the weather stays` : 'custom — a pick replaces the sky; the weather stays' },
     { t: 'tiles', k: 'wsky', value: ch.sky, empty: 'this world serves no sky presets (defs/sky/_presets.json)', options: names(skyPresets).map((n) => ({ v: n, label: n, hint: `the sky at ${skyPresets[n].hours ?? '?'}h${skyPresets[n].clouds ? `, ${skyPresets[n].clouds}` : ''}` })), ...ro },
@@ -1127,8 +1081,7 @@ function buildDispatch(action, payload) {
     case 'light': holdGhost('@light', 'light'); break;
     case 'bp': placeAhead(payload); break;
     case 'bpsave': { const ids = selection(); if (!ids.length) break;
-      // asked, as Roblox's "Save to Roblox" and SL's Take name what they keep (review 10-07 S5: it saved as "4177f489").
-      // The offer is a person's word for it: its label, else its model's name (the inspector's header), else its id
+      // the name is asked for, never a hash: offer its label, else its model's name (the inspector's header), else its id
       const one = ids.length === 1 ? foldRecord(ids[0]) : null;
       const offer = ids.length === 1 ? String(one?.label ?? (one?.model != null ? modelName(one.model) : ids[0])) : `${ids.length} things`;
       (xrActive() ? Promise.resolve(offer) : askCenter({ title: 'Save as blueprint', body: 'A name for it in Blueprints › saved here, where you place copies of it.', value: offer, ok: 'Save' }))
@@ -1168,20 +1121,17 @@ function buildVRDispatch(action, payload) {
 // Credits are view modes (historyrows.js historyView), this viewer's only, never logged.
 const hist = { key: null, entries: [], next: null, loading: false, id: null, mode: 'time', who: null, gen: 0, paged: false, failed: null };
 const histRetry = backoff(2000, 30000);
-// A thing's history is re-read whenever the thing changes (its components are in the key). A refresh shows the newest page;
-// once the person has read Older… pages, a refresh never undoes them (historyrows.js mergeHistory), and a refresh answered
-// after a newer refresh was sent is dropped (client-check HT6, 10-17: a late refresh replaced an Older… read).
+// A thing's history re-reads whenever it changes (components in the key), showing the newest page; a refresh never
+// undoes Older… pages already read (historyrows.js mergeHistory), and one answered after a newer refresh is dropped.
 function histLoad(id, more = false) {
-  // a re-read queued for a thing the panel has since left (pacedRead runs it later) must not run: it took a newer generation,
-  // so the selected thing's own answer was dropped as stale and nothing asked again — "reading the log…" (client-check HT8)
+  // a re-read queued for a thing the panel has left must not run: its newer generation drops the selected thing's answer
   if (id !== hist.id) return Promise.resolve();
   const before = more ? hist.next : undefined;
   const gen = more ? hist.gen : ++hist.gen;
   hist.loading = true;
   return sendRequest('history', id ? { id, limit: 20, ...(before != null ? { before } : {}) } : { limit: 30 }).then((r) => {
     if (hist.id !== id || (!more && gen !== hist.gen)) return;   // a newer read owns the panel now
-    // refused or timed out: say so, and ask again in a while (it said "reading the log…" forever: HT7). Not at once: a refusal
-    // for `rate` would only be met by more reads.
+    // refused or timed out: say so and ask again later, not at once: a `rate` refusal is only met by more reads
     if (!r?.ok) { histFailed(id, r?.refused?.reason ?? 'no answer', more); return; }
     hist.failed = null; histRetry.reset();
     const rows = id ? r.entries : worldHistoryRows(r.entries, Edits.nameOf);
@@ -1213,7 +1163,7 @@ function historyFields() {
   if (hist.mode === 'person') f.push({ t: 'enum', k: 'who', label: 'person', value: hist.who ?? '', options: [{ v: '', label: '(pick someone)' }, ...people.map((p) => ({ v: p.by, label: `${p.who} (${p.deeds})` }))] });
   if (!hist.entries.length) f.push({ t: 'info', label: '', value: hist.loading ? 'reading the log…' : hist.failed ? `couldn't read the log: ${hist.failed}` : 'nothing yet' });
   const row = (e) => {
-    // what changed, not just where (R 10-10 23:55): the authority's diff per component ('text: width 5.08 → 3.91')
+    // what changed, not just where: the authority's per-component diff ('text: width 5.08 → 3.91')
     const diff = e.diff && !e.changed?.includes('(created)') ? Object.entries(e.diff).map(([c, d]) => `${c}: ${d}`).join(' · ') : '';   // a creation says so; its every field isn't news
     const what = `${e.verb}${e.target ? ` ${e.target}` : ''}${diff ? ` · ${diff}` : e.changed?.length ? ` · ${e.changed.join(', ')}` : ''}${e.undoes !== undefined ? ` (undoes #${e.undoes})` : ''}`;
     f.push({ t: 'info', k: `h:${e.seq}`, label: e.ts ? agoWords(e.ts) : `#${e.seq}`, value: e.text ?? `${e.who ?? Edits.nameOf(e.by)} · ${what}`, hint: `${diff ? diff + '\n' : ''}act #${e.act ?? e.seq} in the log${e.ts ? ` · ${new Date(e.ts).toLocaleString()}` : ''}` });
@@ -1231,9 +1181,8 @@ function historyDispatch(action, value) {
   else if (typeof action === 'string' && action.startsWith('who:')) { hist.mode = 'person'; hist.who = action.slice(4); repaintAll(); }
 }
 
-// ---------------------------------------------------------------- Attributes (R 10-10: Maya's Attribute Editor beside
-// the Inspector's channel box): everything about the selection, including what the Inspector leaves out — its id, its
-// parent, whether it is hidden for EVERYONE, and every component as JSON.
+// ---------------------------------------------------------------- Attributes (Maya's Attribute Editor)
+// everything about the selection, including what the Inspector leaves out: id, parent, hidden-for-EVERYONE, raw JSON
 let attrPainted = [];
 function attributesFields() {
   const id = worldSel() ? null : sceneSelected();
@@ -1244,7 +1193,7 @@ function attributesFields() {
   if (hid) f.push({ ...hid, label: 'hidden for all', hint: 'Hidden from EVERYONE in this world (a world edit). The eye in the Inspector and the Hierarchy hides it in your view only.' });
   const lk = cardRow(schema, id, 'flags.lock'); if (lk) f.push({ ...lk, label: 'locked' });
   const ly = cardRow(schema, id, 'flags.layer'); if (ly) f.push(ly);   // the selection layer (Select ▾ in the viewport bar)
-  const ct = cardRow(schema, id, 'flags.clickthrough'); if (ct) f.push(ct);   // clicks go through: beside the layer, which it may merge into (R 10-17 20:36; left the Inspector)
+  const ct = cardRow(schema, id, 'flags.clickthrough'); if (ct) f.push(ct);   // clicks go through: beside the layer, which it may merge into
   // the Transform's advanced rows (were the Inspector's 'Advanced'): rotation order and the quaternion as stored
   const tsec = schema.sections?.list?.find((x) => x.type === 'Transform');
   const adv = (tsec?.fields ?? []).map((addr) => [addr, cardRow(schema, id, addr)]).filter(([addr, r]) => r && !r.alias && (r.row === 'quat' || addr === 'rot.order')).map(([, r]) => r);
@@ -1292,7 +1241,7 @@ function repaintAll() {
   });
 }
 
-/** The Inspector header's scrub-feel dials (Maya's Channel Box icons, R 10-04): speed and accelerating. Per viewer. */
+/** The Inspector header's scrub-feel dials (Maya's Channel Box icons): speed and accelerating. Per viewer. */
 function scrubFeelButtons(root) {
   const btns = root.querySelector('.fr-btns'); if (!btns) return;
   const mk = (cls) => { const b = document.createElement('button'); b.className = `fr-btn sp-scrubfeel ${cls}`; Object.assign(b.style, { fontSize: '10px', padding: '0 5px', width: 'auto', opacity: '0.8' }); return b; };
@@ -1330,12 +1279,10 @@ export function initEditPanels() {
   bus.on('edit-extend', (id) => extendSelection(id));   // Ctrl-click in the viewport (build.js)
   // a box drawn in the viewport (Shift-drag on bare space, build.js): ADD each to the selection (never toggles one off)
   bus.on('edit-select-add', (ids) => { const list = (ids ?? []).filter((id) => entities.get(id)); if (list.length) Sel.extend(list); });
-  // an armed attach completes on a VIEWPORT pick too: build.js select → the store
-  // → this. The child is re-selected after, so the inspector shows what moved.
+  // an armed attach completes on a VIEWPORT pick too; the child is re-selected after, so the inspector shows what moved
   bus.on('selection', ({ ids, kind }) => {
     const id = kind === 'things' ? ids[0] ?? null : null;
-    // a ref pick armed from the inspector: the world-clicked id is the target.
-    // Re-select the entity being edited so the inspector stays on it.
+    // a ref pick armed from the inspector: the world-clicked id is the target; the edited entity stays selected
     if (armingRef && id && id !== armingRef.id && !String(id).startsWith(OCC_ROW)) {
       const back = armingRef.id;
       if (completeRefPick(id)) { sceneSelect(back); return; }
@@ -1354,7 +1301,7 @@ export function initEditPanels() {
   setRemoveHook(() => removeMany(removable()));
   bus.on('edit-find', () => findSelected());              // F in the viewport
   bus.on('edit-reset', (what) => resetTransform(what));   // Alt+G / Alt+E / Alt+R, Ctrl+G in the viewport
-  bus.on('key', (e) => {   // Ctrl+D duplicates (Maya, Unity, Godot; R 10-04), Alt+D as well; preventDefault stops the bookmark
+  bus.on('key', (e) => {   // Ctrl+D duplicates (Maya, Unity, Godot), Alt+D as well; preventDefault stops the bookmark
     if (!shown || e.code !== 'KeyD' || !(e.ctrlKey || e.metaKey || e.altKey)) return;   // keys: duplicate
     if (sceneSelected()) { e.preventDefault(); hierarchyDispatch('duplicate', sceneSelected()); }
   });
@@ -1366,9 +1313,7 @@ export function initEditPanels() {
     const on = state.st.entities[ids[0]]?.disabled === true;
     for (const id of ids) setEnabled(id, on);
   });
-  // ↑/↓ walk the tree ONLY while the tree has focus — on the window they are
-  // walking keys (controller.js: ArrowUp is forward). The frame listener runs
-  // before the window's and stops the event there.
+  // ↑/↓ walk the tree ONLY while it has focus (on the window they walk: controller.js); the frame listener stops them first
   const hf = frames.get('hierarchy');
   if (hf) {
     const scroll = hf.frame.body.querySelector('.schema-scroll');

@@ -1,15 +1,10 @@
-// browservoice — BRING YOUR OWN VOICE.
-//
-// Point at a ws:// or http:// synthesizer you already run (the headless harness protocol); the server serves
-// nothing. Not a bundled TTS (~82 MB per visitor for a voice they didn't choose), and not speechSynthesis (no
-// route to an AudioNode or MediaStream; WICG/speech-api#69).
+// browservoice — bring your own voice: a ws:// or http:// synthesizer you already run; the server serves nothing.
+// Not a bundled TTS (~82 MB per visitor), not speechSynthesis (no route to an AudioNode; WICG/speech-api#69).
 
 import { setTtsSource } from './tts.js';
 import { report } from './base.js';
 
-/** Point the mouth at a synthesizer already running locally — the same ws
- *  protocol a headless harness uses, so a browser and a harness are pointing
- *  at the same kind of thing through the same call. */
+/** ws: the same protocol a headless harness uses. */
 export async function setEndpointVoice(url, label) {
   const isWs = /^wss?:/.test(url);
   if (isWs) {
@@ -32,8 +27,7 @@ export async function setEndpointVoice(url, label) {
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       r({ pcm: new Int16Array(bytes.buffer), sampleRate: m.sampleRate || 22050 });
     };
-    // A synthesizer that goes away must surface as a failed utterance, never as
-    // a caller left hanging forever.
+    // a synthesizer that goes away must surface as a failed utterance, never a caller hanging forever
     ws.onclose = () => { for (const [, r] of pending) r({ pcm: new Int16Array(0), sampleRate: 22050 }); pending.clear(); };
     setTtsSource((text) => new Promise((resolve) => {
       if (ws.readyState !== 1) return resolve({ pcm: new Int16Array(0), sampleRate: 22050 });
@@ -45,16 +39,13 @@ export async function setEndpointVoice(url, label) {
     return true;
   }
 
-  // HTTP: POST {text} → wav/mp3 bytes. Deliberately the dumbest possible
-  // contract, so anything from a two-line Flask app to a cloud TTS fits.
+  // HTTP: POST {text} → wav/mp3 bytes; the dumbest contract, so anything from Flask to a cloud TTS fits
   const probe = await fetch(url, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: 'test' }),
   }).catch(() => null);
   if (!probe?.ok) return false;
-  // ONE AudioContext per page (#86's whole reason to exist; #91 B4 caught
-  // this constructing a second one). decodeAudioData is context-agnostic —
-  // the shared context serves it fine even suspended.
+  // ONE AudioContext per page, never a second; decodeAudioData works on the shared one even suspended
   const { audioContext } = await import('./audioctx.js');
   const ctx = audioContext();
   setTtsSource(async (text) => {

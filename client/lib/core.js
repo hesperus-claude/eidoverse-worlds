@@ -1,13 +1,5 @@
-// core — the PRESENTATION substrate: renderer, scene, camera, canvas, the
-// base lights and stage floor, and the eidoverse module-host contract. The
-// renderer-free substrate (bus, CONFIG, report, colours, helpers) lives in
-// base.js (RENDERER-SEAM move 2) — modules that never touch the GPU import
-// THAT and stop depending on this file transitively.
-//
-// Import rule: core imports nothing from the client except base.js (which
-// imports nothing at all). Everything else may import either. The module
-// graph stays acyclic at load time even where the runtime call graph is
-// circular.
+// core — the PRESENTATION substrate: renderer, scene, camera, base lights, stage floor, eidoverse module host.
+// Imports nothing from the client but base.js, so the load graph stays acyclic; GPU-free modules import base.js.
 
 import * as THREE from 'three';
 import * as TSL from 'three/tsl';
@@ -45,9 +37,7 @@ if (CONFIG.params.has('wgsldebug') && globalThis.GPUDevice) {
 
 // ------------------------------------------------------------ renderer
 export const canvas = document.createElement('canvas');
-// focusable so pointer-lock re-entry works after an Esc unlock: Chrome wants
-// the request to come from a focused target, and a canvas is not focusable by
-// default.
+// focusable: Chrome's pointer-lock re-entry after Esc needs a focused target
 canvas.tabIndex = -1;
 canvas.style.outline = 'none';
 document.body.prepend(canvas);
@@ -55,13 +45,11 @@ document.body.prepend(canvas);
 // MSAA stays on by default (§22n/§22r: ~4ms/frame at 2× retina, but vanished AA reads as a bug); ?msaa=0 opts out.
 // ?webgl=1 forces WebGL 2. Both apply at construction (next load): the URL param wins, else the saved preference.
 export const PREF_MSAA = 'ew-msaa', PREF_BACKEND = 'ew-backend';
-// The stored headset bit is HISTORY, not presence, and it expires (#197 review B3) — the meaning
-// lives in headset_seen.js so it can be driven directly; core.js just supplies the stored value.
+// the stored headset bit is HISTORY, not presence, and it expires (headset_seen.js)
 export const PREF_HEADSET_SEEN = 'ew-headset-seen';   // ms timestamp of the last granted session (legacy: '1')
 const pref = (k) => { try { return localStorage.getItem(k); } catch { return null; } };   // a storage throw must not kill boot
 export const headsetSeenRecently = () => {
-  // Migrate the legacy '1' marker on first observation and WRITE IT BACK, so it ages out like every
-  // real timestamp instead of being permanent (#197 round-two review B3).
+  // WRITE the legacy '1' back as a timestamp, so it ages out instead of being permanent
   const now = Date.now(); let raw = pref(PREF_HEADSET_SEEN);
   const migrated = _migrateHeadsetSeen(now, raw);
   if (migrated !== null) { try { localStorage.setItem(PREF_HEADSET_SEEN, migrated); } catch {} raw = migrated; }
@@ -69,8 +57,7 @@ export const headsetSeenRecently = () => {
 };
 
 // ?xr=1 is a boot flag: WebGPU-XR needs an xrCompatible adapter, read at init(), so xr.enabled is set before init.
-// An XR boot takes WebGPU-XR when XRGPUBinding exists, else WebGL; the rule is decideBackend (backend_choice.js,
-// tested by tools/backend-choice-test.mjs). `?xr=1` boots XR; `?xr=0` and absence do not.
+// the backend rule is decideBackend (backend_choice.js)
 export const WEBGPU_XR = 'XRGPUBinding' in globalThis;               // WebGPU can present VR here (Chrome flags)
 export const WEBGPU_POSSIBLE = typeof navigator !== 'undefined' && !!navigator.gpu;   // WebGPU API exists at all
 const _choice = decideBackend({ params: CONFIG.params, backendPref: pref(PREF_BACKEND), headsetSeen: headsetSeenRecently(), webgpuXR: WEBGPU_XR });
@@ -116,12 +103,11 @@ if (XR_BOOT) renderer.xr.enabled = true;   // must precede init(): xrCompatible 
 renderer.setSize(innerWidth, innerHeight);
 // Shadows from the sun, not the head: presenting, Renderer.render() swaps in the XR camera for every call, the
 // shadow pass included. xr is turned off around that pass (as render.js renderAside does).
-globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype);   // xrshadow.js — importable, so the patch is TESTED (tools/xrshadow-test.mjs); the global lets boot-check assert it was APPLIED
-// Spectators start a notch lower — an audience laptop's job is 30fps for an
-// hour, not maximum sharpness. Adaptive scaling adjusts from here.
+globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype);   // the global lets boot-check assert it was APPLIED
+// spectators start a notch lower: an audience laptop's job is 30fps for an hour
 export const BASE_PIXEL_RATIO = Math.min(devicePixelRatio, CONFIG.spectate ? 1.5 : 2);
 renderer.setPixelRatio(BASE_PIXEL_RATIO);
-// #32 split vision: while presenting, the pixel ratio belongs to the XR layer — xrpixelratio.js says why.
+// while presenting, the pixel ratio belongs to the XR layer (xrpixelratio.js)
 export const xrPixelRatio = guardPixelRatioInXR(renderer);
 globalThis.__xrPixelRatioGuarded = !!xrPixelRatio;   // boot-check asserts the guard was APPLIED, not just importable
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -147,14 +133,11 @@ globalThis.__xrNullFb = tolerateNullXRFramebuffer(renderer);
 globalThis.__syncGate = installSyncGate(renderer, { tee: (l, now) => (now ? teeNow(l) : tee(l)), gate: CONFIG.params.get('syncgate') !== '0' });
 // A lost context (GPU watchdog reset, driver crash) goes back to the live world instead of a black canvas (gpulost.js).
 globalThis.__gpuLost = installGpuLostRecovery({ canvas, renderer, tee, onStop: (why, rule) => bus.emit('gpu-lost-stop', { why, rule }) });
-// the splash watchdog (index.html) stops worrying: modules resolved and the
-// GPU answered — everything past this point can report its own failures
+// the splash watchdog (index.html) stands down: past here everything reports its own failures
 globalThis.__ewEngineUp = true;
 
 export const scene = new THREE.Scene();
-// the construct (no sky yet) wears the PANEL family — deep-ocean dark — not a
-// navy that fought the teal chrome (owner, 09-05)
-scene.background = new THREE.Color(0x0b0f12);   // the page's own --bg: neutral, so the teal chrome is the only colour (owner, 09-05: teal ground read odd)
+scene.background = new THREE.Color(0x0b0f12);   // no sky yet: the page's own --bg, so the teal chrome is the only colour
 scene.fog = new THREE.FogExp2(0x0b0f12, 0.018);
 
 // The far plane must hold the SKY (cloud dome ~3200 out, ringworld band 4940 up); reversed-Z keeps depth precise.
@@ -163,16 +146,14 @@ camera.position.set(3.5, 2.6, 5.5);
 camera.lookAt(0, 1, 0);
 
 addEventListener('resize', () => {
-  // XR owns the framebuffer while presenting: resizing it mid-session tears
-  // the eye buffers. Aspect math is still safe to keep warm.
+  // XR owns the framebuffer while presenting: resizing it tears the eye buffers
   if (!renderer.xr?.isPresenting) renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 });
 
 // ------------------------------------------------------------ base lighting
-// The sky module owns these once a sky verb lands; these are the "empty world"
-// defaults so a fresh world is not pitch black.
+// empty-world defaults; the sky module owns these once a sky verb lands
 export const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x283024, 0.75);
 scene.add(hemi);
 export const sun = new THREE.DirectionalLight(0xfff2e0, 2.2);
@@ -196,8 +177,7 @@ axisLines.material.depthWrite = false;
 grid.material.depthWrite = false;
 axisLines.position.y = 0.04; axisLines.renderOrder = 2; axisLines.frustumCulled = false;
 scene.add(axisLines);
-// XR per-eye frustum culling misjudges huge planes (in-headset 08-05: the
-// ground VANISHES at some head angles) — one draw call each, never cull them
+// never cull these: XR per-eye frustum culling makes huge planes vanish at some head angles
 ground.frustumCulled = false;
 grid.frustumCulled = false;
 grid.position.y = 0.02; grid.renderOrder = 1;

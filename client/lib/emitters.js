@@ -1,20 +1,8 @@
-// emitters — the browser host for the `particles` component.
-//
-// Owns the THREE/DOM-bound half: resolving a stored value into its effect (shared/particle_effects.js: an Essential, or
-// a document stored in the world, fetched once with the `effect` request), priming and caching sprite textures, building
-// each emitter (client/lib/particlefx.js: shared/particlesim.js, Godot's CPUParticles3D ported, drawn as instanced
-// quads) with a DETERMINISTIC random stream from its seed, parenting it to the thing (or the model part) that owns it, and
-// handing the handle to the registry that knows how to take it back out again.
-//
-// The split mirrors flora:
-//   particle_effects.js — what a `particles` value MEANS (shared with the authority and the mcpl agent)
-//   particlesim.js      — the simulation (pure)
-//   emitter_field.js    — lifecycle/registry, DOM-free and unit-tested
-//   particlefx.js       — the GPU half of one emitter
-//   this file           — hosting
-//
-// `playing: false` is Godot's emitting = false: the living particles finish and none are born; turning it back on
-// resumes the same emitter (no rebuild).
+// emitters — the browser host for the `particles` component: resolve the effect, cache sprites, build each emitter
+// with a DETERMINISTIC stream from its seed, parent it, hand it to the registry.
+//   shared/particle_effects.js — what a value MEANS · shared/particlesim.js — the sim (pure)
+//   emitter_field.js — lifecycle/registry · particlefx.js — the GPU half of one emitter · this file — hosting
+// `playing: false` is Godot's emitting = false: living particles finish, none are born; back on resumes with no rebuild.
 
 import { THREE, scene } from './core.js';
 import { bus } from './base.js';
@@ -27,8 +15,7 @@ import { autoHooks as autos, ownHook } from './autohooks.js';
 import { sendRequest } from './net.js';
 
 // ---- textures --------------------------------------------------------------
-// Sprite textures are shared, cached per path: the cache owns them, emitters borrow (#25), so retiring one never
-// disposes them (that would blank every other fire).
+// the cache owns sprite textures, emitters borrow: retiring one never disposes them (that would blank every other fire)
 const textureCache = new Map();
 
 async function spriteTexture(path) {
@@ -39,9 +26,7 @@ async function spriteTexture(path) {
       const bytes = globalThis.Deno.readFileSync(path);
       return globalThis.loadImageTexture(bytes, { srgb: true });
     })().catch((e) => {
-      // A missing sprite is not a missing emitter: the builder's procedural
-      // dot always works, and a hearth that reads as fire in text but shows a
-      // soft glow beats a hearth that shows nothing.
+      // a missing sprite is not a missing emitter: the procedural dot always works
       console.warn(`[emitters] sprite ${path} unavailable — using the preset's own look`, e);
       textureCache.delete(path);
       return null;
@@ -62,8 +47,7 @@ export function setEmitterQuality(next) {
   return true;
 }
 export const emitterQuality = () => tier;
-/** Live emitters — the governor's cue to bother at all, and the cleanup test's
- *  window onto whether anything leaked. */
+/** The governor's cue to bother at all, and the cleanup test's leak check. */
 export const emitterCount = () => handles.size;
 
 // ---- stored effects ---------------------------------------------------------
@@ -76,8 +60,7 @@ function fetchEffect(name, id) {
   (waiting.get(name) ?? waiting.set(name, new Set()).get(name)).add(id);
   if (stored.has(name)) return;
   stored.set(name, sendRequest('effect', { name }).then((r) => {
-    // the unknown-field policy (lead 10-17): keep the parts this build knows (readableEffect), so a document using an
-    // addition this client predates draws what it can instead of nothing
+    // unknown fields: keep the parts this build knows, so a newer document draws what it can instead of nothing
     const doc = r?.ok && r.effect ? readableEffect(r.effect) : null;
     if (!doc) console.warn(`[emitters] effect ${name}: ${r?.refused?.reason ?? (r?.effect ? effectProblem(r.effect) : 'not stored here')}`);
     stored.set(name, doc);
@@ -86,18 +69,17 @@ function fetchEffect(name, id) {
   }).catch(() => { stored.delete(name); }));
 }
 const lastValue = new Map();       // id → the stored value last seen (what a landed effect re-applies)
-/** A stored effect document this viewer has loaded, by blob name (the inspector's knobs read it), or null. */
+/** By blob name (the inspector's knobs read it), or null. */
 export const effectLookup = (name) => lookup(name);
 
 // ---- build -----------------------------------------------------------------
 
-/** A viewer's share of particles: its tier (the governor lowers it). */
+/** The governor lowers it. */
 const budget = () => QUALITY_TIERS[tier] ?? 1;
 
 async function build(resolved, { id }) {
   const ent = entities.get(id);
-  // `null` is a spawn reservation whose GLB is still downloading, and an absent id is an entity that was removed under
-  // us. Either way there is nothing to hang a local origin off, and a world-origin emitter is drift (#25 requirement 2).
+  // `null` (GLB still downloading) or absent (removed): nothing to hang off, and a world-origin emitter is drift
   if (!ent) throw new Error(`entity ${id} is not in the scene`);
   // a part (picture.part, openable.part): its node, once the model has it; until then the thing itself, re-hung below
   const host = (resolved.part && findPart(ent, resolved.part)) || ent;
@@ -116,8 +98,7 @@ async function build(resolved, { id }) {
     }
   } catch (e) { for (const fx of parts) fx.dispose(); throw e; }
   host.add(group);
-  // The world owns this, not the sky: an async sky build that snapshots scene.children mid-flight must never claim (and
-  // then dispose) somebody's hearth. And the weather sweep must not wet a fire.
+  // the world owns this, not the sky: a mid-flight sky build must never claim (then dispose) it, nor the weather wet it
   for (const o of [group, ...parts.map((p) => p.mesh)]) { o.userData.emitterOf = id; o.userData.entityId = id; o.userData.noWet = true; o.userData.noCloudShadow = true; }
   const update = ownHook(() => {
     if (resolved.part && group.parent === ent) { const p = findPart(ent, resolved.part); if (p) p.add(group); }   // the GLB landed
@@ -156,8 +137,7 @@ function applyFrom(id, data) {
   if (!norm.ok) {
     const name = effectBlobName(data?.effect);
     if (norm.pending && name) { fetchEffect(name, id); return; }   // it builds when the document lands
-    // Legible, and only once per authoring: the component still folds, still persists, and still reads as an emitter
-    // in every text-tier look().
+    // once per authoring; the component still folds, persists, and reads as an emitter in every text-tier look()
     console.warn(`[emitters] ${id}: ${norm.why}`);
     void registry.apply(id, null);
     return;
@@ -204,7 +184,7 @@ const fxRegistry = makeEmitterRegistry({
   onError: (e, id) => console.warn(`[emitters] ${id}: ${e?.message ?? e}`),
 });
 const fxOn = new Set();
-/** Turn a held thing's fx on (fx = grabbable.fx {particles, at}) or off (null). Idempotent. */
+/** fx = grabbable.fx {particles, at}, or null for off. Idempotent. */
 export function setPressFx(id, fx) {
   if (!fx) { if (fxOn.delete(id)) void fxRegistry.apply(`fx:${id}`, null); return; }
   if (!entities.get(id)) return;
@@ -215,8 +195,7 @@ export function setPressFx(id, fx) {
 }
 export const pressFxOn = () => [...fxOn];
 
-/** World teardown (a world switch, a reset): every emitter goes, and the
- *  global hook array comes back to where it started. */
+/** The global hook array comes back to where it started. */
 export function clearEmitters() {
   pending.clear(); lastValue.clear();
   registry.retireAll();

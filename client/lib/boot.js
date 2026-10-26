@@ -1,16 +1,5 @@
-// boot — the first fifteen seconds.
-//
-// Arriving used to be: a black page while 2.1MB of engine parsed, then a dark
-// empty grid while ~22MB of body, clips and sky streamed in, with a small
-// bottom-right tray of filenames as the only evidence anything was happening.
-// Nothing said what was going on, how far along it was, or when you could move.
-//
-// Three things fix that, in descending order of how much they matter:
-//   1. Something on screen IMMEDIATELY — the splash is static markup in
-//      index.html, so it paints before any JavaScript has loaded at all.
-//   2. Progress measured in real bytes and real phases, never a fake timer.
-//   3. The wait made useful: the controls are on the splash, so the time is
-//      spent learning them instead of watching a bar.
+// boot — the first fifteen seconds: the splash (static markup in index.html, painting before any JS), progress in
+// real bytes and phases (never a fake timer), and the controls to learn while it waits.
 
 import { bus } from './base.js';
 // Injected, not imported: assets.js pulls in the engine, and this splash also serves a client with no assets.
@@ -59,7 +48,7 @@ function currentLabel() {
 
 // ---- what's loading: named items, once they have been in flight > 2 s
 const firstSeen = new Map();   // key → performance.now() when first seen in flight
-const SHOW_AFTER_MS = 2000, MAX_ITEMS = 1;   // ONE line of load detail: two left an empty gap above the tips
+const SHOW_AFTER_MS = 2000, MAX_ITEMS = 1;   // ONE line: two leave an empty gap above the tips
 function paintItems() {
   if (!itemsEl || done) return;
   const now = performance.now();
@@ -79,21 +68,17 @@ const escapeHtml = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '
 // The peg is the progress: it enters from the sphere's left skin and rests at 1. Its tip is at x = 48 + 40 = 88 and
 // the sphere's leftmost point is 8, so D >= 80 hides it at rest; +0.5 clears the anti-aliased edge.
 const PEG_D = 88 - 8 + 0.5;
-/** Mostly honest (linear in progress) with a gentle ease-out on the last stretch, so the peg ARRIVES
- *  rather than stops. ease(0) = 0, ease(1) = 1 exactly, monotone. */
+/** Linear, easing out on the last stretch so the peg ARRIVES; ease(0) = 0, ease(1) = 1 exactly, monotone. */
 export function pegEase(p) { const k = 0.35; return (1 - k) * p + k * (1 - Math.pow(1 - p, 3)); }
 /** The peg's x offset at progress p: −D at 0, exactly 0 at 1. */
 export const pegOffset = (p) => -PEG_D * (1 - pegEase(Math.min(1, Math.max(0, p))));
-/** Put the splash's peg where progress p says. At p ≥ 1 the transform and the sphere clip are
- *  REMOVED, not zeroed — the loaded mark is exactly the still mark (the clip is a geometric no-op
- *  there, but a second anti-aliasing pass on the skin edge is not). */
+/** At p ≥ 1 the transform and clip are REMOVED, not zeroed: a no-op clip still re-antialiases the skin edge. */
 export function paintPeg(p, root = document.getElementById('splash')) {
   const peg = root?.querySelector('.sp-peg'); if (!peg) return;
   const world = peg.parentNode;
   if (p >= 1) {
     peg.style.transform = '';
-    // the clip goes once the .3s glide has landed: a peg still gliding home, unclipped, would show
-    // outside the sphere for a moment
+    // the clip goes once the .3s glide lands, or a still-gliding peg shows outside the sphere
     const drop = () => { if (peg.style.transform === '') world.removeAttribute?.('clip-path'); };
     if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) drop(); else setTimeout(drop, 350);
   } else {
@@ -118,12 +103,10 @@ function paint() {
     : '';
 }
 
-// Rotating tips — the wait is the best teaching moment the client gets, since
-// it's the one time the user is looking at the UI and not at the world.
+// rotating tips: the one time someone looks at the UI and not the world
 const TIPS = [
   // keep these in step with the live bindings
-  // An agent's wake rules are its own, not promises this client can make — the wording stays descriptive, never a
-  // guarantee.
+  // an agent's wake rules are its own: describe, never promise
   ['@', 'Type <b>@</b> in chat to mention someone by name. An agent listening for its name may be pinged.'],
   ['/', 'Type <b>/</b> in chat for commands. Everything said in a world is public: everyone here hears it.'],
   ['B', '<b>B</b> toggles builder mode. Off by default, so looking around never moves anything.'],
@@ -174,12 +157,10 @@ export function initBoot({ world, name }) {
   markPhase('engine', 1);
   marks.engine = Math.round(performance.now());
 
-  // Byte progress refreshes the numbers even when no phase boundary moves, so
-  // the bar never looks frozen during one big download.
+  // bytes refresh the numbers between phases, so one big download never looks frozen
   bus.on('loading', paint);
 
-  // An escape hatch, always. A stuck asset must never trap someone outside the
-  // world — they can walk in and let the rest arrive around them.
+  // an escape hatch, always: a stuck asset must never trap someone outside the world
   const skip = el.querySelector('.sp-skip');
   skip.onclick = () => finishBoot('skipped');
   setTimeout(() => { if (!done) skip.classList.add('show'); }, 4000);
@@ -214,8 +195,7 @@ export function finishBoot(reason = 'ready') {
   releaseBoot?.();
 }
 
-/** The world refused the join (net.js: close 4005 and kin): the splash stays up and says so in the server's words.
- *  Nothing lifts it (an empty world behind it reads as a successful join); coming back is a reload. */
+/** A refused join (close 4005 and kin) keeps the splash up in the server's words; nothing lifts it, a reload returns. */
 export function refuseBoot(text) {
   const root = el ?? document.getElementById('splash');
   if (!root) return;
@@ -236,8 +216,7 @@ export function refuseBoot(text) {
 }
 export const bootRefused = () => !!el?.classList.contains('refused');
 
-/** A TRANSIENT refusal (a full world) shown on the splash while it waits; nothing is pinned, and the next
- *  successful join finishes it as usual. */
+/** Nothing is pinned: the next successful join finishes it as usual. */
 export function waitBoot(text) {
   const root = el ?? document.getElementById('splash');
   if (!root || done) return false;
@@ -249,16 +228,14 @@ export function waitBoot(text) {
   return true;
 }
 
-/** Disarm the lite-mode tripwire index.html armed before the first engine byte: on pagehide (a deliberate exit;
- *  an OOM kill fires none) or after DWELL_MS, never at finishBoot, since assets keep streaming after arrival and
- *  that tail is where phones die. A crash after the dwell is forgotten, on purpose (the cheap way to be wrong). */
+/** On pagehide or after DWELL_MS, never at finishBoot: assets stream on after arrival, and that tail is where phones die.
+ *  A crash after the dwell is forgotten, on purpose. */
 const DWELL_MS = 60000;
 function disarmTripwire() {
   // A lite session (lite.js calls finishBoot too) proves nothing about the full client: don't clear its evidence.
   if (globalThis.__ewLite) return;
   const key = globalThis.__ewTripKey?.(new URLSearchParams(location.search)) ?? 'ew-boot-attempt';
-  // pagehide is index.html's; this is the dwell. It removes the key unconditionally: a bfcache restore re-arms,
-  // so an "already cleared" guard would leave the flag set forever.
+  // unconditional: a bfcache restore re-arms, so an "already cleared" guard would leave the flag set forever
   setTimeout(() => {
     globalThis.__ewTripDisarmed = true;
     try {
@@ -280,9 +257,8 @@ export const whenBooted = () => (done
   : Promise.race([bootGate, new Promise((r) => setTimeout(r, BOOT_GATE_MAX))]));
 bus.on('booted', () => releaseBoot?.());
 
-// ---- the rays live in a WORKER (splashrays.worker.js, WebGL2 on OffscreenCanvas) so they animate whatever the
-// main thread does; else the static gradient. Worker, resize listener and harness handle are one resource:
-// stopRays releases all three, idempotently, on every exit.
+// ---- the rays live in a WORKER (splashrays.worker.js) so they animate whatever the main thread does
+// worker, resize listener and harness handle are one resource: stopRays releases all three, idempotently
 let raysWorker = null, raysResize = null;
 export function startRays(el) {
   const cv = el.querySelector('.sp-rays');
@@ -294,8 +270,7 @@ export function startRays(el) {
     cv.width = cv.clientWidth; cv.height = cv.clientHeight;
     const off = cv.transferControlToOffscreen();
     raysWorker = new Worker(new URL('./splashrays.worker.js', import.meta.url), { type: 'module' });
-    // Three outcomes, kept distinct (#185): ACK = the worker drew a frame
-    // and said so; NOGL = it reached us and declined (legitimate fallback); silence = neither.
+    // three outcomes kept distinct: ACK = drew a frame; NOGL = declined (fallback); silence = neither
     raysWorker.onmessage = (e) => {
       const t = e.data?.type;
       if (t === 'ready') { globalThis.__raysAck = true; return; }
@@ -305,7 +280,7 @@ export function startRays(el) {
     raysResize = () => raysWorker?.postMessage({ type: 'size', w: cv.clientWidth, h: cv.clientHeight });
     addEventListener('resize', raysResize);
     globalThis.__raysWorker = raysWorker;   // harness: postMessage({type:'frames'}) answers with the frame count
-    // Cumulative, never cleared: the handle above is transient, and a polling sampler can miss a short-lived worker.
+    // cumulative, never cleared: a polling sampler can miss a short-lived worker
     globalThis.__raysStarted = true;
   } catch { cv.style.display = 'none'; stopRays(); }
 }

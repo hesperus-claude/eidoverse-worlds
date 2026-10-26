@@ -1,12 +1,7 @@
-// The behavior behind /commands — every branch of main.js's old
-// bus.on('command') if-chain, registered into the pure registry (§14 6c).
-// Each handler imports its own deps; chat.js never imports THIS file (only
-// registry.js), or the cycle chat→handlers→net→chat closes.
+// handlers — the behavior behind /commands, registered into the pure registry (§14 6c); each imports its own deps.
+// chat.js never imports THIS file (only registry.js), or the cycle chat→handlers→net→chat closes.
 //
-// The kick and push disambiguators are each ONE handler doing its own
-// entities/remotes checks — the old if-chain's fallthrough ORDER was
-// semantic (things win the name lookup because they were here first), and
-// it is preserved inside the handler bodies rather than across them.
+// kick and push are each ONE handler doing its own entities/remotes checks: the lookup ORDER is semantic (things win).
 
 import { CONFIG, bus, report } from '../base.js';
 import { SHOVE_REACH } from '../../../shared/protocol/physconst.js';
@@ -19,7 +14,7 @@ import { captureFrame } from '../capture.js';
 import { register, dispatch } from './registry.js';
 import { entities, worldHasOwner, bagOf } from '../world.js';
 import { resolveThing, handleOf } from '../../../shared/thingref.js';
-// a thing by what a person types (R 10-17: ids are minted and opaque): its id, its label, or a unique id prefix of 4+.
+// a thing by what a person types (ids are opaque): its id, its label, or a unique id prefix of 4+.
 // A label two things share is refused with their handles, never resolved by picking one. {id} | {err} | null (nothing)
 function thingNamed(word) {
   if (!word) return null;
@@ -51,14 +46,10 @@ import { TOUCH_GAP } from '../../../shared/reachwire.js';
 import { panelAlpha, setPanelAlpha } from '../stylepanel.js';
 
 register('help', () => toggleHelp());
-// Flight's own diagnostic, in the chat log where a person can read it and
-// paste it back. See controller.js flightReport() for why this is not just
-// the console probe.
+// flight's own diagnostic, in the chat log where a person can read and paste it (why not the console: controller.js flightReport())
 register('flight', () => { for (const line of flightReport().split('\n')) logChat('*', line); });
 
-// Panel opacity — the glass escape hatch. Adaptive translucency fails over
-// bright scenes (Apple shipped "Tinted" after the Liquid Glass backlash);
-// this is our version of that lesson, one number, user-owned, persisted.
+// panel opacity, the glass escape hatch: adaptive translucency fails over bright scenes; one number, user-owned, persisted
 register('panels', (arg) => {
   const v = parseFloat(arg);
   if (!(v >= 0.3 && v <= 1)) return logChat('*', `usage: /panels <0.3–1> — desktop panel opacity (current ${panelAlpha().toFixed(2)})`);
@@ -115,7 +106,7 @@ register('role', (arg) => {
 
 register('grant', (arg) => {
   // /grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever]: +gen/+fly are roles:<id>.can exceptions, `for`
-  // sets roles:<id>.until (30m, 2h, 1d, 1w), `forever` clears it (upstream #258). The authority decides rank.
+  // sets roles:<id>.until (30m, 2h, 1d, 1w), `forever` clears it. The authority decides rank.
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const id = parts[0];
   const forAt = parts.findIndex((p, i) => i > 0 && p.toLowerCase() === 'for');
@@ -179,8 +170,7 @@ register('access', (arg) => {
   send(ops.length === 1 ? ops[0] : { verb: 'batch', args: { ops } }, { what: `make this world ${door === 'invite-only' ? 'invite-only' : door === 'watch' ? 'watch only' : door}`, record: false });
 });
 register('members', () => showMembers());
-/** Who may come into this world, and until when: the door (shared/protocol/access.js) and everyone listed, from this
- *  client's own fold. */
+/** Who may come in, and until when: the door (shared/protocol/access.js) and everyone listed, from this client's fold. */
 function showMembers() {
   const wc = worldComponents(), now = serverNow();
   const door = doorOf(wc);
@@ -218,8 +208,7 @@ register('kick', (arg) => moderate('kick', arg));
 register('punt', (arg) => {
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const named = parts.find((x) => !/^[\d.]+$/.test(x));
-  // things win the name lookup (they were here first); a person's name is
-  // the shove. No name at all = the object kick's nearest-thing search.
+  // things win the name lookup (they were here first), then a person's name; no name = the nearest-thing search
   if (named && !entities.has(named) && remotes.has(named)) {
     const pow = Math.min(4, Math.max(0.5, parseFloat(parts.find((x) => /^[\d.]+$/.test(x))) || 2.6));
     shovePerson(named, pow, 'punt');
@@ -256,9 +245,8 @@ register('unban', (arg) => {
   onePerson(id, 'unban').then((who) => { if (who) send({ verb: 'unban', args: { who } }, { what: `unban ${id}`, record: false }); });
 });
 
-// /bans: what is in force here now — bans, removals cooling down and mutes — from the authority's `bans` (the
-// Moderation panel's source). The legacy world-bans message listed bans only, so a mute in force read "nobody is banned"
-// (audit 10-07). Moderators may ask; the authority says so to anyone else.
+// /bans: bans, cooling removals and mutes in force here, from the authority's `bans` (the Moderation panel's source).
+// Moderators may ask; the authority says so to anyone else.
 register('bans', async () => {
   const r = await sendRequest('bans', {});
   if (!r?.ok) return logChat('*', r?.refused?.reason ?? "couldn't read what's in force here");
@@ -292,9 +280,7 @@ register('push', (arg) => {
   const REACH = SHOVE_REACH;
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const named = parts.find((p) => !/^[\d.]+$/.test(p));
-  // one word, two acts: /push swing1 is the swing's use-reaction (the old
-  // alias, kept working), /push bob is a shove. Things win the name lookup
-  // because they were here first; /shove is always the person verb.
+  // /push swing1 is the swing's use-reaction (the old alias), /push <person> a shove; things win the lookup; /shove is always the person verb
   { const t = thingNamed(named); if (t?.err) return logChat('*', t.err); if (t) { send(OP.use(t.id, 'push'), { what: `push ${named}` }); return; } }
   const pow = Math.min(4, Math.max(0.5, parseFloat(parts.find((p) => /^[\d.]+$/.test(p))) || 2.2));
   let target = named ?? null;
@@ -310,9 +296,7 @@ register('push', (arg) => {
   shovePerson(target, pow, 'push');
 });
 
-/** The person-shove, shared by /push and /punt: a REQUEST to the target's
- *  client, which owns the body and decides (pushable). Range-gated here out
- *  of honesty, not security — the receiver caps magnitude anyway. */
+/** A REQUEST the target's client decides (pushable); the range gate is honesty, not security (the receiver caps magnitude). */
 function shovePerson(target, pow, word) {
   const REACH = SHOVE_REACH;
   const r = remotes.get(target);
@@ -320,8 +304,7 @@ function shovePerson(target, pow, word) {
   const tp = r.avatar.root.position;
   const d = Math.hypot(tp.x - myState.pos.x, tp.z - myState.pos.z);
   if (d > REACH) return logChat('*', `${target} is too far away to ${word} (${d.toFixed(1)}m)`);
-  // straight through the target from where I stand; face-to-face at zero
-  // distance falls back to the way I'm facing
+  // straight through the target from where I stand; at zero distance, the way I'm facing
   const nx = d > 0.05 ? (tp.x - myState.pos.x) / d : Math.sin(myState.yaw);
   const nz = d > 0.05 ? (tp.z - myState.pos.z) / d : Math.cos(myState.yaw);
   sendPuppet(target, { ragdoll: { lean: [nx * pow, 0, nz * pow] } });
@@ -351,9 +334,7 @@ register('touch', (arg) => {
       if (hit) { who = hit; rest = parts.slice(1); }
     }
   }
-  // your hand rides at the END ("/touch bob shoulder left") — and "left" is
-  // only a hand when the words before it still name a point without it, so
-  // "/touch bob left shoulder" keeps meaning the shoulder
+  // a trailing "left"/"right" is the hand only if the rest still names a point: "/touch <person> left shoulder" is the shoulder
   let limb = 'rightHand';
   let words = rest;
   const last = rest[rest.length - 1]?.toLowerCase();
@@ -366,8 +347,7 @@ register('touch', (arg) => {
   }
   const point = words.length ? pointOf(words) : 'shoulder_l';
   if (!point) {
-    // an unresolved first word is at least as likely a name as a point —
-    // say both, or an absent person masquerades as a bad landmark
+    // an unresolved first word may be a name as much as a point: say both, or an absent person reads as a bad landmark
     if (!who && parts.length) {
       return logChat('*', `nobody here called "${parts[0]}" (and no contact point by that name) — /who lists people; points: ${Object.keys(CONTACT_POINTS).join(', ')}`);
     }
@@ -431,8 +411,7 @@ register('newworld', (arg) => {
 });
 
 register('reset', (arg) => {
-  // /reset alone only tells you what it would do; erasing a world takes
-  // typing its own name back. The server checks the same confirmation.
+  // /reset alone only says what it would do; erasing takes typing the world's name back (the server checks it too)
   const confirm = (arg || '').trim();
   if (confirm !== CONFIG.world) {
     return logChat('*', `this erases "${CONFIG.world}" back to zero — everything built and said here goes to the archive. `
@@ -486,7 +465,7 @@ register('use', (arg) => {
 register('sit', (arg) => {
   // /sit [thing] [slot] — a declared seat nearby wins; otherwise sit on the ground
   const [word, slot] = (arg || '').trim().split(/\s+/);
-  const t = thingNamed(word); if (t?.err) return logChat('*', t.err);   // by id, label or handle (R 10-17)
+  const t = thingNamed(word); if (t?.err) return logChat('*', t.err);   // by id, label or handle
   if (!trySitOn(t?.id ?? (word || null), slot || null)) setPosture('sit');
 });
 
@@ -509,9 +488,7 @@ register('goto', (arg) => {
 });
 
 register('rename', () => {
-  // chat.js emitted this command for years with nobody subscribed (§14.1
-  // found bug) — a silently dead command. Until mid-session renames exist,
-  // say so instead of saying nothing.
+  // nothing renames mid-session yet: say so rather than leave a silently dead command
   logChat('*', "renaming mid-session isn't supported yet — set your name at the authority (clear ew-name in devtools to re-open it)");
 });
 
@@ -532,8 +509,7 @@ export async function saveScreenshot() {
   } catch (e) { report('screenshot', e); }
 }
 
-/** The bus subscriptions — called once from main's boot sequence. The
- *  register() table above filled at import; this turns it on. */
+/** Turns on the bus subscriptions, once, from main's boot; the register() table above filled at import. */
 export function initCommands() {
   let saidRights = null;
   bus.on('your-rights', (r) => {

@@ -1,20 +1,7 @@
-// build — the human's authoring surface.
-//
-// Before this, a person could ADD to a world and never move, correct, or
-// unmake anything in it: `place` and `remove` were server-allowed and agent-
-// reachable, but there was no UI for either, so every misplacement was
-// permanent and there was no undo. Agents had a richer verb surface than
-// people. That is what this module fixes.
-//
-// Placement helpers are the drag semantics, per DESIGN.md: the ghost lands ON
-// the table rather than beside it, because the collider tops that already
-// compute walkable ground are the same data as "what can I put things on".
+// build — the human's authoring surface: mode, selection, ghost, drag, undo, and the one pointer/key router.
+// Placement (DESIGN.md): the ghost lands ON surfaces; collider tops are both walkable ground and what holds things.
 
-// SPLIT (R4): this file is the gesture CORE — mode, selection, ghost, drag,
-// undo, and the one pointer/key router. The panel sections live beside it
-// (catalog.js models+avatars+upload, groundpanel.js, skypanel.js), and the
-// seat-anchor grammar in socketedit.js; the router here hands seat gestures
-// across that seam and never re-implements them.
+// Panels live beside it (catalog.js, groundpanel.js, skypanel.js); seat gestures go to socketedit.js, never re-implemented here.
 
 import { svg as iconSvg } from './icons.js';
 import * as OP from '../../shared/protocol/requests.js';
@@ -40,8 +27,8 @@ import * as Sel from './edit/selection.js';
 import { claimEscape } from './windows.js';
 import { isOwner } from '../../shared/protocol/roles.js';
 import { currentTool as structureTool, setTool as setStructureTool } from './structure_ui.js';   // an armed building tool is Esc's first rung
-import { state } from './state.js';   // one rule for who may author (and one name for them), shared with the scene panel
-import * as Edits from './editwrites.js';   // slice 3b: every write here is a request
+import { state } from './state.js';   // the one rule for who may author, shared with the scene panel
+import * as Edits from './editwrites.js';   // every write here is a request
 import { refreshSocketGizmos, resetSockets, armSocketPlacement, socketArmed, socketSelected,
   cancelSocketArm, deselectSocket, socketMouseDown, socketKeyDown, updateSocketDrag } from './socketedit.js';
 
@@ -60,20 +47,19 @@ let editMode = false;
 export const isEditing = () => editMode;
 claimEscape(() => (editMode ? 'edit' : null));   // edit mode owns Esc (its own ladder) — the frames' close-all yields
 
-/** May this client enter edit mode at all? Permissive while net.myRights is still undefined (pre-snapshot, as
- *  generate.js's `gen !== false`), or a slow join's build click silently does nothing. */
+/** Permissive while net.myRights is undefined (pre-snapshot), or a slow join's build click silently does nothing. */
 // No edit mode on a phone (coarse pointer, short side < 600); never reads XR state, so VR edit mode stays possible.
 export const editSurface = () => !(globalThis.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600);
 export const mayEdit = () => {
   if (!editSurface()) return false;
   const r = net.myRights; const role = r?.role;
-  // the build permission, whatever the role is called (recut B1: never a role name); rights not known yet: allow, the authority decides
+  // the build permission, never a role name; rights not known yet: allow, the authority decides
   if (Array.isArray(r?.permissions)) return r.permissions.includes('build');
   return role === undefined || isOwner(r);
 };
 
 export function setEditMode(on, { quiet = false } = {}) {
-  // The rail's gate, at the one chokepoint every entry funnels through (incl. holdGhost, armSocketPlacement).
+  // the rail's gate: every entry (holdGhost and armSocketPlacement too) funnels through here
   // Only the `on` direction: a client demoted mid-session must still be able to leave.
   if (on && !mayEdit()) {
     if (!quiet) flashHint(editSurface() ? 'builder mode needs build rights in this world' : 'builder mode is for a desktop (or tablet); on a phone you can look around and play');
@@ -84,9 +70,7 @@ export function setEditMode(on, { quiet = false } = {}) {
   document.body.classList.toggle('edit-mode', on);
   if (!on) { cancelGhost(); deselect(); resetSockets(); }
   refreshSocketGizmos();   // anchors are visible exactly while you are editing
-  // Saying you are building puts the tools in front of you: the workspace's Build tab (editlayout.js) is the catalog.
-  // The legacy World frame used to be shown here too; the workspace parked it at once and then "restored" it on the
-  // way out, so it stayed open in look mode (review 10-07 S14). It now opens only if it was open before.
+  // entering edit mode opens the Build tab (editlayout.js); the legacy World frame opens only if it was open before
   if (!quiet) {
     flashHint(on
       ? html`builder mode — <kbd>G</kbd> move · <kbd>E</kbd> rotate · <kbd>R</kbd> scale · <kbd>Q</kbd> select · <kbd>F</kbd> find · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>B</kbd> leaves`
@@ -100,9 +84,8 @@ export const toggleEditMode = () => setEditMode(!editMode);
 // The TOOL is what a drag does: move, rotate, scale, or select (which never moves anything).
 let tool = 'move';
 export const getTool = () => tool;
-// transform space per tool (R 10-04: "gimbal/object/world rotations... a way to switch between them"): world = the
-// world's axes, object = the thing's own axes (three's 'local'). Gimbal (the Euler rings in the rotate order) needs
-// its own gizmo: not yet. Scale is always the thing's own axes. Kept per viewer (a view choice, never logged).
+// transform space per tool: world = the world's axes, object = the thing's own (three's 'local'); gimbal needs its own gizmo.
+// Scale is always the thing's own axes. Per viewer (a view choice, never logged).
 export const SPACES = { move: ['world', 'object'], rotate: ['world', 'object'], scale: ['object'] };
 const space = (() => { try { return { move: 'world', rotate: 'world', scale: 'object', ...JSON.parse(localStorage.getItem('ew-tool-space') ?? '{}') }; } catch { return { move: 'world', rotate: 'world', scale: 'object' }; } })();
 export const getSpace = (t = tool) => space[t] ?? 'world';
@@ -126,9 +109,7 @@ export function setTool(t) {
 export const hasGhost = () => ghost !== null;
 export const hasSelection = () => selected !== null;
 setPointerClaim(() => ghost !== null || !!dragging?.armed);
-// the gizmo (gizmo.js) vetoes the mesh-grab while one of its handles is hot —
-// a probe, not an import: gizmo imports us
-// several handle sets may own a press (the gizmo, the grip editor's): any one vetoes
+// a hot handle (the gizmo's, the grip editor's) vetoes the mesh-grab; a probe, not an import: gizmo imports us
 const pointerVetoes = [];
 const pointerVeto = () => pointerVetoes.some((f) => f());
 export function setPointerVeto(fn) { pointerVetoes.push(fn); }
@@ -141,16 +122,14 @@ outline.visible = false;
 outline.userData.noCamCollide = true;
 scene.add(outline);
 
-// the selection line lives IN the one status bar (ui.js claimStatus, DESIGN-status-bar.md): a node it owns, claimed at
-// priority 4 while something is selected, released when nothing is. The lock checkbox rides inside the node.
+// the selection line lives in the one status bar (ui.js claimStatus) at priority 4 while something is selected; the lock box rides inside
 let inspector = null;
 function ensureInspector() {
   if (!inspector) { inspector = document.createElement('div'); inspector.className = 'edit-selbar'; }
   return inspector;
 }
 const showSelbar = () => claimStatus('selection', { priority: 4, node: ensureInspector() });
-/** The inspector bar as a surface other editors write to — seatedit paints
- *  its anchor line through this rather than reaching into the element. */
+/** For other editors (seatedit's anchor line): write here, never into the element. */
 export function setInspectorHtml(line) {   // text, or markup built with html`` (markup.js)
   paint(ensureInspector(), line);
   showSelbar();
@@ -158,7 +137,7 @@ export function setInspectorHtml(line) {   // text, or markup built with html`` 
 function showInspector(id) {
   const meta = metaOf(id) ?? {};
   ensureInspector();
-  // its NAME first (R 10-11: the bar said 'crate_large_blue'), then the model's library label, its file, its id
+  // its name first, then the model's library label, its file, its id
   const own = Edits.compsOf(id)?.label;
   const label = (typeof own === 'string' && own) || (meta.model != null ? modelName(meta.model) : id);
   const locked = isLocked(id);
@@ -169,10 +148,9 @@ function showInspector(id) {
         : `<span style="color:var(--dim)">drag move · <kbd>Shift</kbd>+drag up/down · ` +
           `<kbd>G</kbd> move · <kbd>E</kbd> rotate · <kbd>R</kbd> scale · <kbd>F</kbd> find · <kbd>X</kbd> remove · <kbd>Esc</kbd> done</span>`) +
     `<label title="nail it down: while locked, nobody's drags, verbs or scripts can move, replace or remove it (server-enforced) — sitting on it and content edits stay open" style="display:flex;gap:4px;align-items:center;cursor:pointer">` +
-    // an icon, never an emoji (R, 10-10: emoji only in the Chat pane and on the action bar — "illegal pretty much everywhere else")
+    // an icon, never an emoji: emoji live only in the Chat pane and on the action bar
     `<input type="checkbox" data-bact="lock"${locked ? ' checked' : ''}><span class="sp-ico" aria-hidden="true">${iconSvg(locked ? 'lock' : 'lockOpen', 14)}</span> lock</label>`;
-  // '+ seat' lived here (R 10-10 23:56: "Very curious why there's a 'seat' button here in the helper dialog?"); one stray
-  // click on it seated people on a sign 3 m up. A seat is added where components are: Add Component ▸ Sockets ▸ '+ socket here'.
+  // no seat button here: one stray click seated people on a sign 3 m up; seats come from Add Component ▸ Sockets
   inspector.querySelector('[data-bact="lock"]').onchange = (ev) => {
     const on = ev.target.checked;
     Edits.lock(id, on).then(() => { if (selected?.id === id) showInspector(id); });
@@ -181,7 +159,6 @@ function showInspector(id) {
 }
 export function hideInspector() { releaseStatus('selection'); }
 
-/** The selection's primary thing, when it is a thing. */
 const primaryThing = () => { const s = Sel.selection(); return s.kind === 'things' ? s.ids[0] ?? null : null; };
 export function select(id) {
   if (!entities.get(id)) return;
@@ -189,9 +166,7 @@ export function select(id) {
   Sel.set([id]);
   showInspector(id);
 }
-/** The deliberate deselect (Esc, Edit ▸ deselect): the selection itself. Plain deselect() drops the gesture and the
- *  helper strip and re-reads the selection — undo calls it, and an undo must not throw away the selection you are
- *  working on. */
+/** The deliberate deselect (Esc, Edit ▸ deselect). Plain deselect() keeps the selection: undo calls it. */
 export function deselectAll() { deselect(); Sel.clear(); }
 export function deselect() {
   dragging = null;
@@ -231,9 +206,7 @@ function ghostify(obj) {
   obj.userData.noCamCollide = true;
 }
 
-// Create ▸ Box/Sphere/Cylinder/Plane/Capsule (R 10-12): a mesh thing (componentspec `mesh`), held as its own grey ghost and
-// placed with a click, standing on the floor (its origin is its base centre, the authority's boxOfM). Q/E turn it; ,/. scale
-// its default size. The lib is '@mesh:<shape>'.
+// Create ▸ primitive: a `mesh` thing held as a grey ghost, lib '@mesh:<shape>'; origin at its base centre (the authority's boxOfM)
 const meshOf = (lib) => (typeof lib === 'string' && lib.startsWith('@mesh:') ? lib.slice(6) : null);
 function meshGhost(shape, [x, y, z]) {
   const r = x / 2;
@@ -255,7 +228,7 @@ export async function holdGhost(lib, label) {
     if (lib === '@light') {
       obj = makeLightGizmo(0xffd9a0);
       obj.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.7; } });
-    } else if (lib === '@empty') {   // Create ▸ Empty (R 10-11): a bare entity, a parent for others; shown as its axes
+    } else if (lib === '@empty') {   // Create ▸ Empty: a bare entity, a parent for others; shown as its axes
       obj = new THREE.AxesHelper(0.5);
     } else if (meshOf(lib)) {
       obj = meshGhost(meshOf(lib), MESH_DEFAULT[meshOf(lib)] ?? [1, 1, 1]);
@@ -343,30 +316,24 @@ function ghostKey(e) {
   return true;
 }
 
-/** Where the pointer is aiming, snapped onto whatever surface is under it.
- *  Raycasting real entities first is what turns "drops at y=0 beside the
- *  table" into "lands on the table". */
+/** Where the pointer aims, snapped onto the surface under it: entities first, so it lands ON the table, not beside it. */
 function aimPoint(skipId = null) {
   raycaster.setFromCamera(mouse, camera);
   const targets = [];
   for (const [id, o] of entities) if (o && id !== skipId) targets.push(o);
   let hits = raycaster.intersectObjects(targets, true);
-  // a mounted child is drawn INSIDE its parent's object, so the parent's recursive hit test would find the very
-  // thing being dragged under the pointer (and it would climb toward the camera). Skip its whole subtree.
+  // skip the dragged subtree: a mounted child is drawn inside its parent, so the parent's hit test would find it (and it climbs)
   const skipObj = skipId != null ? entities.get(skipId) : null;
   if (skipObj) hits = hits.filter((h) => { for (let o = h.object; o; o = o.parent) if (o === skipObj) return false; return true; });
-  // a thing hidden in MY view still catches what I place: it is solid for everyone, and my private view must never shape a
-  // shared write (review 10-12 S3-5)
+  // a thing hidden in MY view still catches placement: my private view must never shape a shared write
   if (hits.length) {
     const h = hits[0];
-    // only treat near-horizontal faces as placement surfaces — a wall should
-    // not catch a chair
+    // only near-horizontal faces: a wall should not catch a chair
     const n = h.face?.normal ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : null;
     if (!n || n.y > 0.6) return { point: h.point.clone(), onto: h.object.userData.entityId ?? null };
   }
   if (raycaster.ray.intersectPlane(groundPlane, _hit)) {
-    // clamp to placeable range — a ray toward the horizon meets the ground
-    // plane hundreds of metres out
+    // clamp: a ray toward the horizon meets the ground plane hundreds of metres out
     const d = _hit.clone().sub(myState.pos); d.y = 0;
     const MAX = 20;
     if (d.length() > MAX) _hit.copy(myState.pos).addScaledVector(d.normalize(), MAX);
@@ -387,8 +354,7 @@ export function updateBuild() {
   }
   if (dragging?.armed && selected) {
     if (tool === 'rotate') {
-      // ~1° per px, drag right = clockwise from above — a turn about world UP,
-      // composed on the full orientation, so a tilted thing turns where it lies
+      // ~1° per px, right = clockwise from above, about world UP on the full orientation (a tilted thing turns where it lies)
       _turn.setFromAxisAngle(_up, -(dragging.clientX - dragging.startX) * 0.012);
       selected.obj.quaternion.copy(_turn).multiply(dragging.startQuat);
       reindexCollider(selected.id); refreshOutline(); relayDrag();
@@ -396,8 +362,7 @@ export function updateBuild() {
       { const k = Math.exp((dragging.clientX - dragging.startX) * 0.006); const sc = selected.obj.scale.copy(dragging.startScale).multiplyScalar(k); sc.set(...sc.toArray().map((v) => THREE.MathUtils.clamp(v, 0.1, 12))); }   // keeps a stretched thing's proportions
       reindexCollider(selected.id); refreshOutline();
     } else if (dragging.vertical) {
-      // map screen-vertical pixels to world metres at the object's depth, so a
-      // drag feels the same whether the thing is near or far
+      // screen px → world metres at the object's depth: a drag feels the same near or far
       const fov = camera.fov * Math.PI / 180;
       const pxToWorld = (2 * dragging.depth * Math.tan(fov / 2)) / innerHeight;
       const dy = (dragging.startY - dragging.clientY) * pxToWorld;   // up = raise
@@ -411,19 +376,15 @@ export function updateBuild() {
     } else {
       const aim = aimPoint(selected.id);
       if (aim) {
-        // Keep the grab offset. Without it the object teleports so that its
-        // ORIGIN sits under the cursor, which is both a jump and usually wrong —
-        // you grabbed a crate by its corner, not by its pivot.
+        // keep the grab offset, or the ORIGIN jumps under the cursor (you grabbed the crate's corner, not its pivot)
         if (dragging.world) {
-          // the grab offset, the aim and the result are WORLD points; a mounted child's object position is local
-          // to its parent (turned, scaled), so the world target is brought into that frame last (research 44 #5)
+          // grab offset, aim and result are WORLD points; a mounted child's position is parent-local, so convert last
           _w.copy(aim.point).add(dragging.grab);
           if (aim.onto) _w.y = aim.point.y;
           setWorldPosition(selected.obj, _w);
         } else {
           selected.obj.position.copy(aim.point).add(dragging.grab);
-          // dropping onto a surface should still rest ON it, not float by the
-          // offset you happened to grab at
+          // dropping onto a surface rests ON it, not floating by the grab offset
           if (aim.onto) selected.obj.position.y = aim.point.y;
         }
         reindexCollider(selected.id);
@@ -453,9 +414,8 @@ function relayDrag() {
   sendDrag(selected.id, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
 }
 
-// remote drags: apply transiently, no log involvement. A live drag is a CLAIM (locking design 10-11, R: "while someone
-// drags/edits a thing, presence says who"): while samples flow, `by` is editing `id`; an amber box marks it and the
-// Hierarchy says 'editing: <name>'; it lapses on the last sample (`end`) or CLAIM_MS of silence. Presence only.
+// remote drags: transient, never logged. A live drag is a presence CLAIM (`by` edits `id`: amber box, Hierarchy 'editing: <name>')
+// that lapses on the last sample (`end`) or CLAIM_MS of silence.
 const CLAIM_MS = 1500;
 const claims = new Map();   // id -> { by, at, box }
 const claimBox = () => { const b = new THREE.Box3Helper(new THREE.Box3(), 0xe0a33a); b.userData.noCamCollide = true; scene.add(b); return b; };
@@ -481,7 +441,7 @@ bus.on('cut-adopted', () => { for (const id of [...claims.keys()]) endClaim(id);
 
 function commitSpawn() {
   const p = ghost.obj.position;
-  const id = '$new';   // the authority mints its id (R 10-17); the reply's ids map says what it became
+  const id = '$new';   // the authority mints its id; the reply's ids map says what it became
   // one request: create (a model, or a light: a thing with a light component), or create {from} for a blueprint copy
   // a copy's root keeps the record's own size, times the size it was given in hand
   const rootScale = () => { const s = ghost.bp.record?.root?.components?.find((c) => c.type === 'Transform')?.params?.scale; return Number.isFinite(s) ? s : 1; };
@@ -492,9 +452,8 @@ function commitSpawn() {
     sent = Edits.sendOps([OP.create(id, { transform: { pos: [p.x, p.y, p.z], q: [0, Math.sin(ghost.yaw / 2), 0, Math.cos(ghost.yaw / 2)] }, components: { mesh: { shape, size }, label: shape } })], { what: `place a ${shape}`, expect: false }); }
   else if (ghost.lib === '@light') sent = Edits.sendOps([OP.create(id, { transform: { pos: [p.x, p.y + 0.9, p.z] }, components: { light: { color: 0xffd9a0, intensity: 16, range: 10 } } })], { what: 'place a light', expect: false });   // a touch off the floor: a hanging bulb
   else sent = Edits.sendOps([OP.create(id, { model: ghost.lib, transform: { pos: [p.x, p.y, p.z], q: [0, Math.sin(ghost.yaw / 2), 0, Math.cos(ghost.yaw / 2)], scale: ghost.scale } })], { what: `place ${libLabels.get(ghost.lib) ?? ghost.lib}`, expect: false });
-  // what you just placed is the selection, so you can tweak it straight away (review 10-07 S7; Roblox, Unity and Godot
-  // select what was inserted). A blueprint copy selects its root: the first thing the authority names that rides nothing
-  // else it made. The thing arrives a frame or two after the reply.
+  // what you placed becomes the selection (a blueprint copy: its root, the first new thing not parented to another new one);
+  // it arrives a frame or two after the reply.
   const bp = !!ghost.bp;
   Promise.resolve(sent).then((r) => {
     if (!r?.ok) return;
@@ -510,8 +469,7 @@ function selectWhenHere(id, ms = 3000) {
   go();
 }
 
-// ---- lock: the SERVER enforces it (for everyone, locker included); these guards only skip a preview that would
-// snap back, and hint at the unlock.
+// ---- lock: the SERVER enforces it, for everyone; these guards only skip a preview that would snap back, and hint
 function isLocked(id) { return !!bagOf(id)?.lock; }
 function commitPlace(before) {
   if (!selected) return;
@@ -558,9 +516,8 @@ addEventListener('mouseup', (e) => {
   // a click on empty space clears THE selection (the Hierarchy's too), not only the viewport's pick
   deselectAll(); if (socketSelected()) deselectSocket();
 });
-// BOX SELECT (R 10-11 00:18: "shift-select-drag draw a bounding box around objects to select them"): Shift-drag on bare
-// space draws a box and ADDS every thing whose centre lands inside it (hidden ones, and layers I've switched off for
-// clicks, aren't caught). A plain bare drag still orbits.
+// BOX SELECT: Shift-drag on bare space ADDS every thing whose centre lands inside (hidden ones and click-off layers aren't caught).
+// A plain bare drag still orbits.
 let marquee = null; const _mc = new THREE.Vector3(), _mb = new THREE.Box3();
 function marqueeMove(e) { if (!marquee) return; const x0 = Math.min(marquee.x, e.clientX), y0 = Math.min(marquee.y, e.clientY);
   Object.assign(marquee.el.style, { left: `${x0}px`, top: `${y0}px`, width: `${Math.abs(e.clientX - marquee.x)}px`, height: `${Math.abs(e.clientY - marquee.y)}px`, display: 'block' }); }
@@ -574,8 +531,7 @@ function marqueeEnd(e) { const m = marquee; marquee = null; if (!m) return; m.el
   if (ids.length) bus.emit('edit-select-add', ids); }
 export const marqueeActive = () => !!marquee;
 
-/** The nearest hit under a viewport point (NDC) on a thing MY selection layers let me click (selectmask.js; the floor is
- *  'environment', off at first) and that is in my view (a thing hidden with the eye is not drawn, so not clicked). */
+/** Nearest hit at NDC on a thing my selection layers allow (selectmask.js; floor 'environment', off at first) and in my view. */
 function pickHit(nx, ny) {
   mouse.set(nx, ny);
   raycaster.setFromCamera(mouse, camera);
@@ -593,14 +549,12 @@ canvas.addEventListener('mousedown', (e) => {
   // an armed seat placement outranks everything, the ghost included
   if (socketArmed()) { socketMouseDown(e); e.preventDefault(); return; }
   if (ghost) return;                        // click-to-place handled on click
-  // gizmo picks next — a marker is small and deliberate, and the mesh it
-  // floats over would otherwise win every contested click
+  // gizmo picks next: a marker is small and deliberate, and the mesh under it would win every contested click
   if (socketMouseDown(e)) { e.preventDefault(); return; }
   if (pointerVeto()) return;                // a gizmo handle under the pointer owns this press
   // pick from THIS event's coordinates: a touch or synthetic click has no preceding mousemove
   const hit = pickHit((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
-  // a press on nothing: a DRAG from here orbits the camera; only a click that didn't travel deselects (an orbit that
-  // threw away the selection every time would make looking around a thing impossible)
+  // a press on nothing: a drag orbits; only an untravelled click deselects (else orbiting a thing would drop it)
   if (!hit && e.shiftKey) { const d = document.createElement('div');   // keys: selectExtend
     d.className = 'edit-marquee'; d.style.display = 'none'; document.body.append(d);
     marquee = { x: e.clientX, y: e.clientY, el: d }; addEventListener('mousemove', marqueeMove); addEventListener('mouseup', marqueeEnd); e.preventDefault(); return; }
@@ -610,16 +564,12 @@ canvas.addEventListener('mousedown', (e) => {
   while (root && !root.userData.entityId) root = root.parent;
   if (!root) return;
   const id = root.userData.entityId;
-  // Ctrl-click EXTENDS the selection (editpanels owns the set; Shift is the
-  // vertical drag here, so it can't double as the extend modifier it is in
-  // the tree). No drag starts from an extend.
+  // Ctrl-click EXTENDS (editpanels owns the set; Shift is the vertical drag here); no drag starts from an extend
   if (e.ctrlKey || e.metaKey) { bus.emit('edit-extend', id); e.preventDefault(); return; }   // keys: selectExtend
-  // Shift: a click adds it to (or takes it from) the selection, as in the tree (R 10-11); a Shift press that TRAVELS is
-  // still the vertical drag, so the thing is selected only once it starts to move
+  // Shift-click toggles membership, as in the tree; a Shift press that TRAVELS is the vertical drag, selected once it moves
   const shiftPick = e.shiftKey && !!primaryThing() && primaryThing() !== id;   // keys: selectExtend
   if (!shiftPick) select(id);
-  // A press is a SELECT. It only becomes a drag once the pointer actually
-  // travels — otherwise clicking a thing to look at its label moved it.
+  // a press SELECTS; it becomes a drag only once the pointer travels (else clicking to read a label moved it)
   const aim = aimPoint(id);
   // the drag reckons in WORLD space (a mounted child's object position is in its parent's frame)
   const world = true;
@@ -634,9 +584,7 @@ canvas.addEventListener('mousedown', (e) => {
     startX: e.clientX,
     startY: e.clientY,
     clientY: e.clientY,
-    // Shift held at grab = a VERTICAL drag: the ground-plane raycast can't
-    // express height, so hold Shift and the pointer's up/down maps to world Y
-    // with the horizontal position pinned. The standard editor gesture.
+    // Shift at grab = VERTICAL drag: pointer up/down maps to world Y, horizontal pinned (a ground-plane ray can't express height)
     vertical: e.shiftKey,   // keys: meshMove
     shiftPick,
     clientX: e.clientX,
@@ -650,8 +598,7 @@ canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
 });
 
-// Arm the drag only after a few pixels of travel — the same threshold every
-// desktop UI uses to tell a click from a drag.
+// arm only after a few pixels: the usual click-vs-drag threshold
 const DRAG_SLOP = 4;
 addEventListener('mousemove', (e) => {
   if (!dragging) return;
@@ -660,8 +607,7 @@ addEventListener('mousemove', (e) => {
   if (tool === 'select') return;                // select: a press picks, travel never moves
   if (!dragging.armed
       && Math.hypot(e.clientX - dragging.startX, e.clientY - dragging.startY) > DRAG_SLOP) {
-    // the press selected it; travel is where a move would begin — a locked
-    // thing refuses here, before any preview exists to snap back
+    // a locked thing refuses here, before any preview exists to snap back
     dragging.armed = true;
     if (dragging.shiftPick) { select(dragging.id); dragging.shiftPick = false; }
     engage('meshMove');
@@ -712,16 +658,14 @@ bus.on('key', (e) => {
     else if (editMode) setEditMode(false);
     return;
   }
-  // Undo stays available outside edit mode — you may only notice the mistake
-  // after you have gone back to looking.
+  // undo works outside edit mode too: you may notice the mistake after going back to looking
   // redo is Ctrl+Shift+Z or Ctrl+Y (the authority's undo of my undo)
   if ((e.ctrlKey || e.metaKey) && ((e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY')) {   // keys: undo
     e.preventDefault?.(); Edits.redo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }   // keys: undo
   if (!editMode) return;
 
-  // reset the selection's transform (editpanels.resetTransform): the tools' own letters with Alt, and Ctrl+G for all
-  // three. Before the tool keys, which ignore modifiers.
+  // reset transform (editpanels.resetTransform): Alt+G/E/R one, Ctrl+G all three; before the tool keys, which ignore modifiers
   if (e.altKey && !e.ctrlKey && !e.metaKey && ['KeyG', 'KeyE', 'KeyR'].includes(e.code)) { e.preventDefault(); bus.emit('edit-reset', { KeyG: 'pos', KeyE: 'rot', KeyR: 'scale' }[e.code]); return; }   // keys: resetTransform
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyG') { e.preventDefault(); bus.emit('edit-reset', 'all'); return; }   // keys: resetTransform
   // the thing in hand holds Q / E and , / . before the tools do (they'd switch tool mid-aim)

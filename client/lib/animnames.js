@@ -1,13 +1,5 @@
-// The action bar's vocabulary: names, bar glyphs, and the clip each one plays.
-//
-// Split out of avatar.js so the ACTION BAR can have it without the engine. The bar
-// needs a name and a glyph per gesture — strings — while the clip is the only part that
-// wants a renderer, and importing all of it from avatar.js meant a client that renders
-// nothing (lite.js) still paid for three.js to draw nine buttons.
-//
-// avatar.js re-exports every name below, so nothing that imported these from there had
-// to change; it is one module instance either way, which is what the hydration trick
-// relies on.
+// The action bar's vocabulary (names, glyphs, clips), apart from avatar.js so a client that renders nothing
+// (lite.js) doesn't load three.js for it. avatar.js re-exports it: one module instance, which hydration relies on.
 import { bus } from './base.js';
 import { defsRegistry } from './defs.js';
 
@@ -29,8 +21,8 @@ export function hydrateAnimNames(table) {
   bus.emit('animnames-updated');
 }
 {
-  // a failed fetch tries again, backing off (2 s doubling to a minute): waiting for a hot-reload push left the bar empty
-  // for the session (house config I18). unref: a headless host without /defs isn't held open by the retry
+  // a failed fetch retries (2 s doubling to 60 s) rather than waiting on a hot-reload push that may never come
+  // unref: a headless host without /defs isn't held open by the retry
   let wait = 2000, retry = null;
   const refresh = () => { clearTimeout(retry); retry = null; return defsRegistry()
     .then((reg) => { wait = 2000; hydrateAnimNames(reg.actionbar); })

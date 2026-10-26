@@ -1,11 +1,7 @@
-// VR quads = the REAL desktop frames (live, 2026-09-05 20:37: "use the ACTUAL menus so
-// there is only one set of panels to maintain"). Each XR-registered frame's live DOM is
-// rasterised onto a quad by the vendored HTMLMesh (vendor/htmlmesh.js: DPR, inline SVG,
-// throttle, no window dispatch) and a trigger on the quad fires the SAME click/input
-// handlers the mouse does — one panel set, one code path. While presenting, the frame
-// element is moved into an offscreen-but-laid-out stage (HTMLMesh measures with
-// getBoundingClientRect, never elementFromPoint, so negative coordinates are fine) and
-// returned, with its display state, on exit. Fallback for comparison: ?canvasquads=1.
+// domquad — VR quads ARE the desktop frames: each XR-registered frame's live DOM is rasterised onto a quad by the
+// vendored HTMLMesh (vendor/htmlmesh.js), and a trigger fires the SAME click/input handlers the mouse does.
+// While presenting, the frame moves into an offscreen-but-laid-out stage (HTMLMesh measures with getBoundingClientRect,
+// so negative coordinates are fine) and returns, with its display state, on exit. Fallback: ?canvasquads=1.
 import { THREE, renderer } from './core.js';
 import { tee, bus } from './base.js';
 import { allFrames, getFrame, frameResizeInfo } from './windows.js';
@@ -14,25 +10,23 @@ import { quadMaterial } from './quadcolour.js';
 
 const PX_PER_M = 900;      // xrpanels' density — the number the tester's eyes accepted
 const W = 0.58;            // metres across, like the canvas quads
-const XR_FRAMES = ['world', 'actions', 'settings', 'chat', 'debug', 'profile', 'moderation', 'world-settings'];   // + the two roles panels (research roles S7, S8)   // the frames that had canvas quads
+const XR_FRAMES = ['world', 'actions', 'settings', 'chat', 'debug', 'profile', 'moderation', 'world-settings'];   // the frames that had canvas quads, + the two roles panels
 const LIVE_MIN_MS = { debug: 250, chat: 250 };   // live panels re-rasterise at most 4 Hz; others at 16 ms
 
 let stage = null; let quads = null; let shown = false;
 let all = [];          // every quad ever staged, kept across sessions (soft swap); `quads` is this session's list
 let rigRef = null; let builds = 0;
-// where you put each panel (rig-local pos + yaw/pitch), per browser — a grabbed panel (C17) stays put next session
+// where you put each panel (rig-local pos + yaw/pitch), per browser — a grabbed panel stays put next session
 const PLACE_LS = 'ew-xr-quads';
 const loadPlaces = () => { try { return JSON.parse(localStorage.getItem(PLACE_LS) || '{}'); } catch { return {}; } };
-// MERGED into what is saved: a move (pos/yaw/pitch) must not wipe a VR resize (w, bh, mpp) — it did, and the next grab
-// after a resize put the panel back to its old size and density on the following session (found by the probe, 10-02)
+// MERGED into what is saved: a move (pos/yaw/pitch) must not wipe a VR resize (w, bh, mpp)
 const savePlace = (id, p) => { try { const all = loadPlaces(); all[id] = { ...(all[id] ?? {}), ...p }; localStorage.setItem(PLACE_LS, JSON.stringify(all)); } catch {} };
 export const resetQuadPlaces = () => { try { localStorage.removeItem(PLACE_LS); } catch {} };
 const _rc = new THREE.Raycaster(); const _m = new THREE.Matrix4();
 
 function ensureStage() {
   if (stage) return stage;
-  // XR-only chrome for the staged frames: HTMLMesh's mini-renderer has no blur/shadow, so none is asked
-  // for; desktop-only furniture (✕, resize, collapse) is hidden on the quad
+  // XR-only chrome: HTMLMesh's mini-renderer has no blur/shadow, so none is asked for; desktop furniture (✕, resize, collapse) hides
   const css = document.createElement('style'); css.id = 'xr-stage-css';
   // The panel is the --panel-rgb token, opaque by default (desktop glass has no viewport to composite over);
   // --xr-panel-a is "VR panel opacity". rgb(var()), never color-mix(): HTMLMesh's parser mangles color(srgb …).
@@ -52,12 +46,11 @@ function stageEl(q) {
   const el = q.el, api = q.api;
   q.restore = { parent: el.parentNode, next: el.nextSibling, display: el.style.display, left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, position: el.style.position, collapsed: el.classList.contains('collapsed') };
   ensureStage().appendChild(el);
-  el.style.display = 'flex'; el.style.left = '0px'; el.style.top = '0px'; el.style.position = 'absolute';   // laid out, visible, INSIDE the offscreen stage (frames are position:fixed — left at that they piled up in the desktop's corner while presenting; owner, 22:25)
+  el.style.display = 'flex'; el.style.left = '0px'; el.style.top = '0px'; el.style.position = 'absolute';   // laid out, visible, INSIDE the offscreen stage (frames are position:fixed: left so, they pile up in the desktop's corner)
   if (el.offsetWidth < 40 || el.offsetHeight < 40) {   // a frame that has never been shown may carry no size yet
     const st = api._state ?? api.state ?? {}; el.style.width = `${st.w ?? 300}px`; el.style.height = `${st.h ?? 220}px`;
   }
-  // VR has ITS OWN layout for a frame (owner, 10-02): a size resized in the headset (saved with the panel's place)
-  // goes on while staged; the desktop's state is never touched
+  // VR has ITS OWN layout for a frame: a headset resize (saved with the panel's place) goes on while staged; the desktop's is never touched
   const vr = loadPlaces()[q.id];
   if (Number.isFinite(vr?.w) && Number.isFinite(vr?.bh)) api._setVrSize?.({ w: vr.w, h: vr.bh });
 }
@@ -130,8 +123,7 @@ function setVisible(q, on) {
 
 function unstageEl(q) {
   const r = q.restore; if (!r) return;
-  // the desktop DOM may have re-ordered while we were presenting: the saved sibling is only usable if it is
-  // still that parent's child (live, 09-05 22:20: 'error when I try to leave VR' — insertBefore NotFoundError)
+  // the desktop DOM may have re-ordered meanwhile: the saved sibling is usable only if still that parent's child (else insertBefore throws)
   const parent = r.parent ?? document.body;
   if (r.next && r.next.parentNode === parent) parent.insertBefore(q.el, r.next); else parent.appendChild(q.el);
   q.el.style.display = r.display; q.el.style.left = r.left; q.el.style.top = r.top; q.el.style.width = r.width; q.el.style.height = r.height; q.el.style.position = r.position; if (r.collapsed) q.el.classList.add('collapsed');
@@ -157,8 +149,7 @@ export function domQuadsEnter(rig) {
     try { stageEl(q); } catch (e) { console.warn('[domquad] stage', q.id, e); }
     if (q.mesh) { rig.add(q.mesh); q.mesh.material.map.unsuspend?.(); }
   }
-  // OFF by default while the quads are still being worked on (live 09-06 12:49): staged, hidden, unbuilt;
-  // the ring's 'panels' slot (or a text-focus for the keyboard) shows them. ?quads=1 restores the old default.
+  // OFF by default (staged, hidden, unbuilt); the ring's 'panels' slot or a text-focus shows them. ?quads=1 restores the old default.
   shown = new URLSearchParams(location.search).get('quads') === '1';
   for (const q of quads) setVisible(q, shown);
   bus.emit('xr:domquads', quads.map((q) => q.id));
@@ -184,9 +175,8 @@ export function domQuadsSetShown(v) {
   for (const q of quads ?? []) setVisible(q, shown);
 }
 
-// THE QUICK HIDE (owner, 10-02): one button puts every open panel away and the same button brings exactly those back,
-// where they were. It is not closing them: their open state, places and sizes are kept (the meshes are only hidden,
-// and paused); opening a panel from the ring while they are hidden brings the hidden ones back first.
+// THE QUICK HIDE: one button puts every open panel away and brings exactly those back, where they were.
+// Not closing: open state, places and sizes are kept (meshes hidden, paused); opening one from the ring brings the hidden back first.
 let stash = null;   // ids of the panels the quick hide put away, or null when nothing is hidden
 export const domQuadsHidden = () => !!stash;
 export function domQuadsHideToggle() {
@@ -216,7 +206,7 @@ export function domQuadsPick(handRay, click = false) {
   if (!hit) return null;
   if (click && hit.uv) {
     const data = { x: hit.uv.x, y: 1 - hit.uv.y };
-    // witness (live 09-07 22:57: 'trigger-to-click … working'): which element the click lands on, teed
+    // witness: which element the click lands on, teed
     try { const el = hit.object.material.map.elementAt?.(data.x, data.y); tee(`[xr] quad click ${quads.find((q) => q.mesh === hit.object)?.id ?? '?'} → ${el ? `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : ''} "${(el.textContent || '').trim().slice(0, 24)}"` : 'nothing'}`); } catch {}
     for (const type of ['mousedown', 'mouseup', 'click']) hit.object.dispatchEvent({ type, data });
   }
@@ -229,7 +219,7 @@ export function domQuadsPick(handRay, click = false) {
 export const TEXT_SEL = 'input:not([type]),input[type=text],input[type=search],input[type=number],input[type=password],input[type=email],input[type=url],'
   + 'textarea,[contenteditable=""],[contenteditable="true"]';
 const NEEDS_PRESS = 'input[type=range],[role=slider],' + TEXT_SEL;
-const DRAG_PX = 20;   // from the press point, not summed per frame: hand tremor wanders a few px each way (review 09-27, P1)
+const DRAG_PX = 20;   // from the press point, not summed per frame: hand tremor wanders a few px each way
 function aim(handRay) {
   _m.identity().extractRotation(handRay.matrixWorld);
   _rc.ray.origin.setFromMatrixPosition(handRay.matrixWorld);
@@ -360,9 +350,8 @@ export function scrollableAt(map, x, y) {
   return false;
 }
 
-// THE RESIZE HANDLES, revealed on dwell: invisible until a laser has rested on a zone for a beat (xr.js asks with the
-// hand's dwell), then that zone's handle shows — an L at a corner, a line along an edge — in the house's brand ink, on
-// the quad (its children, in its CSS-px-by-mm units, a hair in front). 'move' brightens the handle bar instead.
+// THE RESIZE HANDLES, revealed on dwell (xr.js asks with the hand's dwell): an L at a corner, a line along an edge, brand ink,
+// as the quad's children a hair in front. 'move' brightens the handle bar instead.
 const AID_INK = 0x8fe8c8, AID_Z = 0.002;
 function aidsFor(q) {
   if (q.aids && q.aids.parent === q.mesh) return q.aids;
@@ -459,14 +448,12 @@ export function domQuadResizeEnd(drag, rig) {
   const mesh = q.mesh, mpp = mesh.scale.x * 0.001;   // metres per CSS px, kept
   // the anchor corner in world, before the rebuild
   const anchorW = mesh.localToWorld(new THREE.Vector3(drag.ax, drag.ay, 0));
-  // VR's OWN size (owner, 10-02: separate VR and desktop layouts): on the staged frame and saved with the panel's place
-  // below; the desktop frame's state and its saved layout are not touched
+  // VR's OWN size: on the staged frame and saved with the panel's place below; the desktop frame's state and layout are untouched
   const cur = api._vrSize ?? { w: q.el.offsetWidth, h: Math.max(drag.info.minH, Math.round(drag.h0 - drag.chrome)) };
   const w = z.includes('e') || z.includes('w') ? Math.round(drag.w) : cur.w;
   const bh = z.includes('s') || z.includes('n') ? Math.max(drag.info.minH, Math.round(drag.h - drag.chrome)) : cur.h;
   api._setVrSize({ w, h: bh });
-  // the new box's centre: from the anchor, half the NEW size toward the gripped side (an edge-only resize keeps the
-  // other axis's centre), in the quad's own frame
+  // the new centre: from the anchor, half the NEW size toward the gripped side, in the quad's frame (an edge-only resize keeps the other axis)
   const fr = q.el.getBoundingClientRect(), sx = z.includes('w') ? -1 : 1, sy = z.includes('n') ? 1 : -1;
   const { width: W0, height: H0 } = mesh.geometry.parameters;
   const cx = z.includes('e') || z.includes('w') ? drag.ax + sx * fr.width * 0.0005 : 0;

@@ -1,19 +1,9 @@
-// base — the renderer-free substrate (RENDERER-SEAM move 2, split from
-// core.js): the event bus, config, error routing, the participant colours,
-// and two small helpers. Nothing here touches three.js, the DOM tree, or
-// the GPU — which is the point: the ~35 modules that only ever wanted
-// `bus`/`CONFIG`/`report` no longer import the module that constructs the
-// renderer, and headless tests get the REAL bus and report instead of a
-// stub's (this file guards its browser touches, so it imports clean under
-// bun).
-//
-// Import rule (inherited from core): base imports NOTHING from the rest of
-// the client. core.js imports base; everything else may import either.
+// base — the renderer-free substrate (docs/RENDERER-SEAM.md): bus, config, error routing, participant colours.
+// Never touches three.js, the DOM tree or the GPU, and guards browser touches, so headless tests import the REAL thing.
+// Imports NOTHING from the rest of the client; core.js imports base.
 
 // ------------------------------------------------------------ event bus
-// Cross-cutting notifications (a verb landed, the connection changed, a toast)
-// travel on this instead of through imports, which is what keeps net.js from
-// having to know about the palette and vice versa.
+// cross-cutting notifications travel on this instead of through imports
 
 const listeners = new Map();
 export const bus = {
@@ -51,9 +41,8 @@ export const CONFIG = {
 };
 if (params.get('key')) store?.setItem('ew-key', CONFIG.token);
 store?.setItem('ew-name', CONFIG.name);
-// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (R 10-11: renaming herself
-// "Rab" made her a stranger with no role in her own world). Fixed at the first real name this browser used; ?account=
-// overrides. A server with sign-in ignores it: the session is the account there.
+// the ACCOUNT a TRUST_NAMES server knows you by, apart from the shown name (a rename must not make you a stranger).
+// Fixed at this browser's first real name; ?account= overrides; a server with sign-in ignores it.
 { let acct = params.get('account') || store?.getItem('ew-account') || '';
   if (!acct && !/^guest-/.test(CONFIG.name)) acct = CONFIG.name;
   CONFIG.account = acct || null; if (acct) store?.setItem('ew-account', acct); }
@@ -66,12 +55,11 @@ export function nameFromJoinAck(you, { renderer = false, spectate = false, verif
   return prefix && you.startsWith(prefix) ? you.slice(prefix.length) : you;
 }
 
-/** Rename in place (the front-door panel calls this before connecting). */
+/** The front-door panel calls this before connecting. */
 export function setName(name) {
   CONFIG.name = name;
   store?.setItem('ew-name', name);
-  // the first real name this browser uses is its account, as at load: a first visit loads as a guest, and the door's name
-  // is that first name (a later rename never moves the account)
+  // a first visit loads as a guest, so the door's name is the first real one; a later rename never moves the account
   if (!CONFIG.account && name && !/^guest-/.test(name)) { CONFIG.account = name; store?.setItem('ew-account', name); }
 }
 export function setToken(token) {
@@ -80,8 +68,7 @@ export function setToken(token) {
 }
 
 // ------------------------------------------------------------ error routing
-// Modules call report(); ui.js decides how to show it. Before the UI has
-// registered a sink, errors still reach the console.
+// modules call report(); ui.js decides how to show it (the console until it registers)
 let errorSink = null;
 export function setErrorSink(fn) { errorSink = fn; }
 
@@ -117,15 +104,12 @@ export function tee(line) {
     if (!teeTimer) teeTimer = setTimeout(teeFlush, 1000);
   } catch { /* never */ }
 }
-/** tee, sent NOW: for the line before something that may freeze the page (a GPU-process compile), so it isn't lost
- *  in the 1 s batch. */
+/** For the line before something that may freeze the page (a GPU-process compile): not lost in the 1 s batch. */
 export function teeNow(line) { tee(line); try { clearTimeout(teeTimer); teeFlush(); } catch { /* never */ } }
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => tee(`[window.error] ${e.message} @ ${(e.filename ?? '').split('/').pop()}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e) => tee(`[unhandled] ${e.reason?.message ?? e.reason}`));
-  // wake CAUSE, not just the URL (cribbed from agent-framework #141's turn
-  // provenance: who woke you ≠ whose words are in view): reload vs navigate
-  // vs back_forward separates "R reloaded" from "the tunnel reconnected"
+  // wake CAUSE, not just the URL: reload vs navigate vs back_forward separates a reload from a reconnect
   let cause = '?'; try { cause = performance.getEntriesByType('navigation')[0]?.type ?? '?'; } catch { /* old UA */ }
   tee(`[boot] cause=${cause} host=${location.host} ${location.pathname}${location.search.replace(/key=[^&]+/, 'key=…')} ua=${navigator.userAgent.slice(0, 120)}`);
 }
@@ -152,7 +136,7 @@ globalThis.addEventListener?.('error', (e) => report('uncaught', e.error ?? e.me
 
 // ------------------------------------------------------------ misc helpers
 
-/** Shortest signed angular difference, a → b. Used everywhere yaw is lerped. */
+/** Shortest signed angular difference, a → b. */
 export function angleDelta(a, b) {
   let d = b - a;
   while (d > Math.PI) d -= 2 * Math.PI;
@@ -191,13 +175,12 @@ export function preferredColor(name) {
 // linear-probes, so all agree with nothing on the wire. Assigned colours stick, even after someone leaves.
 const claimed = new Map();   // name -> colour, sticky once assigned
 
-/** The colour to draw `name` in, anywhere in the UI. */
 export function colorFor(name) {
   const k = String(name ?? '').toLowerCase();
   return claimed.get(k) ?? preferredColor(name);
 }
 
-/** Re-negotiate colours for the people present. Call on roster changes. */
+/** Call on roster changes. */
 export function assignColors(names) {
   const present = [...new Set(names.map((n) => String(n ?? '').toLowerCase()))].filter(Boolean).sort();
   const used = new Set();

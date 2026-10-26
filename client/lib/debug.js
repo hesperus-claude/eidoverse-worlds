@@ -1,17 +1,5 @@
-// debug — draw what the physics actually thinks the world is.
-//
-// This exists because of a day spent proving by measurement that
-// resolveColliders treated every box as an infinite column reaching down to
-// the world floor: it never read box.min.y, so a mezzanine slab modelled at
-// y 2.4-2.7 shoved a walking body 2.3m sideways at GROUND level. Finding that
-// took a headless harness and a lot of printf. One wireframe would have shown
-// it in a glance — the box on screen simply would not have been where the box
-// on screen was.
-//
-// So: the collider volumes as the solver reads them, and the ragdoll as the
-// solver reads it. Not the meshes — the COLLIDERS. Where the two disagree is
-// the whole point, and a debug view that redraws the visible geometry would
-// have shown nothing wrong on the day it mattered most.
+// debug — draw what the physics thinks the world is: collider volumes and the ragdoll as the solver reads them, not the meshes.
+// Where the two disagree is the point: a view that redrew the visible geometry would show nothing wrong.
 
 import { THREE, scene } from './core.js';
 import { bus } from './base.js';
@@ -30,10 +18,8 @@ import { sliderTable, checkRow, selectRow, btn, sectionHead } from './rows.js';
 import { toast, paintRangesIn } from './ui.js';
 
 // box = an OBB, walkable on top, solid on the sides between min.y and max.y
-// pillar = anything over 2.4m tall, collapsed to a slim centre column so you
-//          can walk under a canopy
-// exact  = collides against its actual triangles; a box would be a lie, so the
-//          BVH is drawn instead
+// pillar = anything over 2.4m tall, a slim centre column so you can walk under a canopy
+// exact  = collides against its own triangles, so its BVH is drawn, not a box
 const KIND_COLOR = { box: 0x4fd8ff, pillar: 0xffb347, exact: 0x8fe8c8 };
 const RAG_COLOR = { joint: 0xff8fb0, bone: 0xffd166, hit: 0xff3b3b };
 
@@ -142,8 +128,7 @@ function syncColliders() {
       }
       continue;
     }
-    // A pillar keeps its full height but only a slim centre footprint — the
-    // clamp lives in LOCAL units, so it scales with the entity like the box.
+    // a pillar: full height, slim centre footprint; clamped in LOCAL units so it scales with the entity like the box
     const half = kind === 'pillar' ? 0.25 : null;
     const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
     _c.set(half ? cx : cx, (box.min.y + box.max.y) / 2, half ? cz : cz)
@@ -173,9 +158,7 @@ function buildCapsules(rd) {
   const items = [];
   for (const c of rd.caps ?? []) {
     const len = rd.p[c.a].distanceTo(rd.p[c.b]);
-    // CapsuleGeometry's `length` is the CYLINDER, with hemispheres added on
-    // top — so a cylinder of |ab| puts the cap centres exactly on the joints,
-    // which is the volume the solver tests.
+    // CapsuleGeometry's `length` is the CYLINDER (caps added), so |ab| puts the cap centres on the joints: the solver's volume
     const mesh = onTop(new THREE.LineSegments(
       new THREE.WireframeGeometry(new THREE.CapsuleGeometry(c.r, len, 2, 8)),
       lineMat(RAG_COLOR.bone)));
@@ -189,8 +172,7 @@ function disposeCapsules() {
   ragCaps = null;
 }
 
-// Box volumes. Geometry is a unit cube built once and SCALED per box, so N
-// volumes cost N transforms — the same bargain the collider boxes strike.
+// box volumes: one unit cube SCALED per box, so N volumes cost N transforms
 let ragVols = null;
 function syncVolumes(vols) {
   if (!ragVols || ragVols.items.length !== vols.length) {
@@ -210,8 +192,7 @@ function syncVolumes(vols) {
   });
 }
 function disposeVolumes() {
-  // NOT m.geometry.dispose(): every box shares the one unit cube, so disposing
-  // it through any single mesh guts all the others.
+  // NOT m.geometry.dispose(): every box shares the one unit cube
   for (const m of ragVols?.items ?? []) ragGroup?.remove(m);
   ragVols = null;
 }
@@ -219,8 +200,7 @@ let _boxWire = null;
 const unitBoxWire = () => (_boxWire ??= new THREE.WireframeGeometry(new THREE.BoxGeometry(1, 1, 1)));
 
 function syncRagdoll(rd) {
-  // ---- joint spheres, at the radius the GROUND and props are tested against
-  // (which is per-joint, and not the same number as a bone's radius)
+  // ---- joint spheres, at the per-joint radius the ground and props are tested against (not a bone's radius)
   const joints = Object.keys(rd.p);
   if (!ragJoints || ragJoints.count !== joints.length) {
     if (ragJoints) ragGroup.remove(ragJoints.mesh);
@@ -250,8 +230,7 @@ function syncRagdoll(rd) {
     it.mesh.quaternion.setFromUnitVectors(_Y, _dir.divideScalar(len));
     it.hit = false;
   }
-  // ---- and which of them are currently INSIDE each other, which is the whole
-  // question the capsule model exists to answer
+  // ---- and which of them currently INTERPENETRATE: the question the capsule model exists to answer
   for (const { A, B, min } of rd.pairs ?? []) {
     closestParams(rd.p[A.a], rd.p[A.b], rd.p[B.a], rd.p[B.b], _pr);
     _ca.copy(rd.p[A.a]).lerp(rd.p[A.b], _pr.s);
@@ -286,8 +265,7 @@ const DIALS = [
   ['GRAVITY', -20, 0, 0.5], ['SETTLE_V', 0, 0.4, 0.01], ['DEADLINE', 1, 30, 1],
 ];
 const DEFAULTS = {};
-// (the row builders themselves live in rows.js — this panel spelled the
-// slider-table loop six private times before that file existed)
+// (the row builders live in rows.js)
 
 // ---- joint limits ----------------------------------------------------------
 //
@@ -309,12 +287,10 @@ const setF = (S, f, v) => {
   else S[f] = v;
 };
 
-/** The retune hook the live-tuning tables share: push the edited table into
- *  the running doll, if one exists and answers. */
+/** Push the edited table into the running doll, if one exists and answers. */
 const retune = (method) => () => { providers.ragdoll?.()?.[method]?.(); };
 
-/** The keep-the-answer button: tuning a number and losing it is the
- *  difference between a nice afternoon and a number you have to find twice. */
+/** Copy the tuned table (to the console if the clipboard refuses), so a tuned number isn't lost. */
 function copyBtn(label, make) {
   return btn(label, async () => {
     const out = make();
@@ -324,8 +300,7 @@ function copyBtn(label, make) {
 }
 
 function buildJointPanel(stack) {
-  // one snapshot of the shipped table, so "reset" means the defaults and not
-  // whatever was on the sliders when the panel was opened
+  // one snapshot of the shipped table: "reset" means the defaults, not the sliders as the panel opened
   const jointDefaults = JSON.parse(JSON.stringify(JOINT_SPECS));
   const apply = retune('retune');
 
@@ -368,17 +343,14 @@ const BLINK_FIELDS = [
   ['lower', -2, 2, 0.02],    // lower lid — an upper alone does not shut an eye
   ['dur', 0.05, 0.8, 0.01],  // seconds for the whole close-and-open
   ['hz', 0.2, 4, 0.1],
-  // eyeMax 0 pins the eyeballs at rest — the way to tell "the eyes are rigged
-  // wrong" from "the gaze code is turning them wrong" without rebuilding.
+  // eyeMax 0 pins the eyeballs at rest: tells "rigged wrong" from "the gaze code turns them wrong" without a rebuild
   ['eyeMax', 0, 1.2, 0.02],
   ['axis', 0, 2, 1],          // 0=x 1=y 2=z — which way the lid hinges
 ];
 
 const HAIR_FIELDS = [
   ['mass', 0.001, 0.05, 0.001],
-  // 0-40 put the whole interesting range (see WING/HAIR_TUNING: 3 to 20 covers
-  // barely-moving to lively) inside the first eighth of the track. These now
-  // resolve where the hair actually responds.
+  // a 0-40 track put the whole useful range (3 to 20, see WING/HAIR_TUNING) in its first eighth; these resolve where hair responds
   ['tension', 0, 24, 0.25],
   ['damping', 0, 0.6, 0.01],
   ['gravity', 0, 1.5, 0.05],
@@ -438,10 +410,8 @@ const WING_IDLE_FIELDS = [
   ['bias', -40, 40, 1],     // permanent lift, degrees
   ['tip', 0, 1.5, 0.05],    // outer segment's share
   ['lag', 0, 0.5, 0.01],    // cycles the tip trails the root
-  ['sweep', 0, 40, 1],      // fore/aft travel — 0 pins the tips to the frontal
-                            // plane, which is the hinge look it exists to fix
-  ['sweepPhase', 0, 0.5, 0.01],  // 0.25 opens the path into an ellipse; 0 or
-                                 // 0.5 collapses it back to a tilted line
+  ['sweep', 0, 40, 1],      // fore/aft travel; 0 pins the tips to the frontal plane (the hinge look)
+  ['sweepPhase', 0, 0.5, 0.01],  // 0.25 opens the path into an ellipse; 0 or 0.5, a tilted line
   ['recover', 0.05, 2, 0.05],
 ];
 const WING_SIM_FIELDS = [
@@ -457,12 +427,10 @@ function buildWingPanel(stack) {
   const idleDefaults = { ...WING_IDLE };
   const simDefaults = { ...WING_TUNING };
   const apply = retune('retuneWings');
-  // WING_IDLE is read fresh every frame by avatar.js, so its table needs no
-  // retune hook; WING_TUNING has to be pushed into constraints that already
-  // exist, which is what `apply` does.
+  // WING_IDLE is read fresh every frame, so no retune hook; WING_TUNING's constraints already exist, so `apply` pushes it
   const idle = sliderTable(WING_IDLE_FIELDS, WING_IDLE, {
     fmt: (f, v) => (f === 'deg' || f === 'bias' || f === 'sweep' ? `${v}°`
-      : f === 'hz' ? `${+(+v).toFixed(2)}Hz`   // the default is 1/3.4: unrounded it printed 0.29411764705882354Hz, 157 px in a 44 px readout
+      : f === 'hz' ? `${+(+v).toFixed(2)}Hz`   // rounded: the default 1/3.4 printed 17 digits into a 44 px readout
         : f === 'recover' ? `${(v * 1000).toFixed(0)}ms` : String(+(+v).toFixed(3))),
   });
   const sim = sliderTable(WING_SIM_FIELDS, WING_TUNING, {
@@ -512,9 +480,8 @@ export function initDebug(p = {}) {
   framePre.className = 'dbg-stats';
   framePre.style.cssText = 'flex:none;margin:0 0 4px';
   stack.appendChild(framePre);
-  // TEXT TABS BY JOB (owner, 09-29: Debug stays on the dock, its many collapsing sections become tabs):
-  // physics = the ragdoll and its tuning, body = the secondary motion that rides a body (blink, hair,
-  // wings), perf = what the frame costs. The frame numbers above stay put whichever tab is chosen.
+  // text tabs by job: physics = the ragdoll and its tuning, body = secondary motion (blink, hair, wings), perf = frame cost.
+  // The frame numbers above stay put whichever tab is chosen.
   const tabs = dbgTabs(stack, ['physics', 'body', 'perf'], () => frame.visible);
   // the remembered tab is chosen at boot with Debug closed: its groups wait until the panel is on screen
   frame.onShow(tabs.flush);
@@ -548,8 +515,7 @@ export function initDebug(p = {}) {
   phys.appendChild(btns);
 
   const swBox = document.createElement('div');
-  // NOT .stack — that is flex:1 with its own scroller, and nested inside the
-  // panel's stack it collapses to nothing and the switches vanish.
+  // NOT .stack: flex:1 with its own scroller; nested in the panel's stack it collapses and the switches vanish
   swBox.style.cssText = 'display:flex;flex-direction:column;gap:3px';
   for (const [k, label] of SWITCHES) {
     swBox.appendChild(checkRow(label,
@@ -662,8 +628,7 @@ const fmt = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '--');
 
 export function updateDebug(now = performance.now()) {
   if (!frame) return;
-  // F1 hides the UI for screenshots; debug lines are UI, whatever layer they
-  // happen to live on
+  // F1 hides the UI for screenshots; debug lines are UI, whatever layer they live on
   // open in the VR ring counts as shown, or the quad's numbers never repaint
   let inXR = false; try { inXR = xrPanelOpen('debug'); } catch { /* not presenting */ }
   const hidden = (!frame.visible && !inXR) || document.body.classList.contains('photo');
@@ -674,9 +639,7 @@ export function updateDebug(now = performance.now()) {
 
   if (on.colliders) syncColliders();
 
-  // The settled pose is the one worth inspecting, and it is exactly the moment
-  // main.js drops its ragdoll reference — so hold the last skeleton for as long
-  // as the body is still down, and only clear it when they get up.
+  // the settled pose is the one worth inspecting, exactly when main.js drops its ragdoll: hold the last skeleton until they get up
   const live = providers.ragdoll?.();
   if (live?.p) lastRag = live;
   if (!providers.downed?.()) lastRag = null;
@@ -690,8 +653,7 @@ export function updateDebug(now = performance.now()) {
     const k = kindOf(e);
     if (k === 'box') box++; else if (k === 'pillar') pillar++; else exact++;
   }
-  // the pinned frame block: fps + honest ms + worst-of-last-second, then
-  // the per-system bill (EWMA ms) — where the frame actually goes
+  // the pinned frame block: fps + honest ms + worst-of-last-second, then the per-system bill (EWMA ms)
   const p = providers.perf?.();
   if (framePre && p) {
     const bill = (providers.bill?.() ?? [])
@@ -710,9 +672,7 @@ export function updateDebug(now = performance.now()) {
     `  pillar ${String(pillar).padStart(5)}   slim column, pass under`,
     `  exact  ${String(exact).padStart(5)}   trimesh (BVH)`,
   ];
-  // A tumble's numbers are most worth reading the moment it STOPS, which is
-  // exactly when main.js drops its reference and they would vanish. Keep the
-  // last set and say plainly that it is the last one.
+  // keep the last tumble's numbers (main.js drops its reference the moment it STOPS) and say plainly they are the last
   if (rd?.p) {
     lastRun = [
       `  speed  ${fmt(rd.maxV, 3).padStart(5)} m/s`,
@@ -721,9 +681,7 @@ export function updateDebug(now = performance.now()) {
       // hipsOffset is a RIG constant; if it drifts, the body renders that far off the sim (floating or clipping)
       `  hipsΔ  ${fmt(rd.hipsOffset, 3).padStart(5)} m  (rig constant)`,
       `  rootY  ${fmt(rd.avatar?.root?.position?.y, 3).padStart(5)} m`,
-      // steps vs age separates "nobody is calling step()" from "step() is
-      // being called with dt 0" — two very different bugs that look identical
-      // from a frozen body.
+      // steps vs age separates "nobody calls step()" from "step() gets dt 0": identical on a frozen body
       `  steps  ${String(rd.steps ?? 0).padStart(5)} / ${rd.frames ?? 0} substeps`,
       `  joints ${String(Object.keys(rd.p).length).padStart(5)}`,
       `  pairs  ${String(rd.pairs?.length ?? 0).padStart(5)}   capsule tests`,
@@ -732,9 +690,7 @@ export function updateDebug(now = performance.now()) {
   }
   if (lastRun) lines.push('', `ragdoll  ${rd?.p ? 'active' : 'settled (last)'}`, ...lastRun);
 
-  // Per-bone TWIST, live. This is the number I have got wrong more than once,
-  // so it is on screen next to the body it claims to describe: if a limb looks
-  // twisted and its row says 0°, the measurement is what is broken.
+  // per-bone TWIST, live, beside the body: if a limb looks twisted and its row says 0°, the measurement is what's broken
   if (rd?.drive && rd.pose) {
     lines.push('', 'twist about each bone (deg)');
     for (const d of rd.drive) {

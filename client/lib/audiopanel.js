@@ -1,16 +1,7 @@
-// audiopanel — the audio section: three category sliders, one consent row.
-//
-// This is where the categories live, and why they are HERE rather than behind
-// a press-and-hold on the HUD toggle: volume is taste you set once, so it
-// belongs on a settings row you can find, not a hidden gesture you cannot.
-// (A hold-menu also does not survive VR, where the panel is a quad you point
-// a laser at — a list of rows works there, a long-press does not.)
-//
-// Categories:
+// audiopanel — the audio section: three category sliders, one consent row (rows, not a hold-menu: it must work in VR).
 //   voices — other people's speech, and agent TTS. A resident is a resident.
 //   world  — place sound. Not touched by the 🎧 toggle, on purpose.
-//   TTS    — synthetic speech specifically, for anyone who wants people but
-//            not narration (or the reverse).
+//   TTS    — synthetic speech specifically, for people without narration (or the reverse).
 
 import { makeSection } from './ui.js';
 import { audioPrefs, setVolume, receivingVoice, setReceiveVoice,
@@ -28,8 +19,7 @@ function micLevelNow() {
 import { gateUnavailable, ungatedConsent, allowUngated } from './micgate.js';
 import { selfMonitor, selfMonitoring } from './micstate.js';
 import { why } from './debuglog.js';
-/** Is a mic publishing, on whichever transport is live? The one guarded reader: window.relayDiag exists before its
- *  state does, so an early call throws (`?.` covers only absence). */
+/** The one guarded reader: window.relayDiag exists before its state does, so an early call throws (`?.` covers absence only). */
 const micLive = () => {
   try { return window.relayDiag?.().micPublished ?? micOn(); } catch { return micOn(); }
 };
@@ -39,15 +29,14 @@ import { micOn, toggleMic } from './micstate.js';
 // the mic row's toggleMic needs CONFIG.name; a throwing handler leaves the checkbox checked over nothing
 import { CONFIG } from './base.js';
 
-// Rows use the house sheet's .row / .row.wide and its tokens (index.html); no private CSS here, so panels can't drift.
-function ensureCss() { /* house sheet — index.html owns .row and .row.wide */ }
+// house sheet only (index.html's .row / .row.wide): no private CSS, so panels can't drift
+function ensureCss() { /* house sheet */ }
 
 // Labels say what they CONTROL ("voice volume"), not what they're about.
 const ROWS = [
   ['voices', 'voice volume', 'other people speaking, and agent speech'],
   ['world', 'world volume', 'ambience and place-sound — the 🎧 toggle never touches this'],
-  // The SIDETONE only ('voices' already governs all TTS you hear): never a sender-side gain, which would override
-  // each listener's own volume and consent.
+  // the SIDETONE only: never a sender-side gain, which would override each listener's own volume and consent
   ['tts', 'self-TTS volume', 'how loud you hear your own synthesized voice'],
 ];
 
@@ -72,7 +61,7 @@ function slider(cat, label, hint, value) {
 function checkRow(label, hint, checked, onChange) {
   const row = document.createElement('div');
   row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (tools/xr-quad-colour-probe.mjs selects by it)
-  // Label first: the grid assigns columns by source order.
+  // label first: the grid assigns columns by source order
   row.innerHTML =
     `<span class="nm" title="${hint}">${label}</span>` +
     `<span class="ctl"><input type="checkbox" ${checked ? 'checked' : ''} title="${hint}"></span>`;
@@ -80,12 +69,9 @@ function checkRow(label, hint, checked, onChange) {
   return row;
 }
 
-// Mic sensitivity: a slider over a LIVE level bar (animates only while its row is in the DOM), in the mic badge's
-// palette (mictoggle.js); muted it still moves, dimmer, so a floor can be set before unmuting.
-const LVL_LIVE = '#ffd66b';   // = INK.hot in mictoggle.js. One instrument, one gold.
-// Mic ON but under the threshold: the bar is hearing you and the gate is not
-// passing it. Brighter than muted-dark (something IS happening) and plainly not
-// the live gold (nothing is leaving your machine).
+// mic sensitivity over a LIVE level bar in the mic badge's palette; muted it still moves (dimmer) so a floor can be set first
+const LVL_LIVE = '#ffd66b';   // = INK.hot in mictoggle.js: one instrument, one gold
+// on but under the floor: brighter than muted, plainly not gold (nothing is leaving your machine)
 const LVL_WARM = '#9a8a5e';
 const LVL_DARK = '#6b5f42';   // must stay readable on the black track: muted is dimmer, never invisible
 
@@ -110,20 +96,18 @@ function micFloorRow() {
   const out = row.querySelector('[data-out]');
   const lvl = row.querySelector('[data-lvl]');
   const thr = row.querySelector('[data-thr]');
-  // Three states: off → dark, on under floor → dim, on over floor → GOLD (INK.hot). Hysteresis: release at 85%
-  // of the floor, or the bar strobes on every syllable.
+  // off → dark, under floor → dim, over → GOLD; release at 85% of the floor, or the bar strobes every syllable
   const REL = 0.85;
   let hot = false;
-  // micOn() alone is the mesh's answer (false on SFU); use the shared guarded reader (tools/mic-meter-states.mjs)
-  const micIsLive = micLive;   // the shared guarded reader — see module top
+  // never micOn() alone: it is the mesh's answer, false on SFU (tools/mic-meter-states.mjs)
+  const micIsLive = micLive;
   const paintLive = () => {
     if (!micIsLive()) { hot = false; lvl.style.background = LVL_DARK; return; }
     lvl.style.background = hot ? LVL_LIVE : LVL_WARM;
   };
   paintLive();
   bus.on('audio:mic', paintLive);
-  // Dragging the threshold must re-evaluate immediately: the bar is the thing
-  // you are aiming, so it cannot wait for the next level sample to agree.
+  // dragging the threshold re-evaluates at once: it can't wait for the next level sample
   bus.on('audio:micfloor', () => paintLive());
   const paintThr = () => {
     thr.style.left = `calc(${Math.min(100, (micFloor() / FS) * 100)}% - 1px)`;
@@ -141,9 +125,7 @@ function micFloorRow() {
     if (!row.isConnected) return;
     const level = micLevelNow();
     lvl.style.width = `${Math.min(100, (level / FS) * 100)}%`;
-    // Latch above the floor, release at REL× it. Repaint only on a state
-    // CHANGE — this runs at frame rate, and assigning a style every frame is
-    // how you get a repaint storm behind a bar that already looks fine.
+    // repaint only on a state CHANGE: this runs at frame rate
     const floor = micFloor();
     const next = hot ? level > floor * REL : level > floor;
     if (next !== hot) { hot = next; paintLive(); }
@@ -154,12 +136,10 @@ function micFloorRow() {
 }
 
 let _body = null;
-// Rows are built once; bus events only write .checked via _sync. A rebuild kills the meter's rAF loop and drops
-// in-flight drags.
+// rows are built once; bus events only re-sync: a rebuild kills the meter's rAF loop and drops in-flight drags
 const _sync = { mic: null, hear: null, connect: null };
 
-/** Reflect state onto the existing controls. No DOM construction, no reflow —
- *  this is what the bus handlers call instead of paint(). */
+/** No DOM construction, no reflow: what the bus handlers call instead of paint(). */
 function syncRows() {
   if (!_body) return;
   const p = audioPrefs();   // unused today; kept so slider sync has an obvious home
@@ -170,21 +150,17 @@ function syncRows() {
 }
 
 function paint(body) {
-  // makeSection calls onOpen(body) on EVERY open, so this must be idempotent:
-  // if the rows are already built and still attached, just re-sync them.
+  // onOpen runs on EVERY open: idempotent, re-syncs rows already attached
   if (body && _body === body && _body.firstChild) { syncRows(); return; }
   _body = body ?? _body;
   if (!_body) return;
   const body_ = _body;
   body_.innerHTML = '';
   const p = audioPrefs();
-  // 'hear voices' is the 🎧 glyph's bit (ticking it from fully revoked grants consent too); the mic row is the HUD
-  // badge's state. One state, two surfaces: both read and call the same functions.
+  // one state, two surfaces: 'hear voices' is the 🎧 bit (ticking it from fully revoked grants consent), mic the badge's
   const micRow = checkRow('microphone',
     'transmit your voice — the mic glyph beside the HUD is this same switch',
-    // 🔴 micOn() reads the MESH's state — on the SFU path it is always false,
-    // so the box would render unticked no matter what. Ask whichever transport
-    // is live. (window.relayDiag is installed by the SFU bridge.)
+    // never micOn(): always false on the SFU path; ask whichever transport is live
     micLive(), async () => {
       // As the badge does: pass CONFIG.name (the mesh path needs it) and use the resolved state, not micOn() after.
       const on = await toggleMic(CONFIG.name);
@@ -200,7 +176,7 @@ function paint(body) {
     pttMode(), (on) => setPttMode(on)));
   const floorRow = micFloorRow();
   body_.append(floorRow);        // sensitivity belongs UNDER the switch it serves
-  // Under PTT the floor does nothing: dimmed and inert, not hidden, so it doesn't look functional or go missing.
+  // under PTT the floor does nothing: dimmed and inert, not hidden
   const dimFloor = () => {
     const off = pttMode();
     floorRow.style.opacity = off ? '0.45' : '';
@@ -217,15 +193,13 @@ function paint(body) {
     });
   _sync.hear = hearRow.querySelector('input');
   body_.append(hearRow);
-  // Toggle, then its volume: the TTS section sits just above its volume slider.
   const ttsHost = document.createElement('div');
   for (const [cat, label, hint] of ROWS) {
     if (cat === 'tts') body_.append(ttsHost);   // the switch, immediately above its slider
     body_.append(slider(cat, label, hint,
       cat === 'world' ? p.volWorld : cat === 'tts' ? p.volTts : p.volVoices));
   }
-  // Self-monitor, tapped AFTER the gate's gain node so it plays exactly what the room hears. Off by default:
-  // on speakers it feeds back.
+  // self-monitor, tapped AFTER the gate so it plays what the room hears; off by default (speakers feed back)
   {
     const row = checkRow('hear my own mic (monitor)',
       'plays your gated lane back to you — exactly what the room hears, so silence here means the room hears silence. USE HEADPHONES: on speakers this feeds back.',
@@ -240,9 +214,7 @@ function paint(body) {
     body_.append(row);
   }
 
-  // B2 (#90): the gate-unavailable escape hatch. Hidden while the gate works;
-  // when the graph cannot be built the mic REFUSES to transmit and this row
-  // appears — the explicit, user-visible choice to go raw. Never silent.
+  // gate unavailable: the mic REFUSES to transmit and this row offers the explicit choice to go raw; never silent
   {
     const row = checkRow('transmit UNGATED (voice gate unavailable)',
       'the noise gate could not be built on this device — checking this transmits your raw microphone, room noise and all',
@@ -255,8 +227,7 @@ function paint(body) {
   body_.append(checkRow('speech-to-text',
     'sends your mic audio to your browser vendor’s cloud to transcribe',
     sttConsented(), (on) => setSttConsent(on)));
-  // Deliberately last: hush is a gain, this is the connection. Unticked, no inbound media is negotiated at all;
-  // the label says what you get, so it doesn't read as a second mute.
+  // last: hush is a gain, this is the connection; unticked, no inbound media is negotiated at all
   const connectRow = checkRow('connect to other people’s audio',
     'on: your machine holds a live connection to each speaker nearby. ' +
     'Off: nothing is sent to you at all — saves bandwidth and CPU in busy ' +
@@ -266,7 +237,7 @@ function paint(body) {
   _sync.connect = connectRow.querySelector('input');
   body_.append(connectRow);
 
-  // ttsSection owns its host (build() clears it), so it gets its own div; wired last so it can measure the grid gutter.
+  // its own div (build() clears it), wired last so it can measure the grid gutter
   ttsSection(ttsHost, () => {});
 }
 

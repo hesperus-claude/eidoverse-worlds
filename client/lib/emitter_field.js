@@ -1,15 +1,9 @@
-// emitter_field — the `particles` component's LIFECYCLE, DOM-free and
-// THREE-free so it can be unit-tested without a browser (tools/particles-test.ts).
-//
-// Upstream particles.js gives no undo, so this registry owns every emitter's lifecycle. Apply and remove are
-// idempotent; a build that lands after its entity changed retires itself.
+// emitter_field — the `particles` component's LIFECYCLE, DOM/THREE-free (tools/particles-test.ts); upstream has no undo.
+// Apply and remove are idempotent; a build that lands after its entity changed retires itself.
 
 import { releaseHook } from './autohooks.js';
 
-/**
- * Retire one built emitter completely (hook, GPU resources, mesh); safe twice. Hooks come off by IDENTITY,
- * never index: the array is global and shared.
- */
+/** Safe twice. Hooks come off by IDENTITY, never index: the array is global and shared. */
 export function retireEmitter(handle, autos) {
   if (!handle || handle.retired) return;
   handle.retired = true;
@@ -20,10 +14,7 @@ export function retireEmitter(handle, autos) {
   } catch { /* a failed teardown must not strand the registry entry */ }
 }
 
-/**
- * Give back a RAW upstream system that no handle owns yet (adoptSystem unwinds to this if a host step throws).
- * Disposes geometry and material, never the texture: it is cached and shared (emitters.js).
- */
+/** For a RAW system no handle owns yet. Never disposes the texture: it is cached and shared (emitters.js). */
 export function retireRawSystem(sys, autos) {
   if (!sys || sys.__retired) return;
   sys.__retired = true;
@@ -38,9 +29,6 @@ export function retireRawSystem(sys, autos) {
   } catch { /* a failed teardown must not mask the error that caused it */ }
 }
 
-/**
- * Run the host's attach steps over a fresh upstream system, unwinding it if any throws (no handle exists yet).
- */
 export function adoptSystem(sys, autos, attach) {
   try {
     return attach(sys);
@@ -50,13 +38,10 @@ export function adoptSystem(sys, autos, attach) {
   }
 }
 
-/**
- * The world's emitter registry. `build(emitter, {id})` (THREE-bound) returns or resolves to a handle
- * `{mesh?, update?, hooks?, dispose()}`; `autos` = globalThis._autoParticleSystems.
- * `apply(id, emitter)` is the fold's ONLY entry point: an emitter to attach or replace, `null` to end it.
- */
+/** `build(emitter, {id})` → (a promise of) `{mesh?, update?, hooks?, dispose()}`; `autos` = globalThis._autoParticleSystems.
+ *  `apply(id, emitter)` is the fold's ONLY entry point: an emitter to attach or replace, `null` to end it. */
 export function makeEmitterRegistry({ autos, build, onError } = {}) {
-  /** id -> { gen, key, handle|null, emitter } — one live emitter per entity. */
+  /** id -> { gen, key, handle|null, emitter }: one live emitter per entity. */
   const live = new Map();
   let gen = 0;
 
@@ -69,8 +54,7 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
     if (cur && cur.key === key) return cur.handle;
 
     const mine = ++gen;
-    // Retire the old one FIRST. Replacement is not two emitters overlapping
-    // for the duration of an await: the world says one thing is burning there.
+    // retire the old one FIRST: never two emitters overlapping across an await
     if (cur) {
       retireEmitter(cur.handle, autos);
       live.delete(id);
@@ -87,9 +71,7 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
       onError?.(e, id);
       return null;
     }
-    // The entity was replaced, removed, or the world was cleared while the
-    // texture downloaded. Whatever we just built belongs to nobody: retire it
-    // here or it is a mesh in the scene with no entry to reach it by.
+    // the entity changed while the texture downloaded: retire the orphan, or it is a mesh nothing can reach
     if (live.get(id) !== slot) {
       retireEmitter(handle, autos);
       return null;
@@ -117,8 +99,7 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
     has: (id) => live.has(id),
     get: (id) => live.get(id)?.handle ?? null,
     emitterOf: (id) => live.get(id)?.emitter ?? null,
-    /** The same emitter stops or resumes spawning (emitters.js's playing-only path): the slot's key follows, so the bag it
-     *  now matches is recognised as already applied. */
+    /** The slot's key follows, so the bag it now matches is recognised as already applied. */
     setPlaying(id, on) { const s = live.get(id); if (!s) return false; s.emitter.playing = on; s.key = keyOf(s.emitter); s.handle?.setEmitting?.(on); return true; },
     get size() { return live.size; },
   };
