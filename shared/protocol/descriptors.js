@@ -1,15 +1,13 @@
-// shared/protocol/descriptors.js — one descriptor per engine component, derived from componentspec.js.
-// The registry is the schema; this adds the EDITOR'S VOCABULARY where it differs from the wire's: axis letters vs unit
-// vectors, one rate in °/s vs degPerSec | period | rpm, light.daytime as a check, uniform scale vs [s, s, s], and
-// whole-value cards (Grabbable, Sockets, Reactions).
-// A descriptor is {key, card, type?, fields: [{k, param, t, path, wire?: {to, from}, ui?}], extra}: key the registry
-// name, card the record (RECORDS[card]), type the motion type when the key is shared, k the inspector address, param the
-// record's name, t the field type, path the key in the wire value (null = whole), wire the editor↔wire translation.
-// `ui` is widget facts only (t, step/dp/softMin/softMax/deg); HARD limits and units come from the registry, never here.
+// shared/protocol/descriptors.js — one descriptor per engine component, derived from componentspec.js (the schema), adding
+// the EDITOR'S VOCABULARY where it differs from the wire's: axis letters vs unit vectors, one rate in °/s vs degPerSec |
+// period | rpm, light.daytime as a check, uniform scale vs [s, s, s], whole-value cards (Grabbable, Sockets, Reactions).
+// A descriptor is {key, card, type?, fields: [{k, param, t, path, wire?: {to, from}, ui?}], extra}: key the registry name,
+// card the record (RECORDS[card]), type the motion type when the key is shared, k the inspector address, param the record's
+// name, t the field type, path the key in the wire value (null = whole), wire the editor↔wire translation.
+// `ui` is widget facts only; HARD limits and units come from the registry, never here.
 // def: false = no reset; absent = how an UNWRITTEN value draws; sparse = written only off default; clears = spellings a
-// write retires; own = the card's own code writes it. Prose lives in editschema.js; tools/descriptor-defaults-test.ts and
-// tools/components-inspector-test.ts hold it. Fields where RECORDS states a default the registry never writes are
-// decided per field as `absent` (spec/registry-pin.json D8); see DECIDED below.
+// write retires; own = the card's own code writes it. Prose lives in editschema.js. A default RECORDS states that the
+// registry never writes is decided per field as `absent` (spec/registry-pin.json D8; DECIDED below).
 
 import { COMPONENTS, materialize } from './componentspec.js';
 
@@ -22,12 +20,12 @@ export function axisLetter(a) {
 }
 /** A letter's vector; a vector as itself; anything else null. */
 export const axisVector = (a) => (typeof a === 'string' ? (Object.hasOwn(AXES, a.toLowerCase()) ? AXES[a.toLowerCase()] : null) : Array.isArray(a) && a.length === 3 ? a : null);
-/** The editor's rate (°/s) of a motion bag: degPerSec, else 360 / period (seconds a turn), else an old rpm × 6. */
+/** degPerSec, else 360 / period (seconds a turn), else an old rpm × 6. */
 export const rateOf = (m) => (Number.isFinite(m?.degPerSec) ? m.degPerSec : Number.isFinite(m?.period) && m.period > 0 ? 360 / m.period : Number.isFinite(m?.rpm) ? m.rpm * 6 : undefined);
 
 const AXIS = { to: (v) => axisVector(v) ?? v, from: (v) => axisLetter(v) ?? v };
 const RATE = { to: (v) => v, from: (_, m) => rateOf(m) };
-const NOON = { to: (b) => (b ? 'full' : 'dim'), from: (d) => d === 'full' };   // daytime (shape audit 10-16: was day: false)
+const NOON = { to: (b) => (b ? 'full' : 'dim'), from: (d) => d === 'full' };   // daytime (was day: false)
 const UNIFORM = { to: (s) => (typeof s === 'number' ? [s, s, s] : s), from: (v) => (Array.isArray(v) && v[0] === v[1] && v[1] === v[2] ? v[0] : v) };
 const AMP = { to: (v) => v, from: (v, m) => v ?? m?.amplitude };   // the first protocol spelled a pendulum's amp `amplitude`
 
@@ -37,11 +35,11 @@ const DEG = { t: 'num', step: 5, deg: true };
 const SEC = { t: 'num', step: 0.1, dp: 2, softMin: 0.05 };
 const RATE_UI = { t: 'num', step: 5, dp: 1 };
 
-/** The seven yellows (C5): where RECORDS states a default the registry never writes. Each decided as `absent` prose — the
- *  record's number is what a reader DOES when the key is absent, not what the authority writes — and none registered:
- *  registering one changes what every new component carries on the wire (a pin regeneration), and no reader needs it. */
+/** Where RECORDS states a default the registry never writes. Each is `absent` prose (what a reader DOES when the key is
+ *  absent, not what the authority writes), and none registered: registering one changes every new component on the wire
+ *  (a pin regeneration), and no reader needs it. */
 const DECIDED = {
-  // the registry states these two now (shape audit 10-16): read from it, never restated
+  // the registry states these two now: read from it, never restated
   'Pivot.pos': COMPONENTS.pivot.absentMeans.pos,
   'Collider.shape': COMPONENTS.collider.absentMeans.shape,
   'Pendulum.pivot': 'a whole thing swings about its Pivot component, else its origin [0, 0, 0] (before 10-16: [0, 2, 0], written as its pivot by a stored world\'s maintenance command); a part about its own origin',
@@ -68,20 +66,19 @@ const MOTION = {
 const MOTION_EDITOR = { axis: { wire: AXIS, ui: { t: 'enum', def: false, own: true } }, degPerSec: { param: 'rate', wire: RATE, ui: { ...RATE_UI, clears: ['rpm', 'period'] } } };
 const CARDS = {
   Transform: { key: 'transform', hand: true, show: ['pos', 'q', 'scale'], editor: { scale: { wire: UNIFORM } } },
-  Pivot: { key: 'pivot', extra: ['x', 'y', 'z'] },   // pivot.pos is a registered field (shape audit 10-16)
+  Pivot: { key: 'pivot', extra: ['x', 'y', 'z'] },   // pivot.pos is a registered field
   Collider: { key: 'collider', editor: { shape: { ui: { t: 'enum', def: false } } } },
-  // a mesh thing (primitives, R 10-12): its shape from the table; its size's three channels are the card's own rows (extra),
-  // one vec3 on the wire, as a pivot's are
+  // a mesh thing: shape from the table; its size's three channels are the card's own rows (extra), one vec3 on the wire
   Mesh: { key: 'mesh', show: ['shape'], extra: ['size.x', 'size.y', 'size.z'], editor: { shape: { ui: { t: 'enum' } } } },
   Light: { key: 'light', show: ['color', 'intensity', 'range', 'decay', 'important', 'daytime'], writeDp: null,
     editor: { color: { ui: { t: 'color' } }, intensity: { ui: { t: 'num', step: 1, dp: 0, softMax: 64 } }, range: { ui: { t: 'num', step: 1, dp: 0, softMin: 1, softMax: 40 } },
       decay: { ui: { t: 'num', step: 0.1, dp: 2 } },
       important: { ui: { t: 'check', sparse: true } }, daytime: { k: 'daytime', param: 'burnsAtNoon', wire: NOON, ui: { t: 'check', sparse: true } } } },
-  // a motion's part is its KEY (motion:<part>), never a field of the value (shape audit 10-16): the card's own row
+  // a motion's part is its KEY (motion:<part>), never a field of the value: the card's own row
   ...Object.fromEntries(Object.entries(MOTION).map(([card, m]) => [card, { key: 'motion', type: m.type, show: m.show, extra: ['part'], writeDp: 4, editor: { ...MOTION_EDITOR, ...m.editor } }])),
   Sockets: { key: 'sockets', whole: 'slots', hand: true },
-  // the hand-written four (hand: true): Transform, Sockets, Grabbable and Material (a draft, unregistered: no descriptor) keep
-  // read/write hooks in editschema.js (HAND); Grabbable's registry fields still draw and write through the table
+  // hand: true: Transform, Sockets, Grabbable and Material (a draft: no descriptor) keep read/write hooks in editschema.js
+  // (HAND); Grabbable's registry fields still draw and write through the table
   Grabbable: { key: 'grabbable', whole: 'spec', hand: true, show: ['enabled', 'who', 'steal', 'range', 'priority', 'hold', 'twoHanded', 'throw', 'release', 'returnAfter'], writeDp: 3, extra: ['anim', 'carries', 'fits', 'use', 'prompt'],
     editor: { enabled: { ui: { t: 'check' } }, who: { ui: { t: 'enum' } }, steal: { ui: { t: 'check' } }, range: { ui: { t: 'num', step: 0.1, dp: 2 } },
       priority: { ui: { t: 'num', step: 1, dp: 0, wdp: 0 } }, hold: { ui: { t: 'enum' } }, twoHanded: { ui: { t: 'check' } }, throw: { ui: { t: 'num', step: 0.1, dp: 2 } },
@@ -105,8 +102,8 @@ const CARDS = {
       align: { ui: { t: 'enum' } }, color: { ui: { t: 'color' } }, outline: { ui: { t: 'check' } }, outlineColor: { ui: { t: 'color' } }, background: { ui: { t: 'color', def: false } }, billboard: { ui: { t: 'enum' } }, lit: { ui: { t: 'enum' } } } },
   LookAt: { key: 'look-at', show: ['target', 'mode', 'forward', 'up', 'yaw', 'pitch', 'speed', 'range'], writeDp: 3, extra: ['target@'],
     editor: { target: { ui: { t: 'ref' } }, mode: { ui: { t: 'enum' } }, forward: { ui: { t: 'enum' } },
-      speed: { ui: { t: 'num', step: 30, dp: 0, deg: true } }, /* stored rad/s (shape audit 10-16), shown in degrees */ range: { ui: { t: 'num', step: 1, dp: 1, softMin: 0.1 } } } },
-  Lock: { key: 'lock', whole: 'value', show: [] },   // true: the whole value is the row (recut B2: no levels)
+      speed: { ui: { t: 'num', step: 30, dp: 0, deg: true } }, /* stored rad/s, shown in degrees */ range: { ui: { t: 'num', step: 1, dp: 1, softMin: 0.1 } } } },
+  Lock: { key: 'lock', whole: 'value', show: [] },   // true: the whole value is the row (no levels)
   Hidden: { key: 'hidden', whole: 'value' },
   Label: { key: 'label', whole: 'text' },
   Description: { key: 'description', whole: 'text' },
@@ -127,8 +124,8 @@ function build(card, c) {
     const e = c.editor?.[path] ?? {};
     const decided = DECIDED[`${card}.${path}`];
     for (const k of ['min', 'max', 'unit', 'hint']) if (e.ui && k in e.ui) throw new Error(`descriptors: ${card}.${path} states ${k} here; a field's limits, unit and doc are the registry's (componentspec ${c.key}.ranges / units / docs)`);
-    // the registry's limits, as the door judges them (gt reads as the slider's floor: editschema refuses the bound itself
-    // before sending), its unit (per motion type where a field's differs: motion.amp) and its one-line doc
+    // the registry's limits as the door judges them (gt is the slider's floor: editschema refuses the bound itself), its
+    // unit (per motion type where a field's differs: motion.amp) and its one-line doc
     const r = def.ranges?.[path]; const u = def.units?.[path];
     const lim = r && r.maxLen === undefined && r.maxItems === undefined ? { ...(r.min !== undefined ? { min: r.min } : r.gt !== undefined ? { min: r.gt } : {}), ...(r.max !== undefined ? { max: r.max } : {}) } : {};
     const unit = u == null ? undefined : typeof u === 'string' ? (u.includes('|') ? null : u) : (u[c.type] ?? null);
@@ -141,10 +138,9 @@ function build(card, c) {
 export const DESCRIPTORS = Object.freeze(Object.fromEntries(Object.entries(CARDS).map(([card, c]) => [card, build(card, c)])));
 export const descriptorFor = (card) => DESCRIPTORS[card] ?? null;
 
-/** What a card's value is with its defaults written in, as the AUTHORITY writes them: materialize(key, {type}). */
+/** With its defaults written in, as the AUTHORITY writes them: materialize(key, {type}). */
 export const materializedOf = (card) => { const d = DESCRIPTORS[card]; return d ? materialize(d.key, d.type ? { type: d.type } : {}).value : null; };
-/** A field's default as the editor sees it: the materialized value at its path, through `wire.from`. undefined = the
- *  registry writes nothing there (absence has its own meaning, absentMeans). */
+/** The materialized value at its path, through `wire.from`. undefined = the registry writes nothing there (absentMeans). */
 export function editorDefault(card, k) {
   const d = DESCRIPTORS[card]; const f = d?.fields.find((x) => x.k === k); if (!f || f.path == null) return undefined;
   const bag = materializedOf(card); const v = bag?.[f.path];
@@ -155,8 +151,8 @@ export function editorDefault(card, k) {
 export function toWire(card, k, v) { const f = DESCRIPTORS[card]?.fields.find((x) => x.k === k); return f?.wire ? f.wire.to(v) : v; }
 /** A card's field by its inspector address k. */
 export const fieldOf = (card, k) => DESCRIPTORS[card]?.fields.find((x) => x.k === k) ?? null;
-/** The field a value row of the card is: the address's own k, or (a keyed card's `<part>|<k>`, an indexed `<k>|<i>`) any
- *  segment of it that the card declares — a field, or one of its own derived rows (extra). null = the card names no such row. */
+/** The address's own k, or (a keyed `<part>|<k>`, an indexed `<k>|<i>`) any segment the card declares as a field or
+ *  derived row. null = the card names no such row. */
 export function claimOf(card, k) {
   const d = DESCRIPTORS[card]; if (!d) return null;
   for (const seg of String(k).split('|')) { const f = d.fields.find((x) => x.k === seg); if (f) return f; if (d.extra.includes(seg)) return { k: seg, extra: true }; }
@@ -164,7 +160,7 @@ export function claimOf(card, k) {
 }
 /** Every registry key some descriptor speaks for. */
 export const DESCRIBED_KEYS = Object.freeze([...new Set(Object.values(DESCRIPTORS).map((d) => d.key))]);
-/** The hand-written cards: editschema.js HAND must hold a read and a write hook for each. */
+/** editschema.js HAND must hold a read and a write hook for each. */
 export const HAND_CARDS = Object.freeze(Object.values(DESCRIPTORS).filter((d) => d.hand).map((d) => d.card));
-/** The keys a typed card speaks for — not raw JSON on the inspector's floor (the `floor` cards keep theirs there). */
+/** Not raw JSON on the inspector's floor (the `floor` cards keep theirs there). */
 export const CLAIMED_KEYS = Object.freeze([...new Set(Object.values(DESCRIPTORS).filter((d) => !d.floor).map((d) => d.key))]);

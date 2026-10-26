@@ -1,7 +1,6 @@
-// shared/protocol/authority/writes.js — the write path: changeEntry (the only code that appends a change entry, and it
-// takes only what admit returned), actEntry/actOf, commit (a verb's build, admitted, appended, answered), and the builds
-// of the plain writes: create (with createAt and mint), set, delete, turn and place (with resolve), and the thing
-// lookups they share (needThing, notAThing, offRefuse, the world's bounds). guess is reached through UP.
+// shared/protocol/authority/writes.js — the write path: changeEntry (the only code that appends a change entry, and it takes
+// only what admit returned), actEntry/actOf, commit (a verb's build, admitted, appended, answered), and the builds of the
+// plain writes: create (createAt, mint), set, delete, turn and place (resolve), and the thing lookups they share.
 import { isEntityId, isComponent, utf8Len } from "../fold.js";
 import { mintId } from "../ids.js";
 import { COMPONENTS, defOf, isNamespaced, materialize, unitTransform } from "../componentspec.js";
@@ -27,14 +26,13 @@ import { Admitted, admit, rateCheck } from "./gate.js";
 import { applyResettle, clearRefsTo, lastTouch, planResettle, resettleEntries, stampMedia, stampModelHash, stampShapes, stripDry, touched, warnOrNot, warnings } from "./followups.js";
 import { renameFields } from "../shaperepair.js";
 import { ratedHoursAt } from "../../forecast.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// layers above this one (a leaf may not import them), through UP (ctx.js)
 const guess = (...a) => UP.guess(...a);
 
 function changeShape(plan, cause, w) {
   // §2.4: in a chained log every set carries a salt (16 random bytes), so a purged value's commit can't be brute-forced;
-  // added before fits() measures the entry. `followUps` names the authority's ops in the entry itself, so any log reader
-  // can tell them from the asker's and authorship skips them. Always a batch then.
+  // added before fits() measures the entry. `followUps` names the authority's ops in the entry itself, so any reader can
+  // tell them from the asker's and authorship skips them. Always a batch then.
   const ops = plan.ops.map((o) => (o.verb === "set" && "value" in o && o.salt === undefined ? { ...o, salt: nonce16(w) } : o));
   const fu = plan.followUps ?? [];
   const one = ops.length === 1 && !fu.length ? (({ verb, ...body }) => ({ verb, body }))(ops[0]) : { verb: "batch", body: { ops, ...(fu.length ? { followUps: [...fu] } : {}) } };
@@ -44,8 +42,8 @@ function changeEntry(w, plan, cause) {
   if (!(plan instanceof Admitted)) throw new Error("authority bug: a state write that admit() didn't produce (§7)");
   const pre = plan.vacate.length ? w.state() : null;   // where each occupant was let go: the seat as it stood before the edit
   const seq = w.append(changeShape(plan, cause, w), CHANGE);
-  // the occupants an edit lets go (vacatesFor): presence, after the write has landed, each told in their inbox (with where
-  // they stand now: the authority's track of their body starts again there, scars r9 M2)
+  // the occupants an edit lets go (vacatesFor): presence, after the write lands, each told in their inbox with where they
+  // stand now (the authority's track of their body starts again there)
   for (const u of plan.vacate) if (w.presence.occupants?.[u.who]?.to === u.socket) { const at = vacateAt(w, pre, u.who, u.socket); clearOccupant(w, u.who);
     inboxPush(w.presence, u.who, { type: "vacated", socket: u.socket, ...(u.host ? { host: u.host } : {}), by: plan.who.actor, why: vacateWhy(u), ...(at ? { at } : {}) }); }
   (w.changedQ ??= []).push(seq); // `changed:<comp>` events, drained after the request (scripts, below)
@@ -55,7 +53,7 @@ const actEntry = (w, actor, verb, body) => ({ kind: "act", actor, verb, body });
 const actOf = (w, actor, verb, args, extra) => actEntry(w, actor, verb, { request: stripDry(args), ...(extra ?? {}) });
 
 // an imported world's sky/terrain/grass/water (imported:<it>) fills the view's slot while it's empty (view.js); a request
-// that sets or deletes the native one deletes the leftovers too. A capability's scoped writes are left as they are.
+// setting or deleting the native one deletes the leftovers too. A capability's scoped writes are left as they are.
 const NATIVE_WORLD = ["sky", "terrain", "grass", "water"];
 function dropImportedShadows(ctx, ops) {
   if (ctx.cap || !ops.length) return ops; const wc = ctx.st.entities["@world"]?.c; if (!wc) return ops;
@@ -72,8 +70,8 @@ function commit(w, actor, verb, args, build) {
   const sent = clone(args); // L4: the act is the request AS SENT (builders may annotate their own copy)
   const st = w.state();
   const ctx = { st, actor, w, notes: [], refs: new Set() };
-  // the old spelling's writes (a sockets map) are lifted here, before the references are cleared below, so a socket child the
-  // lift takes away has the references to it cleared too, as a delete's are; admit then takes the ops as lifted
+  // the old spelling's writes (a sockets map) are lifted before references are cleared, so a socket child the lift takes away
+  // has the references to it cleared too, as a delete's are; admit then takes the ops as lifted
   const pre = liftOps(st, stampModelHash(ctx, stampMedia(ctx, stampResetHomes(ctx, stampHomes(ctx, stampShapes(ctx, dropImportedShadows(ctx, build(ctx))))))), w.everIds());
   const ops = pre.ops;
   // whatever removes a thing (delete, a batch's delete, an undo of its create) clears the references to it in the same act
@@ -91,14 +89,14 @@ function commit(w, actor, verb, args, build) {
       ...warnOrNot(warnings(plan.after, [...ctx.refs])) }; }
   const actE = actOf(w, actor, verb, sent, CTX.operator && CTX.operator === actor && !ctx.cap ? { ...(ctx.actExtra ?? {}), operator: true } : ctx.actExtra);   // an operator's repair says so, in the act
   const changeE = changeShape(plan, w.entries.length, w);
-  // what a delete woke (buildDelete: things resting on what it removed as well as on their parent) falls from rest after the
-  // change, caused by the act; only things the write leaves standing (a later batch op may have removed one)
+  // what a delete woke (things resting on what it removed or on their parent) falls from rest after the change, caused by the
+  // act; only things the write leaves standing
   const wakes = (ctx.launches ?? []).filter((b) => plan.after.entities[b.id]).map((b) => ({ kind: "sim", actor, cause: w.entries.length, verb: "launch", body: b }));
-  // what an engine's start finds in a hand (buildEpoch): lifted out of its world, caused by the act. Each names its holder as
-  // actor, as a grab's own lift does, since orphanLifts reads the holder from it
+  // what an engine's start finds in a hand (buildEpoch): lifted out of its world, caused by the act, each naming its holder as
+  // actor (orphanLifts reads the holder from it)
   const lifts = liftsOf(w, ctx, plan);
   w.fits(actE, changeE, ...resettleEntries(w, settle, w.entries.length), ...wakes, ...lifts); // every line fits, or none is written
-  // the budget counts THIS write too, not only what came before it (review 10-14 C0: a 300 KiB batch in an empty window passed a 256 KiB cap)
+  // the budget counts THIS write too, not only what came before it
   if (!ctx.cap || ctx.cap.kind === "reaction" || ctx.cap.kind === "handle" || ctx.cap.kind === "caption") rateCheck(w, actor, "act", utf8Len(JSON.stringify(actE)) + utf8Len(JSON.stringify(changeE)));
   const act = w.append(actE);
   const seq = changeEntry(w, plan, act);
@@ -111,16 +109,16 @@ function commit(w, actor, verb, args, build) {
     after: touched(plan.ops, after), ...(ctx.undid ? { undid: ctx.undid } : {}), ...(ctx.notes.length ? { notes: ctx.notes } : {}), ...warnOrNot(warnings(after, [...ctx.refs])) };
 }
 
-// what an engine's start finds in a hand (buildEpoch), lifted out of its world: one sim entry each, naming its holder. Only
-// the holds the write itself leaves: a thing the same write takes out of the hand (handsLetGo) is where the edit put it,
-// and the replay seats it in the new engine's world, so a lift logged after the change would take it out again
+// what an engine's start finds in a hand (buildEpoch): one sim entry each, naming its holder. Only the holds the write itself
+// leaves: a thing the same write takes out of the hand (handsLetGo) is where the edit put it, and the replay seats it in the
+// new engine's world, so a lift logged after the change would take it out again
 const liftsOf = (w, ctx, plan) => { const released = new Set(handsLetGo(w, plan, plan.after).map((g) => g.id));
   return (ctx.lifts ?? []).filter((id) => plan.after.entities[id] && w.presence.holds?.[id] && !released.has(id))
     .map((id) => ({ kind: "sim", actor: w.presence.holds[id].by, cause: w.entries.length, verb: "lift", body: { id } })); };
 
-// the hands a write empties, by the replay's own rule (simlayer ends() and endsUnder()), so client and authority agree
-// on what is held: a held thing moved, re-parented, removed or switched off is let go, and so is whatever is held UNDER
-// a thing switched off or removed. `after` is the state the write leaves; a dry run reports them.
+// the hands a write empties, by the replay's own rule (simlayer ends() and endsUnder()), so client and authority agree on
+// what is held: a held thing moved, re-parented, removed or switched off is let go, and so is whatever is held UNDER a thing
+// switched off or removed. `after` is the state the write leaves; a dry run reports them.
 function handsLetGo(w, plan, after) {
   const out = []; const seen = new Set(); const holds = w.presence.holds ?? {};
   for (const o of plan.ops) { const h = holds[o.id]; if (!h || seen.has(o.id) || !ends(o)) continue;
@@ -133,14 +131,14 @@ function handsLetGo(w, plan, after) {
 }
 const handNote = (g) => ({ id: g.id, tookFromHand: g.by, why: g.why });
 
-// What a write leaves for the people it touched, whoever wrote it (a person's commit or a script's activation): a thing it
-// moved, re-parented, switched off or removed leaves the hand that held it, and so does what hangs under a thing it switched
-// off or removed; a seat it removed or switched off lets its occupant go. notes: the writer's reply notes (a script has none).
+// What a write leaves for the people it touched, whoever wrote it (a person's commit or a script): a thing moved, re-parented,
+// switched off or removed leaves the hand that held it, as does what hangs under one switched off or removed; a seat removed
+// or switched off lets its occupant go. notes: the writer's reply notes (a script has none).
 function letGoEdited(w, plan, act, st, after, actor, notes = []) {
   { const gone = handsLetGo(w, plan, after);
     for (const g of gone) { delete w.presence.holds[g.id]; heldEvent(w, "release", g.id, { by: g.by, how: "edited", seq: act }); notes.push(handNote(g)); }
     if (gone.length) w.savePresence(); }
-  // a seat gone or switched off lets its occupant go: told in their inbox like any vacate (holes r10 L6), with where the track restarts
+  // a seat gone or switched off lets its occupant go: told in their inbox like any vacate, with where the track restarts
   for (const who of Object.keys(w.presence.occupants ?? {})) if (!occupantOf(w, after, who)) { const to = w.presence.occupants[who]?.to; const why = "the socket they occupied was switched off or removed";
     const at = typeof to === "string" && st.entities[to] ? vacateAt(w, st, who, to) : null; clearOccupant(w, who); notes.push({ who, vacated: true, socket: to, why });
     if (typeof to === "string") inboxPush(w.presence, who, { type: "vacated", socket: to, by: actor, why: `${to}: ${why}`, ...(at ? { at } : {}) }); }
@@ -158,8 +156,8 @@ function needThing(ctx, id) {
   return e;
 }
 
-// resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights
-// are admit's. A malformed @world.bounds already in a log is treated as no bounds; the floor is the terrain's.
+// resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
+// admit's. A malformed @world.bounds already in a log is treated as no bounds; the floor is the terrain's.
 const outsideWorld = (B, p) => p[0] < B.min[0] || p[0] > B.max[0] || p[2] < B.min[2] || p[2] > B.max[2] || p[1] > B.max[1];
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
@@ -176,26 +174,26 @@ function resolve(ctx, id, comp, value, prev) {
     return unitTransform(v);
   }
   if (!defOf(comp) && isNamespaced(comp)) ctx.notes.push({ id, component: comp, why: `'${comp}' is a namespaced component this world's engine doesn't know: it is kept (and will be preserved), but nothing here will draw or run it` });
-  // one spelling per meaning (shape audit 10-16): what a write may say the short way is stored the one way
+  // one spelling per meaning: what a write may say the short way is stored the one way
   if (comp === "home" && value && typeof value === "object" && !Array.isArray(value) && typeof value.scale === "number") value = { ...value, scale: [value.scale, value.scale, value.scale] };
-  // a reference is stored as written (R 10-17: a model's library path, an Essential's name, a grass preset's name;
+  // a reference is stored as written (a model's library path, an Essential's name, a grass preset's name;
   // shared/protocol/assetref.js): grass's first-protocol knobs are mapped to the flora spelling, and a preset is checked
   if (comp === "grass") { let r;
     try { r = atWrite(comp, value); } catch (x) { refuse("shape", `${id}.${comp}: ${String(x?.message ?? x).replace(/^\[flora\] /, "")}`, COMPONENTS.grass.help); }
     for (const n of r.notes) ctx.notes.push({ id, component: comp, ...n }); value = r.value; }
-  // grabbable.pose / station.pose are anim, a grip's fingers its grasp (R 10-17 15:09/15:11): a write in the old spelling is
-  // taken and stored in the new (shaperepair.js renameFields: the maintenance command renames a stored one the same way)
+  // grabbable.pose / station.pose are anim, a grip's fingers its grasp: an old-spelling write is stored in the new
+  // (shaperepair.js renameFields: the maintenance command renames a stored one the same way)
   if (comp === "grabbable" || comp === "station") { const r = renameFields(comp, value); if (r.renamed.length) { value = r.value; for (const n of r.renamed) ctx.notes.push({ id, component: comp, ...n, why: "renamed before release (R 10-17): pose is anim, fingers is grasp" }); } }
-  // a motion's type bob is oscillate (R 10-17 21:40): the old spelling is taken for one release and stored in the new (the
-  // maintenance command renames a stored one the same way: renameFields)
+  // a motion's old type is oscillate: the old spelling is taken for one release and stored in the new (renameFields renames
+  // a stored one the same way)
   if (comp === "motion" || comp.startsWith("motion:")) { const r = renameFields(comp, value); if (r.renamed.length) { value = r.value; for (const n of r.renamed) ctx.notes.push({ id, component: comp, ...n, why: "renamed before release (R 10-17): a motion's bob is oscillate" }); } }
-  // a light's day (a double negative) is daytime (shape audit 10-16): true = dim, false = full
+  // a light's day (a double negative) is daytime: true = dim, false = full
   if (comp === "light" && value && typeof value === "object" && !Array.isArray(value) && typeof value.day === "boolean") { const { day, ...rest } = value;
     value = { ...rest, daytime: rest.daytime ?? (day ? "dim" : "full") }; ctx.notes.push({ id, component: comp, field: "day", sent: day, kept: value.daytime, why: "a light's day is daytime: dim | full" }); }
-  // a terrain layer's colour is an int, as every colour (shape audit 10-16): "#rrggbb" is taken
+  // a terrain layer's colour is an int, as every colour: "#rrggbb" is taken
   if (comp === "terrain" && value && typeof value === "object" && !Array.isArray(value) && Array.isArray(value.layers) && value.layers.some((l) => typeof l?.color === "string" && /^#[0-9a-f]{6}$/i.test(l.color)))
     value = { ...value, layers: value.layers.map((l) => (typeof l?.color === "string" && /^#[0-9a-f]{6}$/i.test(l.color) ? { ...l, color: parseInt(l.color.slice(1), 16) } : l)) };
-  // a sky written by hand is stamped like the sky act's: ts is the instant its hours held (the stamped fields are refused in buildSet)
+  // a sky written by hand is stamped like the sky act's: ts is the instant its hours held (stamped fields are refused in buildSet)
   if (comp === "sky" && value && typeof value === "object" && !Array.isArray(value) && value.ts === undefined) value = { ...value, ts: Math.floor(ctx.w.now()) };
   if (isLookAt(comp) && value && typeof value === "object" && !Array.isArray(value)) { const AXV = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };   // the letters the door takes (tools/lookat-forward-check: no negative letter)
     for (const f of ["forward", "up"]) if (typeof value[f] === "string" && AXV[value[f]]) value = { ...value, [f]: AXV[value[f]].slice() }; }
@@ -208,11 +206,10 @@ function resolve(ctx, id, comp, value, prev) {
   if (comp === "parent" && value && typeof value === "object" && !Array.isArray(value) && "order" in value) { const { order, ...rest } = value; ctx.notes.push({ id, component: comp, field: "order", sent: order, why: "siblings have no stored order: dropped" }); value = rest; }
   if (comp === "motion" && value && typeof value === "object") { const m = materialize("motion", value); const v = filled(m.value, m.filled);
     if (v.t0 === undefined) { v.t0 = ctx.w.now(); ctx.notes.push({ id, component: "motion", field: "t0", kept: v.t0, why: "stamped by the authority" }); } return v; }
-  // a part's motion (motion:<part>) runs on the same clock: without a stamp every client started it from its own first
-  // look and disagreed on its phase (a swing's seat, locked to that phase, pumped out of step on every screen)
+  // a part's motion (motion:<part>) runs on the same clock: unstamped, every client started it at its own first look and
+  // disagreed on its phase
   if (comp.startsWith("motion:") && value && typeof value === "object" && !Array.isArray(value)) {
-    // the node it moves is data in the value; a write that leaves it out names the node its key's tag spells (the reading
-    // before 10-16), written down
+    // the node it moves is data in the value; a write leaving it out names the node its key's tag spells, written down
     if (!(typeof value.node === "string" && value.node)) { value = { ...value, node: comp.slice(7) }; ctx.notes.push({ id, component: comp, field: "node", kept: value.node, why: "the node it moves, written down (absent, its key's tag)" }); }
     const m = materialize("motion", value); const v = filled(m.value, m.filled);
     if (v.t0 === undefined) { v.t0 = ctx.w.now(); ctx.notes.push({ id, component: comp, field: "t0", kept: v.t0, why: "stamped by the authority" }); } return v; }
@@ -226,13 +223,13 @@ function merge7396(target, patch) {
   return out;
 }
 // a fresh id: never one this world has had (§3d H7), nor one already used in this request (`also`)
-// review 10-07 H5: 26 base32 (shared/protocol/ids.js), never <slug>-<count>, which two forks minted alike; R 10-17: no slug
-// at all (a word in an id goes stale; the label is the name)
+// 26 base32 (shared/protocol/ids.js), never <slug>-<count> (two forks minted alike) and no slug at all (a word in an id goes
+// stale; the label is the name)
 function mint(st, also = null) { const ever = CTX.mintW?.everIds() ?? new Set(); let id;
   do id = mintId(); while (st.entities[id] || ever.has(id) || also?.has(id)); return id; }
 
-// create {at} without from: [x, z] is on the ground there, [x, y, z] the origin exactly, {pos?, yaw|q?, scale?} replaces
-// those transform fields. Anything else is a shape refusal, and so is at with place (one way of saying where).
+// create {at} without from: [x, z] is on the ground there, [x, y, z] the origin exactly, {pos?, yaw|q?, scale?} replaces those
+// transform fields. Anything else is a shape refusal, and so is at with place (one way of saying where).
 const AT_FIX = "at: [x, z] on the ground, [x, y, z] exactly, or {pos: [x, y, z], yaw} (or q); or place {…} instead";
 function createAt(a, comps) {
   const at = a.at; if (at === undefined) return null;
@@ -263,7 +260,7 @@ function buildCreate(ctx, a) {
   const made = createOps(id, out);
   const place = placeAt ? { at: placeAt } : a.place;
   if (!place) return made;
-  admit(ctx.w, ctx.st, { actor: ctx.actor }, made);   // the one gate before place solves (security pass 2 H-A); again on the whole write after
+  admit(ctx.w, ctx.st, { actor: ctx.actor }, made);   // the one gate before place solves; again on the whole write after
   const placed = buildPlace({ ...ctx, st: scratch(ctx.st, made) }, { ...place, id, __made: true });
   return [...made.filter((o) => !(o.verb === "set" && (o.comp === "transform" || o.comp === "parent"))), ...placed.filter((o) => o.verb === "set")];
 }
@@ -275,9 +272,8 @@ function buildSet(ctx, a) {
   const e = needThing(ctx, a.id); handWrite(ctx, a.id, a.component);
   if (!isComponent(a.component)) refuse("shape", `'${a.component}' isn't a component name`, "§3.1: [a-z][a-z0-9-]*, optionally <domain>/, @<n> and :<key> (ASCII only)", { didYouMean: guess(String(a.component), Object.keys(COMPONENTS)) });
   const lt = lastTouch(ctx.w, a.id, a.component); const base = a.base === undefined ? undefined : versionSeq(ctx.w, a.base, "base");
-  // no `current` here, as with expect: buildSet runs BEFORE admit and a dry request is never logged, so an echoed value
-  // would read any component through a lock with no trace (the fix sends them to `inspect`). version/by stay: history is
-  // public (READ_ONLY).
+  // no `current` here, as with expect: buildSet runs BEFORE admit and a dry request is never logged, so an echoed value would
+  // read any component through a lock with no trace (the fix sends them to `inspect`). version/by stay: history is public (READ_ONLY).
   if (base !== undefined && lt && lt.seq > base) refuse("stale", `${a.id}.${a.component} changed since version ${base}: ${said(lt.actor)} set it at ${lt.seq}`, a.merge ? `inspect {id: '${a.id}'} for the current value and its new version, then re-send with that base` : `inspect {id: '${a.id}'} for the current value and version, then decide; or merge: true to change only your fields`, { version: lt.seq, by: lt.actor });
   if (a.base === undefined && !a.merge && lt && lt.actor !== ctx.actor && a.component in e.c) ctx.notes.push({ id: a.id, component: a.component, overwrote: { by: lt.actor, seq: lt.seq }, why: "you replaced someone else's value without a base version; send base (from inspect) to be refused instead if it changed" });
   let v = a.merge ? merge7396(e.c[a.component], a.value) : a.value;
@@ -292,13 +288,12 @@ function buildSet(ctx, a) {
   }
   if (a.id === "@world" && a.component === "physics-engine") return buildEpoch(ctx, v, a);
   // a field the authority stamps (componentspec `stamped`: the sky's ts, override, a forecast's epoch) is never taken from a
-  // writer (shape audit 10-16): the act that owns it stamps it (sky, weather)
-  // …except a fork's own copy (CTX.forking), which carries the value its source's act stamped (review of #260, server I36)
+  // writer: the owning act stamps it (sky, weather). Except a fork's own copy (CTX.forking), carrying its source's stamp (#260 I36)
   if (!CTX.forking) for (const f of defOf(a.component)?.stamped ?? []) { const path = f.split("."); let x = a.value;
     for (const k of path) x = x && typeof x === "object" && !Array.isArray(x) ? x[k] : undefined;
     if (x !== undefined) refuse("stamped", `${a.id}.${a.component}.${f} is stamped by the authority, never written`, a.component === "sky" ? "leave it out: the sky act stamps ts and a forecast's epoch, the weather act an override (sky {…} / weather {weather})" : "leave it out"); }
-  // a merge that sets the sky's hours or rate restarts its clock now (ts is the instant hours held, so a kept ts would
-  // count the time since again): hours as written, or, with only the rate, the hour the old clock shows now (review of #260)
+  // a merge setting the sky's hours or rate restarts its clock now (ts is the instant hours held, so a kept ts would count the
+  // time since again): hours as written, or with only the rate the hour the old clock shows now (#260)
   if (a.component === "sky" && a.merge && v && typeof v === "object" && a.value && typeof a.value === "object" && (Object.hasOwn(a.value, "hours") || Object.hasOwn(a.value, "rate"))) {
     const old = e.c.sky && typeof e.c.sky === "object" ? e.c.sky : null; const { ts, ...rest } = v;
     v = Object.hasOwn(a.value, "hours") || !old ? rest : { ...rest, hours: Math.round(ratedHoursAt(old, ctx.w.now()) * 1e6) / 1e6 }; }
@@ -327,8 +322,8 @@ function buildDelete(ctx, a) {
   // only what stands over a surface of what's gone can have rested on it (the index: its neighbours, never the world)
   const ixb = spatial(ctx.st); const over = new Set();
   for (const g of gone) for (const s of ixb.rec.get(g)?.surfs ?? []) for (const id of near(ctx.st, [s.min[0], s.y - 0.02, s.min[1]], [s.max[0], Infinity, s.max[1]])) over.add(id);
-  // the set-down is the authority's consequence of the delete, so a follow-up (scars r10 M3): admitted without the deleter's rights or
-  // the resting thing's lock, so nobody pins a thing against deletion by resting something of theirs on it. In a hand or in flight isn't resting
+  // the set-down is the delete's consequence, so a follow-up: admitted without the deleter's rights or the resting thing's
+  // lock, so nobody pins a thing against deletion by resting something on it. In a hand or in flight isn't resting
   const sf = ctx.w?.sim?.();
   for (const id of Object.keys(after.entities)) { if (!over.has(id)) continue; const b = aabb(after, id); if (!b || after.entities[id].c.parent) continue;
     if (ctx.w?.presence.holds?.[id] || sf?.launched?.[id]) continue;
@@ -337,9 +332,9 @@ function buildDelete(ctx, a) {
     const now = supportBelow(after, (b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2, b.min[1], new Set([id]));
     const t = worldT(after, id); ops.push(followUp(setOp(id, "transform", { ...t, pos: [t.pos[0], r3(t.pos[1] - (b.min[1] - now.y)), t.pos[2]] }))); setDown.push({ id, onto: now.id }); ctx.refs.add(id); }
   if (setDown.length) ctx.notes.push({ setDown, why: "they were resting on what you deleted, so they were set down on what's below" });
-  // a dynamic thing rested on TWO supports is parented to one; deleting the other would leave it asleep in mid-air (the
-  // engine wakes sleepers only on touch). So one whose box touches a deleted thing's top falls from rest (a zero-velocity
-  // launch); held, flying and locked things stay, as does everything while the ground is still loading.
+  // a dynamic thing on TWO supports is parented to one; deleting the other would leave it asleep in mid-air (the engine wakes
+  // sleepers only on touch). So one whose box touches a deleted thing's top falls from rest (a zero-velocity launch); held,
+  // flying and locked things stay, as does everything while the ground is still loading.
   const spec = ctx.st.entities["@world"]?.c["physics-engine"];
   if (spec) { const wake = [];
     const tops = [...gone].flatMap((g) => ixb.rec.get(g)?.surfs ?? []);
@@ -355,9 +350,8 @@ function buildDelete(ctx, a) {
 }
 
 
-// turn {id, axis, deg, space?, about?}: the gizmo's rotate, for agents (agent lab, Juniper #3: no tool could say "about
-// its own long axis"). space: 'object' (its own axes, the default) | 'parent' | 'world'. about: 'pivot' (default when it
-// has one: the pivot stays put and the thing swings round it, research 52) | 'origin'. The log gets a plain transform.
+// turn {id, axis, deg, space?, about?}: the gizmo's rotate, for agents. space: 'object' (its own axes, the default) | 'parent'
+// | 'world'. about: 'pivot' (default when it has one: the pivot stays put, research 52) | 'origin'. The log gets a plain transform.
 function buildTurn(ctx, a) {
   const e = needThing(ctx, a.id); const st = ctx.st;
   const AX = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
@@ -386,9 +380,9 @@ function buildTurn(ctx, a) {
 function buildPlace(ctx, a) {
   const e = needThing(ctx, a.id);
   const m = geomE(e); if (!m) refuse("shape", modelOf(e.c.model) ? `${a.id}'s model hasn't been measured here, so it has no size to place` : `${a.id} has no model or mesh, so it has no size to place`, "set its transform directly");
-  // the one gate before any solving (security pass 2 H-A: a visitor's place on a table scaled 1000× ran the whole search,
-  // seconds of every world's thread, and was refused only after): admit a move of this thing as it stands — rights,
-  // locks, flight and rate, the checks the placed result meets — so a refusal costs nothing. admit runs again on the result.
+  // the one gate before any solving (a place on a table scaled 1000× would run the whole search on every world's thread and
+  // be refused only after): admit a move of this thing as it stands (rights, locks, flight, rate), so a refusal costs nothing.
+  // admit runs again on the result.
   if (!a.__made) admit(ctx.w, ctx.st, { actor: ctx.actor }, [setOp(a.id, "transform", COMPONENTS.transform.defaults)]);   // (the value is a stand-in: these checks don't read it)
   const st = ctx.st, cur = worldT(st, a.id), scale = cur.scale;
   const fam = new Set([a.id, ...descendants(st, a.id)]);
@@ -401,8 +395,8 @@ function buildPlace(ctx, a) {
   const lo = [0, 1, 2].map((i) => Math.min(...lc.map((c) => c[i]))), hi = [0, 1, 2].map((i) => Math.max(...lc.map((c) => c[i])));
   const S = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]], C = [(hi[0] + lo[0]) / 2, 0, (hi[2] + lo[2]) / 2];
   const half = (y) => { const c = Math.abs(Math.cos(y)), s = Math.abs(Math.sin(y)); const hx = S[0] / 2, hz = S[2] / 2; return [c * hx + s * hz, s * hx + c * hz]; };
-  // `local`: what meets the whole region a search tests (its key order kept), so each spot filters that instead of asking
-  // a search reuses one box and its oriented twin (the same numbers boxToObb gives), so a spot costs no allocations
+  // `local`: what meets the whole region a search tests (key order kept), so each spot filters that; a search reuses one box
+  // and its oriented twin (as boxToObb gives), so a spot allocates nothing
   const QB = { min: [0, 0, 0], max: [0, 0, 0] }, QO = { c: [0, 0, 0], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], h: [0, 0, 0] };
   const free = (x, y, z, yw, ignore, local = null) => { const [hx, hz] = half(yw);
     const box = local ? QB : { min: [0, 0, 0], max: [0, 0, 0] }; box.min[0] = x - hx; box.min[1] = y; box.min[2] = z - hz; box.max[0] = x + hx; box.max[1] = y + S[1]; box.max[2] = z + hz;
@@ -412,9 +406,8 @@ function buildPlace(ctx, a) {
       if (local) { const q = ix.rec.get(id).q; if (q.min[0] > box.max[0] || q.max[0] < box.min[0] || q.min[1] > box.max[1] || q.max[1] < box.min[1] || q.min[2] > box.max[2] || q.max[2] < box.min[2]) continue; spend(1); }
       if (B ? hitsIx(st, box, id, 0.01, B) : hitsIx(st, box, id, 0.01)) return id; } return null; };
   const relaxed = []; let pos, support;
-  // a TARGET is aimed at by its bounds centre, never its origin: a library model's origin is wherever its author left it
-  // (agent lab, 10-04: "near the desk, facing it" aimed at an origin 2.46 m off the desk and faced air; a swing hung from
-  // a frame's corner). An unmeasured thing falls back to its origin.
+  // a TARGET is aimed at by its bounds centre, never its origin (a library model's origin is wherever its author left it); an
+  // unmeasured thing falls back to its origin
   const centreOf = (id) => { const b = aabb(st, id); if (b) return [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2]; return worldT(st, id)?.pos; };
   const faceYaw = (p) => { if (!a.facing) return yaw; const tgt = Array.isArray(a.facing) ? [a.facing[0], 0, a.facing[1]] : centreOf(a.facing);
     if (!tgt) refuse("not-found", `can't face '${a.facing}': facing takes a thing's id or an [x, z] point, not a direction word`, "e.g. facing: 'door-1', or facing: [0, -5] to face north-ish (−z)", { didYouMean: guess(String(a.facing), Object.keys(st.entities)) }); const d = [tgt[0] - p[0], tgt[2] - p[2]]; return Math.atan2(d[0], d[1]) + (a.away ? Math.PI : 0); };
@@ -427,11 +420,10 @@ function buildPlace(ctx, a) {
     let best = null, lastBlock = null; const whatWas = CTX.work.what;
     for (let pass = 0; pass < 2; pass++) {
       const [hx, hz] = half(yaw);
-      // the footprint's own corners, turned by yaw (house 6340433633: a turned top tested the box of them, so a long thing
-      // laid along a turned top was refused where it fits)
+      // the footprint's own corners, turned by yaw (the box of them would refuse a long thing laid along a turned top that fits)
       const fq = yawQ(yaw), foot = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => { const r = qrot(fq, [sx * S[0] / 2, 0, sz * S[2] / 2]); return [r[0], r[2]]; });
-      // the 2.5 cm grid, searched nearest-first ring by ring from the cell nearest `want`: the full scan's answer, at the cost
-      // of the cells near it. Past the work budget it's refused (too-costly), never minutes of the world's thread.
+      // the 2.5 cm grid, nearest-first ring by ring from the cell nearest `want`: the full scan's answer at the cost of the
+      // cells near it. Past the work budget it's refused (too-costly), never minutes of the world's thread.
       if ((s.max[0] - s.min[0]) / 0.025 > 2e5 || (s.max[1] - s.min[1]) / 0.025 > 2e5) spend(Infinity, `finding room for ${a.id} on ${a.on} (${r3(s.max[0] - s.min[0])}×${r3(s.max[1] - s.min[1])} m at 2.5 cm)`);
       const xs = [], zs = []; for (let x = s.min[0] + hx; x <= s.max[0] - hx + 1e-9; x += 0.025) xs.push(x); for (let z = s.min[1] + hz; z <= s.max[1] - hz + 1e-9; z += 0.025) zs.push(z);
       const nx = xs.length, nz = zs.length; let lastIdx = -1;
@@ -443,8 +435,7 @@ function buildPlace(ctx, a) {
           if (best && (d > best.d || (d === best.d && idx > best.idx))) return;
           if (s.rect && !foot.every(([dx, dz]) => inRect(s, x + dx, z + dz))) return;   // off a turned top's own rectangle, though inside the box of its corners
           spend(4); const bl = free(x, s.y, z, yaw, NONE, local); if (!bl) best = { x, z, d, idx }; else if (idx > lastIdx) { lastIdx = idx; lastBlock = bl; } };
-        // the nearest a ring's side can be to `want`: no ring is nearer than the one inside it, so the search ends at the
-        // first ring whose sides are all further than the best found
+        // no ring is nearer than the one inside it, so the search ends at the first ring whose sides are all further than the best
         const side = (i0, i1, k0, k1) => Math.hypot(Math.min(Math.max(want[0], xs[i0]), xs[i1]) - want[0], Math.min(Math.max(want[1], zs[k0]), zs[k1]) - want[1]);
         for (let r = 0, R = Math.max(ci, nx - 1 - ci, ck, nz - 1 - ck); r <= R; r++) {
           const i0 = Math.max(0, ci - r), i1 = Math.min(nx - 1, ci + r), k0 = Math.max(0, ck - r), k1 = Math.min(nz - 1, ck + r);
@@ -490,7 +481,7 @@ function buildPlace(ctx, a) {
     yaw = thinX ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI);
     const [hx, hz] = half(yaw); const gap = a.gap ?? 0.01; const along = a.along ?? 0;
     pos = thinX ? [side > 0 ? b.max[0] + hx + gap : b.min[0] - hx - gap, 0, c[1] + along] : [c[0] + along, 0, side > 0 ? b.max[2] + hz + gap : b.min[2] - hz - gap];
-    if (a.height !== undefined) { // wall-mounted: at that height, riding the wall
+    if (a.height !== undefined) { // wall-mounted: at that height, against the wall
       if (a.height + m.size[1] * scale[1] > b.max[1]) refuse("no-room", `${a.id} at ${a.height} m would stick out above ${a.against} (top ${r3(b.max[1])} m)`, "use a lower height");
       pos[1] = a.height; support = a.against; if (a.attach === undefined) a.attach = true; a.__mounted = true; }
     if (a.facing) relaxed.push("'facing' ignored: against a wall, a thing faces away from it");
@@ -521,9 +512,8 @@ function buildPlace(ctx, a) {
     if (e.c.parent) ops.push(delOp(a.id, "parent"));
     ops.push(setOp(a.id, "transform", wt));
   }
-  // a hung thing swings from where its ropes would tie: the UNDERSIDE of the member right above it (agent lab round 2,
-  // Rowan: the swing's pivot was the frame's top), stored as its pivot component, which the authority's pivot, inspect, the
-  // renderer and the agent's look all read (research 52). A pivot someone already set is left alone.
+  // a hung thing swings from where its ropes would tie: the UNDERSIDE of the member right above it, stored as its pivot
+  // component (read by the authority, inspect, the renderer and the agent's look: research 52). A pivot already set is left alone.
   if (a.hang && !e.c.pivot) {
     const tie = obbs(st, a.hang).map((o) => { const ext = [0, 1, 2].map((i) => o.ax.reduce((acc, axv, j) => acc + Math.abs(axv[i]) * o.h[j], 0)); return { min: o.c.map((v, i) => v - ext[i]), max: o.c.map((v, i) => v + ext[i]) }; })
       .filter((b) => pos[0] >= b.min[0] - 1e-6 && pos[0] <= b.max[0] + 1e-6 && pos[2] >= b.min[2] - 1e-6 && pos[2] <= b.max[2] + 1e-6 && b.min[1] >= pos[1] + S[1] - 1e-6)

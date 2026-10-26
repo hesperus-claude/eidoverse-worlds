@@ -1,17 +1,12 @@
-// terrainshape — the terrain you SHAPE, over the noise you roll (terrainmath.js); both ride the `terrain` verb:
-//
+// terrainshape — the terrain you SHAPE, over the noise you roll (terrainmath.js); both travel in the `terrain` verb:
 //   features   placed shapes, applied in order over the base:
 //                {type:'hill',    x, z, radius, height}         a round bump; negative height = a pit
 //                {type:'ridge',   x1, z1, x2, z2, radius, height} a raised line; negative = a valley/channel
 //                {type:'flatten', x, z, radius, height, edge?}  level a circle to an ABSOLUTE height
-//   heightmap  {grid: 'store/heightmaps/<hash>.json', min, max} — an uploaded
-//              grayscale image REPLACES the noise as the base: black = min
-//              metres, white = max, stretched over the terrain's `size`
-//              square (image x → world +x, image down → world +z). Features
-//              still apply on top.
-//
-// One implementation for the client mesh, the agents and the sim (via terrainmath.js), so it holds to the sim's
-// exact-op set (Covenant I: + - * /, sqrt, floor; no pow or hypot). A world with neither key never reaches it.
+//   heightmap  {grid: 'store/heightmaps/<hash>.json', min, max}: an uploaded grayscale image REPLACES the noise base
+//              (black = min m, white = max, over the `size` square; image x → +x, image down → +z). Features apply on top.
+// One implementation for the client mesh, the agents and the sim, so it holds to the sim's exact-op set (Covenant I:
+// + - * /, sqrt, floor; no pow or hypot). A world with neither key never reaches it.
 
 import { MOVER, waterStance, waterCost } from './mover.js';   // the water law (below): one walker, one law
 
@@ -23,9 +18,7 @@ const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const GRID_REF = /^store\/heightmaps\/[0-9a-f]{16}\.json$/;
 
-/** The shaping part of terrain-verb args, normalized — or null when the
- *  world uses none (the caller then keeps its plain noise law, untouched).
- *  Malformed features are dropped, not guessed at.
+/** Or null when the world uses none (the caller keeps its plain noise law, untouched). Malformed features are dropped, not guessed at.
  *  @param {Record<string, any>} a */
 export function shapeParams(a) {
   const features = [];
@@ -54,8 +47,8 @@ export function shapeParams(a) {
 }
 
 // ---- heightmap grids ---------------------------------------------------------
-// A grid is {w, h, data: Uint16Array}, row-major from the image's top-left; on the wire base64 of little-endian uint16s,
-// decoded once by the server at upload so every consumer reads integers.
+// {w, h, data: Uint16Array}, row-major from the image's top-left; on the wire base64 of little-endian uint16s, decoded once
+// by the server at upload so every consumer reads integers.
 
 // grids cached by ref (last GRID_CACHE kept); a disk miss is remembered MISS_RETRY_MS, a failed fetch backs off from
 // FETCH_RETRY_MS. No ground commits for a heightmap until its grid is here (shapeReady).
@@ -76,10 +69,9 @@ const missedLately = (ref) => { const t = misses.get(ref); return t != null && D
 
 /** Make a grid available to every height function that names it. */
 export function registerGrid(ref, grid) { keep(ref, grid); }
-/** A synchronous source for grids not yet registered — the server's disk.
- *  Clients and agents fetch asynchronously instead (they cannot block): see setGridFetcher. */
+/** A synchronous source (the server's disk). Clients and agents can't block: see setGridFetcher. */
 export function setGridLoader(fn) { loader = fn; }
-/** An asynchronous source — `fn(ref)` resolves to the wire form ({w, h, data}) or throws. */
+/** `fn(ref)` resolves to the wire form ({w, h, data}) or throws. */
 export function setGridFetcher(fn) { fetcher = fn; }
 export function gridFor(ref) {
   let g = grids.get(ref);
@@ -89,8 +81,7 @@ export function gridFor(ref) {
   if (g) keep(ref, g); else misses.set(ref, Date.now());
   return g ?? null;
 }
-/** Fetch a grid through the fetcher, once at a time per ref: resolves to the grid, or null if it could not
- *  be had (and then not asked for again until MISS_RETRY_MS has passed). */
+/** Once at a time per ref: the grid, or null (then not asked again until MISS_RETRY_MS has passed). */
 export function requestGrid(ref) {
   const have = gridFor(ref);
   if (have) return Promise.resolve(have);
@@ -110,13 +101,12 @@ export function requestGrid(ref) {
   }
   return p;
 }
-/** Milliseconds until a failed grid may be fetched again (0: now). */
+/** 0: now. */
 export function gridRetryIn(ref) { const m = fetchMisses.get(ref); return m ? Math.max(0, m.until - Date.now()) : 0; }
-/** Whether a terrain's shaping can be computed as written — false while its heightmap grid is still
- *  missing (the height law would fall back to noise, which nothing should commit to). */
+/** False while its heightmap grid is missing (the height law would fall back to noise, which nothing should commit to). */
 export function shapeReady(shape) { return !shape?.heightmap || !!gridFor(shape.heightmap.grid); }
 
-/** Wire/disk form → grid. Integer byte assembly, so it is exact everywhere. */
+/** Integer byte assembly, so it is exact everywhere. */
 export function decodeGrid(obj) {
   const w = obj?.w | 0, h = obj?.h | 0;
   if (w < 2 || h < 2 || w > MAX_GRID || h > MAX_GRID || typeof obj.data !== 'string') throw new Error('bad heightmap grid');
@@ -140,11 +130,10 @@ export function encodeGrid(grid) {
 // ---- the height law ------------------------------------------------------------
 
 const sm = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-// round-topped bump: 1 at the centre, 0 at r, flat at both ends — (1-t²)²
+// 1 at the centre, 0 at r, flat at both ends: (1-t²)²
 const bell = (d2, r) => { const t2 = d2 / (r * r); if (t2 >= 1) return 0; const k = 1 - t2; return k * k; };
 
-/** Wrap a base height function with a world's shaping.
- *  @param {(x: number, z: number) => number} base  the noise law (toolkit or terrainmath)
+/** @param {(x: number, z: number) => number} base  the noise law (toolkit or terrainmath)
  *  @param {NonNullable<ReturnType<typeof shapeParams>>} S
  *  @param {number} size  the terrain square the heightmap stretches over
  *  @returns {(x: number, z: number) => number} */
@@ -152,7 +141,7 @@ export function shapeHeight(base, S, size) {
   const hm = S.heightmap, feats = S.features;
   const half = size / 2;
   const sample = (g, x, z) => {
-    // image-space position, clamped to the edge (outside the square the edge rows extend)
+    // image-space, clamped (outside the square the edge rows extend)
     const u = clamp((x + half) / size, 0, 1) * (g.w - 1), v = clamp((z + half) / size, 0, 1) * (g.h - 1);
     const i = Math.floor(u), j = Math.floor(v);
     const i1 = i + 1 < g.w ? i + 1 : i, j1 = j + 1 < g.h ? j + 1 : j;
@@ -161,8 +150,7 @@ export function shapeHeight(base, S, size) {
     const b = d[j1 * W + i] + (d[j1 * W + i1] - d[j1 * W + i]) * fu;
     return hm.min + (hm.max - hm.min) * ((a + (b - a) * fv) / 65535);
   };
-  // The grid is HELD from the moment it is first found: a built terrain keeps its own image however the
-  // cache turns over. Until then it is looked up per call (a sim's field made before the grid landed).
+  // HELD once first found: a built terrain keeps its image however the cache turns over; until then looked up per call
   let held = hm ? gridFor(hm.grid) : null;
   return (x, z) => {
     let h;
@@ -193,21 +181,21 @@ export function shapeHeight(base, S, size) {
 }
 
 // ---- water ---------------------------------------------------------------------
-// One level per world (`water: {level, color?, opacity?}`): ground below it is under water, drawn by every client and
-// read by agents; the sim ignores it. Wading and swimming live in shared/mover.js; these are re-exports, never a copy.
+// One level per world (`water: {level, color?, opacity?}`); the sim ignores it. Wading and swimming live in shared/mover.js:
+// these are re-exports, never a copy.
 export { waterStance, waterCost };
-export const SWIM_AT = MOVER.swim.at;         // of body height: deeper than this at the feet, the body floats (the chest)
+export const SWIM_AT = MOVER.swim.at;         // of body height: deeper than this at the feet, the body floats
 export const SWIM_SPEED = MOVER.swim.speed;   // m/s, a steady stroke
 export const SWIM_RUN = MOVER.swim.run;       // m/s, swimming hard (shift)
 export const WALK_SPEED = MOVER.walk.speed;   // the walking pace waterCost prices against
-/** @deprecated wading has no depth limit now — kept so callers of the old rule still read one. */
+/** @deprecated wading has no depth limit now; kept so old callers still read one. */
 export const WADE_DEPTH = 1.0;
 const HEX = /^#[0-9a-fA-F]{6}$/;
-/** @world's water (shape audit 10-16: its own component, @world.water; an older world's terrain.water until the maintenance command moves
- *  it), or undefined. @param {Record<string, any>} c  @world's components (or a view: {water, terrain}) */
+/** @world.water (an older world's terrain.water until the maintenance command moves it), or undefined.
+ *  @param {Record<string, any>} c  @world's components (or a view: {water, terrain}) */
 export const worldWater = (c) => c?.water ?? c?.terrain?.water;
-/** A world's water, normalized — or null when it has none. Its colour is an int (0xRRGGBB) or an older '#rrggbb'.
- *  @param {Record<string, any>} a  terrain-verb args carrying `water` (the water component riding on them) */
+/** Or null when it has none. Colour is an int (0xRRGGBB) or an older '#rrggbb'.
+ *  @param {Record<string, any>} a  terrain-verb args carrying `water` */
 export function waterParams(a) {
   const w = a?.water;
   if (!w || typeof w.level !== 'number' || !Number.isFinite(w.level)) return null;
@@ -218,14 +206,12 @@ export function waterParams(a) {
   };
 }
 
-/** @deprecated swimming means no step is refused; kept so the old callers read "allowed". */
+/** @deprecated swimming means no step is refused; kept so old callers read "allowed". */
 export function wadeAllowed() { return true; }
-/** The one place a route planner asks whether water blocks a move: with swimming, it never does —
- *  ask waterCost for what the water costs instead. */
+/** With swimming, water never blocks a move: ask waterCost for what it costs instead. */
 export function waterBlocks() { return false; }
 
-/** The shaped heightAt for terrain-verb args over a base law — or the base
- *  itself when the args shape nothing. What the client and agents call. */
+/** Or the base itself when the args shape nothing. What the client and agents call. */
 export function shapedHeightAt(base, args) {
   const S = shapeParams(args);
   return S ? shapeHeight(base, S, num(args?.size, 80)) : base;

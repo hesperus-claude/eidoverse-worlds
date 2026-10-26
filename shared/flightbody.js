@@ -1,19 +1,13 @@
-// flightbody — what a body must HAVE to fly, checked by bone NAME and nothing else, not an avatar hash: re-export a
-// body with the same names and flight keeps working; rename them and this says so. It returns a CAPABILITY REPORT, not
-// a boolean: a wingless body still flies the physics, it just can't animate wings.
-// PURE, per shared/README.md: the caller passes a list of bone names.
+// flightbody — what a body must HAVE to fly, checked by bone NAME only (re-export with the same names and flight works).
+// A CAPABILITY REPORT, not a boolean: a wingless body still flies the physics, it just can't animate wings. PURE: bone names in.
 
-/** The wing chains, as authored by rigtest/hair_rig.py's sibling convention:
- *  <side>_Wing_<row> then _1, _2 outward. Two rows per side, three deep. */
+/** <side>_Wing_<row> then _1, _2 outward (the rig tooling's sibling convention). Two rows per side, three deep. */
 export const WING_RE = /^([LR])_Wing_(Upper|Lower)(?:_(\d+))?$/;
 
-/** Bones flight will DRIVE if they exist. Everything else the body has is its
- *  own business. */
+/** Bones flight DRIVES if they exist; the rest is the body's own business. */
 export const WANTED = {
   wings: WING_RE,
-  // The humanoid bones the flight pose actually leans on. VRM guarantees
-  // these by its own spec, so their absence means something is deeply wrong
-  // rather than merely different.
+  // VRM guarantees these, so their absence means something is deeply wrong rather than merely different.
   core: /^(Hip|Spine01|Spine02|Head|NeckTwist01)$/,
 };
 
@@ -34,15 +28,12 @@ export function inspectBody(boneNames) {
     const key = `${m[1]}_${m[2]}`;                 // L_Upper, R_Lower, ...
     (chains[key] ??= []).push(n);
   }
-  // Sort each chain root-first. The INDEX in the name is the depth: counting
-  // underscores instead collapses _1 and _2 to the same level, which is the
-  // bug ammodoll.js documents having hit.
+  // root-first by the INDEX in the name: counting underscores collapses _1 and _2 to one level
   for (const k of Object.keys(chains)) {
     chains[k].sort((a, b) => depthOf(a) - depthOf(b));
   }
   const wingCount = Object.values(chains).reduce((n, c) => n + c.length, 0);
-  // core bones by any spelling: Tripo (`Hip`/`Spine02`), three-vrm's humanoid map (`hips`/`chest`) and Mixamo
-  // (`Hips`/`Spine`) reach this; case-insensitive matching over a set per joint is true in all three
+  // core bones by any spelling (Tripo `Hip`/`Spine02`, three-vrm `hips`/`chest`, Mixamo `Hips`/`Spine`): case-insensitive, a set per joint
   const CORE = [
     ['hip', 'hips'],
     ['spine02', 'spine01', 'spine', 'chest', 'upperchest'],
@@ -61,8 +52,7 @@ export function inspectBody(boneNames) {
         'expected 4 chains (L/R x Upper/Lower)');
   }
   if (missing.length) notes.push(`missing core bone(s): ${missing.join(', ')}`);
-  // Chains of differing depth are fine and worth SAYING: the wings grew from
-  // two bones to three on 2026-08-17 and nothing in the pipeline counted them.
+  // chains of differing depth are fine and worth SAYING
   const depths = [...new Set(Object.values(chains).map(c => c.length))];
   if (depths.length > 1) notes.push(`wing chains have uneven depth (${depths.join('/')})`);
 
@@ -78,7 +68,7 @@ function depthOf(name) {
   return m && m[3] ? Number(m[3]) : 0;
 }
 
-/** A one-line summary for a log or a HUD readout. */
+/** For a log or a HUD readout. */
 export function describeBody(report) {
   if (!report.canFly) return `NOT FLIGHT-CAPABLE: ${report.missing.join(', ')} absent`;
   const wings = report.canAnimateWings

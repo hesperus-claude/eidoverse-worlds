@@ -1,6 +1,5 @@
-// Presence (present / away / busy) on the embodied plane: one small field on the pose packet, relayed as sent (the
-// fence, server/posecheck.ts, normalises only the voice and body fields below) and remembered for late joiners.
-// Shared by client and server so both agree on the vocabulary.
+// Presence (present / away / busy): one field on the pose packet, relayed as sent (server/posecheck.ts normalises only the voice
+// and body fields below) and remembered for late joiners. Shared by client and server so both agree on the vocabulary.
 export const PRESENCE_STATES = ['present', 'away', 'busy'];
 
 export function presenceWire(state) {
@@ -13,8 +12,8 @@ export function applyPresenceWire(target, sample) {
   return true;
 }
 
-// voice state on the same packet: `mic` (this body's microphone is live), `hear` (receiving and not hushed). Optional:
-// absent means the receiver knows NOTHING, not "can't hear you". Booleans only.
+// voice state: `mic` (microphone live), `hear` (receiving, not hushed). Booleans, optional: absent means the receiver knows
+// NOTHING, not "can't hear you".
 export function voiceWire(v) {
   const o = {};
   if (typeof v?.mic === 'boolean') o.mic = v.mic;
@@ -30,9 +29,8 @@ export function applyVoiceWire(target, sample) {
   return did;
 }
 
-// this body's size: `scale` (the chosen size multiplier; body, eyes, stride and collider grow together) and `plateY`
-// (m the nameplate hangs above the crown). ABSENCE MEANS DEFAULT (1 and 0); every receiver clamps (scale 0.5–2, plateY
-// −0.3…+0.8 m) and reads non-finite as default.
+// body size: `scale` (body, eyes, stride and collider grow together) and `plateY` (m the nameplate hangs above the crown).
+// ABSENCE MEANS DEFAULT (1 and 0); every receiver clamps (scale 0.5–2, plateY −0.3…+0.8 m) and reads non-finite as default.
 export const BODY_SCALE_MIN = 0.5, BODY_SCALE_MAX = 2;
 export const PLATE_Y_MIN = -0.3, PLATE_Y_MAX = 0.8;
 const clampTo = (v, lo, hi, dflt) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
@@ -48,8 +46,7 @@ export function bodyWire(b) {
   return o;
 }
 
-/** Writes { scale, plateY } onto target from one pose sample — always both, absence = default. Returns true when
- *  either changed (so a receiver can skip the re-apply). */
+/** Always writes both onto target, absence = default. → true when either changed (a receiver can skip the re-apply). */
 export function applyBodyWire(target, sample) {
   if (!target || !sample) return false;
   const s = clampBodyScale(sample.scale), y = clampPlateY(sample.plateY);
@@ -59,8 +56,8 @@ export function applyBodyWire(target, sample) {
 }
 
 // ---- one time base (spec/PHYSICS.md §5.1) ----
-// A sample may carry `t` (capture time, authority's clock) and `seq` (the sender's count); optional. A capture time is
-// used only when sane against its frame (not after it, not older than STALE_MS).
+// optional `t` (capture time, authority's clock) and `seq` (sender's count); a capture time is used only when sane against its
+// frame (not after it, not older than STALE_MS).
 export const SAMPLE_STALE_MS = 1000;
 export function sampleTime(pose, frameT) {
   const t = pose?.t;

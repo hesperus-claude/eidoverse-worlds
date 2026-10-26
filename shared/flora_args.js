@@ -1,9 +1,8 @@
-// flora_args — pure translation for the `grass` verb: legacy makeGrass bags → createFlora options, and preset/variety
-// stroke composition (tools/flora.test.ts). The authority runs mapGrassArgs at write (shared/protocol/assetref.js) so a
-// stored grass holds one spelling; a preset is stored by its name and composed here on read.
+// flora_args — the `grass` verb's legacy makeGrass bags → createFlora options, and preset/variety stroke composition.
+// The authority runs mapGrassArgs at write (shared/protocol/assetref.js) so a stored grass holds one spelling; a preset
+// is stored by name and composed here on read.
 
-// makeGrass's blade atlas has a known opaque mean (vegetation.js): a legacy hex colour maps to the multiplier that
-// carries that mean to the hex
+// makeGrass's blade atlas has a known opaque mean: a legacy hex maps to the multiplier carrying that mean to the hex
 export const ATLAS_MEAN = [91, 138, 35];
 const LEGACY_KEYS = ['bladeHeight', 'spacing', 'perCell', 'colorTip',
   'windSpeed', 'lean', 'fade', 'fadeStart', 'fadeEnd', 'fadeColor', 'backlight'];
@@ -20,16 +19,15 @@ const splitHex = (h) => {
 export function hexToMultiplier(hex, tipHex) {
   const c = splitHex(hex);
   const t = tipHex !== undefined ? splitHex(tipHex) : c;
-  // blade color reads mostly at the lit tip half — bias the blend that way
+  // blade color reads mostly at the lit tip half
   return c.map((v, i) => {
     const blended = v * 0.4 + t[i] * 0.6;
     return Math.min(2.5, Math.max(0.2, blended / ATLAS_MEAN[i]));
   });
 }
 
-/** A persisted `grass` bag → createFlora options. New-style bags pass
- *  through; legacy makeGrass bags are translated. The log is never
- *  rewritten — old worlds replay forever through this mapping. */
+/** A persisted `grass` bag → createFlora options; legacy bags are translated. The log is never rewritten: old worlds
+ *  replay forever through this mapping. */
 export function mapGrassArgs(a) {
   if (!isLegacyArgs(a)) return { species: 'grass', ...a };
   const out = {
@@ -48,19 +46,16 @@ export function mapGrassArgs(a) {
 
 // `grass` is a world singleton but a biome is several strokes: a `preset` composes them client-side under ONE field object
 export function presetStrokes(args, presets = null) {
-  // stored strokes ARE the planting, drawn as they are (they win over a preset)
+  // stored strokes ARE the planting (they win over a preset)
   if (Array.isArray(args.strokes) && args.strokes.length) return args.strokes.map((st) => ({ ...st }));
   const W = args.width ?? args.size ?? 80, D = args.depth ?? args.size ?? 70;
   const [cx, cz] = args.center ?? [0, 0];
   const seed = args.seed ?? 7;
   const sc = (f) => Math.round(f * Math.min(W, D));
-  // the caller's density is a FACTOR over each stroke's authored fullness —
-  // a preset that ignored it left the sparse/lush dial doing nothing at all
-  // on the composed biomes, since every stroke carried a hardcoded density
+  // the caller's density is a FACTOR over each stroke's authored fullness, or the sparse/lush dial does nothing on presets
   const k = args.density ?? 1;
   if (args.preset != null) {
-    // §24 defs: named presets are DATA (defs/flora/_presets.json), composed from a small template vocabulary. A preset
-    // this instance lacks fails LOUDLY: a logged bag must never drift into a default lawn.
+    // §24 defs: presets are DATA (defs/flora/_presets.json). One this instance lacks fails LOUDLY: a logged bag must never drift into a default lawn.
     const p = presets?.[args.preset];
     if (!p?.strokes?.length) {
       throw new Error(`[flora] unknown preset '${args.preset}' — have: ${Object.keys(presets ?? {}).join(', ') || '(no presets hydrated)'}`);
@@ -77,7 +72,7 @@ export function presetStrokes(args, presets = null) {
     });
   }
   if (args.species === 'corn' && !args.rows?.stride) {
-    // variety: one stroke clones one plant variant field-wide, so the recipe interleaves seeds by row stride
+    // one stroke clones one variant field-wide, so the recipe interleaves seeds by row stride
     const rows = { spacing: 0.9, plant: 0.26, ...(args.rows ?? {}) };
     const corn = args.corn ?? {};
     return [
@@ -91,7 +86,7 @@ export function presetStrokes(args, presets = null) {
     ];
   }
   if (args.species === 'sunflower' && !args.rows?.stride) {
-    // the same interleave with three variants; the shared `heading` must match across strokes (a sunflower field faces one way)
+    // three variants; the shared `heading` must match across strokes (a sunflower field faces one way)
     const rows = { spacing: 0.85, plant: 0.5, ...(args.rows ?? {}) };
     const heading = args.heading ?? -0.6;
     return [0, 1, 2].map((phase, i) => ({

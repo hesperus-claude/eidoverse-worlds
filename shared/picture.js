@@ -1,15 +1,9 @@
-// picture — what a `picture` component MEANS. Shared verbatim between the browser host (client/lib/pictures.js) and
-// the mcpl agent (text-tier perception), so the two can never describe different pictures.
-//
+// picture — what a `picture` component MEANS, shared verbatim by the browser host (client/lib/pictures.js) and the mcpl agent.
 //   picture {src, width?, alt?, lit?}   (a quad of its own, facing +Z on the thing's origin)
 //   comp {id, type: "picture", data: null}          # take it down
-//
-// SOURCES. `src` is a library path under `eidoverse/assets/` (what the operator placed) or `store/images/` (uploaded
-// through `POST /upload?as=image`: content-addressed, sniffed by bytes), or an https link, which shared/mediasrc.js
-// gates per viewer (an untrusted host is fetched only for a viewer who opted in).
-//
-// ALT. A picture with no `alt` reads as "a picture (<file>)"; the author can say what it shows in ≤200 chars, and that
-// line is what look() carries. Nothing about pixels is ever claimed.
+// SOURCES. A library path under `eidoverse/assets/` or `store/images/` (uploaded via `POST /upload?as=image`: content-addressed,
+// sniffed by bytes), or an https link, which shared/mediasrc.js gates per viewer (an untrusted host only for a viewer who opted in).
+// ALT. No `alt` reads as "a picture (<file>)"; the author's ≤200-char line is what look() carries. Nothing about pixels is ever claimed.
 
 import { mediaTier } from './mediasrc.js';
 import { graphemes, graphemeList, quoted } from './text.js';
@@ -19,19 +13,19 @@ export const PICTURE_STORE = 'store/images/';
 export const PICTURE_DIRS = Object.freeze([PICTURE_DIR, PICTURE_STORE]);
 const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
 export const PICTURE_ALT_MAX = 200;
-export const PICTURE_LOOK_MAX = PICTURE_ALT_MAX;   // the old name, for callers not yet renamed
+export const PICTURE_LOOK_MAX = PICTURE_ALT_MAX;   // the old name
 export const PICTURE_MAX_WIDTH = 20;
 export const PICTURE_DEFAULTS = Object.freeze({ lit: 'scene', width: 1 });
-/** The alt field's tooltip, in plain words (R 10-07). */
+/** The alt field's tooltip, in plain words. */
 export const ALT_HINT = 'Alternative text: describes this for people who can\'t see it, and for agents';
 export const PICTURE_LIT = Object.freeze({ scene: 'lit by the scene', self: 'self-lit (a screen)' });
 const KNOWN_KEYS = new Set(['src', 'width', 'alt', 'lit']);
-// alt was named look before release: a picture stored under the old name is read by it (never written so: alt wins)
+// alt was once named look: a picture stored under it is read (never written so: alt wins)
 const altOf = (data) => data.alt ?? data.look;
 
-/** Is `src` an allowed library picture source? Under PICTURE_DIRS, an image extension, no scheme, leading slash, dot
- *  segments or percent-encoding at all: the rule is over the path the FETCH canonicalizes to (`%2e%2e` is `..`), so the
- *  parsed pathname must come back byte-identical. */
+/** Is `src` an allowed library picture source? Under PICTURE_DIRS, an image extension; no scheme, leading slash, dot
+ *  segments or percent-encoding: the rule is over the path the FETCH canonicalizes to (`%2e%2e` is `..`), so the parsed
+ *  pathname must come back byte-identical. */
 export function allowedPictureSrc(src) {
   if (typeof src !== 'string' || !src) return false;
   if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('/') || src.includes('\\')) return false;
@@ -39,16 +33,14 @@ export function allowedPictureSrc(src) {
   if (src.split('/').some((seg) => seg === '' || seg === '.' || seg === '..')) return false;
   if (!PICTURE_DIRS.some((d) => src.startsWith(d)) || !IMAGE_EXT.test(src)) return false;
   try {
-    // What the browser will actually ask the library route for. Any
-    // difference — a collapsed segment, a decoded byte — means the string
-    // and the fetch disagree, and the fetch is the one that matters.
+    // any difference (a collapsed segment, a decoded byte) means the string and the fetch disagree; the fetch is what matters
     if (new URL(`/library/${src}`, 'http://library.invalid').pathname !== `/library/${src}`) return false;
   } catch { return false; }
   return true;
 }
 
-/** Validate an authored bag: `ok:false` carries WHY, `ok:true` the normalized picture (a quad `width` m wide) plus
- *  notes for anything coerced. `alt` is the describing line; src may be an https link (shared/mediasrc.js decides). */
+/** `ok:false` carries WHY, `ok:true` the normalized picture (a quad `width` m wide) plus notes for anything coerced.
+ *  src may be an https link (shared/mediasrc.js decides). */
 export function normalizePicture(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, why: 'picture data must be an object {src, width?, alt?, lit?}' };
@@ -73,13 +65,12 @@ export function normalizePicture(data) {
   return { ok: true, picture, tier, notes };
 }
 
-/** The one line look() carries for a picture — the same string on the authority, in mcpl and in every client, from the
- *  same bag. Says what the author said it shows (quoted, as data); never claims anything about the pixels. */
+/** The one line look() carries, the same everywhere: what the author said it shows (quoted, as data); never a claim about pixels. */
 export function describePicture(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return 'a picture (malformed declaration)';
   const file = typeof data.src === 'string' ? (/^https:/i.test(data.src) ? (() => { try { return new URL(data.src).hostname; } catch { return 'a link'; } })() : data.src.split('/').pop()) : null;
   const alt = typeof altOf(data) === 'string' && altOf(data).trim() ? altOf(data) : null;
-  const where = '';   // a picture is a quad of its own (part was cut, shape audit 10-16)
+  const where = '';   // a picture is a quad of its own
   const ok = mediaTier(data.src, 'image').tier !== 'bad';
   const bits = [];
   if (!ok) bits.push('not shown: invalid declaration');

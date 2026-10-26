@@ -1,9 +1,7 @@
-// shared/joints.js — what a humanoid joint may do, as measured against the shipped rigs (tools/ragdoll-test.ts).
-// One table, two consumers: the ragdoll clamps to it while tumbling, the IK (shared/reach.js) while reaching, so a
-// reach and a fall are one body. Angles are DEGREES, as authored; consumers convert. Pure data plus one derivation.
+// shared/joints.js — what a humanoid joint may do, measured against the shipped rigs (tools/ragdoll-test.ts). One table for
+// the ragdoll (tumbling) and the IK (shared/reach.js), so a reach and a fall are one body. DEGREES, as authored; consumers convert.
 
-// BEHIND — how far a limb may point behind the body's frontal plane: a one-sided plane, because tilting the
-// circular cone to bound a hip's back also walls off abduction
+// BEHIND — how far a limb may point behind the frontal plane: one-sided, since tilting the cone to bound a hip's back walls off abduction
 export const BEHIND = [
   ['leftUpperLeg', 'leftLowerLeg', 30],
   ['rightUpperLeg', 'rightLowerLeg', 30],
@@ -11,20 +9,19 @@ export const BEHIND = [
   ['rightUpperArm', 'rightLowerArm', 65],
 ];
 
-// CONE — the limb's direction relative to the BODY, not its parent link, so a limit means the same on T- and
-// A-pose rigs. `tilt` leans the axis forward (a thigh swings far forward, barely back).
+// CONE — relative to the BODY, not the parent link, so a limit means the same on T- and A-pose rigs. `tilt` leans the axis
+// forward (a thigh swings far forward, barely back).
 export const CONE = [
   // bone           child            half°  tilt° (toward body forward)
-  // arms carry a fifth number: how far they may swing toward the midline.
-  // See ACROSS below. Consumed by the reach only; the ragdoll reads [2] and [3].
+  // arms carry a fifth number, ACROSS below (reach only; the ragdoll reads [2] and [3])
   ['leftUpperArm',  'leftLowerArm',   85,    0,   135],
   ['rightUpperArm', 'rightLowerArm',  85,    0,   135],
   ['leftUpperLeg',  'leftLowerLeg',   55,   25],
   ['rightUpperLeg', 'rightLowerLeg',  55,   25],
 ];
 
-// HINGE — a signed fold (knees back, elbows forward); handedness comes from _frame, `dir` is the fold direction.
-// `sideways` is slop, not range, and can't be zero (no hip or shoulder rotation to absorb twist): smallest stable values.
+// HINGE — a signed fold (knees back, elbows forward); handedness from _frame, `dir` the fold direction. `sideways` is slop,
+// not range, and can't be zero (no hip or shoulder rotation to absorb twist): smallest stable values.
 // TWIST — a bone's roll as real state (inertia, damping, spring to neutral, hard stop at `max`°). Measured against the
 // parent, never the world (which drifts by holonomy); well posed because the limits forbid a 180° swing from the parent.
 export const TWIST = {
@@ -34,8 +31,7 @@ export const TWIST = {
   leftUpperLeg: 40, rightUpperLeg: 40,
   leftLowerLeg: 25, rightLowerLeg: 25,
 };
-// Which bone each one twists AGAINST. The drive walks CHAINS parents-first, so
-// a parent's frame is always resolved before its children ask for it.
+// Which bone each one twists AGAINST. The drive walks CHAINS parents-first, so a parent's frame resolves before its children ask.
 export const TWIST_PARENT = {
   spine: 'hips', chest: 'spine', neck: 'chest',
   leftUpperArm: 'chest', rightUpperArm: 'chest',
@@ -56,9 +52,7 @@ export const HINGE = [
 export const D2R = Math.PI / 180;
 
 /**
- * The cone axis for one bone in BODY-FRAME coordinates: its rest direction leaned `tilt` degrees forward, so it is
- * centred on where that rig's limb rests and turns with the torso.
- *
+ * The rest direction leaned `tilt` degrees forward, in BODY-FRAME coordinates: centred where that rig's limb rests, turning with the torso.
  * @param {number[]} restDirBody bone->child rest direction, already expressed
  *        in body-frame coordinates [right, up, forward]
  * @param {number} tiltDeg lean toward forward, degrees
@@ -67,8 +61,7 @@ export const D2R = Math.PI / 180;
 export function coneAxisBody(restDirBody, tiltDeg) {
   const a = [...restDirBody];
   if (tiltDeg) {
-    // the forward component perpendicular to the axis, so the lean is a pure
-    // rotation in the sagittal plane rather than a shortening
+    // the forward component perpendicular to the axis: a pure sagittal rotation, not a shortening
     const f = [-a[2] * a[0], -a[2] * a[1], 1 - a[2] * a[2]];
     const fl = Math.hypot(f[0], f[1], f[2]);
     if (fl > 1e-4) {
@@ -80,8 +73,7 @@ export function coneAxisBody(restDirBody, tiltDeg) {
   return [a[0] / l, a[1] / l, a[2] / l];
 }
 
-/** The limits for one bone, gathered from the tables above into the shape
- *  shared/reach.js wants. Angles come out in RADIANS. */
+/** In the shape shared/reach.js wants. Angles come out in RADIANS. */
 export function limitsFor(bone) {
   const cone = CONE.find((c) => c[0] === bone);
   const behind = BEHIND.find((b) => b[0] === bone);
@@ -92,14 +84,13 @@ export function limitsFor(bone) {
     ...(behind ? { behind: behind[2] * D2R } : {}),
     ...(hinge ? { maxFlex: hinge[4] * D2R, hingeDir: hinge[3], hingeSide: hinge[5] * D2R } : {}),
     ...(TWIST[bone] != null ? { twistMax: TWIST[bone] * D2R } : {}),
-    // the forearm's roll is what turns a palm over, so a chain rooted at the
-    // upper arm needs its CHILD's twist limit, not its own
+    // the forearm's roll turns a palm over, so a chain rooted at the upper arm needs its CHILD's twist limit
     ...(hinge && TWIST[hinge[1]] != null ? { foreTwistMax: TWIST[hinge[1]] * D2R } : {}),
     ...(TWIST_PARENT[bone] ? { twistParent: TWIST_PARENT[bone] } : {}),
   };
 }
 
-/** The two-bone chains a reach can drive, root -> mid -> end. */
+/** root -> mid -> end. */
 export const REACH_CHAINS = {
   leftHand:  { root: 'leftUpperArm',  mid: 'leftLowerArm',  end: 'leftHand' },
   rightHand: { root: 'rightUpperArm', mid: 'rightLowerArm', end: 'rightHand' },
@@ -108,9 +99,8 @@ export const REACH_CHAINS = {
 };
 
 /**
- * The body's own axes from rest bone positions: the ragdoll's `_frame` construction (pelvis bar right, hips to head up,
- * their cross forward), but pure: a reach solves from the REST pose, which is never degenerate.
- *
+ * The ragdoll's `_frame` construction (pelvis bar right, hips to head up, their cross forward), but pure: from the REST pose,
+ * which is never degenerate.
  * @param {Record<string, number[]>} P bone -> [x,y,z]
  * @returns {{r: number[], u: number[], f: number[]}|null}
  */
@@ -157,9 +147,7 @@ export const RADIUS_FRAC = {
 
 
 /**
- * A body's torso half-thickness, MEASURED as the ragdoll does: half the wider of the shoulder or hip span, else a
- * fraction of the spine.
- *
+ * MEASURED as the ragdoll does: half the wider of the shoulder or hip span, else a fraction of the spine.
  * @param {Record<string, number[]>} P rest bone positions
  */
 export function torsoRadius(P) {
@@ -174,9 +162,7 @@ export function torsoRadius(P) {
 /** Capsule radius for one bone on a body of the given torso radius. */
 export const boneRadius = (bone, torsoR) => torsoR * (RADIUS_FRAC[bone] ?? 0.4);
 
-/** The segments a reaching arm must not pass through: the torso column, the
- *  head, the thighs, and the OTHER arm. Chain-owned bones are excluded by the
- *  caller — a limb cannot collide with itself. */
+/** The torso column, the head, the thighs and the OTHER arm. The caller excludes chain-owned bones (a limb can't hit itself). */
 export const GUARD_SEGMENTS = [
   ['hips', 'spine'], ['spine', 'chest'], ['chest', 'neck'], ['neck', 'head'],
   ['hips', 'leftUpperLeg'], ['hips', 'rightUpperLeg'],
@@ -185,6 +171,5 @@ export const GUARD_SEGMENTS = [
   ['leftLowerArm', 'leftHand'], ['rightLowerArm', 'rightHand'],
 ];
 
-// ACROSS — how far a limb may swing toward the midline (the circular cone has one number for every direction).
-// Safe only with shared/reach.js's torso projection, or the arm swings into the chest. Reach only; the ragdoll keeps
-// the plain cone.
+// ACROSS — how far a limb may swing toward the midline. Safe only with shared/reach.js's torso projection, or the arm swings
+// into the chest. Reach only; the ragdoll keeps the plain cone.

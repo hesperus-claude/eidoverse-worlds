@@ -1,8 +1,6 @@
 // shared/blueprint.js — blueprints: the record, its hash, and the copy link as pure functions (design §3 "Blueprints").
-//
 //   { kind: "eido.blueprint", v: 1, name, parent?: <hash>, note?,
 //     root: { components: [...], children: [ { id, components, children }, … ] } }
-//
 // Components are instances as shared/components.js reads them. The root carries no placement (scale only); a child's
 // Transform is LOCAL to its parent node; a child's `id` is unique among siblings (the handle an update uses).
 // Editing mints a NEW record naming `parent`; the hash covers meaning (note excluded, name included).
@@ -15,8 +13,7 @@ import { qNorm, qHeading } from './rot.js';
 
 import { recordComponents } from './protocol/view.js';
 export const BLUEPRINT_KIND = 'eido.blueprint';
-/** What the door accepts. A component is written to the world as one `comp`
- *  (≤ 8 KB, PROTOCOL §3), so one instance may not exceed that either. */
+/** What the door accepts. A component is written as one `comp` (≤ 8 KB, PROTOCOL §3), so one instance may not exceed that either. */
 export const BLUEPRINT_LIMITS = Object.freeze({
   BYTES: 65536,          // the canonical record
   NODES: 256,            // root + every child, at any depth
@@ -32,28 +29,26 @@ const isBag = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 const RECORD_KEYS = new Set(['kind', 'v', 'name', 'parent', 'note', 'root']);
 const NODE_KEYS = new Set(['id', 'components', 'children']);
 const INST_KEYS = new Set(['type', 'key', 'params', 'wire', 'extra']);
-// Types a blueprint node may not hold: the nesting IS the attachment, captions
-// are server-written (the caption verb), and the world's records are the world's.
+// types a node may not hold: the nesting IS the attachment, captions are server-written, and the world's records are the world's
 const NOT_IN_A_BLUEPRINT = {
   Parent: 'a node is attached by nesting it under its parent, not by a Parent component',
   Captions: 'captions are written by the caption verb, never authored',
 };
 const PLACEMENT = ['pos', 'q', 'yaw'];
 
-/** A record's meaning: everything but its prose (`note`). */
+/** Everything but its prose (`note`). */
 function meaningOf(rec) {
   const { note: _n, ...out } = rec;
   return out;
 }
-/** The content hash of a blueprint record: SHA-256 (hex) of the RFC 8785 canonical JSON of its meaning, as component
- *  records (shared/components.js). Throws on what canon refuses; blueprintRefusal says so first. */
+/** SHA-256 (hex) of the RFC 8785 canonical JSON of its meaning, as component records. Throws on what canon refuses;
+ *  blueprintRefusal says so first. */
 export const blueprintHash = (rec) => sha256hex(canon(meaningOf(rec)));
 
-/** The identity of an instance within its node: type + comp-bag key. */
+/** Within its node: type + comp-bag key. */
 export const compIdOf = (inst) => `${inst.type}${inst.key != null ? `|${inst.key}` : ''}`;
 
-/** Why this is not a v1 blueprint record, or null. The door refuses with this
- *  prose; the editor asks the same before it sends. Never throws. */
+/** Or null. The door refuses with this prose; the editor asks the same before it sends. Never throws. */
 export function blueprintRefusal(rec) {
   if (!isBag(rec)) return 'a blueprint is an object: {kind: "eido.blueprint", v: 1, name, parent?, note?, root: {components, children}}';
   for (const k of Object.keys(rec)) if (!RECORD_KEYS.has(k)) return `a v1 blueprint has no "${k}" (it has kind, v, name, parent?, note?, root)`;
@@ -108,18 +103,17 @@ export function blueprintRefusal(rec) {
   return node(rec.root, 0, 'root');
 }
 
-/** Why `hash` is not this record's hash, or null — the door's check. */
+/** Or null: the door's check. */
 export function hashRefusal(rec, hash) {
   if (typeof hash !== 'string' || !HEX64.test(hash)) return 'blueprint wants {hash, record}: hash is the record\'s content hash, 64 lowercase hex';
   const real = blueprintHash(rec);
   return real === hash ? null : `this record hashes to ${real}, not ${hash} — the hash names exactly the record sent (canonical JSON, RFC 8785, without its note)`;
 }
 
-/** What a copy's `comp.blueprint` says: which record it follows. */
+/** Which record it follows. */
 export const linkOf = (rec, hash = blueprintHash(rec)) => ({ hash, name: rec.name });
 
-/** A record's lineage, newest first: [hash, parent, grandparent, …] as far as
- *  the store holds them (a store keyed by hash: { [hash]: { record } }). */
+/** Newest first: [hash, parent, grandparent, …] as far as the store ({ [hash]: { record } }) holds them. */
 export function lineageOf(store, hash) {
   const out = [];
   const seen = new Set();
@@ -133,9 +127,8 @@ export function lineageOf(store, hash) {
 // ------------------------------------------------------------ the copy link
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
-/** A record's tree, expanded: each node's components (deep copies, safe to
- *  edit) and the wire bytes they write (`entity`, via entityOf — no stamps,
- *  no placement on the root), with its children. 6b places these. */
+/** Each node's components (deep copies, safe to edit) and the wire bytes they write (`entity`, via entityOf: no stamps, no
+ *  placement on the root), with its children. 6b places these. */
 export function expand(rec) {
   const node = (n) => ({
     ...(n.id !== undefined ? { id: n.id } : {}),
@@ -146,9 +139,8 @@ export function expand(rec) {
   return node(rec.root);
 }
 
-// A node's components with what is not the design taken out: the root's
-// placement (pos/q/yaw), any Attachment (the world's parenting; nesting is the
-// design's), and the copy link itself. Returns { comps, placement }.
+// a node's components without what isn't the design: the root's placement (pos/q/yaw), any Attachment (the world's
+// parenting; nesting is the design's), and the copy link itself. → { comps, placement }.
 function designOf(components, isRoot) {
   let placement = null;
   const comps = [];
@@ -167,8 +159,8 @@ function designOf(components, isRoot) {
   return { comps, placement };
 }
 
-// flatten a tree to addressable facts for a field-by-field compare. Keys are JSON [path, compId?, field?] (path = child
-// ids from the root, "" = root); fields are params/<name>, key, wire, extra (wire/extra compared whole)
+// flatten a tree to addressable facts for a field-by-field compare. Keys are JSON [path, compId?, field?] (path = child ids
+// from the root, "" = root); fields are params/<name>, key, wire, extra (wire/extra compared whole)
 const K = (...parts) => JSON.stringify(parts);
 function flatten(tree, isCopy) {
   const out = new Map();
@@ -206,9 +198,9 @@ function describe(key) {
   return { path: path ? path.split('/') : [], ...(comp !== undefined ? { comp } : {}), ...(field !== undefined ? { field } : {}) };
 }
 
-/** What a copy changes for itself relative to its record, one entry per differing fact: a field `{path, comp, field,
- *  value, base}`, a component `{path, comp, value: type | undefined, base}`, a part `{path, value: true | undefined, base}`.
- *  `copy` is a tree in the record's shape; the root's placement, any Attachment and the link aren't overrides. */
+/** One entry per fact differing from its record: a field `{path, comp, field, value, base}`, a component `{path, comp, value:
+ *  type | undefined, base}`, a part `{path, value: true | undefined, base}`. `copy` is a tree in the record's shape; the root's
+ *  placement, any Attachment and the link aren't overrides. */
 export function overridesOf(copy, rec) {
   const ours = flatten(copy, true).facts;
   const base = flatten(rec.root, false).facts;
@@ -220,9 +212,9 @@ export function overridesOf(copy, rec) {
   return out;
 }
 
-/** Bring a copy to a new version keeping its overrides: a three-way merge (copy ours, oldRec base, newRec theirs), fact
- *  by fact; a fact both sides changed differently, or a removal of something the other side edited, is a CONFLICT.
- *  → { ok: true, tree: {components, children} } or { ok: false, conflicts: [{path, comp?, field?, ours, base, theirs}] }. */
+/** A three-way merge (copy ours, oldRec base, newRec theirs), fact by fact; a fact both sides changed differently, or a removal
+ *  of something the other side edited, is a CONFLICT. → { ok: true, tree: {components, children} } or
+ *  { ok: false, conflicts: [{path, comp?, field?, ours, base, theirs}] }. */
 export function rebase(copy, newRec, oldRec) {
   const O = flatten(copy, true), B = flatten(oldRec.root, false), T = flatten(newRec.root, false);
   const merged = new Map();
@@ -235,15 +227,14 @@ export function rebase(copy, newRec, oldRec) {
     else { conflicts.push({ ...describe(k), ours: o, base: b, theirs: t }); continue; }
     if (v !== undefined) merged.set(k, v);
   }
-  // a fact that survived under a part or component that did not is an edit to
-  // something removed: the remover and the editor disagree
+  // a fact surviving under a part or component that didn't is an edit to something removed: remover and editor disagree
   for (const k of merged.keys()) {
     const [path, comp, field] = JSON.parse(k);
     const lost = (field !== undefined && !merged.has(K(path, comp))) || !nodeLives(merged, path);
     if (lost) conflicts.push({ ...describe(k), ours: O.facts.get(k), base: B.facts.get(k), theirs: T.facts.get(k) });
   }
   if (conflicts.length) return { ok: false, conflicts };
-  // rebuild, in the new version's order with the copy's additions after
+  // rebuild in the new version's order, the copy's additions after
   const nodeOrder = (path) => [...new Set([...(T.order.nodes.get(path) ?? []), ...(O.order.nodes.get(path) ?? [])])];
   const compOrder = (path) => [...new Set([...(T.order.comps.get(path) ?? []), ...(O.order.comps.get(path) ?? [])])];
   const build = (path) => {
@@ -277,18 +268,18 @@ function nodeLives(merged, path) {
 }
 
 // ------------------------------------------------------------ one spelling per meaning
-// The key each type is written under when an instance names none (entityOf's, plus Lock/Guard/Hidden, else "undefined").
+// the key each type is written under when an instance names none (entityOf's, plus Lock/Guard/Hidden, else "undefined")
 const DEFAULT_KEY = {
   Lock: 'lock', Guard: 'guard', Hidden: 'hidden', Label: 'label',
   Pendulum: 'motion', Spin: 'motion', Orbit: 'motion', Oscillate: 'motion', Path: 'motion',
   Sockets: 'sockets', Reactions: 'reactions', Structure: 'structure', Captions: 'captions',
   LookAt: 'look', Stage: 'stage', Particles: 'particles', Picture: 'picture', Sound: 'sound',
 };
-const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: the stored word before 10-16 (the door stores mesh)
+const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: the old stored word (the door stores mesh)
 
-/** A node's components in the spelling every NEW write uses: a keyless Light becomes comp.light (unless the part holds
- *  one: placeRefusal names it), a keyless Collider comp.collider when its shape is one the component speaks, any other
- *  keyless type takes entityOf's key. Placement and overridesOf/rebase share it, so a legacy record reads back as itself. */
+/** In the spelling every NEW write uses: a keyless Light becomes comp.light (unless the part holds one: placeRefusal names
+ *  it), a keyless Collider comp.collider when the component speaks its shape, any other keyless type takes entityOf's key.
+ *  Placement and overridesOf/rebase share it, so a legacy record reads back as itself. */
 function dropRateKey(c) {
   const { rateKey: _r, ...extra } = c.extra;
   const { extra: _e, ...rest } = c;
@@ -298,9 +289,8 @@ export function modernize(components) {
   const list = components ?? [];
   const keyed = (type, key) => list.some((c) => c.type === type && c.key === key);
   return list.map((c0) => {
-    // a motion's rate written under the default key reads back naming it
-    // (componentsOf keeps extra.rateKey so `rpm` survives): the default is
-    // not a fact of the design, so it is left unsaid on both sides
+    // a motion's rate under the default key reads back naming it (componentsOf keeps extra.rateKey so `rpm` survives): the
+    // default is no fact of the design, so it is unsaid on both sides
     const c = c0?.extra?.rateKey === 'degPerSec' ? dropRateKey(c0) : c0;
     if (c.key != null || !c?.type) return c;
     if (c.type === 'Light') return keyed('Light', 'light') ? c : { ...c, key: 'light' };
@@ -311,8 +301,8 @@ export function modernize(components) {
 }
 
 // ------------------------------------------------------------ placing a copy (6b)
-// A copy is placed as ORDINARY verbs; only the link is new: root comp.blueprint = { hash, name }, child
-// comp.blueprint = { part: <id> }. The marker rides each part, not a root map, because a comp is ≤ COMPONENT_BYTES.
+// A copy is placed as ORDINARY verbs; only the link is new: root comp.blueprint = { hash, name }, child comp.blueprint =
+// { part: <id> }. The marker is on each part, not a root map, because a comp is ≤ COMPONENT_BYTES.
 export const LINK_KEY = 'blueprint';
 const isBagV = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 /** Is this comp.blueprint value a copy's link ({hash, name})? */
@@ -324,12 +314,12 @@ const r4 = (v) => +(+v).toFixed(4);
 const r9 = (v) => +(+v).toFixed(9);
 const upright = (q) => Math.abs(q[0]) < 1e-9 && Math.abs(q[2]) < 1e-9;
 const slug = (s) => String(s).replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 24) || 'part';
-/** The comp entries a component writes, as `[key, data]` (entityOf's bytes). */
+/** As `[key, data]` (entityOf's bytes). */
 const compEntries = (inst) => Object.entries(recordComponents(entityOf({ components: [inst] }))).filter(([k]) => k !== 'model' && k !== 'parent');
 const RULES = new Set(['lock', 'guard']);   // written last: a lock refuses the mount; guard last for symmetry
 
-/** Why this record can't be placed as ordinary verbs, or null: blueprintRefusal's shape plus what the door would refuse
- *  one verb at a time, refused for the whole copy before anything is sent (a half-placed copy is worse than none). */
+/** blueprintRefusal's shape plus what the door would refuse one verb at a time, refused for the whole copy before anything is
+ *  sent (a half-placed copy is worse than none); or null. */
 export function placeRefusal(rec) {
   const shape = blueprintRefusal(rec);
   if (shape) return shape;
@@ -358,10 +348,10 @@ export function placeRefusal(rec) {
   return node(rec.root, 'root');
 }
 
-/** The verbs that place a copy of `rec` and their inverses, ONE undo step: { verbs, inverses, parts: { <path>: <id> },
- *  errors }. `at` is the root's {id, pos, q?, yaw?, scale?} (q wins; scale multiplies the record's); `taken(id)` keeps
- *  minted `<root>-<child id>` names unique. Per part spawn → mount → comps → link, then locks and guards (a locked part
- *  refuses its own mount); inverses unlock, then remove leaves first. */
+/** The verbs that place a copy of `rec` and their inverses, ONE undo step: { verbs, inverses, parts: { <path>: <id> }, errors }.
+ *  `at` is the root's {id, pos, q?, yaw?, scale?} (q wins; scale multiplies the record's); `taken(id)` keeps minted
+ *  `<root>-<child id>` names unique. Per part spawn → mount → comps → link, then locks and guards (a locked part refuses its
+ *  own mount); inverses unlock, then remove leaves first. */
 export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
   const why = placeRefusal(rec);
   if (why) return { verbs: [], inverses: [], parts: {}, errors: [why] };
@@ -378,7 +368,7 @@ export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
     used.add(id);
     return id;
   };
-  // the plan, parents first, with a synthetic fold to compose world poses from
+  // parents first, with a synthetic fold to compose world poses from
   const plan = [];
   const world = {};
   const walk = (n, path, entId, parentEnt) => {
@@ -407,9 +397,8 @@ export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
     parts[path] = entId;
     const model = comps.find((c) => c.type === 'Model');
     const legacyCollide = comps.find((c) => c.type === 'Collider' && c.key == null);
-    // spawn where it will stand (a child at its composed world pose, so nothing
-    // jumps between its spawn and its mount); a child's own pos/q is then its
-    // pre-mount pose, unused until a dismount stamps a new one (hierarchy.js)
+    // spawn at its composed world pose, so nothing jumps between spawn and mount; a child's own pos/q is then its pre-mount
+    // pose, unused until a dismount stamps a new one (hierarchy.js)
     const W = worldPose(world, entId);
     const pose = parentEnt == null
       ? { pos: [...pos], ...(world[entId].q ? { q: world[entId].q, yaw: world[entId].yaw } : { yaw: world[entId].yaw }) }
@@ -438,8 +427,7 @@ export function placeVerbs(rec, at, { hash = null, taken = () => false } = {}) {
 }
 
 // ------------------------------------------------------------ reading a copy back (6b)
-/** The copy `id` belongs to: { root, path } (path = part ids from the linked root, [] = the root), or null. Walks the
- *  fold's parent edges up. */
+/** { root, path } (path = part ids from the linked root, [] = the root), or null. Walks the fold's parent edges up. */
 export function copyOf(world, id) {
   const path = [];
   const seen = new Set();
@@ -453,8 +441,8 @@ export function copyOf(world, id) {
   return null;
 }
 
-/** A child entity's components with its Transform made LOCAL (the mount's offset and relative q, or its slot's pose),
- *  its own scale; a mounted thing's fold pos/q is its pre-mount pose (hierarchy.js). Exported for Save as Blueprint. */
+/** Transform made LOCAL (the mount's offset and relative q, or its slot's pose), its own scale; a mounted thing's fold pos/q
+ *  is its pre-mount pose (hierarchy.js). Exported for Save as Blueprint. */
 export function localComponents(world, ent) {
   const { components } = componentsOf(ent);
   const rel = ent.parent ?? {};
@@ -472,9 +460,9 @@ export function localComponents(world, ent) {
   });
 }
 
-/** Read a placed copy back as a tree in the record's shape: { root, hash, name, tree: {components, children: [{id, …}]},
- *  parts: { <path>: <entity id> } }, or null with no link. Children's Transforms are LOCAL; a child without its own
- *  part marker (or a duplicate) is an ADDED part named by its id; `rec` orders children; nested copies aren't descended. */
+/** A placed copy as a tree in the record's shape: { root, hash, name, tree: {components, children: [{id, …}]}, parts:
+ *  { <path>: <entity id> } }, or null with no link. Children's Transforms are LOCAL; a child without its own part marker (or a
+ *  duplicate) is an ADDED part named by its id; `rec` orders children; nested copies aren't descended. */
 export function copyTree(world, rootId, rec = null) {
   const root = world?.[rootId];
   const link = root?.[LINK_KEY];
@@ -508,7 +496,7 @@ export function copyTree(world, rootId, rec = null) {
   return { root: rootId, hash: link.hash, name: typeof link.name === 'string' ? link.name : null, tree, parts };
 }
 
-/** Where copies stand: { <hash>: [root ids, sorted] } for every linked root. */
+/** { <hash>: [root ids, sorted] } for every linked root. */
 export function copiesOf(world) {
   const out = {};
   for (const id of Object.keys(world ?? {}).sort()) {
@@ -518,12 +506,11 @@ export function copiesOf(world) {
   return out;
 }
 
-/** A record's version number in this world: how many of its lineage the
- *  store holds (v1 = an original). 0 when the store lacks the record. */
+/** How many of its lineage the store holds (v1 = an original); 0 when the store lacks the record. */
 export const versionOf = (store, hash) => (store?.[hash] ? lineageOf(store, hash).filter((h) => store[h]).length : 0);
 
-/** One line a reader can act on (`a copy of "Lamp" (v2, 1a2b3c4d5e6f)`, `part "bulb" of lamp-1, …`), or null; the text
- *  tier, inspect and the panels say the same. The name is the store's when it holds the record. */
+/** One line a reader can act on (`a copy of "Lamp" (v2, 1a2b3c4d5e6f)`, `part "bulb" of lamp-1, …`), or null; text tier,
+ *  inspect and the panels say the same. The name is the store's when it holds the record. */
 export function copyLine(world, id, store = null) {
   const c = copyOf(world, id);
   if (!c) return null;

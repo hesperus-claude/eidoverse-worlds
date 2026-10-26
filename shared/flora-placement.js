@@ -1,7 +1,5 @@
-// Pure placement evaluator, shared by browser and native scene projection.
-// Structural plants (species with footRadius) claim their canopy footprint
-// here as they place; later fields skip candidates that would clip an
-// existing claim. One registry per render process = per scene build.
+// Pure placement evaluator, shared by browser and native scene projection. Structural plants (footRadius) claim their
+// canopy footprint as they place; later fields skip candidates that would clip a claim. One registry per scene build.
 // Shrub canopies may touch (×0.75 of summed radii); grasses ignore it all.
 const _placedPlants = [];
 export function resetFloraOccupancy() { _placedPlants.length = 0; }
@@ -15,7 +13,7 @@ function occupancyConflict(x, z, r) {
     return false;
 }
 
-// ── placement — jittered grid, slope rejection, bare patches (CK42BB) ───────
+// ── placement — jittered grid, slope rejection, bare patches ───────
 export function valueNoise2D(seed) {
     const h = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453; return s - Math.floor(s); };
     return (x, y) => {
@@ -31,17 +29,13 @@ export function placeInstances(o, spec) {
         return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })();
     const noise = valueNoise2D(o.seed ?? 7);
     const W = o.width, D = o.depth, cx = o.center[0], cz = o.center[1];
-    // `density` means the stand's INTERIOR fullness in every footprint mode:
-    // the organic mask culls ~1/3 of placements, so it samples finer to keep
-    // the same plants-per-square-metre as the circular default
+    // `density` is the stand's INTERIOR fullness in every footprint mode: the organic mask culls ~1/3, so it samples finer
     const step = 1 / Math.sqrt(spec.density * (o.density ?? 1) * (o.footprint === 'organic' ? 1.45 : 1));
     const out = [];
-    // footprint: a stand is never square: the W×D rectangle is cut to a feathered ellipse; 'organic' adds low-frequency
-    // noise for a lobed patch
+    // a stand is never square: W×D is cut to a feathered ellipse; 'organic' adds low-frequency noise for a lobed patch
     const organic = o.footprint === 'organic';
     const sstep = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-    // the rim has no line: density feathers from 60% of the radius, and sparse stragglers run to 1.25R so a low camera
-    // doesn't see a stamped boundary
+    // no rim line: density feathers from 60% of the radius and stragglers run to 1.25R, so a low camera sees no stamped edge
     const EXT = 1.25;
     for (let gx = -W * EXT / 2; gx < W * EXT / 2; gx += step) for (let gz = -D * EXT / 2; gz < D * EXT / 2; gz += step) {
         const x = cx + gx + (rng() - 0.5) * step, z = cz + gz + (rng() - 0.5) * step;
@@ -52,9 +46,7 @@ export function placeInstances(o, spec) {
             if (rng() > 0.055 * (1 - (r - 1) / (EXT - 1))) continue;   // stragglers
         } else if (rng() < sstep(0.82, 1.04, r)) continue;             // feathered rim (outer ~18%)
         if (organic) {
-            // lobe scale ADAPTS to the field: ~4 lobes per stand at any size.
-            // A fixed wavelength made small stands lose half their area to a
-            // single mask gap (and aligned gaps across stands left holes).
+            // lobe scale ADAPTS: ~4 lobes per stand at any size (a fixed wavelength let one gap eat half a small stand)
             const f = 3.4 / Math.max(W, D);
             const m = noise(x * f + 31.7, z * f + 17.3);
             if (m < 0.4 + 0.28 * Math.min(1, r)) continue;             // lobes shrink toward the rim
@@ -63,8 +55,7 @@ export function placeInstances(o, spec) {
         const dN = noise(x * 0.05, z * 0.05);
         if (dN < 0.5 - spec.clump && rng() < 0.85) continue;
         const p = finishPlacement(x, z, o, spec, rng, step, true);
-        // Optional streaming sink for bounded native/LOD reservoirs. It must
-        // not consume the placement RNG: default browser output stays exact.
+        // optional streaming sink for bounded native/LOD reservoirs: it must not consume the placement RNG (browser output stays exact)
         if (p) { if (o.placementSink) o.placementSink(p); else out.push(p); }
     }
     return out;
@@ -79,8 +70,7 @@ function finishPlacement(x, z, o, spec, rng, step, selfCheck) {
         if (!hit) return null;                           // off the geometry
         if (o.maxSlope && hit.slope > o.maxSlope) return null;
         y = hit.y;
-        // follow the geometry: tilt world-up toward the hit normal by the
-        // stroke's align share (grass hugs its ground, shrubs grow to sky)
+        // tilt world-up toward the hit normal by the stroke's align share (grass hugs its ground, shrubs grow to sky)
         const k = o._align;
         if (k > 0) {
             ntx = Math.atan2(hit.nz, hit.ny) * k;
@@ -102,9 +92,8 @@ function finishPlacement(x, z, o, spec, rng, step, selfCheck) {
         _placedPlants.push({ x, z, r });
     }
     const leanAz = rng() * Math.PI * 2, lean = (rng() - 0.5) * 0.16;
-    // `heading` locks instance yaw to a shared world azimuth (± headingJitter,
-    // default 0.15 rad) — sunflower fields face one way; omit for the usual
-    // random spin. ONE rng draw either way so the stream stays aligned.
+    // `heading` locks yaw to a shared world azimuth (± headingJitter, default 0.15 rad); omit for random spin.
+    // ONE rng draw either way so the stream stays aligned.
     const spin = rng();
     const yaw = o.heading != null
         ? o.heading + (spin - 0.5) * 2 * (o.headingJitter ?? 0.15)
@@ -120,13 +109,11 @@ function finishPlacement(x, z, o, spec, rng, step, selfCheck) {
 // ── row planting — the cultivated footprint ─────────────────────────────────
 // A planted field IS rectangular: rows at `spacing`, plants every `plant` m, sowing jitter, misses, ragged headlands;
 // no ellipse or stragglers. `angle` turns it; stride/phase interleave two strokes through one field.
-/** Authored placements ([x, z, scale?] each): the exact spots, with seeded yaw/colour/phase so they reproduce
- *  per seed, and their footprints registered for occupancy — the same answer in the browser and the native
- *  projection. y: o._surfaceAt (a building's floor) when given, else o.heightFn, else o.y. */
+/** Authored placements ([x, z, scale?] each): exact spots, seeded yaw/colour/phase, footprints registered for occupancy;
+ *  the same in browser and native. y: o._surfaceAt (a building's floor) when given, else o.heightFn, else o.y. */
 export function placeExplicit(o, spec) {
     return o.placements.map((pl, pi) => {
-        // seeded, not Math.random(): authored placements must reproduce exactly per seed — run-to-run
-        // scale/yaw drift broke every like-for-like lookdev comparison
+        // seeded, never Math.random(): authored placements must reproduce exactly per seed (lookdev compares like for like)
         const pr = (() => { let sN = ((o.seed ?? 7) * 131 + pi * 37 + 5) % 2147483647;
             return () => { sN = (sN * 16807) % 2147483647; return sN / 2147483647; }; })();
         const scale = pl[2] ?? 1;
@@ -145,8 +132,7 @@ export function placeRows(o, spec) {
     const rng = (() => { let s = ((o.seed ?? 7) + 5) * 2654435761 % 2147483647;
         return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; })();
     const r = typeof o.rows === 'object' ? o.rows : {};
-    // `density` works both ways on a planted field: below 1 it skips plants, above 1 it tightens the in-row spacing
-    // (the row gap is fixed by machinery)
+    // below 1 `density` skips plants, above 1 it tightens the in-row spacing (the row gap is fixed by machinery)
     const k = o.density ?? 1;
     const gap = r.spacing ?? 0.76, inRow = (r.plant ?? 0.24) / Math.max(1, k);
     const ang = r.angle ?? 0, jit = r.jitter ?? 0.05;

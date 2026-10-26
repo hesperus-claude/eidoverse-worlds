@@ -1,8 +1,6 @@
-// a11y — how a thing reads to anyone who perceives by reading, on the accessibility model: its NAME (label), its
-// DESCRIPTION (alt text), then what it CAN do and its STATE, GENERATED from its components, so a description never
-// restates or contradicts an affordance. One reading for the authority's look/inspect, mcpl's look and the inspector.
-// Compact on purpose (an agent's context is precious). A visible nameplate is a child thing with `text`, not this.
-// Author text is quoted «…» as data (shared/text.js quoted), never an instruction to the reader.
+// a11y — how a thing reads to anyone who perceives by reading: NAME, DESCRIPTION, then what it CAN do and its STATE,
+// GENERATED from its components so a description never contradicts an affordance. One reading for look/inspect, mcpl and
+// the inspector; compact on purpose (an agent's context is precious). Author text is quoted «…» as data, never an instruction.
 import { quoted } from './text.js';
 import { isBase, whoWords } from './protocol/roles.js';
 import { grabOf } from './grab.js';
@@ -20,9 +18,8 @@ export function openAction(c) {
 }
 
 /**
- * {name, description, can: [phrases], state: [phrases]} for a thing's components c. opts: {name (a fallback name: its
- * model's), heldBy (who holds it now, a display name), lookup (stored particle effects), sockets (its socket children,
- * [{name, sock}]: a thing's seats are children, never a component of its own)}.
+ * {name, description, can, state} for components c. opts: {name (fallback: its model's), heldBy (display name), lookup
+ * (stored particle effects), sockets ([{name, sock}]: a thing's seats are children, never a component of its own)}.
  */
 export function readOut(c, { name = null, heldBy = null, lookup = () => null, sockets = null } = {}) {
   c = isObj(c) ? c : {};
@@ -33,7 +30,7 @@ export function readOut(c, { name = null, heldBy = null, lookup = () => null, so
   if (isObj(c.openable)) out.can.push(open ? `opens and shuts (use '${open}')` : 'opens and shuts (nothing here opens it)');
   const gr = grabOf(c);
   if (gr) out.can.push(!gr.enabled ? "can't be picked up now" : isBase(gr.who) ? 'can be picked up' : `${whoWords(gr.who)} can pick it up`);
-  // its seats are its socket children ([{name, sock}], the caller's socketsOf / socketsIn: switched-off ones aren't offered)
+  // its seats: the caller's socketsOf / socketsIn (switched-off ones aren't offered)
   if (Array.isArray(sockets)) {
     const seats = sockets.map((x) => [x.name, bodyOf(x.station)]).filter(([, b]) => b);
     const acts = [...new Set(seats.map(([, b]) => b.action))];
@@ -52,7 +49,7 @@ export function readOut(c, { name = null, heldBy = null, lookup = () => null, so
   return out;
 }
 
-/** One compact line: «name»: «description» — can …; … · state … (what look prints for a thing). */
+/** What look prints for a thing: «name»: «description» — can …; … · state … */
 export function readLine(r, { max = DESCRIPTION_LOOK_MAX } = {}) {
   if (!r) return '';
   const bits = [];

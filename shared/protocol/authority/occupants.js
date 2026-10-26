@@ -1,7 +1,6 @@
-// shared/protocol/authority/occupants.js — who occupies what (presence, never logged): a body occupying a station
-// (sitting, today), setting and clearing it, vacating it when what it occupies is moved or let go, and the occupant rule
-// that keeps an occupied thing from being punted, pushed, grabbed or thrown out from under them; and occupyRights, a
-// socket joining a host. lastTouch, lacks, lockCheck and needWords are reached through UP.
+// shared/protocol/authority/occupants.js — who occupies what (presence, never logged): setting, clearing, vacating when the
+// station is moved or let go; the occupant rule that keeps an occupied thing from being punted, pushed, grabbed or thrown
+// out from under them; and occupyRights, a socket joining a host.
 import { TRACK } from "../../mover.js";
 import { baseOf } from "../componentspec.js";
 import { offChain } from "../simlayer.js";
@@ -12,32 +11,29 @@ import { refuse, said } from "./refuse.js";
 import { lockedC } from "./storage.js";
 import { aabb, ancestors, descendants, worldT } from "./math.js";
 import { isSocketC } from "./sockets.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// layers above this one (a leaf may not import them), through UP (ctx.js)
 const lacks = (...a) => UP.lacks(...a);
 const lastTouch = (...a) => UP.lastTouch(...a);
 const lockCheck = (...a) => UP.lockCheck(...a);
 const needWords = (...a) => UP.needWords(...a);
 
-// A body that walks more than a metre from its seat has stood up (a seated client sends no steps; standing, it walks)
-// Who sits where (presence, never logged: review 10-12 S1-1): {to: <socket id>}. A seat whose socket is gone or switched
-// off is no seat (its occupant was let go by every client), so a reader never sees one.
+// A body that walks more than a metre from its seat has stood up (a seated client sends no steps).
+// Who sits where (presence, never logged): {to: <socket id>}. A seat whose socket is gone or switched off is no seat, so a reader never sees one.
 function occupantOf(w, st, who) { const s = w.presence.occupants?.[who];
   return s && typeof s.to === "string" && isSocketC(st.entities[s.to]?.c) && !offChain(st, s.to) ? s : null; }
-// `since`: the log's length when they sat (review r9 M1): what was written from then on isn't part of the seat's own motion they consented to
-// `near`: the body was tracked within sitting reach when it sat (review r10 M1): only then does leaving re-anchor the track at the seat
+// `since`: the log's length when they sat: what was written from then on isn't part of the seat's own motion they consented to
+// `near`: tracked within sitting reach when it sat: only then does vacating re-anchor the track at the seat
 const setOccupant = (w, who, to, near = false) => { (w.presence.occupants ??= {})[who] = { to, since: w.entries.length, ...(near ? { near: true } : {}) }; w.presenceDirty = true; };
 const clearOccupant = (w, who) => { if (w.presence.occupants?.[who]) { delete w.presence.occupants[who]; w.presenceDirty = true; } };
-// leaving a seat is presence: the track restarts from the seat's world pose with a full speed budget, writing nothing,
-// so the next step is measured from where they are (never too-fast from the boarding point). Only for a body that
-// boarded within reach (`near`). Returns where, or null.
+// vacating is presence: the track restarts from the seat's world pose with a full speed budget, writing nothing, so the
+// next step is never too-fast from the boarding point. Only with `near`. → where, or null.
 function vacateAt(w, st, who, seat) {
   const b = w.presence.bodies?.[who]; if (!b || !st?.entities[seat] || w.presence.occupants?.[who]?.near !== true) return null;
   const at = worldT(st, seat).pos.map(r3); if (!at.every(Number.isFinite)) return null;
   w.presence.bodies[who] = { ...b, at, ts: w.pace ? w.pace() : w.now(), tokens: TRACK.cap }; w.presenceDirty = true;
   return at;
 }
-// another present body seated on this socket (one body per socket: VRChat Station, Roblox Seat), or the thing sitting in it
+// another present body seated on this socket (one body per socket), or the thing sitting in it
 function occupantOn(w, st, sock, actor) {
   for (const who of Object.keys(w.presence.occupants ?? {})) if (who !== actor && w.presence.bodies[who] && occupantOf(w, st, who)?.to === sock) return { who };
   const thing = Object.keys(st.entities).find((k) => st.entities[k].c.parent?.to === sock); return thing ? { thing } : null; }
@@ -46,9 +42,9 @@ function leftOccupied(w, st, actor, to) {
   const p = worldT(st, s.to).pos;
   if (Math.hypot(to[0] - p[0], to[2] - p[2]) > 1) clearOccupant(w, actor);
 }
-// Who a hand or a foot acting on `id` would move with it: another present body seated on it or on anything carried by it, or
-// standing on it or on anything carried by it (review 10-12 S1-1/S1-2: a punt, a contact push, a grab or a throw went round body
-// consent through the chair). Bodies are presence and never things, so this is the only way one is moved by moving a thing.
+// Who a hand or foot acting on `id` would move: a present body seated or standing on it or on anything it carries (else a
+// punt, push, grab or throw goes round body consent through the chair). Bodies are presence, never things: this is the
+// only way one is moved by moving a thing.
 function occupant(w, st, id, actor) {
   const fam = new Set([id, ...descendants(st, id)]);
   for (const who of Object.keys(w.presence.occupants ?? {})) { const s = occupantOf(w, st, who); if (who !== actor && s && fam.has(s.to)) return { who, how: "sits on" }; }
@@ -69,11 +65,11 @@ function vacatesFor(w, st, who, norm) {
   const rootOf = (id) => { const a = ancestors(st, id); return a.length ? a[a.length - 1] : id; };
   const from = cap?.kind === "reaction" ? cap.ids[0] : cap?.kind === "script" ? cap.id : null;   // the thing whose own behaviour this is
   const own = from && st.entities[from] ? rootOf(from) : null;
-  // the exemption covers the assembly as it was when they sat (review r9 M1): the handler or script doing it, and every parent link from
-  // its host up to the root, were last written before the occupant sat. A reaction added to the chair after you sat, or a thing
-  // hung under it since, is someone's edit, not the seat's own motion (a builder can't move an occupied seat in two steps)
+  // the exemption covers the assembly as it was when they sat: the handler or script, and every parent link from its host
+  // to the root, last written before then. A reaction or child added since is someone's edit, not the seat's own motion
+  // (a builder can't move an occupied seat in two steps)
   const key = cap?.kind === "reaction" ? "reactions" : cap?.kind === "script" ? cap.key : null;
-  // (the authority's follow-ups aren't edits: a reference cleared on the seat since is skipped, claims r10 O3, as §5 says)
+  // (follow-ups aren't edits: a reference cleared on the seat since is skipped, as §5 says)
   const unchangedSinceSat = (since) => Number.isInteger(since) && [from, ...ancestors(st, from)].every((id, k) =>
     (lastTouch(w, id, "parent", { authored: true })?.seq ?? -1) < since && (k > 0 || (lastTouch(w, from, key, { authored: true })?.seq ?? Infinity) < since));
   const out = new Map();
@@ -81,7 +77,7 @@ function vacatesFor(w, st, who, norm) {
     if (op.verb === "create" || op.comp === undefined || !MOVES_BODIES(op.comp) || !st.entities[op.id]) continue;
     const fam = new Set([op.id, ...descendants(st, op.id)]);
     for (const r of occupants) { if (out.has(r)) continue; const s = occupantOf(w, st, r); if (!s || !fam.has(s.to)) continue;
-      if (own && rootOf(s.to) === own && unchangedSinceSat(s.since)) continue;   // the seat's own assembly moving it, as it was when they sat: the occupant exemption
+      if (own && rootOf(s.to) === own && unchangedSinceSat(s.since)) continue;   // the occupant exemption
       out.set(r, { who: r, socket: s.to, host: st.entities[s.to]?.c.parent?.to ?? null, id: op.id, field: op.comp }); } }
   return [...out.values()];
 }
@@ -90,9 +86,9 @@ function occupiedRefuse(w, st, id, actor, what) {
   const o = occupant(w, st, id, actor);
   if (o) refuse("occupied", `${said(o.who)} ${o.how} ${id} (or something on it), so it can't be ${what}`, "wait till they get up or step off", { by: o.who });
 }
-// a socket is part of its host: one JOINING a host (made under it, re-parented onto it, a child made a socket) needs
-// the host's rights, and every write touching a socket child meets the locks over its old and new host chains. The
-// legacy map's lifted creates are in `norm`; a host made in this write is the asker's own.
+// a socket is part of its host: JOINING one (made under it, re-parented onto it, a child made a socket) needs the host's
+// rights, and every write touching a socket child meets the locks over its old and new host chains. Lifted legacy creates
+// are in `norm`; a host made in this write is the asker's own.
 function occupyRights(w, st, s, who, role, norm, made) {
   const cap = who.cap; if (cap && cap.kind !== "reaction" && cap.kind !== "script") return;
   const holder = cap?.kind === "reaction" ? cap.author : cap?.kind === "script" ? cap.sponsor : who.actor;
@@ -103,8 +99,7 @@ function occupyRights(w, st, s, who, role, norm, made) {
     if (h1 && h1 !== h0) joins.add(h1); }
   for (const [h, op] of hosts) { if (made.has(h) || !st.entities[h]) continue;
     const at = h + "'s sockets (" + op.verb + " " + op.id + (op.comp !== undefined ? "." + op.comp : "") + ")"; const as = { verb: "set", id: h, comp: "sockets" };
-    // a socket joining h (made, re-parented onto it, or a thing made one) needs h's rights; an edit of a socket already
-    // on h is judged on the socket's own rights in rights() (its creator, or the builder the command's lift names: RL4)
+    // joining h needs h's rights; an edit of a socket already on h is judged on its own rights in rights() (its creator, or the lift's builder: RL4)
     const n = joins.has(h) ? lacks(w, st, holder, as, made, { viaCap: !!cap }) : null;
     const whose = cap ? " (" + said(holder) + "'s, whose rights this write carries)" : "; you are " + role;
     if (n) refuse("rights", "a socket is part of its host, so " + op.id + " is an edit of " + at + ": that needs " + needWords(n) + whose, "ask " + h + "'s builder or an owner; a socket on a thing of your own needs nothing more", { needs: n, host: h });

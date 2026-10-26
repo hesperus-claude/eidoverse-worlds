@@ -1,10 +1,9 @@
-// structure_edit — the griddled-building editor's pure half: a `structure` component in, a new one out, nothing mutated.
-// Undo is keeping the old value; a preview is the same function as the commit, so the two can't disagree.
-// ⚠️ Wholesale replace means LAST WRITE WINS: two people editing one building silently lose an edit.
+// structure_edit — the griddled-building editor's pure half: a `structure` in, a new one out, nothing mutated. Undo keeps the
+// old value; preview and commit are one function. ⚠️ Wholesale replace means LAST WRITE WINS: two editors silently lose an edit.
 
 import { cellKey, edgeKey, APERTURES, GRID_DEFAULTS } from './structure.js';
 
-/** A structure's own defaults, so an empty building is still a legal one. */
+/** So an empty building is still a legal one. */
 export const emptyStructure = (over = {}) => ({
   tile: GRID_DEFAULTS.tile, wallH: GRID_DEFAULTS.wallH, wallT: GRID_DEFAULTS.wallT,
   labels: {}, levels: [{ y: 0, tiles: [], walls: [], apertures: [] }], ...over,
@@ -13,14 +12,13 @@ export const emptyStructure = (over = {}) => ({
 const clone = (d) => JSON.parse(JSON.stringify(d ?? emptyStructure()));
 const lvOf = (d, i) => (d.levels[i] ??= { y: 0, tiles: [], walls: [], apertures: [] });
 
-/** Edge identity, for comparing entries that may carry extra fields. */
+/** For comparing entries that may carry extra fields. */
 const sameEdge = (w, axis, x, z) => w[0] === axis && w[1] === x && w[2] === z;
 const sameCell = (t, x, z) => t[0] === x && t[1] === z;
 
 // ---- picking ----------------------------------------------------------------
 
-/** Every edge of the cell under a grid-local point, nearest first (metres), so each tool takes the first entry or
- *  filters to the kinds it accepts. */
+/** Every edge of the cell under a grid-local point, nearest first (metres). */
 export function pickEdges(g, lx, lz) {
   const t = g.tile ?? GRID_DEFAULTS.tile;
   const cx = Math.floor(lx / t), cz = Math.floor(lz / t);
@@ -42,8 +40,7 @@ export function pickEdge(g, lx, lz, { diagonals = true } = {}) {
   return all[0] ?? null;
 }
 
-/** The nearest edge that CARRIES a wall: near a cell's centre the nearest edge is an empty diagonal, and a door click
- *  there would silently do nothing. */
+/** Near a cell's centre the nearest edge is an empty diagonal, and a door click there would silently do nothing. */
 export function pickWalledEdge(data, lx, lz, level = 0) {
   const lv = data?.levels?.[level];
   if (!lv) return null;
@@ -61,8 +58,7 @@ export const pickCell = (g, lx, lz) => {
 export function addWall(data, { axis, x, z }, level = 0, mat = 'wall') {
   const d = clone(data), lv = lvOf(d, level);
   if (lv.walls.some((w) => sameEdge(w, axis, x, z))) return d;
-  // a diagonal and an orthogonal wall can coexist in a cell, but TWO diagonals
-  // cannot — the second would cut a cell already cut
+  // a diagonal and an orthogonal wall can share a cell, but TWO diagonals cannot
   if (axis >= 2) lv.walls = lv.walls.filter((w) => !(w[0] >= 2 && w[1] === x && w[2] === z));
   lv.walls.push(mat === 'wall' ? [axis, x, z] : [axis, x, z, mat]);
   return d;
@@ -76,7 +72,7 @@ export function removeWall(data, { axis, x, z }, level = 0) {
   return d;
 }
 
-/** Put an aperture in a wall, or clear it with kind = null. */
+/** kind = null clears it. */
 export function setAperture(data, { axis, x, z }, kind, level = 0) {
   const d = clone(data), lv = lvOf(d, level);
   if (!lv.walls.some((w) => sameEdge(w, axis, x, z))) return d;   // nothing to hole
@@ -98,8 +94,7 @@ export function removeTile(data, { x, z }, level = 0) {
   return d;
 }
 
-/** Draw a rectangular room: floor across the span, walls right round it. The perimeter is edges, so a room dragged
- *  against another SHARES their common wall. */
+/** Floor across the span, walls round it. The perimeter is edges, so a room dragged against another SHARES their wall. */
 export function drawRoom(data, a, b, level = 0, mat = 'wall') {
   let d = clone(data);
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);
@@ -118,7 +113,7 @@ export function drawRoom(data, a, b, level = 0, mat = 'wall') {
   return d;
 }
 
-/** Erase a rectangle: floor and any wall not shared with what remains. */
+/** Floor and any wall not shared with what remains. */
 export function eraseRoom(data, a, b, level = 0) {
   let d = clone(data);
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x);

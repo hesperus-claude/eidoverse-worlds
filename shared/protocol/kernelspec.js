@@ -1,5 +1,5 @@
 // shared/protocol/kernelspec.js — the KERNEL's shapes, pinned: what every reader of every log agrees on before a single
-// component is read (PROTOCOL §1–§3, §9.3, §13). The registry (componentspec.js) pins components; this pins below it:
+// component is read (PROTOCOL §1–§3, §9.3, §13). componentspec.js pins components; this pins below it:
 //   envelope   the entry's fields (§1 "The envelope") and its kinds
 //   fold       the four operations and their fields; the batch body (§3)
 //   identity   the grammar of an identity, an entity id and a component name (§3.1)
@@ -19,9 +19,7 @@ import { ENVELOPE, KINDS, IDENT, ENTITY, COMP, OP_FIELDS, BATCH_FIELDS, GENESIS_
 import { COMPONENTS, pinOf } from "./componentspec.js";
 
 export const TRIAL_KERNEL = "trial-kernel";
-/** The component names that belong to the kernel (their registry status is trial-kernel). */
-/** The component names that belong to the kernel: what every reader rests on (C11b, house plan #260 10-20: the kernel is what the
- *  fold reads; transform, parent and model left it, as the fold never reads them). */
+/** What every reader rests on (status trial-kernel; #260): the kernel is what the fold reads (transform, parent and model left it). */
 export const KERNEL_COMPONENTS = Object.freeze(["roles", "access"]);
 /** The kernel's shapes that aren't components: the pin's other keys. */
 export const KERNEL_SHAPES = Object.freeze(["envelope", "fold", "identity", "version"]);
@@ -29,8 +27,7 @@ export const KERNEL_SHAPES = Object.freeze(["envelope", "fold", "identity", "ver
 /** The kernel's checkable shape, as the pin stores it. Deterministic (sorted where the source is a set). */
 export function kernelPinOf() {
   const reg = pinOf();
-  // a kernel component's FIELD shape only (C11b: "roles/access keep at most their component shape"): its ranges, enums, defaults,
-  // meanings and vocabulary are the registry's, pinned there
+  // a kernel component's FIELD shape only: ranges, enums, defaults, meanings and vocabulary are the registry's, pinned there
   const comp = (name) => { const p = reg[name]; if (!p) return { missing: true }; return { status: COMPONENTS[name]?.status ?? p.status, fields: p.fields }; };
   return {
     envelope: { status: TRIAL_KERNEL, fields: [...ENVELOPE].sort(), kinds: [...KINDS].sort() },
@@ -43,8 +40,8 @@ export function kernelPinOf() {
 }
 
 const j = (x) => JSON.stringify(x);
-/** Every difference between a pinned kernel and now, as lines. [] = the kernel is as pinned. Any difference counts (a kernel
- *  addition is a change too: an old reader refuses an unknown envelope field, a new kind, a new op field). */
+/** Every difference as lines; [] = as pinned. An addition counts too (an old reader refuses an unknown envelope field,
+ *  a new kind, a new op field). */
 export function kernelDiff(pin, now = kernelPinOf()) {
   const out = [];
   const walk = (a, b, at) => {
@@ -57,23 +54,21 @@ export function kernelDiff(pin, now = kernelPinOf()) {
   return out;
 }
 
-/** The translator's version number from its name (eidoverse/translate-v1@14 → 14), or null. */
+/** eidoverse/translate-v1@14 → 14, or null. */
 export const translatorN = (name) => { const m = /@(\d+)$/.exec(String(name ?? "")); return m ? +m[1] : null; };
 
-/** May `now` be pinned over `pin`? {ok, diff, why?, companions?}. With no diff: yes (the old companions are kept). With a
- *  diff, only with all three companions: {ack, translator: {from, to}, vectors: {dir, ran: {old: [...], new: [...]}}}, where
- *  each vector's `old` verdict is a refusal (not "ok") and its `new` verdict is "ok". `date` stamps the changelog line.
- *  The companions the pin will record: {changelog, translator, vectors}. */
+/** May `now` be pinned over `pin`? {ok, diff, why?, companions?}. No diff: yes (old companions kept). A diff needs all
+ *  three: {ack, translator: {from, to}, vectors: {dir, ran: {old: [...], new: [...]}}}, every vector's `old` verdict a
+ *  refusal and its `new` "ok". `date` stamps the changelog line. Recorded companions: {changelog, translator, vectors}. */
 export function kernelVerdict(pin, now = kernelPinOf(), companions = null, date = new Date().toISOString().slice(0, 10)) {
-  if (!pin) return { ok: true, diff: [], companions: null, initial: true };   // the first pin: nothing changed yet, so nothing to carry
+  if (!pin) return { ok: true, diff: [], companions: null, initial: true };   // the first pin: nothing to carry
   const diff = kernelDiff(pin.kernel ?? pin, now);
   if (!diff.length) return { ok: true, diff, companions: pin.companions ?? null };
   const c = companions ?? {}; const missing = [];
   const ack = typeof c.ack === "string" ? c.ack.trim() : "";
   if (!ack) missing.push(`a changelog line: --ack "<why>" (written to spec/REGISTRY-CHANGELOG.md as "kernel: <why>")`);
   // a SCOPE TRIM: the whole diff is kernel components (or keys) LEAVING the pin, each HELD (companions.trim.held /
-  // heldPaths) or DROPPED with a why (companions.trim.dropped). No stored byte changes meaning, so only the ack is needed;
-  // anything else is a kernel change: all three.
+  // heldPaths) or DROPPED with a why (companions.trim.dropped). No stored byte changes meaning, so only the ack is needed.
   const base = pin.kernel ?? pin; const pinnedComps = Object.keys(base).filter((k) => !KERNEL_SHAPES.includes(k));
   const units = diff.map((d) => { const m = /^([a-z][a-z0-9-]*)((?:\.[A-Za-z]+)?): [\s\S]* → absent$/.exec(d);
     return m && pinnedComps.includes(m[1]) ? { n: m[1], path: m[1] + m[2], grammar: m[2] === ".grammar" } : null; });
@@ -97,9 +92,8 @@ export function kernelVerdict(pin, now = kernelPinOf(), companions = null, date 
     const trim = { held: t.held ?? {}, ...(t.heldPaths?.length ? { heldPaths: t.heldPaths } : {}), dropped: t.dropped ?? {} };
     return { ok: true, diff, trimOnly: true, changelog: `- ${date}: kernel: ${ack}\n${lines.join("\n")}\n`, companions: { changelog: `${date}: kernel: ${ack}`, trim, translator: null, vectors: null } };
   }
-  // a SCOPE EXTENSION: the whole diff is kernel components entering the pin with the shape the registry ALREADY pinned
-  // (named in companions.scope). Only a changelog line is needed, and K3 keeps the names in the kernel; anything else is
-  // a kernel change: all three.
+  // a SCOPE EXTENSION: the whole diff is kernel components entering with the shape the registry ALREADY pinned
+  // (companions.scope). Only a changelog line is needed; K3 keeps the names in the kernel.
   const entering = diff.map((d) => /^([a-z][a-z0-9-]*): absent → /.exec(d)?.[1] ?? null);
   const scope = Array.isArray(c.scope?.names) ? c.scope.names : null;
   if (scope && diff.length && entering.every((n) => n && KERNEL_COMPONENTS.includes(n) && scope.includes(n)) && scope.every((n) => entering.includes(n)) && c.scope.registryPinned === true) {

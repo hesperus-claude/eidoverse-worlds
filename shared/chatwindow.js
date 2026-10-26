@@ -2,9 +2,8 @@
 //   hear(st, line)    append {actor, text, ts, seq} to st.recentChat, count it, trim fairly
 export const RECENT_CHAT = 40;
 
-/** Make room in the recent-chat window WITHOUT letting one loud speaker erase everyone else: the loudest voice loses
- *  its oldest line first, and nobody's LAST line is dropped while someone else still has several (a plain "keep the last
- *  N" lets one bot fill an arrival's window). Recency wins within a speaker; fairness between them.
+/** Trim without letting one loud speaker erase everyone else: the loudest loses its oldest line first, and nobody's LAST
+ *  line goes while someone else still has several (a plain "keep the last N" lets one bot fill an arrival's window).
  *  @param {WorldState["recentChat"]} rc */
 export function trimRecentChat(rc) {
   while (rc.length > RECENT_CHAT) {
@@ -20,7 +19,7 @@ export function trimRecentChat(rc) {
   }
 }
 
-/** One line heard: into the window (fairly trimmed) and counted. */
+/** Into the window (fairly trimmed) and counted. */
 export function hear(st, { actor, text, ts, seq }) {
   (st.recentChat ??= []).push({ actor, text: String(text ?? ""), ts, seq });
   st.chatTotal = (st.chatTotal ?? 0) + 1;

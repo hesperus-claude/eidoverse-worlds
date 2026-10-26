@@ -1,20 +1,14 @@
-// rot — entity orientation as a unit quaternion [x, y, z, w], with yaw as
-// the friendly subset (PROTOCOL §9: "quaternions where full rotation is
-// needed — never Euler triples").
-//
-// Folds run on every runtime and must agree bit for bit, so nothing here
-// touches a host transcendental: trig goes through simmath's owned kernels,
-// everything else is + − × ÷ and sqrt (exact everywhere).
+// rot — orientation as a unit quaternion [x, y, z, w], yaw the friendly subset (PROTOCOL §9: never Euler triples).
+// Folds must agree bit for bit on every runtime, so nothing here touches a host transcendental: trig through simmath's
+// owned kernels, everything else + − × ÷ and sqrt.
 
 import { sinT, cosT, atan2T, PI } from './simmath.js';
 
-/** A usable quaternion arg, normalized — or null (the fold's "finite or
- *  nothing" rule: a malformed q shapes nothing). */
+/** Normalized, or null (the fold's "finite or nothing" rule: a malformed q shapes nothing). */
 export function qNorm(q) {
   if (!Array.isArray(q) || q.length !== 4 || !q.every(Number.isFinite)) return null;
   const n2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
-  // already unit (to a few ulps): returned as it is, so a quaternion that needs nothing is never moved by one ulp, which
-  // happened differently per platform (Windows rounded a unit q's re-normalisation the other way: channelbox, 10-22)
+  // already unit (to a few ulps): returned as is, since re-normalising rounded differently per platform
   if (Math.abs(n2 - 1) <= 8 * Number.EPSILON) return [q[0], q[1], q[2], q[3]];
   const n = Math.sqrt(n2);
   if (!(n > 1e-9)) return null;
@@ -56,10 +50,9 @@ export function qAxisAngle(axis, angle) {
   return [axis[0] * s, axis[1] * s, axis[2] * s, cosT(h)];
 }
 
-/** The world pose of a parent chain, root first, each link a local { pos, q, scale: [x, y, z] } (PROTOCOL §9.3, glTF:
- *  world = parent × T·R·S). A TRS, exact for position and, under uniform ancestor scale, q and scale; under a
- *  non-uniform one the true transform shears, and this gives the plain products (Unity's lossyScale). Its float order is
- *  pinned (checks.js compares it as JSON with the engine's rests; conformance digests start here): no renormalization. */
+/** World pose of a parent chain, root first, each link a local { pos, q, scale: [x, y, z] } (PROTOCOL §9.3, glTF: world =
+ *  parent × T·R·S). Exact for position and, under uniform ancestor scale, q and scale; non-uniform shears, and this gives
+ *  the plain products (Unity's lossyScale). Its float order is pinned (conformance digests start here): no renormalization. */
 // TODO: return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
 export function composePose(chain) {
   let acc = chain[0];
@@ -71,8 +64,8 @@ export function composePose(chain) {
   return acc;
 }
 
-/** Heading of an orientation: yaw = atan2(fx, fz) of where +Z ends up (PROTOCOL §9); facing straight up or down, read
- *  off the TOP instead (the continuous limit), so a turn about +Y always moves the heading by exactly the turn. */
+/** yaw = atan2(fx, fz) of where +Z ends up (PROTOCOL §9); facing straight up or down, read off the TOP (the continuous
+ *  limit), so a turn about +Y always moves the heading by exactly the turn. */
 export function qHeading(q) {
   const f = qRotate(q, [0, 0, 1]);
   if (f[0] * f[0] + f[2] * f[2] > 1e-12) return atan2T(f[0], f[2]);
@@ -80,9 +73,7 @@ export function qHeading(q) {
   return atan2T(s * u[0], s * u[2]);
 }
 
-/** Turn an orientation about world +Y so its heading becomes `yaw`,
- *  keeping its tilt — a yaw-only `place` on a toppled chair spins it where
- *  it lies instead of standing it up. */
+/** Turn about world +Y to heading `yaw`, keeping tilt: a yaw-only `place` on a toppled chair spins it where it lies. */
 export function qWithHeading(q, yaw) {
   return qNorm(qMul(qFromYaw(yaw - qHeading(q)), q));
 }
@@ -92,10 +83,9 @@ export function orientOf(ent) {
   return ent?.q ?? qFromYaw(ent?.yaw ?? 0);
 }
 
-// A thing lying down (a tumbling engine lays things on their sides): the yaw of its horizontal axes and its local box
-// [min, max] turned into that yawed frame, for readers that work root-local with a yaw (the walker, an agent's support).
-// null while it stands (its own up within 10° of the world's): read it by its yaw as always. Exact when it lies on a
-// face; the bounding box when it balances on an edge. Yaw in three's convention (rotation.y; +x turns toward -z).
+// A thing lying down: the yaw of its horizontal axes and its local box [min, max] in that yawed frame, for root-local readers
+// (the walker, an agent's support). null while it stands (up within 10° of the world's). Exact on a face; the bounding box
+// on an edge. Yaw in three's convention (rotation.y; +x turns toward -z).
 const UPRIGHT = cosT(10 * PI / 180);
 export function lyingFrame(q, min, max) {
   const [x, y, z, w] = q;

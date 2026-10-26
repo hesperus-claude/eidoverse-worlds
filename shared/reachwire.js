@@ -1,32 +1,24 @@
-// shared/reachwire.js — the reach DESCRIPTOR: what a reach IS on the wire.
-// A reach travels as a RELATION, not solved bone angles; each end re-solves with the closed-form shared/reach.js. It
-// rides the presence plane (spec/PROTOCOL.md §5), relayed opaquely, and every reader normalizes: a malformed
-// descriptor folds to nothing rather than a throw in somebody's frame loop.
-//
+// shared/reachwire.js — the reach DESCRIPTOR: what a reach IS on the wire. A RELATION, not solved bone angles; each end
+// re-solves with shared/reach.js. It travels the presence plane (spec/PROTOCOL.md §5), relayed opaquely, and every reader
+// normalizes: a malformed descriptor folds to nothing rather than a throw in somebody's frame loop.
 // Two target shapes:
 //   { who: 'mythos', point: 'shoulder_l', standoff?: 0.02 }
-//       a named contact point (shared/contact.js) on a body — the toucher's
-//       own body included. Resolvers derive the millimetre per rig; the name
-//       is what travels, because a coordinate that is a shoulder on one body
-//       is mid-air on the next.
+//       a named contact point (shared/contact.js) on a body, the toucher's own included. The name travels, never a
+//       coordinate: a shoulder on one body is mid-air on the next.
 //   { p: [x,y,z], space?: 'world' | 'self' | '<participant id>' }
-//       a bare point. 'world' (the default) is fixed; 'self' lives in the
-//       REACHER's root frame and moves with them; a participant id lives in
-//       that body's root frame and tracks them.
-//
-// A limb entry wraps a target with its flags:
-//   { t: <target>, palm?: false, reached?: true }
+//       a bare point: 'world' (default) fixed; 'self' in the REACHER's root frame; a participant id in that body's.
+// A limb entry wraps a target with its flags: { t: <target>, palm?: false, reached?: true }
 // `palm: false` opts out of turning the palm to meet the surface (name-form targets orient it by default).
 // `reached` is set by the REACHER's own solve on arrival; its rising edge fires a touch. An attestation, as trusted as
 // the pose stream that carries it.
 
 import { canonicalPoint } from './contact.js';
 
-/** The limbs a reach can drive — mirror of shared/joints.js REACH_CHAINS. */
+/** Mirror of shared/joints.js REACH_CHAINS. */
 export const REACH_LIMBS = ['leftHand', 'rightHand', 'leftFoot', 'rightFoot'];
 
-/** A hand "has arrived" at this gap or less (the target already stands off the skin; slack absorbs breathing and
- *  settling). One constant, so browser and agent agree on what a touch is. */
+/** A hand "has arrived" at this gap or less (the target already stands off the skin). One constant, so browser and agent
+ *  agree on what a touch is. */
 export const TOUCH_GAP = 0.05;
 
 /** Tolerant limb naming: 'right', 'right hand', 'right_hand' → 'rightHand'. */
@@ -44,8 +36,7 @@ export function canonicalLimb(name) {
 
 const fin3 = (p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite);
 
-/** Normalize one target. Returns the canonical form, or null (never throws,
- *  never guesses: a reader of wire data folds garbage to nothing). */
+/** → the canonical form, or null: never throws, never guesses (a reader of wire data folds garbage to nothing). */
 export function normalizeReachTarget(t) {
   if (!t || typeof t !== 'object') return null;
   if (typeof t.who === 'string' && t.who.length && t.who.length <= 64) {
@@ -64,9 +55,7 @@ export function normalizeReachTarget(t) {
   return null;
 }
 
-/** Normalize a whole `pose.reach` bag from the wire. Unknown limbs and
- *  malformed entries drop; an empty result is null (absence and emptiness
- *  mean the same thing: nobody is reaching). */
+/** Unknown limbs and malformed entries drop; an empty result is null (absence and emptiness both mean nobody is reaching). */
 export function normalizeReachBag(bag) {
   if (!bag || typeof bag !== 'object') return null;
   const out = {};
@@ -83,16 +72,14 @@ export function normalizeReachBag(bag) {
   return Object.keys(out).length ? out : null;
 }
 
-/** Does this entry's target name a particular body? (A landmark on them, or a
- *  point in their root frame — both are reaches TOWARD that person.) */
+/** A landmark on them or a point in their root frame: both are reaches TOWARD that person. */
 export function reachTargetsWho(entry, id) {
   const t = entry?.t;
   if (!t || !id) return false;
   return t.who === id || t.space === id;
 }
 
-/** Same reach, ignoring the `reached` flag — the identity that edge
- *  detection cares about. Both sides assumed normalized. */
+/** Ignoring `reached`: the identity edge detection cares about. Both sides assumed normalized. */
 export function sameReach(a, b) {
   if (!a || !b) return false;
   if ((a.palm === false) !== (b.palm === false)) return false;
@@ -105,8 +92,7 @@ export function sameReach(a, b) {
     && ta.p[0] === tb.p[0] && ta.p[1] === tb.p[1] && ta.p[2] === tb.p[2];
 }
 
-/** Target as words, for tool replies and events. `selfId` renders that body's
- *  own name as "your". */
+/** For tool replies and events; `selfId` renders that body as "your". */
 export function describeTarget(t, selfId = null) {
   if (!t) return 'nothing';
   if (t.who !== undefined) {
@@ -120,12 +106,8 @@ export function describeTarget(t, selfId = null) {
 }
 
 /**
- * Diff two normalized bags into the EVENTS a body should hear about.
- * Pure, so the edge/latch logic is testable without an agent or a browser.
- *
- * `selfId` is the body doing the listening; only reaches directed at it (a
- * landmark on it, or a point in its frame) produce events. Returns
- * [{ type: 'reach' | 'touch' | 'release', limb, entry }]:
+ * Diff two normalized bags into the EVENTS a body should hear about. Pure, so the edge/latch logic is testable alone.
+ * `selfId` is the listener; only reaches directed at it produce events. → [{ type: 'reach' | 'touch' | 'release', limb, entry }]:
  *   reach   — a descriptor aimed at self appeared or changed aim
  *   touch   — the reacher's solve reports the hand arrived (rising edge)
  *   release — a descriptor aimed at self went away

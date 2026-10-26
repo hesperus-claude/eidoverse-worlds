@@ -1,23 +1,17 @@
-// captions — what the `caption` verb MEANS, and the bag it folds into. Shared by the sequencer, the caption bot
-// (tools/captionbot), the mcpl agent and any client overlay, so no two describe a different screen.
-//
+// captions — what the `caption` verb MEANS and the bag it folds into, shared by the sequencer, the caption bot
+// (tools/captionbot), the mcpl agent and any overlay, so no two describe a different screen.
 //   caption {id, session, n, t0, t1, text, speaker?, title?}   # one line, once
 //   caption {id, session, end: true}                            # the screen goes quiet
-//
-// folds into the entity's comp bag, SERVER-WRITTEN (a client's `comp {type: "captions"}` is refused):
-//
+// folds into the comp bag, SERVER-WRITTEN (a client's `comp {type: "captions"}` is refused):
 //   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}
-//
-// Each write holds ITS line, once (as WebVTT stores a cue); the log is the transcript, and an older value's `window`
-// still reads. RETENTION: captions are durable world testimony like `say`; `end` clears perception, not history.
-//
+// Each write holds ITS line once (as WebVTT stores a cue); the log is the transcript; an older value's `window` still reads.
+// RETENTION: durable world testimony like `say`; `end` clears perception, not history.
 // WHO IS THE CAPTIONER: the LIVE LEG. Every join gets a world-scoped generation (World.legGen, survives restarts; a
-// same-identity join takes over), stamped onto each caption by the door (server/requestwire.ts), never by the client.
-// A lower generation is refused as superseded, a higher one takes over: no clock the bot claims decides it.
+// same-identity join takes over), stamped by the door (server/requestwire.ts), never by the client. A lower generation is
+// refused as superseded, a higher one takes over: no clock the bot claims decides it.
 // SESSION is the bot's media-clock label, minted at attach; within it `n` is monotonic and a caption at or below the
 // high-water mark is refused before it becomes history (a resend is safe). TIMES t0/t1 are MEDIA seconds since attach.
-// BOUNDS are in CHARACTERS (UTF-16 code units), not bytes; the authority keeps each value under 64 KiB of UTF-8
-// (authority/gate.js), well above one line plus title and speakers in any script.
+// BOUNDS are in CHARACTERS (UTF-16 code units), not bytes; the authority keeps each value under 64 KiB of UTF-8 (authority/gate.js).
 
 import { shown } from './shown.js';
 
@@ -26,7 +20,7 @@ export const CAPTION_TEXT_MAX = 240;
 export const CAPTIONS_TITLE_MAX = 120;
 export const CAPTIONS_SPEAKER_MAX = 48;
 export const CAPTION_SESSION_MAX = 64;
-/** Sessions are `<ISO attach time>-<nonce>`: ordered by when the bot attached. */
+/** `<ISO attach time>-<nonce>`: ordered by when the bot attached. */
 export const SESSION_RX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z-[A-Za-z0-9]{2,16}$/;
 const KNOWN_KEYS = new Set(['session', 'n', 'gen', 'title', 'line', 'mediaTime', 'window']);   // mediaTime and window: an older value's
 
@@ -34,20 +28,18 @@ function cleanText(s, max) {
   return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-/** A line's parts and what keeps them from being a line: the one statement
- *  of the rule, for normalizeCaption and for the refusal that names what
- *  failed. */
+/** The one statement of the rule, for normalizeCaption and for the refusal that names what failed. */
 function readLine(c) {
   const t0 = Number(c.t0), t1 = Number(c.t1), text = cleanText(c.text, CAPTION_TEXT_MAX);
   return { t0, t1, text, badTimes: !Number.isFinite(t0) || !Number.isFinite(t1) || t0 < 0 || t1 < t0, badText: !text };
 }
 
-/** Mint a session id: attach time first so sessions sort by attach. */
+/** Attach time first, so sessions sort by attach. */
 export function mintSession(now = new Date(), nonce = Math.random().toString(36).slice(2, 8)) {
   return `${now.toISOString()}-${nonce}`;
 }
 
-/** One caption LINE, validated: finite non-negative times in order, non-empty text. */
+/** Finite non-negative times in order, non-empty text. */
 export function normalizeCaption(c) {
   if (!c || typeof c !== 'object' || Array.isArray(c)) return null;
   const { t0, t1, text, badTimes, badText } = readLine(c);
@@ -58,8 +50,8 @@ export function normalizeCaption(c) {
   return out;
 }
 
-/** The `caption` verb's args, shape-checked: `ok:false` carries WHY (the refusal sent), `ok:true` the normalized args.
- *  Pure: the authority and the bot's own pre-check are the same function. */
+/** `ok:false` carries WHY (the refusal sent), `ok:true` the normalized args. The authority and the bot's own pre-check are
+ *  the same function. */
 export function normalizeCaptionArgs(a) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) return { ok: false, why: 'caption wants {id, session, n, t0, t1, text, speaker?, title?} or {id, session, end: true}' };
   const id = String(a.id ?? '').slice(0, 64);
@@ -86,9 +78,8 @@ export function normalizeCaptionArgs(a) {
   return { ok: true, args };
 }
 
-/** Why the folded bag refuses these (normalized, server-stamped) args, or null, decided before append so a refusal
- *  never becomes history: a superseded leg (lower `gen`), a duplicate or old `n` in the session, or an `end` for another
- *  session. `gen` is stamped by the door (server/requestwire.ts); entries without it read as generation 0. */
+/** Decided before append so a refusal never becomes history: a superseded leg (lower `gen`), a duplicate or old `n` in the
+ *  session, or an `end` for another session. `gen` is stamped by the door; entries without it read as generation 0. */
 export function captionRefusal(bag, args) {
   const cur = bag && typeof bag === 'object' ? bag : null;
   if (!cur) return args.end ? `"${args.id}" has no captions to end, so it's already quiet` : null;
@@ -104,9 +95,7 @@ export function captionRefusal(bag, args) {
   return null;   // the same session continues; a different one starts fresh
 }
 
-/** Fold normalized args into the bag (pure; returns the new bag, or null when
- *  the screen went quiet): the current line only. The title carries within a
- *  session; a new session starts fresh. */
+/** Pure: the new bag, or null when the screen went quiet: the current line only. The title carries within a session. */
 export function foldCaption(bag, args) {
   if (args.end) return null;
   const cur = bag && typeof bag === 'object' && bag.session === args.session ? bag : null;
@@ -115,8 +104,7 @@ export function foldCaption(bag, args) {
   return { session: args.session, n: args.n, gen: Number(args.gen) || 0, ...(title ? { title } : {}), line };
 }
 
-/** Validate a folded bag as a reader (look(), an overlay). `ok:false` carries
- *  WHY; `ok:true` the normalized captions plus notes for anything coerced. */
+/** As a reader (look(), an overlay): `ok:false` carries WHY; `ok:true` the normalized captions plus notes for anything coerced. */
 export function normalizeCaptions(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, why: 'captions must be an object {session, n, gen, title?, line: {t0, t1, text, speaker?}}' };
@@ -161,9 +149,7 @@ export function clock(seconds) {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-/** The one line look() carries: what is showing, where in it, and the last
- *  thing it said. Never a claim about pixels or sound — only what the
- *  captioner wrote down. */
+/** What is showing, where in it, and the last thing it said. Never a claim about pixels or sound: only what the captioner wrote. */
 export function describeCaptions(data) {
   const n = normalizeCaptions(data);
   if (!n.ok) return 'a screen (malformed captions declaration)';
@@ -175,8 +161,7 @@ export function describeCaptions(data) {
   return `a screen, ${showing}, ${clock(captions.mediaTime ?? last.t1)}, last line: ${line}`;
 }
 
-/** The `captions` detail level: the lines, oldest first, at most `lines`. A value holds its current line (an older one
- *  its window); `earlier` is the screen's earlier captions values (the log's captions changes), oldest first. */
+/** The lines, oldest first, at most `lines`. `earlier` is the screen's earlier captions values (the log's changes), oldest first. */
 export function captionsDetail(data, lines = CAPTIONS_MAX_LINES, earlier = []) {
   const n = normalizeCaptions(data);
   if (!n.ok) return [];

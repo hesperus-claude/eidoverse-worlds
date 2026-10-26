@@ -1,7 +1,5 @@
 // flightcap — the capability boundary. Nothing flies without a profile, and the default provider issues none.
-//
 //     flightCapability({ identity, avatar, world }) -> { enabled:false } | profile
-//
 // DEFAULT DENY: a missing provider is "no"; enabling flight takes a deliberate act. CHECKED AT ACTION TIME, not
 // construction: bodies hot-swap, so the profile is re-resolved on every action (`revoked()` makes the swap testable).
 // A SEMANTIC RIG PROFILE, not an asset hash: it binds to load-bearing bone names, so an updated body still flies;
@@ -17,8 +15,7 @@ const BONES_UNKNOWN = "this body's bones aren't known (its model hasn't loaded o
 /** @typedef {{ wingChains:Record<string,string[]>, wingCount:number,
  *              core:string[], digest:string, version:string }} RigProfile */
 
-/** The default: always denies, for every caller, in every world, so a forgotten dependency means "no flight", never
- *  "flight for everyone". */
+/** Always denies, for every caller, in every world: a forgotten dependency means "no flight", never "flight for everyone". */
 export const denyAllFlight = {
   name: 'deny-all',
   flightCapability() {
@@ -26,8 +23,8 @@ export const denyAllFlight = {
   },
 };
 
-/** Build a rig profile from a body's bone names, or explain why not. The DIGEST covers only the load-bearing names
- *  (wing chains, driven core bones): a re-export that adds hair keeps flying, a renamed wing bone does not. */
+/** Or explain why not. The DIGEST covers only the load-bearing names (wing chains, driven core bones): a re-export that adds
+ *  hair keeps flying, a renamed wing bone does not. */
 export function rigProfile(boneNames) {
   const report = inspectBody(boneNames);
   if (!report.canFly) {
@@ -38,8 +35,7 @@ export function rigProfile(boneNames) {
       report,
     };
   }
-  // wings are required for a CAPABILITY though not for the physics: inspectBody answers "could this body be integrated?",
-  // this answers "may this body take off" in a world with onlookers
+  // wings are required for a CAPABILITY, not for the physics: "may this body take off" in a world with onlookers
   if (!report.canAnimateWings) {
     const chains = Object.keys(report.chains).length;
     return {
@@ -51,8 +47,7 @@ export function rigProfile(boneNames) {
       report,
     };
   }
-  // the same vocabularies as inspectBody; the digest records the spellings THIS body uses, so a rig keeps its identity
-  // across runtimes that rename it
+  // the digest records the spellings THIS body uses, so a rig keeps its identity across runtimes that rename it
   const CORE_ANY = new Set(['hip', 'hips', 'spine', 'spine01', 'spine02',
                             'chest', 'upperchest', 'head', 'neck', 'necktwist01']);
   const core = boneNames.filter(b => CORE_ANY.has(String(b).toLowerCase()));
@@ -75,8 +70,8 @@ export function rigProfile(boneNames) {
   };
 }
 
-/** A LOCAL DEV provider for the bench: flight for named identities on a compatible rig, nobody else. The allow-list is a
- *  constructor argument, so no URL string reaches it and a build that never constructs one can't be talked into flying.
+/** A LOCAL DEV provider: flight for named identities on a compatible rig, nobody else. The allow-list is a constructor
+ *  argument, so no URL string reaches it and a build that never constructs one can't be talked into flying.
  */
 export function devFlightProvider({ allow = [], bones = null, label = 'local-dev' } = {}) {
   const allowed = new Set(allow);
@@ -88,8 +83,8 @@ export function devFlightProvider({ allow = [], bones = null, label = 'local-dev
       if (!allowed.has(identity)) {
         return { enabled: false, reason: `identity ${identity ?? '(none)'} not in the bench allow-list` };
       }
-      // the LIVE body wins: constructor `bones` are only a fallback for a headless caller with no avatar, or a provider
-      // keeps granting flight after a hot-swap. An avatar with unknown bones gets no list.
+      // the LIVE body wins: constructor `bones` are only a headless fallback, or a provider keeps granting after a hot-swap.
+      // An avatar with unknown bones gets no list.
       const names = (avatar ? avatar.boneNames : bones) ?? null;
       if (!names) return { enabled: false, reason: BONES_UNKNOWN };
       const r = rigProfile(names);
@@ -100,9 +95,8 @@ export function devFlightProvider({ allow = [], bones = null, label = 'local-dev
 }
 
 /** THE PRODUCTION PROVIDER: both must say yes. rights.fly: may this identity fly in this world (server-authoritative,
- *  per-world, a role's fly permission; a URL can't forge it). rigProfile: is this body a flier (evidence,
- *  never consent). `rights` is read through a THUNK: grants change live.
- *
+ *  per-world, a role's fly permission; a URL can't forge it). rigProfile: is this body a flier (evidence, never consent).
+ *  `rights` is read through a THUNK: grants change live.
  * @param {{ rights?: (() => any) | any, label?: string }} [opts]
  */
 export function worldFlightProvider({ rights = null, label = 'world-grant' } = {}) {
@@ -111,14 +105,12 @@ export function worldFlightProvider({ rights = null, label = 'world-grant' } = {
     name: label,
     flightCapability(ctx = {}) {
       const r = read() ?? null;
-      // A MISSING RIGHTS OBJECT IS A NO. Not yet joined, an older server that
-      // never heard of `fly`, a dropped snapshot -- every one of those is
-      // "nobody has said you may", which is the same answer as "no".
+      // A MISSING RIGHTS OBJECT IS A NO: not joined, an older server, a dropped snapshot all mean "nobody has said you may".
       if (!r) {
         return { enabled: false, reason: "your rights in this world haven't arrived, which counts as no: if you're still joining, try again once you've joined; if they never arrive, this server may not send them (an older version), so ask whoever runs it" };
       }
       if (r.fly !== true) {
-        // flight is a role's fly permission (server rightsFor), so the fix this names is a roles:<id> set
+        // a role's fly permission (server rightsFor), so the fix names a roles:<id> set
         return {
           enabled: false,
           reason: "this world hasn't given you flight; flight comes with a role's fly permission, which the world's owner " +
@@ -134,8 +126,7 @@ export function worldFlightProvider({ rights = null, label = 'world-grant' } = {
   };
 }
 
-/** Resolve a capability through a provider, defaulting to deny. Every entry point calls THIS when it acts; nothing
- *  caches, so a stale grant can't ride an avatar swap. */
+/** Defaulting to deny. Every entry point calls THIS when it acts; nothing caches, so a stale grant can't survive an avatar swap. */
 export function resolveFlight(provider, ctx) {
   const p = provider ?? denyAllFlight;
   let out;
@@ -152,8 +143,8 @@ export function resolveFlight(provider, ctx) {
   return out;
 }
 
-/** True when a previously-granted profile no longer matches the body (the hot-swap test): flight must then STOP, not
- *  degrade or persist on the old rig's numbers. */
+/** True when a granted profile no longer matches the body (the hot-swap test): flight must then STOP, not degrade or persist
+ *  on the old rig's numbers. */
 export function revoked(profile, currentBoneNames) {
   if (!profile) return true;
   const r = rigProfile(currentBoneNames);
@@ -161,8 +152,7 @@ export function revoked(profile, currentBoneNames) {
   return r.profile.digest !== profile.digest;
 }
 
-// a small dependency-free digest for change detection ("did the load-bearing names change"), not security; asset
-// integrity is the SHA-256 in the clip receipt
+// a dependency-free digest for change detection, not security; asset integrity is the SHA-256 in the clip receipt
 function digestOf(parts) {
   const s = parts.join('|');
   let h1 = 0x811c9dc5, h2 = 0x01000193;

@@ -1,11 +1,7 @@
 // shared/reach.js — two-bone inverse kinematics, bounded by the joint limits the ragdoll measures (shared/joints.js).
-//
-// Closed form, not CCD/FABRIK: every client solves the same reach independently, and only a closed form draws the
-// same arm everywhere with no starting-state memory. The limits are consumed, never second-guessed: a reach and a
-// fall must be one body.
-//
-// Pure: numbers in, numbers out. The caller measures the skeleton and converts the answer back into rotations
-// (same split as motioneval.js).
+// Closed form, not CCD/FABRIK: every client solves the same reach independently, and only a closed form draws the same arm
+// everywhere with no starting-state memory. The limits are consumed, never second-guessed: a reach and a fall are one body.
+// Pure: numbers in, numbers out; the caller measures the skeleton and converts the answer back into rotations.
 
 import { qMul as qMulq, qConj, qRotate as qRot, qAxisAngle } from './rot.js';
 
@@ -23,7 +19,7 @@ const len = (a) => Math.hypot(a[0], a[1], a[2]);
 const norm = (a) => { const l = len(a); return l > 1e-9 ? mul(a, 1 / l) : null; };
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
-/** Rodrigues: rotate `v` about unit `axis` by `ang` radians. */
+/** Rodrigues: `v` about unit `axis` by `ang` radians. */
 export function rotateAbout(v, axis, ang) {
   const c = Math.cos(ang), s = Math.sin(ang);
   const k = cross(axis, v);
@@ -35,14 +31,12 @@ export function rotateAbout(v, axis, ang) {
   ];
 }
 
-/** Turn `v` toward `axis` until it sits inside a cone of half-angle `half`
- *  (radians) about it. Returns v unchanged when it is already inside. */
+/** Into a cone of half-angle `half` (radians) about `axis`; v unchanged when already inside. */
 export function clampToCone(v, axis, half) {
   const c = dot(v, axis);
   const cosHalf = Math.cos(half);
   if (c >= cosHalf) return { v, clamped: false };
-  // degenerate only when v is exactly antiparallel to the axis: pick a plane deterministically rather than
-  // return NaN, so a body never explodes on a measure-zero input
+  // degenerate only when v is exactly antiparallel to the axis: pick a plane deterministically, never NaN
   let n = norm(cross(axis, v));
   if (!n) {
     const alt = Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
@@ -51,15 +45,14 @@ export function clampToCone(v, axis, half) {
   return { v: rotateAbout(axis, n, half), clamped: true };
 }
 
-/** Hold `v` in front of the body's frontal plane: its forward component may
- *  not fall below `minFwd`. Projects onto the plane and renormalizes. */
+/** Its forward component may not fall below `minFwd`: projects onto the frontal plane and renormalizes. */
 export function clampBehind(v, fwd, minFwd) {
   const f = dot(v, fwd);
   if (f >= minFwd) return { v, clamped: false };
   let planar = norm(sub(v, mul(fwd, f)));
   if (!planar) {
-    // v exactly antiparallel to forward: pick a direction deterministically. Returning `fwd` would flip a limb
-    // reaching backwards 180° in one frame (exact antiparallel has measure zero, so a fuzz never finds it)
+    // v exactly antiparallel to forward: pick a direction deterministically (returning `fwd` would flip a limb reaching
+    // backwards 180° in one frame)
     const alt = Math.abs(fwd[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
     planar = norm(sub(alt, mul(fwd, dot(alt, fwd))));
     if (!planar) return { v, clamped: false };
@@ -69,9 +62,8 @@ export function clampBehind(v, fwd, minFwd) {
 }
 
 /**
- * Solve a two-bone chain so the end effector reaches `target` as nearly as the joints allow. World-space; lengths come
- * from the REST skeleton, never the live one (live limits change with the walk cycle).
- *
+ * The end effector reaches `target` as nearly as the joints allow. World-space; lengths from the REST skeleton, never the
+ * live one (live limits change with the walk cycle).
  * @param {object} o
  * @param {number[]} o.root    shoulder (or hip) world position
  * @param {number[]} o.target  where the hand (or foot) is wanted
@@ -79,8 +71,7 @@ export function clampBehind(v, fwd, minFwd) {
  * @param {number} o.L2        rest length mid->end
  * @param {number[]} o.pole    world-space hint for which way the elbow points
  * @param {number[]} [o.fwd]   body forward axis, for the frontal-plane stop
- * @param {number[]} [o.coneAxis] cone axis in WORLD space (already lifted out
- *        of body-frame coords by the caller — see joints.js coneAxisWorld)
+ * @param {number[]} [o.coneAxis] cone axis in WORLD space (lifted out of body-frame coords by joints.js coneAxisWorld)
  * @param {object} [o.limits]  { coneHalf, behind, maxFlex, minFlex } radians
  * @returns {{ok: true, upper: number[], lower: number[], elbow: number[],
  *            hand: number[], reached: boolean, gap: number,
@@ -112,8 +103,8 @@ export function solveTwoBone(o) {
   if (flex > maxFlex || flex < minFlex) {
     flex = clamp(flex, minFlex, maxFlex);
     bound.push('hinge');
-    // a clamped elbow changes the hand's distance, so rebuild the triangle from the angle; else the hand
-    // reaches the target anyway by stretching the forearm
+    // a clamped elbow changes the hand's distance, so rebuild the triangle from the angle; else the hand reaches the
+    // target anyway by stretching the forearm
     interior = Math.PI - flex;
     d = Math.sqrt(Math.max(EPS, L1 * L1 + L2 * L2 - 2 * L1 * L2 * Math.cos(interior)));
   }
@@ -121,8 +112,7 @@ export function solveTwoBone(o) {
   // ---- the bend plane, chosen by the pole hint
   let poleDir = o.pole ? norm(sub(o.pole, mul(aim, dot(o.pole, aim)))) : null;
   if (!poleDir) {
-    // No usable hint (or one parallel to the aim): fall back to something
-    // deterministic and anatomically sane rather than an arbitrary axis.
+    // no usable hint (or one parallel to the aim): something deterministic and anatomically sane, never an arbitrary axis
     const alt = o.fwd ? mul(o.fwd, -1) : [0, -1, 0];
     poleDir = norm(sub(alt, mul(aim, dot(alt, aim))))
       ?? norm(sub([0, -1, 0], mul(aim, dot([0, -1, 0], aim))))
@@ -133,27 +123,27 @@ export function solveTwoBone(o) {
 
   const alpha = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
 
-  // ---- the upper bone's own direction is limited, not the aim line (they differ by alpha). Alternate cone and
-  // half-space projections to a fixed point (convex caps < 90°, so it converges); bounded, and infeasibility is reported.
+  // ---- the upper bone's own direction is limited, not the aim line (they differ by alpha). Alternate cone and half-space
+  // projections to a fixed point (convex caps < 90°, so it converges); bounded, and infeasibility is reported.
   let upper = rotateAbout(aim, axis, alpha);
   let hitCone = false, hitBehind = false, hitBody = false;
 
-  // ---- the shoulder's envelope is not a circle: `inward` opens a wider allowance toward the midline (crossing
-  // the chest), keyed on the adduction the reach ASKS for before clamping (keyed on the clamped vector it never opens)
+  // ---- the shoulder's envelope is not a circle: `inward` opens a wider allowance toward the midline, keyed on the
+  // adduction the reach ASKS for before clamping (keyed on the clamped vector it never opens)
   const wantAdduction = o.inward ? clamp(dot(upper, o.inward), 0, 1) : 0;
   const coneHalfEff = (lim.coneAcross != null && o.inward)
     ? lim.coneHalf + (lim.coneAcross - lim.coneHalf) * wantAdduction
     : lim.coneHalf;
 
-  // ---- the torso pushes the UPPER BONE, in the same loop as the joint limits: widening the envelope alone points
-  // it through the chest, and the elbow swivel can't fix that (the offending bone is the swivel's axis)
+  // ---- the torso pushes the UPPER BONE in the same loop as the joint limits: widening the envelope alone points it through
+  // the chest, and the elbow swivel can't fix that (the offending bone is the swivel's axis)
   const pushOutOfBody = (v) => {
     if (!o.guards?.length) return { v, moved: false };
     const rU = o.rUpper ?? 0;
     let out = v, moved = false;
     for (const g of o.guards) {
-      // the upper bone only, deliberately: resolving a forearm collision with the shoulder swings the whole arm away.
-      // The forearm stays the swivel's business (a capsule torso has no front to tuck it against).
+      // the upper bone only: resolving a forearm collision with the shoulder swings the whole arm away; the forearm stays
+      // the swivel's business
       const min = g.r + rU * CONTACT;
       const w = g.warp;
       const elbow = add(root, mul(out, L1));
@@ -162,8 +152,7 @@ export function solveTwoBone(o) {
       const arm = sub(cc.c1, warpPt(root, w));
       const armLen = len(arm);
       if (armLen < 1e-4) continue;
-      // the push direction is discovered in warped space and has to be carried
-      // back, or the arm is shoved along an axis the body does not have
+      // the push direction is found in warped space and carried back, or the arm is shoved along an axis the body doesn't have
       const n = unwarpDir(norm(sub(cc.c1, cc.c2)) ?? [0, 0, 0], w);
       if (!n || !len(n)) continue;            // dead centre: no direction to push
       const ax = norm(cross(sub(elbow, root), n));
@@ -201,9 +190,8 @@ export function solveTwoBone(o) {
     if (!feasible) bound.push('infeasible');
   }
 
-  // ---- the forearm: aim it at the target from wherever the elbow ended up,
-  // then let the hinge have the last word. When nothing above bound, this
-  // reproduces the analytic triangle exactly and the hand lands on target.
+  // ---- the forearm: aim at the target from wherever the elbow ended up, then the hinge has the last word. With nothing
+  // bound above, this reproduces the analytic triangle exactly.
   const elbow = add(root, mul(upper, L1));
   const toTargetFromElbow = sub(target, elbow);
   let lower = norm(toTargetFromElbow) ?? [...upper];
@@ -225,8 +213,8 @@ export function solveTwoBone(o) {
 }
 
 // ---- directions -> bone rotations ------------------------------------------
-// A normalized VRM rig has identity rest rotations, so a bone's rotation IS the arc from rest to wanted direction,
-// minus its parent's. Minimal arc leaves twist at zero: two-bone IK fixes the pole, twist belongs to the hand's aim.
+// a normalized VRM rig has identity rest rotations, so a bone's rotation IS the arc from rest to wanted direction, minus its
+// parent's. Minimal arc leaves twist at zero: two-bone IK fixes the pole, twist belongs to the hand's aim.
 
 /** Quaternion (x,y,z,w) taking unit `a` to unit `b`, by the shortest arc. */
 export function qFromUnitVectors(a, b) {
@@ -245,31 +233,27 @@ export function qFromUnitVectors(a, b) {
 export { qMulq, qConj, qRot, qAxisAngle };
 
 /**
- * Local rotations for a two-bone chain, given rest and wanted directions in
- * ONE common frame (the frame in which the rest pose has identity rotations —
- * i.e. the avatar root's local frame, not the world).
- *
+ * Rest and wanted directions in ONE common frame (where the rest pose has identity rotations: the avatar root's local
+ * frame, not the world).
  * @returns {{upper: number[], lower: number[]}} local quaternions, ready to
  *          write onto the normalized bone nodes.
  */
 export function chainLocalQuats(dRestUpper, dRestLower, dWantUpper, dWantLower, rest = null) {
-  // `rest`: the rig's real rest orientations in the avatar root's frame (qU/qL the two bones, qP the parent).
-  // null assumes identity, which is false on Mixamo-derived rigs (180° from root): the arm reaches the mirror image.
+  // `rest`: the rig's real rest orientations in the root's frame (qU/qL the two bones, qP the parent). null assumes identity,
+  // which is false on Mixamo-derived rigs (180° from root): the arm reaches the mirror image.
   const qP0 = rest?.qP ?? [0, 0, 0, 1];
   const qU0 = rest?.qU ?? [0, 0, 0, 1];
   const qL0 = rest?.qL ?? [0, 0, 0, 1];
   const qPnow = rest?.qPnow ?? qP0;
 
-  // how far the parent has turned since rest — the only thing that carries a
-  // rest-frame direction into the current pose
+  // how far the parent has turned since rest: the only thing that carries a rest-frame direction into the current pose
   const dP = qMulq(qPnow, qConj(qP0));
 
   // upper: rest direction carried by the parent, then swung onto the target
   const restU = qRot(dP, dRestUpper);
   const U = qMulq(qFromUnitVectors(restU, dWantUpper), qMulq(dP, qU0));
 
-  // lower: hangs off the upper, so its rest is carried by the upper's OWN
-  // change since rest, not by the parent's
+  // lower: its rest is carried by the upper's OWN change since rest, not by the parent's
   const dU = qMulq(U, qConj(qU0));
   const restL = qRot(dU, dRestLower);
   const V = qMulq(qFromUnitVectors(restL, dWantLower), qMulq(dU, qL0));
@@ -284,11 +268,10 @@ export function chainLocalQuats(dRestUpper, dRestLower, dWantUpper, dWantLower, 
 
 
 // ---- not through your own body ---------------------------------------------
-// The elbow's swivel about the shoulder-hand axis clears the torso without moving the hand, so the reach still
-// touches what it was asked to. Thicknesses come from shared/joints.js, the ragdoll's model.
+// the elbow's swivel about the shoulder-hand axis clears the torso without moving the hand, so the reach still touches
+// what it was asked to. Thicknesses come from shared/joints.js.
 
-/** Squared distance between two segments, by the standard clamped-parameter
- *  method. Degenerate (zero-length) segments fall through to point cases. */
+/** The standard clamped-parameter method; zero-length segments fall through to point cases. */
 export function segSegClosest(p1, q1, p2, q2) {
   const d1 = sub(q1, p1), d2 = sub(q2, p2), r = sub(p1, p2);
   const a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r);
@@ -330,14 +313,14 @@ export function segSegDist(p1, q1, p2, q2) {
   return len(sub(add(p1, mul(d1, s)), add(p2, mul(d2, t))));
 }
 
-// share of a limb's radius allowed to sink into the body (NOT 1): contact is touching; only the centreline
-// must stay outside, or an arm resting at the side reads as penetrating and a hand can't reach its own hip
+// share of a limb's radius allowed into the body (NOT 1): contact is touching; only the centreline must stay outside, or an
+// arm resting at the side reads as penetrating and a hand can't reach its own hip
 const CONTACT = 0.25;
 
 
 // ---- bodies are not round ---------------------------------------------------
-// A guard's WARP (an elliptical body-frame basis) measures distance where the ellipse is a circle (linear, so
-// segment distance survives), or a forearm in front of the belly reads as inside a capsule with no front.
+// a guard's WARP (an elliptical body-frame basis) measures distance where the ellipse is a circle (linear, so segment
+// distance survives), or a forearm in front of the belly reads as inside a capsule with no front
 const warpPt = (p, w) => (!w ? p : [
   dot(p, w.r), dot(p, w.u), dot(p, w.f) * w.k,
 ]);
@@ -352,8 +335,7 @@ const unwarpDir = (n, w) => {
   return norm(v) ?? n;
 };
 
-/** How far the solved limb is inside anything it should not be, in metres
- *  summed over every offending pair. Zero means clear. */
+/** Metres summed over every offending pair; zero means clear. */
 export function penetration(root, elbow, hand, rUpper, rLower, guards) {
   let pen = 0;
   for (const g of guards) {
@@ -369,8 +351,7 @@ export function penetration(root, elbow, hand, rUpper, rLower, guards) {
   return pen;
 }
 
-/** Cut the part of a guard within `R` of the target, keeping the rest (at most two pieces): dropping the whole guard
- *  lets the forearm pass through the torso unreported. */
+/** Within `R` of the target (at most two pieces kept): dropping the whole guard lets the forearm pass through the torso unreported. */
 export function clipGuardNear(g, target, R) {
   const d = sub(g.b, g.a), m = sub(g.a, target);
   const A = dot(d, d);
@@ -388,30 +369,27 @@ export function clipGuardNear(g, target, R) {
 }
 
 const SWIVELS = (() => {
-  // ordered by |angle|, so the FIRST clear one is the least departure from the
-  // pose the pole hint asked for. Deterministic — every client sweeps the same
-  // list in the same order and picks the same arm.
+  // ordered by |angle|, so the FIRST clear one is the least departure from the pole hint's pose; every client sweeps the same
+  // list in the same order and picks the same arm
   const out = [0];
   for (let a = 10; a <= 170; a += 10) { out.push(a * Math.PI / 180, -a * Math.PI / 180); }
   return out;
 })();
 
 /**
- * Solve, and if the arm comes out inside the body, swivel the elbow until it doesn't; else the least-bad swivel (2 cm
- * into a hip reads better than giving up). A previously REACHED elbow is tried as an incumbent, never fed back as the
- * sweep's basis (that self-excites an oscillator).
- *
+ * If the arm comes out inside the body, swivel the elbow until it doesn't; else the least-bad swivel (2 cm into a hip reads
+ * better than giving up). A previously REACHED elbow is tried as an incumbent, never fed back as the sweep's basis (that
+ * self-excites an oscillator).
  * @param {object} o the same options solveTwoBone takes
  * @param {Array<{a:number[],b:number[],r:number}>} guards live segments to avoid
  */
 export function solveTwoBoneClear(o, guards) {
   const rU = o.rUpper ?? 0, rL = o.rLower ?? 0;
   const lim = o.limits ?? {};
-  // a millimetre of tolerance: a pose exactly on the penetration boundary flickers feasible/infeasible as the body breathes
+  // a millimetre of tolerance: a pose exactly on the boundary flickers feasible/infeasible as the body breathes
   const CLEAR = 0.001;
 
-  // clip each guard near the target rather than dropping it: the torso is ONE capsule, and dropping it lets the
-  // forearm cross the chest
+  // clip each guard near the target, never drop it: the torso is ONE capsule, and dropping it lets the forearm cross the chest
   guards = (guards ?? []).flatMap((g) => clipGuardNear(g, o.target, g.r + rL * CONTACT));
   o = { ...o, guards };
 
@@ -420,8 +398,8 @@ export function solveTwoBoneClear(o, guards) {
   const reachDir = norm(toTarget);
   const fullDist = len(toTarget);
 
-  // ---- best pose for ONE target: the least swivel that clears the body. The chord test proxies which way an
-  // elbow folds, sound only while the arm isn't adducted, so it is gated on how far across the reach asks to go.
+  // ---- best pose for ONE target: the least swivel that clears the body. The chord test proxies which way an elbow folds,
+  // sound only while the arm isn't adducted, so it is gated on how far across the reach asks to go.
   const sideOf = (res, target) => {
     if (!o.fwd || !lim.hingeDir || !res?.ok) return 1;
     const chord = norm(sub(res.hand, root));
@@ -446,13 +424,13 @@ export function solveTwoBoneClear(o, guards) {
     const aimDir = aim;
     const adducted = o.inward && aimDir ? Math.max(0, dot(aimDir, o.inward)) : 0;
     const judgeSide = !!(lim.hingeDir && o.fwd) && adducted < 0.35;
-    // accepting a fresh pose is strict (an elbow the wrong side of the chord is the artefact); keeping the incumbent
-    // is tolerant by a few degrees, or noise on the plane flips it and the search chatters
+    // accepting a fresh pose is strict (an elbow the wrong side of the chord is the artefact); keeping the incumbent is
+    // tolerant by a few degrees, or noise on the plane flips it and the search chatters
     const okSide = (res) => !judgeSide || sideOf(res, target) >= 0;
     const okSideHeld = (res) => !judgeSide || sideOf(res, target) >= -0.08;
 
-    // the swivel basis flips when a lateral target crosses the pole axis, so try the previous physical bend first
-    // (only if it reached). It is NOT the sweep's base pole: that would rotate our own output each frame and oscillate.
+    // the swivel basis flips when a lateral target crosses the pole axis, so try the previous physical bend first (only if it
+    // reached). Never the sweep's base pole: that would rotate our own output each frame and oscillate.
     if (Number.isFinite(o.lastGap) && o.lastGap <= 1e-4 && Array.isArray(o.lastElbow) && o.lastElbow.length === 3 && o.lastElbow.every(Number.isFinite)) {
       const held = solveTwoBone({ ...oo, pole: o.lastElbow });
       if (held?.ok && penOf(held) <= CLEAR && okSideHeld(held) && held.gap <= base.gap + 0.005) {
@@ -460,8 +438,8 @@ export function solveTwoBoneClear(o, guards) {
       }
     }
 
-    // ---- keep the swivel we had while it still works: tried FIRST and kept if clear, so penetration hovering near
-    // zero can't make the winner alternate frame to frame (no feedback added)
+    // ---- keep the swivel we had while it still works (tried FIRST, kept if clear), so penetration hovering near zero can't
+    // make the winner alternate frame to frame
     if (o.lastSwivel != null) {
       const held = at(o.lastSwivel);
       if (held?.ok && penOf(held) <= CLEAR && okSideHeld(held)) {
@@ -493,8 +471,8 @@ export function solveTwoBoneClear(o, guards) {
     return { ...full.res, swivel: full.swivel, penetration: 0, retreat: 1 };
   }
 
-  // ---- unreachable: find the nearest pose the body allows. It isn't on the line to the target (that penetrates
-  // throughout); sample directions in a cone and distances along each, score by where the hand lands; cheap probe first.
+  // ---- unreachable: the nearest pose the body allows, never on the line to the target (that penetrates throughout): sample
+  // directions in a cone and distances along each, scored by where the hand lands; cheap probe first.
   if (!reachDir || fullDist < 1e-6) {
     return { ...full.res, swivel: full.swivel, penetration: full.pen, retreat: 1 };
   }
@@ -511,8 +489,8 @@ export function solveTwoBoneClear(o, guards) {
     return { r, pen: guards.length ? penetration(root, r.elbow, r.hand, rU, rL, guards) : 0 };
   };
 
-  // ---- stickiness: a DEADBAND LATCH, not feedback. A rival must beat the incumbent by STICK to switch (and again
-  // to switch back), so sub-margin noise can't drive a cycle.
+  // ---- stickiness: a DEADBAND LATCH, not feedback. A rival must beat the incumbent by STICK to switch (and again to switch
+  // back), so sub-margin noise can't drive a cycle.
   const STICK = 0.03;                       // metres of "clearly better"
   const prev = o.lastPick ?? null;
   const shortlist = [];
@@ -525,8 +503,7 @@ export function solveTwoBoneClear(o, guards) {
         const target = add(root, mul(dir, fullDist * f));
         const c = cheapPen(target);
         if (!c) continue;
-        // score by where the HAND lands against what was asked for — the whole
-        // point is closeness to the target, not closeness to some proxy
+        // score by where the HAND lands against what was asked: closeness to the target, not to a proxy
         shortlist.push({ target, miss: len(sub(o.target, c.r.hand)), pen: c.pen });
       }
     }
@@ -541,7 +518,7 @@ export function solveTwoBoneClear(o, guards) {
     if (!best || miss < best.miss) best = { ...r, miss, pick: cand.target };
   }
 
-  // the incumbent gets a full evaluation outside the shortlist: the latch is useless if its pose never gets asked
+  // the incumbent gets a full evaluation outside the shortlist: the latch is useless if its pose is never asked
   if (prev) {
     const r = bestFor(prev);
     if (r && r.pen <= CLEAR) {
@@ -560,8 +537,8 @@ export function solveTwoBoneClear(o, guards) {
 }
 
 // ---- and which way the palm faces ------------------------------------------
-// Position IK leaves the hand's turn free, and touching is done with the palm. Most of the correction goes to the
-// forearm (pronation; TWIST.lowerArm in joints.js), the rest to the wrist, clamped to its range.
+// position IK leaves the hand's turn free, and touching is done with the palm. Most of the correction goes to the forearm
+// (pronation; TWIST.lowerArm in joints.js), the rest to the wrist, clamped to its range.
 
 /** Shorten a rotation to at most `maxAng`, keeping its axis. */
 export function qClampAngle(q, maxAng) {
@@ -586,9 +563,7 @@ function stepQuaternion(from, to, maxAngle) {
 }
 
 /**
- * Turn the palm toward `want`, by twisting the forearm and then bending the
- * wrist for the remainder.
- *
+ * By twisting the forearm, then bending the wrist for the remainder.
  * @param {object} o
  * @param {number[]} o.lowerFrame solved orientation of the forearm
  * @param {number[]} o.dLower     forearm direction (unit), same frame
@@ -621,8 +596,7 @@ export function orientPalm(o) {
     if (Number.isFinite(o.lastTwist)) {
       const previous = clamp(o.lastTwist, -twistMax, twistMax);
       const error = (t) => Math.acos(clamp(dot(rotateAbout(p0, axis, t), p1), -1, 1));
-      // Across the +/-pi boundary both saturated choices are nearly tied.
-      // Keep the incumbent until the alternative is materially better.
+      // across the ±π boundary both saturated choices nearly tie: keep the incumbent until the alternative is materially better
       if (previous * twist < 0 && error(previous) <= error(twist) + 5 * Math.PI / 180) twist = previous;
       if (Number.isFinite(o.dt)) {
         const step = Math.PI * clamp(o.dt, 0, 0.1); // <=180 degrees/sec
