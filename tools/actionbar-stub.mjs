@@ -1,6 +1,6 @@
-// actionbar-test substitutes this for every neighbour actionbar.js imports except icons.js (pure). ONE file,
-// resolved for windows.js / avatar.js / controller.js / mybody.js / xrpanels.js / base.js — each module's
-// names are disjoint, so one export table serves them all. Everything is a recorder the test reads.
+// actionbar-test substitutes this for every neighbour actionbar.js imports except icons.js (pure): ONE file for
+// windows.js / avatar.js / controller.js / mybody.js / xrpanels.js / base.js (their names are disjoint). Every export
+// is a recorder the test reads.
 
 // ---- base.js: the bus
 const handlers = new Map();
@@ -56,6 +56,6 @@ export const getMe = () => ({ playOnce: (n) => played.push(n) });
 export const xrPanels = [];
 export function registerXRPanel(p) { xrPanels.push(p); }
 
-// ---- windows.js: chromeCost is re-exported from the real module, not stubbed: roomFor()'s job is its arithmetic.
-// The '../client/lib/' specifier is deliberate: actionbar-test's resolver filter (`^\./windows\.js$`) won't rewrite it.
+// ---- windows.js: chromeCost is re-exported from the real module, not stubbed (roomFor()'s job is its arithmetic). The
+// '../client/lib/' specifier is deliberate: actionbar-test's resolver filter (`^\./windows\.js$`) won't rewrite it.
 export { chromeCost } from '../client/lib/windows.js';

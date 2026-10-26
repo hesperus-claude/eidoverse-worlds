@@ -1,9 +1,6 @@
-// consent-switch-test — my body's switch (recut A2) is what the authority decides by, and a sync that fails is heard, then retried.
-//
-// The client owns the last word (consent.js: "my client applies them to my body, or doesn't"); the table the server
-// checks is a projection of the switches, sent on arrival. Two things kept that honest only by luck (DEBT-SURVEY
-// 2026-10-12 #9): nothing pinned switch → cell, and localbody.js swallowed a refused `consent` sync, leaving the server
-// on Normal (everyone: deny) while the switch said allow.
+// consent-switch-test: my body's switch is what the authority decides by, and a failed sync is heard, then retried.
+// The client owns the last word (consent.js); the server's table is a projection of the switches, sent on arrival, so
+// switch → cell is pinned, and a refused `consent` sync must not leave the server on Normal (deny) while the switch says allow.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/consent-switch-test.ts
 // Mutation (must go red): in client/lib/consentsync.js drop the `on('hydrated', …)` line, or the timer retry, or the toast.
 import { setConsent, decide, SWITCHES } from '../shared/protocol/consent.js';
@@ -17,7 +14,7 @@ const store = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } };
 const C = await import('../client/lib/consent.js');
 
-// 1. (recut A2) each switch value, set through the authority's own setConsent, is what decide answers a stranger
+// 1. each switch value, set through the authority's own setConsent, is what decide answers a stranger
 for (const v of SWITCHES) {
   check(`setSwitch(${v}) is remembered`, (C.setSwitch(v) || C.mySwitch() === v) && C.mySwitch() === v && C.bodyTable().switch === v);
   const P: any = {}; const r = setConsent(P, 'me', { switch: C.bodyTable().switch }, 1000);
@@ -69,8 +66,8 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   const s = makeConsentSync({ table: () => ({ switch: 'accept' }), send: async (v: string, a: any) => { sent.push(a); return { ok: true }; }, toast: () => {}, on: () => {}, later: () => {}, enabled: () => false });
   await s.sync(); check('a bodiless client sends nothing', sent.length === 0); }
 
-// 3. the ask round-trip (10-14, R: wire `ask`): a body-inbox message holds the ask; answering sends consent {answer, yes}
-// and the ask is gone; an ask nobody answers expires locally with no send (the authority already took it as a no).
+// 3. the ask round-trip: a body-inbox message holds the ask; answering sends consent {answer, yes} and the ask is gone;
+// an unanswered ask expires locally with no send (the authority already took it as a no).
 // Mutation (must go red): in client/lib/consentinbox.js drop the `delete` in answer(), or the expiry in sweep().
 {
   const { makeConsentInbox } = await import('../client/lib/consentinbox.js');
@@ -92,8 +89,8 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('a drag ask is the displace class', box.askFrom('u-wren')?.cls === 'displace', JSON.stringify(box.asks()));
   await box.answer('ask-1001-0', false, send);
   check('answering no sends consent {answer, yes: false}', sent.length === 2 && sent[1][1].yes === false && box.asks().length === 0, JSON.stringify(sent));
-  // a reach to an intimate point: the authority classes it (bodyconsent.js: cls intimate for chest_front), and the
-  // inbox keeps that class, so Allow and Never are for intimate touch, not ordinary touch (review of #260)
+  // a reach to an intimate point: the authority classes it (bodyconsent.js: chest_front is intimate) and the inbox keeps
+  // the class, so Allow and Never are for intimate touch, not ordinary touch
   box.take([{ type: 'body-ask', ask: { ...ask, id: 'ask-1001-1', kind: 'touch', cls: 'intimate', summary: 'u-wren asks to touch (chest_front)' } }]);
   check('a reach the authority classes intimate is held as intimate, not as its kind\'s touch', box.askFrom('u-wren')?.cls === 'intimate', JSON.stringify(box.asks()));
   await box.answer('ask-1001-1', false, send); sent.pop();
@@ -113,9 +110,9 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('a malformed inbox is ignored', (box.take(null as any), box.take([{ type: 'body-ask' }, 7, { type: 'body-ask', ask: { id: 42 } }]), box.asks().length === 0));
 }
 
-// 4. an act the authority delivered ({type: 'body', kind, spec}) is APPLIED as the puppet message localbody.js
-// applies; the relay refuses a puppet while my switch is `ask` (server/messages.ts bodyRefusal), so this is the
-// only way it lands. Mutation: bodyActAsPuppet returns null for every kind.
+// 4. an authority-delivered act ({type: 'body', kind, spec}) is APPLIED as localbody.js applies a puppet message; the
+// relay refuses puppets while my switch is `ask` (server/messages.ts bodyRefusal), so this is the only way it lands.
+// Mutation: bodyActAsPuppet returns null for every kind.
 {
   const { bodyActAsPuppet } = await import('../client/lib/consentinbox.js');
   const q = [0, 0, 0.38, 0.92];
@@ -125,8 +122,8 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('…or {pose, merge} as a puppet sends it', JSON.stringify(merged) === JSON.stringify({ pose: { head: q }, merge: true }), JSON.stringify(merged));
   const anim = { dur: 1, tracks: { head: [{ t: 0, q }] }, replace: false };
   check('a delivered anim with tracks is a puppet anim', JSON.stringify(bodyActAsPuppet({ type: 'body', kind: 'anim', spec: anim })) === JSON.stringify({ anim }));
-  // streamed kinds apply nothing from the inbox (they arrive live, where consent gates each sample), and an unknown kind
-  // applies nothing: only pose, anim (with tracks) and shove become puppet messages (client review, 10-21)
+  // streamed kinds apply nothing from the inbox (they arrive live, consent-gated per sample), nor does an unknown kind:
+  // only pose, anim (with tracks) and shove become puppet messages
   check('a delivered drag, occupy or carry, or an unknown kind, applies nothing', ['drag', 'occupy', 'carry', 'teleport'].every((kind) => bodyActAsPuppet({ type: 'body', kind, spec: { tracks: { head: [] }, pose: { head: q } } }) === null));
   check('a delivered shove is a ragdoll, directed by spec.lean when it has one', JSON.stringify(bodyActAsPuppet({ type: 'body', kind: 'shove', spec: { lean: [1, 0, 2] } })) === JSON.stringify({ ragdoll: { lean: [1, 0, 2] } })
     && bodyActAsPuppet({ type: 'body', kind: 'shove' })?.ragdoll === true && bodyActAsPuppet({ type: 'body', kind: 'shove', spec: { lean: [1, 'x', 2] } })?.ragdoll === true);

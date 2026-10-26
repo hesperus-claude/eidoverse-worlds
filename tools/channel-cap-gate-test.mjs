@@ -37,7 +37,7 @@ ok('bare * does not span two segments',
    !withGrant(['*'], CAP.channelsPublish));
 ok('an EMPTY grant list denies (declared, granted nothing)',
    !withGrant([], CAP.channelsPublish));
-// The three fences the first extraction missed:
+// the three fences the first extraction missed
 ok('plain-MCP host (never declared MCPL) gets NO channel verbs',
    !capAllowed(false, null, null, CAP.channelsPublish));
 ok('0.5 host with no policy yet is DENIED (deny-until-policy window)',
@@ -48,15 +48,14 @@ ok('0.5 host whose featureSets/update OMITS effectiveCapabilities stays denied (
    !capAllowed(true, '0.5', null, CAP.channelsPublish));  // update-without-grant leaves grant null
 
 // ---- the wiring: is the gate actually CALLED at each verb? ------------------
-// a predicate test passes while nothing invokes it, so read the source and require a gate in each case block
+// a predicate test passes while nothing invokes it: read the source and require a gate in each case block
 
 const src = await Bun.file(new URL('../mcpl/net-server.ts', import.meta.url)).text();
 
 const gatedCase = (caseName, capConst) => {
   const at = src.indexOf(`case method.${caseName}:`);
   if (at < 0) return { ok: false, why: `case ${caseName} not found` };
-  // the case body up to the next `case ` at the same level — enough to see
-  // whether a gate precedes the work
+  // the case body up to the next `case ` at the same level: enough to see whether a gate precedes the work
   const body = src.slice(at, at + 700);
   const gate = body.indexOf(`capAllowed(CAP.${capConst})`);
   if (gate < 0) return { ok: false, why: `no capAllowed(CAP.${capConst}) in the case body` };
@@ -81,15 +80,14 @@ for (const [caseName, capConst] of [
   ok('channels/typing is gated on channelsTyping', gate >= 0);
   ok('the typing gate precedes the relay starting', gate >= 0 && start >= 0 && gate < start);
   ok('nothing acts on a chunk of the generation stream', !src.includes('method.CHANNELS_OUTGOING_CHUNK'));
-  // The signal is taken as it arrives, from the connection's notification
-  // event, and only there: the serve loop also reads every notification from
-  // its queue, and must not act on the same signal a second time.
+  // the signal is taken from the connection's notification event only: the serve loop also reads every notification
+  // from its queue and must not act on it twice
   ok('the typing signal is handled in one place, the notification listener',
      src.split('method.CHANNELS_TYPING').length === 2 && src.split('this.onTyping(').length === 2 &&
      /this\.conn\.on\("notification"[\s\S]{0,200}method\.CHANNELS_TYPING[\s\S]{0,200}this\.onTyping\(/.test(src));
 }
 
-// a host sends channels/typing only under a channels.typing grant, and grants only what's advertised, so the
+// a host sends channels/typing only under a channels.typing grant and grants only what's advertised, so the
 // advertisement and the feature set turn the dots on
 {
   const { MCPL_ADVERTISEMENT, FEATURE_SETS } = await import('../mcpl/declaration.ts');
@@ -100,8 +98,8 @@ for (const [caseName, capConst] of [
      Object.values(FEATURE_SETS).every((fs) => !fs.uses.includes('channels.streaming')));
 }
 
-// the body's speech ends the dots: each body gets a hook that stops the relay, and travel hands it on
-// (pinned here for a travelled body, which no test drives)
+// the body's speech ends the dots: each body gets a hook that stops the relay, and travel hands it on (no other test
+// drives a travelled body)
 {
   const ctorAt = src.indexOf('this.channelId = `world:${this.agent.world}`;');
   const ctor = ctorAt >= 0 ? src.slice(ctorAt, ctorAt + 400) : '';
@@ -115,7 +113,7 @@ for (const [caseName, capConst] of [
      handed >= 0 && taken >= 0 && handed < taken);
 }
 
-// tools/list and tools/call were the original offenders — keep them pinned.
+// tools/list and tools/call were the original offenders: keep them pinned
 for (const m of ['tools/list', 'tools/call']) {
   const at = src.indexOf(`case "${m}"`);
   ok(`${m} consults toolsAllowed()`,

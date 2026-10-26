@@ -1,16 +1,7 @@
-// flight-headless-test — the path Mythos will actually fly.
-//
-//   bun tools/flight-headless-test.ts
-//
-// He flies through mcpl, not a browser, and that is a different body: the
-// stand-in skeleton in mcpl/physics.ts is built from HUMANOID bones, and
-// [LR]_Wing_* are not humanoid. So everything the browser proves about wings
-// proves nothing here, and this file exists to stop that gap being invisible
-// twice -- the hair went missing the same way and nothing noticed until
-// someone read the code.
-//
-// No browser, no three, no DOM. Parses the shipped VRM the way the agent does
-// and asserts on what the agent would receive.
+// flight-headless-test: the path a headless agent flies (`bun tools/flight-headless-test.ts`).
+// An agent flies through mcpl, a different body: mcpl/physics.ts's stand-in skeleton is built from HUMANOID bones and
+// [LR]_Wing_* are not humanoid, so the browser's wing proofs prove nothing here. No browser, three or DOM: parses the
+// shipped VRM as the agent does and asserts on what the agent receives.
 
 import { readFileSync } from 'node:fs';
 import { makeConfig, initialState, step, bodyDown, bodyRecovered, takeOff } from '../shared/flight.js';
@@ -65,15 +56,13 @@ check('wing roots reparent to chest (no clavicle body in this rig cut)',
 check('wing segments continue their own chain',
       wingParent['L_Wing_Upper_2'] === 'L_Wing_Upper_1' &&
       wingParent['R_Wing_Lower_1'] === 'R_Wing_Lower');
-// worldPositions() yields {x,y,z}, not a triple -- the first version of this
-// assertion tested for an array and failed a graft that was perfectly correct.
+// worldPositions() yields {x,y,z}, not a triple
 check('every grafted bone has a finite world position in P',
       Object.keys(wingParent).every(n => {
         const v = P[n];
         return v && ['x', 'y', 'z'].every(k => Number.isFinite(v[k]));
       }));
-// wing ROOTS sit above the hips; the lower tips sweep down past them (as a folded wing does), so assert roots high,
-// span wide, left and right opposed
+// wing ROOTS sit above the hips; the lower tips sweep down past them (as a folded wing does): roots high, span wide, sides opposed
 const roots = ['L_Wing_Upper', 'L_Wing_Lower', 'R_Wing_Upper', 'R_Wing_Lower'];
 check('wing ROOTS sit above the hips',
       roots.every(n => P[n].y > P.hips.y));
@@ -142,19 +131,17 @@ check('and a flutter torque, not just drag', Math.abs(f.torque.y) > 1e-6);
 
 // ---------------------------------------------- live revocation, the real path
 // the server re-sends your-rights on every role change, the agent hands it to acceptEffectiveRights, and flightAllowed()
-// must see the withdrawn grant; a test that hand-edits the rights object never crosses that path. The your-rights
-// wiring is the mutation control at the end.
+// must see the withdrawn grant (hand-editing the rights object never crosses that path); the wiring is the mutation control
 console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
   const ag: any = new WorldAgent({ name: 'mythos', world: 'commons' });
-  // A winged body, so the RIG half of the capability is satisfied and the only
-  // variable under test is the GRANT half.
+  // a winged body, so the RIG half is satisfied and only the GRANT half varies
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
     'L_Wing_Lower', 'R_Wing_Lower'];
-  ag.loadBodyBones = async () => {};          // no HTTP in a unit test
-  // exactly what the `your-rights` case does with a message's rights
+  ag.loadBodyBones = async () => {};  // no HTTP in a unit test
+  // what the `your-rights` case does with a message's rights
   const yourRights = (rights: any) => ag.acceptEffectiveRights(rights, 'world');
 
   ag.myRights = null;
@@ -170,19 +157,19 @@ console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
   yourRights({ role: 'owner', gen: true, fly: true });
   check('a later role change that keeps fly keeps flight', ag.flightAllowed().ok && ag.myRights.role === 'owner');
 
-  // THE BLOCKER ITSELF.
+  // the blocker itself
   yourRights({ role: 'owner', gen: true, fly: false });
   check('-fly makes the very next action refuse', !ag.flightAllowed().ok,
         JSON.stringify(ag.myRights));
   const why = ag.flightAllowed().why ?? '';
   check('...and says why, in words a pilot can act on', /grant|flight/i.test(why), why);
 
-  // The answer is whole: an absent fly is no, never "keep what I had"
+  // the answer is whole: an absent fly is no, never "keep what I had"
   yourRights({ role: 'builder', gen: true, fly: true });
   yourRights({ role: 'builder', gen: true });
   check('an answer without fly is a withdrawal (absent is not "unchanged")', !ag.flightAllowed().ok, JSON.stringify(ag.myRights));
 
-  // MUTATION CONTROL, as required: unwire the case and this must go red.
+  // MUTATION CONTROL: unwire the case and this goes red
   const src = readFileSync('mcpl/agent.ts', 'utf8');
   check('the your-rights case installs the server\'s answer (mutation control)',
         /case "your-rights":[\s\S]{0,400}if \(msg\.rights\) this\.acceptEffectiveRights\(msg\.rights, "world"\);/.test(src));

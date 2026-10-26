@@ -13,9 +13,8 @@ export const reindexCollider = () => {};
 // nothing here collides, so return the bare terrain height
 export const resolveColliders = (pos, terrainAt) => terrainAt(pos.x, pos.z);
 
-// remotes.js (same cone, via motion.js) reads the mount table. Nothing under
-// test mounts anything, so an empty table and a "not riding" answer are the
-// honest stubs — mountTransform returns null for an occupant with no mount.
+// remotes.js (same cone) reads the mount table; nothing here mounts, so an empty table and a null mountTransform (an
+// occupant with no mount) are the honest stubs
 export const avatarMounts = new Map();
 export const mountTransform = () => null;
 

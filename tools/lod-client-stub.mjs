@@ -1,20 +1,13 @@
-// tools/lod-client-stub.mjs — the realizer's dependency cone, stubbed for
-// tools/lod-client-test.ts. client/lib/realize/models.js is REAL there; so
-// are lod_policy.js, models_field.js, state.js (the fold), scheduler.js and
-// base.js (the bus). This one file stands in for:
-//
-//   core.js      a WebGPURenderer at import time — here a bare scene and camera
-//   assets.js    the loader — the WIRE truth (askFor) decides the tier a load
-//                IS, a pretend sequencer answers a stamped variant when it
-//                "baked" one and the original otherwise, and the test can
-//                HOLD every load open and release it by hand, so a tier swap
-//                can be caught mid-flight
-//   colliders.js / lightrig.js / lights.js — recorded, never built
+// tools/lod-client-stub.mjs: the realizer's dependency cone, stubbed for tools/lod-client-test.ts (models.js,
+// lod_policy.js, models_field.js, state.js, scheduler.js and base.js stay REAL there). Stands in for:
+//   core.js      a WebGPURenderer at import time: here a bare scene and camera
+//   assets.js    the loader: the WIRE truth (askFor) decides the tier; a pretend sequencer answers a stamped variant
+//                when it "baked" one, else the original; the test can HOLD every load and release it by hand
+//   colliders.js / lightrig.js / lights.js: recorded, never built
 //   world.js     its maps only (entities, mounts, edit holds, findPart)
-//
-// Every side effect the test asserts on is a plain array or Map here.
-import { KTX2_KEY } from '../shared/ktx2.js';   // the stub publishes the REAL generation — a literal here went stale on the 3→4 bump
-import { LOD_RECIPE } from '../server/store-variants.ts';   // …and the REAL recipe: the literal here went stale when #205 derived it
+// Every side effect the test asserts on is a plain array or Map.
+import { KTX2_KEY } from '../shared/ktx2.js';  // the REAL generation: a literal went stale on the 3→4 bump
+import { LOD_RECIPE } from '../server/store-variants.ts';  // and the REAL recipe (#205 derived it)
 import * as THREE_ from '../client/node_modules/three/build/three.module.js';
 import { askFor, tierOf } from '../client/lib/lod_policy.js';
 import { state } from '../client/lib/state.js';
@@ -23,8 +16,7 @@ import { kindOf } from '../shared/protocol/kind.js';
 import { bus } from '../client/lib/base.js';
 
 // ---- core.js ----------------------------------------------------------------
-// makePlaceholder wants the node material class from three/webgpu; the
-// stand-in's material is never rendered here
+// makePlaceholder wants three/webgpu's node material class; the stand-in's material is never rendered
 export const THREE = { ...THREE_, MeshBasicNodeMaterial: THREE_.MeshBasicMaterial };
 export const scene = new THREE_.Scene();
 export const camera = new THREE_.PerspectiveCamera();
@@ -34,9 +26,8 @@ export const report = (where, e) => { reports.push({ where, e }); };
 export const CONFIG = {};
 
 // ---- assets.js --------------------------------------------------------------
-/** The pretend sequencer + browser: what /version published, whether this
- *  "browser" transcodes KTX2, and which libs have a baked variant. Mutable —
- *  a section flips them and spawns fresh placements. */
+/** The pretend sequencer + browser: what /version published, whether it transcodes KTX2, which libs are baked.
+ *  Mutable: a section flips them and spawns fresh placements. */
 export const server = { key: KTX2_KEY, recipe: LOD_RECIPE, capable: true, variants: new Set() };
 /** Every loadGLB call, in order: { lib, tier (what crossed the wire), url }. */
 export const loads = [];
@@ -57,16 +48,14 @@ export const lodRecipeReady = Promise.resolve(server.recipe);
 export const negotiationReady = Promise.resolve();
 export const lodNegotiable = (lib) =>
   askFor({ libPath: lib, key: server.key, capable: server.capable, recipe: server.recipe, tier: 'lod' }).tier === 'lod';
-/** The loader as the realizer sees it. Identity stamps are the real
- *  loader's: glbKey (the cache entry worn), tierServed (tierOf over what the
- *  "server" answered, bound to the running recipe), tierAsked (the wire). */
+/** The loader as the realizer sees it, with the real loader's stamps: glbKey (cache entry worn), tierServed (tierOf
+ *  over the answer, bound to the running recipe), tierAsked (the wire). */
 export async function loadGLB(lib, { tier = 'full' } = {}) {
   const ask = askFor({ libPath: lib, key: server.key, capable: server.capable, recipe: server.recipe, tier });
   const rec = { lib, tier: ask.tier, url: ask.url };
   loads.push(rec);
   if (hold) await new Promise((release) => held.push({ ...rec, release }));
-  // the answer: a stamped variant for a lib the sequencer baked, the
-  // original chain (extras untouched — none here) otherwise
+  // a stamped variant for a baked lib, otherwise the original chain
   const json = ask.tier === 'lod' && server.variants.has(lib)
     ? { asset: { extras: { lodOf: `sha-${lib}`, recipe: server.recipe, tools: { meshoptimizer: 'x', encoder: 'none' } } } }
     : { asset: { extras: {} } };
@@ -112,21 +101,18 @@ export const updateLight = () => {};
 export const disposeLight = () => {};
 
 // ---- the governor's cone (governor.js is REAL in the harness) ---------------
-// core.js extras: the sun and the pixel-ratio base the 'detail' / 'pixels'
-// levers touch
+// core.js extras: the sun and the pixel-ratio base the 'detail' / 'pixels' levers touch
 export const sun = { shadow: { mapSize: { width: 2048, set() {} }, map: null } };
 export const BASE_PIXEL_RATIO = 1;
 renderer.setPixelRatio = () => {};
 renderer.getPixelRatio = () => 1;
-// warmqueue.js / loadwork.js: never loading — the governor's grace never holds
+// warmqueue.js / loadwork.js: never loading, so the governor's grace never holds
 export const warmStats = () => ({ pending: 0, running: false });
 export const warm = (label, fn) => Promise.resolve().then(fn);
 export const warmDepth = () => Promise.resolve();
 export const P_GATE = 0, P_MODEL = 1, P_AMBIENT = 2;
 export const laneBusy = () => false;
-// lightrig.js / emitters.js / terrain.js / frameloop.js / remotes.js: every lever
-// BELOW 'lod' in the ladder answers "nothing to shed", so a slow window
-// reaches the lod lever deterministically
+// every lever BELOW 'lod' answers "nothing to shed", so a slow window reaches the lod lever deterministically
 export const setSlotCap = () => {};
 export const getSlotCap = () => 0;
 export const maxSlots = () => 0;
@@ -160,14 +146,14 @@ export const clearStatusChip = (id) => { chips.delete(id); };
 // ---- world.js (its maps) ----------------------------------------------------
 export const entities = new Map();
 export const entityMeta = new Map();
-/** the suite's driver: a record set here wins; otherwise the record is read from the view state.js holds (the fold's
- *  record as the realizer reads it — world.js bagOf reads replica.st; this cone has no replica, so the view stands in) */
+/** the suite's driver: a record set here wins; otherwise it's read from the view state.js holds (this cone has no
+ *  replica for world.js bagOf to read) */
 export const comps = new Map();
-const recordOfView = (e) => (e ? { transform: {}, ...recordComponents(e) } : null);   // the view's record is flat (view.js): its model, parent and components as the fold spells them
+const recordOfView = (e) => (e ? { transform: {}, ...recordComponents(e) } : null);  // the view's record is flat (view.js): model, parent and components as the fold spells them
 export const bagOf = (id) => comps.get(id) ?? recordOfView(state.st.entities?.[id]);
 export function* bags() { const seen = new Set(); for (const [id, c] of comps) { seen.add(id); yield [id, c]; } for (const id of Object.keys(state.st.entities ?? {})) if (!seen.has(id) && id !== '@world') yield [id, bagOf(id)]; }
 export const metaOf = (id) => entityMeta.get(id) ?? (state.st.entities?.[id] ? { kind: kindOf(state.st.entities[id]), ...(state.st.entities[id].model ? { model: state.st.entities[id].model } : {}) } : null);
-/** the fold's edge index (world.js childrenOf/parentIdOf/ancestorsOf): this cone has no replica, so the view's records answer */
+/** the fold's edge index (world.js childrenOf/parentIdOf/ancestorsOf), answered from the view's records */
 export const childrenOf = (id) => Object.keys(state.st.entities ?? {}).filter((k) => state.st.entities[k]?.parent?.to === id).sort();
 export const parentIdOf = (id) => state.st.entities?.[id]?.parent?.to ?? null;
 export const ancestorsOf = (id) => { const out = []; const seen = new Set([id]); for (let p = parentIdOf(id); p && state.st.entities[p] && !seen.has(p); p = parentIdOf(p)) { out.push(p); seen.add(p); } return out; };
@@ -179,14 +165,14 @@ export function findPart(root, name) {
   return hit;
 }
 
-// materials.js: the realizer's mesh thing (createMesh) hands its one material to the factory; nothing to prepare here
+// materials.js: createMesh hands its one material to the factory; nothing to prepare here
 export const prepareMaterial = () => {};
 
-// governor.js (VR alpha) imports the shadow switch + resolution from lightrig; inert here
+// governor.js imports the shadow switch + resolution from lightrig; inert here
 export const shadowsOn = () => true;
 export const shadowRes = () => 2048;
 
-// breadcrumbs.js: frameloop.js (the governor's cone) stamps each system's name; the real module reads `location`
-// and reaches net.js → assets.js → materials.js → core.js's `ground`, none of which this cone has
+// breadcrumbs.js: frameloop.js stamps each system's name; the real module reads `location` and reaches net.js →
+// assets.js → materials.js → core.js's `ground`, none of which this cone has
 export const BC = () => {};
 export const XR_BOOT = false;   // core.js: frameloop.js never arms the XR loop here

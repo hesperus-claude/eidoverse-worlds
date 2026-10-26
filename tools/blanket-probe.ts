@@ -1,21 +1,8 @@
-// blanket-probe — the control experiment for the "standing on a blanket puts
-// you at pillow height" bug.
-//
-//   bun tools/blanket-probe.ts
-//
-// The reported symptom: a generated blanket with giant pillows on it collides
-// as ONE box, so its top face — the top of the tallest pillow — becomes the
-// ground over the entire footprint. Walk onto the bare blanket and you float
-// half a metre up.
-//
-// This asks one question before any collision work is designed: does the
-// EXISTING `collide: "exact"` override already fix it? If it does, better
-// collision hulls are a performance problem, not a correctness one, and the
-// project changes shape.
-//
-// Same stubbing trick as tools/collider-test.ts, but resolving core-stub via
-// fileURLToPath — `new URL(...).pathname` yields "/L:/a%20b/..." on Windows
-// and the plugin then can't find the module.
+// blanket-probe: the control experiment for "standing on a blanket puts you at pillow height" (`bun tools/blanket-probe.ts`).
+// A blanket with giant pillows collides as ONE box, so the tallest pillow's top is the ground over the whole footprint.
+// Asks first: does the EXISTING `collide: "exact"` override fix it? If so, better hulls are a performance problem.
+// Stubbed as tools/collider-test.ts, but core-stub resolves via fileURLToPath (`new URL(...).pathname` is "/L:/a%20b/..."
+// on Windows).
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -33,8 +20,7 @@ const flat = () => 0;
 const AVATAR = 1.9;
 
 // ---- loading a REAL mesh ----------------------------------------------------
-// not three's GLTFLoader (it needs DOM Image/ImageBitmap, absent in headless Bun); @gltf-transform reads the
-// draco'd GLBs /library serves
+// not three's GLTFLoader (it needs DOM Image/ImageBitmap); @gltf-transform reads the draco'd GLBs /library serves
 async function loadGlbMesh(path: string) {
   const { NodeIO } = await import('@gltf-transform/core');
   const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
@@ -61,7 +47,7 @@ async function loadGlbMesh(path: string) {
       const p = [0, 0, 0];
       for (let t = 0; t < count; t++) {
         pos.getElement(idx ? idx.getScalar(t) : t, p);
-        // flatten to non-indexed world-space triangles, same as buildExact
+        // flatten to non-indexed world-space triangles, as buildExact does
         verts.push(
           m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12],
           m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
@@ -77,9 +63,7 @@ async function loadGlbMesh(path: string) {
   return { mesh, tris: verts.length / 9 };
 }
 
-/** Ground truth for a real mesh: raycast its triangles directly, independent
- *  of anything colliders.js decides. This is the yardstick both modes are
- *  scored against — the mesh cannot disagree with itself. */
+/** Ground truth: raycast the mesh's triangles directly, independent of colliders.js; both modes are scored against it. */
 function truthSampler(mesh: any) {
   const bvh = new MeshBVH(mesh.geometry);
   const ray = new THREE.Ray();
@@ -92,7 +76,7 @@ function truthSampler(mesh: any) {
 }
 
 // ---- the object under test --------------------------------------------------
-// a 3x3m blanket, 4cm thick, three 50cm pillows: the smallest repro, walkable height known (0.04 cloth, 0.54 pillow)
+// a 3x3m blanket, 4cm thick, three 50cm pillows: walkable heights known (0.04 cloth, 0.54 pillow)
 
 const BLANKET_Y = 0.04;
 const PILLOW_Y = 0.04 + 0.50;
@@ -116,9 +100,7 @@ function blanket(id: string, collide?: string) {
   return m;
 }
 
-// A sample sitting exactly on a pillow's rim is neither on nor off it, and
-// float error decides which — 1.35 - 1.0 > 0.35 by one ulp. Those samples say
-// nothing about the collider, so they are excluded rather than scored.
+// samples exactly on a pillow's rim are decided by float error (1.35 - 1.0 > 0.35 by one ulp): excluded, not scored
 const HALF = 0.35, EDGE = 0.03;
 const nearRim = (x: number, z: number) => PILLOWS.some(([px, pz]) =>
   Math.abs(Math.abs(x - px) - HALF) < EDGE || Math.abs(Math.abs(z - pz) - HALF) < EDGE);
@@ -132,8 +114,8 @@ function probe(x: number, z: number, y = 0) {
   return { ground, push: Math.hypot(p.x - x, p.z - z) };
 }
 
-/** Walk a 7x7 grid over the blanket and score each mode's reported ground against the geometry. `feetY` is the
- *  regime: cloth height tests walling-out; pillow height tests the reported bug (walking on top after a mantle). */
+/** Walk a 7x7 grid over the blanket, scoring each mode's ground against the geometry. `feetY` is the regime: cloth
+ *  height tests walling-out; pillow height tests the reported bug (walking on top after a mantle). */
 function sweep(label: string, feetY: number) {
   let worst = 0, sumErr = 0, n = 0, walled = 0, skipped = 0;
   const rows: string[] = [];
@@ -174,8 +156,7 @@ blanket('auto');
   console.log(`  (footprint ${foot.toFixed(1)}m² — needs >=16 — and height ` +
     `${(bx.max.y - bx.min.y).toFixed(2)}m — needs >=2.2)`);
 }
-// The reported bug is what someone STANDING ON the blanket experiences, so the
-// feet start at pillow height — where the mantle below actually puts them.
+// the bug is what someone STANDING ON the blanket sees, so the feet start at pillow height, where the mantle puts them
 const boxRes = sweep('  === as it ships today (one OBB), standing on it ===', PILLOW_Y);
 
 C.clearColliders();
@@ -192,14 +173,14 @@ for (const [mode, forced] of [['box', 'box'], ['exact', 'exact']] as const) {
 }
 
 // ---- what does exact COST? --------------------------------------------------
-// time the BVH build at generated-mesh density: "exact for everything" lives or dies on this number
+// the BVH build at generated-mesh density: "exact for everything" lives or dies on this number
 console.log('\n  cost of exact at generated-mesh density:');
 for (const target of [5_000, 50_000, 150_000]) {
   const seg = Math.max(1, Math.round(Math.sqrt(target / 12)));
   const g = new THREE.BoxGeometry(3, 0.5, 3, seg, seg, seg);
   const m = new THREE.Mesh(g, undefined);
   m.updateMatrixWorld(true);
-  // BoxGeometry is INDEXED — position.count is vertices, not 3x triangles
+  // BoxGeometry is INDEXED: position.count is vertices, not 3x triangles
   const idx = g.getIndex();
   const tris = (idx ? idx.count : g.getAttribute('position').count) / 3;
   C.clearColliders();
@@ -241,8 +222,7 @@ if (glbIdx >= 0 && argv[glbIdx + 1]) {
     ` · footprint ${((bb.max.x - bb.min.x) * (bb.max.z - bb.min.z)).toFixed(1)}m²`);
   console.log(`  placed at world y=${entY}, scale ${entScale}`);
 
-  // what does the classifier pick, and what else does forcing exact turn on? `interior` drives the grass
-  // clearing mask, not collision
+  // what does the classifier pick, and what else does forcing exact turn on? (`interior` drives the grass mask, not collision)
   {
     C.clearColliders();
     const probeMesh = mesh.clone(); probeMesh.updateMatrixWorld(true);
@@ -274,7 +254,7 @@ if (glbIdx >= 0 && argv[glbIdx + 1]) {
       for (let j = 0; j < 9; j++) {
         const x = bb.min.x + ((bb.max.x - bb.min.x) * (i + 0.5)) / 9;
         const z = bb.min.z + ((bb.max.z - bb.min.z) * (j + 0.5)) / 9;
-        // truth is the mesh's own top surface at this column, in world terms
+        // truth: the mesh's own top surface at this column, in world terms
         const localTruth = truthAt(x, z, bb.max.y + 0.5);
         if (localTruth == null) { row += '  -  '; missing++; continue; }
         const truth = entY + localTruth * entScale;

@@ -1,7 +1,7 @@
-// gpulost-probe — real Chromium: kill the WebGL context (WEBGL_lose_context), expect a reload into the
-// same world without ?xr=1 and a red 'graphics reset' status chip (statuschips.js); kill it again inside 2 min, expect
-// NO reload and a red 'graphics lost ×2' chip that opens itself ('Graphics lost again') and replaces the reset chip.   bun tools/gpulost-probe.mjs   (an owned server; SHOT=<png> saves the last frame)
-// …and once stopped, render / compileAsync / renderWorld reach nothing in three (live control before the loss; each gate is red-on-revert).
+// gpulost-probe (`bun tools/gpulost-probe.mjs`, an owned server; SHOT=<png> saves the last frame): real Chromium kills the
+// WebGL context (WEBGL_lose_context) and expects a reload into the same world without ?xr=1 and a red 'graphics reset'
+// chip (statuschips.js); a second kill inside 2 min expects NO reload and a red self-opening 'graphics lost ×2' chip
+// replacing it. Once stopped, render / compileAsync / renderWorld reach nothing in three (each gate red-on-revert).
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 const { check: ok, done } = checker();
 const world = await ownedWorld({});

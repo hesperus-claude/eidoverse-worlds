@@ -1,6 +1,5 @@
-// Test stand-in for client/lib/loadwork.js — the scheduler is irrelevant here.
-// beginWork records the phases a load passes through, so a test can see WHERE a load waited
-// (tools/loadgate-boundary-test.mjs); the scheduler itself is still irrelevant here.
+// Test stand-in for client/lib/loadwork.js: no scheduler; beginWork records the phases a load passes through, so a test
+// can see WHERE a load waited (tools/loadgate-boundary-test.mjs).
 export const works = [];
 export const beginWork = (label) => { const w = { label, phases: [], phase(p) { w.phases.push(p); }, yield: async () => {}, done() {}, end() {} }; works.push(w); return w; };
 export const enqueue = (fn) => Promise.resolve(fn?.());

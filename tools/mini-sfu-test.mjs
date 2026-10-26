@@ -1,11 +1,8 @@
-// MINIMAL werift↔Chromium: does a browser answer sendonly to a server's
-// recvonly m-line when it has a track? Strips away every world concern.
+// MINIMAL werift↔Chromium: does a browser answer sendonly to a server's recvonly m-line when it has a track?
 import { chromium } from 'playwright';
 import { RTCPeerConnection } from 'werift';
 const server = new RTCPeerConnection({});
-// THE REAL SHAPE: the server holds sendonly ROUTES (one per speaker this
-// listener consents to hear) PLUS the recvonly floor for the listener's own
-// mic — and the floor is added LAST, exactly as sfuadapter does.
+// THE REAL SHAPE: sendonly ROUTES (one per consented speaker) PLUS the recvonly floor for the listener's mic, added LAST as sfuadapter does
 const { MediaStreamTrack, MediaStream } = await import('werift');
 for (const speaker of ['spkA','spkB']) {
   const t = new MediaStreamTrack({ kind: 'audio' });
@@ -21,53 +18,51 @@ await server.setLocalDescription(offer);
 const b = await chromium.launch({ ...(process.env.SFU_TEST_CHROME ? { executablePath: process.env.SFU_TEST_CHROME } : {}),
   args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required'] });
 const pg = await (await b.newContext({permissions:['microphone']})).newPage();
-// getUserMedia needs a secure-context origin, and it must be OURS (an ambient responder isn't identity): a one-page
-// server owned by the test
+// getUserMedia needs a secure-context origin, and it must be OURS: a one-page server owned by the test
 const { createServer } = await import('node:http');
 const pageSrv = createServer((_, res) => { res.setHeader('content-type', 'text/html'); res.end('<!doctype html><title>mini-sfu</title>'); });
 await new Promise((r) => pageSrv.listen(0, '127.0.0.1', r));
 await pg.goto(`http://127.0.0.1:${pageSrv.address().port}/`);
-// THE REAL SEQUENCE: answer FIRST with no mic (as the client does at join),
-// then acquire the mic, then answer the SAME offer again (renegotiation).
+// THE REAL SEQUENCE: answer FIRST with no mic (as at join), then acquire the mic and answer the SAME offer again
 const out = await pg.evaluate(async (offerSdp) => {
   const pc = new RTCPeerConnection({});
   const r = {};
   await pc.setRemoteDescription({type:'offer', sdp: offerSdp});
   let a = await pc.createAnswer(); await pc.setLocalDescription(a);
   r.first = (a.sdp.match(/a=(sendonly|recvonly|sendrecv|inactive)/g)||[]).join(',');
-  // now the mic shows up, exactly as it does when a user clicks the button
+  // the mic shows up, as when a user clicks the button
   const s = await navigator.mediaDevices.getUserMedia({audio:true});
-  // the fix under test: bind the mic to the transceiver the SERVER offered for it (remote recvonly); addTrack picks
-  // the first compatible one, a speaker route, and the floor never gets the track
+  // the fix under test: bind the mic to the transceiver the SERVER offered for it (remote recvonly); addTrack picks the
+  // first compatible one, a speaker route, and the floor never gets the track
   const floor = pc.getTransceivers().find(t => t.currentDirection === 'inactive' || t.direction === 'inactive');
   if (floor) { await floor.sender.replaceTrack(s.getTracks()[0]); floor.direction = 'sendonly'; }
   else { for (const t of s.getTracks()) pc.addTrack(t, s); }
-  // the server re-offers the SAME sdp (it has no new transceivers)
+  // the server re-offers the SAME sdp (no new transceivers)
   await pc.setRemoteDescription({type:'offer', sdp: offerSdp});
   a = await pc.createAnswer(); await pc.setLocalDescription(a);
   r.second = (a.sdp.match(/a=(sendonly|recvonly|sendrecv|inactive)/g)||[]).join(',');
   r.trx = pc.getTransceivers().map(t=>`${t.direction}${t.sender?.track?'+track':''}`).join(',');
 
-  // ── STAGE 3: SWAP THE SOURCE ON AN ALREADY-PUBLISHED PC. The floor is sendonly now, so a hunt that knows only
-  // 'inactive' falls to addTrack, and an answer can't add an m-line: the new sender never enters the SDP.
+  // ── STAGE 3: SWAP THE SOURCE ON AN ALREADY-PUBLISHED PC. The floor is sendonly now, so a hunt knowing only 'inactive'
+  // falls to addTrack, and an answer can't add an m-line: the new sender never enters the SDP.
   const ctx = new AudioContext();
-  const dest = ctx.createMediaStreamDestination();       // a synthetic "TTS" track
+  const dest = ctx.createMediaStreamDestination();  // a synthetic "TTS" track
   const synthTrack = dest.stream.getAudioTracks()[0];
-  // the OLD hunt, verbatim — proves the failure shape:
+  // the OLD hunt, verbatim: proves the failure shape
   {
     const floor = pc.getTransceivers().find(t => t.currentDirection === 'inactive' || t.direction === 'inactive');
     if (floor) { await floor.sender.replaceTrack(synthTrack); floor.direction = 'sendonly'; }
     else { pc.addTrack(synthTrack, dest.stream); }
   }
-  // measured: addTrack HIJACKS a recvonly route transceiver (its empty sender is "compatible"), whose answer can only
-  // say recvonly, so the synth track sits on a sender that never transmits
+  // addTrack HIJACKS a recvonly route transceiver (its empty sender is "compatible"), whose answer can only say recvonly,
+  // so the synth track sits on a sender that never transmits
   r.oldHuntTrx = pc.getTransceivers().length;
   r.oldHuntPutSynthOnRecvRoute = pc.getTransceivers()
     .some(t => t.sender?.track === synthTrack && t.direction !== 'sendonly');
   r.oldHuntOwnedSenderHasSynth = pc.getTransceivers()
     .some(t => t.direction === 'sendonly' && t.sender?.track === synthTrack);
-  // the fixed hunt, kept in sync with voicesfu.js: the NEGOTIATED direction is the authority, the ask (direction)
-  // counts only pre-negotiation; currentDirection === 'recvonly' excludes a recv-associated sendrecv
+  // the fixed hunt, in sync with voicesfu.js: the NEGOTIATED direction is the authority, the ask counts only
+  // pre-negotiation; currentDirection === 'recvonly' excludes a recv-associated sendrecv
   {
     const mine = pc.getTransceivers().find(t =>
       t.currentDirection === 'sendonly'
@@ -76,9 +71,8 @@ const out = await pg.evaluate(async (offerSdp) => {
   }
   r.ownedSenderCarriesSynth = pc.getTransceivers()
     .some(t => t.currentDirection === 'sendonly' && t.sender?.track === synthTrack);
-  // round-2 control: a transceiver whose ASK is sendrecv but whose NEGOTIATED
-  // answer is recvonly (a route JSEP associated with our addTrack) must be
-  // invisible to the hunt.
+  // control: a transceiver whose ASK is sendrecv but NEGOTIATED answer recvonly (JSEP associated it with our addTrack)
+  // must be invisible to the hunt
   r.recvAssociatedExcluded = !pc.getTransceivers().some(t =>
     t.currentDirection === 'recvonly' && t.direction === 'sendrecv'
     && (t.currentDirection === 'sendonly'

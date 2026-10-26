@@ -1,15 +1,11 @@
-// particles-probe — the `particles` component end-to-end through a REAL
-// sequencer and a REAL embodied body: author an emitter over websockets,
-// watch the flight recorder explain an unrenderable one, and confirm that a
-// resident who joins afterwards SEES the fire in look() without being told it
-// was just lit. Scratch use only (not part of the pure suite).
-//
+// particles-probe: the `particles` component end to end through a REAL sequencer and embodied body: author an emitter
+// over websockets, watch the flight recorder explain an unrenderable one, and confirm a resident who joins afterwards
+// SEES the fire in look() without being told it was just lit. Scratch use only (not in the pure suite).
 //   WORLDS_DIR=$(mktemp -d) JOIN_TOKEN=test-door PORT=8996 bun run server/server.ts &
 //   WORLD_URL=ws://localhost:8996/ws JOIN_TOKEN=test-door bun tools/particles-probe.ts
 
-// Shorten the world-change coalescing window so the probe doesn't wait four
-// seconds per leg. agent.ts reads it at module load, so the import must come
-// after (a static import would hoist above this line).
+// a short coalescing window, so legs don't wait four seconds: agent.ts reads it at module load, so the import comes
+// after (a static import would hoist above this line)
 process.env.EW_EMITTER_COALESCE_SEC = "1";
 const WINDOW = 1000;
 const { WorldAgent } = await import("../mcpl/agent.ts");
@@ -60,8 +56,7 @@ check("...and the log carries the bag verbatim, no per-particle entries",
   && author.live.filter((e: any) => e.verb === "comp").length === 1);
 
 // ---- a body that arrives afterwards -----------------------------------------
-// Everything below rides the REAL join: snapshot → entries → fold, exactly the
-// path a resident's body takes.
+// everything below rides the REAL join: snapshot → entries → fold, a resident's body's path
 const body = new WorldAgent({ url: URL, name: "probe-body", world });
 (process.env as Record<string, string>).WORLD_TOKEN ??= TOKEN;
 const heard: any[] = [];

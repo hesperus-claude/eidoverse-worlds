@@ -1,15 +1,7 @@
-// chat log — the spoken-utterance merge and unread accounting, run headless.
-//
-//   bun tools/chat-log-test.ts
-//
-// This exists because logChat's merge fast-path once keyed on nothing but
-// "agent + same author + 15 seconds", which collapsed ordinary agent chat
-// into unrelated rows and skipped the unread/mention counters entirely
-// (found in review, PR#7). The contract now: a row merges ONLY as the
-// continuation of one spoken utterance (spoken:true + author + utt), a
-// mention arriving in a merged sentence counts exactly like one arriving
-// as its own row, and `t0` may reorder display only inside the spoken
-// protocol's bounded window.
+// chat log: the spoken-utterance merge and unread accounting, headless (`bun tools/chat-log-test.ts`).
+// A row merges ONLY as the continuation of one spoken utterance (spoken:true + author + utt), never on "agent + same
+// author + 15 s" (PR#7); a mention in a merged sentence counts exactly like one on its own row; `t0` may reorder display
+// only inside the spoken protocol's bounded window.
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
@@ -18,8 +10,8 @@ plugin({
   name: "chat-stubs",
   setup(b) {
     b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("./chat-core-stub.mjs") }));
-    // rimward: CONFIG/bus/report live in base.js (the renderer-free substrate) — same stub, or the
-    // test's CONFIG.name never reaches chat.js and every mention assertion passes vacuously (PR #160 B6)
+    // CONFIG/bus/report live in base.js (the renderer-free substrate): the same stub, or CONFIG.name never reaches chat.js
+    // and every mention assertion passes vacuously
     b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("./chat-base-stub.mjs") }));
     b.onResolve({ filter: /^\.\/windows\.js$/ }, () => ({ path: here("./chat-frames-stub.mjs") }));
     b.onResolve({ filter: /^\.\/net\.js$/ }, () => ({ path: here("./chat-net-stub.mjs") }));
@@ -38,9 +30,8 @@ const check = (name: string, ok: boolean, detail = "") => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
 };
 
-// A self row + two others: the self row exercises the "not yourself" skip of the
-// People Here double-click (a mention now; it opened a DM tab until whisper was removed, R 10-18).
-const says: any[] = [];   // the public say channel: everything typed into chat goes here (there is no other)
+// a self row + two others: the self row exercises People Here's "not yourself" skip on double-click (a mention)
+const says: any[] = [];  // the public say channel: everything typed into chat goes here (there is no other)
 initChat({
   send: (text: string) => says.push(text),
   people: () => [{ id: "me", me: true }, { id: "keir", agent: true }, { id: "mica" }],
@@ -62,7 +53,7 @@ check("merged row reads as a paragraph",
 logChat("keir", "A new thought.", "agent", { seq: 3, ts: ts + 900, spoken: true, utt: 8 });
 check("a NEW utt is a new row", rows().length === 2, `${rows().length} rows`);
 
-// --- ordinary agent says never merge (the review's core regression)
+// --- ordinary agent says never merge
 reset();
 logChat("keir", "tool output one", "agent", { seq: 4, ts });
 logChat("keir", "tool output two", "agent", { seq: 5, ts: ts + 100 });
@@ -113,8 +104,8 @@ logChat("keir", "unspoken t0 smuggle", "", { seq: 16, ts, t0: ts - 5000 });
 check("t0 outside the spoken protocol is ignored",
   texts()[1] === "unspoken t0 smuggle", JSON.stringify(texts()));
 
-// --- REGRESSION (#27 review): an inserted line takes its grouping from its VISUAL neighbour, not arrival
-// order, and the displaced anchor reprints its name
+// --- REGRESSION (#27): an inserted line takes its grouping from its VISUAL neighbour, not arrival order, and the
+// displaced anchor reprints its name
 reset();
 ts = Date.now();
 logChat("rab", "alpha", "", { seq: 20, ts: ts - 4000 });
@@ -145,8 +136,7 @@ check("displaced anchor reprints its name when a different speaker wedges in",
 
 
 // ============================================================ the People Here pane and the tab strip
-// (R, 2026-09-11 asked for DM tabs to be driven here; they left with whisper, R 10-18, and this is what remains: the
-// fixed tabs, the pane, and the double-click that now mentions.)
+// the fixed tabs, the pane, and the double-click that mentions (no DM tabs: whisper is gone)
 console.log("\nCHAT — the People Here pane, and the tab strip");
 const tabs = () => frameStub.body!.querySelector(".chat-tabs") as HTMLElement;
 const tabLabels = () => [...tabs().querySelectorAll(".tabscroll button")].map((b: any) => b.textContent.replace(/\u00d7/g, "").trim());
@@ -163,15 +153,14 @@ check("the gear sits at the right end of the compose row, after the line", (() =
 })());
 check("both scroll arrows exist", tabs().querySelectorAll(".tabarrow").length === 2);
 
-// WHISPER WAS REMOVED (R 10-18): world chat has no private channel. A typed /w (or /r) is answered locally in words and
-// sends nothing; there are no conversation tabs to open
+// world chat has no private channel: a typed /w (or /r) is answered locally in words and sends nothing; no conversation tabs
 { const inp = document.querySelector("#chatline") as HTMLInputElement; const n0 = says.length;
   for (const line of ["/w keir psst", "/r hello"]) { inp.value = line; inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }
   const sys = [...log().children].filter((l: any) => l.classList.contains("sys")).map((l: any) => l.textContent).join(" | ");
   check("/w and /r are answered: whisper was removed, nothing is sent", says.length === n0 && (sys.match(/whisper was removed/g) ?? []).length === 2, JSON.stringify({ said: says.slice(n0), sys: sys.slice(-200) }));
   check("...and no conversation tab opens", tabLabels().join("|") === "all|mentions|system", tabLabels().join("|")); }
 
-// the People Here pane: double-click a name -> a mention of them in the compose box (it opened a DM tab until R 10-18)
+// the People Here pane: double-click a name -> a mention of them in the compose box
 openPane();
 { // OPEN: the tab-row chip steps out and the column's header is the way back (a chevron toward the edge it collapses to)
   const chip = tabs().querySelector(":scope > .chat-who") as HTMLElement;
@@ -188,8 +177,8 @@ openPane();
 }
 const rows2 = () => [...frameStub.body!.querySelectorAll(".chat-side-list .who-row")];
 check("the People Here pane lists everyone", rows2().length === 3, `${rows2().length} rows`);
-// a BUTTON, not a div: windows.js _contentClaims exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's
-// drag surface, so a div row's dblclick never arrived
+// a BUTTON, not a div: windows.js _contentClaims exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's drag
+// surface, so a div row's dblclick never arrives
 check("each roster row is a BUTTON, so the frame cannot claim it as a drag surface",
   rows2().every((r: any) => r.tagName === "BUTTON"), rows2().map((r: any) => r.tagName).join(","));
 const mica = rows2().find((r: any) => r.querySelector(".n")?.textContent?.trim() === "mica") as HTMLElement;
@@ -213,8 +202,8 @@ const allTab = tabs().querySelector(".tabscroll button") as HTMLElement;
 allTab?.click();
 check("...and `all` shows the room again", visible().some((l: any) => l.textContent.includes("a room line")), visible().length + " visible");
 
-// the active tab is scrolled into view. happy-dom does no layout, so only the mechanism is bindable here
-// (setFilter asks the active tab to scroll into view); the pixels were checked in real Chromium
+// the active tab is scrolled into view: happy-dom does no layout, so only the mechanism is bound (the pixels were
+// checked in real Chromium)
 { const calls: string[] = [];
   const proto = (globalThis as any).HTMLElement?.prototype;
   const orig = proto?.scrollIntoView;
@@ -225,8 +214,6 @@ check("...and `all` shows the room again", visible().some((l: any) => l.textCont
     calls.some((t) => t.includes("system")), JSON.stringify(calls));
   if (proto) proto.scrollIntoView = orig; }
 
-// (CLOSING A TAB and A DRAFT BELONGS TO ITS DESTINATION — antra #185 B3 — were about conversation tabs, which left with
-// whisper, R 10-18: every tab is a view of the one public room now, so there is no destination for a draft to leak from.)
 
 // ============================================================ commands as lantern actions
 console.log("\nCHAT — a command that acts on whoever is nearest fills the lantern's line; it never runs on a default");
@@ -257,7 +244,7 @@ console.log("\nCHAT — a mod's markup carrying the public classes is never mist
   check("a roster repaint paints OUR people chip", /here|just you/.test(real.textContent ?? ""), real.textContent ?? "");
   check("…and leaves a mod's prepended .chat-who alone", dChip.innerHTML === "" && !dChip.hasAttribute("aria-expanded"), dChip.outerHTML);
   const ours = [...frameStub.body!.querySelectorAll(".chat-tabs")].find((t) => !decoy.contains(t))!;
-  ([...ours.querySelectorAll(".tabscroll button")].find((b) => b.textContent!.trim().startsWith("system")) as HTMLElement)?.click();   // a tab change repaints the tab row
+  ([...ours.querySelectorAll(".tabscroll button")].find((b) => b.textContent!.trim().startsWith("system")) as HTMLElement)?.click();  // a tab change repaints the tab row
   check("a tab repaint builds into OUR tab row, not a mod's .chat-tabs", !decoy.querySelector(".tabscroll")
     && [...[...frameStub.body!.querySelectorAll(".chat-tabs")].find((t) => !decoy.contains(t))!.querySelectorAll(".tabscroll button.on")].some((b) => b.textContent!.startsWith("system")),
     decoy.innerHTML.slice(0, 120));

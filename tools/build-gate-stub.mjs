@@ -1,8 +1,5 @@
-// build-gate-test substitutes this for everything build.js imports. build.js
-// does real work AT IMPORT — `new THREE.Raycaster()`, `new THREE.Plane(new
-// THREE.Vector3(...))`, claimEscape(), three addEventListeners and two bus.on
-// registrations — so every one of those has to be constructible here or the
-// module throws before a single assertion runs.
+// build-gate-test substitutes this for everything build.js imports. build.js works AT IMPORT (`new THREE.Raycaster()`,
+// `new THREE.Plane(...)`, claimEscape(), addEventListeners, bus.on), so all of it must be constructible here.
 class V3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; } set() { return this; } setFromMatrixPosition() { return this; } copy() { return this; } add() { return this; } sub() { return this; } addScaledVector() { return this; } applyQuaternion() { return this; } normalize() { return this; } length() { return 0; } distanceTo() { return 0; } clone() { return new V3(this.x, this.y, this.z); } }
 class Obj3 {
   constructor() { this.position = new V3(); this.rotation = { y: 0, x: 0, z: 0 }; this.scale = new V3(1, 1, 1); this.quaternion = {}; this.userData = {}; this.children = []; this.visible = true; this.matrixWorld = { decompose() {}, elements: [] }; }
@@ -16,7 +13,7 @@ export const THREE = {
   Mesh: class extends Obj3 { constructor() { super(); this.geometry = { dispose() {} }; this.material = { dispose() {} }; } },
   Object3D: Obj3,
   Box3: class { constructor() { this.min = new V3(); this.max = new V3(); } setFromObject() { return this; } getSize() { return new V3(); } getCenter() { return new V3(); } isEmpty() { return false; } },
-  // outline.box.setFromObject(obj) + .visible + .userData — build.js:117-188
+  // outline.box.setFromObject(obj) + .visible + .userData
   Box3Helper: class extends Obj3 { constructor(box) { super(); this.box = box ?? { setFromObject() {} }; this.geometry = { dispose() {} }; this.material = { dispose() {} }; } },
   Plane: class { constructor() {} setFromNormalAndCoplanarPoint() { return this; } },
   Raycaster: class { constructor() { this.ray = { intersectPlane: () => null }; } setFromCamera() {} intersectObjects() { return []; } intersectObject() { return []; } },
@@ -32,7 +29,7 @@ export const camera = { position: new V3(), quaternion: {} };
 export const canvas = { addEventListener() {}, removeEventListener() {}, style: {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) };
 
 const handlers = new Map();
-export const CONFIG = {};   // base.js's CONFIG: chat/catalog/audiopanel read it (sockets merge 10-14)
+export const CONFIG = {};  // base.js's CONFIG: chat/catalog/audiopanel read it
 export const bus = {
   on(t, f) { (handlers.get(t) ?? handlers.set(t, []).get(t)).push(f); },
   emit(t, p) { for (const f of handlers.get(t) ?? []) f(p); },
@@ -41,7 +38,7 @@ export const report = () => {};
 
 export const loadGLB = async () => new THREE.Object3D();
 export const libLabels = new Map();
-export const modelName = (m) => String(m ?? "").split("/").pop().replace(/\.[a-z0-9]+$/i, "") || "thing";   // assets.js modelName (address fix 10-16)
+export const modelName = (m) => String(m ?? "").split("/").pop().replace(/\.[a-z0-9]+$/i, "") || "thing";  // assets.js modelName
 export const makeLightGizmo = () => new THREE.Object3D();
 
 // findPart: socketedit.js (imported by build.js) needs it, and socketedit must be remapped too or the real one loads
@@ -56,8 +53,7 @@ export const editHolds = new Map();
 export const reindexCollider = () => {};
 export const heightAt = () => 0;
 
-// THE ONE THAT MATTERS: the gate reads net.myRights. Left undeclared, exactly
-// as the real net.js leaves it before a snapshot.
+// THE ONE THAT MATTERS: the gate reads net.myRights, left undeclared as the real net.js leaves it before a snapshot
 export const net = {};
 export const sendDrag = () => {};
 
@@ -75,7 +71,7 @@ export const sceneSelected = () => null;   // build.js: Del/X/F act on the inspe
 export const sceneDeselect = () => {};   // build.js: Esc / Edit ▸ deselect clear it
 export const claimEscape = () => {};
 
-// socketedit.js — build.js imports ten symbols from it at line 31
+// socketedit.js: the symbols build.js imports from it
 export const refreshSocketGizmos = () => {};
 export const resetSockets = () => {};
 export const armSocketPlacement = () => {};
@@ -97,8 +93,8 @@ export const replica = { st: null };
 export const replicaActive = () => false;
 export const sendRequest = async () => ({ ok: false, refused: { code: 'not-joined', reason: 'not in a world' } });
 export const toast = (t) => { hints.push(String(t)); };
-// ui.js's one status bar (claimStatus/releaseStatus, DESIGN-status-bar.md): build.js claims the selection line, editwrites
-// claims 'warn' for a refusal. A text claim is a hint the suite reads, as flashHint's are; a node claim (the selection) is not.
+// ui.js's one status bar (claimStatus/releaseStatus): build.js claims the selection line, editwrites 'warn' for a
+// refusal; a text claim is a hint the suite reads (as flashHint's), a node claim (the selection) is not
 export const claimStatus = (id, { content = null } = {}) => { if (content != null) hints.push(String(content)); };
 export const releaseStatus = () => {};
 export { html } from '../client/lib/markup.js';

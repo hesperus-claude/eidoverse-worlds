@@ -1,18 +1,7 @@
-// panel-teardown-probe — the audio panel must UPDATE, not rebuild.
-//
-// R, 2026-08-16: "it looks like you're doing a full-panel teardown because I
-// can see elements in the panel jumping around on the tick after a click. You
-// need to make that tear-down per element and not the whole panel."
-//
-// The claim under test is about NODE IDENTITY, which is the only thing that
-// distinguishes an update from a rebuild: after a click, are the row elements
-// the SAME objects? A screenshot cannot answer that (both look identical once
-// settled), and neither can a syntax check — so this probe tags every row,
-// clicks, and looks for its own tags afterwards. A rebuilt panel loses them.
-//
-// It also watches the meter's rAF chain: micFloorRow's beat() loop ends itself
-// on !row.isConnected, so a teardown silently restarts the animation.
-//
+// panel-teardown-probe: the audio panel must UPDATE, not rebuild, or rows visibly jump on the tick after a click.
+// The claim is NODE IDENTITY (screenshots and syntax checks can't see it): this tags every row, clicks, and looks for its
+// own tags afterwards; a rebuilt panel loses them. It also watches the meter's rAF chain: micFloorRow's beat() ends on
+// !row.isConnected, so a teardown silently restarts the animation.
 //   node tools/panel-teardown-probe.mjs [origin]
 import { launchBrowser, ownedWorld } from './probe-harness.mjs';
 
@@ -23,14 +12,12 @@ const shut = async () => { await close(); await world.close(); };
 const pg = await page();
 pg.on('pageerror', (e) => console.log('  [pageerror]', String(e).slice(0, 140)));
 await pg.goto(`${ORIGIN}/?world=staging&key=${world.key}&name=panelprobe`, { waitUntil: 'domcontentloaded' });
-// The panel frame is built during boot; clicking a head before it exists is a
-// no-op that looks exactly like a broken selector. Wait for the section first.
+// the panel frame is built during boot; clicking a head before it exists is a no-op that looks like a broken selector
 await pg.waitForSelector('#sec-audio-tab', { timeout: 20000 }).catch(() => {});
 await new Promise((r) => setTimeout(r, 2000));
 
-// Open the 🔊 audio section. The click and the CHECK must be separate calls:
-// makeSection's toggle awaits onOpen(body), so a sleep inside the same
-// evaluate() races the very build it is waiting for.
+// open the 🔊 audio section; click and CHECK are separate calls: makeSection's toggle awaits onOpen(body), so a sleep in
+// the same evaluate() races the build it waits for
 await pg.evaluate(() => {
   const head = [...document.querySelectorAll('.sec-tabs .pf-tab')].find((h) => /audio/i.test(h.textContent || ''));
   head?.click();
@@ -48,17 +35,16 @@ const r = await pg.evaluate(async () => {
   const body = document.querySelector('#sec-audio .body');
   const rows = () => [...body.querySelectorAll('.row')];
 
-  // Tag every row object. Only surviving NODES keep an expando.
+  // tag every row object: only surviving NODES keep an expando
   rows().forEach((el, i) => { el.__probeTag = `row${i}`; });
   const before = rows().length;
 
-  // Grab the meter and remember its width-setting node, plus a live sample of
-  // whether the rAF loop is still ticking after the click.
+  // the meter's width-setting node, plus a live sample of whether the rAF loop still ticks after the click
   const meterEl = body.querySelector('[data-lvl]');
   if (meterEl) meterEl.__probeTag = 'meter';
 
-  // click EVERY checkbox, not a representative one (a probe proves only the path it walks; the TTS tick has its own
-  // build()), and identify targets by LABEL, not index, which drifts when a row is skipped
+  // click EVERY checkbox (a probe proves only the path it walks; the TTS tick has its own build()), identified by LABEL,
+  // not index, which drifts when a row is skipped
   const labels = [...body.querySelectorAll('.row')]
     .filter((r) => r.querySelector('input[type=checkbox]') && r.style.display !== 'none')
     .map((r) => r.querySelector('.nm')?.textContent?.trim())
@@ -77,7 +63,7 @@ const r = await pg.evaluate(async () => {
     await new Promise((r) => setTimeout(r, 500));
     const survived = rows().filter((el) => typeof el.__probeTag === 'string').length;
     perBox.push({ label, before: n0, survived, after: rows().length });
-    live.click();                                   // put it back
+    live.click();  // put it back
     await new Promise((r) => setTimeout(r, 400));
   }
 

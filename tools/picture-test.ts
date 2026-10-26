@@ -1,16 +1,8 @@
-// The `picture` component's meaning + text-tier perception, without a browser.
-//
-//   bun tools/picture-test.ts
-//
-// Two legs:
-//   1. DECLARATION — the source allow-list (library-relative image under
-//      eidoverse/assets/, never a URL, never a path escape), the named part,
-//      the look line and its bound, unknown keys noted, and a `describe` that
-//      says what the author said and nothing about pixels.
-//   2. PERCEPTION  — what look() carries for a resident who reads: the line
-//      appears on the owning entity, tracks a replace, and is gone on removal;
-//      other component types still read as they did.
-// Every check fails on main by construction: `picture` did not exist.
+// The `picture` component's meaning + text-tier perception, without a browser (`bun tools/picture-test.ts`).
+//   1. DECLARATION: the source allow-list (library-relative image under eidoverse/assets/, never a path escape), the
+//      look line and its bound, unknown keys noted, and a `describe` that says what the author said, nothing about pixels.
+//   2. PERCEPTION: look() carries the line on the owning entity, tracks a replace, drops it on removal; other component
+//      types read as they did.
 import { normalizePicture, describePicture, allowedPictureSrc, PICTURE_ALT_MAX } from "../shared/picture.js";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const { WorldAgent } = await import("../mcpl/agent.ts");
@@ -22,7 +14,7 @@ console.log("— 1. declaration —");
 const GOOD = "eidoverse/assets/pictures/hearth_at_dusk.png";
 for (const [src, expect] of [
   [GOOD, true], ["eidoverse/assets/models/thing_preview.jpg", true], ["eidoverse/assets/x/y.webp", true],
-  // the upload door's store — content-addressed pictures land here (POST /upload?as=image)
+  // the upload door's store: content-addressed pictures land here (POST /upload?as=image)
   ["store/images/0123456789abcdef.png", true], ["store/images/0123456789abcdef.jpg", true], ["store/images/0123456789abcdef.webp", true],
   ["store/0123456789abcdef.png", false], ["store/scripts/x.png", false], ["store/images/../secret.png", false], ["store/images/x.glb", false],
   ["store/imagesx/y.png", false], ["/store/images/x.png", false],
@@ -31,8 +23,8 @@ for (const [src, expect] of [
   ["eidoverse/assets//x.png", false], ["other/x.png", false], ["eidoverse/assets/x.gif", false], ["eidoverse/assets/x.glb", false],
   ["eidoverse\\assets\\x.png", false], ["", false], [null, false],
 ] as [unknown, boolean][]) check(`allowedPictureSrc(${JSON.stringify(src)}) === ${expect}`, allowedPictureSrc(src) === expect);
-// encoded traversal: the rule is over the path the FETCH canonicalizes to (%2e%2e is a dot segment; a server may
-// decode %41 after the check). Library paths are plain: any % is refused, and the parsed pathname must equal the declared one.
+// encoded traversal: the rule is over the path the FETCH canonicalizes to (%2e%2e is a dot segment; a server may decode
+// %41 after the check). Library paths are plain: any % is refused, and the parsed pathname must equal the declared one.
 for (const src of [
   "eidoverse/assets/%2e%2e/%2e%2e/store/x.png", "eidoverse/assets/%2E%2E/secret.jpg", "eidoverse/assets/.%2e/x.png",
   "eidoverse/assets/%2e./x.png", "eidoverse/assets/%2e/x.png", "eidoverse/assets/a%2fb/x.png", "eidoverse/assets/%41.png",
@@ -41,12 +33,12 @@ for (const src of [
 ]) check(`encoded/odd source refused: ${JSON.stringify(src)}`, allowedPictureSrc(src) === false);
 check("the canonical library path of an allowed source is itself", new URL(`/library/${GOOD}`, "http://library.invalid").pathname === `/library/${GOOD}`);
 
-// shape audit 10-16 (render-media-env §5): part and flip are cut (a material override, the reserved material's): a picture is a quad of its own
+// (render-media-env §5) part and flip are cut (a material override is the reserved material's): a picture is a quad of its own
 const n0 = normalizePicture({ src: GOOD, alt: "a print of the hearth at dusk", lit: "self" });
 check("a well-formed bag normalizes", n0.ok && n0.picture.src === GOOD && !("part" in n0.picture) && n0.picture.lit === "self" && !("flip" in n0.picture), JSON.stringify(n0));
 check("…with no notes", n0.ok && n0.notes.length === 0, JSON.stringify(n0.ok && n0.notes));
 const nUrl = normalizePicture({ src: "https://example.com/x.png", part: "screenplane" });
-// batch 2 (R 10-07): an https link is a source now; who may fetch it is shared/mediasrc.js (the tier); http and local hosts are refused
+// an https link is a source; who may fetch it is shared/mediasrc.js (the tier); http and local hosts are refused
 check("an https link is taken, with its tier (an untrusted host: only opted-in viewers fetch it)", nUrl.ok && nUrl.tier.tier === "link", JSON.stringify(nUrl));
 check("an http link or a local host is refused, legibly", !normalizePicture({ src: "http://example.com/x.png" }).ok && /https/.test(normalizePicture({ src: "http://example.com/x.png" }).why) && !normalizePicture({ src: "https://192.168.0.2/x.png" }).ok);
 const nPart = normalizePicture({ src: GOOD });
@@ -60,7 +52,7 @@ const nUnknown = normalizePicture({ src: GOOD, alt: "x", scale: 2, _private: 1, 
 check("unknown keys and an unknown lit are noted, not fatal; _keys ignored silently", nUnknown.ok && nUnknown.notes.some((x) => /ignored by the evaluator: scale/.test(x) && !/_private/.test(x)) && nUnknown.notes.some((x) => /lit "neon" is unknown/.test(x)) && nUnknown.picture.lit === "scene", JSON.stringify(nUnknown.notes));
 check("malformed bags are refused", !normalizePicture(null).ok && !normalizePicture([]).ok && !normalizePicture("x").ok);
 
-// house I236 (#260): alt was named look; a picture stored under the old name still says what it shows
+// alt was named look: a picture stored under the old name still says what it shows
 const nOld = normalizePicture({ src: GOOD, look: "the hearth, written before alt" });
 check("a stored look reads as alt, with no 'ignored' note", nOld.ok && nOld.picture.alt === "the hearth, written before alt" && !nOld.notes.some((x) => /ignored/.test(x)), JSON.stringify(nOld));
 check("…and describe carries it", describePicture({ src: GOOD, look: "the hearth, written before alt" }) === "a picture: «the hearth, written before alt»", describePicture({ src: GOOD, look: "the hearth, written before alt" }));
@@ -73,7 +65,7 @@ check("describe: malformed", describePicture(null) === "a picture (malformed dec
 check("describe never mentions pixels/colours (it carries the author's claim only)", !/pixel|colour|color/.test(describePicture({ src: GOOD, part: "p", alt: "x" })));
 
 console.log("— 2. perception —");
-// the agent's protocol path: a scratch authority, its cut adopted, and the next view taken after every write (tools/agent-scratch.ts)
+// the agent's protocol path: a scratch authority, its cut adopted, the next view taken after every write (tools/agent-scratch.ts)
 const { agentOnDoor } = await import("./agent-scratch.ts");
 const ag = new WorldAgent({ name: "reader" });
 const { seed, act } = agentOnDoor(ag, "picture");

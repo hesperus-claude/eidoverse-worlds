@@ -1,19 +1,13 @@
-// Sub-object motion — headless checks for client/lib/motion.js's part tier.
-//
-// Orrery's segmented exports name their parts (tripo_part_N); a component
-// keyed `motion:<part>` (or a motion carrying `part`) animates that node
-// alone. These checks pin the contract: the root never moves for a part
-// motion, the pivot point is a real hinge (fixed in the parent frame),
-// several parts move independently, a vanished part-motion restores the rest
-// pose, and whole-entity motion is untouched by any of it.
-//
-// Run: bun run tools/parts-test.ts   (no servers, no GPU)
+// Sub-object motion: headless checks for client/lib/motion.js's part tier (`bun run tools/parts-test.ts`, no servers, no GPU).
+// Segmented exports name their parts (tripo_part_N); a component keyed `motion:<part>` (or a motion carrying `part`)
+// animates that node alone. The root never moves for a part motion, the pivot is a real hinge (fixed in the parent
+// frame), parts move independently, a vanished part motion restores the rest pose, whole-entity motion is untouched.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 
-// Bun 1.3.x caches transpiled module graphs by content, so a failed plugin-resolved path can survive and bypass
-// onResolve; re-exec once with the cache off (read at process startup). Production keeps Bun's cache.
+// Bun 1.3.x caches transpiled graphs by content, so a failed plugin-resolved path can bypass onResolve: re-exec once
+// with the cache off (read at process startup). Production keeps Bun's cache.
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -41,9 +35,8 @@ plugin({
     build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: CORE }));
     build.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: PARTS }));
     build.onResolve({ filter: /^\.\/colliders\.js$/ }, () => ({ path: COLLIDERS }));
-    // motion.js's cone reaches remotes.js → loadwork.js, which schedules on
-    // requestAnimationFrame at module scope and dies headless. avatar-test
-    // already carries a stub for exactly this; share it.
+    // motion.js's cone reaches remotes.js → loadwork.js, which schedules on requestAnimationFrame at module scope and dies
+    // headless: share avatar-test's stub
     build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: LOADWORK }));
     // motion.js reads one clock from remotes.js, whose own cone is every remote body (avatar.js, the renderer)
     build.onResolve({ filter: /^\.\/remotes\.js$/ }, () => ({ path: REMOTES }));
@@ -61,7 +54,7 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const v = (...a: number[]) => new THREE.Vector3(...a);
 
-// A swing the shape Orrery ships: a scaled wrapper, a frame, a seat.
+// a swing as segmented exports ship it: a scaled wrapper, a frame, a seat
 function makeSwing() {
   const root = new THREE.Object3D(); root.name = 'orrery_scale';
   const frame = new THREE.Object3D(); frame.name = 'tripo_part_fused_0';
@@ -80,7 +73,7 @@ console.log('\n━━ part motion: the named node moves, the entity does not ━
   // t0 = now → theta(0) = amp exactly: deterministic
   comps.set('swing', { 'motion:tripo_part_3': { type: 'pendulum', axis: [0, 0, 1], pivot: [0, 0.6, 0], amp: 0.5, period: 3, damp: 0, t0: Date.now() } });
   const seatBasePos = seat.position.clone(), pivot = v(0, 0.6, 0);
-  const pivotBefore = seatBasePos.clone().add(pivot); // base quat = identity
+  const pivotBefore = seatBasePos.clone().add(pivot);  // base quat = identity
   tickMotion();
   const angle = 2 * Math.acos(Math.min(1, Math.abs(seat.quaternion.w)));
   check('seat rotated by ~amp', Math.abs(angle - 0.5) < 0.02, `angle=${angle.toFixed(3)}`);
@@ -157,8 +150,8 @@ console.log('\n━━ a parented thing keeps its own motion, in its parent\'s fr
   check('…and the 90 m gate reads its world position', child.position.y === 2, `pos=${child.position.toArray()}`);
 }
 
-// I37, the openable half (openable.js skipped userData.mountedTo the same way): a lid parented to its box still opens
-// Mutation (must go red): restore `|| obj.userData.mountedTo` in openable.js apply().
+// the openable half: a lid parented to its box still opens. Mutation (must go red): restore `|| obj.userData.mountedTo`
+// in openable.js apply().
 {
   const { tickOpenables } = await import('../client/lib/openable.js');
   const box = new THREE.Object3D(); const lid = new THREE.Object3D(); lid.position.set(0, 1, 0);

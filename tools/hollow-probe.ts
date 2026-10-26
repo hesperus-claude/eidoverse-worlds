@@ -1,23 +1,14 @@
-// Will this model be walkable, and will it flatten the grass under it?
-//
-// Both answers live in colliders.js decide(), inside a running client, which
-// makes them annoying to ask. This reproduces them offline from the GLB:
-//
+// Will this model be walkable, and will it flatten the grass under it? Both answers live in colliders.js decide() in a
+// running client; this reproduces them offline from the GLB:
 //   bun tools/hollow-probe.ts <file.glb> [scale]
-//
-//   walkable  — room-sized (footprint >= 16m^2, height >= 2.2m) gets an exact
-//               trimesh collider you can walk into. Size is the whole rule.
-//   clearing  — only models carrying their own FLOOR suppress the meadow, so a
-//               tree keeps its grass while a pavilion gets a clean interior.
-//
-// It also reports the old centre-probe distance, which used to gate walkability
-// and rejected every bell tower and pavilion we own (bell2: 0.20m). Kept only
-// as a diagnostic — it decides nothing now.
+//   walkable: room-sized (footprint >= 16m^2, height >= 2.2m) gets an exact trimesh collider; size is the whole rule.
+//   clearing: only models carrying their own FLOOR suppress the meadow (a tree keeps its grass, a pavilion is clean).
+// The old centre-probe distance is reported as a diagnostic only; it decides nothing.
 
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 
-const HOLLOW_MIN_DIST = 0.9;   // retired gate — reported for diagnosis only
+const HOLLOW_MIN_DIST = 0.9;  // retired gate: reported for diagnosis only
 const MIN_FOOTPRINT = 16;      // m², colliders.js decide()
 const MIN_HEIGHT = 2.2;        // m
 const FLOOR_FRAC = 0.35;       // colliders.js hasFloor()
@@ -61,7 +52,6 @@ function* triangles(): Generator<number[][]> {
   }
 }
 
-// bbox
 const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
 let tris = 0;
 for (const t of triangles()) {
@@ -116,8 +106,8 @@ const roomScale = footprint >= MIN_FOOTPRINT && height >= MIN_HEIGHT;
 const hollow = dist > HOLLOW_MIN_DIST;
 
 // ---- does it carry its own floor? (colliders.js hasFloor) -------------------
-// rays straight down from mid-height over the inset footprint: a deck catches most, a tree's understorey almost
-// none; same 4×4 grid and 0.35 threshold as the client
+// rays straight down from mid-height over the inset footprint: a deck catches most, a tree's understorey almost none;
+// the client's 4×4 grid and 0.35 threshold
 const tris3: number[][][] = [...triangles()];
 function rayDownHitsFloor(ox: number, oz: number): boolean {
   const midY = centre[1]!;

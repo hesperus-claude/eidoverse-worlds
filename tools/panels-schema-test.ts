@@ -1,11 +1,8 @@
-// panels (client/lib/panels.js) — one schema, two renderers. renderDOM builds the desktop rows and wires
-// each control to edit(k, payload); renderCanvas paints the VR quad and returns hit REGIONS carrying the
-// same (action, payload); hitRegion turns a laser UV into one of them, snapping a slider to its step.
-// Drives the REAL module under happy-dom with a recording 2D context.
-//
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/panels-schema-test.ts
-//
-// Each block names the product line that would silence it:
+// panels (client/lib/panels.js): one schema, two renderers. renderDOM builds the desktop rows and wires each control to
+// edit(k, payload); renderCanvas paints the VR quad and returns hit REGIONS carrying the same (action, payload);
+// hitRegion turns a laser UV into one of them, snapping a slider to its step. The REAL module under happy-dom with a
+// recording 2D context. `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/panels-schema-test.ts`
+// The product lines that would silence each block:
 //   hitRegion returning the unsnapped slider value   → "slider hit snaps to step" goes red
 //   check region payload no longer !value            → "check region payload is the flipped value" goes red
 import { fileURLToPath } from "node:url";
@@ -36,8 +33,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const edits: any[][] = [];
 const edit = (...a: any[]) => { edits.push(a); };
-// panels' dispatcher is edit(k, value, field?, opts?) — field = Godot's axis index, opts.live = a preview.
-// Trailing empty args are not part of what a case asserts; a meaningful one (an axis, {live}) still is.
+// edit(k, value, field?, opts?): field = Godot's axis index, opts.live = a preview. Trailing empty args aren't asserted;
+// a meaningful one (an axis, {live}) is
 const last = () => { const a = [...(edits.at(-1) ?? [])]; while (a.length && a.at(-1) == null) a.pop(); return JSON.stringify(a); };
 const FIELDS = [
   { t: 'info', label: 'world', value: 'garden' },
@@ -66,12 +63,11 @@ check('info shows the value as text', rows[0].querySelector('.sp-info')?.textCon
   plus.onclick!(new Event('click'));
   check('+ steps by step and clamps to max: edit("h", 2)', last() === '["h",2]', last());
   minus.onclick!(new Event('click'));
-  // the stepper shows what it just set (p1 edit mode): + then − returns to the start, 1.5 — the old face stayed
-  // at 1.5 after a + and stepped to 1, i.e. two clicks that should cancel moved the value
+  // the stepper shows what it just set: + then − returns to the start, 1.5 (two clicks that should cancel must not move it)
   check('− steps down from the SHOWN value (+ then − cancel): edit("h", 1.5)', last() === '["h",1.5]', last());
   num.value = '-4'; num.onchange!(new Event('change'));
-  // refused, never clamped (D4a; review 10-12): the row's min is the slider's; the editor's own check refuses what the door
-  // would and says why, so the stepper hands on what was typed
+  // refused, never clamped (D4a): the row's min is the slider's; the editor refuses what the door would and says why, so
+  // the stepper hands on what was typed
   check('a typed value is handed on as typed, not clamped to min: edit("h", -4)', last() === '["h",-4]', last());
   num.value = 'nope'; const n = edits.length; num.onchange!(new Event('change'));
   check('a non-number is ignored', edits.length === n); }
@@ -120,7 +116,7 @@ console.log('PANELS — renderCanvas: regions carry the same action/payload');
 const cv = document.createElement('canvas');
 const W = 512, ROW = 44, PAD = 12;
 const regions = renderCanvas(cv, FIELDS, { width: W, rowH: ROW, pad: PAD, title: 'lamp' });
-const rowsPainted = FIELDS.length + 1;   // + one list row
+const rowsPainted = FIELDS.length + 1;  // + one list row
 check('canvas sized to header + rows + padding', cv.width === W && cv.height === 30 + rowsPainted * ROW + PAD * 2, `${cv.width}×${cv.height}`);
 check('title painted upper-cased', paintLog.some((l) => l.startsWith('fillText("LAMP"')));
 const byAction = (a: string) => regions.filter((r: any) => r.action === a);
@@ -135,8 +131,8 @@ const slider = byAction('vol')[0];
 check('range: ONE track region carrying {lo,hi,st}', byAction('vol').length === 1 && JSON.stringify(slider.slider) === '{"lo":0,"hi":1,"st":0.05}', JSON.stringify(slider?.slider));
 check('rows stack: every region lies inside the canvas', regions.every((r: any) => r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= cv.height));
 
-// C13: every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads. Mutation: delete
-// one entry (say `check`) → this goes red for the DOM and the legacy quad; tools/edittheme-test.ts C for the edit quad.
+// every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads. Mutation: delete one
+// (say `check`) → red for the DOM and the legacy quad; tools/edittheme-test.ts C for the edit quad.
 console.log('PANELS — every field type draws on both surfaces (widgets.js WIDGETS, one table)');
 {
   (globalThis as any).Option ??= function (text: string, value: string) { const o = document.createElement('option'); o.textContent = text; o.value = value; return o; };
@@ -171,8 +167,8 @@ const uvAt = (r: any, fx = 0.5, fy = 0.5) => [(r.x + r.w * fx) / cv.width, (r.y 
 check('a UV in the padding resolves to null', hitRegion(regions, cv, 0.5, 0.001) === null);
 { const [u, v] = uvAt(byAction('dim')[0]);
   check('a check hit hands back the flipped payload', hitRegion(regions, cv, u, v)?.payload === true); }
-// the track proper is the region inset 6px each side; frac is measured along it. The inset is DERIVED from the
-// emitted geometry (value column at width * 0.34), not restated, so a mutation can't move with the test
+// the track proper is the region inset 6px each side, frac measured along it; the inset is DERIVED from the emitted
+// geometry (value column at width * 0.34), so a mutation can't move with the test
 const VX = W * 0.34;                       // the product's own value-column origin
 const INSET = VX - slider.x;               // what renderCanvas actually inset by
 check('the slider region is inset by exactly 6px each side (derived from the emitted region, not restated)', INSET === 6, `derived inset=${INSET} (x=${slider.x}, vx=${VX})`);

@@ -1,26 +1,14 @@
-// glb2vrm — turn a rigged humanoid GLB (Tripo-style skeleton) into a VRM 1.0
-// avatar the eidoverse-worlds client can wear.
-//
-// VRM 1.0 is just glTF + a VRMC_vrm extension (humanoid bone map + meta), so
-// no geometry pipeline is needed: we edit the JSON chunk in place. Three real
-// transformations happen along the way:
-//
-//  1. T-pose: VRMA retargeting assumes a T-pose rest. Tripo exports A-pose.
-//     We rotate rest joints (upperarm→forearm→hand chain to ±X, thigh→calf
-//     to -Y) while KEEPING inverse bind matrices — the mesh re-poses with the
-//     skeleton, which is exactly the point.
-//  2. Scale: Tripo models are ~1m tall. We bake a uniform scale on the
-//     Armature (an ancestor of all skin joints, so the skinned mesh follows).
-//  3. Facing: VRM 1.0 avatars face +Z. We measure forward from the foot→toe
-//     direction and bake a 180° yaw on the Armature if needed.
-//
+// glb2vrm: a rigged humanoid GLB (Tripo-style skeleton) becomes a VRM 1.0 avatar the client can wear.
+// VRM 1.0 is glTF + a VRMC_vrm extension, so the JSON chunk is edited in place, with three transformations:
+//  1. T-pose: VRMA retargeting assumes a T-pose rest (Tripo exports A-pose): rest joints are rotated while KEEPING
+//     inverse bind matrices, so the mesh re-poses with the skeleton.
+//  2. Scale: Tripo models are ~1m tall: a uniform scale is baked on the Armature (ancestor of all skin joints).
+//  3. Facing: VRM 1.0 faces +Z: forward is measured from foot→toe and a 180° yaw baked on the Armature if needed.
 // Usage:
 //   bun tools/glb2vrm.ts input.glb --name cosplay [--height 1.65]
 //     [--head-pitch -20] [--out path]
 //   bun tools/glb2vrm.ts anything.{glb,vrm} --measure   # just report pose/facing
-//
-// Bone names are Tripo's (Hip/Pelvis/Spine01/L_Upperarm/...). Extend TRIPO_MAP
-// for other generators.
+// Bone names are Tripo's (Hip/Pelvis/Spine01/L_Upperarm/...); extend TRIPO_MAP for other generators.
 
 import * as THREE from "../client/node_modules/three/src/Three.js";
 import { resolve, join, basename } from "node:path";
@@ -59,7 +47,7 @@ function writeGLB(json: any, bin: Uint8Array | null): Uint8Array {
   dv.setUint32(off, jsonBytes.length + jsonPad, true);
   dv.setUint32(off + 4, 0x4e4f534a, true);
   out.set(jsonBytes, off + 8);
-  out.fill(0x20, off + 8 + jsonBytes.length, off + 8 + jsonBytes.length + jsonPad); // pad w/ spaces
+  out.fill(0x20, off + 8 + jsonBytes.length, off + 8 + jsonBytes.length + jsonPad);  // pad with spaces
   off += 8 + jsonBytes.length + jsonPad;
   if (bin) {
     dv.setUint32(off, bin.length + binPad, true);
@@ -109,8 +97,7 @@ const rotOf = (m: THREE.Matrix4) => {
   return q;
 };
 
-/** Rotate `bone` (rest pose) so the world direction bone→child becomes
- *  `target`. Inverse bind matrices stay untouched: the mesh re-poses. */
+/** Rotate `bone` (rest pose) so the world direction bone→child becomes `target`; inverse binds untouched. */
 function alignBone(g: G, boneName: string, childName: string, target: THREE.Vector3) {
   const bi = nodeByName(g, boneName);
   const ci = nodeByName(g, childName);
@@ -206,9 +193,8 @@ const TRIPO_MAP: Record<string, string> = {
   rightToes: "R_ToeBase",
 };
 
-// optional digits (many rigs have none; TRIPO_MAP's nodeByName is fail-fast), skipped when missing; ammodoll.js's
-// finger springs need these joints. *0 is the METACARPAL: only the thumb's has a VRM slot, so Index1 is the
-// PROXIMAL. VRM says "Little" where Tripo says "Pinky".
+// optional digits, skipped when missing (TRIPO_MAP's nodeByName is fail-fast); ammodoll.js's finger springs need them.
+// *0 is the METACARPAL (only the thumb's has a VRM slot), so Index1 is PROXIMAL; VRM "Little" is Tripo "Pinky".
 const TRIPO_DIGITS: Record<string, string> = (() => {
   const m: Record<string, string> = {};
   for (const [vrmSide, t] of [["left", "L"], ["right", "R"]] as const) {
@@ -242,7 +228,7 @@ const has = (n: string) => argv.includes(`--${n}`);
 const { json: g, bin } = parseGLB(await Bun.file(input).arrayBuffer());
 
 if (has("measure")) {
-  // Report conventions of any glb/vrm — used to sanity-check against library avatars.
+  // report conventions of any glb/vrm, to sanity-check against library avatars
   const v1 = g.extensions?.VRMC_vrm;
   const bones = v1?.humanoid?.humanBones;
   const name = (k: string) => (bones ? g.nodes[bones[k].node].name : TRIPO_MAP[k]);
@@ -263,8 +249,8 @@ const out = flag("out") ?? join(import.meta.dir, "..", "assets", "opt", "eidover
 
 for (const vrmBone of Object.values(TRIPO_MAP)) nodeByName(g, vrmBone); // fail fast on unknown rigs
 
-// facing quadrant, measured ONCE before pose surgery and reused by the T-pose (its side axes are facing-relative)
-// and the yaw bake; T-posing a +X-facing rig to world ±X bakes one arm forward, one back
+// facing measured ONCE before pose surgery, reused by the T-pose (side axes are facing-relative) and the yaw bake:
+// T-posing a +X-facing rig to world ±X bakes one arm forward, one back
 const FACE_YAW: Record<string, number> = { "+z": 0, "-z": Math.PI, "+x": Math.PI / 2, "-x": -Math.PI / 2 };
 const faceFlag = flag("face")?.toLowerCase();
 if (faceFlag !== undefined && !(faceFlag in FACE_YAW)) throw new Error("--face must be one of +z -z +x -x");
@@ -274,8 +260,7 @@ const faceYaw = (Math.round(rawYaw / (Math.PI / 2)) * Math.PI) / 2; // snapped: 
 const fwdAxis = new THREE.Vector3(Math.sin(faceYaw), 0, Math.cos(faceYaw));
 const leftAxis = new THREE.Vector3(fwdAxis.z, 0, -fwdAxis.x); // up × forward
 
-// -- 1. T-pose. Side axes are relative to the measured facing; left is
-// wherever the left leg lives along that axis (don't assume anything).
+// -- 1. T-pose. Side axes are relative to the measured facing; left is wherever the left leg lives along that axis.
 if (!has("no-tpose")) {
   const W = worldMatrices(g);
   // compare the two sides to each other, not the origin: some scans translate the whole armature sideways
@@ -287,8 +272,8 @@ if (!has("no-tpose")) {
   const DOWN = new THREE.Vector3(0, -1, 0);
   const UP = new THREE.Vector3(0, 1, 0);
   const fixes: [string, string, THREE.Vector3][] = [
-    // torso first: clip rotations are absolute and can't move the shoulder sockets, so a scanned S-posture puts hands
-    // in the lower back. Stack the spine vertical, then pose the limbs relative to it.
+    // torso first: clip rotations are absolute and can't move the shoulder sockets (a scanned S-posture puts hands in
+    // the lower back), so stack the spine vertical, then pose the limbs relative to it
     ["Waist", "Spine01", UP], ["Spine01", "Spine02", UP],
     ["Spine02", "NeckTwist01", UP], ["NeckTwist01", "NeckTwist02", UP],
     ["NeckTwist02", "Head", UP],
@@ -303,15 +288,15 @@ if (!has("no-tpose")) {
   }
 }
 
-// -- 1.5. Normalize the skeleton (VRM hard requirement — see docstring).
+// -- 1.5. Normalize the skeleton (a VRM hard requirement).
 if (!has("no-normalize")) {
   if (!bin) throw new Error("no BIN chunk — cannot rewrite inverse bind matrices");
   normalizeSkeleton(g, bin, "Armature");
   console.log("  normalized: joint rotations zeroed, orientations folded into IBMs");
 }
 
-// some generated characters' neutral pose pitches the face down on a vertical neck: a small rotation on the unmapped
-// NeckTwist02 fixes the head without touching clips or mapping. After normalization, so it stays in the neutral pose.
+// some neutral poses pitch the face down on a vertical neck: a small rotation on the unmapped NeckTwist02 fixes the
+// head without touching clips; after normalization, so it stays in the neutral pose
 const headPitch = Number(flag("head-pitch") ?? 0);
 if (!Number.isFinite(headPitch)) throw new Error("--head-pitch must be a number");
 if (headPitch !== 0) {
@@ -329,8 +314,7 @@ if (headPitch !== 0) {
 if (!has("no-scale")) {
   const W = worldMatrices(g);
   const headY = posOf(W[nodeByName(g, "Head")]).y;
-  // True height = mesh bounds when available (includes hair/hat; robust to
-  // stylized rigs whose head bone sits low), else head bone + a crown fudge.
+  // true height = mesh bounds when available (includes hair/hat; robust to low head bones), else head bone + a crown fudge
   let meshMaxY = 0;
   for (const m of g.meshes ?? []) for (const p of m.primitives) {
     const max = g.accessors[p.attributes.POSITION]?.max;
@@ -338,9 +322,7 @@ if (!has("no-scale")) {
   }
   const height = Math.max(headY * 1.08, meshMaxY);
   const scale = targetHeight / height;
-  // Facing was measured (or overridden via --face) BEFORE the T-pose surgery;
-  // faceYaw is the model's yaw away from +Z, snapped to a quadrant. Bake the
-  // correction on the Armature so the avatar faces +Z (VRM 1.0).
+  // faceYaw (measured or --face, BEFORE the T-pose) is the yaw away from +Z, snapped to a quadrant; baked on the Armature
   const armIdx = nodeByName(g, "Armature");
   const arm = g.nodes[armIdx];
   if (arm.matrix) throw new Error("Armature uses matrix transform — unexpected for Tripo");
@@ -370,9 +352,8 @@ g.extensions.VRMC_vrm = {
     modification: "allowModification",
   },
   humanoid: {
-    // Trust geometry, not bone names: some rigs come out mirrored (L_* bones
-    // on the -X side). VRM left = +X when facing +Z; binding a "left" clip
-    // track to a -X arm rotates it the wrong way (the arms-to-the-sky bug).
+    // trust geometry, not bone names: some rigs are mirrored (L_* on -X). VRM left = +X facing +Z; a "left" clip track on
+    // a -X arm rotates it the wrong way
     humanBones: (() => {
       const W = worldMatrices(g);
       const leftLegX = posOf(W[nodeByName(g, TRIPO_MAP.leftUpperLeg)]).x;

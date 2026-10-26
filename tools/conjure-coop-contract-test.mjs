@@ -9,8 +9,8 @@ let pass = 0, fail = 0;
 const ok = (n, c) => { c ? (pass++, console.log(`ok   ${n}`)) : (fail++, console.log(`FAIL ${n}`)); };
 
 // ── contract 1: credentialed thumbnails ─────────────────────────────────────
-// under COEP a bare <img> fetches without credentials and the thumbnail 401s: every candidate image needs
-// crossorigin="use-credentials" (the length filter skips prose mentions of '<img>')
+// under COEP a bare <img> fetches without credentials and 401s: every candidate needs crossorigin="use-credentials"
+// (the length filter skips prose mentions of '<img>')
 const imgTags = [...src.matchAll(/<img\b[^>]*>/gs)].map((m) => m[0]).filter((t) => t.length > 12);
 const candidateImgs = imgTags.filter((t) => /cj-pick|imageCandidates|candidate/i.test(src.slice(Math.max(0, src.indexOf(t) - 300), src.indexOf(t) + t.length)));
 ok('at least one candidate <img> exists to protect', candidateImgs.length > 0);

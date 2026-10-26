@@ -1,7 +1,5 @@
-// Audio sources feeding the tap. Two, deliberately: the appliance (ffmpeg
-// pulling the RTSP audio off mediamtx) and a file (rehearsal and tests) —
-// the same 20 ms PCM16LE mono frames either way, so nothing downstream
-// knows which it is.
+// Audio sources feeding the tap: the appliance (ffmpeg pulling RTSP audio off mediamtx) and a file (rehearsal and
+// tests), the same 20 ms PCM16LE mono frames either way, so nothing downstream knows which.
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import type { AudioTap } from './tap.ts';
@@ -21,8 +19,7 @@ export function framer(tap: AudioTap): { write(chunk: Buffer): void; end(): void
       carry = off ? Buffer.from(carry.subarray(off)) : carry;
     },
     end() {
-      // A trailing partial frame is padded with silence, never dropped: the
-      // last syllable of a file is the one a test looks for.
+      // a trailing partial frame is padded with silence, never dropped: a file's last syllable is the one a test looks for
       if (carry.length) { const last = Buffer.alloc(size); carry.copy(last); tap.push(last); }
       tap.end();
     },
@@ -68,8 +65,8 @@ export function ffmpegSource(url: string, tap: AudioTap, log: (m: string) => voi
   return handle;
 }
 
-/** A raw PCM16LE mono file at the tap's rate (a .wav is fine — the 44-byte
- *  header is noise the VAD ignores). Paced to real time unless `fast`. */
+/** A raw PCM16LE mono file at the tap's rate (a .wav is fine: the 44-byte header is noise the VAD ignores). Paced to
+ *  real time unless `fast`. */
 export function fileSource(path: string, tap: AudioTap, opts: { fast?: boolean } = {}): Promise<void> {
   const f = framer(tap);
   return new Promise((resolve, reject) => {

@@ -1,13 +1,7 @@
-// bun tools/finger-curl-test.mjs — the analog finger-curl filter (xr.js sampleFingerCurl).
-//
-// WHY: the raw trigger/grip value was assigned straight through every frame, so controller ADC noise
-// and a resting finger's tremor reached the hand pose as a visible quiver — and rode the wire to
-// every remote viewer (xrbody.js:554 packs the curls into wire.c).
-//
-// The module cannot be imported: xr.js pulls three, the renderer and the DOM. So this drives the
-// EXACT source text of sampleFingerCurl, extracted from client/lib/xr.js and evaluated with a fake
-// `sourceFor` and a fake clock. If the product function is edited, this runs the edit.
-//
+// bun tools/finger-curl-test.mjs: the analog finger-curl filter (xr.js sampleFingerCurl). Raw trigger/grip values put
+// ADC noise and finger tremor on the hand pose and the wire (xrbody.js packs the curls into wire.c).
+// xr.js can't be imported (three, renderer, DOM), so this evaluates the EXACT source text of sampleFingerCurl from
+// client/lib/xr.js with a fake `sourceFor` and clock: an edit to the product function is what runs.
 // Mutations that MUST turn this red:
 //   drop the filter (assign raw straight through)        → the jitter check
 //   make k a fixed per-frame constant (ignore dt)        → the frame-rate independence check
@@ -40,16 +34,14 @@ check('the filter consults the elapsed time, not a fixed per-frame constant',
 check('the cutoff is driven by the smoothed SPEED, not a constant',
   /CURL_MIN_CUTOFF \+ CURL_BETA \* Math\.abs\(st\.dx\)/.test(fnSrc));
 check('NO hard jump/threshold branch survives in the FILTER — that discontinuity read as "clicky"',
-  !/\? raw :/.test(fnSrc) && !/CURL_JUMP/.test(fnSrc));   // scoped to the FUNCTION: the header comment
-  // describes the old branch on purpose, and a grep of the whole file matches that prose, not the code.
+  !/\? raw :/.test(fnSrc) && !/CURL_JUMP/.test(fnSrc));   // scoped to the FUNCTION: the file's header prose describes the old branch
 check('a stall cannot teleport the pose (dt is clamped)', /Math\.min\(0\.1,/.test(fnSrc));
 
 // ---- build a runnable copy against fakes
 let clock = 0, buttons = { left: [], right: [] };
 const fingerCurl = { left: { index: 0, grip: 0 }, right: { index: 0, grip: 0 } };
 const sourceFor = (hand) => ({ gamepad: { buttons: buttons[hand] } });
-// a runnable MODEL of the product filter (xr.js can't be imported headless): the text assertions pin the product
-// source and the check below pins this model to it
+// a runnable MODEL of the product filter: the text assertions pin the product source, the check below pins this model to it
 const st = { left: { index: null, grip: null }, right: { index: null, grip: null } };
 const alpha = (hz, dt) => { const te = 1 / (2 * Math.PI * hz); return 1 / (1 + te / dt); };
 const sample = (function () {
@@ -72,7 +64,7 @@ const sample = (function () {
     }
   };
 })();
-// the model is a COPY of the product filter: both product lines are pinned by text, so mutating either turns this red
+// the model is a COPY: both product lines are pinned by text, so mutating either turns this red
 check('the runnable model matches the product’s filter expression',
   /st\.x \+= oneEuroAlpha\(CURL_MIN_CUTOFF \+ CURL_BETA \* Math\.abs\(st\.dx\), dt\) \* \(raw - st\.x\)/.test(fnSrc));
 check('…and the SPEED estimate is low-passed too, not taken raw',
@@ -83,8 +75,8 @@ const step = (ms, vIndex, vGrip = 0) => { clock += ms;
   sample(); };
 
 // ---- 1. a resting finger's noise is suppressed
-// a STRONGER noise case (#197): at ±2% an unsmoothed speed estimate still passes; this much opens the cutoff unless
-// the D_CUTOFF low-pass works (real controller noise is nearer this)
+// a STRONGER noise case (#197): ±2% passes an unsmoothed speed estimate; this much opens the cutoff unless the D_CUTOFF
+// low-pass works (real controller noise is nearer this)
 { clock = 0; st.left.index = null; st.right.index = null; fingerCurl.left.index = 0.5;
   const ms = 1000 / 72; step(ms, 0.5); let worst = 0;
   for (let i = 0; i < 600; i++) { step(ms, 0.5 + (i % 2 ? 0.06 : -0.06)); if (i > 500) worst = Math.max(worst, Math.abs(fingerCurl.left.index - 0.5)); }
@@ -99,9 +91,8 @@ for (const hz of [72, 90, 120]) {
   check(`±2% resting noise is damped to under 0.6% at ${hz} Hz`, worst < 0.006, `worst=${(worst * 100).toFixed(2)}%`);
 }
 
-// ---- 3. SMOOTHNESS: the property that failed in the headset ("clicky on big moves").
-// Peak JERK = the largest frame-to-frame change in step size. A hard threshold branch alternates
-// between heavily-smoothed and teleported frames and scores ~0.17 here; a continuous filter ~0.05.
+// ---- 3. SMOOTHNESS ("clicky on big moves"): peak JERK = the largest frame-to-frame change in step size. A hard
+// threshold branch alternates smoothed and teleported frames (~0.17 here); a continuous filter ~0.05.
 const jerkOf = (rampMs, hz = 72) => { clock = 0; st.left.index = null; st.right.index = null;
   fingerCurl.left.index = 0;
   const ms = 1000 / hz; step(ms, 0);

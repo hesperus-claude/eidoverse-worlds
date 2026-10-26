@@ -1,45 +1,18 @@
-// chat-catchup-probe — what a reader can scroll back to after a long drop, in
-// the real chat client: Chromium, joined to an owned scratch world, with raw
-// sockets beside it saying what the reader misses while disconnected.
-//
-//   bun tools/chat-catchup-probe.ts
-//
-// Needs a Chromium that tools/probe-harness.mjs can find.
-//
-// The reader's socket is dropped by closing net.js's own socket from inside
-// the page, and held down by pointing each reconnect the client attempts at a
-// closed port, while the raw sockets talk. Then the client reconnects on its
-// own and its re-join catches up, newest first, 1,000 lines at most. Each
-// reader's world holds 200 lines before the drop:
-//  - one had scrolled back a page, and misses 1,100. A scroll-up while it's
-//    disconnected must try to load a page and not show "the beginning of this
-//    world". After the re-join, scrolling up must bring back every line once,
-//    in order, the 100 past the catch-up's cap too;
-//  - one had scrolled to the beginning, and misses 1,100: the same after the
-//    re-join;
-//  - one had scrolled back a page, and misses 200, and the page drops the
-//    answer to its catch-up's second request, so requestHistory's own 8 s
-//    timer rejects it: the same after the re-join.
-// The page follows each history request it sends until its answer arrives or
-// requestHistory's 8 s timer for it fires, so a wait for the log to settle
-// waits for every request to end one way or the other.
-//
-// Speech is arrival-only (R 10-18, server/messages.ts "history"): a joiner's
-// window is empty, and a page holds only what was said since its connection
-// arrived, unless it is an admin's, who reads the whole log. A re-join is a
-// new arrival, so only an admin's catch-up can reach what a drop missed: the
-// reader is each world's owner (TRUST_NAMES=1, so the name it types is the
-// founder's account). With its window empty, it joins after 160 lines and
-// hears the last 40 arrive, as many as a joiner's window held before.
-//
-// The three worlds are founded before the server starts, since a join never
-// founds one, and each raw socket joins as a replica, since a world talks only
-// to clients that fold its log. They speak through `say` requests and read
-// the lines back from the log stream's `say` entries (saysIn). The world's
-// authority takes at most 20 says in 10 s from one speaker
-// (shared/protocol/authority/gate.js RATE), so VOICES speakers take turns,
-// each kept under that, and each line waits for the world's reply to the one
-// before it, so the log holds them in order.
+// chat-catchup-probe: what a reader can scroll back to after a long drop, in the real chat client (Chromium joined to
+// an owned scratch world, raw sockets talking meanwhile). `bun tools/chat-catchup-probe.ts`; needs a Chromium
+// tools/probe-harness.mjs can find.
+// The drop closes net.js's own socket from inside the page and holds it down by pointing each reconnect at a closed
+// port; then the client reconnects and catches up, newest first, at most 1,000 lines. Each world holds 200 lines first:
+//  - scrolled back a page, misses 1,100: a scroll-up while disconnected must try a page, not show "the beginning of
+//    this world"; after the re-join, scrolling up brings back every line once, in order, past the catch-up's cap too
+//  - scrolled to the beginning, misses 1,100: the same
+//  - scrolled back a page, misses 200, its catch-up's second answer dropped so requestHistory's 8 s timer rejects it: the same
+// The page tracks each history request until answered or timed out, so "settled" waits for every request to end.
+// Speech is arrival-only (server/messages.ts "history"): only an admin's catch-up reaches what a drop missed, so the
+// reader is each world's owner (TRUST_NAMES=1); it joins after 160 lines and hears the last 40.
+// Worlds are founded before the server starts (a join never founds one); raw sockets join as replicas and speak
+// via `say` requests, read back from the log stream (saysIn). The authority takes at most 20 says per 10 s per
+// speaker (shared/protocol/authority/gate.js RATE), so VOICES speakers take turns, each line awaiting the previous reply.
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -87,10 +60,10 @@ async function voice(world: string, id: string) {
   });
   return {
     ws, seen, said,
-    /** One line, once the authority takes it: under its say rate this voice waits its turn, and a rate refusal is sent again. */
+    /** One line, once the authority takes it: under its say rate this voice waits its turn; a rate refusal is resent. */
     async say(text: string) {
       for (;;) {
-        // at most 19 of this voice's says in the last 10 s, with a margin for the authority's own stamp
+        // at most 19 says in the last 10 s, a margin for the authority's own stamp
         while (sent.length >= 19 && performance.now() - sent[0] < 10_200) await sleep(10_200 - (performance.now() - sent[0]));
         while (sent.length && performance.now() - sent[0] >= 10_200) sent.shift();
         const rid = `${id}-${++n}`;
@@ -109,7 +82,7 @@ async function voice(world: string, id: string) {
 }
 
 const VOICES = 32;
-/** VOICES speakers in `world`, taking turns: line #s goes to voice s % VOICES, after the world has taken #s-1. */
+/** VOICES speakers taking turns: line #s goes to voice s % VOICES, after the world has taken #s-1. */
 async function chorus(world: string) {
   const voices = [];
   for (let i = 1; i <= VOICES; i++) voices.push(await voice(world, `speaker-${i}`));
@@ -137,11 +110,11 @@ try {
     page.on("pageerror", (e: Error) => errors.push(e.message));
     await page.addInitScript((loading) => {
       const g = globalThis as any;
-      // __hist tracks each history request by reqId until answered or requestHistory's 8 s timer fires (`open` =
-      // still waiting). With dropCatchup set, that catch-up's answer is dropped (only resyncChatAfter sends `after`).
+      // __hist tracks each history request by reqId until answered or timed out (`open` = waiting); with dropCatchup set,
+      // that catch-up's answer is dropped (only resyncChatAfter sends `after`)
       g.__hist = { sent: 0, answered: 0, dropped: 0, timedOut: 0, open: new Set(), catchups: 0, dropCatchup: 0, dropId: null, armed: null };
-      // requestHistory arms its timer then sends synchronously, so the last timer armed before a send is that
-      // request's own: timers are tagged, a send names the latest tag, and only a named tag counts
+      // requestHistory arms its timer then sends synchronously, so the last timer armed before a send is its own: timers
+      // are tagged, a send names the latest tag, and only a named tag counts
       const setT = g.setTimeout;
       g.setTimeout = (fn: any, ...rest: any[]) => {
         if (typeof fn === "function") {
@@ -154,8 +127,7 @@ try {
         }
         return setT.call(g, fn, ...rest);
       };
-      // While __holdSockets is set, every socket the page opens goes to a
-      // closed port: the client's own reconnects fail, and it keeps retrying.
+      // while __holdSockets is set every socket the page opens goes to a closed port, so the client keeps retrying
       const WS = WebSocket;
       const setOnMessage = Object.getOwnPropertyDescriptor(WS.prototype, "onmessage")!.set!;
       g.WebSocket = new Proxy(WS, { construct(t, args: any[]) {
@@ -203,9 +175,7 @@ try {
       const g = globalThis as any, h = g.__hist;
       return { sent: h.sent, answered: h.answered, dropped: h.dropped, timedOut: h.timedOut, open: h.open.size, loadingRows: g.__loadingRows };
     });
-    // Settled: every history request the page sent has its answer or has had
-    // requestHistory's 8 s timer for it fire, no loading row is up, and the
-    // log's row count is the same on two reads in a row.
+    // settled: every history request answered or timed out, no loading row, and the row count equal on two reads in a row
     const settle = async () => {
       let last = -1;
       await until("the chat log to settle", async () => {
@@ -219,8 +189,7 @@ try {
         return settled;
       }, 30000);
     };
-    // One scroll to the top, as a reader's: the log moves down and back up,
-    // which fires the log's own scroll events, and loadOlder runs from those.
+    // one scroll to the top, as a reader's: down and back up, so the log's own scroll events run loadOlder
     const scrollUp = async () => {
       await page.evaluate(() => new Promise<void>((done) => {
         const el = document.getElementById("chatlog")!;
@@ -229,8 +198,7 @@ try {
       }));
       await settle();
     };
-    // Scroll up until three scrolls in a row land nothing, not stopping at an
-    // end marker, so a stale one shows as a second marker.
+    // scroll until three scrolls in a row land nothing, past end markers, so a stale one shows as a second marker
     const scrollAll = async (max = 80) => {
       for (let i = 0, still = 0; i < max && still < 3; i++) {
         const was = (await lines()).length;
@@ -245,7 +213,7 @@ try {
       await page.evaluate(() => { (globalThis as any).__holdSockets = false; });
       await page.waitForFunction(async () => (await import("/lib/net.js")).net.joined === true, null, { timeout: 60000 });
     };
-    // What the page holds, for a wait that fails: the log's rows, its last three, and what the page threw.
+    // what the page holds, for a wait that fails: rows, the last three, and what the page threw
     const diag = () => page.evaluate(() => {
       const el = document.getElementById("chatlog"), rows = [...(el?.children ?? [])];
       return { chatlog: el ? (el.isConnected ? "in the page" : "not in the page") : "absent", rows: rows.length,
@@ -305,8 +273,7 @@ try {
     await r.rejoin();
     if ("lose" in c) {
       await until("the catch-up's second answer to be dropped", async () => (await r.hist()).dropped === 1, 60000);
-      // net.js gives up on that request when its own 8 s timer fires, and the
-      // catch-up's catch restarts the walk
+      // net.js gives up when its own 8 s timer fires, and the catch-up's catch restarts the walk
       await until("requestHistory's 8 s timer for it to fire", async () => (await r.hist()).timedOut === 1, 20000);
       await r.settle();
       const caught = await r.lines();

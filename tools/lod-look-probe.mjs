@@ -1,9 +1,8 @@
-// bun tools/lod-look-probe.mjs — does a LOD look like its original from where a viewer can ACTUALLY see it?
-// Pairs come from LOD_LOOK_PAIRS="orig.glb=lod.glb;…" (or LOD_LOOK_DIR: <dir>/<name>.plod.glb beside a list of
-// originals). Each pair is loaded by the CLIENT's own loader and rendered from the closest distance lod_policy can
-// show the LOD: auto = LOD edge 0.45·R × (1 − hyst 0.25) = 0.3375·R; eco/pressured = half that (R = 80 + 4·diag,
-// realize/models.js). Pixel density ≈ a headset's (~20 px/°: 480 px over a 24° field). Per pair: the object's pixels
-// (union of both silhouettes), mean RGB difference over them, and the share differing by > 24 (sum of channels).
+// bun tools/lod-look-probe.mjs: does a LOD look like its original from where a viewer can ACTUALLY see it?
+// Pairs from LOD_LOOK_PAIRS="orig.glb=lod.glb;…" (or LOD_LOOK_DIR: <dir>/<name>.plod.glb beside a list of originals),
+// loaded by the CLIENT's loader and rendered from the closest distance lod_policy shows the LOD: auto = 0.45·R × (1 −
+// hyst 0.25) = 0.3375·R; eco/pressured half that (R = 80 + 4·diag, realize/models.js). ~20 px/° (a headset's). Per
+// pair: the object's pixels (both silhouettes), mean RGB difference, and the share differing by > 24 (channel sum).
 // Writes a contact sheet (original | LOD | ×8 difference per row, auto and eco) to LOD_LOOK_OUT.
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -11,8 +10,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const { check, done } = checker();
 const pairs = (process.env.LOD_LOOK_PAIRS ?? '').split(';').filter(Boolean).map((p) => p.split('='));
 const OUT = process.env.LOD_LOOK_OUT ?? '/tmp/lod-look.png';
-// REPORT-ONLY by default: a per-pixel threshold isn't a look judgement (texture conversion alone scored 64%
-// "different" on identical geometry); the contact sheet is for eyes, and LOD_LOOK_MAX gates for whoever calibrates one
+// REPORT-ONLY by default: a per-pixel threshold isn't a look judgement (texture conversion alone scores 64% "different"
+// on identical geometry); the sheet is for eyes, and LOD_LOOK_MAX gates for whoever calibrates one
 const MAX_BAD = process.env.LOD_LOOK_MAX != null ? Number(process.env.LOD_LOOK_MAX) : null;
 if (!pairs.length) { check('pairs given (LOD_LOOK_PAIRS)', false, 'none'); done(); process.exit(1); }
 const world = await ownedWorld({});
@@ -55,7 +54,7 @@ try {
         return px;
       };
       const out = { R: +R.toFixed(1), diag: +sz.length().toFixed(2) };
-      // LOD_LOOK_DISTS="a,b" (metres) overrides both views — e.g. an avatar close-up, where LOD distances are meaningless
+      // LOD_LOOK_DISTS="a,b" (metres) overrides both views, e.g. an avatar close-up where LOD distances are meaningless
       const dd = (dists ?? '').split(',').map(Number).filter((x) => x > 0);
       for (const [label, d] of [['auto', dd[0] ?? near], ['eco', dd[1] ?? near * PRESSURE_EDGE]]) {
         const pa = await shoot(a, d), pb = await shoot(b, d);

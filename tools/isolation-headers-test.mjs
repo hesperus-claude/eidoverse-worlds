@@ -15,8 +15,7 @@ const ok = (name, cond, detail = '') => {
   else { fail++; console.log(`FAIL ${name}${detail ? ' — ' + detail : ''}`); }
 };
 
-// identity, not just a listener: the child echoes this per-run nonce on /version and every probe is bound to it, so
-// a stale server holding the port can't answer for the child
+// identity, not just a listener: the child echoes this per-run nonce on /version and every probe is bound to it
 const NONCE = randomUUID();
 const scratch = mkdtempSync(join(tmpdir(), 'iso-'));
 const srv = spawn(process.execPath, ['server/server.ts'], {
@@ -34,7 +33,7 @@ const identity = async () => {
 };
 const up = async () => {
   for (let i = 0; i < 60; i++) {
-    if (!childAlive()) return false;            // died (EADDRINUSE etc.) — never green
+    if (!childAlive()) return false;  // died (EADDRINUSE etc.): never green
     try { if (await identity()) return true; }  // an answer that isn't OURS is not readiness
     catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, 250));
@@ -45,7 +44,7 @@ const up = async () => {
 try {
   if (!await up()) { console.log(`FAIL server never came up as OURS (child ${childAlive() ? 'alive' : `exited ${srv.exitCode}`})`); process.exit(1); }
 
-  // The document itself.
+  // the document itself
   const doc = await fetch(`http://127.0.0.1:${PORT}/`);
   ok('document sends COOP',
      doc.headers.get('cross-origin-opener-policy') === 'same-origin',
@@ -54,8 +53,8 @@ try {
      doc.headers.get('cross-origin-embedder-policy') === 'credentialless',
      `got ${doc.headers.get('cross-origin-embedder-policy')}`);
 
-  // the one that matters: a module script without COEP breaks isolation for the whole context. Real 200s, not 404s:
-  // the static tree is rooted AT client/, so the module is '/main.js'
+  // the one that matters: a module script without COEP breaks isolation for the whole context; real 200s (the static
+  // tree is rooted AT client/, so the module is '/main.js')
   for (const path of ['/main.js', '/lib/core.js', '/nonexistent-404']) {
     const r = await fetch(`http://127.0.0.1:${PORT}${path}`);
     if (path !== '/nonexistent-404') ok(`${path} is really served (not a 404)`, r.status === 200, `status ${r.status}`);
@@ -65,15 +64,12 @@ try {
        `COOP=${r.headers.get('cross-origin-opener-policy')} COEP=${r.headers.get('cross-origin-embedder-policy')}`);
   }
 
-  // credentialless, NOT require-corp: require-corp would block any cross-origin
-  // subresource that does not opt in, which is a different (breaking) product
-  // decision. Pin the exact value so a "stricter is safer" edit has to argue.
+  // credentialless, NOT require-corp (which blocks any non-opted-in cross-origin subresource, a different product
+  // decision): the exact value is pinned so a "stricter is safer" edit has to argue
   ok('COEP is credentialless, not require-corp',
      doc.headers.get('cross-origin-embedder-policy') !== 'require-corp');
 
-  // The websocket upgrade must be untouched — isolate() returning a modified
-  // response (or throwing on undefined) would break every world connection.
-  // A 101 never reaches fetch(), so the observable is: the socket still opens.
+  // the websocket upgrade must be untouched: a 101 never reaches fetch(), so the observable is that the socket still opens
   const wsOk = await new Promise((resolve) => {
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     const t = setTimeout(() => { try { ws.close(); } catch {} resolve(false); }, 4000);
@@ -82,13 +78,11 @@ try {
   });
   ok('websocket upgrade still succeeds under isolate()', wsOk);
 
-  // Bind the whole vector run to the child one last time: still alive, still
-  // answering with our nonce. A mid-run crash + stale listener would otherwise
-  // pass every header assertion above.
+  // bind the whole run to the child once more (alive, our nonce): a mid-run crash + stale listener would pass every header check
   ok('child is still alive after the vectors', childAlive(), `exitCode=${srv.exitCode}`);
   ok('responder is still OUR child (nonce echo)', await identity().catch(() => false));
 } finally {
-  // TERM first (let it close sockets), escalate to KILL, then remove scratch.
+  // TERM first (let it close sockets), escalate to KILL, then remove scratch
   srv.kill('SIGTERM');
   await new Promise((r) => { const t = setTimeout(() => { try { srv.kill('SIGKILL'); } catch {} r(); }, 3000); srv.once('exit', () => { clearTimeout(t); r(); }); });
   try { rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ }
