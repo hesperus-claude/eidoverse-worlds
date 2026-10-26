@@ -1,6 +1,6 @@
 // The HTTP surface (TEL0S_NOTES §15, step 7c): a route table, first match wins (the catch-all serves the browser
 // client); server.ts's fetch() delegates here. Holds the static-file machinery and the avatar roster. Never imports
-// server.ts (avatarRoster and pendingCaptures are imported the other way).
+// server.ts (avatarRoster is imported the other way).
 
 import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, appendFileSync } from "node:fs";
 import { addressOf } from "./peer.ts";   // the client's address, from a trusted proxy only

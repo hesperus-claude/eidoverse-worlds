@@ -34,7 +34,6 @@ export function restoreBans(raw: Record<string, BanRec>): Record<string, BanRec>
 try {
   if (existsSync(BANS_FILE)) {
     const raw = JSON.parse(readFileSync(BANS_FILE, "utf8")) as Record<string, BanRec>;
-    // a pre-account name-keyed record would hit namesakes: kept only if it carried its account
     Object.assign(globalBans, restoreBans(raw));
     if (Object.keys(globalBans).length) console.log(`[mod] ${Object.keys(globalBans).length} global ban(s) loaded`);
   }

@@ -1,5 +1,5 @@
 // Boot constants (TEL0S_NOTES §15, step 7a): env knobs, directories, cadences, and the one side effect (WORLDS_DIR
-// must exist first). server.ts's FIRST import, so this runs before any other module's boot work.
+// must exist first). server.ts imports it before any module with boot work of its own.
 
 import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -42,7 +42,7 @@ function envNumber(name: string, fallback: number, ok: (n: number) => boolean): 
 export const OPT_MEM_BUDGET_MB = envNumber("OPT_MEM_BUDGET_MB", Math.floor(usableMemory() / 2_000_000), (n) => n >= 0);
 // peak RSS ÷ source bytes: measured 259MB for a 5.4MB GLB (x48); KTX2/LOD assumed the same order
 export const OPT_COST_FACTOR = envNumber("OPT_COST_FACTOR", 48, (n) => n > 0);
-// seconds; at most 225: Bun's 255 s idleTimeout less a roamer's 25 s journey and 5 s slack (snapshots.ts budgetMs).
+// seconds; at most 225: Bun's 255 s idleTimeout less a roamer's 25 s journey and 5 s slack (snapshots.ts travelMs).
 // A proxy must allow the longest wait: deploy/nginx-show.conf gives /snap 300 s (nginx's 60 s default cuts it).
 export const SNAP_TIMEOUT_MS = envNumber("SNAP_TIMEOUT_SEC", 12, (n) => n > 0 && n <= 225) * 1000;
 // before the first roamer sweep (snapshots.ts): renderers reconnecting after a restart need the moment. Tests set 0.
@@ -66,9 +66,9 @@ export const LADDER = [PATCH_DIR, OPT_DIR, LIBRARY_DIR];
 
 mkdirSync(WORLDS_DIR, { recursive: true });
 
-/** Entries past a snapshot before folding again: a joiner's tail stays trivial, a busy world doesn't snapshot per action. */
+/** Nothing reads it: the server never folds on an append count; every client folds the log itself (server/worldlog.ts). */
 export const FOLD_EVERY = Number(process.env.FOLD_EVERY ?? 150);
-/** Per client per 4s: a griefer gets silence; a person arranging furniture must not. */
+/** Nothing reads it: requests spend from the message bucket (MSG_RATE); there is no separate verb rate. */
 export const VERB_RATE = Number(process.env.VERB_RATE ?? 12);
 /** Per client per second, two seconds of burst (server/msgrate.ts): a backlog the server caused isn't the client's. */
 export const MSG_RATE = Number(process.env.MSG_RATE ?? 60);

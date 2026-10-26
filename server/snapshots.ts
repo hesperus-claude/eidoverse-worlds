@@ -303,7 +303,7 @@ export function createSnapshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, ma
   }
   /** tests pass their own */
   function setClients(fn: () => Iterable<Client>) { allClients = fn; }
-  /** Injected (access.ts canEnter), so the broker's unit test never depends on a machine's bans. Unwired = admits all. */
+  /** Injected (server.ts: access.ts entryFor, mode "watch"), so the broker's unit test never depends on a machine's bans. Unwired = admits all. */
   function setAdmission(fn: (world: World, c: Client) => boolean) { admits = fn; }
   /** config.ts SNAP_TIMEOUT_SEC, injected: this module never loads server config. */
   function setFrameTimeout(ms: number) { timeoutMs = ms; }

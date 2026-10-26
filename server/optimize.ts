@@ -251,7 +251,7 @@ const sceneBounds = (doc: Document): [number[], number[]] => {
 };
 
 /** Non-final (store-variants.ts lodVerdictKind "gpu"): it depends on encoder and host, which the URL doesn't pin, so
- *  only a LOD_GEN bump re-asks it. */
+ *  a LOD_GEN bump or a tool change re-asks it (store-variants.ts verdictStands). */
 export const lodGpuRefusal = (origTexMB: number, lodTexMB: number, ms: number): string =>
   `[optimize] lod: not lighter on the GPU (textures ${origTexMB} -> ${lodTexMB} MB, ${ms}ms) ${recipeStamp(LOD_RECIPE)} ${toolsStamp()} — original stays the only representation`;
 
@@ -886,8 +886,8 @@ export async function transcodeImageKtx2(src: Uint8Array, srcPath: string, encod
 
 // ---- CLI: bun run server/optimize.ts [--ktx2|--ktx2-vrm|--ktx2-img|--lod] <in> <out>
 // Exit 0 wrote; 1 failed (stderr); 2 nothing written, serve the original (bigger, nothing to convert, unsuitable, or a typed
-// --lod verdict); 3 no KTX2 encoder on this box (env-skip, no .failed marker); 5 partial texture conversion, refused,
-// retried next boot (no marker).
+// --lod verdict); 3 no KTX2 encoder on this box (env-skip, no .failed marker); 4 the output's images failed the container
+// check (no marker, retried); 5 partial texture conversion, refused, retried next boot (no marker).
 
 if (import.meta.main) {
   const argv = process.argv.slice(2);

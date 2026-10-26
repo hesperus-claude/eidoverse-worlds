@@ -1,12 +1,6 @@
-// eidoverse-worlds sequencer — the wire-limit table (R2, survey §1.1).
-//
-// "What does this server accept" used to be answerable only by reading 900
-// lines of ws switch: every cap below lived as a bare literal inside its
-// case, unnamed and un-overridable. One table now, env-overridable with the
-// same idiom mcpl/denoise.ts established — the values are unchanged, the
-// names are new. config.ts keeps the boot/cadence knobs; this file is the
-// PROTOCOL surface: what a message may carry before it is refused or
-// truncated. WIRE.md describes the shapes; this is where their bounds live.
+// eidoverse-worlds sequencer — the wire-limit table (R2, survey §1.1): what a message may carry before it is refused
+// or truncated, each cap env-overridable (the idiom of mcpl/denoise.ts). config.ts keeps the boot/cadence knobs;
+// docs/WIRE.md describes the shapes.
 
 const env = (k: string, d: number) => {
   const v = Number(process.env[k]);
@@ -26,7 +20,7 @@ export const LIMITS = {
   // binary-ish payloads
   ANIM_TRACKS_BYTES: env("EW_ANIM_TRACKS_BYTES", 64_000),
   BODYDRAG_POSE_BYTES: env("EW_BODYDRAG_POSE_BYTES", 24_000),
-  RTC_PAYLOAD_BYTES: env("EW_RTC_PAYLOAD_BYTES", 20_000),   // SDP-sized, not file-sized
+  RTC_PAYLOAD_BYTES: env("EW_RTC_PAYLOAD_BYTES", 20_000),   // nothing reads it: server.ts caps an SDP at a literal 20 000
 
   // paging + rings
   PAGE_MAX: env("EW_PAGE_MAX", 300),               // history/debug page ceiling

@@ -58,10 +58,10 @@ function extraConnect(): string[] {
   return String(process.env.CSP_CONNECT_EXTRA ?? "").split(/\s+/).filter((o) => /^(https?|wss?):\/\/[a-z0-9.-]+(:\d+)?$/i.test(o));
 }
 
-/** The policy for an HTML page whose text is `html` (or none, for a page with no inline script of ours). */
 /** Pages that talk to a service of their own beyond what every page may reach: the captions page's default Portal socket
  *  (client/captions.html's URL_), which the blanket policy refused (review of #260, server I55). */
 const PAGE_CONNECT: Record<string, string[]> = { "captions.html": ["wss://portal.animalabs.ai"] };
+/** The policy for an HTML page whose text is `html` (or none, for a page with no inline script of ours). */
 export function cspFor(html = "", connect: string[] = []): string {
   const hashes = inlineScriptHashes(html);
   return [

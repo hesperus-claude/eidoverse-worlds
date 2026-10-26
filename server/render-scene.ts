@@ -106,7 +106,7 @@ export function projectEntity(id: string, e: any) {
     ...(e.kind === "light" ? { keep: !!e.keep, day: e.day !== false } : {}),
     interact: {actions:Object.keys(e.comp?.reactions??{}).slice(0,32),sockets:e.comp?.sockets??null,
       locked:!!e.comp?.lock, mounted:!!e.parent, moving:!!e.comp?.motion,
-      // attribution for the inspector and the guard check (placer.js / build.js mayAuthor)
+      // attribution for a renderer's inspector: who placed it, who last acted on it
       guarded:!!e.comp?.guard, placer:e.placer?.id ?? null, placerSub:e.placer?.sub ?? null, lastActor:e.actor ?? null} };
   return { ...out, revision: hash(out) };
 }

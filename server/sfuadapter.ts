@@ -48,7 +48,7 @@ export function registerSfuSender(world: string, legId: string, send: (payload: 
   senders.set(wkey(world, legId), send);
 }
 
-/** Same shape as mintRelayCredential, minus the JWT. */
+/** The credential a client presents back through admitSfuLeg: its claims plus a one-shot nonce; no JWT. */
 export function mintSfuCredential(world: string, id: string, primaryGen: number, mediaGen: number) {
   // a mint retires the old leg via revokeSfuLeg (keeping consent given while no leg existed); revoke unregisters the
   // sender, so registerSfuSender must come after the mint
@@ -67,7 +67,7 @@ export function mintSfuCredential(world: string, id: string, primaryGen: number,
   s.sfu.createLeg(id, mediaGen);
   applyStandingConsent(s, id);   // consent given before this leg existed still counts
   // world/id/primaryGen ride along so the client can PRESENT the full claim set (amendment 1): admitParticipant
-  // checks six things besides the nonce
+  // checks world, id, primaryGen, mediaGen and incarnation before the nonce
   return { nonce, incarnation: s.incarnation, identity: relayIdentity(id, mediaGen),
            world, id, primaryGen, mediaGen,
            transport: "sfu" as const, iceServers: iceServers() };

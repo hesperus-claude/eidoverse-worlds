@@ -26,9 +26,10 @@ import { isOwner } from "../shared/protocol/roles.js";
  *  among the people here and, for accounts, across the directory (server.ts join); none is shaped like an actor id. */
 const ACTOR_ID = /^u-[a-z2-7]{20}$/;
 
-/** Body consent (PROTOCOL L6): an act on someone else's body is checked against THEIR table (shared/protocol/consent.js;
- *  none sent denies shove, pose and displace) and a sane range BEFORE forwarding, so a stranger's packet never reaches a
- *  body that said no. 'ask' is refused with how to ask. Refusal or null. */
+/** Body consent (PROTOCOL L6): an act on someone else's body is checked against THEIR table (shared/protocol/consent.js
+ *  decide: their answer for this person, else their switch, else the world's body-default, else accept) and a sane range
+ *  BEFORE forwarding, so a stranger's packet never reaches a body that said no. 'ask' is refused with how to ask.
+ *  Refusal or null. */
 export { BODY_RANGE };   // m between the two bodies' last frames
 function bodyRefusal(c: Client, tc: Client, cls: "shove" | "pose" | "displace", kind: string): string | null {
   if (c.actorId && c.actorId === tc.actorId) return null;            // your own body
@@ -229,7 +230,7 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       ws.send(JSON.stringify({ type: "error", error: "attest surface-generation mismatch" }));
       return;
     }
-    // the say must exist, be recent, and be THIS identity's (recentSays: fold() empties entries every FOLD_EVERY appends);
+    // the say must exist, be recent, and be THIS identity's (recentSays holds the last 256 says, worldlog.ts record);
     // misses answer with an error frame, so a leg can detect a discarded receipt
     const e = c.world.recentSays.find((x) => x.seq === seq);
     if (!e || e.verb !== "say" || e.actor !== c.id) {

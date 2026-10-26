@@ -19,7 +19,7 @@ import { modLogAt } from "./custody.ts";
 import { entryOf, doorOf as doorOfWc, listedIn, timedGrants, leftWords, ACCESS_WARN_MS } from "../shared/protocol/access.js";
 import type { World, Client } from "./world.ts";
 
-/** "This world is not open to you", at the door or on removal. Clients don't redial it (4006 moderation, 4005 a bad link). */
+/** "This world is not open to you", at the door or on removal. Clients don't redial it (4006 moderation, 4005 a refused join; only 4005 "full" is retried). */
 export const ACCESS_CLOSE = 4010;
 /** "Nothing here YET" (an unfounded world). Not a refusal: clients redial with their usual backoff. */
 export const NOT_YET_CLOSE = 4011;
