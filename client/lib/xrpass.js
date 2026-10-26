@@ -1,7 +1,6 @@
-// xrpass — stereo renders get their own pass. The XR ArrayCamera changes a render object's dynamic cache key, so
-// sharing the default chain map made every VR switch dispose and rebuild every object (tools/xr-switch-compile-probe.mjs).
-// Stereo cameras route to their own maps ('xr', 'xr:backSide'), so both variants live side by side; passId is only a
-// map key in three, and compileAsync resolves through the same get(), so a stereo warm lands where the headset reads.
+// xrpass — stereo renders get their own pass ('xr', 'xr:backSide'): the ArrayCamera changes the dynamic cache key, so a
+// shared map rebuilt every object on each VR switch (tools/xr-switch-compile-probe.mjs).
+// compileAsync resolves through the same get(), so a stereo warm lands where the headset reads.
 const isStereo = (camera) => camera?.isArrayCamera === true && camera.cameras.length > 0;
 
 export function separateXRPass(renderer) {
@@ -17,11 +16,9 @@ export function separateXRPass(renderer) {
   return true;
 }
 
-/** Run a stereo warm through three's own XR camera and its persistent eyes, never a look-alike: r186 binds stereo
- *  uniforms once to whichever ArrayCamera built a shader last (tools/xr-eye-binding-probe.mjs). Before a session the
- *  camera has no eyes, so two are put in for the warm and taken out if no session started meanwhile. */
-// overlapping warms share the pushed eyes: a count in flight, and only the last one out takes them back; a session
-// that starts meanwhile owns them from then on
+/** Stereo warm through three's own XR camera and persistent eyes, never a look-alike: r186 binds stereo uniforms
+ *  once to whichever ArrayCamera built a shader last (tools/xr-eye-binding-probe.mjs). */
+// pre-session the eyes are lent: the last overlapping warm out takes them back, unless a session started meanwhile
 const eyeHolds = new WeakMap();   // xr camera → number of warms currently relying on eyes WE pushed
 export async function withXREyes(renderer, fn) {
   const xr = renderer.xr, cam = xr.getCamera();

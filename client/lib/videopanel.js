@@ -1,8 +1,5 @@
-// videopanel — the resident's graphics dials, in Settings. Every row is LOCAL: a preference about this machine, never
-// shared with the world (the build panel is for what the world looks like; this is for what your GPU can afford).
-//
-// Two rows apply on RELOAD, and say so: renderer backend and antialiasing are construction-time choices in three's
-// WebGPURenderer (core.js), not live.
+// videopanel — the resident's graphics dials in Settings; every row is LOCAL to this machine, never shared with the world.
+// renderer backend and antialiasing apply on RELOAD: construction-time choices in WebGPURenderer (core.js).
 import { makeSection, flashHint } from './ui.js';
 import { RENDER_SCALES, getRenderScale, setRenderScale,
   PARTICLE_TIERS, getParticleTier, setParticleTier,
@@ -16,12 +13,11 @@ import { allowUntrusted, setAllowUntrusted, UNTRUSTED_WORDS } from './mediaprefs
 import { initConsentPanel } from './consentpanel.js';
 import { myShadowPref, setMyShadowPref } from './materials.js';
 
-// same markup contract as the audio section (label right of centre, control
-// left of it — index.html owns .row.wide / .nm / .ctl)
-// storage can throw (private mode, quota) — never let a preference read kill the panel
+// storage can throw (private mode, quota): a preference read must never kill the panel
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } };
+// markup shared with the audio section: index.html owns .row.wide / .nm / .ctl
 function selectRow(label, hint, options, value, onChange) {
   const row = document.createElement('div');
   row.className = 'row wide';
@@ -54,13 +50,12 @@ function needsReload(row) {
   b.style.padding = '2px 7px';
   b.onclick = () => location.reload();
   const ctl = row.querySelector('.ctl');
-  ctl.style.flexWrap = 'wrap';   // the frame is narrow; the button drops under a wide select rather than off the edge
+  ctl.style.flexWrap = 'wrap';   // narrow frame: the button wraps under a wide select, not off the edge
   ctl.appendChild(b);
 }
 const pct = (v) => v === 'auto' ? 'auto (adaptive)' : `${Math.round(v * 100)}%`;
 
-// the same dials as a VR quad, through the same getters and setters as the desk's rows; discrete choices are list rows
-// with a 'use' action because 'auto' appears in all three lists and a bare row click couldn't say which
+// list rows take a 'use' action: 'auto' is in three lists, so a bare row click couldn't say which
 function videoFields() {
   const pick = (k, values, cur, label) => ({ t: 'list', label,
     rows: values.map((v) => ({ id: String(v), label: String(v), active: String(v) === String(cur),
@@ -76,7 +71,7 @@ function videoFields() {
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
     { t: 'check', k: 'msaa', label: 'antialiasing (on reload)', value: msaaOn },
-    // the safety row rides the same VR quad (the desk has its own 🛡 safety section, below)
+    // on the desk this row lives in its own 🛡 safety section, below
     { t: 'check', k: 'untrusted', label: UNTRUSTED_WORDS.label.toLowerCase(), value: allowUntrusted(), hint: UNTRUSTED_WORDS.hint },
   ];
 }
@@ -102,14 +97,12 @@ export function initVideoPanel() {
     if (body.dataset.init) return;
     body.dataset.init = '1';
 
-    // renderer: ONE control. auto matches the backend VR will use so entry never reloads; a headset present without
-    // the WebGPU-XR flags makes force-WebGPU cost a reload into VR (warned), and it's disabled with no WebGPU at all
+    // ONE renderer control; auto matches the backend VR will use, so entering VR never reloads
     const backend = backendName();
     const forced = CONFIG.params.has('webgl') || CONFIG.params.has('webgpu');
     const rpref = lsGet(PREF_BACKEND) || 'auto';
-    // HISTORY, not presence (#197 review B3). Nothing clears this when a headset is unplugged, and a
-    // live re-probe is no better — isSessionSupported stays optimistic after one is switched off
-    // (mictoggle.js:91). So the copy says what is actually known: a headset has been USED here.
+    // HISTORY, not presence: nothing clears it on unplug, and isSessionSupported stays optimistic after switch-off
+    // (mictoggle.js), so the copy claims only that a headset has been USED here
     const headsetSeen = headsetSeenRecently();
     const autoTail = headsetSeen
       ? (WEBGPU_XR ? 'A headset has been used here before, and this browser can present VR from WebGPU, so auto is WebGPU and VR enters without a reload.'
@@ -133,7 +126,6 @@ export function initVideoPanel() {
           row.appendChild(warn);
         }
       });
-    // gray out force-WebGPU when the machine has no WebGPU at all
     if (!WEBGPU_POSSIBLE) { const o = rrow.querySelector('select option[value=webgpu]'); if (o) { o.disabled = true; o.text = 'force WebGPU (unavailable)'; } }
     body.appendChild(rrow);
 
@@ -187,15 +179,14 @@ export function initVideoPanel() {
       '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload.',
       msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row); }));
   }, { id: 'video', host: 'settings' });
-  // 🛡 safety: what this browser may fetch from other websites. One row, off by default: VRChat's
-  // "Allow Untrusted URLs" (Comfort & Safety). Its own section so it can't be mistaken for a graphics dial.
+  // 🛡 safety: what this browser may fetch from other sites (VRChat's "Allow Untrusted URLs"), off by default;
+  // its own section so it can't be mistaken for a graphics dial
   makeSection('🛡 safety', (body) => {
     if (body.dataset.init) return;
     body.dataset.init = '1';
     body.appendChild(checkRow(UNTRUSTED_WORDS.label, UNTRUSTED_WORDS.hint, allowUntrusted(), (on) => {
-      setAllowUntrusted(on); flashHint(on ? 'links from any site play for you now' : 'only this server\'s files and trusted hosts play for you');   // no emoji outside Chat and the action bar (R)
+      setAllowUntrusted(on); flashHint(on ? 'links from any site play for you now' : 'only this server\'s files and trusted hosts play for you');   // no emoji outside Chat and the action bar
     }));
-    // the explanation runs the panel's full width
     const p = document.createElement('div'); p.style.cssText = 'display:block;width:100%;box-sizing:border-box;padding:2px 8px 6px;font-size:11px;color:var(--dim);line-height:1.4';
     p.textContent = UNTRUSTED_WORDS.hint; body.appendChild(p);
   }, { id: 'safety', host: 'settings' });

@@ -1,8 +1,7 @@
-// Dual warm: at content load, also compile the other mode's variant, so entering or leaving VR compiles nothing.
-//   desktop  also compile through three's XR camera and persistent eyes (xrpass.js withXREyes: a look-alike camera
-//            would rebind the stereo uniforms)
-//   in VR    also compile the main camera into a 1×1 twin of the desktop target (same render context as desktop frames)
-// Hooked at renderer.compileAsync; only main-camera, no-target calls are doubled. tools/xr-dual-warm-probe.mjs.
+// Dual warm: compileAsync also compiles the other mode's variant, so entering or leaving VR compiles nothing.
+//   desktop  through three's XR camera and eyes (xrpass.js withXREyes; a look-alike would rebind stereo uniforms)
+//   in VR    the main camera into a 1×1 twin of the desktop target (the desktop frames' render context)
+// Only main-camera, no-target calls are doubled. tools/xr-dual-warm-probe.mjs.
 // Pattern from BasisVR (MIT, © 2024 Luke B Doolan, https://github.com/BasisVR/Basis).
 import { withXREyes } from './xrpass.js';
 
@@ -31,13 +30,11 @@ export function installDualWarm({ THREE, renderer, camera, presenting }) {
       try { return unculled(obj, () => { const p = compile(obj, camera, target); renderer.setRenderTarget(prev); return p; }); }
       finally { renderer.setRenderTarget(prev); }
     }
-    // no target bound: the eyes draw through the same tone-mapping target shape as the desktop (measured: the
-    // probe's births land in the desktop's render context), so only the eye COUNT differs
+    // the eyes share the desktop's tone-mapping target shape (measured), so only the eye COUNT differs
     return unculled(obj, () => withXREyes(renderer, (eyes) => compile(obj, eyes, target)));
   };
-  // three r186 leaves the eye buffer bound after an XR frame, and compileAsync would compile straight into it (a render
-  // context the headset's frames never use). Treat a bound target that is just the leaked output target as unbound
-  // for the synchronous pass (tools/xr-dual-warm-probe.mjs).
+  // three r186 leaves the eye buffer bound after an XR frame (a context the headset never draws with): a bound target
+  // that is just the leaked output target counts as unbound for the synchronous pass
   const compileAsRendered = (obj, cam, target, onProgress) => {
     const rt = renderer.getRenderTarget(), out = renderer.getOutputRenderTarget();
     if (rt === null || rt !== out) return compile(obj, cam, target, onProgress);
@@ -49,7 +46,7 @@ export function installDualWarm({ THREE, renderer, camera, presenting }) {
     // a caller's OWN target (portrait, bake) opts out; three itself leaves the XR output target bound while presenting
     const rt = renderer.getRenderTarget();
     if (cam !== camera || (rt !== null && rt !== renderer.getOutputRenderTarget())) return first;
-    return first.then(async (v) => { try { await other(obj, target); } catch { /* a warm is best-effort (house pattern) */ } return v; });
+    return first.then(async (v) => { try { await other(obj, target); } catch { /* a warm is best-effort */ } return v; });
   };
   renderer.__dualWarm = true;
   return true;

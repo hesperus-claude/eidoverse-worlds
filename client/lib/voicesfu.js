@@ -1,35 +1,27 @@
-// voicesfu — the browser half of the in-process SFU, in plain WebRTC, and the only voice transport.
-// Its bus events, speakers map and relayDiag()-shaped surface are what the smokes assert against.
-//
-// THE SERVER OFFERS, ALWAYS: an answer can't add a receive direction the offer never proposed, so every
-// renegotiation is server-initiated; we only ever setRemoteDescription(offer) → answer.
+// voicesfu — the browser half of the in-process SFU in plain WebRTC; the only voice transport.
+// THE SERVER OFFERS, ALWAYS: an answer can't add a receive direction the offer never proposed, so we only answer.
 import { bus } from './base.js';
 import { audioContext } from './audioctx.js';
-// a dead media path must be visible to the person, not only the console: the mic meter shows capture, not transmission
+// a dead media path must reach the person, not only the console: the mic meter shows capture, not transmission
 import { logChat } from './chat.js';
 import { playWhenAllowed } from './audiounlock.js';
 import { why } from './debuglog.js';
 import { rawMicStream, setMicLive } from './micstate.js';
 
 let pc = null, cred = null, micStream = null, wantMic = false;
-// my own outbound analyser (sfuMyLevel); declared here because sfuConnect() clears it, and a later `let` would be
-// in the temporal dead zone for callers during module evaluation
+// declared up here: sfuConnect() clears these, and a later `let` would be in the TDZ during module evaluation
 let _myAn = null, _myBuf = null, _myStream = null;
-/** Speaker ids announced by the server, consumed in order by ontrack. Module
- *  level and subscribed ONCE (see sfuConnect) — core.js has no `off`. */
+/** subscribed ONCE at module level: core.js has no `off` */
 const routeQueue = [];
 bus.on('sfu-route', (m) => routeQueue.push(m.speaker));
 const speakers = new Map();           // id → { audio, stream, wantVolume, an, buf }
 
 export const sfuActive = () => !!pc && pc.connectionState === 'connected';
 export const sfuMicOn = () => !!micStream && wantMic;
-/** The mic the user ASKED for, not the one they got: a press before `pc` exists sets only this, and the bridge
- *  replays it once the credential lands. */
+/** what the user ASKED for: a press before `pc` exists sets only this; the bridge replays it on credential */
 export const sfuMicWanted = () => wantMic;
 
-/** Attach a remote track to a per-speaker <audio>. The playback half is
- *  transport-agnostic; every transport this codebase has carried shared it
- *  verbatim, which is why the rolloff/hush/analyser code below never forks. */
+/** transport-agnostic playback, so the rolloff/hush/analyser code never forks */
 function attach(id, track) {
   let s = speakers.get(id);
   if (!s) { s = { audio: new Audio(), wantVolume: 0 }; speakers.set(id, s); }
@@ -38,36 +30,31 @@ function attach(id, track) {
   const stream = new MediaStream([track]);
   s.audio.srcObject = stream;
   s.stream = stream;
-  // autoplay policy: a real user's first join needs the unlock queue (audiounlock.js)
+  // autoplay policy: a real user's first join needs the unlock queue
   playWhenAllowed(s.audio, id);
 }
 
 export async function sfuConnect(credential, send) {
   cred = credential;
-  // A mic track belongs to the pc that published it: on reconnect, stop the old stream's tracks (or the hardware
-  // light stays on) and drop it, so the bridge's replay takes the real addTrack path.
+  // a mic track belongs to its pc: stop it (or the hardware light stays on) so the replay takes the addTrack path
   if (micStream) {
     for (const t of micStream.getTracks()) { try { t.stop(); } catch { /* already dead */ } }
-    micStream = null;      // wantMic is KEPT: intent survives a reconnect, the stream does not
+    micStream = null;      // wantMic is KEPT: intent survives a reconnect
   }
-  // Close the predecessor, handlers nulled first: its handlers close over the module-level `pc`, so a ghost's
-  // 'failed' or stall timer would diagnose the new leg and emit sfu-media-dead.
+  // null handlers first: they read module-level `pc`, so a ghost's 'failed' would diagnose the new leg
   if (pc) {
     try { pc.onicecandidate = pc.ontrack = pc.oniceconnectionstatechange = null; pc.close(); }
     catch { /* already closed */ }
   }
-  pendingIce.length = 0;            // candidates for the dead pc are meaningless
-  _myAn = null; _myStream = null;   // the analyser was bound to the dead stream
-  // The ICE config comes from the credential (notes/SFU-SPEC.md `iceServers?`): without STUN a peer on another
-  // network has no viable pair and ICE stalls in 'checking'. The [] fallback keeps an older server's behaviour.
+  pendingIce.length = 0;
+  _myAn = null; _myStream = null;
+  // notes/SFU-SPEC.md `iceServers?`: without STUN a peer on another network stalls in 'checking'; [] = older server
   pc = new RTCPeerConnection({ iceServers: credential?.iceServers ?? [] });
 
-  // The server names each route by a sideband `sfu-route` message before the offer that adds it (mid isn't
-  // portable); ontrack pairs tracks with ids in arrival order. routeQueue is subscribed once (core.js has no `off`).
+  // `sfu-route` names each route before its offer (mid isn't portable); ontrack pairs them in arrival order
   routeQueue.length = 0;
   pc.ontrack = (e) => {
-    // Prefer the track's own identity: the server names each stream after its speaker (sfu.ts ensureRoute), so
-    // msid can't desync. The queue is a fallback for older servers; on disagreement msid wins, loudly.
+    // msid can't desync (server/sfu.ts ensureRoute names streams by speaker); queue is the older-server fallback
     const viaMsid = e.streams?.[0]?.id;
     const viaQueue = routeQueue.shift();
     const id = (viaMsid && viaMsid !== 'default') ? viaMsid : viaQueue;
@@ -77,29 +64,27 @@ export async function sfuConnect(credential, send) {
     if (id) attach(id, e.track);
   };
 
-  // candidate TYPE is the evidence for the stall diagnosis: host-only means no STUN reflexive address
+  // host-only candidates mean no STUN reflexive address: the stall diagnosis
   let _sawNonHostCandidate = false;
   pc.onicecandidate = (e) => {
     if (!e.candidate) return;
     if (e.candidate.type && e.candidate.type !== 'host') _sawNonHostCandidate = true;
-    // ICE names its generation (#130 item 4): the server refuses a candidate that can't prove its leg
+    // ICE names its generation (#130): the server refuses a candidate that can't prove its leg
     send({ type: 'sfu-ice', candidate: e.candidate, gen: cred?.mediaGen });
   };
 
-  // Make a dead media path visible: 'failed' or a stall in 'checking' (e.g. no STUN/TURN across networks) is
-  // reported; 'disconnected' is often transient and isn't.
+  // 'failed' and a stall in 'checking' are reported; 'disconnected' is often transient and isn't
   let iceStallTimer = null;
   const clearStall = () => { if (iceStallTimer) { clearTimeout(iceStallTimer); iceStallTimer = null; } };
-  // which pc THIS closure serves: a superseded connection's timer must not diagnose the successor
   const myPc = pc;
   pc.oniceconnectionstatechange = () => {
-    if (myPc !== pc) return;            // a ghost has no diagnosis to offer
+    if (myPc !== pc) return;            // a superseded pc must not diagnose its successor
     const st = pc.iceConnectionState;
     if (st === 'checking') {
       clearStall();
       // host-only pairs settle in well under a second on a LAN; 8s means no viable pair without STUN/TURN
       iceStallTimer = setTimeout(() => {
-        if (myPc !== pc) return;        // superseded while armed — not our patient
+        if (myPc !== pc) return;
         if (pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'new') {
           const hostOnly = !_sawNonHostCandidate;
           console.error('[voice] 🔴 ICE STALLED — no media path. '
@@ -110,20 +95,18 @@ export async function sfuConnect(credential, send) {
                 : '')
             + '  Your mic is capturing (the meter is local) but NOTHING is being transmitted.');
           logChat('*', 'voice: no media path to the server — mic is on but nobody can hear you');
-          // a stall is a 'failed' with less ceremony; the bridge caps the retries
           bus.emit('sfu-media-dead', { reason: 'ice-stalled' });
         }
       }, 8000);
     } else if (st === 'connected' || st === 'completed') {
       clearStall();
       console.info(`[voice] ICE ${st} — media path is live`);
-      bus.emit('sfu-media-live', {});     // the bridge resets its recovery budget
+      bus.emit('sfu-media-live', {});
     } else if (st === 'failed') {
       clearStall();
       console.error('[voice] 🔴 ICE FAILED — no media path to the server. '
         + 'Mic capture is unaffected and still looks healthy; nothing is reaching anyone.');
       logChat('*', 'voice: connection failed — reconnecting voice…');
-      // recover, don't just report: the bridge owns the retry budget; this only names the corpse
       bus.emit('sfu-media-dead', { reason: 'ice-failed' });
     } else if (st === 'closed') {
       clearStall();
@@ -132,16 +115,15 @@ export async function sfuConnect(credential, send) {
   return pc;
 }
 
-/** Server-initiated renegotiation. The ONLY negotiation path — see the header. */
+/** the ONLY negotiation path */
 export async function sfuOnOffer(sdp, send) {
   if (!pc) return;
-  // the connection this offer was FOR: a reconnect mid-await swaps `pc`, and answering on the fresh one throws
+  // a reconnect mid-await swaps `pc`, and answering on the fresh one throws
   const myPc = pc;
   await myPc.setRemoteDescription({ type: 'offer', sdp });
-  if (myPc !== pc) return;              // superseded mid-exchange — the new pc has its own offer coming
-  // candidates queued before the offer applied can attach now
+  if (myPc !== pc) return;
   while (pendingIce.length) {
-    if (myPc !== pc) return;   // queue now belongs to the successor's offer
+    if (myPc !== pc) return;
     const c = pendingIce.shift();
     try { await myPc.addIceCandidate(c); } catch { /* stale */ }
   }
@@ -149,8 +131,7 @@ export async function sfuOnOffer(sdp, send) {
   if (myPc !== pc) return;
   await myPc.setLocalDescription(answer);
   if (myPc !== pc) return;
-  // Rescue a stranded publish: a publish that beat the first offer can sit on a transceiver JSEP bound to a recv
-  // route. If we hold a live track and no m-line is actually sending (currentDirection), move it to the floor.
+  // a publish that beat the first offer can sit on a transceiver JSEP bound to a recv route: move it to the floor
   const outTrack = micStream?.getTracks?.()[0];
   if (outTrack && outTrack.readyState === 'live'
       && !myPc.getTransceivers().some((t) => t.currentDirection === 'sendonly')) {
@@ -159,20 +140,18 @@ export async function sfuOnOffer(sdp, send) {
     if (floor) {
       why('publish', 'post-offer rescue: outbound track was stranded — moving to the floor');
       await floor.sender.replaceTrack(outTrack);
-      if (myPc !== pc) return;          // superseded mid-rescue — not our negotiation to ask for
+      if (myPc !== pc) return;
       floor.direction = 'sendonly';
       bus.emit('sfu-want-negotiate', {});
     }
   }
-  // Present the credential (nonce included) so the server's replay check runs, and the generation this answer
-  // is for, so a replaced leg's answer is dropped.
+  // the nonce feeds the server's replay check; the gen lets it drop a replaced leg's answer
   send({ type: 'sfu-answer', sdp: answer.sdp, gen: cred?.mediaGen ?? cred?.gen, cred: cred && {
     world: cred.world, id: cred.id, primaryGen: cred.primaryGen,
     mediaGen: cred.mediaGen ?? cred.gen, incarnation: cred.incarnation, nonce: cred.nonce } });
 }
 
-// Early candidates are queued, not dropped: addIceCandidate throws until a remote description exists, and host
-// candidates arrive in exactly that window.
+// queued, not dropped: addIceCandidate throws before a remote description, exactly when host candidates arrive
 const pendingIce = [];
 export async function sfuOnIce(candidate) {
   if (!pc) return;
@@ -180,12 +159,10 @@ export async function sfuOnIce(candidate) {
   try { await pc.addIceCandidate(candidate); } catch { /* stale/dup candidate */ }
 }
 
-/** Publish the mic via plain getUserMedia; the browser supplies AGC/NS/AEC and NetEq, so no SDK DSP or jitter
- *  buffer is needed. */
-// One acquisition at a time: late callers await the same promise, or two senders publish and the orphaned stream
-// keeps the mic light on.
+/** The browser supplies AGC/NS/AEC and NetEq: no SDK DSP or jitter buffer. */
+// one acquisition at a time, or two senders publish and the orphan keeps the mic light on
 let micPending = null;
-// which pc the pending acquisition was FOR: a stale pending (pc replaced) is awaited, then treated as absent
+// a stale pending (pc replaced) is awaited, then treated as absent
 let micPendingPc = null;
 
 export async function sfuMic(on = true) {
@@ -194,13 +171,11 @@ export async function sfuMic(on = true) {
   if (!on) {
     // mic off must not mean voice off when a synth provider speaks for you: swap the source, don't mute it
     const { synthProvider } = await import('./voicesource.js');
-    // say why the swap did or didn't happen: this path can decline silently
     const prov = synthProvider();
     why('publish', `mic off · provider=${prov ? 'registered' : 'NONE'}`
       + (prov ? ` · available=${!!prov.available?.()}` : ''));
     if (prov?.available?.()) {
-      // drop the device stream and re-enter the publish path (voiceSource() returns the synth when micWanted is
-      // false): one place chooses and attaches a track
+      // re-enter the publish path: one place chooses and attaches a track
       if (micStream) {
         for (const t of micStream.getTracks()) { try { t.stop(); } catch { /* gone */ } }
         micStream = null;
@@ -212,8 +187,7 @@ export async function sfuMic(on = true) {
     try { (await import('./micstate.js')).setMicLive(false); } catch { /* module may be absent in probes */ }
     return;
   }
-  // Re-enable only a real device stream; a synthetic one (mic-off swaps to the synth) must re-acquire. Report
-  // setMicLive(true) synchronously with the enable: device liveness gates the lane (micstate.js).
+  // a synthetic stream must re-acquire; setMicLive(true) is synchronous with the enable, as liveness gates the lane
   if (micStream && !micStream.synthetic) {
     micStream.getTracks().forEach((t) => (t.enabled = true));
     setMicLive(true);
@@ -221,20 +195,17 @@ export async function sfuMic(on = true) {
   }
   if (micStream?.synthetic) {
     for (const t of micStream.getTracks()) { try { t.stop(); } catch { /* gone */ } }
-    micStream = null;                      // force a real getUserMedia below
+    micStream = null;
   }
   if (micPending && micPendingPc === pc) {
-    // nothing to apply after this await: sfuPublish re-reads wantMic after its own await, so a waiter only waits
+    // sfuPublish re-reads wantMic after its own await, so a waiter only waits
     await micPending;
     return;
   }
-  // a stale pending is sfuPublish's problem: its entry loop re-checks after every await
   return sfuPublish();
 }
 
-/** Acquire a source (mic or synth, decided by voiceSource) and publish it.
- *  Split out of sfuMic so the mic-OFF path can re-enter it to swap sources
- *  rather than carrying a second copy of the transceiver logic below. */
+/** the mic-OFF path re-enters this to swap sources, so the transceiver logic has one copy */
 async function sfuPublish() {
   if (!pc) return;
   // re-check after every stale await, or two waiters on one stale pending mint two acquisitions
@@ -242,17 +213,15 @@ async function sfuPublish() {
     if (micPendingPc === pc) return micPending;
     try { await micPending; } catch { /* the old one's problem */ }
   }
-  // snapshot: getUserMedia can take seconds, and the track must not land on a successor pc
+  // getUserMedia can take seconds, and the track must not land on a successor pc
   const myPc = pc;
   micPendingPc = myPc;
   micPending = (async () => {
-    // Ask the seam, not the device: voiceSource() returns the mic when available and wanted, else the synth
-    // provider (marked synthetic), so TTS has a route to the sender. Everything below is source-agnostic.
+    // ask the seam, not the device, so TTS has a route to the sender; everything below is source-agnostic
     const { voiceSource } = await import('./voicesource.js');
     const asked = wantMic;
     const raw = await voiceSource({ micWanted: asked });
-    // Re-read intent after the await: a mic toggle during a permission prompt makes this acquisition stale.
-    // Stop it (a device keeps the light on) and let the caller ask the current question.
+    // a toggle during a permission prompt makes this stale: stop it (a device keeps the light on)
     if (wantMic !== asked) {
       why('publish', `intent changed during acquisition (asked mic=${asked}, now ${wantMic}) — dropping ${raw?.synthetic ? 'synth' : 'device'}`);
       for (const t of raw?.getTracks?.() ?? []) { try { t.enabled = false; t.stop(); } catch { /* gone */ } }
@@ -260,8 +229,7 @@ async function sfuPublish() {
       if (!raw?.synthetic) { try { (await import('./micstate.js')).setMicLive(false); } catch { /* probe env */ } }
       return 'intent-changed';
     }
-    // Gate before the sender sees it, or the SFU sends raw room tone; gateFor() passes a synthetic source through
-    // untouched (nothing to gate, and the gate's graph can't run on a headless stalled clock).
+    // gate before the sender, or the SFU sends room tone; synthetic passes untouched (headless clock is stalled)
     const { gateFor, gateIsUnavailable, ungatedAllowed, setMicLive } = await import('./micstate.js');
     const s = gateFor(raw);
     // tell micstate whether a DEVICE is capturing: sfuMicOn() can't tell a muted mic from a live one
@@ -276,19 +244,15 @@ async function sfuPublish() {
     if (myPc !== pc) {
       why('publish', 'pc superseded during acquisition — dropping this publish');
       for (const t of raw?.getTracks?.() ?? []) { try { t.stop(); } catch { /* gone */ } }
-      // setMicLive(true) ran above for a device we just stopped — undo the claim.
       try { setMicLive(false); } catch { /* probe env */ }
       return;
     }
     why('publish', `published ${s?.synthetic ? 'SYNTH' : 'mic'}`
       + ` · tracks=${s?.getTracks?.().length ?? 0}` + ` · wantMic=${wantMic}`);
     micStream = s;
-    // addTrack reuses the first compatible transceiver, a speaker route once 2+ people are in, so the server never
-    // subscribes: put the track on the floor transceiver the server offered for it (repro: tools/mini-sfu-test.mjs).
+    // bare addTrack reuses a speaker route once 2+ are in, which the server never subscribes (tools/mini-sfu-test.mjs)
     const track = s.getTracks()[0];
-    // Sender order: our live sender (currentDirection 'sendonly', or direction sendonly/sendrecv while never
-    // negotiated) → replaceTrack, no renegotiation; else the inactive floor; else bare addTrack.
-    // currentDirection is the authority: a recvonly route can never transmit (tools/mini-sfu-test.mjs stage 3).
+    // our live sender, else the inactive floor, else addTrack; currentDirection is the authority (recvonly can't send)
     const mine = pc.getTransceivers().find((t) =>
       t.currentDirection === 'sendonly'
       || (t.currentDirection == null && (t.direction === 'sendonly' || t.direction === 'sendrecv')));
@@ -317,29 +281,25 @@ async function sfuPublish() {
     console.warn('[sfu] mic not granted:', e?.name || e);
     return;
   } finally {
-    // CAS, not blind null: a successor may have registered its own pending
+    // a successor may have registered its own pending
     if (micPending === own) micPending = null;
   }
   if (outcome === 'intent-changed') {
-    // a wanted mic is acquired; an unwanted one is replaced by the synth only if a provider can speak (else
-    // re-entering would re-acquire the device we just dropped, forever)
+    // only with a provider that can speak, else re-entering re-acquires the dropped device forever
     if (myPc !== pc) return;
     const { synthProvider } = await import('./voicesource.js');
     const prov = synthProvider();
     if (wantMic || !!prov?.available?.()) return sfuPublish();
     return;
   }
-  // the server offers, so we ASK it to renegotiate rather than offering ourselves (glare)
+  // ask, never offer (glare)
   bus.emit('sfu-want-negotiate', {});
 }
 
-/** My own level, for my mouth flap and the 🎙 glyph. Reads the RAW mic on purpose: a mouth answers "are you
- *  making sound", not "is the gate forwarding it". */
+/** RAW mic on purpose: a mouth and a sensitivity meter answer "are you making sound", not "is the gate open" */
 export function sfuMyLevel() {
   if (!micStream || !wantMic) return 0;
   try {
-    // measure the raw device, not the gated lane: a sensitivity meter that reads zero below threshold can't help
-    // you set the threshold
     const src = rawMicStream() ?? micStream;
     if (!_myAn || _myStream !== src) {
       const ctx = audioContext();
@@ -355,14 +315,13 @@ export function sfuMyLevel() {
   } catch { return 0; }
 }
 
-/** Same shape relayPeerLevels() returns, so mouth-flap code is shared. */
 export function sfuPeerLevels() {
   const out = new Map();
   for (const [id, s] of speakers) {
     if (!s.stream) continue;
     if (!s.an) {
       try {
-        const ctx = audioContext();      // the shared context, not a new one per speaker
+        const ctx = audioContext();      // shared, never one per speaker
         s.an = ctx.createAnalyser(); s.an.fftSize = 512;
         ctx.createMediaStreamSource(s.stream).connect(s.an);
         s.buf = new Float32Array(s.an.fftSize);
@@ -376,8 +335,7 @@ export function sfuPeerLevels() {
   return out;
 }
 
-/** The diag surface the browser smoke asserts against — same keys as
- *  relayDiag() so one smoke test can drive either transport. */
+/** the browser smoke asserts against these keys */
 export function sfuDiagClient() {
   return {
     transport: 'sfu',
@@ -392,12 +350,10 @@ export function sfuDiagClient() {
   };
 }
 
-/** Live speaker records for the bridge's rolloff/hush loops: the real objects (mutated in place), as entries so a
- *  caller can't add or delete speakers behind ontrack's back. */
+/** live records, mutated in place; entries so a caller can't add or delete speakers behind ontrack's back */
 export function sfuSpeakerEntries() { return [...speakers.entries()]; }
 
-/** Live inbound-audio stats: NetEq's adaptive depth, time-stretching (inserted/removedSamples) and PLC
- *  (concealedSamples), counted apart so delivered and lost audio can be measured separately. */
+/** time-stretch and PLC are counted apart so delivered and lost audio can be measured separately */
 export async function sfuInboundStats() {
   if (!pc) return [];
   const out = [];
@@ -415,7 +371,7 @@ export async function sfuInboundStats() {
   return out;
 }
 
-/** Tear down one departed speaker's playback: off-DOM <audio> elements and analysers are never reclaimed otherwise. */
+/** off-DOM <audio> elements and analysers are never reclaimed otherwise */
 export function sfuDropSpeaker(id) {
   const s = speakers.get(id);
   if (!s) return;

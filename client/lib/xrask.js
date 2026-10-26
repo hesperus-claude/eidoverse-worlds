@@ -1,14 +1,12 @@
-// xrask — the centre card's questions, inside a headset. A DOM card isn't drawn in an immersive session, so a question
-// nobody could see stalled every later undo (editwrites settled()). In VR it rides a quad: a hidden xr-flagged DOM frame
-// that domquad.js mirrors, or on the canvas path (?domquads=0) a schema panel in xrpanels.js; showXRPanel picks the live
-// one. Refusals (silent toasts in a headset) show here too, with an OK.
+// xrask — the centre card's questions (and refusals, with an OK) on a VR quad: no DOM card draws in a headset, and an
+// unseen question stalls every later undo (editwrites settled()). Quad = xr-flagged frame (domquad.js) or, ?domquads=0, xrpanels.js
 import { renderer } from './core.js';
 import { bus } from './base.js';
 import { registerXRPanel, showXRPanel } from './xrpanels.js';
 import { makeFrame } from './windows.js';
 
 let pending = null;   // {title, body, choices: [{v, label}], cancel, resolve}
-let api = null;       // the DOM frame the default VR path mirrors onto a quad (domquad.js mounts every xr-flagged frame)
+let api = null;       // the xr-flagged frame domquad.js mirrors onto a quad
 export const xrActive = () => !!renderer?.xr?.isPresenting;
 function paintFrame() {
   if (!api) return;
@@ -35,8 +33,7 @@ function settle(v) {
 }
 function dispatch(action) { if (typeof action === 'string' && action.startsWith('c:')) settle(action.slice(2)); }
 registerXRPanel({ id: 'ask', title: 'question', fields, dispatch });   // the canvas-quad path (?domquads=0)
-// leaving the headset answers the open question with its cancel: nobody can see it now, and an unsettled ask holds every
-// later undo behind it (editwrites settled(); house review I19)
+// leaving the headset cancels the open question: nobody can see it, and an unsettled ask holds every later undo
 bus.on('xr:state', (on) => { if (!on && pending) settle(pending.cancel); });
 /** the default path's frame: hidden on the desk (the centre card asks there), a quad in a headset */
 export function initXRAsk() {
@@ -51,8 +48,7 @@ export function initXRAsk() {
   return api;
 }
 
-/** chooseCenter's contract ({title, body, choices: [{v, label}], cancel} → the chosen v), on a VR quad. Asking again
- *  answers the open question with its cancel, as the centre card does. */
+/** chooseCenter's contract on a VR quad; asking again cancels the open question, as the centre card does. */
 export function chooseXR({ title, body = '', choices = [], cancel = null } = {}) {
   if (!choices.length) return Promise.resolve(cancel);
   if (pending) settle(pending.cancel);
@@ -65,8 +61,8 @@ bus.on('edit-refused', ({ text }) => {
   chooseXR({ title: 'refused — nothing changed', body: text, choices: [{ v: 'ok', label: 'OK' }], cancel: 'ok' });
 });
 
-// a refused physics act (grab, put, drop, throw, punt, use, move) shows here: the desk's chat line isn't visible in VR.
-// Not a dialog: the card goes by itself after PLAY_CARD_MS. A timeout or nowhere-sent request says it may yet land.
+// a refused physics act shows here (the desk's chat line isn't visible in VR); it goes by itself after PLAY_CARD_MS,
+// and a timeout or offline request says it may yet land
 const PLAY_CARD_MS = 4000;
 bus.on('thingphysics-refused', ({ text, refused: x }) => {
   if (!xrActive() || pending || !text) return;

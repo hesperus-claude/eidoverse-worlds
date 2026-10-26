@@ -1,7 +1,6 @@
-// Desktop mirror while presenting: 'first' (headset view) or 'third' (behind-and-above), drawn after the eye render
-// with xr.enabled off.
-// WebGPU: XR overwrites the CanvasTarget size with the layer's, so this pass restores the canvas size and puts the XR
-// size back before the next eye frame. Never touch the XR layer's framebuffer (on Windows it is SteamVR's).
+// Desktop mirror while presenting: 'first' (headset view) or 'third' (behind-and-above), after the eye render with
+// xr.enabled off. WebGPU: XR overwrites the CanvasTarget size, so each pass restores the canvas size, then the XR one.
+// Never touch the XR layer's framebuffer (on Windows it is SteamVR's).
 import { THREE, renderer, scene, camera } from './core.js';
 import { isPresenting, xrPrefs, withHeadShown } from './xr.js';
 import { myState } from './controller.js';
@@ -13,8 +12,7 @@ const tmpPos = new THREE.Vector3(), tmpQuat = new THREE.Quaternion(), tmpScl = n
 const savedVp = new THREE.Vector4(), savedSc = new THREE.Vector4();
 let lastAspect = 0;
 
-/** Render `fn` onto the canvas with the CanvasTarget at the canvas's real size (see the header). Returns the size the
- *  target held during the session, for the first-frame tee. */
+/** Render `fn` onto the canvas at its real size; returns the session's target size for the first-frame tee. */
 function onCanvas(fn) {
   const ct = renderer._canvasTarget;
   if (!ct || typeof ct._width !== 'number') throw new Error('three internals moved (_canvasTarget)');
@@ -53,7 +51,7 @@ function onCanvas(fn) {
   return { sessionTarget: `${Math.round(was.w * pr)}x${Math.round(was.h * pr)}`, canvas: `${cw}x${ch}` };
 }
 
-// Shadow-casting lights, refreshed now and then (a light added mid-session joins within a second).
+// shadow casters, refreshed each second so a light added mid-session joins
 let casterList = [], castersAt = 0;
 function casters() {
   const now = performance.now();
@@ -63,16 +61,12 @@ function casters() {
 
 let slowFrames = 0, lastTick = 0, mirrorKilled = false, teed = false, failed = false;
 const stats = (globalThis.__xrMirror = { passes: 0, last: null });   // harness: xr-mirror-probe counts the mirror's own passes
-// holdKill: a HARNESS switch (xr-mirror-probe) so the killswitch can't end the specimen mid-sample on a slow headless
-// frame clock (antra's #206 review: on a slower host it killed the mirror before the screenshot). It still counts and
-// records wouldKill; the probe checks the switch itself in a separate run with the hold off.
+// holdKill: a harness switch (tools/xr-mirror-probe.mjs) so a slow headless clock can't kill the specimen mid-sample;
+// it still records wouldKill
 
-// WHY THE DESKTOP STOPPED, said for as long as it's true (owner, 09-27: an 8 s toast 'isn't on the screen for very long
-// and could be easily missed'). A banner centred on the desktop from the moment the mirror switches itself off until
-// the session ends; nobody in the headset sees it, and whoever is at the monitor can't miss it.
+// WHY THE DESKTOP STOPPED, as a banner for as long as it's true (a toast is easily missed)
 let banner = null, bannerKind = null;
-// Mirror set to OFF by choice: the desktop is black for the whole session, which reads as a crash to whoever's at the
-// monitor (owner, 09-27: 'a generic in VR label … same style'). Neutral colour; the self-kill banner above outranks it.
+// mirror OFF by choice: a black desktop reads as a crash at the monitor; neutral, and the self-kill banner outranks it
 function showInVRLabel() {
   if (typeof document === 'undefined' || bannerKind === 'killed') return;
   showMirrorBanner(null, 'inVR');
@@ -106,11 +100,10 @@ bus.on('xr:state', (on) => { if (on) { mirrorKilled = false; failed = false; slo
 export function tickXRMirror() {
   if (!isPresenting() || xrPrefs.mirror === 'off' || mirrorKilled || failed) return;
   if (xrCurtainOn()) return;   // entry: the curtain is up and pipelines are building; no desktop pass on top of that
-  // THE MIRROR MUST NEVER COST THE HEADSET (owner, 09-08 01:19: fps 17 → frozen with the mirror on). 30 consecutive
-  // frames over 30 ms while it runs → off for the session, said out loud. The pref is untouched.
+  // THE MIRROR MUST NEVER COST THE HEADSET: 30 consecutive frames over 30 ms → off for the session, said out loud
+  // the pref is untouched
   { const now = performance.now(); if (lastTick && now - lastTick > 30) { if (++slowFrames >= 30 && !(stats.wouldKill = stats.holdKill)) { mirrorKilled = true; stats.killed = true; tee(`[xr] mirror: OFF for this session — 30 frames over 30 ms (mode ${xrPrefs.mirror})`); showMirrorBanner('Mirroring your eyes to this screen was costing the headset frames, so it switched itself off to keep VR smooth.'); return; } } else slowFrames = 0; lastTick = now; }
-  // every frame, as porch-old did: a skipped frame risks the desktop presenting a cleared buffer (a flicker). The pass
-  // is desktop-sized now, which was the whole cost; the killswitch above still guards the headset.
+  // every frame: a skipped one risks the desktop presenting a cleared buffer (a flicker)
   const cw = renderer.domElement.width || 1, ch = renderer.domElement.height || 1;
   if (cw / ch !== lastAspect) { lastAspect = cw / ch; deskCam.aspect = lastAspect; deskCam.updateProjectionMatrix(); }
   const xrCam = renderer.xr.getCamera();

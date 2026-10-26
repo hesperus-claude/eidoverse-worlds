@@ -1,9 +1,6 @@
 /**
- * tts-chunk — the spoken form of an utterance, in synthesis-sized pieces.
- *
- * The batch port of the porch aggregator (the streaming form stays in LiveSay in eido-cc-extras.ts): soft clause
- * split past 90 chars so the voice can breathe. Markdown and emoji are stripped here because piper reads them
- * aloud; the say keeps its glyphs.
+ * tts-chunk — the spoken form of an utterance, in synthesis-sized pieces (soft clause split past SOFT_LEN).
+ * Markdown and emoji are stripped because piper reads them aloud; the say keeps its glyphs.
  */
 
 const ABBREVS = new Set([
@@ -18,13 +15,12 @@ const MIN_LEN = 20;
 const SOFT_LEN = 90;
 const SOFT_MIN = 35;
 
-/** Strip what TTS would read aloud: fenced code entirely, URLs → "link" ([label](url) keeps its label), symbol
- *  runs (→ ▸ · -> => | ~, separator colons) → a pause. digit:digit keeps its colon (6:04). */
+/** Strips what TTS would read aloud; symbol runs become a pause, but digit:digit keeps its colon (6:04). */
 export function spokenForm(text) {
   return text
-    .replace(/```[\s\S]*?(?:```|$)/g, ' ')                     // fenced code never speaks
-    .replace(/\[([^\]]{1,80})\]\((?:[^)]+)\)/g, '$1')           // [label](url) → label
-    .replace(/\bhttps?:\/\/\S+/gi, 'link')                     // bare URLs → "link"
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+    .replace(/\[([^\]]{1,80})\]\((?:[^)]+)\)/g, '$1')
+    .replace(/\bhttps?:\/\/\S+/gi, 'link')
     .replace(/[*_`#]+/g, '')
     .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
     .replace(/[→⇒↔▸▶◦‣·•]+/g, ', ')                            // glyphs espeak names aloud
@@ -67,11 +63,10 @@ function splitLong(sentence) {
   return chunks;
 }
 
-const FIRST_MAX = 64;   // the opener: small enough that synth(first) is fast (research: 60-80)
-const FIRST_MIN = 20;   // ...but never a comic stub (research: 20-25 floor for piper quality)
+const FIRST_MAX = 64;   // chars; small enough that synth(first) is fast (60-80 measured fine)
+const FIRST_MIN = 20;   // chars; below ~20-25 piper quality drops
 
-/** Split the opening chunk aggressively: time-to-first-word is synth(chunk 1), so better a slightly abrupt first
- *  clause than a silent second. */
+/** time-to-first-word is synth(chunk 1): better a slightly abrupt first clause than a silent second */
 function fastFirst(chunk) {
   if (chunk.length <= FIRST_MAX) return [chunk];
   let cut = -1;
@@ -91,18 +86,15 @@ function fastFirst(chunk) {
   return [shapeContinuation(chunk.slice(0, cut).trim()), chunk.slice(cut).trim()];
 }
 
-/** A mid-sentence chunk should END WITH A COMMA: espeak renders it as a continuation rise, not a sentence-final
- *  fall (the one free prosody mitigation piper supports). */
+/** espeak renders a trailing comma as a continuation rise, not a sentence-final fall */
 function shapeContinuation(chunk) {
   return /[,;:—–.!?…]$/.test(chunk) ? chunk : chunk + ',';
 }
 
-/** A complete utterance → synthesis-sized spoken chunks (possibly none:
- *  an emoji-only utterance is in the log, not the air). */
+/** possibly none: an emoji-only utterance is in the log, not the air */
 export function ttsChunks(text) {
   const spoken = spokenForm(text);
   if (!spoken) return [];
-  // hard sentence boundaries with abbreviation/initial guards
   const sentences = [];
   let pos = 0;
   BOUNDARY.lastIndex = 0;

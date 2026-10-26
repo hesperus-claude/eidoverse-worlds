@@ -18,22 +18,19 @@ export function pointerVisible(mode, { target = false, grip = false, trig = fals
   if (m === 'always') return true;
   return !!(target || grip || trig);
 }
-/** SURFACE DOT VISIBILITY: its own setting, beside pointer visibility, the same three words. 'never' on
- *  pointer visibility hides only the beam; the dot follows this. `target`: a panel, a nameplate or an interactable
- *  entity (what the contextual beam shows for); `surface`: anything at all under the laser (a plain wall too). */
+/** The surface dot has its own setting; pointer 'never' hides only the beam. `target`: what the contextual beam
+ *  shows for (panel, nameplate, interactable); `surface`: anything under the laser, a plain wall too. */
 export function dotVisible(mode, { target = false, surface = false } = {}) {
   const m = pointerVisibilityMode(mode);
   if (m === 'never') return false;
   if (m === 'always') return !!(target || surface);
   return !!target;
 }
-/** Does a PLAIN world entity (one with nothing to interact with) count for the beam's length this frame? Only while a
- *  button is held, or when the beam is always drawn: an idle hand in contextual or never mode must not reach out to
- *  every wall it hangs toward. An INTERACTABLE entity (below) is a target like a panel, button or not. */
+/** Does a PLAIN entity count for the beam's length? Only with a button held or the beam always drawn: an idle hand
+ *  must not reach out to every wall it hangs toward. An INTERACTABLE entity is a target regardless. */
 export const looksAtWorld = (mode, { grip = false, trig = false } = {}) => pointerVisibilityMode(mode) === 'always' || !!(grip || trig);
-/** INTERACTABLE: an entity that does something when you use it: it has sockets (sit / mount; world.js socketsOn) or
- *  reactions. Trigger also selects any entity for editing, but that is an editor's act, so a plain wall isn't a target.
- *  `comp`: the entity's component bag (world.js comps). */
+/** Sockets (world.js socketsOn) or reactions. Trigger-select for editing is an editor's act, so a plain wall isn't a
+ *  target. `comp`: the entity's component bag (world.js comps). */
 export const interactable = (comp, sockets = 0) => !!comp && (sockets > 0 || (!!comp.reactions && typeof comp.reactions === 'object' && Object.keys(comp.reactions).length > 0));
 
 // ---- 2. smoothing ---------------------------------------------------------------------------------------------

@@ -1,25 +1,18 @@
-// stt — your voice, written down: the agent-inclusion half of voice chat.
-//
-// Speech becomes an ordinary `say` prefixed "🎙 ", so it lands in the log agents already read and their wake
-// triggers never learn voice exists; the prefix survives the say-fold and doubles as captions.
-//
+// stt — speech becomes an ordinary `say` prefixed "🎙 ", so agents read it from the log and never learn voice exists.
 // PRIVACY: webkitSpeechRecognition is cloud (Google) on every platform; no setting keeps the audio on the device.
-// Mobile STT works about half the time; don't disable it there. /stt (and /stt say) reports the live tallies:
-// speech×N with result:final×0 is the broken case. Android ignores `continuous`, so we restart in onend, which
-// plays the OS earcon each time (https://issues.chromium.org/issues/40324711).
+// Mobile works about half the time; don't disable it there. /stt tallies: speech×N with result:final×0 = broken.
+// Android ignores `continuous`; the onend restart plays the OS earcon (https://issues.chromium.org/issues/40324711).
 
 import { say } from './net.js';
 import { report, bus } from './base.js';
 import { sttConsented } from './voiceconsent.js';
 import { flashHint } from './ui.js';
-// flashHint is a 2.6s overlay, so failures also go to the chat log, which persists.
-// Lazy import: a static chat.js import drags core.js into headless tests that mock core.
+// failures also go to the persistent chat log; lazy, since chat.js drags core.js into headless tests that mock core
 const logChat = (who, text) => import('./chat.js').then((m) => m.logChat(who, text)).catch(() => {});
-// The mic's real state; this module's capture must never outlive it. Ask whichever transport is running.
+// capture must never outlive the mic
 import { micOn as meshMicOn } from './micstate.js';
 function micIsLive() {
   try {
-    // SFU first: its bridge publishes __sfuMicOn only once that transport initialised
     if (typeof window.__sfuMicOn === 'function') return !!window.__sfuMicOn();
     return !!meshMicOn();
   } catch { return false; }   // unreadable state = not live = stay silent
@@ -27,13 +20,12 @@ function micIsLive() {
 
 let rec = null;
 let wanted = false;
-let uttSeq = 0;                 // one id per transcribed utterance (log plane)
+let uttSeq = 0;
 export const sttOn = () => wanted;
-// Readable from /audio on a device with no console.
+// for /audio on a device with no console
 try { window.__sttOn = () => wanted; } catch { /* no window */ }
 
-// Module scope, assigned at load: a probe that's absent until used reads as "no events", and the tally must
-// accumulate across on/off toggles.
+// module scope: a probe absent until used reads as "no events", and the tally spans on/off toggles
 const tally = Object.create(null);
 let lastMissNotice = 0;
 let restarts = 0;
@@ -51,7 +43,7 @@ try {
 export const sttAvailable = () => !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
 
 export function setSTT(on) {
-  if (on && wanted && rec) return;      // already running — never rebuild the recognizer
+  if (on && wanted && rec) return;      // never rebuild a running recognizer
   wanted = on;
   if (!on) { try { rec?.stop(); } catch { /* already stopped */ } rec = null; return; }
   const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -59,12 +51,12 @@ export function setSTT(on) {
   rec = new SR();
   rec.continuous = true;
   rec.interimResults = false;
-  // A recognizer asked for the wrong language returns nomatch, not an error; expose the lang for /audio.
+  // a wrong language returns nomatch, not an error; exposed for /audio
   rec.lang = navigator.language || 'en-US';
   try { window.__sttLang = rec.lang; } catch { /* no window */ }
-  // Speech-onset presence lives in micstate.js, not here, so declining transcription keeps an audible presence.
+  // speech-onset presence lives in micstate.js, so declining transcription keeps an audible presence
   rec.onresult = (e) => {
-    // Count interim results too: interims that never finalize (common on Android) look like silence otherwise.
+    // count interims: ones that never finalize (common on Android) otherwise look like silence
     let fin = 0, interim = 0;
     for (let i = e.resultIndex; i < e.results.length; i++) {
       (e.results[i].isFinal ? fin++ : interim++);
@@ -77,17 +69,15 @@ export function setSTT(on) {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (!e.results[i].isFinal) continue;
       const text = e.results[i][0].transcript.trim();
-      // The log plane: the sound already reached the room live, so this must never re-perform it (spoken:true).
-      // Gate the emit as well as the restart: a late result after mic-off would leak a private line; `wanted` is
-      // intent, micIsLive() is reality, and any disagreement resolves to silence.
+      // spoken:true: the sound already reached the room, so this must never re-perform it
+      // gate the emit too: a late result after mic-off would leak a private line; disagreement resolves to silence
       if (!wanted || !micIsLive()) continue;
       if (text) { ++uttSeq; say(`🎙 ${text}`, { spoken: true, utt: uttSeq, live: true }); }
     }
   };
-  // Chrome ends recognition on silence: restart only while wanted AND the mic is live. SpeechRecognition holds
-  // its own mic, so the mic toggle must govern it too; fails closed if the mic state can't be read.
+  // SpeechRecognition holds its own mic, so restart only while wanted AND the mic is live; fails closed
   rec.onend = () => {
-    // Count restarts: on Android the session dies every 6-8 s, too fast to ever finalize.
+    // on Android the session dies every 6-8 s, too fast to ever finalize
     restarts++;
     const secs = ((performance.now() - firstStart) / 1000).toFixed(0);
     if (wanted && micIsLive()) {
@@ -98,16 +88,12 @@ export function setSTT(on) {
     }
     else if (wanted) { wanted = false; rec = null; mark('stopped: mic is off'); report('stt', 'stopped: mic is off'); }
   };
-  // A caption engine that never starts must say so. Errors are named because each has its own fix:
-  // audio-capture (another consumer holds the mic), not-allowed (scoped apart from getUserMedia),
-  // network (the recognizer is Google's).
+  // a caption engine that never starts must say so; each error is named because each has its own fix
   let sawAudio = false;
-  // The phone has no console, so the last event must be readable from the page (/audio prints it).
   rec.onaudiostart = () => { sawAudio = true; mark('audio reached the recognizer', 'audiostart'); };
   rec.onstart = () => {
     mark('started', 'start');
-    // Give it a beat: if recognition starts but never receives audio, that is
-    // the contention signature and it is otherwise invisible.
+    // started but no audio is the mic-contention signature, otherwise invisible
     setTimeout(() => {
       if (wanted && !sawAudio) {
         mark('started but NO audio after 4s (mic contention?)');
@@ -118,15 +104,13 @@ export function setSTT(on) {
       }
     }, 4000);
   };
-  // nomatch = a final result with nothing recognised (not no-speech). Sound isn't speech: a "captions broken"
-  // test must key on speechstart with no result, never on missing results (a cough raises soundstart alone).
+  // a "captions broken" test must key on speechstart with no result, never on missing results (a cough is sound)
   rec.onsoundstart = () => mark('sound detected (not necessarily speech)', 'sound');
   rec.onspeechstart = () => mark('SPEECH detected', 'speech');
   rec.onspeechend = () => mark('speech ended', 'speechend');
   rec.onnomatch = () => {
     mark('nomatch — heard something, recognised nothing', 'nomatch');
-    // Say it missed, so a miss isn't mistaken for a dropped line: a local chat line, never a `say`, at most
-    // one per 30 s.
+    // so a miss isn't taken for a dropped line: local only, never a `say`, at most one per 30 s
     const now = Date.now();
     if (now - lastMissNotice > 30_000) {
       lastMissNotice = now;
@@ -135,7 +119,7 @@ export function setSTT(on) {
   };
   rec.onerror = (e) => {
     mark(`error: ${e.error}`, `err:${e.error}`);
-    if (e.error === 'no-speech' || e.error === 'aborted') return;   // ordinary silence
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
     report('stt', e.error);
     const said = {
       'audio-capture': 'captions: something else is holding the microphone',
@@ -150,8 +134,7 @@ export function setSTT(on) {
   try { rec.start(); } catch (e) { report('stt', e); wanted = false; }
 }
 
-// Running STT is derived state (consent AND a live mic AND a recognizer), not a click's side effect: the
-// mic can turn on from the audio panel or a reconnect replay. flipMic still asks for consent the first time.
+// derived state, not a click's side effect: the mic can turn on from the audio panel or a reconnect replay
 function syncSTT() {
   const want = sttConsented() && micIsLive() && sttAvailable();
   if (want !== wanted) setSTT(want);

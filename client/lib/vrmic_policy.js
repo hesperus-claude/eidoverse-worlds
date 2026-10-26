@@ -1,9 +1,6 @@
-// vrmic_policy — WHEN to ask for the microphone around VR, as pure functions. vrmic.js owns the effects (the 2D step,
-// getUserMedia, the in-headset message); this file owns the decisions, so a suite can drive every state × choice
-// without a browser (tools/vrmic-policy-test.mjs).
-//
-// Why: a browser's permission prompt can't be relied on to show DURING an immersive session, so the question is
-// asked on the flat page before the headset goes on, once per browser, and only when the answer is unknown.
+// vrmic_policy — WHEN to ask for the mic around VR, as pure functions; vrmic.js owns the effects (tools/vrmic-policy-test.mjs).
+// A permission prompt can't be relied on DURING an immersive session: ask on the flat page first, once per browser,
+// only when the answer is unknown.
 //
 // Inputs:
 //   state       the Permissions API's answer for 'microphone', read WITHOUT prompting:
@@ -15,12 +12,11 @@ export const MIC_CHOICE_KEY = 'ew-vr-mic-choice';     // 'allow' | 'later' — t
 export const MIC_PENDING_KEY = 'ew-vr-mic-pending';   // '1' — VR owes the person a flat-page ask
 
 /** The Enter VR press. → { step: 'ask' | 'straight', hint: null | 'denied' }
- *  A browser-level answer (granted / denied) always wins; 'unknown' is treated like 'prompt' (asking is harmless
- *  when it's in fact granted, and happens at most once per browser). */
+ *  A browser-level answer always wins; 'unknown' acts as 'prompt' (harmless if granted, at most once per browser). */
 export function preVrStep({ state, remembered = null, pending = false }) {
   if (state === 'granted') return { step: 'straight', hint: null };
   if (state === 'denied') return { step: 'straight', hint: 'denied' };
-  // A promise VR made outranks an earlier "not now": the person tried to talk in the headset since then.
+  // a promise VR made outranks an earlier "not now": the person tried to talk in the headset since
   if (pending) return { step: 'ask', hint: null };
   if (remembered === 'allow' || remembered === 'later') return { step: 'straight', hint: null };
   return { step: 'ask', hint: null };

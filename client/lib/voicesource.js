@@ -1,8 +1,5 @@
-// voicesource — where your voice comes from.
-//
-// A voice is a property of the participant, not a second client: voice code (voicesfu.js) asks here for a
-// MediaStream, so spatialization, consent and mute apply unchanged to humans (getUserMedia) and agents (a
-// registered synth provider). Deliberately no synthesizer here: a provider hands over a finished track.
+// voicesource — the MediaStream your voice comes from: mic for humans, a registered synth provider for agents, so
+// spatialization, consent and mute apply unchanged to both. No synthesizer here: a provider hands over a track.
 
 import { report } from './base.js';
 
@@ -13,7 +10,7 @@ import { report } from './base.js';
 //   stop(): void                    — cease producing (track may end)
 //   label?: string                  — shown in the audio panel
 // }
-// One provider, replaceable. null = this body has no synthetic voice.
+// null = this body has no synthetic voice
 let provider = null;
 
 export function setSynthProvider(p) {
@@ -22,8 +19,7 @@ export function setSynthProvider(p) {
 }
 export const synthProvider = () => provider;
 
-// ── track-change notification ──: a provider that rebuilds its track calls notifySynthTrackChanged(track).
-// Hooks are a list, not a slot (a slot lets the last registrant silently win); each runs isolated.
+// a list, not a slot (a slot lets the last registrant silently win); each hook runs isolated
 const rebuildHooks = new Set();
 export const setGeneratorRebuildHook = (fn) => { rebuildHooks.add(fn); return () => rebuildHooks.delete(fn); };
 export const notifySynthTrackChanged = (track) => {
@@ -34,10 +30,8 @@ export const notifySynthTrackChanged = (track) => {
 
 // ── the source ───────────────────────────────────────────────────────────────
 export async function voiceSource({ micWanted = true } = {}) {
-  // A live mic wins outright. A mic the user turned off (micWanted:false), not only a missing one, takes the
-  // synth path without opening the device; the provider's enablement stays standing.
+  // a mic turned off takes the synth path without opening the device; no provider means publish nothing
   if (!micWanted) {
-    // No provider is not permission: a declined mic with nothing to replace it publishes nothing.
     if (provider?.available?.()) return synthStream();
     throw new Error('mic declined and no synth provider registered — nothing to publish');
   }
@@ -47,17 +41,13 @@ export async function voiceSource({ micWanted = true } = {}) {
     });
     return mic;
   } catch (e) {
-    // No microphone, or permission refused. If a synth provider is registered
-    // and willing, that is the whole voice — the agent path, and the path a
-    // human with no mic takes to still be heard.
+    // no mic or permission refused: a willing synth provider is the whole voice
     if (provider?.available?.()) return synthStream();
     throw e;
   }
 }
 
-/** The synth provider's track as a stream, marked so callers can tell it from a
- *  device. Extracted so the two paths that reach it — no mic, and mic
- *  deliberately off — cannot drift apart. */
+/** shared by both synth paths (no mic, mic off) so they cannot drift apart */
 function synthStream() {
   const track = provider.start();
   const ms = new MediaStream([track]);
@@ -67,9 +57,7 @@ function synthStream() {
   return ms;
 }
 
-/** True when the current source's track has died and needs re-making. The
- *  liveness check nothing was doing — an `audio:ended` sender transmits
- *  silence forever while ICE and direction both look perfectly healthy. */
+/** an ended track transmits silence forever while ICE and direction look healthy */
 export function sourceIsDead(stream) {
   const t = stream?.getAudioTracks?.()[0];
   return !!t && t.readyState === 'ended';

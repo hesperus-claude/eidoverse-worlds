@@ -1,9 +1,7 @@
-// The splash rays, off the main thread: a WebGL2 fragment shader on an OffscreenCanvas inside a Worker. A worker
-// so the splash animates through main-thread stalls (GLB parses block for 300 ms–2 s) and stops only on a hard
-// freeze; a shader because only a shader can dither 8-bit dark gradients without banding. Alpha eases in over 1.5 s.
+// The splash rays: a WebGL2 shader on an OffscreenCanvas in a Worker, so it animates through main-thread stalls
+// (GLB parses block 300 ms–2 s); a shader because only a shader dithers 8-bit dark gradients without banding.
 let gl, prog, uT, uRes, uRamp, uCalm, canvas, t0, raf = 0, calm = 1, probe = false;
-// cost: full-res 60 Hz fbm per pixel slowed the load visibly; the gradient is soft, so render at 1/3 res and
-// 30 Hz and let the compositor upscale
+// full-res 60 Hz slowed the load visibly; the gradient is soft, so 1/3 res at 30 Hz
 const RES_DIV = 3, FRAME_MS = 33;
 let lastFrame = 0;
 
@@ -67,8 +65,7 @@ function frame() {
   gl.uniform1f(uT, t); gl.uniform2f(uRes, canvas.width, canvas.height); gl.uniform1f(uRamp, ease); gl.uniform1f(uCalm, calm);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   frames++;
-  // the ready receipt must come FROM the worker after a real draw: a main-thread flag set at new Worker()
-  // can't go red on a worker module that failed to parse
+  // ready comes from the worker after a real draw: a main-thread flag can't go red on a module that failed to parse
   if (frames === 1) postMessage({ type: 'ready' });
   raf = requestAnimationFrame(frame);
 }

@@ -1,7 +1,5 @@
-// supportclass — the one "can this box top be trusted as ground?" classifier, shared by colliders.js and
-// server/geometry.ts (adapters that gather vertices their own way) so the constants can't drift (#84).
-// Within the floor-shaped gate, the 24×24 max-y grid tracks raycast ground truth to 1.8 cm worst case
-// (tools/collider-survey.ts), so the same grid doubles as the headless heightfield for that class.
+// supportclass — the one "can this box top be trusted as ground?" classifier for colliders.js and server/geometry.ts (#84).
+// For floor-shaped boxes the 24×24 max-y grid is within 1.8 cm of raycast truth (tools/collider-survey.ts): it doubles as the headless heightfield.
 
 export const TOPGRID_VERSION = 1;
 export const LIE_GRID = 24;              // cells per side
@@ -12,16 +10,13 @@ export const FLOOR_MIN_AREA = 2;         // m² (scaled) — smaller and nobody 
 export const FLOOR_MAX_H = 1.0;          // m (scaled) — decide()'s one movable line
 export const UNEVEN_MIN_LIE = 0.10;      // m (scaled) — below this a box is honest enough
 export const TOPGRID_MAX_JSON = 8192;    // hard cap on the serialized payload
-/** Per-cell certification: a cell is offered as support only if a within-cell ray subsample varies by no more than
- *  this (model metres), else a body standing in it floats; 0.03 keeps the world bound (0.05m) up to scale ~1.66, so
- *  consumers must refuse grids their scale stretches further. */
+/** A cell is offered as support only if its ray subsample spreads ≤ this, else a body in it floats.
+ *  Holds CERT_MAX_WORLD only up to scale ~1.66: consumers must refuse grids their scale stretches further. */
 export const CERT_SPREAD = 0.03;         // m, model frame — max within-cell surface spread
 export const CERT_MAX_WORLD = 0.05;      // m, world frame — the agreed per-cell truth bound
 export const CERT_SUBSAMPLE = 4;         // rays per cell axis (4×4 per cell)
 
-/** Bucket model-local vertices into a LIE_GRID² footprint grid, max-y per
- *  cell. Both adapters feed this: the browser walks THREE meshes, the
- *  server walks gltf-transform accessors — the math is this one function. */
+/** Model-local vertices → LIE_GRID² max-y footprint grid; both adapters (THREE meshes, gltf-transform) feed it. */
 export function gridAccumulator(minX, minZ, w, d) {
   if (!(w > 0) || !(d > 0)) return null;
   const n = LIE_GRID;
@@ -49,9 +44,7 @@ export function gridAccumulator(minX, minZ, w, d) {
   };
 }
 
-/** The decision arithmetic, verbatim from decide() (colliders.js). ALL
- *  inputs are WORLD-SCALED metres — callers multiply by the entity scale.
- *  `lie` may be 0/omitted when only the shape gates are being asked. */
+/** decide()'s arithmetic (colliders.js). ALL inputs are WORLD-SCALED metres: callers multiply by the entity scale. */
 export function decideSupportClass({ w, d, h, lie = 0 }) {
   const roomScale = w * d >= ROOM_MIN_AREA && h >= ROOM_MIN_H;
   const floorShaped = !roomScale && w * d >= FLOOR_MIN_AREA && h <= FLOOR_MAX_H;
@@ -59,8 +52,7 @@ export function decideSupportClass({ w, d, h, lie = 0 }) {
   return { roomScale, floorShaped, uneven };
 }
 
-/** Is a served topGrid payload usable as support (versioned, finite, bounded; unoccupied cells are explicit nulls)?
- *  On refusal the caller must ABSTAIN, never fall back to the box top. */
+/** Unoccupied cells are explicit nulls. On refusal the caller must ABSTAIN, never fall back to the box top. */
 export function validTopGrid(g) {
   if (!g || typeof g !== "object") return false;
   if (g.version !== TOPGRID_VERSION) return false;
@@ -68,8 +60,7 @@ export function validTopGrid(g) {
   if (!Array.isArray(g.minXZ) || g.minXZ.length !== 2 || !g.minXZ.every(Number.isFinite)) return false;
   if (!Array.isArray(g.sizeXZ) || g.sizeXZ.length !== 2 || !g.sizeXZ.every((v) => Number.isFinite(v) && v > 0)) return false;
   if (!Number.isFinite(g.lie)) return false;
-  // certSpread declares the bound every offered cell was certified to; a
-  // grid without one (or claiming worse than the contract) is refused
+  // certSpread: the bound every offered cell was certified to; missing or worse than the contract is refused
   if (!Number.isFinite(g.certSpread) || g.certSpread <= 0 || g.certSpread > CERT_SPREAD) return false;
   if (!Array.isArray(g.cells) || g.cells.length !== LIE_GRID * LIE_GRID) return false;
   let occupied = 0;

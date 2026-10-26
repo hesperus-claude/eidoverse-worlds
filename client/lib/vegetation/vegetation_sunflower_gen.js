@@ -1,7 +1,6 @@
-// Vendored from eidoverse-video vegetation_sunflower_gen.js @ 62365e9; upstream changes are cherry-picked by hand, never
-// auto-merged. sunflower_gen: the sunflower for createFlora, one geometry on the sunflower_ trim sheet, field-instanced
-// like corn. Card widths and UV windows follow sunflower_fit.json; stalk→neck is one swept tube; the gen owns its
-// normals; every head vertex shares one aH (rigid in wind).
+// Vendored from eidoverse-video vegetation_sunflower_gen.js @ 62365e9; cherry-pick upstream by hand, never auto-merge.
+// sunflower_gen: the sunflower for createFlora, one geometry on the sunflower_ trim sheet (fit: sunflower_fit.json);
+// the gen owns its normals; every head vertex shares one aH (rigid in wind).
 //
 // sunflower_ sheet regions (UV, v up, 1024²) — layout v2:
 //   DISC   circle centre (.2405,.780) r .2053 (planar projection)
@@ -16,8 +15,7 @@ import { Rng } from './vegetation_shrub_gen.js';
 const TAU = Math.PI * 2;
 const tri = (s) => { const m = s % 2; return m <= 1 ? m : 2 - m; };
 
-// thin plate: a button riding proud of the petal bed, smaller than the whorl and recessed into the bract cup; petals
-// slide strictly under it
+// a button proud of the petal bed, recessed into the bract cup; petals slide strictly under it
 const DISC_R = 0.30;
 const DISC_K = 0.90;        // plate radius vs art circle
 const DISC_X = -0.012;      // whole plate recessed into the bract cup
@@ -64,12 +62,9 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
                 s * s * p0[2] + 2 * s * t * p1[2] + t * t * p2[2]];
     };
 
-    // swept tube over a sampled centreline with a PARALLEL-TRANSPORTED frame
-    // (no per-ring world-up guessing — that twists at steep tangents) and
-    // fibre-v continuous along the run (mirrored triangle tiling)
+    // PARALLEL-TRANSPORTED frame, never per-ring world-up (it twists at steep tangents); fibre-v continuous along the run
     function sweepTube(pts, radii, weights, RADS, vStart = 0.012) {
         const n = pts.length;
-        // tangents
         const tans = [];
         for (let i = 0; i < n; i++) {
             const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
@@ -114,7 +109,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
             quad(rows[i][j], rows[i][j + 1], rows[i + 1][j + 1], rows[i + 1][j]);
     }
 
-    // ── head placement first (the cane sweeps INTO it) ──────────────────────
+    // ── head placement first (the cane sweeps INTO it) ───────────────────────
     const H = cfg.height * (cfg.heightJitter ?? rng.range(0.9, 1.1));
     const leanA = R() * TAU, leanAmt = (cfg.stalkLean ?? rng.range(0.02, 0.08)) * H;
     const lx = Math.cos(leanA) * leanAmt, lz = Math.sin(leanA) * leanAmt;
@@ -174,7 +169,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
         const sideX = -Math.sin(yaw), sideZ = Math.cos(yaw);
         const aL = f * 0.8;
         const r0 = stalkR(f);
-        // petiole: swept tube, base buried in the cane, arcing out and up
+        // petiole: base buried in the cane, arcing out and up
         const q0 = [sx + dirX * r0 * 0.2, sy, sz + dirZ * r0 * 0.2];
         const q1 = [q0[0] + dirX * petL * 0.55, q0[1] + petL * 0.38, q0[2] + dirZ * petL * 0.55];
         const q2 = [q0[0] + dirX * petL * 1.02, q0[1] + petL * rng.range(0.32, 0.5), q0[2] + dirZ * petL * 1.02];
@@ -187,8 +182,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
             }
             sweepTube(pts, radii, weights, 4, 0.03);
         }
-        // blade: 5-column strip continuing the petiole; width and uv v-window follow the measured envelope band;
-        // cupped off the midrib, an edge ruffle (a hard V-fold reads as paper), and a decurving tip
+        // blade: width and uv follow the measured envelope; an edge ruffle, since a hard V-fold reads as paper
         const petT = [q2[0] - q1[0], q2[1] - q1[1], q2[2] - q1[2]];
         const ptl = Math.hypot(...petT) || 1;
         const b0 = q2;
@@ -226,10 +220,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
         }
     }
     const headStart = vb;   // every vertex from here on is head assembly
-    let petalStart = vb;    // set after the disc lathe — bent normals apply
-                            // to the CARD parts only (petals + bract cup);
-                            // the disc plate keeps geometric normals and its
-                            // normal MAP carries the seed relief
+    let petalStart = vb;    // bent normals apply to cards only; the disc keeps geometric normals (its normal MAP has the seeds)
 
     // ── disc plate ──────────────────────────────────────────────────────────
     const discUV = (rr, th) => [0.2405 + 0.2053 * (rr / DISC_R) * Math.cos(th),
@@ -282,8 +273,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
                          fit: fit.petals[cx2 * 2 + ry] });
         const rimR = 0.262;                    // whorl ring pulled in with the disc
         const needHW = (TAU * rimR / N) * 0.5 * 1.25;
-        // layered whorls so background never shows between petal bases and the disc: an outer and a shorter
-        // inner layer, phase-offset half a spacing
+        // two whorls, the inner shorter and offset half a spacing, so no background shows between petal bases
         const layers = [
             { n: N, rIn: 0.020, lenK: 1.0, phase: 0, droopLo: -0.15, droopHi: 0.18 },
             { n: Math.round(N * 0.7), rIn: 0.042, lenK: 0.55, phase: Math.PI / N,
@@ -304,9 +294,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
             const wx = txp * Math.cos(roll) + ax * Math.sin(roll),
                   wy = typ * Math.cos(roll) + ay * Math.sin(roll),
                   wz = tzp * Math.cos(roll) + az * Math.sin(roll);
-            // base sits BEHIND the disc's underside — petals slide UNDER the
-            // button (never co-planar with its face, so they can never cross
-            // it); droop waits until the petal has radially cleared the rim
+            // base BEHIND the disc's underside, never co-planar with its face, so petals can never cross it
             const bxp = hx + ox * (rimR - LY.rIn) * s - ax * 0.008 * s,
                   byp = hy + oy * (rimR - LY.rIn) * s - ay * 0.008 * s,
                   bzp = hz + oz * (rimR - LY.rIn) * s - az * 0.008 * s;
@@ -318,9 +306,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
                 const t = g / (NBp - 1);
                 const [cFrac, hwFrac] = bands[g];
                 const hw = hwFrac * cardHW * 2;
-                // droop holds off until the petal has passed the disc edge
-                // radius, then fades in to full by mid-petal — under the
-                // button, then free
+                // droop waits until the petal clears the disc edge, full by mid-petal
                 const dk = droop * Math.min(1, Math.max(0, (t - 0.12) / 0.38));
                 const cd = Math.cos(dk), sd = Math.sin(dk);
                 const dx = ox * cd + ax * sd, dy = oy * cd + ay * sd, dz = oz * cd + az * sd;
@@ -329,7 +315,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
                       cy3 = byp + dy * L * t * s + ay * cup * s,
                       cz3 = bzp + dz * L * t * s + az * cup * s;
                 const vv2 = cell.v0 + (cell.v1 - cell.v0) * t;
-                // uv follows the band: centre offset + half width in CELL space
+                // centre offset + half width in CELL space
                 const uC = cell.u0 + cFrac * uSpan;
                 const uHw = hwFrac * uSpan;
                 V(cx3 - wx * hw * s, cy3 - wy * hw * s, cz3 - wz * hw * s, uC - uHw, vv2, aHead);
@@ -390,8 +376,7 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
     g.setAttribute('aH', new T3.Float32BufferAttribute(aH, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
-    // ── normal treatment (the gen owns it; createFlora must NOT re-blend): head = spherical bent normals from behind
-    // the disc, leaf blades toward up, tubes geometric
+    // ── normals (createFlora must NOT re-blend): head bent spherically from behind the disc, blades up, tubes geometric
     {
         const nrm = g.attributes.normal;
         const px2 = g.attributes.position;
