@@ -90,6 +90,13 @@ export function chromeArgs({ headed = false, port, profile, extra = [] }: { head
   ];
 }
 
+/** A playwright-launched Chrome with a devtools port (0: Chrome picks it and writes DevToolsActivePort to the profile);
+ *  playwright sets headless and the profile itself. */
+export function playwrightArgs({ port = 0, extra = [] }: { port?: number; extra?: string[] } = {},
+  platform: NodeJS.Platform = process.platform): string[] {
+  return [`--remote-debugging-port=${port}`, ...extra, ...platformArgs(platform)];
+}
+
 export type Cdp = { send<T = any>(m: string, p?: unknown): Promise<T> };
 /** One CDP call's budget. SwiftShader can pin a page's main thread past 60 s on a full world (Commons, 10-15), so a
  *  probe that needs to wait sets CDP_CALL_MS; the default is the old 60 s. */

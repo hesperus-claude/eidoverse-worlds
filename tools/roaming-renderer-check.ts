@@ -12,6 +12,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
+import { playwrightArgs } from './protocol/chrome.ts';
 const base = process.argv[2] ?? 'http://127.0.0.1:19347';
 const shot = process.env.SHOT;
 const world = `roam-build-${Date.now().toString(36)}`, lobby = `roam-lobby-${Date.now().toString(36)}`;
@@ -22,7 +23,7 @@ let ws: WebSocket | null = null, keepPose: ReturnType<typeof setInterval> | unde
 // choosing and the binding; that is why this is a persistent context, in a profile this check owns.
 const profile = mkdtempSync(join(tmpdir(), 'roam-check-'));
 const browser = await chromium.launchPersistentContext(profile, { headless: true, channel: 'chrome', viewport: { width: 960, height: 540 },
-  args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--remote-debugging-port=0'] });
+  args: playwrightArgs({ extra: ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])] }) });
 let dbg = 0;
 try {
   for (let i = 0; i < 50 && !dbg; i++) {
