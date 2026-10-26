@@ -1,6 +1,6 @@
 // quadcolour — the VR panels' colour, delivered as authored.
 //
-// WHY (owner's headset pass, 09-30: "all colours on the VR panes look washed out"; only our panels, not other pages):
+// WHY (the VR panes looked washed out; only our panels, not other pages):
 // the quads are MeshBasicMaterial with toneMapped:false, and WebGPURenderer (both its backends — the WebGL 2 one is
 // what Chromium runs, desktop and headset) IGNORES material.toneMapped: tone mapping and the sRGB encode happen in ONE
 // output pass over the whole frame (Renderer._renderOutput; `toneMapped` is read only by the classic WebGLRenderer).
@@ -11,7 +11,7 @@
 // colour node applies the EXACT INVERSE of three's acesFilmicToneMapping at the live toneMappingExposure, so the
 // output pass lands on the authored value (measured exact to the 8-bit level for every house token).
 //
-// Then the VR-only look (owner, 09-30: "colours are generally less vibrant in VR"): saturation and contrast in
+// Then the VR-only look (colours read less vibrant in VR): saturation and contrast in
 // display (sRGB-encoded) space, applied to the quads only — never the design tokens, never the desktop.
 // `gradeSRGB` (quadgrade.js) is the JS twin of the shader's grade; tools/quadcolour-test.mjs holds both to the same numbers.
 import * as THREE from 'three';
@@ -46,7 +46,7 @@ export const acesFilmicInverse = Fn(([lin]) => {
   const v = vec3(rrtInv(y.x), rrtInv(y.y), rrtInv(y.z));
   // NOT clamped at 0: a saturated hue (--brand's red channel, a strong yellow) needs a NEGATIVE linear input for
   // ACES's channel-mixing input matrix to land it; the output pass reads a HalfFloat target (three's default
-  // outputBufferType), which carries it. Clamped, #8fe8c8 came out #a0e8c8 (the probe, 09-30).
+  // outputBufferType), which carries it. Clamped, #8fe8c8 came out #a0e8c8 (the probe).
   return mat3(...ACES_IN_INV).mul(v).mul(0.6).div(toneMappingExposure);
 });
 

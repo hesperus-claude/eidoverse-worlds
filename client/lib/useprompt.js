@@ -1,9 +1,9 @@
-// useprompt — "E  open “Gate”" (ship list 10-07: a desktop visitor could use a thing only through the unlisted
-// `/use <hex id>`). The conventional affordance: Roblox's ProximityPrompt (E, within a few metres, the action's words on
-// screen), Unity/Unreal interact-on-E. The nearest thing within reach that offers an action (its reactions), preferring
-// what you face, shows on the hint bar beside the seat hint (localbody.js updateSeatHint asks usePromptHint when there's
-// no seat to offer); E uses it through the door, and a refusal reads in a person's words (editwrites showRefusal). Not in
-// edit mode (E rotates there), not while typing (controller.js filters), not in a headset (no hint bar there).
+// useprompt — "E  open “Gate”": the conventional affordance (Roblox's ProximityPrompt: E, within a few metres, the
+// action's words on screen; Unity/Unreal interact-on-E). The nearest thing within reach that offers an action (its
+// reactions), preferring what you face, shows on the hint bar beside the seat hint (localbody.js updateSeatHint asks
+// usePromptHint when there's no seat to offer); E uses it through the door, and a refusal reads in a person's words
+// (plainwords.js plain, on the status bar). Not in edit mode (E rotates there), not while typing (controller.js filters),
+// not in a headset (no hint bar there).
 import { THREE } from './core.js';
 import { bags, bagOf, entities } from './world.js';
 import { outOfMyView } from './myview.js';
@@ -50,8 +50,7 @@ export function usable() {
 /** Every action a thing offers (its reactions), in its own order: [{action, verb, who?, barred?}]. */
 export function actionsOf(id) {
   const bag = bagOf(id); let rx = bag?.reactions; if (!isBag(rx)) rx = {};
-  // an openable thing with nothing that opens it offers 'open' on its own (the authority's implicit toggle; R 10-11
-  // 23:17: the gym door had only `openable`, so clicking it did nothing)
+  // an openable thing with nothing that opens it offers 'open' on its own (the authority's implicit toggle)
   if (isBag(bag?.openable) && !Object.values(rx).some((h) => h?.kind === 'toggle' && (h.component ?? 'openable') === 'openable')) rx = { open: { kind: 'toggle', component: 'openable', field: 'open' }, ...rx };
   if (!Object.keys(rx).length) return [];
   return Object.keys(rx).map((action) => {
@@ -67,8 +66,7 @@ export function actionsOf(id) {
 }
 /** Use one action of one thing (the mouse: clickuse.js). The door's reply. */
 export async function useThing(id, action, verb = action) {
-  // a use that doesn't work says why in the status bar, in the attention colour, every time (R, 10-10: "same goes for
-  // objects you click to use but it doesn't work for some reason"); it was a 9 s toast
+  // a use that doesn't work says why in the status bar, in the attention colour, every time
   const req = OP.use(id, action), what = `${verb} ${id}`; const r = await requestWithBody(req.verb, req.args);   // re-arrives once on 'not-here'
   if (r && !r.ok && r.refused) { const text = plain(what, r); flashHint(text, 4200, 'attn'); bus.emit('edit-refused', { what, refused: r.refused, text, agentText: text }); }
   bus.emit('use-prompt', { id, action, ok: !!r?.ok });

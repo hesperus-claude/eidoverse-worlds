@@ -1,4 +1,4 @@
-// VR keyboard (gap list C16; porch-old :7377–7390 had one) — a FRAME, so it rides the
+// VR keyboard — a FRAME, so it rides the
 // same HTMLMesh quad + click-through every other panel does (domquad.js): a trigger on a
 // key is a DOM click on a real <button>. Keys type into the last-focused text input
 // (HTMLMesh focuses an <input> when its quad is clicked; default: the chat line), and ⏎

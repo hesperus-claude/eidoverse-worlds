@@ -34,8 +34,7 @@ export function onWorldChange(fn) {
 
 function emit(ev) {
   for (const fn of [...subs]) {
-    // A subscriber must not be able to break the fold path — same doctrine
-    // as the sequencer's house rule 3, one layer down.
+    // a subscriber must not be able to break the fold path
     try { fn(ev); } catch (err) { console.error('[state] subscriber failed:', err); }
   }
 }

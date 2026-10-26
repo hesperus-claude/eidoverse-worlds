@@ -162,7 +162,7 @@ const chatApi = initChat({
   send: (text) => say(text),
   typing: (to) => { sendTyping(to); getMe()?.setTyping(); },
   people,
-  // the person menu and badges (research roles S6)
+  // the person menu and badges
   person: { menuAt: personMenuAt, sheetFor: personSheet, stripFor: personStrip, badgeHtml: personBadge, muted: (n) => personOf(n).muted, presenting: () => isPresenting() },
 });
 initPeople({ mentionPerson, presenting: () => isPresenting(), toast, openModLog: (who) => openModeration({ tab: 'log', who }) });

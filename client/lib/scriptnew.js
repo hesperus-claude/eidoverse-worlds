@@ -1,4 +1,4 @@
-// scriptnew — the editor's "new script" card (ship list 10-07: the editor couldn't make a script).
+// scriptnew — the editor's "new script" card.
 //
 // A small centre card on the selected thing: a name, what starts it (someone using it, or a timer), what it may change,
 // whether it may speak, and the source (a template that runs as it stands). Create plans the requests an agent sends

@@ -1,6 +1,6 @@
-// texts — the browser realizer for the `text` component: a sign (batch 2; R 10-06 23:52: plain, first version, on the canvas text
-// path, one house font, no rich text). The meaning lives in shared/protocol/componentspec.js (text) and shared/text.js (how it
-// wraps); this file only draws it.
+// texts — the browser realizer for the `text` component: a plain sign on the canvas text path, one house font, no rich
+// text. The meaning lives in shared/protocol/componentspec.js (text) and shared/text.js (how it wraps); this file only
+// draws it.
 //
 //   - Layout: shared/text.js layoutLines, by words, falling back to characters for a word wider than a line (CJK, a URL),
 //     measured with the canvas's own measureText. Each paragraph's direction is its first strong letter's, so Arabic and
@@ -45,7 +45,7 @@ export function paintSign(v) {
     ctx.fillStyle = css(v.background); ctx.beginPath(); ctx.roundRect?.(0, 0, W, H, pad) ?? ctx.rect(0, 0, W, H); ctx.fill();
   }
   const color = Number.isInteger(v.color) ? v.color : D.color;
-  // the outline's colour: the author's (text.outlineColor, R 10-11), else the contrasting one for the text colour
+  // the outline's colour: the author's (text.outlineColor), else the contrasting one for the text colour
   const outline = v.outline !== false; const edge = Number.isInteger(v.outlineColor) ? css(v.outlineColor) : lumaOf(color) > 0.5 ? '#000' : '#fff';
   lines.forEach((l, i) => {
     const y = pad + (i + 0.5) * LINE_PX; const align = v.align ?? D.align;

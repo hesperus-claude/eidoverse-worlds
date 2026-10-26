@@ -102,7 +102,7 @@ function updateEnvironmentSky(settings) {
   // an authored environment owns sun and ambient: sky.js rewrites them per frame, so main.js reapplies right after,
   // before the shadow rig reads sun.position
   envLight={color:new THREE.Color(sky.sunColor??'#fff4df'),intensity:Number.isFinite(sky.sunIntensity)?Math.max(0,sky.sunIntensity):3,
-    position:new THREE.Vector3().fromArray(vector(sky.sunDirection,[.4,.8,.2])).normalize().multiplyScalar(60),   // 60 m: the shadow fit's distance (lightrig.js)
+    position:new THREE.Vector3().fromArray(vector(sky.sunDirection,[.4,.8,.2])).normalize().multiplyScalar(60),   // 60 m: the sun's distance (sky.js)
     ambient:Number.isFinite(sky.ambient)?Math.max(0,sky.ambient):1.5};
   applyEnvLight();
 }

@@ -34,7 +34,7 @@ export function setTtsEnabled(on) {
   // with the mic live this only arms (mic beats TTS); with it off the takeover is here. No WebAudio mixing: stalls headless
   if (ttsEnabled !== was && typeof window !== 'undefined') {
     import('./micstate.js').then((v) => {
-      // micstate's own read is null forever on an SFU client, and would fail open
+      // micstate's own read is false on an SFU client, and would fail open
       const micLive = (typeof window !== 'undefined' && typeof window.__sfuMicOn === 'function')
         ? !!window.__sfuMicOn() : v.micOn?.();
       if (ttsEnabled && canSynthesize() && !micLive) {
@@ -350,7 +350,7 @@ export const genTrackInfo = () => (genTrack
 
 
 
-/** P50 and best, since a mean hides the slow first call; localStorage.eidoTtsBackend = 'wasm' switches backend */
+/** P50 and best, since a mean hides the slow first call; localStorage.eidoTtsBackend = 'webgpu' tries the GPU backend (engine-piper.js) */
 export async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
   if (!isTtsEnabled() || !ttsFn) { console.warn('[ttfs] no voice loaded'); return null; }
   const out = [];

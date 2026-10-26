@@ -447,7 +447,7 @@ function releaseGrab() {
   held = null;
 }
 
-// ---- radial menu: right-stick press opens, stick aims, release commits -----
+// ---- radial menu: right-stick click opens, stick aims, trigger / flick / quick release commits -----
 /** The ring IS the dock, radially (every slot verb-backed): same pins and order, rebuilt per open. A frame with no VR
  *  surface is still a slot, dim, so parity gaps stay visible. */
 let ringLevel = 'root';   // 'root' | 'actions' — the sub-wheel in view
@@ -711,7 +711,7 @@ async function enterVR({ retryOf = null } = {}) {
         for (const [k, field] of [['createProgram', 'programs'], ['createRenderPipeline', 'pipelines']]) { const orig = be[k]?.bind(be); if (!orig) continue;
           be[k] = (...a) => { const t = performance.now(); try { return orig(...a); } finally { buildTotals[field]++; if (field === 'programs') buildTotals.programMs += performance.now() - t; if (field === 'pipelines' && a[1] == null) { buildTotals.syncPipelines++; const ms = performance.now() - t; buildTotals.syncMs += ms; if (ms > 30) { const ro = a[0]; const nm = ro?.material?.name || ro?.material?.type || '?', ob = ro?.object?.name || ro?.object?.type || '?'; tee(`[xr] sync pipeline ${ms.toFixed(0)} ms: ${nm} on ${ob}${ro?.context?.material?.isShadowMaterial || ro?.material?.isDepthMaterial ? ' [shadow/depth]' : ''}`); } } if (entryClock) { entryClock[field]++; if (field === 'programs') entryClock.programMs += performance.now() - t; } } }; } } }
     // ENTRY CURTAIN: a cheap curtain while the scene compiles against the real XR camera + target (compileAsync
-    // inside an XR frame captures that context); 6 s fallback
+    // inside an XR frame captures that context); 15 s cap
     setXRCurtain(true); curtainState = { armed: true, t0: performance.now() };
     if (!floor) tee('[xr] NO floor reference space granted — using local (eye-level origin); floor height is a guess');
     const onLine = `[xr] session on ${renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL'} refspace=${floor ?? 'local'} features=${JSON.stringify(session.enabledFeatures ?? [])} xrctx=${JSON.stringify(globalThis.__xrCtx ?? 'default')}`;
@@ -818,7 +818,7 @@ async function enterVR({ retryOf = null } = {}) {
     // a session that was GRANTED but whose setSession failed is alive and ours: end it, or the visor is dead
     // until reload (the browser answers every later request 'already an active immersive XRSession')
     if (session && !presenting) { try { session.end(); } catch { /* already ending */ } session = null; renderer.xr.enabled = false; }
-    // the failure must OUTLIVE the glance: a sticky toast with the actual message, 30 s
+    // the failure must OUTLIVE the glance: a sticky toast with the actual message, 30 s (8 s when the policy supplied a userMessage)
     toast(e?.userMessage ?? `VR failed to start: ${e?.message ?? e}`, e?.userMessage ? 'warn' : 'err', e?.userMessage ? 8000 : 30000);
     tee(`[xr] ENTER FAILED: ${e?.name ?? ''} ${e?.message ?? e}`);
   } finally { entering = false; if (!presenting) xrVeilShow(false); }
@@ -930,7 +930,7 @@ export function leaveVR(why = 'verb') {
   try { const p = session.end(); p?.catch?.((e) => tee(`[xr] leave (${why}) rejected: ${e?.message ?? e}`)); } catch (e) { tee(`[xr] leave (${why}) threw: ${e?.message ?? e}`); }
   return true;
 }
-// ENTRY CLOCK: setSession → first presenting frame, then eight frame gaps (a compile stall = one huge gap; a runtime
+// ENTRY CLOCK: setSession → first presenting frame, then seven more frame gaps (a compile stall = one huge gap; a runtime
 // stall = the t0→first gap). One tee line, then it retires.
 let entryClock = null;
 const buildTotals = { programs: 0, programMs: 0, pipelines: 0, syncPipelines: 0, syncMs: 0 };   // lifetime totals the exit probe reads deltas off; sync = promises===null on a render frame (blocking link)

@@ -146,7 +146,7 @@ function place() {
     let lo = hud.left, hi = hud.right;
     for (const g of glyphs) if (g.top <= cy && g.bottom >= cy) { lo = Math.min(lo, g.left); hi = Math.max(hi, g.right); }
     // builder mode: the ∃'s row is also the editor's menu bar (editlayout.js .edit-top). The chips continue past its last
-    // menu and viewport button, never over them (review 10-07 B1: "WebGL 2" sat on Edit ▾, "reduced detail" on View ▾)
+    // menu and viewport button, never over them
     for (const b of document.querySelectorAll('.edit-top:not([hidden]) > :not(.edit-mode-label)')) {
       const r = visible(b); if (r && r.top <= cy && r.bottom >= cy) hi = Math.max(hi, r.right);
     }

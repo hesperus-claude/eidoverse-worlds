@@ -1,32 +1,23 @@
-// environment — the world-scope realizer (TEL0S_NOTES §11.4, slice 3c):
-// terrain, grass, sky/weather, and the asset palette as projections of the
-// folded singletons in state.st.
+// environment — the world-scope realizer (TEL0S_NOTES §11.4): terrain, grass, sky/weather and the asset palette as
+// projections of the folded singletons in state.st. Thin on purpose: the application logic is world.js's
+// (applyTerrainState / applyGrassState / applySkyFolded / applyAssetState); st.sky is already the folded bag.
 //
-// Deliberately thin: the actual application logic lives in world.js
-// (applyTerrainState / applyGrassState / applySkyFolded / applyAssetState),
-// shared with the legacy applyEntry switch so the migration window has one
-// implementation under two drivers. The fold already did the hard part —
-// st.sky IS the folded bag (weather merged, forecast provenance stamped,
-// hours rebased), so applying it is a straight read.
-//
-// Ordering note that keeps boot honest: the 'hydrated' handler runs
-// synchronously inside shadowHydrate, which net.js calls BEFORE any legacy
-// replay await — so the terrain build (which GATES arrival) is enqueued
-// before checkReady can ever observe an empty build queue.
+// Ordering: the 'hydrated' handler runs synchronously inside state.hydrate, which net.js calls from the snapshot
+// handler, so the terrain build (which GATES arrival) is enqueued before main.js's checkReady can see an empty build queue.
 
 import { state, onWorldChange } from '../state.js';
 import { applyTerrainState, applyGrassState, applySkyFolded, applyAssetState } from '../world.js';
 
-// a world with no sky authored (never, or removed) shows a plain clear sky: the sky's defaults bring cumulus, and R removed
-// the sky and still had clouds (10-11 14:05). The same at join, so a removal looks the same after a reload.
+// a world with no sky authored (never, or removed) shows a plain clear sky: the sky's defaults bring cumulus. The same at
+// join, so a removal looks the same after a reload.
 const NO_SKY = Object.freeze({ clouds: 'clear' });
 
-// the ground's builder fills water on the ground it builds: the world's water component (shape audit 10-16) rides on its args,
-// and in a world with no terrain on the stage floor ({stageFloor, water}: house review I8)
+// the ground's builder fills water on the ground it builds: the world's water component rides on its args, and in a world
+// with no terrain on the stage floor ({stageFloor, water})
 const groundArgs = (st) => (st.terrain ? (st.water ? { ...st.terrain, water: st.water } : st.terrain) : st.water ? { stageFloor: true, water: st.water } : null);
 
 // every join hands over what the fold says, absence included: a rejoin into a world whose terrain or grass went while we
-// were away clears them, instead of keeping the last session's (house review I55)
+// were away clears them, instead of keeping the last session's
 function reconcileEnvironment() {
   const st = state.st;
   applyTerrainState(groundArgs(st));

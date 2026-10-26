@@ -9,18 +9,6 @@ export { kindOf, isMeshBag };
 /** A realized id, enough to detect identity drift; lib only for models.
  *  @typedef {{ kind: 'model'|'mesh'|'light'|'empty', lib?: string }} RealizedView */
 
-/** Diff folded entities against the realized view.
- *
- *  Identity rules:
- *  - an id in state but not realized → create
- *  - realized but gone from state → retire
- *  - realized as one kind, folded as another (the id namespace is flat) → rebuild (retire + create)
- *  - a model whose `lib` changed → rebuild (the fold overwrites a same-id spawn)
- *  - everything else is an in-place refresh by the hosted half
- *
- *  @param {Record<string, any>} stEntities  state.st.entities
- *  @param {Map<string, RealizedView>} realized
- *  @returns {{ create: {id: string, ent: any}[], retire: string[] }} */
 /** (A thing with both a model and a mesh is its model.) The `mesh` component as a client reads it: malformed is absent
  *  (an Empty), never a throw; out-of-range clamps; a capsule is at least its diameter tall. */
 export const MESH_SHAPES = COMPONENTS.mesh.enums.shape;
@@ -38,6 +26,18 @@ export const meshKeyOf = (ent) => { const m = readMesh(ent?.mesh); return m ? `$
 /** Switched off, itself or anything it hangs under: not loaded, not drawn, no collider. Same rule as the engine's offChain. */
 export function offIn(stEntities, id) { for (let k = id, n = 0; k && n < 33; k = stEntities[k]?.parent?.to, n++) if (stEntities[k]?.disabled === true) return true; return false; }
 
+/** Diff folded entities against the realized view.
+ *
+ *  Identity rules:
+ *  - an id in state but not realized → create
+ *  - realized but gone from state → retire
+ *  - realized as one kind, folded as another (the id namespace is flat) → rebuild (retire + create)
+ *  - a model whose `lib` changed → rebuild (the fold overwrites a same-id spawn)
+ *  - everything else is an in-place refresh by the hosted half
+ *
+ *  @param {Record<string, any>} stEntities  state.st.entities
+ *  @param {Map<string, RealizedView>} realized
+ *  @returns {{ create: {id: string, ent: any}[], retire: string[] }} */
 export function planReconcile(stEntities, realized) {
   const create = [];
   const retire = [];

@@ -26,9 +26,9 @@ function paint() {
   col.needsUpdate = true;
 }
 
-/** Show the stand-in, fed by the sky system's uniforms ({zenith, horizon} vec3 uniforms). */
 /** The interim gradient mesh, when built (unfogged too — hidden under the world's water). */
 export const interimSkyObject = () => mesh;
+/** Show the stand-in, fed by the sky system's uniforms ({zenith, horizon} vec3 uniforms). */
 export function showInterimSky(uniforms) {
   uni = uniforms ?? null;
   if (!mesh) {

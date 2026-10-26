@@ -392,7 +392,7 @@ export function makeFrame(id, opts = {}) {
       }
     }
     root.style.zIndex = String(Math.min(++zTop, Z_HI));
-    // builder mode: above the workspace columns (z 26, editlayout.js), below the status strip (45) and ∃ menu (50)
+    // builder mode: above the workspace columns (z 26, index.html .edit-col), below the status strip (45) and ∃ menu (50)
     if (!docked && inWorkspace()) root.style.zIndex = String(30 + Math.min(13, zTop - Z_LO));
   }
   function clearColumns() {

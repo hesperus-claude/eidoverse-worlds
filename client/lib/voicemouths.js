@@ -55,7 +55,7 @@ export function updateVoiceMouths(now) {
   }
 }
 
-// captions are the live performance; the logged say carries spoken:true and world.js never re-performs it
+// captions are the live performance; the logged say carries spoken:true, and livechat.js emits no 'speech' for it once performed
 function performSpeech({ actor, text }) {
   const av = actor === CONFIG.name ? getMe() : remotes.get(actor)?.avatar;
   av?.say(text);

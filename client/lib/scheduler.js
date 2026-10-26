@@ -10,7 +10,7 @@ export const P = Object.freeze({
   NEAR: 60,         // in front of you
   VISIBLE: 40,      // on screen
   FAR: 20,          // the world behind you
-  COSMETIC: 10,     // sky variants, prefetch, high-LOD swaps
+  COSMETIC: 10,     // the lowest band; nothing in the client schedules here
 });
 
 const LANES = { net: { max: 6, running: 0 }, cpu: { max: 2, running: 0 }, gpu: { max: 2, running: 0 } };

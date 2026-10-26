@@ -40,7 +40,7 @@ import { grabOf, holdPoseOf, fingerPose, armPose, bothArms, pickGrip, HAND_REACH
 
 const TRACK_MS = 200, TRACK_MIN = 0.05;           // ms, m: at most 5 moves a second, only when moved
 const THROW = { speed: 8, arc: 0.45, lob: 0.6 };   // m/s, rad: unaimed ~26° up the way my body faces; aimed, a lob of ~34° or steeper
-const PUNT_POWER = 4;                             // physobj's default
+const PUNT_POWER = 4;                             // the authority's default (shared/protocol/authority/bodyverbs.js punt)
 
 let hooks = null;   // { myPos(): {x,y,z}, me(): Avatar|null, camera, editing(): bool }
 // hooks get SECONDS since boot but frame() takes SERVER ms: wrap it, never pass the bare function, or flights freeze
@@ -194,7 +194,7 @@ async function track(force = false, { noTeleport = false } = {}) {
     if (r?.ok) { trackedAt = r.at ?? step; return true; }
     if (r?.refused?.at) trackedAt = r.refused.at;
     stuck = { at: to, until: performance.now() + 2000 };
-    // the authority lost me: re-arrive (refused while holding: a teleport can't carry things); ≤ once in 3 s, each is an act on the record
+    // the authority lost me: re-arrive (refused while holding: a teleport can't carry things); ≤ once in 3 s unless forced, each is an act on the record
     if (!noTeleport && ['too-fast', 'solid'].includes(r?.refused?.code) && !myHolds().length && (force || performance.now() - lastTeleport > 3000)) {
       lastTeleport = performance.now();
       r = await sendRequest('move', { to: to.map(r3), teleport: true }); lastMove = { teleport: true, ok: !!r?.ok, refused: r?.refused?.code, reason: r?.refused?.reason };
@@ -656,7 +656,7 @@ async function shove(id, v, now) {
   return r;
 }
 
-// ---------------------------------------------------------------- use while held (grabbable.use; research grab §3-4)
+// ---------------------------------------------------------------- use while held (grabbable.use)
 // one request per press and release; the fx ride presence (pose.use): the authority rate-limits acts on purpose
 const usable = () => myHolds().find((id) => grabOf(compsOf(id))?.use) ?? null;
 let pressing = null;   // the id my use is held down on
@@ -702,7 +702,7 @@ if (typeof document !== 'undefined') {
   bus.on('holds', () => setTimeout(sync, 0));
 }
 
-// ---------------------------------------------------------------- VR hands (research grab §4; xr.js calls xrHand per hand)
+// ---------------------------------------------------------------- VR hands (xr.js calls xrHand per hand)
 // grip takes the nearest within NEAR_GRAB × scale (priority, a grip for this hand, distance), else the laser to grabbable.range.
 // Release throws at the velocity averaged over AVG_MS; trigger is use; the other hand takes or swaps.
 const AVG_MS = 100;

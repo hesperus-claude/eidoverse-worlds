@@ -90,7 +90,8 @@ export function setHud(parts) { el.hud.innerHTML = parts; }
 // #hintbar is the one bar at the lantern's spot, and everything CLAIMS it with a priority:
 //   1 attn      a refusal (attention colour, copy pill, holds while pointed at)
 //   2 keys      the engaged gesture's keys (keyhints `during`)
-//   3 flash     a moment's notice ("panels hidden · Tab", "locked", the authority's warnings on my own edit)
+//   2.5 flash   a moment's notice ("panels hidden · Tab", "locked", the authority's warnings on my own edit)
+//   3 hint      setHint's standing line (30 s unless sticky)
 //   4 selection edit mode's selection line (name · keys · lock)
 //   5 ambient   the standing offer from the world ("X — sit")
 // the lowest live claim shows (no stacking); the lantern pill shows when none does. Content: text, html``, or a node
