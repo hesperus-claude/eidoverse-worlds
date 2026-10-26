@@ -1,6 +1,5 @@
-// components-wire-test — step 2 of docs/DESIGN-edit-mode-components.md §7:
-// light as a component, empty entities, collider as a component — each with
-// its alias, on every tier that gives it meaning.
+// components-wire-test — light, empty entities and collider as components,
+// each with its alias, on every tier that gives it meaning.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-wire-test.ts
 //

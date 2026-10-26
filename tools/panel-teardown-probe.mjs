@@ -35,10 +35,8 @@ await pg.evaluate(() => {
   const head = [...document.querySelectorAll('.sec-tabs .pf-tab')].find((h) => /audio/i.test(h.textContent || ''));
   head?.click();
 });
-// This branch's audiopanel renders settings rows as `.row` with `.nm` labels
-// (the `.sp-row`/`.sp-label` markup belongs to the later SFU-stack panel).
-// Gate on checkbox rows existing — they are the panel's own controls, so a
-// lone-resident OWNED world renders them all; no ambient population needed.
+// the audiopanel's settings rows are .sp-row.row with .nm labels; gate on checkbox rows existing (the panel's own
+// controls, so a lone-resident owned world renders them all)
 const opened = await pg.waitForFunction(
   () => [...(document.querySelector('#sec-audio .body')?.querySelectorAll('.row') ?? [])]
     .filter((r) => r.querySelector('input[type=checkbox]')).length >= 2,

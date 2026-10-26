@@ -358,11 +358,8 @@ async function residencyState(pred: (r: any) => boolean, label: string): Promise
 }
 
 // ============================================================ live edit
-// live(fold) === join(fold), per field (slice 18a): a light edited LIVE must
-// render exactly as a fresh joiner folding the same log renders it. The
-// keeps anchor the uniform reads: keep-tier requests are exempt from the
-// governor's slot cap (PROTOCOL §3.1), so they cast deterministically even
-// when a slow headless box sheds the sheddable tail.
+// live(fold) === join(fold), per field (slice 18a); keep-tier requests are exempt from the governor's slot cap, so
+// the keeps cast deterministically even when a slow box sheds the sheddable tail
 console.log(`\n${bold("── live edit")}`);
 
 const lightRow = (id: string) => evalJson(`(() => {

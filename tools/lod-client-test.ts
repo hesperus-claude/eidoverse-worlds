@@ -34,7 +34,7 @@
 // landing over an occupant / cargo / a part motion / an edit hold, a lod ask a
 // non-KTX2 browser reports without ever sending, an authored `recipe`
 // extra read as a served lod, a governor lever overriding the resident's
-// "full detail". Dies at import on main (no lod_policy.js).
+// "full detail".
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';

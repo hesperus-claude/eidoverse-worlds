@@ -3,7 +3,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/plateanchor-test.ts
 //
-// What must hold (FEATURE-WISHLIST "Nameplate height", steps 1–4; Basis's constants):
+// What must hold (Basis's constants):
 //   the crown — eye + 1.35·(eye − head); no eyes → head + 0.45·(head − hips); the mesh top counts, capped at
 //     head + 1.8·(that span); no head/hips → nothing;
 //   the gap — 5% of height, 3–15 cm;
