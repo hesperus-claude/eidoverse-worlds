@@ -32,75 +32,46 @@ async function rig(args: any, who = "antra") {
   return { ag: A, events, door };
 }
 
-// ---------------------------------------------------------------- A: forecast boundaries (rate 0: no phase noise)
+// ---------------------------------------------------------------- one rule over every sky source: the first look is
+// silent, a crossing emits exactly one event, re-checks within it add none (agent.ts checkSky, lastSkyKey/lastDayPhase)
 
-{
-  const { ag, events } = await rig({ hours: 12, rate: 0, forecast: policyArgs });
-  const p = normalizePolicy(ag.skyState.forecast)!;
-  const seg0 = segmentAt(p, T0);
-
-  ag.checkSky(T0 + 1000);
-  check("first observation is silent (arrival is look()'s job)", events.length === 0);
-  ag.checkSky(T0 + (seg0.endMs - T0) / 2);
-  check("mid-segment ticks stay quiet", events.length === 0);
-
-  ag.checkSky(seg0.endMs + 1000);
-  check("segment boundary emits exactly one event", events.length === 1);
-  check("boundary event carries provenance (the sky's log position, and who set it)",
-    /forecast/.test(events[0]?.text) && /seq \d+/.test(events[0]?.text) && /olive/.test(events[0]?.text)   /* the actor the door wrote (its owner: agent-scratch acts as olive; the rig's who is display only) */,
-    events[0]?.text);
-  ag.checkSky(seg0.endMs + 2000);
-  ag.checkSky(seg0.endMs + 3000);
-  check("deduped: repeated checks in the same segment add nothing", events.length === 1);
-
-  // walk three more boundaries: one event each, all states from the policy
-  const seg1 = segmentAt(p, seg0.endMs + 1000);
-  const seg2 = segmentAt(p, seg1.endMs + 1000, seg1);
-  const seg3 = segmentAt(p, seg2.endMs + 1000, seg2);
-  ag.checkSky(seg2.startMs + 1000);
-  ag.checkSky(seg3.startMs + 1000);
-  check("each later boundary emits once", events.length === 3, `got ${events.length}`);
-  check("no day-phase events under rate 0", events.every((e: any) => /world weather/.test(e.text)));
-}
-
-// ---------------------------------------------------------------- B: day phases (rate 24, authored-only weather)
-
-{
-  const { ag, events } = await rig({ hours: 8, rate: 24, weather: "clear" });
-  ag.checkSky(T0 + 1000);                       // world hour ~8: day; init silent
-  check("phase init is silent", events.length === 0);
-  ag.checkSky(T0 + (4 / 24) * HOUR);            // world hour 12: still day
-  check("no event within one phase", events.length === 0);
-  ag.checkSky(T0 + (10.5 / 24) * HOUR);         // world hour 18.5: dusk
-  check("dusk crossing emits", events.length === 1 && /dusk/.test(events[0]?.text), events[0]?.text);
-  ag.checkSky(T0 + (13.5 / 24) * HOUR);         // world hour 21.5: night
-  check("night crossing emits", events.length === 2 && /night/.test(events[1]?.text), events[1]?.text);
-  ag.checkSky(T0 + (14 / 24) * HOUR);           // world hour 22: still night
-  check("still-night tick is quiet", events.length === 2);
-  check("no weather-change events without a forecast or verb", events.every((e: any) => !/world weather/.test(e.text)));
-}
-
-// ---------------------------------------------------------------- C: manual override lands, then expires
-
-{
-  const { ag, events, door } = await rig({ hours: 12, rate: 0, forecast: policyArgs });
-  const p = normalizePolicy(ag.skyState.forecast)!;
-  ag.checkSky(T0 + 1000);                       // init
-  const seg = segmentAt(p, T0 + 20 * MIN);
-  const tO = T0 + 20 * MIN;
-  const wr = await door.act("weather", { weather: "storm", weatherK: 1.1 }, { who: "digi", at: tO });
-  check("the door takes the weather override", wr.ok, JSON.stringify(wr.refused));
-  // boundary events between init and the override are legitimate: count from here
-  const before = events.length;
-  ag.checkSky(tO + 1000);
-  check("override landing emits with the actor's name",
-    events.length === before + 1 && /storm/.test(events.at(-1)?.text) && /olive/.test(events.at(-1)?.text)   /* the logged actor, as above */,
-    events.at(-1)?.text);
-  ag.checkSky(tO + 2000);
-  check("override event is deduped", events.length === before + 1);
-  ag.checkSky(seg.endMs + 1000);
-  check("override expiry emits the forecast's resumption",
-    events.length === before + 2 && /forecast/.test(events.at(-1)?.text), events.at(-1)?.text);
+type Step = [label: string, at: number, adds: number, text?: RegExp];
+const fc = { hours: 12, rate: 0, forecast: policyArgs };
+const LA = { night: Date.UTC(2026, 0, 15, 12, 50, 0), dawn: Date.UTC(2026, 0, 15, 13, 10, 0) };   // LA 4:50 → 5:10
+const SOURCES: { name: string; args: any; steps: (ag: any, door: any) => Promise<Step[]> }[] = [
+  { name: "forecast segment", args: fc, steps: async (ag) => {
+    const p = normalizePolicy(ag.skyState.forecast)!, s0 = segmentAt(p, T0);
+    const s1 = segmentAt(p, s0.endMs + 1000), s2 = segmentAt(p, s1.endMs + 1000, s1), s3 = segmentAt(p, s2.endMs + 1000, s2);
+    // the actor is the one the door logged (agent-scratch acts as olive; the rig's who is display only)
+    return [["first look", T0 + 1000, 0], ["mid-segment", (T0 + s0.endMs) / 2, 0],
+      ["boundary, with the log's seq and actor", s0.endMs + 1000, 1, /world weather.*forecast.*seq \d+.*olive/],
+      ["re-check", s0.endMs + 2000, 0], ["re-check", s0.endMs + 3000, 0],
+      ["a later boundary", s2.startMs + 1000, 1, /world weather/], ["and the next", s3.startMs + 1000, 1, /world weather/]];
+  } },
+  { name: "rated day phase (no forecast: no weather events)", args: { hours: 8, rate: 24, weather: "clear" }, steps: async () => [
+    ["first look (day)", T0 + 1000, 0], ["within day", T0 + (4 / 24) * HOUR, 0],
+    ["dusk", T0 + (10.5 / 24) * HOUR, 1, /^dusk/], ["within dusk", T0 + (10.6 / 24) * HOUR, 0],
+    ["night", T0 + (13.5 / 24) * HOUR, 1, /^night/], ["within night", T0 + (14 / 24) * HOUR, 0]] },
+  { name: "manual override lands, then expires", args: fc, steps: async (ag, door) => {
+    ag.checkSky(T0 + 1000);
+    const tO = T0 + 20 * MIN, seg = segmentAt(normalizePolicy(ag.skyState.forecast)!, tO);
+    const wr = await door.act("weather", { weather: "storm", weatherK: 1.1 }, { who: "digi", at: tO });
+    check("the door takes the weather override", wr.ok, JSON.stringify(wr.refused));
+    return [["override lands, with the logged actor", tO + 1000, 1, /storm.*olive/], ["re-check", tO + 2000, 0],
+      ["expiry resumes the forecast", seg.endMs + 1000, 1, /forecast/], ["re-check", seg.endMs + 2000, 0]];
+  } },
+  { name: "real-clock day phase (no rate field)", args: { hours: 6.8, rate: 24, tz: "America/Los_Angeles" }, steps: async () => [
+    ["first look (night)", LA.night, 0], ["dawn", LA.dawn, 1, /^dawn/],
+    ["a minute later", LA.dawn + MIN, 0], ["ten minutes later", LA.dawn + 10 * MIN, 0]] },
+];
+for (const src of SOURCES) {
+  const { ag, events, door } = await rig(src.args);
+  for (const [label, at, adds, text] of await src.steps(ag, door)) {
+    const before = events.length; ag.checkSky(at);
+    const got = events.slice(before);
+    check(`${src.name}: ${label} adds ${adds}`, got.length === adds && (!text || got.every((e: any) => text.test(e.text))),
+      JSON.stringify(got.map((e: any) => e.text)));
+  }
 }
 
 // ---------------------------------------------------------------- D: static skies stay silent
@@ -200,16 +171,6 @@ async function rig(args: any, who = "antra") {
   check("#65 look(): narration says real time, never ×24",
     sky.description.includes("real time, America/Los_Angeles") && !sky.description.includes("advancing"),
     sky.description);
-
-  // day phases still move with no rate field: LA 4:50 (night) → 5:10 (dawn)
-  const night = Date.UTC(2026, 0, 15, 12, 50, 0), dawn = Date.UTC(2026, 0, 15, 13, 10, 0);
-  ag.checkSky(night);
-  const before = events.length;
-  ag.checkSky(dawn);
-  // (a forecast boundary may also land in the 20min window: only the phase crossing is under test)
-  check("#65 ambient day-phase crossing still fires under a real clock",
-    events.slice(before).some((e: any) => /dawn/.test(e?.text ?? "")),
-    JSON.stringify(events.slice(before)));
 
   // return to accelerated: effective source changes once, with new provenance
   await door.act("sky", { hours: 6.8, rate: 24, clouds: "cumulus" }, { who: "antra", at: T0 + 2 * HOUR, live: false });
