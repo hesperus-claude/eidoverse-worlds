@@ -1,8 +1,8 @@
 // The renderers' credential and a private world's HTTP reads (#260 house I143, I144): the cases access-test.ts held
 // before it was retired, against a scratch server.
-//   - a client merely SAYING renderer (with the door key) may not watch a members-only world (4010);
-//   - the renderers' credential WITHOUT the renderer flag opens no door (4003);
-//   - a renderer holding the renderers' credential watches it, and a later closing doesn't remove it;
+//   - every join shape × credential: only the renderer flag with the renderers' credential watches a members-only world;
+//     the door key alone is 4010, the renderers' credential without the flag (a lite ?renderer page included) is 4003;
+//   - a later closing doesn't remove the admitted renderer;
 //   - a stranger (the door key, no membership) gets 404 from /snap and /heightmap of a members-only world, where the
 //     same reads of the world while open answer (the control).
 //
@@ -45,17 +45,27 @@ try {
   const a = await req(owner, "set", { id: "@world", component: "access", value: { join: "listed" } });
   check("(setup) the owner makes the world members-only", a.ok === true, JSON.stringify(a));
 
-  const fake = await open("fake-renderer", { renderer: true, token: DOOR });
-  check("a client merely SAYING renderer (door key) may not watch the members-only world", fake.closedWith === 4010 && !fake.snap(), `code=${fake.closedWith}`);
-  const sneaky = await open("sneaky", { token: RKEY });
-  check("the renderers' credential without the renderer flag opens no door", sneaky.closedWith === 4003 && !sneaky.snap(), `code=${sneaky.closedWith}`);
-  const real = await open("mac-renderer", { renderer: true, token: RKEY });
-  check("a renderer holding the renderers' credential watches the members-only world", !!real.snap(), `code=${real.closedWith}`);
+  // every join shape × credential on the members-only world: only the renderer flag WITH the renderers' credential watches.
+  // The shapes are what pages send (renderer-join-test): a renderer page, a roaming one, a lite ?renderer page (spectate, no
+  // renderer flag), a spectator, a person.
+  const SHAPES: [string, Record<string, unknown>][] = [["renderer", { renderer: true, spectate: true }],
+    ["roaming renderer", { renderer: true, roam: true, spectate: true }], ["bare renderer flag", { renderer: true }],
+    ["spectator (a lite ?renderer page sends this)", { spectate: true }], ["person", {}]];
+  const CREDS: [string, string, number | null][] = [["door key", DOOR, 4010], ["renderers' credential", RKEY, 4003], ["a wrong key", "nope", 4003]];
+  let real: Conn | null = null, n = 0;
+  for (const [shape, flags] of SHAPES) for (const [cred, token, refusal] of CREDS) {
+    const c = await open(`j${++n}`, { ...flags, token });
+    const watches = cred === "renderers' credential" && flags.renderer === true;
+    if (watches) check(`${shape} + ${cred}: watches the members-only world`, !!c.snap() && c.closedWith == null, `code=${c.closedWith}`);
+    else check(`${shape} + ${cred}: refused ${refusal}`, c.closedWith === refusal && !c.snap(), `code=${c.closedWith}`);
+    if (watches && !real) real = c; else if (c.closedWith == null) c.ws.close();
+  }
+  if (!real) throw new Error("no renderer was admitted");
   const again = await req(owner, "set", { id: "@world", component: "access", value: { join: "listed", watch: "anyone" } });
   await h.sleep(600);
   const shut = await req(owner, "set", { id: "@world", component: "access", value: { join: "listed" } });
   await h.sleep(800);
-  check("…and the trusted renderer is not removed when the world closes again", again.ok && shut.ok && real.closedWith == null, `code=${real.closedWith}`);
+  check("…and the trusted renderer is not removed when the world closes again", again.ok && shut.ok && real!.closedWith == null, `code=${real!.closedWith}`);
 
   const hm = await fetch(`${h.BASE}/heightmap?world=${W}&format=json`, KEY);
   check("a stranger's /heightmap of the members-only world: 404, nothing about it", hm.status === 404, `${hm.status} ${await hm.text()}`);
