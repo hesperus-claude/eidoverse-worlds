@@ -58,7 +58,7 @@ export const APPROACH_MAX_WAIT_MS = (() => {
 })();
 
 /** Activity pulse defaults: a digest within ACTIVITY_RADIUS_M, at most once per window and only when something
- *  happened, for hosts that wake on the "activity" tag. Per-agent: WorldAgent.setActivity. */
+ *  happened, for hosts that wake on eidoverse:activity-digest. Per-agent: WorldAgent.setActivity. */
 export const ACTIVITY_RADIUS_M = env("EW_ACTIVITY_RADIUS_M", 30);
 export const ACTIVITY_PULSE_MS = env("EW_ACTIVITY_PULSE_SEC", 30) * 1000;
 /** An unchanged ambient digest repeats no more often than this; discrete events (speech, arrivals, builds) always

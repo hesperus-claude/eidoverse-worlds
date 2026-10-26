@@ -344,7 +344,7 @@ async function presenceRefusal(ag: ToolAgent, t0: number, ms = 700): Promise<str
   while (Date.now() < end) { const r = ag.lastRefusal; if (r && r.ts >= t0) return r.text; await new Promise((res) => setTimeout(res, 25)); }
   return null;
 }
-// a script activation's statuses that mean it ran (or, dry, would run): authority/scriptrun.js activate's out(); anything else
+// a script activation's statuses that mean it ran (or, dry, would run): shared/protocol/authority/scriptrun.js activate's out(); anything else
 // (refused, failed, unavailable, paused, stopped, suspended, not-installed) means it didn't
 const SCRIPT_RAN = new Set(["ran", "nothing", "would-run"]);
 // the code, why, and what to do instead: the words edit mode shows for the same refusal (shared/protocol/refusal.js)
@@ -1150,7 +1150,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       const wireId = id === WORLD_ID ? id : encId(id);   // the authority's own id, as the ops carry it (requests.js)
       const base = ag.componentsOf(wireId);
       // a host's sockets are its socket children: a write of the sockets map changes the children it names and retires the
-      // rest (authority/sockets.js liftOps), so the plan's read of them is pinned too
+      // rest (shared/protocol/authority/sockets.js liftOps), so the plan's read of them is pinned too
       const sockets = id === WORLD_ID ? {} : ag.socketChildrenOf(wireId);
       const { ops, errors, asks } = id === WORLD_ID
         ? { ...worldEditOps(ag.worldFold(), (a.set ?? {}) as Record<string, unknown>, { now: Date.now() }), asks: undefined }

@@ -10,7 +10,7 @@
 
 import { MOVER } from "../shared/mover.js";
 
-/** Under the capsule radius (0.32), so a wall cannot fall between two neighbouring standing columns. */
+/** Under the planning radius (physics.ts PLAN_R, ~0.33 m), so a wall cannot fall between two neighbouring standing columns. */
 export const NAV_CELL = 0.2;
 /** Off round metres: on a wall face (authored on round coordinates) resolveColliders has no push direction, so the
  *  point would read as standing room inside the wall. */
