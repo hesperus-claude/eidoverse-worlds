@@ -129,7 +129,7 @@ export class WorldLog {
     // a request waits for them, or one just after a load meets unsized models and its outcome is logged for good
     this.standing = warm(Object.values(st.entities ?? {}).map((e: Any) => e.c.model)).catch(() => {});
   }
-  /** said to the flight recorder when a world attaches */
+  /** what the socket lift couldn't do, whether the world still needs the shape repair, a rename's failure: said to the flight recorder when a world attaches */
   private liftNotes: Record<string, unknown>[] = [];
   private standing: Promise<unknown> = Promise.resolve();
   attach(host: LogHost) { this.host = host; for (const n of this.liftNotes) host.debug(n.repair ? "repair-needed" : "custody", n); }
