@@ -154,8 +154,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
   ["grant-until", "../grant-until-test.ts", 1], // a timed grant's end is a whole millisecond (the authority refuses a fractional one)
   ["lite-graph", "../lite-graph-test.ts", 1], // the lite client never imports the WebGPU renderer
-  ["say-live", "../say-live-test.ts", 1], // a transcript is dropped offline, and its say carries spoken/utt/t0
-  ["presence-actor", "../presence-actor-test.ts", 1], // puppet, bodydrag and typing go only with the target's identity
+  ["net-send-shape", "../net-send-shape-test.ts", 1], // a message about a person carries their identity or is not sent; a spoken say carries spoken/utt/t0, a live one is refused offline
   ["first-name-account", "../first-name-account-test.ts", 1], // the first-run door's name becomes the account
   ["retired-commands", "../retired-commands-test.ts", 1], // a retired command says why it is gone
   ["animnames-retry", "../animnames-retry-test.ts", 1], // a failed defs fetch is retried with back-off
