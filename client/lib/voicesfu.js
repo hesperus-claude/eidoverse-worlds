@@ -217,7 +217,7 @@ async function sfuPublish() {
   const myPc = pc;
   micPendingPc = myPc;
   micPending = (async () => {
-    // ask the seam, not the device, so TTS has a route to the sender; everything below is source-agnostic
+    // ask the seam, not the device, so TTS has a route to the sender; everything below is source-agnostic (docs/research/voice-sources.md)
     const { voiceSource } = await import('./voicesource.js');
     const asked = wantMic;
     const raw = await voiceSource({ micWanted: asked });

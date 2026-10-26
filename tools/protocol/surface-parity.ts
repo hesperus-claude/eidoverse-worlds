@@ -4,25 +4,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/surface-parity.ts [--check] --commons <dir> --gym <dir> [flags]
 //
-//   --check              assert every prerequisite and stop before the first frame (what to run first on a new box)
-//   --old-ref <ref>      the git ref the OLD tree is checked out from (default main; env SURFACE_OLD_REF)
-//   --old <tree>         the OLD checkout to serve (default: a detached worktree of --old-ref, made if missing at
-//                        $SURFACE_OLD_TREE or <tmpdir>/eido-surface-old-<commit>)
-//   --new <tree>         the NEW checkout (default: this file's repo)
-//   --commons <dir>      the Commons world to render: a directory holding world.jsonl (required unless --only excludes it)
-//   --gym <dir>          the gym world to render (required unless --only excludes it)
-//   --world <name>=<dir> another world to render beside them; repeatable (name: letters, digits, _)
-//   --out <dir>          where frames and diffs go (default notes/surface-parity/<timestamp>/ in the new tree; never /tmp)
-//   --threshold <pct>    changed-pixel percentage that fails a camera (default 0.5)
-//   --tolerance <0-255>  per-channel difference under which a pixel counts as unchanged (default 16: SwiftShader dither)
-//   --camera <w>:<name>=<x>,<y>,<z>/<lx>,<ly>,<lz>   add a camera to world <w>; repeatable
-//   --keep-ui            leave the DOM chrome (panels, chat, HUD) in frame; by default only the canvas is compared
-//   --pin-clock <ms>     the epoch ms the page's Date.now() is pinned to (default: the old tree's commit time)
-//   --no-pin-clock       let the page's Date.now() run real; by default it is pinned (see "probe hooks")
-//   --no-control         skip the second boot of the old tree that measures the noise floor
-//   --timeout <s>        how long a client may take to settle and draw (default 150; SwiftShader is slow)
-//   --only <world>       just one world
-//   --headed             a window you can watch
+//   flags: tools/protocol/SURFACE-PARITY.md (Flags)
 //
 // Every prerequisite is asserted BY NAME before the first frame. Exit 1 = a pixel verdict, 2 = could not look (names the
 // step), 3 = the noise floor is too high to call it.

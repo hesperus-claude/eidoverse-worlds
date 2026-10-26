@@ -13,7 +13,7 @@
 // Injective but for two cases, neither reachable on import (encRaw/encNameRaw escape the hashed form; a lone surrogate
 // fails the strict reader): a literal name in the hashed form (HASHED), and names differing only in a lone surrogate
 // (both written as U+FFFD's bytes). A refused component name always takes the x-- form, never a letter prefix, so
-// "0abc" and "n0abc" can't collide.
+// "0abc" and "n0abc" can't collide. See docs/research/name-escaping.md.
 import { sha256, utf8Hex } from "./hash.js";
 import { isComponent } from "./fold.js";
 

@@ -16,7 +16,7 @@ it and nothing at runtime can load it; `tools/protocol/nov1-check.ts` (in `bun r
 | `frozen/` | every module the old fold reads (forecast, captions, rot, blueprint, chatwindow, and what they import: components, euler, hierarchy, scale3, simmath), byte for byte as they stood at 6dab22f5 (2026-10-04, the commit where the server stopped reading v1 worlds), so a change to the live `shared/` modules never changes what an old log means. Its import closure stays inside this directory (importer-check IM-I3b) |
 | `build.ts` | the old fold's build hash, stamped into a translated world's `translated` act |
 | `world.ts` | `reportV1World(src, {name})`: the dry-run report and its hash (nothing written). `translateV1World(src, dest, {name, approval})`: refuses a founder key (a translation names none), reads `src/log.jsonl` (never writes it), refuses a log using a `DEFERRED` feature, translates, re-reads the result with the strict reader (and, for a physics-era log, the live host's sim layer, which must read the whole history without a disagreement and find nothing to fly: each rest is already a plain change), maps every old name to a door identity, then writes `dest/world.jsonl`; a failure after that removes what it made again |
-| `snapshot-oracle.ts` | the translator against the OLD ENGINE (suite `oracle`): every old world whose `snapshot.json` is a complete fold of its log (seq and bytes match) is translated for real, and its fold (and the server's lifted load) compared with the snapshot, through the translator's mapping and also field by field off the snapshot. Incomplete snapshots are skipped, never compared. Given a world translated in place, it reads the kept originals (`log.original.jsonl`, `snapshot.original.json`). `OPT_DIR=<serving checkout>/assets/opt` gives store models their real addresses |
+| `snapshot-oracle.ts` | the translator against the OLD ENGINE (suite `oracle`): every old world whose `snapshot.json` is a complete fold of its log (seq and bytes match) is translated for real, and its fold (and the server's lifted load) compared with the snapshot, through the translator's mapping and also field by field off the snapshot. Incomplete snapshots are skipped, never compared. Given a world translated in place, it reads the kept originals (`log.original.jsonl`, `snapshot.original.json`). `OPT_DIR=<serving checkout>/assets/opt` gives store models their real addresses. Method: `docs/TRANSLATING-OLD-WORLDS.md`, "The snapshot oracle" |
 
 The operator runs it, in place, in two steps (review of PR #260, item 6: the approval is bound to the exact dry-run
 report before anything moves). **A translation names no founder and carries no owner's signature** (#260 rereview,
@@ -121,3 +121,111 @@ which `create-world {ownerKey}` puts in tier 0 (without one, tier 0 is empty). T
 
 3. **The operator checks it** (nothing is written): `bun tools/protocol/world.ts owner-key <KEY> <signature>`. It says
    `ok` only when the signature verifies over `eidoverse-owner-key:<KEY>`.
+
+## eidosim-v1 versions
+
+`eidosim-v1.js` carries every retired version of the first eidosim (Covenant II: an old log replays under the law it
+was written under, bit for bit). `SIM_ID` is what an epoch minted last (`eidosim@0.5.0`); `CARRIED` is what this build
+can still replay. An epoch naming any other sim is foreign: it is recorded and never recomputed (`epoch.foreign`, and
+`advanceSim` only moves the tick). Each version below is gated by name, so adding one never moved an earlier one's bits.
+
+- **0.1.0, flat floor.** Ground is the body's own starting height. That is right on build pads and wrong on slopes: a
+  flight lands on an invisible floor at its launch altitude. Its advance law is untouched, so 0.1.0 epochs replay to
+  the same bits they always did.
+- **0.2.0, terrain ground.** The sim folds the world's `terrain` entries and grounds every body on
+  `shared/terrainmath.js`, the client's height law in exact ops (≥ 99.8 % bit-identical to the mesh the client walks,
+  worst divergence about 1e-15). A grounded body is glued to the terrain while it slides, and a flight meeting rising
+  ground stops at the contact. A `terrain` entry under a live epoch re-grounds the world: every body is released to
+  the instant fold. A world with no terrain keeps the flat floor.
+- **0.3.0, things are colliders.** The sim folds the boxes the sequencer stamps into history (Covenant III: an asset's
+  geometry is not in the log until the sequencer writes it there): `epoch.boxes` (library path → `[[min], [max]]` for
+  every model standing at the barrier) and `spawn.box` for each model spawned later. Every fold entity with a known box
+  is a static collider (the world AABB of its yaw-rotated, scaled box); a punted body carries its own. A body in
+  flight lands on a static whose top it was above and whose footprint it overlaps (the same contact law as terrain); a
+  static met from the side pushes it out along the shallower horizontal axis and reflects that velocity, scaled by
+  `RESTITUTION`. A grounded slider that loses its support by more than a step falls rather than gluing. A body that
+  comes to rest becomes a static again. Out of scope: flying bodies don't collide with each other, a resting body is
+  not woken by a hit, and a thing that mounts, follows a motion or has no box is not a collider.
+- **0.4.0, swept.** 0.3 tests collisions at the end of each tick, so a fast body can cross a thin wall between two
+  endpoints (#160: a 0.2 m body at power 20 rests 30 m past a 0.1 m wall). 0.4 sweeps the body's AABB along the tick's
+  displacement against every static (a slab test, exact ops) and resolves the earliest contact at the contact point: a
+  top met from above is a landing, a side a wall bounce, and the rest of the tick's motion is spent there. States that
+  already overlap keep 0.3's endpoint resolution. Constants and order are unchanged.
+- **0.5.0, contacts consume time.** After a contact the remaining movement is swept again, so a zero-time contact with
+  a deck cancels downward gravity without cancelling horizontal sliding. At most eight contacts a tick; when they run
+  out, the body stays at the last safe contact.
+
+## Translator versions
+
+`TRANSLATOR` and `TRANSLATOR_SIM` in `translate-v1.js` say which output a translation is: either name is bumped on any
+change to the output, and two translators never share a name (`translatorVersion` parses the number; compare numbers,
+never a pattern of digits). Both are `eidoverse/translate-v1@20`. What each version changed, in order (a later entry
+can replace an earlier rule; the current code is the truth):
+
+- **@3.** Genesis on PROTOCOL §2.4 and §3d. A v1 world has no keys, so the translating door's key is the sequencer and
+  the only governance key, in tier 1 (tier 0 empty). The nonce is the first 16 bytes of the sha256 of the source log's
+  lines, so translation is a pure function. `translatedFrom` can't sit in genesis, so it is the `translated` act right
+  after it. v1's owners become `@world` roles from its grants. (Since then a real authority passes its own operator key
+  for tier 1 and a random nonce: `translatedGenesis`.)
+- **@4.** A v1 `fly: true` grant becomes `roles:<id>.can.fly`.
+- **@5** (two parallel bumps). `story` is a component (`{title, text, marks?}`): a v1 story's `practice` becomes a
+  paragraph of its text and `markedEntity` its marks, and both also ride in the carried story beside it. A v1 `door`
+  component is `openable`, and a reaction naming `door` names `openable`. A spin's `rpm` is `degPerSec` (rpm × 6). An
+  orbit's center/face/period and a path's points/speed/duration/loop stay in the motion.
+- **@6.** The two @5 outputs merged.
+- **@7, the renamed protocol.** A result entry is kind `change`; the translating door's entries, and a v1 entry whose
+  actor was `door`, are actor `system`. Everything carried only from translation is one `imported` family: the act verb
+  `imported`, `imported:<k>`, `imported-behavior:<k>`, `imported-bans:<id>`. A v1 `gen` grant is `can.generate`. A
+  light's `keep` is `important`; a palette entry is `assets:<k>`; a dialect-3 epoch's engine is `@world
+  physics-engine`; a mount's parent names its socket as `socket` (v1's `slot`). Every log's output changed.
+- **@8.** A model was written as `eido:sha256/<hex>` in place of its library path (replaced at @12).
+- **@9, particles.** A v1 `particles` bag is today's instance: its preset is the effect, its origin `at`, its seed
+  stays, and count, size, opacity, speed, lifetime, area, texture and quality are the params every Essential declares
+  (`shared/particle_effects.js` `modernize`). A key neither spelling knows rides in `imported:particles`.
+- **@10.** A dialect-3 log is translated with the first eidosim run beside the v1 fold, as `translate-d3.js` did alone
+  before. Punts were written as launches with stamped state and each rest as a checked result. Superseded by @11. A log
+  with no epoch translated byte for byte as @9, so it kept @9's name.
+- **@11.** The runtime no longer carries the first eidosim, so nothing in a new log asks a reader to fly it. The sim
+  still runs here and says where each punt came to rest, but a punt stays its imported act, each rest is a plain
+  change by `sim` caused by that act (no digest), the world's engine is today's eidosim from the epoch on, and a thing
+  v1 ever punted is a `dynamic` collider, every other one `static`.
+- **@12, the shape audit.** No account subject (`sub`) is written in roles or imported bans (refined at @16 and @20). A
+  refused dialect-3 epoch is carried as `imported:epoch`. A stored value's old spelling is written in today's, by the
+  same rules the server's load applies (`shapeRepaired`, `shared/protocol/shaperepair.js`), and a parent carries no
+  order. Render: a light carries decay 1.7 (the rig's old falloff) and `daytime`; `@world`'s sky, terrain, water and
+  grass are in today's spelling. A model stays its library path, with `model-hash sha256:<hex>` beside it when the
+  resolver knows the bytes; a particle Essential and a grass preset keep their names. A lock is `{rank: 'builder'}`.
+  Sockets stay the v1 map with each seat's body block; the server's load lifts them to socket children.
+- **@13.** Every translation writes the system's `repair-shapes` act right after `translated` (the shape repair's
+  once-per-world marker). The projection is @12's; the log is one entry longer.
+- **@14.** A motion's type is written in today's spelling: v1's back-and-forth along an axis is `oscillate`
+  (`motionType`).
+- **@15, named emitters.** A v1 `particles:<name>` (name: 1–32 of `A–Z a–z 0–9 _ -`) on X becomes a child thing of X
+  (parent `{to: X}`, label `<name>`, at X's origin) whose `particles` is that emitter in today's spelling. Its id is
+  `emitterChildId` (the same from every translation) and its seed the one v1 drew it with
+  (`hashSeed("<X>:particles:<name>:<preset>")`) unless it wrote one. Putting it out removes the child. A malformed
+  `particles:…` key is carried like any unknown component. v1's look and motion knobs ride in `imported:particles`, and
+  its `scale` is the instance's scale.
+- **@16.** No account subject is written anywhere. A property named `sub` or ending in `Sub` whose string has an
+  account's shape is one, at any depth (`withoutAccounts`): in an imported act's args it becomes the person's id when a
+  mapper is given and is dropped when none is; in a value it is always dropped. Other strings under such names stay. A
+  binding's author is found through its account, as the author's grant is.
+- **@17.** The base rung is `inhabitant` (v1's visitor), with nothing below it. A person's v1 spectator or none grant
+  is carried as `imported-roles:<id>` with no `roles:<id>`, so they hold the world's newcomer role. The door's own
+  words (`*` none/spectator) still become access.
+- **@18.** An approved translation's `translation-approved` act is written by translate itself, so every later change's
+  cause is the act it answers. v1's captions bag (a window of lines) becomes today's current line (`newCaptions`), the
+  old fold reading its own frozen modules (`frozen/`). A caption deed is a place in its screen's captioners. A spin's
+  rpm and a seat's yaw are read as the renderer coerced them, and what can't be read is carried. An earlier epoch's
+  rest tick never dates a later epoch's rest.
+- **@19.** An old name already in the hashed form (`h--` + 61 hex) is escaped like any other name, never kept as that
+  id (`encRaw`): old logs never held one, and keeping it let a long name and a raw name equal to its hashed form
+  collide. A motion whose amplitude was null is carried as `amp` 0, as the old reader read it, where @18 dropped it.
+- **@20.** A name is joined to an account only where v1's server wrote the pair itself: a grant's or ban's `sub`
+  beside its id, a spawn's or light's placer `{id, sub}`, a behaviour's `bySub`, the act's own actor. Elsewhere, a name
+  beside an account is data: the account becomes its person's id and the name is joined to nothing, so no value in the
+  log moves anyone's acts or role to another person. A binding's author is its `bySub`'s person. The translated act's
+  copy of the old genesis carries no account either. A component whose name has an account's (`ownerSub`) and whose
+  whole value is an account is left out of the state. An account is any shape a join wears (`human:`, `agent:`,
+  `aid1:`, `local:`). A role or ban keyed by an account is that account's person; the placer and `bySub` pairs join a
+  name to its account before any act is read (`world.ts`), as a grant's do.

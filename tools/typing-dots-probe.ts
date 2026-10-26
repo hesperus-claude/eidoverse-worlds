@@ -9,20 +9,7 @@
 // agent-framework (start when a turn begins and every 7 s, stop when it ends); the full client runs in Chromium in the
 // same world, and a raw socket beside it logs what the world broadcasts, in order.
 //
-// The PAGE is judged by the client's own state, in one logged sequence: the agent avatar's setTyping (each signal and
-// the window it set) and update (the state each render-loop update left) are wrapped, plus a listener on the client's
-// socket and a requestAnimationFrame logger. Rules: every update draws the pill exactly when the window is open at the
-// update's own `now` and no bubble shows; each signal opens a window ending 4 s after it; the page receives every
-// typing frame the world sent; and the client applies each after the one before and before the page renders again.
-// Deadlines count from the PAGE's receipt (a loaded page queues messages while it renders). Agent frames carry no state
-// (setTyping(undefined)), so the live-mic pill can't arise; the agent's plate is never hidden on the viewer's page, so
-// an update hiding it is a defect. A remote avatar updates only on level-of-detail ticks (client/lib/remotes.js), so
-// the probe judges each decision and prints how far apart they came; page and probe times are both Date.now().
-//
-// The RAW SOCKET judges the door's contract by this side's clock, as a viewer would see it: only this side's own stalls
-// are excused (a heartbeat records every gap past 100 ms; a stamp is allowed the stall whose late tick ran within 20 ms
-// of it, erring toward the door by at most that stall), so a door or world slowed past a bound's margin fails it, and
-// the run prints the machine's load. Send times are read after each send, so a stall before a send delays it with it.
+// Judged by the client's own state at each update. Method: docs/research/typing-dots-probe.md.
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";

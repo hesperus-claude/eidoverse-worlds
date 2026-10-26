@@ -66,7 +66,7 @@ async function pump() {
 export const warmStats = () => ({ ...stats, pending: queue.length, running });
 
 // ---- shadow-depth pre-warm --------------------------------------------------
-// compile a caster's depth pipelines before castShadow flips, so the real pass is a cache hit
+// compile a caster's depth pipelines before castShadow flips, so the real pass is a cache hit — see docs/research/shadow-depth-prewarm.md
 // warmMat is pre-set to the post-mutation state because renderObject restores before compileAsync's deferred codegen
 
 const SHADOW_SIDE = {
@@ -83,7 +83,7 @@ let depthWarmBroken = new URLSearchParams(globalThis.location?.search ?? '').has
 function ensureDepthWarm() {
   if (warmMat) return true;
   if (depthWarmBroken) return false;
-  // the one internal this leans on; if the vendored build moves it, degrade loudly to compiling in-frame
+  // the one internal this leans on; if a three update moves it, degrade loudly to compiling in-frame
   if (typeof renderer._getShadowNodes !== 'function') {
     depthWarmBroken = true;
     console.warn('[warm] three internals moved (_getShadowNodes) — depth pre-warm disabled, casters compile in-frame as before');
@@ -113,7 +113,7 @@ function warmTarget() {
   return scratchRT;
 }
 
-/** the exact state renderObject() leaves the per-light shadow material in (:61181-61209), so restore is identity */
+/** the exact state renderObject() leaves the per-light shadow material in, so restore is identity */
 function configureFor(m) {
   const sn = renderer._getShadowNodes(m); // cached on the renderer: the same instances the real pass uses
   warmMat.alphaTest = m.alphaTest;
@@ -137,13 +137,13 @@ async function compileDepthRound(mesh, material) {
   const saveCulled = mesh.frustumCulled;
   const prevOverride = scene.overrideMaterial;
   const prevTarget = renderer.getRenderTarget();
-  mesh.visible = true;         // compile's projectObject skips invisible (:60819)
-  mesh.frustumCulled = false;  // …and out-of-frustum (:60869)
+  mesh.visible = true;         // compile's projectObject skips invisible
+  mesh.frustumCulled = false;  // …and out-of-frustum
   scene.overrideMaterial = warmMat;
   renderer.setRenderTarget(warmTarget());
   let compiled;
   try {
-    // live scene: env/fog inputs match the real pass (both inert for an unlit shadow material, :30264)
+    // live scene: env/fog inputs match the real pass (both inert for an unlit shadow material)
     compiled = renderer.compileAsync(mesh, sun.shadow.camera, scene);
   } finally {
     // same synchronous block: no frame can observe these mutated

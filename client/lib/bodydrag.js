@@ -4,6 +4,7 @@
 //   * Consent is the owner's, always: the grab is a request, a movement key revokes, and 1.2 s of dragger silence
 //     auto-resumes; a crashed dragger never leaves a body possessed.
 //   * On release the owner settles from where it was left. Agents only accept and rebroadcast, so they drag too.
+//   See docs/research/ragdoll-sync.md.
 
 import { THREE, camera, canvas, scene } from './core.js';
 import { bus } from './base.js';

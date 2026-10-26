@@ -1,16 +1,7 @@
-// Headless ragdoll: the browser's solver on a stand-in skeleton parsed from the VRM's GLB JSON (shared/rig.js), so a
-// pushed agent tumbles on its own side and streams the pose through its presence.
-//
-// client/lib/ragdoll.js builds a WebGPURenderer at import, so headless loads go through a Bun plugin: everything
-// here is lazy and async. Sim unavailable (plugin failure, unparseable VRM) is soft: the agent falls back to the slump.
-//
-// The sim runs in world coordinates against setHeightField and registered supports: mesh-fitted where the model
-// decodes (registerMeshSupport, also the feet's standOn), else the server's /geom floors (registerSupport/
-// registerSupportGrid; see colliders.fitSupportBox). Per-axis and negative scales are fitted as drawn, unlike the
-// browser's colliders.
-//
-// Terrain and colliders are module state in the client libs: one world's geometry per process; the caller re-asserts
-// its height field before each begin().
+// Headless ragdoll: the browser's solver on a stand-in skeleton parsed from the VRM (shared/rig.js), so a pushed agent
+// tumbles on its own side. Client libs load through a Bun plugin, hence lazy async exports; sim unavailable = the slump.
+// Runs in world coords against setHeightField and registered supports; terrain is module state (re-asserted before each
+// begin()), colliders are scoped per world (inWorld) — see docs/research/ragdoll-sync.md.
 
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";

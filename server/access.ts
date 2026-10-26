@@ -2,7 +2,7 @@
 // components, read by one pure function server and client share (shared/protocol/access.js):
 //   @world.access {join: anyone|signed-in|listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //   @world.default-role, roles:<id> {role, …, until?}
-// The one place every DOOR asks. It never imports server.ts: expel is injected.
+// The one place every DOOR asks. It never imports server.ts: expel is injected. Not ported from upstream: the design doc.
 
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

@@ -1,23 +1,7 @@
-// tools/protocol/migrate-identities.ts — move an existing engine world from name identities to directory ids (round-2
-// review R1), and seal it (R3). For the worlds founded or translated before b1ec40b1; a fresh translation does this
-// itself. Run with the world's server STOPPED (it holds the old log in memory).
-//   - ONE map from each legacy identity to one id, applied everywhere a person is named: every actor, every
-//     roles:/imported-bans: key, a say's `to`, an act's capability.author and sponsor, and every record of the moderator
-//     log (world.mod.jsonl: who and actor). A role value's `sub` binds that NAME to its account first, so the person's
-//     acts land on the id they sign in as; otherwise a reserved agent name -> agent:<slug>; with --trust-names (a
-//     PRIVATE server that runs TRUST_NAMES=1) a bare name -> local:<name>, the account a join there gets; otherwise a
-//     legacy identity an operator binds later. An escaped name (x--…) is read back first. The `sub` moves into the
-//     directory. The authority's own actors (system, world, sim), script:<entity> actors, ids already minted and a
-//     guest's address (addr:…) are left as they are. Act requests (as sent) are left as written.
-//   - then the whole log is sealed with this server's keys: a salt on every set and act/say/sim body, {head, sig} on
-//     every entry after genesis. Genesis and the world id don't change.
-// SAFETY: written only if a gate that reads the two logs side by side (never the map that wrote them) agrees: every
-// legacy identity became exactly one id, everyone left alone stayed themselves, nobody is still named by a legacy name,
-// each role's account is held by the id its role went to, and the old fold with the role/ban keys renamed as the logs
-// show IS the new fold (digest); the reference reader says ok with 0 malformed; chain.py verifies every head. The old
-// logs are kept beside them as world.jsonl.before-identities (and world.mod.jsonl.before-identities). A world that
-// already has that backup, or names nobody by a legacy name, is refused: a second run would overwrite the only way
-// back. The directory learns the new ids before the logs name them. Dry run without --apply.
+// tools/protocol/migrate-identities.ts — move a pre-b1ec40b1 world from name identities to directory ids and seal it; server
+// STOPPED; dry run without --apply. The mapping and the gate: docs/MAINTENANCE.md.
+// SAFETY: writes only if a side-by-side gate of old vs new logs agrees (one id per identity, digests match, chain verifies);
+// keeps *.before-identities and refuses a second run.
 // usage: bun tools/protocol/migrate-identities.ts [--apply] [--trust-names] <world dir>…
 import fs from "node:fs";
 import path from "node:path";

@@ -1,7 +1,7 @@
 // ammodoll — the Bullet (ammo.js) body engine, ported from socketteer/ragdoll-physics; contract: BodyEngineBase (bodyengine.js).
 // The source's tuned numbers transfer (Blender's rigid bodies ARE Bullet); the rig is measured from the live VRM skeleton.
 // Joint frames are ANATOMICAL (Y along the bone, X flexion from the rig's forward/up), never a node's local axes.
-// Laws: bodies are rest-aligned (limits mean "from rest"); a joint must CONTAIN THE POSE IT WAS BORN IN.
+// Laws: bodies are rest-aligned (limits mean "from rest"); a joint must CONTAIN THE POSE IT WAS BORN IN — see docs/research/ammodoll-port.md.
 // WASM: every Ammo object is tracked and destroyed in dispose(); per-frame math reuses module temps.
 
 import { THREE } from './core.js';
@@ -218,11 +218,11 @@ export const HAIR_TUNING = {
 /** Wing tuning, live, same shape as HAIR_TUNING: a limp wing swings from the shoulder and trails, never flaps. */
 export const WING_TUNING = {
   mass: 0.55,       // kg per segment: a 20 g metre-long plate is all lever and reads as paper
-  // Tension 8 is the knee (swept over 4 leans): most kept bend, least jitter; stiffer reads rigid and twitchy.
+  // Tension 8 is the knee (swept over 4 leans): most kept bend, least jitter; stiffer reads rigid and twitchy — see docs/research/ragdoll-tuning.md.
   tension: 8,       // 6DOF angular spring stiffness
   damping: 0.15,    // spring and body angular damping; Bullet's spring damping is a velocity GAIN: more is snappier
   gravity: 1.0,     // fraction of world gravity: full, unlike hair
-  // A linear ramp (70/1.0) beat steeper ones on fold and jitter both; 0.7 was no better on a paired re-test.
+  // A linear ramp (70/1.0) beat steeper ones on fold and jitter both; 0.7 was no better on a paired re-test — see docs/research/ragdoll-tuning.md.
   limit: 70,        // degrees at the outermost segment
   rootExp: 1.0,     // linear: the shoulder gets a third of the range, the tip all of it
 };

@@ -3,28 +3,9 @@
 //
 // Ported from Godot Engine 4.7.2-stable, scene/3d/cpu_particles_3d.cpp (CPUParticles3D::_particles_process and
 // _update_internal) — tag 4.7.2-stable, commit ed1daf0bf001b61586d9930840f2f1394092c079 (see THIRD-PARTY.md). The
-// module vocabulary (emission shapes, direction/spread/flatness, initial velocity, gravity, linear/radial/tangential
-// acceleration, damping, angle and angular velocity, scale and its curve, colour and its ramp, hue variation, animation
-// speed/offset for a flipbook, lifetime randomness, explosiveness, randomness, one-shot, preprocess, speed scale) is
-// Godot's ParticleProcessMaterial's. What is ours, and why:
-//   - local coordinates only: a particles component hangs off its thing and moves with it, so the emission transform is
-//     the identity and every radial/tangential force is about the emitter's own origin;
-//   - gravity alone is WORLD-down (Unity's convention): the renderer turns the document's world vector into the emitter's
-//     frame every frame (setGravity(localGravity(…))), so a tipped brazier's smoke still rises. Godot's local_coords turns
-//     gravity with the node; here only velocity, linear/radial/tangential and the shape stay in the emitter's frame, and
-//     tangential's axis is the document's gravity as written, read in that frame;
-//   - no 2D (DISABLE_Z), no emission points, no attractors, no turbulence, no orbit velocity (Godot's is 2D-only here);
-//   - `sphere` is uniform by VOLUME (the cube root of the draw) with per-axis extents (an ellipsoid); Godot's plain lerp
-//     toward the centre crowds it, and the Essentials keep the toolkit builder's look;
-//   - `velocity` may also be a ranged vector {min, max} per axis (Niagara's Add Velocity) beside Godot's cone: the
-//     Essentials' launch was a box;
-//   - a particle's own randoms come from mulberry32 seeded per particle and cycle (Godot: PCG32); Godot's rand_from_seed
-//     (Park–Miller) and idhash are kept where Godot uses them;
-//   - hue variation applies without a curve (Godot 4.7's CPU path multiplies it by 0 unless a curve is set; its GPU path
-//     doesn't), and the anim-offset curve isn't the angle curve (a slip in the same file);
-//   - every angle is radians (PROTOCOL §9.2) where Godot's material speaks degrees: Godot's arithmetic, deg_to_rad dropped;
-//   - four positional modules applied at output (never fed back into the integration): drift (a slow sinusoidal sway),
-//     swirl (a small circle with age), converge (the offset from the axis narrows over life: a flame's taper), flicker (alpha twinkles).
+// module vocabulary is Godot's ParticleProcessMaterial's. Divergences (local coords, world-down gravity, volume-uniform
+// sphere, ranged velocity, mulberry32 randoms, hue without a curve, radians, drift/swirl/converge/flicker):
+// docs/research/particlesim-godot-port.md.
 //
 // Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md).
 // Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.

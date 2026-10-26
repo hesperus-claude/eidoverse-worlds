@@ -1,6 +1,7 @@
 // baked sky — the clouds as a banded, double-buffered equirect bake (bakeEnv) instead of a per-pixel march; two targets
 // cross-dissolve, and the freshest feeds scene.environment. No in-cloud lightning ('high' keeps the live march).
-// Reaches through skyApi._internals: if they move, attach() returns false and sky.js stays on the live march.
+// Reaches through skyApi._internals: if they move, attachBakedDome() returns false and sky.js stays on the live march.
+// Why bake: docs/research/baked-sky.md.
 
 import { THREE, TSL, scene, camera, renderer } from './core.js';
 import { tee, bus, CONFIG } from './base.js';

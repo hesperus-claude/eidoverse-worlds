@@ -172,7 +172,7 @@ function wireFieldCulling(field) {
 
 // ---- tiling (§13.2 G2, §16.2.B) + blade LOD (§17b): big strokes re-cut into XZ tiles sharing attributes and one
 // material, sized by occupancy (§16.1b). instanceMatrix is allocated past the uniform limit ON PURPOSE so every tile
-// shares one count-independent program (TEL0S_NOTES §16.2).
+// shares one count-independent program (TEL0S_NOTES §16.2) — see docs/research/grass-tiling-lod.md.
 
 // §22 grassdiag toggles — normal operation leaves all of these alone
 let pushersFrozen = false;
@@ -203,7 +203,7 @@ const GRASS_FALL_EXP = 2.5;        // shared with the shader's dither (§22f): C
 const BLADE_LOD_KEEP = 0.4;        // far tiles keep ceil(0.4 × perBunch) blades per tuft (§17b)
 // Coarse far twin (§22n): off by default (measured inert), ?grassvlod=on opts in, forceBladeLod('far') diags it.
 // Shaped density (§22q): thins by DENSE_BASE, widens survivors by 1/√DENSE_BASE, full density at the feet.
-// ?grassdense=N, 1 = kill switch.
+// ?grassdense=N, 1 = kill switch. Why each step: docs/research/grass-tiling-lod.md.
 const DENSE_DEFAULT = 0.65;        // §22q: the least thinning that held the frame cap on the probe meadow
 export const DENSE_BASE = (() => {
   const v = Number(CONFIG.params.get('grassdense'));

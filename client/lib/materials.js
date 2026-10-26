@@ -5,7 +5,7 @@
 //   cloud shade — our own field (two taps of a seeded tileable noise, wind-scrolled, sun-projected); upstream's needs
 //                 textures that don't exist before the sky modules do
 // Prepared meshes are marked userData.noWet + noCloudShadow so upstream sweeps skip them; unprepared ones (mods)
-// still get swept.
+// still get swept. Why: docs/research/material-factory.md.
 
 import { THREE, TSL, sun, ground, renderer } from './core.js';
 import { report, CONFIG, bus } from './base.js';

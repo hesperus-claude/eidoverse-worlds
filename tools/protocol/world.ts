@@ -11,20 +11,9 @@
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts repair <name> [--dry-run] [--by <who asked>]     maintenance: lift-sockets, rename-components, repair-shapes (PROTOCOL §4), each recorded
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts repair <name> --rollback [--force]               the pre-repair log put back, byte-identical
 //
-// The server never makes a world by itself (it refuses a directory holding only an old log). A directory is a world
-// because it holds world.jsonl whose line 0 is a genesis saying {dialect, v: 4}, and only this tool writes one (shell
-// access to the host, like every other operator act on world files). `found` runs the authority's own `new` request, so
-// genesis names the owner and the founding act writes @world (about, bounds, roles:<owner>) through admit; --owner is the
-// name you join with, stamped through names.js exactly as the live authority stamps you.
-// `translate` reads <v1 world>/log.jsonl, never writes it, runs the importer (tools/protocol/import-v1/: 0 divergences
-// required), re-reads the output with the strict reader, and only then writes <new name>/world.jsonl; the old directory
-// stays as it was, unserved.
-// `translate <v1 world>` alone (links keep working) translates IN PLACE: into a temporary sibling, verified (the
-// importer's checks, the result opened as the server opens it, and where the old server left a snapshot.json, the
-// snapshot oracle's agreement), then swapped in under the original name with the old log kept beside it as
-// log.original.jsonl (snapshot.json → snapshot.original.json): renamed, never rewritten. On any failure the original is
-// left as it was, the temporary directory removed, and it says why; if the process dies mid-swap, the next
-// `translate <world>` finishes the swap (renames and moves only), saying so.
+// Only this tool and a person's world-found request write a genesis; the server never founds a world unasked. `found`
+// runs the authority's own create-world request. `translate` never writes the v1 log; in place, it builds in a sibling,
+// verifies, swaps (old log kept as log.original.jsonl) and finishes a half-done swap. Procedure: docs/TRANSLATING-OLD-WORLDS.md.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";

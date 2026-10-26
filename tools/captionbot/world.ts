@@ -1,17 +1,7 @@
 // The captionbot's world client: joins EMBODIED as an identity the screen's `captioners {ids}` names, sends one
 // door `caption` request per final line, and reads the operator's `stage` cue off its own fold (replica.js), so
-// `speaker` is never the bot's guess.
-// RECEIPTS: a line is done when the door answers ok; until then it is PENDING (memory + spool) and resent after a
-// disconnect or silent timeout. The door refuses a duplicate n before writing (captions.js captionRefusal): that is a receipt.
-// ORDER: one line in flight, FIFO, paced under the door's rate (60 entries / 10 s; a caption is two). The server
-// stamps the leg generation; a restart's old-session tail drains first, so the window switches once.
-// BACKPRESSURE: `maxPending` (default 600 ≈ five minutes) bounds the queue; past it the OLDEST drop, each spooled as
-// `overflow` and counted, never silent. The spool (JSONL, append-only) is replayed on restart, minus overflow/refused rows.
-// THE SPOOL FAILS CLOSED: a line queues only once its `queued` row is on disk, else it is refused and intake halts
-// until the operator fixes the disk and restarts. `end` (an idempotent perception clear) still goes through, counted
-// in `endMissed` when unspooled. acked/refused/overflow rows are bookkeeping: they log and continue (the door dedupes
-// resends). `spoolBestEffort` (SPOOL_BEST_EFFORT=1) queues anyway, counted in `spoolMissed`.
-// Captions are durable world testimony like `say`; `end` clears perception, not history. Nothing is kept the world doesn't.
+// `speaker` is never the bot's guess. A line is done at door ok (the door's dedupe makes resends safe); FIFO, one in
+// flight, bounded queue; the spool fails closed unless SPOOL_BEST_EFFORT=1. Details: docs/research/captionbot-delivery.md.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { normalizeCaptionArgs, mintSession } from '../../shared/captions.js';
 import { makeReplica } from '../../shared/protocol/replica.js';

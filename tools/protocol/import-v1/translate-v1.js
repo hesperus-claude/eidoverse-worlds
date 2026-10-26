@@ -108,7 +108,8 @@ export const TRANSLATOR = "eidoverse/translate-v1@20";
  *  of version digits. */
 export const translatorVersion = (name) => { const m = /@(\d+)$/.exec(String(name ?? "")); return m ? Number(m[1]) : NaN; };
 // the name says which output you got: bump BOTH names (TRANSLATOR, TRANSLATOR_SIM) on any change to the output; two
-// translators never share a name. Live rules sit beside the code that applies them (withoutAccounts, isAccount, noAcct)
+// translators never share a name. Live rules sit beside the code that applies them (withoutAccounts, isAccount, noAcct);
+// what each version changed: README.md#translator-versions
 export const TRANSLATOR_SIM = "eidoverse/translate-v1@20";
 export const LAB_DOOR_KEY = "ed25519:rRoIPhqlc8rDxC1GZlfHOe1IBJYWQ8MDNg9QuZzMsic"; // the conformance suite's fixed sequencer key
 const b64url = (bytes) => { let s = ""; for (const x of bytes) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };

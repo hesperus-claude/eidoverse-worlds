@@ -1,4 +1,4 @@
-// sim: the deterministic sim fold (spec/PROTOCOL_v2.md, dialect 3), as one pure module: the reference eidosim. Fold
+// sim: the deterministic sim fold (spec/history/PROTOCOL-v2-sim.md, dialect 3), as one pure module: the reference eidosim. Fold
 // an epoch's sim-scoped entries through it, advance to a tick, and every conforming implementation holds bit-identical
 // state: that is the whole covenant.
 //
@@ -7,54 +7,8 @@
 // (bodies/statics are plain objects in the log's entry order). Number→string is ECMA shortest-round-trip, so JSON of
 // this state is a deterministic serialization: digests may be taken over it directly.
 //
-// This build carries each retired sim (Covenant II: old logs replay under the law they were written under, bit for bit):
-//
-// eidosim@0.1.0: flat floor: ground = the body's own starting height (wrong on slopes: flights land on an invisible
-//   floor at launch altitude, §24t-3). Its advance law below is UNTOUCHED; 0.1.0 epochs in old logs replay to the same
-//   bits they always did (replaybench holds the proof).
-//
-// eidosim@0.2.0: terrain-aware ground: the sim folds the world's `terrain`
-//   entries and grounds every body on shared/terrainmath.js, the toolkit's
-//   own height law re-expressed in exact ops (Covenant I; ≥99.8%
-//   bit-identical to the mesh the client walks, worst divergence ~1e-15).
-//   Grounded bodies are GLUED to the terrain while sliding; a flight meeting
-//   rising ground splats to contact. A `terrain` entry under a live epoch
-//   re-grounds the world wholesale: every body is released to the instant
-//   fold. Worlds with no terrain keep the flat-floor fallback. UNTOUCHED
-//   since 0.2.0 shipped: every 0.3 addition below is gated by name.
-//
-// eidosim@0.3.0: the world's things are colliders. The sim folds the boxes
-//   the SEQUENCER stamps into history (Covenant III: an asset's geometry is
-//   not in the log until the sequencer writes it there): `epoch.boxes`
-//   (lib → [[min],[max]] for every model standing in the world at the barrier)
-//   and `spawn.box` for every model spawned
-//   after it. Every fold entity with a known box is a STATIC collider (its
-//   yaw-rotated, scaled local box's world AABB); a punted body carries its
-//   own. Per tick, for a body in flight: a static whose top the body was
-//   above and whose footprint it overlaps is GROUND: land on a crate,
-//   slide, rest on it under the same contact law as terrain; a static it
-//   meets from the side pushes it out along the shallower horizontal axis
-//   and reflects that velocity (a bounce off a wall, RESTITUTION-scaled). A
-//   grounded slider that loses its support by more than a step FALLS rather
-//   than gluing (no teleport off a crate edge). A body that comes to rest
-//   becomes a static again. Scope honestly stated: flying bodies do not
-//   collide with each other; a resting body is not woken by being hit; a
-//   thing that mounts, follows a motion, or has no box is not a collider.
-//
-// eidosim@0.4.0: the same world, SWEPT. 0.3 tests collisions at the end of
-//   each tick only, so a fast body crosses a thin wall between two endpoints
-//   and never meets it (#160 B4: 0.2m body, 0.1m wall, power 20 → rests 30m
-//   past the wall). 0.4 sweeps the body's AABB along the tick's
-//   displacement against every static (a slab test, exact ops) and resolves
-//   the EARLIEST contact: a top met from above is a landing (the same contact
-//   law), a side is a wall bounce, at the contact point; the rest of that
-//   tick's motion is spent there. Already-overlapping states keep 0.3's
-//   endpoint resolution. Nothing else moved: same constants, same order.
-//
-// eidosim@0.5.0: contacts consume time, then the remaining movement is swept
-//   again. In particular a zero-time contact with a deck cancels downward
-//   gravity without cancelling horizontal sliding. Eight contacts per tick
-//   bound work; if exhausted, the body stays at the last safe contact.
+// This build carries each retired sim unchanged (Covenant II: old logs replay under the law they were written under, bit
+// for bit); what each version's law is: README.md#eidosim-v1-versions.
 //
 // Shared by all:
 //   - one intent: `punt` (dialect-3 form: dir REQUIRED — Covenant III, the

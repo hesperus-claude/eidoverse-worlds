@@ -2,7 +2,8 @@
 // order (TEL0S_NOTES §12.1), so the light TOPOLOGY is fixed at init: N slots under one group, never added, removed,
 // reparented or visible-toggled; idle = intensity 0, and every light is a request (slot churn is uniform writes).
 // Assignment is deterministic in (state, camera): keep/adopted, then authored, then inferred lamps; ties by camera
-// distance with an incumbent bonus. `keep` is priority, not a budget escape. N=8 is measured (lightbench --measure).
+// distance with an incumbent bonus. `keep` is priority, not a budget escape. N=8 is measured (lightbench --measure;
+// docs/research/lightrig-slots.md).
 // Foreign lights (weather lightning) are caught at scene.add() via a scene Proxy and mirrored into a slot each frame
 // (docs/upstream-wrap-once.md addendum).
 
@@ -23,7 +24,8 @@ const slots = [];
 // ONE SLOT CASTS, born that way: flipping castShadow on a live slot is a recompile, so slot 0 is a caster
 // from construction and the rest never cast. Map size and bias: SHADOW_MAP below.
 const SHADOW_SLOT = 0;
-// normalBias ≈ 0.75 m mostly unshadows the body on purpose (light from inside); it is not a contact offset.
+// normalBias ≈ 0.75 m mostly unshadows the body on purpose (light from inside); it is not a contact offset — see
+// docs/research/chest-lamp-shadow.md.
 // map 256: a point light is six cube faces. workDist 12 = the lamp's range (`far`), so the bias scales to its volume.
 const SHADOW_MAP = 256;
 const SHADOW_WORK_DIST = 12;

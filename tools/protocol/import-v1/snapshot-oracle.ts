@@ -1,31 +1,11 @@
-// tools/protocol/import-v1/snapshot-oracle.ts: the old-world translator checked against the OLD ENGINE, without rendering.
-//
-// The translator's own checks prove it agrees with ITSELF (its copy of the old fold, its projection, its v4 fold); this
-// proves it agrees with the old server. A first-protocol world directory holds, beside log.jsonl, a snapshot.json = the old
-// server's own folded state ({v: 1, seq, bytes, ts, state: {entities, terrain, grass, sky, assets, roles, bans, …}}). When
-// snapshot.seq is the log's last seq AND snapshot.bytes is log.jsonl's size, it is the old engine's answer to "what does
-// this whole log mean"; an incomplete snapshot is SKIPPED (with its reason), never compared.
-//
-// Per world:
-//   1. translate log.jsonl with the real path (translateV1World, as `world.ts translate --no-founder-key`) into a scratch
-//      worlds dir (its own custody, directory and model index; the source directory is only read);
-//   A. the translated world.jsonl, read by the strict reader and folded by the real fold (shared/protocol/fold.js), against
-//      the snapshot put through the translator's own mapping table (translate-v1 `project`: lib→model, comp→flat
-//      components, yaw→q, light fields, door→openable, guard→lock, motion rpm, sockets' v4 spelling, imported:<k>, the
-//      namespace), with the translated world's identities (read back from its directory) and model hashes beside the paths;
-//   B. the SERVER's view: the world opened as the server opens it (server/livehost.ts openLive with the engine's
-//      catalogue) and lifted as at first load (authority.js liftWorld: a stored `sockets` map becomes socket child entities,
-//      a mounted thing's parent names the child, its pose re-expressed in the child's frame), against side A's projection
-//      put through the SAME lift (sockets.js legacyHosts/liftHostOps), plus an independent check that every old seat is a
-//      child entity with that name at that pose.
-//   Ids: the translator keeps every entity id (enc() only escapes what the §2.3 grammar refuses), so ids are matched
-//   through enc(); people's names (roles, bans, authors) through the translated world's directory. Numbers compare with
-//   a 1e-9 tolerance, everything else exactly; only the translator's DROPPED table is left out (printed with its reasons).
+// tools/protocol/import-v1/snapshot-oracle.ts: the v1 translator checked against the OLD engine's own complete snapshot.json:
+// A) translated log vs projected snapshot, B) the server's lifted view vs the same lift, C) the snapshot's plain fields;
+// numbers to 1e-9, only DROPPED excluded. Method: docs/TRANSLATING-OLD-WORLDS.md, "The snapshot oracle".
 //
 // usage: bun tools/protocol/import-v1/snapshot-oracle.ts [<world dir> …]
 //   a world dir translated in place is read through its kept originals (log.original.jsonl, snapshot.original.json)
 //   no args: ORACLE_WORLDS=<dir>[:<dir>…] (`;` on Windows) (a world dir, or a dir of worlds), else PROTOCOL_WORLDS; always the repo's spec/fixtures (folded.json as each snapshot)
-//   (walked like the sweep), each distinct complete snapshot once. Exit 0 only when every compared world has 0 differences.
+//   (walked like the sweep), each distinct complete snapshot once. Exit 0 only when some world was compared and all agree.
 //   OPT_DIR=<serving checkout>/assets/opt so store models get the model-hash they get on this host (read only).
 //   ORACLE_SCRATCH=<dir> where the scratch worlds go (default $PROTOCOL_SCRATCH or the OS temp dir); ORACLE_KEEP=1 keeps it.
 // @ts-nocheck

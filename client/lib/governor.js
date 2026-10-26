@@ -1,10 +1,11 @@
-// governor — one quality controller, session-scoped, two-way (TEL0S_NOTES §12.6): every lever moves both ways,
+// governor — one quality controller, session-scoped, two-way (TEL0S_NOTES §12.6; docs/research/governor.md): every lever moves both ways,
 // nothing persists (machine pressure is not a preference), and the cloud tier is never touched (it's the resident's ⚙).
 //
 // The ladder, in shed order (recovery unwinds back-to-front, so pixels return first and content last):
 //   casters   distant objects stop casting shadows (castShadow is in no pipeline key, §12.1)
-//   slots     the light-slot cap drops (idle slots are uniform zeros)
+//   lights    the light-slot cap drops (idle slots are uniform zeros)
 //   emitters  per-emitter instance counts thin (auto → med → low)
+//   cosmetics cosmetic per-frame hooks run at half rate
 //   grass     the meadow thins (instanced count, no rebuild)
 //   lod       far placed objects fetch their reduced tier sooner (#156; swaps ride the residency sweep)
 //   pixels    render scale, −0.25 steps to 0.7

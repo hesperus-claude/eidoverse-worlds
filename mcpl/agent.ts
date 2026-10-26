@@ -302,7 +302,7 @@ const fillOf = (t: { area: number; x: number[]; z: number[] }) => {
 };
 
 /** 0.45 sits in the empty gap between sparse surfaces (≤0.36) and real decks (≥0.53) in a survey of the shipped
- *  library. Open decks are abstained on rather than inventing geometry. */
+ *  library. Open decks are abstained on rather than inventing geometry. See docs/research/deck-fill-survey.md. */
 const DECK_FILL = 0.45;
 
 /** A rotation, or {q, t, s} (shared/humanoid.js poseChannels). */
@@ -1678,7 +1678,8 @@ export class WorldAgent {
 
   /** The raised storey the feet stand on at (x, z), or null: above its building's base, more than NAV_STEP over the
    *  terrain (a porch is the terrain's), feet within ROUTE_STEP_METRES below to wallH above; the highest floor wins.
-   *  yHint picks a floor, never sets the height. Griddled floors aren't headless colliders, hence this (ew#140). */
+   *  yHint picks a floor, never sets the height. Griddled floors aren't headless colliders, hence this (ew#140).
+   *  Rules: docs/research/storey-support.md. */
   private storeyUnder(x: number, z: number, yHint = this.pos.y): { entity: string; level: number; height: number } | null {
     const terrain = this.heightAt(x, z), nowMs = this.serverNow();
     let best: { entity: string; level: number; height: number } | null = null;

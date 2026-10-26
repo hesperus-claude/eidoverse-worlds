@@ -1,17 +1,9 @@
-// captions — what the `caption` verb MEANS and the bag it folds into, shared by the sequencer, the caption bot
+// captions — what the `caption` request MEANS and the bag it folds into, shared by the authority, the caption bot
 // (tools/captionbot), the mcpl agent and any overlay, so no two describe a different screen.
 //   caption {id, session, n, t0, t1, text, speaker?, title?}   # one line, once
 //   caption {id, session, end: true}                            # the screen goes quiet
-// folds into the comp bag, SERVER-WRITTEN (a client's `comp {type: "captions"}` is refused):
-//   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}
-// Each write holds ITS line once (as WebVTT stores a cue); the log is the transcript; an older value's `window` still reads.
-// RETENTION: durable world testimony like `say`; `end` clears perception, not history.
-// WHO IS THE CAPTIONER: the LIVE LEG. Every join gets a world-scoped generation (World.legGen, survives restarts; a
-// same-identity join takes over), stamped by the door (server/requestwire.ts), never by the client. A lower generation is
-// refused as superseded, a higher one takes over: no clock the bot claims decides it.
-// SESSION is the bot's media-clock label, minted at attach; within it `n` is monotonic and a caption at or below the
-// high-water mark is refused before it becomes history (a resend is safe). TIMES t0/t1 are MEDIA seconds since attach.
-// BOUNDS are in CHARACTERS (UTF-16 code units), not bytes; the authority keeps each value under 64 KiB of UTF-8 (authority/gate.js).
+//   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}   # the authority writes it, one line per write
+// Who may caption, the live-leg generation, session/n dedupe, media time, bounds, retention: docs/CAPTIONS.md.
 
 import { shown } from './shown.js';
 

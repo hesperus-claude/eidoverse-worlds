@@ -1,15 +1,7 @@
 // bake-seat-clip: regenerate upstream-patched/…/sitting_normal_chair.vrma, lowered onto the seat.
-// The clip is authored FLOOR-ORIGIN (hips y≈0.5247 track units above the chair's floor), but every seat path puts the
-// root ON THE SEAT SURFACE (mountTransform, controller.toggleSit), so the body hovers. The ground clips are authored
-// root-at-contact and don't (the control that localizes the fault to this file).
-// In the clip, not code: createVRMAnimationClip scales hips translation by avatarRestHipsY / animationRestHipsY
-// (0.963756), so the shift is per-rig proportional with no profile, and the ROOT stays put (lowering the root, #101, fights
-// the every-frame resolveColliders snap). restHipsPosition comes from the REST SCENE GRAPH, not the track, so editing
-// sampler values leaves `scale` untouched: that is why this edit is safe.
-// Δ = 0.409 puts the pelvis ~0.10 m above the seat (anchored on sitting_on_ground's 0.0975 and a ~0.42 m chair at 1.75 m).
-// Never derive Δ from the lowest hips-weighted vertex: it hangs below the visible mass and reads contact while the
-// body is in the air. Re-derive (don't guess) after an upstream re-export: pose a body, take the lowest point of the
-// mass that should rest (buttocks, thigh undersides), Δ = that height / 0.865.
+// The stock clip is floor-origin but seats put the root on the surface, so the hips track is lowered by Δ ≈ 0.409 in the
+// clip (createVRMAnimationClip scales it per rig; restHipsPosition comes from the rest graph, so the scale is untouched).
+// Re-derive from the seated mass, never a single minimum vertex: Δ = rest height / 0.865 — see docs/research/seat-clip-delta.md.
 // USAGE
 //   bun tools/bake-seat-clip.ts               # write the patched file
 //   bun tools/bake-seat-clip.ts --check       # verify the committed file matches

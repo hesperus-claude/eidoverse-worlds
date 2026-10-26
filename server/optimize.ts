@@ -260,7 +260,7 @@ export type LodResult = { out: Uint8Array | null; verdict: string | null; kind?:
   /** served for its textures alone (LOD_TEX_ONLY): the vertices stayed over 0.6× */ texOnly?: boolean; /** LOD / full-tier texel area */ texRatio?: number };
 
 // simplifyWithAttributes, never simplify() (positions only: it smears normals and UV seams). Weights measured; nothing
-// is locked; a model that can't reach the bar without tearing is refused 'ineffective'.
+// is locked; a model that can't reach the bar without tearing is refused 'ineffective'. See docs/research/lod-simplify.md.
 const LOD_NORMAL_WEIGHT = 0.25, LOD_UV_WEIGHT = 1, LOD_COLOR_WEIGHT = 1;
 function readFloats(a: NonNullable<ReturnType<Primitive["getAttribute"]>>, width: number, out: Float32Array, stride: number, at: number) {
   const el = new Array(a.getElementSize()).fill(0);

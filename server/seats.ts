@@ -4,7 +4,7 @@
 // wearer and "?by=" is self-asserted. The countersign has no HTTP path (tools/seat-accept.ts). Bearers never logged.
 // Integrity: null-prototype maps, reserved keys refused; proposals name a ROSTER avatar; provenance first (log ⊇
 // snapshot ⊇ memory: a log ahead folds forward, a snapshot ahead is quarantined); every mutation whole under one
-// cross-process lock with a forced reload; the countersign names the revision the operator reviewed.
+// cross-process lock with a forced reload; the countersign names the revision the operator reviewed. See docs/SEATS.md.
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";

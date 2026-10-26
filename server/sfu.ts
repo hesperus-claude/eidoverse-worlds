@@ -159,7 +159,7 @@ export class Sfu {
   }
 
   /** The hot path: checks in the order that fails cheapest first; P2P offload (#104 phase 2) hooks in beside the
-   *  proximity gate (both answer "does this packet need the relay?"). */
+   *  proximity gate (both answer "does this packet need the relay?") — see docs/research/sfu-p2p-offload.md. */
   private fanout(from: SfuLeg, rtp: RtpPacket) {
     // the closed check comes FIRST: werift's onReceiveRtp outlives the leg, and counting late packets makes a corpse look live
     if (from.closed || this.muted.has(from.id)) return;   // moderator mute: at the source

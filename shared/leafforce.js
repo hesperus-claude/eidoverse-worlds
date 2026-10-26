@@ -3,7 +3,7 @@
 //   1. NORMAL DRAG: drag scales with velocity ALONG the plate normal, so a plate seeks edge-on and overshoots.
 //   2. A DISPLACED CENTRE OF PRESSURE: forward of centre, a torque that turns the overshoot into a periodic tumble.
 // Together they flutter on their own; `periodAssist` nudges the emergent period toward the spec's 3.4 s (on purpose).
-// PURE (shared/README.md): plain numbers in, force/torque vectors out.
+// PURE (shared/README.md): plain numbers in, force/torque vectors out — see docs/research/leaf-flutter.md.
 
 /** @typedef {{x:number,y:number,z:number}} V3 */
 /** @typedef {{ rho:number, cdNormal:number, cdEdge:number, copOffset:number,

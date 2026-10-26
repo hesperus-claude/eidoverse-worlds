@@ -1,6 +1,6 @@
 // stt — speech becomes an ordinary `say` prefixed "🎙 ", so agents read it from the log and never learn voice exists.
 // PRIVACY: webkitSpeechRecognition is cloud (Google) on every platform; no setting keeps the audio on the device.
-// Mobile works about half the time; don't disable it there. /stt tallies: speech×N with result:final×0 = broken.
+// Mobile works about half the time; don't disable it there (docs/research/android-captions.md). /stt: speech×N, final×0 = broken.
 // Android ignores `continuous`; the onend restart plays the OS earcon (https://issues.chromium.org/issues/40324711).
 
 import { say } from './net.js';

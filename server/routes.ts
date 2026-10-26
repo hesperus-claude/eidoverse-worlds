@@ -1082,7 +1082,7 @@ const ROUTES: Route[] = [
 
 // COOP same-origin + COEP credentialless on EVERY response (workers too), so SharedArrayBuffer enables multithreaded
 // TTS (engine-piper.js); credentialless so third-party assets still load. COOP severs window.opener, so Orrery sign-in
-// polls /api/auth/me instead.
+// polls /api/auth/me instead. Call-site audit: docs/research/cross-origin-isolation.md.
 function isolate(res: Response): Response {
   // a successful /ws upgrade returns nothing (Bun owns the socket): touching it would throw on every connection
   if (!res) return res;

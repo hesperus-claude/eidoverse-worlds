@@ -18,14 +18,14 @@ export const ttsAvailable = () => !!ttsFn;
 export const ttsVoiceName = () => ttsName;
 export const isTtsEnabled = () => ttsEnabled && !!ttsFn;
 
-/** called by an agent harness, never by the UI; null reverts to the microphone */
+/** the one seam for humans and agents: an agent harness, a loaded engine, an endpoint voice; null reverts to the microphone */
 export function setTtsSource(fn, name = 'TTS') {
   ttsFn = fn || null;
   ttsName = fn ? name : '';
   if (!fn) ttsEnabled = false;
 }
 
-// built-in speechSynthesis can't feed the seam (no route to an AudioNode; WICG/speech-api#69)
+// built-in speechSynthesis can't feed the seam (no route to an AudioNode; WICG/speech-api#69) — see docs/research/voice-sources.md
 
 /** the audio panel's toggle; an agent turns it on once its source is registered */
 export function setTtsEnabled(on) {

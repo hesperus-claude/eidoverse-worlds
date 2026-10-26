@@ -1,27 +1,6 @@
 // sockbody — what a person's body does at a socket: the `station` component on a socket entity, as data (the old `body`
-// block of `socket` / `sockets.<name>` is still read; the door lifts it). The alpha registers the station's core only
-// (componentspec.js station: action, anim, anchor, exit, leaveBy, who); the rest below is RESERVED (STATION_RESERVED) but
-// read generously, so it returns as an addition. hold is cut.
-//
-//   body: {
-//     action   'sit'            the verb `use` calls it AND the default posture (sit | lie | stand | ride | kneel | …)
-//     anchor   'hips'           which body point lands on the socket: hips | feet | head | root (the default, so no existing
-//                               seat moves) | surface (the socket IS the seat's support plane: the body's seat contact lands on it)
-//     pose     'sitchair'       a clip; {clip, time?, offset?}; or a blend {by, clips, time?, offset?}
-//     poses    {lean: …}        a menu of named poses (pose is the default); the occupant picks one
-//     sync     'sofa'           sockets sharing a sync group switch same-named poses together (AVsitter SYNC)
-//     approach [x,y,z,yaw]      socket frame: where you're brought to first, then `enter` carries you onto the seat
-//     enter    'stand_to_sit'   one-shot clip while you're carried on;  leave: one-shot clip while carried off
-//     exit     [x,y,z(,yaw)]    where you're set down (the thing's frame)
-//     reach    {leftHand: {at, q?, part?, hint?, vr?}}   IK targets in the thing's frame (or a part's: they move with it)
-//     hold     {spine: [x,y,z,w]}                       sparse bone overrides over the pose (the escape hatch)
-//     look     {yaw: [min,max], pitch: [min,max], up}   head limits in degrees, socket frame; up: world | socket
-//     input    {move: none|drive|walk, look: free|aim|locked}   at most one `drive` per thing
-//     leaveBy  'jump'           jump | menu | script  (absent: moving, jumping or getting up all leave; script: only the
-//                               world, or the occupant's always-on escape: a held X, a second get-up, detach {escape})
-//     fromSeat true             you may move here from another seat without standing up
-//     who      'builder'        inhabitant | builder | owner
-//   }
+// block of `socket` / `sockets.<name>` is still read; the door lifts it). The alpha registers the core (action, anim, anchor,
+// exit, leaveBy, who); the rest is RESERVED (STATION_RESERVED) but read generously; hold is cut. Shape: docs/SEATS.md.
 //
 // Pure: no DOM, no three, no clock. The authority validates with checkSockets; browser, door and agent read with bodyOf.
 

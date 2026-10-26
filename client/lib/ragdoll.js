@@ -1,18 +1,6 @@
-// ragdoll — a body going limp, simulated by ONE machine and streamed.
-//
-// Single authority, not determinism: only the body's OWNER simulates; it streams sparse bone rotations on the
-// presence `pose` field (remotes see an ordinary changing pose); when it settles the owner CAPTURES the bones as a
-// held pose, so late joiners get the result, never a replay (a permanent one commits as a `pose` verb). The server
-// never simulates and never sees a bone.
-//
-// A Verlet particle skeleton, not a rigid-body solver, carrying four things:
-//   MASS         — constraints split by inverse mass, so a hand can't throw the pelvis around.
-//   VOLUME       — bones are CAPSULES, not beads, or limbs pass through the torso.
-//   HANDEDNESS   — knees and elbows bend one way, from a body frame the particles supply (see _frame).
-//   A FIXED STEP — Verlet's inertia term is a position delta, so raw frame time makes physics framerate-dependent.
-//
-// Everything anatomical is MEASURED from the rig at construction: shipped avatars disagree on height, rest pose
-// (T to A) and whether an upperChest + shoulder pair sits between chest and arm.
+// ragdoll — the Verlet limp body. Only the owner simulates; sparse bones stream on presence `pose`; the settled pose is
+// captured as held state (late joiners get the result); the server never simulates. Mass, capsules, handedness and a
+// fixed step (FIXED_DT); anatomy measured from the rig — see docs/research/ragdoll-sync.md.
 
 import { THREE } from './core.js';
 import { BEHIND, CONE, HINGE, TWIST, TWIST_PARENT, RADIUS_FRAC, torsoRadius } from '../../shared/joints.js';

@@ -1,5 +1,5 @@
 /** Piper as a voice-engine plugin: every piper specific (the two-file shape, OPFS seeding, PATH_MAP) lives here.
- *  WASM latency is the HiFi-GAN vocoder's; INT8 is slower here and WebGPU is opt-in. */
+ *  WASM latency is the HiFi-GAN vocoder's; INT8 is slower here and WebGPU is opt-in (docs/research/piper-latency.md). */
 import { registerEngine } from './voiceengines.js';
 import { setTtsSource } from './tts.js';
 import { decodeWavToPcm } from './wavpcm.js';
@@ -124,9 +124,9 @@ registerEngine({
       const opts = { graphOptimizationLevel: 'all' };
       let ortSession = null, usedEP = 'wasm';
       try {
-      // localStorage.eidoTtsBackend = 'wasm' | 'webgpu' | 'auto' (default): measure with ttsBench(), don't assume the GPU wins
+      // localStorage.eidoTtsBackend = 'webgpu' tries the GPU, anything else is WASM: measure with ttsBench(), don't assume it wins
       const pref = (() => { try { return localStorage.getItem('eidoTtsBackend'); } catch { return null; } })();
-      // opt-in: some VITS kernels fail at inference, not load, and WASM often wins on short speech; verbose logs the ops
+      // opt-in: some VITS kernels fail at inference, not load, and WASM often wins on short speech; verbose logs the ops — see docs/research/piper-latency.md
       if (hasGpu && pref === 'webgpu') {
         ort.env.debug = true;
         ort.env.logLevel = 'verbose';
@@ -163,7 +163,7 @@ registerEngine({
         input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)])),
         scales: new ort.Tensor('float32', Float32Array.from([
           // noise_w: duration noise (0.8 varies length ~6% on identical ids). length_scale sets pace AND cost.
-          // localStorage.eidoTtsLengthScale overrides the voice's length_scale for A/B.
+          // localStorage.eidoTtsLengthScale overrides the voice's length_scale for A/B — see docs/research/piper-latency.md
           inf.noise_scale ?? 0.667,
           (() => { try { const v = parseFloat(localStorage.getItem('eidoTtsLengthScale')); return Number.isFinite(v) ? v : (inf.length_scale ?? 1.0); } catch { return inf.length_scale ?? 1.0; } })(),
           inf.noise_w ?? 0.8,

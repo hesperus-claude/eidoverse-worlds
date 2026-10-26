@@ -5,7 +5,7 @@
 // Occlusion: hidden by scenery and other bodies, never its own: depth is written as if plateClear() m nearer the eye
 // (ownClearance, measured once per body); only the depth TEST moves.
 // Hold-to-reveal: every plate in range draws through everything at ≥0.6°, fading past REVEAL_FULL–REVEAL_GONE;
-// `k` is the eased reveal level 0..1 (revealLevel, REVEAL_EASE_MS).
+// `k` is the eased reveal level 0..1 (revealLevel, REVEAL_EASE_MS). Why this shape: docs/research/nameplates.md.
 
 export const PLATE_W = 0.9;            // metres: the sprite's width at s = 1 (512 px canvas)
 // cap height of the 40 px name, MEASURED in headless Chromium: 30 px, at 0.9 m per 512 px

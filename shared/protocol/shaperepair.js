@@ -1,31 +1,7 @@
 // shared/protocol/shaperepair.js — a value stored before the shape audit, in today's spelling, with the meaning its readers
 // gave it. Pure: components in, repaired components out. Callers: the explicit repair command (repairShapes, never a load:
 // one `repair-shapes` act ONCE per world, shapesMarked), translate-v1@12's projection, and the old-world oracle. Rules that
-// read an absent field may only see pre-audit values: the marker guards that.
-//
-// The rules:
-//   motion   a bare motion naming a `part` is that node's motion: motion:<partSlot(part)> {node: part} (a motion already on
-//            that node wins); a keyed motion with no node gets its key's tag (the node's name, before the node was data);
-//            amplitude → amp (amp wins); a letter axis (x, y, z, -x, -y, -z) → its vector;
-//            a pendulum with no period read 3.5 s and with no damp 0 (motioneval.js): written down;
-//            a whole motion's `pivot` field → the thing's pivot component (when it has none);
-//            a whole PENDULUM with no pivot component swung about [0, 2, 0]: that point is written as its pivot
-//            component, because a whole thing now turns about its origin when it has none.
-//   collider exact → mesh (one vocabulary with shapes.js, KHR, Unity, Godot).
-//   physics  no kind read as the old materialized default, dynamic; material → surface (renamed); layers, mask, ccd
-//            (cut, never read) are dropped.
-//   light      no decay fell off as the rig's three.js decay 1.7: written (a NEW light's default is 2); day → daytime
-//              (true dim, false full); shadows (read by nothing) dropped
-//   model      a content address eido:sha256/<hex> → the library path this host's index names, its hash beside it as
-//              model-hash sha256:<hex>; only with a resolver (the catalogue's pathOf); an unknown address is kept
-//   @world (repairWorld):
-//   sky        clock 'real' + dormantRated {hours, rate, ts} → tz, with hours/rate/ts the parked clock (it is the fallback
-//              now); another clock → no tz; azimuth degrees → radians;
-//              weatherSeconds → transition; forecast dwellSec/transitionSec → dwell/transition; sun, fill, world dropped
-//   terrain    layer colours "#rrggbb" → ints; the sim's defaults (terrainmath.js) written where absent; terrain.water →
-//              the water component (its colour an int)
-//   grass      the first protocol's makeGrass knobs → the flora spelling (mapGrassArgs); a preset is kept by its name
-// A particle Essential's name and a grass preset's name are stored as written: nothing rewrites them to an address.
+// read an absent field may only see pre-audit values: the marker guards that. The rules: docs/MAINTENANCE.md.
 import { grassAtWrite } from "./assetref.js";
 import { eidoHex } from "../eido.js";
 import { COMPONENTS } from "./componentspec.js";

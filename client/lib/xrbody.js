@@ -58,7 +58,7 @@ export const xrSimGrip = (side, pos, quat) => { if (CONFIG.params.has('xrsim')) 
 
 // ---- arm IK: port of Basis's swivel solver (BasisArmSolveCore.cs @6377b3eb); dials in ARM ----------------
 // The elbow picks the cheapest angle on its swivel circle (prior, last frame, torso penalty, dwell hysteresis); the
-// wrist twist is split between forearm and hand. Joint-limit costs aren't ported. Gestures trump IK.
+// wrist twist is split between forearm and hand. Joint-limit costs aren't ported. Gestures trump IK — see docs/research/arm-ik.md.
 const WRIST_R = new THREE.Quaternion(0.5812875774993174, 0.7123369384133019, 0.08586779365740962, -0.38380664895827776);
 const WRIST_L = new THREE.Quaternion(-WRIST_R.x, WRIST_R.y, WRIST_R.z, -WRIST_R.w).normalize();   // mirror across YZ
 const ARM = { SAMPLES: 36, REFINE: 8, MIN_ELBOW: 22 * Math.PI / 180, MIN_REACH_FRAC: 0.05, SOFT: 0.02, PRIOR_W: 0.5, PREV_W: 0.25,

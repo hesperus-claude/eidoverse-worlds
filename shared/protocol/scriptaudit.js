@@ -7,9 +7,10 @@
 //             and compare with the change entry and says the act caused.
 //   reads   — the log keeps what presence reads ASKED, never who: the re-run must ask the same read shape (else `reads`);
 //             a mismatch from an act that read identities is `skipped`, never flagged; one with no such reads is `rerun`.
-//   arrivals — enter/leave keep no identity: re-run with a stand-in, then a second of another shape; the two disagree →
-//             `skipped`; they agree but mismatch → `rerun-anon` (two inputs can't prove identity-independence).
-// Replay of the WORLD never runs code (L1); this re-run is an optional audit view.
+//   arrivals — enter/leave (and an unlogged grab/release) keep no identity: re-run with a stand-in, then a second of
+//             another shape; the two disagree → `skipped`; they agree but mismatch → `rerun-anon` (two inputs can't prove
+//             identity-independence).
+// Replay of the WORLD never runs code (L1); this re-run is an optional audit view. Why: docs/research/script-audit-soundness.md.
 import { fold, opsOf, followUpsOf, jcs } from "./fold.js";
 import { elide, seedOf, stampMotions } from "./scriptrules.js";
 

@@ -1,21 +1,6 @@
-// bodyscale — "this body": the wearer's chosen SIZE and NAMEPLATE LIFT for the body they have on (Profile › Avatar;
-// R, 2026-09-30). Pure: no THREE, no DOM — tools/bodyscale-test.ts drives these very functions.
-//
-// SIZE, Basis/VRChat semantics: one multiplier `u` grows the body, its eye height, its stride (move speed) and its
-// collider together. On an Avatar it lives on vrm.scene (never the root: the root also carries the nameplate,
-// the typing pill and the bubble, which stay screen-sized — platesize.js owns their size), multiplied with the VR
-// puppet fit: vrm.scene.scale = u · puppet.
-//
-// IN VR (xr.js DeviceScale, Basis's way): the puppet wears 1/k, k = avatar eye / your eye, so your authored body's eyes
-// land at your real eye height H with tracking 1:1. A chosen size u must NOT be undone by that fit — and eyes must
-// still sit at the HMD and hands on the controllers. So the TRACKING SPACE (the rig: camera + controllers) scales by u
-// too: the HMD then reads u·H in the world, the body is u·(1/k)·E = u·H tall at the eye, the controllers are u× as far
-// from the rig as your hands are from your feet, and the arms (u/k × authored) reach them — the same 1:1 as before,
-// one size up. The world looks 1/u as big, which is what being big IS. Everything the rig measures in its own frame
-// (the head-height samples that decide k, the recentre offsets) is in rig-local units, i.e. divided by u.
-//
-// NAMEPLATE LIFT: metres above the measured crown (plateanchor.js), at the body's AUTHORED size — applied × the live
-// model→world scale, so it grows with the body and follows sitting/lying exactly as auto does. 0 = auto.
+// bodyscale — the wearer's chosen size u and nameplate lift for the body they have on (Profile › Avatar). Pure
+// (tools/bodyscale-test.ts). Size lives on vrm.scene, never the root (plates stay screen-sized); in VR the tracking space
+// scales by u too, so tracking stays 1:1 — see docs/research/body-scale-vr.md.
 import { clampBodyScale, clampPlateY, BODY_SCALE_MIN, BODY_SCALE_MAX, PLATE_Y_MIN, PLATE_Y_MAX } from '../../shared/presencewire.js';
 import { capsule, canMantle } from '../../shared/mover.js';
 export { clampBodyScale, clampPlateY, BODY_SCALE_MIN, BODY_SCALE_MAX, PLATE_Y_MIN, PLATE_Y_MAX };

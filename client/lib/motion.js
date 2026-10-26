@@ -11,7 +11,7 @@
 //   path     {points, speed|duration, loop?: 'loop'|'pingpong'|'once', face?, t0}
 //
 // Parts: a `motion:<slot>` naming a `node` animates that node. Pivot/axis are in the node's own frame; oscillate/orbit/
-// path positions in its parent's (the frame `measure` reports). A removed part motion returns to rest.
+// path positions in its parent's (the frame `measure` reports). A removed part motion returns to rest. See docs/research/motion.md.
 
 import { THREE, camera } from './core.js';
 import { entities, bags, bagOf, findPart } from './world.js';

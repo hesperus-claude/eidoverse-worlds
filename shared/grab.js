@@ -1,31 +1,6 @@
 // grab — what a hand may do with a thing: the `grabbable` component, as data. Grabbing is its OWN component, apart from
 // dynamics; a grip is a named point in the thing's frame (none: held where grabbed); use-while-held has a down and an up;
-// theft, who and reach are per thing; a release can snap into a socket that accepts it, or go home.
-//   grabbable: {
-//     enabled     true          can it be picked up now (false: a dynamic ball you can only kick)
-//     who         'builder'     inhabitant | builder | owner: who may pick it up
-//     steal       true          may someone take it from a holder's hand (owners always may)
-//     range       1.5           m from the hand; past 1.5 it flies to the hand (0.1..10)
-//     priority    0             -10..10: wins over lower when several things are in reach (the key, not the table)
-//     hold        'auto'        auto (press-to-hold in VR, sticky on desktop and phone) | press | toggle
-//     anim        (by size)     how a body without tracked hands holds it: a pose or clip by NAME, open:
-//                               built in hand | carry | torch | pistol | shoulder (HOLD_POSES); a name
-//                               the body doesn't know is its default hold (by size), never a refusal. two-hand is twoHanded.
-//     grips       {}            {<name>: {pos, q?, hand?, role?, grasp?, part?}}: where the PALM goes, in the
-//                               thing's own frame (+Z out of the palm, +Y along the fingers' base)
-//     twoHanded   false         a second hand on a secondary grip steers it (false: a second hand takes it over)
-//     carries     (absent=false) a tray: what rests on it comes along when it is picked up (false: it falls off)
-//     throw       1             0..3: scales the release velocity (0: it can only be dropped)
-//     release     'drop'        drop | stay (hangs where you let go) | return (goes home)
-//     returnAfter 0             s, 0..3600: goes home after this long unheld (0: never)
-//     (home)                    where it goes home to is the thing's own `home` component (one home;
-//                               the authority stamps it when a returning grabbable is written without one)
-//     fits        []            keywords: it snaps into a socket whose `accepts` shares one, released within its radius
-//     use         null          a reactions action, or {down, up}: what the use button fires while held
-//     prompt      null          hover text (≤ 40); absent: "Pick up <label>"
-//     (fx)                      reserved: refused; presence-only particles while use is held come back
-//                               as an addition if wanted. A grip's bone overrides (hold) are cut.
-//   }
+// theft, who and reach are per thing; a release can snap into a socket that accepts it, or go home. Fields: docs/GRABBABLE.md.
 //
 // Pure: no DOM, no three, no clock. The authority validates with checkGrabbable; browser, door and agent read with grabOf.
 

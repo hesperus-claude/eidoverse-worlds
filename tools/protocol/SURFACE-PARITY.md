@@ -21,6 +21,27 @@ opens: ‹world› on old". The comparisons that work today are between two comm
 The old tree is a detached worktree of `--old-ref <ref>` (default `main`, env `SURFACE_OLD_REF`), created in the temp
 directory if missing; `--old <tree>` points at a checkout you already have instead. Run one headless browser at a time.
 
+## Flags
+
+| flag | what it does |
+|---|---|
+| `--check` | assert every prerequisite and stop before the first frame (run this first on a new box) |
+| `--old-ref <ref>` | the git ref the old tree is checked out from (default `main`; env `SURFACE_OLD_REF`) |
+| `--old <tree>` | the old checkout to serve (default: a detached worktree of `--old-ref`, made if missing at `SURFACE_OLD_TREE` or `<tmpdir>/eido-surface-old-<commit>`) |
+| `--new <tree>` | the new checkout (default: this file's repo) |
+| `--commons <dir>` / `--gym <dir>` | the two worlds to render, each a directory holding `world.jsonl` (required unless `--only` excludes it) |
+| `--world <name>=<dir>` | another world to render beside them; repeatable (name: letters, digits, `_`) |
+| `--out <dir>` | where frames and diffs go (default `notes/surface-parity/<timestamp>/` in the new tree; never `/tmp`) |
+| `--threshold <pct>` | changed-pixel percentage that fails a camera (default 0.5) |
+| `--tolerance <0-255>` | per-channel difference under which a pixel counts as unchanged (default 16: SwiftShader dither) |
+| `--camera <w>:<name>=<x>,<y>,<z>/<lx>,<ly>,<lz>` | add a camera to world `<w>`; repeatable |
+| `--keep-ui` | leave the DOM chrome in frame (by default only the canvas is compared) |
+| `--pin-clock <ms>` / `--no-pin-clock` | the epoch ms the page's `Date.now()` is pinned to (default: the old tree's commit time), or no pin |
+| `--no-control` | skip the second boot of the old tree that measures the noise floor |
+| `--timeout <s>` | how long a client may take to settle and draw (default 150; SwiftShader is slow) |
+| `--only <world>` | just one world |
+| `--headed` | a window you can watch |
+
 ## Prepare, don't pretend
 
 Headless Chromium is easy to get half-working, so the script asserts every prerequisite BY NAME before it takes a frame
@@ -38,7 +59,7 @@ checked:
 | world opens: ‹world› on ‹tree› | a spectator join gets a snapshot (not an error), its cut folds to > 0 entities, and `present[]` is empty | `server/server.ts:747` buildSnapshot; `shared/protocol/replica.js:150` clientCutOf |
 | browser page target | the Chromium we spawned exposes *our* page on *our* debug port | as `tools/harness.ts:187-203` |
 | client ready: ‹world› on ‹tree› | joined → loads idle → builds settled → sky not busy → **≥ 12 frames drawn after that** | `net.js replicaActive`, `assets.js loadingItems`, `world.js anyBuildsPending`, `sky.js skyBusy`, a `renderer.render` call counter the probe installs (`render.js renderCensus` ticks only in XR) |
-| camera honoured | after 6 drawn frames the camera is still where it was put (< 1 cm drift) | `controller.js:1035 updateSpectator` only moves a spectator's camera to follow a remote body |
+| camera honoured | after 6 drawn frames the camera is still where it was put (< 1 cm drift) | `controller.js updateSpectator` only moves a spectator's camera to follow a remote body |
 | frame drawn | the capture has more than a handful of distinct colours | a blank canvas is a failed capture, not a surface |
 
 Exit codes: **0** every camera inside the threshold · **1** at least one camera over it (a surface diff) · **2** a named
@@ -46,20 +67,20 @@ prerequisite is missing (nothing was compared) · **3** over the threshold but i
 
 ## What is compared, and what is deliberately not
 
-- **Spectator, nobody present.** The browser joins with `?spectate` (`client/lib/base.js:42` → `net.js:266`;
-  `localbody.js:335` spawns no body for a spectator) in a scratch *copy* of each world that nobody else is in. So there
+- **Spectator, nobody present.** The browser joins with `?spectate` (`client/lib/base.js` `CONFIG.spectate` → `net.js` join `spectate: true`;
+  `localbody.js` spawns no body for a spectator) in a scratch *copy* of each world that nobody else is in. So there
   are no bodies, name tags or chat bubbles in frame: presence-only regions are **absent rather than masked**, and the
   harness asserts `present[]` is empty from the server's own snapshot before any frame. Pixel parity is blind to
   presence-only regions; this makes that blindness explicit and checked rather than papered over.
-- **DOM chrome hidden.** `body > *:not(canvas)` is hidden (as `particles-shots.ts:185` does): panels carry names and
+- **DOM chrome hidden.** `body > *:not(canvas)` is hidden (as `tools/protocol/particles-shots.ts` does): panels carry names and
   clocks, and a panel regression is a UI diff, not a surface one. `--keep-ui` puts it back.
 - **Clock pinned.** `Date.now()` inside the page is pinned to the old tree's commit time (override with
-  `--pin-clock <ms>`). `sky.js:385/:416` derive the sun's hour and the forecast's weather from `Date.now()`, so two runs
+  `--pin-clock <ms>`). `sky.js` derives the sun's hour and the forecast's weather from `Date.now()`, so two runs
   minutes apart would light the world differently — a false red. `serverclock.js` reads `performance.timeOrigin`, so
   motion phases and clock sync are untouched. `--no-pin-clock` turns it off.
 - **Fixed cameras**, two per world by default (`wide` at 0,7,14 → 0,1,0; `eye` at 6,1.6,6 → 0,1.2,−2). Add more with
   `--camera gym:stage=3,2,8/0,1,0`. The camera is placed by `Runtime.evaluate` on `core.js`'s exported `camera`
-  (`particles-shots.ts:189` does the same). **This is a probe hook, not a feature** — there is no URL parameter for a
+  (`tools/protocol/particles-shots.ts` does the same). **This is a probe hook, not a feature** — there is no URL parameter for a
   fixed camera.
 - **Diff rule.** A pixel counts as changed when any channel differs by more than `--tolerance` (default 16/255:
   SwiftShader dithers). A camera fails when changed pixels exceed `--threshold` percent (default 0.5). `pngjs` does the

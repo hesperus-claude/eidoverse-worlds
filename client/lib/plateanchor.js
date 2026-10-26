@@ -5,6 +5,7 @@
 // Lying blends over the head only when the head is low AND the torso has gone over: sitting lowers the head too.
 // Y is smoothed (critically damped, a small dead zone); X/Z aren't (sideways trail reads as lag).
 // Standing is rigid (STAND_SLOTS), so a jump clip can't swing it; the chase runs only on a posture change.
+// Why this shape: docs/research/nameplates.md.
 
 export const EYE_K = 1.35;        // crown = eye + 1.35·(eye − head bone)            (Basis)
 export const NO_EYE_K = 0.45;     // no eyes: crown = head + 0.45·(head − hips)       (Basis)

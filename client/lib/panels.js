@@ -1,59 +1,6 @@
-// panels — schema-driven edit surfaces.
-//
-// A panel is a FRAME on desktop and a laser-clickable QUAD in VR, so it never owns bespoke DOM: it declares FIELDS
-// (a serializable schema) and one of two renderers builds them, sharing a single action dispatcher:
-//
-//   renderDOM(body, fields, edit)              → frame body (desktop)
-//   renderCanvas(canvas, fields) → hit regions → quad texture (VR); a laser
-//     UV-hit resolves to a region and dispatches the SAME edit(action, payload)
-//
-// Every field must be operable with no keyboard: numbers are steppers, actions buttons, lists rows. Free text is
-// desktop-only and degrades to display-only in VR (no floating keyboards).
-//
-// field specs (plain JSON, no closures — actions are string keys):
-//   { t:'info',   label, value }
-//   { t:'num',    k, label, value, step=0.1, dp=2, min?, max?, softMin?, softMax?,
-//                 unit?, deg?, compact?, drag? }                  → edit(k, newValue)
-//   { t:'vec3',   k, label, value:[x,y,z], step=0.1, dp=2, link? } → edit(k, [x,y,z], axis|null)
-//   { t:'text',   k, label, value, placeholder? }                 → edit(k, string)  [desktop only]
-//   { t:'ref',    k, label, value:id|null, arming?, filter? }      → edit(k) to arm the pick;
-//                 the next thing clicked (a tree row or the thing in the world) names the
-//                 target and commits edit(k, id). value shows the current target or '—'.
-//                 A ✕ on a filled ref clears it: edit(k, null).
-//   { t:'btn',    k, label, danger?, icon? }                      → edit(k)   (icon: an icons.js glyph before the label)
-//   { t:'tiles',  k, value, options:[{v, label, icon?, img?, hint?}], empty? }
-//                 a grid of tiles — an icon or a picture over a short label; the tile whose v is
-//                 `value` reads as armed. Clicking dispatches edit(k, v) (the owner decides
-//                 whether clicking the armed one disarms it)        → edit(k, v)
-//   { t:'json',   k, label, value:string, collapsed? }            → edit(k, jsonText)  [desktop; the quad shows a one-line summary]
-//   { t:'log',    lines:[string], empty? }   a scrolling console tail; the VR quad shows the newest line
-//   { t:'range',  k, label, value, min=0, max=1, step=0.01, dp=2, unit? } → edit(k, number)  [a slider on BOTH renderers]
-//   { t:'list',   k?, label, empty?, rows:[{ id, label, sub?, active?,
-//                 actions:[{k, label, danger?}] }] }              → edit(a.k, rowId) / edit(k ?? 'row', rowId)
-//   { t:'check',  k, label, value, hint? }                        → edit(k, bool)
-//   { t:'enum',   k, label, value, options:[{v,label}] }          → edit(k, v)
-//   { t:'color',  k, label, value:0xRRGGBB }                      → edit(k, int)
-//   { t:'group',  k, label, open? }   marker: rows until the next marker belong to it;
-//                 collapsed groups skip their rows                → edit('fold', k)
-//   { t:'tree',   k, rows:[{ id, label, sub?, depth, active?, multi?, badges?:[], locked?, menu?, kids?, open?, dim? }],
-//                 a Shift/Ctrl-click row dispatches edit(k, id, f, {extend:true}); dragging a row onto
-//                 another dispatches edit('drop', {id, onto}) — onto empty tree space: {onto: null};
-//                 rootDrop?: a label for a strip at the tree's foot, shown while a row is dragged, that drops {onto: null}
-//                 menu?:[{k, label, danger?}] }   right-click a row → its menu (row.menu wins)
-//                 rename?: current label — double-click / menu 'rename' edits it inline → edit('rename', id, f, {value})
-//                 kids>0 draws a disclosure → edit('open', id)   → edit(k, id) / edit('lock', id) / edit(item.k, id)
-// Every field also takes { disabled?, driven?, hint?, vrOnly?, def? }: def is the value ↺ reverts to; vrOnly is painted
-// on the VR quad only (a stand-in for a key a headset lacks); disabled draws it read-only; driven names what owns the
-// value and marks the FIELD (amber edge, `~` on the value), so an axis label keeps its x/y/z colour.
-//
-// The dispatcher is edit(k, value, field?, opts?). `field` is an axis index for vec3, so multi-select can assign one
-// component without clobbering the others. `opts.live` (mid-drag): PREVIEW locally, no log traffic; a call without
-// it ends the gesture: commit ONE verb.
-//
-// num entry (desktop): drag to scrub. The value is ALWAYS start + step × distance, never accumulated, so a drag that
-// wanders comes back to exactly where it began (Blender #37453 drift). Shift = 0.1×, Ctrl = whole units, Esc mid-drag restores the start.
-// Click without travel types; typed entry takes relative math: `+=2`, `-=.5`, `*=-1`, `/=2`, `+=10%`.
-// Soft limits bound the drag; hard limits bound everything.
+// panels: schema-driven edit surfaces. A panel declares fields (plain JSON, no closures); renderDOM (desktop) and
+// renderCanvas (VR quad) build them and both dispatch edit(k, value, field?, opts): opts.live previews, a call without it
+// commits one verb. Every field must work without a keyboard. Field reference: docs/PANEL-FIELDS.md.
 
 import { makeFrame } from './windows.js';
 import { parseEntry } from '../../shared/editschema.js';
