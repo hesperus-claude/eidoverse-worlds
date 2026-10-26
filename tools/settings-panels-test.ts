@@ -273,29 +273,30 @@ console.log('TABS — every registered section is a tab; choosing one shows its 
 { const actions = await import('../client/lib/actions.js');
   const frame = ui.settingsFrame() as any;
   const strip = frame.strip as HTMLElement;
-  const ids = ['style', 'video', 'safety'];
-  check('the settings frame carries a tab strip with one tab per section, in registration order',
-    [...strip.querySelectorAll('.pf-tab')].map((b) => b.id).join() === ids.map((i) => `sec-${i}-tab`).join(),
+  // every section the host registered, whoever registered it: the built-ins, the bodies list, a mod's
+  const secs = () => frame.sections as Array<{ key: string; box: HTMLElement; head: HTMLElement }>;
+  check('the settings frame carries a tab strip with one tab per section, in registration order (style, video, safety among them)',
+    [...strip.querySelectorAll('.pf-tab')].every((b, i) => b === secs()[i]?.head) && strip.querySelectorAll('.pf-tab').length === secs().length
+      && ['style', 'video', 'safety'].every((k) => secs().some((x) => x.key === k)),
     [...strip.querySelectorAll('.pf-tab')].map((b) => b.id).join());
   check('no pane lives in the strip, no tab in a pane (a strip, not an accordion)',
-    !strip.querySelector('.sec') && ids.every((i) => !document.getElementById(`sec-${i}`)!.querySelector('.pf-tab')));
-  const state = () => ids.map((i) => `${i}:${document.getElementById(`sec-${i}`)!.classList.contains('open') ? 'open' : '-'}/${document.getElementById(`sec-${i}-tab`)!.classList.contains('on') ? 'on' : '-'}/${document.getElementById(`sec-${i}-tab`)!.getAttribute('aria-selected')}`).join(' ');
-  for (const id of ids) {
-    await openSection(id);
-    check(`clicking the ${id} tab shows its pane ALONE, the tab marked chosen`,
-      state() === ids.map((i) => (i === id ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), state());
+    !strip.querySelector('.sec') && secs().every((x) => !x.box.querySelector('.pf-tab')));
+  const state = () => secs().map((x) => `${x.key}:${x.box.classList.contains('open') ? 'open' : '-'}/${x.head.classList.contains('on') ? 'on' : '-'}/${x.head.getAttribute('aria-selected')}`).join(' ');
+  const alone = (key: string) => secs().map((x) => (x.key === key ? `${x.key}:open/on/true` : `${x.key}:-/-/false`)).join(' ');
+  for (const x of secs()) {
+    x.head.click(); await tick();
+    check(`clicking the ${x.key} tab shows its pane ALONE, the tab marked chosen`, state() === alone(x.key), state());
   }
   frame.hide();
-  for (const id of ids) {
-    actions.run(`section:settings:${id}`); await tick(); await tick();
-    check(`the lantern action section:settings:${id} opens the frame on the ${id} tab`,
-      frame.visible && state() === ids.map((i) => (i === id ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), `${frame.visible} ${state()}`);
+  for (const x of secs()) {
+    actions.run(`section:settings:${x.head.title}`); await tick(); await tick();
+    check(`the lantern action section:settings:${x.head.title} opens the frame on the ${x.key} tab`, frame.visible && state() === alone(x.key), `${frame.visible} ${state()}`);
   }
   // a frame shown with no tab chosen opens the one last chosen (never an empty pane)
   ui.collapseAll(); await tick();
-  check('collapseAll folds the pane away (placing a ghost wants the view)', !ids.some((i) => document.getElementById(`sec-${i}`)!.classList.contains('open')), state());
+  check('collapseAll folds the pane away (placing a ghost wants the view)', !secs().some((x) => x.box.classList.contains('open')), state());
   frame.hide(); frame.show(); await tick();
-  check('shown again with nothing chosen, the frame opens its last tab (the last of them)', state() === ids.map((i) => (i === ids.at(-1) ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), state());
+  check('shown again with nothing chosen, the frame opens its last tab (the last of them)', state() === alone(secs().at(-1)!.key), state());
 
   // a mod's section may share a built-in's label (mods.js passes no id): removing the mod's must keep the built-in's row
   const builtinRun = actions.get('section:settings:video')?.run;
