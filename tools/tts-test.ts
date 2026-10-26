@@ -15,19 +15,21 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ---- fakes ----------------------------------------------------------------
 // AudioData frames written to the generator, the harness's "wire": the pacer writes CONTINUOUSLY (silence between
 // utterances), so checks assert on speech (by amplitude), not on writes
-const written: { frames: number; ts: number; loud: boolean }[] = [];
+const written: { frames: number; ts: number; loud: boolean; sum: number }[] = [];
 const speechFrames = () => written.filter((w) => w.loud).reduce((a, w) => a + w.frames, 0);
+const speechSum = () => written.reduce((a, w) => a + w.sum, 0);
 class FakeAudioData {
-  numberOfFrames: number; timestamp: number; loud: boolean;
+  numberOfFrames: number; timestamp: number; loud: boolean; sum: number;
   constructor(init: { numberOfFrames: number; timestamp: number; data?: Float32Array }) {
     this.numberOfFrames = init.numberOfFrames; this.timestamp = init.timestamp;
     this.loud = !!init.data && init.data.some((v) => Math.abs(v) > 1e-6);
+    this.sum = init.data ? init.data.reduce((a, v) => a + v, 0) : 0;
   }
   close() {}
 }
 class FakeWriter {
   closed = false;
-  write(d: FakeAudioData) { written.push({ frames: d.numberOfFrames, ts: d.timestamp, loud: d.loud }); return Promise.resolve(); }
+  write(d: FakeAudioData) { written.push({ frames: d.numberOfFrames, ts: d.timestamp, loud: d.loud, sum: d.sum }); return Promise.resolve(); }
   close() { this.closed = true; return Promise.resolve(); }
 }
 let generatorCount = 0;
@@ -57,8 +59,15 @@ class FakeAudioCtx {
   createGain() { return { gain: { value: 0, setTargetAtTime() {} }, connect() {}, disconnect() {} }; }
   createMediaStreamDestination() { return { stream: new FakeStream(), disconnect() {} }; }
   createAnalyser() { return { fftSize: 0, connect() {}, disconnect() {}, getFloatTimeDomainData(b: Float32Array) { b.fill(0); } }; }
-  createBufferSource() { return { connect() {}, start() {}, stop() {} }; }
+  // the sidetone: each scheduled chunk records the gain it plays through
+  currentTime = 0; destination = {};
+  createBuffer(_c: number, n: number, sr: number) { const d = new Float32Array(n); return { duration: n / sr, getChannelData: () => d }; }
+  createBufferSource() {
+    let to: { gain?: { value: number } } = {};
+    return { connect(g: typeof to) { to = g; }, start() { monitored.push(to.gain?.value ?? NaN); }, stop() {} };
+  }
 }
+const monitored: number[] = [];
 (globalThis as Record<string, unknown>).AudioContext = FakeAudioCtx;
 class FakePC {
   senders: { track: { kind: string; id: string } | null; replaceTrack(t: unknown): Promise<void> }[] = [];
@@ -156,8 +165,8 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   await sleep(30);
 }
 
-// one producer on the wire across mic/TTS handoffs: also tools/voicesource-real-test.mjs, mic-resume-after-synth-test.mjs,
-// tts-publishes-mic-off-test.mjs and tools/sfu-test.ts
+// one producer on the wire across mic/TTS handoffs: also tools/voicesource-real-test.mjs, sfu-mic-intent-race-test.mjs
+// and tools/sfu-test.ts
 
 console.log("\n— mic priority: both orderings, repeated cycles, no dual producer —");
 {
@@ -274,6 +283,26 @@ console.log("\n— voicestore: identity is digests; remember/forget round-trip �
   // both variants can be remembered side by side: distinct ids can't clobber
   check("model+cfgA and model+cfgB coexist as distinct rows",
     idA.id !== idC.id && idA.modelSha256 === idC.modelSha256 && idA.configSha256 !== idC.configSha256);
+}
+
+console.log("\n— sidetone: the tts slider moves only what you hear of yourself, never the wire —");
+{
+  const vc = await import("../client/lib/voiceconsent.js");
+  tts.sidetone(true);
+  const run = async (v: number) => {
+    vc.setVolume("tts", v); await sleep(30); written.length = 0; monitored.length = 0;
+    await tts.speak("sidetone row"); await sleep(150);
+    return { wire: speechSum(), heard: [...monitored] };
+  };
+  const full = await run(1), half = await run(0.5), none = await run(0);
+  const all = (h: number[], g: number) => h.length > 0 && h.every((x) => Math.abs(x - g) < 1e-9);
+  check("slider 1: you hear yourself at the 0.8 default", all(full.heard, 0.8), JSON.stringify(full.heard));
+  check("slider 0.5 halves only your monitor", all(half.heard, 0.4), JSON.stringify(half.heard));
+  check("slider 0 is silence for you only", all(none.heard, 0), JSON.stringify(none.heard));
+  check("what others receive is identical at every slider setting",
+    full.wire > 0 && Math.abs(half.wire - full.wire) < 1e-9 && Math.abs(none.wire - full.wire) < 1e-9,
+    `${full.wire} / ${half.wire} / ${none.wire}`);
+  vc.setVolume("tts", 1);
 }
 
 console.log("\n— negative control: a disconnected feature must FAIL this suite —");

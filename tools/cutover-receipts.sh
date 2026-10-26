@@ -24,7 +24,7 @@ run door-media-whitelist-test.mjs
 run micstate-exec-test.mjs
 run micstate-release-test.mjs
 run micstate-single-transport-test.mjs
-run tts-import-order-test.mjs
+run ttsrow-test.mjs
 run tts-fault-test.ts
 run tts-test.ts
 run audioctx-test.ts
@@ -35,8 +35,6 @@ run relay-decision-test.ts
 run sfu-ops-test.mjs
 run sfu-verb-gate-test.mjs
 run sfu-loss-test.mjs
-run synth-hook-broadcast-test.mjs
-run tts-publishes-mic-off-test.mjs
 run mic-gate-wired-test.mjs
 run audio-unlock-test.mjs
 run join-rfc005.test.ts
@@ -73,7 +71,7 @@ run mic-meter-states.mjs
 run panel-teardown-probe.mjs
 run sfu-no-duplicate-playback-test.mjs
 run voicesource-real-test.mjs
-run mic-resume-after-synth-test.mjs
+run sfu-mic-intent-race-test.mjs
 run transport-check.mjs
 run sfu-browser-smoke.mjs
 echo

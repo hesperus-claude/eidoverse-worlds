@@ -251,5 +251,28 @@ console.log("\nCHAT — a mod's markup carrying the public classes is never mist
   decoy.remove();
 }
 
+// --- /audio: the shipped report survives missing subsystems and names the real failures (one guarded probe each)
+{
+  const w = window as any;
+  const audio = (install: () => void) => {
+    for (const k of ["__voiceTransport", "__sfuMicOn", "relayDiag", "__voiceSpeakerEls"]) delete w[k];
+    install();
+    chat.submit("/audio");
+    return [...log().querySelectorAll("*")].map((e) => e.textContent ?? "").filter((x) => x.startsWith("audio ▸")).at(-1) ?? "";
+  };
+  const a = audio(() => {});
+  check("/audio with nothing initialised answers every probe", /transport: \(none/.test(a) && /mic: unknown/.test(a)
+    && /ice: unknown \(no diag\)/.test(a) && /build: /.test(a) && !/unreadable/.test(a), a);
+  const b = audio(() => { w.__voiceTransport = "sfu"; w.__sfuMicOn = () => true;
+    w.relayDiag = () => ({ iceConnectionState: "checking", connectionState: "connecting" }); });
+  check("/audio names an ICE stall", /mic: ON/.test(b) && /ice: checking \/ conn=connecting/.test(b), b);
+  const c = audio(() => { w.__voiceSpeakerEls = () => [{ id: "keir", audio: { paused: true } }, { id: "mica", audio: { paused: true } }]; });
+  check("/audio names an autoplay block and who is held", /playback: 2 — 0 playing, 2 paused {2}← keir, mica held/.test(c), c);
+  const d = audio(() => Object.defineProperty(w, "__voiceTransport", { configurable: true, get() { throw new Error("boom"); } }));
+  check("/audio: a throwing probe is said unreadable once and the rest still answer",
+    (d.match(/unreadable/g) ?? []).length === 1 && /transport: unreadable \(boom\)/.test(d) && /mic: unknown/.test(d) && /build: /.test(d), d);
+  delete w.__voiceTransport;
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
