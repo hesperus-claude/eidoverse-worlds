@@ -17,12 +17,12 @@ import { fileURLToPath } from "node:url";
 import { poseChannels } from "../shared/humanoid.js";
 import { clampBodyScale } from "../shared/presencewire.js";
 import { isFiniteVec3 } from "./shape.ts";
-// pure shared geometry — no client import cone, safe to load eagerly
+// pure shared geometry, no client import cone: safe to load eagerly
 import { CONTACT_POINTS, contactSeed } from "../shared/contact.js";
-// The aerodynamics of a limp fall -- forces, not a scripted path.
+// forces, not a scripted path
 import { leafForceFor, DEFAULT_LEAF_FORCE } from "../shared/leafforce.js";
 import { bodyFrame, fromBody } from "../shared/joints.js";
-// the walking capsule's dimensions — pure module, the browser controller's own numbers
+// the browser controller's own numbers; a pure module
 import { colliderFor } from "../client/lib/bodyscale.js";
 import { NAV_NUDGE, type NavProbe } from "./navgrid.ts";
 
@@ -30,7 +30,7 @@ const HEADLESS_CORE = fileURLToPath(new URL("./headless-core.mjs", import.meta.u
 
 let simMods: {
   Ragdoll: any;
-  Body: any;                 // the engine that actually runs: AmmoRagdoll or Ragdoll
+  Body: any;                 // AmmoRagdoll or Ragdoll
   engine: string;
   rig: { glbJson: any; humanBones: any; worldPositions: any; worldRotations: any; makeAvatar: any };
   THREE: any;
@@ -39,7 +39,7 @@ let simMods: {
   reachbone: { measureChain: any; solveChain: any };
 } | null = null;
 let simFailed = false;
-// the in-flight load, shared: a join's burst of spawns reaches loadSim() many times before it resolves
+// shared: a join's burst of spawns reaches loadSim() many times before it resolves
 let simLoading: Promise<typeof simMods> | null = null;
 
 function loadSim(): Promise<typeof simMods> {
@@ -58,11 +58,10 @@ function loadSim(): Promise<typeof simMods> {
       const rig = await import("./rig.ts");
       const terrain = await import("../client/lib/terrain.js");
       const colliders = await import("../client/lib/colliders.js");
-      // the reach solver's frame algebra — same door, same runtime adapter (its own
-      // import cone is core.js + pure shared modules; tools/reachlive-test.ts
-      // is the standing proof it runs headless)
+      // the reach solver's frame algebra; its import cone is core.js + pure shared modules (tools/reachlive-test.ts
+      // proves it runs headless)
       const reachbone = await import("../client/lib/reachbone.js");
-      // Bullet, as the browser runs (bodysim.js): a different solver here swaps models mid-fall on every drag release
+      // Bullet, as the browser runs (client/lib/bodysim.js): a different solver swaps models mid-fall on every drag release
       let Body: any = rag.Ragdoll;
       let engine = "verlet";
       const want = process.env.AGENT_BODY_ENGINE ?? "ammo";
@@ -75,9 +74,7 @@ function loadSim(): Promise<typeof simMods> {
           console.warn("[physics] ammodoll unavailable — falling back to verlet:", e);
         }
       }
-      // Say which engine answered. A silent fallback here is indistinguishable
-      // from a toggle that does not work -- the same ambiguity bodysim.js's
-      // status string was added to kill.
+      // say which engine answered: a silent fallback is indistinguishable from a toggle that does not work
       console.log(`[physics] headless body engine: ${engine}`);
       simMods = { Ragdoll: rag.Ragdoll, Body, engine, rig, THREE: core.THREE, terrain, colliders, reachbone };
       return simMods;
@@ -90,45 +87,42 @@ function loadSim(): Promise<typeof simMods> {
   return simLoading;
 }
 
-/** Hand the sim the world's ground truth: the same heightAt the walking
- *  clamp uses. Null restores the bare stage (flat zero). Soft no-op when the
- *  sim is unavailable — a slumping agent has no clamp to feed. */
+/** The same heightAt the walking clamp uses. Null restores the bare stage (flat zero). Soft no-op when the sim is
+ *  unavailable: a slumping agent has no clamp to feed. */
 export async function setHeightField(fn: ((x: number, z: number) => number) | null) {
   const m = await loadSim();
   if (!m) return;
   m.terrain.setTerrain(fn ? { mesh: null, heightAt: fn } : null);
 }
 
-/** Hand the sim the world's water, so a body that falls in floats (ammodoll.js, via terrain.js's seam):
- *  {level, sample(x, z), time()} — the agent's own water analysis and wave clock — or null. */
+/** So a body that falls in floats (client/lib/ammodoll.js, via terrain.js's seam): {level, sample(x, z), time()},
+ *  the agent's own water analysis and wave clock, or null. */
 export async function setWaterField(f: { level: number; sample: (x: number, z: number) => unknown; time: () => number } | null) {
   const m = await loadSim();
   if (!m) return;
   m.terrain.setWaterField(f);
 }
 
-// who claims each support box: ids are shared per world, so a box lives until its last holder lets go
-// (a Set, so a holder re-registering the same id still counts once)
+// ids are shared per world, so a box lives until its last holder lets go (a Set: a re-registering holder counts once)
 const holders = new Map<string, Set<string>>();
 
 /** A stretched thing's per-axis scale (shared/scale3.js); absent is uniform. */
 const finite3 = (v: unknown) => v == null || (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
-/** A stretched thing's per-axis |scale|, or null when uniform; colliders.js reads one scale, so a stretched support
- *  is fitted at scale 1 with the stretch baked into its box, grid and triangles. */
+/** null when uniform; colliders.js reads one scale, so a stretched support is fitted at scale 1 with the stretch
+ *  baked into its box, grid and triangles. */
 const stretchOf = (x: { scale3?: number[] }): [number, number, number] | null => {
   if (!Array.isArray(x.scale3)) return null;
   const [a, b, c] = x.scale3.map(Math.abs);
   return a === b && b === c ? null : [a, b, c];
 };
-/** The transform a support is fitted with: a stretched one at scale 1, its stretch being in its geometry, and any other at
- *  |scale|, since physics reads a mirrored axis as its size (a mirror the same on every axis is no stretch, and a negative
- *  one-number scale is refused by the grid fitter and turns a box inside out). */
+/** A stretched support is fitted at scale 1 (its stretch is in its geometry), any other at |scale|, since physics
+ *  reads a mirrored axis as its size (a uniform mirror is no stretch, and a negative one-number scale is refused by
+ *  the grid fitter and turns a box inside out). */
 const fitXform = <T extends { scale?: number; scale3?: number[] }>(x: T, k: number[] | null): T =>
   ({ ...x, scale: k ? 1 : Math.abs(x.scale ?? 1), scale3: undefined });
 
-/** Register a placed entity's support geometry (a local-frame box + world
- *  transform) so settling bodies rest on it. `holder` is the claiming agent;
- *  the box survives until every holder has removed it. */
+/** A local-frame box + world transform, so settling bodies rest on it. `holder` is the claiming agent; the box
+ *  survives until every holder has removed it. */
 export async function registerSupport(
   holder: string, id: string, min: number[], max: number[],
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },
@@ -142,8 +136,7 @@ export async function registerSupport(
   const m = await loadSim();
   if (!m) return;
   (holders.get(id) ?? holders.set(id, new Set()).get(id)!).add(holder);
-  // re-fit unconditionally: a place moves the box, and the newest claimant's
-  // transform is the freshest reading of where the thing actually is
+  // re-fit unconditionally: a place moves the box, and the newest claimant's transform is the freshest reading
   const k = stretchOf(xform);
   if (k) m.colliders.fitSupportBox(id, min.map((v, i) => v * k[i]), max.map((v, i) => v * k[i]), fitXform(xform, k));
   else m.colliders.fitSupportBox(id, min, max, fitXform(xform, null));
@@ -151,14 +144,13 @@ export async function registerSupport(
   scopeEntry(m, id);
 }
 
-/** test/debug probe — who holds which support box (the world_debug spirit:
- *  the first question about a ghost floor is answered by looking, not by
- *  re-deriving process state). Copies, not live references. */
+/** test/debug probe: a ghost floor is answered by looking, not by re-deriving process state. Copies, not live
+ *  references. */
 export const supportHolders = (): Record<string, string[]> =>
   Object.fromEntries([...holders].map(([id, hs]) => [id, [...hs]]));
 
-/** Heightfield support from a served topGrid (#84), for floors whose box top lies. False when refused
- *  (validTopGrid, non-finite transform): the caller must then abstain, never fall back to the box top. */
+/** Heightfield support from a served topGrid (#84), for floors whose box top lies. False when refused (validTopGrid, non-finite transform): the caller must then
+ *  abstain, never fall back to the box top. */
 export async function registerSupportGrid(
   holder: string, id: string, topGrid: unknown,
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },
@@ -185,14 +177,13 @@ export async function registerSupportGrid(
   return true;
 }
 
-// One geometry per collision mesh, shared by every entity fitted from it —
-// the triangles are the lib's, the transform is the entity's (colliders.js
-// works root-local, so clones at any place/yaw/scale read the same arrays).
+// one geometry per collision mesh, shared by every entity fitted from it (colliders.js works root-local, so clones
+// at any place/yaw/scale read the same arrays)
 const meshGeometries = new WeakMap<object, any>();
 
-/** A placed entity's real collider, fitted from its triangles (server/geometry.ts collisionTriangles) as the browser
- *  does (client/lib/realize/models.js), except stretched and mirrored things, fitted as drawn; decide() picks box,
- *  pillar or trimesh. Same holders and lifetime as registerSupport. */
+/** Fitted from its triangles (server/geometry.ts collisionTriangles) as the browser does
+ *  (client/lib/realize/models.js), except stretched and mirrored things, fitted as drawn; decide() picks box, pillar
+ *  or trimesh. Same holders and lifetime as registerSupport. */
 export async function registerMeshSupport(
   holder: string, id: string, mesh: { positions: Float32Array; indices: Uint32Array },
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[]; collide?: string; model?: string },
@@ -212,8 +203,7 @@ export async function registerMeshSupport(
     geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     meshGeometries.set(mesh, geom);
   }
-  // a stretched thing's triangles carry its stretch, in a copy of its own: the shared geometry and the lib's shared
-  // fit are for the model at one scale
+  // a stretched thing's triangles carry its stretch, in its own copy: the shared geometry and fit are for one scale
   const k = stretchOf(xform);
   if (k) geom = geom.clone().scale(k[0], k[1], k[2]);
   const s = fitXform(xform, k).scale!;
@@ -223,8 +213,8 @@ export async function registerMeshSupport(
   root.rotation.y = xform.yaw ?? 0;
   root.scale.setScalar(s);
   root.updateMatrixWorld(true);
-  // Never throws (#88): a model the fit chokes on (degenerate triangles, a
-  // BVH build failure) abstains, and the caller falls back to its summary.
+  // never throws (#88): a model the fit chokes on (degenerate triangles, a BVH build failure) abstains; the caller falls
+  // back to its summary
   try {
     const lib = k ? null : xform.model ?? null;   // colliders.js shares a fit between spawns of one model by this name
     m.colliders.fitCollider(id, root, { collide: xform.collide, scale: s, lib, localFrame: true });
@@ -239,31 +229,27 @@ export async function registerMeshSupport(
 }
 
 const WALKING = colliderFor(1);
-/** The route planner's radius: the authority's square body box, corners included, plus navgrid's nudge (navProbe). */
+/** The authority's square body box, corners included, plus navgrid's nudge (navProbe). */
 const PLAN_R = WALKING.r * Math.SQRT2 + NAV_NUDGE;
 
-/** Bumped whenever the collider map changes (a fit, a refit, a removal):
- *  what a route planner learned about the world is good until it moves. */
+/** Bumped whenever the collider map changes (a fit, a refit, a removal): a route plan is good until it moves. */
 let generation = 0;
 export const collidersGeneration = () => generation;
-/** Support ids are `<world>/<entity>…` (agent.ts): the entry belongs to that
- *  world, and queries made inside another world (inWorld) don't see it. */
+/** Support ids are `<world>/<entity>…` (agent.ts): queries made inside another world (inWorld) don't see them. */
 function scopeEntry(m: NonNullable<typeof simMods>, id: string) {
   const e = m.colliders.colliders?.get(id), slash = id.indexOf("/");
   if (e && slash > 0) e.scope = id.slice(0, slash);
 }
 
-/** test/debug probe — what a registered support id was fitted as: the exact
- *  triangles, a box (or pillar), a heightfield grid, or a data box. */
+/** test/debug probe, what a support id was fitted as: the exact triangles, a box (or pillar), a heightfield grid, or a data box. */
 export function supportShape(id: string): "exact" | "box" | "pillar" | "grid" | "data-box" | null {
   const e = simMods?.colliders.colliders?.get(id);
   if (!e) return null;
   return e.exact ? "exact" : e.grid ? "grid" : e.support ? "data-box" : e.pillar ? "pillar" : "box";
 }
 
-/** Run `fn` with the collider queries scoped to `world`: an agent process can
- *  hold several worlds' colliders, and a body in one must not stand on, or
- *  be stopped by, a floor or a wall in another at the same coordinates. */
+/** A process can hold several worlds' colliders; a body in one must not stand on, or be stopped by, a floor or a
+ *  wall in another at the same coordinates. */
 export function inWorld<T>(world: string | null | undefined, fn: () => T): T {
   const C = simMods?.colliders;
   if (!C?.setColliderScope || !world) return fn();
@@ -272,16 +258,15 @@ export function inWorld<T>(world: string | null | undefined, fn: () => T): T {
   try { return fn(); } finally { C.setColliderScope(prev); }
 }
 
-/** Are the collision modules loaded? Asking starts the load: a body's feet
- *  use the terrain clamp until the answer is yes. */
+/** Asking starts the load: a body's feet use the terrain clamp until the answer is yes. */
 export function collidersReady(): boolean {
   if (!simMods) void loadSim();
   return simMods != null;
 }
 let standProbe: any = null;
 
-/** Where the feet stand at `pos`, by client/lib/controller.js's rule (resolveColliders; also pushes pos.x/z out of
- *  solids). Null while the sim isn't loaded (keep the terrain clamp). Synchronous: called every walk substep. */
+/** By client/lib/controller.js's rule (resolveColliders; also pushes pos.x/z out of solids). Null while the sim isn't
+ *  loaded (keep the terrain clamp). Synchronous: called every walk substep. */
 export function standOn(pos: { x: number; y: number; z: number }, heightAt: (x: number, z: number) => number): number | null {
   if (!simMods) { void loadSim(); return null; }
   standProbe ??= new simMods.THREE.Vector3();
@@ -291,9 +276,9 @@ export function standOn(pos: { x: number; y: number; z: number }, heightAt: (x: 
   return ground;
 }
 
-/** Run `fn` with the colliders `ids` out of every query (colliders.suspendCollider: out of the grid, the entry kept) and
- *  put back after — those already out (a thing in a hand) stay as they were. The route planner's passable things: a loose
- *  thing this body would shove is walked INTO, not round (agent.ts walkNow). Synchronous, so no other query sees the gap. */
+/** Run `fn` with the colliders `ids` out of every query (colliders.suspendCollider: out of the grid, the entry kept),
+ *  put back after; those already out (a thing in a hand) stay so. A loose thing this body would shove is walked INTO,
+ *  not round (agent.ts walkNow). Synchronous, so no other query sees the gap. */
 export function withoutColliders<T>(ids: Iterable<string>, fn: () => T): T {
   const C = simMods?.colliders;
   if (!C?.suspendCollider) return fn();
@@ -302,9 +287,8 @@ export function withoutColliders<T>(ids: Iterable<string>, fn: () => T): T {
   try { return fn(); } finally { for (const id of out) C.suspendCollider(id, false); }
 }
 
-/** The route planner's view of the world (mcpl/navgrid.ts): the same
- *  surfaceUnder and resolveColliders, with the same walking capsule, that the
- *  feet will be moved by. null while the sim is not loaded. */
+/** For mcpl/navgrid.ts: the same surfaceUnder and resolveColliders, with the same walking capsule, that the feet
+ *  will be moved by. null while the sim is not loaded. */
 export function navProbe(heightAt: (x: number, z: number) => number): NavProbe | null {
   if (!simMods) { void loadSim(); return null; }
   const C = simMods.colliders, v = new simMods.THREE.Vector3();
@@ -316,9 +300,9 @@ export function navProbe(heightAt: (x: number, z: number) => number): NavProbe |
       // and navgrid takes a push under NAV_NUDGE as standing room; PLAN_R clears that box everywhere
       const ground = C.resolveColliders(v, heightAt, PLAN_R, WALKING.tall, true);
       const push = Math.hypot(v.x - x, v.z - z);
-      // ...and the authority's box reaches the body's full height (shared/mover.js bodyBox: a step above the feet to the
-      // top of the head), where the feet's wall probe stops at the hips: the same probe again, raised half a body, is
-      // the head's band — so a stair under the edge of an upper floor is climbed where the head clears it
+      // ...and the authority's box reaches the full height (bodyBox: a step above the feet to the head) while the feet's
+      // wall probe stops at the hips: the same probe raised half a body is the head's band, so a stair under the
+      // edge of an upper floor is climbed where the head clears it
       v.set(x, y + WALKING.tall / 2, z);
       C.resolveColliders(v, heightAt, PLAN_R, WALKING.tall, false);
       return { ground, push: Math.max(push, Math.hypot(v.x - x, v.z - z)) };
@@ -326,9 +310,9 @@ export function navProbe(heightAt: (x: number, z: number) => number): NavProbe |
   };
 }
 
-/** Can an eye at `from` see `to`? A ray against the fitted colliders (colliders.raySegment: a model's exact triangles where
- *  it was fitted exact, its box otherwise — the colliders the feet use) and the terrain, sampled every half metre.
- *  null while the collision modules are not loaded: the caller decides by distance alone then, and says so. */
+/** A ray against the fitted colliders (colliders.raySegment: the ones the feet use, exact triangles where fitted
+ *  exact) and the terrain, sampled every half metre. null while the collision modules are not loaded: the caller
+ *  decides by distance alone then, and says so. */
 export function lineOfSight(from: number[], to: number[], heightAt: (x: number, z: number) => number): boolean | null {
   if (!simMods) { void loadSim(); return null; }
   const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], far = Math.hypot(dx, dy, dz);
@@ -353,7 +337,7 @@ export async function removeSupport(holder: string, id: string) {
   generation++;
 }
 
-// skeletons are per-VRM and immutable — parse each avatar file once
+// skeletons are per-VRM and immutable: parse each avatar file once
 const skeletons = new Map<string, Record<string, any> | null>();
 
 async function skeletonFor(httpBase: string, avatarPath: string) {
@@ -388,8 +372,8 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
       hairParent[name] = (pn && /^Hair_\d+_\d+$/.test(pn)) ? pn : "head";
     }
 
-    // wing bones aren't humanoid, so graft [LR]_Wing_* onto the stand-in (they're most of the doll's drag area); a root
-    // wing bone reparents to chest, since the clavicle has no body
+    // wing bones aren't humanoid, so graft [LR]_Wing_* onto the stand-in (most of the doll's drag area); a root wing
+    // bone reparents to chest, since the clavicle has no body
     const wingParent: Record<string, string> = {};
     for (const [name, i] of byName) {
       if (!/^[LR]_Wing_(Upper|Lower)(_\d+)?$/.test(name)) continue;
@@ -401,15 +385,12 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
 
     const extraParent = { ...hairParent, ...wingParent };
     if (Object.keys(extraParent).length) {
-      // Named __hairParent still: ammodoll and HeadlessBody both read that key,
-      // and renaming it would be a rename in three files to say the same thing.
-      // It has always meant "bones the humanoid table does not know about".
+      // still named __hairParent (ammodoll and HeadlessBody read it); it means "bones the humanoid table doesn't know"
       Object.defineProperty(P, "__hairParent", { value: extraParent, enumerable: false });
       Object.defineProperty(P, "__wingBones", { value: Object.keys(wingParent), enumerable: false });
     }
-    // VRM 0.x bodies face -Z; the reach frame algebra needs to know (six of
-    // the shipped rigs). The ragdoll never asked, so this travels as a
-    // non-enumerable extra rather than a change to its P contract.
+    // VRM 0.x bodies face -Z and the reach frame algebra needs to know; a non-enumerable extra, so the ragdoll's P
+    // contract is unchanged
     Object.defineProperty(P, "__vrm0", { value: !!g.extensions?.VRM, enumerable: false });
     Object.defineProperty(P, "__restAxes", { value: restAxes, enumerable: false });
     skeletons.set(key, P);
@@ -421,9 +402,8 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
   }
 }
 
-/** One headless body's physics: a stand-in skeleton plus whichever Ragdoll is
- *  currently running on it. The caller owns cadence (call step from its own
- *  ticker) and streaming (read pose/root after each step). */
+/** One headless body's physics: a stand-in skeleton plus whichever Ragdoll runs on it. The caller owns cadence
+ *  (call step from its own ticker) and streaming (read pose/root after each step). */
 export class HeadlessBody {
   private m: NonNullable<typeof simMods>;
   private av: any;
@@ -440,8 +420,8 @@ export class HeadlessBody {
       : m.rig.makeAvatar(P, { vrm0: this.vrm0 });
   }
 
-  /** This body's water, read on every step it floats (ammodoll.js _water) — set by its agent, so a body
-   *  floats on its own world's water whatever another agent in the process last handed setWaterField. */
+  /** Read on every step it floats (ammodoll.js _water): set by its agent, so a body floats on its own world's water
+   *  whatever another agent in the process last handed setWaterField. */
   waterSource: (() => { level: number; sample: (x: number, z: number) => unknown; time: () => number } | null) | null = null;
 
   /** null when physics is unavailable for this process or this VRM. */
@@ -453,8 +433,8 @@ export class HeadlessBody {
     return new HeadlessBody(m, P);
   }
 
-  /** Reset the stand-in to a sparse bone map (null = standing) on the live ground. Rotations only, as a limp
-   *  browser body draws (avatar.js _applyRawPose doesn't run while limp); begin() moves a hips drop to the root. */
+  /** Reset the stand-in to a sparse bone map (null = standing) on the live ground. Rotations only, as a limp browser
+   *  body draws (avatar.js _applyRawPose doesn't run while limp); begin() moves a hips drop to the root. */
   private pose(x: number, z: number, yaw: number, pose: Record<string, unknown> | null) {
     this.av.root.position.set(x, this.m.terrain.heightAt(x, z), z);
     this.av.root.rotation.y = yaw;
@@ -469,10 +449,10 @@ export class HeadlessBody {
     this.av.root.updateMatrixWorld(true);
   }
 
-  /** The world this body falls in: its ragdoll sees that world's colliders only. */
+  /** Its ragdoll sees that world's colliders only. */
   scope: string | null = null;
-  /** Start a tumble from standing or a given pose, leaning or free. Everything is world y (rootY, pins, seed);
-   *  a held hips drop lowers the root before the sim starts. */
+  /** From standing or a given pose, leaning or free. Everything is world y (rootY, pins, seed); a held hips drop lowers
+   *  the root before the sim starts. */
   begin(opts: Parameters<HeadlessBody["beginIn"]>[0]) { return inWorld(this.scope, () => this.beginIn(opts)); }
   step(dt: number) { return inWorld(this.scope, () => this.stepIn(dt)); }
   private beginIn(opts: {
@@ -514,13 +494,12 @@ export class HeadlessBody {
     }
   }
 
-  /** Add/update/remove a pin, in WORLD coordinates. */
+  /** In WORLD coordinates. */
   setPin(joint: string | null, at?: number[] | null, firm = true) {
     if (!this.rd) return;
     if (!joint) { this.rd.setPin(null); return; }
     if (!Array.isArray(at)) { this.rd.setPin(joint, null); return; }
-    // Pins arriving here are NAILS (begin's opts.pins, and the bodydrag relay's
-    // pin map) — a hand is simulated by whoever is holding it, not replicated.
+    // pins here are NAILS (begin's opts.pins, the bodydrag relay's pin map): a hand is simulated by its holder, not replicated
     this.rd.setPin(joint, new this.m.THREE.Vector3(at[0], at[1], at[2]), firm);
   }
 
@@ -544,8 +523,7 @@ export class HeadlessBody {
         const he = shape?.getHalfExtentsWithMargin?.();
         const half = he ? [he.x(), he.y(), he.z()] : [0.05, 0.12, 0.05];
         const mass = 1 / Math.max(1e-6, rb.getInvMass?.() ?? 1);
-        // The plate's normal in WORLD space: the thinnest local axis, rotated
-        // by the body. A box's smallest face IS its plate.
+        // the plate's world normal: the thinnest local axis, rotated by the body (a box's smallest face IS its plate)
         const thin = half.indexOf(Math.min(...half));
         const basis = rb.getWorldTransform().getBasis();
         const col = (i: number) => {
@@ -575,7 +553,7 @@ export class HeadlessBody {
     return this._bv;
   }
 
-  /** Advance; returns what to stream, or null once the sim has captured. */
+  /** Returns what to stream, or null once the sim has captured. */
   private stepIn(dt: number): { pose: Record<string, number[]>; p: number[]; done: boolean } | null {
     if (!this.rd) return null;
     this.rd.step(dt);
@@ -599,8 +577,7 @@ export class HeadlessBody {
   }
 
   get active() { return this.rd != null; }
-  /** Drop the body. dispose() before the reference goes: under ammo the
-   *  reference is the only handle on a wasm world. */
+  /** dispose() before the reference goes: under ammo the reference is the only handle on a wasm world. */
   stop() { this.rd?.dispose?.(); this.rd = null; }
 }
 
@@ -608,7 +585,7 @@ export class HeadlessBody {
 // ReachBody: the stand-in driven by the reach solver. No mesh, so contact() uses client/lib/landmarks.js's
 // fallback rule (proportional off the bone); within a few cm of the browser's
 
-/** A body the reach solver can pose and interrogate, per VRM. */
+/** Per VRM: a body the reach solver can pose and interrogate. */
 export class ReachBody {
   private m: NonNullable<typeof simMods>;
   av: any;
@@ -616,15 +593,14 @@ export class ReachBody {
   private restPositions = new Map<string, any>();
   private restAxes: Record<string, number[]>;
   private landmarks = new Map<string, { node: any; offset: any; normal: any }>();
-  /** Whether the held pose's raw layer (holdPose) is in the nodes' matrices:
-   *  on for what is drawn (joints, contacts), off while the solver runs. */
+  /** Whether the held pose's raw layer (holdPose) is in the nodes' matrices: on for what is drawn (joints, contacts),
+   *  off while the solver runs. */
   private drawn = true;
 
   private constructor(m: NonNullable<typeof simMods>, P: Record<string, any>, realParent: Record<string, string | null> | null = null) {
     this.m = m;
-    // Existing reaches use the collapsed body. Readback can retain the full
-    // humanoid ancestry (shoulders, upperChest, fingers); chain measurement
-    // still refuses a lower limb that is not its upper limb's direct child.
+    // reaches use the collapsed body; readback can keep the full humanoid ancestry. Chain measurement still refuses a
+    // lower limb that is not its upper limb's direct child.
     this.av = m.rig.makeAvatar(P, { vrm0: !!(P as any).__vrm0, realParent });
     this.restAxes = (P as any).__restAxes ?? {};
     // the held pose's raw layer goes in the local matrix: its scale is in the bone's rest axes, which Object3D.scale
@@ -659,22 +635,20 @@ export class ReachBody {
     return new ReachBody(m, P);
   }
 
-  /** Build from an already-parsed skeleton. Readback supplies real humanoid
-   *  ancestry; existing reach tests can retain the collapsed-chain default.
-   *  Every call creates private nodes, even when the parsed rig is cached. */
+  /** Readback supplies real humanoid ancestry; reach tests can keep the collapsed-chain default. Every call creates
+   *  private nodes, even when the parsed rig is cached. */
   static async fromSkeleton(P: Record<string, any>, realParent: Record<string, string | null> | null = null): Promise<ReachBody | null> {
     const m = await loadSim();
     return m ? new ReachBody(m, P, realParent) : null;
   }
 
-  /** Put the stand-in where the streamed presence says. `scale` (wire pose.scale, absent = 1) goes on the pivot,
-   *  never the root, as avatar.js _applyBodyScale does, so root-frame points stay in unscaled metres. */
+  /** Where the streamed presence says. `scale` (wire pose.scale, absent = 1) goes on the pivot, never the root, as
+   *  avatar.js _applyBodyScale does, so root-frame points stay in unscaled metres. */
   poseAt(p: number[], yaw: number, pose: Record<string, unknown> | null, scale: unknown = 1, raw = true) {
     const u = clampBodyScale(scale);
     if (this.av.pivot.scale.x !== u) {
       this.av.pivot.scale.setScalar(u);
-      // limb lengths are measured in the root's (unscaled) frame, so a size
-      // change re-measures them — a stale arm length would misjudge reach
+      // limb lengths are measured in the root's unscaled frame, so a size change re-measures them (a stale arm misjudges reach)
       this.chains.clear();
     }
     this.av.root.position.set(p[0], p[1] ?? 0, p[2]);
@@ -706,7 +680,7 @@ export class ReachBody {
     }
   }
 
-  /** Run `fn` on the normalized layer alone, as the browser's IK runs before the raw layer (avatar.js update). */
+  /** As the browser's IK runs before the raw layer (avatar.js update). */
   private solverView<R>(fn: () => R): R {
     if (!this.drawn) return fn();
     this.drawn = false;
@@ -720,14 +694,13 @@ export class ReachBody {
     return this.chains.get(limb);
   }
 
-  /** Arm span of one chain, for "walk closer" advice. */
+  /** For "walk closer" advice. */
   armLength(limb: string): number | null {
     const ch = this.chain(limb);
     return ch ? ch.L1 + ch.L2 : null;
   }
 
-  /** Solve one limb toward a world target at the CURRENT pose. Returns plain
-   *  data — the same verdict fields the browser's reachStatus reports. */
+  /** At the CURRENT pose. Returns the same verdict fields the browser's reachStatus reports. */
   solve(limb: string, target: number[] | { pos: number[]; normal?: number[] }, opts: { palm?: boolean; apply?: boolean; history?: any; dt?: number } = {}) {
     return this.solverView(() => this.solveNormalized(limb, target, opts));
   }
@@ -741,8 +714,7 @@ export class ReachBody {
     const out = this.m.reachbone.solveChain(ch, this.av, tw, opts.history?.elbowOffset ?? null,
       { palm, ...opts.history, dt: opts.dt });
     if (!out.ok) return { ok: false as const, why: String(out.why) };
-    // Opt-in only for a perception query's private scratch nodes. The live
-    // reach attester's existing solve remains a measurement without mutation.
+    // opt-in only for a perception query's private scratch nodes; the live reach attester's solve stays mutation-free
     if (opts.apply) {
       ch.nodes.upper.quaternion.fromArray(out.upper);
       ch.nodes.lower.quaternion.fromArray(out.lower);
@@ -761,8 +733,7 @@ export class ReachBody {
     };
   }
 
-  /** A named contact point on THIS body at its current pose — the fallback
-   *  derivation (landmarks.js), sans mesh: proportionally off the bone along
+  /** At its current pose, by the fallback derivation (landmarks.js), sans mesh: proportionally off the bone along
    *  the body-frame approach direction, normal facing out the same way. */
   contact(point: string, standoff = 0.02): { pos: number[]; normal: number[] } | null {
     const mark = this.landmarks.get(point);

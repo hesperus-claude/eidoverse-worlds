@@ -1,11 +1,5 @@
-// ping-wire — the two renderings of a ping, extracted so they are TESTABLE.
-//
-// net-server.ts cannot be imported by a test (it listens at module level), so
-// the ping→channel mapping used to exist only as source assertions inside its
-// onPing closure — declaration.ts promised "approach is addressed, depart is
-// ambient" and nothing executable held it to that. Both servers now consume
-// these two pure functions, and tools/approach-wire-test.ts is the receipt.
-//
+// ping-wire: the two renderings of a ping, pure so they are testable (net-server.ts listens at import).
+// Receipt: tools/approach-wire-test.ts.
 //  - pingLine:     the pending_pings queue line (plain-MCP hosts, server.ts)
 //  - pingDelivery: the channel frame (MCPL hosts, net-server.ts deliver())
 
@@ -18,20 +12,19 @@ export type WirePing = {
   text?: string;
 };
 
-/** One pending_pings line; every kind renders as itself. Depart carries the agent's wording, since only it knows
- *  who moved (see WorldAgent.stepApproach). */
+/** Every kind renders as itself; depart carries the agent's wording, since only it knows who moved. */
 export function pingLine(p: WirePing): string {
   switch (p.kind) {
     case "mention": return `@ ${p.who}: ${p.text}`;
     case "approach": return `≈ ${p.who} walked up to you`;
     case "depart": return `≈ ${p.who} ${p.text ?? "is no longer nearby"}`;
-    default: return `≈ ${p.who} ${p.text}`;   // reach / touch carry their own phrasing
+    default: return `≈ ${p.who} ${p.text}`;
   }
 }
 
-/** The channel frame for a ping, or null for kinds the event path already delivers (a mention rides its say).
- *  approach, reach, touch: chat:addressed + mentioned. depart: ambient, never mentioned (being left isn't being
- *  addressed). `declares` (PROTOCOL §6a rule 3) rides verbatim; only "agent" maps to a tag (declaration.ts senderFacet). */
+/** null for kinds the event path already delivers (a mention rides its say). approach/reach/touch: chat:addressed
+ *  + mentioned; depart: ambient, never mentioned. `declares` (PROTOCOL §6a rule 3) rides verbatim; only "agent"
+ *  maps to a tag (declaration.ts senderFacet). */
 export function pingDelivery(p: WirePing, declares: string | null):
   { text: string; tags: string[]; mentioned?: true; declares?: string } | null {
   const d = typeof declares === "string" && declares ? { declares } : {};

@@ -1,29 +1,19 @@
-// What the eidoverse door DECLARES about itself: capabilities (MCPL SPEC §5.1),
-// feature sets (§6.1–§6.2), and the tag vocabulary + producer ontology (§16).
+// What the eidoverse door DECLARES about itself: capabilities (MCPL SPEC §5.1), feature sets (§6.1–§6.2), and the
+// tag vocabulary + producer ontology (§16). Three rules govern this file:
 //
-// Three rules govern everything in this file:
+//  1. **Declaration is not authorization** (§5.4). The door may say what it can do, never what it is entitled to.
+//     Nothing here decides whether something is allowed: that is `Session.granted()` in net-server.ts, sourced
+//     only from the host's `effectiveCapabilities`.
 //
-//  1. **Declaration is not authorization.** Everything here is an *input* to the
-//     host's decision (§5.4: "Advertisement is an input, never an authorization").
-//     The door may say what it can do; it may never assert what it is entitled
-//     to. Nothing in this module is ever consulted to decide whether something
-//     is allowed — that is `Session.granted()` in net-server.ts, and its only
-//     source is the host's `effectiveCapabilities`.
+//  2. **Tags are never authority (§16.6).** They describe what an event IS; they never gate delivery, open a
+//     channel, or widen a grant. "Is this channel open" is decided from world state, never from a tag array.
 //
-//  2. **Tags are never authority (§16.6).** The tag sets below describe what an
-//     event IS. They never gate delivery, never open a channel, never widen a
-//     grant. The door's own "is this channel open" decision is made from world
-//     state, never by reading a tag array back.
-//
-//  3. **A suggestion must not be able to purchase a wake (§16.5).** The
-//     ontology's `suggestedTreatment` deliberately contains no `immediate` rule
-//     — see SUGGESTED_TREATMENT below.
+//  3. **A suggestion must not be able to purchase a wake (§16.5).** `suggestedTreatment` has no `immediate` rule.
 
 // ---- tag vocabulary --------------------------------------------------------
 
-/** Reserved cross-platform core (§16.2). Spelled out rather than imported so
- *  this file is readable as the whole contract, and so a core-lib version skew
- *  cannot silently change what goes on the wire. */
+/** Reserved cross-platform core (§16.2). Spelled out, not imported, so this file reads as the whole contract and a
+ *  core-lib version skew cannot silently change the wire. */
 export const CHAT = {
   addressed: "chat:addressed",
   mention: "chat:mention",
@@ -47,9 +37,8 @@ export function senderFacet(declares: string | null | undefined): string | null 
   return declares === "agent" ? CHAT.fromAgent : null;
 }
 
-/** This producer's own namespace (§16.1: it SHOULD match the producer's declared
- *  name). The long tail of what a *world* is lives here — a world has events
- *  chat has no word for. */
+/** This producer's namespace (§16.1: it SHOULD match the declared name): the events a world has that chat has no
+ *  word for. */
 export const EIDO = {
   approach: "eidoverse:approach",
   depart: "eidoverse:depart",
@@ -64,9 +53,8 @@ export const EIDO = {
   particles: "eidoverse:particles",
 } as const;
 
-/** §16.3 core closure, as the producer's own obligation. Hosts MUST expand these
- *  themselves; producers SHOULD also emit them directly ("direct emission is more
- *  robust"), which is what `tags()` does. */
+/** §16.3 core closure. Hosts MUST expand these themselves; producers SHOULD also emit them directly, as `tags()`
+ *  does. */
 const CLOSURE: Record<string, string[]> = {
   [CHAT.mention]: [CHAT.addressed],
   [CHAT.reply]: [CHAT.addressed],
@@ -86,9 +74,9 @@ export function tags(...list: (string | false | null | undefined)[]): string[] {
   return [...out];
 }
 
-/** The tags a world's say and act are delivered with (net-server.ts's onEvent): a say is ambient, or addressed when it
- *  mentions this body; an act is ambient and eidoverse:act; each with the sender's facet (senderFacet). Here so the lists
- *  themselves are tested, not only the facet (house 6340433633). */
+/** The tags a say and act are delivered with (net-server.ts onEvent): a say is ambient, or addressed when it
+ *  mentions this body; an act is ambient and eidoverse:act; each with the sender's facet. Here so the lists
+ *  themselves are tested, not only the facet. */
 export function speechTags(kind: "say" | "act", declares: string | null | undefined, mention = false): string[] {
   const from = senderFacet(declares);
   if (kind === "act") return tags(CHAT.ambient, EIDO.act, from);
@@ -97,9 +85,8 @@ export function speechTags(kind: "say" | "act", declares: string | null | undefi
 
 // ---- capability paths (§6.2) -----------------------------------------------
 
-/** The complete, closed set of legal `uses` values (SPEC §6.2 / Appendix B.2).
- *  Not a starting point: a value outside this list makes the feature set INVALID
- *  and the host disables it with reason `invalid_uses` (§6.4.1). */
+/** The closed set of legal `uses` values (SPEC §6.2 / Appendix B.2): a value outside it makes the feature set
+ *  INVALID and the host disables it with reason `invalid_uses` (§6.4.1). */
 export const VALID_USES: ReadonlySet<string> = new Set([
   "pushEvents",
   "tools",
@@ -129,8 +116,8 @@ export const CAP = {
   channelsTyping: "channels.typing",
 } as const;
 
-/** Does a granted path cover this capability? §5.4: full paths, `*` matches exactly one segment, and an ancestor
- *  prefix is not a grant (`channels` doesn't confer `channels.publish`): ambiguity fails closed. */
+/** §5.4: full paths, `*` matches exactly one segment, and an ancestor prefix is not a grant (`channels` doesn't
+ *  confer `channels.publish`): ambiguity fails closed. */
 export function capabilityMatches(granted: string, path: string): boolean {
   const g = granted.split("."), p = path.split(".");
   if (g.length !== p.length) return false;
@@ -149,10 +136,9 @@ const SUGGESTED_TREATMENT = [
 ];
 
 const TAG_ONTOLOGY = {
-  // Descriptions of the reserved core are inherited from §16.2 — listing them
-  // here says only "this server emits these", never what they mean (§16.4).
+  // reserved-core descriptions are §16.2's: listing them says only "this server emits these" (§16.4)
   coreTags: [
-    // (no chat:dm / chat:private: world chat has no private channel since whisper was removed)
+    // no chat:dm / chat:private: world chat has no private channel
     CHAT.addressed, CHAT.mention, CHAT.ambient,
     CHAT.fromAgent,
   ],
@@ -208,12 +194,10 @@ const TAG_ONTOLOGY = {
     },
   },
   suggestedTreatment: SUGGESTED_TREATMENT,
-  // Deprecated alias, accepted by hosts written against RFC-001 revision 1
-  // (which called the field `defaultTreatment`). Same list, same semantics:
-  // advisory, never auto-applied.
+  // deprecated alias for hosts written against RFC-001 revision 1 (`defaultTreatment`): same list, advisory, never
+  // auto-applied
   defaultTreatment: SUGGESTED_TREATMENT,
-  // A world grows verbs; this namespace will grow tags with them (§16.4:
-  // "a hint catalog, not a closed schema").
+  // a world grows verbs; this namespace grows tags with them (§16.4: "a hint catalog, not a closed schema")
   open: true,
 };
 
@@ -231,9 +215,8 @@ export const FEATURE_SETS: Record<string, FeatureSetDecl> = {
   "eidoverse.world": {
     description:
       "Embodied presence in a world. The world's chat is an MCPL channel: speech, approaches, presence and an ambient activity digest arrive as channels/incoming, and publishing on the world channel IS saying it aloud in-world.",
-    // channels.lifecycle is here because the world an agent is IN can change —
-    // see eidoverse.travel, which shares the leaf. Presence and travel are
-    // separable feature sets so a host can take the world without the door.
+    // channels.lifecycle: the world an agent is IN can change (eidoverse.travel shares the leaf). Presence and travel
+    // are separate sets so a host can take the world without the door.
     uses: [CAP.channelsRegister, CAP.channelsLifecycle, CAP.channelsPublish, CAP.channelsIncoming],
     tagOntology: TAG_ONTOLOGY,
   },
@@ -254,9 +237,8 @@ export const FEATURE_SETS: Record<string, FeatureSetDecl> = {
   },
 };
 
-/** Fail at boot, not on the wire: a `uses` value outside §6.2 makes the feature
- *  set invalid and gets it disabled with reason `invalid_uses` (§6.4.1). A typo
- *  here would silently cost a resident their world, so it is a startup error. */
+/** Fail at boot, not on the wire: a typo'd `uses` value gets the set disabled (`invalid_uses`, §6.4.1) and silently
+ *  costs a resident their world. */
 for (const [name, fs] of Object.entries(FEATURE_SETS)) {
   if (!fs.uses.length) throw new Error(`[mcpl] feature set "${name}" has empty uses — invalid per SPEC §6.2`);
   for (const u of fs.uses) {
