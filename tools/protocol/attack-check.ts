@@ -45,10 +45,7 @@ const attacks = [
       s.call("bob", "create", { id: "statue", model: "crate", place: { at: [2, 2] } }); s.call("olive", "set", { id: "statue", component: "lock", value: true });
       return { attack: s.call("bob", "delete", { id: "statue", component: "model" }) }; },
     baseBad: (o) => ok(o.attack), nowGood: (o) => o.attack.refused?.code === "locked" },
-  // H1c was "pin bypass: set motion {type:'spin'} on a pinned thing", refused by the lab's pin. PROTOCOL §5 gave
-  // `lock` v1's exact meaning, and v1's matrix (tools/locktest.ts) keeps motion open on a locked thing: a motion
-  // animates it in place (today's are pendulum/spin/bob), it doesn't relocate it. So this is a guard now: it must work.
-  // R 10-11 16:21: a lock now covers EVERYTHING on the thing (review C-S1-1): H1c is an attack again, refused.
+  // H1c: a lock covers every component on the thing (review C-S1-1), so a motion on a locked thing is refused
   { id: "H1c", what: "motion {type:'spin'} on a locked thing (a lock covers every component, 10-11)", run(s) { cast(s);
       s.call("bob", "create", { id: "statue", model: "crate", place: { at: [2, 2] } }); s.call("olive", "set", { id: "statue", component: "lock", value: true });
       return { open: s.call("bob", "set", { id: "statue", component: "motion", value: { type: "spin" } }), move: s.call("bob", "set", { id: "statue", component: "transform", value: { pos: [0, 0, 0] } }) }; },

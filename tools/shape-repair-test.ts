@@ -1,9 +1,7 @@
-// shape-repair-test — the load's shape repair after review round 7 (notes/eidoverse/REVIEW-holes-r7-2026-10-16.md F1, F2, F5)
-// and R's rulings of 10-16: a node's name from a model file is DATA (motion:<slot> {node}), the repair runs ONCE per world
-// (a marker the log carries), and one bad value never blocks the rest. Reviewer item 9 (10-18): the repair is an EXPLICIT maintenance
-// command (authority repairShapes; world.ts repair, with a backup and --rollback; an operator's operator-repair), never the load's. Each row was written red against wt/repair @
-// 080a8fef. Stored "pre-audit" worlds are built in memory (worldOf, unsigned, no custody): their founding has no stamp,
-// so liftWorld treats them as old, which is exactly what a log written before the audit looks like.
+// shape-repair-test — the shape repair, an explicit maintenance command (authority repairShapes; world.ts repair, with a
+// backup and --rollback), never the load's: a node's name from a model file is DATA (motion:<slot> {node}), the repair runs
+// ONCE per world (a marker the log carries), and one bad value never blocks the rest.
+// "Pre-audit" worlds are built in memory (worldOf, unsigned, no custody): no founding stamp, so liftWorld treats them as old.
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-repair-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";

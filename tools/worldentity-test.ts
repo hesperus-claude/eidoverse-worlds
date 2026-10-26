@@ -96,7 +96,7 @@ console.log('1. the alias both ways, through the real door:');
     ['Sky', 'Weather', 'Terrain', 'Grass'].every((t) => /^[0-9a-f]{64}$/.test((RECORDS as any)[t]?.hash ?? '') && (RECORDS as any)[t].category === 'World')
     && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a: any) => (RECORDS as any)[a.name]?.world));
 
-  // every spec fixture, translated (shared/protocol/translate-v1.js, as a world is migrated), state by state
+  // every spec fixture, translated (tools/protocol/import-v1/translate-v1.js, as a world is migrated), state by state
   const logs: string[] = [];
   const walk = (d: string) => { if (!existsSync(d)) return; for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) walk(p); else if (x === 'log.jsonl') logs.push(p); } };
   walk(join(ROOT, 'spec/fixtures'));
