@@ -1,12 +1,8 @@
-// bun tools/xr-session-lifecycle-test.mjs — THE SESSION CLOCK LIFECYCLE, EXECUTED.
-//
-// The ORDER (capture, save-once → restore listener BEFORE setSession → shim) must be executed, not source-checked:
-// this drives client/lib/xr_frame_clock.js's installFrameClock(), the function xr.js calls, over:
+// bun tools/xr-session-lifecycle-test.mjs: THE SESSION CLOCK LIFECYCLE, EXECUTED. The ORDER (capture, save-once →
+// restore listener BEFORE setSession → shim) runs through xr_frame_clock.js's installFrameClock(), the function xr.js calls:
 //     requestSession → setSession → session clock owns frames → end latch → desktop clock restored
 //     → second session enters and exits → stale first-session completion cannot affect the second
-//
-// The session objects are IWER's where it can supply them and a minimal fake otherwise; what matters
-// is that the PRODUCT'S install sequence runs. Removing the install turns this red.
+// Sessions are IWER's where it can supply them, else a minimal fake; removing the install turns this red.
 import { installFrameClock, installEntryClock, clockIsRestored } from '../client/lib/xr_frame_clock.js';
 import { readFileSync } from 'node:fs';
 
@@ -14,8 +10,8 @@ let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${n}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${n}${extra ? ` — ${extra}` : ''}`); } };
 
-// THE FAKE MUST BE AS FUSSY AS A BROWSER: a detached window.requestAnimationFrame throws "Illegal invocation", so the
-// fake enforces its receiver (dropping captureNative's `.bind(win)` must go red)
+// THE FAKE MUST BE AS FUSSY AS A BROWSER: a detached window.requestAnimationFrame throws "Illegal invocation", so dropping
+// captureNative's `.bind(win)` must go red
 function fakeWindow() {
   const w = { calls: [], cancelled: [], _n: 0 };
   w.requestAnimationFrame = function (cb) {
@@ -47,8 +43,7 @@ const nat = { raf: win.requestAnimationFrame, caf: win.cancelAnimationFrame };
 const s1 = fakeSession();
 const fc1 = installFrameClock({ win, session: s1, saved: null });
 check('the install reports that it installed', fc1.installed === true);
-// captureNative BINDS, so assert what the saved pair DOES: called DETACHED, as the restore does, it reaches the window
-// (an unbound capture throws "Illegal invocation", caught so it prints ✗)
+// captureNative BINDS: called DETACHED as the restore does, the saved pair must reach the window
 { let threw = null;
   try { const detached = fc1.native.raf; detached(() => {}); } catch (e) { threw = e?.message ?? String(e); }
   check('the saved native pair is BOUND — it survives being called detached, as the restore calls it',
@@ -65,9 +60,8 @@ check('a cancel goes to the session too', (win.cancelAnimationFrame('ses-1'), s1
 
 console.log('\n— ORDERING: our restore must run before a listener registered after us —');
 {
-  // three registers its own 'end' listener inside setSession, i.e. AFTER ours. Listeners fire in
-  // registration order, so ours must be first: if three's restarts the desktop loop against a dead
-  // session first, no frame ever ticks again (the module header's 09-07 22:41 receipt).
+  // three registers its own 'end' listener inside setSession, AFTER ours, and listeners fire in order: ours must be first,
+  // or three restarts the desktop loop against a dead session and no frame ever ticks again
   const w = fakeWindow(); const s = fakeSession();
   s.tagNext('decoy-before');
   s.addEventListener('end', () => {}, {});           // something already listening
@@ -85,9 +79,8 @@ console.log('\n— ORDERING: our restore must run before a listener registered a
 
 console.log('\n— the latch, in the window it exists for —');
 {
-  // Between 'end' firing and the restore completing, a caller can still hold the shim. The latch is
-  // the only thing that keeps that frame off a dead session — and it is invisible to any test that
-  // only looks after the restore.
+  // between 'end' and the restore completing a caller can still hold the shim: only the latch keeps that frame off a dead
+  // session, invisible to a test that looks only after the restore
   const w = fakeWindow(); const s = fakeSession();
   const fc = installFrameClock({ win: w, session: s, saved: null });
   const shim = w.requestAnimationFrame;            // a caller that grabbed the shim earlier
@@ -100,9 +93,7 @@ console.log('\n— the latch, in the window it exists for —');
 {
   const w = fakeWindow(); const s = fakeSession({ throwOnRaf: true });
   installFrameClock({ win: w, session: s, saved: null });
-  // Caught, so a missing try/catch in the shim fails as a printed ✗ rather than crashing the run:
-  // a harness gating on a ✗ COUNT would read an abort as zero failures (it gates on exit code too,
-  // but the failure should be legible either way).
+  // caught, so a missing try/catch in the shim prints ✗ rather than crashing the run (an abort would count as zero ✗)
   let threw = null;
   try { w.calls.length = 0; w.requestAnimationFrame(() => {}); } catch (e) { threw = e?.message ?? String(e); }
   check('a session that THROWS from requestAnimationFrame falls back to the window',
@@ -118,8 +109,8 @@ console.log('\n— the latch, in the window it exists for —');
 }
 
 {
-  // CANCEL REACHES BOTH CLOCKS even when the session throws: the try blocks are separate on purpose (an id may belong to
-  // either clock), or a dead session's throw would swallow the NATIVE cancel
+  // CANCEL REACHES BOTH CLOCKS even when the session throws: separate try blocks on purpose (an id may belong to either
+  // clock), or a dead session's throw would swallow the NATIVE cancel
   const w = fakeWindow(); const s = fakeSession({ throwOnCaf: true });
   installFrameClock({ win: w, session: s, saved: null });
   let threw = null;
@@ -160,8 +151,8 @@ console.log('\n— a stale first-session completion cannot affect the second —
   check('a late end from the superseded session does not steal the clock back',
     w.requestAnimationFrame(() => {}) === 'ses-1' && b.calls.length === 1,
     `window got ${w.calls.length}`);
-  // THE SUPERSEDED SESSION'S OWN SHIM: three holds session A's shim across a fast re-entry, so after A ends it must be
-  // latched (`ended = true` above the generation guard), or it feeds frames to a dead session forever
+  // THE SUPERSEDED SESSION'S OWN SHIM: three holds A's shim across a fast re-entry, so after A ends it must be latched
+  // (`ended = true` above the generation guard), or it feeds frames to a dead session forever
   { let threw = null, landed = null;
     try { shimA(() => {}); } catch (e) { threw = e?.message ?? String(e); }
     landed = a.calls.length ? 'the DEAD session' : (w.calls.length ? 'the window' : 'nowhere');
@@ -169,7 +160,7 @@ console.log('\n— a stale first-session completion cannot affect the second —
       threw === null && a.calls.length === 0, threw ? `threw: ${threw}` : `landed on ${landed}`); }
   b.end();
   check('…and when the live session ends, the desktop clock comes back', clockIsRestored(w, fb.native) === true);
-  // onEnd must still run for a superseded install — xr.js hangs teardown off it.
+  // onEnd must still run for a superseded install: xr.js hangs teardown off it
   check('the superseded install’s onEnd still fired', staleOnEnd === true);
 }
 
@@ -210,9 +201,7 @@ console.log('\n— the PRODUCT runs this sequence (the wiring the reviewer broke
   check('…and calls it', /frameClock = installEntryClock\(\{/.test(xr));
   check('…without constructing `emulated` at the call site, where no test could reach it',
     !/emulated:/.test(xr));
-  // `globals` is a TEST seam. If the product passed it, it could disable the shim exactly the way
-  // the round-three mutation did — a parameter added for testability becoming a new bypass. Found by
-  // trying it: passing `globals: { IWER: {} }` from xr.js left this suite green.
+  // `globals` is a TEST seam: if the product passed it, it would disable the shim, a testability parameter turned bypass
   check('…and without passing `globals`, which would be the same bypass by another name',
     !/globals:/.test(xr));
   check('…passing the saved pair, so save-once holds across entries', /saved: nativeRAF \? \{ raf: nativeRAF, caf: nativeCAF \} : null/.test(xr));

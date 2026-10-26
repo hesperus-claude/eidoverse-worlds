@@ -1,14 +1,11 @@
-// tools/protocol/pinhistory.ts — a pinned file's history in git, for rows that hold a rule against the record and not just
-// against the live code. A pin edited together with the code it pins agrees with the code, so a row comparing the two can't
-// see the break; only the pin's earlier version can. Shared by pretrans-check (registry-pin.json), normative-check
-// (refusal-codes.json, readback.json) and the conformance files' version rule (engine-check, trig-check, laws-check).
-//
+// tools/protocol/pinhistory.ts: a pinned file's history in git, for rows that hold a rule against the record. A pin edited
+// with the code it pins agrees with it; only the pin's earlier version can see the break. Used by pretrans-check,
+// normative-check and the conformance files' version rule (engine-check, trig-check, laws-check).
 // Two earlier versions are judged:
-//   the base's: --base <rev> or PIN_BASE, else where this branch left origin/main (git merge-base), else (a shallow or foreign
-//     checkout with no origin/main) the previous version below. A file new since the base has no base version.
-//   the previous version: the file as it was before its newest change (the working tree's, if uncommitted; else the commit
-//     before the newest commit that changed it, along first parents), which is how kernel-check finds its base. This holds
-//     a branch that brought the file new: its latest change is judged even though the base never had it.
+//   the base's: --base <rev> or PIN_BASE, else the merge-base with origin/main, else (no origin/main) the previous
+//     version below. A file new since the base has no base version.
+//   the previous version: the file before its newest change (the working tree's, if uncommitted; else the commit before
+//     the newest commit that changed it, along first parents), so a branch that brought the file new is still judged.
 // @ts-nocheck
 import { spawnSync } from "node:child_process";
 
@@ -23,9 +20,8 @@ export function baseOf(root: string, argv: string[] = process.argv.slice(2)) {
   return git(root, ["merge-base", "HEAD", "origin/main"])?.trim() || null;
 }
 
-/** Where a branch's own history starts: HEAD, except under a CI checkout of a pull request, where HEAD is a merge commit
- *  whose first parent is the base (GitHub's pull_request ref). There the branch is the SECOND parent: walking first parents
- *  would walk the base's history, where a pin the branch brought never existed, and judge nothing. */
+/** Where a branch's own history starts: HEAD, except in a CI pull-request checkout, where HEAD is a merge whose first parent
+ *  is the base: there the branch is the SECOND parent, or a pin the branch brought would never be judged. */
 export function tipOf(root: string, argv: string[] = process.argv.slice(2)) {
   const second = git(root, ["rev-parse", "--verify", "-q", "HEAD^2"])?.trim(); if (!second) return "HEAD";
   const first = git(root, ["rev-parse", "--verify", "-q", "HEAD^1"])?.trim(); const base = baseOf(root, argv);

@@ -1,12 +1,8 @@
-// ragdoll sim test — the physics, run headless, no browser and no renderer.
-//
+// ragdoll sim test: the physics, headless (no browser, no renderer). core.js builds a WebGPURenderer at import, so a
+// loader plugin swaps in a stub exporting what ragdoll's cone uses (THREE, terrain's scene/ground/grid). Runs the SHIPPED
+// VRM RIGS as well as a synthetic humanoid: the synthetic cases isolate the solver, but the rigs are what the sim is most
+// sensitive to (a synthetic-only suite can pass while every real rig is broken).
 //   bun tools/ragdoll-test.ts
-//
-// core.js builds a WebGPURenderer at import time, so a loader plugin swaps it for a stub exporting what ragdoll's
-// dependency cone uses (THREE, and terrain's scene/ground/grid).
-//
-// Runs the SHIPPED VRM RIGS as well as a synthetic humanoid: the synthetic cases isolate the solver, but the rigs are
-// what the sim is most sensitive to (a synthetic-only suite once passed while every real rig was broken).
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -83,8 +79,7 @@ check('every shipped rig loads with a humanoid and hips',
       if (rd.maxV > 0.1) bad.settle.push(`${rig.name}(FLAILING at capture, v=${rd.maxV.toFixed(3)})`);
     }
 
-    // bone SHAFTS must not pass through each other — the failure that made a
-    // limb vanish into the torso on every rig when only joints collided
+    // bone SHAFTS must not pass through each other, or a limb vanishes into the torso when only joints collide
     const ov = worstOverlap(rd);
     if (ov.frac > 0.35) bad.overlap.push(`${rig.name}(${(ov.frac * 100).toFixed(0)}% ${ov.name})`);
 
@@ -93,9 +88,8 @@ check('every shipped rig loads with a humanoid and hips',
 
     if (Object.keys(rd.p).some((j: string) => rd.p[j].y < -0.01)) bad.under.push(rig.name);
 
-    // knees and elbows must not fold the wrong way. The old unsigned bend
-    // table could not express this at all: with a rest angle near 0 its
-    // "no hyperextension" bound resolved to 0° on all 14 rigs.
+    // knees and elbows must not fold the wrong way (an unsigned bend table can't express this: with a rest angle near 0
+    // its "no hyperextension" bound is 0°)
     for (const H of rd.hinge) {
       const u = rd.p[H.b].clone().sub(rd.p[H.a]).normalize();
       const v = rd.p[H.c].clone().sub(rd.p[H.b]).normalize();
@@ -137,9 +131,8 @@ check('every shipped rig loads with a humanoid and hips',
       if (d > worst) { worst = d; who = rig.name; }
     }
   }
-  // Before the fixed timestep this was metres, not centimetres: the Verlet
-  // inertia term is a position delta, so raw frame time made gravity and
-  // damping per-second both functions of the display rate.
+  // the fixed timestep is why: the Verlet inertia term is a position delta, so raw frame time makes gravity and damping
+  // functions of the display rate (metres, not centimetres)
   check('framerate does not change where a body lands (≤5cm)', worst <= 0.05,
     `worst ${(worst * 100).toFixed(1)}cm on ${who}`);
 }
@@ -246,8 +239,7 @@ check('every shipped rig loads with a humanoid and hips',
   const thrown = runWith(seed);
   check('a body handed 3 m/s actually carries it', thrown.travelled > dead.travelled + 0.5,
     `travelled ${thrown.travelled.toFixed(2)}m vs ${dead.travelled.toFixed(2)}m at rest`);
-  // not "takes longer to settle" — a body thrown sideways can land and stop
-  // sooner than one dropped in place. The thing that matters is that it MOVED.
+  // not "takes longer to settle" (a body thrown sideways can stop sooner than one dropped in place): what matters is that it MOVED
   check('...and carries it as real travel, not a dead drop',
     thrown.travelled > 1.0, `only ${thrown.travelled.toFixed(2)}m`);
 }
@@ -406,7 +398,7 @@ console.log('\nthe solver:');
 }
 
 // ---------------------------------------------------------------------------
-// the ragdoll against actual props — the seam where this went wrong
+// the ragdoll against actual props
 // ---------------------------------------------------------------------------
 console.log('\nbodies and furniture:');
 {
@@ -454,8 +446,8 @@ console.log('\nbodies and furniture:');
 }
 
 // ---------------------------------------------------------------------------
-// impulse: shoves that land on a body already in flight, or already down.
-// This is the wire path — puppet {lean} and the force verb both end here.
+// impulse: shoves that land on a body already in flight, or already down; the wire path (puppet {lean} and the force
+// verb both end here)
 // ---------------------------------------------------------------------------
 console.log('\nimpulse (the wire-borne shove):');
 {
@@ -495,13 +487,11 @@ console.log('\nimpulse (the wire-borne shove):');
   check('...and the body goes the way it was shoved (≥5cm a second after)', none('moved'), bad.moved.join(' '));
   check('...and a body that is down does not creep (≤5cm from 3s to capture)', none('creep'), bad.creep.join(' '));
 
-  // The deadline restarts with the motion: a shove at 7.9s of an 8s window
-  // must not capture a body still in the air. impulse() grants the new motion
-  // the same full window the original fall had.
+  // the deadline restarts with the motion: a shove at 7.9s of an 8s window must not capture a body still in the air
+  // (impulse() grants the new motion the original fall's full window)
   {
     const rd: any = new Ragdoll(synth(), toppleLean(), null);
-    // shove while the tumble is still LIVE — a captured sim ignores impulses
-    // by design (main.js starts a fresh one instead: the corpse-kick below)
+    // shove while the tumble is still LIVE: a captured sim ignores impulses by design (main.js starts a fresh one: the corpse-kick below)
     for (let i = 0; i < 45 && !rd.done; i++) rd.step(1 / 60);
     const before = rd.elapsed;
     rd.impulse(new THREE.Vector3(1, 0, 0));
@@ -510,8 +500,7 @@ console.log('\nimpulse (the wire-borne shove):');
       `done=${rd.done} elapsed ${before.toFixed(2)} -> ${rd.elapsed}`);
   }
 
-  // The sim caps what it will accept: a hostile magnitude must not shatter
-  // the body, whatever the trust boundary upstream let through.
+  // the sim caps what it accepts: a hostile magnitude must not shatter the body, whatever the trust boundary let through
   {
     const av = synth();
     const rd: any = new Ragdoll(av, null, av.restBonePositions());
@@ -524,9 +513,8 @@ console.log('\nimpulse (the wire-borne shove):');
       `done=${rd.done} stretch=${(stretchOf(rd) * 100).toFixed(0)}%`);
   }
 
-  // Kicking the corpse: a settled body shoved again starts a FRESH sim from
-  // its lying pose (main.js re-limp path — downed, ragdoll already handed
-  // off). It must tumble again, move, and come back to rest.
+  // kicking the corpse: a settled body shoved again starts a FRESH sim from its lying pose (main.js re-limp path); it must
+  // tumble again, move, and come back to rest
   {
     const av = synth();
     const first = run(av, toppleLean());
@@ -547,9 +535,8 @@ console.log('\nimpulse (the wire-borne shove):');
 // ---------------------------------------------------------------------------
 console.log('\npin (the grabbed joint):');
 {
-  // hang: pin a hand above standing height — the body must dangle from it,
-  // the pinned joint must BE at the target, and the sim must neither settle
-  // nor deadline while held (a pin is ongoing input).
+  // hang: pin a hand above standing height: the body dangles, the pinned joint IS at the target, and the sim neither
+  // settles nor deadlines while held (a pin is ongoing input)
   const av = synth();
   const rd: any = new Ragdoll(av, null, av.restBonePositions());
   const hold = new THREE.Vector3(0.3, 3.0, 0.2);   // well above standing: the lift must RAISE the root
@@ -568,7 +555,7 @@ console.log('\npin (the grabbed joint):');
   check('...and its bone lengths survive the hang (≤10%)',
     stretchOf(rd) < 0.10, `${(stretchOf(rd) * 100).toFixed(0)}%`);
 
-  // drag: walk the pin sideways 2m — the body must come along
+  // drag: walk the pin sideways 2m; the body must come along
   const x0 = rd.p.hips.x;
   for (let i = 0; i < 300; i++) {
     hold.x = 0.3 + (i / 300) * 2;
@@ -578,7 +565,7 @@ console.log('\npin (the grabbed joint):');
   check('dragging the pin drags the body', rd.p.hips.x - x0 > 1.2,
     `Δx=${(rd.p.hips.x - x0).toFixed(2)}`);
 
-  // release: let go mid-air — the body falls and comes to rest on its own
+  // release: let go mid-air; the body falls and comes to rest on its own
   rd.setPin(null);
   let steps = 0;
   while (!rd.done && steps < 1400) { rd.step(1 / 60); steps++; }

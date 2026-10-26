@@ -1,11 +1,10 @@
-// tools/protocol/import-v1/snapshot-oracle.ts — the old-world translator checked against the OLD ENGINE, without rendering.
+// tools/protocol/import-v1/snapshot-oracle.ts: the old-world translator checked against the OLD ENGINE, without rendering.
 //
-// The translator's own checks (translate-v1's per-entry projection equality, the sweep's inverse) prove it agrees with
-// ITSELF: its copy of the old fold (./fold.js), its projection, its v4 fold. This proves it agrees with the old server.
-// Every first-protocol world directory holds, beside its log.jsonl, a snapshot.json = the old server's own folded state
-// ({v: 1, seq, bytes, ts, state: {entities, terrain, grass, sky, assets, roles, bans, …}}). When snapshot.seq is the log's
-// last seq AND snapshot.bytes is log.jsonl's size, the snapshot is the old engine's answer to "what does this whole log
-// mean". A snapshot that isn't complete is SKIPPED (with its reason), never compared.
+// The translator's own checks prove it agrees with ITSELF (its copy of the old fold, its projection, its v4 fold); this
+// proves it agrees with the old server. A first-protocol world directory holds, beside log.jsonl, a snapshot.json = the old
+// server's own folded state ({v: 1, seq, bytes, ts, state: {entities, terrain, grass, sky, assets, roles, bans, …}}). When
+// snapshot.seq is the log's last seq AND snapshot.bytes is log.jsonl's size, it is the old engine's answer to "what does
+// this whole log mean"; an incomplete snapshot is SKIPPED (with its reason), never compared.
 //
 // Per world:
 //   1. translate log.jsonl with the real path (translateV1World, as `world.ts translate --no-founder-key`) into a scratch
@@ -13,17 +12,15 @@
 //   A. the translated world.jsonl, read by the strict reader and folded by the real fold (shared/protocol/fold.js), against
 //      the snapshot put through the translator's own mapping table (translate-v1 `project`: lib→model, comp→flat
 //      components, yaw→q, light fields, door→openable, guard→lock, motion rpm, sockets' v4 spelling, imported:<k>, the
-//      namespace), with the translated world's identities (read back from its directory: a name → the id it was given)
-//      and model hashes (computed here from the same host files) beside the paths;
-//   B. the SERVER's view: the same world opened as the server opens it (server/livehost.ts openLive with the engine's
-//      catalogue), then lifted as server/worldlog.ts lifts it at first load (authority.js liftWorld: a stored `sockets`
-//      map becomes socket child entities, a mounted thing's parent names the child, its pose is re-expressed in the
-//      child's frame), against side A's old projection put through the SAME lift (sockets.js legacyHosts/liftHostOps),
-//      plus an independent check that every old seat is a child entity with that name at that pose.
+//      namespace), with the translated world's identities (read back from its directory) and model hashes beside the paths;
+//   B. the SERVER's view: the world opened as the server opens it (server/livehost.ts openLive with the engine's
+//      catalogue) and lifted as at first load (authority.js liftWorld: a stored `sockets` map becomes socket child entities,
+//      a mounted thing's parent names the child, its pose re-expressed in the child's frame), against side A's projection
+//      put through the SAME lift (sockets.js legacyHosts/liftHostOps), plus an independent check that every old seat is a
+//      child entity with that name at that pose.
 //   Ids: the translator keeps every entity id (enc() only escapes what the §2.3 grammar refuses), so ids are matched
-//   through enc(); people's names (roles, bans, authors) are matched through the translated world's directory.
-//   Numbers compare with a 1e-9 tolerance; everything else exactly. What the comparison leaves out is only the
-//   translator's own DROPPED table (printed by name with its reason), and nothing else.
+//   through enc(); people's names (roles, bans, authors) through the translated world's directory. Numbers compare with
+//   a 1e-9 tolerance, everything else exactly; only the translator's DROPPED table is left out (printed with its reasons).
 //
 // usage: bun tools/protocol/import-v1/snapshot-oracle.ts [<world dir> …]
 //   a world dir translated in place is read through its kept originals (log.original.jsonl, snapshot.original.json)
@@ -181,22 +178,22 @@ function liftPlain(P, ever, repair = true) {
   for (const [id, c] of Object.entries(P)) st.entities[id] = { born: 0, c: Object.assign(Object.create(null), jclone(c)) };
   const hosts = legacyHosts(st, ever);
   for (const h of hosts) { if (!st.entities[h]) continue; const { ops } = liftHostOps(st, ever, h); applyInPlace(st, ops, 1); }
-  // …then the shape repair (shape audit 10-16), as liftWorld does: once per world, so not on a log that is already marked
-  // (a translate-v1@12 log is: its projection is the repaired one; review r7 F2)
+  // …then the shape repair, as liftWorld does: once per world, so not on a log already marked (a translate-v1@12 log's
+  // projection is the repaired one)
   if (repair) { const ops = shapeRepairOps(st); if (ops.length) applyInPlace(st, ops, 1); }
   return { lifted: v4comps(st), hosts };
 }
 
 /** C, independent of the translator's projection (so a bug in `project`, which side A shares, still shows): the fields
- *  the old snapshot states plainly: id, model and model-hash, pose when it rides nothing, what it rides (parent.to,
- *  slot as parent.socket), and the world's terrain and grass (an undefined key read from imported:<k>). */
+ *  the old snapshot states plainly: id, model and model-hash, pose when unparented, its parent (parent.to, slot as
+ *  parent.socket), and the world's terrain and grass (an undefined key read from imported:<k>). */
 function coreCheck(snapState, newA, content) {
   const diffs = []; const push = (id, field, o, n) => diffs.push({ id, field, old: o, new: n });
   const yq = (y) => [0, Math.sin(y / 2), 0, Math.cos(y / 2)];
   for (const [id0, e] of Object.entries(snapState.entities ?? {})) {
     const id = enc(id0), c = newA[id];
     if (!c) { push(id, "(the entity)", "present", undefined); continue; }
-    // R 10-17: the model is v1's path as written; its bytes' hash beside it where this host has them
+    // the model is v1's path as written; its bytes' hash beside it where this host has them
     if (e.lib !== undefined) { if (c.model !== e.lib) push(id, "model", e.lib, c.model);
       const h = typeof e.lib === "string" ? content(e.lib) ?? undefined : undefined; if (c["model-hash"] !== h) push(id, "model-hash", h, c["model-hash"]); }
     else if (c.model !== undefined) push(id, "model", undefined, c.model);
@@ -209,7 +206,7 @@ function coreCheck(snapState, newA, content) {
     }
   }
   // a key the v4 component doesn't define rides beside it in imported:<k> (translate-v1 splitUnknown, R10: carried, never
-  // dropped): the world's ground is the two together (under-the-eves' terrain `amp`, a key no terrain reader ever read)
+  // dropped): the world's ground is the two together
   const W = newA["@world"] ?? {};
   for (const k of ["terrain", "grass", "water"]) { const n = W[k] == null && W[`imported:${k}`] == null ? null : { ...(W[k] ?? {}), ...(W[`imported:${k}`] ?? {}) };
     for (const d of deepDiff(declaredGround(snapState)[k] ?? null, n)) push("@world", `${k}${d.path}`, d.old, d.new); }
@@ -232,9 +229,9 @@ function declaredGround(snap) {
   return out;
 }
 
-/** A world translated in place (world.ts translate <world>) keeps its old files beside the new world as log.original.jsonl
- *  and snapshot.original.json: read them through a scratch directory of the same name whose log.jsonl / snapshot.json /
- *  poses.json are links to them (read only), so the oracle can be re-run on the original after the swap. Else `dir`. */
+/** A world translated in place keeps its old files beside it as log.original.jsonl and snapshot.original.json: read them
+ *  through a scratch directory of the same name whose log.jsonl / snapshot.json / poses.json link to them (read only), so
+ *  the oracle can re-run on the original after the swap. Else `dir`. */
 function originalsOf(dir) {
   if (fs.existsSync(path.join(dir, "log.jsonl")) || !fs.existsSync(path.join(dir, "log.original.jsonl"))) return dir;
   const d = path.join(SCRATCH, "originals-" + crypto.randomBytes(3).toString("hex"), path.basename(dir)); fs.mkdirSync(d, { recursive: true });
@@ -267,9 +264,9 @@ export function oracleWorld(given) {
   const tTranslate = performance.now();
   // A. the strict reader and the real fold over what was written
   const text = fs.readFileSync(path.join(dest, "world.jsonl"));
-  // the translate command runs the maintenance command on its output (lead 10-18: a load never writes; the lift is the
-  // translation's own act, by: "translate"). A compares the PROJECTION, so it folds the log up to that lift; B compares the
-  // served state (lifted) with the snapshot put through the same lift
+  // the translate command runs the maintenance command on its output (a load never writes; the lift is the translation's
+  // own act, by: "translate"). A compares the PROJECTION, folding up to that lift; B compares the served (lifted) state with
+  // the snapshot put through the same lift
   const all = readLog(text); const liftAt = all.findIndex((e: any) => e?.kind === "act" && e.verb === "lift-sockets" && e.actor === "system" && e.body?.by === "translate");
   const preLift = liftAt >= 0 ? all.slice(0, liftAt) : all;
   const st = fold(preLift);

@@ -1,5 +1,5 @@
-// tools/protocol/sclock-check.ts — the client's server clock slews (DESIGN-physics-responsiveness §3; STRIKES PH-S2 'display
-// clock jumps'): a new minimum-RTT sample moves the shown offset gradually, a large one at once. usage: bun tools/protocol/sclock-check.ts
+// tools/protocol/sclock-check.ts: the client's server clock slews (DESIGN-physics-responsiveness §3): a new min-RTT sample
+// moves the shown offset gradually, a large one at once. usage: bun tools/protocol/sclock-check.ts
 // @ts-nocheck
 import { noteRoundTrip, serverNow, localNow, clockDebug, noteServerFloor, onClockDoubt } from "../../client/lib/serverclock.js";
 import { pause } from "./wait.ts";
@@ -17,8 +17,7 @@ ok(Math.abs(d.shown - 1100) < 1, "C3 …and in a few seconds it is there", d);
 noteRoundTrip(t - 8, t + 3000 - 4, t);        // a 1.9 s correction (and the best rtt yet): a resync, taken at once
 serverNow(); const e = clockDebug();
 ok(Math.abs(e.shown - 3000) < 1, "C4 a correction over half a second is taken at once", e);
-// a clock that STEPS (a wall-clock jump, a laptop waking): older samples the new one proves impossible (honest samples agree
-// within their half round trips) are retired, not kept as the minimum-RTT "best" for the next 8 asks
+// a clock that STEPS (wall-clock jump, laptop wake): older samples the new one proves impossible are retired, not kept as "best"
 const s0 = localNow();
 for (let i = 0; i < 8; i++) noteRoundTrip(s0 - 2, s0 + 3000 - 1, s0);   // a full window at +3000, rtt 2
 noteRoundTrip(s0 - 2.4, s0 + 4620 - 1.2, s0);                          // the clock steps +1620; this sample's rtt is a hair worse
@@ -27,8 +26,7 @@ ok(Math.abs(f.best - 4620) < 1 && Math.abs(f.shown - 4620) < 1, "C5 a sample tha
 noteRoundTrip(s0 - 40, s0 + 4620 + 15 - 20, s0);                       // a slow but honest sample, consistent within its rtt: kept, not a step
 serverNow(); const g = clockDebug();
 ok(Math.abs(g.best - 4620) < 1, "C6 …while a slow sample that agrees within its own round trip changes nothing", g);
-// …and noticed before the next ask: anything the authority stamped is a FLOOR on the offset, so a floor above the estimate
-// (beyond its slack) makes the client ask again at once (rate-limited) rather than draw seconds behind for up to CLOCK_MS
+// …and noticed before the next ask: a server stamp is a FLOOR on the offset, so one above the estimate re-asks at once (rate-limited)
 let asks = 0; onClockDoubt(() => asks++);
 const h0 = localNow();
 noteServerFloor(h0 + 4620 - 30);                                     // an entry stamped a moment ago, on the estimate: fine

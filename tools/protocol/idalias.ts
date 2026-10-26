@@ -1,8 +1,6 @@
-// tools/protocol/idalias.ts — a test client's names for the things it makes (R 10-17 ID HARDENING: a writer never chooses an
-// id). A suite written as `create {id: "tbl"}` then `place {on: "tbl"}` keeps its words: the client sends the create's id as
-// a placeholder ('$tbl'), keeps the id the authority minted (the reply's ids map), and writes that id wherever a later
-// request names "tbl" in a reference position. The wire only ever carries placeholders and minted ids — what a real client
-// sends. ids.of(name) reads a name as its id for the suite's own checks.
+// tools/protocol/idalias.ts: a test client's names for what it makes, since a writer never chooses an id. `create {id: "tbl"}`
+// goes out as placeholder '$tbl'; the minted id (reply's ids map) replaces "tbl" in later reference positions, so the
+// wire carries only placeholders and minted ids. ids.of(name) reads a name's id for the suite's own checks.
 // @ts-nocheck
 // self-contained (no outer names): pageIds() ships this very function to a browser page as source
 export function idAliases() {
@@ -19,8 +17,8 @@ export function idAliases() {
   return {
     /** the request as the wire gets it: a create's chosen id → '$id', every known name → its minted id */
     out(verb, args = {}) {
-      // a create's own id names a NEW thing (a name may be reused for a new one): it becomes a placeholder before any
-      // known name is replaced, so it never resolves to an older thing that had the same name
+      // a create's own id names a NEW thing: it becomes a placeholder before names are replaced, so it never resolves to an
+      // older thing of the same name
       const mark = (o) => { const n = named(o); return n === o ? sub(o, null) : { ...sub({ ...o, id: undefined }, null), id: n.id }; };
       if (verb === "create") return mark(args);
       if (verb === "batch" && Array.isArray(args?.ops)) return { ...sub({ ...args, ops: undefined }, null), ops: args.ops.map((o) => (o?.verb === "create" ? { ...o, args: mark(o.args) } : sub(o, null))) };
@@ -32,8 +30,8 @@ export function idAliases() {
   };
 }
 
-/** The same names inside a browser page: source to evaluate once (idempotent), after which every request the page sends,
- *  on any socket, goes out with names as minted ids, reply id maps are kept, and globalThis.__id(name) reads a name's id. */
+/** The same names inside a browser page: source to evaluate once (idempotent); then every request on any socket sends
+ *  minted ids, reply id maps are kept, and globalThis.__id(name) reads a name's id. */
 export function pageIds(): string {
   return `(() => { if (globalThis.__eidoIds) return true;
   const IDS = (${idAliases.toString()})(); globalThis.__eidoIds = IDS; globalThis.__id = (n) => IDS.of(n);
@@ -57,9 +55,8 @@ export function inPage(expr: string, names: string[], node?: Map<string, string>
   return `(${pageIds()}, (${body}))`;
 }
 
-/** A probe's evalJson, page-side names included: every expression goes through inPage, and every answer brings back the
- *  page's name → id map, merged into `node` — so node-side checks read a page-made thing's id as N(name) right after the
- *  page made it. Returns the wrapped evalJson; its `.ids` is `node`. */
+/** evalJson with page-side names: each expression goes through inPage and each answer brings back the page's name → id
+ *  map, merged into `node`, so N(name) works right after the page made it. Returns the wrapped evalJson; `.ids` is `node`. */
 export function pagedEval(raw: (expr: string) => Promise<any>, names: string[], node: Map<string, string> = new Map()) {
   const f: any = async (expr: string) => {
     const r = await raw(`Promise.resolve(${inPage(expr, names, node)}).then((v) => ({ v, ids: [...globalThis.__eidoIds.map] }))`);

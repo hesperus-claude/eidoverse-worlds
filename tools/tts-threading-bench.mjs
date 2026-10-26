@@ -1,13 +1,8 @@
 #!/usr/bin/env node
-/**
- * What cross-origin isolation buys Piper/ORT: times synthesis (numThreads reads 8 even when ORT falls back to one core)
- * and reports ms per 1k samples (noise_w varies output length, and length is latency).
- *
- * The A/B is two SERVERS differing only in server/routes.ts isolate() (isolation has no page-side switch).
- *
- *   node tools/tts-threading-bench.mjs --isolated 8960 --bare 8974
- *   node tools/tts-threading-bench.mjs --port 8960        # one arm only
- */
+/** What cross-origin isolation buys Piper/ORT: ms per 1k samples (noise_w varies output length; numThreads reads 8
+ *  even on one core). The A/B is two SERVERS differing only in server/routes.ts isolate(): there is no page-side switch.
+ *    node tools/tts-threading-bench.mjs --isolated 8960 --bare 8974
+ *    node tools/tts-threading-bench.mjs --port 8960        # one arm only */
 import { chromium } from 'playwright';
 
 const PHRASES = [
@@ -25,7 +20,7 @@ const median = (xs) => { const s = [...xs].sort((a, b) => a - b);
 
 async function measure(base, label) {
   const browser = await chromium.launch({
-    // the same chromium the other browser smokes pin (sfu-browser-smoke.mjs), not playwright's own build
+    // the chromium the other browser smokes pin (sfu-browser-smoke.mjs), not playwright's own build
     executablePath: process.env.SFU_TEST_CHROME ?? process.env.CHROME ?? undefined,
     args: ['--autoplay-policy=no-user-gesture-required',
            '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
@@ -46,12 +41,11 @@ async function measure(base, label) {
   }));
 
   const result = await page.evaluate(async ({ phrases, repeats, voice }) => {
-    // Register engines exactly the way the page does, then drive the real one.
+    // register engines as the page does, then drive the real one
     await import('./lib/engines.js');
     const { loadFromFiles } = await import('./lib/voiceengines.js');
 
-    // The engine takes File objects (the UI hands it user-picked files), so
-    // fetch the served model and wrap it — same bytes the app would load.
+    // the engine takes File objects (user-picked in the UI): fetch the served model and wrap it, same bytes the app loads
     const grab = async (name) => {
       const r = await fetch(`./voices/${name}`);
       if (!r.ok) throw new Error(`${name} → HTTP ${r.status}`);

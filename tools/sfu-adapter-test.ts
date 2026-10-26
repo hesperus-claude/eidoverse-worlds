@@ -1,9 +1,5 @@
-// The seven refusals of #104 amendment 1, proven through the SFU adapter.
-//
-// These are ALREADY proven in relay-decision-test.ts (23 tests) against the
-// decision layer directly. This file exists to prove they still hold when the
-// decision layer is driven through the in-process adapter — that reusing
-// relaydecision.ts is a real inheritance and not a claim.
+// the seven refusals of #104 amendment 1, through the in-process SFU adapter: relay-decision-test.ts proves them on the
+// decision layer; this proves reusing relaydecision.ts is a real inheritance
 import { mintSfuCredential, admitSfuLeg, setSfuConsent, setSfuModeratorMute,
   revokeSfuLeg, sfuDiag, sfuState, registerSfuSender } from "../server/sfuadapter.ts";
 
@@ -24,8 +20,7 @@ check("5 prior relay incarnation refused", admitSfuLeg(W, claims({ incarnation: 
 const good = claims();
 check("   (a valid credential IS admitted)", admitSfuLeg(W, good, live).admit === true);
 check("6 removed participant cannot reuse its token", admitSfuLeg(W, good, live).reason === "credential replay");
-// 7 expiry: there is no bearer token at all — the nonce is single-use and the
-// leg dies with the websocket, so there is no window to expire INTO.
+// 7 expiry: no bearer token at all; the nonce is single-use and the leg dies with the websocket, so no window to expire INTO
 check("7 expiry: no bearer token exists to replay (nonce is single-use)", s.usedNonces.has(good.nonce));
 
 // amendment 3: three independent states
@@ -33,9 +28,7 @@ setSfuConsent(W, "bob", 1, true);
 check("consent is listener-authored and gen-bound", s.consent.get("bob")?.consent === true);
 setSfuModeratorMute(W, "alice", true);
 check("moderator mute is a DIFFERENT state than consent",
-  // ONE store now: the SFU is the enforcement point and therefore owns the fact.
-  // This read the adapter's shadow Set, which is exactly the duplication that
-  // let the two diverge in production.
+  // ONE store: the SFU is the enforcement point and owns the fact; a shadow Set in the adapter is the duplication that diverges
   s.sfu.diag().muted.includes("alice") && s.consent.get("alice") === undefined);
 
 // measurement hygiene: delivered and suppressed reported separately
@@ -82,7 +75,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   mintSfuCredential(W,"L",1,6);                      // …and comes back, new gen
   check("a reconnected listener starts FAIL-CLOSED (no resurrected yes)", !allowed(W,"L","S")); }
 
-// 5. consent BEFORE the speaker exists, then speaker joins (tonight's 2nd bug)
+// 5. consent BEFORE the speaker exists, then speaker joins
 { const W="w5"; mintSfuCredential(W,"L",1,2);
   setSfuConsent(W,"L",2,true);
   mintSfuCredential(W,"S",1,4);                      // arrives LATER
@@ -90,7 +83,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   setSfuConsent(W,"L",2,false);
   check("…and revoking still silences that late speaker", !allowed(W,"L","S")); }
 
-// 6. moderator mute vs consent — independent states (amendment 3)
+// 6. moderator mute vs consent: independent states (amendment 3)
 { const W="w6"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
   setSfuModeratorMute(W,"S",true);
   setSfuConsent(W,"L",2,true);
@@ -145,12 +138,12 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("…and nothing leaks into world B's socket", wsB.length === 0, `wsB=${wsB.length}`);
 }
 
-// ── 2026-08-17 adversarial-review regressions ────────────────────────────────
+// ── adversarial-review regressions ────────────────────────────────
 {
   const W2 = "rev-regress";
   const s2 = sfuState(W2);
 
-  // #1 A refused revoke must also flip the STANDING answer — the future tense.
+  // #1 a refused revoke must also flip the STANDING answer: the future tense
   mintSfuCredential(W2, "lis", 1, 2);
   setSfuConsent(W2, "lis", 2, true);                       // consent ON at gen 2
   setSfuConsent(W2, "lis", 1, false);                      // revoke at STALE gen → refused
@@ -160,7 +153,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("…and a speaker joining later is NOT consented to the revoked listener",
     !s2.sfu.diag().consent?.["lis"]?.includes?.("late-speaker"));
 
-  // #2 A re-mint is a retirement first: no inherited consent, admission, or mute.
+  // #2 a re-mint is a retirement first: no inherited consent, admission, or mute
   const W3 = "rev-remint";
   const s3 = sfuState(W3);
   const c1 = mintSfuCredential(W3, "amy", 1, 2);
@@ -178,24 +171,22 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("re-mint does not inherit a moderation mute aimed at the predecessor",
     !s3.sfu.diag().muted.includes("amy"));
 
-  // Round 2: consent given while NO leg existed must survive the first mint
-  // (it has no predecessor to inherit from), while takeover still wipes.
+  // consent given while NO leg existed must survive the first mint (no predecessor to inherit from); takeover still wipes
   const W4 = "rev-premint";
   const s4 = sfuState(W4);
   setSfuConsent(W4, "early-bird", 1, true);        // consent BEFORE any leg
-  mintSfuCredential(W4, "early-bird", 1, 2);       // first mint — no predecessor
+  mintSfuCredential(W4, "early-bird", 1, 2);       // first mint: no predecessor
   check("pre-mint consent survives the FIRST mint (no predecessor to inherit from)",
     s4.standingConsent.get("early-bird") === true);
-  mintSfuCredential(W4, "early-bird", 1, 3);       // takeover — predecessor existed
+  mintSfuCredential(W4, "early-bird", 1, 3);       // takeover: predecessor existed
   check("…and a takeover re-mint still wipes it (fail-closed rejoin)",
     s4.standingConsent.get("early-bird") === undefined);
 
-  // Round 3: the gen WATERMARK survives with the answer — a delayed replay of
-  // an older YES must not re-grant consent the listener later revoked.
+  // the gen WATERMARK survives with the answer: a delayed replay of an older YES must not re-grant a revoked consent
   const W5 = "rev-watermark";
   const s5 = sfuState(W5);
   setSfuConsent(W5, "careful", 1, true);           // yes at gen 1, pre-leg
-  setSfuConsent(W5, "careful", 2, false);          // no at gen 2, pre-leg — the last word
+  setSfuConsent(W5, "careful", 2, false);          // no at gen 2, pre-leg: the last word
   mintSfuCredential(W5, "careful", 1, 2);          // first mint
   setSfuConsent(W5, "careful", 1, true);           // delayed REPLAY of the old yes
   check("a replayed older YES after the first mint is refused (watermark preserved)",

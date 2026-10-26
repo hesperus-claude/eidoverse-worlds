@@ -1,16 +1,12 @@
-// shared/structure.js — the griddled-building planner, tested headless.
-//
-//   bun tools/structure-field-test.ts
-//
-// The load-bearing claims:
+// shared/structure.js, the griddled-building planner, headless. The load-bearing claims:
 //  - walls on EDGES cannot be double-counted: one wall between two rooms;
 //  - rooms are DERIVED by flood fill, and a wall stops the fill;
-//  - a DOOR DOES NOT MERGE two rooms (Sims semantics) — only an absent wall does;
-//  - an aperture is a hole made of ABSENT boxes, so it is walkable with no
-//    change to the movement solver, and the surrounding boxes never overlap;
+//  - a DOOR DOES NOT MERGE two rooms (Sims semantics): only an absent wall does;
+//  - an aperture is a hole made of ABSENT boxes, so it is walkable with no change to the movement solver, and the
+//    surrounding boxes never overlap;
 //  - portals resolve to the two rooms they join, null meaning outdoors;
-//  - the planner is pure, deterministic and TOTAL — malformed data yields an
-//    empty plan rather than a throw (house rule 3, one layer down).
+//  - the planner is pure, deterministic and TOTAL: malformed data yields an empty plan rather than a throw.
+//   bun tools/structure-field-test.ts
 
 import {
   planStructure, normalize, wallBoxes, deriveRooms, derivePortals, roomAt, levelAt,
@@ -26,8 +22,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 
 console.log(`\nstructure_field — the griddled-building planner\n`);
 
-// A two-room house, 4×2 cells, split down the middle by a wall with a door,
-// and a window in room A's north wall.
+// a two-room house, 4×2 cells, split down the middle by a wall with a door, and a window in room A's north wall
 //
 //        x=0   1   2   3   4
 //   z=0   ┌───┬───╥───┬───┐
@@ -60,15 +55,13 @@ const HOUSE = {
   }],
 };
 
-// 1. edge algebra is canonical — one name per edge, and it inverts
+// 1. edge algebra is canonical: one name per edge, and it inverts
 {
   check("an X-edge separates north from south",
     JSON.stringify(edgeCells(0, 3, 5)) === JSON.stringify([[3, 4], [3, 5]]));
   check("a Z-edge separates west from east",
     JSON.stringify(edgeCells(1, 3, 5)) === JSON.stringify([[2, 5], [3, 5]]));
-  // the same pair of cells names the SAME edge from either direction — this is
-  // what makes double-counting structurally impossible rather than merely
-  // avoided by a de-dup pass
+  // the same pair of cells names the SAME edge from either direction: double-counting is structurally impossible, not de-duped
   const ab = edgeBetween(1, 0, 1, 1)!;
   const ba = edgeBetween(1, 1, 1, 0)!;
   check("edgeBetween is symmetric", edgeKey(ab[0], ab[1], ab[2]) === edgeKey(ba[0], ba[1], ba[2]),
@@ -98,7 +91,7 @@ const HOUSE = {
     rooms.map((r) => r.label).join());
 }
 
-// 4. A DOOR DOES NOT MERGE ROOMS — remove the wall and they become one
+// 4. A DOOR DOES NOT MERGE ROOMS: remove the wall and they become one
 {
   const noDivider = structuredClone(HOUSE);
   noDivider.levels[0].walls = noDivider.levels[0].walls.filter(
@@ -107,8 +100,7 @@ const HOUSE = {
   const merged = planStructure(noDivider).levels[0].rooms;
   check("absent wall merges the rooms", merged.length === 1 && merged[0].cells.length === 8,
     `${merged.length} rooms`);
-  // ...while the doored version stays two. The door is a hole in a wall, and a
-  // wall is what a room is made of.
+  // …while the doored version stays two: a door is a hole in a wall, and a wall is what a room is made of
   check("a door leaves them separate", planStructure(HOUSE).levels[0].rooms.length === 2);
 }
 
@@ -141,9 +133,8 @@ const HOUSE = {
   check("a window has a sill AND a lintel", windowed.length === 2
     && windowed.some((b) => b.kind === "sill")
     && windowed.some((b) => b.kind === "lintel"), windowed.map((b) => b.kind).join());
-  // No box may be thinner than a body can be ejected through. This is the
-  // regression that killed side jambs: a 5cm sliver ejects a 32cm body
-  // sideways ALONG the wall, so it slides through the opening.
+  // no box may be thinner than a body can be ejected through: a 5cm sliver ejects a 32cm body sideways ALONG the wall,
+  // so it slides through the opening
   const SLIVER = 0.32;
   const thin = [...doored, ...windowed].filter(
     (b) => Math.min(b.x1 - b.x0, b.z1 - b.z0) < g.wallT - 1e-9
@@ -155,8 +146,7 @@ const HOUSE = {
 
   const inside = (b: any, x: number, y: number, z: number) =>
     x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1 && z > b.z0 && z < b.z1;
-  // The doorway itself: mid-segment, at chest height. Absent from every box —
-  // which is precisely why the movement solver needs no concept of a hole.
+  // the doorway itself, mid-segment at chest height, is absent from every box: why the movement solver needs no concept of a hole
   check("the doorway is empty at body height",
     !doored.some((b) => inside(b, 2.0, 1.0, 0.5)));
   check("the lintel above it is solid",
@@ -168,9 +158,8 @@ const HOUSE = {
   check("but solid below the sill",
     windowed.filter((b) => inside(b, 2.0, 0.4, 0.5)).length === 1);
 
-  // Non-overlap: the partition is exact, so no two boxes share volume. Sampled
-  // densely rather than proven, because a sliver from bad arithmetic would show
-  // up as a double-count long before it showed up as a visible seam.
+  // non-overlap: the partition is exact, so no two boxes share volume; sampled densely, since a sliver from bad arithmetic
+  // shows as a double-count long before a visible seam
   for (const set of [doored, windowed]) {
     let overlaps = 0;
     for (let i = 0; i < set.length; i++) {
@@ -205,7 +194,7 @@ const HOUSE = {
     `${b.y0}..${b.y1} vs walk ${walk}`);
 }
 
-// 8. box census — geometry and collision come from one decomposition
+// 8. box census: geometry and collision come from one decomposition
 {
   const plan = planStructure(HOUSE);
   const n = (k: string) => plan.boxes.filter((b) => b.kind === k).length;
@@ -219,8 +208,7 @@ const HOUSE = {
   check("2 lintels, 1 sill", n("lintel") === 2 && n("sill") === 1,
     `${n("lintel")} lintels, ${n("sill")} sills`);
 
-  // the merge is a property of the RUN grouping, asserted directly so a
-  // regression reads as "runs broke" rather than as a mysterious box count
+  // the merge is a property of the RUN grouping, asserted directly so a regression reads as "runs broke", not a box count
   const g2 = normalize(HOUSE);
   const runs = wallRuns(g2.levels[0], g2);
   check("the south wall is one run of four", runs.some((r) => r.axis === 0
@@ -236,7 +224,7 @@ const HOUSE = {
     `${parts.filter((p) => p.kind === "base").length} boards for ${runs.length} runs`);
 }
 
-// 9. roomAt — "which room am I in" is a lookup, not a geometric query
+// 9. roomAt: "which room am I in" is a lookup, not a geometric query
 {
   const plan = planStructure(HOUSE);
   check("a point in room A finds the kitchen", roomAt(plan, 0.5, 0.5)?.label === "kitchen");
@@ -245,7 +233,7 @@ const HOUSE = {
   check("negative coords floor correctly", roomAt(plan, 3.9, 1.9)?.label === "hall");
 }
 
-// 10. determinism — same log, same house, for every agent standing in it
+// 10. determinism: same log, same house, for every agent standing in it
 {
   const a = JSON.stringify(planStructure(HOUSE).levels[0].rooms);
   const b = JSON.stringify(planStructure(structuredClone(HOUSE)).levels[0].rooms);
@@ -258,7 +246,7 @@ const HOUSE = {
   check("room ids don't depend on author order", a === c);
 }
 
-// 11. totality — a broken house is an empty house, never a thrown fold
+// 11. totality: a broken house is an empty house, never a thrown fold
 {
   const bad: any[] = [
     null, undefined, 42, "house", [],
@@ -272,8 +260,7 @@ const HOUSE = {
     try { const p = planStructure(d); boxes += p.boxes.length; } catch { threw++; }
   }
   check("no malformed payload throws", threw === 0, `${threw} threw`);
-  // the last case has one VALID tile and junk dimensions — dimensions fall back
-  // to defaults, so it draws exactly its one slab
+  // the last case has one VALID tile and junk dimensions: dimensions fall back to defaults, so it draws exactly its one slab
   check("junk yields near-nothing", boxes === 1, `${boxes} boxes`);
   check("bad dimensions fall back to the contract",
     normalize({ tile: -1, wallH: 0 }).tile === GRID_DEFAULTS.tile);
@@ -293,8 +280,7 @@ const HOUSE = {
 // 13a. multi-storey perception and routing (ew#140): the describer and router must use the storey the body stands on
 // (cell keys are x,z, so a first-match level lookup would always answer the ground floor)
 {
-  // Identical footprints. Ground: kitchen|hall with a door in the divider.
-  // Upstairs: the same divider with NO aperture — two sealed rooms.
+  // identical footprints: ground kitchen|hall with a door in the divider; upstairs the same divider with NO aperture (sealed)
   const TWO = structuredClone(HOUSE) as typeof HOUSE & { levels: any[] };
   const up = structuredClone(HOUSE.levels[0]) as any;
   up.y = 3; up.apertures = [];
@@ -308,8 +294,7 @@ const HOUSE = {
   check("upstairs kitchen is sealed — it must NOT report the ground floor's door",
     /No doors — this room is sealed/.test(upstairs) && !/door on its east/.test(upstairs), upstairs);
 
-  // The other direction: open-plan ground, upstairs divided with the door at
-  // the SOUTH end. Upstairs must say it has a door, not that it is sealed …
+  // the other direction: open-plan ground, upstairs divided with the door at the SOUTH end: upstairs must say it has a door…
   const OPEN = structuredClone(HOUSE) as any;
   OPEN.levels[0].walls = OPEN.levels[0].walls.filter(([a, x]: number[]) => !(a === 1 && x === 2));
   OPEN.levels[0].apertures = [[0, 0, 0, "window"]];
@@ -320,8 +305,7 @@ const HOUSE = {
   const upY2 = plan2.levels[1].y + 0.1;
   const up2 = describeHere(plan2, 0.5, 0.5, upY2)!;
   check("upstairs room with a south door is not reported sealed", /a door on its east/.test(up2), up2);
-  // … and the router must detour through that door instead of walking the
-  // ground floor's open plan straight through the upstairs wall.
+  // …and the router must detour through that door, not walk the ground floor's open plan through the upstairs wall
   const groundRoute = routeLocal(plan2, 0.5, 0.5, 3.5, 0.5, 0.1)!;
   check("open-plan ground floor routes straight", groundRoute.length === 2, JSON.stringify(groundRoute));
   const upRoute = routeLocal(plan2, 0.5, 0.5, 3.5, 0.5, upY2)!;
@@ -332,7 +316,7 @@ const HOUSE = {
     JSON.stringify(routeLocal(plan2, 0.5, 0.5, 3.5, 0.5)) === JSON.stringify(groundRoute));
 }
 
-// 13. perception — the whole reason the grid exists
+// 13. perception: the whole reason the grid exists
 {
   const plan = planStructure(HOUSE);
   const here = describeHere(plan, 0.5, 0.5)!;
@@ -347,7 +331,7 @@ const HOUSE = {
   check("the hall has no window", !/window/.test(inHall), inHall);
   check("outdoors describes nothing", describeHere(plan, -5, -5) === null);
 
-  // a sealed room must SAY so — silence would read as "no exits mentioned"
+  // a sealed room must SAY so: silence would read as "no exits mentioned"
   const sealed = planStructure({
     levels: [{
       tiles: [[0, 0]],
@@ -361,7 +345,7 @@ const HOUSE = {
     label === "a building: 2 rooms, 14 walls, 1 door, 1 window", label);
 }
 
-// 14. localizePoint — non-orthogonal grids are the point of grid-local coords
+// 14. localizePoint: non-orthogonal grids are the point of grid-local coords
 {
   const plan = planStructure(HOUSE);
   // the same physical spot, reached through four different building poses
@@ -373,8 +357,7 @@ const HOUSE = {
     // and an off-axis grid, which is the case that has no orthogonal excuse
     { ent: { pos: [3, 0, 7], yaw: 0.7, scale: 1 }, world: null as any },
   ];
-  // for the off-axis case, compute the world point by forward-rotating a known
-  // local point — then localizePoint must invert it exactly
+  // for the off-axis case, compute the world point by forward-rotating a known local point; localizePoint must invert it exactly
   {
     const { pos, yaw } = cases[3].ent as any;
     const lx = 0.5, lz = 0.5;
@@ -394,7 +377,7 @@ const HOUSE = {
     /kitchen/.test(describeHere(plan,
       localizePoint(off.ent as any, off.world[0], off.world[1], off.world[2])[0],
       localizePoint(off.ent as any, off.world[0], off.world[1], off.world[2])[2])!));
-  // scale composes too — a building at ×2 has 2m tiles in world terms
+  // scale composes too: a building at ×2 has 2m tiles in world terms
   const scaled = { pos: [0, 0, 0], yaw: 0, scale: 2 };
   const [sx, , sz] = localizePoint(scaled as any, 1.0, 0, 1.0);
   check("scale divides out", Math.abs(sx - 0.5) < 1e-9 && Math.abs(sz - 0.5) < 1e-9);
@@ -426,7 +409,7 @@ const HOUSE = {
     parts.some((p) => p.kind === "roof" && p.x0 < 0 && p.x1 > 4));
 }
 
-// 16. EXTERNAL CORNERS ARE SOLID — the notch bug
+// 16. EXTERNAL CORNERS ARE SOLID
 //
 // a wall straddles its edge, so two perpendicular walls cover their INNER quadrant twice and the OUTER one not at all:
 // a t/2 notch down every external corner, invisible to single-segment checks
@@ -439,8 +422,7 @@ const HOUSE = {
     boxes.some((b) => x > b.x0 - 1e-9 && x < b.x1 + 1e-9 && y > b.y0 - 1e-9
       && y < b.y1 + 1e-9 && z > b.z0 - 1e-9 && z < b.z1 + 1e-9);
 
-  // the REAL plan, corner fills included — testing wallBoxes in isolation is
-  // how the notch survived a "corner is solid" check in the first place
+  // the REAL plan, corner fills included: testing wallBoxes in isolation lets the notch pass a "corner is solid" check
   const withJoin = planStructure(HOUSE).boxes as any[];
   const without: any[] = [];
   for (const [k, edge] of lv.walls) without.push(...wallBoxes(edge, lv.apertures.get(k) ?? null, g, floorY));
@@ -490,8 +472,7 @@ const HOUSE = {
   check("the fill is a half-thickness square",
     fills.every((f) => Math.abs(f.x1 - f.x0 - ell.wallT / 2) < 1e-9
       && Math.abs(f.z1 - f.z0 - ell.wallT / 2) < 1e-9));
-  // A T-JUNCTION NEEDS NOTHING — the crossing wall already spans ±t/2, and
-  // anything added reappears on its far face.
+  // a T-JUNCTION NEEDS NOTHING: the crossing wall already spans ±t/2, and anything added reappears on its far face
   const tee = normalize({ levels: [{ tiles: [[0, 0]], walls: [[0, 0, 0], [0, -1, 0], [1, 0, 0]] }] });
   check("a T-junction grows no fill",
     cornerFills(tee.levels[0], tee, 0, tee.wallH).length === 0,
@@ -501,7 +482,7 @@ const HOUSE = {
   check("a crossing grows no fill", cornerFills(cross.levels[0], cross, 0, cross.wallH).length === 0);
 }
 
-// 17. ROUTING — the grid is the navigation graph
+// 17. ROUTING: the grid is the navigation graph
 //
 // without it an agent told "go to the kitchen" walks through the dividing wall in BOTH houses, and the
 // monolith-vs-griddled comparison measures nothing
@@ -535,7 +516,7 @@ const HOUSE = {
     return passable(lv, ax, az, bx, bz);
   }));
 
-  // seal the door and the rooms become unreachable — the honest failure
+  // seal the door and the rooms become unreachable: the honest failure
   const sealed = structuredClone(HOUSE);
   sealed.levels[0].apertures = [[0, 0, 0, "window"]];
   const sg = normalize(sealed);
@@ -567,7 +548,7 @@ const HOUSE = {
   check("unreachable target routes to null", routeLocal(plan, 0.5, 0.5, 99, 99) === null);
 }
 
-// 18. exterior AO — the outside gets modelled too
+// 18. exterior AO: the outside gets modelled too
 {
   const g = normalize(HOUSE);
   const lv = g.levels[0];
@@ -585,7 +566,7 @@ const HOUSE = {
     `${inFace.toFixed(3)} vs ${lum(floorY + 1.5).toFixed(3)}`);
 }
 
-// 19. SWEPT WALLS — built from the wall's direction, not the world's axes
+// 19. SWEPT WALLS: built from the wall's direction, not the world's axes
 {
   const g = normalize(HOUSE);
   const lv = g.levels[0];
@@ -593,9 +574,8 @@ const HOUSE = {
   const lines = wallPolylines(lv, g);
 
   check("solid walls chain into polylines", lines.length > 0);
-  // The divider meets the shell at a T. The shell must run THROUGH that node
-  // as one line while the divider ends against it — three stubs meeting at a
-  // point is what "straightest continuation" exists to prevent.
+  // the divider meets the shell at a T: the shell runs THROUGH that node as one line while the divider ends against it
+  // (three stubs meeting at a point is what "straightest continuation" prevents)
   const lens = lines.map((l) => l.pts.length).sort((a, b) => b - a);
   check("the shell chains into one long run, the divider is its own stub",
     lines.length === 2 && lens[0] >= 8 && lens[1] === 2, JSON.stringify(lens));
@@ -633,7 +613,7 @@ const HOUSE = {
   check("a 90° mitre reaches the full corner",
     Math.abs(outer - (2 + g.wallT / 2)) < 1e-6, `outer x = ${outer}`);
 
-  // and a 45° turn mitres too — this is what makes diagonals possible
+  // and a 45° turn mitres too: what makes diagonals possible
   const D = [[0, 0], [2, 0], [3, 1]];
   const sd = sweepProfile(D, [[-g.wallT / 2, 0], [g.wallT / 2, 0]], 0);
   check("a 45° turn produces finite, mitred geometry",
@@ -704,9 +684,8 @@ const HOUSE = {
     `${volume(flipped).toFixed(4)}`);
 
   const sw = sweepProfile([[0, 0], [3, 0]], wallProfile(g), 0);
-  // END CAPS. An open run without them is a hollow tube, and at a doorway you
-  // look into the inside of the wall — which reads as a missing jamb, not as a
-  // missing face. An uncapped sweep has strictly fewer triangles.
+  // END CAPS: an open run without them is a hollow tube, and at a doorway you look into the wall (a missing jamb, not a
+  // missing face); an uncapped sweep has strictly fewer triangles
   const uncappedTris = (sw.rings - 1) * (wallProfile(g).length - 1) * 2;
   check("an open run is capped at both ends",
     sw.indices.length / 3 > uncappedTris, `${sw.indices.length / 3} vs ${uncappedTris}`);
@@ -748,15 +727,13 @@ const HOUSE = {
   check("and carries a ladder between them, not two lonely ends",
     heights.length >= 10, `${heights.length} sample heights`);
 
-  // the real claim: at an aperture boundary, what a WALL shows and what the
-  // LINTEL shows must agree. Interpolate the wall's face between its samples
-  // either side of 2.1 and compare with the direct value.
+  // the real claim: at an aperture boundary, what a WALL shows and what the LINTEL shows must agree: interpolate the wall's
+  // face between its samples either side of 2.1 and compare with the direct value
   const lv = g.levels[0], floorY = lv.y + g.slabT;
   const shade = makeShader(lv, g, floorY);
   const at = (v: number) => shade(0.5, floorY + v, -g.wallT / 2, 0, 0, -1)[0];
-  // The aperture lines are exact samples, so nothing interpolates ACROSS them.
-  // What remains to prove is that the ladder is fine enough that interpolation
-  // between adjacent samples tracks the real curve.
+  // the aperture lines are exact samples, so nothing interpolates ACROSS them: prove the ladder is fine enough that
+  // interpolation between adjacent samples tracks the real curve
   const sorted = [...heights].sort((a, b) => a - b);
   let worst = 0, worstAt = 0;
   for (let i = 1; i < sorted.length; i++) {
@@ -767,8 +744,7 @@ const HOUSE = {
   check("interpolation tracks the shading curve between samples", worst < 0.02,
     `worst ${worst.toFixed(4)} at ${worstAt.toFixed(2)}m`);
 
-  // control: with only the two ends, the same measure must blow up — otherwise
-  // this test cannot see the defect it exists for
+  // control: with only the two ends the same measure must blow up, or this test can't see the defect it exists for
   const crude = Math.abs((at(0) + at(g.wallH)) / 2 - at(g.wallH / 2));
   check("control: two lonely ends DO disagree", crude > 0.02, `${crude.toFixed(4)}`);
 
@@ -776,7 +752,7 @@ const HOUSE = {
     refineProfile([[0, 0], [0, 2], [1, 2], [1, 0]], [1]).length === 6);
 }
 
-// 22. DIAGONALS — Sims-style walls corner to corner across a cell
+// 22. DIAGONALS: Sims-style walls corner to corner across a cell
 //
 // a swept profile mitres at any angle; what diagonals break is "a CELL IS ATOMIC": a diagonal cuts one in two rooms
 {
@@ -830,7 +806,7 @@ const HOUSE = {
     `gap ${biggestGap.toFixed(3)} vs box ${boxW.toFixed(3)}`);
 }
 
-// 23. HALF-FLOORED CELLS — a cut corner is a corner, not a wall on a floor
+// 23. HALF-FLOORED CELLS: a cut corner is a corner, not a wall on a floor
 {
   const D = { levels: [{ tiles: [[0, 0, "floor", "B"], [1, 0]], walls: [[2, 0, 0]] }] };
   const g = normalize(D);
@@ -848,9 +824,8 @@ const HOUSE = {
   check("a half cell emits no box slab",
     plan.levels[0].parts.filter((b: any) => b.kind === "floor").length === 1);
 
-  // the slab is a PRISM, and its orientation is derived rather than assumed:
-  // hand-reasoning the winding per half of per diagonal is how a floor ends up
-  // lit from underneath. Signed volume proves all four cases at once.
+  // the slab is a PRISM, its orientation derived rather than assumed (hand-reasoned winding per half per diagonal ends lit
+  // from underneath): signed volume proves all four cases at once
   const vol = (pr: any) => {
     let v = 0;
     for (let t = 0; t < pr.indices.length; t += 3) {
@@ -886,8 +861,8 @@ const HOUSE = {
   check("the pane runs diagonally, not along one axis",
     spanX > 0.8 && spanZ > 0.8, `span ${spanX.toFixed(2)} × ${spanZ.toFixed(2)}`);
 
-  // aperture ends mitre against the run they interrupt. A butt joint keeps the
-  // end ring square to its own segment; a mitred one leans into the neighbour.
+  // aperture ends mitre against the run they interrupt: a butt joint keeps the end ring square to its own segment; a
+  // mitred one leans into the neighbour
   const g2 = normalize({ levels: [{ tiles: [[0, 0], [1, 0]],
     walls: [[0, 0, 0], [0, 1, 0]], apertures: [[0, 1, 0, "door"]] }] });
   const e = g2.levels[0].walls.get(edgeKey(0, 1, 0))!;
@@ -904,19 +879,17 @@ const HOUSE = {
     "aperture ends are still butting");
 }
 
-// 25. MITRE SCALE AND JUNCTION CHAINING — both found by MEASURING, not looking
+// 25. MITRE SCALE AND JUNCTION CHAINING, found by MEASURING, not looking
 {
   const g = normalize(HOUSE);
 
-  // (a) an end mitre must lean, never explode. Using the ARRIVING direction at
-  // a path's END reverses the outgoing normal, flips the bisector and drives
-  // 1/cos(θ/2) from 1.08 to 2.6 — a diagonal overshot its own corner by 0.23m.
+  // (a) an end mitre must lean, never explode: the ARRIVING direction at a path's END reverses the outgoing normal, flips
+  // the bisector and drives 1/cos(θ/2) from 1.08 to 2.6 (a diagonal overshooting its own corner by 0.23m)
   const seg: [number, number][] = [[0, 0], [1, 1]];        // a 45° segment
   const thin: [number, number][] = [[-0.075, 0], [0.075, 0]];
   const good = sweepProfile(seg, thin, 0, { inDir: [1, 0], outDir: [0, 1] });
   const flipped = sweepProfile(seg, thin, 0, { inDir: [1, 0], outDir: [0, -1] });
-  // only the LAST ring — the path's start is √2 away from (1,1) by
-  // construction, and including it measures the segment, not the mitre
+  // only the LAST ring: the path's start is √2 away from (1,1) by construction, and including it measures the segment, not the mitre
   const reach = (sw: any) => {
     let far = 0;
     const start = (sw.rings - 1) * sw.ringSize * 3;
@@ -925,22 +898,19 @@ const HOUSE = {
     }
     return far;
   };
-  // relative, not absolute: with a thin probe profile both numbers are small,
-  // and what matters is the RATIO the bad bisector introduces
+  // relative, not absolute: with a thin probe profile both numbers are small; what matters is the RATIO the bad bisector introduces
   check("a correct end mitre barely leans", reach(good) < g.wallT,
     `reaches ${reach(good).toFixed(3)}m past`);
   check("control: a reversed end direction DOES blow the mitre up",
     reach(flipped) > reach(good) * 1.8,
     `${reach(flipped).toFixed(3)} vs ${reach(good).toFixed(3)} — the sign error is no longer detectable`);
 
-  // (b) a run may turn at a corner but must STOP at a junction, or it swallows
-  // one arbitrary branch of a wall it merely meets.
+  // (b) a run may turn at a corner but must STOP at a junction, or it swallows one arbitrary branch of a wall it merely meets
   const tee = normalize({ levels: [{ tiles: [[0, 0], [1, 0], [0, 1], [1, 1]],
     walls: [[0, 0, 1], [0, 1, 1], [1, 2, 0], [1, 2, 1]] }] });
   const lines = wallPolylines(tee.levels[0], tee);
-  // The STRAIGHT wall runs through; the stem meeting it must stop. Asserting
-  // that nothing passes through was wrong — continuing straight is the whole
-  // point, and it is what keeps a T from becoming three stubs at a point.
+  // the STRAIGHT wall runs through; the stem meeting it must stop (continuing straight is what keeps a T from being three
+  // stubs at a point)
   const isJunction = ([x, z]: number[]) => Math.abs(x - 2) < 1e-9 && Math.abs(z - 1) < 1e-9;
   const through = lines.filter((l) => l.pts.some((p, i) => i > 0 && i < l.pts.length - 1 && isJunction(p)));
   check("exactly one run continues through the junction", through.length === 1,

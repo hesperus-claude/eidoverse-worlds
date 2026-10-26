@@ -1,28 +1,27 @@
-// v1/v2 → v4 translator (lab). Runs the REAL v1 fold (anima/main shared/fold.js, extracted to legacy/) one entry at a
-// time, projects its state into v4 entity/component form, and emits, per old entry:
+// v1/v2 → v4 translator. Runs the REAL v1 fold (../fold.js) one entry at a time, projects its state into v4
+// entity/component form, and emits, per old entry:
 //   - the old entry as sent: an `act` (verb "imported", body {verb, args, from: old seq}, ts: old ts), or a `say`, and
 //   - at most one change entry with the plain results that bring v4 to the same place (cause = that act).
-// The output is in the PROTOCOL-v4 §2.4 wire format, and every name and id follows §2.3: an old id or name the
-// grammar refuses is mapped by `enc`, here names.js's encRaw (deterministic and injective: a name in the hashed form is
-// escaped like any other, and a log holding a lone surrogate, the one pair it maps alike, isn't imported at all). After
-// every entry it folds the v4 entry with the v4 fold and checks the projections agree. The original log is never written (R9); the output is a regenerable cache.
-// Ported from the v4 lab (code/v4-lab/translate-v1.js @ 11db981). Engine changes: the v1 fold is the engine's own
-// ../fold.js (the lab carried an older anima/main copy in legacy/), hashing and hex come from ./hash.js (no node:
-// imports; the browser may import this file), and the lab's CLI is tools/protocol/sweep.ts.
+// The output is in the PROTOCOL-v4 §2.4 wire format, and every name and id follows §2.3: an old id or name the grammar
+// refuses is mapped by `enc`, names.js's encRaw (deterministic and injective: a name in the hashed form is escaped like
+// any other, and a log holding a lone surrogate, the one pair it maps alike, isn't imported at all). After every entry
+// it folds the v4 entry with the v4 fold and checks the projections agree. The original log is never written (R9); the
+// output is a regenerable cache. Hashing and hex come from ./hash.js (no node: imports: the browser may import this file);
+// the CLI is tools/protocol/sweep.ts.
 import { emptyState as v1Empty, foldEntry } from "./fold.js";
 import { emptyState as v4Empty, applyInPlace, opsOf, worldIdOf, DIALECT, VERSION } from "../../../shared/protocol/fold.js";
 import { unNegZero } from "../../../shared/protocol/round.js";
-// an old log's names are never ids, so a name in the hashed form is escaped too (encRaw; house 6340433633, @19)
+// an old log's names are never ids, so a name in the hashed form is escaped too (encRaw, @19)
 import { encRaw as enc, encNameRaw as encName, dec, partSlot, motionType } from "../../../shared/protocol/names.js";
 import { qNorm } from "../../../shared/rot.js";
 import { sha256 } from "../../../shared/protocol/hash.js";
 import { COMPONENTS, registered } from "../../../shared/protocol/componentspec.js";
 import { modernize as newParticles, hashSeed } from "../../../shared/particle_effects.js";
 import { repairComps, repairWorld, SHAPES_VERSION } from "../../../shared/protocol/shaperepair.js";
-import * as eidosim from "./eidosim-v1.js";   // HER engine (the first eidosim, dialect 3): what a v1 punt did. Importer-only.
+import * as eidosim from "./eidosim-v1.js";   // the first eidosim (dialect 3): what a v1 punt did. Importer-only.
 import { ENGINES, DEFAULT_ENGINE } from "../../../shared/protocol/simlayer.js";
 
-// the translator has its own name (it projects the engine's v1 fold, not the lab's); the fold build is stamped beside it.
+// the translator has its own name (it projects the engine's v1 fold); the fold build is stamped beside it.
 // v1 {impulse: x} is v4's {kind: "impulse", angular: x}; a v1 key the closed v4 component lacks rides in imported:<component>
 // v1 took a CSS hex colour where three.js does ("#fff"); v4's colours are 0xRRGGBB integers. Lossless.
 export const hexColor = (x) => { if (typeof x !== "string") return x; const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(x.trim());
@@ -72,9 +71,9 @@ function newStory(v) {
   if (typeof v.markedEntity === "string" && v.markedEntity) out.marks = [enc(v.markedEntity)];
   return out; // practice, markedEntity and anything else story doesn't define move to imported:story (splitUnknown)
 }
-// v1's spin took rpm or degPerSec; v4's is degPerSec (rpm × 6, lossless: the renderer read rpm × 6). degPerSec wins
+// v1's spin took rpm or degPerSec; v4's is degPerSec (rpm × 6, lossless: the renderer read rpm × 6); degPerSec wins
 // when both were written, as the renderer had it.
-// @14 (R 10-17 21:40): v1's back-and-forth along an axis is written under today's name, oscillate (motionType: its one reading).
+// @14: v1's back-and-forth along an axis is written under today's name, oscillate (motionType: its one reading).
 function newMotion(m0) {
   if (!m0 || typeof m0 !== "object" || Array.isArray(m0)) return m0;
   const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };
@@ -89,7 +88,7 @@ function newMotion(m0) {
 // what the shape repair (shared/protocol/shaperepair.js) fixes in a stored v4 world, the translation writes already:
 // motion:<part>, amp, axis vectors, a pendulum's 3.5 s / 0 defaults and [0, 2, 0] pivot, collider exact as mesh; no parent order
 function shapeRepaired(c) {
-  return repairComps(c).c;   // a node's motion is motion:<partSlot(name)> {node: name}: its key is already in the §2.3 grammar (review r7 F1)
+  return repairComps(c).c;   // a node's motion is motion:<partSlot(name)> {node: name}: its key is already in the §2.3 grammar
 }
 function newReactions(rx) {
   if (!rx || typeof rx !== "object") return rx;
@@ -288,7 +287,7 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
     for (const [k, v] of Object.entries(e.comp ?? {})) if (k !== "guard") {
       if (accountNamed(k) && isAccount(v)) continue;   // a component whose name has an account's, holding one (@19)
       if (k.startsWith("particles:") && EMITTER_NAME.test(k.slice(10))) { if (v != null) emitters.push([k.slice(10), v]); continue; }
-      // a node's motion (v1 motion:<node name>): the name is data, motion:<partSlot(name)> {node: name} (@12, review r7 F1)
+      // a node's motion (v1 motion:<node name>): the name is data, motion:<partSlot(name)> {node: name} (@12)
       if (k.startsWith("motion:") && v && typeof v === "object" && !Array.isArray(v)) { const node = k.slice(7); c[`motion:${partSlot(node)}`] = { ...newMotion(v), node: typeof v.node === "string" && v.node ? v.node : node }; continue; }
       c[encName(k === "door" && !e.comp.openable ? "openable" : k)] = k === "reactions" ? newReactions(v) : k === "sockets" ? newSockets(v, c) : k === "motion" ? newMotion(v) : k === "particles" ? newParticles(v) : k === "captions" ? newCaptions(v) : v; }
     if (e.comp?.guard && !e.comp.lock) { c.lock = true; seen?.guards.add(id); } // §5: guard merges into lock
@@ -310,14 +309,14 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
   const w = {};
   for (const k of ["sky", "terrain", "grass"]) if (st[k] != null) w[k] = st[k];
   // v1 dialect 3's physics epoch is carried like any field the mapping doesn't know: imported:epoch (@12; was imported-epoch)
-  // round-2 R8: v1 echoed into the sky value who set it (`by`, a display name) and at which seq: derived, and a person's
-  // name inside a value. Dropped; the log says who set the sky (History, inspect's touched).
+  // v1 echoed into the sky value who set it (`by`, a display name) and at which seq: derived, and a person's name inside
+  // a value. Dropped; the log says who set the sky (History, inspect's touched).
   if (w.sky && typeof w.sky === "object") { const { seq, by, ...sky } = w.sky;
     if (sky.forecast && typeof sky.forecast === "object") { const { seq: _s, by: _b, ...fc } = sky.forecast; sky.forecast = fc; }
     w.sky = sky; }
   for (const a of st.assets ?? []) w[keyed("assets", typeof a === "string" ? a : a.path ?? JSON.stringify(a))] = typeof a === "string" ? {} : a;
-  // research roles §translation: v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate
-  // (@7: gen had stayed as written, read by the authority as generate); a `caption` deed is a place in its screen's captioners (below)
+  // v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate (@7); a `caption` deed is a place
+  // in its screen's captioners (below)
   const toCan = (v) => { if (!v || typeof v !== "object" || !("fly" in v || "gen" in v)) return v; const { fly, gen, ...rest } = v;
     const can = { ...(rest.can ?? {}), ...(fly === true ? { fly: true } : {}), ...(gen === true ? { generate: true } : {}) };
     return Object.keys(can).length ? { ...rest, can } : rest; };
@@ -365,10 +364,10 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
 function physical(st, sim, recorded, out, dynamic = () => false) {
   if (!st.epoch && !recorded.size && !sim.boxes) return out;
   const w = out["@world"];
-  // what her sim made of the epoch (review of b398d7e3 #3): her own law (carried) → today's eidosim runs from here on;
-  // an engine she didn't carry (foreign: nothing flew) → that name, with no build, so nothing flies here either; an
-  // epoch her sim refused (a bad tickMs: it never started) → no physics, only the imported record
-  if (sim.epoch && !sim.epoch.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: DEFAULT_ENGINE, build: ENGINES[DEFAULT_ENGINE].build, tickMs: sim.epoch.tickMs }; }   // HER tick (a later epoch she refused doesn't replace it; review r4 #3)
+  // what the old sim made of the epoch: its own law (carried) → today's eidosim runs from here on; an engine it didn't
+  // carry (foreign: nothing flew) → that name, with no build, so nothing flies here either; an epoch it refused (a bad
+  // tickMs: it never started) → no physics, only the imported record
+  if (sim.epoch && !sim.epoch.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: DEFAULT_ENGINE, build: ENGINES[DEFAULT_ENGINE].build, tickMs: sim.epoch.tickMs }; }   // the old sim's tick (a later epoch it refused doesn't replace it)
   else if (sim.epoch?.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: sim.epoch.sim, build: null, tickMs: sim.epoch.tickMs }; }
   for (const [id, p] of recorded) { const c = out[enc(id)]; if (sim.bodies[id] && c) c.transform = { ...c.transform, pos: p.slice() }; }
   if (sim.boxes) for (const [id, e] of Object.entries(st.entities ?? {})) { const c = out[enc(id)]; if (c && typeof e?.lib === "string" && sim.boxes[e.lib]) c.physics = { kind: dynamic(id) ? "dynamic" : "static", shape: clone(sim.boxes[e.lib]) }; }
@@ -376,7 +375,7 @@ function physical(st, sim, recorded, out, dynamic = () => false) {
 }
 /** Which thing an id names, as the v1 fold tells them apart (fold.js bornOf): a spawn it accepts (an id, and a lib that's
  *  absent or real) is a NEW thing when the id was free (never spawned, or removed) or held a different lib or a light; a
- *  same-lib re-spawn is the same thing. `of(id)` is the id's life count. R 2026-10-08's "punted → dynamic" is per thing. */
+ *  same-lib re-spawn is the same thing. `of(id)` is the id's life count; "punted → dynamic" is per thing. */
 export function lifeTracker() {
   // an id is a property key to the v1 fold (st.entities[a.id]): 7 and "7" name one thing
   const lib = new Map(), n = new Map();
@@ -388,7 +387,7 @@ export function lifeTracker() {
     else if (e.verb === "spawn" && id && !(e.args.lib != null && !e.args.lib)) { const l = e.args.lib ?? null;
       if (!lib.has(id) || lib.get(id) !== l) n.set(id, (n.get(id) ?? 0) + 1); lib.set(id, l); } } };
 }
-/** The things (`id#life`) a v1 log ever punts: R 2026-10-08, these come across `dynamic`, every other collider `static`. */
+/** The things (`id#life`) a v1 log ever punts: these come across `dynamic`, every other collider `static`. */
 export function puntedLives(entries) {
   const t = lifeTracker(), out = new Set();
   for (const e of entries) { t.step(e); const id = e?.args?.id; if (e?.verb === "punt" && id != null) out.add(`${String(id)}#${t.of(id)}`); }
@@ -440,7 +439,7 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
   // the old genesis as it was, but never an account (@19): a genesis role's sub becomes its person's id, as in an old request
   push({ kind: "act", actor: "system", verb: "translated", ts: t0.ts ?? 0, body: { from: unNegZero(withoutAccounts({ ...genesis, translator: physics ? TRANSLATOR_SIM : TRANSLATOR, ...(foldBuild ? { fold: foldBuild } : {}) }, mapAcct)) } });
   // the translation writes the repaired spelling, so its log carries the load's once-per-world marker from the start: the
-  // system's repair-shapes act, read by verb and actor only (review r8 M3: the translated act's body is purgeable)
+  // system's repair-shapes act, read by verb and actor only (the translated act's body is purgeable)
   push({ kind: "act", actor: "system", verb: "repair-shapes", ts: t0.ts ?? 0, body: { v: SHAPES_VERSION, ids: [], translated: true } });
   // the operator's approval of this translation (import-v1/world.ts), written here, before any cause is taken
   if (approved) push({ kind: "act", actor: "system", verb: "translation-approved", ts: t0.ts ?? 0, body: approved });
@@ -475,16 +474,16 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
         x = { ...x, bySub: who(typeof e.actor === "string" && !SYSTEM.has(e.actor) && !/^bhv:/i.test(e.actor) ? e.actor : x.bySub, { sub: x.bySub }) }; }
     return withoutAccounts(x, mapAcct); };
   const actorFor = (a) => (who && !SYSTEM.has(a ?? "door") ? who(String(a), {}) : actorOf(a ?? "door"));
-  // ---- dialect 3 (@10): her sim beside the v1 fold. Inert until an epoch: simEntry ignores everything before one, and
+  // ---- dialect 3 (@10): the old sim beside the v1 fold. Inert until an epoch: simEntry ignores everything before one, and
   // physical() returns project() as it is, so a log without one translates exactly as @9 did.
   const sim = eidosim.emptySim();
-  const recorded = new Map();     // v1 id → its last LOGGED rest pose (held until her law releases the body)
+  const recorded = new Map();     // v1 id → its last LOGGED rest pose (held until the old law releases the body)
   const launchSeq = {};           // v1 id → the seq of the launch its current flight came from
   const restLogged = new Set();   // bodies whose CURRENT flight's rest is logged
   const restTicks = {};           // v1 id → the tick it came to rest
-  // R 2026-10-08: a thing the v1 log ever punts is a dynamic collider, every other one static. Known up front, so the
-  // kind is right from the moment its collider appears (no static → dynamic flip at the punt, which an undo of the
-  // punt's act would then take back), and per incarnation: an id spawned again is a new thing (review of b398d7e3 #2, #4)
+  // a thing the v1 log ever punts is a dynamic collider, every other one static: known up front, so the kind is right from
+  // the moment its collider appears (no static → dynamic flip at the punt, which an undo of the punt's act would take
+  // back), and per incarnation: an id spawned again is a new thing
   const lives = puntedLives(oldEntries); const lifeNow = lifeTracker(); const dynamic = (id) => lives.has(`${id}#${lifeNow.of(id)}`);
   if (physics) Object.assign(stats, { launches: 0, rests: 0, worldDivergences: 0 });
   const diverged = (kind, e, extra) => { stats.divergences++; if (physics) stats[kind]++;
@@ -504,7 +503,7 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
     const fresh = Object.keys(sim.bodies).filter((id) => sim.bodies[id].resting && launchSeq[id] !== undefined && !restLogged.has(id))
       .sort((a, b) => restTicks[a] - restTicks[b]);
     for (const id of fresh) {
-      // her sim's rest: a plain change by `sim`, caused by the punt's imported act (@11: no launch, no digest)
+      // the old sim's rest: a plain change by `sim`, caused by the punt's imported act (@11: no launch, no digest)
       recorded.set(id, sim.bodies[id].p.slice()); restLogged.add(id);
       const now = view(); const ops = diff(prev, now); prev = now;
       push({ kind: "change", actor: "sim", ts, cause: launchSeq[id], ...changeBody(unNegZero(ops)) }); stats.change++; stats.ops += ops.length;
@@ -522,18 +521,18 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
     const tl = push({ ...(e.verb === "say" ? { kind: "say", actor, verb: "say", body: unNegZero(((b) => (who && typeof b.to === "string" && !SYSTEM.has(b.to) ? { ...b, to: who(b.to, {}) } : b))(clone(e.args) ?? {})) }
       : { kind: "act", actor, verb: "imported", body: unNegZero({ verb: e.verb, args: noAcct(e, clone(e.args) ?? null), from: e.seq ?? null }) }), ...(ts !== undefined ? { ts } : {}) });
     const b = sim.bodies[e.args?.id];
-    if (e.verb === "punt" && b && b.seq === e.seq) { // her punt started (or kicked) a body: its rest will be caused by this act
+    if (e.verb === "punt" && b && b.seq === e.seq) { // a punt started (or kicked) a body: its rest will be caused by this act
       launchSeq[e.args.id] = tl;
       restLogged.delete(e.args.id); stats.launches++;
     }
-    for (const id of [...recorded.keys(), ...Object.keys(launchSeq), ...Object.keys(restTicks)]) if (!sim.bodies[id]) { recorded.delete(id); restLogged.delete(id); delete launchSeq[id]; delete restTicks[id]; } // released by her law (or a new epoch)
+    for (const id of [...recorded.keys(), ...Object.keys(launchSeq), ...Object.keys(restTicks)]) if (!sim.bodies[id]) { recorded.delete(id); restLogged.delete(id); delete launchSeq[id]; delete restTicks[id]; } // released by the old law (or a new epoch)
     const now = view();
     const ops = diff(prev, now);
     if (ops.length) { push({ kind: "change", actor, cause: tl, ...changeBody(unNegZero(ops)), ...(ts !== undefined ? { ts } : {}) }); stats.change++; stats.ops += ops.length; }
     if (canon(v4project(v4)) !== canon(now)) { diverged("worldDivergences", e); if (stats.divergences === 1) onDivergence?.(e, now, v4project(v4)); }
     prev = now;
   }
-  // settle, as her replaybench does: far past the last entry, then log what came to rest
+  // settle, as the replaybench does: far past the last entry, then log what came to rest
   if (sim.epoch && !sim.epoch.foreign) {
     stepTo(sim.tick + 100000);
     const tsAt = (tick) => sim.epoch.ts + tick * sim.epoch.tickMs;

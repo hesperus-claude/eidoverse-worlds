@@ -1,28 +1,20 @@
-// sim — the deterministic sim fold (spec/PROTOCOL_v2.md, dialect 3), as one
-// pure module. This is the reference eidosim: fold the sim-scoped entries of
-// an epoch through it, advance to a tick, and every conforming
-// implementation holds bit-identical state — that is the whole covenant.
+// sim: the deterministic sim fold (spec/PROTOCOL_v2.md, dialect 3), as one pure module: the reference eidosim. Fold
+// an epoch's sim-scoped entries through it, advance to a tick, and every conforming implementation holds bit-identical
+// state: that is the whole covenant.
 //
-// Same constraints as everything in shared/ (README.md), tightened to
-// Covenant I (owned numerics): ONLY IEEE-754 exact host operations are used
-// — + − × ÷, sqrt, comparisons, min/max/abs. No Math.sin/cos/exp/pow (yaw
-// goes through simmath's owned sinT/cosT), no Date.now(), no randomness, no
-// unordered iteration (bodies/statics are plain objects; insertion order
-// follows entry order, which is the log's order). Number→string is
-// ECMA-specified shortest-round-trip, so JSON of this state is itself a
-// deterministic serialization — digests may be taken over it directly.
+// Covenant I (owned numerics): ONLY IEEE-754 exact host operations (+ − × ÷, sqrt, comparisons, min/max/abs). No
+// Math.sin/cos/exp/pow (yaw goes through simmath's sinT/cosT), no Date.now(), no randomness, no unordered iteration
+// (bodies/statics are plain objects in the log's entry order). Number→string is ECMA shortest-round-trip, so JSON of
+// this state is a deterministic serialization: digests may be taken over it directly.
 //
-// This build carries each retired sim (Covenant II — old logs replay under the law
-// they were written under, bit for bit):
+// This build carries each retired sim (Covenant II: old logs replay under the law they were written under, bit for bit):
 //
-// eidosim@0.1.0 — flat floor: ground = the body's own starting height
-//   (right on build pads, wrong on slopes — which a hilly-meadow playtest
-//   duly hit: flights landed on an invisible floor at launch altitude,
-//   §24t-3). Its advance law below is UNTOUCHED; 0.1.0 epochs in old logs
-//   replay to the same bits they always did (replaybench holds the proof).
+// eidosim@0.1.0: flat floor: ground = the body's own starting height (wrong on slopes: flights land on an invisible
+//   floor at launch altitude, §24t-3). Its advance law below is UNTOUCHED; 0.1.0 epochs in old logs replay to the same
+//   bits they always did (replaybench holds the proof).
 //
-// eidosim@0.2.0 — terrain-aware ground: the sim folds the world's `terrain`
-//   entries and grounds every body on shared/terrainmath.js — the toolkit's
+// eidosim@0.2.0: terrain-aware ground: the sim folds the world's `terrain`
+//   entries and grounds every body on shared/terrainmath.js, the toolkit's
 //   own height law re-expressed in exact ops (Covenant I; ≥99.8%
 //   bit-identical to the mesh the client walks, worst divergence ~1e-15).
 //   Grounded bodies are GLUED to the terrain while sliding; a flight meeting
@@ -31,15 +23,15 @@
 //   fold. Worlds with no terrain keep the flat-floor fallback. UNTOUCHED
 //   since 0.2.0 shipped: every 0.3 addition below is gated by name.
 //
-// eidosim@0.3.0 — the world's things are colliders. The sim folds the boxes
+// eidosim@0.3.0: the world's things are colliders. The sim folds the boxes
 //   the SEQUENCER stamps into history (Covenant III: an asset's geometry is
-//   not in the log until the sequencer writes it there — ruling tel0s,
-//   2026-09-01): `epoch.boxes` — lib → [[min],[max]] for every model standing
-//   in the world at the barrier — and `spawn.box` for every model spawned
+//   not in the log until the sequencer writes it there): `epoch.boxes`
+//   (lib → [[min],[max]] for every model standing in the world at the barrier)
+//   and `spawn.box` for every model spawned
 //   after it. Every fold entity with a known box is a STATIC collider (its
 //   yaw-rotated, scaled local box's world AABB); a punted body carries its
 //   own. Per tick, for a body in flight: a static whose top the body was
-//   above and whose footprint it overlaps is GROUND — land on a crate,
+//   above and whose footprint it overlaps is GROUND: land on a crate,
 //   slide, rest on it under the same contact law as terrain; a static it
 //   meets from the side pushes it out along the shallower horizontal axis
 //   and reflects that velocity (a bounce off a wall, RESTITUTION-scaled). A
@@ -47,19 +39,19 @@
 //   than gluing (no teleport off a crate edge). A body that comes to rest
 //   becomes a static again. Scope honestly stated: flying bodies do not
 //   collide with each other; a resting body is not woken by being hit; a
-//   thing that mounts, rides a motion, or has no box is not a collider.
+//   thing that mounts, follows a motion, or has no box is not a collider.
 //
-// eidosim@0.4.0 — the same world, SWEPT. 0.3 tested collisions at the end of
-//   each tick only, so a fast body crossed a thin wall between two endpoints
-//   and never met it (PR #160 review, B4: 0.2m body, 0.1m wall, power 20 →
-//   rests 30m past the wall). 0.4 sweeps the body's AABB along the tick's
+// eidosim@0.4.0: the same world, SWEPT. 0.3 tests collisions at the end of
+//   each tick only, so a fast body crosses a thin wall between two endpoints
+//   and never meets it (#160 B4: 0.2m body, 0.1m wall, power 20 → rests 30m
+//   past the wall). 0.4 sweeps the body's AABB along the tick's
 //   displacement against every static (a slab test, exact ops) and resolves
 //   the EARLIEST contact: a top met from above is a landing (the same contact
 //   law), a side is a wall bounce, at the contact point; the rest of that
 //   tick's motion is spent there. Already-overlapping states keep 0.3's
 //   endpoint resolution. Nothing else moved: same constants, same order.
 //
-// eidosim@0.5.0 — contacts consume time, then the remaining movement is swept
+// eidosim@0.5.0: contacts consume time, then the remaining movement is swept
 //   again. In particular a zero-time contact with a deck cancels downward
 //   gravity without cancelling horizontal sliding. Eight contacts per tick
 //   bound work; if exhausted, the body stays at the last safe contact.
@@ -96,8 +88,7 @@ const CARRIED = new Set([V1, V2, V3, V4, SIM_ID]);
  *  3 endpoint · 4 first contact · 5 remaining-motion sweeps. 0 = not carried. */
 const lawOf = (name) => name === V1 ? 1 : name === V2 ? 2 : name === V3 ? 3 : name === V4 ? 4 : name === SIM_ID ? 5 : 0;
 
-// The physics constants ARE the sim version — editing any of them is an
-// epoch bump, never a patch (Covenant II: it rewrites what old logs mean).
+// the physics constants ARE the sim version: editing any is an epoch bump, never a patch (Covenant II)
 const G = 9.8;                  // m/s² downward
 const RESTITUTION = 0.45;       // bounce keep — vertical off ground, horizontal off a wall (0.3)
 const BOUNCE_FRICTION = 0.75;   // tangential keep per bounce
@@ -154,8 +145,7 @@ function extentsOf(box, scale, yaw) {
 const aabbAt = (p, e) => [[p[0] + e.cx - e.hx, p[1] + e.y0, p[2] + e.cz - e.hz],
   [p[0] + e.cx + e.hx, p[1] + e.y1, p[2] + e.cz + e.hz]];
 
-/** (0.3) Make the fold entity `id` a static collider from its lib's box —
- *  or drop it, if its lib has none. */
+/** (0.3) Make the fold entity `id` a static collider from its lib's box, or drop it if its lib has none. */
 function setStatic(sim, id, ent) {
   if (!sim.statics) return;
   const box = ent && typeof ent.lib === 'string' ? sim.boxes?.[ent.lib] : null;
@@ -179,9 +169,8 @@ function sweepMotion(sim, id, b, dt, hf) {
     const d = [b.v[0] * remaining, b.v[1] * remaining, b.v[2] * remaining];
     const [lo, hi] = aabbAt(b.p, e);
     let hitT = Infinity, hitAxis = -1, hit = null;
-    // The support plane must participate too: on a coarse tick, sweeping a
-    // gravity-displaced endpoint below ground can otherwise miss a wall above
-    // it. Terrain is sampled again at contact and by the final ground resolver.
+    // the support plane participates too: on a coarse tick a gravity-displaced endpoint below ground can miss a wall
+    // above it; terrain is sampled again at contact and by the final ground resolver
     const floor = hf ? hf(b.p[0], b.p[2]) : b.ground;
     const floorT = d[1] < 0 ? Math.max(0, (floor - b.p[1]) / d[1]) : Infinity;
     if (floorT <= 1) { hitT = floorT; hitAxis = 1; }
@@ -209,7 +198,7 @@ function sweepMotion(sim, id, b, dt, hf) {
       return;
     }
     for (let k = 0; k < 3; k++) b.p[k] = b.p[k] + d[k] * hitT;
-    // Exact face placement avoids sinking into the support on the next sweep.
+    // exact face placement avoids sinking into the support on the next sweep
     if (!hit) b.p[1] = hf ? hf(b.p[0], b.p[2]) : b.ground;
     else if (hitAxis === 0) b.p[0] = d[0] > 0 ? hit[0][0] - e.hx - e.cx : hit[1][0] + e.hx - e.cx;
     else if (hitAxis === 2) b.p[2] = d[2] > 0 ? hit[0][2] - e.hz - e.cz : hit[1][2] + e.hz - e.cz;
@@ -252,9 +241,8 @@ export function advanceSim(sim, toTick) {
       b.p[0] = b.p[0] + b.v[0] * dt;
       b.p[1] = b.p[1] + b.v[1] * dt;
       b.p[2] = b.p[2] + b.v[2] * dt;
-      // the floor under the body THIS tick: the terrain law (0.2+ epochs with
-      // a terrain), else the flat launch-height floor (0.1 law, and the
-      // fallback for terrainless worlds)
+      // the floor under the body THIS tick: the terrain law (0.2+ epochs with a terrain), else the flat launch-height floor
+      // (0.1 law, and the fallback for terrainless worlds)
       let g = hf ? hf(b.p[0], b.p[2]) : b.ground;
       let sweptLanding = false;
       if (v5 && b.ext && sim.statics) {
@@ -262,8 +250,7 @@ export function advanceSim(sim, toTick) {
         sweepMotion(sim, id, b, dt, hf);
         g = hf ? hf(b.p[0], b.p[2]) : b.ground;
       } else if (v4 && b.ext && sim.statics) {
-        // 0.4: SWEEP the body's box along this tick's displacement and take
-        // the earliest contact — a slab test per static, exact ops only.
+        // 0.4: SWEEP the body's box along this tick's displacement and take the earliest contact (a slab test per static, exact ops)
         const dx = b.p[0] - p0x, dy = b.p[1] - p0y, dz = b.p[2] - p0z;
         const e = b.ext;
         const lo = [p0x + e.cx - e.hx, p0y + e.y0, p0z + e.cz - e.hz];
@@ -285,14 +272,12 @@ export function advanceSim(sim, toTick) {
             if (tA > tEnter) { tEnter = tA; axis = k; }
             if (tB < tExit) tExit = tB;
           }
-          // a contact WITHIN this tick, not already overlapping (0.3's endpoint
-          // code below owns that) and not merely grazing
+          // a contact WITHIN this tick, not already overlapping (0.3's endpoint code owns that) and not merely grazing
           if (tEnter >= 0 && tEnter <= 1 && tEnter < tExit && tEnter < hitT) { hitT = tEnter; hitAxis = axis; hitId = sid; }
         }
         if (hitId !== null) {
           const s = sim.statics[hitId].aabb;
-          // to the contact, exactly: the touching face is placed by the
-          // static's own coordinate, the free axes by the fraction
+          // to the contact, exactly: the touching face placed by the static's own coordinate, the free axes by the fraction
           b.p[0] = hitAxis === 0 ? (dx > 0 ? s[0][0] - e.hx - e.cx : s[1][0] + e.hx - e.cx) : p0x + dx * hitT;
           b.p[2] = hitAxis === 2 ? (dz > 0 ? s[0][2] - e.hz - e.cz : s[1][2] + e.hz - e.cz) : p0z + dz * hitT;
           b.p[1] = hitAxis === 1 ? (dy > 0 ? s[0][1] - e.y1 : s[1][1] - e.y0) : p0y + dy * hitT;
@@ -328,8 +313,7 @@ export function advanceSim(sim, toTick) {
             const gs = s[1][1] - b.ext.y0;
             if (gs > g) { g = gs; on = sid; }
           } else if (bb[1][1] > s[0][1] && bb[0][1] < s[1][1]) {
-            // it met a side: push out along the shallower horizontal
-            // overlap and reflect that velocity — a wall bounce
+            // it met a side: push out along the shallower horizontal overlap and reflect that velocity (a wall bounce)
             const px = Math.min(bb[1][0] - s[0][0], s[1][0] - bb[0][0]);
             const pz = Math.min(bb[1][2] - s[0][2], s[1][2] - bb[0][2]);
             if (px <= pz) {
@@ -349,13 +333,11 @@ export function advanceSim(sim, toTick) {
         b.on = on;
       }
       if (sweptLanding) {
-        // already resolved at the contact above; only the grounded slide/rest
-        // logic below may still apply (v[1] === 0 ⇒ it does)
+        // already resolved at the contact above; only the grounded slide/rest logic below may still apply (v[1] === 0 ⇒ it does)
       } else if (b.p[1] < g && b.v[1] < 0) {
         b.p[1] = g;
-        // an impact slower than two gravity-ticks is not a bounce — it is
-        // resting CONTACT (the terminal micro-bounce would otherwise feed
-        // v[1] from gravity forever and rest could never be reached)
+        // an impact slower than two gravity-ticks is resting CONTACT, not a bounce, or the terminal micro-bounce feeds v[1]
+        // from gravity forever and rest is never reached
         if (-b.v[1] > 2 * G * dt) {
           b.v[1] = -b.v[1] * RESTITUTION;
           b.v[0] = b.v[0] * BOUNCE_FRICTION;
@@ -364,14 +346,12 @@ export function advanceSim(sim, toTick) {
           b.v[1] = 0;
         }
       } else if (v2 && b.p[1] <= g && b.v[1] >= 0) {
-        // 0.2+: flying INTO rising ground (a hillside) splats to contact;
-        // a grounded slider (v[1] === 0) is GLUED to the terrain, following
-        // it down and up rather than launching off every bump
+        // 0.2+: flying INTO rising ground (a hillside) splats to contact; a grounded slider (v[1] === 0) is GLUED to the
+        // terrain, following it down and up rather than launching off every bump
         b.p[1] = g;
         b.v[1] = 0;
       } else if (v2 && b.v[1] === 0) {
-        // 0.3 only: a step down is followed; a drop (the crate edge) is a
-        // fall — gravity takes the next tick. 0.2 glues unconditionally.
+        // 0.3 only: a step down is followed; a drop (the crate edge) is a fall, gravity's next tick. 0.2 glues unconditionally.
         if (!v3 || b.p[1] - g <= STEP_DOWN) b.p[1] = g;
       }
       if (b.p[1] === g && b.v[1] === 0) {
@@ -404,11 +384,10 @@ function heightFieldOf(sim) {
   return f;
 }
 
-/** The verbs whose authoring RELEASES a body — the instant fold's word wins
- *  over recomputation from the moment someone re-authors the entity. */
+/** The verbs whose authoring RELEASES a body: the instant fold's word wins over recomputation once the entity is re-authored. */
 const RELEASERS = new Set(['place', 'spawn', 'remove', 'mount', 'dismount', 'motion', 'light']);   // light: a lamp may reuse an entity id wholesale
-/** (0.3) …and of those, the ones after which the entity stands still where
- *  the fold says (a collider again) vs. moves in ways the sim cannot follow. */
+/** (0.3) …and of those, the ones after which the entity stands still where the fold says (a collider again), vs. moves
+ *  in ways the sim cannot follow. */
 const RESEATERS = new Set(['place', 'spawn', 'dismount', 'light']);   // (a light has no box: setStatic drops it)
 
 /** Fold one entry into the sim. Total, like the instant fold: nothing here
@@ -438,14 +417,12 @@ export function simEntry(sim, entry, st) {
       ...(CARRIED.has(simName) ? {} : { foreign: true }) };
     sim.tick = 0;
     sim.bodies = {};
-    // 0.2+ epochs adopt the world's standing terrain (the instant fold's
-    // word, already folded through this entry); 0.1 epochs keep their flat
-    // law — sim.terrain stays null so the old advance path cannot see it.
+    // 0.2+ epochs adopt the world's standing terrain (the instant fold's word, already folded through this entry); 0.1
+    // epochs keep their flat law: sim.terrain stays null so the old advance path cannot see it
     sim.terrain = simName !== V1 && CARRIED.has(simName) && /** @type {any} */(st)?.terrain
       ? terrainParams(/** @type {any} */(st).terrain) : null;
-    // 0.3 epochs adopt the sequencer's word on the world's geometry: the
-    // stamped lib → box table, and every standing entity it covers becomes
-    // a static. Older laws never see these fields (their JSON is unchanged).
+    // 0.3 epochs adopt the sequencer's word on the world's geometry: the stamped lib → box table, every standing entity it
+    // covers a static. Older laws never see these fields (their JSON is unchanged)
     if (lawOf(simName) >= 3) {
       sim.boxes = {};
       const bx = a.boxes;
@@ -497,8 +474,7 @@ export function simEntry(sim, entry, st) {
     const body = { p, v: [a.dir[0] * k, a.dir[1] * k, a.dir[2] * k],
       yaw, ground, seq: entry.seq, born: sim.tick, resting: false };
     if (v3) {
-      // 0.3: the body carries its own box (its lib's stamped one) and is no
-      // longer a static — it is the thing that moves now
+      // 0.3: the body carries its own box (its lib's stamped one) and is no longer a static: it is the thing that moves now
       const box = typeof ent.lib === 'string' ? sim.boxes?.[ent.lib] ?? null : null;
       const scale = Number.isFinite(ent.scale) && ent.scale > 0 ? ent.scale : 1;
       Object.assign(body, { box, scale, ext: box ? extentsOf(box, scale, yaw) : null, on: null });
@@ -513,8 +489,7 @@ export function simEntry(sim, entry, st) {
   }
   if (RELEASERS.has(entry.verb) && a?.id != null) {
     if (v3 && sim.statics) {
-      // a collider change takes effect at ITS entry's tick — advance first,
-      // so any schedule reaching a later tick agrees (Covenant IV)
+      // a collider change takes effect at ITS entry's tick: advance first, so any schedule reaching a later tick agrees (Covenant IV)
       advanceSim(sim, tickOf(sim, entry.ts));
       if (RESEATERS.has(entry.verb)) setStatic(sim, a.id, st.entities[a.id]);
       else delete sim.statics[a.id];
@@ -523,8 +498,8 @@ export function simEntry(sim, entry, st) {
   }
 }
 
-/** The composition read: where the sim says this entity is, or null if the
- *  instant fold owns it. @param {SimState} sim @param {string} id */
+/** The composition read: where the sim says this entity is, or null if the instant fold owns it.
+ *  @param {SimState} sim @param {string} id */
 export function simPose(sim, id) {
   const b = sim.bodies[id];
   return b ? { p: b.p, yaw: b.yaw, resting: b.resting } : null;

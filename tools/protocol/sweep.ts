@@ -1,15 +1,14 @@
-// tools/protocol/sweep.ts — the translators against real logs, and the pins the core relies on.
+// tools/protocol/sweep.ts: the translators against real logs, and the pins the core relies on.
 //   bun tools/protocol/sweep.ts                  # every distinct log.jsonl under spec/fixtures (the repo's own)
 //   PROTOCOL_WORLDS=<dir>[:<dir>…] (`;` on Windows) bun tools/protocol/sweep.ts
 // Required, for every distinct world log found:
-//   - translate-v1: 0 divergences (the fold agrees with the projection of the engine's own fold after EVERY
-//     entry — the translator checks this itself);
+//   - translate-v1: 0 divergences (the fold agrees with the projection of the engine's own fold after EVERY entry);
 //   - the written log, re-read from text by the strict reader alone: status ok, 0 malformed, and its fold equals
 //     the translator's final projection;
 //   - the projection loses nothing: an independent inverse (components → old field names), compared with the
 //     REAL engine fold, entry by entry (every 250th past 2,000 entries), aligned by act. Only representation is
-//     normalised (yaw ↔ q, scalar scale ↔ vector, light spelling) and only translate-v1's DROPPED list may differ.
-//     (Without this check, a translator that silently dropped grass passed.)
+//     normalised (yaw ↔ q, scalar scale ↔ vector, light spelling) and only translate-v1's DROPPED list may differ
+//     (without it, a translator silently dropping grass would pass).
 // Plus: the four dialect-3 fixtures through translate-d3 (the goldens reproduce; 0 world/flight divergences; every
 // launch rests where the golden rests, re-checked by a carrier; deterministic; strict read-back clean); the sim build pin;
 // the hash shim (native = portable = the reference vectors).
@@ -25,7 +24,7 @@ import { translate as translateV1, DROPPED, hasEpoch, puntedLives, lifeTracker }
 import { translate as translateD3 } from "./import-v1/translate-d3.js";
 import { simFold, DEFAULT_ENGINE } from "../../shared/protocol/simlayer.js";
 import { emptyState as v1Empty, foldEntry } from "./import-v1/fold.js";
-import * as eidosim from "./import-v1/eidosim-v1.js";   // HER engine (the first eidosim): what v1 logs mean
+import * as eidosim from "./import-v1/eidosim-v1.js";   // the first eidosim: what v1 logs mean
 import { localOf } from "../../shared/hierarchy.js";
 import { mapGrassArgs, isLegacyArgs } from "../../shared/flora_args.js";   // the grass READER's own mapping (not the repair)
 
@@ -49,7 +48,7 @@ check("the native path is the one in use under bun", typeof (globalThis as any).
 
 // ---- 2. (the engine's identity is its version, held to its conformance digests by engine-check.ts; no source hash) ----
 
-// ---- 3. her dialect-3 fixtures through translate-d3 ----
+// ---- 3. the dialect-3 fixtures through translate-d3 ----
 const golden = JSON.parse(fs.readFileSync(ENGINE + "spec/fixtures/replay/.replaybench.json", "utf8"));
 for (const name of Object.keys(golden)) {
   const old = parse(fs.readFileSync(ENGINE + `spec/fixtures/replay/${name}/log.jsonl`, "utf8"));
@@ -66,7 +65,7 @@ for (const name of Object.keys(golden)) {
   check(`${name}: strict read-back ok, 0 malformed`, back.status === "ok" && !back.diagnostics.some(([, k]: any) => k.startsWith("malformed")), JSON.stringify(back.diagnostics.filter(([, k]: any) => k.startsWith("malformed")).slice(0, 3)));
   const where = Object.entries(s0.bodies).every(([id, b]: [string, any]) => c(back.entities?.[id]?.c.transform.pos) === c(b.p));
   check(`${name}: with no engine at all, everything rests where hers rests`, where);
-  // @11: nothing asks a reader to fly her engine (no launch, no digest), the world runs today's eidosim, and the live
+  // @11: nothing asks a reader to fly the old engine (no launch, no digest), the world runs today's eidosim, and the live
   // host's sim layer (server/livehost.ts: no catalogue of its own) reads the whole history without a disagreement
   const sf = simFold(readLog(text(r.out)), Math.max(...r.out.map((e: any) => e.ts ?? 0)), { models: {} });
   const flown = r.out.filter((e: any) => e.kind === "sim");
@@ -88,8 +87,8 @@ const noAccounts = (v: any): any => Array.isArray(v) ? v.map(noAccounts)
   : v && typeof v === "object" ? Object.fromEntries(Object.entries<any>(v).filter(([k, x]) => !/^(human|agent|aid1):/.test(k) && !((k === "sub" || k.endsWith("Sub")) && typeof x === "string" && /^(human|agent|aid1|local):/.test(x))).map(([k, x]) => [k, noAccounts(x)]))
   : v;
 const DROP_WORLD = ["entities", "mounts", "recentChat", "chatTotal"]; // DROPPED: mounts, recentChat / chatTotal
-// a riding thing's pose is where the RENDERER puts it (shared/hierarchy.js localOf, not the translator's rideOf); its own
-// v1 pos/yaw/q while it rides are DROPPED, the parent keeps {to, slot?} and non-pose fields; a v1 guard is a lock
+// a parented thing's pose is where the RENDERER puts it (shared/hierarchy.js localOf, not the translator's rideOf); its own
+// v1 pos/yaw/q while parented are DROPPED, the parent keeps {to, slot?} and non-pose fields; a v1 guard is a lock
 const POSE = new Set(["offset", "yaw", "q"]);
 // v1's parent.slot is today's parent.socket: shared/hierarchy.js (the renderer's reading) speaks the protocol
 const asSocketParent = (e: any) => (e?.parent && "slot" in e.parent ? { ...e, parent: (({ slot, ...p }) => ({ ...p, socket: slot }))(e.parent) } : e);
@@ -123,8 +122,8 @@ function oldNorm(st: any, phys: any = null) {
     // independently of shared/protocol/shaperepair.js: motion:<part> (a keyed one wins), amp, axis vectors, a pendulum's
     // 3.5 s / 0 defaults and [0, 2, 0] pivot, a whole motion's pivot is the thing's, collider exact is mesh
     if (n.comp) { const C = (n.comp = { ...n.comp }), isB = (v: any) => !!v && typeof v === "object" && !Array.isArray(v), AX: any = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };
-      // (review r7 F1) a node's name is data: a keyed motion carries node (its tag, when it was the name), and a bare one naming
-      // a part becomes motion:<partSlot(part)> {node: part} (a motion already on that node wins)
+      // a node's name is data: a keyed motion carries node (its tag, when it was the name), and a bare one naming a part
+      // becomes motion:<partSlot(part)> {node: part} (a motion already on that node wins)
       for (const k of Object.keys(C)) if (k.startsWith("motion:") && isB(C[k]) && !(typeof C[k].node === "string" && C[k].node)) C[k] = { ...C[k], node: k.slice(7) };
       if (isB(C.motion) && typeof C.motion.part === "string" && C.motion.part) { const { part, ...r } = C.motion; const key = `motion:${partSlot(part)}`;
         if (!Object.keys(C).some((k) => k.startsWith("motion:") && isB(C[k]) && C[k].node === part) && !isB(C[key])) C[key] = { ...r, node: part }; delete C.motion; }
@@ -138,12 +137,12 @@ function oldNorm(st: any, phys: any = null) {
       if (isB(C.motion) && "pivot" in C.motion) { const { pivot, ...r } = C.motion; C.motion = r; if (!isB(C.pivot) && Array.isArray(pivot) && pivot.length === 3 && pivot.every(Number.isFinite)) C.pivot = { pos: pivot }; }
       if (isB(C.motion) && C.motion.type === "pendulum" && !isB(C.pivot)) C.pivot = { pos: [0, 2, 0] };
       if (isB(C.collider) && C.collider.shape === "exact") C.collider = { ...C.collider, shape: "mesh" };
-      // declared (translate-v1@12, the shape audit's render-media-env family): a light falls off as the rig's old decay 1.7
-      // and says daytime (v1's day: false = full), no shadows; a particle Essential keeps its name (R 10-17)
+      // declared (translate-v1@12): a light falls off as the rig's old decay 1.7 and says daytime (v1's day: false = full),
+      // no shadows; a particle Essential keeps its name
       if (isB(C.light)) { const { day, shadows: _sh, ...L } = C.light; C.light = { ...L, decay: L.decay ?? 1.7, daytime: L.daytime ?? (day === false ? "full" : "dim") }; }
     }
     if (phys?.restAt[id]) n.pos = phys.restAt[id].slice();
-    if (phys?.sim.boxes && typeof e0.lib === "string" && phys.sim.boxes[e0.lib]) n.comp = { ...(n.comp ?? {}), physics: { kind: phys.dynamic?.(id) ? "dynamic" : "static", shape: phys.sim.boxes[e0.lib] } };   // @11: what the log punts (this incarnation) is dynamic, from its start (R 10-08)
+    if (phys?.sim.boxes && typeof e0.lib === "string" && phys.sim.boxes[e0.lib]) n.comp = { ...(n.comp ?? {}), physics: { kind: phys.dynamic?.(id) ? "dynamic" : "static", shape: phys.sim.boxes[e0.lib] } };   // @11: what the log punts (this incarnation) is dynamic, from its start
     // a component whose name (an x-- escape read back, else as written) has an account's and whose whole value is one: dropped (@19)
     if (n.comp && typeof n.comp === "object") n.comp = Object.fromEntries(Object.entries<any>(n.comp).filter(([k, x]) => {
       const plain = k.slice(k.lastIndexOf("/") + 1), name = /^x--(?:[0-9a-f]{2})+$/.test(plain) ? dec(plain) : plain;
@@ -156,13 +155,13 @@ function oldNorm(st: any, phys: any = null) {
     if (Array.isArray(v) && !v.length) continue; if (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length) continue; world[k] = v; }
   // DROPPED "roles.sub / bans.sub" (translate-v1@12): an account subject never reaches a value
   for (const k of ["roles", "bans"]) if (world[k] && typeof world[k] === "object") world[k] = Object.fromEntries(Object.entries<any>(world[k]).map(([n, v]) => [n, v && typeof v === "object" && !Array.isArray(v) && "sub" in v ? (({ sub, ...r }) => r)(v) : v]));
-  // DROPPED "behaviors.authorSub, and any other account in a value" (translate-v1@16; still so at @17): nor does any account-shaped sub or *Sub
+  // DROPPED "behaviors.authorSub, and any other account in a value" (translate-v1@16): nor does any account-shaped sub or *Sub
   // …but a role or ban kept by its account is kept, under its account here (no mapper): only its value is read, and a ban's
   // `by` that is an account is dropped, as the translator drops it without a mapper
   for (const k of Object.keys(world)) world[k] = (k === "roles" || k === "bans") && world[k] && typeof world[k] === "object" && !Array.isArray(world[k])
     ? Object.fromEntries(Object.entries<any>(world[k]).map(([n, v]) => [n, noAccounts(k === "bans" && v && typeof v === "object" && /^(human|agent|aid1):/.test(v.by) ? (({ by: _b, ...r }) => r)(v) : v)]))
     : noAccounts(world[k]);
-  // dropped on purpose by translate-v1 (round-2 R8): the sky's echo of who set it and when (the log says so itself)
+  // dropped on purpose by translate-v1: the sky's echo of who set it and when (the log says so itself)
   if (world.sky && typeof world.sky === "object") { const { seq, by, ...sky } = world.sky;
     if (sky.forecast && typeof sky.forecast === "object") { const { seq: _s, by: _b, ...fc } = sky.forecast; sky.forecast = fc; }
     world.sky = sky; }
@@ -185,8 +184,8 @@ function oldNorm(st: any, phys: any = null) {
   if (isO(world.grass)) { let g: any = world.grass;
     if (isLegacyArgs(g)) { const m = mapGrassArgs(g); g = { ...Object.fromEntries(Object.entries<any>(g).filter(([k]) => !["bladeHeight", "spacing", "perCell", "colorTip", "windSpeed", "lean", "fade", "fadeStart", "fadeEnd", "fadeColor", "backlight", "color"].includes(k) && !(k in m))), ...m }; }
     world.grass = g; }
-  // @11 (declared): her own law becomes today's eidosim; an engine she didn't carry keeps its name (nothing flies); an epoch
-  // her sim refused never started, so it stays a record
+  // @11 (declared): the old law becomes today's eidosim; an uncarried engine keeps its name (nothing flies); an epoch the old
+  // sim refused never started, so it stays a record
   if (phys?.sim.epoch && world.epoch) world.epoch = { sim: phys.sim.epoch.foreign ? world.epoch.sim : DEFAULT_ENGINE, tickMs: world.epoch.tickMs };
   return { ents, world };
 }
@@ -230,7 +229,7 @@ function unproject(ents0: any) {
       }
       // a closed component's v1 leftovers ride beside it as imported:<component> {key: value}: they fold back in
       for (const c of ["sky", "terrain", "grass", "epoch"]) if (comps[`${IMP}${c}`] && world[c] && typeof world[c] === "object") world[c] = { ...world[c], ...comps[`${IMP}${c}`] };
-      // translate-v1@12: an epoch her sim refused is carried whole as imported:epoch (was the imported-epoch component)
+      // translate-v1@12: an epoch the old sim refused is carried whole as imported:epoch (was the imported-epoch component)
       if (comps[`${IMP}epoch`] !== undefined && world.epoch === undefined) world.epoch = comps[`${IMP}epoch`];
       continue;
     }
@@ -266,9 +265,8 @@ function lossAt(oldSt: any, st: any, phys: any = null) {
   return { other: true };
 }
 
-// the gate's sweep is hermetic: the repo's own old-format logs (spec/fixtures), plus any PROTOCOL_WORLDS a host adds (this
-// box's real worlds, say). It never walks outside the checkout unasked: the parent directory is a different place on
-// every host. Not sweeping local worlds is reported as an OPTIONAL line the gate counts.
+// the gate's sweep is hermetic: the repo's own old-format logs (spec/fixtures) plus any PROTOCOL_WORLDS a host adds; it
+// never walks outside the checkout unasked. Not sweeping local worlds is reported as an OPTIONAL line the gate counts.
 const roots = [path.join(ENGINE, "spec/fixtures"), ...pathList(process.env.PROTOCOL_WORLDS)];
 const logs: string[] = [];
 const walk = (d: string, depth = 0) => { if (depth > 5) return; let ents: string[] = []; try { ents = fs.readdirSync(d); } catch { return; }
@@ -300,11 +298,11 @@ for (const p of logs.sort()) {
   const compareAt = (i: number) => { if (loss || i < 0) return; if (i % every && i !== body.length - 1) return; const x = lossAt(v1, now, phys); if (x) loss = { oldSeq: body[i].seq, ...x }; };
   for (let s = 1; s < r.out.length && !loss; s++) { const e = r.out[s];
     if ((e.kind === "act" && e.verb !== "translated" && !(e.verb === "repair-shapes" && e.actor === "system")) || e.kind === "say") { // `translated` (genesis's companion, translate-v1@3) and the repair marker beside it have no old entry
-      if (phys && Number.isInteger(body[k + 1]?.ts)) settle(eidosim.tickOf(phys.sim, body[k + 1].ts));   // her rests up to the next act are logged before it
+      if (phys && Number.isInteger(body[k + 1]?.ts)) settle(eidosim.tickOf(phys.sim, body[k + 1].ts));   // rests up to the next act are logged before it
       compareAt(k); k++; alive.step(body[k]); foldEntry(v1, body[k]);
       if (phys) { eidosim.simEntry(phys.sim, body[k], v1); settle(phys.sim.tick); } }
     else if (e.kind === "change") applyInPlace(now, opsOf(e), s); }
-  if (phys?.sim.epoch && !phys.sim.epoch.foreign) settle(phys.sim.tick + 100_000);   // the translator settles at the end, as her replaybench does
+  if (phys?.sim.epoch && !phys.sim.epoch.foreign) settle(phys.sim.tick + 100_000);   // the translator settles at the end, as the replaybench does
   compareAt(k);
   // the inverse folds the source only as far as the translation's acts led it: a translation that stops early would be
   // compared with a source folded to the same point and pass, so the whole source must have been consumed

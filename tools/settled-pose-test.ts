@@ -1,16 +1,11 @@
-// settled-pose-test — what a body looks like TO SOMEONE ELSE (#61).
-//
+// settled-pose-test: what a body looks like TO SOMEONE ELSE (#61). A pose handed to someone else is the SETTLED result, never a
+// frame of physics in flight: both join-snapshot paths (`restore`, your own body; `present`, everyone else's) call
+// settledPose. Pure logic, no assets (the solver's tests are tools/ragdoll-test.ts).
 //   bun tools/settled-pose-test.ts
-//
-// A POSE HANDED TO SOMEONE ELSE IS THE SETTLED RESULT, NEVER A FRAME OF PHYSICS IN FLIGHT: both join-snapshot paths
-// (`restore`, your own body; `present`, everyone else's) call settledPose, and nobody can notice the bug from inside
-// their own session. Pure logic, no assets (the solver's tests are tools/ragdoll-test.ts).
 
 import { withoutOnceAnim, ONCE_KEYS } from "../shared/onceanim.js";
 
-// Mirror of server.ts's settledPose. Kept in sync by the assertions below —
-// if the server's version changes shape, these fail loudly rather than
-// silently testing a stale copy.
+// mirror of server.ts's settledPose, held in sync by the source assertions below
 function settledPose(pose: unknown): Record<string, unknown> | null {
   if (!pose) return null;
   const { mic: _mic, hear: _hear, ...still } = withoutOnceAnim(pose as Record<string, unknown>);
@@ -59,9 +54,8 @@ const ck = (n: string, got: unknown, want: unknown) => {
   ck("  ...the underlying clip does", out.clip, "idle");
 }
 
-// ── voice state is a LIVE reading, not a place (review 09-30 S2) ──────────
-// Remembered, it came back in `restore`, a client replayed it, and the world heard a microphone state the new
-// session never had. A live sender re-sends it every packet; size and plate lift are the body, and stay.
+// ── voice state is a LIVE reading, not a place ──────────
+// remembered, a replayed `restore` would claim a mic state the new session never had; size and plate lift are the body, and stay
 {
   const talking = { clip: "idle", mic: true, hear: false, scale: 1.5, plateY: 0.3, p: [0, 0, 0] };
   const out = settledPose(talking)!;
@@ -96,8 +90,7 @@ const ck = (n: string, got: unknown, want: unknown) => {
 }
 
 // ── the mirror must not drift, and the call site must actually use it ──────
-// this file mirrors settledPose (server.ts imports the whole world), so it asserts against the SOURCE: a changed
-// function or reverted call site fails here
+// server.ts imports the whole world, so this asserts against the SOURCE: a changed function or reverted call site fails
 {
   const src = await Bun.file(new URL("../server/server.ts", import.meta.url)).text();
   ck("server still defines settledPose", /function settledPose\(/.test(src), true);

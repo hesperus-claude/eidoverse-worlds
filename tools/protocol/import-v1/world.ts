@@ -1,4 +1,4 @@
-// tools/protocol/import-v1/world.ts — translate an OLD (v1) world on disk into a NEW v4 world, once. The operator runs it
+// tools/protocol/import-v1/world.ts: translate an OLD (v1) world on disk into a NEW v4 world, once. The operator runs it
 // (bun tools/protocol/world.ts translate <v1 world> <new world>); nothing at runtime imports this directory
 // (tools/protocol/nov1-check.ts enforces it). The v1 log is read, never written (R9).
 import fs from "node:fs";
@@ -64,9 +64,9 @@ function identityMapper(old: Any[], dir: ReturnType<typeof directoryFor> | null,
   const planned: Record<string, Entry> = {}; const memo = new Map<string, string>();
   const agents = agentTokens();
   const nameKey = (n: string) => `name:${n}`;
-  // every name this log gives a person (actors, grants, genesis roles, a say's addressee), and every account it gives one
-  // (a sub, a placer's, a bySub): what a lowered ban key may mean, an account's case included. A ban's or an unban's own
-  // id is how its sender typed the name, which v1 matched in any case, so it counts only when nothing else names them.
+  // every name this log gives a person (actors, grants, genesis roles, a say's addressee) and every account (a sub, a
+  // placer's, a bySub): what a lowered ban key may mean. A ban's or unban's own id is how its sender typed the name (v1
+  // matched any case), so it counts only when nothing else names them.
   const names = new Set<string>(), banned = new Set<string>();
   for (const e of old) { const a = e?.args ?? {};
     if (typeof e?.actor === "string") names.add(e.actor);
@@ -95,8 +95,8 @@ function identityMapper(old: Any[], dir: ReturnType<typeof directoryFor> | null,
     if (!id) { id = mint ? mintId() : stable(key); planned[id] = { name: display || "someone", subs: acct ? [acct] : [], kind: acct ? "account" : "imported", since: Date.now() }; }
     if (display && planned[id]?.name === "someone") planned[id].name = display;   // a later mention brings the name
     memo.set(key, id); if (display !== null) memo.set(nameKey(display), id); return id; };
-  // every name/account pair v1's server wrote (grants, genesis roles, bans, placers, bySub) first: a person's acts may come
-  // before the grant naming their account and must land on the same id; the last account seen for a name wins (reported)
+  // every name/account pair v1's server wrote first: a person's acts may come before the grant naming their account and
+  // must land on the same id; the last account seen for a name wins (reported)
   for (const e of old) { const a = e?.args ?? {};
     if ((e?.verb === "grant" || e?.verb === "ban") && typeof a.id === "string" && typeof a.sub === "string") who(a.id, { sub: a.sub });
     if (e?.verb === "genesis") for (const [k, v] of Object.entries<Any>(a.roles ?? {})) if (k !== "*" && typeof v?.sub === "string") who(k, { sub: v.sub });
@@ -112,8 +112,7 @@ const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `
 function reportOf(srcBytes: Buffer, world: string, unparsed: number, deferred: Any[], r: Any, outLength = r.out.length) {
   const report = {
     v: 1, world,
-    // Mica, #260 (10-17): "Worlds using alpha should know they accepted translation churn." In the report, so the hash that is
-    // approved covers it (PROTOCOL.md, the trial-period paragraph).
+    // in the report, so the approved hash covers that a trial-period world accepted translation churn (PROTOCOL.md)
     trial: "This protocol is in a trial period (about a year): later versions may translate this world again, and stored data may change shape between them (PROTOCOL.md, start). Approving this report accepts that.",
     source: { file: "log.jsonl", size: srcBytes.length, sha256: crypto.createHash("sha256").update(srcBytes).digest("hex"), unparsedLines: unparsed },
     translator: TRANSLATOR, fold: v1FoldBuild(), founderKey: null,   // a translation names no founder (NO_FOUNDER): tier 0 empty
@@ -157,8 +156,8 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   // the approval is checked before anything is translated: its countersignature here, its report hash after the run
   if (approval) { const bad = approvalProblem(world, approval);
     if (bad) throw new Error(`the approval is refused: ${bad}. Nothing written`); }
-  // the bytes this translation is OF: an in-place translation checks the old log still holds exactly these before it swaps
-  // (world.ts translateInPlace; review of PR #260, world.ts:99 — a server still writing to it would lose those edits)
+  // the bytes this translation is OF: an in-place translation checks the old log still holds exactly these before it
+  // swaps (world.ts translateInPlace), or a server still writing to it would lose those edits
   const source = { size: srcBytes.length, sha256: crypto.createHash("sha256").update(srcBytes).digest("hex"), unparsedLines: unparsed };
   // a dialect-3 log's rests are plain changes by `sim`, and the live host's sim layer reads the sealed text before anything
   // is written. Every v1 person becomes an opaque directory id (an account keeps the one it wears), written only after the
@@ -166,7 +165,7 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   const dir = directoryFor(path.dirname(destDir));
   const { who, planned, idOfName } = identityMapper(old, dir);
   const cust = custodyAt(custodyFileIn(path.dirname(destDir)));
-  // a model's bytes (R 10-17: the path is the reference; this is model-hash beside it): the original bytes on this host, hashed;
+  // a model's bytes (the path is the reference; this is model-hash beside it), hashed from this host's originals and
   // recorded so this server answers /eido/sha256/<hex> for them
   const addressed = new Map<string, string>();
   const content = (p: string) => { const h = contentAddressOf(p); if (!h) return null; addressed.set(h, p); if (!storeNameMatches(p)) renamedBlobs.push(p); return `sha256:${h}`; };
@@ -179,7 +178,7 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   // the approval is of the report of THESE bytes, translated as this run translated them (the dry run's numbers are this run's)
   if (approval) { const now = reportOf(srcBytes, world, unparsed, deferred, r, r.out.length - 1).hash;
     if (now !== approval.report) throw new Error(`the approval is refused: it approves report ${approval.report}, but the report of the log being translated hashes to ${now} (the old log or the tool changed since the dry run). Nothing written`); }
-  // salted and signed like every line the authority writes (§2.4; round-2 review R3): a translated world is a chained log
+  // salted and signed like every line the authority writes (§2.4): a translated world is a chained log
   const text = seal(r.out, { sign: (m: string) => cust.sign(m) }).map((e: Any) => JSON.stringify(e)).join("\n") + "\n";
   // the strict reader must accept every line, and fold to the translator's own final state, before the file exists
   const back = fold(readLog(text));
@@ -188,7 +187,7 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   // and it carries no account subject anywhere (PROTOCOL §9.2; translate-v1 @16): the translator drops or maps every one whose
   // shape it knows, and a log that still holds one, from a shape it missed, is refused here rather than written for good
   { const acct = accountIn(readLog(text)); if (acct) throw new Error(`the translated log would carry an account subject at seq ${acct.seq}: ${acct.path} (PROTOCOL §9.2: no account subjects in values): nothing written`); }
-  // a physics-era world (translate-v1@11): her sim's outcomes are plain logged writes, so nothing in the text may ask a
+  // a physics-era world (translate-v1@11): its sim's outcomes are plain logged writes, so nothing in the text may ask a
   // reader to fly an engine (no launch, no digest), and the live host's sim layer (livehost.ts: no catalogue of its own)
   // must read the whole history without one disagreement
   let sim: Any = null;
@@ -208,16 +207,16 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   // back), so a rerun isn't refused as "already holds a world"; the shared directory is written last, once nothing can fail
   const touched: Touched = [{ file: path.join(destDir, "world.jsonl"), before: null }];
   try {
-    // lead's ruling 10-18: a LOAD never writes, so the translation runs the maintenance command on its own output here: the
-    // v1 sockets maps become socket children (lift-sockets, the system's act with by: "translate"); the renames and the shape
-    // repair are already in the projection and write nothing. A translated world therefore needs no step when it is served.
+    // a LOAD never writes, so the translation runs the maintenance command on its own output: the v1 sockets maps become
+    // socket children (lift-sockets, by: "translate"); the renames and shape repair are already in the projection, so a
+    // translated world needs no step when served
     const live = openLive(destDir, world, { catalogue: ENGINE_CATALOGUE, scripts: null });
     const m: Any = maintain(live, { by: "translate" });
     if (m.refused) throw new Error(`the translated world could not be lifted: ${m.refused.code}: ${m.refused.reason}`);
     const maintenance = { lifted: m.steps.lift.made.length, liftFailed: m.steps.lift.failed, renamed: m.steps.rename.renamed.length, repaired: m.repaired.length, entries: live.entries.length };
     if (maintenance.liftFailed.length) throw new Error(`the translated world's seats could not all be lifted: ${JSON.stringify(maintenance.liftFailed).slice(0, 300)}`);
-    // v1 bans are the moderator's record in v4 (the authority reads bans only from world.mod.jsonl): file each one there, or a
-    // translated world quietly unbans everyone (component review, world-settings #3)
+    // v1 bans are the moderator's record in v4 (bans are read only from world.mod.jsonl): file each one there, or a
+    // translated world quietly unbans everyone
     const banned = Object.entries<Any>(back.entities?.["@world"]?.c ?? {}).filter(([k]) => k.startsWith("imported-bans:"));
     if (banned.length) { const modFile = path.join(destDir, "world.mod.jsonl"); touched.push({ file: modFile, before: fs.existsSync(modFile) ? fs.readFileSync(modFile) : null }); const ml = modLogAt(modFile);
       for (const [k, v] of banned) ml.appendMod({ ts: Number.isInteger(v?.ts) ? v.ts : Date.now(), actor: "system", verb: "ban", who: k.slice("imported-bans:".length), ...(v?.reason ? { reason: String(v.reason) } : {}), translated: true }); }

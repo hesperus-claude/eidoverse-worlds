@@ -1,15 +1,8 @@
-// skywatch-test — the ambient sky percept, serverless.
-//
-// The contract: resting agents must HEAR the sky change,
-// not merely be able to ask. One ambient event per meaningful boundary —
-// forecast segment change, manual override landing/expiring, coarse day-phase
-// crossing — deduped by signature, derived from the same pure oracle look()
-// uses, never a synthetic log verb, never a continuous clock.
-//
-// Run: bun tools/skywatch-test.ts
-//
-// A bare worktree also needs client/node_modules and mcpl/node_modules linked (mcpl/agent.ts pulls three/webgpu),
-// or this dies at import.
+// skywatch-test: the ambient sky percept, serverless. Resting agents must HEAR the sky change, not merely be able to ask:
+// one ambient event per meaningful boundary (forecast segment, manual override landing/expiring, coarse day-phase),
+// deduped by signature, from the same pure oracle look() uses; never a synthetic log verb, never a continuous clock.
+// A bare worktree needs client/node_modules and mcpl/node_modules linked (mcpl/agent.ts pulls three/webgpu).
+//   Run: bun tools/skywatch-test.ts
 
 import { WorldAgent } from "../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../shared/forecast.js";
@@ -39,7 +32,7 @@ async function rig(args: any, who = "antra") {
   return { ag: A, events, door };
 }
 
-// ---------------------------------------------------------------- A: forecast boundaries (rate 0 — no phase noise)
+// ---------------------------------------------------------------- A: forecast boundaries (rate 0: no phase noise)
 
 {
   const { ag, events } = await rig({ hours: 12, rate: 0, forecast: policyArgs });
@@ -60,7 +53,7 @@ async function rig(args: any, who = "antra") {
   ag.checkSky(seg0.endMs + 3000);
   check("deduped: repeated checks in the same segment add nothing", events.length === 1);
 
-  // walk three more boundaries — one event each, all states from the policy
+  // walk three more boundaries: one event each, all states from the policy
   const seg1 = segmentAt(p, seg0.endMs + 1000);
   const seg2 = segmentAt(p, seg1.endMs + 1000, seg1);
   const seg3 = segmentAt(p, seg2.endMs + 1000, seg2);
@@ -74,15 +67,15 @@ async function rig(args: any, who = "antra") {
 
 {
   const { ag, events } = await rig({ hours: 8, rate: 24, weather: "clear" });
-  ag.checkSky(T0 + 1000);                       // world hour ~8 — day; init silent
+  ag.checkSky(T0 + 1000);                       // world hour ~8: day; init silent
   check("phase init is silent", events.length === 0);
-  ag.checkSky(T0 + (4 / 24) * HOUR);            // world hour 12 — still day
+  ag.checkSky(T0 + (4 / 24) * HOUR);            // world hour 12: still day
   check("no event within one phase", events.length === 0);
-  ag.checkSky(T0 + (10.5 / 24) * HOUR);         // world hour 18.5 — dusk
+  ag.checkSky(T0 + (10.5 / 24) * HOUR);         // world hour 18.5: dusk
   check("dusk crossing emits", events.length === 1 && /dusk/.test(events[0]?.text), events[0]?.text);
-  ag.checkSky(T0 + (13.5 / 24) * HOUR);         // world hour 21.5 — night
+  ag.checkSky(T0 + (13.5 / 24) * HOUR);         // world hour 21.5: night
   check("night crossing emits", events.length === 2 && /night/.test(events[1]?.text), events[1]?.text);
-  ag.checkSky(T0 + (14 / 24) * HOUR);           // world hour 22 — still night
+  ag.checkSky(T0 + (14 / 24) * HOUR);           // world hour 22: still night
   check("still-night tick is quiet", events.length === 2);
   check("no weather-change events without a forecast or verb", events.every((e: any) => !/world weather/.test(e.text)));
 }
@@ -97,8 +90,7 @@ async function rig(args: any, who = "antra") {
   const tO = T0 + 20 * MIN;
   const wr = await door.act("weather", { weather: "storm", weatherK: 1.1 }, { who: "digi", at: tO });
   check("the door takes the weather override", wr.ok, JSON.stringify(wr.refused));
-  // boundary events between init and the override (if any) are legitimate —
-  // count from here
+  // boundary events between init and the override are legitimate: count from here
   const before = events.length;
   ag.checkSky(tO + 1000);
   check("override landing emits with the actor's name",
@@ -124,9 +116,7 @@ async function rig(args: any, who = "antra") {
   check("no sky at all is a no-op, not a crash", !boomed);
 }
 
-// the late-join parity leg: the watcher keys off the SAME fold the door
-// writes, so a joiner adopting the cut resumes the watch without a spam
-// burst — a late joiner's skyState is the live one's
+// late-join parity: the watcher keys off the SAME fold the door writes, so a joiner adopting the cut resumes without a spam burst
 {
   const live = await rig({ hours: 12, rate: 0, forecast: policyArgs });
   const ag = new WorldAgent({ name: "late" }) as any; const events: any[] = [];
@@ -160,7 +150,7 @@ async function rig(args: any, who = "antra") {
 // folded fields preserved; currentHour/currentWeather/source/description ADDED alongside, never instead
 
 {
-  const AZ = 200 * Math.PI / 180;   // radians (shape audit 10-16: azimuth was degrees)
+  const AZ = 200 * Math.PI / 180;   // radians
   const { ag } = await rig({ hours: 8, rate: 24, clouds: "cumulus", azimuth: AZ, forecast: policyArgs });
   ag.look();
   const sky = ag.worldInfo.sky;
@@ -189,15 +179,14 @@ async function rig(args: any, who = "antra") {
 // ambient day-phase perception works with no top-level rate
 
 {
-  // accelerated commons shape, then the owner flips to real time re-issuing
-  // the standing bag (the tuner's gather() spread — the seq 4777 shape)
+  // accelerated commons shape, then the owner flips to real time re-issuing the standing bag (the tuner's gather() spread)
   const { ag, events, door } = await rig({ hours: 6.8, rate: 24, clouds: "cumulus", forecast: policyArgs }, "mica");
   const { ts: _ts, ...standing } = ag.skyState;
   const flip = await door.act("sky", { ...standing, clock: "real", tz: "America/Los_Angeles" }, { who: "antra", at: T0 + HOUR, live: false });
   check("#65 the door takes the clock flip (the standing bag re-issued)", flip.ok, JSON.stringify(flip.refused));
   ag.look();
   const sky = ag.worldInfo.sky;
-  // shape audit 10-16 (render-media-env §13): the tz alone says the wall clock governs; hours/rate stay as the rated fallback
+  // the tz alone says the wall clock governs (render-media-env §13); hours/rate stay as the rated fallback
   check("#65 look(): the clock flip is stored as its tz (no clock field, no dormantRated park)",
     sky.tz === "America/Los_Angeles" && sky.clock === undefined && sky.dormantRated === undefined,
     JSON.stringify({ tz: sky.tz, clock: sky.clock, dormant: sky.dormantRated }));
@@ -217,8 +206,7 @@ async function rig(args: any, who = "antra") {
   ag.checkSky(night);
   const before = events.length;
   ag.checkSky(dawn);
-  // (a forecast segment boundary may also land in the 20min window — only
-  // the phase crossing itself is under test here)
+  // (a forecast boundary may also land in the 20min window: only the phase crossing is under test)
   check("#65 ambient day-phase crossing still fires under a real clock",
     events.slice(before).some((e: any) => /dawn/.test(e?.text ?? "")),
     JSON.stringify(events.slice(before)));

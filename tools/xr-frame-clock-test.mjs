@@ -1,9 +1,6 @@
-// xr-frame-clock-test — who owns window.requestAnimationFrame across a session (#197).
-//
-// This is the teardown/re-entry half of the session lifecycle, and it needs no renderer and no real
-// XRSession: the shim touches exactly three members (requestAnimationFrame, cancelAnimationFrame,
-// and an 'end' that flips a latch), so the stand-in below cannot invent product shape — there is
-// almost no shape to invent. The compile/curtain/pose half is headset-only.
+// xr-frame-clock-test: who owns window.requestAnimationFrame across a session (#197); the teardown/re-entry half of the
+// lifecycle (the compile/curtain/pose half is headset-only). The shim touches only requestAnimationFrame,
+// cancelAnimationFrame and an 'end' that flips a latch, so the stand-in has almost no product shape to invent.
 //
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xr-frame-clock-test.mjs
 //
@@ -27,7 +24,7 @@ const check = (name, ok, detail = '') => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
 
-/** A window whose clock we can watch. Ids are distinguishable so a frame can be traced to its owner. */
+/** A window whose clock we can watch; ids trace a frame to its owner. */
 function fakeWindow() {
   const w = { calls: [], cancelled: [], _n: 0 };
   w.requestAnimationFrame = (cb) => { w.calls.push(cb); return `win-${++w._n}`; };
@@ -59,16 +56,15 @@ console.log('one session, start to finish:');
   check('while presenting, a frame request goes to the SESSION clock',
     win.requestAnimationFrame(() => {}) === 'ses-1' && ses.calls.length === 1);
   check('…and not to the window', win.calls.length === 0);
-  // what the callback RECEIVES: the timestamp, and no XRFrame (dropped ON PURPOSE: the shim stands in for
-  // window.requestAnimationFrame, whose callback takes one argument). Pinned both ways
+  // what the callback RECEIVES: the timestamp, and no XRFrame (dropped ON PURPOSE: window.requestAnimationFrame's callback
+  // takes one argument). Pinned both ways
   { let gotT, gotF; const frame = { pose: 'x' };
     win.requestAnimationFrame((t, f) => { gotT = t; gotF = f; });
     ses.tick(1234.5, frame);
     check('the session timestamp reaches the caller', gotT === 1234.5, `got=${gotT}`);
     check('…as the FIRST argument, with the XRFrame deliberately dropped (window.rAF shape)',
       gotF === undefined, `second arg=${gotF}`);
-    // tick() drained the queue and this probe added an id; later checks count queued callbacks and
-    // ids, so put both back exactly as they were before this block.
+    // tick() drained the queue and this probe added an id: put both back for the later counting checks
     ses.calls.push(() => {}); ses._n = 1; }
 
   // the session ends; the latch flips BEFORE the restore runs
@@ -77,9 +73,7 @@ console.log('one session, start to finish:');
   check('between "end" and the restore, frames fall back to the native clock rather than a dead session',
     win.requestAnimationFrame(() => {}) === 'win-1' && ses.calls.length === 1);
 
-  // the restore itself. PIN THE NEGATIVE FIRST (#197 review, 2026-09-20): clockIsRestored was only
-  // ever called in the already-restored state, so every term in it was dead — gutting the whole
-  // predicate to `return true` passed green. Each clock is now checked on its own.
+  // the restore itself. PIN THE NEGATIVE FIRST, or every term of clockIsRestored is dead; each clock is checked on its own
   check('before the restore the clock is NOT the one we saved', clockIsRestored(win, nat) === false);
   win.requestAnimationFrame = nat.raf;
   check('restoring only rAF is not enough — cancel must come back too', clockIsRestored(win, nat) === false);
@@ -92,9 +86,8 @@ console.log('one session, start to finish:');
 
 console.log('\nre-entry — the failure that save-once exists to prevent:');
 {
-  // Assert BEHAVIOUR, not identity: captureNative returns bound functions, so `saved.raf` is never
-  // `===` the original — a reference check here would fail on correct code. What matters is where a
-  // frame actually lands, which is also what breaks in production when the save-once rule is broken.
+  // assert BEHAVIOUR, not identity: captureNative returns bound functions, so `saved.raf` is never `===` the original;
+  // what matters is where a frame lands
   const win = fakeWindow();
   let saved = null;
   const sessions = [];
@@ -114,16 +107,14 @@ console.log('\nre-entry — the failure that save-once exists to prevent:');
     check(`session ${n}: a desktop frame reaches the WINDOW after teardown`,
       win.calls.length === before + 1 && String(id).startsWith('win-'), `id=${id}`);
   }
-  // The double-capture bug is invisible on entry 1 and fatal on entry 2: the second capture would
-  // save session 1's SHIM as "native", so the restore would hand frames to the dead first session.
+  // double-capture is invisible on entry 1 and fatal on entry 2: session 1's SHIM saved as "native" hands frames to the dead session
   check('after TWO sessions a frame still reaches the window, not the first session',
     sessions[0].calls.length === 1, `session 1 received ${sessions[0].calls.length} frames (1 = only its own)`);
   check('…and not the second either', sessions[1].calls.length === 1);
   check('the native clock was captured exactly once', clockIsRestored(win, saved));
 }
 
-// save-once only BITES on a re-enter before the first teardown completes (the loop above restores between entries,
-// which hides it)
+// save-once only BITES on a re-enter before the first teardown completes (the loop above restores between entries)
 console.log('\nre-enter BEFORE the first teardown — where double-capture actually bites:');
 {
   const win = fakeWindow();
@@ -179,14 +170,14 @@ console.log('\nthe wiring:');
   check('xr.js installs the shim through them', /frameClock = installEntryClock\(\{/.test(xr));
   check('the emulator case is decided INSIDE the module, not at the call site',
   !/emulated:/.test(xr) && /const emulated = !!globals\?\.IWER;/.test(readFileSync(join(dir, '../client/lib/xr_frame_clock.js'), 'utf8')));
-  // ORDERING: the restore listener must be registered before setSession, so it runs before three's
-  // own 'end' listener restarts the desktop loop through window.requestAnimationFrame.
+  // ORDERING: the restore listener must be registered before setSession, so it runs before three's own 'end' listener
+  // restarts the desktop loop through window.requestAnimationFrame
   const restoreAt = xr.indexOf("session.addEventListener('end'");
   const setSessionAt = xr.indexOf('renderer.xr.setSession(session)');
   check('the install — which registers the restore listener — runs BEFORE setSession',
   xr.indexOf('installFrameClock({') < xr.indexOf('await renderer.xr.setSession('));
-  // The restore lives in installFrameClock, generation-guarded. xr.js must NOT restore on its own: a
-  // second unguarded listener there let a stale session hand the clock back mid-session (agent review).
+  // the restore lives in installFrameClock, generation-guarded: xr.js must NOT restore on its own, or a stale session
+  // hands the clock back mid-session
   check('the OWNER restores both clocks',
     /win\.requestAnimationFrame = native\.raf; win\.cancelAnimationFrame = native\.caf;/.test(readFileSync(join(dir, '../client/lib/xr_frame_clock.js'), 'utf8')));
   check('…and xr.js does not restore behind its back', !/window\.requestAnimationFrame = nativeRAF/.test(xr));

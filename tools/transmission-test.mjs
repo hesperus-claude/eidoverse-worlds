@@ -2,9 +2,7 @@
 // WebGPU renderer builds transmission only for MeshPhysicalNodeMaterial, so a plain MeshPhysicalMaterial renders as
 // nothing, silently. CALLS prepareObject() on a real mesh and asserts on what comes back; no source regex.
 
-// The Avatar constructor makes a nameplate sprite through document/canvas, so
-// the DOM has to exist before avatar.js is imported. Same registrator
-// chat-log-test and frames-resize-test use.
+// the Avatar constructor makes a nameplate sprite through document/canvas, so the DOM must exist before avatar.js imports
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 // happy-dom has no 2D canvas context and the nameplate draws text: an inert recorder will do (no pixel asserts here)
@@ -29,8 +27,7 @@ plugin({
   name: 'core-stub',
   setup(build) {
     build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
-    // lightrig pulls warmqueue -> loadwork, which calls requestAnimationFrame
-    // at module scope. Same stub avatar-test and parts-test use.
+    // lightrig pulls warmqueue -> loadwork, which calls requestAnimationFrame at module scope
     build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
     // avatar.js pulls assets.js, which builds a KTX2Loader against a real renderer: stub it so the outcome doesn't
     // depend on module-cache order
@@ -42,8 +39,7 @@ plugin({
 const { readFileSync } = await import('node:fs');
 const { THREE } = await import('./core-stub.mjs');
 
-// The stand-in for MeshPhysicalNodeMaterial lives in core-stub.mjs, which owns
-// the THREE namespace it re-exports (a module namespace object is frozen).
+// the MeshPhysicalNodeMaterial stand-in lives in core-stub.mjs, which owns the THREE namespace it re-exports (frozen)
 
 const { prepareObject } = await import('../client/lib/materials.js');
 // TOP-LEVEL, once: a dynamic import inside a test can resolve `./core.js` without the plugin's substitution on a cold cache
@@ -97,9 +93,7 @@ console.log('TRANSMISSION -- a correct file the renderer could not honour');
         out?.name === 'Glass', `got ${out?.name}`);
   check('it is in the transparent pass', out?.transparent === true);
 
-  // Colour/Vector types must be COPIED, not shared: assigning them would leave
-  // the new material pointing at the old one's Color instance, so a later tweak
-  // to either would silently move the other.
+  // Colour/Vector types must be COPIED, not shared, or a later tweak to either silently moves the other
   check('colour came across by VALUE, not by reference',
         out?.color !== src.color
         && Math.abs(out.color.r - 0.96) < 1e-6
@@ -136,7 +130,7 @@ console.log('\nSHARING -- one source material, one replacement');
         a.material === b.material ? '' : 'two node materials for one source');
   check('...carrying the value', a.material.transmission === 0.9);
 
-  // And a mesh added LATER, in a separate pass, still shares.
+  // and a mesh added LATER, in a separate pass, still shares
   const c = new THREE.Mesh(new THREE.BoxGeometry(), src);
   const root2 = new THREE.Group(); root2.add(c);
   prepareObject(root2, { kind: 'model' });
@@ -145,9 +139,7 @@ console.log('\nSHARING -- one source material, one replacement');
 
 console.log('\nAUTHORED ZERO -- ?? not ||');
 {
-  // A lamp material authored at emissiveIntensity 0 (starts dark) must not be
-  // "restored" to 1. `|| 1` did exactly that, and the pooled material then
-  // came back brighter than it was written.
+  // a lamp material authored at emissiveIntensity 0 (starts dark) must not be "restored" to 1 (`|| 1`) and pooled brighter
   const av = readFileSync(`${HERE}/../client/lib/avatar.js`, 'utf8');
   check('the lamp base uses ?? so an authored zero survives',
         /base: m\.emissiveIntensity \?\? 1/.test(av) &&
@@ -192,9 +184,8 @@ console.log('\nTHE AVATAR ITSELF -- build-new -> dispose-old, and pool -> rewear
   const lampsOf = (owner) => rigDebug().requests.filter((r) => r.key.startsWith(`lamp:${owner}`)).length;
   const mine = (id) => rigDebug().requests.filter((r) => r.key.includes(`body:${id}`)).length;
 
-  // B2: THE SWAP. mybody.js builds the NEW body and then disposes the old, so
-  // an owner keyed on the identity means the old body's dispose deletes the
-  // live lamp. mica measured requests 1 -> 0.
+  // B2: THE SWAP: mybody.js builds the NEW body, then disposes the old, so an owner keyed on the identity lets the old
+  // body's dispose delete the live lamp
   const v1 = glowingVrm();
   const oldBody = new Avatar('mythos', v1, {});
   check('a glowing body registers a lamp', mine('mythos') === 1, `${mine('mythos')}`);
@@ -237,15 +228,14 @@ console.log('\nLAMP LIFECYCLE -- the rig\'s own contract');
         `${left} left`);
   releaseOwner('body:mythos:2');
 
-  // ...and the collision itself, so the test states what used to happen.
+  // ...and the collision itself, so the test states what used to happen
   requestLight('lamp:body:janus:0', { owner: 'body:janus', intensity: 10 });
   releaseOwner('body:janus');
   check('(control) a SHARED owner key does take the other body down',
         rigDebug().requests.filter((r) => /janus/.test(r.key)).length === 0);
 
-  // B6: intensity must NOT dirty slot assignment -- the rig recomputes at most
-  // every 600ms and assignment reads tier and camera distance, never intensity.
-  // A breathing lamp patches this 60x a second.
+  // B6: intensity must NOT dirty slot assignment: the rig recomputes at most every 600ms from tier and camera distance,
+  // never intensity, and a breathing lamp patches this 60x a second.
   //
   // start from a CLEAN flag (a fresh requestLight leaves assignDirty true): updateRig(), confirm it cleared, then patch
   requestLight('probe:0', { owner: 'probe', intensity: 5 });

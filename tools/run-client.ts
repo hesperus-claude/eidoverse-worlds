@@ -1,4 +1,4 @@
-// tools/run-client.ts — every tools/*-{test,check} and tools/protocol/*-{test,check}, one command.
+// tools/run-client.ts: every tools/*-{test,check} and tools/protocol/*-{test,check}, one command.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/run-client.ts --import-only    each file loads: no SyntaxError, no
 //                                                                                 "Export named … not found", no missing module
@@ -6,14 +6,12 @@
 //                                                                                 dead at import / timed out / env / skipped
 //   … --jobs 4  --timeout 90  --slow (run the SLOW table too)  --unreached (list only)  <name-fragment> … (only those)
 //
-// A test whose stub or import graph broke dies before its first check, silently; Bun fails the import loudly, so loading
-// each file is the whole stub-contract test. Exit 1 on any dead-at-import file (and, in the full mode, on any red or
-// timed-out one; a file that is merely long belongs in the SLOW table).
+// A test whose stub or import graph broke dies before its first check, silently; loading each file is the stub-contract
+// test. Exit 1 on any dead-at-import file (full mode: also any red or timed-out one; a merely long file goes in SLOW).
 // Every run lists the files no other runner reaches (tools/protocol/run.ts, package.json scripts): this one is theirs.
-// gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some tools/*-test files start a headless
-// Chromium at their top level. So the files that launch one (the file or a local module it imports calls scratchBench,
-// playwright, puppeteer, a --remote-debugging-port Chrome) run one at a time in their own lane, beside the --jobs others:
-// never two Chromiums at once from here. tools/protocol/run.ts keeps this runner in its browser lane.
+// gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some start a headless Chromium at top
+// level, so those (scratchBench, playwright, puppeteer, a --remote-debugging-port Chrome, directly or via a local
+// import) run one at a time in their own lane: never two Chromiums at once. run.ts keeps this runner in its browser lane.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, relative, basename } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -30,7 +28,7 @@ const JOBS = opt("--jobs", importOnly ? 6 : 2);
 const TIMEOUT_S = opt("--timeout", importOnly ? 15 : 90);
 const only = args.filter((a, i) => !a.startsWith("--") && !["--jobs", "--timeout"].includes(args[i - 1]));
 
-// longer than any sane per-file budget on this box (the 10-12 sweep: still running at 40 s); run with --slow
+// longer than any sane per-file budget on this box; run with --slow
 const SLOW: Record<string, string> = {
   "audio-upload-test.ts": "uploads through a real server and transcodes",
   "image-upload-test.ts": "uploads through a real server and runs libvips",
@@ -59,9 +57,8 @@ for (const [, file] of SUITES) reached.add(rel(join(ROOT, "tools/protocol", file
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 for (const s of Object.values(pkg.scripts ?? {}) as string[]) for (const m of s.matchAll(/tools\/[\w./-]+/g)) reached.add(m[0]);
 const unreached = files.map(rel).filter((p) => !reached.has(p));
-// --skip-suites: the gate runs each of its own suites in full (a load error fails that suite), so loading them here
-// again is the same check twice; on windows-latest those 26 files, each run to the 15 s cap, were what pushed the lane
-// past its budget (358 s, 478 s, then >1010 s on three runs, 10-23)
+// --skip-suites: the gate runs each of its own suites in full, so loading them here again is the same check twice (and
+// pushed the windows lane past its budget)
 const gateSuite = new Map<string, string>(); for (const [n, file] of SUITES) gateSuite.set(rel(join(ROOT, "tools/protocol", file.split(" ")[0])), n);
 
 if (flag("--unreached")) {
@@ -103,8 +100,7 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
     if (timedOut) return done({ file, kind: "timeout", why: `still running at ${TIMEOUT_S} s`, ms, tail });
     if (code === 0) return done({ file, kind: "pass", ms });
     if (code === 2 && /no browser|no chrome|chromium|no gpu|webgpu/i.test(out)) return done({ file, kind: "env", why: tail.split("\n").pop(), ms, tail });
-    // the avatar corpus is gitignored (assets/opt/eidoverse/assets/vrms): a worktree has none until it is linked, and no
-    // host here has every rig a suite names (princess0)
+    // the avatar corpus is gitignored (assets/opt/eidoverse/assets/vrms): a worktree has none until linked, and no host has every rig
     const corpus = /ENOENT[^\n]*assets\/opt\/eidoverse|(\w+) fixture required/.exec(out);
     if (corpus) return done({ file, kind: "env", why: corpus[1] ? `the avatar corpus lacks ${corpus[1]}` : "no avatar corpus: ln -s <an asset root>/assets assets/opt/eidoverse/assets", ms, tail });
     done({ file, kind: "red", why: `exit ${code}`, ms, tail });

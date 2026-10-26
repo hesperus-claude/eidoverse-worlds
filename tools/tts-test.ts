@@ -1,14 +1,6 @@
-// tts-test — the synthesizer, executed (#91 B2).
-//
+// tts-test: the synthesizer, executed (#91 B2). Deterministic, dependency-free (fake generator/writer/engine/OPFS/worker);
+// the negative control at the bottom proves the feature can't be disconnected while every suite stays green.
 //   bun tools/tts-test.ts
-//
-// Deterministic, dependency-free: fake generator/writer/engine/OPFS/worker.
-// Exists because review caught that every green suite quoted by #91 exercised
-// #90's plumbing — "the entire new feature could be disconnected and every
-// quoted suite would still pass." The negative control at the bottom makes
-// that structurally false. First catch, before a single check ran: a dangling
-// `onRebuild` in ensureGenerator's rebuild path — ReferenceError at runtime,
-// invisible to the bundler, in exactly the recovery this suite pins.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
@@ -83,8 +75,7 @@ class FakePC {
 }
 (globalThis as Record<string, unknown>).RTCPeerConnection = FakePC;
 
-// engine: a deterministic "synthesizer" — 1000 samples of known pcm per call,
-// with controllable latency and failure.
+// engine: a deterministic "synthesizer": 1000 samples of known pcm per call, with controllable latency and failure
 let synthCalls: string[] = [];
 let synthDelay = 5;
 let synthFail = false;
@@ -95,8 +86,7 @@ const engine = async (text: string) => {
   return { pcm: new Int16Array(1000).fill(7), sampleRate: 22050 };
 };
 
-// ---- module substitution (voice-lifecycle doctrine): core.js constructs a
-// WebGPU renderer at import; swap the non-audio siblings for the stubs.
+// ---- module substitution: core.js constructs a WebGPU renderer at import; swap the non-audio siblings for the stubs
 const stubs = await import("./voice-stubs.mjs");
 const { mock } = await import("bun:test");
 for (const m of ["core", "net", "ui", "controller", "remotes"])
@@ -149,9 +139,8 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMicOn = () => stubMicOn;
   (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMic = async () => {
     stubMicOn = !stubMicOn;
-    // The real transport routes the device through micstate's gate and reports
-    // liveness (voicesfu.js:447-449) — the lane is what makes micOn() true and
-    // what registers the mic producer that outranks the synth. Mirror both.
+    // the real transport routes the device through micstate's gate and reports liveness (voicesfu.js): that lane makes
+    // micOn() true and registers the mic producer that outranks the synth. Mirror both.
     if (stubMicOn) { voice.gateFor(new (globalThis as Record<string, any>).MediaStream()); voice.setMicLive(true); }
     else { voice.gateRelease(); voice.setMicLive(false); }
     return stubMicOn;
@@ -167,7 +156,7 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   await sleep(30);
 }
 
-// one producer on the wire across mic/TTS handoffs: tools/voicesource-real-test.mjs, mic-resume-after-synth-test.mjs,
+// one producer on the wire across mic/TTS handoffs: also tools/voicesource-real-test.mjs, mic-resume-after-synth-test.mjs,
 // tts-publishes-mic-off-test.mjs and tools/sfu-test.ts
 
 console.log("\n— mic priority: both orderings, repeated cycles, no dual producer —");
@@ -179,8 +168,8 @@ console.log("\n— mic priority: both orderings, repeated cycles, no dual produc
   const gen = tts.ensureGenerator();
   vsrc.notifySynthTrackChanged(gen);      // what enabling does via the hook
   await sleep(20);
-  // ordering B: mic ON wins. The pacer-stop on a live takeover is the transport's (voicesource-real-test owns it); here:
-  // enabling TTS while the mic is live must NOT start the pacer (tts.js's !micLive gate)
+  // ordering B: mic ON wins. The pacer-stop on a live takeover is the transport's (voicesource-real-test); here, enabling
+  // TTS while the mic is live must NOT start the pacer (tts.js's !micLive gate)
   await voice.toggleMic();
   await sleep(50);
   check("mic ON while TTS enabled: mic wins (micOn true)", voice.micOn() === true);
@@ -282,16 +271,14 @@ console.log("\n— voicestore: identity is digests; remember/forget round-trip �
   const idC = await store.voiceIdentity(onnx, cfgB);
   check("same model, different config → DIFFERENT voice identity", idC.id !== idA.id, `${idA.id} vs ${idC.id}`);
   check("joint id carries both digests", idA.id.includes("+") && idA.id.split("+").length === 2, idA.id);
-  // both variants can be remembered side by side — distinct ids can't clobber
+  // both variants can be remembered side by side: distinct ids can't clobber
   check("model+cfgA and model+cfgB coexist as distinct rows",
     idA.id !== idC.id && idA.modelSha256 === idC.modelSha256 && idA.configSha256 !== idC.configSha256);
 }
 
 console.log("\n— negative control: a disconnected feature must FAIL this suite —");
 {
-  // If tts.js stopped registering its provider, or speak() stopped writing to
-  // the generator, the checks above go red. Prove the harness sees the wire:
-  // break it on purpose and confirm detection.
+  // negative control: break the wire on purpose and confirm the harness detects it
   written.length = 0;
   const before = written.length;
   await tts.speak("control");

@@ -12,8 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
 
-// A free port unless PORT names one: on a fixed default, another server
-// already listening there would answer this test's joins.
+// a free port unless PORT names one: on a fixed default another server already listening would answer this test's joins
 const PORT = Number(process.env.PORT ?? (() => {
   const s = Bun.serve({ port: 0, fetch: () => new Response() });
   const port = s.port;
@@ -39,9 +38,8 @@ function connect(): Promise<Sock> {
     ws.onerror = (e) => reject(e);
   });
 }
-/** Sends a join and waits for its snapshot. Returns the messages that came
- *  after the join was sent, and the machine's time before the send and at
- *  the snapshot (the server runs on this machine, so it reads the same clock). */
+/** Sends a join and waits for its snapshot. Returns the messages after the send, and the machine's time before the send
+ *  and at the snapshot (the server runs on this machine, so it reads the same clock). */
 async function joinWorld(s: Sock, msg: Record<string, unknown>) {
   const from = s.msgs.length;
   const sentAt = Date.now();
@@ -83,9 +81,7 @@ try {
   const eye = await connect();
   checkJoin("a spectator's join", await joinWorld(eye, { world: WORLD, id: "eye", spectate: true, clock: true }));
   checkJoin("a travel to another world on the same socket", await joinWorld(ra, { world: `${WORLD}-b`, id: "ra", clock: true }));
-  // A join that doesn't ask gets the messages it always did: into a world
-  // that already exists (no grant for a first joiner), its first message is
-  // the snapshot, and no clock comes at all.
+  // a join that doesn't ask gets what it always did: into an existing world its first message is the snapshot, no clock
   const plain = await connect();
   const pr = await joinWorld(plain, { world: WORLD, id: "plain", spectate: true });
   check("a join that doesn't ask for the clock gets the snapshot as its first message",
@@ -107,8 +103,7 @@ try {
   agent.localNow = () => ownClock() - AGENT_BEHIND;
   const { LEAK_MS_PER_S, LEAK_MAX_MS } = await import("../shared/clockoffset.js");
   const leakFor = (ms: number) => Math.min(LEAK_MAX_MS, LEAK_MS_PER_S * ms / 1000);
-  // Each fold during the join is recorded with the agent's clock read just
-  // before and just after it, which bracket the clock it took the sample at.
+  // each fold during the join is recorded with the agent's clock read just before and after it, bracketing its sample
   const joinFolds: { t: number; after: number; high: number; low: number }[] = [];
   const foldAtJoin = agent.noteServerTime;
   agent.noteServerTime = function (this: any, t: unknown) {
@@ -118,8 +113,7 @@ try {
     if (typeof t === "number" && Number.isFinite(t)) joinFolds.push({ t, after: this.clock?.offset, high: t - from, low: t - to });
     return r;
   };
-  // The clock messages the agent's socket receives, as the server sent them:
-  // a listener added as the socket is made, ahead of the agent's own handler.
+  // the clock messages the agent's socket receives, as sent: a listener added as the socket is made, ahead of the agent's own
   const clockOnWire: { t: unknown }[] = [];
   const RealWebSocket = globalThis.WebSocket;
   globalThis.WebSocket = class extends RealWebSocket {
@@ -151,8 +145,7 @@ try {
   check("…and a sample taken 20 s late brings it down by the leak since its previous sample, and no more",
     agentDown >= leakFor(lateFrom - agentSince) - 1e-6 && agentDown <= leakFor(lateTo - agentSince) + 1e-6,
     `down ${agentDown} ms, ${lateFrom - agentSince} to ${lateTo - agentSince} ms after the previous sample`);
-  // serverNow() is its own clock plus the kept offset: bracketed by its clock
-  // read just before and just after, so a stall between the reads can't fail it
+  // serverNow() is its own clock plus the kept offset, bracketed by clock reads just before and after (a stall can't fail it)
   const keptFrom = agent.localNow(), keptNow = agent.serverNow(), keptTo = agent.localNow();
   const kept = keptNow - agent.clock.offset;
   check("…nor its serverNow(), which reads the kept offset", kept >= keptFrom - 1e-3 && kept <= keptTo + 1e-3,
@@ -186,21 +179,18 @@ try {
   check("an agent folds a frame's stamp into its estimate, as that frame's own sample",
     first != null && first.before === lowered && first.after >= first.low - 1e-6 && first.after <= first.high + 1e-6,
     first ? `after ${first.after}, the frame's sample ${first.low} to ${first.high}, set to ${lowered}` : "no frame folded");
-  // The fold's arithmetic is the check above's, which every frame gets: this
-  // one shows only that the posing body's own frame reaches it with its t.
+  // the fold's arithmetic is the check above's (every frame gets it): this shows only that the posing body's own frame reaches it with its t
   check("…and the frame the server sent with the posing body's pose reaches the fold with its own t",
     own != null && own.after >= own.low - 1e-6 && own.after <= Math.max(own.before, own.high) + 1e-6,
     `the frame's t ${wire?.t ?? "none"}, folded ${JSON.stringify(folds.map((f) => f.t))}`);
   poser.ws.close();
-  // its clock is the monotonic one: a step of the wall clock, read through
-  // Date.now or new Date(), moves neither its own clock nor its serverNow()
+  // its clock is the monotonic one: a step of the wall clock (Date.now or new Date()) moves neither its own clock nor its serverNow()
   const RealDate = Date;
   class SteppedDate extends RealDate {
     constructor(...a: any[]) { super(...((a.length ? a : [RealDate.now() - 60_000]) as unknown as [number])); }
     static now() { return RealDate.now() - 60_000; }
   }
-  // serverNow() less its offset, as read against the performance clock just
-  // before and just after it: inside that bracket unless it follows the step
+  // serverNow() less its offset, read against the performance clock just before and after: inside that bracket unless it follows the step
   const perf = () => performance.timeOrigin + performance.now();
   const bracket = () => { const a = perf(), s = agent.serverNow() - agent.clock.offset + AGENT_BEHIND, b = perf(); return { a, s, b }; };
   const beforeStep = bracket();
@@ -243,17 +233,15 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     mock.module(`${import.meta.dir}/../client/lib/${m}.js`, () => stubs);
   }
   const remotesMod: any = await import("../client/lib/remotes.js");
-  // The estimate itself, before serverclock.js slews what the screen shows toward it (clockDebug().best): the
-  // arithmetic checks below read this, as machine time plus the best offset.
+  // the estimate itself, before serverclock.js slews what the screen shows toward it (clockDebug().best): the arithmetic
+  // checks below read this, as machine time plus the best offset
   const { clockDebug } = await import("../client/lib/serverclock.js");
   const rawNow = () => performance.timeOrigin + performance.now() + clockDebug().best;
   const netMod: any = await import("../client/lib/net.js");
-  // As main.js wires it, before connect(); the avatar is the boot script's
-  // default, so the early socket's join below matches the one net.js would send.
+  // as main.js wires it, before connect(); the avatar is the boot script's default, so the early socket's join matches net.js's
   netMod.wireNet({ participants: remotesMod, myAvatarPath: () => "claude" });
   const machine = () => performance.timeOrigin + performance.now();
-  // Margins of 2 s: wide enough for a stalled process, and the skews and
-  // waits below are large enough that every wrong sample lands further off.
+  // margins of 2 s: wide enough for a stalled process; the skews and waits below put every wrong sample further off
   const MARGIN = 2_000;
   const AHEAD = 125_000;   // the early socket's server, far enough ahead that a wrong sample shows
   check("before any clock or frame, serverNow() is the machine's own clock",
@@ -300,8 +288,7 @@ console.log("\n— the browser takes the clock as its server clock —\n");
       (fakeLocation, fakeStorage, FakeSocket, behind);
     const serverAt = (ahead: number) => performance.timeOrigin + behind.now() + ahead;
     globalThis.fetch = (async () => new Response("null", { status: 404 })) as any;   // no identity service here
-    // 1. From a server 125 s ahead: a clock message 120 s before the drain,
-    //    then a message that isn't JSON 80 s before.
+    // 1. from a server 125 s ahead: a clock message 120 s before the drain, then a message that isn't JSON 80 s before
     runBoot();
     sock.onopen();   // the boot script sends its join when the socket opens
     check("the early socket's join asks for the clock", JSON.parse(sock.sent[0] ?? "{}").clock === true, String(sock.sent[0]));
@@ -317,8 +304,7 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     const afterClock = remotesMod.serverNow() - machine();
     check("a clock message the early socket buffered is sampled when its handler ran, not at the drain",
       Math.abs(afterClock - AHEAD) < MARGIN, `serverNow - machine = ${afterClock} ms, want ${AHEAD}`);
-    // 2. A second load, from a server 250 s ahead: a message that isn't JSON
-    //    80 s before the drain, then a frame 40 s before.
+    // 2. a second load, from a server 250 s ahead: a message that isn't JSON 80 s before the drain, then a frame 40 s before
     const AHEAD2 = 250_000;
     runBoot();
     sock.onopen();
@@ -329,9 +315,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     const afterFrame = remotesMod.serverNow() - machine();
     check("…and so is a frame, with its own stamp, not the one before it",
       Math.abs(afterFrame - AHEAD2) < MARGIN, `serverNow - machine = ${afterFrame} ms, want ${AHEAD2}`);
-    // 3. A boot script from before `arrived` (a page whose HTML was fetched
-    //    just before a deploy rewrote net.js) still has its socket adopted and
-    //    drained, its clock sampled at the drain.
+    // 3. a boot script from before `arrived` (HTML fetched just before a deploy rewrote net.js) still has its socket adopted
+    // and drained, its clock sampled at the drain
     const OLDER = 400_000;
     const older = { ws: new FakeSocket(), sent: { world: CONFIG.world, id: CONFIG.name, avatar: "claude", token: CONFIG.token },
       buffered: [JSON.stringify({ type: "clock", t: machine() + OLDER })], failed: false };
@@ -340,8 +325,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     const fallback = remotesMod.serverNow() - machine();
     check("a buffer with no arrival times is still adopted and drained, its clock sampled at the drain",
       outcome === "drained" && netMod.net.ws === older.ws && Math.abs(fallback - OLDER) < MARGIN, `${outcome}, serverNow - machine = ${fallback} ms, want ${OLDER}`);
-    // house review of #260, client/lib I62: requests in flight belong to the socket they went on. A replaced socket's close
-    // (rejoin waits at most 2 s for it, then dials) used to fail the NEW socket's requests too, and mark it unjoined.
+    // requests in flight belong to the socket they went on: a replaced socket's close (rejoin waits at most 2 s for it, then
+    // dials) must not fail the NEW socket's requests or mark it unjoined.
     // Mutation (must go red): make failPending ignore its socket argument (fail every request).
     {
       const mk = (): any => ({ ws: new FakeSocket(), sent: { world: CONFIG.world, id: CONFIG.name, avatar: "claude", token: CONFIG.token }, buffered: [], failed: false });
@@ -361,9 +346,9 @@ console.log("\n— the browser takes the clock as its server clock —\n");
       const rB: any = await onB;
       check("…which its own reply then answers", rB?.ok === true, JSON.stringify(rB));
     }
-    // review of I62: rejoin() skips the reconnect for the socket it REPLACED only. The new socket dropping before the old
-    // socket's close lands must still redial (a shared flag let it be used up by the new socket's close, then the old
-    // close was ignored as replaced, and nothing ever redialled). Mutation (must go red): make the skip a plain boolean again.
+    // rejoin() skips the reconnect only for the socket it REPLACED: the new socket dropping before the old one's close lands
+    // must still redial (a shared flag would be used up by the new close, then the old close ignored as replaced).
+    // Mutation (must go red): make the skip a plain boolean again.
     {
       const mk = (): any => ({ ws: new FakeSocket(), sent: { world: CONFIG.world, id: CONFIG.name, avatar: "claude", token: CONFIG.token }, buffered: [], failed: false });
       const C = mk(); (globalThis as any).__ewEarlySocket = C; await netMod.connect(); netMod.net.joined = true;
@@ -408,13 +393,12 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   // remote bodies are drawn on the one time base (spec/PHYSICS.md §5.1): serverNow(), the clock flights and every authority
   // stamp use, less INTERP_MS (110 ms); a sample carries its sender's capture time on the authority's clock
   {
-    // A pose with no `t` (the snapshot's, once a body loads: net.js) is
-    // stamped at serverNow().
+    // a pose with no `t` (the snapshot's, once a body loads: net.js) is stamped at serverNow()
     const camera: any = stubs.camera;
     camera.getWorldPosition ??= (v: any) => v.copy(camera.position);
     const stamped = await remotesMod.ensureRemote("stamped", null);
-    // a real Object3D root for every body updateRemotes draws below, since it
-    // sets a root's rotation with rotation.set or a quaternion (since #248)
+    // a real Object3D root for every body updateRemotes draws below: it sets a root's rotation with rotation.set or a
+    // quaternion (since #248)
     check("setup: the stamped body has an avatar", stamped.avatar != null);
     if (stamped.avatar) stamped.avatar.root = new stubs.THREE.Object3D();
     const { stampFrom, stampTo } = heldStill(() => {
@@ -460,8 +444,8 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     check("samples 300 ms late: the body is drawn between two of them, not stuck at the newest", xs < 30 - 0.5 && xs > 20, `x = ${xs} (30 is the newest sample)`);
   }
 
-  // The lite client keeps no clock of its own: net.js hands participants_lite's noteServerTime the one-way samples and reads
-  // serverclock.js's serverNow for round trips, so two estimates there would part (audit 10-22 #10).
+  // the lite client keeps no clock of its own: net.js hands participants_lite's noteServerTime the one-way samples and reads
+  // serverclock.js's serverNow for round trips, so there are never two estimates to part
   const lite: any = await import("../client/lib/participants_lite.js");
   const sc: any = await import("../client/lib/serverclock.js");
   check("the lite client's server clock is serverclock.js's (noteServerTime, serverNow), not a copy that can drift",

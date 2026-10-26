@@ -1,16 +1,7 @@
-// The SFU transport, EXECUTED: mic intent that changes while an acquisition
-// is in flight. Mica's #148 round-4 probe: two same-pc callers share one slow
-// permission prompt, the person turns the mic OFF before it resolves, the
-// device arrives — and the old code published it live, then a parked waiter
-// re-enabled it and reported liveness. The user's OFF was visible in wantMic
-// and nowhere else.
-//
-// Only the browser boundary is stubbed: RTCPeerConnection, the WebAudio
-// context (gate graph unbuildable → consented ungated lane, so the published
-// track IS the device track and its enabled flag is the wire), and
-// voiceSource() as a deferred acquisition we resolve by hand. voicesfu.js,
-// micstate.js, micgate.js and voiceconsent.js are the shipped modules.
-//
+// The SFU transport, EXECUTED: mic intent that changes while an acquisition is in flight. Two same-pc callers share one
+// slow permission prompt, the person turns the mic OFF, then the device arrives: it must not go live, and a parked
+// waiter must not re-enable it. Stubbed: only the browser boundary (RTCPeerConnection, WebAudio, so the published track
+// IS the device track, and voiceSource() as a deferred we resolve); voicesfu/micstate/micgate/voiceconsent are shipped.
 // Run: bun tools/sfu-mic-intent-race-test.mjs
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -27,8 +18,7 @@ mock.module(M('audioctx.js'), () => ({
     createMediaStreamSource: () => ({ connect() {}, disconnect() {} }),
   }),
 }));
-// Every acquisition parks here until the test resolves it — a permission
-// prompt with the test's finger on the button.
+// every acquisition parks here until the test resolves it: a permission prompt with the test's finger on the button
 let provider = null;
 const acquisitions = [];
 mock.module(M('voicesource.js'), () => ({
@@ -50,8 +40,7 @@ mg.allowUngated(true);
 
 let ok = 0, bad = 0;
 const t = (n, cond) => { cond ? ok++ : bad++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${n}`); };
-// A mutation that leaves a caller parked forever (nothing ever re-asks the
-// current question) would hang here rather than fail. A hang is a red.
+// a caller parked forever would hang rather than fail: a hang is a red
 const watchdog = setTimeout(() => {
   console.log('FAIL watchdog: an await never settled — some caller is parked forever');
   console.log(`\n${ok} ok, ${bad + 1} failed`);
@@ -65,7 +54,7 @@ const lastPublished = (pc) => pc.added[pc.added.length - 1]?.stream;
 
 const pc = await sfu.sfuConnect({}, () => {});
 
-// ── 1. Mica's sequence: ON, ON (shared prompt), OFF, prompt resolves ─────
+// ── 1. ON, ON (shared prompt), OFF, prompt resolves ─────
 let p1 = sfu.sfuMic(true);
 await flush();
 t('1: the first ON opened an acquisition asking for the mic', acquisitions.length === 1 && acquisitions[0].micWanted === true);
@@ -126,7 +115,7 @@ acquisitions[5]?.resolve(dev4);
 await Promise.all([p1, p3]); await flush();
 t('3: the device is published and live', lastPublished(pc) === dev4 && ms.micDeviceLive() === true && ms.micOn() === true && sfu.sfuMicWanted() === true);
 
-// ── 4. the retained-device fast path reports liveness (round 3, executed) ─
+// ── 4. the retained-device fast path reports liveness ─
 provider = null;
 await sfu.sfuMic(false);
 t('4: OFF with no provider disables the device and reports it not live', dev4.track.enabled === false && ms.micDeviceLive() === false && ms.micOn() === false);

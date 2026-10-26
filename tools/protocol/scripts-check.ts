@@ -1,4 +1,4 @@
-// tools/protocol/scripts-check.ts — scripts (JavaScript in the QuickJS sandbox) through the real authority, plus `use` →
+// tools/protocol/scripts-check.ts: scripts (JavaScript in the QuickJS sandbox) through the real authority, plus `use` →
 // script and a timer through a real server.
 //   bun tools/protocol/scripts-check.ts                 every case (the server cases start a scratch sequencer)
 //   bun tools/protocol/scripts-check.ts --only B2,B5    just those
@@ -21,15 +21,15 @@ import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { idAliases } from "./idalias.ts";
 import { tryUntil, pause } from "./wait.ts";
 import { labClock, pinned } from "./clock.ts";
-const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids (R 10-17)
+const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "bbc9ac22";
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-// Each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red. Applied as an exact text
-// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list).
+// each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red, as an exact text
+// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list)
 const MUTANTS: [string, string, string, string[]][] = [
   // [name, file, find, replace, cases]
   ["install: scope within installer's rights", "authority/scripts.js", "if (need) refuse(\"rights\", `${at}'s scope reaches", "if (false) refuse(\"rights\", `${at}'s scope reaches", ["B1"]],
@@ -105,8 +105,8 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["admit copies one entity per op, not the world", "authority/gate.js", "    applyCow(s, [op]); norm.push(op);", "    s = applyOps(s, [op]); norm.push(op);", ["I5"]],
   ["elision copies one entity per op, not the world", "scriptrules.js", "out.push(o); try { applyCow(s, [o]); }", "out.push(o); try { JSON.parse(JSON.stringify(s.entities)); applyCow(s, [o]); }", ["I5"]],
   ["read-your-writes without copying the world", "sandbox.js", "const writable = (id) => { if (ov.has(id)) return ov.get(id); const b = base[id]; if (!b) return null; const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", "const writable = (id) => { const b = ov.has(id) ? ov.get(id) : base[id]; if (!b) return null; for (const k of Object.keys(base)) JSON.parse(JSON.stringify(base[k])); const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", ["I5"]],
-  // (not a mutation: the check between host answers is defence in depth. A process can't send its next call before its
-  // answer arrives, so the authority always finds the pipe empty first and its ordinary deadline check fires: measured, I9)
+  // (not a mutation: the check between host answers is defence in depth; a process can't send its next call before its
+  // answer arrives, so the authority finds the pipe empty first and its ordinary deadline check fires, as I9 measures)
   ["time spent answering isn't the process's starvation", "sandbox.js", "if (used !== null && own > 0.5 * wall && used < STARVED * own)", "if (used !== null && used < STARVED * wall)", ["I9"]],
   ["a starved process isn't the script's failure", "sandbox.js", "export const STARVED = 0.3;", "export const STARVED = 0;", ["I8"]],
   ["end of file means the process died", "sandbox.js", "if ((n === 0 && c.opened) || c.proc.exitCode !== null", "if (c.proc.exitCode !== null", ["I6"]],
@@ -137,8 +137,8 @@ if (argv.includes("--mutants")) {
   console.log(`[scripts-check --mutants] ${ran} mutations run, ${bad} wrong (each must turn its cases red; the control must stay green)`); process.exit(bad ? 1 : 0);
 }
 if (argv.includes("--control")) {
-  // the base commit's shared/ (default: the authority before scripts, where every server case must FAIL). --control <commit>
-  // runs against a later base (a round's start) and lists what is red there, with --want <ids> naming what must be
+  // the base commit's shared/ (default: the authority before scripts, where every server case must FAIL); --control <commit>
+  // runs against a later base and lists what is red there, with --want <ids> naming what must be
   const at = opt("control") && !opt("control")!.startsWith("--") ? opt("control")! : BASE; const want = opt("want")?.split(",") ?? null;
   const d = scratch("ctl"); const r0 = archiveTo(ENGINE, at, ["shared"], d);
   if (r0.exitCode !== 0) { console.log(`FAIL can't extract ${at}: ${r0.stderr}`); process.exit(1); }
@@ -158,7 +158,7 @@ const TREE = path.resolve(opt("tree") ?? ENGINE) + "/";
 const tryImport = async (p: string) => { try { return await import(p); } catch (e) { if (!argv.includes("--expect-absent")) throw e; return null; } };
 const D = await import(TREE + "shared/protocol/authority.js");
 const SD = await import(TREE + "shared/protocol/authority/scripts.js");   // the duty log and constants (I7 calibrates from them)
-D.fixtureIds?.(true);   // the fixtures below seed the ids they read (R 10-17: a writer never chooses one; ids-check covers the refusal)
+D.fixtureIds?.(true);   // the fixtures below seed the ids they read (a writer never chooses one; ids-check covers the refusal)
 const F = await import(TREE + "shared/protocol/fold.js");
 const STOR = await import(TREE + "shared/protocol/authority/storage.js");   // CHANGE: B25 stores an old spelling as an old log holds it
 const SB = await tryImport(TREE + "shared/protocol/sandbox.js");
@@ -166,16 +166,16 @@ const AU = await tryImport(TREE + "shared/protocol/scriptaudit.js");
 const ONLY = opt("only")?.split(",") ?? null;
 // the edit UI's schema and the view record it reads (shared code: from the same tree as the authority, so a mutant reaches it)
 const await_ES = await import(TREE + "shared/editschema.js"), await_RV = await import(TREE + "shared/protocol/view.js");
-// the process-wide script duty (DUTY, authority.js) is about real seconds; these cases fire hundreds of activations in a tight
-// loop on a simulated clock, so it's opened wide here, and I2 sets it on purpose
+// the process-wide script duty (DUTY, authority.js) is about real seconds; these cases fire hundreds of activations in a
+// tight loop on a simulated clock, so it's opened wide here, and I2 sets it on purpose
 const DUTY0 = D.setScriptDuty ? D.setScriptDuty({ maxMs: 1e9 }) : null;
-// the warm processes started and SAID ready (the pool's own count), not a fixed 800 ms: on a slow host QuickJS takes longer
-// to load, and a case that measures the deadline must start from the state it names ("the pool is warm"). Bounded: 30 s
+// the warm processes started and SAID ready (the pool's own count), not a fixed wait: on a slow host QuickJS loads later,
+// and a case that measures the deadline must start from the state it names ("the pool is warm"). Bounded: 30 s
 function warmUp(want = 2, limitMs = 30000) { if (!SB?.warm) return; SB.warm(); const t = performance.now();
   while ((SB.isolationStats?.().warm ?? want) < want && performance.now() - t < limitMs) Bun.sleepSync(20); }
-// "unavailable" is the sandbox's own verdict that the HOST starved the run (its process got too little CPU before the
-// deadline: not the script's doing, not evidence either way). A case about what a script does asks again, bounded, after
-// the pool is warm; it never retries a real verdict (ran, failed, refused)
+// "unavailable" is the sandbox's verdict that the HOST starved the run (too little CPU before the deadline: not the
+// script's doing, no evidence either way). A case about what a script does asks again, bounded, after the pool is warm;
+// it never retries a real verdict (ran, failed, refused)
 const UNAVAILABLE_RETRIES = 4;
 function useSteady(s: any, actor: string, args: any) { let r: any;
   for (let i = 0; i <= UNAVAILABLE_RETRIES; i++) { r = s.call(actor, "use", args); if (r?.script?.code !== "unavailable") break; warmUp(); Bun.sleepSync(300); }
@@ -249,8 +249,8 @@ const cpuCapped = (g: any, cpu: number) => g.out.length > 1 && g.out.slice(0, -1
   && g.used >= cpu && g.used === g.recorded;
 const HEAVY = onUse(`for (let i = 0; i < 31; i++) world.set("self", "t/n", i); world.get("self"); world.set("self", "t/m", world.ids().length); world.children("box");`);
 
-// E5's stand-in for the sandbox: a host whose script callback re-enters the authority with a request of its own (the shape
-// enter() guards: a nested call must not reset the outer call's queues under it)
+// E5's stand-in for the sandbox: a host whose script callback re-enters the authority with a request of its own (the
+// shape enter() guards: a nested call must not reset the outer call's queues under it)
 const HOSTCB: any = { w: null, nested: null, checkSyntax: () => null,
   run({ self, key, event }: any) {
     const ops = key === "script:hear" ? ((HOSTCB.nested = D.request(HOSTCB.w, "bob", "set", { id: "lamp", component: "t/n", value: 1 })), [{ verb: "set", id: self, comp: "t/released", value: { by: event.by } }])
@@ -303,7 +303,7 @@ const cases: Case[] = [
     good: (o) => o.r === "refused scope" && o.a === null && o.b === null && o.scripted === 0 },
   { id: "B5", what: "41 #6 the heart: a 5 s timer re-asserting one light, 2 h simulated, nobody present: 0 entries, asleep; `always` and already lit: still 0 (elided)", run(s) { cast(s);
       if (!D.tick) return { absent: true };
-      const LIT = { kind: "point", color: 16711680, intensity: 1, range: 6, decay: 2 };   // shadows was cut (shape audit 10-16)
+      const LIT = { kind: "point", color: 16711680, intensity: 1, range: 6, decay: 2 };   // shadows is gone from a light
       s.call("bob", "create", { id: "lamp", components: { label: "lamp", transform: { pos: [0, 0, 0] } } }); s.call("olive", "create", { id: "lamp2", components: { label: "lamp2", light: LIT, transform: { pos: [2, 0, 0] } } });
       const HEART = `world.on("tick", () => world.set("self", "light", ${JSON.stringify(LIT)}));\nworld.on("wake", () => world.set("self", "light", ${JSON.stringify(LIT)}));\n`;
       install(s, "bob", "lamp", "heart", HEART, { scope: { ids: "self", comps: ["light"] }, every: 5 });
@@ -368,8 +368,8 @@ const cases: Case[] = [
   { id: "B6e", what: "…with no owner value, a ceiling lowered below the server's default is the plain budget, and the refusal names no owner's value", run(s) { cast(s);
       if (!D.tick) return { absent: true };
       // the owner sets nothing: the default (600) stands, then the operator lowers the ceiling to 31. Odd, because each beat
-      // writes two entries: at 30 written the next beat passes the check before it runs (30 + 1) and is refused by the
-      // check of what it would write (30 + 2), so the refusal comes from the second check
+      // writes two entries: at 30 written the next beat passes the check before it runs (30 + 1) and is refused by the check
+      // of what it would write (30 + 2), so the refusal comes from the second check
       const set = { ok: true };
       const was = D.setScriptConfig({ budget: 31 });
       try {
@@ -444,7 +444,7 @@ const cases: Case[] = [
       const dormant = s.call("olive", "scripts", {}).scripts?.[0]?.status; const base = s.call("olive", "inspect", { id: "bell1" }).versions?.["script:bell"];
       const dan = s.call("dan", "adopt", { id: "bell1", script: "bell" }), olive = s.call("olive", "adopt", { id: "bell1", script: "bell", base }), ann = s.call("ann", "adopt", { id: "bell1", script: "bell", base });
       const sv = s.call("olive", "scripts", {}).scripts?.[0]; const ring = s.call("vic", "use", { id: "bell1", action: "ring" });
-      const act = s.entries().find((e: any) => e.kind === "act" && e.verb === "adopt" && e.body?.adopts); // (dan's refused try is logged too, R7)
+      const act = s.entries().find((e: any) => e.kind === "act" && e.verb === "adopt" && e.body?.adopts); // (dan's refused try is logged too)
       return { dormant, dan: code(dan), olive: show(olive), ann: code(ann), now: `${sv?.status} ${sv?.sponsor}`, ring: ring.script ? `${ring.script.status} ${ring.script.sponsor}` : show(ring), logged: act ? `${act.actor} was ${act.body.adopts?.was}` : null }; },
     good: (o) => o.dormant === "dormant" && o.dan === "rights" && o.olive === "ok" && o.ann === "stale" && o.now === "active olive" && o.ring === "ran olive" && o.logged === "olive was bob" },
   { id: "B15", what: "a banned sponsor's scripts are suspended (nothing runs); the ban lives in the moderator log, not the world log", run(s) { cast(s);
@@ -631,7 +631,7 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       D.setScriptConfig(was);
       return { ear, earWhy, mill }; },
     good: (o) => JSON.stringify(o.ear) === '["nothing","nothing","nothing","nothing","nothing","refused","refused","refused"]' && /ran 5 times/.test(o.earWhy)
-      && /this server's limit/.test(o.earWhy) && !/script-settings/.test(o.earWhy)   // review of #260: runs is the server's, so the refusal names no owner field
+      && /this server's limit/.test(o.earWhy) && !/script-settings/.test(o.earWhy)   // runs is the server's, so the refusal names no owner field
       && cpuCapped(o.mill, 25) && /ann's scripts used \d+ ms of the authority's time in the last minute; at most 25/.test(o.mill.why)
       && /which the world's owner sets in @world\.script-settings\.cpu/.test(o.mill.why) },
   { id: "B23b", what: "a cpu refusal says whose limit it is: this server's when the owner set none, and this server's ceiling over the owner's value when it lowered theirs", run(s) { cast(s);
@@ -733,8 +733,8 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       s.call("bob", "set", { id: "box", component: "reactions", value: Object.fromEntries(Object.keys(HOSTILE).map((k) => [k, { kind: "script", script: k }])) });
       warmUp(); // warm processes, as an authority with scripts has at load
       const k0 = SB.isolationStats().kills; const runs: any[] = [], starved: any[] = [];
-      // spaced as the process's script duty spaces them in a door (I2 tests the duty): a killed process's spare is warm again
-      // a run the host starved (unavailable) is stopped at the same deadline but says nothing about the builtin: asked again
+      // spaced as the process's script duty spaces them in a door (I2 tests the duty): a killed process's spare is warm again.
+      // A run the host starved (unavailable) is stopped at the same deadline but says nothing about the builtin: asked again
       // (bounded), and every attempt must still be back within the deadline with the other world answering at once
       for (const k of Object.keys(HOSTILE)) for (let a = 0; a <= UNAVAILABLE_RETRIES; a++) { Bun.sleepSync(800); warmUp(); const t0 = performance.now(); const r = s.call("vic", "use", { id: "box", action: k }); const ms = performance.now() - t0;
         const t1 = performance.now(); const other = s2.call("olive", "inspect", { id: "cup" }); const otherMs = performance.now() - t1;
@@ -779,12 +779,12 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       const put = (ops: any[]) => { const rb = s.call("olive", "batch", { ops }, 11000);
         if (!rb?.ok && rb?.refused?.code === "too-costly" && ops.length > 1) { refusedBatches.push(`split ${ops.length}`); put(ops.slice(0, ops.length >> 1)); put(ops.slice(ops.length >> 1)); }
         else if (!rb?.ok) refusedBatches.push(show(rb)); };
-      for (let b = 0; b < 15; b++) put(Array.from({ length: 100 }, (_, i) => ({ verb: "create", args: { id: `t${b}-${i}`, components: { "t/data": { xs: big } } } }))); // each batch alone in the 10 s byte window: the charge is PRE-paid since C0 (10-15), so 6 s steps held two batches and tripped the cap
+      for (let b = 0; b < 15; b++) put(Array.from({ length: 100 }, (_, i) => ({ verb: "create", args: { id: `t${b}-${i}`, components: { "t/data": { xs: big } } } }))); // each batch alone in the 10 s byte window: the charge is PRE-paid, so shorter steps would hold two batches and trip the cap
       s.call("bob", "create", { id: "box", model: "crate", place: { at: [0, 0] } });
       install(s, "bob", "box", "heavy", HEAVY, { scope: { ids: "self", comps: ["t/n", "t/m"] }, on: ["use"] });
       s.call("bob", "set", { id: "box", component: "reactions", value: { go: { kind: "script", script: "heavy" } } });
-      // the same script on an empty world, on this host, now: what the run costs without any world to copy. A whole-world
-      // copy per write (the mutants below) costs ~32 copies of 1500 x 300 numbers, far past both bounds
+      // the same script on an empty world, on this host, now: the run's cost without a world to copy. A whole-world copy per
+      // write (the mutants below) costs ~32 copies of 1500 x 300 numbers, far past both bounds
       const s0 = session(); cast(s0); s0.call("bob", "create", { id: "box", model: "crate", place: { at: [0, 0] } });
       install(s0, "bob", "box", "heavy", HEAVY, { scope: { ids: "self", comps: ["t/n", "t/m"] }, on: ["use"] });
       s0.call("bob", "set", { id: "box", component: "reactions", value: { go: { kind: "script", script: "heavy" } } });
@@ -812,9 +812,9 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       s2.call("olive", "create", { id: "cup", model: "crate", place: { at: [0, 0] } });
       install(s2, "olive", "cup", "go", onUse(`world.set("self", "t/n", 1);`), { scope: { ids: "self", comps: ["t/n"] }, on: ["use"] });
       s2.call("olive", "set", { id: "cup", component: "reactions", value: { go: { kind: "script", script: "go" } } });
-      // calibrated, not guessed (Mica r3 on 0ff8bcad: on a fast host 30 fixed-size activations never filled a world's
-      // share, {"ranA":30,"busyA":0}, so the row couldn't tell fair from unfair). World A's own storm runs once with the
-      // duty wide open; the median activation cost HERE sizes the budget so A's share holds about four, on any host.
+      // calibrated, not guessed: on a fast host fixed-size activations never fill a world's share, so the row couldn't tell fair
+      // from unfair. World A's storm runs once with the duty wide open; the median activation cost HERE sizes the budget so A's
+      // share holds about four, on any host.
       D.setScriptDuty({ maxMs: 1e9 }); s.call("vic", "say", { text: "grind" });
       const costs = SD.dutyLog.map((d: any) => d.ms).sort((x: number, y: number) => x - y);
       if (costs.length < 20) return { calibration: `only ${costs.length} of 30 activations measured` };
@@ -961,9 +961,9 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       const rest = s.entries().slice(n0).find((e: any) => e.kind === "change" && e.actor === "sim");
       return { setup: [show(mv), show(gr), show(th)], beats, wrote, rest: !!rest, landed: comp(s, "mat", "t/landed") }; },
     good: (o) => o.setup.every((x: string) => x === "ok") && o.wrote > 0 && o.rest && o.landed?.id === "ball" && o.landed?.by === "vic" },
-  // ---------------- P: params (the one signal store; shape audit 10-16) ----------------
+  // ---------------- P: params (the one signal store) ----------------
   { id: "P1", what: "world.param(id, name, n) writes params.<name> (merged into what's there; a seat pose reads it as param.<name>); a param.<name> key in any other component is refused like any unknown key", run(s) { cast(s);
-      s.call("bob", "create", { id: "swing", components: { label: "swing", transform: { pos: [0, 0, 0] } } });   // a light is its own thing (one place per thing, 10-11): no model here
+      s.call("bob", "create", { id: "swing", components: { label: "swing", transform: { pos: [0, 0, 0] } } });   // a light is its own thing (one place per thing): no model here
       s.call("bob", "set", { id: "swing", component: "light", value: { kind: "point", intensity: 1 } });
       s.call("bob", "set", { id: "swing", component: "params", value: { tilt: 2 } });
       install(s, "bob", "swing", "pump", onUse(`world.param("self", "lean", 0.25); world.param("self", "push", -1);`), { scope: { ids: "self", comps: ["params"] }, on: ["use"] });
@@ -1013,16 +1013,16 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       vals.forEach((x, i) => install(s, "bob", "box", `f${i}`, onUse(`world.set("self", "t/n", ${i + 1}); throw ${x};`), { scope: { ids: "self", comps: ["t/n"] }, on: ["use"] }));
       s.call("bob", "set", { id: "box", component: "reactions", value: Object.fromEntries(vals.map((_, i) => [`f${i}`, { kind: "script", script: `f${i}` }])) });
       const out = vals.map((_, i) => { const r = s.call("vic", "use", { id: "box", action: `f${i}` }); return { st: r.script?.status ?? st(s, r), code: r.script?.code ?? null, n: comp(s, "box", "t/n") ?? null }; });
-      // the control: the same script without the throw runs and its write is kept, so a null above is the rollback (house
-      // 6340433633: "not ran" passed a refusal as well as a throw, so the row never showed each throw ran and was rolled back)
+      // the control: the same script without the throw runs and its write is kept, so a null above is the rollback ("not ran"
+      // would pass a refusal as well as a throw, never showing each throw ran and was rolled back)
       install(s, "bob", "box", "fok", onUse(`world.set("self", "t/n", 9);`), { scope: { ids: "self", comps: ["t/n"] }, on: ["use"] });
       s.call("bob", "set", { id: "box", component: "reactions", value: { fok: { kind: "script", script: "fok" } }, merge: true });
       const c = s.call("vic", "use", { id: "box", action: "fok" });
       return { out, control: { st: c.script?.status ?? st(s, c), n: comp(s, "box", "t/n") ?? null } }; },
     good: (o) => o.out.every((x: any) => x.st === "failed" && x.code === "thrown" && x.n === null) && o.control.st === "ran" && o.control.n === 9 },
-  // house 6340433633: run where a host's zone reaches the script, in this process (the Windows path: an isolated child is
-  // started with TZ=UTC) under UTC+14, so the originals would read 2026 (getYear 126) and set 1999-12-31 local: on a UTC host
-  // the row couldn't tell the replacements from the originals
+  // run where a host's zone reaches the script, in this process (an isolated child is started with TZ=UTC) under UTC+14,
+  // so the originals would read 2026 (getYear 126) and set 1999-12-31 local: on a UTC host the row couldn't tell the
+  // replacements from the originals
   { id: "B20c", what: "getYear and setYear are UTC too, like every other local-time method: an activation reads the same year on any host's time zone (run in-process at UTC+14)",
     opts: { scripts: SB?.SANDBOX ? { ...SB.SANDBOX, run: SB.runScript, isolated: () => false } : null }, run(s) { cast(s);
       if (!SB?.SANDBOX) return { absent: true };
@@ -1039,7 +1039,7 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       install(s, "bob", "pad1", "p", onUse(`world.pose(e.by, { clip: "wave" });`), { scope: { ids: "self", comps: [], bodies: ["pose"] }, on: ["use"] });
       s.call("bob", "set", { id: "pad1", component: "reactions", value: { go: { kind: "script", script: "p" } } });
       s.call("vic", "move", { to: [0, 0, 1] }); s.call("vic", "consent", { switch: "refuse" }); s.call("vic", "consent", { allow: "scripts-by:bob", class: "pose" });
-      const r = st(s, s.call("vic", "use", { id: "pad1", action: "go" })); const posed = s.w().presence.bodies.vic?.poseBy !== undefined;   // who posed you, never the pose (recut A4)
+      const r = st(s, s.call("vic", "use", { id: "pad1", action: "go" })); const posed = s.w().presence.bodies.vic?.poseBy !== undefined;   // who posed you, never the pose
       s.call("vic", "consent", { switch: "refuse" });
       return { r, posed, after: s.w().presence.bodies.vic?.poseBy !== undefined }; },
     good: (o) => o.r === "ran" && o.posed && o.after },
@@ -1137,7 +1137,7 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       const v = s.call("olive", "scripts", {}); return { set: show(set), imported: v.imported, use: code(use), fix: use.refused?.fix }; },
     good: (o) => o.set === "ok" && o.imported?.[0]?.status === "needs-reinstall" && /re-install it as script:<name>/i.test(o.imported?.[0]?.why) && o.imported?.[0]?.attach === "bell1"
       && o.use === "no-runtime" && /re-install it as script:greeter/.test(o.fix) },
-  // ---------------- Q: a stored rotation is a unit quaternion, whoever writes it (review of #260) ----------------
+  // ---------------- Q: a stored rotation is a unit quaternion, whoever writes it ----------------
   { id: "UQ1", what: "a script's set of a transform with a scaled q stores the unit rotation, and the auditor's re-run agrees with the log", run(s) { cast(s);
       s.call("bob", "create", { id: "vane", model: "crate", place: { at: [0, 0] } });
       install(s, "bob", "vane", "turn", onUse(`world.set("self", "transform", { pos: [0, 0, 0], q: [0, 0, 0.5, 0.5], scale: [1, 1, 1] });`), { scope: { ids: "self", comps: ["transform"] }, on: ["use"] });
@@ -1229,11 +1229,11 @@ const serverCases: Case[] = [{ id: "S1", server: true, what: "the server: a worl
     const clock = await ann.req("set", { id: "bell1", component: "script:clock", value: { src: up2.src, scope: { ids: "self", comps: ["t/beats", "t/hello"] }, on: ["enter"], every: 5 } });
     let bob = await client("Bob"); await sleep(300);
     // "busy" is the authority's fairness answer (its script duty: 500 ms of each real second, 300 for one world), not this
-    // path failing: on a slow or loaded host the enter script's first run can spend this world's share, so the use waits
-    // for the next second and asks again (nothing was written by the refused one, so rung stays exact)
+    // path failing: on a slow host the enter script's first run can spend this world's share, so the use waits for the next
+    // second and asks again (the refused one wrote nothing, so rung stays exact)
     let ring: any, ringBusy = 0;
     for (;;) { ring = await bob.req("use", { id: "bell1", action: "ring" }); if (ring.script?.code !== "busy" || ringBusy >= 10) break; ringBusy++; await pause("the next second of script duty", 1100); }
-    const B1 = IDS.of("bell1");   // the id the authority minted for the suite's bell1 (R 10-17)
+    const B1 = IDS.of("bell1");   // the id the authority minted for the suite's bell1
     const readWorld = () => { const L = F.readLog(fs.readFileSync(path.join(W4, "chimes", "world.jsonl"))); const st = F.fold(L).entities[B1]?.c ?? {};
       return { L, st0: st, tickActs: L.filter((e: any) => e.kind === "act" && e.actor === `script:${B1}` && e.body?.on === "tick").length }; };
     // two 5 s periods on the server's 1 s clock (the first only arms the timer): at least 11.5 s, then up to 30 s more on a
@@ -1280,8 +1280,8 @@ serverCases.push({ id: "S2", server: true, what: "the server: while a hostile sc
       await ann.req("set", { id: "box", component: "reactions", value: { spin: { kind: "script", script: "spin" } } });
       await sleep(800); // the world now holds a script: its sandbox processes warm
       const rounds = [];
-      // three rounds the script really ran in (a round the host starved says "unavailable": stopped at the same deadline,
-      // but no verdict on the script, so it doesn't count toward the three; at most 8 rounds in all)
+      // three rounds the script really ran in (a starved round says "unavailable": stopped at the same deadline, no verdict on
+      // the script, so it doesn't count; at most 8 rounds in all)
       for (let i = 0; i < 8 && rounds.filter((r: any) => r.code !== "unavailable").length < 3; i++) {
         const t0 = performance.now(); let done: any = null; const p = ann.req("use", { id: "box", action: "spin" }).then((r) => { done = { r, ms: performance.now() - t0 }; });
         const lat: number[] = []; while (!done && performance.now() - t0 < 20000) { const t1 = performance.now(); await bea.req("look", {}); lat.push(performance.now() - t1); await pause("the other world's looks are paced while the script spins", 20); }
@@ -1296,9 +1296,9 @@ serverCases.push({ id: "S2", server: true, what: "the server: while a hostile sc
 
 // ---------------- run ----------------
 let pass = 0, fail = 0, na = 0;
-// The I rows test isolation itself (a killed process, the deadline held against a native builtin). A host without it
-// (Windows: shared/protocol/sandbox.js fifoOk) runs scripts in-process, where those guarantees are the documented gap, so
-// they print n/a with the reason. I0 keeps that from hiding a regression: isolation must be on everywhere else.
+// the I rows test isolation itself (a killed process, the deadline held against a native builtin); a host without it
+// (Windows: shared/protocol/sandbox.js fifoOk) runs scripts in-process, the documented gap, so they print n/a with the
+// reason. I0 keeps that from hiding a regression: isolation must be on everywhere else.
 const { SANDBOX: SBX } = await import("../../shared/protocol/sandbox.js");
 const isolating = !!SBX.isolated(), mustIsolate = process.platform !== "win32" && process.env.EIDO_SANDBOX !== "inprocess";
 { const good = isolating || !mustIsolate; if (good) pass++; else fail++;

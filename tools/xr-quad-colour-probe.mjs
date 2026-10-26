@@ -1,6 +1,5 @@
-// bun tools/xr-quad-colour-probe.mjs [--shots <dir>] — WHAT THE VR PANELS ACTUALLY PAINT (R's headset pass, 09-30:
-// "little black squares like checkboxes" in World › Sky, "all colours washed out", "Style colour hexes don't render").
-// The real client, ?xr=1, IWER session, the real domquad staging (its #xr-stage CSS) and the real vendored HTMLMesh.
+// bun tools/xr-quad-colour-probe.mjs [--shots <dir>]: WHAT THE VR PANELS ACTUALLY PAINT. The real client, ?xr=1, an
+// IWER session, the real domquad staging (#xr-stage CSS) and the real vendored HTMLMesh.
 //   raster  — each quad's canvas (texture.image) is dumped next to the desktop DOM shot of the same frame
 //   swatch  — Settings › Style: every <input type=color> paints ITS colour on the quad (not the hex as text)
 //   squares — World › Sky: no dark square is painted where the DOM shows none (hidden/unrendered form controls)
@@ -8,8 +7,8 @@
 //   panel   — the quad's panel background IS the --panel-rgb token (no lift), in the raster and on screen
 //   dimmed  — partial opacity (a disabled range, a dead row) lands as the browser composites it: group, multiplied
 //   vr-a    — Settings › Style › VR panel opacity: default 1 (opaque pass), lower → the quad's panel alpha, reset → 1
-// On Chromium the engine runs WebGPURenderer's WebGL 2 backend in the headset too (owner, 09-30), so this headless
-// path IS the user path for the output transform. What it can't show: the headset's own compositor/display.
+// Chromium runs WebGPURenderer's WebGL 2 backend in the headset too, so this headless path IS the user path for the
+// output transform; it can't show the headset's own compositor/display.
 // Run one headless browser at a time; clouds are forced off before boot here.
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -148,7 +147,7 @@ try {
   check('style: every swatch paints its own colour at its centre (±6)', colours.length > 0 && colours.every((c) => near(c.centre, hexRgb(c.value), 6)),
     JSON.stringify(colours.map((c) => `${c.value} → rgb(${c.centre?.slice(0, 3)})`)));
 
-  // ── panel: the quad's background is the token, no lift (R, 09-30: the 18% lift was ACES compensation, obsolete) ──
+  // ── panel: the quad's background is the token, no lift ──
   const panelTok = await ev(() => getComputedStyle(document.documentElement).getPropertyValue('--panel-rgb').trim().split(/\s+/).map(Number));
   for (const id of ['settings', 'world']) {
     const r = raster[id];
@@ -237,8 +236,8 @@ try {
   console.log(`  · sky paint census: ${squares.natives} skinned native selects; ${squares.hidden} elements the DOM doesn't render; painted for them: ${JSON.stringify(squares.hits.slice(0, 12))}${squares.hits.length > 12 ? ` (+${squares.hits.length - 12})` : ''}`);
   check('sky: the quad paints NOTHING for an element the DOM does not render', squares.hits.length === 0, `${squares.hits.length} paints`);
 
-  // ── caption: World › Mods' sub-area captions (.sec-cap) paint as headings on the quad, not as body text — the rule
-  // above (a one-sided border), the capitals and the brand tint all reach the raster (owner, 10-01) ──
+  // ── caption: World › Mods' sub-area captions (.sec-cap) paint as headings on the quad, not body text: the rule above
+  // (a one-sided border), the capitals and the brand tint all reach the raster ──
   const caps = await ev(async () => {
     document.getElementById('sec-mods-tab').click();
     await new Promise((r) => setTimeout(r, 400));
@@ -287,7 +286,7 @@ try {
     const desk = pts.map(([px, py]) => Array.from(x.getImageData(Math.floor(px), Math.floor(py), 1, 1).data).slice(0, 3));
     const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
     const d = document.getElementById('dimfx'); const mesh = new HTMLMesh(d, { scale: 1 }); mesh.material.map.pause();
-    const svg = d.querySelector('svg'), t0 = performance.now();   // EIDO (2): the icon draws once its image has loaded
+    const svg = d.querySelector('svg'), t0 = performance.now();   // the icon draws once its image has loaded
     while (!svg.__eidoReady && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 50));
     mesh.material.map.resume(); mesh.material.map.pause();   // one raster with the icon in it
     const q = mesh.material.map.image.getContext('2d');

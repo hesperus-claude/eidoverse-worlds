@@ -1,9 +1,5 @@
-/**
- * SFU unit proof — the acceptance rows that are checkable without a browser.
- * Loopback werift peers stand in for browsers: same RTP, same negotiation,
- * no Chromium. The browser smoke is a separate (and mandatory) step; passing
- * here proves the POLICY, not the interop.
- */
+/** SFU unit proof: the acceptance rows checkable without a browser. Loopback werift peers stand in for browsers (same RTP,
+ *  same negotiation, no Chromium); passing proves the POLICY, not the interop, so the browser smoke stays mandatory. */
 import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, RtpHeader } from "werift";
 import { Sfu } from "../server/sfu.ts";
 import { installSfuTransportGuard } from "../server/sfuguard.ts";
@@ -94,9 +90,8 @@ check("…but the SFU DID receive alice's mic", (sfu.getLeg("alice")?.rxPackets 
 // ── consent ON → route created, renegotiation requested, audio flows ───────
 sfu.setConsent("bob", "alice", true);
 check("consent created a route", (sfu.getLeg("bob")?.outbound.has("alice")) === true);
-// Coalesced: the ask lands on the next microtask, so N routes added in one
-// turn produce ONE renegotiation rather than N. (N exchanges also inflates the
-// SDP — werift adds a transceiver per exchange — and double-delivers.)
+// coalesced: the ask lands on the next microtask, so N routes added in one turn produce ONE renegotiation (N exchanges
+// would inflate the SDP, a transceiver each, and double-deliver)
 await sleep(10);
 check("consent asked the caller to renegotiate", renegotiations.includes("bob"));
 check("…exactly once, however many routes were added",
@@ -132,7 +127,7 @@ await sleep(400);
 check("moderator mute silences alice for everyone", bob.heard === atMute, `heard ${atMute}→${bob.heard}`);
 sfu.setMuted("alice", false);
 
-// ── a DEAFENED listener (a ghost, R 10-07: "no for a ghost hearing voice chat") hears nobody, whatever its consent ─
+// ── a DEAFENED listener (a ghost) hears nobody, whatever its consent ─
 // consent is the listener's own answer (it can turn it back on); deafness is the server's and overrides it
 sfu.setConsent("bob", "alice", true);
 await sleep(200);
@@ -174,8 +169,7 @@ check("takeover replaced the leg", sfu.getLeg("bob")?.gen === 2);
 check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bLeg.closed);
 
 // ── INCREMENTAL JOINS + GLARE: the case a batch-setup test never exercises ──
-// People arrive one at a time, and two can arrive at once. Concurrent offers on
-// one PC is SDP glare — the failure class that grew voice.js to 1388 lines.
+// people arrive one at a time, and two can arrive at once: concurrent offers on one PC is SDP glare
 {
   const room = new Sfu({ onNegotiationNeeded: (id) => { pend.push(id); } });
   const pend: string[] = [];
@@ -191,7 +185,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     }
     await sleep(10);                                  // let the coalesced asks land
     const asks = [...new Set(pend)]; pend.length = 0;
-    // Drain CONCURRENTLY — this is the glare case, and negotiate() must serialize it.
+    // drain CONCURRENTLY: the glare case, which negotiate() must serialize
     const r = await Promise.allSettled(asks.map((legId) =>
       room.negotiate(legId, (pc) => negotiate(pc, members.get(legId)!.pc))));
     check(`join ${i + 1}/5: every renegotiation succeeded (no glare rejection)`,
@@ -236,9 +230,8 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   room.closeAll();
 }
 
-// ── LEAK: werift's memleak harness (PR #665) warns that un-unsubscribed
-// Event.subscribe closures retain RTCPeerConnection. We never call the
-// unSubscribe that onReceiveRtp.subscribe returns, so pin that it's fine.
+// ── LEAK: werift's memleak harness (PR #665) warns that un-unsubscribed Event.subscribe closures retain
+// RTCPeerConnection; we never call the unSubscribe onReceiveRtp.subscribe returns, so pin that it's fine
 {
   const room = new Sfu();
   const rss0 = process.memoryUsage().rss;
@@ -270,7 +263,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   room.setConsent("L", "S", true);
   await sleep(10);
   const afterFirst = asks.filter((a) => a === "L").length;
-  // the exchange never happens (simulating a blip) — the route stays pending
+  // the exchange never happens (a blip): the route stays pending
   room.setConsent("L", "S", false);
   room.setConsent("L", "S", true);
   await sleep(10);
@@ -329,16 +322,14 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   await negotiate(a.pc, room.createLeg("a", 1).pc);
   await negotiate(b.pc, room.createLeg("b", 1).pc);
   await negotiate(c.pc, room.createLeg("c", 1).pc);
-  // Build a NEGOTIATED route, then remove the consent ENTRY entirely (not set
-  // false). This is the state after closeLeg cleanup, and for any pair policy
-  // never spoke about — the "absent" case the allowlist claims to deny.
+  // build a NEGOTIATED route, then remove the consent ENTRY entirely (not set false): the state after closeLeg cleanup, and
+  // for any pair policy never spoke about, the "absent" case the allowlist claims to deny
   room.setConsent("b", "a", true);
   await sleep(10);
   await room.negotiate("b", (pc) => negotiate(pc, b.pc));
   await sleep(400);
-  // Remove the ENTIRE listener row — the true "absent" state. Deleting only the
-  // inner key leaves the row, and `=== false` vs `!== true` behave identically
-  // there, which is why the first version of this test did not discriminate.
+  // remove the ENTIRE listener row, the true "absent" state: with only the inner key deleted `=== false` and `!== true`
+  // behave identically, so the test wouldn't discriminate
   (room as unknown as { consent: Map<string, Map<string, boolean>> }).consent.delete("b");
   const atDelete = b.heard;
   await a.speak(20);
@@ -346,7 +337,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   check("M4: ABSENT consent denies (not merely explicit-false)",
     b.heard === atDelete, `heard ${atDelete}→${b.heard}`);
 
-  // M5: a listener with consent but NO route must hear nothing.
+  // M5: a listener with consent but NO route must hear nothing
   room.setConsent("c", "a", true);
   (room.getLeg("c") as unknown as { outbound: Map<string, unknown> }).outbound.delete("a");
   const cAt = c.heard;
@@ -354,7 +345,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   await sleep(300);
   check("M5: consent without a route still delivers nothing", c.heard === cAt, `heard ${cAt}→${c.heard}`);
 
-  // M1: a CLOSED speaker's in-flight packets reach nobody.
+  // M1: a CLOSED speaker's in-flight packets reach nobody
   room.setConsent("b", "a", true);
   await sleep(10);
   await room.negotiate("b", (pc) => negotiate(pc, b.pc));
@@ -365,7 +356,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   await sleep(300);
   check("M1: a closed speaker's packets reach nobody", b.heard === beforeClose, `heard ${beforeClose}→${b.heard}`);
 
-  // M7: nobody hears their own voice echoed back.
+  // M7: nobody hears their own voice echoed back
   const solo = new Sfu();
   const s1 = new FakePeer();
   await negotiate(s1.pc, solo.createLeg("s1", 1).pc);
@@ -493,9 +484,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check(`20 same-id speaker reconnect cycles → ${tx} transceiver(s), bounded (was 20)`, tx === 1);
   check("…and exactly one route entry (reused, not re-created)",
     listener.outbound.size === 1);
-  // No stale audio: the retired speaker's consent is wiped, so a packet from a
-  // NEW same-id leg is starved until consent is granted afresh — and after a
-  // fresh grant, the reused route carries it again.
+  // no stale audio: the retired speaker's consent is wiped, so a NEW same-id leg's packet is starved until consent is granted
+  // afresh, and after a fresh grant the reused route carries it again
   room.createLeg("spk", 21);
   const spk = room.getLeg("spk")!;
   const fakeRtp = { header: {}, payload: Buffer.from([0xf8]) } as any;
@@ -538,8 +528,7 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check("an UNOWNED error with the exact benign errno/syscall shape DIES (shape is not ownership)",
     shapedButUnowned.exitCode !== 0 && !shapedButUnowned.stdout.toString().includes("SURVIVED"));
 
-  // Same discriminator on a REAL non-werift dgram socket: an actual dgram
-  // emitter error, benign-shaped, no werift involved — ordinary fatal.
+  // the same discriminator on a REAL non-werift dgram socket: a benign-shaped emitter error, no werift involved: ordinary fatal
   const unownedDgram = run(`
     const { installSfuTransportGuard } = await import("./server/sfuguard.ts");
     const dgram = await import("node:dgram");
@@ -554,9 +543,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check("a real NON-WERIFT dgram socket erroring with a benign shape DIES",
     unownedDgram.exitCode !== 0 && !unownedDgram.stdout.toString().includes("SURVIVED"));
 
-  // OWNED positive: a socket created through werift's own UdpTransport.init —
-  // the one seam all its raw sockets flow through — survives the same benign
-  // error, counted; and a NON-benign error on the same owned socket is fatal.
+  // OWNED positive: a socket made through werift's UdpTransport.init (the seam all its raw sockets flow through) survives
+  // the same benign error, counted; a NON-benign error on the same owned socket is fatal
   const ownedBenign = run(`
     const { installSfuTransportGuard, transportErrorsSwallowed } = await import("./server/sfuguard.ts");
     const { UdpTransport } = await import("werift");
@@ -582,9 +570,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check("…and a NON-benign error on an owned socket is still fatal, with its site on stderr",
     ownedFatal.exitCode !== 0 && ownedFatal.stderr.toString().includes("werift-adjacent real bug"));
 
-  // The callback-send rejection path is contained at the same seam: a send
-  // whose underlying socket errors with a benign code resolves (counted)
-  // instead of escaping as an unhandledRejection.
+  // the callback-send rejection path is contained at the same seam: a send whose socket errors with a benign code resolves
+  // (counted) instead of escaping as an unhandledRejection
   const ownedSend = run(`
     const { installSfuTransportGuard, transportErrorsSwallowed } = await import("./server/sfuguard.ts");
     const { UdpTransport } = await import("werift");

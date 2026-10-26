@@ -1,16 +1,11 @@
-// sfu-browser-smoke — TWO real Chromium bodies through the IN-PROCESS SFU.
-//
-// The one row loopback werift peers can never prove: real getUserMedia, real
-// Opus, real Chrome SDP against our answer. Same assertions as
-// relay-browser-smoke.mjs (deliberately — a row proved by a different yardstick
-// proves nothing comparable), plus two the SFU makes newly checkable.
-//
+// sfu-browser-smoke: TWO real Chromium bodies through the IN-PROCESS SFU: real getUserMedia, Opus and Chrome SDP, which
+// loopback werift peers can never prove.
 //   BASE=http://127.0.0.1:8946 bun tools/sfu-browser-smoke.mjs
 //   (server must be running with VOICE_TRANSPORT=sfu)
 import { chromium } from 'playwright';
 
 // 🔴 ONLY MEANINGFUL OVER A REAL NETWORK: localhost is a free secure context and ICE picks loopback, skipping the real
-// exchange. BASE=$(tools/tunnel-up.sh) node tools/sfu-browser-smoke.mjs (a localhost BASE runs, flagged as no evidence).
+// exchange; a localhost BASE runs, flagged as no evidence.
 // No BASE ⇒ own a scratch child (VOICE_TRANSPORT=sfu, nonce identity), never an ambient port
 import { ownedWorld } from './probe-harness.mjs';
 const world = process.env.BASE ? null
@@ -27,9 +22,7 @@ const KEY = process.env.KEY ?? (world ? world.key : 'dev');
 const browser = await chromium.launch({
   executablePath: process.env.SFU_TEST_CHROME ?? process.env.CHROME ?? undefined,
   args: [
-    // --use-fake-device gives a deterministic tone, which is what makes the
-    // envelope check a THRESHOLD rather than a vibe. A real mic in a quiet room
-    // would fail this test for the right reason and the wrong purpose.
+    // --use-fake-device gives a deterministic tone, so the envelope check is a THRESHOLD; a real mic in a quiet room would fail
     '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
     '--autoplay-policy=no-user-gesture-required',
     // 🔴 WSL has no sound card: give Chromium a null audio sink, or WebAudio dies and the analyser reads 0.000, which
@@ -53,9 +46,7 @@ const mk = async (name) => {
   const nameField = await pg.$('#d-name');
   if (nameField) await nameField.fill(name).catch(() => {});
   await pg.click('#d-go').catch(() => {});
-  // Page boot is ~13s under load, so 90s is the floor, not slack. (Cited
-  // RECEIPTS.md until 2026-08-16 — a file that never existed. The number is a
-  // live observation with no preserved artifact.)
+  // page boot is ~13s under load, so 90s is the floor, not slack (a live observation, no preserved artifact)
   await pg.waitForFunction(() => window.relayDiag?.().active === true, null, { timeout: 90000 });
   return pg;
 };
@@ -66,9 +57,7 @@ try {
   const B = await mk('smoke-b');
   ok(`both connected: ${await A.evaluate(() => relayDiag().identity)} + ${await B.evaluate(() => relayDiag().identity)}`);
 
-  // The transport must be OURS, not a LiveKit leg that happened to be up. This
-  // assertion exists because "the smoke passed" is worthless if it passed
-  // against the wrong server.
+  // the transport must be OURS, not a LiveKit leg that happened to be up: a pass against the wrong server is worthless
   const t = await A.evaluate(() => relayDiag().transport);
   t === 'sfu' ? ok('transport is the in-process SFU (no LiveKit)') : bad(`transport reported "${t}", expected "sfu"`);
 
@@ -80,9 +69,7 @@ try {
   await B.waitForFunction(() => relayDiag().speakers.some((s) => s.hasStream), null, { timeout: 30000 });
   ok('B subscribed to A — server-enforced, POST-consent');
 
-  // THE ONE SPEECH CHECK. Packet counters can be right while the audio is
-  // silence; amplitude at the listener's element is the only proof that
-  // survives every intermediate lie.
+  // THE ONE SPEECH CHECK: packet counters can be right while the audio is silence; amplitude at the listener's element is the proof
   const level = await B.evaluate(async () => {
     let peak = 0;
     for (let i = 0; i < 40; i++) {
@@ -95,7 +82,7 @@ try {
   level > 0.02 ? ok('AUDIO IS FLOWING browser → our SFU → browser')
                : bad('no audible envelope at B');
 
-  // Revocation must be a memory write, not an SDP round trip — measure it.
+  // revocation must be a memory write, not an SDP round trip: measure it.
   // 🔴 only meaningful if audio was flowing: with a dead analyser "audio stopped" is vacuous, so it fails BOTH rows
   if (!(level > 0.02)) bad('revocation unmeasurable — envelope instrument was dead before revoke');
   const t0 = Date.now();
@@ -112,7 +99,7 @@ try {
   quiet ? ok(`consent revoked → audio stopped in ~${Date.now() - t0}ms`)
         : bad('audio survived revocation');
 
-  // Server-side truth, not just what the client believes.
+  // server-side truth, not just what the client believes
   const diag = await (await fetch(`${BASE}/relay-diag?world=staging`)).json();
   console.log(`  server diag: forwarded=${diag.forwarded} suppressed=${JSON.stringify(diag.suppressed)}`);
   diag.forwarded > 0 ? ok('server confirms it forwarded packets')

@@ -1,7 +1,6 @@
-// tools/protocol/txn-check.ts — the transaction service and the request capability
-// (docs/DESIGN-txn-capability.md). Real World, real WorldLog, real authority, real files; the wire handler is the
-// real REQUEST_MESSAGES. Storage faults are injected at node:fs (the calls server/durable.ts makes), and a slow warm() is a
-// gate held in front of the real WorldLog.request (the same stub reset-race-check uses).
+// tools/protocol/txn-check.ts: the transaction service and the request capability (docs/DESIGN-txn-capability.md).
+// Real World, WorldLog, authority, files and REQUEST_MESSAGES; storage faults are injected at node:fs (the calls
+// server/durable.ts makes), and a slow warm() is a gate held in front of the real WorldLog.request (as in reset-race-check).
 //   T1  a durable write throws on the 2nd line of a commit → ambiguous, `from` = that line; the 1st line is published
 //   T2  fsync throws after the bytes were written → ambiguous, wedged, no ok to anyone; reopen finds the line; later writes rolled back
 //   T3  a refusal is rolled back and publishes nothing; every published line was on disk when it was published
@@ -51,8 +50,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["a reset's fresh log renamed in unsynced", "server/worldlog.ts", "path.join(dir, \"world.jsonl\")); syncDir(dir);", "path.join(dir, \"world.jsonl\"));", ["T8f"]],
   ["CONTROL (no-op: must stay green)", "server/reqcap.ts", "// the door: the same decision", "// the door:  the same decision", []],
 ];
-// T8c and T8e check directory syncs, which the server doesn't make on win32 (durable.ts syncDir): there the rows that only
-// they would turn red have nothing to catch, so their mutants are skipped
+// T8c/T8e/T8f check directory syncs, which the server doesn't make on win32 (durable.ts syncDir): there their mutants are skipped
 const DIR_SYNC_ROWS = new Set(["T8c", "T8e", "T8f"]);
 if (process.argv.includes("--mutants")) {
   const ENGINE = path.resolve(import.meta.dir, "../.."); let bad = 0, ran = 0;
@@ -168,7 +166,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   const r2 = t.replies[1];
   ok(r2?.ok === false && r2?.txn === "rolled-back" && r2?.reply?.refused?.code === "server-error" && lines("t2").length === n0 + 1,
     "T2c the wedged log refuses the next write before any byte: rolled back, server-error, the file unchanged", r2);
-  // what each reply tells its reader to do: only whoever runs the server can reopen the world, and asking again changes nothing
+  // what each reply tells its reader: only whoever runs the server can reopen the world, and asking again changes nothing
   // until then; neither points at a log the reader can't open, nor says to send it again
   const fx = (m) => `${m?.reply?.refused?.reason ?? ""} | ${m?.reply?.refused?.fix ?? ""}`;
   ok([r, r2].every((m) => /whoever runs (the|this) server/.test(fx(m)) && /won't change|until (then|it is reopened)/.test(fx(m)) && !/send it again|server's log/.test(fx(m))) && /refuses writes/.test(fx(r2)),
@@ -198,7 +196,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
     "T4 banned while the request waited: refused at the seam by the door (superseded), nothing written", r);
   // re-roled while waiting: an inhabitant made a builder mid-request is refused (admitted under the old role), never silently promoted
   const bea = idOf("local:bea", "bea");
-  // she starts an inhabitant (a new world's newcomers are builders, R 10-21: promoting a builder to builder changes nothing)
+  // she starts an inhabitant (a new world's newcomers are builders, and promoting a builder to builder changes nothing)
   ok(ownerDo(X, "set", { id: "@world", component: `roles:${bea}`, value: { role: "inhabitant" } })?.ok === true, "(T4b setup) the asker starts an inhabitant");
   const b = tab(X, bea, { account: "local:bea" });
   X.g.hold(); e0 = X.g.entered; send(b, "create", { components: { description: "under-the-old-role" } }); await tryUntil('"under-the-old-role" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
@@ -251,8 +249,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
 // every one of those entries is synced, the topmost new directory's parent included
 { const { putBlobFile } = await import("../../server/durable.ts");
   const base = path.join(root, "t8c"); fs.mkdirSync(base, { recursive: true });
-  // founding in an existing worlds directory: its own directory is the only new name. A first founding runs before the syncs
-  // are watched, since minting the keys file syncs this directory too and would hide whether founding synced the world's name
+  // founding in an existing worlds directory: its own directory is the only new name. A first founding runs before the
+  // syncs are watched, since minting the keys file syncs this directory too and would hide whether founding synced it
   const worlds = path.join(base, "worlds"); fs.mkdirSync(worlds); foundWorld(path.join(worlds, "t8c-first"), "t8c-first", "olive");
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync }; const dirFds = new Map(); const synced = [];
   nodefs.openSync = function (p, flags, ...r) { const fd = o.openSync.call(nodefs, p, flags, ...r); if (flags === "r") dirFds.set(fd, path.resolve(String(p))); return fd; };
@@ -266,9 +264,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
     "T8c a first write into directories just made syncs each new directory's name in its parent, up to the parent of the first one made, a founded world's directory too (none on win32)", { missing: missing.map((d) => path.relative(root, d)), synced: synced.map((d) => path.relative(root, d)) }); }
 
 // ---------------- T8f ----------------
-// a person's founding, a fork and a reset each move new names into place: each is answered only once those names are durable
-// (the directory they land in synced AFTER the rename; a fork's copied blobs synced before its directory moves). None on
-// win32, where the server can't sync a directory
+// a person's founding, a fork and a reset are answered only once their new names are durable (the landing directory
+// synced AFTER the rename; a fork's copied blobs before its directory moves); none on win32
 { const WL = await import("../../server/worldlog.ts"); const { putBlobFile } = await import("../../server/durable.ts");
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync, renameSync: nodefs.renameSync }; let fdPath = new Map(), ev = [];
   const watch = () => { fdPath = new Map(); ev = [];
@@ -296,8 +293,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
     { foundOk, forkOk, blobSynced, resetOk, tmp }); }
 
 // ---------------- T8d, T8e ----------------
-// a key a mint hands out must survive a crash, or the genesis it signed (synced) names a key no one holds: the keys file is
-// written to a temp file and synced, renamed into place, and the directory holding its name synced after the rename
+// a key a mint hands out must survive a crash, or the genesis it signed names a key no one holds: the keys file is
+// written to a temp file and synced, renamed into place, and the directory holding its name synced after
 { const { custodyAt } = await import("../../server/custody.ts");
   const file = path.join(root, "t8d", "keys", "custody.json"), dir = path.dirname(file);
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync, renameSync: nodefs.renameSync }; const fdPath = new Map(), events = [];
@@ -334,8 +331,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   X.g.release(); await tryUntil('the operator-repair reply (operator-repair builder)', () => t.replies.filter((m) => m.operator).length >= k0 + 2, { ms: 3000, step: 10 });
   const two = t.replies.filter((m) => m.operator).slice(k0);
   ok(two.length === 2 && two.every((m) => m.ok === true && m.txn === "committed"), "T9c an operator's repairs queued behind one that changed their own role both commit (no role compare for repairs)", two);
-  // house 6340433633: the refusal says which way the status went, and its fix follows: revoked, sending again won't
-  // change it; granted (an ordinary request queued while the account became an operator), sending again is decided anew
+  // the refusal says which way the status went, and its fix follows: revoked, sending again won't change it; granted (an
+  // ordinary request queued while the account became an operator), sending again is decided anew
   ok(/stopped being a server operator/.test(rep?.reply?.refused?.reason ?? "") && /won't change this/.test(rep?.reply?.refused?.fix ?? ""), "T9d revoked: said so, and that sending it again won't change it", rep?.reply?.refused);
   const gus = idOf("local:gus", "gus"); const tg = tab(X, gus, { account: "local:gus" });
   X.g.hold(); const e2 = X.g.entered; send(t, "say", { text: "ahead-a-third-time" }); await tryUntil('"ahead-a-third-time" is held at the await', () => X.g.entered > e2, { ms: 3000, step: 10 });
@@ -360,9 +357,9 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(t.replies.length === 100 && !bad.length && said(X, "n97") && t.replies.filter((m) => m.verb === "say").length === 14, "T10 100 serial requests from an unchanged guest connection: all committed, no false refusal", { n: t.replies.length, bad: bad.slice(0, 2) }); }
 
 ok(!publishedNotOnDisk.length, "T3d every line any client was sent was on disk when it was sent", publishedNotOnDisk);
-// ---------------- T11 (review r14 M1, 10-18) ----------------
-// every write a socket sends goes through requestwire (one capability, the queue, the meters, both recheck seams): server.ts
-// itself calls w.log.request nowhere; voice-moderate goes through requestAs. A static row: the wire has no other door to a write.
+// ---------------- T11 ----------------
+// every write a socket sends goes through requestwire (one capability, the queue, the meters, both recheck seams):
+// server.ts calls w.log.request nowhere; voice-moderate goes through requestAs; the wire has no other door to a write
 { const srv = fs.readFileSync(path.join(ENGINE, "server/server.ts"), "utf8"); const rw = fs.readFileSync(path.join(ENGINE, "server/requestwire.ts"), "utf8");
   const direct = srv.split("\n").map((l, i) => [i + 1, l] as const).filter(([, l]) => /\.log\.request\(/.test(l) && !/^\s*\/\//.test(l)).map(([n, l]) => `${n}: ${l.trim().slice(0, 100)}`);
   ok(!direct.length && /requestAs\(c, ws, w,/.test(srv) && /export function requestAs\(/.test(rw) && /recheck\(cap\)/.test(rw.slice(rw.indexOf("export function requestAs"))),

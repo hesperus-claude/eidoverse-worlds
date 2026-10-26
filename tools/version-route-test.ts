@@ -1,15 +1,10 @@
-// version-route-test — /version, actually fetched (#51 review ask 1).
-//
-//   bun tools/version-route-test.ts
-//
-// Three spawns of the real server, each proving one leg of the contract:
+// version-route-test: /version, actually fetched, from three spawns of the real server:
 //   A. env-driven: BUILD_SHA/BUILD_TIME/BUILD_DIRTY → exact body echo
 //   B. git-driven: no env, repo present → sha/commitTime from git, dirty bool
 //   C. neither: no env, git unreachable → honest "unknown"s, never fake-clean
-// Plus: cache-control:no-store, and startedAt stable across repeated requests
-// (fresh process ≠ fresh code — the field distinction this PR exists for).
-// Port discipline per the stale-listener incident: verified-free random port
-// + a nonce file served from THIS tree before any assertion counts.
+// Plus cache-control:no-store and startedAt stable across requests (fresh process ≠ fresh code). A verified-free
+// random port + a nonce file served from THIS tree before any assertion counts: never a stale listener's answer.
+//   bun tools/version-route-test.ts
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
@@ -54,9 +49,8 @@ async function spawnServer(env: Record<string, string | undefined>): Promise<{ p
   const nonce = `vr-nonce-${crypto.randomUUID().slice(0, 8)}`;
   const noncePath = join(REPO, "client", `${nonce}.txt`);
   writeFileSync(noncePath, nonce); nonces.push(noncePath);
-  // process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on
-  // Windows whose pid dies immediately, orphaning the real sequencer on this
-  // port where it poisons the next run.
+  // process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd shim whose pid dies at once, orphaning the
+  // real sequencer on this port, where it poisons the next run
   const child = spawn(process.execPath, [join(REPO, "server", "server.ts")], {
     env: { PORT: String(port), WORLDS_DIR: mkdtempSync(join(tmpdir(), "vr-")), ...env },
     stdio: "ignore",
@@ -66,9 +60,7 @@ async function spawnServer(env: Record<string, string | undefined>): Promise<{ p
   const own = await fetch(`http://127.0.0.1:${port}/${nonce}.txt`).then((r) => r.ok && r.text()).catch(() => false);
   if (own !== nonce) throw new Error(`listener on :${port} is not our child — refusing to test it`);
   return { port };
-  // (freePort's probe can false-positive "free" on a slow listener; the nonce
-  // check above is the backstop that turns that race into a loud abort
-  // rather than a wrong-server receipt — abort over false testimony.)
+  // (freePort can false-positive "free" on a slow listener; the nonce check above turns that into a loud abort)
 }
 
 const HOME = process.env.HOME; const BUNPATH = process.env.PATH;
@@ -109,38 +101,34 @@ console.log("\n— B. git-driven identity (dev checkout case) —");
   const body = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
   check("sha resolved from git (not unknown)", body.sha !== "unknown" && body.sha.length >= 7, body.sha);
   check("commitTime resolved from git", body.commitTime !== "unknown" && !Number.isNaN(Date.parse(body.commitTime)));
-  // the planted nonce file is UNTRACKED, so the checkout is dirty while the server runs: a hardcoded `dirty: false`
-  // fails here
+  // the planted nonce file is UNTRACKED, so the checkout is dirty while the server runs: a hardcoded `dirty: false` fails here
   check("git-derived dirty is TRUE while the tree holds the nonce (real detection, not a hardcode)",
     body.dirty === true, String(body.dirty));
 }
 
 console.log("\n— B2. mixed provenance refused: sha/time are ONE pair (r3, review vectors) —");
 {
-  // BUILD_SHA without BUILD_TIME, git PRESENT: the tempting-but-wrong move is
-  // filling time from local HEAD — that pairs the image's sha with another
-  // identity's timestamp, the exact composite the dirty fix rejects.
+  // BUILD_SHA without BUILD_TIME, git PRESENT: filling time from local HEAD would pair the image's sha with another
+  // identity's timestamp, the composite the dirty fix rejects
   const a = await spawnServer({ HOME, PATH: BUNPATH, BUILD_SHA: "cafe123" });
   const bodyA = await (await fetch(`http://127.0.0.1:${a.port}/version`)).json();
   check("BUILD_SHA alone, git present: commitTime is unknown, never local HEAD's",
     bodyA.sha === "cafe123" && bodyA.commitTime === "unknown", `${bodyA.sha} @ ${bodyA.commitTime}`);
   check("BUILD_SHA alone: dirty stays unknown too (no partner from another tree)",
     bodyA.dirty === "unknown", String(bodyA.dirty));
-  // The mirror: BUILD_TIME without BUILD_SHA, git present.
+  // the mirror: BUILD_TIME without BUILD_SHA, git present
   const b = await spawnServer({ HOME, PATH: BUNPATH, BUILD_TIME: "2026-08-12T00:00:00Z" });
   const bodyB = await (await fetch(`http://127.0.0.1:${b.port}/version`)).json();
   check("BUILD_TIME alone, git present: sha is unknown, never local HEAD",
     bodyB.commitTime === "2026-08-12T00:00:00Z" && bodyB.sha === "unknown", `${bodyB.sha} @ ${bodyB.commitTime}`);
-  // The THIRD direction (adversarial review): BUILD_DIRTY alone, git PRESENT.
-  // The image's dirty flag must NOT pair with a local git sha+time — the same
-  // composite class, the remaining member. sha and commitTime go unknown.
+  // the third direction: BUILD_DIRTY alone, git PRESENT, must NOT pair with a local git sha+time; sha and commitTime go unknown
   const c = await spawnServer({ HOME, PATH: BUNPATH, BUILD_DIRTY: "true" });
   const bodyC = await (await fetch(`http://127.0.0.1:${c.port}/version`)).json();
   check("BUILD_DIRTY alone, git present: sha AND commitTime are unknown (no local partner for an env dirty)",
     bodyC.sha === "unknown" && bodyC.commitTime === "unknown", `${bodyC.sha} @ ${bodyC.commitTime} dirty=${bodyC.dirty}`);
   check("BUILD_DIRTY alone: the env dirty value itself is still honored",
     bodyC.dirty === true, String(bodyC.dirty));
-  // Garbage / empty BUILD_DIRTY clamps to "unknown", never a leaked raw string.
+  // garbage / empty BUILD_DIRTY clamps to "unknown", never a leaked raw string
   const d = await spawnServer({ HOME, PATH: BUNPATH, BUILD_DIRTY: "" });
   const bodyD = await (await fetch(`http://127.0.0.1:${d.port}/version`)).json();
   check("BUILD_DIRTY='' clamps dirty to unknown (no leaked empty string) and still marks env-identity",
@@ -154,7 +142,7 @@ console.log("\n— B2. mixed provenance refused: sha/time are ONE pair (r3, revi
 
 console.log("\n— C. no env, no git: honest unknowns, never fake-clean —");
 {
-  // PATH without git: gitLine's spawn fails → catch → "" → "unknown"s.
+  // PATH without git: gitLine's spawn fails → catch → "" → "unknown"s
   const bare = mkdtempSync(join(tmpdir(), "no-git-bin-"));
   const bunReal = Bun.which("bun") ?? "/usr/local/bin/bun";
   const { linkSync, copyFileSync } = await import("node:fs");

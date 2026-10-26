@@ -1,6 +1,5 @@
-// bun tools/route-preparation-test.ts — exact cap and authored-cache boundaries.
-// Real editor operations and received-entry fold; unrelated geometry I/O is
-// disabled so this suite cannot fetch assets from a running sequencer.
+// bun tools/route-preparation-test.ts: exact cap and authored-cache boundaries, through real editor operations and the
+// received-entry fold; unrelated geometry I/O is disabled so this suite cannot fetch assets from a running sequencer.
 import { strict as assert } from "node:assert";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { planStructure, prepareRouteLocal, planRouteLocal } from "../shared/structure.js";
@@ -14,8 +13,7 @@ const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
 function capPlan(x:number,z:number) {
  return planStructure({levels:[{y:0,tiles:[[x,z]],walls:[[1,0,0]],apertures:[]}]});
 }
-// The search region is the authored geometry's cells, padded by one: count it
-// from the plan itself, not from the planner, so the fixtures are measured.
+// the search region is the authored geometry's cells padded by one, counted from the plan, not the planner
 function paddedCells(plan:any) {
  let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
  const include=(x:number,z:number)=>{minX=Math.min(minX,x);minZ=Math.min(minZ,z);maxX=Math.max(maxX,x);maxZ=Math.max(maxZ,z);};
@@ -27,7 +25,7 @@ function paddedCells(plan:any) {
 }
 check(paddedCells(capPlan(125,125))===ROUTE_MAX_CELLS&&paddedCells(capPlan(2,3274))===ROUTE_MAX_CELLS+1,"the fixtures' padded regions are 16384 and 16385 cells");
 const exact=prepareRouteLocal(capPlan(125,125),terrain()).route(-.5,.5,.5,.5);
-// The wall [1,0,0] stands at x = 0 for z in [0, 1]; a leg meeting it there crosses it.
+// the wall [1,0,0] stands at x = 0 for z in [0, 1]; a leg meeting it there crosses it
 const meetsWall=(p:number[],q:number[])=>{
  if(p[0]*q[0]>0||p[0]===q[0]) return false;
  const z=p[1]+(0-p[0])/(q[0]-p[0])*(q[1]-p[1]);return z>=0&&z<=1;
@@ -58,9 +56,8 @@ check(worst.kind==="blocked"&&worst.reason==="no path through its doorways and a
 const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
 const agent=new WorldAgent({name:"cache-test",avatar:"",world:"cache-test"});
 (agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test
-// the old format fed hand-written log entries to agent.applyEntry; the current agent folds the authority's log itself (its replica), so each
-// old entry is the current write that does the same (spawn → create, comp → set/delete a component, place → set transform)
-// through the real door, and the agent takes its next view (tools/agent-scratch.ts agentOnDoor).
+// the agent folds the authority's log itself, so each old hand-written entry is the current write doing the same (spawn →
+// create, comp → set/delete a component, place → set transform) through the real door (tools/agent-scratch.ts agentOnDoor)
 const door=agentOnDoor(agent,"route-prep");
 async function receive(verb:string,args:any) {
  const a=JSON.parse(JSON.stringify(args));
@@ -69,8 +66,7 @@ async function receive(verb:string,args:any) {
  let r:any;
  if(verb==="spawn"){
   if(now){
-   // the old spawn over an id replaced the thing. the authority never reuses an id: the old thing is deleted, and the door refuses the
-   // id's return ("reused"), so nothing can come back under it, structure or not.
+   // the authority never reuses an id: the old thing is deleted and the door refuses the id's return ("reused"), structure or not
    const gone=await door.act("delete",{id:a.id});
    if(!gone.ok) throw new Error("delete refused: "+JSON.stringify(gone.refused));
    r=door.call("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
@@ -84,7 +80,7 @@ async function receive(verb:string,args:any) {
  if(!r.ok) throw new Error(verb+" refused: "+JSON.stringify(r.refused));
  return {verb,args:a};
 }
-/** The same value (the fold hands the agent a copy of what was written, never the writer's object). */
+/** The same value: the fold hands the agent a copy of what was written, never the writer's object. */
 const same=(x:any,y:any)=>JSON.stringify(x)===JSON.stringify(y);
 const data=()=>agent.entities.get("house")?.structure;
 const cached=(d:any)=>(agent as any).planOf(d);
@@ -132,7 +128,7 @@ try{
  await receive("comp",{id:"house",type:"structure",data:door});
  const doorPlan=cached(data());
  check(prepareRouteLocal(doorPlan,terrain()).clear(.5,.5,1.5,.5),"replacement opening invalidates old blocking geometry");
- // The editor clearing that door: the wall it leaves blocks again.
+ // the editor clearing that door: the wall it leaves blocks again
  await receive("comp",{id:"house",type:"structure",data:setAperture(door,edge,null)});
  const clearedPlan=cached(data());
  check(clearedPlan!==doorPlan&&!prepareRouteLocal(clearedPlan,terrain()).clear(.5,.5,1.5,.5),"clearing an existing door through the editor closes the opening");
@@ -151,8 +147,7 @@ try{
  check(cached(data())===undonePlan&&detour(await planned([11,-8])),"same geometry uses fresh rotation, scale and terrain origin");
  (agent as any).terrain={heightAt:()=>8};
  check(straight(await planned([11,-8]),[11,-8]),"later walk uses changed terrain height with the same authored plan");
- // walkTo plans each received revision once: a second walk over the same
- // component reads none of its data again (the plan is the cached one).
+ // walkTo plans each received revision once: a second walk over the same component reads none of its data again
  let reads=0;
  const counted={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}]};
  const watched={get levels(){reads++;return counted.levels;}};

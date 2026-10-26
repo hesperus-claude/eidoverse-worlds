@@ -1,8 +1,5 @@
-/**
- * Browser-owner wing posture — drive the real controller key path into the
- * real net.sendPose packet. This is the seam a local-looking fold used to
- * miss: the owner rig moved, while every other browser received `false`.
- */
+/** Browser-owner wing posture: the real controller key path into the real net.sendPose packet (the owner rig can move
+ *  while every other browser receives `false`). */
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 const { mock } = await import('bun:test');
@@ -16,23 +13,21 @@ const bus = {
   emit(t:string,p:any){ for(const f of handlers.get(t)??[]) f(p); },
 };
 const canvas = Object.assign(document.createElement('canvas'), { requestPointerLock() {} });
-// the real CONFIG carries `params` (a URLSearchParams render.js reads for
-// ?batching=); the bench only renames the wearer and the world
+// the real CONFIG carries `params` (render.js reads ?batching=); the bench only renames the wearer and the world
 const realBase: any = await import(base+'base.js');
 const BENCH_CONFIG = { ...realBase.CONFIG, name:'owner', world:'bench' };
 mock.module(base+'core.js', () => ({
   THREE, TSL, camera: new THREE.PerspectiveCamera(), canvas, CONFIG: BENCH_CONFIG,
   angleDelta:(a:number,b:number)=>b-a, bus, scene: new THREE.Scene(), renderer:{}, report() {},
-  // the rest of core.js's surface — materials.js (in the controller's cone) imports sun/ground
+  // the rest of core.js's surface: materials.js imports sun/ground
   sun: new THREE.DirectionalLight(), ground: new THREE.Mesh(), hemi: new THREE.HemisphereLight(), grid: new THREE.Group(),
   BASE_PIXEL_RATIO: 1,
 }));
-// bus/CONFIG/report live in base.js and the controller listens on THAT bus, so the bench's bus must be the one base.js
-// hands out; the real module's other exports ride along untouched
+// the controller listens on base.js's bus, so the bench's bus must be the one base.js hands out
 mock.module(base+'base.js', () => ({ ...realBase, CONFIG: BENCH_CONFIG, bus, report() {} }));
 mock.module(base+'terrain.js', () => ({ heightAt:()=>0, setWaterField() {}, setEnvironmentFloor() {}, rainSurfaceAt:()=>0 }));   // water.js (upstream #242) hands the water to terrain.js; watervolumes.js its floor
 mock.module(base+'colliders.js', () => ({ resolveColliders:()=>{}, lastBlockedTop:0, findSeat:()=>null, raySegment:()=>null,
-  frameOf:()=>null, lastContacts:()=>[], colliders:new Map() }));   // hiddenbump.js / controller.js / debug.js import these now (10-14)
+  frameOf:()=>null, lastContacts:()=>[], colliders:new Map() }));   // hiddenbump.js / controller.js / debug.js import these
 mock.module(base+'assets.js', () => ({ forgetBytes() {}, primeFiles: async () => {} }));
 mock.module(base+'world.js', () => ({ avatarMounts:new Map() }));   // net.js reads the mounts; the realizer behind world.js is not under test
 mock.module(base+'state.js', () => ({ state: { st: { entities: {}, roles: {}, recentChat: [] }, lastSeq: -1, hydrated: false }, hydrate() {}, applyView() {}, reset() {}, onWorldChange: () => () => {} }));

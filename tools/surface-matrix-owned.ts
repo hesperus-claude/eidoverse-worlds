@@ -1,12 +1,5 @@
-// surface-matrix-owned.ts — B3 (#57 review): owns the server that
-// surface-test.py inspects. The python matrix assumed an externally prepared
-// server at SURF_URL, so its checked-in results could not prove WHICH server
-// they described. This wrapper is the ownership layer: free port (pid-derived,
-// verified by nonce below), scratch worlds dir, per-run join token, child
-// diagnostics preserved, and a process-identity check — the served /version
-// startedAt must postdate this harness's own start, so a stale server on the
-// port fails loudly instead of lending its answers.
-//
+// surface-matrix-owned.ts: owns the server surface-test.py inspects (free port, scratch worlds, per-run join token, child
+// diagnostics). The served /version startedAt must postdate this harness's start, so a stale server on the port fails loudly.
 //   bun tools/surface-matrix-owned.ts
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,8 +11,7 @@ const worldsDir = mkdtempSync(join(tmpdir(), "eido-surfmatrix-"));
 foundWorlds(worldsDir, ["ownprobe", "surftest", "elsewhere"]);   // joining never founds a world
 const TOK = `surf-${Math.random().toString(36).slice(2, 10)}`;   // per-run fixture
 
-// own the AGENT-token fixture too (surface-test.py's reserved bearers), via AGENT_TOKENS_PATH, so the run never borrows
-// the checkout's mcpl/tokens.json
+// own the AGENT-token fixture too (AGENT_TOKENS_PATH): the run never borrows the checkout's mcpl/tokens.json
 const agentTokensPath = join(worldsDir, "agent-tokens.json");
 writeFileSync(agentTokensPath, JSON.stringify({
   "surf-lab-hesp": { id: "hesp" },
@@ -40,8 +32,7 @@ const drain = async (label: string, stream: unknown) => {
 
 let code = 1;
 try {
-  // readiness + ownership in ONE probe: only our child knows the per-run JOIN_TOKEN, so a foreign listener on this port
-  // refuses our join and the harness fails loudly
+  // readiness + ownership in ONE probe: only our child knows the per-run JOIN_TOKEN, so a foreign listener refuses our join
   let owned = false;
   for (let i = 0; i < 40 && !owned; i++) {
     await new Promise((r) => setTimeout(r, 250));

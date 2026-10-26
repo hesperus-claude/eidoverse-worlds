@@ -1,12 +1,6 @@
-// Does an agent standing inside a griddled building know where it is?
-//
-//   WORLD_URL=ws://localhost:8961/ws JOIN_TOKEN=test-door \
-//     bun run tools/structure-look-probe.ts structdemo
-//
-// This is the claim the whole slice exists to test, so it is checked against a
-// live sequencer rather than a fixture: a headless agent with no scene, no
-// triangles and no renderer walks from room to room and reads its own percept
-// back. Everything it says is derived from folded state alone.
+// Does an agent standing inside a griddled building know where it is? Checked against a live sequencer, not a fixture:
+// a headless agent (no scene, no renderer) walks room to room and reads its percept, derived from folded state alone.
+//   WORLD_URL=ws://localhost:8961/ws JOIN_TOKEN=test-door bun run tools/structure-look-probe.ts structdemo
 
 import { WorldAgent } from '../mcpl/agent.ts';
 
@@ -23,7 +17,7 @@ const hereLine = (text: string) =>
 const buildingLine = (text: string) =>
   text.split('\n').find((l) => /a building:/.test(l))?.trim() ?? '(no building line)';
 
-// The house sits at the origin, 6×4 tiles. Room centres, in world metres.
+// the house sits at the origin, 6×4 tiles; room centres in world metres
 const SPOTS: [string, number, number][] = [
   ['kitchen (1.5, 1.0)', 1.5, 1.0],
   ['bedroom (1.5, 3.0)', 1.5, 3.0],
@@ -36,7 +30,7 @@ console.log(`  entity line: ${buildingLine(await ag.look())}\n`);
 
 let failed = 0;
 for (const [label, x, z] of SPOTS) {
-  // teleport rather than walk: perception is under test here, not locomotion
+  // teleport rather than walk: perception is under test, not locomotion
   ag.pos.x = x; ag.pos.z = z;
   const line = hereLine(await ag.look());
   console.log(`  ${label}\n    ${line}\n`);

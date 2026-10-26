@@ -1,14 +1,8 @@
-/**
- * Live reach test — the solver driving REAL bone nodes on the shipped rigs,
- * frame after frame, with the target moving under it.
- *
- *   EIDOVERSE_DIR=<library checkout> bun tools/reachlive-test.ts
- *
- * EIDOVERSE_DIR is not optional in a worktree: without it the library rigs (the default body among them) silently drop out.
- *
- * reach-test and reachrig-test never write a bone; this one puts the solver's quaternions on a real three.js hierarchy
- * of each shipped rig, updates matrices as a frame would, and asks the HAND NODE where it ended up.
- */
+/** Live reach: the solver driving REAL bone nodes on the shipped rigs, frame after frame, with the target moving. Unlike
+ *  reach-test and reachrig-test it writes the quaternions onto a real three.js hierarchy, updates matrices as a frame
+ *  would, and asks the HAND NODE where it ended up.
+ *  EIDOVERSE_DIR is not optional in a worktree: without it the library rigs (the default body among them) silently drop out.
+ *    EIDOVERSE_DIR=<library checkout> bun tools/reachlive-test.ts */
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -65,8 +59,7 @@ console.log("\na hand goes where it is sent");
 
 console.log("\nand it KEEPS going where it is sent (the moving target)");
 {
-  // the whole point of re-solving per frame: a target that moves is tracked,
-  // not snapped to once
+  // re-solving per frame: a moving target is tracked, not snapped to once
   let worst = 0, frames = 0, worstJump = 0, spike = 0, spikeRig = '';
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -89,9 +82,7 @@ console.log("\nand it KEEPS going where it is sent (the moving target)");
       if (prevElbow) jumps.push(elbow.distanceTo(prevElbow));
       prevElbow = elbow;
     }
-    // Per RIG, not pooled: pooling makes one body's legitimately fast region
-    // an outlier against a percentile set by the other thirteen. Bodies differ
-    // in proportion, so each is its own population.
+    // per RIG, not pooled: bodies differ in proportion, so one body's legitimately fast region isn't an outlier against another's
     jumps.sort((a, b) => a - b);
     const p99r = jumps[Math.floor(jumps.length * 0.99)] || 1e-9;
     const mx = jumps[jumps.length - 1];
@@ -108,9 +99,7 @@ console.log("\nand it KEEPS going where it is sent (the moving target)");
 
 console.log("\nwith the body moving under it");
 {
-  // the torso turns (as a locomotion clip turns it) WHILE the target moves.
-  // A reach that read its limits from the rest frame is correct here in the
-  // first frame and drifts thereafter.
+  // the torso turns (as a locomotion clip turns it) WHILE the target moves: limits read from the rest frame drift
   let worst = 0, frames = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -182,8 +171,7 @@ console.log("\nnot through your own body");
     const R = (chain.L1 + chain.L2);
     for (let i = 0; i < 60; i++) {
       const a = (i / 60) * Math.PI * 2;
-      // a ring across the front of the torso, well inside arm's length —
-      // squarely in the region where the elbow wants to be inside the chest
+      // a ring across the front of the torso, well inside arm's length, where the elbow wants to be inside the chest
       const t = [sh.x - R * 0.55 + Math.cos(a) * R * 0.3,
                  sh.y + Math.sin(a) * R * 0.35,
                  sh.z + R * 0.22];
@@ -227,8 +215,7 @@ console.log("\nself-touch does not hunt");
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
     const chain: any = measureChain(av, "rightHand");
     if (!chain) continue;
-    // a point just off the LEFT upper arm — anchored on a bone that is also
-    // one of this arm's own guards, which is what made it unsatisfiable
+    // a point just off the LEFT upper arm, a bone that is also one of this arm's own guards: unsatisfiable
     const lu = av.nodes.leftUpperArm.getWorldPosition(new THREE.Vector3());
     const target = [lu.x + 0.03, lu.y + 0.04, lu.z + 0.02];
     const seen: number[] = [];
@@ -267,8 +254,7 @@ console.log("\nthe elbow does not sweep as the body turns");
       av.root.updateMatrixWorld(true);
       const q = av.root.getWorldQuaternion(new THREE.Quaternion());
       const sh = chain.nodes.upper.getWorldPosition(new THREE.Vector3());
-      // the target sweeps a cone AROUND the arm's rest direction, so the aim passes through the degenerate case (pole
-      // parallel to aim); a merely convenient target never comes near the singularity
+      // the target sweeps a cone AROUND the arm's rest direction, so the aim passes through the degenerate case (pole parallel to aim)
       const restW = new THREE.Vector3(...chain.dRestU).applyQuaternion(q).normalize();
       const side = new THREE.Vector3(0, 1, 0).cross(restW).normalize();
       const up2 = restW.clone().cross(side).normalize();
@@ -293,8 +279,8 @@ console.log("\nthe elbow does not sweep as the body turns");
     const mx = steps[steps.length - 1];
     if (mx / p99 > spike) { spike = mx / p99; spikeRig = rig.name; }
   }
-  // ⚠ RATCHET (≤64x): the hard elbow-side constraint snaps once per full turn of this worst-case sweep (the feasible arc's
-  // nearest edge switches ends). The fix needs a continuity-aware arc edge; ratcheted so it can't worsen
+  // ⚠ RATCHET (≤64x): the hard elbow-side constraint snaps once per full turn of this sweep (the feasible arc's nearest
+  // edge switches ends); fixing it needs a continuity-aware arc edge, ratcheted so it can't worsen
   check(`elbow sweep does not worsen (${tested} rigs, worst max/p99 ${spike.toFixed(2)}x on ${spikeRig})`,
     spike <= 64);
   check("...and the sweep actually ran", tested >= 14, `${tested}`);
@@ -302,9 +288,7 @@ console.log("\nthe elbow does not sweep as the body turns");
 
 console.log("\nelbows bend the way elbows bend (where that is knowable)");
 {
-  // The chord proxy is only valid for an un-adducted arm — reach across your
-  // chest and the elbow legitimately sits in front of the chord. So this
-  // measures exactly the population the solver claims to police, and no more.
+  // the chord proxy is valid only for an un-adducted arm (across the chest the elbow legitimately sits in front of the chord)
   let inverted = 0, checked = 0, skipped = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -380,8 +364,7 @@ console.log("\nthe forearm, crossing the body");
       const B = g.nb.getWorldPosition(new THREE.Vector3());
       const req = g.r + chain.rLower * 0.25;
       const d = segDist(el, hd, A, B);
-      // the guard nearest the TARGET is clipped on purpose — the hand has to
-      // arrive somewhere — so only count the torso the hand is not reaching for
+      // the guard nearest the TARGET is clipped on purpose (the hand has to arrive): count only the torso it isn't reaching for
       if (segDist(target, target, A, B) < req) continue;
       const deficit = (req - d) * 1000;
       if (deficit > worstDeficitMM) { worstDeficitMM = deficit; worstRig = rig.name; }
@@ -396,7 +379,7 @@ console.log("\nthe forearm, crossing the body");
 console.log("\ntouching with the palm, not the back of the hand");
 {
   // position IK says nothing about how a hand is turned; with no mesh the surface normal is synthesised (target back toward
-  // the shoulder, head-on), exercising the same forearm pronation then clamped wrist
+  // the shoulder, head-on), exercising forearm pronation then the clamped wrist
   let worstOff = 0, worstRig = '', tested = 0, sumBefore = 0, sumAfter = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });
@@ -449,8 +432,7 @@ console.log("\ntouching with the palm, not the back of the hand");
 
 console.log("\nno flicker between two poses");
 {
-  // an idle clip breathes, and a pose on a decision boundary flips with it: a sub-millimetre input must not produce a
-  // centimetre of output
+  // an idle clip breathes, and a pose on a decision boundary flips with it: a sub-millimetre input must not move a centimetre
   let worstMM = 0, worstRig = '', tested = 0;
   for (const rig of good) {
     const av = makeAvatar(rig.P, { realParent: rig.realParent, vrm0: rig.vrm0 });

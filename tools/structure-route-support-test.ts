@@ -1,6 +1,5 @@
 // bun tools/structure-route-support-test.ts
-// Actual support mode, terrain crossing height, and world/local transforms.
-// No server or renderer; product legs drive the real WorldAgent tick.
+// Support mode, terrain crossing height, world/local transforms; no server or renderer, legs drive the real WorldAgent tick.
 import { strict as assert } from "node:assert";
 import { planStructure, prepareRouteLocal, planRouteLocal, localizePoint } from "../shared/structure.js";
 import { WorldAgent } from "../mcpl/agent.ts";
@@ -43,8 +42,7 @@ check(!prepareRouteLocal(planStructure(doorway),terrain(()=>2)).clear(0,.5,2,.5)
 check(!prepareRouteLocal(planStructure(wall),terrain(()=>NaN)).clear(0,.5,2,.5),"unknown terrain height is not an assumed clear route");
 check(prepareRouteLocal(planStructure({levels:[upper]}),floor(0,0)).route(.5,.5,2.5,.5).kind==="blocked","wrong supplied floor height is refused rather than inferred from x/z");
 
-// Count every read of the level's wall map, through any accessor: the checks
-// after preparation must read the prepared geometry, never the map again.
+// counts every read of the wall map: checks after preparation must read the prepared geometry, never the map again
 let preparedReads=0;
 const preparedPlan=planStructure(wall);
 const wallLevel=preparedPlan.levels[0].level;
@@ -64,11 +62,10 @@ const closed={levels:[{y:0,tiles:[[0,0]],walls:[[0,0,0],[0,0,1],[1,0,0],[1,1,0]]
 check(prepareRouteLocal(planStructure(closed),terrain()).route(.5,.5,2,.5).kind==="blocked",
   "new prepared API retains sealed-room refusal");
 
-// Stacked levels cutting one cell along different diagonals: a terrain walker
-// meets the ground floor's ↗, not the upper floor's ↘, so the cell's halves
-// are ↗'s, whichever level comes first.
+// stacked levels cut one cell along different diagonals: a terrain walker meets the ground floor's ↗, so the halves are ↗'s
+// whichever level comes first
 const groundDiagonal={y:0,tiles:[],walls:[[3,0,0]],apertures:[]}, upperDiagonal={y:3,tiles:[],walls:[[2,0,0]],apertures:[]};
-// Whether the leg p→q crosses ↗ in cell (0,0): the segment from (1,0) to (0,1).
+// whether p→q crosses ↗ in cell (0,0), the segment (1,0)–(0,1)
 const crossesUp=(p:number[],q:number[])=>{
  const side=(r:number[])=>r[0]+r[1]-1, sp=side(p), sq=side(q);
  if(sp*sq>0||sp===sq) return false;
@@ -110,8 +107,7 @@ try{
  const a=body(e,()=>1,transform(e,.5,.5));
  check((await walk(a,transform(e,2.5,.5))).arrived,"real ground body walks beneath translated/scaled overhead floor without confinement");
 
- // the obstruction band is 0.5 WORLD metres: at scale 2, y 0.4, the wall's base is 0.4 + 0.1×2 = 0.6 m up, over a
- // 0.5 m band though a 0.5-local (1 m) band would reach it
+ // the obstruction band is 0.5 WORLD metres: at scale 2, y 0.4 the wall's base is 0.6 m up, above the band
  const raised={id:"band",pos:[0,.4,0],yaw:0,scale:2,structure:wall};
  const b=body(raised,()=>0,[0,1]);
  const r=await walk(b,[4,1]);
@@ -124,8 +120,7 @@ try{
  const slope={id:"slope",pos:[10,2,-5],yaw:Math.PI/2,scale:2,structure:wall};
  const highAtCross=(wx:number,wz:number)=>{const [lx]=localizePoint(slope,wx,0,wz);return 2+8*lx;};
  const c=body(slope,highAtCross,transform(slope,0,.5));
- // Walked, not run: the one walker (shared/mover.js) refuses a stride rising more than a step (0.8 m), and a run's
- // 0.4 m stride up this 4 m-per-metre slope rises 1.6 m. A walk's 0.155 m stride rises 0.62 m.
+ // walked, not run: shared/mover.js refuses a stride rising over a step (0.8 m); a run's stride here rises 1.6 m, a walk's 0.62 m
  const high=await walk(c,transform(slope,2,.5),false);
  check(high.arrived&&high.points.every(p=>Math.abs(localizePoint(slope,p[0],p[1],p[2])[2]-.5)<1e-8),
    "transformed real body uses terrain at wall crossing rather than origin height");

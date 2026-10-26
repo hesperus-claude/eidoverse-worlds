@@ -1,23 +1,15 @@
-// sky-lifecycle-test — the REAL client/lib/sky.js state machine (the VR cap, the headset holds, the tier queued while
-// the sky arrives, the failed bake's one retry, the held changes applied at exit), driven headless.
+// sky-lifecycle-test: the REAL client/lib/sky.js state machine (the VR cap, the headset holds, the tier queued while the
+// sky arrives, the failed bake's one retry, the held changes applied at exit), headless: headless Chromium can't compile
+// the cloud programs, and the state machine doesn't need them. Only sky.js's NEIGHBOURS are fakes (renderer, sky_baked.js,
+// the Skye loader with two domes, the interim gradient, the boot/loading gates); sky_swapchain, sky_bakelock and
+// shared/forecast run for real.
 //
-// Why not a browser probe: headless Chromium can't compile the cloud programs (they exhaust a 7 GB machine), so every
-// real-sky probe either skips the cloudy tiers or never reaches them. The state machine doesn't need them. Here sky.js
-// runs as shipped; only its NEIGHBOURS are fakes: the renderer, sky_baked.js (dome hold/park/attach), the Skye module
-// loader (a fake makeSky/makeSkySystem with two domes), the interim gradient, the boot/loading gates. The pure pieces
-// it composes run for real: sky_swapchain (one swap at a time, latest wins), sky_bakelock (one bake at a time, the
-// post-bake step inside the lock), shared/forecast.
+// "The live march is visible in the headset" is measured as a person would see it: a FRAME sampler (between tasks, never
+// mid-function) records any frame where the session presents, a live dome is in the scene and no baked dome is attached.
+// Timers are scaled 1/TS (the cap's 4 s wait, the 1 s settle, the 10 s retry run in ms, in the same order).
 //
-// "The live march is visible in the headset" is measured the way a person would see it: a FRAME sampler (every few ms
-// of scaled time, i.e. between tasks, never mid-function) records any frame where the session is presenting, a live dome
-// is in the scene, and no baked dome is attached. Synchronous hold/release flips inside one task are never a frame.
-//
-// Timers are scaled 1/TS so the cap's 4 s wait, the 1 s settle and the failed bake's 10 s retry run in milliseconds,
-// in the same order.
-//
-// Not covered here (disclosed): the prebuild under the splash (navigator.xr is absent, so headsetPresent() is false);
-// banded bakes (bandCuts is faked to one band); how the real sky_baked parks domes (its own probe:
-// sky-xr-livehold-probe); anything visual. Those are the fakes' contracts, stated beside each fake.
+// Not covered (disclosed): the prebuild under the splash (no navigator.xr); banded bakes (bandCuts faked to one band); how
+// the real sky_baked parks domes (sky-xr-livehold-probe); anything visual. The fakes' contracts are stated beside each.
 //
 //   bun tools/sky-lifecycle-test.mjs
 import { fileURLToPath } from "node:url";
@@ -62,7 +54,7 @@ mock.module(lib('loadwork.js'), () => ({ beginWork: () => ({ end() {} }) }));
 mock.module(lib('framebudget.js'), () => ({ busy: () => false }));
 mock.module(lib('lightrig.js'), () => ({ setDayness() {}, releaseForeignLights() {} }));
 mock.module(lib('warmqueue.js'), () => ({ warm: async (_n, fn) => fn(), P_AMBIENT: 0 }));
-mock.module(lib('terrain.js'), () => ({ rainSurfaceAt: () => null }));   // sky.js reads only the rain surface from terrain (main #254)
+mock.module(lib('terrain.js'), () => ({ rainSurfaceAt: () => null }));   // sky.js reads only the rain surface from terrain (#254)
 mock.module(lib('autohooks.js'), () => ({ claimUnowned: () => [], releaseHook() {}, autoHooks: [], ownHook: (fn) => fn }));
 
 // ---- the interim gradient: a flag, announced as sky_interim does ---------------------------------------------------
@@ -70,19 +62,19 @@ let interim = false;
 mock.module(lib('sky_interim.js'), () => ({
   showInterimSky() { if (!interim) { interim = true; bus.emit('sky-interim', true); } },
   hideInterimSky() { if (interim) { interim = false; bus.emit('sky-interim', false); } },
-  updateInterimSky() {}, interimSkyShown: () => interim, interimSkyObject: () => null,   // read only to hide the sky under water (main #254)
+  updateInterimSky() {}, interimSkyShown: () => interim, interimSkyObject: () => null,   // read only to hide the sky under water (#254)
 }));
 
 // ---- sky_baked: the dome contract sky.js relies on ------------------------------------------------------------------
 // hold: take the live domes out of the scene (true if it took them); release: put held ones back, under their parent;
-// attach: the baked dome goes up and PARKS the live domes (out of the scene) — refused when `attachRefuses`;
+// attach: the baked dome goes up and PARKS the live domes (out of the scene); refused when `attachRefuses`;
 // detach: the baked dome comes down and the parked/held domes go back (sky_baked.detachBakedDome's documented order).
 const SB = { held: null, parked: null, baked: null, attachRefuses: false, attaches: [], gen: 1 };
 const putBack = (list) => { for (const [d, p] of list ?? []) if (!d.parent) p.add(d); };
 const takeOut = (api) => { const ds = api?._internals?.sky?.domes ?? []; const l = ds.filter((d) => d.parent).map((d) => [d, d.parent]); for (const [d, p] of l) p.remove(d); return l; };
 mock.module(lib('sky_baked.js'), () => ({
   BAKE_INTERCEPT: Symbol('bake-intercept'),
-  bakedDomeObject: () => null,   // read only to hide the sky under water (main #254)
+  bakedDomeObject: () => null,   // read only to hide the sky under water (#254)
   bandCuts: () => [0, 1], bandedBakeRender: async () => 1, bakeGeneration: () => SB.gen,
   holdLiveDomes(api) { if (SB.held || SB.parked) return false; const l = takeOut(api); if (!l.length) return false; SB.held = l; return true; },
   releaseLiveDomes() { putBack(SB.held); SB.held = null; },
@@ -155,8 +147,8 @@ const bakesSince = (i) => BAKE.runs.slice(i);
 let T = 0;
 const ARGS = { system: 'eidoverse', world: 'earth', clouds: 'cumulus', weather: 'clear' };
 async function freshSky(quality) {
-  // a new sky build at `quality` (a rebuild through setCloudQuality would carry today's state; a clean module per case
-  // isn't possible, so each case starts by flipping off → quality, which rebuilds, and waits for the sky to arrive)
+  // a new sky build at `quality`: no clean module per case, so each starts by flipping off → quality (a rebuild) and waits
+  // for the sky to arrive
   if (renderer.xr.isPresenting) leave();
   localStorage.setItem('ew-cloud-quality', quality);
   BAKE.fail = 0; BAKE.gate = null; SB.attachRefuses = false;
@@ -174,8 +166,8 @@ try {
     sky.getCloudQuality() === 'medium' && !!SB.baked && !interim && !sky.skyBusy(), { q: sky.getCloudQuality(), baked: !!SB.baked, interim, log: log.slice(-4) });
 
   // ---- 1. ENTRY WHILE `high` IS PENDING -----------------------------------------------------------------------------
-  // high chosen on the desktop while the sky is still arriving is only PENDING at entry. The cap takes it: the session
-  // runs medium (baked), the live march never shows in the headset, and the choice still reads high.
+  // high chosen while the sky still arrives is only PENDING at entry: the cap takes it (medium, baked), the live march never
+  // shows in the headset, and the choice still reads high
   {
     await freshSky('low');
     await sky.setCloudQuality('off'); await settle();          // arrive fresh: an off → low rebuild, caught mid-arrival
@@ -207,9 +199,8 @@ try {
     await sleep(6000);                                          // past the 4 s fallback timer
     check('quick exit: the first session\'s cap timer never applies (desktop stays high)',
       sky.getCloudQuality() === 'high' && !sky.cloudCap(), { q: sky.getCloudQuality(), cap: sky.cloudCap() });
-    // (a2) exit and re-enter INSIDE the first timer's window, no curtain yet: at the moment the FIRST session's 4 s timer
-    //      would fire, the second session must still be waiting on its own curtain (review 10b L1: the old timer applied
-    //      the cap early, its bake taking the GPU before the headset's first frames)
+    // (a2) exit and re-enter INSIDE the first timer's window, no curtain yet: when the FIRST session's 4 s timer would fire,
+    //      the second must still wait on its own curtain (an early cap's bake takes the GPU before the headset's first frames)
     enter(); await sleep(2500); leave(); enter();
     await sleep(2000);                                          // 4.5 s after the FIRST entry, 2 s after the second
     const early = sky.getCloudQuality();

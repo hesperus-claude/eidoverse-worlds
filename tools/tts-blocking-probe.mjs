@@ -1,8 +1,5 @@
-// tts-blocking-probe — does a long utterance freeze the page?
-//
-// Not how long synthesis takes but whether the MAIN THREAD stays available: drives a rAF counter and reports the worst
-// frame gap (~16 ms healthy), with a stub synthesizer that spins on purpose, so it measures our scheduling, not piper.
-//
+// tts-blocking-probe: does a long utterance freeze the page? Reports the worst rAF frame gap (~16 ms healthy) with a
+// stub synthesizer that spins on purpose, so it measures our scheduling, not piper.
 //   node tools/tts-blocking-probe.mjs [origin]
 import { launchBrowser, ownedWorld } from './probe-harness.mjs';
 
@@ -23,18 +20,17 @@ const LONG = "Right, here's a good long one for you to push the sliders around o
 const r = await pg.evaluate(async (text) => {
   const tts = await import('./lib/tts.js');
 
-  // a stub engine standing in for ort.run(): each call blocks 300 ms, enough that an UNCHUNKED run is unmistakably worse
+  // stands in for ort.run(): each call blocks 300 ms, so an UNCHUNKED run is unmistakably worse
   let calls = 0;
   tts.setTtsSource(async (t) => {
     calls++;
     const spin = 300 * Math.max(1, Math.round(t.length / 60));   // cost scales with length, like RTF
     const end = performance.now() + spin;
-    while (performance.now() < end) { /* block, exactly as inference does */ }
+    while (performance.now() < end) { /* block, as inference does */ }
     return { pcm: new Int16Array(1024), sampleRate: 22050 };
   }, 'blocking stub');
   tts.setTtsEnabled(true);
 
-  // Watch frame-to-frame gaps across the whole utterance.
   let worst = 0, frames = 0, last = performance.now();
   let running = true;
   const tick = () => {
@@ -57,8 +53,7 @@ console.log(`  synth calls      ${r.calls}   (1 = never chunked)`);
 console.log(`  total time       ${r.total}ms`);
 console.log(`  frames observed  ${r.frames}`);
 console.log(`  WORST frame gap  ${r.worst}ms`);
-// One blocking slice is unavoidable per chunk; what must not happen is a single
-// gap spanning the whole utterance.
+// one blocking slice per chunk is unavoidable; a single gap spanning the whole utterance must not happen
 const chunked = r.calls > 1;
 const ok = chunked && r.worst < r.total * 0.6;
 console.log(ok ? '✅ CHUNKED — the page gets the thread back between pieces'

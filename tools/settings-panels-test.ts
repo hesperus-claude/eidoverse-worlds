@@ -1,7 +1,6 @@
-// Settings panels (rung 3, desktop UI): the style dial, the video rows, the profile's presence and
-// the bodies list — driven through the REAL stylepanel.js / videopanel.js / profile.js / bodies.js /
-// mybody.js / presence.js / ui.js / windows.js / panels.js, with only the renderer-bound edge stubbed
-// (tools/settings-panels-stub.mjs). Each block names the product line that must turn it red:
+// Settings panels (desktop UI): the style dial, the video rows, the profile's presence and the bodies list, through the
+// REAL stylepanel/videopanel/profile/bodies/mybody/presence/ui/windows/panels.js with only the renderer-bound edge
+// stubbed (tools/settings-panels-stub.mjs). Each block names the product line that must turn it red:
 //   · setPanelAlpha not persisted (stylepanel.js)          → "survives a re-apply from storage"
 //   · renderer select without needsReload (videopanel.js) → "grows the reload button"
 //   · presence dispatch not reaching setPresence (profile.js) → "presence() is busy" / "dock dot"
@@ -81,7 +80,7 @@ console.log('STYLE — setPanelAlpha persists and repaints --panel-a');
   check('a swatch repaints its token', computed('--brand') === '#112233', computed('--brand'));
   check('…persists it', tokens()['--brand'] === '#112233');
   check('…and emits style{--brand}', emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === '--brand'));
-  // the two opacity dials (owner, 09-30): the desktop one says it is the desktop's, and VR has its own
+  // the two opacity dials: the desktop one says it is the desktop's, and VR has its own
   const dials = [...body.querySelectorAll('input[type=range]')] as HTMLInputElement[];
   const label = (el: Element) => el.closest('.row')?.querySelector('.nm')?.textContent ?? '';
   check('two opacity dials: desktop, then VR', dials.length === 2 && label(dials[0]) === 'desktop panel opacity' && label(dials[1]) === 'VR panel opacity',
@@ -200,9 +199,8 @@ console.log('PROFILE — presence dispatch reaches setPresence; the dock dot rep
   check('choosing away sets presence()', presence.presence() === 'away', presence.presence());
   check('the pop closes and the header repaints', !b.querySelector('.pf-pop') && b.querySelector('.pf-state')?.textContent === 'away', b.querySelector('.pf-state')?.textContent ?? '');
   check('the dock dot follows', dockBtn.dataset.presence === 'away');
-  // Esc closes the pop and GOES NO FURTHER: profile.js's onKey calls
-  // stopPropagation so the global Esc (windows.js close-all) yields to an open
-  // pop, and dismiss() takes the capture listeners down with it.
+  // Esc closes the pop and GOES NO FURTHER: profile.js's onKey stops propagation so the global Esc (windows.js
+  // close-all) yields to an open pop, and dismiss() takes the capture listeners down with it
   portrait.click();
   check('the pop reopens', !!b.querySelector('.pf-pop'));
   let globalEsc = 0;
@@ -251,8 +249,7 @@ console.log('BODIES — the list populates on avatar-worn, which setMe emits');
   wear?.click(); await tick();
   check('wear dispatches into switchAvatar(path, name)', since(c0, 'switchAvatar').length === 1 && since(c0, 'switchAvatar')[0][1].startsWith('library/'), JSON.stringify(since(c0, 'switchAvatar')));
 }
-  // re-wearing a body already in the list MOVES it to the front — it never
-  // duplicates (bodies.js noteWorn filters the name out before unshifting).
+  // re-wearing a body already in the list MOVES it to the front, never duplicates (bodies.js noteWorn)
   { const e2 = emitted.length;
     mybody.announceWorn('fox', 'library/fox.vrm');
     const stored = JSON.parse(localStorage.getItem('ew-worn') || '[]');
@@ -289,8 +286,7 @@ console.log('TABS — every registered section is a tab; choosing one shows its 
   frame.hide(); frame.show(); await tick();
   check('shown again with nothing chosen, the frame opens its last tab (the last of them)', state() === ids.map((i) => (i === ids.at(-1) ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), state());
 
-  // a mod's section may share a built-in's label (mods.js passes no id): removing the mod's
-  // must not take the built-in's lantern row with it
+  // a mod's section may share a built-in's label (mods.js passes no id): removing the mod's must keep the built-in's row
   const builtinRun = actions.get('section:settings:video')?.run;
   const mod = ui.makeSection('video', () => {}, { host: 'settings' });
   mod.remove(); await tick();
@@ -312,9 +308,8 @@ console.log('TABS — every registered section is a tab; choosing one shows its 
 
 console.log('WORLD — a viewport restore opens a tab, like show() does');
 {
-  // Last session the viewport auto-hid World; its sections register while it is hidden, so the queued
-  // ensureTab finds it closed and does nothing. When the window grows back, the viewport rule un-hides it
-  // WITHOUT show() — it must still open a tab, not come back as an empty pane.
+  // World's sections register while the viewport has auto-hidden it, so the queued ensureTab finds it closed; when the
+  // viewport rule un-hides it WITHOUT show(), it must still open a tab, not come back as an empty pane
   check('setup: World is not built yet', !getFrame('world'));
   localStorage.setItem('ew-frame-world', JSON.stringify({ x: 700, y: 52, w: 280, h: 320, hidden: true, autoHidden: true }));
   const sec = ui.makeSection('🧪 probe', () => {}, { id: 'probe' });

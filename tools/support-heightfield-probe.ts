@@ -1,23 +1,12 @@
-/**
- * Support heightfield probe — #84's matched browser/headless receipt.
- *
- * For each asset: the SERVED summary (server/geometry.ts summarizeGlb,
- * imported directly — no network) against a BVH raycast ground truth
- * (tools/collider-survey.ts machinery). Asserts, for
- * every asset the shared classifier calls floor-shaped + uneven:
- *
- *   - the summary carries a validTopGrid-accepted grid;
- *   - per occupied cell (where a ray hits), the grid top is an UPPER bound
- *     on the ray top and tracks it (median ≤ 5cm, worst reported);
- *   - the OLD box top's error at the same columns — the float a body
- *     suffered before this fix — is recorded as the receipt.
- *
- * Assets NOT in the class (the height gate excludes them) are reported with the scale at which they WOULD enter it.
- *
- * Run:
- *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/library \
- *     bun run tools/support-heightfield-probe.ts [extra.glb ...]
- */
+/** Support heightfield probe, #84's matched browser/headless receipt: the SERVED summary (server/geometry.ts summarizeGlb, imported, no network) against a BVH
+ *  raycast ground truth (tools/collider-survey.ts). For every asset the shared classifier calls floor-shaped + uneven:
+ *    - the summary carries a validTopGrid-accepted grid;
+ *    - per occupied cell the grid top is an UPPER bound on the ray top and tracks it (median ≤ 5cm, worst reported);
+ *    - the OLD box top's error at the same columns is recorded as the receipt.
+ *  Assets the height gate excludes are reported with the scale at which they WOULD enter the class.
+ *  Run:
+ *    BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/library \
+ *      bun run tools/support-heightfield-probe.ts [extra.glb ...] */
 
 import { join } from "node:path";
 import { summarizeGlb } from "../server/geometry.ts";
@@ -95,9 +84,7 @@ async function probe(label: string, path: string, scale = 1) {
     (cls.uneven ? "floor-shaped + UNEVEN" : cls.floorShaped ? "floor-shaped (honest top)" : cls.roomScale ? "room-scale" : "small solid"));
 
   if (!cls.uneven) {
-    // outside the class at s=1: report the scale that would admit it (the
-    // agent-level test spawns at such a scale), and if a grid is served for
-    // that scaled use, verify it against raycast all the same
+    // outside the class at s=1: report the admitting scale and, if a grid is served there, verify it against raycast too
     const sH = FLOOR_MAX_H / h, area = w * d;
     const sMin = Math.sqrt(FLOOR_MIN_AREA / area);
     const lieOk = (sum.lie ?? 0) * sH > UNEVEN_MIN_LIE;
@@ -110,14 +97,14 @@ async function probe(label: string, path: string, scale = 1) {
   if (!validTopGrid(sum.topGrid)) return;
   const g = sum.topGrid!;
 
-  // raycast truth per OFFERED cell, 4×4 subsample: the bound is per SUBPOINT in WORLD metres (a body may stand anywhere
-  // in a cell), and 4×4 differs from certification's 3×3 so the probe never samples the certified points
+  // raycast truth per OFFERED cell: the bound is per SUBPOINT in WORLD metres (a body may stand anywhere in a cell), on a
+  // lattice that never samples certification's own points
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(v, 3));
   const bvh = new MeshBVH(geo);
   const ray = new THREE.Ray();
   ray.direction.set(0, -1, 0);
-  const SUB = 5;   // denser than certification's 4×4, on a different lattice — the probe must not resample certification's own points
+  const SUB = 5;   // denser than certification's 4×4, on a different lattice
   const diffs: number[] = [];
   const boxErr: number[] = [];
   let notUpper = 0, overBound = 0, compared = 0, worstOver = 0;
@@ -164,8 +151,7 @@ if (process.env.BLANKET_GLB) {
   targets.push(["blanket (store/9a9d0239eca609b3)", process.env.BLANKET_GLB, 1.25]);   // the agent test's spawn scale
 }
 if (lib) {
-  // the scifi debris pile is the rubble asset the scale gate actually admits
-  // (h 1.12m → in the class at ≤ 0.90) — probed AT the agent test's scale
+  // the rubble asset the scale gate actually admits (h 1.12m → in the class at ≤ 0.90), probed AT the agent test's scale
   targets.push(["scifi rubble pile", join(lib, "eidoverse/assets/models/apocalyptic_scifi_cyberpunk_destroyed_rubble_debris_pile.glb"), 0.88]);
   targets.push(["rubble pile (building collapse)", join(lib, "eidoverse/assets/models/apocalyptic_destroyed_rubble_debris_pile_building_collapse.glb")]);
   targets.push(["rubble pile (ruins)", join(lib, "eidoverse/assets/models/apocalyptic_destroyed_rubble_debris_pile_ruins.glb")]);

@@ -1,9 +1,7 @@
-// Content that loads in ONE mode must not compile when you switch to the OTHER (client/lib/xrwarm.js; the pattern
-// is BasisVR's warm-at-load — see that file's header). REAL three r186, WebGL backend, MSAA on like the client.
-//
-// Presenting is simulated the way three sees it: the output render target is set (XRManager does that), the XR
-// ArrayCamera holds two eyes, xr.enabled and xr.isPresenting are true and cameraAutoUpdate is off (xr.js turns it off too). So a
-// content warm with the main camera goes through three's own XR-camera swap, exactly as in a session.
+// Content that loads in ONE mode must not compile when you switch to the OTHER (client/lib/xrwarm.js, BasisVR's
+// warm-at-load). REAL three r186, WebGL backend, MSAA on like the client. Presenting is simulated as three sees it: the
+// output target set, a two-eye XR ArrayCamera, xr.enabled/isPresenting true, cameraAutoUpdate off (as xr.js does), so a
+// content warm with the main camera goes through three's own XR-camera swap.
 //
 //   boot      scene A, desktop frames; the stand-in pre-warm builds A's XR variants (the fixed warmXRPipelines)
 //   load B    on the desktop: a content warm (as assets.js does), then desktop frames
@@ -11,8 +9,7 @@
 //   load C    in VR: a content warm, then XR frames
 //   exit      desktop frames → 'plain' compiles C's desktop variants here; 'dual' warmed them at load
 //
-// Render-object births are counted per pass / camera / render context, which is what exposed three's post-frame
-// target leak (xrwarm.js: an in-VR compileAsync built into a context the headset's frames never use).
+// Render-object births are counted per pass / camera / render context, which exposes three's post-frame target leak.
 //
 // Run: node tools/xr-dual-warm-probe.mjs   (~40 s; run it under a memory guard)
 import { fileURLToPath } from "node:url";

@@ -1,13 +1,10 @@
-// tools/protocol/vocab-check.ts — one vocabulary for a thing's record, everywhere (R 2026-10-14: "we should be completely on
-// a new and streamlined protocol system"). The view (shared/protocol/view.js) says a thing in the protocol's own names:
-// its components flat (model, transform, sockets, label, light, …) plus the derived pos/q/yaw/scale/scale3/parent. Until
-// 10-14 it spoke the old protocol's: the model as `lib`, every other component inside a `comp` bag — and 180-odd readers
-// learned that spelling. This fails the build on a read of the old spelling in any runtime file (client/, mcpl/, server/,
-// shared/) or deployed bot:
+// tools/protocol/vocab-check.ts: one vocabulary for a thing's record. The view (shared/protocol/view.js) names a thing's
+// components flat (model, transform, sockets, …) plus derived pos/q/yaw/scale/scale3/parent; this fails on a read of the
+// old spelling in any runtime file (client/, mcpl/, server/, shared/) or deployed bot:
 //   - `.lib` read on a record (a model's library path is `.model`);
 //   - the `comp` bag: `.comp.x`, `.comp?.x`, `.comp[`, `.comp ?? {}`, `comp:` written on a record (a component sits flat).
-// `op.comp` — the log op's field (PROTOCOL §3: set {id, comp, value}) — is the protocol, not the record, and is allowed by
-// name: the variables that carry ops are listed in OPS. Other true exceptions go in EXEMPT, each with why.
+// `op.comp` (PROTOCOL §3: set {id, comp, value}) is the protocol, not the record: op variables are listed in OPS; other
+// true exceptions go in EXEMPT, each with why.
 // usage: bun tools/protocol/vocab-check.ts        (prints each offence as file:line; exit 1 if any)
 // @ts-nocheck
 import fs from "node:fs";
@@ -63,8 +60,7 @@ const walk = (dir: string) => {
   }
 };
 for (const d of [...RUNTIME, ...DEPLOYED]) walk(path.join(ROOT, d));
-// What the operator's world tools print counts ENTITIES (R 10-17: "the protocol's word is entities"): `info` once said
-// `things: N`, the translator "guarded thing(s)". A string these files print may not count things; a comment may.
+// the operator's world tools count ENTITIES: a string these files print may not count things; a comment may
 const OPERATOR = ["tools/protocol/world.ts", "tools/protocol/import-v1/world.ts", "server/oldworlds.ts"];
 for (const rel of OPERATOR) {
   const p = path.join(ROOT, rel); if (!fs.existsSync(p)) { offences.push(`${rel}: missing (OPERATOR lists it)`); continue; }
@@ -77,7 +73,7 @@ for (const rel of OPERATOR) {
   });
 }
 // occupy / occupant / vacate is the one word for a body in a seat: "rider" may not appear in runtime code (comments
-// included), the protocol spec or AGENTS.md; reads of an old wire/log name are listed in RIDER_OK, each with why
+// included), the protocol spec or AGENTS.md; reads of an old wire/log name go in RIDER_OK, each with why
 const RIDER = /\b[Rr]iders?\b|\bRIDERS?\b|[Rr]ider(?=[A-Z_0-9])|(?<=[a-z0-9_$])Riders?(?![a-z])|_riders?\b/;
 const RIDER_DOCS = ["spec/PROTOCOL.md", "AGENTS.md"];
 const RIDER_OK: [string, RegExp, string][] = [

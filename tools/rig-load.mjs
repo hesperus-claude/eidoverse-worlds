@@ -1,17 +1,8 @@
-// Load the SHIPPED VRM rigs headless, for anything that needs to test or
-// measure against real skeletons rather than an idealised one.
-//
-// This exists because for a long time nothing did. ragdoll-test.ts and
-// rag-param-study.mjs both drove a synthetic T-pose humanoid — "the invariants
-// under test live in the particle sim, not in any particular VRM" — and the
-// suite was green while every real rig in the fleet was broken. The rigs are
-// the variable: heights run 0.63m to 1.53m, rests run T-pose to A-pose, and
-// the fleet splits into 19-21 bone rigs and 50-54 bone ones that carry an
-// upperChest and shoulders between the chest and the arm.
-//
-// No renderer and no textures are involved: the GLB's JSON chunk carries the
-// node tree and the humanoid map, and world rest positions are all a skeleton
-// test needs. VRM's normalized bone nodes share those positions by definition.
+// Load the SHIPPED VRM rigs headless, for tests that must measure real skeletons: a synthetic T-pose stays green while
+// real rigs break. Heights run 0.63m to 1.53m, rests T-pose to A-pose, and the fleet splits into 19-21 bone rigs and
+// 50-54 bone ones with an upperChest and shoulders between chest and arm.
+// No renderer or textures: the GLB's JSON chunk carries the node tree and humanoid map, and world rest positions are all
+// a skeleton test needs (VRM's normalized bone nodes share them by definition).
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -68,8 +59,8 @@ export function fixtureRig(name) {
   return { ...rigFromGltf(name, g), fixture: true };
 }
 
-/** Every shipped rig, as { name, P } where P maps humanoid bone -> world rest position; rigs without a humanoid
- *  extension or hips are skipped loudly. */
+/** Every shipped rig, as { name, P } (humanoid bone -> world rest position); rigs without a humanoid extension or hips
+ *  are skipped loudly. */
 export function rigs() {
   const out = [];
   for (const f of readdirSync(VRM_DIR).filter((n) => n.endsWith('.vrm') && !n.endsWith('.ktx2.vrm')).sort()) {
@@ -97,13 +88,13 @@ export function rigs() {
   return out;
 }
 
-// Test-only perturbation: start the production rig partway through a stride.
+// test-only perturbation: start the production rig partway through a stride
 export function makeAvatar(P, { stride = 0, ...options } = {}) {
   const av = makeRuntimeAvatar(P, options);
   const { root, nodes } = av;
   if (stride) {
-    // a plausible mid-walk frame about the RIG'S OWN axes: VRM 0.x rigs face -Z (not normalised in a raw GLB read), and
-    // rotating those about world X would bend the knee forward into an impossible pose
+    // a mid-walk frame about the RIG'S OWN axes: VRM 0.x rigs face -Z (not normalised in a raw GLB read), and rotating about
+    // world X would bend the knee forward into an impossible pose
     const up = (P.neck ?? P.chest ?? P.spine).clone().sub(P.hips).normalize();
     const lat = (P.leftUpperArm && P.rightUpperArm)
       ? P.leftUpperArm.clone().sub(P.rightUpperArm)
@@ -129,8 +120,7 @@ export function toppleLean(yaw = 0, speed = 0) {
     .multiplyScalar(0.9 + Math.min(1.2, speed * 0.35));
 }
 
-/** Worst speed any foot reaches AFTER the body has come down — the "legs kick
- *  out from under it" measurement. Excludes the fall itself. */
+/** Worst speed any foot reaches AFTER the body has come down (legs kicking out from under it), excluding the fall itself. */
 export function footKick(Ragdoll, av, rest, lean, { maxSteps = 900 } = {}) {
   const rd = new Ragdoll(av, lean, rest);
   let steps = 0, landed = 0, peak = 0;
@@ -179,9 +169,8 @@ export function worstOverlap(rd) {
   return { frac: worst, name };
 }
 
-/** Run a tumble to completion (or a step cap) and hand back the sim. `Ragdoll`
- *  is passed in rather than imported: importing it needs the core.js stub
- *  plugin registered first, which only the entry script can do. */
+/** Run a tumble to completion (or a step cap) and hand back the sim. `Ragdoll` is passed in: importing it needs the
+ *  core.js stub plugin registered first, which only the entry script can do. */
 export function tumble(Ragdoll, av, rest, impulse, { dt = 1 / 60, maxSteps = 3000 } = {}) {
   const rd = new Ragdoll(av, impulse, rest);
   let steps = 0;

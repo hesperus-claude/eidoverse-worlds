@@ -1,4 +1,4 @@
-// tools/protocol/scale-check.ts — the authority at scale: every world on a server shares ONE thread, and every request
+// tools/protocol/scale-check.ts: the authority at scale: every world on a server shares ONE thread, and every request
 // goes through shared/protocol/authority.js on it, so no request may hold it for long.
 //   bun tools/protocol/scale-check.ts                 every case
 //   bun tools/protocol/scale-check.ts --only S2,I1    just those
@@ -22,7 +22,7 @@
 //   R   re-entrancy: a request nested in another (leave → drop, or a host's callback) leaves the outer call's state alone
 //   G   guards (green at base too): the index answers what the scans answered; a derived index files what a fresh one does
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
@@ -112,7 +112,7 @@ if (argv.includes("--mutants")) {
 }
 // ---------------- the authority, from a tree (this checkout unless --tree) ----------------
 const TREE = path.resolve(opt("tree") ?? ENGINE) + "/";
-// the first path that loads: today's name, then the base commit's (before the 10-07 names pass)
+// the first path that loads: today's name, then the base commit's (before the names pass)
 const imp1 = async (...ps: string[]) => { let err: unknown; for (const p of ps) { try { return await import(TREE + p); } catch (e) { err = e; } } throw err; };
 const D = await imp1("shared/protocol/authority.js", "shared/" + "v4/door.js");   // (split: the base's path, not a stale one)
 // fixture-ids.ts opened the fixture seam on ENGINE's authority; a --tree run (mutants, control) imports another instance
@@ -132,11 +132,10 @@ function open(name: string, o: any = {}) {
   if (o.presence) Object.assign(w.presence, o.presence);
   return w;
 }
-// G3 runs the scenario against its base commit too, which speaks the names before the 10-07 conventional-names pass. Known
-// by its layout (the base has no shared/protocol/authority.js), never by being another directory: a mutant is a copy of today's tree
-// and speaks today's names (read as "another tree", every case failed in every mutant, so each read as caught)
+// G3 runs against its base commit too, which speaks the names before the conventional-names pass: known by its layout
+// (no shared/protocol/authority.js), never by being another directory, since a mutant is a copy of today's tree
 const AT_BASE = !fs.existsSync(path.join(TREE, "shared/protocol/authority.js"));
-// the base rung's name in the tree under test (R 10-21: inhabitant; the base commit says visitor): G3 speaks each tree's own word
+// the base rung's name in the tree under test (inhabitant; the base commit says visitor): G3 speaks each tree's own word
 const BASE_RUNG = AT_BASE ? "visitor" : "inhabitant";
 const BASE_VERB: Record<string, string> = { "create-world": "new", lint: "check" };
 // …and its batch ops were {tool, args}
@@ -262,7 +261,7 @@ const cases: Case[] = [
       const mk = best(3, (i) => s.call("olive", "batch", { ops: Array.from({ length: 120 }, (_, k) => ({ verb: "create", args: { id: `more-${i}-${k}`, model: "crate", components: { transform: T0([0, 0, 0]) } } })) }, 20000));
       return { check: code(c.r), ms: r1(c.ms), one: code(one.r), oneMs: r1(one.ms), batch: code(mk.r), batchMs: r1(mk.ms), bound: r1(bound()), made: !!s.w().state().entities["more-0-119"],
         unchecked: mk.r?.warnings?.find((x: any) => x.kind === "unchecked")?.things ?? 0, why: c.r?.refused?.reason }; },
-    // the refusal names what it was checking (review r4 F4: a trailing comment once swallowed the line that says so)
+    // the refusal names what it was checking
     good: (o) => o.check === "too-costly" && /^checking \d+ things would take more of the authority's time/.test(o.why ?? "") && o.ms <= o.bound && o.one === "ok" && o.oneMs <= o.bound && o.batch === "ok" && o.made && o.unchecked > 0 && o.batchMs <= 2 * o.bound },
   { id: "Q4", what: "reads are metered per connection (server/readmeter.ts): 300 in 10 s, or 1.5 s of the authority's time, then refused (rate) until the window moves", run() {
       if (!RM) return { missing: true };
@@ -361,7 +360,7 @@ const cases: Case[] = [
       const step = s.call("vic", "move", { to: [0, 0, 5] }, 1000); const step2 = s.call("vic", "move", { to: [0, 0, 3] }, 1000);
       const tp = s.call("bob", "move", { to: [0, 0, 4] }); const tp2 = s.call("vic", "move", { to: [0, 0, 4], teleport: true }, 4000);
       return { arrive: code(arrive), step: [code(step), code(step2)], tp: code(tp), tp2: code(tp2), refusedLogged: n1 - n0, arrivalLogged: n2 - n1, afterArrival: s.w().entries.length - n2 }; },
-    good: (o) => o.arrive === "spawn" && o.step.includes("solid") && o.tp === "solid" && o.tp2 === "solid" && o.refusedLogged === 0 && o.arrivalLogged === 0 && o.afterArrival === 0 },   // review 10-07 M3: an accepted arrival is presence too (it was one act)
+    good: (o) => o.arrive === "spawn" && o.step.includes("solid") && o.tp === "solid" && o.tp2 === "solid" && o.refusedLogged === 0 && o.arrivalLogged === 0 && o.afterArrival === 0 },   // an accepted arrival is presence too
   { id: "I2", what: "a house measured from its triangles: a body walks in through the doorway (not through a wall), arrives inside, and a thing is put down on its floor", run(s) {
       s = session({ catalogue: withLab({ house: houseEntry() }) }); cast(s);
       s.call("olive", "create", { id: "home", model: "house", components: { transform: T0([0, 0, 0]) } });
@@ -399,7 +398,7 @@ const cases: Case[] = [
     good: (o) => o.put === "ok" && o.nested === "ok" && o.annLeft && o.before?.length === 1 && JSON.stringify(o.after) === JSON.stringify(o.before) },
   { id: "R2", what: "…and a leave nested in another leave (a host callback during its drops) doesn't end the outer leave's settlement: its later drops are still never rate-refused", run(s) { cast(s);
       s.call("olive", "set", { id: "@world", component: "roles:ann", value: { role: "inhabitant" } });
-      for (let k = 0; k < 2; k++) s.call("olive", "create", { id: `b-${k}`, model: "book", components: { transform: T0([0.2 * k, 0, 0]), grabbable: { who: "inhabitant", ...(k < 1 ? { release: "return" } : {}) } } });   // one goes home: the second lands alone (two hands: MAX_HELD, 10-10; it was three)
+      for (let k = 0; k < 2; k++) s.call("olive", "create", { id: `b-${k}`, model: "book", components: { transform: T0([0.2 * k, 0, 0]), grabbable: { who: "inhabitant", ...(k < 1 ? { release: "return" } : {}) } } });   // one goes home: the second lands alone (two hands: MAX_HELD)
       s.call("olive", "create", { id: "ball", model: "book", components: { transform: T0([3, 0, 0]), grabbable: { who: "inhabitant" } } });
       s.call("ann", "move", { to: [3, 0, 0.5] }); s.call("ann", "grab", { id: "ball" });
       for (let i = 0; i < 64; i++) s.call("vic", "move", { to: [0, 0, 0.5 + (i % 2) * 0.1], teleport: true }, 10);   // vic's budget for this window is spent (each an act)
@@ -475,11 +474,11 @@ if (argv.includes("--control")) {
 }
 
 // I4 needs the engine's catalogue (it measures GLBs asynchronously): run before the synchronous cases
-// the G3 scenario: every reply, with what differs between runs by design (chain heads, salts) left out; and the
-// viewer's own consent shield, whose shape recut A2 changed on purpose (a switch, not a preset): G3 is about the index
+// the G3 scenario: every reply, with what differs between runs by design (chain heads, salts) left out, and the viewer's
+// own consent shield, reshaped on purpose (a switch, not a preset): G3 is about the index
 function scenario() {
   // (and log positions: a refused move is no longer recorded, so the seqs after one shift by design)
-  const s = session(); const out: any[] = []; const strip = (r: any) => JSON.parse(JSON.stringify(r ?? null, (k, v) => (["head", "seq", "act", "born", "cause", "recorded", "blocker", "shield"].includes(k) ? undefined : v)));   // recorded: an arrival isn't logged now (review 10-07 M3); blocker: a solid move refusal names what is in the way (body shove, 10-12), additive
+  const s = session(); const out: any[] = []; const strip = (r: any) => JSON.parse(JSON.stringify(r ?? null, (k, v) => (["head", "seq", "act", "born", "cause", "recorded", "blocker", "shield"].includes(k) ? undefined : v)));   // recorded: an arrival isn't logged; a solid move refusal names what is in the way (additive)
   const c = (who: string, verb: string, args: any = {}, step = 200) => { const r = s.call(who, verb, args, step); out.push([who, verb, strip(r)]); return r; };
   cast(s); c("olive", "set", { id: "@world", component: "roles:ann", value: { role: "builder" } });
   fill(s, 100, (i) => [(i % 10) * 2.5 - 12, 0, Math.floor(i / 10) * 2.5 - 12]);
@@ -525,7 +524,7 @@ async function realGlbs() {
   return { solids: te.solids?.length ?? 0, inTower, outWall, container };
 }
 
-// reply keys the names pass renamed (PROPOSAL-conventional-names-2026-10-07): base spelling → today's
+// reply keys the names pass renamed: base spelling → today's
 const RENAMED_KEYS: Record<string, string> = { teach: "fix", touchI: "intimate" };
 async function sameAsBase() {
   const d = scratch("sbase"); const r0 = archiveTo(ENGINE, BASE, ["shared", "server", "package.json"], d);
@@ -533,13 +532,12 @@ async function sameAsBase() {
   const run = (tree: string) => { const r = Bun.spawnSync(["bun", path.join(ENGINE, "tools/protocol/scale-check.ts"), "--tree", tree, "--scenario"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
     const t = r.stdout.toString(); try { return JSON.parse(t); } catch { return { bad: (t + r.stderr.toString()).slice(-400) }; } };
   const a = run(TREE), b0 = run(d); if (!Array.isArray(a) || !Array.isArray(b0)) return { a: a?.bad ?? "ok", b: b0?.bad ?? "ok" };
-  // the base speaks the names before the 10-07 conventional-names pass: its replies' keys are read in today's names
-  // R 10-17 14:41 (consent words): a body's shield in look is read in today's words (tier strangers → everyone; class move →
-  // displace; everyone|nobody → allow|deny): the same table, renamed
+  // the base speaks the names before the conventional-names pass: its replies' keys are read in today's names, and a
+  // body's shield in look in today's words (tier strangers → everyone; class move → displace; everyone|nobody → allow|deny)
   const CONSENT_WORD: Record<string, string> = { everyone: "allow", nobody: "deny" };
   const shieldToday = (sh: any) => Object.fromEntries(Object.entries(sh).map(([k, row]: any) => [k === "strangers" ? "everyone" : k,
     row && typeof row === "object" && !Array.isArray(row) ? Object.fromEntries(Object.entries(row).map(([c, m]: any) => [c === "move" ? "displace" : c, CONSENT_WORD[m] ?? m])) : row]));
-  // R 10-21: the base commit's word for the base rung (visitor) is the rung this tree calls inhabitant
+  // the base commit's word for the base rung (visitor) is the rung this tree calls inhabitant
   const b = JSON.parse(JSON.stringify(b0), function (k, v) { if (k === "shield" && v && typeof v === "object" && !Array.isArray(v)) v = shieldToday(v);
     if ((k === "who" || k === "role") && v === "visitor") return "inhabitant";
     if (!v || typeof v !== "object" || Array.isArray(v)) return v;
@@ -555,7 +553,7 @@ async function sameAsBase() {
   if (notUnit) return { same: false, replies: a.length, notUnit };
   // a refusal's code and fix shape are the contract, not the metres in its prose: decimals are blanked. Minted socket
   // children in `after` are left out (the base minted none); the host's own record must still match exactly
-  const noA11y = (x: any) => JSON.stringify(x, (k, v) => (k === "can" || k === "state" || k === "description" || k === "sockets" || (k === "order" && v === "a0") ? undefined   // parent.order: cut by the shape audit 10-16 (nothing read it)
+  const noA11y = (x: any) => JSON.stringify(x, (k, v) => (k === "can" || k === "state" || k === "description" || k === "sockets" || (k === "order" && v === "a0") ? undefined   // parent.order: cut by the shape audit (nothing read it)
       // `sockets` on a look row: the children, listed (same addition)
     : k === "after" && v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, e]: any) => !(e && typeof e === "object" && "socket" in e)))
     : k === "notes" && Array.isArray(v) ? v.filter((e: any) => !(e && typeof e === "object" && "legacy" in e))   // the note saying it minted them
