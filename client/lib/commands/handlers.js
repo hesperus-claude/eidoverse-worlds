@@ -106,7 +106,7 @@ register('role', (arg) => {
 
 register('grant', (arg) => {
   // /grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever]: +gen/+fly are roles:<id>.can exceptions, `for`
-  // sets roles:<id>.until (30m, 2h, 1d, 1w), `forever` clears it. The authority decides rank.
+  // sets roles:<id>.until (30m, 2h, 1d, 1w), `forever` clears it (upstream #258). The authority decides rank.
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const id = parts[0];
   const forAt = parts.findIndex((p, i) => i > 0 && p.toLowerCase() === 'for');

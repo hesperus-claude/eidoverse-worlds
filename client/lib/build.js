@@ -378,7 +378,7 @@ export function updateBuild() {
       if (aim) {
         // keep the grab offset, or the ORIGIN jumps under the cursor (you grabbed the crate's corner, not its pivot)
         if (dragging.world) {
-          // grab offset, aim and result are WORLD points; a mounted child's position is parent-local, so convert last
+          // grab offset, aim and result are WORLD points; a mounted child's position is parent-local, so convert last (research 44 #5)
           _w.copy(aim.point).add(dragging.grab);
           if (aim.onto) _w.y = aim.point.y;
           setWorldPosition(selected.obj, _w);

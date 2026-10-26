@@ -281,7 +281,7 @@ export function logChat(who, text, kind = '', meta = {}) {
   recent.push({ who, text: String(text).slice(0, 140), kind });
   if (recent.length > 12) recent.shift();
   bus.emit('xr:repaint');
-  // merge ONLY one spoken utterance's continuation (same author + utt): an interrupted voice may finish later
+  // merge ONLY one spoken utterance's continuation (same author + utt, PR#7): an interrupted voice may finish later
   if (meta.spoken && meta.utt != null && lastLineEl?.isConnected &&
       lastLineEl.dataset.author === who && lastLineEl.dataset.utt === String(meta.utt)) {
     const body = lastLineEl.querySelector('.body');
@@ -309,7 +309,7 @@ export function logChat(who, text, kind = '', meta = {}) {
   lastLineEl = line;
 
   const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
-  // a spoken say slots before lines that arrived after its speech began (t0); display only, and bounded: a server may not clamp t0
+  // a spoken say slots before lines that arrived after its speech began (t0); display only, and bounded: a server may not clamp t0 (PR#7)
   const ts = meta.ts ?? Date.now();
   const t0ok = meta.spoken && Number.isFinite(meta.t0) &&
     meta.t0 <= ts && meta.t0 >= ts - 300_000;

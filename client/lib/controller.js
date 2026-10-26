@@ -473,7 +473,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 let swimVelocity = [0, 0, 0];
 const _swimProbe = new THREE.Vector3(), _swimOld = new THREE.Vector3();
 const _swimQ = new THREE.Quaternion(), _swimTilt = new THREE.Quaternion();
-/** @world.bounds as walking, else the stage's 78 m island. Upstream's `environment.bounds` is deferred with water volumes. */
+/** @world.bounds as walking, else the stage's 78 m island. Upstream's `environment.bounds` is deferred with #248's water volumes. */
 export function constrainMovement(pos) {
   const [x, z] = clampToBounds(pos.x, pos.z); pos.x = x; pos.z = z;
   if (!worldBounds()) { const r = Math.hypot(pos.x, pos.z); if (r > 78) { pos.x *= 78 / r; pos.z *= 78 / r; } }
@@ -609,7 +609,7 @@ export function updateMe(dt, me) {
   const target = moving ? (xrIntent.active ? stickSpeed(mag, me.userScale) : full * mag) : 0;
   myState.speed = easeSpeed(myState.speed, target, dt);
   if (speedCap && performance.now() < speedCap.until) myState.speed = Math.min(myState.speed, speedCap.v); else speedCap = null;
-  // one water level per world, none while flying; the mover's stance sets the pace, measured on this body's stature
+  // one water level per world (upstream #242), none while flying; the mover's stance sets the pace, measured on this body's stature
   const wl = flight ? null : waterLevel();
   const wadeH = wl == null ? 0 : me.bodyHeight?.() ?? colliderFor(me.userScale).tall;
 
@@ -780,7 +780,7 @@ export function updateFollowCamera(dt, me) {
   if (editingNow() && !firstPerson) focus.add(editPan);
 
   if (firstPerson) {
-    // posed or not standing: the LIVE head bone (the mixer runs while hidden); standing keeps the fixed height, or the stride's head motion reaches the eye
+    // posed or not standing: the LIVE head bone (#75; the mixer runs while hidden); standing keeps the fixed height, or the stride's head motion reaches the eye
     if (me && (myState.pose || !STANDING_CLIPS.has(myState.clip))) {
       const hp = me.headWorldPosition(_headWp);
       if (hp) focus.set(hp.x, hp.y + FP_EYE_LIFT, hp.z);
@@ -903,7 +903,7 @@ function updatePhotoCamera(dt) {
   camera.lookAt(_f.add(photo.pos));   // _f is spent here
 }
 
-/** Spectator/retina camera: first person from a followed body's live head bone (as the snap `first` view), body hidden. */
+/** Spectator/retina camera: first person from a followed body's live head bone (as the snap `first` view, #75), body hidden. */
 const _specHead = new THREE.Vector3();
 const _specBox = new THREE.Box3();
 export function updateSpectator(dt, remote) {

@@ -15,7 +15,7 @@ import { autoHooks as autos, ownHook } from './autohooks.js';
 import { sendRequest } from './net.js';
 
 // ---- textures --------------------------------------------------------------
-// the cache owns sprite textures, emitters borrow: retiring one never disposes them (that would blank every other fire)
+// the cache owns sprite textures, emitters borrow (#25): retiring one never disposes them (that would blank every other fire)
 const textureCache = new Map();
 
 async function spriteTexture(path) {
@@ -79,7 +79,7 @@ const budget = () => QUALITY_TIERS[tier] ?? 1;
 
 async function build(resolved, { id }) {
   const ent = entities.get(id);
-  // `null` (GLB still downloading) or absent (removed): nothing to hang off, and a world-origin emitter is drift
+  // `null` (GLB still downloading) or absent (removed): nothing to hang off, and a world-origin emitter is drift (#25 requirement 2)
   if (!ent) throw new Error(`entity ${id} is not in the scene`);
   // a part (picture.part, openable.part): its node, once the model has it; until then the thing itself, re-hung below
   const host = (resolved.part && findPart(ent, resolved.part)) || ent;

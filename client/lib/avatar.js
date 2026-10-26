@@ -1683,7 +1683,7 @@ export class Avatar {
     this.root.add(this.label);
   }
 
-  /** A seated body whose profile gate is closed (legacy socket, no profile, clip not loaded…) wears a ≈ on its plate:
+  /** (#101) A seated body whose profile gate is closed (legacy socket, no profile, clip not loaded…) wears a ≈ on its plate:
    *  no silent root-at-socket. Redrawn only on a transition. */
   setSeatApprox(on) {
     if (this._seatApprox === !!on) return;
@@ -1692,7 +1692,7 @@ export class Avatar {
   }
 
   // ---- speech
-  /** Generation-end: the TRANSIENTS (pill, bubble, held pose, limpness, gaze) belong to the generation, not the mesh a
+  /** Generation-end (#95): the TRANSIENTS (pill, bubble, held pose, limpness, gaze) belong to the generation, not the mesh a
    *  takeover transplants. Each resets through its own teardown, never a second way to die. */
   resetTransients() {
     this.setTyping(null);

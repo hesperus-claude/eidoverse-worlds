@@ -45,7 +45,7 @@ export async function setEndpointVoice(url, label) {
     body: JSON.stringify({ text: 'test' }),
   }).catch(() => null);
   if (!probe?.ok) return false;
-  // ONE AudioContext per page, never a second; decodeAudioData works on the shared one even suspended
+  // ONE AudioContext per page (#86), never a second; decodeAudioData works on the shared one even suspended
   const { audioContext } = await import('./audioctx.js');
   const ctx = audioContext();
   setTtsSource(async (text) => {

@@ -185,7 +185,7 @@ function endGrab() {
   drag = null;
 }
 
-/** Release quietly BEFORE the avatar is disposed, or the VRM is double-disposed ('participant-teardown' comes first). */
+/** The dragged person left (#95): release quietly BEFORE the avatar is disposed, or the VRM is double-disposed ('participant-teardown' comes first). */
 bus.on('participant-teardown', (id) => {
   if (drag?.id === id) {
     drag.rd.setPin(null);

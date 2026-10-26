@@ -214,7 +214,7 @@ function paint(body) {
     body_.append(row);
   }
 
-  // gate unavailable: the mic REFUSES to transmit and this row offers the explicit choice to go raw; never silent
+  // gate unavailable (#90): the mic REFUSES to transmit and this row offers the explicit choice to go raw; never silent
   {
     const row = checkRow('transmit UNGATED (voice gate unavailable)',
       'the noise gate could not be built on this device — checking this transmits your raw microphone, room noise and all',

@@ -147,9 +147,9 @@ function hasFloor(bvh, box, s) {
 }
 
 // ---- the uneven-top probe ---------------------------------------------------
-// Top lie = bbox top minus the median cell top of a vertex grid; the math is supportclass.js's, shared with headless.
+// Top lie = bbox top minus the median cell top of a vertex grid (#11); the math is supportclass.js's, shared with headless.
 // with headless. No BVH on purpose: the BVH is what decide() is pricing. Survey: tools/collider-survey.ts.
-export function topLie(obj, box) {   // exported for the classifier-parity fixture
+export function topLie(obj, box) {   // exported for the classifier-parity fixture (#94)
   const w = box.max.x - box.min.x, d = box.max.z - box.min.z;
   const acc = gridAccumulator(box.min.x, box.min.z, w, d);
   if (!acc) return 0;
@@ -178,7 +178,7 @@ function decide(entry, s, fresh = false) {
   const h = (box.max.y - box.min.y) * s;
   // shape gates come from supportclass.js; the numbers in the comments below are ITS constants
   const { roomScale } = decideSupportClass({ w, d, h });
-  // The exception: floor-shaped things whose box top lies (blankets, rugs) collide exact; thresholds
+  // The exception: floor-shaped things whose box top lies (blankets, rugs) collide exact (#11); thresholds
   // in supportclass.js. The lie probe is per lib and scale-free, and runs only when the shape gate asks.
   const { floorShaped } = decideSupportClass({ w, d, h });
   const shared = entry.cacheKey ? libCache.get(entry.cacheKey) : null;
@@ -235,7 +235,7 @@ export function fitCollider(id, obj, { collide, scale = 1, lib = null, localFram
   bucketAdd(id, entry);
 }
 
-/** Support from DATA (/geom bboxes and floor decks) for a model headless couldn't decode. Not decide()
+/** Support from DATA (/geom bboxes and floor decks) for a model headless couldn't decode (#17). Not decide()
  *  (its probes need triangles): always a box; room-scale floors come as thin slabs, never a sealing block.
  *  `min`/`max` are entity-LOCAL, like fitCollider's box. */
 export function fitSupportBox(id, min, max, { position, yaw = 0, scale = 1 } = {}) {
@@ -256,7 +256,7 @@ export function fitSupportBox(id, min, max, { position, yaw = 0, scale = 1 } = {
   bucketAdd(id, entry);
 }
 
-/** Heightfield support from a served topGrid, for floor-shaped assets whose box top lies: the same grid
+/** Heightfield support from a served topGrid (#84), for floor-shaped assets whose box top lies: the same grid
  *  decide() uses to detect the lie IS the floor here. Support only, model-local. Returns false for anything
  *  validTopGrid refuses; the caller then abstains, never falls back to the box top. */
 export function fitSupportGrid(id, topGrid, { position, yaw = 0, scale = 1 } = {}) {
@@ -589,7 +589,7 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
       continue;
     }
     if (grid) {
-      // Heightfield support: the containing cell's max-y, piecewise-constant; an empty cell offers NOTHING
+      // Heightfield support (#84): the containing cell's max-y, piecewise-constant; an empty cell offers NOTHING
       // (interpolating would bridge air into floors).
       const gs = obj.scale?.x || 1;
       _local.set(pos.x - obj.position.x, 0, pos.z - obj.position.z)
@@ -685,7 +685,7 @@ export function findSeat(pos, range = 1.2, skip = null) {   // skip(entry): a su
     const { obj, mask } = e0; const { yaw, box, exact, pillar, grid } = frameOf(e0);
     if (mask || skip?.(e0)) continue;
     if (pillar || exact) continue; // interiors aren't chairs; furniture inside them is
-    if (grid) continue; // a heightfield's box top is the lie we exist to avoid — no phantom seat offers
+    if (grid) continue; // a heightfield's box top is the lie we exist to avoid — no phantom seat offers (#11)
     const sc = obj.scale?.x || 1;
     const topY = obj.position.y + box.max.y * sc;
     const rise = topY - pos.y;

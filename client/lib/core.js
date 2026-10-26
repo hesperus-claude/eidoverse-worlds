@@ -107,7 +107,7 @@ globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype)
 // spectators start a notch lower: an audience laptop's job is 30fps for an hour
 export const BASE_PIXEL_RATIO = Math.min(devicePixelRatio, CONFIG.spectate ? 1.5 : 2);
 renderer.setPixelRatio(BASE_PIXEL_RATIO);
-// while presenting, the pixel ratio belongs to the XR layer (xrpixelratio.js)
+// #32 split vision: while presenting, the pixel ratio belongs to the XR layer (xrpixelratio.js)
 export const xrPixelRatio = guardPixelRatioInXR(renderer);
 globalThis.__xrPixelRatioGuarded = !!xrPixelRatio;   // boot-check asserts the guard was APPLIED, not just importable
 renderer.outputColorSpace = THREE.SRGBColorSpace;

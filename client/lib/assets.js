@@ -153,7 +153,7 @@ export const ktx2Capable = () => !!ktx2.workerConfig;
 const versionReady = fetch('/version', { cache: 'no-store' })
   .then((r) => (r.ok ? r.json() : null)).catch(() => null);
 export const ktx2KeyReady = versionReady.then(keyFromVersion);
-/** The running sequencer's geometry-LOD recipe, or null: never ask for a tier the running process didn't declare. */
+/** The running sequencer's geometry-LOD recipe (#156), or null: never ask for a tier the running process didn't declare. */
 export const lodRecipeReady = versionReady.then(lodFromVersion);
 // resolved, for synchronous reads (the 2 Hz residency sweep can't await); null until or unless /version publishes
 let ktx2Key = null, lodRecipe = null;
@@ -161,9 +161,9 @@ ktx2KeyReady.then((k) => { ktx2Key = k; }).catch(() => {});
 lodRecipeReady.then((r) => { lodRecipe = r; }).catch(() => {});
 /** Settles once /version answers or fails; never rejects. */
 export const negotiationReady = Promise.all([ktx2KeyReady, lodRecipeReady]).then(() => {}, () => {});
-/** Can a lod ask cross the wire now (transcoder, running key AND recipe, bare .glb)? Nothing is reported asked that couldn't be. */
+/** Can a lod ask cross the wire now (#170;transcoder, running key AND recipe, bare .glb)? Nothing is reported asked that couldn't be. */
 export const lodNegotiable = (libPath) => resolveLoadRequest(libPath, 'lod').tier === 'lod';
-/** THE decision seam of a tiered load: tier wish -> URL, asked tier, cache key. tools/lod-loader-probe.ts gates it. */
+/** THE decision seam of a tiered load (#170): tier wish -> URL, asked tier, cache key. tools/lod-loader-probe.ts gates it. */
 export function resolveLoadRequest(libPath, tier = 'full') {
   // an eido:sha256/… model fetches /library/eido/sha256/<hex>.glb; the cache keys stay the model value itself
   const ask = askFor({ libPath: libRelOf(libPath), key: ktx2Key, capable: !!ktx2.workerConfig, recipe: lodRecipe, tier });
@@ -171,7 +171,7 @@ export function resolveLoadRequest(libPath, tier = 'full') {
 }
 /** GPU memory against the proto budget — the policy's "device pressure". */
 export const gpuPressure = () => (renderer.info?.memory?.total ?? 0) / GPU_BUDGET;
-// loadGLB(lib, { tier: 'full' | 'lod' }) is the only place a tier turns into bytes
+// loadGLB(lib, { tier: 'full' | 'lod' }) is the only place a tier turns into bytes (#156)
 /** The running server's key appended when this GPU decodes KTX2 and the asset class is `eligible`; else the bare path. */
 async function negotiated(path, eligible) {
   const key = eligible && ktx2.workerConfig ? await ktx2KeyReady : null;
@@ -415,7 +415,7 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
       const work = beginWork(`glb ${short}`);
       try {
         work.phase('download');
-        // §20: a lod ask is never a worse model (the server falls back); the full URL keys byteCache
+        // §20 + #156: a lod ask is never a worse model (the server falls back); the full URL keys byteCache
         const buf = await fetchBytes(`/library/${req.url}`);
         // body first: the PARSE waits for your own body (bodygate.js), capped so nothing can hold the world
         if (BODY_FIRST && bodyGateArmed() && !bodyGateOpen()) {
@@ -541,7 +541,7 @@ export const protoStats = () => ({
 // 'fly' and 'soar' are the airborne pair: fallIdle (limbs trailing, no contact), not a run cycle.
 
 const vrmaCache = new Map();
-// the seat gate matches this to the server's profile digest: a divergent clip can't wear another's profile
+// the seat gate matches this to the server's profile digest (#101): a divergent clip can't wear another's profile
 const vrmaSha = new Map(); // slot → hex sha256, present only once resolved
 export function vrmaShaLoaded(slot) { return vrmaSha.get(slot) ?? null; }
 // ?v=<mtime> from /animations: the only invalidation reaching caches we don't control
