@@ -986,10 +986,10 @@ try {
     const rel = (b) => { const p = at(b).sub(hips); return { fwd: +p.dot(f).toFixed(2), up: +p.y.toFixed(2), side: +p.dot(new T.Vector3(f.z, 0, -f.x)).toFixed(2) }; };
     const palm = (b, sgn) => { const n = h.getNormalizedBoneNode(b); n.updateWorldMatrix(true, false); const d = new T.Vector3(0, -1, 0).transformDirection(n.matrixWorld); return +d.dot(f).toFixed(2); };
     return { leftHand: rel('leftHand'), rightHand: rel('rightHand'), leftShoulder: rel('leftUpperArm'), head: rel('head'), palmOut: [palm('leftHand'), palm('rightHand')] };`);
-  const posed = (limbs: any) => !!(posed(limbs));
+  const posed = (limbs: any) => !!(limbs && limbs.leftHand.fwd > 0.35 && limbs.rightHand.fwd > 0.35 && limbs.palmOut[0] > 0.6 && limbs.palmOut[1] > 0.6 && limbs.leftHand.up > 0.05 && limbs.leftHand.up < limbs.leftShoulder.up && limbs.rightHand.up < limbs.leftShoulder.up && limbs.leftHand.side * limbs.rightHand.side < 0);
   // the pose eases in over frames: wait for it (a slow runner draws few frames a second), then read it
   const limbs = (await tryUntil("my body has eased into the working pose", async () => { const l = await measure(); return posed(l) ? l : null; }, { ms: 8000, step: 200 })) ?? await measure();
-  check("FC1b the working pose (a mage casting): both hands well out in front, below the shoulders, on their own sides, palms facing out", limbs && limbs.leftHand.fwd > 0.35 && limbs.rightHand.fwd > 0.35 && limbs.palmOut[0] > 0.6 && limbs.palmOut[1] > 0.6 && limbs.leftHand.up > 0.05 && limbs.leftHand.up < limbs.leftShoulder.up && limbs.rightHand.up < limbs.leftShoulder.up && limbs.leftHand.side * limbs.rightHand.side < 0, limbs);
+  check("FC1b the working pose (a mage casting): both hands well out in front, below the shoulders, on their own sides, palms facing out", posed(limbs), limbs);
   check("FC1 the Free switch: the camera is its own, the switch shows it, and my body holds a pose", s0.sw.join() === "body" && s1.free && s1.sw.join() === "free" && s1.pose && !s0.pose, { s0, s1 });
   // hold W until the camera's centre has flown > 1 m (it moves per frame: a fixed hold measured the frame rate, not the flight)
   await evalJson(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true })), true)`);
