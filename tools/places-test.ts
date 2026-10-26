@@ -72,7 +72,7 @@ try {
   await legacyVerb(a, "spawn", { id: "tower", lib, pos: [0, gy, 0], yaw: 0 });
   // a second, identical tower 30m east, for "the nearest of two"
   await legacyVerb(a, "spawn", { id: "tower2", lib, pos: [30, a.heightAt(30, 0), 0], yaw: 0 });
-  await tryUntil("the towers' supports are registered", () => a.supportIds?.get("tower") && a.supportIds?.get("tower2"), { ms: 5000, step: 50 });
+  await tryUntil("the towers' supports are registered", () => a.supportIds?.get(sceneId(a, "tower")) && a.supportIds?.get(sceneId(a, "tower2")), { ms: 5000, step: 50 });
   await a.supportReady(); await sleep(300);
 
   await a.walkTo(0, 7, true);
@@ -144,7 +144,7 @@ try {
   const stool = await upload("stool", await buildGlb([[-0.25, 0, -0.2, 0.25, 0.32, 0.2]]));
   await legacyVerb(a, "spawn", { id: "stool", lib: stool, pos: [-1.5, gy + FLOOR, 1.0], yaw: 0, collide: "box" });
   await legacyVerb(a, "comp", { id: "tower", type: "places", data: { ...a.entities.get(sceneId(a, "tower")).places, by_stool: { at: [-1.0, FLOOR, 1.0] } } });
-  await tryUntil("the stool's support is registered", () => a.supportIds?.get("stool"), { ms: 2000, step: 50 });
+  await tryUntil("the stool's support is registered", () => a.supportIds?.get(sceneId(a, "stool")), { ms: 2000, step: 50 });
   await a.supportReady(); await sleep(400);
   await tool("walk_to", { to: "tower/entrance", run: true });
   r = await tool("walk_to", { to: "tower/by_stool", run: true });
@@ -213,7 +213,7 @@ try {
   const kr = await legacyVerb(a, "comp", { id: "perch", type: "places", data: { seat: { at: [0, 0.32, 0], kind: "seat" } } });
   check("a place's kind is gone: an entry with one is refused (shape audit 10-16: a seat is a station)", kr?.refused?.code === "schema", JSON.stringify(kr?.refused ?? kr));
   await legacyVerb(a, "comp", { id: "perch", type: "places", data: { seat: { at: [0, 0.32, 0] } } });
-  await tryUntil("the rug's and perch's supports are registered", () => a.supportIds?.get("rug") && a.supportIds?.get("perch"), { ms: 3000, step: 50 });
+  await tryUntil("the rug's and perch's supports are registered", () => a.supportIds?.get(sceneId(a, "rug")) && a.supportIds?.get(sceneId(a, "perch")), { ms: 3000, step: 50 });
   await a.supportReady(); await sleep(400);
   r = await tool("walk_to", { to: "the long room", run: true });
   check("a room whose middle is furnished is reached at its clear floor, toward an end",

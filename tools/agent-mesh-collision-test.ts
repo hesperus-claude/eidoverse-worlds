@@ -96,7 +96,7 @@ try {
   // the building sits on the ground under its own origin, wherever that is
   const gy = a.heightAt(0, 0);
   await legacyVerb(a, "spawn", { id: "tower", lib: path, pos: [0, gy, 0], yaw: 0 });
-  await tryUntil("the tower's support is registered", () => a.supportIds?.get("tower"), { ms: 5000, step: 50 });
+  await tryUntil("the tower's support is registered", () => a.supportIds?.get(sceneId(a, "tower")), { ms: 5000, step: 50 });
   await a.supportReady();
   await sleep(300);  // the fit is a detached registration
   // y: which floor at the destination, where it has more than one (navgrid)
