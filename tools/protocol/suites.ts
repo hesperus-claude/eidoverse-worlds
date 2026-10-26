@@ -104,7 +104,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["disabled", "disabled-check.ts", 1],   // a switched-off thing: no handling, no body, nothing stands on it; back on, all returns
   ["histdiff", "history-diff-check.ts", 1], // history {id}: each entry says what changed (a field, from what to what)
   ["reachgate", "reachgate-check.ts", 1], // a hand on another body relays only with their consent (the relay strips it, the reacher is told)
-  ["consent", "consent-check.ts", 1],   // the consent tool never writes through a prototype
+  ["consent", "consent-table-check.ts", 1],   // decide() and setConsent() over every class: one order, and nothing from the wire reaches a prototype
   ["history-rows", "history-rows-check.ts", 1],   // the editor History never shows a refused attempt as done
   ["scale", "scale-check.ts", 1],       // the authority at scale: every request under 50 ms at 72/500/2 000 things; gates before work; capacity; indoors
   ["roles", "roles-check.ts", 1],       // roles + moderation: ranks, permissions, the grant rule, sanctions, ghost

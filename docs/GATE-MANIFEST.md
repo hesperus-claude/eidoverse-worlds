@@ -263,7 +263,7 @@ time.
 | 93 | disabled | main | `tools/protocol/disabled-check.ts` | bun | 1.2 s | 180 s |
 | 94 | histdiff | main | `tools/protocol/history-diff-check.ts` | bun | 0.3 s | 180 s |
 | 95 | reachgate | main | `tools/protocol/reachgate-check.ts` | bun | 22 s | 180 s |
-| 96 | consent | main | `tools/protocol/consent-check.ts` | bun | 0 s | 180 s |
+| 96 | consent | main | `tools/protocol/consent-table-check.ts` | bun | 0 s | 180 s |
 | 97 | history-rows | main | `tools/protocol/history-rows-check.ts` | bun | 0.6 s | 180 s |
 | 98 | scale | main | `tools/protocol/scale-check.ts` | bun | 125 s | 625 s |
 | 99 | roles | main | `tools/protocol/roles-check.ts` | bun | 3.1 s | 180 s |

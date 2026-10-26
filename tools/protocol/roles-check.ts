@@ -344,7 +344,7 @@ const cases: Case[] = [
     good: (o) => o.code === "shape" && /no level/.test(o.why) && o.before === undefined && o.rank === 200 },
 
   // ---------------- B3: world settings that reach the authority ----------------
-  { id: "WS1", what: "(recut B3) an owner sets @world.body-default through the real set verb and it is stored (the decision reading it: switch-check W8)", run(s) { cast(s);
+  { id: "WS1", what: "(recut B3) an owner sets @world.body-default through the real set verb and it is stored (the decision reading it: consent-table-check T2b)", run(s) { cast(s);
       const r = set(s, "olive", "body-default", "refuse");
       return { set: show(r), stored: s.w().state().entities["@world"].c["body-default"] }; },
     good: (o) => o.set === "ok" && o.stored === "refuse" },
