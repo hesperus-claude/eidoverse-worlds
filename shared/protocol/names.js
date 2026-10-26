@@ -66,7 +66,7 @@ export function motionNode(key, m) {
   return m && typeof m.node === "string" && m.node ? m.node : key.slice(7);
 }
 
-// a motion's type: `bob` is now `oscillate`; the old spelling is READ for one release (the door stores today's, the
+// a motion's type: its old spelling (OLD_MOTION_TYPES) is now `oscillate` and is READ for one release (the door stores today's, the
 // repair renames stored ones: shaperepair.js renameFields). Spelled here only (tools/protocol/vocab-check.ts).
 export const OLD_MOTION_TYPES = Object.freeze({ bob: "oscillate" });
 /** @param {any} m a motion value @returns {any} its type in today's spelling (anything else as it is) */

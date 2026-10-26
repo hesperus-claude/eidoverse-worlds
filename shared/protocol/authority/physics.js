@@ -1,6 +1,6 @@
 // shared/protocol/authority/physics.js — physics (design 20), the engine and the body: settleSim (the rests a request
 // logs), restampEngine, buildEpoch, a body's track and hand, what is solid, ground steps and blocked paths, a body's
-// size and law. Riders are authority/occupants.js, body-on-thing authority/manipulate.js, body verbs
+// size and law. Occupants are authority/occupants.js, body-on-thing authority/manipulate.js, body verbs
 // authority/bodyverbs.js. The gate and manipulate's returnPlan are reached through UP.
 import { MOVER, bodyBox, bodyScale, floorStep, sweep } from "../../mover.js";
 import { COMPONENTS } from "../componentspec.js";

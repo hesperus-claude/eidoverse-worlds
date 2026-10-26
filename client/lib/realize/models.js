@@ -645,7 +645,7 @@ function execMount(id) {
   if (!child) return;
   const parent = entities.get(rel.to) || standInFor(rel.to);
   if (!parent) return;
-  // a socket on a part goes INTO the part's node at its rest pose, so the scene graph carries it (and its riders)
+  // a socket on a part goes INTO the part's node at its rest pose, so the scene graph carries it (and its occupants)
   // through the motion; the part node is part of the linkage identity
   const part = typeof ent?.socket?.part === 'string' ? ent.socket.part : null;
   const partNode = part && !parent.userData.standIn ? findPart(parent, part) : null;
