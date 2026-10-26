@@ -1,8 +1,5 @@
-// Settings › VR (owner, 09-05 18:22: "add VR to the Settings — smooth turning,
-// vignette, mirror VR view to desktop, 3rd person"). One section on the
-// video panel's grammar; prefs live in xr.js (xrPrefs / setXrPref) so the
-// frame loop reads them without a round trip. Visible whether or not a
-// headset is sensed — the first row says which, so the rest make sense.
+// Settings › VR — one section on the video panel's grammar; prefs live in xr.js (xrPrefs / setXrPref) so the
+// frame loop reads them without a round trip. The first row says whether a headset is sensed.
 import { makeSection, flashHint } from './ui.js';
 import { checkRow, selectRow, btn, sliderTable } from './rows.js';
 import { currentGrade, setGrade, GRADE_DEFAULT, GRADE_RANGE } from './quadcolour.js';
@@ -30,18 +27,15 @@ export function initVRPanel() {
     turn.title = 'smooth: continuous, like a desktop mouse — the default. snap: the world pivots 30° per stick flick, a comfort option.';
     body.appendChild(turn);
 
-    // pointer visibility: is the VR laser drawn (owner, 10-02, after comparing with Resonite; the owner named it). A house
-    // dropdown like its neighbours: dropdown.js skins the <select> and opens its list INSIDE the staged frame, so it works
-    // on the VR quad (a native popup is never drawn there). Pointing works in every mode; this only decides whether the
-    // beam is drawn (xrpointer.js).
+    // pointer visibility: whether the VR laser is drawn (pointing works in every mode; xrpointer.js). dropdown.js
+    // opens its list inside the staged frame, so it works on the VR quad where a native popup never draws.
     const POINTER_VIS_OPTS = [['always', 'always'], ['never', 'never (still points)'], ['contextual', 'contextual']];
     const { row: pointerVis, select: pointerVisSel } = selectRow('pointer visibility', POINTER_VIS_OPTS, pointerVisibilityMode(xrPrefs.pointerVisibility),
       (v) => { setXrPref('pointerVisibility', pointerVisibilityMode(v)); flashHint(`VR pointer visibility: ${pointerVisibilityMode(v)}`); });
     pointerVisSel.id = 'vr-pointer-visibility';
     pointerVis.title = 'contextual (the default): the beam shows while it rests on a panel or a name, or while you hold grip or trigger. always: always drawn, faint when it points at nothing. never: no beam, but pointing, clicking and name hover still work (the surface dot has its own setting, below).';
     body.appendChild(pointerVis);
-    // surface dot visibility: the dot where the laser lands has its own say (owner, 10-02). Contextual: on what the
-    // contextual beam shows for (a panel, a name, something you can use); always: on any surface, a plain wall too.
+    // surface dot: contextual = on what the contextual beam shows for; always = on any surface, a plain wall too
     const { row: dotVis, select: dotVisSel } = selectRow('surface dot visibility', POINTER_VIS_OPTS.map(([v, t]) => [v, v === 'never' ? 'never' : t]), pointerVisibilityMode(xrPrefs.dotVisibility),
       (v) => { setXrPref('dotVisibility', pointerVisibilityMode(v)); flashHint(`VR surface dot visibility: ${pointerVisibilityMode(v)}`); });
     dotVisSel.id = 'vr-dot-visibility';
@@ -65,16 +59,14 @@ export function initVRPanel() {
     mir.title = 'what the browser window shows while you are in the headset. off costs nothing; the others draw one extra frame per tick.';
     body.appendChild(mir);
 
-    // C15: seated + recentre. Seated keeps the body standing while you sit (the head is lifted to the
-    // avatar's standing eye height and your real height is not measured); recentre puts the body
-    // under your head and turns it to face where you face — also on the VR ring.
+    // seated keeps the body standing while you sit (head lifted to the avatar's eye height); recentre puts the body
+    // under your head, facing where you face (also on the VR ring)
     const seated = checkRow('seated', () => !!xrPrefs.seated,
       (on) => { setXrPref('seated', !!on); flashHint(`VR seated ${on ? 'on' : 'off'}`); if (isPresenting()) recentreXR('seated'); });
     seated.title = 'playing from a chair: the body stands at its own height under your head, and your real height is not measured. Recentres when toggled.';
     body.appendChild(seated);
 
-    // the VR panels' look (owner, 09-30: colours read less vibrant in the headset): saturation and contrast applied to
-    // the panel quads only (quadcolour.js), never the design tokens or the desktop. Live while presenting; persisted.
+    // VR panels' look: saturation and contrast on the panel quads only (quadcolour.js), never the tokens or desktop
     const g = { ...currentGrade() };
     const grade = sliderTable([['saturation', ...GRADE_RANGE.saturation, 0.05], ['contrast', ...GRADE_RANGE.contrast, 0.02]], g, {
       set: (k, v) => { g[k] = v; Object.assign(g, setGrade({ [k]: v })); },

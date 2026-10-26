@@ -1,34 +1,6 @@
-/** voiceengines — a SLOT for speech engines, the way the world has a slot for
- *  components.
- *
- *  R asked for this shape directly (2026-08-09): "Can we do a slot-component
- *  solution for this under the hood like we do for eidoverse itself?" Yes, and
- *  it is the right call — the alternative was already rotting. Piper was baked
- *  into 21 places across two files, so "support Kokoro too" meant editing the
- *  dropdown, the loader, and the accept list, and every engine after it would
- *  cost the same again. That is the enum basin: a kind-list masquerading as a
- *  capability.
- *
- *  The server's comp fold is the model (server.ts:407):
- *
- *      if (a.data == null) delete ent.comp[a.type]; else ent.comp[a.type] = a.data;
- *      // "Blind by design: `data` is opaque here."
- *
- *  It stores components without knowing a single component type. The meaning
- *  lives in the data and in whoever reads it. So here: this module knows no
- *  engine names. An engine REGISTERS itself, declares what files it recognises,
- *  and returns the one thing the rest of the system wants —
- *
- *      (text) => { pcm: Int16Array, sampleRate: number }
- *
- *  which is exactly what setTtsSource() has always taken. The universal seam was
- *  already there; only the loading layer had an enum in it.
- *
- *  Adding an engine = one registerEngine() call in its own file. Nothing here,
- *  in the panel, or in the accept list changes. A stranger can add one without
- *  touching code they did not write — the test from the enum-basin note: *can
- *  someone need a value that isn't listed?* Yes → it is data, not an enum.
- */
+/** voiceengines — a slot for speech engines; this module knows no engine names. An engine calls registerEngine(),
+ *  declares the files it recognises, and returns (text) => { pcm: Int16Array, sampleRate }, what setTtsSource()
+ *  takes. Adding an engine is one registerEngine() call in its own file. */
 
 const engines = [];
 
@@ -38,10 +10,8 @@ const engines = [];
  * @param {string} spec.label   human name for the UI
  * @param {string[]} spec.accept  file extensions it can consume ('.onnx', '.bin')
  * @param {(files: File[]) => number} spec.match
- *        Confidence this engine owns the picked files: 0 = not mine, higher
- *        wins. A SCORE rather than a boolean, because file shapes overlap —
- *        several engines use .onnx, and the one that recognises the config too
- *        should win over one that only saw a model.
+ *        Confidence this engine owns the picked files: 0 = not mine, higher wins (a score: several engines take
+ *        .onnx, and the one that also recognises the config should win).
  * @param {(files: File[]) => Promise<{speak: Function, label: string}>} spec.load
  *        Returns the speak fn. Throwing here is fine; the caller reports it.
  * @param {() => boolean} [spec.supported]  environment gate (WebGPU, OPFS, …)
@@ -79,10 +49,7 @@ export function matchEngine(files) {
   return best;
 }
 
-/** The whole public flow: hand it the files a human picked, get back a speak fn.
- *  Deliberately does NOT ask which engine — sniffing is the point, because a
- *  person with a voice model should not have to know which runtime consumes it.
- */
+/** The whole public flow: picked files in, a speak fn out. It sniffs rather than asks which engine. */
 
 export async function loadFromFiles(files, onProgress = () => {}) {
   const e = matchEngine(files);

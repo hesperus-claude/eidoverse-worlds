@@ -1,17 +1,9 @@
-// xrbody — the body follows the headset (Tier A1 + A2 of the 09-05 gap list;
-// porch-old index.html:6186–6236 ported, Basis's design). Before this, VR moved
-// only the camera and the body's yaw: the VRM's head never tilted and the body
-// stood wherever the controller put it, so a tall person floated above a
-// short avatar and remotes saw a mannequin. Now, every presenting frame, AFTER
-// the controller placed the root and BEFORE the render:
-//   1. distributed look-at — the HMD's pitch / roll / residual yaw, expressed
-//      relative to the body's facing, is spread over spine→chest→upperChest→
-//      neck→head with porch's weights, damped, yaw faded near vertical gaze —
-//      no single joint snaps;
-//   2. eye anchor — the whole VRM is translated (root-local) by (hmd − eye), so
-//      the avatar's eyes coincide with the headset by construction; the body
-//      HANGS BENEATH the head. Order matters: after the look chain (the head
-//      pose moves the eyes), before any arm solve (shoulders under the head).
+// xrbody — the body follows the headset. Every presenting frame, AFTER the controller placed the root and BEFORE
+// the render:
+//   1. distributed look-at: the HMD's pitch/roll/residual yaw, relative to the body's facing, spread over
+//      spine→chest→upperChest→neck→head, damped, yaw faded near vertical gaze; no single joint snaps;
+//   2. eye anchor: the VRM is translated (root-local) by (hmd − eye), so the body HANGS BENEATH the head.
+// Order matters: after the look chain (the head pose moves the eyes), before any arm solve.
 // DeviceScale (xr.js) scales the PUPPET to the player (Basis); tracking stays 1:1.
 import { THREE, renderer } from './core.js';
 import { CONFIG, tee } from './base.js';
@@ -57,12 +49,9 @@ export const xrBodyDebug = () => ({ look: look.toArray().map((v) => +v.toFixed(3
 // feeding the pose directly — the one input this module consumes.
 let simHead = null;
 export const xrSimActive = () => !!simHead;
-// C18 (owner, 09-05 20:03: body root stays yaw-only; tracked head/hands ride the wire as full quaternions,
-// Basis's shape). Everything here is FACING-relative — the wire `yaw` IS the facing (xrAvatarYaw), and a
-// remote sets its root to it, so a receiver's root frame equals the sender's facing frame by construction:
-// h = qRel (the look-chain input), l/r = grip [px,py,pz,qx,qy,qz,qw] in that frame, c = curls [lI,lG,rI,rG].
-// Receivers RE-SOLVE (reach's pattern: a relation, not bones). Absent when not tracked; a side is absent
-// while a gesture owns the arms or the grip is untracked.
+// The wire: body root stays yaw-only, tracked head/hands ride as full quaternions, all FACING-relative (wire `yaw`
+// IS the facing): h = qRel, l/r = grip [px,py,pz,qx,qy,qz,qw], c = curls [lI,lG,rI,rG]. Receivers RE-SOLVE; a
+// side is absent while untracked or a gesture owns the arms.
 const wire = { on: false, h: null, l: null, r: null, c: null };
 const r4 = (v) => +v.toFixed(4);
 const facingQ = new THREE.Quaternion(), facingInv = new THREE.Quaternion(), rootP = new THREE.Vector3(), fp = new THREE.Vector3(), fq = new THREE.Quaternion();
@@ -71,21 +60,9 @@ export const xrSimHead = (pos, quat) => { if (CONFIG.params.has('xrsim')) simHea
 const simGrip = { left: null, right: null };
 export const xrSimGrip = (side, pos, quat) => { if (CONFIG.params.has('xrsim')) simGrip[side] = pos ? { pos, quat } : null; };
 
-// ---- arm IK (Tier A3) — Basis's swivel solver, ported 2026-09-19 -----------
-// Was porch-old's two-bone + fixed chest-local pole (elbow flipped at the pole singularity — the
-// `_axis=(0,0,1)` fallback — and the wrist wrapped because the hand bone took the whole grip twist).
-// Now BasisArmSolveCore.cs (com.basis.eeriemovement, 6377b3eb): the elbow lives on the circle of
-// radius upper·sinα about the shoulder→hand axis; a STABLE frame (ex,ey) on that circle is built
-// from the torso so the swivel angle is continuous across reach directions; 36 samples + golden
-// refine pick the cheapest angle under (a) a prior — rest direction blended toward the head's line
-// of sight, (b) last frame's angle, (c) a torso-capsule penalty; a far-cheaper basin only wins after
-// a 0.2 s dwell (hysteresis: no flicker between two elbows); the chosen angle is smoothed 0.08 s at
-// ≤720°/s, reset outright on a teleport (>0.6·chain). Reach is SOFT at the end (exponential, s=0.02),
-// so full extension never pops. The wrist twist is SPLIT: the forearm rolls (keep ≤15°/15% on the
-// hand, cap 120°) and the hand takes the remainder — the grip orientation still
-// lands exactly. Joint-limit costs (humeral/pronation/wrist) are NOT ported: they need Basis's per-
-// joint limit tables; a later rung. Gestures trump IK. Lost tracking: hold 0.5 s, then relax to the
-// clip at 3 Hz (Basis's tracker-loss rule) instead of snapping in one frame.
+// ---- arm IK: port of Basis's swivel solver (BasisArmSolveCore.cs @6377b3eb); dials in ARM ----------------
+// The elbow picks the cheapest angle on its swivel circle (prior, last frame, torso penalty, dwell hysteresis); the
+// wrist twist is split between forearm and hand. Joint-limit costs aren't ported. Gestures trump IK.
 const WRIST_R = new THREE.Quaternion(0.5812875774993174, 0.7123369384133019, 0.08586779365740962, -0.38380664895827776);
 const WRIST_L = new THREE.Quaternion(-WRIST_R.x, WRIST_R.y, WRIST_R.z, -WRIST_R.w).normalize();   // mirror across YZ
 const ARM = { SAMPLES: 36, REFINE: 8, MIN_ELBOW: 22 * Math.PI / 180, MIN_REACH_FRAC: 0.05, SOFT: 0.02, PRIOR_W: 0.5, PREV_W: 0.25,
@@ -146,10 +123,8 @@ export function solveArm(vrm, side, targetPos, targetQuat, opts = {}) {
   const U = h.getNormalizedBoneNode(side + 'UpperArm'), L = h.getNormalizedBoneNode(side + 'LowerArm'), H = h.getNormalizedBoneNode(side + 'Hand');
   if (!U || !L || !H) return false;
   const st = armState(vrm, side), dt = opts.dt > 0 ? opts.dt : 1 / 60;
-  // THE TWIST RESEEDS AFTER ANY GAP (review 10a M1). It unwraps against last frame's value, which is only meaningful if
-  // last frame was just now: across a VR exit/entry, a gesture that took the arms, a remote leaving VR, or a tracking
-  // loss shorter than the relax, the stale value put a fresh grip on the far 360° branch (palm-up at exit, pronated at
-  // entry → a candy-wrapper wrist) and it stuck, since the unwrap only moves continuously. `opts.now` (ms) for tests.
+  // the twist reseeds after any solve gap: it unwraps against last frame, so a stale value lands a fresh grip on the
+  // far 360° branch and sticks. `opts.now` (ms) for tests.
   const now = opts.now ?? performance.now();
   if (st.twist != null && st.solvedAt != null && now - st.solvedAt > ARM.TWIST_GAP * 1000) st.twist = null;
   U.quaternion.identity(); L.quaternion.identity(); H.quaternion.identity();
@@ -222,17 +197,9 @@ export function solveArm(vrm, side, targetPos, targetQuat, opts = {}) {
     H.parent.getWorldQuaternion(_q).invert();
     _qH.copy(_q).multiply(targetQuat).multiply(side === 'left' ? WRIST_L : WRIST_R);
     _fa.copy(H.position).normalize();   // forearm axis in the lower arm's local frame
-    // CONTINUOUS twist (owner, 09-23, tigerbee: thumb-down/palm-out → thumb-out/palm-up and the forearm 'tries to
-    // flip the other way'). The twist was wrapped to ±180° about the REST hand (palm down) and faded 155–178°; but
-    // a forearm's range isn't centred on rest — palm-up is ~170° of supination, thumb-down ~100° of pronation — so
-    // full supination sat on the wrap, and the forearm unwound +120° → 0 → −120° over ~60° of wrist
-    // (armsolve-test 6: 9.4° of forearm per degree of grip). Now: (a) the twist is measured about the forearm's
-    // ANATOMICAL middle (45° of supination; supination is + on the right, − on the left in the normalized rig), so
-    // the one ambiguous angle a seed can land on is 135° of pronation past palm-down, not palm-up; (b) it unwraps
-    // against last frame, continuous through ±180°; (c) it SATURATES 240° either side of that middle — past it the
-    // forearm holds its cap and the hand takes the rest. A twist must change branch once per 360° somewhere; this
-    // puts it ~420° from the middle. Reseeded wherever the swivel is (first frame, teleport, tracking lost), and after any
-    // solve gap over ARM.TWIST_GAP (session start, gestures, short tracking losses: review 10a M1).
+    // Continuous twist, measured about the forearm's ANATOMICAL middle (TWIST_CENTER of supination; + right, − left),
+    // unwrapped against last frame and saturated TWIST_WINDOW either side, so the branch change sits ~420° from the
+    // middle, not at palm-up. Reseeded with the swivel and after any gap over ARM.TWIST_GAP.
     const raw = twistAbout(_qH, _fa), mid = side === 'left' ? -ARM.TWIST_CENTER : ARM.TWIST_CENTER;
     const demand = st.twist == null ? mid + wrapA(raw - mid)
       : THREE.MathUtils.clamp(st.twist + wrapA(raw - st.twist), mid - ARM.TWIST_WINDOW, mid + ARM.TWIST_WINDOW);
@@ -268,12 +235,9 @@ export function relaxArm(vrm, side, dt) {
   return true;
 }
 
-// ---- finger curl (Tier A4; porch-old :5917–5939 verbatim) ------------------
-// Index ← trigger, Middle/Ring/Little ← grip, across Proximal/Intermediate/
-// Distal at [1.22, 1.57, 0.96] rad for a full fist, handed sign. ASSIGN base×
-// curl every frame — never multiply onto last frame's result: nothing resets
-// finger bones in VR, so an accumulated curl integrates into spin (porch's
-// spinning-fingertips bug). Base quats are captured on first touch.
+// ---- finger curl -------------------------------------------------------------
+// Index ← trigger, Middle/Ring/Little ← grip, at CURL rad for a full fist, handed sign. ASSIGN base × curl every
+// frame, never multiply onto last frame's: nothing resets finger bones in VR, so a curl would integrate into spin.
 const CURL = [1.22, 1.57, 0.96];
 const curlQ = new THREE.Quaternion(), curlE = new THREE.Euler();
 const simCurl = { left: null, right: null };
@@ -321,9 +285,6 @@ function applyLookChain(h, qIn, lk, dt) {
   return pitch;
 }
 
-/** C18 receiver: pose a REMOTE body from its wire sample — same look chain, same arm solve, same curls,
- *  in the remote root's frame (== the sender's facing frame). No latch (the wire yaw already carries it),
- *  no eye anchor (the remote stands on its root). `st` = per-remote state { look: Vector3 }. */
 /** My tracked hand's world position this frame (a simulated grip in a probe), or null when it isn't tracked — what a
  *  socket's reach vr policy compares against its target (shared/sockbody.js reachWins). */
 const _hw = new THREE.Vector3(), _hwO = new THREE.Vector3();
@@ -335,6 +296,8 @@ export function xrHandWorld(side, out = _hw) {
   g.getWorldPosition(out);
   return out.distanceToSquared(xrRig()?.position ?? _hwO) > 1e-4 ? out : null;   // a controller at the rig origin is untracked
 }
+/** Pose a remote body from its wire sample, in the remote root's frame, with the same look chain, arm solve and
+ *  curls; no latch (the wire yaw carries it), no eye anchor. `st` = per-remote state { look: Vector3 }. */
 export function applyRemoteXR(av, xr, st, dt) {
   const vrm = av?.vrm, h = vrm?.humanoid;
   if (!h || !xr || !Array.isArray(xr.h) || xr.h.length !== 4) return;
@@ -356,13 +319,9 @@ export function applyRemoteXR(av, xr, st, dt) {
   fingerTick(vrm, { left: { index: c[0], grip: c[1] }, right: { index: c[2], grip: c[3] } });
 }
 
-// ---- foot IK + gait (Tier C14; porch-old index.html:6068–6163, porch-old's 2026-07-09 gait v1, ported
-// whole) — only with real HMD data (desktop keeps the mixer's legs); ?nofootik opts out. Feet are
-// PLANTED in the world and STEP when the desired spot (under the hips at rest hip-width, on the
-// root's floor) drifts past STEP or the body twists past YAWT; a stride is a 0.28 s sine-lift toward
-// desired + velocity-lead; a foot won't step while its partner is airborne unless past EMERG (both
-// airborne = running). Deterministic. When the eye anchor lifts the body beyond leg reach the feet
-// dangle (reach-clamped); when it lowers the body the knees bend — that is how crouching reads.
+// ---- foot IK + gait: only with real HMD data (desktop keeps the mixer's legs); ?nofootik opts out. Feet are
+// PLANTED and STEP when the desired spot drifts past STEP or the body twists past YAWT; no step while the partner
+// is airborne unless past EMERG. Deterministic; beyond leg reach the feet dangle, below it the knees bend.
 const NOFOOT = _qs.has('nofootik');
 const GAIT = { STEP: 0.16, EMERG: 0.42, YAWT: 0.7, DUR: 0.28, LIFT: 0.055, LEAD: 0.15, LEADMAX: 0.35, SNAP: 1.5 };
 const _fv = new THREE.Vector3(), _fq = new THREE.Quaternion();
@@ -404,7 +363,7 @@ export function gaitTick(g, desL, desR, bodyYaw, t, dt) {
     }
     f.p.y = des.y;   // a planted foot FOLLOWS THE GROUND: the plant is an x/z decision, never a height. Without this
                      // a foot planted at a jump's apex kept its airborne y after landing until an x/z step re-planted
-                     // it (owner, in-headset 09-19: 'stuck in the air after jumping until you move around a bit')
+                     // it
     const err = Math.hypot(f.p.x - des.x, f.p.z - des.z);
     if (err > GAIT.SNAP) { f.p.copy(des); f.yaw = bodyYaw; continue; }   // teleport: re-plant, no cross-room glide
     const yerr = Math.abs(wrap(bodyYaw - f.yaw));
@@ -448,10 +407,8 @@ export function solveLeg(vrm, side, targetPos, footYaw) {
     F.quaternion.copy(_fq.multiply(_fq2.setFromEuler(_e2.set(0, Math.atan2(fwd.x, fwd.z), 0)))); }   // flat foot, toes along the planted yaw
   return true;
 }
-// Basis's rule (owner, 09-19: 'anim takeover when explicitly locomoting with the stick'): the clip owns the legs while
-// locomoting or airborne; the foot sim takes them only after 0.15 s stationary (BasisEeriePlanner.cs:65–66,
-// BasisLocalCharacterDriver.cs:134), weight in at 20/s, out at 15/s (Planner:71–72), applied as slerp(animated,
-// solved, w) per bone (BasisEerieMovement.Legs.cs:112–118). Each 0→>0 re-seeds the plants from the animated feet.
+// Basis's rule: the clip owns the legs while locomoting or airborne; the foot sim takes them after 0.15 s stationary
+// (BasisEeriePlanner.cs:65–66), weight in 20/s, out 15/s, as slerp(animated, solved, w) per bone; each 0→>0 re-seeds.
 const LEGIK = { STATIONARY: 0.15, IN: 20, OUT: 15 };
 const ANIM_OWNS = new Set(['walk', 'run', 'jump', 'climb', 'fly', 'soar', 'ragdoll']);
 const _legQ = { left: [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()], right: [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()] };
@@ -469,10 +426,8 @@ function feetTick(vrm, av, dt) {
   const ft = footTargets(vrm, floorY); if (!ft) return;
   ud._gaitT = (ud._gaitT || 0) + (dt > 0 ? dt : 1 / 30);
   if (!ud._gait) {
-    // RE-ENGAGE (landing, or the 0.15 s stationary gate opening): seed the plants from where the ANIMATED feet are, y forced to the floor,
-    // and let the ordinary step walk them to the ideal spots — Basis re-seeds its foot sim from the animated foot
-    // on every 0→1 of the leg weight (BasisLocalFootDriver.cs:206–228). Seeding at the ideal spots instead put a
-    // straight IK stance on the body in one frame, straight out of the jump clip's tucked legs.
+    // re-engage: seed the plants from the ANIMATED feet (y on the floor) and let the step walk them, as Basis does
+    // (BasisLocalFootDriver.cs:206–228); seeding at the ideal spots snapped a straight stance out of the jump clip
     const fL = vrm.humanoid.getNormalizedBoneNode('leftFoot'), fR = vrm.humanoid.getNormalizedBoneNode('rightFoot');
     const seedL = fL ? fL.getWorldPosition(new THREE.Vector3()).setY(ft.left.y) : ft.left, seedR = fR ? fR.getWorldPosition(new THREE.Vector3()).setY(ft.right.y) : ft.right;
     ud._gait = gaitInit(seedL, seedR, ft.yaw);
@@ -506,33 +461,16 @@ export function tickXRBody(dt) {
   // the HMD in world, then scaled about the rig (DeviceScale: tracked targets, not the view)
   if (simHead) { hmdPos.fromArray(simHead.pos); hmdQ.fromArray(simHead.quat); }
   else renderer.xr.getCamera().matrixWorld.decompose(hmdPos, hmdQ, tmpS);
-  // DeviceScale, Basis's way: the PUPPET wears the scale (vrm.scene.scale = 1/k), tracking stays 1:1 —
-  // hands land on the controllers by construction. A change re-measures the legs (ankle height and
-  // hip width are read in world units) and is announced once.
-  // The chosen size (Profile › Avatar, bodyscale.js) composes ON TOP: vrm.scene wears userScale × 1/k and xr.js scales
-  // the rig by userScale, so eyes stay at the HMD and hands on the controllers at any size. The legs are re-measured
-  // on ANY change of the body's world size (either factor), since the size slider can move mid-session.
+  // DeviceScale, Basis's way: the PUPPET wears the scale (1/k) and tracking stays 1:1. The chosen size (bodyscale.js)
+  // composes on top (vrm.scene = userScale × 1/k, xr.js scales the rig), so eyes and hands stay put at any size.
+  // The legs are re-measured on any change of the body's world size.
   { const ps = simHead ? 1 : puppetScale(); const ud = vrm.userData = vrm.userData || {};
     if (av.setPuppetScale) av.setPuppetScale(ps); else if (Math.abs(vrm.scene.scale.x - ps) > 1e-4) vrm.scene.scale.setScalar(ps);
     if (Math.abs((ud._bodyS ?? -1) - vrm.scene.scale.x) > 1e-4) { ud._bodyS = vrm.scene.scale.x; ud.ankleH = null; ud._gait = null; tee(`[xr] puppet scale ${ps.toFixed(3)} × size ${(av.userScale ?? 1).toFixed(2)} = body ${vrm.scene.scale.x.toFixed(3)} (avatar sized to you; targets 1:1)`); } }
 
-  // 1. distributed look-at
-  // facing = the body's TRUE world yaw. The controller already turns the body to
-  // the HMD's yaw every frame (setCamYaw → myState.yaw → root.rotation.y), so the
-  // residual here is only what the head has turned beyond the body. the owner's first
-  // headset read (09-05 19:55): computing this against rig.rotation.y (0 at
-  // entry) while the body faced her heading gave a constant residual ≈ her
-  // heading — the spine twisted toward it, the anchor pulled, the controller
-  // re-asserted: 'snap back' and 'the back of my avatar'.
-  // 1a. THE HIPS CHASE THE HEAD — Basis's torso-yaw latch (BasisVirtualSpineCore.cs:246–284; owner 09-05
-  // 21:15: "do Basis's hip IK method — their methods are hard-won"). The controller owns the root
-  // (stick); the HIPS bone — the humanoid root, legs come along — carries a yaw offset toward the
-  // head's world yaw: the torso holds an ANCHOR; the head roams freely inside a deadband (VR default
-  // 0° = rigid; ?torsoplay=30 is Basis's opt-in shoulder play; desktop 45°); exceeding it — or
-  // locomoting at all — breaks the anchor and `follow` ramps to 1 at blend 8/s; once fully
-  // followed and the head has slowed below 6°/s the anchor re-latches. Output = slerp(anchor, head,
-  // follow). The look chain below is the spine solver between hips and the tracked head. The rest
-  // offset (which way THIS model faces at hips identity, in root space) is measured once.
+  // 1. look-at against the body's TRUE world yaw (rig yaw is 0 at entry and would twist the spine).
+  // 1a. hips chase the head: Basis's torso-yaw latch (BasisVirtualSpineCore.cs:246-284); deadband 0° VR, 45° desktop,
+  // ?torsoplay=30; locomoting breaks the anchor, `follow` ramps at 8/s, re-latches below 6°/s.
   av.root.getWorldQuaternion(qYaw); eul.setFromQuaternion(qYaw, 'YXZ'); const rootYaw = eul.y;
   const hips = h.getNormalizedBoneNode('hips');
   if (vrm.scene.userData.restYaw == null) {
@@ -555,7 +493,7 @@ export function tickXRBody(dt) {
     if (hips) {
       // The base is the MIXER's pose. If the bone still holds what WE wrote last frame (a clip that
       // doesn't own hips, a gesture ending), reuse the stored base — else the latch compounds into a
-      // fast spin (owner, 09-05 22:14: 'a strobing tumbleweed… spinning extremely fast' after a wave).
+      // fast spin.
       if (hipsLast.equals(hips.quaternion)) hipsBase.copy(hipsStored); else { hipsBase.copy(hips.quaternion); hipsStored.copy(hipsBase); }
       qHip.setFromEuler(eul.set(0, L.yaw, 0, 'YXZ')); hips.quaternion.copy(qHip).multiply(hipsBase); hipsLast.copy(hips.quaternion); hips.updateWorldMatrix(true, true);
     }
@@ -563,10 +501,8 @@ export function tickXRBody(dt) {
   // the look chain measures the head against the BODY'S ACTUAL FACING = root + hips offset + rest
   const facing = rootYaw + latch.yaw + restYaw;
   qYaw.setFromEuler(eul.set(0, facing, 0, 'YXZ')).invert();
-  // porch-old :6185 `qRel = R_y(rigY+sceneY)⁻¹ · hq · R_y(π)`: the HMD is a −Z-forward camera frame, the
-  // body is +Z-forward (eido's facing = (sin yaw, 0, cos yaw); `restYaw` measured it). Conjugating through
-  // R_y(π) expresses the head in the body's frame — and negates pitch/roll correctly (the two frames call
-  // 'up' opposite X rotations; porch's inversion fix 2026-07-09). Probe 09-05 20:58 without it: residual yaw −π.
+  // qRel = R_y(facing)⁻¹ · hq · R_y(π): the HMD is −Z-forward, the body +Z-forward; conjugating through R_y(π)
+  // expresses the head in the body's frame and negates pitch/roll correctly
   qRel.copy(qYaw).multiply(hmdQ).multiply(qFlip);
   wire.h = qRel.toArray().map(r4);
   dbg.sim = !!simHead; dbg.hmdQ = hmdQ.toArray().map((v) => +v.toFixed(3));

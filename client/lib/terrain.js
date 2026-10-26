@@ -1,8 +1,5 @@
-// terrain — the world's ground truth for "how high is the floor here".
-//
-// Its own module (rather than living in world.js) purely to break a cycle:
-// the controller needs ground height every frame, and world.js needs the
-// controller's position to place things. Both depend on this instead.
+// terrain — the world's ground truth for "how high is the floor here". Its own module to break a cycle: the
+// controller needs ground height every frame, and world.js needs the controller's position.
 
 import { scene, ground, grid, axisLines } from './core.js';
 import { bus } from './base.js';
@@ -20,20 +17,16 @@ export function setEnvironmentFloor(y) {
 }
 
 export const heightAt = (x, z) => (current ? current.heightAt(x, z) : (environmentFloor ?? 0));
-// THE WATER, for whatever floats in it (the ragdolls — ammodoll.js). The same seam as the ground and for the
-// same reason: the browser and the agents' headless bodies both load this module, and each hands it its
-// own water — the browser from client/lib/water.js, an agent from mcpl/physics.ts setWaterField.
+// the water, for whatever floats in it (ammodoll.js): browser and headless agents each hand in their own
+// (client/lib/water.js, mcpl/physics.ts setWaterField).
 // {level, sample(x, z) → shared/waterkind.js sample | null, time() → wave seconds} or null for no water.
 let water = null;
 export const waterField = () => water;
 export function setWaterField(f) { water = f ?? null; bus.emit('ground-changed'); }
 export const hasTerrain = () => current !== null;
 
-/** Where the rain lands (the sky's splash ground — weather_system's groundHeightAt): the terrain, or
- *  the water standing over it, whichever is higher. null past the terrain's edge: there is no ground
- *  out there, so no splash. With no terrain, whatever floor heightAt stands on. The weather system
- *  bakes this into a heightfield around the camera, so it is called a few thousand times when the
- *  rain starts or the camera roams far, not per frame. 'ground-changed' (below) re-bakes it. */
+/** The rain's splash ground (weather_system groundHeightAt): terrain or the water over it, whichever is higher; null
+ *  past the terrain's edge. Baked into a heightfield around the camera, not per frame; 'ground-changed' re-bakes. */
 export function rainSurfaceAt(x, z) {
   if (!current) return heightAt(x, z);
   const box = extentOf(current);
@@ -63,11 +56,8 @@ export const getTerrainMesh = () => current?.mesh ?? null;
 export function setTerrain(t) {
   if (current) {
     scene.remove(current.mesh);
-    // …and FREE it (audit §13.1): three's WebGPU renderer pins every
-    // geometry and texture it has uploaded in strong maps, so a replaced
-    // terrain stayed GPU-resident forever. Terrain resources are per-build
-    // (engine mesh + client-baked layer noiseTextures) — nothing shared,
-    // safe to dispose wholesale.
+    // …and free it (audit §13.1): three's WebGPU renderer pins uploaded geometry and textures, and terrain
+    // resources are per-build, so dispose wholesale
     current.mesh?.traverse?.((o) => {
       o.geometry?.dispose?.();
       for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
@@ -84,10 +74,7 @@ export function setTerrain(t) {
   // terrain for its settle sim and has no stage floor to hide (issue #17)
   if (t) {
     if (t.mesh) {
-      // the sky's scene-diff claim must never own the ground: a terrain
-      // landing while an async sky build is in flight got CLAIMED (tel0s's
-      // trace: "sky warm terrain") and the next sky rebuild would have
-      // removed it (§17c)
+      // exempt from the sky's scene-diff claim, or the next sky rebuild removes the ground (§17c)
       if (t.mesh.userData) { t.mesh.userData.skyExempt = true; t.mesh.userData.odTag = 'terrain'; }
       scene.add(t.mesh);
     }
@@ -105,17 +92,8 @@ export function setTerrain(t) {
 }
 
 // ---- grass -----------------------------------------------------------------
-// A flora field adds its mesh to the scene AND pushes per-frame hooks (wind
-// per stroke, plus the avatar pushers) into globalThis._autoParticleSystems.
-// Replacing or clearing has to undo BOTH — otherwise a new field stacks on
-// the old, and the old field's hooks keep ticking against disposed GPU
-// resources. setGrass owns that; retireField does the work.
-//
-// ⚠️ A field's mesh is a GROUP (one child InstancedMesh per stroke, plus
-// shrub-wood stem meshes), and its textures are the species' map sets. Only
-// the field itself knows all of that, so retirement prefers the field's own
-// dispose() — walking `mesh.geometry`/`mesh.material` on a Group frees
-// NOTHING and silently leaked a whole meadow's VRAM per re-grow.
+// A flora field adds its mesh AND per-frame hooks (_autoParticleSystems); replacing must undo both (retireField).
+// The mesh is a Group, so retirement prefers the field's own dispose(): walking mesh.geometry on a Group frees nothing.
 let currentGrass = null;
 
 export function setGrass(field) {
@@ -161,13 +139,8 @@ export function setGrassDensity(f) {
  *  a stroke without a working count dial draws denser than this number. */
 export const getGrassDensity = () => budget.effective();
 
-/** The full budget→draw chain, honestly (#74): the resident's chosen level,
- *  the governor's shed, the requested effective factor, and what the
- *  renderer verifiably APPLIED — read from live instance counts, never from
- *  policy arithmetic. status: 'applied' | 'partial' | 'unavailable' |
- *  'not-applied' | 'unknown' (field predates draw-state reporting) |
- *  'no-field'. Strokes carry per-stroke truth so partial failure names the
- *  affected stroke(s). Shared authored grass state is never touched. */
+/** The budget→draw chain (#74): chosen level, governor shed, requested factor, and what was verifiably APPLIED (live
+ *  instance counts). status: 'applied' | 'partial' | 'unavailable' | 'not-applied' | 'unknown' | 'no-field'. */
 export function getGrassApplied() {
   const base = {
     quality: budget.quality, cap: budget.cap,

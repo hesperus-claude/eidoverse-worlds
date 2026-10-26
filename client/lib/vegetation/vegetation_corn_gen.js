@@ -1,15 +1,10 @@
-// VENDORED from eidoverse-video eidoverse/vegetation_corn_gen.js @ 62365e9 (2026-08-27, §24j:
-// the upstream-patched retirement — engine code is ours now; video is an
-// asset library). Upstream changes to this file are cherry-picked by hand
-// if wanted, never auto-merged.
-// corn_gen — the corn plant (Zea mays) for makeVegetation: cane stalk, ranked
-// arching leaves, a husked ear (peel option stands the baked cob up bare),
-// silk, tassel — every part UV'd onto the ONE corn_ trim sheet, so a whole
-// plant (cob included) is a single geometry + single material, field-
-// instanced by grass2 exactly like the shrubs.
+// VENDORED from eidoverse-video vegetation_corn_gen.js @ 62365e9; upstream changes are cherry-picked by hand,
+// never auto-merged.
+// corn_gen — the corn plant for makeVegetation: stalk, arching leaves, a husked ear (peel stands the cob up bare),
+// silk, tassel; every part UV'd onto the ONE corn_ trim sheet, so a plant is one geometry + one material.
 //
 // corn_ sheet regions (UV, v up — measured off the delivered 1024² sheet):
-//   COB    u 0–.5, v .701–1   — her highpoly's bake: shell island u .015–.46
+//   COB    u 0–.5, v .701–1   — shell island u .015–.46
 //          (length ALONG u), circumference along v .706–.994; flat cap discs
 //          at (.478,.93) r.017 (butt) and (.478,.97) r.010 (tip)
 //   PLUME  u .5–1, v .701–1   — alpha'd tassel/silk strand art
@@ -153,10 +148,8 @@ export function buildCornGeometry(name, seed, over = {}) {
                 lean: rng.range(0.4, 0.58), len: rng.range(0.24, 0.29) * (1 - k * 0.12),
                 peel: (cfg.peel && k === 0) || R() < pc });
     }
-    // world-space keep-out: a capsule down the ear body (+ husk margin) and,
-    // on peeled ears, a sphere over the curl zone. REAL geometry tests —
-    // base-azimuth heuristics let broad mid-blades sweep straight through
-    // the cob, and husk-curl tips punch through blades
+    // world-space keep-out: a capsule down the ear body (+ husk margin) and, on peeled ears, a sphere over the curl
+    // zone: real geometry tests, since azimuth heuristics let blades sweep through the cob
     const earCaps = earSpecs.map((e) => {
         const [sx, sy, sz] = P(e.f);
         const dirX = Math.cos(e.yaw), dirZ = Math.sin(e.yaw);
@@ -180,10 +173,8 @@ export function buildCornGeometry(name, seed, over = {}) {
         let L0 = cfg.leafLen * (0.62 + 0.55 * Math.sin(Math.PI * Math.min(1, f * 1.4))) * rng.range(0.85, 1.15);
         // top leaves shorten and stand up along the peduncle
         if (f > 0.7) L0 *= 1 - (f - 0.7) * 1.6;
-        // candidate blades are COLLISION-TESTED as swept centrelines against
-        // the ear capsules and every placed blade, then rebuilt with the
-        // accepted arc. Failed rounds redraw yaw AND droop; the last resort
-        // is a shorter, higher blade (short upright leaves always clear).
+        // candidate blades are collision-tested as swept centrelines against the ear capsules and placed blades;
+        // failed rounds redraw yaw and droop; last resort is a shorter, higher blade (always clears)
         let best = null;
         for (let tries = 0; tries < 8 && !best; tries++) {
             const yaw = rank + i * Math.PI + i * 0.55 + rng.vary(0, 0.85);
@@ -292,17 +283,11 @@ export function buildCornGeometry(name, seed, over = {}) {
         const radial = (th) => [s1x * Math.cos(th) + s2x * Math.sin(th),
                                 s1y * Math.cos(th) + s2y * Math.sin(th),
                                 s1z * Math.cos(th) + s2z * Math.sin(th)];
-        // ── the husk IS leaves: overlapping curved strips WRAPPED around the
-        // cob's own profile, like the real thing. Closed: they converge past
-        // the tip in staggered points. Peeled: each wraps the lower half then
-        // CURLS outward and down, the bare cob standing above.
-        // closed: five strips ring the ear. Peeled: a FEW leaves at uneven
-        // azimuths (a symmetric ring of many read as a machine part)
+        // ── the husk IS leaves: curved strips wrapped around the cob's own profile. Closed: five strips converge
+        // past the tip. Peeled: a few at uneven azimuths wrap the lower half, then curl outward and down.
         const nH = peel ? 3 : 5;
-        // leaf azimuths drawn first, then each arc width computed from the
-        // ACTUAL gaps to its neighbours (+15% overlap) — coverage of the
-        // circumference is guaranteed by construction. Independent random
-        // widths left wedge gaps that bared the cob at the ear's base.
+        // azimuths first, then each arc width from the ACTUAL gaps to its neighbours (+15% overlap), so the
+        // circumference is covered by construction
         const th0s = [];
         if (peel) { let acc = R() * TAU; for (let k2 = 0; k2 < nH; k2++) { th0s.push(acc); acc += rng.range(1.6, 2.6); } }
         else for (let k2 = 0; k2 < nH; k2++) th0s.push((k2 / nH) * TAU + R() * 0.5);
@@ -335,10 +320,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                 }
                 rows2++;
             };
-            // rows dense enough that straight spans clear the cob's CONVEX
-            // butt flare, plus per-segment sagitta padding — 4 rows left the
-            // cone chord cutting inside the flare and kernels showed at the
-            // base (the column-chord bug's twin, along the length axis)
+            // rows dense enough that straight spans clear the cob's convex butt flare, plus per-segment sagitta padding
             const wrapSegs = 5;
             const rowTs = [];
             for (let sg = 0; sg <= wrapSegs; sg++) rowTs.push(-0.03 + (wrapTop + 0.03) * (sg / wrapSegs));
@@ -364,10 +346,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                 const px = bx + ax * wrapTop * cobLen + ox * rimR,
                       py = by + ay * wrapTop * cobLen + oy * rimR,
                       pz = bz + az * wrapTop * cobLen + oz * rimR;
-                // CUBIC bend, tangent-continuous with the wrap: it keeps going
-                // UP off the rim, then turns out and over in one smooth arc —
-                // the quadratic version snapped direction at the rim (a 90°
-                // crink at one loop, not a bend)
+                // CUBIC bend, tangent-continuous with the wrap (a quadratic one kinks at the rim)
                 const cL = len * rng.range(0.38, 0.55);
                 const c1 = [px + ax * cL * 0.38 + ox * cL * 0.06,
                             py + ay * cL * 0.38 + oy * cL * 0.06,
@@ -466,11 +445,8 @@ export function buildCornGeometry(name, seed, over = {}) {
         }
         for (let g = 0; g < 2; g++) for (let j = 0; j < RADS; j++)
             quad(s0 + g * (RADS + 1) + j, s0 + g * (RADS + 1) + j + 1, s0 + (g + 1) * (RADS + 1) + j + 1, s0 + (g + 1) * (RADS + 1) + j);
-        // sparse crown per the reference diagram: thin arcing branch strands
-        // around a central spike, mostly AIR — each branch is a narrow strip
-        // sampling a thin v-slice of the plume art (the silk trick: strands
-        // run along u, so a sliver reads as one seed-strand branch). Full-art
-        // cards made a dense plume mass no real tassel has.
+        // sparse crown: thin arcing branch strands around a central spike, mostly air; each branch samples a thin
+        // v-slice of the plume art (strands run along u, so a sliver reads as one strand)
         const nB = 6;
         for (let k = 0; k < nB; k++) {
             const t01 = k / (nB - 1);

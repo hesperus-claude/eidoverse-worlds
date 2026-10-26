@@ -11,15 +11,8 @@ import { svg, fsvg, hasFill, rsvg, hasLine } from './icons.js';
 import { html, paint, lineKey } from './markup.js';
 export { html, markup } from './markup.js';
 
-// section-head emoji → Phosphor fill glyph (menu chrome never rides emoji —
-// the canvas-emoji trap generalizes: platform glyph gaps are silent)
-// Upstream labels its dock entries with emoji (main.js: world is '🧱'), and the
-// same emoji means different things in different places — '🧱' is genuinely a
-// hammer in catalog.js's BUILD section. The world panel is NOT a build panel:
-// it holds world inventories, public avatars and other non-builder things, and
-// the editing affordances fork off elsewhere. A brick was wrong semantically,
-// not just visually. So the entry id wins over the emoji: remapping '🧱'
-// globally would fix the dock and break build.
+// section-head emoji → Phosphor fill glyph (menu chrome never rides emoji: platform glyph gaps are silent).
+// The entry id wins over the emoji: '🧱' is a hammer in catalog.js's BUILD section, so remapping it globally breaks build.
 const ID_ICON = { world: 'planet' };
 const EMOJI_ICON = {
   '💬': 'chat-circle',
@@ -28,10 +21,7 @@ const EMOJI_ICON = {
   '🧱': 'hammer', '🧍': 'person-arms-spread', '🌿': 'plant', '☀': 'sun', '🔒': 'lock',
   '✨': 'sparkle', '🌳': 'tree', '📜': 'scroll', '🧩': 'puzzle-piece', '🔊': 'speaker-high', '🎨': 'palette', '🖥': 'monitor', '🥽': 'virtual-reality', '🛡': 'shield',
 };
-// The load list is INJECTED, not imported: assets.js reaches the engine (GLTFLoader),
-// and ui.js is shared with a client that has no renderer and therefore never loads an
-// asset to list. Default is empty, which is the truth for such a client. main.js wires
-// the real one.
+// injected, not imported: assets.js reaches the engine, and ui.js is shared with a renderer-free client; main.js wires it
 let loadingItems = () => [];
 export function setLoadingItems(fn) { loadingItems = fn; }
 import { makeFrame, getFrame, isLocked, setLocked, resetLayout, escapeHid } from './windows.js';
@@ -96,9 +86,8 @@ bus.on('loading', () => {
 
 export function setHud(parts) { el.hud.innerHTML = parts; }
 
-// The hint bar shows TEXT unless it is handed markup built with html`` (markup.js): a plain string — a person's name, a
-// thing's label, an error from anywhere — is shown as the characters it is, never parsed (security pass 3, H1: a guest
-// named <img onerror=…> ran script in the browser of anyone they knocked over).
+// Text is shown as characters, never parsed, unless built with the html tag (markup.js): a name like <img onerror=…>
+// must not run script.
 // ============================================================ ONE status bar
 // #hintbar is the one bar at the lantern's spot, and everything CLAIMS it with a priority:
 //   1 attn      a refusal (attention colour, copy pill, holds while pointed at)
@@ -106,9 +95,7 @@ export function setHud(parts) { el.hud.innerHTML = parts; }
 //   3 flash     a moment's notice ("panels hidden · Tab", "locked", the authority's warnings on my own edit)
 //   4 selection edit mode's selection line (name · keys · lock)
 //   5 ambient   the standing offer from the world ("X — sit")
-// The lowest number live shows; when it ends, the next live one shows (no stacking, no gaps). The lantern pill is the
-// resting content: it yields while any claim shows and comes back when none does. Content: text (shown as the
-// characters it is — security pass 3, H1), markup built with html``, or a node (the selection line, with its checkbox).
+// The lowest live claim shows (no stacking); the lantern pill shows when none does. Content: text, html`` markup, or a node.
 const claims = new Map();   // id → { id, priority, content, node, tone, hold, ttl, timer }
 let hovering = false;
 const winner = () => { let w = null; for (const c of claims.values()) if (!w || c.priority < w.priority) w = c; return w; };
@@ -203,10 +190,8 @@ new MutationObserver(buildCursors)
   .observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 
 // ============================================================ slider fill
-// WebKit custom tracks have no progress fill, so every .row range carries a
-// --p custom property the track gradient reads (index.html). Painted on user
-// input, and swept every 200 ms because panels also set .value from code
-// (syncSky and friends fire no events).
+// WebKit tracks have no progress fill, so each .row range carries a --p the track gradient reads (index.html);
+// painted on input and swept every 200 ms, since code also sets .value without events.
 
 function paintRange(i) {
   const min = +i.min || 0, max = +i.max || 100;
@@ -215,21 +200,15 @@ function paintRange(i) {
 document.addEventListener('input', (e) => {
   if (e.target.matches?.('input[type=range]')) paintRange(e.target);
 }, true);
-/** Repaint every slider fill under `root` NOW — call after setting .value from
- *  code (a reset, a sync). The sweep below also catches it, but a code-driven
- *  reset showed stale fills for up to a second (live, 09-04: 'half the sliders
- *  highlight oddly' after Reset Hair). */
+/** Repaint every slider fill under `root` now: call after setting .value from code (the sweep lags up to a second). */
 export function paintRangesIn(root = document) {
   for (const i of root.querySelectorAll('input[type=range]')) paintRange(i);
 }
 setInterval(() => paintRangesIn(document), 200);   // module-scope timer: a node-side importer of ui.js needs an explicit process.exit
 
 // ============================================================ tooltips
-// Every hover hint in the client is a native title= attribute, which browsers
-// paint in OS chrome no token can reach — so "style the tooltips" means owning
-// them. One delegated chip: on hover we borrow the title (native suppressed by
-// removing the attribute), show the house version, and hand it back on leave.
-// Zero call-site changes; new code keeps writing title= and inherits this.
+// Native title= tooltips paint in OS chrome no token reaches, so one delegated chip borrows the title on hover
+// (removing the attribute suppresses the native one) and hands it back on leave. New code keeps writing title=.
 
 const tip = document.createElement('div');
 tip.id = 'tipchip';
@@ -303,10 +282,8 @@ new MutationObserver(() => {
 
 // ============================================================ panel frames
 
-// World and Settings hold their sections as TABS (owner, 09-29: the A-kit mockup's tabs, not the accordion):
-// a strip on top, one pane below. The strip is the profile's own recipe (.pf-tabs/.pf-tab — one tab
-// mechanism in this client, not three), and it tightens as the frame narrows: full labels → the chosen
-// tab alone keeps its label → icons only → the strip scrolls. Every tab keeps its name as a tooltip.
+// World and Settings hold their sections as TABS: one strip (the profile's .pf-tabs recipe, the client's one tab
+// mechanism), one pane. The strip tightens as the frame narrows: labels → chosen label only → icons → scroll.
 function tabbedFrame(id, opts) {
   const f = makeFrame(id, opts);
   f.body.classList.add('tabbed');
@@ -467,9 +444,7 @@ export const escapeHtml = (v) => String(v).replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ============================================================ dock
-// A closed frame has to be findable again. One row of toggles, plus the
-// layout lock — the MMO convention: arrange it, then lock it so a stray drag
-// can't undo an hour of fiddling.
+// A closed frame has to be findable again: one row of toggles plus the layout lock (arrange, then lock).
 
 // Rail semantics (the dev sheet's): an icon rides the rail while its window
 // is OPEN or while it is PINNED; otherwise it hides. Pinning lives in the
@@ -481,11 +456,8 @@ const gateWas = new Map();
 let pins = new Set();
 // every panel starts pinned to the dock; unpinning is the personal choice, not pinning (live, 09-06 23:34)
 const DEFAULT_PINS = ['search', 'profile', 'world', 'chat', 'actions', 'debug', 'settings', 'edit'];   // 'edit' too (live 09-07 10:55) — its ownership gate still decides visibility
-// THE ACTION BAR HAD ANOTHER ID UNTIL 10-17 (ad90009f), and its id keys two things a returning person saved: their dock
-// pins and the frame's place/size/open state (windows.js `ew-frame-<id>`). Renamed without carrying them, R's bar lost
-// its rail icon and fell back to the default spot hard against the dock and the mic/ear glyphs (gym 10-17 20:00: "it
-// looks a bit closer to the dock than it used to"). Carried once, here, before anything reads either key; a state saved
-// under 'actions' is newer and wins. The old id is spelled on this one line only (names-check E3 allows it).
+// The action bar's old id keys saved dock pins and frame state (windows.js `ew-frame-<id>`): carried once, here,
+// before anything reads either key; a state under 'actions' is newer and wins. The old id is spelled on this line only.
 export const ACTIONBAR_OLD_ID = 'emotes';
 export function carryRenamedPanel(from, to, ls = localStorage) {
   try {
@@ -503,11 +475,8 @@ const savePins = () => { try { localStorage.setItem(PINS_LS, JSON.stringify([...
 let dockEntries = [];
 
 const DOCKPOS_LS = 'ew-dock-pos';
-// ---- mod seam (get un-painted out of the corner; the WoW/Resonite
-// lesson — the HUD is a REGISTRY, core panels are just the built-in entries).
-// A mod calls eido.ui.registerPanel() and gets: a frame, a menu row, a rail
-// icon when open/pinned, arrange/lock/reset participation — everything the
-// built-ins get, through the same door. See docs/MODDING-UI.md.
+// ---- mod seam: the HUD is a registry and core panels are the built-in entries; a mod's registerPanel() gets
+// everything they get, through the same door (docs/MODDING-UI.md §2).
 export function registerPanel({ id, icon = 'puzzle-piece', title = id, mount,
                                 w = 260, h = 200, x = 60, y = 60 }) {
   if (!id || dockEntries.some((e) => e.id === id)) return null;
@@ -651,35 +620,17 @@ export function initDock(entries) {
   paintDock();
   bus.on('frames', () => paintDock());
   bus.on('edit-mode', () => paintDock());   // the wrench's title follows the mode at once, not on the 2 s poll
-  // AUTO-PIN ON THE GRANT, and only on the transition. R asked for the wrench
-  // to "activate and pin to the dock automatically when you do get it", with a
-  // manual unpin still winning — so this fires on closed->open, never on every
-  // repaint, or the next paint would undo her unpin. A builder who was ALREADY
-  // a builder at boot is not pinned over their own earlier choice; only an
-  // actual grant counts. The gate is closed for everyone at initDock (rights
-  // ride the snapshot, which lands later), so the FIRST report is the level we
-  // start from, not an edge — read at initDock, every reload re-pinned a
-  // builder's unpinned wrench (measured 10-01; tools/dock-boot-test.ts).
+  // Auto-pin on the grant, and only on the transition (closed→open), so a manual unpin wins. The first report is the
+  // starting level, not an edge: rights ride the snapshot, which lands after initDock (tools/dock-boot-test.ts).
   bus.on('your-rights', () => {
     for (const e of dockEntries) {
       if (!e.action || !e.gate) continue;
       const now = !!e.gate(), was = gateWas.get(e.id);
       gateWas.set(e.id, now);
       if (was === undefined) continue;                 // the arrival: a level
-      // BOTH VERBS. R asked to "gray out AND UNPIN ... when you don't have
-      // builder status, and it activates and pins to the dock automatically
-      // when you do get it" — I quoted that sentence in the comment above and
-      // shipped only the pin half (round 5). Pins are ONE GLOBAL key
-      // (ew-dock-pins), not per-world, so a single grant anywhere welded a
-      // dead wrench to the rail in every world after it.
+      // both verbs: pin on grant, unpin on revoke; pins are one global key (ew-dock-pins), not per-world
       if (was === now) continue;                       // level, not edge
-      // SAVE ON THE EDGE, not only when the set changes. `pins` hydrates from
-      // DEFAULT_PINS when the key is absent (:313), and 'edit' is in that list
-      // — so on a FIRST grant `pins.has('edit')` was already true, savePins()
-      // was skipped, and nothing was written. The rail looked right but the pin
-      // only became durable after a revoke->regrant happened to stamp the key.
-      // The edge is exactly the moment this becomes the user's state; persist
-      // it. (round 6, measured: LS stayed null across boot and first grant.)
+      // save on the edge, not only when the set changes: 'edit' is in DEFAULT_PINS, so a first grant would write nothing
       if (now) pins.add(e.id); else pins.delete(e.id);
       savePins();
     }
@@ -693,16 +644,8 @@ export function initDock(entries) {
 // ---- the rail lives flat on an edge. {edge, along} persisted;
 // left/right = vertical (∃ on top), top/bottom = horizontal (∃ leftmost).
 
-// The touch controls own the bottom corners: #stick is left:18 bottom:18 at
-// 116px square (so it reserves the bottom 134px on the left), and #touchbtns
-// sits bottom-right. A LEFT rail runs straight down into the stick — and the
-// clamp in applyDockEdge cannot save it: at 844x390 the rail is taller than
-// the column above the stick, so `along` pins to its minimum and the rail
-// spans the joystick regardless. That is the whole reason to move: not
-// "landscape" as such, but that the rail no longer clears the thumb.
-//
-// Derived from what the rail actually carries rather than a breakpoint, the
-// fitsDefaults() idiom: it stays true if pins are added or removed.
+// The touch controls own the bottom corners (#stick reserves the bottom 134px on the left): a left rail taller than the
+// column above the stick spans it regardless of applyDockEdge's clamp. Derived from what the rail carries, not a breakpoint.
 const STICK_RESERVE = 134 + 8;          // #stick (bottom:18 + 116) + breathing room
 const DOCK_SLOT = 34 + 2;               // button + gap (index.html #dock)
 function railHeight() {
@@ -777,11 +720,7 @@ function paintDock() {
     const id = b.dataset.toggles;
     const entry = dockEntries.find((x) => x.id === id);
     if (entry?.action) {                          // action buttons (edit wrench)
-      // GREY, NOT GONE. Hiding a gated action teaches nobody the affordance
-      // exists — which is exactly how the wrench went missing for days without
-      // either of us noticing. R, 2026-09-11: "gray out and unpin the Edit
-      // dock button when you don't have builder status, and it activates and
-      // pins to the dock automatically when you do get it."
+      // grey, not gone: hiding a gated action teaches nobody the affordance exists
       const open = entry.gate ? !!entry.gate() : true;
       b.classList.toggle('dead', !open);
       b.disabled = !open;
@@ -804,15 +743,10 @@ function paintDock() {
   paintEMenu();
 }
 
-// ---- the ∃ menu: a File-style waterfall (owner, 10-01) -------------------
-// "turning the E-menu into a traditional drop down waterfall menu, kind of like a traditional File menu, pop out to
-// the right of E/dock, over the mic/headphones/vr visor icons." Top level: Save world · Load world · Panels ▸ ·
-// Log in · Help · Keys · About ▸. Settings and Profile stay on the rail ("I don't want to bury it"). Panels ▸ holds
-// what the old menu was: HUD layout mode (the old click-∃ arranging, now a switch of its own), the pins, the lock
-// and reset layout. An item never dismisses the menu unless it takes you to another window (help, a login page);
-// the menu goes on mouse-away (desktop), a press outside it, and Esc — touch and VR have no hover.
-// Alt = the universal window-manager "grab anywhere" chord; show the hand
-// so the convention teaches itself.
+// ---- the ∃ menu: a File-style waterfall to the right of the dock. Top level: Save world · Load world · Panels ▸ ·
+// Log in · Help · Keys · About ▸; Panels ▸ holds layout mode, pins, lock and reset. An item dismisses the menu only if it
+// leaves the window; the menu goes on mouse-away, an outside press, or Esc.
+// Alt = the window-manager "grab anywhere" chord; show the hand so the convention teaches itself.
 addEventListener('keydown', (e) => { if (e.key === 'Alt') document.body.classList.add('altgrab'); });
 addEventListener('keyup', (e) => { if (e.key === 'Alt') document.body.classList.remove('altgrab'); });
 addEventListener('blur', () => document.body.classList.remove('altgrab'));
@@ -1140,10 +1074,8 @@ function paintEMenu() {
 /** Every window back where it started, and the lantern's resting line too (it is not a frame, but it moves in
  *  HUD layout mode). The rail's own edge is NOT reset — where you put the rail is your decision (loadDockEdge). */
 export function resetHudLayout() { resetLayout(); resetPillPlace(); }
-// THE LANTERN'S RESTING LINE (owner, 10-01: "add it as a pin feature for the reverse-E menu (might need its own logo to
-// differentiate)"). A group of its own between the voice rows and the windows ("It's not *quite* a conventional panel
-// so it can't get docked"): the row opens the lantern, and its pin keeps the pill bottom-centre (commandbar.js
-// setPillPinned — its own key, ew-lantern-pinned, like the glyphs'). Unpinned, the lantern is still one chord away.
+// The lantern's resting line: its own group (not a dockable panel); the row opens the lantern, and its pin keeps the
+// pill bottom-centre (commandbar.js setPillPinned, key ew-lantern-pinned).
 const LANTERN_GLYPH = 'lantern';   // R 10-08 (was the lighthouse, the 10-01 stand-in: Phosphor has no lantern); its own glyph, so it reads apart from the search glass
 function pinButton(id, onclick) {
   const pin = document.createElement('button');
@@ -1195,11 +1127,7 @@ function buildPanels(s) {
   s.appendChild(sep());
   s.appendChild(lanternRow());
   s.appendChild(sep());
-  // ORDER AT PAINT TIME, not at registration. initDock sorts `last` to the end
-  // once, but registerPanel PUSHES later mods onto dockEntries after that sort
-  // has already run — so the rail stayed correct (addDockButton inserts before
-  // the first [data-last] button) while this menu drifted.
-  // R, 2026-09-11: "it should always be at the bottom of both until further notice."
+  // order at paint time: registerPanel pushes later mods after initDock's sort, so `last` entries are sorted here
   const ordered = [...dockEntries].sort((a, b) => (a.last ? 1 : 0) - (b.last ? 1 : 0));
   const flipPin = (id) => () => { pins.has(id) ? pins.delete(id) : pins.add(id); savePins(); };
   for (const entry of ordered) {
@@ -1264,14 +1192,8 @@ for (const s of [el.door, el.help]) {
 }
 
 // ---- help ------------------------------------------------------------------
-// The overlay's CONTENT is a def (defs/ui/_help.json, §R4 defs round two) —
-// title, subtitle, the key table, the prose sections. A world can reword its
-// own welcome without forking the client. Defs are server-owned, the same
-// trust domain as this file itself, so the fragments are trusted markup. The
-// "Your layout" section stays code-side: it carries a live button wired to
-// resetLayout. SINGLE-SOURCE — no baked-in fallback prose (the fallback would
-// be the 120-line mirror this move kills); a world serving no help def gets a
-// sheet that says so.
+// The overlay's content is a def (defs/ui/_help.json), trusted markup like this file, so a world can reword it.
+// "Your layout" stays code-side (a live button). No baked-in fallback: a world with no help def gets a sheet saying so.
 
 export function buildHelp() {
   const paint = () => defsRegistry().then((reg) => {
@@ -1384,16 +1306,8 @@ export function openDoor({ roster = [], needsKey = false, login = null, onEnter 
 // Tab: the people pane (the chat frame's side pane replaced the old roster)
 export function togglePeopleHere() {
   const f = getFrame('chat'); const wasVisible = !!f?.visible; if (f && !wasVisible) f.show();
-  // ASK the frame for the nodes chat.js built; do NOT re-derive them by class.
-  // .chat-cols and .chat-side-tog are part of the PUBLIC class contract
-  // (docs/MODDING-UI.md §3) and a local mod is a TRUSTED mod — an in-page ES
-  // module handed makeFrame (mods.js:5,88) — so it can legitimately mount
-  // markup carrying them into this very body. A class lookup
-  // then picks by depth AND order: `:scope >` bounds the first but not the
-  // second, and a PREPENDED .chat-cols is a direct child that wins. chat.js
-  // captured these nodes as it wrote them and hangs the accessor on the frame,
-  // which both files already hold via getFrame('chat'): no import edge, and
-  // nothing to steal.
+  // ask the frame for the nodes chat.js built; never look them up by class: a trusted mod may mount markup carrying
+  // the public classes (docs/MODDING-UI.md §4) into this body, and a prepended .chat-cols would win
   const cols = f?.sidePane?.('cols');
   const closed = cols?.classList.contains('side-closed');
   // Tab OPENS (defs/ui/_help.json): only a closed pane needs the toggler.

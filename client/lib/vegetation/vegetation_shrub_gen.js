@@ -1,25 +1,7 @@
-// VENDORED from eidoverse-video eidoverse/vegetation_shrub_gen.js @ 62365e9 (2026-08-27, §24j:
-// the upstream-patched retirement — engine code is ours now; video is an
-// asset library). Upstream changes to this file are cherry-picked by hand
-// if wanted, never auto-merged.
-// shrub_gen — SeedThree's dichotomous plant math, vendored for makeVegetation.
-//
-// Skeleton + welded tube network: SeedThree src/core/dichotomous.js — the
-// stochastic L-system (F → F[+F][-F]) growing short segments that fork low and
-// diverge in a V from a multi-stem root crown, meshed as ONE merged tube
-// network where the parent tube feeds its children through each fork (no split
-// pieces, no holes), tips closed with rounded domes. Cactus/saguaro-only paths
-// (ribs, asymmetric arms, LOD ring decimation) removed; growth constants kept.
-//
-// Spray cards: SeedThree src/core/leaf-cards.js buildFoliage 'clusters' mode —
-// base-anchored quads placed on the terminal stems' rotation-minimising frames
-// with phyllotaxy, down-angle and gravity droop — here BAKED into one merged
-// geometry per plant so grass2's field instancing (aPosRot/aScaleVar/aPhase,
-// the 7-vertex-buffer budget) applies unchanged. Card bases keep the measured
-// art alignment (shrub_anchors.json: u-centre + roll) and sink their painted
-// margin into the wood — the approved junction law.
-//
-// Rng: SeedThree src/core/rng.js verbatim (xmur3 + splitmix32).
+// Vendored from eidoverse-video vegetation_shrub_gen.js @ 62365e9; upstream changes are cherry-picked by hand, never
+// auto-merged. SeedThree's dichotomous plant math (src/core/dichotomous.js tubes, leaf-cards.js clusters, rng.js
+// verbatim: xmur3 + splitmix32); spray cards are baked into one geometry per plant so grass2's field instancing applies
+// unchanged. Card bases keep shrub_anchors.json's alignment and sink their painted margin into the wood.
 
 const T3 = globalThis.THREE;
 
@@ -267,12 +249,8 @@ export function generateShrubSkeleton(userParams, rng) {
 }
 
 // ── merged tube mesh (SeedThree buildMergedMesh, smooth tubes) ───────────────
-// One connected surface: each stem is a tube of rings; a stem's LAST ring is
-// stitched to EACH child's FIRST ring so the parent feeds its children through
-// the fork. Rotation-minimizing frames avoid twist; terminal tips close with a
-// rounded dome (no holes, no double-siding). Wind weights land in aH (grass2's
-// height factor) — no aWind/aStemCenter attributes, keeping the instanced mesh
-// inside the 7-vertex-buffer budget.
+// One surface: a stem's last ring is stitched to each child's first. Wind weights ride aH (no extra attributes), so the
+// instanced mesh stays inside the 7-vertex-buffer budget.
 
 const _rmfAxis = new T3.Vector3();
 function ringVertices(center, tangent, refDir, radius, seg, uvY, uScale, out, prevTangent = null) {
@@ -296,10 +274,7 @@ function ringVertices(center, tangent, refDir, radius, seg, uvY, uScale, out, pr
         const dir = new T3.Vector3().copy(n).multiplyScalar(Math.cos(a)).addScaledVector(b, Math.sin(a));
         out.pos.push(center.x + dir.x * radius, center.y + dir.y * radius, center.z + dir.z * radius);
         out.nrm.push(dir.x, dir.y, dir.z);
-        // Bark grain must run ALONG the branch — sampled the other way, a thin
-        // tube cuts a strip ACROSS the painted grain and its shadow gaps wrap
-        // into dark rings around every branch. Tiles differ in authored grain
-        // direction, so out.grainU says which image axis is the grain.
+        // bark grain must run along the branch (across it, shadow gaps wrap into rings); out.grainU names the grain axis
         if (out.grainU) out.uv.push(uvY, (j / seg) * uScale);
         else out.uv.push((j / seg) * uScale, uvY);
         out.wind.push(0);
@@ -355,10 +330,7 @@ export function buildWoodMesh(stems, params) {
             const childFirst = emitStem(child, ref, vY, isContinuation ? lastTan : null);
             stitch(lastBase, childFirst.first);
         }
-        // Cone cap: ONE degenerate apex ring (every vertex at the tip point,
-        // each keeping its own U — standard pole UV handling) closes the tube
-        // with radialSegs triangles. A shrub twig ends in a point inside its
-        // card assembly; dome rings on hundreds of terminals were pure waste.
+        // cone cap: one degenerate apex ring (each vertex keeps its own U) — twig tips end inside the card assembly
         if (stem.children.length === 0) {
             const capR = stem.radii[stem.radii.length - 1];
             const capC = stem.points[stem.points.length - 1];
@@ -580,10 +552,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
 
 // ── species presets (tuned in the SeedThree shrub dive, 2026-07-29) ──────────
 export const SHRUB_GEN = {
-    // The wood is a LOWPOLY armature that stops where the card takes over —
-    // each card is a WHOLE painted branch assembly (twig + leaves + blooms),
-    // so the skeleton grows one generation less and the art carries the
-    // terminal branching. Big cards, few of them.
+    // lowpoly armature: each card is a whole painted branch assembly, so the skeleton grows one generation less
     creosote: {
         // open wiry vase: multi-stem root crown, low V-forks, no leader
         params: {

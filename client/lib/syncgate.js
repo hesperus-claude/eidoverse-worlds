@@ -1,22 +1,10 @@
 // syncgate — no pipeline is ever LINKED on the render path (WebGL backend).
 //
-// three r186's WebGL backend builds a pipeline the first time a frame meets a render object it has no program for, and
-// on that path (promises === null) it goes straight to _completeCompile, whose gl.getProgramParameter(LINK_STATUS)
-// blocks until the driver has finished linking (three.webgpu.js ~75523/75697). KHR_parallel_shader_compile lets the
-// link run off-thread and be POLLED, but three only takes that branch inside compileAsync. Measured on the owner's
-// machine 2026-09-24 (a DevTools trace): one
-// render-path getProgramParameter held the main thread 54.7 s in the Commons, and the whole browser froze with it.
-// Every warm in the client (assets.js, avatar.js, sky.js, warmqueue.js …) exists to keep builds off that path; this is
-// the backstop for whatever they miss (a variant change after the warm, a pass nobody pre-compiled).
-//
-// With the extension present, a render-path build is handed to three's own polling branch. The object is then simply
-// not drawn until its program links, by three itself: _renderObjectDirect draws only when Pipelines.isReady(), which
-// stays false until _completeCompile sets the pipeline (~65557/33289). It pops in late instead of stopping the world. Without the extension nothing
-// changes (there is no way to link without blocking). ?syncgate=0 turns the gate off; the census stays.
-//
-// The census tees every render-path build that took ≥ SLOW_MS to request (with the gate off, that is the link itself),
-// naming object, material and the generated shader sizes — the question the trace could not answer: WHICH material.
-
+// A render-path build in three's WebGL backend links synchronously (a blocking LINK_STATUS read), and one once froze
+// the whole browser. The client's warms keep builds off that path; this is the backstop for what they miss. With
+// KHR_parallel_shader_compile, a render-path build goes to three's own polling branch and the object pops in late;
+// without it nothing changes. ?syncgate=0 turns the gate off; the census still tees builds ≥ SLOW_MS by object,
+// material and shader size.
 const SLOW_MS = 250;
 const GIANT_FS = 400000;   // chars of fragment source: only the sky's cloud programs are this big
 // the world's own pass: no user target bound — or the target three's _renderScene binds for it (its tone-mapping
@@ -36,7 +24,7 @@ export function installSyncGate(renderer, { tee = () => {}, gate = true } = {}) 
 
   be.createRenderPipeline = (renderObject, promises) => {
     if (promises != null) {                                              // compileAsync: three polls already
-      // …but a BIG program compiling there can still freeze the GPU process on a cold cache (the owner, 09-27): say
+      // …but a BIG program compiling there can still freeze the GPU process on a cold cache: say
       // which, immediately, so a freeze leaves its name as the last line in the clientlog
       const ret = orig(renderObject, promises);
       const fs = renderObject.pipeline?.fragmentProgram?.code?.length ?? 0;
@@ -50,15 +38,10 @@ export function installSyncGate(renderer, { tee = () => {}, gate = true } = {}) 
     stats.renderPath++;
     if (!isWorldPass(renderer.getRenderTarget())) stats.intoTarget++;
     const t0 = performance.now();
-    // Only the WORLD drawn to the screen may wait a frame. A render into a render target is usually ONE-SHOT — a bake,
-    // an env/PMREM, a capture — and a skipped draw there is not a late pop-in but a permanently wrong texture (the sky
-    // boot bake would come out black). Those keep upstream behaviour; their owners warm them (sky_baked compiles its
-    // bands with compileAsync first).
-    // …and the BACKSTOP (owner, 09-27: 'it simply can't block the rest of the world'): a GIANT program asked for
-    // synchronously into a target defers too, whoever asks. On the owner's GPU a 1.76 MB sky program built this way blocked
-    // 89–94 s, Windows reset the driver, the page reloaded and asked again: a loop that never finishes. Deferred, that
-    // one draw into the target is skipped until the program links (a stale or empty texel set, redrawn by its owner's
-    // next pass) instead of freezing Chrome. Measured sizes: world materials ~66 k, the sky programs 0.9–1.8 M.
+    // Only the WORLD drawn to the screen may wait a frame: a skipped draw into a one-shot target (bake, PMREM,
+    // capture) is a permanently wrong texture, so those keep upstream behaviour and their owners warm them.
+    // Backstop: a GIANT program asked for synchronously into a target defers too (a sync link that size can hang
+    // long enough for the driver to reset); that draw is skipped until it links.
     const fsLen = renderObject.pipeline?.fragmentProgram?.code?.length ?? 0;
     const giantAside = fsLen > GIANT_FS && !isWorldPass(renderer.getRenderTarget());
     const deferring = gate && !!be.parallel && (isWorldPass(renderer.getRenderTarget()) || giantAside);
@@ -111,11 +94,8 @@ export function installSyncGate(renderer, { tee = () => {}, gate = true } = {}) 
   };
 
   tee(`[syncgate] installed: parallel-compile ${stats.parallel ? 'yes' : 'NO (gate inert: links block)'}; gate ${gate ? 'on' : 'off (?syncgate=0, census only)'}`);
-  // resolves when every giant link pending now has landed; after maxMs it gives up, saying what the GL reports (a black
-  // baked sky on the owner's rig, 09-27 18:10, with no 'linked after' line: this is the witness)
-  // Never gives up: drawing with an unlinked giant program skips the draw and leaves a baked target black (audit M4;
-  // cold links measured 125–583 s on the owner's rig). Every tickMs it says what the GL reports, so a stuck link is
-  // visible; a dead context is gpulost's to recover (reload).
+  // Never gives up: drawing with an unlinked giant program skips the draw and leaves a baked target black. Every
+  // tickMs it says what the GL reports, so a stuck link is visible; a dead context is gpulost's to recover (reload).
   stats.whenGiantLinked = (tickMs = 120000) => {
     const list = [...pendingGiant];
     if (!list.length) return Promise.resolve(true);

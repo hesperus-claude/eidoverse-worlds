@@ -1,21 +1,8 @@
 // xr — the door into the headset, and everything your hands do inside it.
 //
-// Boot split unchanged (?xr=1 → WebGL2). This module owns: the session + rig,
-// STICK LOCOMOTION (which is not locomotion at all — it fills xrIntent and the
-// eidoverse controller's own wish/gravity/mantle/seat code does every bit of
-// the moving; a thumbstick is a keyboard that reports fractions), the POINTER
-// (right-hand ray: trigger = select, feeding the same sgSelect the hierarchy
-// and viewport clicks feed), PANEL GRAB (grip alone takes the panel under the
-// laser by its background or title — never by a control, so a habitual grip
-// mid-click can't yank it; owner, 10-02, replacing the grip+trigger chord), and
-// the RADIAL MENU (right-stick PRESS opens, stick aims, release
-// commits; snap turn keeps stick-X when the ring is closed; every slot is a
-// verb-backed action — nothing exists only as a VR gesture. Agent parity).
-//
-// Knowledge ported from exultation input/xr.ts + porch-old, not the structure:
-// deadzone-with-rescale, snap cooldown, tracking-loss = keep-last-pose,
-// 'layers' dropped from optionalFeatures (MSAA via classic XRWebGLLayer),
-// foveation 1 standalone / 0 PC (Basis split; ?fov=), local-floor, and the settled law: NEVER navigate mid-session.
+// Owns the session and rig, and the hands: stick locomotion only fills xrIntent (the controller does the moving),
+// the right-hand ray feeds sgSelect, grip alone grabs a panel by its background or title (never by a control),
+// and every radial-menu slot is verb-backed (agent parity). Never navigate mid-session.
 
 import { confirmCenter } from './confirmcenter.js';
 import { outOfMyView } from './myview.js';
@@ -54,25 +41,14 @@ import { renderCensusTake, renderCensusTick, renderCensusPeek, setXRCurtain, dra
 import { warm, P_AMBIENT } from './warmqueue.js';
 
 // ---- self-body in first person ---------------------------------------------
-// the owner's first headset session (23:22): own body invisible (she stood INSIDE it,
-// camera at head height), own nameplate photobombing from above her own head.
-// porch-old's settled answer: hide the HEAD, keep the body (looking down and
-// seeing your own torso is the embodiment), hide your own label. Generic form
-// for arbitrary VRMs: three-vrm firstPerson layers — setup() splits/annotates
-// meshes onto FP-only (9) and TP-only (10) layers; eye cameras see 9 not 10,
-// the desktop camera sees 10 not 9. main.js binds the self-avatar getter.
+// Hide your own head and label, keep the body (looking down at your torso is the embodiment).
+// main.js binds the self-avatar getter.
 let getSelf = () => null;
 export const bindXRSelf = (fn) => { getSelf = fn; };
 const FP_LAYER = 9, TP_LAYER = 10;
 let fpVrm = null;   // which vrm the head-chop is applied to — re-applied after an avatar swap
-// HEAD CHOP, Basis's way (BasisLocalAvatarDriver.ScaleHeadToZero: Mapping.head.localScale = 0;
-// porch-old did the same). ONE mechanism for every avatar: the RAW head bone is scaled to ~0 while
-// presenting, so everything skinned to the head and its children collapses to a point behind the
-// eyes, and the rest of the body draws through the ordinary path. Replaces the three-vrm layer split
-// (09-04 → 09-06): that made a second skinned mesh per body part on layer 9 at enter-VR time, and the owner's
-// own body was invisible in the headset all morning with every layer number reading correct
-// (09-06 11:31–11:53) — a mechanism that can disagree with the camera is one mechanism too many.
-// three-vrm's normalized rig copies ROTATIONS raw←normalized in humanoid.update(); raw scale is ours.
+// HEAD CHOP, Basis's way (BasisLocalAvatarDriver.ScaleHeadToZero): the raw head bone scales to ~0 while
+// presenting, one mechanism for every avatar. three-vrm copies rotations raw←normalized; raw scale is ours.
 const HEAD_CHOP = 0.0001;
 let choppedHead = null;   // { bone, scale: Vector3 }
 function selfFirstPerson(on) {
@@ -112,42 +88,9 @@ export const xrHands = () => hands;   // { left, right }: { grip, ray, … } —
 // finger curl surrogate (Tier A4; porch-old :10933): trigger value → index, grip value → the other three
 const fingerCurl = { left: { index: 0, grip: 0 }, right: { index: 0, grip: 0 } };
 export const xrFingerCurl = () => fingerCurl;
-// The analog trigger/grip values carry real noise — a resting finger and the controller's own ADC
-// jitter reach the hand pose as a visible quiver (reported in-headset 2026-09-20: "a subtle buzzing
-// jitter on the fingertips"; button ACTUATION was correct, so this is the pose, not the threshold).
-// The raw value was assigned straight through every frame, with none of the conditioning the
-// thumbstick already gets from DEADZONE/dead().
-//
-// This also rides the WIRE — xrbody.js:554 packs the four curls into `wire.c` for every remote
-// viewer, so unfiltered noise is broadcast, not merely local.
-//
-// A one-pole low-pass, TIME-BASED rather than per-frame: `sampleFingerCurl` has no dt in scope and a
-// fixed coefficient would smooth differently at 72 Hz and 120 Hz. TAU is the time to close ~63% of a
-// gap, so the feel is identical on any headset.
-//
-// SNAP THROUGH REAL MOVEMENT: a lag on a deliberate squeeze is worse than the jitter. A step larger
-// than JUMP goes straight through unfiltered, so only small residual motion — which is what the
-// noise is — gets averaged.
-// The analog trigger/grip values carry real noise — a resting finger and the controller's own ADC
-// jitter reach the hand pose as a visible quiver (reported in-headset 2026-09-20: "a subtle buzzing
-// jitter on the fingertips"; button ACTUATION was correct, so this is the pose, not the threshold).
-// The raw value was assigned straight through every frame, with none of the conditioning the
-// thumbstick already gets from DEADZONE/dead().
-//
-// This also rides the WIRE — xrbody.js:554 packs the four curls into `wire.c` for every remote
-// viewer, so unfiltered noise is broadcast, not merely local.
-//
-// WHY NOT A PLAIN LOW-PASS WITH A JUMP THRESHOLD: that was the first fix, and it read as "clicky on
-// big moves" in the headset. A hard `|raw-prev| > JUMP ? raw : lerp` branch is a DISCONTINUITY — the
-// output alternates between heavily-smoothed and teleported, measurably 0.006/0.011/0.149 per frame
-// on a 250 ms squeeze, a 13× step ratio. Raising the time constant made it worse, because it widened
-// the gap between the two regimes.
-//
-// So: the 1€ filter (Casiez, Roussel & Vogel, CHI 2012), which is the standard answer to exactly this
-// tradeoff. The cutoff rises CONTINUOUSLY with the signal's own speed — heavy smoothing when the
-// finger is still, light when it moves — so there is no branch to click on. Measured at 72 Hz, peak
-// jerk (frame-to-frame change in step size, which is what reads as stutter) on a 150 ms squeeze:
-// hard-JUMP 0.167, 1€ 0.055. A third of the stutter, same time to 90%.
+// Finger curls go through a 1€ filter (Casiez, Roussel & Vogel, CHI 2012): raw values jitter visibly and ride
+// the wire (xrbody.js packs them), and a hard jump threshold clicked on big moves. The cutoff rises with the
+// finger's speed, so rest is smooth and a squeeze doesn't lag.
 const CURL_MIN_CUTOFF = 2.0;   // Hz. Lower = quieter at rest, and the floor on responsiveness.
 const CURL_BETA = 3.0;         // how hard the cutoff opens with speed. Higher = less lag, more noise.
 const CURL_D_CUTOFF = 1.0;     // Hz, for the speed estimate itself — its own noise must not open the gate.
@@ -186,10 +129,8 @@ function sampleFingerCurl() {
 }
 rig.name = 'xr-rig';
 let presenting = false;
-// ?vrprobe=1 — the STEADY-STATE bill while presenting, one tee line per 5 s (the entry/exit lines cover the seams; nothing
-// covered the minutes in between). CPU-bound vs GPU-bound: cpu = the frame systems' summed rolling ms; if it sits near the
-// frame interval (1000/fps) the CPU is the wall, if fps is low while cpu is small the GPU/compositor is. Plus the asset
-// churn (geometry/texture counts) so load/unload shows up as it happens, and the JS heap for leaks across entries.
+// ?vrprobe=1: the steady-state bill while presenting, one tee line per 5 s. cpu near 1000/fps = CPU-bound;
+// low fps with small cpu = GPU/compositor. Plus geometry/texture counts and the JS heap.
 const VRPROBE = CONFIG.params.has('vrprobe');
 let vrprobeTimer = null, vrprobeLast = null, vrprobeT0 = 0;
 function vrprobeLine() {
@@ -237,18 +178,9 @@ let exitVeil = null;
 let floorSpace = null;              // 'local-floor' | 'bounded-floor' | null (fell back to 'local')
 export const xrFloorSpace = () => floorSpace;
 
-// ---- DeviceScale (Tier A5; Basis BasisHeightDriver — the AVATAR is scaled to the player)
-// Map the human's standing eye height onto the avatar's: median of the first
-// 120 in-session HMD heights (> 0.5 m — a seated start or tracking garbage
-// must not scale), k = avatarEyeY / median, clamped .6–1.6. Provenance says why
-// you are this size; saved per avatar (Basis: Fallback/Measured/Saved).
-// HOW it is applied changed 09-06 12:10 (owner: 'hands 8 inches from my controllers'): porch-old and
-// the first port scaled the TRACKED TARGETS toward the rig by k and left the puppet at its authored
-// size — so a controller 1.3 m from the rig landed 0.15 × 1.3 ≈ 20 cm short at k = 0.85, by
-// construction. Basis scales the PUPPET (BasisHeightDriver.ApplyAvatarScale: the avatar root, its
-// T-pose offsets, the capsule) and never the tracking. So: vrm.scene.scale = 1/k while presenting,
-// targets stay 1:1, hands sit ON the controllers. xrbody reads puppetScale(); xrScale().k stays the
-// measured ratio for anyone who wants the number. Restored to 1 on session end.
+// ---- DeviceScale (Basis BasisHeightDriver: the AVATAR is scaled to the player)
+// k = avatarEyeY / median of the first 120 HMD heights (> 0.5 m), clamped .6–1.6, saved per avatar. Scale the
+// puppet (vrm.scene.scale = 1/k), never the tracking, so hands sit on the controllers. Restored on session end.
 const SCALE_LS = 'ew-xr-scale';
 let wornName = '';   // the avatar name from 'avatar-worn' — the per-body key for a saved scale (Avatar has no .name)
 const scaleState = { k: 1, source: 'fallback', samples: [], eyeY: null, locked: false, firstAt: 0 };
@@ -300,19 +232,15 @@ let session = null;
 export const isPresenting = () => presenting;
 
 // ---- tuning (exultation XR_DEFAULTS, ported values) ------------------------
-// ---- VR preferences (Settings › VR; owner, 09-05 18:22). Persisted per browser.
-// turn: 'snap' | 'smooth' · vignette: comfort tunnel on move/turn · mirror:
-// what the desktop window shows while presenting — 'off' | 'first' | 'third'.
-// pointerVisibility: is the VR laser drawn — 'always' | 'never' | 'contextual' (owner, 10-02; xrpointer.js says what each means).
+// ---- VR preferences (Settings › VR), persisted per browser. turn: 'snap' | 'smooth' · vignette · mirror:
+// 'off' | 'first' | 'third' · pointerVisibility: 'always' | 'never' | 'contextual' (xrpointer.js).
 const PREF_XR = 'ew-xr-prefs';
 // dotVisibility: is the surface dot drawn — the same three words, its own setting (owner, 10-02).
 const XR_PREF_DEFAULTS = { turn: 'smooth', vignette: false, mirror: 'first', seated: false, res: 'auto', pointerVisibility: POINTER_VIS_DEFAULT, dotVisibility: POINTER_VIS_DEFAULT };
 export const xrPrefs = (() => { try { return { ...XR_PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_XR) || '{}') }; } catch { return { ...XR_PREF_DEFAULTS }; } })();
 { const m = new URLSearchParams(location.search).get('mirror'); if (m === 'off' || m === 'first' || m === 'third') xrPrefs.mirror = m; }   // URL override for A/B (the 'pop to origin' hunt, 09-05 21:46)
-// Eye resolution, as WebXR's framebufferScaleFactor: a per-axis scale of the size the runtime recommends. 'auto' (1.0)
-// is that size — SteamVR's resolution slider sets it, and it is deliberately LARGER than the panel because the lens
-// magnifies the centre. Desktop Chrome clamps the factor to 0.2–1.0, so this can only go down from there; it is read
-// once as a session starts (three warns if it changes while presenting). ?xrres=0.2..1 overrides for an A/B.
+// Eye resolution as WebXR framebufferScaleFactor ('auto' = 1.0, the runtime's size). Chrome clamps it to
+// 0.2–1.0 and it's read once at session start. ?xrres=0.2..1 overrides for an A/B.
 export const XR_RES_SCALES = { auto: 1, 85: 0.85, 70: 0.7, 50: 0.5 };
 export function xrResScale() {
   const q = +new URLSearchParams(location.search).get('xrres');
@@ -333,10 +261,8 @@ const pickAxis = (a, b) => (typeof a === 'number' && a !== 0 ? a : (b ?? 0));
 
 // ---- controllers -----------------------------------------------------------
 const hands = { left: null, right: null };   // {grip, ray, laser} — resolved by HANDEDNESS
-// three's controller slots 0/1 are enumeration order, NOT left/right (porch-old
-// index.html:5395 learned this; owner, 09-05 20:00: 'hands attached to the wrong
-// controller'). Each slot listens to its own 'connected' event and files itself
-// under e.data.handedness; until then slot 0 = left, 1 = right as a guess.
+// three's controller slots 0/1 are enumeration order, NOT left/right: each files itself under
+// e.data.handedness on 'connected'; until then slot 0 = left, 1 = right as a guess.
 const slots = [null, null];
 function fileHand(slotIdx, handedness) {
   const h = slots[slotIdx]; if (!h) return;
@@ -447,11 +373,8 @@ function rayHitEntity(handRay, far = 24) {
 
 
 // ---- stickiness (xrpointer.js §3) ------------------------------------------------------------------------------
-// Per hand, the target the laser HOLDS: a panel control or a nameplate, kept as a point LOCAL to the thing it is on
-// (the quad, the plate's sprite, the card's quad), so a panel that moves or a person who walks carries the point along.
-// Each frame the unbent aim is tested; stickStep decides hold / switch / let go, and while it holds, the ray every pick
-// and the beam use is BENT from the hand to that point. A press in progress or a panel in this hand: no bending —
-// the press clicks what it pressed whatever the ray does (domquad.js), and a held panel rides the hand.
+// Per hand, the target the laser holds, as a point local to its thing (so it moves with it); while held, picks
+// and the beam bend to it. No bending during a press or while this hand holds a panel.
 const sticky = { left: null, right: null };   // {kind: 'panel'|'plate', key, obj, local: Vector3}
 const pickState = { left: { bent: false, kind: null }, right: { bent: false, kind: null } };   // probe window
 // THE DWELL, per hand (dwell.js), keyed on what the laser HOLDS — so the stickiness carries it through a small drift.
@@ -490,15 +413,8 @@ function stickTo(side, aim, eye, hold) {
 }
 
 // ---- panel grab: GRIP takes a QUAD to reposition it -----------------------------
-// Grip ALONE, on the press (an edge: a grip held while the laser sweeps onto a panel takes nothing), by the panel's
-// background or title (owner, 10-02, after comparing with Resonite — it was the grip+trigger chord). Over a CONTROL
-// (domquad.js controlAt: a button, an input, a slider, a tab, a link…) grip does nothing: the trigger is the click, and
-// a hand that squeezes out of habit mid-click must not yank the panel away. Release on grip release, as before; the
-// trigger of the hand holding a panel does nothing while it holds.
-// World-object grabbing lived here too (near-grab, far-grab, the place verb + undo) and was removed
-// whole (owner, 09-07 22:26: 'take the code out — it needs to be a proper object component, otherwise it's
-// tech debt'). Panels are UI, not world entities: no verb, no undo, they just ride the hand and land
-// uprighted on the rig. See git history (a2e25e2 and before) for the entity path when the component exists.
+// Grip alone, on the press edge, by background or title; over a control (domquad.js controlAt) it does nothing,
+// so a habitual squeeze mid-click can't yank the panel. Panels are UI: no verb, no undo.
 let held = null;   // {quad, hand}
 // a RESIZE in progress (grip on a panel's corner or edge; domquad.js does the geometry and the commit): {hand, drag}
 let resizing = null;
@@ -515,14 +431,9 @@ function tryGrab(hand, ray) {
   if (!q) return;
   held = { quad: q, hand }; haptic(hand, 0.4, 30); h.grip.attach(q.mesh); flashHint(`holding the ${q.id} panel — trigger + stick to push or pull it, release grip to place it`);
 }
-// PUSH / PULL (owner, 10-02, Resonite's reel): on the hand HOLDING a panel, with that hand's TRIGGER also held, stick
-// forward sends it away along the laser, stick back reels it in. Exponential, so the feel is the same near and far
-// (×e^(rate) per second at full deflection), and clamped to an arm's reach and a room's. Carrying a panel must not stop
-// you running or turning (owner, 10-02, revising the first pass, which took the stick over for the whole hold): the
-// stick is the panel's only while that trigger is held (a holding hand's trigger clicks nothing anyway), and then only
-// its forward/back — the left stick's walk-forward is held off for those moments, its strafe and the right stick's turn
-// never are. No rotation: a released panel is uprighted and faces you, as before. Panels only (world-object grabbing
-// waits for its component).
+// PUSH / PULL: on the hand holding a panel, with its trigger held, stick forward/back moves it along the laser,
+// exponentially, clamped to arm's and room reach. Only then is the stick the panel's (walk-forward held off;
+// strafe and turn never). No rotation: a released panel is uprighted and faces you.
 export const PUSH_RATE = 1.6;              // 1/s at full deflection: ≈5× farther per second
 export const PUSH_MIN_M = 0.25, PUSH_MAX_M = 3.0;
 const _pp = new THREE.Vector3(), _po = new THREE.Vector3(), _pd = new THREE.Vector3();
@@ -552,23 +463,14 @@ function releaseGrab() {
 }
 
 // ---- radial menu: right-stick press opens, stick aims, release commits -----
-// Every slot is verb-backed — an agent can speak each of these; the ring is
-// just a hand-shaped way to say them. The dock has no body in VR: this ring
-// is the dock, and 'panels' toggles the schema quads xrpanels.js carries.
-/** The ring IS the dock rendered radially (owner, 09-04 22:02): the same pins, in
- *  the same order, each slot opening that frame's quad. Rebuilt on every open
- *  so a pin toggled on the desk shows up here. The pinned trio glyphs lead,
- *  drawn from their own SVGs so the ring and the rail cannot drift; a frame
- *  with no VR surface yet is still a slot — dim, and honest about it — because
- *  parity means the gap is visible until the sweep fills it. sit/lie live in
- *  the action quad now, not here. */
+// Every slot is verb-backed (an agent can speak each); in VR this ring is the dock.
+/** The ring IS the dock rendered radially: same pins, same order, rebuilt on every open. A frame with no VR surface
+ *  is still a slot, dim, so parity gaps stay visible. */
 let ringLevel = 'root';   // 'root' | 'actions' — the sub-wheel in view
 const SPACER = { spacer: true, has: false, label: '', on: () => false, act: () => {} };
 const BACK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 26 26" fill="none" stroke="#f2f7f5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-7 7 7 7"/></svg>';
-// THE WHEEL IS THE DOCK, plus what VR needs (owner, 09-07 22:08): 12 o'clock = the panels menu (the rail's reverse-E),
-// 6 o'clock = leave VR; the dock's pins fill the right half, mic / headphones / recentre the left; a dim spacer keeps the
-// count even so the two fixed slots sit exactly on the vertical. 'actions' is a sub-wheel (VRC's shape): the nine
-// plus a back slot at 6 o'clock. Toggles stay open and show state; everything else closes on activation.
+// The wheel: 12 o'clock = panels menu, 6 = leave VR, pins on the right, mic/headphones/recentre left, a spacer
+// keeps the count even. 'actions' is a sub-wheel with back at 6. Toggles stay open; the rest close on activation.
 export function radialEntries() {   // exported with makeRadial for the headless ring screenshot
   if (ringLevel === 'actions') {
     const e = ringActionEntries();                    // postures + gestures, bar order, 12 o'clock first
@@ -600,14 +502,8 @@ export function radialEntries() {   // exported with makeRadial for the headless
   return [panels, ...right, leave, ...left];   // clockwise from the top: right side descends 1→5, left ascends 7→11
 }
 const RECENTRE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 26 26" fill="none" stroke="#f2f7f5" stroke-width="1.6" stroke-linecap="round"><circle cx="13" cy="13" r="7"/><circle cx="13" cy="13" r="1.6" fill="#f2f7f5"/><path d="M13 2v4M13 20v4M2 13h4M20 13h4"/></svg>';
-// THE RING as a MENU — porch-old's NESTED RADIAL v2 rules (index.html:7592–7770, headset testing
-// 2026-07-12/14/15), eidoverse's tokens, the same slots as before (owner, 09-06 12:49–12:50):
-//   · rides the RIGHT GRIP, anchored over the THUMB (0, +5 cm, +1 cm) — the digit making the choice;
-//   · billboarded to the eyes every frame with HEADSET-up (wrist roll can't tilt it); de-rolled from the grip;
-//   · R = 7.5 cm, 5 cm icon planes (depthTest off, renderOrder 999) — it draws over the world;
-//   · focus: the slot scales 1.4× and swaps to the brand ink; a focus-label PILL under the ring names it
-//     (07-15: "add words to the hover menus when an option is focused");
-//   · deflect > 0.5 selects a sector, release < 0.35 commits (the stick driver below), hold-to-open (updateXR).
+// THE RING: rides the right grip over the thumb, billboarded with headset-up; R = 7.5 cm, 5 cm icons drawn over
+// the world; focus scales 1.4× with a label pill; deflect > 0.5 selects, release < 0.35 commits.
 // Ink from the page's tokens: brand seafoam #8fe8c8, fg #ebebe9, panel rgb(5 20 20).
 const RING_R = 0.075, RING_ICON = 0.05, RING_ANCHOR = { x: 0, y: 0.05, z: 0.01 };
 const INK = { brand: '#8fe8c8', fg: '#ebebe9', dim: 'rgba(235,235,233,.42)', panel: 'rgb(5, 20, 20)', rule: 'rgba(143,232,200,.45)' };
@@ -784,13 +680,8 @@ async function enterVR({ retryOf = null } = {}) {
     // session request + the compile storm stall the main thread before the browser ever draws them. Two frames —
     // inside the try, so a tab hidden mid-yield still releases `entering` (round 1 S8). Capped: rAF stops in a hidden tab.
     await Promise.race([new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))), new Promise((r) => setTimeout(r, 250))]);
-    // THE LADDER (the owner's first tee line, 09-04 23:20: Chrome 152 granted the
-    // session WITHOUT the optional 'webgpu' feature and three refused it —
-    // "WebGPU XR sessions require the webgpu session feature"). On a WebGPU
-    // backend the feature is REQUIRED: a browser that can't grant it rejects
-    // the request, and we reload onto the WebGL backend (?webgl=1), where
-    // three's classic XRWebGLLayer path runs (and keeps MSAA — the porch A/B).
-    // 'layers' deliberately absent on that path.
+    // THE LADDER: on a WebGPU backend the 'webgpu' session feature is REQUIRED (three refuses a session without
+    // it); a browser that can't grant it rejects, and we reload onto WebGL (?webgl=1), classic XRWebGLLayer + MSAA.
     const gpu = !!renderer.backend?.isWebGPUBackend;
     sessionNo++;
     tee(`[xr] enter #${sessionNo}: requesting session (${gpu ? 'WebGPU' : 'WebGL'}; renderer.xr.enabled=${renderer.xr.enabled}; presenting=${renderer.xr.isPresenting})`);   // 09-07 11:20: a re-entry went silent between here and 'session on' — which await hangs?
@@ -800,16 +691,9 @@ async function enterVR({ retryOf = null } = {}) {
       session = await navigator.xr.requestSession('immersive-vr',
         gpu ? { requiredFeatures: ['webgpu'], optionalFeatures } : { optionalFeatures });
     } catch (e) {
-      // owner 09-07 10:46: a tab that reloaded into ?xr=1 while the previous page's session was still alive got
-      // "already an active, immersive XRSession". The browser owns that session and offers no handle to it,
-      // so the honest path is: say so, and retry once after a short wait for the old page to release it.
-      // WHAT the failure means is decided by xr_entry_policy.js (#197 review B1); the effects —
-      // timer, toast, reload, absent mark — stay here. `isRetry` is what makes one retry one retry.
-      // THE WHOLE SEAM IS ONE IMPORTABLE CALL (#197 round-three review). Extracting the effects moved
-      // the untested boundary out here instead of removing it: a mutation rewriting this as
-      // `false ? entryEffects.apply(...) : 'surface'` kept the text for every source regex, disabled
-      // retry/absence/reload, and left the suite at 35/35. There is nothing left here to bypass —
-      // the decision, the argument construction and the dispatch all live in the tested function.
+      // "already an active, immersive XRSession" (an old page's session the browser won't hand over): say so and
+      // retry once. xr_entry_policy.js decides what a failure means; handleEntryFailure (xr_entry_effects.js) is the
+      // whole tested seam, so nothing here can bypass it. `isRetry` makes one retry one retry.
       const next = handleEntryFailure({ effects: entryEffects, decide: decideEntryFailure,
                                         error: e, intent: myEntry, retryOf, gpu });
       if (next === 'handled') return;
@@ -823,10 +707,7 @@ async function enterVR({ retryOf = null } = {}) {
     try { localStorage.setItem(PREF_HEADSET_SEEN, String(Date.now())); } catch {}   // a REAL session, not a capability answer (phones say yes to Cardboard): next boot picks WebGL up front. The TIME, not a flag: it expires (#197 B3)
     tee(`[xr] enter #${sessionNo}: session granted (${session.enabledFeatures?.length ?? '?'} features)`); markXrAbsent(false);
     renderer.xr.enabled = true;
-    // Tier A6 (gap list 09-05): CHOOSE the floor reference space — before this it
-    // was only requested, and three's default is 'local' (eye-level origin), so
-    // the world's floor could sit anywhere relative to the real one. The type
-    // must be set BEFORE setSession (three reads it as the session starts).
+    // Choose the floor reference space (three defaults to 'local', eye-level); must be set BEFORE setSession.
     const feats = session.enabledFeatures ?? [];
     const floor = feats.includes('local-floor') ? 'local-floor' : feats.includes('bounded-floor') ? 'bounded-floor' : null;
     try { renderer.xr.setReferenceSpaceType(floor ?? 'local'); } catch (e) { report('xr ref space', e); }
@@ -835,14 +716,9 @@ async function enterVR({ retryOf = null } = {}) {
     scaleState.samples.length = 0; scaleState.locked = false; scaleState.firstAt = 0; scaleState.k = 1; scaleState.source = 'fallback'; loadSavedScale();
     bus.emit('xr:loop');   // frameloop.js hands the loop to three BEFORE setSession saves+wraps it (see frameloop.js)
     const tReq = performance.now();
-    // BEFORE setSession, so it runs BEFORE three's own 'end' listener (registered inside setSession), which restarts
-    // the desktop loop through window.requestAnimationFrame: with the in-session shim still installed that restart
-    // went to the dead session and no frame ever ticked again — owner 09-07 22:41, after-exit frames+0 at +0.5 s AND +3 s
-    // ONE OWNED SEQUENCE (#197 round-two review B2): capture (save-once), register the restore
-    // listener BEFORE setSession so it runs ahead of three's own 'end' listener, then shim. The order
-    // used to live only in this file and only as a source assertion, so mutating the install to
-    // `if (false && shouldShim(...))` left the suite green. installFrameClock owns it and
-    // tools/xr-session-lifecycle-test.mjs executes it.
+    // One owned sequence (installFrameClock, tools/xr-session-lifecycle-test.mjs): capture once, register the
+    // restore BEFORE setSession so it runs ahead of three's 'end' listener (which restarts the desktop loop through
+    // window.rAF), then shim.
     sessionEnded = false;
     frameClock = installEntryClock({
       win: window, session, saved: nativeRAF ? { raf: nativeRAF, caf: nativeCAF } : null,
@@ -862,18 +738,14 @@ async function enterVR({ retryOf = null } = {}) {
     { const be = renderer.backend; if (be && !be.__entryProbe) { be.__entryProbe = true;
         for (const [k, field] of [['createProgram', 'programs'], ['createRenderPipeline', 'pipelines']]) { const orig = be[k]?.bind(be); if (!orig) continue;
           be[k] = (...a) => { const t = performance.now(); try { return orig(...a); } finally { buildTotals[field]++; if (field === 'programs') buildTotals.programMs += performance.now() - t; if (field === 'pipelines' && a[1] == null) { buildTotals.syncPipelines++; const ms = performance.now() - t; buildTotals.syncMs += ms; if (ms > 30) { const ro = a[0]; const nm = ro?.material?.name || ro?.material?.type || '?', ob = ro?.object?.name || ro?.object?.type || '?'; tee(`[xr] sync pipeline ${ms.toFixed(0)} ms: ${nm} on ${ob}${ro?.context?.material?.isShadowMaterial || ro?.material?.isDepthMaterial ? ' [shadow/depth]' : ''}`); } } if (entryClock) { entryClock[field]++; if (field === 'programs') entryClock.programMs += performance.now() - t; } } }; } } }
-    // ENTRY CURTAIN (owner, 09-06 13:34: 'a bespoke loading screen to cover the WebXR construct'): the first
-    // presenting frames draw a cheap curtain to the eyes while the WHOLE scene compiles against the real
-    // XR camera + target (compileAsync from inside an XR frame captures that context — the 13:20 pre-warm
-    // into a plain RT missed the pipeline key). The world appears when the compile resolves; 6 s fallback.
+    // ENTRY CURTAIN: the first presenting frames draw a cheap curtain while the whole scene compiles against the
+    // real XR camera + target (compileAsync inside an XR frame captures that context); 6 s fallback.
     setXRCurtain(true); curtainState = { armed: true, t0: performance.now() };
     if (!floor) tee('[xr] NO floor reference space granted — using local (eye-level origin); floor height is a guess');
     const onLine = `[xr] session on ${renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL'} refspace=${floor ?? 'local'} features=${JSON.stringify(session.enabledFeatures ?? [])} xrctx=${JSON.stringify(globalThis.__xrCtx ?? 'default')}`;
     console.log(onLine); tee(onLine);
-    // Fixed foveation, Basis's split (BasisSettingsDefaults.cs:933 FoveatedRendering: windows 0, android 1): a
-    // standalone headset renders its own eye buffers and max foveation is its single biggest GPU lever; a PC
-    // headset (Link/Steam) has the GPU to spare and the periphery blur shows. Was 0 everywhere — inherited from
-    // porch-old, never measured. ?fov=0..1 overrides for the A/B.
+    // Fixed foveation, Basis's split (BasisSettingsDefaults.cs FoveatedRendering): 1 standalone, where it's the
+    // biggest GPU lever; 0 on PC, where the periphery blur shows. ?fov=0..1 overrides.
     { const standalone = /OculusBrowser|Quest|Pico|Wolvic|Android/i.test(navigator.userAgent) && !/Windows|Macintosh|Linux x86/i.test(navigator.userAgent);
       const fov = CONFIG.params.has('fov') ? THREE.MathUtils.clamp(+CONFIG.params.get('fov') || 0, 0, 1) : (standalone ? 1 : 0);
       try { renderer.xr.setFoveation(fov); tee(`[xr] foveation ${fov} (${standalone ? 'standalone' : 'pc'}${CONFIG.params.has('fov') ? ', ?fov' : ''})`); } catch { /* not all runtimes */ } }
@@ -897,40 +769,24 @@ async function enterVR({ retryOf = null } = {}) {
       markXrAbsent(true); toast('no headset detected — put it on (or wake it) and click the visor again', 'warn', 8000);
       leaveVR('no-headset');
     }, 2500);
-    // IN-SESSION CLOCK SHIM: window.requestAnimationFrame crawls at ~2 Hz during a WebXR session on the owner's rig
-    // (09-07: 7 ticks in 3 s). Everything that yields on it stalls — three's parallel-link poll (so compileAsync
-    // takes 7 s to resolve), the warm conductor (so no scene caster ever finishes its depth warm in VR: only her
-    // avatar cast a shadow), r186's buildAsync fallback. Route it onto the session clock for the session's
-    // duration; restored at teardown. Our own frame loop is unaffected (three's Animation holds the session).
-    // The rules live in xr_frame_clock.js (#197 review B2); the swap happens here. `captureNative` is
-    // save-ONCE across the page: capturing per entry would save the previous entry's SHIM as "native"
-    // and the desktop clock would never come back on the second exit.
-    // (installed above, with the restore listener, as one sequence — see installFrameClock)
-    // SHADER ERROR TEE: a material that fails to compile/link in the eye buffers' context draws black
-    // and the WebGL backend only console.error()s it — invisible from the operator's side. First 6 such lines tee.
+    // IN-SESSION CLOCK SHIM: window.rAF crawls at ~2 Hz in a WebXR session, stalling everything that yields on it
+    // (three's parallel-link poll, the warm conductor), so it's routed onto the session clock (xr_frame_clock.js,
+    // installed above with the restore). captureNative is save-once per page, or a second exit restores the shim.
+    // SHADER ERROR TEE: a material that fails in the eye buffers' context draws black and only console.error()s;
+    // the first 6 such lines tee.
     if (!consoleTapped) { consoleTapped = true; for (const k of ['error', 'warn']) { const orig = console[k].bind(console);
       console[k] = (...a) => { try { const m = a.map((x) => (typeof x === 'string' ? x : x?.message ?? '')).join(' '); if (presenting && shaderTees < 6 && /shader|program|link|compile|GLSL|uniform|invalid/i.test(m)) { shaderTees++; tee(`[xr] console.${k}: ${m.slice(0, 300)}`); } } catch {} orig(...a); }; } }
-    // WE own the stereo camera update (render.js renderWorld → xr.updateCamera(camera)). With
-    // cameraAutoUpdate on, three rebuilt cameraXR inside EVERY renderer.render() while presenting —
-    // including ShadowNode's nested render with the light camera (parent null) → the eyes at the
-    // playspace origin (the owner's Frame, 09-05 21:45–23:45: 'I pop to the origin', view-dependent).
+    // We own the stereo camera update (render.js → xr.updateCamera): with cameraAutoUpdate on, ShadowNode's nested
+    // render rebuilt cameraXR from the light camera and put the eyes at the playspace origin.
     renderer.xr.cameraAutoUpdate = false;
-    // three.webgpu also hands the shadow pass cameraXR instead of the light camera while presenting
-    // (Renderer.js: camera = xr.getCamera() for any render) — shadow maps are wrong by construction
-    // in XR, and cost a full scene pass per light per frame. Off while presenting.
-    // owner 09-07 18:30: 'leave everything alone.' shadowMap.enabled is pipeline-shape (lightrig.js:85) — flipping it
-    // off here and back on at exit recompiled the whole scene at the first frame in BOTH directions: the hard
-    // hangs in and out. Shadows now stay exactly as they are on the desktop. What that costs per frame in VR, and
-    // whether three's XR-camera shadow pass looks wrong, is the owner's read (fps tee + eyes), not a claim.
+    // Shadows stay as on the desktop: shadowMap.enabled is pipeline-shape (lightrig.js), so flipping it for XR
+    // recompiled the whole scene on entry and exit. three's XR shadow pass uses cameraXR; its cost is unmeasured.
     xrIntent.active = true;
     selfFirstPerson(true);
     { const t = performance.now(); xrPanelsEnter(rig); tee(`[xr] panels enter ${(performance.now() - t).toFixed(1)} ms`); }   // every registered frame as a physical surface (soft swap: staged each time, built on first show)
     session.addEventListener('end', () => {
-      // NO RESTORE HERE. installFrameClock's listener already did it, generation-checked, and it is
-      // registered BEFORE setSession so it runs first. This one used to restore unconditionally from
-      // the module-global pair — which the NEWER session's install overwrites — so a stale session's
-      // end handed the desktop clock back while the live session was presenting, reaching straight
-      // around the guard. Reproduced against the real module before removing (round-two agent review).
+      // No restore here: installFrameClock's generation-checked listener already ran; an unconditional restore
+      // let a stale session's end hand the desktop clock back mid-session.
       exitVeilShow(true);   // desktop feedback while the session tears down and the first desktop frames come back
       tee('[xr] session end — teardown begins');   // 09-06 23:43: a leave with no after-exit lines at all → was this handler even reached?
       try {
@@ -958,11 +814,8 @@ async function enterVR({ retryOf = null } = {}) {
       // Defensive: the canvas back to the window's size and ratio (three restores its own record; ours is the truth)
       // a pixel ratio asked for mid-session (the #32 guard deferred it) lands now
       try { renderer.setPixelRatio(xrPixelRatio?.takeDeferred() ?? Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); bus.emit('xr:exit-resized'); } catch (e) { report('xr exit resize', e); }
-      // THE BLACK DESKTOP (owner, 09-06 12:46 → 23:43; reproduced 09-07 00:05 with an emulated headset, smoke/xr-exit-probe.mjs):
-      // three's WebGL backend (0.185–0.186) keeps `_currentContext` = the last XR frame's render context after the session
-      // ends (that frame's finishRender never ran). Every desktop render then ends with finishRender → _setFramebuffer
-      // (deadXRContext) → drawBuffers → `WeakMap.set(undefined)` THROWS — nothing reaches the canvas while the HUD (DOM)
-      // lives on. Drop the dead context; the next render starts clean. (Upstream: report against Renderer/XRManager.)
+      // THE BLACK DESKTOP: three's WebGL backend keeps `_currentContext` = the last XR frame's after the session
+      // ends, and every desktop finishRender then throws. Drop the dead context.
       try { const be = renderer.backend; if (be && be._currentContext && be._currentContext !== null) { const rt = be._currentContext.renderTarget; tee(`[xr] exit: dropping stale backend context (${rt?.isXRRenderTarget ? 'XR' : rt?.constructor?.name ?? 'canvas'})`); be._currentContext = null; }
         renderer.setRenderTarget(null);
       } catch (e) { report('xr exit context', e); }
@@ -971,10 +824,8 @@ async function enterVR({ retryOf = null } = {}) {
       // at +0.5 s and +3 s, tee what the desktop actually is — is the loop running, what did the last frame
       // draw, where is the camera, what size is the canvas, and a REAL pixel read of the canvas centre.
       const f0 = perf.frameNo ?? 0;
-      // EXIT COST (owner, 09-07 18:20 'hard hangs in/out'): programs/pipelines built since teardown began (the
-      // shadowMap.enabled restore is pipeline-shape — lightrig.js:85 — so a recompile lands on the first desktop
-      // frame), and `held` = how late each timer fired versus its schedule — a client-side clock, so a frozen tab
-      // shows as held time even when the block is in the GPU process (parallel shader link) and no longtask fires.
+      // EXIT COST: programs/pipelines built since teardown began, and `held` = how late each timer fired (a frozen
+      // tab shows as held time even when the block is in the GPU process and no longtask fires).
       const tExit = performance.now(); const c0 = { ...buildTotals };
       const probe = (tag, due) => {
         // the veil drops only when desktop frames are actually flowing (a timer-hide left the owner a black world with a
@@ -1018,13 +869,8 @@ async function enterVR({ retryOf = null } = {}) {
   } finally { entering = false; if (!presenting) xrVeilShow(false); }
 }
 
-/** The rig goes where the body is: the BODY's root offset by the head's playspace position (recentreXR),
- *  so the head — not the playspace origin — stands on myState.pos and turns pivot about the head. Called
- *  from xrbody BEFORE the head/arm solve (main.js runs `xrbody` inside updateMe, ahead of `xr`): read
- *  after the root moved but before the rig followed, the grips and the XR camera were one frame behind
- *  the body — at 4 m/s that is a 4–5 cm fore/aft error flipping sign every frame (owner, 09-06 12:53: 'hands
- *  stutter backwards and forwards while running'). Basis and porch-old both move the playspace first.
- *  Rebuilds the stereo camera from the fresh rig so the eye pose xrbody reads is this frame's. */
+/** The rig goes where the body is (root offset by the head's playspace position, recentreXR). Called from xrbody BEFORE
+ *  the head/arm solve, or grips and camera lag the body a frame (a fore/aft stutter when running). */
 export function syncRigToBody() {
   if (!presenting) return;
   // THE CHOSEN SIZE scales the tracking space (bodyscale.js xrScales: rig = u, body = u/k): the HMD reads u× your real
@@ -1037,14 +883,8 @@ export function syncRigToBody() {
   rig.updateMatrixWorld(true);
   renderer.xr.updateCamera(camera);
 }
-/** THE SMOOTH TURN, BEFORE THE BODY SOLVE (owner, 09-08 01:10: hands and hips shimmy on turns; frames even).
- *  xrbody solves the head anchor and the arms from the rig's pose, and it runs BEFORE updateXR — where the
- *  stick turn used to write the rig's yaw. So every frame the body was solved against LAST frame's yaw while
- *  the eyes rendered this frame's: the whole body one yaw-step behind the eyes, the hands (at arm's length)
- *  and the hips (a latch on the head) showing it. Same class as the running stutter (09-06 12:53; the rig
- *  followed the root a frame late) and the same cure: apply the turn first. xrbody calls this ahead of
- *  syncRigToBody; the input pass below skips the smooth turn on a frame this already handled. Snap turns
- *  stay in the input pass — a discrete step is not a per-frame lag. */
+/** Apply the smooth turn BEFORE the body solve, or the body is solved against last frame's yaw while the eyes render
+ *  this one's. xrbody calls this ahead of syncRigToBody; snap turns stay in the input pass. */
 let turnEarlyFrame = -1;
 let hadPose = false;   // a viewer pose has arrived this session (the eyes exist) — the headset is on someone's head
 export function applyTurnEarly(dtSec) {
@@ -1070,9 +910,8 @@ export function applyTurnEarly(dtSec) {
 }
 /** Per-frame while presenting. Order matters: read hands → fill intent →
  *  (controller.updateMe moves the body with THEIR loco) → rig follows body. */
-// TURN BURST TRACE (owner, 09-07 22:28: 'avatar shimmies back and forth on turns; fine on locomotion'): the 5 s recorder
-// cannot see a per-frame oscillation. Armed by a stick turn, 60 frames of rig yaw / hips yaw / root xz / head xz /
-// rig xz tee as ONE line (cm, centi-radians), then it retires for 10 s. Read: does root or rig alternate sign frame to frame?
+// TURN BURST TRACE: armed by a stick turn, 60 frames of rig/hips yaw and root/head/rig xz tee as one line (cm,
+// centi-radians), then it retires for 10 s. Read: does root or rig alternate sign frame to frame?
 let turnTrace = null, turnTraceLast = 0;
 function turnTraceArm(kind) { if (turnTrace || performance.now() - turnTraceLast < 10000) return; turnTrace = { kind, rows: [], d: 0, dt: null }; }
 function turnTraceInput(d, dt) { if (turnTrace) { turnTrace.d = d; turnTrace.dt = dt; } }
@@ -1093,19 +932,10 @@ function turnTraceTick() {
 }
 function camYawWorld() { const e = renderer.xr.getCamera().matrixWorld.elements; return Math.atan2(-e[8], -e[10]); }   // world yaw of the HMD's -Z
 const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));   // every yaw write wraps: an unwrapped body yaw (7.88 = 1.6 + 2π on the owner's recorder) met a wrapped camera yaw and 'popped' a full turn
-// ---- recentre / seated (gap list C15; Basis: seated suppresses height capture) ----------
-// The headset sits wherever the human is in the playspace; the rig is the body's root. Without
-// this the root stands on myState.pos while the visible body (eye-anchored under the head) stands
-// a step away — colliders, the wire `p`, and every turn pivot are off by the human's drift. Recentre
-// measures the head's RIG-LOCAL pose once and folds it into the rig every frame: head xz lands on
-// myState.pos (turns then pivot about the head), and in seated mode the rig is lifted so the head
-// reads at the avatar's standing eye height — the body stands, the knees don't bend for the rest
-// of the session. Runs once on entry, and on the ring / Settings › VR verb. Pure math in
-// recentreSolve (smoke/recentre-probe.mjs).
-// NEVER yaw the rig for a body (Basis: the tracking space is only ever turned by the stick; a head
-// that faces away from the root is the torso latch's job). An earlier version rotated the rig by
-// (bodyYaw − headYaw) here — the camera is a child of the rig, so entering physically turned 60°
-// would have spun the world 60° on frame one. Removed 09-06 10:48 before it was ever felt.
+// ---- recentre / seated (Basis: seated suppresses height capture) ----------
+// Measure the head's rig-local pose once and fold it into the rig every frame, so head xz lands on myState.pos;
+// seated lifts the rig to standing eye height. Pure math in recentreSolve. NEVER yaw the rig for a body: the
+// camera is the rig's child, so that spins the world (only the stick turns the tracking space).
 const recentre = { x: 0, y: 0, z: 0, pending: false };
 /** @returns {{x,z,y}} rig-local head xz to fold in; y lift (seated only). No yaw: the rig is stick-only. */
 export function recentreSolve({ headLocal, seated, standingEyeY }) {
@@ -1119,11 +949,8 @@ export function recentreXR(why = 'verb') {
   _hl.setFromMatrixPosition(cam.matrixWorld);
   rig.updateMatrixWorld(true); rig.worldToLocal(_hl);           // head in rig space == the playspace: the rig's origin is root − R·recentre (syncRigToBody), so the offset is already out
   if (![_hl.x, _hl.y, _hl.z].every(Number.isFinite)) return false;
-  // A tracked head stands on a floor-referenced space at ~1–2 m and within a room of the origin. On the
-  // first presenting frames the XR camera has NO pose yet — its matrix is still the desktop camera at the
-  // world origin, so 'rig-local head' comes out as minus the rig's own position (owner, 09-06 11:24: 'head at
-  // playspace 3.43,0.00,-43.50' — 43 m folded into the rig on entry). Not a head: refuse, and if this was
-  // the entry pass, try again next frame.
+  // A tracked head is ~0.3–3 m up and within 10 m of the origin. The first presenting frames have no pose (the
+  // desktop camera at the origin): refuse, and on the entry pass retry next frame.
   if (_hl.y < 0.3 || _hl.y > 3 || Math.hypot(_hl.x, _hl.z) > 10) {
     if (why === 'entry') recentre.pending = true;
     else tee(`[xr] recentre (${why}) refused: head at playspace ${_hl.x.toFixed(2)},${_hl.y.toFixed(2)},${_hl.z.toFixed(2)} is not a tracked pose`);
@@ -1168,10 +995,8 @@ export const turnMagnitude = () => turnMag;
 export function updateXR(dtSec = 1 / 72) {
   if (!presenting) { turnMag = 0; if (pttFromX) { setPttHeld(false); pttFromX = false; } muteBtnWas = false; return; }
   renderCensusTick();
-  // EYE WATCH (owner, 09-06 12:22: 'spontaneously each eye becomes extremely fish-eyed; right eye visible in the
-  // left'): per frame, not per 5 s — the first sample is the baseline; any eye whose vertical fov moves
-  // more than 5° or whose viewport changes shape tees ONE line with both eyes' fov, viewport, and the last
-  // foreign render, then re-arms when it returns to baseline.
+  // EYE WATCH: per frame, against a first-sample baseline; an eye whose vertical fov moves > 5° or whose viewport
+  // changes shape tees one line (both eyes' fov, viewport, last foreign render), re-armed on return to baseline.
   { const cams = renderer.xr.getCamera().cameras ?? [];
     if (cams.length && !hadPose) { hadPose = true; markXrAbsent(false); }
     if (cams.length === 2) {
@@ -1185,13 +1010,8 @@ export function updateXR(dtSec = 1 / 72) {
       }
     } }
   if (curtainState?.armed) { curtainState.armed = false;
-    // The curtain holds until the entry compileAsync RESOLVES (cap 15 s), then drops after ≥2 presenting
-    // frames. It used to drop after 2 frames flat, because the promise could not resolve in-session: three's
-    // parallel-link poll reschedules on window.requestAnimationFrame, which crawls at ~2 Hz in a WebXR session on
-    // the owner's rig (measured 09-07: 7 ticks in 3 s) — so the world's first frame found nothing linked and built 25
-    // pipelines synchronously (6.9 s, measured: 'sync pipelines total 25 (6894 ms)'). Now window.rAF is routed
-    // onto the session clock while presenting (see the shim after setSession), the poll runs at frame rate, the
-    // promise resolves in-session, and the first world frame finds its pipelines linked.
+    // The curtain holds until the entry compileAsync resolves (cap 15 s), then drops after ≥2 presenting frames;
+    // it can resolve in-session only because window.rAF is routed onto the session clock (installFrameClock).
     const t0 = performance.now(); const f0 = perf.frameNo ?? 0; const clock = entryClock;
     curtainState = { down: false, resolved: false, t0, f0, clock };
     { let ticks = 0; const tw = performance.now(); const tick = () => { ticks++; if (performance.now() - tw < 3000) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
@@ -1221,17 +1041,12 @@ export function updateXR(dtSec = 1 / 72) {
   sampleFingerCurl();
   if (recentre.pending) { recentre.pending = false; recentreXR('entry'); }
 
-  // head yaw becomes the movement frame: stick-forward = where you look.
-  // Read the -Z column of matrixWorld DIRECTLY: getWorldDirection() calls
-  // updateWorldMatrix(), which clobbers the XR-set matrix and freezes forward
-  // at north (porch-old :9948, a debugged-for-days bug — not a style choice).
+  // head yaw becomes the movement frame. Read the -Z column of matrixWorld directly: getWorldDirection() calls
+  // updateWorldMatrix(), which clobbers the XR-set matrix and freezes forward at north.
   const me_ = camera.matrixWorld.elements;
   _v.set(-me_[8], -me_[9], -me_[10]);
-  // NaN passes `< 1e-6` (every comparison with NaN is false): a frame whose
-  // XR camera matrix is momentarily NaN (tracking loss, the hand-mesh
-  // compile spike) poisoned camYaw → updateMe rotated the move vector by NaN
-  // → myState.pos = [NaN, 0, NaN] → camera.far NaN → three threw in render
-  // (the owner's recorder, 09-04 23:50). Keep the last good yaw on a bad frame.
+  // NaN passes `< 1e-6`: a momentarily NaN XR matrix (tracking loss, a compile spike) would poison the move
+  // vector and myState.pos. Keep the last good yaw on a bad frame.
   const yaw = Math.atan2(_v.x, _v.z) + Math.PI;
   if (Number.isFinite(yaw) && _v.lengthSq() > 1e-6) {
     setCamYaw(yaw);   // orbit yaw (= facing + π) for the walk direction ONLY; the body's yaw is not driven from here
@@ -1258,22 +1073,16 @@ export function updateXR(dtSec = 1 / 72) {
     xrIntent.jump = !!R?.buttons[4]?.pressed;
     if (held?.hand === 'left' && L.buttons[0]?.pressed) xrIntent.fwd = 0;   // trigger + stick on the holding hand reels the panel: that push is not a step
   } else { xrIntent.fwd = 0; xrIntent.strafe = 0; xrIntent.jump = !!R?.buttons[4]?.pressed; }
-  // LEFT A / X = THE MIC (owner, 10-02, VRChat's convention: Touch "X (left hand, bottom button): Mute", Index "Left A:
-  // Toggle Mute"). It does what the desktop's V does, through the same doors: in voice-activation mode a press flips the
-  // mic (the ring's 'xr:mic', vrmic.js's VR-safe toggleMic); in push-to-talk mode it is HOLD to speak while the mic is
-  // armed (setPttHeld, exactly V's rule — an unarmed mic is armed from the ring or the HUD glyph, as on the desktop).
-  // Released on button-up, a dropped controller and the session's end (the stuck-key class, mictoggle.js).
+  // LEFT A / X = the mic (VRChat's convention), through the desktop V's doors: a press flips it in voice
+  // activation, hold-to-talk in push-to-talk (setPttHeld). Released on button-up, a dropped controller, session end.
   { const x = buttonsTrusted() && !!L?.buttons[4]?.pressed;
     if (x && !muteBtnWas) {
       if (pttMode()) { if (micLive()) { setPttHeld(true); pttFromX = true; } }
       else { bus.emit('xr:mic'); haptic('left', 0.3, 20); tee('[xr] mic toggled (left A/X)'); }
     } else if (!x && muteBtnWas && pttFromX) { setPttHeld(false); pttFromX = false; }
     muteBtnWas = x; }
-  // B or Y = THE QUICK HIDE (owner, 10-02: the face buttons follow VRChat's convention). VRChat opens its menu on the
-  // top face button, B or Y, either hand (docs.vrchat.com/docs/touch "B/Y: Quick Menu", /docs/valve-index "B (top
-  // button): Quick Menu"); our panels are our menu, so B/Y puts every open panel away and the next press brings exactly
-  // those back (xrpanels/domquad quick hide). A press, either hand, on the edge. B/Y held used to show every name;
-  // that is a setting now (Settings › style › always show names; namereveal.js) — the desktop's N hold is unchanged.
+  // B or Y = the quick hide (VRChat's quick-menu button, either hand, on the edge): puts every open panel away and
+  // the next press brings those back (xrpanels/domquad). Always-show-names is a setting (namereveal.js).
   { const by = !!L?.buttons[5]?.pressed || !!R?.buttons[5]?.pressed;
     if (by && !menuBtnWas && buttonsTrusted()) {
       if (held) releaseGrab(); if (resizing) endResize();   // a carried or resizing panel is put down first
@@ -1284,16 +1093,9 @@ export function updateXR(dtSec = 1 / 72) {
     const rx = dead(pickAxis(R.axes[2], R.axes[0]));
     const ry = dead(pickAxis(R.axes[3], R.axes[1]));
     const pressed = !!R.buttons[3]?.pressed;              // thumbstick click
-    // CLICK / LATCH / TRIGGER (owner, 09-07 21:56, replacing hold-aim-release: 'I hate the VRChat action menu').
-    //   · stick CLICK opens; stick click again closes; grip cancels; 12 s without stick or trigger closes (the
-    //     09-04 click-toggle stuck open — every close path here tees its cause so a stuck ring is diagnosable);
-    //   · AIM latches: deflect > 0.5 picks the sector and the pick STAYS when the stick springs back — a choice is
-    //     a state, not a held pose (the stick is exhausting to hold; a lit slot costs nothing);
-    //   · TRIGGER activates the latched slot. Toggles (mic, headphones, panels) stay open and repaint their state;
-    //     one-shots (recentre, opening a panel) close on activation — Resonite's CloseMenuOnPress, per item;
-    //   · FLICK: deflect and return to centre within 220 ms activates without the trigger;
-    //   · compat: release the CLICK while still deflected within 700 ms of opening → commit + close (the old
-    //     hold-aim-release muscle memory keeps working).
+    // CLICK / LATCH / TRIGGER: stick click opens and closes; grip cancels; 12 s idle closes (each close tees its
+    // cause). Aim latches (deflect > 0.5) and stays when the stick springs back; trigger activates; a flick (back
+    // within 220 ms) activates too; releasing the click while deflected within 700 ms commits (hold-aim-release).
     const ringOpenAtStart = radialOpen;   // a grip that closes the ring this frame is spent: it must not also grab
     const gripNow = !!R.buttons[1]?.pressed;
     const trigNow = !!R.buttons[0]?.pressed;
@@ -1329,10 +1131,8 @@ export function updateXR(dtSec = 1 / 72) {
       turnMag = Math.abs(d);
     }
     else if (Math.abs(rx) > 0.6 && !snapState.cooling && turnEarlyFrame !== (perf.frameNo ?? -2)) {
-      // snap turns the RIG — the world pivots around the body. camYaw belongs
-      // to the head (head-following rewrites it every frame), and the camera
-      // rides the rig, so the head's world yaw inherits the snap on its own.
-      // (normally applied EARLY by applyTurnEarly, ahead of the body solve; this is the no-body path)
+      // snap turns the RIG; the head's world yaw inherits it via the camera (normally applied early by
+      // applyTurnEarly; this is the no-body path)
       rig.rotation.y = wrapPi(rig.rotation.y - Math.sign(rx) * (SNAP_DEG * Math.PI) / 180);
       snapState.cooling = true;
       turnTraceArm('snap');
@@ -1350,11 +1150,9 @@ export function updateXR(dtSec = 1 / 72) {
       // the ray every pick below uses, and the beam is drawn along: the controller's, low-passed (xrpointer.js), then
       // bent onto the target it holds while the hand drifts a little off it (stickTo)
       const aim = steerAim(hand, dtSec ?? 1 / 72);
-      // the laser also shows, with no button held, while it rests on a panel (Resonite's always-there pointer): that is
-      // what makes the panel under it scrollable with the stick, and shows where a trigger will land
-      // …or on a nameplate: resting there is VR's hover (platecard.js opens the card). Panels claim the laser first.
-      // A plate counts only if nothing in the world is nearer along the same laser (the beam stops at the first thing) —
-      // decided HERE, before the trust gate below, so the first 700 ms after a controller wakes obey it too (review 10-02)
+      // the laser also shows while resting on a panel (scrollable, shows where a trigger lands) or a nameplate (VR's
+      // hover); panels claim it first, and a plate counts only if nothing nearer is on the laser, decided before the
+      // trust gate.
       const { ray, panel: panelAt, plate } = stickTo(side, aim, eye, !panelPress[side] && held?.hand !== side && resizing?.hand !== side);
       const panelNow = panelAt?.dist ?? null;
       // the WORLD, every frame now: an interactable entity (sockets, reactions — xrpointer.js) is a target like a panel
@@ -1443,28 +1241,17 @@ export function updateXR(dtSec = 1 / 72) {
     domQuadsRevealOnly(reveal);
   }
 
-  // eye cameras see the first-person split, never the third-person head.
-  // r185 re-derives per-eye masks from the BASE camera every frame
-  // (XRManager: cameraXR.layers.mask = camera.layers.mask | 0b110), so the
-  // r184-era per-eye enable() was stomped one frame later. Drive the BASE
-  // camera instead and let three propagate. Restored on session end.
   if (fpVrm !== getSelf()?.vrm) selfFirstPerson(true);   // avatar swapped mid-session → chop the new head
   hookSelfDraws(); selfDrawnLast = selfDrawn; selfDrawn = 0;
 
-  // the body moved by THEIR controller code; the rig goes where the body is
-  // porch-old's rule (index.html:11034–11072, verified 09-05): the RIG IS STICK-ONLY. Nothing reads the head
-  // and writes the rig or the body root; the VRM chases the head INSIDE the root (xrbody.js).
-  // the rig is the BODY's root offset by the head's playspace position (recentreXR), so the
-  // head — not the playspace origin — stands on myState.pos, and turns pivot about the head
+  // the rig is stick-only: nothing reads the head and writes the rig or the body root; the VRM chases the head
+  // inside the root (xrbody.js).
   syncRigToBody();   // (again, after a snap/smooth turn above changed rig.rotation)
   // — three's XRManager builds cameraXR from camera.parent.matrixWorld
   turnTraceTick();
 
-  // three pushes camera.near/far into session.updateRenderState every frame
-  // it changes; a non-finite value throws INSIDE render and the headset
-  // freezes (the owner's tee, 09-04 23:50: "depthFar … non-finite"). Nothing of ours
-  // writes camera.far directly, so restore sane planes and record what was
-  // found — the writer is still being hunted.
+  // three pushes camera.near/far into updateRenderState; a non-finite value throws inside render and freezes the
+  // headset. Restore sane planes and record what was found (the writer is unknown).
   if (!Number.isFinite(camera.near) || !Number.isFinite(camera.far) || camera.far <= camera.near) {
     tee(`[xr] camera planes non-finite: near=${camera.near} far=${camera.far} — restored`);
     camera.near = 0.15; camera.far = 20000; camera.updateProjectionMatrix();
@@ -1514,11 +1301,9 @@ export function updateXR(dtSec = 1 / 72) {
 }
 let recAt = 0;
 
-// XR PIPELINE PRE-WARM (entry clock, owner 09-06 12:33: setSession 4 ms, first frame +45 ms, then ONE 5524 ms
-// frame — every material compiling for the eye buffers' render context on the first presenting draw).
-// On an XR boot, once my body is in, compile the whole scene ONCE into a render target shaped like the
-// eye buffers (RGBA8, depth, 4× MSAA) while the desktop is still idle-waiting on the visor. If the
-// pipeline cache keys match, entry loses the 5 s frame; the entry clock is the verdict either way.
+// XR PIPELINE PRE-WARM: on an XR boot, once my body is in, compile the whole scene once for the eye buffers
+// while the desktop idles on the visor, so entry skips the multi-second first-frame compile (the entry clock is
+// the verdict).
 
 // COMPILE THE WHOLE SCENE, NOT THE FRUSTUM: three's compile walk builds a render list with the camera, so a prop
 // behind you is skipped and compiled at its first in-session draw instead — the owner's probe 09-19 17:09: sixteen prop
@@ -1533,11 +1318,8 @@ function warmXRPipelines() {
   if (xrWarmed || !(XR_BOOT || headsetHere) || presenting || !getSelf()?.vrm) return;   // any boot with a headset present warms (owner, 09-19), not only ?xr=1
   xrWarmed = true;
   warm('xr pipelines', async () => {
-    // One compile of the whole scene through a TWO-EYE stand-in, no target bound. Measured (tools/xr-dual-warm-probe.mjs):
-    // the eyes draw through the same tone-mapping target shape as the desktop, so this lands in the render context the
-    // headset uses. The old warm missed three ways — xr.getCamera() has zero eyes before a session (the mono variant under
-    // a stereo name), a hand-built 64² target keyed a different context, and the next desktop frame evicted what it built
-    // (both variants shared one slot until xrpass.js).
+    // One compile through a two-eye stand-in, no target bound (tools/xr-dual-warm-probe.mjs): it lands in the render
+    // context the headset uses. Not xr.getCamera() (zero eyes before a session) nor a hand-built target (wrong context).
     const t0 = performance.now();
     try { await withXREyes(renderer, (eyes) => compileEverything(eyes)); }
     catch (e) { report('xr pipeline warm', e); }
@@ -1554,30 +1336,18 @@ export async function initXR() {
   // (the headset-seen pref is written when a session is actually GRANTED — see setSession — not here: isSessionSupported
   // is true on any machine with an XR runtime, headset or not, and the pref pins the next boot to WebGL)
   headsetHere = true;
-  // from here on every content warm also builds the variant the OTHER mode needs, and in-session compiles land where the
-  // frames draw (xrwarm.js). Who pays the second compile: machines whose browser reports immersive-vr support — which
-  // is any machine with an XR runtime installed, headset attached or not — and only on the WebGL backend (VR on this
-  // client presents through WebGL unless WebGPU-XR is flagged; a WebGPU boot never draws the WebGL stereo variant).
-  // Content warmed BEFORE this point (initXR resolving) is not dual-warmed; it compiles its stereo variant under the
-  // entry curtain instead (warmXRPipelines).
+  // From here every content warm also builds the other mode's variant (xrwarm.js), on the WebGL backend of any
+  // machine reporting immersive-vr. Content warmed before this compiles its stereo variant under the entry curtain.
   if (renderer.backend?.isWebGLBackend) globalThis.__xrDualWarm = installDualWarm({ THREE, renderer, camera, presenting: () => presenting });
 
-  // the third glyph of the mic/ear trio — the same ink, the same slot
-  // layout, the same pin row in the ∃ menu (owner, 09-04). Exists only here,
-  // where the browser answered that a headset can present.
-  // PRE-WARM the hand meshes: their first draw compiled two materials on the
-  // frame the controllers arrived — a 0.5 s spike (the owner's recorder 09-04 23:50)
-  // that is exactly the kind of frame whose camera matrix comes back NaN.
-  // Build the hands now (controller groups exist without a session), park
-  // them under the rig, and let the conductor compile them off-screen.
+  // the third glyph of the mic/ear trio; exists only where a headset can present.
+  // Pre-warm the hand meshes: their first draw compiled on the frame the controllers arrived (a ~0.5 s spike);
+  // build them now, parked under the rig, and let the conductor compile them off-screen.
   slots[0] ??= makeHand(0); slots[1] ??= makeHand(1);
   hands.left ??= slots[0]; hands.right ??= slots[1];
   warm('xr hands', async () => {
-    // the avatar warm's form: object + camera + the lit scene, frustumCulled
-    // off so a parked (stale-matrix) mesh isn't culled out of the compile walk
-    // the surface dots too, shown for their compile only (a hidden object is skipped by the compile walk) — the rig is not
-    // in the scene before a session, so nothing draws them
-    // …the dot AND an icon with its texture on (a map changes the shader): every part compiles before the first session
+    // the avatar warm's form, frustumCulled off so a parked mesh isn't culled out of the compile walk; the dot and
+    // an icon with its texture on (a map changes the shader) are shown for the compile only
     const dots = [hands.left?.dot, hands.right?.dot].filter(Boolean);
     for (const d of dots) { d.visible = true; setSurfaceDotKind(d, 'click'); d.userData.parts.rim.visible = d.userData.parts.core.visible = true; }
     const meshes = []; rig.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -1651,11 +1421,8 @@ export const xrDebug = () => {
 };
 
 
-// The veil, both ways (owner, 09-07 18:20: 'loading in/out indicator, hard hangs'; 09-19: 'style compliant'): the
-// splash's own furniture — its mark (cloned from #splash so there is ONE drawing of the mark), the eidoverse /
-// worlds marks, the brand phase line with a breathing ellipsis — over the world from the visor click until
-// the session's first frame, and from the leave click until desktop frames are flowing again (a timer-hide
-// left the owner a black world with a dead loop, 09-07). The rays worker stays the splash's; the veil is still.
+// The veil, both ways: the splash's own mark (cloned from #splash, one drawing) and phase line, from the visor
+// click until the session's first frame, and from the leave click until desktop frames flow again (not a timer).
 function xrVeilShow(on, phase = 'leaving VR') {
   if (!exitVeil) {
     exitVeil = document.createElement('div'); exitVeil.className = 'xr-veil'; exitVeil.setAttribute('aria-live', 'polite');

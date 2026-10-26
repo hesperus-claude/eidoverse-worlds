@@ -1,12 +1,8 @@
-// videopanel — the resident's graphics dials, in Settings where a visitor can
-// find them. Every row here is LOCAL: a preference about this machine, never
-// shared with the world (the build panel is for what the world looks like;
-// this is for what your GPU can afford). The APIs already existed, scattered —
-// render scale lived in the build panel, the rest were URL params or governor-
-// only.
+// videopanel — the resident's graphics dials, in Settings. Every row is LOCAL: a preference about this machine, never
+// shared with the world (the build panel is for what the world looks like; this is for what your GPU can afford).
 //
-// Two rows apply on RELOAD, and say so: renderer backend and antialiasing are
-// construction-time choices in three's WebGPURenderer (core.js), not live.
+// Two rows apply on RELOAD, and say so: renderer backend and antialiasing are construction-time choices in three's
+// WebGPURenderer (core.js), not live.
 import { makeSection, flashHint } from './ui.js';
 import { RENDER_SCALES, getRenderScale, setRenderScale,
   PARTICLE_TIERS, getParticleTier, setParticleTier,
@@ -63,11 +59,8 @@ function needsReload(row) {
 }
 const pct = (v) => v === 'auto' ? 'auto (adaptive)' : `${Math.round(v * 100)}%`;
 
-// The same dials as a VR quad, under the rail's 'settings' id: the SAME
-// getters and setters the desk's rows call (the who pattern — one source, one
-// action set, two renderers); the desk's own rows are untouched. Discrete
-// choices are list rows with a 'use' action because 'auto' appears in all
-// three lists and a bare row click could not say which one it meant.
+// the same dials as a VR quad, through the same getters and setters as the desk's rows; discrete choices are list rows
+// with a 'use' action because 'auto' appears in all three lists and a bare row click couldn't say which
 function videoFields() {
   const pick = (k, values, cur, label) => ({ t: 'list', label,
     rows: values.map((v) => ({ id: String(v), label: String(v), active: String(v) === String(cur),
@@ -83,7 +76,7 @@ function videoFields() {
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
     { t: 'check', k: 'msaa', label: 'antialiasing (on reload)', value: msaaOn },
-    // batch 2 (R 10-07): the safety row rides the same VR quad (the desk has its own 🛡 safety section, below)
+    // the safety row rides the same VR quad (the desk has its own 🛡 safety section, below)
     { t: 'check', k: 'untrusted', label: UNTRUSTED_WORDS.label.toLowerCase(), value: allowUntrusted(), hint: UNTRUSTED_WORDS.hint },
   ];
 }
@@ -109,10 +102,8 @@ export function initVideoPanel() {
     if (body.dataset.init) return;
     body.dataset.init = '1';
 
-    // renderer: ONE control (live 09-07). auto matches the backend to what VR will use so entry never reloads;
-    // force WebGPU / force WebGL are the overrides. A headset present + WebGPU-XR flags absent is the case that
-    // makes force-WebGPU cost a reload-into-VR, so that combination is warned; force-WebGPU is disabled outright
-    // when the machine has no WebGPU at all.
+    // renderer: ONE control. auto matches the backend VR will use so entry never reloads; a headset present without
+    // the WebGPU-XR flags makes force-WebGPU cost a reload into VR (warned), and it's disabled with no WebGPU at all
     const backend = backendName();
     const forced = CONFIG.params.has('webgl') || CONFIG.params.has('webgpu');
     const rpref = lsGet(PREF_BACKEND) || 'auto';
@@ -196,7 +187,7 @@ export function initVideoPanel() {
       '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload.',
       msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row); }));
   }, { id: 'video', host: 'settings' });
-  // 🛡 safety (batch 2, R 10-07): what this browser may fetch from other websites. One row, off by default: VRChat's
+  // 🛡 safety: what this browser may fetch from other websites. One row, off by default: VRChat's
   // "Allow Untrusted URLs" (Comfort & Safety). Its own section so it can't be mistaken for a graphics dial.
   makeSection('🛡 safety', (body) => {
     if (body.dataset.init) return;
@@ -204,7 +195,7 @@ export function initVideoPanel() {
     body.appendChild(checkRow(UNTRUSTED_WORDS.label, UNTRUSTED_WORDS.hint, allowUntrusted(), (on) => {
       setAllowUntrusted(on); flashHint(on ? 'links from any site play for you now' : 'only this server\'s files and trusted hosts play for you');   // no emoji outside Chat and the action bar (R)
     }));
-    // the explanation runs the panel's full width (R 10-10: it was squeezed into the label column, a word a line)
+    // the explanation runs the panel's full width
     const p = document.createElement('div'); p.style.cssText = 'display:block;width:100%;box-sizing:border-box;padding:2px 8px 6px;font-size:11px;color:var(--dim);line-height:1.4';
     p.textContent = UNTRUSTED_WORDS.hint; body.appendChild(p);
   }, { id: 'safety', host: 'settings' });

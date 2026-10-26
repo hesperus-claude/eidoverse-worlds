@@ -1,20 +1,9 @@
-// water — a world's one water level, drawn (shared/terrainshape.js waterParams).
+// water — a world's one water level as a flat sheet (shared/terrainshape.js waterParams).
 //
-// A flat sheet at `level` over the terrain square. Every vertex carries how deep the water is THERE
-// (level minus the ground under it), baked once at build, and the material reads that depth: clear and
-// pale in the shallows, the world's colour further out, foam where the depth runs to nothing at the shore.
-// Triangles wholly over dry ground are dropped from the index, so the sheet costs what the lakes cost,
-// not what the whole square would. The ripple is a moving normal, not moving vertices, so the shoreline
-// foam stays exactly where the ground meets the water.
-//
-// KINDS (shared/waterkind.js): the same level fills a bowl, a channel and the open edge of the world,
-// and those are different water. The shape of each wet body says which — still, river, ocean — and each
-// vertex is told its kind, a river's flow, and the sea's way in to shore. The material reads them: still
-// water lies nearly mirror-calm; a river's ripples and foam streaks are carried down its channel; the
-// sea rolls a swell in toward the shore whose swash runs the waterline up and down the beach.
-// Foam is made by water moving at the edge: the waterline's speed up the beach, weighted by wave size.
-//
-// Nothing here moves bodies — wading is the controller's (and the agents') rule, from the same level.
+// Per-vertex depth (baked at build) drives shallows, colour and shore foam; dry triangles are dropped from the
+// index; the ripple is a moving normal, so the foam line stays put. Each wet body's kind (shared/waterkind.js:
+// still, river, ocean) sets its motion; foam comes from the waterline's speed up the beach.
+// Nothing here moves bodies: wading is the controller's rule, from the same level.
 import { THREE, scene } from './core.js';
 import { attribute, mix, smoothstep, vec3, float, positionGeometry, uniform, sin, cos, max, normalize, color, transformNormalToView, faceDirection, positionWorld, cameraPosition } from 'three/tsl';
 import { OCEAN, RIVER, STILL, waveClock, cyc, surfaceOffset } from '../../shared/waves.js';
@@ -172,12 +161,8 @@ export function applyWater(args, heightAt) {
   mat.normalNode = transformNormalToView(normalize(vec3(nx, float(1), nz)));
 
   // ---- foam: made by water MOVING at the edge ---------------------------------------------------------
-  // `wet` is the depth of water actually standing here this instant (the bed depth plus the wave), so the
-  // edge — and the foam riding it — moves up and down the beach with every wave. Foam is the UPRUSH: the
-  // speed the waterline is being driven up the beach (the surface's rise ∂h/∂t over the ground's slope,
-  // m/s), weighted by how big the wave is, in a band at the moving edge. A pond's millimetre ripple moves
-  // its waterline at nothing, so its edge stays clean; the sea's swash runs metres a second up a gentle
-  // beach and throws surf on every crest's arrival.
+  // `wet` = bed depth plus the wave, so the edge moves with each wave. Foam is the uprush: ∂h/∂t over the ground
+  // slope (m/s), weighted by wave size, in a band at the moving edge; a pond's ripple stays clean.
   const wet = d.add(disp);
   const band = float(1).sub(smoothstep(0.0, 0.3, wet));
   const lineSpeed = max(rise, float(0)).div(max(S.z, float(0.04)));
@@ -200,17 +185,13 @@ export function applyWater(args, heightAt) {
   // this keeps the last centimetres from shimmering against the sand)
   const aboveOpacity = mix(float(0.38), float(W.opacity), deep).add(foam.mul(0.3)).mul(smoothstep(-0.02, 0.04, wet)).clamp(0, 1);
   // ---- from below: Snell's window ----------------------------------------------------------------------
-  // Looking up from under water, the sky shows only inside a cone about 48.6° from straight up (the critical
-  // angle: cos ≈ 0.66); past it the surface is a mirror of the dim water below (total internal reflection).
-  // So the underside is clear looking steeply up, and a dark, nearly opaque ceiling at grazing angles.
+  // Sky shows only within ~48.6° of straight up (critical angle, cos ≈ 0.66); past it, total internal reflection.
   const up = normalize(positionWorld.sub(cameraPosition)).y;
   const snell = smoothstep(0.6, 0.72, up);
   const belowCol = mix(deepCol.mul(0.35), base.mul(1.15).add(vec3(0.08, 0.1, 0.1)), snell);
   const belowOpacity = mix(float(0.92), float(0.5), snell).mul(smoothstep(-0.02, 0.04, wet));   // the window still tints the sky
-  // front (from above) = 1, back (from below) = 0, as plain arithmetic: a select() here typed the colour as a vec3
-  // while generating a vec4 variable, and the weather system's wetness wrap — vec4(colorNode).rgb … .a — then
-  // produced invalid WGSL (`vec4(<vec4>, 1.0)`) on worlds with the full sky: the sheet's pipeline failed and no
-  // water drew at all. The colour stays a vec3, as upstream's always was.
+  // front = 1, back = 0, as plain arithmetic: a select() here mistyped the colour (vec3 vs vec4) and the
+  // weather wetness wrap then produced invalid WGSL. Keep the colour a vec3.
   const front = faceDirection.mul(0.5).add(0.5);
   mat.colorNode = mix(belowCol, aboveCol, front);
   // no water across the mouth of a dry shaft or room that reaches up through the surface

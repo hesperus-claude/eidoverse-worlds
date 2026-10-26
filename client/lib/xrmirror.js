@@ -1,22 +1,7 @@
-// Desktop view while presenting (owner, 09-05 18:22: "mirror VR view to desktop, and 3rd person as an option"). By
-// default the desktop canvas goes black in VR — WebXR owns the framebuffer. This system draws the scene once more, onto
-// the canvas, from a desktop camera: 'first' = where the headset looks, 'third' = behind-and-above the body, looking at
-// it. porch-old's pattern, which worked: after the eye render, renderer.xr.enabled OFF, render
-// the scene to the canvas, restore.
-//
-// Why it never worked HERE (found 2026-09-26): three's WebGPURenderer (unlike porch-old's WebGLRenderer) renders the
-// canvas through an intermediate target sized from its CanvasTarget, and XRManager._setXRLayerSize overwrites that
-// CanvasTarget's size with the XR LAYER's for the whole session (Renderer.js "TODO: Find a better solution to resize
-// the canvas when in XR"). So every canvas pass in a session — the 09-20 scene pass, the eye quad before it — drew
-// through a target the size of BOTH EYES (5920×2960 on the owner's headset, MSAA ×4) with a viewport of that size on
-// a ~1920×1080 canvas: the scene pass cost a second stereo frame ("chugging VERY hard… loud fan"), and the quad drew
-// its corner. The fix is the one field three's own TODO names: for this pass only, the CanvasTarget gets the canvas's
-// real size back, and the XR size is restored before the next eye frame.
-//
-// Earlier attempts, kept short: 'first' sampled three's eye intermediate target through a quad (black: it drew through
-// the same oversized path) and before that read the XR layer's framebuffer with blitFramebuffer (two GPU freezes: on
-// Windows that surface belongs to the SteamVR compositor — never touch it). 'third' rendered into a small target and
-// blitted it with raw GL. One path now serves both.
+// Desktop mirror while presenting: 'first' (headset view) or 'third' (behind-and-above), drawn after the eye render
+// with xr.enabled off.
+// WebGPU: XR overwrites the CanvasTarget size with the layer's, so this pass restores the canvas size and puts the XR
+// size back before the next eye frame. Never touch the XR layer's framebuffer (on Windows it is SteamVR's).
 import { THREE, renderer, scene, camera } from './core.js';
 import { isPresenting, xrPrefs, withHeadShown } from './xr.js';
 import { myState } from './controller.js';
@@ -42,10 +27,8 @@ function onCanvas(fn) {
   // this frame's shadow maps are already drawn for the eyes: the desk pass samples them instead of drawing them again
   const shadowLights = casters().map((l) => [l, l.shadow.autoUpdate]); for (const [l] of shadowLights) l.shadow.autoUpdate = false;
   renderer.xr.enabled = false;
-  // The pass runs after this frame's eye render, whose context the backend still holds. finishRender restores the
-  // previous context, and that XR framebuffer no longer resolves: WebGLState.drawBuffers → WeakMap.set(undefined)
-  // on the SECOND pass (xr-mirror-probe; the same throw sky_baked's XR pump documents). Same cure as the pump: null the
-  // pointers, never restore them — the next XR frame's beginRender sets its own.
+  // finishRender would restore this frame's XR context, which no longer resolves (drawBuffers throws on the second
+  // pass): null the pointer, never restore it; the next XR frame's beginRender sets its own (same cure as sky_baked's pump)
   if (renderer.backend) renderer.backend._currentContext = null;
   renderer._currentRenderContext = null;
   try {

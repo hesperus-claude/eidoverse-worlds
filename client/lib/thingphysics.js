@@ -1,25 +1,16 @@
-// thingphysics — physics in a world, on the client (design 20: the physics design note, research 20).
+// thingphysics — physics in a world, on the client.
 //
-// TODAY nothing here simulates for anyone else and nothing is streamed: every act is a REQUEST, and every client draws
-// the same truth. That is this client's current state, not the protocol's limit: spec/PHYSICS.md §4.1 lets whoever
-// holds or touches a thing simulate it locally and stream its state on a presence lane (§4.3, reserved), crossing into
-// the engine only through log entries (a lift; a launch or a checked settlement). Continuous contact gives no unlogged
-// impulse TO THE ENGINE; it was never a ban on live hands.
+// Today every act is a REQUEST, nothing here simulates for anyone else, and every client draws the same truth. That is
+// this client's state, not the protocol's limit: spec/PHYSICS.md §4.1 lets a holder simulate locally and stream state.
 //
-//   carrying   grab / put / throw / drop / punt are requests (shared/protocol/authority.js). Who holds what is the authority's
-//              presence plane (`holds`, never logged); every client draws a held thing in its holder's hand, so it
-//              follows the hand for everyone (a remote's hand is their avatar's hand bone, driven by their own pose
-//              stream: desktop or VR alike), and the holder's own hand is where its release pose is sent from.
-//   flights    a launch (throw, drop, punt, a grab that let what rested on it fall) is a `sim` entry in the log. This
-//              client folds it with the SAME engine the authority runs (shared/protocol/replica.js: simFolder + eidosim, no
-//              catalogue of its own: shapes are the log's physics.shape), so a flight on screen is the engine's
-//              flight, and it rests bit for bit where the authority logs the rest (tools/protocol/physlive-check.ts F4/F6).
-//              The screen shows a COPY of the canonical sim advanced to the server's clock (serverNow), interpolated
-//              between ticks: the canonical fold advances only by the entries' own ts.
-//   the body   the authority measures reach from its own track of your body (L6, 25d M3). A person's client keeps that
-//              track current with `move` requests (presence: unlogged), arriving once when the world has physics.
+//   carrying   grab / put / throw / drop / punt are requests (shared/protocol/authority.js); who holds what is presence
+//              (`holds`, never logged), and every client draws a held thing in its holder's hand.
+//   flights    a launch is a `sim` entry, folded with the SAME engine the authority runs (shared/protocol/replica.js),
+//              so it rests bit for bit where the authority logs it (tools/protocol/physlive-check.ts F4/F6); the screen
+//              shows a copy advanced to serverNow, interpolated between ticks.
+//   the body   the authority measures reach from its own track of your body, kept current by `move` requests.
 //
-// The engine (eidosim) carries each body's whole rotation: a flying crate's tumble and a ball's roll are drawn as the
+// The engine (eidosim) carries each body's whole rotation, slerped between ticks.
 // engine has them, slerped between ticks; the rotation the log records at rest is the realizer's once the rest arrives.
 
 import { THREE } from './core.js';
@@ -56,10 +47,8 @@ const THROW = { speed: 8, arc: 0.45, lob: 0.6 };   // a desktop throw with no ai
 const PUNT_POWER = 4;                             // physobj's default: a barrel hops a couple of metres
 
 let hooks = null;   // { myPos(): {x,y,z}, me(): Avatar|null, camera, editing(): bool }
-// The frame loop hands every hook its own clock (main.js: updateAutoSystems(t), SECONDS since boot). frame() takes a
-// SERVER time in ms (a probe's seam), so the bare function as the hook read "12.3" as the wall clock: tick 0, and the
-// displayed flights never advanced between folds (R, 10-10: "object location updates every few seconds", a domino
-// "stuck in this tilted position"). Every probe passed its own wall, so none saw it.
+// hooks get SECONDS since boot (updateAutoSystems(t)) but frame() takes a SERVER time in ms: wrap it, never pass the
+// bare function, or displayed flights freeze between folds
 export function initThingPhysics(h) { hooks = h; pushHostHook(() => frame()); }
 export const myAvatar = () => hooks?.me() ?? null;
 // Am I in a headset? xr.js binds this (it imports this module, never the other way round): a tracked body holds with
@@ -98,13 +87,9 @@ onWorldChange((ev) => {
   else if (ev.type === 'change' && settles.has(ev.id)) { if (ev.what === 'pose' || ev.what === 'parent') startSettle(ev.id); else if (ev.what === 'gone' || ev.what === 'born') endSettle(ev.id, false); }
   else if (ev.type === 'reset') { holds = {}; settles.clear(); }
 });
-// ---- settling: the way out of a hand (R 10-11 23:17, "lerp on put/attach"). A put, a place onto something, a mount:
-// the row moves the thing from the hand to its rest in one frame. The truth takes it at once (the fold, the object's own
-// transform, whereIs, the collider's place); what is DRAWN eases from where the hand had it over SETTLE_MS, the pull's
-// own ease the other way round (startPull: the thing comes to the hand; this: the hand's place lets it go). Rotation too.
-// The next row for the thing restarts the ease from what is drawn; a grab hands it to the pull; gone ends it. Presence
-// only: nothing sent, nothing logged; the collider sits the ease out (as a flight's does) and comes back at the truth.
-// A launch (throw, drop) is the engine's flight, not this.
+// ---- settling: the way out of a hand. On a put, place or mount the truth takes the rest at once; what is DRAWN eases
+// from the hand over SETTLE_MS (startPull's ease reversed), rotation too. Presence only: nothing sent or logged; the
+// collider sits the ease out. A launch (throw, drop) is the engine's flight, not this.
 let SETTLE_MS = 120;   // lab knob (physicsApi.settle(ms))
 // the engine has it: the presentation copy lags a frame behind the canonical fold, which has a launch's body before the
 // holds message lands (review round 2 S1: a throw by anyone asked the realizer for the pre-grab pose on every client)
@@ -209,11 +194,8 @@ async function track(force = false, { noTeleport = false } = {}) {
       const r = await sendRequest('move', { to: to.map(r3) }); lastMove = { arrive: true, ok: !!r?.ok, refused: r?.refused?.code };
       if (r?.ok) { arrived = true; trackedAt = r.at ?? to; }
       if (arrived) { arriveFails = 0; stuck = null; return true; }   // arrived: no leftover back-off (review round 3)
-      // refused (review of 5a978cc0: this retried every 200 ms, forever). Back off as a refused step does; and when the
-      // server still has me somewhere else (a takeover reconnect keeps the body: too-fast) or calls my spot solid,
-      // re-arrive as a teleport, which it allows when nothing is in my hands (at most once in 3 s, as the step's)
-      // the back-off holds by TIME only, doubling (2, 4, 8, 16 s): walking on doesn't clear it as it clears a step's
-      // (an arrival that can't succeed would otherwise go back to 5 a second the moment I move; review round 2)
+      // refused: back off as a refused step does, doubling by TIME only (2, 4, 8, 16 s; walking doesn't clear it); when the
+      // server has me elsewhere or calls my spot solid, re-arrive as a teleport (allowed with empty hands, ≤ once in 3 s)
       arriveFails++; stuck = { at: to, until: performance.now() + 2000 * 2 ** Math.min(arriveFails - 1, 3), arrival: true };
       if (['too-fast', 'solid'].includes(r?.refused?.code) && !myHolds().length && performance.now() - lastTeleport > 3000) {
         lastTeleport = performance.now();
@@ -271,11 +253,9 @@ function handOf(actorId, side = 'right', out = _hp) {
   root.getWorldPosition(out); root.getWorldDirection(_fw); _fw.y = 0; if (_fw.lengthSq() > 1e-9) _fw.normalize();
   return out.set(out.x + _fw.x * 0.35, out.y + HAND_Y, out.z + _fw.z * 0.35);
 }
-// The PALM's frame, in the world (shared/grab.js: a grip says where the palm goes: +Z out of the palm, +Y along the
-// fingers' base, from the little finger to the index). Read off the hand's own raw bones (wrist, index, middle and little
-// knuckles), so it is right for any rig: the normalized rig is a proxy that can belong to another body (see handOf). The
-// origin sits in the closed hand, three quarters of the way to the knuckles and a little out of the palm. A rig without
-// finger bones uses the normalized hand's rotation (palm down, fingers out in its T-pose).
+// The PALM's frame in the world (shared/grab.js: +Z out of the palm, +Y along the fingers' base, little→index), read off
+// the hand's raw bones so it is right for any rig (the normalized rig can be another body's, see handOf). A rig without
+// finger bones uses the normalized hand's rotation.
 const _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _pc = new THREE.Vector3(), _pd = new THREE.Vector3();
 const _px = new THREE.Vector3(), _py = new THREE.Vector3(), _pz = new THREE.Vector3(), _pm = new THREE.Matrix4();
 const PALM_Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);   // grip frame in a T-pose hand bone
@@ -326,11 +306,9 @@ const compsOf = (id) => replica.st?.entities?.[id]?.c ?? null;
 const _held = new THREE.Vector3(), _hq = new THREE.Quaternion(), _ws = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tp = new THREE.Vector3();
 const _gq = new THREE.Quaternion(), _gv = new THREE.Vector3(), _v2 = new THREE.Vector3(), _aq = new THREE.Quaternion();
 const P1 = { p: new THREE.Vector3(), q: new THREE.Quaternion() }, P2 = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
-/** Where a held thing goes, from the holder's hand bone and the authority's hold record (every client computes the same):
- *  a grip puts the palm on the grip (VRChat ExactGrip, Unity Attach Transform); an offset keeps it where the hand took
- *  it (Unreal Free); neither, it's held by its centre (what the authority did before grips). A second hand on a twoHanded
- *  thing steers it: the line from the primary grip to the secondary one points from hand to hand. A body without
- *  tracked hands carrying in both arms holds it between them. Returns the world {p, q} (q null: keep its rotation). */
+/** Where a held thing goes, from the hand bone and the hold record (every client computes the same): a grip puts the
+ *  palm on it, an offset keeps it where the hand took it, else it's held by its centre; a second hand on a twoHanded
+ *  thing steers it. Returns the world {p, q} (q null: keep its rotation). */
 function heldPose(id, h, obj) {
   const g = grabOf(compsOf(id)); const side = h.hand ?? 'right';
   const grip = h.grip ? g?.grips?.[h.grip] : null;
@@ -367,10 +345,8 @@ const heldTurn = new Map();   // `${id}|${by}` → the thing's rotation in the h
 const _bq = new THREE.Quaternion(), _bodyQ = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0);
 function bodyYawQ(by) { const av = avatarOf(by); if (!av?.root) return null; av.root.getWorldQuaternion(_bq);
   const f = new THREE.Vector3(0, 0, 1).applyQuaternion(_bq); return _bodyQ.setFromAxisAngle(_up, Math.atan2(f.x, f.z)); }
-// Where a held thing is drawn this frame, rotation included. A thing held by its centre (heldPose's centre: no grip) turns
-// with the body, and its origin goes where hand - q * centre puts it with THIS frame's q (R 10-17 20:21: a barrel whose
-// model sits 1.95 m from its origin was placed with last frame's turn and then turned, so every frame the body turned it
-// was drawn metres off the hand: it swung wide on A-D-A).
+// Where a held thing is drawn this frame: a centre-held thing turns with the body, and its origin goes where
+// hand - q * centre puts it with THIS frame's q (last frame's q draws an off-centre model metres off the hand)
 function placeHeld(id, h, obj) {
   const at = heldPose(id, h, obj); if (!at) return null;
   if (at.q) return at;
@@ -431,14 +407,10 @@ const presOwns = (id) => !!pres?.bodies?.[id];
 const _dq = new THREE.Quaternion(), _p = new THREE.Vector3();
 /** Console/probe surface: the displayed sim (a copy), and the canonical fold's view. */
 export const simShown = () => pres;
-// ---- my own release, predicted (DESIGN-physics-responsiveness §3; STRIKES PH-S1-3: a throw stayed in the hand one round
-// trip, then jumped RTT/2 along the arc). On send, the launch is folded into the PRESENTATION copy only, at the tick the
-// entry will most likely take (now + rtt/2 + one tick), with the inputs the authority will stamp (p as sent, q as sent, v
-// scaled by grabbable.throw and capped as launch() does). When the real entry arrives the fresh copy of the canonical fold
-// is the truth: same tick and inputs give the same bits (Covenant IV), so nothing shows; otherwise the truth replaces it
-// and a per-body draw offset decays the difference (Fiedler's error offset, never a blend of states). A refusal, or no
-// entry within PENDING_MS, removes it and the thing eases back into the hand. Nothing here is ever read back into a
-// request (Covenant III): whereIs, reach and the canonical fold never see a provisional body.
+// ---- my own release, predicted: on send, the launch is folded into the PRESENTATION copy only, at the likely tick
+// (now + rtt/2 + one tick) with the inputs the authority will stamp. The real entry then replaces it (same inputs, same
+// bits) and a per-body draw offset decays any difference, never a blend of states. A refusal, or nothing within
+// PENDING_MS, eases it back to the hand. Nothing provisional is ever read back into a request.
 const pending = new Map();   // id -> { ts, args, sentAt }
 const PENDING_MS = 1500, OFFSET_SNAP = 3, OFFSET_DEAD = 0.02;   // a reply normally lands within 300 ms; while a guess is pending, others' news waits (second review S3)
 let predictOn = true;        // lab knob (physicsApi.predict(false)): the old shape, for the probe's control arm
@@ -632,8 +604,8 @@ export async function drop(name) {
   return r?.ok ? r : refused('drop', r, id);
 }
 /** Throw what you hold along your view, from your hand. */
-/** Throw what I hold (the newest). `aim`: a world point [x, y, z] to land on (where the cursor is: R, 10-10, "it just aims
- *  away from your camera view, not at the spot you're aiming with your cursor"): a lob that comes down there, as hard as
+/** Throw what I hold (the newest). `aim`: a world point [x, y, z] to land on (where the cursor is,
+ *  not the camera's view): a lob that comes down there, as hard as
  *  the distance needs, up to the engine's limit. No aim: ahead of my body, the way it faces. A number is a speed. */
 export async function throwHeld(arg) {
   const id = myHolds()[0]; if (!id) return say('you aren\'t holding anything');
@@ -698,9 +670,8 @@ export async function punt(arg) {
 }
 
 // ---------------------------------------------------------------- body shove (shared/shove.js)
-// Walking into a loose thing pushes it: MY body only (a remote's client shoves for its own body, an agent's process for
-// its), one punt {contact: true} per contact, predicted like a throw so the crate leaves at once. A refusal is quiet (nobody
-// asked for this push in words); shover.refused keeps it from repeating.
+// Walking into a loose thing pushes it: MY body only, one punt {contact: true} per contact, predicted like a throw;
+// a refusal is quiet and shover.refused keeps it from repeating
 const shover = createShover();
 let shoveOn = true;          // lab knob (physicsApi.shove.on(false)); off for the session when the server doesn't know shove
 const shoveLog = [];         // the last shoves sent and how they were answered (probe surface)
@@ -746,10 +717,8 @@ async function shove(id, v, now) {
 }
 
 // ---------------------------------------------------------------- use while held (grabbable.use; research grab §3-4)
-// The use button while you hold a thing: a request per press and per release (use.down, use.up: each one act; a
-// hose turns on, then off), and, while it's pressed, presence (pose.use) every client draws the thing's fx from. Desktop:
-// the left mouse button while holding something usable (outside edit mode); phone: a button that appears while you do;
-// VR: the trigger (xr.js calls useHeld). Rapid effects are never a stream of acts: the authority rate-limits acts on purpose.
+// a request per press and per release (use.down / use.up), and while pressed, presence (pose.use) every client draws
+// the fx from; rapid effects are never a stream of acts (the authority rate-limits acts on purpose)
 const usable = () => myHolds().find((id) => grabOf(compsOf(id))?.use) ?? null;
 let pressing = null;   // the id my use is held down on
 /** Press (phase 'down') or release ('up') the use of what I hold. Returns the authority's reply, or null if nothing to use. */
@@ -795,13 +764,9 @@ if (typeof document !== 'undefined') {
 }
 
 // ---------------------------------------------------------------- VR hands (research grab §4; xr.js calls xrHand per hand)
-// The owner took world grabbing out of xr.js until it was "a proper object component" (09-07): this is that. Per hand,
-// each frame: the grip pressed takes the nearest thing within a 0.4 m sphere × the avatar's scale (VRChat's number),
-// choosing by grabbable.priority, then a grip for this hand, then distance; nothing near, the laser reaches out to the
-// thing's grabbable.range and it flies to the hand. hold auto/press is press-to-hold: letting the grip go lets go, with
-// the hand's velocity averaged over the last 0.1 s (the authority scales it by grabbable.throw); hold toggle takes a second
-// press. The trigger while holding is use. The other hand on what you hold takes it in both (twoHanded) or swaps. A
-// hand's take is felt (a firm pulse), and so is the first frame it can reach something (a light tick).
+// Per hand, each frame: grip takes the nearest thing within 0.4 m × avatar scale (by grabbable.priority, then a grip
+// for this hand, then distance); nothing near, the laser reaches to grabbable.range and it flies to the hand. Release
+// throws with the hand's velocity averaged over AVG_MS; trigger while holding is use; the other hand takes or swaps.
 const AVG_MS = 100;
 const vrHands = { left: { grip: false, trig: false, hist: [], hover: null, busy: false }, right: { grip: false, trig: false, hist: [], hover: null, busy: false } };
 const _bx = new THREE.Box3(), _hv = new THREE.Vector3();
@@ -886,7 +851,7 @@ bus.on('key', (e) => {
 });
 
 /** The hint bar's line about my hands (localbody.js updateSeatHint): what I hold and how to let go, else what's in reach
- *  to pick up. R, 10-10: "there's no help option to assist me while I'm holding anything". Null in a headset, in edit mode,
+ *  to pick up. Null in a headset, in edit mode,
  *  outside a world. */
 export function handsHint() {
   if (!replica.active || hooks?.editing?.() || xrActive()) return null;
@@ -898,9 +863,8 @@ export function handsHint() {
 
 /** The surface a runtime mod scripts against (mods.js EW.physics): the same requests the keys send. */
 /** Could my hand set something down at this spot on the floor from where I stand (the authority's reach, with a margin)? */
-// where a let-go starts: the thing as drawn in my hand, but never further from the authority's hand than its reach. A big
-// thing carried two-armed is drawn pushed out from the chest, and the authority's track of a walking body runs a step
-// behind: R 10-11 14:25, 'Couldn't throw: … is 1.586 m from your hand as the authority tracks your body; you can reach 1.5 m'
+// where a let-go starts: the thing as drawn in my hand, but never further from the authority's hand than its reach
+// (a two-armed carry is drawn out from the chest, and the authority's track of a walking body runs a step behind)
 const letGoAt = (pos) => { const f = feet(); if (!pos || !f) return pos; const h = new THREE.Vector3(f[0], f[1] + HAND_Y, f[2]);
   const d = pos.distanceTo(h), lim = REACH - 0.15; return d <= lim ? pos : h.lerp(pos, lim / d); };
 const canPutAt = (x, y, z) => { const f = feet(); return !!f && Math.hypot(x - f[0], y - (f[1] + HAND_Y), z - f[2]) <= REACH - 0.08; };

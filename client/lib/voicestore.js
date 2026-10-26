@@ -1,24 +1,6 @@
-// voicestore — REMEMBER A VOICE YOU PICKED FROM YOUR OWN DISK.
-//
-// R, 2026-08-09: "it doesn't seem to remember which model I selected locally but
-// maybe that's okay? There's also no way to *remove* models from the dropdown."
-// It was not okay: a catalog voice (a name we fetch) persisted fine, while a
-// file you chose vanished on reload — the same control forgetting one kind of
-// choice and not the other, for reasons entirely invisible from the UI.
-//
-// WHY THIS NEEDS A MODULE AND NOT A localStorage KEY. A file path is useless: a
-// page cannot re-open `/home/you/glados.onnx` by name, and browsers will never
-// allow it — that would make any tab a file reader. What CAN be stored is the
-// FileSystemFileHandle itself, which is structured-cloneable and therefore
-// IndexedDB-storable. This is exactly how an editor's "recent files" works.
-//
-// 🔴 THE HANDLE IS NOT A PERMISSION. It survives a reload; the GRANT usually
-// does not. On restore you must call queryPermission() and be ready for
-// 'prompt' — meaning "I still know which file, but I may not read it until you
-// say so." Re-requesting needs a user gesture, so the honest UI shows the voice
-// greyed with a re-pick affordance rather than silently failing at load time.
-// A remembered voice that cannot be read yet is a REAL state, and pretending
-// otherwise is the display-vs-real-state bug that has cost the most time here.
+// voicestore — remembers a locally picked voice by storing its FileSystemFileHandle in IndexedDB (a path can't
+// be reopened). The handle isn't a grant: on restore call queryPermission(); on 'prompt' show the voice greyed
+// with a re-pick (re-requesting needs a user gesture).
 
 const DB = 'eido.voices';
 const STORE = 'handles';
@@ -44,10 +26,7 @@ async function tx(mode, fn) {
       const store = t.objectStore(STORE);
       let out;
       try { out = fn(store); } catch (e) { return reject(e); }
-      // Resolve on COMPLETE, not on the request's success: a readwrite
-      // transaction can still abort after its request succeeded (quota, a
-      // concurrent close), and resolving early would report a save that did not
-      // durably happen.
+      // Resolve on complete, not request success: a readwrite transaction can still abort after it.
       t.oncomplete = () => resolve(out?.result !== undefined ? out.result : out);
       t.onerror = () => reject(t.error);
       t.onabort = () => reject(t.error || new Error('idb aborted'));
@@ -55,15 +34,8 @@ async function tx(mode, fn) {
   } finally { db.close(); }
 }
 
-/** Voice identity from the actual bytes (#91 B5): what the voice IS, not
- *  what its file happens to be called. A same-named different model pair is
- *  a different voice; digests make that structural. sha256 of a 60 MB model
- *  is a one-time ~0.5s at selection — cheap next to the copy it precedes.
- *  Reproducibility claim, scoped honestly: these digests identify the model
- *  and config exactly, so a session's INPUTS are reproducible; VITS
- *  inference is stochastic (noise_scale et al. draw randomness the runtime
- *  does not expose a seed for), so a given utterance's waveform is a
- *  performance, not a regenerable artifact. */
+/** Voice identity from the actual bytes (#91): a same-named different model is a different voice. The digests make a
+ *  session's inputs reproducible, not its waveforms (VITS inference draws unseeded noise). */
 export async function voiceIdentity(onnxFile, cfgFile) {
   const sha = async (f) => Array.from(new Uint8Array(
     await crypto.subtle.digest('SHA-256', await f.arrayBuffer())))

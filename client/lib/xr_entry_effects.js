@@ -1,17 +1,5 @@
-// WHO ACTS ON AN ENTRY FAILURE — the effect owner for the busy/absent/reload verdicts.
-//
-// WHY THIS EXISTS (#197 round-two review, 2026-09-20): xr_entry_policy.js decides what a failure
-// MEANS and is fully tested; the acting on it lived inline in xr.js and was covered only by source
-// assertions — imports present, `verdict.delayMs` referenced, a cancel call in leaveVR. The reviewer
-// mutated the shipping branch to `if (true)` so EVERY busy verdict scheduled a retry, including
-// give-up, and the suite still passed 31/31. Regex-checking that code exists is not running it.
-//
-// So the effects move here, behind injected dependencies, and the suite drives THIS — the same
-// module xr.js imports. Mutating the scheduling logic now turns the suite red because the suite
-// executes it.
-//
-// State is per-owner rather than module-global so a test can hold two independent entry owners, and
-// so nothing leaks between page sessions.
+// xr_entry_effects — acts on the busy/absent/reload entry-failure verdicts (xr_entry_policy.js decides what they
+// mean). Behind injected deps so the suite executes the same module xr.js imports; state is per owner.
 
 /** @param deps {{ setTimer, clearTimer, tee, toast, enter, markAbsent }} */
 export function makeEntryEffects(deps) {
@@ -31,9 +19,8 @@ export function makeEntryEffects(deps) {
   function apply(verdict, { intent, error } = {}) {
     switch (verdict.action) {
       case 'retry-once': {
-        // EXACTLY ONE automatic retry per entry intent. The original shape reset its own flag inside
-        // the timeout, so every failure looked like the first and a busy session retried forever.
-        // The retry carries its intent forward, so ITS failure is the second one and gives up.
+        // exactly one automatic retry per entry intent: the retry carries its intent forward, so its own
+        // failure is the second one and gives up
         cancel(null);
         pendingFor = intent;
         deps.tee(`[xr] session busy (another page holds it) — retrying once in ${verdict.delayMs} ms`);
@@ -47,8 +34,7 @@ export function makeEntryEffects(deps) {
         return 'retried';
       }
       case 'give-up':
-        // No scheduling. The visor waits for an explicit click, which starts a fresh budget because
-        // that click is a NEW intent and arrives with retryOf = null.
+        // no scheduling: the visor waits for an explicit click, a new intent with a fresh budget (retryOf = null)
         deps.toast(verdict.toast, 'warn', 8000);
         deps.tee('[xr] session busy after retry — giving up until the visor is clicked again');
         return 'gave-up';
@@ -65,29 +51,13 @@ export function makeEntryEffects(deps) {
     }
   }
 
-  // `hasPending` reads the TIMER because that is what leaveVR must not swallow. An adversarial sweep
-  // found that rewiring it to `pendingFor` survives every test — correctly, as it turns out: the two
-  // are set and cleared together in every reachable state, so they are equivalent and no test can
-  // distinguish them. Recorded rather than papered over with a test that only appears to bind:
-  // the redundancy is the finding. They stay separate because they MEAN different things (one is a
-  // handle, one is an identity) and a future edit could easily make them diverge.
+  // `hasPending` reads the timer, which is what leaveVR must not swallow. It moves with pendingFor in every reachable
+  // state (no test can tell them apart), but one is a handle and one an identity, so they stay separate.
   return { apply, cancel, get pendingFor() { return pendingFor; }, get hasPending() { return timer !== null; } };
 }
 
-/** THE FAILURE SEAM ITSELF — decide, act, and say what the caller must do next.
- *
- *  #197 round-three review: the effects were importable and well tested, but the CALL SITE was not.
- *  The reviewer rewrote the shipping line as
- *      const did = false ? entryEffects.apply(...) : 'surface';
- *  which keeps the text `entryEffects.apply(...)` for every source regex while disabling retry,
- *  absence and reload entirely — and the suite stayed at 35/35. Extracting the effects moved the
- *  untested boundary one layer out; it did not remove it.
- *
- *  So the boundary itself is now a function. `enterVR`'s catch does nothing but call this and obey
- *  the returned instruction, and the suite drives THIS — the same function the product runs,
- *  including the argument construction (`isRetry` from retryOf, `gpu` from the backend) that the
- *  reviewer's other mutation targeted.
- *
+/** The entry-failure seam: enterVR's catch only calls this and obeys the result, so the suite drives the same
+ *  boundary (argument construction included) that the product runs.
  *  @returns 'handled' (the effect owns what happens next — return) | 'throw' (surface to the outer
  *           catch) | 'reload' (the caller performs the navigation, which needs `location`) */
 export function handleEntryFailure({ effects, decide, error, intent, retryOf, gpu }) {

@@ -1,12 +1,8 @@
-// xrpanels — frames as PHYSICAL SURFACES. A frame that declares its body as
-// FIELDS (panels.js schema) rides a canvas-textured quad in the headset; the
-// right-hand laser is the cursor; a UV-hit resolves to a hit REGION and fires
-// the SAME dispatcher the desktop frame calls. No DOM crosses the threshold.
+// xrpanels — frames as PHYSICAL SURFACES. A frame that declares its body as FIELDS (panels.js schema) rides a
+// canvas-textured quad in the headset; the right-hand laser's UV hit resolves to a hit REGION and fires the SAME
+// dispatcher the desktop frame calls. No DOM crosses the threshold.
 //
-// Any module opts a frame in with registerXRPanel — the dock has no body in
-// VR, so this registry IS the dock's edit-mode: what you can reach, floating
-// at desk height. Frames that never register (chat's free text, the debug
-// log) simply have no VR body yet, and say nothing rather than pretend.
+// registerXRPanel opts a frame in; this registry is the dock's VR edit-mode. Unregistered frames have no VR body.
 
 import { THREE, renderer } from './core.js';
 import { quadMaterial } from './quadcolour.js';
@@ -69,21 +65,15 @@ function repaintAll() {
 }
 const showPanel = (p, on) => { if (on && p.stale) { p.stale = false; repaint(p); } p.mesh.visible = on; };
 
-// SOFT SWAP (Basis): the quads are built once and kept across sessions — only re-added to the rig and
-// repainted on show. A registry that changed since they were built rebuilds. Before this every entry made a
-// fresh canvas/texture/material/mesh per frame and every exit threw them away, leaking the materials. The
-// listeners were never removed either: the bus has no off() (`bus.off?.()` was a silent no-op; on() returns
-// the unsubscribe), so an 'xr:panels' toggle on the desktop still flipped `shown`.
+// SOFT SWAP (Basis): quads are built once and kept across sessions, re-added and repainted on show; a changed
+// registry rebuilds. The bus has no off(): keep on()'s unsubscribe.
 let kept = null;                   // panels while not presenting
 let unsubs = [];
 const PANEL_EVENTS = [['entity', repaintAll], ['comp', repaintAll], ['presence', repaintAll], ['xr:panels', () => togglePanels()], ['xr:repaint', repaintAll]];
 const disposePanel = (p) => { p.mesh.removeFromParent(); p.tex.dispose(); p.mesh.geometry.dispose(); p.mesh.material.dispose(); };
 
 export function xrPanelsEnter(rig) {
-  // BOTH paths subscribe: the ring's 'panels' slot emits xr:panels, and this used to be registered only below
-  // the domquad return — so on the DEFAULT path nothing listened and the ring toggle did nothing
-  // (the domquad path needs only the toggle — its quads repaint themselves; the canvas repaint events would find
-  // `panels` null and return, but there is no reason to hold them)
+  // Both paths subscribe to xr:panels (the ring's 'panels' slot); the domquad path needs only the toggle.
   unsubs.forEach((u) => u());
   unsubs = (domQuadsEnabled() ? PANEL_EVENTS.filter(([ev]) => ev === 'xr:panels') : PANEL_EVENTS).map(([ev, fn]) => bus.on(ev, fn));
   if (domQuadsEnabled()) return domQuadsEnter(rig);

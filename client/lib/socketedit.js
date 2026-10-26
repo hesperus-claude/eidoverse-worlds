@@ -1,16 +1,9 @@
-// seatedit — the seat-anchor authoring grammar (split from build.js, §R4).
+// socketedit — the seat-anchor authoring grammar (split from build.js).
 //
-// Sit anchors (socket children with a body block; PLAN-sockets-entities) get the same editing grammar as
-// things: visible in edit mode as gold gizmos, click to select, drag to
-// refine, Q/E to face, Del to remove, one undoable log entry per commit.
-// Zero server involvement — this is all authoring UI over the comp verb.
-//
-// build.js stays the gesture ROUTER (one pointer, one key ladder — two
-// modules both listening on the canvas would re-fight every contested
-// click); this module owns everything after "it was a seat gesture". The
-// hooks it needs back from the core (mode, selection, undo, the inspector
-// bar) are build.js exports — the modules call across the seam at gesture
-// time only, so the import cycle is eval-safe by construction.
+// Sit anchors (socket children with a body block) get the same editing grammar as things: gold gizmos in edit mode,
+// click to select, drag to refine, Q/E to face, Del to remove, one undoable log entry per commit; no server
+// involvement. build.js stays the gesture ROUTER (two canvas listeners would re-fight contested clicks); this module
+// owns everything after "it was a seat gesture" and calls back across the seam only at gesture time (eval-safe cycle).
 
 import * as OP from '../../shared/protocol/requests.js';
 import { sendOps } from './editwrites.js';
@@ -291,10 +284,7 @@ function removeSeat() {
   deselectSocket();
 }
 
-// The seat drag's own arm/commit listeners — the same DRAG_SLOP threshold
-// every desktop UI uses to tell a click from a drag. These fire beside the
-// core's listeners and touch only seat state, so order between the two
-// modules' handlers does not matter.
+// the seat drag's own arm/commit listeners: they touch only seat state, so order against the core's doesn't matter
 const DRAG_SLOP = 4;
 addEventListener('mousemove', (e) => {
   if (seatDrag && !seatDrag.armed
@@ -309,11 +299,8 @@ addEventListener('mouseup', () => {
 
 
 // ---- the inspector's sockets GESTURES + preview --------------------------------
-// The fields are declared in shared/editschema.js. What only this module can
-// add: '+ socket here' arms the click-to-place, a row click selects the gizmo,
-// a live drag on a slot's channels moves the gizmo before the merged comp
-// commits (the shared path merges and pushes the undo).
-// Components ▸ + seat…: the first seat in ONE step (before, a sockets comp had to exist first)
+// fields are declared in shared/editschema.js; this adds '+ socket here', row-click select, and live gizmo drag
+// before the merged comp commits. Components ▸ + seat… places the first seat in one step.
 registerHandler('comp', (id, _obj, k, _v, opts) => { if (k !== 'add:seat' || opts?.live) return false; armSocketPlacement(id); return true; });
 registerHandler('sockets', (id, obj, k, value, opts) => {
   if (k === 'add') { armSocketPlacement(id); return true; }

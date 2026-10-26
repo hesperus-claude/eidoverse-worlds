@@ -1,28 +1,7 @@
-// VENDORED from eidoverse-video eidoverse/vegetation_sunflower_gen.js @ 62365e9 (2026-08-27, §24j:
-// the upstream-patched retirement — engine code is ours now; video is an
-// asset library). Upstream changes to this file are cherry-picked by hand
-// if wanted, never auto-merged.
-// sunflower_gen — the sunflower (Helianthus annuus) for createFlora: one
-// continuous parallel-transported cane (base → neck arc → head), spiral
-// petioled heart-leaves, and a nodding head — thin-plate seed disc, dense
-// fitted ray-petal whorl, a 3D bract cup of wedge cards behind. One geometry
-// on the ONE sunflower_ trim sheet, field-instanced like corn.
-//
-// Craft laws baked in (memory + Skye's corrections):
-//   - MATERIALS FIRST: petal + leaf cards are planes whose loop widths AND
-//     per-band UV windows follow sunflower_fit.json — the measured alpha
-//     envelope of the art. Geometry AND texture narrow together; mapping a
-//     full art window onto a fitted card is how UVs warp.
-//   - STRUCTURE IS TUBES, and a tube run that continues (stalk → neck) is
-//     ONE swept tube with a parallel-transported frame and monotonic
-//     fibre-v — two independently framed tubes meet in a cracked seam.
-//   - FOLIAGE NORMALS (the 07-31 law): the head shades as one soft volume —
-//     spherical bent normals from the head centre for every head part (the
-//     shrub-canopy treatment); leaf blades blend strongly toward up (turf
-//     treatment); tubes keep their geometric normals. The gen OWNS its
-//     normals — no generic post blend.
-//   - The head is ONE rigid assembly in wind: every head vertex carries the
-//     identical aH (the corn-ear law).
+// Vendored from eidoverse-video vegetation_sunflower_gen.js @ 62365e9; upstream changes are cherry-picked by hand, never
+// auto-merged. sunflower_gen: the sunflower for createFlora, one geometry on the sunflower_ trim sheet, field-instanced
+// like corn. Card widths and UV windows follow sunflower_fit.json; stalk→neck is one swept tube; the gen owns its
+// normals; every head vertex shares one aH (rigid in wind).
 //
 // sunflower_ sheet regions (UV, v up, 1024²) — layout v2:
 //   DISC   circle centre (.2405,.780) r .2053 (planar projection)
@@ -37,10 +16,8 @@ import { Rng } from './vegetation_shrub_gen.js';
 const TAU = Math.PI * 2;
 const tri = (s) => { const m = s % 2; return m <= 1 ? m : 2 - m; };
 
-// thin plate: gentle front bulge, shallow back cup into the neck. Sized and
-// seated to the scan's structure: the disc is a BUTTON riding proud of the
-// petal bed — smaller than the whorl, recessed back into the bract cup so
-// green tips peek past its edge, and petals slide strictly UNDER it
+// thin plate: a button riding proud of the petal bed, smaller than the whorl and recessed into the bract cup; petals
+// slide strictly under it
 const DISC_R = 0.30;
 const DISC_K = 0.90;        // plate radius vs art circle
 const DISC_X = -0.012;      // whole plate recessed into the bract cup
@@ -210,11 +187,8 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
             }
             sweepTube(pts, radii, weights, 4, 0.03);
         }
-        // blade: 5-column strip continuing the petiole — geometry width AND
-        // uv v-window both follow the measured envelope band (unwarped fit),
-        // cross-section is a real leaf surface: parabolic cup off the
-        // midrib, a travelling edge RUFFLE (real blades undulate — a single
-        // hard V-fold reads as folded paper), and a decurving tip
+        // blade: 5-column strip continuing the petiole; width and uv v-window follow the measured envelope band;
+        // cupped off the midrib, an edge ruffle (a hard V-fold reads as paper), and a decurving tip
         const petT = [q2[0] - q1[0], q2[1] - q1[1], q2[2] - q1[2]];
         const ptl = Math.hypot(...petT) || 1;
         const b0 = q2;
@@ -308,10 +282,8 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
                          fit: fit.petals[cx2 * 2 + ry] });
         const rimR = 0.262;                    // whorl ring pulled in with the disc
         const needHW = (TAU * rimR / N) * 0.5 * 1.25;
-        // LAYERED whorls — real heads stack ray florets, so background never
-        // shows between petal bases and the disc: a main outer whorl plus a
-        // shorter inner layer, phase-offset half a spacing, tucked deeper
-        // under the rim and tilted slightly forward (young florets angle up)
+        // layered whorls so background never shows between petal bases and the disc: an outer and a shorter
+        // inner layer, phase-offset half a spacing
         const layers = [
             { n: N, rIn: 0.020, lenK: 1.0, phase: 0, droopLo: -0.15, droopHi: 0.18 },
             { n: Math.round(N * 0.7), rIn: 0.042, lenK: 0.55, phase: Math.PI / N,
@@ -418,10 +390,8 @@ export function buildSunflowerGeometry(name, seed, over = {}) {
     g.setAttribute('aH', new T3.Float32BufferAttribute(aH, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
-    // ── normal treatment (the gen owns it — createFlora must NOT re-blend):
-    // head parts = spherical bent normals from a centre sunk behind the disc
-    // (one soft lit volume, the shrub-canopy law); leaf blades blend toward
-    // up (the turf law); tubes keep geometric normals.
+    // ── normal treatment (the gen owns it; createFlora must NOT re-blend): head = spherical bent normals from behind
+    // the disc, leaf blades toward up, tubes geometric
     {
         const nrm = g.attributes.normal;
         const px2 = g.attributes.position;

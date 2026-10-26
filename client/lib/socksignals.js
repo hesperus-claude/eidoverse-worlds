@@ -10,12 +10,9 @@
 //   aimYaw, aimPitch         rad    where the occupant looks, relative to the socket's forward (riding presence)
 //   param.<name>             the thing's `params` component (scripts write it)
 //
-// Every value here is a closed form of data every client already has — the motion component, the server clock, the
-// occupant's presence — so two clients looking at one swing put the occupant's clip at the same frame. (A thing moved by
-// physics, not by a motion component, reads speed/turn 0 here: physics is a later port.)
-//
-// Pure: imports only the motion closed forms (motioneval.js, itself pure and shared with the agent) and the node and type readers (names.js motionNode, motionType). It lives beside
-// them in client/lib because the browser is served client/ at its root: shared/ code can't reach back into it.
+// Each is a closed form of data every client has (motion, server clock, occupant presence), so clients agree to the
+// frame; physics-moved things read speed/turn 0. Pure (motioneval.js, names.js); lives in client/lib because shared/
+// can't import client/.
 
 import { evalWholeMotion, since, ampOf, rateOf } from './motioneval.js';
 import { motionNode, motionType } from '../../shared/protocol/names.js';

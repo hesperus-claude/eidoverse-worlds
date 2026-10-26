@@ -1,8 +1,7 @@
-// watervolumes — data-driven water VOLUMES (the 'water'/'air' components: pools, oceans in a box,
-// (On this protocol the volume components aren't registered yet — an entity's `water` would collide with @world.water —
-// so no world carries a volume and only the LEVEL's underwater optics below draw; the readers already read records flat.)
-// dry interiors that move). Distinct from water.js, the world's one water LEVEL.
-// Data-driven water volumes and moving dry interiors. No world names or layouts.
+// watervolumes — data-driven water VOLUMES (the 'water'/'air' components: pools, oceans in a box, dry
+// interiors that move). Distinct from water.js, the world's one water LEVEL. No world names or layouts.
+// (On this protocol the volume components aren't registered yet, since an entity's `water` would collide with
+// @world.water, so only the LEVEL's underwater optics below draw.)
 import { THREE, TSL, scene, camera, sun, hemi } from './core.js';
 import { report } from './base.js';
 import { state, onWorldChange } from './state.js';
@@ -164,13 +163,8 @@ function makeSurface(w) {
   o.frustumCulled=false;scene.add(o);surfaces.push(o);return o;
 }
 // ---- under the world's water LEVEL (water.js: lakes, rivers, the sea) -------------------------------------
-// The level is not a volume here — its wading, floating and swimming are water.js's and the controller's — but
-// seen from under its surface it needs the same optics. While the camera is below the surface (the wave there,
-// over wet ground) it takes fog slot 0: a box across the terrain square from far down up to the surface at the
-// camera. Slot 0 is the lowest priority, so authored volumes and dry boxes inside it still win. Above the
-// surface nothing changes: the sheet's own depth shading is the look from above.
-// Per kind (shared/waterkind.js): visibility in metres (Koschmieder: σ = 3.9 / visibility, red absorbed most)
-// and a tint mixed into the world's water colour — still water green, rivers murky, the sea blue and furthest.
+// Below the surface the camera takes fog slot 0 (lowest priority, so authored volumes and dry boxes win).
+// Per kind (shared/waterkind.js): visibility in m (Koschmieder: σ = 3.9 / visibility) and a tint.
 const LEVEL_OPTICS = { still: { vis: 8, tint: [0.42, 0.6, 0.52] }, river: { vis: 3.5, tint: [0.4, 0.42, 0.28] }, ocean: { vis: 15, tint: [0.1, 0.36, 0.55] } };
 const _cam = new THREE.Vector3(), _lc = new THREE.Color();
 let underLevelNow = false;
@@ -187,16 +181,11 @@ function levelSlot() {
   const scatterRGB = [0, 1, 2].map((i) => (_lc.toArray()[i] * 0.5 + o.tint[i] * 0.5) * day * 0.9);
   return { min: [-half, top - 2000, -half], max: [half, top, half], absorption: [sigma * 1.5, sigma, sigma * 0.75], scatter: scatterRGB, day };
 }
-// The far water while under the level: the world sky draws unfogged (and after transparent objects), so under the
-// surface it is hidden and the scene BACKGROUND paints what the fog fades into — far water, brighter toward the
-// surface, glowing inside Snell's window (~48.6° from straight up) with the daylight coming through it. The
-// background sits at the far plane and occludes nothing: every object stays visible exactly as far as its own
-// water path allows (the fog pass decides), through the window or down a dry shaft alike.
+// Under the level the sky is hidden, so the scene background paints far water (glowing inside Snell's window,
+// ~48.6°); it sits at the far plane and occludes nothing, the fog pass decides visibility.
 const underColor = uniform(new THREE.Color(0, 0, 0)), underDay = uniform(0);
-// A dry pocket below the level (a shaft, a submerged room): the view out of it crosses water EXCEPT where it leaves
-// the pocket above the surface — there it is sky. Per direction: trace the view to where it leaves the dry box the
-// camera stands in; above the level's surface, sky (a daylight gradient — the baked environment can be unready and
-// black), below it, far water.
+// A dry pocket below the level: the view out crosses water except where it leaves the pocket above the
+// surface, which is sky (a daylight gradient: the baked environment can be unready and black).
 const lvlTop = uniform(0), dryIdx = uniform(-1, 'int');
 // straight expressions (no Fn/If): a branch here dimmed the window's glow — keep the background a plain node graph
 const underBackground = (() => {
@@ -281,10 +270,8 @@ export function updateWater() {
   if(rebuild){const env=environmentSettings();setEnvironmentFloor(Number.isFinite(env?.floor)?env.floor:null);updateEnvironmentSky(env);makeParticles(env?.particles);}
   if(skyDome)skyDome.position.copy(camera.position);
 }
-// Rebuild surfaces/particles/sky only when water or environment data can have changed: a reset, a water or
-// environment comp, or an edit to an entity that carries (or carried, at the last build) one — or to any
-// carrier above one in its mount chain, whose scale sizes the water it carries. Positions and dry boxes
-// refresh every frame anyway, so unrelated edits cost nothing here.
+// Rebuild only when water/environment data can have changed: a reset, a water or environment comp, or an edit
+// to a carrier (now or at the last build) or anything above it in its mount chain (its scale sizes the water).
 const volumeIds = new Set();   // owners at the last rebuild: a same-id respawn or removal still counts
 function touchesVolume(id) {
   if (id == null) return false;

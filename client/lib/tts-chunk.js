@@ -1,18 +1,9 @@
 /**
  * tts-chunk — the spoken form of an utterance, in synthesis-sized pieces.
  *
- * Ported from the porch token-router aggregation (aggregate.py → LiveSay in
- * eido-cc-extras.ts). Constants are MEASURED, not guessed (porch, 2026-07-25):
- * a real turn opened with a 152-char sentence ≈ 5s of unbroken speech, so
- * soft clause-splitting past 90 chars gives the voice somewhere to breathe.
- * This is the BATCH adaptation: a complete utterance in, chunks out — the
- * streaming form (delta lookahead, arm/flush) stays in LiveSay.
- *
- * Sanitization lives here too because this is the boundary where text stops
- * being for eyes: markdown emphasis marks vanish (piper read "*" aloud —
- * voicebox, R at 14:21) and emoji are stripped (piper READS THEM BY NAME —
- * first public listener session, R laughing at her own moon glyph, 03:27Z).
- * The say keeps its glyphs; only the voice drops them.
+ * The batch port of the porch aggregator (the streaming form stays in LiveSay in eido-cc-extras.ts): soft clause
+ * split past 90 chars so the voice can breathe. Markdown and emoji are stripped here because piper reads them
+ * aloud; the say keeps its glyphs.
  */
 
 const ABBREVS = new Set([
@@ -27,23 +18,8 @@ const MIN_LEN = 20;
 const SOFT_LEN = 90;
 const SOFT_MIN = 35;
 
-/** Markdown is for eyes; emoji are for the log. Neither is for the larynx.
- *
- *  🔴 EXTENDED 2026-08-16 (R, from the phone test: "update the reader-rules so
- *  it doesn't read things like : out loud" — copy eido-cc-extras' rules).
- *  What was missing, in the order it bites:
- *
- *  · FENCED CODE NEVER SPEAKS — extras rule #5, the load-bearing one. The old
- *    form stripped the backticks and then read the CONTENTS of the fence as
- *    prose. Fenced content is work, not words; it goes entirely.
- *  · URLs become "link". espeak spells them out — "h t t p s colon slash
- *    slash mazda dash mic dash…" is most of a minute of noise for one tap.
- *    A markdown [label](url) keeps its label, which was already the speech.
- *  · The symbol runs espeak vocalizes by name: arrows and bullets (→ ▸ ·),
- *    ASCII arrows (->, =>), separator colons in "world:staging" shapes, bare
- *    | and ~ runs. Each maps to a comma or a space — the PAUSE the symbol
- *    meant, not the NAME of the glyph. Times (6:04) and ratios keep their
- *    colon: digit:digit is something espeak already says correctly. */
+/** Strip what TTS would read aloud: fenced code entirely, URLs → "link" ([label](url) keeps its label), symbol
+ *  runs (→ ▸ · -> => | ~, separator colons) → a pause. digit:digit keeps its colon (6:04). */
 export function spokenForm(text) {
   return text
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')                     // fenced code never speaks
@@ -94,10 +70,8 @@ function splitLong(sentence) {
 const FIRST_MAX = 64;   // the opener: small enough that synth(first) is fast (research: 60-80)
 const FIRST_MIN = 20;   // ...but never a comic stub (research: 20-25 floor for piper quality)
 
-/** Split the OPENING chunk aggressively: time-to-first-word is synth(chunk 1),
- *  so the first piece should be a short clause even when the sentence is long.
- *  Relaxed minimum, any soft boundary, and a hard word-boundary cap as the
- *  last resort — better a slightly abrupt first clause than a silent second. */
+/** Split the opening chunk aggressively: time-to-first-word is synth(chunk 1), so better a slightly abrupt first
+ *  clause than a silent second. */
 function fastFirst(chunk) {
   if (chunk.length <= FIRST_MAX) return [chunk];
   let cut = -1;
@@ -117,10 +91,8 @@ function fastFirst(chunk) {
   return [shapeContinuation(chunk.slice(0, cut).trim()), chunk.slice(cut).trim()];
 }
 
-/** A mid-sentence chunk should END WITH A COMMA: espeak renders comma as a
- *  continuation RISE where a bare end gets sentence-final FALL — the split
- *  stops sounding like a full stop. (Research pass, 2026-08-10: the one
- *  free prosody mitigation piper actually supports.) */
+/** A mid-sentence chunk should END WITH A COMMA: espeak renders it as a continuation rise, not a sentence-final
+ *  fall (the one free prosody mitigation piper supports). */
 function shapeContinuation(chunk) {
   return /[,;:—–.!?…]$/.test(chunk) ? chunk : chunk + ',';
 }

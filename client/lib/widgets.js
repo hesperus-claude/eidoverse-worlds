@@ -1,25 +1,13 @@
-// widgets — the ONE field → widget table every panel surface reads (C13, 2026-10-12; DEBT-SURVEY §2.12).
-//
-// A panel declares FIELDS (panels.js's schema) and never owns bespoke DOM or paint. Three surfaces draw a field:
-// the desktop frame (DOM), the legacy VR quad (a 2D canvas in the panels' skin) and edit mode's VR quad (the same
-// canvas under the VR floor edittheme.js sets). Before C13 each surface was its own switch over f.t, in two files;
-// a widget added to one could be missing from another with nothing to say so. Now every field type is ONE entry here:
+// widgets — the ONE field-type → widget table for all three panel surfaces (desktop DOM, legacy VR quad, edit VR quad).
+// A panel declares FIELDS (panels.js's schema) and never owns bespoke DOM or paint:
 //
 //   WIDGETS[t] = { dom(f, D), legacy(f, P), edit(f, P), editH?(f, S), row? }
 //
-// dom builds the row's control into D.row and sets row.update; legacy and edit paint into P.g and push hit REGIONS
-// ({x, y, w, h, action, payload?, slider?}) that xrpanels.js resolves a laser UV against and dispatches exactly as the
-// DOM control dispatches. The SURFACE is the parameter: D is the desktop's (the row, its label, edit(), the frame's
-// stepper/pop/menu makers), P is a canvas surface's (its context, geometry, tokens and primitives; panels.js builds
-// the legacy one, editpaint.js the edit one). paintFields(fields, S) is the one canvas walk both share: the layout
-// (folds, deskOnly, a list's rows), the per-row label the surface paints, the disabled rule (a disabled field paints
-// but takes no hits) and the lookup. A type dropped from this table is gone from every surface at once, which is what
-// tools/panels-schema-test.ts and tools/edittheme-test.ts go red on together.
-//
-// The widget bodies are the three renderers' cases moved here verbatim (REFACTOR-C13-2026-10-12.md lists where the
-// two canvas looks differ; those differences are kept, not reconciled). The facts a widget reads (step, dp, unit, deg,
-// min, max, options, def) are the descriptor's `ui` facts (shared/protocol/descriptors.js) as editschema's rowOf hands
-// them on; the shared readers of them are FACTS below.
+// dom builds the row's control into D.row; legacy and edit paint into P.g and push hit REGIONS ({x, y, w, h, action,
+// payload?, slider?}) that xrpanels.js resolves a laser UV against and dispatches as the DOM control would.
+// paintFields(fields, S) is the one canvas walk both canvas surfaces share. Facts a widget reads are the descriptor's
+// `ui` facts (shared/protocol/descriptors.js), read through FACTS below.
+// Dropping a type drops it everywhere (tools/panels-schema-test.ts, tools/edittheme-test.ts).
 
 import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from './icons.js';
 import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './edittheme.js';
@@ -460,11 +448,8 @@ export const WIDGETS = {
       inp.checked = !!f.value;
       inp.indeterminate = !!f.mixed;   // mixed: some of the selection are, some aren't (the box shows a dash)
       inp.disabled = !!f.disabled;
-      // R 10-10 23:48: in a busy world every frame repaints, and until the authority's answer folded in, each repaint put
-      // the box back to the old value: it looked unclicked, so she clicked again and sent it twice. A clicked box keeps what
-      // it was clicked to until the record agrees (or 3 s pass: then the record wins, e.g. a refusal).
-      // A field that bumps `settle` has had its answer (a refusal too): the record wins from then on, so a refused click
-      // can't leave the box lying (review 10-12 S2-1); so does the record once the 3 s are up, repaint or not.
+      // a clicked box keeps what it was clicked to until the record agrees: busy-world repaints reverted it and invited
+      // a second click. A `settle` bump (an answer, a refusal too) or 3 s hands it back to the record
       let pending = null, rec = !!f.value, settle = f.settle;
       inp.onchange = () => { inp.indeterminate = false; pending = { v: inp.checked, until: performance.now() + 3000 }; edit(f.k, inp.checked);
         setTimeout(() => { if (pending && performance.now() >= pending.until) { pending = null; inp.checked = rec; } }, 3050); };
@@ -801,10 +786,8 @@ export const WIDGETS = {
     dom(f, D) { const { row, edit, ro, el, put, contextMenu, menuButton } = D;
       const box = el('div', 'sp-tree');
       if (!f.rows?.length) box.append(el('div', 'sp-empty', f.empty ?? 'nothing here'));
-      // drag a row onto another to reparent it (edit('drop', {id, onto})); onto
-      // the tree's empty space to make it a root ({onto: null}). The dragged
-      // id rides a module variable, not dataTransfer — synthetic DragEvents
-      // in a headless bench carry no data, and nothing else needs it.
+      // drag a row onto another to reparent it ({onto: null} on empty space = a root). The dragged id rides a module
+      // variable, not dataTransfer: synthetic DragEvents in a headless bench carry no data
       const dropOn = (onto) => (e) => { e.preventDefault(); e.stopPropagation(); box.querySelectorAll('.drop').forEach((x) => x.classList.remove('drop')); if (treeDrag && treeDrag !== onto) edit('drop', { id: treeDrag, onto }); treeDrag = null; };
       box.ondragover = (e) => { if (treeDrag) { e.preventDefault(); e.dataTransfer && (e.dataTransfer.dropEffect = 'move'); } };
       box.ondrop = dropOn(null);
@@ -929,10 +912,8 @@ export const WIDGETS = {
 };
 
 // ---------------------------------------------------------------- the one canvas walk
-/** What rows a canvas paints: group markers fold what follows; deskOnly fields are the desktop's; a list or tree
- *  becomes its rows. Each item is {f, h} or {row, parent, h}. The two looks differ in two places, kept as they were:
- *  the legacy quad gives a list/tree field a row of its own whether or not it has a label (its label paints there, or
- *  nothing); the edit quad gives it a header row only when labelled, and an `empty` line when it has no rows. */
+/** What rows a canvas paints: items {f, h} or {row, parent, h}. The legacy quad gives a list/tree field its own row
+ *  always; the edit quad only when labelled, with an `empty` line when it has no rows. */
 function layout(fields, S) {
   const items = [];
   let folded = false;

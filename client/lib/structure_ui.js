@@ -1,19 +1,5 @@
-// structure_ui — the griddled-building editor's hosted half.
-//
-// Thin on purpose. Every edit is a pure function in shared/structure_edit.js,
-// so this file only has to answer three questions: which building, where on its
-// grid, and which tool. The edit itself, the preview, and the undo entry are
-// all the same call — a preview cannot disagree with what commits, because it
-// IS what commits, drawn instead of sent.
-//
-// One component carries a whole building, so an edit re-sends it wholesale, as
-// ONE request with `expect` on the building as this viewer saw it: if
-// someone else changed it since, the authority refuses (`changed`) rather than one
-// edit silently eating the other. Undo is the editor's one undo (Ctrl+Z: the
-// door's undo of MY act, editwrites.js), so it always lands on the building that
-// act changed, and keeps theirs where someone changed it since. (Review 10-07:
-// this file used to keep its own stack and write the popped plan into whatever
-// building was current, with expect: false.)
+// structure_ui: hosted half of the building editor. Edits are pure (shared/structure_edit.js), so preview IS commit.
+// Each edit is one request with expect (a concurrent change is refused); undo is the editor's one undo (editwrites.js).
 
 import * as OP from '../../shared/protocol/requests.js';
 import { sendOps } from './editwrites.js';
@@ -241,9 +227,7 @@ export function setTool(t) {
 }
 
 // ---- the grid overlay -------------------------------------------------------
-// You cannot snap to something you cannot see. The overlay draws the lattice a
-// click will actually land on, in the building's own frame — which is also the
-// only honest way to show a grid that may be rotated or diagonal to the world.
+// draws the lattice a click will land on, in the building's own frame (it may be rotated or diagonal to the world)
 
 let gridHelp = null;
 

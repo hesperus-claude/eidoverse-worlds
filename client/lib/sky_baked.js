@@ -1,37 +1,9 @@
-// baked sky — the volumetric clouds as a texture instead of a per-pixel march.
-//
-// The cloud dome's raymarch re-shades every screen pixel every frame, but the
-// sky it draws is a function of VIEW DIRECTION alone: the domes are
-// camera-centred and the cloud shell is hundreds of metres up, so walking
-// around a world produces no parallax a person can see. Re-marching a
-// direction-only signal 60 times a second is where the frame budget went —
-// measured here at ~120fps without clouds vs ~30 with.
-//
-// sky_system already knows how to render that signal into an equirect
-// RenderTarget by explicit per-texel direction — bakeEnv(). This module shows
-// that bake on a static dome and keeps it ALIVE:
-//
-//   - TWO targets, front and back. The dome cross-dissolves between them, so
-//     the sky is always easing toward a bake a few seconds newer — clouds
-//     keep their slow evolution (forming, growing, drifting) instead of
-//     teleporting on every re-bake. v1 swapped one texture in place and the
-//     cloud field's natural nucleate-and-grow read as stepwise jumps.
-//   - Bakes are BANDED: the engine's cached bake material is re-rendered a
-//     horizontal strip per frame (~2ms each) instead of one blocking
-//     full-quad pass, which is what makes a 4096x2048 bake affordable — v1's
-//     2048 was ~4x undersampled against the screen and read as mush.
-//   - The freshest bake keeps feeding scene.environment and the reflection
-//     hook's fallback, so IBL agrees with the visible sky.
-//
-// Still traded away, deliberately: per-frame lightning illumination INSIDE
-// the clouds (bolts and the scene flash stay live; bakeEnv refuses to bake a
-// lightning pulse), and the fine per-pixel shimmer of the true march. The
-// live march remains the 'high' cloud-quality tier.
-//
-// Coupling note: this reaches through skyApi._internals (sky_worlds'
-// declared engine-work escape hatch) for `sys.domes`, `sys._envTarget` and
-// the cached `sys._envBake` {scene, camera}. If a toolkit update moves any
-// of them, attach() returns false and sky.js stays on the live march —
+// baked sky — the clouds as a banded, double-buffered equirect bake (bakeEnv) instead of a per-pixel march: the sky
+// is a function of view direction, so no visible parallax is lost. Two targets cross-dissolve so clouds keep evolving;
+// the freshest bake feeds scene.environment so IBL agrees. Trades: no in-cloud lightning, no march shimmer ('high'
+// keeps the live march).
+// Reaches through skyApi._internals (domes, _envTarget, _envBake): if they move, attach() returns false and sky.js
+// stays on the live march.
 // degraded performance, never a broken sky.
 
 import { THREE, TSL, scene, camera, renderer } from './core.js';
@@ -45,8 +17,8 @@ let mat = null;
 let parked = null;     // the live domes we pulled out of the scene graph
 let xrHeld = null;     // [dome, parent] pairs held out of the scene in a headset until a baked dome takes over
 
-/** In a headset the live domes are the full per-eye cloud march: different noise in each eye, and on the owner's rig
- *  ~13 fps while a first compile runs (09-27). When a baked tier is coming, hold them out until the baked dome attaches;
+/** In a headset the live domes are the full per-eye cloud march: different noise in each eye, and
+ *  ~13 fps while a first compile runs. When a baked tier is coming, hold them out until the baked dome attaches;
  *  the sky meanwhile is the atmosphere without clouds. Safe to call repeatedly. */
 export function holdLiveDomes(skyApi, why = 'in a headset until the baked dome is ready') {
   if (dome || xrHeld) return false;
@@ -80,14 +52,9 @@ let bandMeshes = null;
 let bandGeos = null;
 let bakeCam = null;
 let pinnedCloudsOn = null;   // whether the pinned bake graph HAS a cloud branch
-/** The §18b fence in sky.js consults this: 'clear' is respelled as an empty
- *  cumulus ONLY once a cloud-carrying graph is pinned — an eager respell
- *  would build the ~1.5MB-WGSL cloud graph at boot for clear worlds, and
- *  even an ASYNC compile of that monster stalls the whole GPU process ~9s
- *  (measured — Chrome serializes queue submits behind Tint). Lazy pinning
- *  means a session pays that compile at most ONCE, at the user's own first
- *  cloudy change, instead of every clear↔cloudy flip (the old behavior) or
- *  at every clear-world boot (the eager fence). */
+/** The §18b fence in sky.js consults this: 'clear' is respelled as an empty cumulus only once a cloud graph is
+ *  pinned, because even an async compile of the ~1.5MB-WGSL cloud graph stalls the GPU process (~9s); lazy pinning
+ *  pays it at most once, at the first cloudy change. */
 export const bakedCloudsPinned = () => pinnedCloudsOn === true;
 
 // §19a: arrival gates on the FIRST bake's band pipeline being warm (the
@@ -97,17 +64,9 @@ let _bakeReadyResolve = null;
 const _bakeReady = new Promise((r) => { _bakeReadyResolve = r; });
 export const whenBakeReady = () => _bakeReady;
 function resolveBakeReady() { _bakeReadyResolve?.(); _bakeReadyResolve = null; }
-// scene.environment stays a dedicated small target (what IBL was sized for
-// all along) — PMREM from the full 4096 display bake was a ~150ms stall
-// every cycle. Each fresh bake is blitted down into this instead.
-//
-// PERSISTENT, module-lifetime, never disposed, never replaced: assigning a
-// DIFFERENT texture object to scene.environment regrows the lighting branch
-// of every PBR material in the world — the whole-scene recompile behind the
-// post-splash freezes (measured 08-02). The world boots with this target
-// already assigned (black — contributes nothing) and every bake, engine
-// takeover, and tier switch BLITS INTO it. Content changes; the object never
-// does; no material ever recompiles for the environment again.
+// scene.environment is a dedicated small target, PERSISTENT and never replaced: a DIFFERENT texture object there
+// recompiles every PBR material in the world. It boots assigned (black) and every bake, takeover and tier switch BLITS
+// into it (PMREM from the full 4096 bake stalled ~150 ms).
 let envRT = null;
 let blitScene = null;
 let blitTexNode = null;
@@ -146,10 +105,8 @@ export function envTexture() {
   return envRT.texture;
 }
 
-/** If anything (the engine's enableReflections, an old code path) assigned a
- *  different texture to scene.environment, copy its content into the
- *  persistent target and put the persistent texture back — the graphs never
- *  see the object change. Idempotent; cheap (one 512x256 quad). */
+/** If anything else was assigned to scene.environment, copy its content into the persistent target and put the
+ *  persistent texture back, so the graphs never see the object change. Idempotent; one 512x256 quad. */
 export function adoptEnvironment() {
   ensureEnvRig();
   const cur = scene.environment;
@@ -175,27 +132,17 @@ let nextAt = 0;
 let lastCycleMs = 0;   // how long the last bake cycle took (bands + pump spacing)
 let refreshing = false;
 export const bakedRefreshing = () => refreshing;
-// DRIFT (owner 09-27: 'if drift is almost free, do that for medium'; after a look: 'looks nice … an easy win'). On by
-// default on every baked tier until 10-01, when the owner saw it carry the STARS along with the clouds (the bake is one
-// picture, so the shift moves everything in it): OFF by default now, ?skydrift=1 to see it again. A bake is a snapshot, so
-// between bakes the clouds stood still and then dissolved to where they'd moved. The engine moves them by sampling its
-// cloud field at p + wind·time, so the dome can do the same to the picture: each view ray is carried to the cloud
-// layer, shifted by wind × (sky time since THAT texture was baked), and the shifted direction is sampled. The next bake
-// then lands where the drifted picture already is. The shift fades out toward the horizon (no layer hit, tiny angles)
-// and around the sun (the bake includes the disc and its glow, which must not travel).
+// DRIFT (opt-in, ?skydrift=1): each view ray is carried to the cloud layer and shifted by wind × (sky time since that
+// texture was baked), so clouds move between bakes. Off by default because the bake is one picture and the stars
+// drift too. Fades out toward the horizon and around the sun.
 const DRIFT = CONFIG.params.get('skydrift') === '1';   // opt-in since 10-01 (the stars drifted with the clouds)
 let sysRef = null, cycleSkyT = 0, cycleSnap = null;
 const bakeSkyT = [0, 0];               // sky time each target's picture shows (mid-bake)
 let driftDt = null;                    // [uniform, uniform]: dt for A and B
 const skyTimeNow = () => sysRef?.uniforms?.time?.value ?? 0;
-// ONE SKY TIME PER BAKE (owner, 09-27: the VR sky 'banding' seen for a while). A bake is drawn in strips over many
-// frames (156 over ~6–20 s in a headset), and each strip used to march the clouds at the sky time of ITS frame: the
-// clouds moved between strips, so strip edges showed as seams, worse the longer the bake. Every strip of a bake now
-// draws at the time the bake began (the uniform is pinned for the draw and restored), and drift measures from it.
-// …and not only its clock: the sun, the palette and every other per-frame sky uniform move too (fast at a high day
-// rate: the owner's 22.5×), so strips drawn at different moments showed as bands in the atmosphere behind the clouds
-// (09-27 22:57). A bake takes a SNAPSHOT of the sky's scalar and vector uniforms when it begins and draws every strip
-// with it, restoring the live values after each draw. Textures and matrices are left alone.
+// ONE SKY STATE PER BAKE: strips span many frames, so a bake snapshots the sky's scalar and vector uniforms when it
+// begins and draws every strip with them (restoring the live values after each draw), or strip edges show as bands.
+// Textures and matrices are left alone.
 function skySnapshot(sys) {
   const U = sys?.uniforms; if (!U) return null;
   const snap = [];
@@ -228,10 +175,7 @@ let pendingForce = false;
 let cfg = {
   intervalMs: 9000,        // cycle start → next cycle start
   forcedFadeMs: 2500,      // verb-driven changes ease in faster
-  // Band size in TEXELS x MARCH PASSES per frame — the unit the GPU cost
-  // roughly follows (bands are additionally cost-weighted by march chord
-  // length, see attach). A 4096x2048 8-pass bake spreads over ~170 frames
-  // (~2.8s of a 9s cycle) at a few ms each.
+  // band size in TEXELS × MARCH PASSES per frame, the unit GPU cost roughly follows (bands are also chord-weighted)
   passTexelBudget: 0.4e6,
   cloudPasses: 8,
 };
@@ -251,11 +195,9 @@ export async function renderBetweenXRFrames(r, fn) {
   try { return fn(); } finally { r.xr.enabled = xrWas; }
 }
 
-/** The BOOT bake as bands (owner's machine, 2026-09-23: `[load] sky bake — 89951ms over 1 frame` on WebGL, then
- *  CONTEXT_LOST_WEBGL — one 4096x2048 8-pass full-screen draw is past what a GPU watchdog tolerates). Renders the bake
- *  scene's single full-screen quad into `target` as cost-weighted strips, one per frame, with the SAME material and
- *  global uvs as the quad — so the same texels, just not in one draw. The band pipeline is compiled off the render path
- *  first (a cold band met inside a frame is the 1.5MB-shader stall again). Returns the band count. */
+/** The boot bake as bands: one 4096x2048 8-pass full-screen draw is past a GPU watchdog (context lost), so the quad
+ *  renders into `target` as cost-weighted strips, one per frame, same material and uvs (same texels). The band
+ *  pipeline is compiled off the render path first. Returns the band count. */
 export async function bandedBakeRender(r, bakeScene, bakeCam, target, { cloudPasses = cfg.cloudPasses, passTexelBudget = cfg.passTexelBudget,
   nextFrame = () => new Promise((res) => requestAnimationFrame(res)), budget = false, alive = () => true, sys = null } = {}) {
   const bakeMat = bakeScene.children?.[0]?.material;
@@ -332,10 +274,7 @@ export function attachBakedDome(skyApi, opts = {}) {
   cfg = { ...cfg, ...opts };
   bakeCam = bake.camera;
 
-  // Park the domes OUT of the scene graph rather than flipping .visible —
-  // sky.update() re-asserts cloudDome.visible on every weather/cloud change,
-  // so a visibility flag would not stay put. Off-scene meshes cost nothing,
-  // and update()'s position/visible writes against them stay harmless.
+  // park the domes OUT of the scene graph rather than flipping .visible: sky.update() re-asserts cloudDome.visible
   releaseLiveDomes();   // held in a headset: back in, so the park below takes them (and teardown can find them)
   parked = s.domes.filter((d) => d?.parent);
   for (const d of parked) d.parent.remove(d);
@@ -352,10 +291,8 @@ export function attachBakedDome(skyApi, opts = {}) {
   B.texture.name = 'sky_baked_back';
   B.texture.userData._pmremPreInit = true;
   targets = [A, B];
-  // Binding a never-rendered RT texture at pipeline compile races texture
-  // init on the wgpu backend (sky_system hit intermittent "OutputType is
-  // invalid" from exactly this) — clear B once so it exists before the dome
-  // material ever samples it.
+  // clear B once so it exists before the dome samples it: binding a never-rendered RT at pipeline compile races
+  // texture init on the wgpu backend ("OutputType is invalid")
   {
     const prev = renderer.getRenderTarget();
     renderer.setRenderTarget(B);
@@ -363,16 +300,8 @@ export function attachBakedDome(skyApi, opts = {}) {
     renderer.setRenderTarget(prev ?? null);
   }
 
-  // Band strips over the engine's cached bake material: a fullscreen ortho
-  // quad split into horizontal slices with GLOBAL uvs, so rendering one
-  // slice per frame (no clear) re-marches just that strip of the equirect.
-  //
-  // The slices are COST-WEIGHTED, not equal-height: texel cost is dominated
-  // by march chord length, which blows up toward the horizon rows (a grazing
-  // ray crosses tens of km of cloud shell where a zenith ray crosses ~1km) —
-  // uniform slices measured 27-48ms frames at the horizon and ~0ms at the
-  // nadir. Weight rows by an inverse-elevation chord estimate and cut slices
-  // of equal WEIGHT instead, so every band costs about the same few ms.
+  // band strips over the engine's cached bake material: horizontal slices with GLOBAL uvs, one per frame, cut by equal
+  // march-chord WEIGHT rather than height (grazing horizon rows cost far more), so every band costs about the same
   const cuts = bandCuts(A.width, A.height, cfg.cloudPasses, cfg.passTexelBudget);
   bandScene = new THREE.Scene();
   bandMeshes = [];
@@ -393,10 +322,8 @@ export function attachBakedDome(skyApi, opts = {}) {
     bandMeshes.push(m);
     bandGeos.push(g);
   }
-  // bakeEnv keys its cached graph on whether clouds existed at bake time —
-  // a graph built under a 'clear' preset has NO cloud branch at all, and no
-  // uniform can bring one back. Remember which flavour we pinned so a later
-  // clear↔cloudy preset flip can rebuild it (see maybeRefreshGraph).
+  // bakeEnv keys its cached graph on whether clouds existed at bake time (a 'clear' graph has no cloud branch);
+  // remember the pinned flavour so a clear↔cloudy flip can rebuild it (maybeRefreshGraph)
   pinnedCloudsOn = /\|c1$/.test(bake.key ?? '');
 
   // The persistent env rig (module-lifetime — see its comment above).
@@ -443,12 +370,8 @@ export function attachBakedDome(skyApi, opts = {}) {
   ).rgb;
 
   dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 24), mat);
-  // AFTER the world's opaques, not first (2026-09-24). Opaque, never writes depth, far behind everything: drawn first
-  // it shaded every pixel of a 5920x2960 eye pair (equirect atan/asin + two fetches + mix) only to be overdrawn. At 0.5
-  // it follows every world opaque (renderOrder 0) and depth-rejects each covered pixel; overlays (>= 1 — core's grid 1
-  // and axis 2, which write no depth; the ring, gizmos, landmarks, vignette) still draw after it; transparents are a
-  // later list. Same image (tools/dome-order-probe.mjs). The one thing that WOULD differ: an opaque that writes no
-  // depth at renderOrder 0 — the client has none; keep it that way (a stage line must sit at >= 1).
+  // AFTER the world's opaques (0.5): drawn first it shaded every eye pixel only to be overdrawn. Overlays (>= 1) still
+  // draw after it (tools/dome-order-probe.mjs). Keep it so: an opaque that writes no depth must sit at renderOrder >= 1.
   dome.renderOrder = 0.5;
   dome.userData.odTag = 'sky';   // overdraw.js category
   dome.frustumCulled = false;
@@ -458,12 +381,8 @@ export function attachBakedDome(skyApi, opts = {}) {
   scene.add(dome);
 
   front = 0;
-  // §18b: the pinned graph's WGSL is enormous once it carries clouds (the
-  // 8-pass march ≈ 1.5MB of shader text), and the BAND context (bandScene +
-  // targets[]) is a different pipeline than the boot bake's own — the first
-  // renderBand that met it cold paid NodeBuilder plus a BLOCKING pipeline
-  // compile inside one frame (measured 12s on the first cadence cycle). The
-  // cycle holds in 'warming' until the band pipeline exists.
+  // §18b: the BAND context is a different pipeline from the boot bake's, and a cold first band paid a blocking ~1.5MB
+  // WGSL compile inside one frame; the cycle holds in 'warming' until the band pipeline exists
   state = 'warming';
   warmBakePipeline().then(() => {
     if (state === 'warming') state = 'idle';
@@ -476,11 +395,8 @@ export function attachBakedDome(skyApi, opts = {}) {
   return true;
 }
 
-/** Compile the band material's pipeline off the render path, through the
- *  conductor (§16.2.A): same scene, same camera, same target formats as
- *  renderBand — the real band render is then a pure cache hit. All bands
- *  share one material and one geometry layout, so warming band 0 covers
- *  every strip. */
+/** Compile the band pipeline off the render path through the conductor (§16.2.A), with renderBand's scene, camera
+ *  and target formats so the real band render is a cache hit; all bands share one material, so band 0 covers all. */
 function warmBakePipeline() {
   const m0 = bandMeshes[0];
   if (!m0) return Promise.resolve();
@@ -513,22 +429,9 @@ export function requestBake() {
   }
 }
 
-/** Per frame from updateSky(): follow the camera, advance the bake/fade
- *  cycle. The camera-follow matches the live domes (x/z only — sky_system
- *  keeps dome centres at ground level). */
-// ── XR: bakes move OFF the presented frame ──────────────────────────────
-// A secondary renderer.render() inside an XR animation frame corrupts
-// the in-flight per-eye render list ("Cannot destructure 'object' of
-// renderList[i]" @ _renderObjects, per frame = the world strobing in the
-// headset). But BETWEEN XR frames the renderer is not mid-flight — so while
-// a session presents, band renders and env blits run from a macrotask pump
-// instead of the frame callback. setTimeout (not rAF, which Chrome parks
-// during immersive sessions; not the warm conductor, which yields on rAF)
-// paced to one band per XR_BAKE_SPACING_MS so the session's frame budget is
-// never contended two ticks in a row. Fades stay per-frame — they are pure
-// uniform math. If the quarantined crash signature ever appears from the
-// pump path, baking re-freezes for the rest of the session and says so once
-// — the old frozen-sky behavior as fallback, never as default.
+// In XR, bakes run from a setTimeout pump between frames, one band per XR_BAKE_SPACING_MS: a second render() inside
+// an XR frame corrupts the per-eye render list, and rAF is parked in immersive sessions. On the crash signature,
+// baking freezes for the session.
 const XR_BAKE_SPACING_MS = 40;
 let skyWaited = 0;   // band asks age like any waiter (the pump asks last in a frame; it must not starve)
 let xrPumpId = 0;
@@ -551,27 +454,12 @@ function xrPumpTick() {
   if (!dome || xrBakeBroken) return;
   if (!renderer.xr?.isPresenting) return;   // session ended: frame path resumes
   const now = performance.now();
-  // Between frames the renderer must not route through XR state (which only
-  // exists inside a session rAF) — three keys internals off the live frame's
-  // views and a between-frames render lands "Invalid value used as weak map
-  // key". Classic secondary-view discipline: xr.enabled off around the bake.
+  // between frames, route nothing through XR state (it exists only inside a session rAF): xr.enabled off around the bake
   const xrWas = renderer.xr.enabled;
   renderer.xr.enabled = false;
-  // PINNED-VERSION SURGERY, written against r184, re-checked at the 0.186 bump (revisit at every three bump): between XR
-  // frames the backend's _currentContext still points at the LAST XR frame's
-  // context. Our render captures it as previousContext and finishRender then
-  // restores a framebuffer that does not exist outside the session frame —
-  // WebGLState.drawBuffers WeakMap.set(undefined) (stack captured 2026-08-20).
-  // finishRender's own `if (previousContext !== null)` skips the restore, so
-  // null the pointers for the off-frame render; the next XR frame rebinds
-  // everything from its own beginRender. The catch's freeze-latch remains the
-  // backstop if a future three moves these fields.
-  // Deliberately NOT saved/restored: between frames, null IS the truthful
-  // state — restoring the stale pointer after our render re-poisons the NEXT
-  // XR frame (beginRender captures it as previousContext → finishRender
-  // restores a dead framebuffer → the same WeakMap throw, now per-frame; run
-  // 13's 167 errors were exactly this). Each XR frame's beginRender sets its
-  // own context; it never needs the old one back.
+  // PINNED-VERSION SURGERY (re-check at every three bump): between XR frames _currentContext still names the last XR
+  // frame's, and finishRender would restore a dead framebuffer. Null it for the off-frame render and do NOT restore it
+  // (that poisons the next XR frame); the catch's freeze-latch is the backstop.
   const bk = renderer.backend;
   if (bk) bk._currentContext = null;
   renderer._currentRenderContext = null;
@@ -610,6 +498,7 @@ function xrPumpTick() {
 }
 
 const _domeEye = new THREE.Vector3();
+/** Per frame from updateSky(): follow the camera (x/z only, like the live domes) and advance the bake/fade cycle. */
 export function updateBakedDome(now = performance.now()) {
   if (!dome) return;
   // the eye's WORLD position — in XR camera.position is rig-local, which left the dome centred near the world origin
@@ -655,11 +544,8 @@ export function updateBakedDome(now = performance.now()) {
   }
 }
 
-// A weather/cloud verb can move the preset across the clear↔cloudy line,
-// and the pinned bake graph is the wrong flavour on the far side (a 'clear'
-// graph simply has no cloud branch). Rebuild through the engine's own
-// bakeEnv — a one-frame full-quad render plus a recompile, acceptable for a
-// change this dramatic — and re-pin its fresh material.
+// a weather/cloud verb can cross the clear↔cloudy line, where the pinned graph is the wrong flavour: rebuild through
+// the engine's own bakeEnv (one full-quad render + a recompile) and re-pin its fresh material
 let refreshHeldLogged = false;
 let refreshStats = { held: 0, bands: null };
 /** Harness: force the clear→cloudy graph refresh on the next cadence cycle (normally unreachable — sky.js pins the
@@ -677,12 +563,8 @@ export const nextDesktopFrame = () => new Promise(function wait(res) {
 function maybeRefreshGraph() {
   const wantClouds = !cfg.noClouds && sys.state?.preset !== 'clear';   // the off tier never grows a cloud branch (M3)
   if (wantClouds === pinnedCloudsOn) return false;
-  // One direction only (§18b): a c1 graph with finalMul→0 draws a correct
-  // clear sky, so cloudy→clear NEVER needs the full-quad rebake (the
-  // measured ~5s halt). Only c0→c1 is genuinely impossible to render
-  // without a rebuild (a graph built with no cloud branch cannot grow
-  // one) — and the §18b fence in sky.js keeps capable tiers pinned c1
-  // from the first bake, so even that direction is normally unreachable.
+  // one direction only (§18b): a c1 graph with finalMul→0 draws a correct clear sky, so cloudy→clear never rebakes;
+  // only c0→c1 needs a rebuild, and sky.js's §18b fence normally keeps capable tiers pinned c1 anyway
   if (!wantClouds) return false;
   // Never inside a headset: this rebuilds the whole cloud graph and re-bakes it, the class of work that
   // held one XR frame for seconds and tripped the GPU watchdog. The cadence keeps the current (clear)
@@ -724,10 +606,8 @@ function maybeRefreshGraph() {
     for (const m of bandMeshes) m.material = bakeMat;
     bakeCam = bake.camera;
     pinnedCloudsOn = /\|c1$/.test(bake.key ?? '');
-    // the full bake landed in A — show it, take the env back from it, and
-    // let the cadence resume from there. The fresh graph's band pipeline
-    // warms first (§18b) — the re-pinned material is as cold in the band
-    // context as the boot one was.
+    // the full bake landed in A: show it and take the env back from it; the fresh graph's band pipeline warms
+    // first (§18b), since the re-pinned material is cold in the band context
     blitEnvFrom(A);
     blendU.value = 0;
     front = 0;
@@ -820,11 +700,8 @@ export function detachBakedDome() {
     bandScene = null;
   }
   if (envRT) {
-    // The persistent env target SURVIVES teardown — handing scene.environment
-    // a different texture object would recompile every PBR material (the
-    // exact storm this rig exists to prevent). Refill it from the engine's
-    // own target instead so a live-tier sky keeps correct reflections; the
-    // engine's fallback node goes back to its own texture as before.
+    // the persistent env target SURVIVES teardown (a different scene.environment object recompiles every PBR
+    // material): refill it from the engine's own target so a live-tier sky keeps correct reflections
     if (targets) {
       blitTexNode.value = targets[0].texture;
       const prev = renderer.getRenderTarget();
