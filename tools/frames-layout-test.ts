@@ -99,6 +99,34 @@ check("an in-bounds drag lands where it was dropped", f.state.x === 300 && f.sta
   check("the clamped geometry is what gets persisted", s && s.x + s.w === innerWidth - 8, JSON.stringify(s));
 }
 
+console.log("FRAMES — every edge and corner: a resize moves only its own sides, keeps the floor, never leaves the margins");
+{
+  // the margins are 8 px except the south resize's 4 (windows.js: chrome-aware, "a drag clamps at 8"): stated per row on purpose
+  const g = measurable(makeFrame("zones", { title: "zones", x: 300, y: 200, w: 300, h: 200, minW: 100, minH: 80 }));
+  g.show();
+  const ZONES: Record<string, [number, number]> = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0], ne: [1, -1], nw: [-1, -1], se: [1, 1], sw: [-1, 1] };
+  const sides = () => ({ l: g.state.x, t: g.state.y, r: g.state.x + g.state.w, b: g.state.y + outerH(g) });
+  for (const [z, [dx, dy]] of Object.entries(ZONES)) for (const [how, by] of [["by 20", 20], ["far out", 9999], ["far in", -9999]] as const) {
+    Object.assign(g._state, { x: 300, y: 200, w: 300, h: 200 }); g._paint();   // .state is a copy
+    const s0 = sides();
+    // a corner is 8 px in (inside its 15 px square, outside the 4 px bands); an edge is 1 px in at its midpoint
+    const px = dx > 0 ? s0.r - (dy ? 8 : 1) : dx < 0 ? s0.l + (dy ? 8 : 1) : (s0.l + s0.r) / 2;
+    const py = dy > 0 ? s0.b - (dx ? 8 : 1) : dy < 0 ? s0.t + (dx ? 8 : 1) : (s0.t + s0.b) / 2;
+    document.dispatchEvent(pe("pointerdown", px, py));
+    document.dispatchEvent(pe("pointermove", px + dx * by, py + dy * by));
+    document.dispatchEvent(pe("pointerup", px + dx * by, py + dy * by));
+    const s1 = sides(), moved = { l: s1.l !== s0.l, t: s1.t !== s0.t, r: s1.r !== s0.r, b: s1.b !== s0.b };
+    const own = { l: dx < 0, t: dy < 0, r: dx > 0, b: dy > 0 };
+    const planted = (Object.keys(own) as (keyof typeof own)[]).every((k) => own[k] || !moved[k]);
+    const ownMoved = (Object.keys(own) as (keyof typeof own)[]).every((k) => !own[k] || moved[k]);
+    const inside = s1.l >= 8 && s1.t >= 8 && s1.r <= innerWidth - 8 && s1.b <= innerHeight - (dy > 0 ? 4 : 8);
+    const floor = g.state.w >= 100 && g.state.h >= 80;
+    check(`${z} ${how}: only its own sides move, inside the margins, above the floor`, planted && ownMoved && inside && floor,
+      JSON.stringify({ s0, s1, w: g.state.w, h: g.state.h }));
+  }
+  g.hide();
+}
+
 console.log("FRAMES — edge / corner zones");
 dragHeadTo(100, 100);
 const L = f.state.x, T = f.state.y, R = f.state.x + f.state.w, B = f.state.y + outerH(f);
