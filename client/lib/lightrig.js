@@ -173,17 +173,9 @@ if (CONFIG.params.has('shadowdebug')) setTimeout(() => { try { const d = sun.pos
 
 // ---- requests ---------------------------------------------------------------
 
-/** key -> request. A request is a light that WANTS to cast:
- *    obj        Object3D whose world position the slot follows (or null)
- *    offset     local-frame offset within obj (lamp = emissive mesh centre)
- *    pos        fallback world position when there is no obj
- *    mirror     a foreign THREE light whose live color/intensity/distance/
- *               decay/position the slot copies verbatim (the lightning)
- *    color/intensity/range/decay  the authored params (ignored when mirror)
- *    keep       top priority — never outbid by distance
- *    authored   placed by a verb (beats inferred lamps)
- *    dayAware   dimmed by the sky's dayness like a lamp
- *    owner      release scope (entity:<id>) */
+/** key -> request (a light that wants a slot): obj/offset or pos place it; mirror = a foreign light copied verbatim
+ *  (the lightning); keep = never outbid by distance; authored beats inferred; dayAware dims with the sky; owner is the
+ *  release scope (entity:<id>). */
 const requests = new Map();
 let assignDirty = true;
 
@@ -198,17 +190,8 @@ export function requestLight(key, spec) {
   });
   assignDirty = true;
 }
-/** Patch a live request.
- *
- *  INTENSITY DOES NOT DIRTY ASSIGNMENT. Slot assignment is by TIER and CAMERA
- *  DISTANCE -- intensity is not an input to it, and the rig deliberately
- *  recomputes at most every 600ms while writing slot values every frame. A
- *  breathing lamp calls this 60 times a second, so dirtying on every patch
- *  defeated that cadence entirely, for a value the sorter does not read.
- *  (mica caught it in review of PR #173.)
- *
- *  Anything that CAN change the ordering still dirties: tier, the object being
- *  followed, or the owner. */
+/** Patch a live request. Only ORDERING_KEYS dirty assignment: intensity isn't a sort input, and a breathing lamp
+ *  patching every frame must not defeat the 600 ms recompute cadence (PR #173). */
 const ORDERING_KEYS = ['keep', 'authored', 'obj', 'offset', 'pos', 'mirror', 'owner', 'spot'];
 export function updateRequest(key, patch) {
   const r = requests.get(key);
@@ -232,15 +215,9 @@ export const isCasting = (key) => (requests.get(key)?.slot ?? -1) >= 0;
 // Models that glow shed light: a lamp REQUEST at each emissive mesh's centre (≤2 per object: a chandelier is
 // one fixture). No budget or boot deferral: a request costs nothing until it wins a slot.
 
-/** Request a light at each emissive mesh's centre (<=2 per object).
- *
- *  `opts.shadows` is the caller's claim on the ONE casting slot (SHADOW_SLOT)
- *  and defaults to FALSE: a placed prop glows, a body lit from inside throws
- *  itself. Only avatar.js passes true.
- *
- *  @returns {{key:string, intensity:number}[]} the requests it made -- a caller
- *  that wants to ANIMATE a lamp needs the key and the intensity the inference
- *  chose, and reading either back out of the private map was the alternative. */
+/** Request a light at each emissive mesh's centre (<=2 per object). `opts.shadows` claims the one casting slot
+ *  (SHADOW_SLOT), default false; only avatar.js passes true.
+ *  @returns {{key:string, intensity:number}[]} the requests made, so a caller can animate a lamp */
 export function attachLamps(root, owner, { shadows = false } = {}) {
   const made = [];
   const emissive = [];
@@ -287,11 +264,7 @@ export function attachLamps(root, owner, { shadows = false } = {}) {
 let dayness = null;
 export function setDayness(d) { dayness = d; }
 const dayGlow = () => (dayness == null ? 1 : Math.pow(1 - dayness, 2));
-/** The same curve the cast lights use, for anything that GLOWS rather than
- *  casts. An emissive surface has no slot and never passed through here, so a
- *  lamp's bulb burned at full strength at midnight and at noon alike -- glaring
- *  after dark, washed out at midday. Exported so the surface and its light dim
- *  on ONE curve. */
+/** The cast lights' day curve, for anything that glows rather than casts, so a bulb and its light dim on one curve. */
 export const glowScale = () => dayGlow();
 
 // ---- assignment: tier (keep/adopted → authored → inferred), then camera distance with a 15% incumbent bonus,
@@ -762,13 +735,8 @@ function unadoptForeign(light) {
   releaseLight(`foreign:${light.uuid}`);
 }
 
-/** Release every adopted foreign light. The sky's teardown calls this: the
- *  scene-diff that undoes a sky build cannot see the bolt (the seam kept it
- *  OUT of the scene on purpose), and on the eidoverse→skymesh paths that
- *  never construct a replacement weather system, the registry-eviction
- *  release never fires either — a dead mirror would hold a reserved slot
- *  forever, frozen at whatever intensity the last strike left it (review
- *  blocker 2: storms peak at intensity 12000). */
+/** Release every adopted foreign light; the sky's teardown calls it. The scene-diff can't see the bolt (kept out of the
+ *  scene on purpose), so without this a dead mirror holds a slot forever, frozen at its last strike's intensity. */
 export function releaseForeignLights() {
   for (const k of [...requests.keys()]) {
     if (k.startsWith('foreign:')) releaseLight(k);

@@ -148,9 +148,7 @@ export function shapeKey(fields) {
   ].join('|')).join('\n');
 }
 
-/** Nav/action separation: a drag that BEGINS on a button must scroll, never
- *  fire the button. Resonite #707 / Neos #1040 — eight years of "I scrolled
- *  the component list and it nulled a field". Measured from pointerdown; a
+/** A drag that BEGINS on a button must scroll, never fire it (Resonite #707 / Neos #1040). Measured from pointerdown; a
  *  click that travelled is swallowed at capture, before any onclick. */
 function guardActions(root) {
   let down = null;
@@ -437,10 +435,8 @@ function openPop(anchor, f, pick) {
   paint(); inp.focus();
 }
 
-/** The row's menu as a BUTTON (R, 10-10: "buttons in VR to the right of anywhere that would get a right-click menu,
- *  hidden on desktop"; Resonite's inspector does the same: a small button per field opens its menu, no right-click).
- *  It opens exactly what a right-click on the row opens. CSS shows it only on a frame staged for a headset
- *  (#xr-stage: domquad.js), so the desktop row is unchanged. */
+/** The row's menu as a button (VR has no right-click): opens exactly what a right-click on the row opens. CSS shows it
+ *  only on a frame staged for a headset (#xr-stage: domquad.js). */
 function menuButton(row) {
   const b = el('button', 'sp-ctxbtn', '⋯'); b.tabIndex = -1; b.title = 'menu'; b.setAttribute('aria-label', 'menu for this row');
   b.onpointerdown = (e) => e.stopPropagation();   // not a scrub, not a drag of the row

@@ -167,14 +167,8 @@ export function sendPuppet(target, { pose = null, merge = false, anim = null, ra
   }
 }
 
-/** Ask the world for a page of its own history.
- *
- *  Folding bounds what a join costs, which necessarily means a joiner is not
- *  handed everything ever said. This is how the rest is reachable: scroll up
- *  and the client asks for what came before. A request that gets no answer,
- *  because no socket is joined or nothing came back within 8 s, rejects, so
- *  a caller can tell it from an empty page, which is an answer: there is
- *  nothing there. */
+/** Ask the world for a page of its own history (folding means a joiner isn't handed everything).
+ *  No answer (not joined, or nothing within 8 s) rejects, so a caller can tell it from an empty page. */
 const pendingHistory = new Map();
 let histId = 0;
 export function requestHistory(opts = {}) {
@@ -251,10 +245,8 @@ export function sendDrag(id, pos, yaw, q = null, { end = false, scale = null } =
   }
 }
 
-/** This page's presence session: one id for as long as the page lives, sent
- *  with every join, so listeners can tell a reconnect (the same page, whose
- *  utterance counter goes on) from a new page (whose counter starts again).
- *  index.html's early socket sends the first join, with the same id. */
+/** This page's presence session, sent with every join so listeners can tell a reconnect (counter goes on) from a new
+ *  page (counter restarts). index.html's early socket sends the first join with the same id. */
 const PAGE_SESSION = (globalThis.__ewPageSession ??= globalThis.crypto?.randomUUID?.()
   ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
@@ -416,27 +408,8 @@ export function sendPose(now) {
 
 // ---------------------------------------------------------------- connecting
 
-/** Re-enter the world as somebody else.
- *
- *  The server keys a client by its id, so a rename is genuinely a new
- *  identity: this session leaves and a new one arrives. That is honest —
- *  everyone present sees it happen, rather than a name silently mutating on a
- *  body they were talking to. What does NOT follow you is anything the world
- *  filed under the old name: your remembered sleeping place. */
-/** Re-assert a KNOWN body verbatim, plus whatever one-shot rides along.
- *
- *  sendPose() above SAMPLES a live body: it reads position, clip, pitch, wings, held
- *  pose and pins off myState and composes a packet. A client with no body has nothing
- *  to sample, and composing one from defaults is how #188 B2 happened - a lite user
- *  tapping `wave` stood up out of a sit, unfolded their wings and dropped their held
- *  pose, because the composer emitted its own defaults for every field it did not know
- *  to carry.
- *
- *  A pose is the resident's WHOLE public body, not a delta. So the renderer-free path
- *  sends back the server's own settled pose (the join snapshot's `restore`) unchanged,
- *  adding only the one-shot. Fields this client has never heard of survive by
- *  construction, which is the property a field-by-field rebuild cannot have.
- *
+/** Re-send a KNOWN pose verbatim plus a one-shot, for a client with no body: composing from defaults would reset fields
+ *  it doesn't know (sit, wings, held pose). A pose is the whole public body, not a delta.
  *  @returns {boolean} whether it went out. */
 export function sendPoseExact(pose) {
   if (!net.joined || net.ws?.readyState !== 1) return false;
@@ -444,6 +417,8 @@ export function sendPoseExact(pose) {
   return true;
 }
 
+/** Re-enter the world as somebody else: the server keys a client by id, so a rename is a visible leave and arrive.
+ *  Anything filed under the old name (the remembered sleeping place) doesn't follow. */
 export function rejoin() {
   intentionalClose = net.ws ?? true;   // the socket being replaced: its close is the one rejoin() answers for
   try { net.ws?.close(); } catch { /* already gone */ }
@@ -478,11 +453,8 @@ async function fetchIdentity() {
   }
 }
 
-/** A logged-out returning Discord user goes back through the login — it
- *  round-trips without interaction while Discord still knows them. Key-link
- *  visitors (CONFIG.token) are never bounced, and one bounce per minute is
- *  the cap: if the identity node is down we fall through to the authority (which
- *  offers the same link) instead of redirect-looping. */
+/** A logged-out returning Discord user goes back through the login (silent while Discord knows them). Key-link
+ *  visitors (CONFIG.token) are never bounced; one bounce a minute, so a down identity node can't redirect-loop. */
 export function bounceToLogin() {
   if (identity || !authCfg?.login || CONFIG.token) return false;
   if (localStorage.getItem('ew-authed') !== '1') return false;
@@ -688,16 +660,8 @@ function onSocketClosed(ev) {
 
 // ---------------------------------------------------------------- handling
 
-/** ONE teardown for a departed participant — every leave-shaped exit
- *  (ordinary leave, kick/ban's broadcast leave, the reconnect snapshot's
- *  roster prune) funnels here so the whole generation dies together (#95):
- *  drag custody FIRST (a drag sim holds bone references into the avatar
- *  about to be disposed — the one-frame-late recovery double-disposed a
- *  VRM), then the voice peer and its analyser, then the body itself
- *  (avatar root, nameplate, bubbles, typing dots and held poses all hang
- *  off the avatar and dispose with it). Ownership stays explicit — each
- *  line names the table it clears. A body's seat (avatarMounts) is presence,
- *  fed by its frames: dropRemote clears it with the body.
+/** ONE teardown for a departed participant: every leave-shaped exit funnels here so the whole generation dies together
+ *  (#95). Drag custody goes first (a drag sim holds bone refs into the avatar), then the body and all that hangs off it.
  *  `expected` makes the drop generation-conditional (see dropRemote). */
 export function teardownParticipant(id, expected) {
   // the generation check comes BEFORE any side effect: a predecessor's stale cleanup must be a complete no-op

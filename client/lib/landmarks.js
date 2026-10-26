@@ -165,10 +165,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
   return out;
 }
 
-/** Where a landmark is NOW, in world space, with the surface normal it sits
- *  on. `standoff` lifts the point off the skin so a hand rests on it instead
- *  of inside it — in metres, and the caller's choice because a fingertip and
- *  a palm are different distances. */
+/** Where a landmark is now, in world space, with its surface normal. `standoff` (m) lifts the point off the skin;
+ *  the caller's choice (a fingertip and a palm differ). */
 export function landmarkWorld(entry, standoff = 0, outPos = new THREE.Vector3(), outNormal = new THREE.Vector3()) {
   if (!entry?.node) return null;
   outPos.copy(entry.offset);
@@ -178,12 +176,8 @@ export function landmarkWorld(entry, standoff = 0, outPos = new THREE.Vector3(),
   return { pos: outPos, normal: outNormal };
 }
 
-/** Draw every landmark as a pip with a normal whisker, so a person can LOOK
- *  at them. This exists because the derivation cannot check itself: the seat
- *  bug passed every arithmetic test it had, and what finally caught it was
- *  antra's eye. Colour is by tier (social green, familiar amber, intimate
- *  red) and a FALLBACK point is drawn white — an unmeasured guess should not
- *  look like a measurement. */
+/** Draw every landmark as a pip with a normal whisker: the derivation can't check itself, so a person must look.
+ *  Colour by tier (social green, familiar amber, intimate red); a fallback point is white, never a measurement. */
 export function debugMarkers(avatar, marks, scene, on = true) {
   const key = '__landmarkDebug';
   let group = avatar.root.getObjectByName(key);
@@ -216,20 +210,8 @@ export function debugMarkers(avatar, marks, scene, on = true) {
   return group;
 }
 
-/**
- * How deep the torso actually is, measured — half-depth front-to-back at chest
- * height, in metres.
- *
- * The collision model inherits torsoRadius from the ragdoll, which is 0.42x
- * the wider of shoulder or hip span: a half-WIDTH. A capsule is isotropic, so
- * that number silently becomes the half-depth too, and a forearm crossing in
- * FRONT of the belly — exactly what reaching your opposite hip requires — reads
- * as inside the body. Bodies are not round. This asks the mesh how deep this
- * one is, the same way the contact points ask it where its shoulder is.
- *
- * Returns null if it cannot be measured, so a caller can fall back rather than
- * silently use a guess.
- */
+/** Measured torso half-depth (m, front-to-back at chest height): the ragdoll's torsoRadius is a half-WIDTH, so a
+ *  forearm across the belly would read as inside the body. Returns null if it can't be measured. */
 export function torsoHalfDepth(avatar) {
   const h = avatar?.vrm?.humanoid;
   const scene = avatar?.vrm?.scene;

@@ -40,10 +40,8 @@ const lastIndexed = new Map();
 
 const _qb = new THREE.Quaternion();
 
-/** rotateAtPivot's part-frame sibling: compose theta about `axis` at `pivot`
- *  (both in the PART's local frame) onto the part's rest transform. The
- *  pivot point stays fixed in the parent's frame — that is what makes it a
- *  hinge and not a wobble. */
+/** rotateAtPivot's part-frame sibling: theta about `axis` at `pivot` (part-local) onto the rest transform; the pivot
+ *  stays fixed in the parent's frame (a hinge, not a wobble). */
 function rotatePartAtPivot(obj, pbase, axis, pivot, theta) {
   _ax.set(...(axis ?? [0, 1, 0])).normalize();
   _q.setFromAxisAngle(_ax, theta);
@@ -93,17 +91,13 @@ function evalPart(m, t, obj, pbase) {
   }
 }
 
-/** "id\u0000part" -> part Object3D animated last frame. When a part's motion
- *  component vanishes (removed, or {type:null}), the part returns to its
- *  authored rest pose — world.js does this for whole entities, but it has
- *  never heard of parts, so parts settle themselves here. */
+/** "id\u0000part" -> part animated last frame, so a part whose motion vanishes returns to rest here (world.js only
+ *  does that for whole entities). */
 const _liveParts = new Map();
 const _seenParts = new Set();
 
-/** Called once per frame from the main loop. Iterates only entities that have
- *  a motion component — the map is tiny compared to the scene.
- *  Epoch clock, NOT the rAF timestamp: t0s are sequencer Date.now() stamps,
- *  and agreeing with other clients matters more than agreeing with vsync. */
+/** Once per frame, over entities with a motion component only. Epoch clock, NOT the rAF timestamp: t0s are sequencer
+ *  stamps, and agreeing with other clients beats agreeing with vsync. */
 // the camera's WORLD position: in XR camera.position is rig-local, so motion near you froze 90 m from spawn (11a M1)
 const _eye = new THREE.Vector3();
 const _wp = new THREE.Vector3();

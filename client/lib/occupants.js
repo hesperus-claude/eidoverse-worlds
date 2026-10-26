@@ -26,11 +26,8 @@ export function initOccupants() {
   cache.init();
 }
 
-/** The full gate for one mounted occupant, assembled from the served verdict
- *  plus this page's runtime truths. `occ` is {path, av} — the avatar path
- *  the roster knows the body by, and the live wrapper (null while loading).
- *  Returns {applied:true, contactY, scale} or {applied:false, reason} — the
- *  reason is the declared string, shared verbatim with the other readers. */
+/** The full gate for one mounted occupant: served verdict plus this page's runtime truths. `occ` is {path, av}.
+ *  Returns {applied:true, contactY, scale} or {applied:false, reason}; the reason is shared verbatim with other readers. */
 export function occupyCorrectionFor(occ, sock) {
   if (!occ || !occ.path) return { applied: false, reason: 'no occupant context' };
   if (!occ.av) return { applied: false, reason: 'body loading' };

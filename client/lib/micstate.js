@@ -98,11 +98,8 @@ export function micAnalyserLevel() { return _meter(); }
 
 let _raw = null, _gated = null, _released = false;
 
-/** Gate a raw device stream and return what should go on the wire.
- *  A SYNTHETIC source bypasses the gate outright: no room noise to gate, and
- *  the gate's WebAudio graph cannot carry it on a stalled headless clock — the
- *  generator track goes out as-is, frames as data. Same rule voice.js:610-615
- *  applied; it is the source's nature that decides, never the transport's. */
+/** Gate a raw device stream and return what goes on the wire. A synthetic source bypasses the gate (no room noise,
+ *  and the graph can't carry it on a stalled headless clock): the source's nature decides, never the transport. */
 export function gateFor(rawStream) {
   if (!rawStream || rawStream.synthetic) { _raw = _gated = _lane = rawStream; return rawStream; }
   _raw = rawStream;
@@ -134,13 +131,7 @@ export function gateRelease() {
   _gated = _lane = null;
 }
 
-/** Turn the mic on or off. The ONE entry point every UI uses.
- *
- *  🔴 voice.js:508 used to route here to `window.__sfuMic` and return before
- *  touching mesh state — which is exactly why the SFU had no mute: the flag it
- *  checked could never be set. #131's standalone form delegated to the mesh
- *  when no SFU hook was installed; the #132 cutover deletes the mesh, so with
- *  one transport there is no routing left to do, only the call. */
+/** Turn the mic on or off: the one entry point every UI uses. */
 export async function toggleMic() {
   const fn = typeof window !== 'undefined' ? window.__sfuMic : null;
   // the server's "no relay" (net.js sets __voiceRelayAbsent at join) outranks the __sfuMic hook, which is installed
@@ -159,18 +150,8 @@ export async function toggleMic() {
   return on;
 }
 
-/** 🔴 THE ONE ANSWER TO "IS MY MIC ON". The audit found EIGHT sources of truth
- *  and four different fallback ladders across mictoggle/audiopanel/voicemouths/
- *  stt/tts/ttsrow/chat — each subtly different, one of which (ttsrow) returned
- *  a hard false with no fallback, so the TTS row never greyed out on the mesh.
- *
- *  A mic is on when a LANE exists, a DEVICE is capturing, and the user has not
- *  muted — the three-state distinction voice.js:56-66 documented and the SFU
- *  never had (sfuMicOn() is two-state and does not read track.enabled, so a mic
- *  muted by disabling its track still reported micPublished:true).
- *
- *  Transports report device liveness through setMicLive(); everything else in
- *  the client asks HERE. */
+/** The one answer to "is my mic on": a LANE exists, a DEVICE is capturing, and the user hasn't muted. Transports
+ *  report device liveness through setMicLive(); everything else asks here. */
 let _deviceLive = false;
 export function setMicLive(on) {
   const next = !!on;
@@ -186,22 +167,9 @@ export const micOn = () => !!_lane && _deviceLive && !_muted;
  *  keeps asking micOn(). */
 export const micDeviceLive = () => _deviceLive;
 
-/** Release the DEVICE while keeping the lane. Ported verbatim from voice.js:909
- *  — the reasoning is R's and was paid for in production:
- *
- *  (1) The raw device track MUST stop, or the OS recording indicator stays lit
- *      while this function's whole promise is that it goes away.
- *  (2) The GATED track must NOT stop. stop() is a one-way door and a
- *      MediaStreamDestination track cannot be restarted, so re-enabling the mic
- *      would need a new graph and a renegotiation with every peer. R,
- *      2026-08-09: "we don't want to tear down audio tracks at all unless
- *      someone leaves... that's how we ran into people not hearing each other
- *      and unmute lag while it sets it all up again. Now we just mute the lane."
- *
- *  So: kill the device, leave the lane at zero gain. Senders keep a live track,
- *  no renegotiation, and reacquiring reconnects a new source into the SAME
- *  graph. The SFU had NO equivalent — sfuClose() closes the pc but never stops
- *  a device, so the recording indicator survived a disconnect. */
+/** Release the device, keep the lane: stop the raw track (or the OS recording light stays on) but never the gated
+ *  track; a MediaStreamDestination track can't restart, so stopping it forces a new graph and renegotiation.
+ *  Reacquire reconnects into the same graph. */
 export function releaseMicrophone() {
   if (!_lane) return;
   // stop ONLY the raw device (rule 2: a stopped destination lane can't restart). Where the lane IS the device
@@ -224,9 +192,6 @@ export async function hasMicDevice() {
   } catch { return false; }
 }
 
-/** Hear your own lane, exactly as the room hears it. Tapped AFTER the gate's
- *  gain node (micgate.js:150), so when the gate closes the monitor goes quiet —
- *  a monitor on the raw source would sound perfect while the room heard
- *  nothing, which is the confusion it exists to resolve. */
+/** Hear your own lane as the room hears it: tapped AFTER the gate's gain node (micgate.js), so a closed gate is quiet. */
 export function selfMonitor(on, level = 0.35) { return setMonitor(on, level); }
 export const selfMonitoring = () => monitoring();

@@ -308,10 +308,8 @@ const history = [];   // recent lever moves, for the debug surface
 
 // ---- loading grace + the calm signal (§16.2.D) ------------------------------
 
-/** The busy predicate: is the engine loading RIGHT NOW? framebudget's busy() carries what its producers report —
- *  the warm conductor (queued or mid-item) and loadwork's cpu/gpu lanes — and the promote tail's pending boulders
- *  are read directly. (syncgate's deferred links are not loading in this sense: they link off-thread and cost no
- *  frames.) */
+/** Is the engine loading right now? framebudget's busy() (warm conductor, loadwork lanes) plus the promote tail's
+ *  pending boulders; syncgate's deferred links don't count (off-thread, no frame cost). */
 function loadingBusy() {
   return budgetBusy() || promoteTailPending() > 0;
 }
@@ -332,10 +330,8 @@ let calmFor = 0;          // consecutive smooth AND non-busy seconds (never
 let calmReached = false;  // sticky: arrival proved smooth once this session
 const calmWaiters = [];
 
-/** Resolves once smoothness (the restore ladder's >52fps read, fed at 1Hz)
- *  has held 5 consecutive seconds with the busy predicate false throughout.
- *  Sticky: this is a storm-edge signal for boot-deferred extras, and once
- *  the arrival has proven itself the answer stays yes. */
+/** Resolves once >52 fps has held 5 consecutive seconds with loadingBusy() false throughout. Sticky: a one-time
+ *  signal for boot-deferred extras. */
 export function whenCalm() {
   if (calmReached) return Promise.resolve();
   return new Promise((res) => calmWaiters.push(res));

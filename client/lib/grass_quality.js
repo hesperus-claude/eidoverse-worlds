@@ -37,10 +37,8 @@ export function makeGrassQuality(store) {
   };
 }
 
-/** How many of a stroke's `n` instances a density factor keeps. Off (≤0) is
- *  genuinely zero — an InstancedMesh with count 0 draws nothing — while any
- *  positive factor keeps at least one plant so a thinned field never reads
- *  as mowed. */
+/** How many of a stroke's `n` instances a density factor keeps: ≤0 is genuinely zero; any positive factor keeps at
+ *  least one plant, so a thinned field never reads as mowed. */
 export function densityCount(n, f) {
   if (f <= 0) return 0;
   return Math.max(1, Math.round(n * Math.min(1, Math.max(0.05, f))));

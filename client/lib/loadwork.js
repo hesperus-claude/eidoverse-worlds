@@ -35,14 +35,8 @@ const LOG_THRESHOLD_MS = 120;
 const loadLog = (globalThis.__loadLog = []);
 const jankLog = (globalThis.__loadJank = []);
 
-/** Start a labelled piece of load work. Returns a record:
- *    phase(name)  — enter a named phase (closes the previous one)
- *    tick()       — await this inside loops; yields a frame when the current
- *                   slice is over budget, otherwise resolves immediately
- *    yield()      — unconditional yield to the next frame
- *    end()        — close and log one summary line if the work was heavy
- *  Wall time includes awaited downloads and queue waits — give them their own
- *  phases so the summary tells the truth about where time went. */
+/** Start a labelled piece of load work: phase(name), tick() (yields only when over budget), yield(), end() (logs
+ *  heavy work). Wall time includes awaited downloads: give them their own phases so the summary tells the truth. */
 export function beginWork(label) {
   const t0 = performance.now();
   const phases = [];
@@ -104,10 +98,8 @@ export function beginWork(label) {
   return rec;
 }
 
-/** Record a one-line load fact outside any work record. beginWork only logs
- *  work over 120ms — the right filter for stalls, the wrong one for wins: a
- *  VRM pool hit (§19b) finishes in ~0ms and is exactly the line that proves
- *  the cache worked. Same console tag, same automation mirror, same cap. */
+/** Record a one-line load fact outside any work record: beginWork logs only >120 ms, which hides the wins (a ~0 ms
+ *  VRM pool hit, §19b). Same console tag, mirror and cap. */
 export function loadNote(line) {
   console.log(`[load] ${line}`);
   if (loadLog.length < 300) loadLog.push(line);
@@ -115,22 +107,9 @@ export function loadNote(line) {
 
 // ---- serialization ----------------------------------------------------------
 
-/** Queue heavy leaf work. LEAF OPERATIONS ONLY — see the invariant at the top
- *  of this file. Errors reach the caller; the lanes themselves never break.
- *
- *  Two lanes, because two different resources are being protected:
- *    cpu — parses and skeleton passes: genuinely synchronous main-thread work.
- *          Strictly one at a time; two of these in the same frames is the
- *          stall this module exists to prevent.
- *    gpu — pipeline compiles: internally frame-yielding codegen followed by
- *          seconds of WAITING on driver-side pipeline creation. Serializing
- *          that wall time was a mistake this trace paid for: a body queued
- *          19s behind crates whose "work" was mostly idle await. Two in
- *          flight overlaps the waits; the codegen slices still interleave
- *          through the frame loop.
- *
- *  Priority: 2 = your own body, 1 = anyone's body, 0 = objects. People
- *  materialize before furniture, always. Reorders WAITING work only. */
+/** Queue heavy LEAF work (see the invariant up top); errors reach the caller, the lanes never break. Lanes: cpu
+ *  (parses) and gpu (pipeline compiles), two in flight each because their wall time is mostly awaits. Priority
+ *  2 own body > 1 bodies > 0 objects; reorders waiting work only. */
 // cpu at 2: a parse's wall time is mostly awaits (draco workers, image decode), so two in flight overlap them
 const lanes = {
   cpu: { jobs: [], running: 0, max: 2 },
@@ -157,10 +136,7 @@ function pumpLane(l) {
     })();
   }
 }
-/** Whether any lane holds running or queued work — the same truth checkIdle()
- *  gates on, exposed as a predicate for the governor's loading grace
- *  (§16.2.D): storm fps under live lane work is loading, not a performance
- *  regime. */
+/** Whether any lane holds running or queued work (checkIdle()'s truth), for the governor's loading grace (§16.2.D). */
 export const laneBusy = () => Boolean(
   lanes.cpu.running || lanes.gpu.running
   || lanes.cpu.jobs.length || lanes.gpu.jobs.length);

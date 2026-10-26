@@ -45,11 +45,8 @@ export function contactFrameOf(avatar, point, standoff = 0.02) {
 }
 
 /**
- * A normalized entry → the live target function avatar.setReach re-evaluates
- * every frame. `ownerId` is the REACHER (for 'self' space). Bodies resolve
- * lazily inside the function: a reach at someone still loading starts
- * tracking them the moment their avatar exists, instead of failing once at
- * descriptor time and never again.
+ * A normalized entry → the live target function avatar.setReach re-evaluates each frame. `ownerId` is the REACHER.
+ * Bodies resolve lazily, so a reach at someone still loading starts tracking once their avatar exists.
  */
 export function resolveEntryFn(ownerId, entry) {
   const t = entry.t;
@@ -102,16 +99,9 @@ export function applyRemoteReach(r, sample) {
 }
 
 /**
- * Reach/touch/release EVENTS off the raw sample stream — deliberately
- * decoupled from applyRemoteReach, which runs only once the avatar has
- * loaded: a touch that begins during a multi-second VRM load must still be
- * heard (this exact race ate the first live event). Called per pushed
- * sample; edge-triggered, so idle samples cost one null check.
- *
- * A body FIRST OBSERVED mid-reach is a baseline, not a transition (the
- * approach lesson, issue #39): a late joiner must not hear "X touches you"
- * for a hand that has rested there since before they arrived — the first
- * sample seeds silently.
+ * Reach/touch/release events off the raw sample stream, decoupled from applyRemoteReach (which waits for the avatar):
+ * a touch during a VRM load must still be heard. Edge-triggered. A body first seen mid-reach is a baseline, not a
+ * transition (#39): the first sample seeds silently.
  */
 export function noteReachEvents(r, pose) {
   const bag = normalizeReachBag(pose?.reach);

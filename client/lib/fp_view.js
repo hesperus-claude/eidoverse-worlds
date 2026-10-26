@@ -17,19 +17,9 @@ export const FP_GAZE_DROP = 0.6;
 // near the top, where a head would be, without claiming to know the anatomy.
 export const FP_BOUNDS_EYE = 0.85;
 
-/** Where this rig's first-person eye is, in world space.
- *
- *  head    [x,y,z] world position of the rig's head bone, or null when the
- *          rig has none. Callers pass the LIVE bone position — that is what
- *          makes a seated body's eye sit at its seated head, and a body on a
- *          moving socket keep its eye on the socket.
- *  bounds  { min:[x,y,z], max:[x,y,z] } world bounds of the rig's own mesh,
- *          or null. The no-head fallback.
- *  name    who, for the error message.
- *
- *  Returns { eye:[x,y,z], mode:"head"|"bounds" }. Throws (legibly, naming
- *  the rig) when neither anchor exists — a caller that can't place an eye
- *  must say so, not render from inside the mesh. */
+/** The rig's first-person eye in world space, from the LIVE head bone position (so a seated or mounted eye follows)
+ *  or, failing that, the mesh bounds. Returns { eye, mode:"head"|"bounds" }; throws naming the rig when neither
+ *  exists, rather than render from inside the mesh. */
 export function resolveFirstPersonAnchor({ head, bounds, name = "this body" } = {}) {
   if (head && head.length === 3 && head.every(Number.isFinite)) {
     return { eye: [head[0], head[1] + FP_EYE_LIFT, head[2]], mode: "head" };
@@ -50,24 +40,9 @@ export function resolveFirstPersonAnchor({ head, bounds, name = "this body" } = 
     `${name}: rig has no head bone and no measurable mesh bounds — first-person view unsupported for this avatar`);
 }
 
-/** Compose and render one first-person frame.
- *
- *  camera         { position:{set(x,y,z)}, lookAt(x,y,z) } — a THREE camera,
- *                 or anything shaped like one in tests.
- *  yaw            the rig's facing (root.rotation.y). For a mounted body the
- *                 root carries the SOCKET transform, so the gaze follows the
- *                 seat — including a seat mid-swing.
- *  head/bounds/name  → resolveFirstPersonAnchor.
- *  setOwnVisible  hides/shows the avatar's own visual root (mesh, nameplate,
- *                 speech bubble, typing pill — all of it is "own body" to a
- *                 first-person frame).
- *  render         synchronously produces the frame; its return value is passed
- *                 through. A Promise/thenable is rejected explicitly: async
- *                 rendering needs a separately designed re-entrant exclusion.
- *
- *  The body is hidden strictly around synchronous render() and restored in finally — an
- *  exclusion that survived a throw would leave the body invisible to every
- *  OTHER viewer of this renderer's scene. */
+/** One first-person frame. yaw is root.rotation.y (for a mounted body, the socket's, so gaze follows the seat).
+ *  render must be synchronous (a thenable is rejected); the own body is hidden only around it and restored in
+ *  finally, or a throw would hide it from every other viewer. */
 export function composeFirstPerson({ camera, yaw, pitch, head, bounds, name, setOwnVisible, render }) {
   const { eye } = resolveFirstPersonAnchor({ head, bounds, name });
   const fx = Math.sin(yaw), fz = Math.cos(yaw);

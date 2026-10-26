@@ -1,31 +1,11 @@
-/** The phonemizer, running where its loader is fast.
+/** The phonemizer in a Worker: piper's loader uses synchronous XHR (guarded by ENVIRONMENT_IS_WORKER), legal and
+ *  fast only in a Worker; on the main thread the build measured ~480x slower. The 17 MB data isn't the cause.
  *
- *  🔴 WHY THIS FILE EXISTS — measured 2026-08-09, same bytes, same code:
- *
- *      module build in Bun (native fs):       57 ms
- *      module build on the browser main thread:   27,551 ms      ← 480x
- *
- *  So the 17 MB espeak-ng data package is NOT the problem, and trimming it (the
- *  advice every search result gives) would not have helped. The gap is in HOW
- *  the browser path loads: piper-o91UDS6e.js contains two
- *
- *      xhr.open("GET", url, false)
- *
- *  — synchronous XHR — and its own comment concedes that browsers deprecated
- *  "synchronous binary XHRs outside webworkers in modern browsers". Those calls
- *  are guarded by ENVIRONMENT_IS_WORKER: inside a Worker the synchronous path is
- *  legal and fast, on the main thread it is the slow deprecated one.
- *
- *  Running here is therefore not a nicety about avoiding UI jank. It is what
- *  makes the load fast at all.
- *
- *  PROTOCOL — deliberately tiny, because the seam already existed in
- *  piperphon.js (phonemize / warmPhonemizer / phonReady):
+ *  PROTOCOL (the seam is piperphon.js's phonemize / warmPhonemizer / phonReady):
  *      → { id, op: 'warm',      wasmPaths }         ← { id, ok }
  *      → { id, op: 'phonemize', text, voice, wasmPaths } ← { id, ok, ids }
  *      any failure                                   ← { id, ok: false, error }
- *  Every reply carries the id it answers, so a slow call cannot resolve a fast
- *  one's promise.
+ *  Every reply carries the id it answers, so a slow call cannot resolve a fast one's promise.
  */
 
 let _mod = null;

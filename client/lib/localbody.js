@@ -219,13 +219,8 @@ export function updateMountedMe(dt) {
   else escapeHeld = 0;
 }
 
-/** Nearest declared seat: distance to the SOCKET's world point, not the
- *  entity's origin — a swing's pivot frame is not where you sit, and on a
- *  ferry the helm can be a deck-length from the hull's center. Every slot
- *  competes, not just the first. `arg` narrows to one entity by id prefix
- *  (case-insensitive), so `/sit 34` reaches 3485c78e without the full hash.
- *  A seat someone is already on is taken (one occupant per socket); the seat
- *  I'm on doesn't count. */
+/** Nearest declared seat, by the SOCKET's world point (not the entity origin); every slot competes. `arg` narrows by
+ *  case-insensitive id prefix. An occupied seat is taken; the seat I'm on doesn't count. */
 const _sitV = new THREE.Vector3();
 // R 10-11 00:47: X near the crates lifted her ~5 m: a seat declared on a sign 3 m up counted as 'near' (only the ground
 // distance was read). A plain X offers only a seat you could climb onto; naming one (/sit <name>) still reaches any.
@@ -256,13 +251,9 @@ function nearestSeat(arg, reach) {
   return best;
 }
 
-/** Sit ON something: nearest socket within arm's reach (or a named entity
- *  from anywhere). When nothing is in reach but a seat exists further out,
- *  SAY so — the silent ground-sit fallback read as "sitting is broken" to
- *  anyone standing four meters from a swing they could name but not see.
- *  In a world the authority is asked first (`use {id, action, args: {slot}}`):
- *  it checks who may and answers with what the body does; nothing is logged.
- *  Already seated, I may move straight to a socket that allows it (fromSeat). */
+/** Sit ON the nearest socket in reach (or a named entity from anywhere); with a seat only further out, say so rather
+ *  than ground-sit silently. In a world the authority is asked first (`use {id, action, args: {slot}}`, not logged);
+ *  already seated, I may move straight to a socket that allows fromSeat. */
 let sitTicket = 0;   // the latest sit ask; getting up (or asking again) makes every earlier answer stale
 export function trySitOn(arg, slot = null) {
   const mine = avatarMounts.get(CONFIG.name);
@@ -452,11 +443,8 @@ function clearPins() {
 const MAX_PUSH = 6;
 const _shove = new THREE.Vector3();
 
-/** Every external force on my body lands here — a directed push, a blast,
- *  an undirected knock-over. I own the body, so I simulate: standing → the
- *  sim starts with this lean; mid-tumble → the running sim takes it as an
- *  impulse; settled-but-down → a fresh sim starts from the lying pose (a
- *  corpse can be kicked, and tumbles again). */
+/** Every external force on my body lands here, and I simulate: standing → a sim starts with this lean; mid-tumble →
+ *  an impulse; settled-but-down → a fresh sim from the lying pose. */
 function applyShove(lean, by) {
   const me = getMe();
   if (!me) return;

@@ -120,12 +120,8 @@ export function setMe(av) {
   armFlightFor(av);
 }
 
-/** Arm (or disarm) human flight for whatever body this is now.
- *
- *  Re-run on every swap, never cached: the capability binds to the RIG, so
- *  putting on a winged body grants it and putting on a commons one takes it
- *  away. That is the same action-time rule the agent side follows, and the
- *  reason it is a function rather than a flag set once at boot. */
+/** Arm (or disarm) human flight for the body worn now. Re-run on every swap, never cached: the capability binds to
+ *  the RIG (the agent side's action-time rule too). */
 function armFlightFor(av) {
   try {
     if (!av?.vrm?.scene) return;

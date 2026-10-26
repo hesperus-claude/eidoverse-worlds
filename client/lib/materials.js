@@ -2,7 +2,7 @@
 // shader-graph shape (wetness, cloud shade, shadow-receive policy), so weather and sky only ever write uniforms: on
 // three's WebGPU renderer a graph-shape change recompiles the pipeline (TEL0S_NOTES §12). The wraps are client-owned
 // and driven by folded state (effectiveSky), not by upstream systems that arrive seconds later.
-//   wetness     — a shape-identical port of weather_system.js wrapMaterial, driven by our uniforms
+//   wetness     — a shape-identical port of upstream's weather wrapMaterial, driven by our uniforms
 //   cloud shade — our own cheap field (two taps of a boot-made tileable noise, wind-scrolled, sun-projected);
 //                 upstream's needs textures that don't exist before the sky modules do
 // Prepared meshes are marked userData.noWet + noCloudShadow so upstream sweeps skip them; unprepared ones (mods)
@@ -214,29 +214,8 @@ function wrapMaterial(mat, receiver, pbr) {
 const preparedMats = new WeakSet();
 const stats = { meshes: 0, wrapped: 0, unlit: 0 };
 
-/** Upgrade a transmissive material to the NODE class, or it draws nothing.
- *
- *  three's WebGPU renderer does support transmission -- it allocates a backdrop
- *  buffer per render object whose `material.transmission > 0` -- but only
- *  MeshPhysicalNodeMaterial builds the graph that reads it. GLTFLoader's
- *  standard path produces a plain MeshPhysicalMaterial, so a glTF carrying
- *  KHR_materials_transmission arrives with transmission set, `visible: true`,
- *  its mesh present and its triangles counted, and renders as nothing at all:
- *  "all light passes through this surface" with no code to say what comes
- *  through. A correct file the renderer cannot honour.
- *
- *  Measured on mythos-alpha's Glass: transmission 1, ior 1.5, 581 triangles,
- *  MeshPhysicalMaterial, invisible. The same values on a node material render.
- *
- *  Copies by property name rather than field-by-field, because the interesting
- *  list is long (transmission, thickness, attenuation, ior, sheen, clearcoat,
- *  specular, iridescence, every map) and a hand-written subset is a slow leak
- *  of whichever property someone forgot. Textures are shared, not cloned.
- *
- *  Non-transmissive materials are LEFT ALONE. MeshPhysicalNodeMaterial is more
- *  expensive to compile than the standard path and the overwhelming majority of
- *  materials in this world want nothing from it; upgrading everything "for
- *  consistency" would spend that on every body in the room. */
+/** Upgrade a transmissive material to MeshPhysicalNodeMaterial, or WebGPU draws it as nothing. Copies by property
+ *  name (no hand-kept subset); textures shared; non-transmissive materials left alone (costlier compile). */
 // source → replacement, memoised (WeakMap, weak both sides) so meshes sharing a material share one replacement
 const TRANSMISSIVE_REPLACEMENT = new WeakMap();
 const TRANSMISSIVE_UPGRADED = new WeakSet();
@@ -298,7 +277,7 @@ export function prepareMaterial(mat, receiver = null) {
   if (!mat?.isNodeMaterial || preparedMats.has(mat)) return false;
   preparedMats.add(mat);
   if (mat.isMeshBasicNodeMaterial) { stats.unlit++; return false; }
-  // upstream's own PBR duck test (sky_system wrapCloudShadows): real PBR gets
+  // upstream's own PBR duck test (its wrapCloudShadows): real PBR gets
   // cloud shade + roughness/metalness terms; other lit node materials (MToon
   // bodies) get the wetness color term only — exactly what the sweeps did
   const pbr = mat.isMeshStandardNodeMaterial || mat.isMeshPhysicalNodeMaterial
@@ -316,9 +295,6 @@ export function prepareMaterial(mat, receiver = null) {
   return true;
 }
 
-/** Pass a whole object through the factory: marks every mesh so upstream's
- *  sweeps skip it, applies the shadow-receiving policy for its kind, and
- *  wraps every material. Idempotent; call before the first compile. */
 // No-cast body meshes: kintsugi seams (threaded through the skin, they self-shadow into scratches) and wings (one
 // mesh, and castShadow is per object: the only way to drop wing-on-wing shadow, at the cost of wings shadowing body
 // and ground). Exported because the body shadow decision is made in setBodyShadows below.
@@ -348,11 +324,8 @@ export function setMyShadowPref(on) {
   try { localStorage.setItem(PREF_MY_SHADOW, on ? '1' : '0'); } catch { /* private window */ }
   bus.emit('my-shadow', !!on);
 }
-/** Decide and apply the own body's shadows: the pref OR its lamp. Before a flip ON, `lit(label, getMeshes)` warms
- *  the lit+shadow pipelines (receiveShadow is in the cache key) and `warm(label, getMeshes)` the depth pass — both
- *  off the frame, through the conductor; bodies never reach the caster budget's warm. `pref` may be a getter: the
- *  decision is re-read AFTER the warms (a toggle while a warm was pending ends where the pref is, not where it was);
- *  `still()` says whether the body is still the one worn. */
+/** Own body shadows = the pref OR its lamp. Before a flip ON, `lit` and `warm` compile the lit and depth pipelines off
+ *  the frame; `pref` (maybe a getter) is re-read AFTER the warms, so a mid-warm toggle wins. `still()`: body still worn? */
 export async function applyOwnBodyShadow(av, { pref = myShadowPref, warm = null, lit = null, still = () => true } = {}) {
   const root = av?.vrm?.scene;
   if (!root?.traverse) return false;
@@ -372,6 +345,9 @@ export async function applyOwnBodyShadow(av, { pref = myShadowPref, warm = null,
   return want;
 }
 
+/** Pass a whole object through the factory: marks every mesh so upstream's
+ *  sweeps skip it, applies the shadow-receiving policy for its kind, and
+ *  wraps every material. Idempotent; call before the first compile. */
 export function prepareObject(root, { kind = 'model', foliage = true } = {}) {
   // a missing root is a no-op: the module-init call passes `ground`, null before terrain (and in harnesses), and a
   // throw at import takes the whole client down

@@ -5,13 +5,9 @@
 export const BLADE_VERTS = 10;    // (LOOPS+1) × 2 — vegetation.js LOOPS = 4
 export const BLADE_INDICES = 24;  // LOOPS × 6
 
-/** Far-LOD index subset: keep ceil(blades × keep) whole blades, evenly
- *  strided across the tuft (every kth blade, NOT the first k — construction
- *  order scatters blades radially, so a stride keeps the tuft balanced).
- *  `index` is the source index array, `vertexCount` the geometry's position
- *  count, `keep` the fraction of blades the far field draws. Returns a
- *  same-typed array of index entries, or null when the geometry is not
- *  blade-shaped or the subset would not actually drop anything. */
+/** Far-LOD index subset: keep ceil(blades × keep) whole blades, strided across the tuft (every kth, NOT the first k:
+ *  construction order scatters blades radially). Returns a same-typed index array, or null when the geometry isn't
+ *  blade-shaped or nothing would drop. */
 export function bladeLodIndex(index, vertexCount, keep) {
   if (!index || !(keep > 0) || keep >= 1) return null;
   const blades = index.length / BLADE_INDICES;

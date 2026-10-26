@@ -70,12 +70,8 @@ export async function phonemize(text, voice, wasmPaths) {
   return ids;
 }
 
-/** Build the module NOW, before anyone speaks.
- *
- *  The build is the expensive part (~27s on the main thread, which is why it
- *  moved to a worker). It depends on nothing but the wasm paths, so it belongs
- *  inside the load the user is already watching rather than in front of their
- *  first utterance. */
+/** Build the module now, inside the load the user is already watching, not in front of their first utterance:
+ *  the build is the expensive part and needs nothing but the wasm paths. */
 export async function warmPhonemizer(wasmPaths, onProgress = () => {}) {
   if (_ready) return true;
   const t0 = performance.now();

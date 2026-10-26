@@ -37,15 +37,9 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** A thing's history page merged into what the panel shows (editpanels' History; client-check HT4-HT6, 10-17), against the
- *  authority's reply: `history {id, limit, before?}` → {entries: [{seq (the change entry's seq), diff (computed by the
- *  authority against the whole log, never against the page), …}], next: the last row's seq, or null at the beginning}; a
- *  `before` page holds the rows with seq < before. R 10-04: recent by default, deeper on request.
- *  - an Older… read (`more`) appends, by seq, and takes its cursor; it marks the panel `paged`;
- *  - a refresh (the thing changed) shows the newest page and its cursor — unless the person has paged: then the pages
- *    they read stay where they meet the new page, with the deeper cursor (a refresh landing after an Older… read never
- *    undoes it); one that doesn't meet starts over.
- *  {entries, next, paged} */
+/** Merge a `history {id, limit, before?}` reply (rows by seq; next = last row's seq or null) into the panel's rows
+ *  (client-check HT4-HT6). An Older… read (`more`) appends and marks `paged`; a refresh shows the newest page unless
+ *  paged, then keeps the read pages where they meet it (else starts over). Returns {entries, next, paged}. */
 export function mergeHistory({ entries, next, paged = false }, rows, rNext, more) {
   const sorted = (xs) => { const m = new Map(); for (const e of xs) m.set(e.seq, e); return [...m.values()].sort((a, b) => b.seq - a.seq); };
   if (more) return { entries: sorted([...entries, ...rows]), next: rNext, paged: true };

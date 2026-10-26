@@ -81,10 +81,8 @@ export function nextFrame() {
   });
 }
 
-/** May `lane` spend now? Returns a GRANT (truthy; pass it to spent()) or false. The first grant of a frame always
- *  passes, even under debt (so a producer that overruns every frame still progresses; its overrun delays the others);
- *  `waited` (frames this caller has been denied in a row, turn() keeps it) ≥ AGE_FRAMES passes; `gpu: true` asks for
- *  this frame's one gpu unit. */
+/** May `lane` spend now? Returns a GRANT (pass it to spent()) or false. A frame's first grant passes even under
+ *  debt; `waited` ≥ AGE_FRAMES passes; `gpu: true` asks for this frame's one gpu unit. */
 export function ask(lane, { gpu = false, waited = 0 } = {}) {
   const l = laneOf(lane);
   const starved = waited >= AGE_FRAMES;
@@ -102,11 +100,9 @@ export function ask(lane, { gpu = false, waited = 0 } = {}) {
   return { held: l.ewma, frame: frameNo };
 }
 
-/** Charge measured main-thread time, releasing `grant`'s hold if it was taken this frame (a hold from an earlier
- *  frame was cleared by the roll). With `since` (when the slice began): a slice that began before this frame resumed
- *  from an await (a fetch, a worker, a queue) and its main-thread share is unknowable — it charges nothing and leaves
- *  the lane's estimate alone, rather than bill this frame for the render loop's own time. The undercount is at most
- *  one slice per resumption. */
+/** Charge measured main-thread time and release `grant`'s hold if taken this frame. A slice whose `since` predates
+ *  this frame resumed from an await, so its share is unknowable: it charges nothing (at most one slice undercounted
+ *  per resumption) rather than bill the render loop's own time. */
 export function spent(lane, ms, since = null, grant = null) {
   const unknown = since != null && since < frameStart;
   const v = unknown ? 0 : since == null ? Math.max(0, ms) : Math.max(0, Math.min(ms, performance.now() - since));

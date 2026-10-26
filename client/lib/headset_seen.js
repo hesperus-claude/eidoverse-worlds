@@ -17,24 +17,14 @@ export function headsetSeenAt(raw) {
   return Number.isFinite(t) && t > 0 ? t : null;
 }
 
-/** The legacy marker is MIGRATED ON FIRST OBSERVATION, not honoured forever (#197 round-two review
- *  B3). Previously '1' mapped to 0 and 0 returned true unconditionally, so exactly the users carrying
- *  the old marker — the population the original defect created — stayed "headset-capable" forever,
- *  even with the headset gone or the machine replaced. Automatic backend choice never expired.
- *
- *  Stamping it with the time we FIRST SAW it under this build is the honest reading of what the
- *  marker says: "a headset was used here at some unknown time before now". That starts the same
- *  30-day clock every real timestamp gets, and one granted session re-stamps it properly.
- *
- *  Returns the value to persist, or null if nothing needs writing. The caller owns storage. */
+/** The legacy '1' marker is migrated on first observation, not honoured forever: stamped with now, it starts the
+ *  same 30-day clock a real timestamp gets (#197). Returns the value to persist, or null; the caller owns storage. */
 export function migrateHeadsetSeen(now, raw) {
   return raw === '1' ? String(now) : null;
 }
 
-/** Has a headset been used here recently enough to still choose the backend for it?
- *  `now` and `raw` only — the legacy marker is not special-cased here, because by the time this is
- *  asked the caller has migrated it. An unmigrated '1' is treated as UNKNOWN, which is the safe
- *  answer: the visor still works, it just reloads once instead of entering in place. */
+/** Has a headset been used here recently enough to still choose the backend for it? An unmigrated '1' reads as
+ *  unknown, the safe answer (the visor still works; it reloads once instead of entering in place). */
 export function headsetSeenRecently(now, raw) {
   const at = headsetSeenAt(raw);
   if (at === null || at === 0) return false;

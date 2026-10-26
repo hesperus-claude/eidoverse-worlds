@@ -263,19 +263,12 @@ function realizeModel(id, cur, obj) {
 
 // ---- the promote tail (§16.2.C) ---------------------------------------------
 
-/** id -> the realized object awaiting its heavy tail. Identity IS the guard:
- *  the drain runs an item only while entities.get(id) is still this object —
- *  deleted/demoted/replaced entities drop their tail silently (retire and
- *  demote also cancel eagerly, so a demoted stand-in can never inherit the
- *  real model's collider). */
+/** id -> the realized object awaiting its heavy tail. Identity is the guard: the drain runs an item only while
+ *  entities.get(id) is still this object (retire and demote also cancel eagerly). */
 const promoteTail = new Map();
 
-/** Sharing the per-lib collider derivations is sound exactly when the
- *  subtree is the pristine clone: no occupant glued in (a mount verb may have
- *  landed in the gap; stepped-out occupants sit at the scene root and don't
- *  count), no part motion that may already have bent a named node since the
- *  clone was cut. Everything else builds per-entity — correctness beats
- *  sharing (§16.2.C). */
+/** Per-lib collider derivations are shared only for a pristine clone: no occupant glued in, no part motion that may
+ *  have bent a named node. Everything else builds per-entity (§16.2.C). */
 function shareableLib(id, cur) {
   if (!cur?.model) return null;
   const kids = sceneChildren.get(id);
@@ -343,13 +336,8 @@ export function drainPromoteTail() {
   }
 }
 
-/** An Empty (PROTOCOL §3.2): a transform with nothing to draw — a pivot, a
- *  group parent, a target. A bare Group, so every consumer of the entities
- *  map (mounts, motion, the hierarchy, selection, emitters) treats it as an
- *  entity; it owns no collider, no lamps, no caster slot and no load. It
- *  announces itself as a 'spawn' because that is the event the comp
- *  evaluators (emitters, pictures) rebuild on. A light component on it
- *  brings its gizmo (syncCompLight), which is how a bare bulb is seen. `kind` is the fold's word for it (kindOf). */
+/** An Empty (PROTOCOL §3.2): a bare Group, so every entities-map consumer treats it as an entity; no collider, lamps,
+ *  caster slot or load. Announced as 'spawn' (what comp evaluators rebuild on); a light comp brings its gizmo. */
 function createHost(id, ent, kind) {
   reserve(id, { kind });
   const g = new THREE.Group();
@@ -383,10 +371,8 @@ function relabelHost(id) {
   if (kind === 'model' || kind === 'mesh' || kind === t.kind) return;
   t.kind = kind;
 }
-/** A mesh thing (componentspec `mesh`, R 10-12): a parametric body with no model, drawn as one THREE.Mesh whose single
- *  material is named 'surface' so hesperus/material (and its :surface slot) colours it as it colours a model's. Base-centred
- *  like a measured model (the authority's boxOfM): it stands on its own origin. The same tail a model gets: a collider fitted
- *  in its local frame, a caster slot. A changed shape or size rebuilds the geometry in place. */
+/** A mesh thing (componentspec `mesh`): one THREE.Mesh with a single material named 'surface', base-centred like a
+ *  measured model (boxOfM), with a model's tail (collider, caster slot). A shape or size change rebuilds in place. */
 function meshGeometry({ shape, size: [x, y, z] }) {
   const r = x / 2;
   switch (shape) {
@@ -780,12 +766,8 @@ function tierFor(ent, current = null) {
   return chooseTier({ dist: entDist(ent), radius: residencyRadius(ent), quality: modelQuality.quality,
     recipe: lodNegotiable(ent?.model) ? lodRecipe : null, pressure: gpuPressure(), shed: modelQuality.shed, current, scale: ent?.scale ?? 1 });
 }
-/** The models⚙ row's whole behaviour — skypanel.js binds it to the row and
- *  shows what it returns: set the resident's dial, and say honestly whether
- *  a reduced tier can be asked from this browser at all (the variant's
- *  textures are KTX2: no transcoder, or a sequencer that published no
- *  recipe, and every placement stays full detail). Out of the DOM so the
- *  product-door harness gates it (tools/lod-client-test). */
+/** The models⚙ row's behaviour (skypanel.js binds it): set the resident's dial and say whether a reduced tier can be
+ *  asked from this browser at all (variants are KTX2). Out of the DOM so tools/lod-client-test.ts gates it. */
 export function dialModelQuality(v) {
   const q = modelQuality.setQuality(v);
   return lodNegotiable('eidoverse/assets/models/any.glb')
@@ -951,8 +933,6 @@ export const residencyDebug = () => {
 
 // ---- reconcile + dispatch ---------------------------------------------------
 
-/** One id, after its identity may have changed: create, retire, rebuild, or
- *  refresh — the fold's current word is final. */
 /** A thing and everything under it, after it was switched off or on (or moved under / out from under something off): off
  *  goes deepest first, on comes top first, by real depth, with the parent index rebuilt so each load re-seats its occupants. */
 function reconcileSubtree(id) {
@@ -962,6 +942,8 @@ function reconcileSubtree(id) {
   for (const k of order) reconcileId(k);
   if (!off) for (const k of order) execMount(k);   // (a no-op until both ends are realized; the load's own callback finishes it)
 }
+/** One id, after its identity may have changed: create, retire, rebuild, or
+ *  refresh — the fold's current word is final. */
 function reconcileId(id) {
   const ent = state.st.entities[id];
   const t = tracked.get(id);

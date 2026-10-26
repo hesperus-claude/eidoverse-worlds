@@ -54,10 +54,8 @@ function painted(base) {
   return base.mul(float(0.96).add(fbm(positionLocal.mul(3.0), 2).mul(0.06))).mul(baked());
 }
 
-/** ⚠️ `vec3(0xe4ded1)` is NOT a colour — it is a vec3 of the integer 14999249,
- *  and every surface in the building renders blown-out white. The hex has to be
- *  decoded through THREE.Color first, which also lands it in the renderer's
- *  working colour space rather than raw sRGB bytes. */
+/** ⚠️ `vec3(0xe4ded1)` is a vec3 of the integer 14999249 (blown-out white), not a colour: decode the hex through
+ *  THREE.Color first, which also lands it in the renderer's working colour space. */
 const lit = (hex, roughness, node) => {
   const c = new THREE.Color(hex);
   const m = new THREE.MeshStandardNodeMaterial({ color: hex, roughness, metalness: 0 });
@@ -98,10 +96,8 @@ function applyPaletteStyle(style) {
   }
 }
 
-/** Which palette slot a part wears. The plan names a structural `kind` and an
- *  author `mat`; author intent wins where it names a real slot, role decides
- *  otherwise — which is the seam a style catalog plugs into without adding
- *  palette members, since adding members is the part that costs a recompile. */
+/** Which palette slot a part wears: author `mat` wins where it names a real slot, else the structural `kind` decides.
+ *  A style catalog plugs in here without adding palette members (adding members costs a recompile). */
 function slotFor(part) {
   if (PALETTE[part.mat]) return part.mat;
   if (part.kind === 'floor') return 'floor';
@@ -113,13 +109,8 @@ function slotFor(part) {
   return 'wall';
 }
 
-/** Bake the analytic AO/daylight term into a merged geometry's vertex colours.
- *
- *  Pure function of position and normal, so adjacent boxes that meet at a face
- *  agree exactly and the shading is continuous across them without any welding
- *  or shared vertices. BoxGeometry keeps four vertices per face with true
- *  per-face normals, which is precisely what lets one wall's inside read dark
- *  while its outside reads sunlit. */
+/** Bake the analytic AO/daylight term into vertex colours: a pure function of position and normal, so boxes meeting at
+ *  a face shade continuously with no welding; BoxGeometry's per-face normals let a wall's inside read dark. */
 function paintGeometry(geo, shade) {
   const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal');
   const col = new Float32Array(pos.count * 3);
@@ -242,18 +233,8 @@ function buildGroup(plan) {
   return { group, geoms };
 }
 
-/** Hide the anchor object.
- *
- *  Until a `structure` entity can be spawned without a `lib` (PROTOCOL.md §10 —
- *  the amendment this slice defers on purpose), a building rides an ordinary
- *  spawn, so the models realizer independently makes whatever that lib loads
- *  into. The building's geometry is ours; two objects for one entity is a lie
- *  the inspector would faithfully report.
- *
- *  This must be RE-APPLIED rather than done once. The models realizer creates
- *  its object asynchronously (fetch + parse + compile), so a structure that
- *  realizes first finds no anchor to hide — and the crate then pops into
- *  existence seconds later, inside the house. Found live, not reasoned out. */
+/** Hide the anchor object: until a `structure` spawns without a `lib` (PROTOCOL.md §10), the models realizer also builds
+ *  that lib. Re-applied, not done once: the models object arrives async, after a structure that realized first. */
 function hideAnchor(id) {
   const anchor = entities.get(id);
   if (!anchor) return;

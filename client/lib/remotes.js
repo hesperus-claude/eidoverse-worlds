@@ -41,17 +41,9 @@ import { serverNow } from './serverclock.js';   // a re-export binds no local na
 const gens = new Map();
 export const remoteGen = (id) => gens.get(id) ?? 0;
 
-/** The capsule is a FLOOR, not a verdict (#196 review B1): a body that failed
- *  to load once — a dropped packet, a cold CDN, a server restart mid-join —
- *  must be retryable, or one transient failure becomes a session-long identity
- *  substitution. A record wearing the capsule carries `capsuleFor` = the path
- *  it still owes; this is the ONE owner that pays that debt.
- *
- *  Generation safety is by RECORD IDENTITY, the guard every other async
- *  continuation in this file uses: the record we started on must still be the
- *  one in the map when the load resolves, or the body we loaded belongs to
- *  nobody and is disposed. Bounded: RETRY_MAX attempts with backoff, so a
- *  genuinely dead asset costs a few requests, not a hot loop. */
+/** The capsule is a floor, not a verdict: a body that failed to load once must be retryable. A record wearing it carries
+ *  `capsuleFor` (the path still owed) and this is the one owner that pays it, guarded by record identity (a stale load
+ *  is disposed). Bounded: RETRY_MAX attempts with backoff. */
 const RETRY_MAX = 3;
 // Mutable so a test can shrink it: with the shipped delays the latch never clears in a test window, so the cap
 // would be unobservable.
@@ -154,11 +146,8 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
   return r;
 }
 
-/** Remove a body. Idempotent, and GENERATION-CONDITIONAL when handed the
- *  record the caller believes it is dropping: a predecessor's late cleanup
- *  (a drag callback, a stale timer) cannot delete the successor that now
- *  owns the id (#95 acceptance 4). Returns the dropped record, or null when
- *  there was nothing to drop / the record didn't match. */
+/** Remove a body. Idempotent, and generation-conditional when handed `expected`: a predecessor's late cleanup can't
+ *  delete the successor (#95). Returns the dropped record, or null when nothing dropped / no match. */
 export function dropRemote(id, expected) {
   const r = remotes.get(id);
   if (!r) return null;
@@ -204,13 +193,8 @@ const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qk = new THRE
  *  and never `===` a sample's pose so a held pose always re-applies. */
 const POSE_BLEND = {};
 
-/** The held pose (bones), blended a→b by the SAME k as the root. Handed `b`
- *  alone, the bones ran up to INTERP_MS ahead of the body they hang off and
- *  stepped at the 66ms send rate — during a ragdoll tumble the limbs visibly
- *  led the fall. Change detection is pose-object identity, not a stringified
- *  signature: every sample carries a freshly decoded pose so `===` is exactly
- *  as strong, and on the blended path the value differs every frame anyway,
- *  which made the JSON.stringify pure per-frame waste. */
+/** The held pose (bones), blended a→b by the SAME k as the root, or the limbs lead the body. Change detection is
+ *  pose-object identity: every sample carries a freshly decoded pose. */
 function applyPose(r, a, b, k) {
   const pa = a.pose, pb = b.pose;
   if (!pb) {                            // nobody is posed, or just released
@@ -452,10 +436,7 @@ export function noteSpeaking(id, ms = 4000) {
   if (r) r.speakingUntil = performance.now() + ms;
 }
 
-/** Point every body at whatever currently deserves attention: the most recent
- *  speaker if there is one, otherwise the nearest other body. This is the
- *  cheapest presence win in the client — VRM ships a lookAt rig and nothing
- *  was ever aiming it, so every avatar had dead eyes. */
+/** Point every body's VRM lookAt at the most recent speaker, else the nearest other body. */
 let _gazeAt = 0;
 export function updateGaze(myPos, myAvatar, myName, now = performance.now()) {
   // Attention changes at conversational rate: 4 Hz is past perceptual limits for gaze (the lookAt rig eases the turn; §14.1).

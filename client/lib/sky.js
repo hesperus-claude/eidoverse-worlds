@@ -1072,10 +1072,8 @@ async function runEnvBake() {
   }
 }
 
-/** Settings that apply to an already-built sky — cheap, idempotent, and safe
- *  to run for every sky verb in a log AND once a second under a forecast or a
- *  rated day (see updateSky), which is why everything below is guarded to
- *  fire only on actual change. */
+/** Settings for an already-built sky: run per sky verb and once a second under a forecast or rated day (updateSky),
+ *  so everything below fires only on actual change. */
 let forecastCursor = null;   // O(1) live ticking — the segment walk never re-runs from epoch
 let appliedWeather = null;   // `state|k` last asserted on skyApi; null = fresh build
 let appliedClouds = null;

@@ -38,10 +38,8 @@ const _p1 = new THREE.Vector3();
 const _p2 = new THREE.Vector3();
 const _sd = { s: 0, t: 0 };
 
-/** Closest points between two segments, as parameters along each. The classic
- *  clamped-parametric solve; degenerate (zero-length) segments fall back to an
- *  endpoint rather than dividing by zero. Both engines' self-collision builds
- *  run this — it was spelled twice, differently, before this file. */
+/** Closest points between two segments, as parameters along each (clamped-parametric; a zero-length segment falls back
+ *  to an endpoint). Both engines' self-collision builds run this. */
 export function closestParams(p1, q1, p2, q2, out) {
   _a.copy(q1).sub(p1); _b.copy(q2).sub(p2); _c.copy(p1).sub(p2);
   const A = _a.dot(_a), E = _b.dot(_b), F = _b.dot(_c);
@@ -74,12 +72,8 @@ export function segDistance(p1, q1, p2, q2) {
 // the rig frame
 // ---------------------------------------------------------------------------
 
-/** The rig's anatomical frame, measured from a map of rest WORLD positions:
- *  up along the trunk, lateral across the shoulders (hips as fallback),
- *  forward as their cross product — which comes out correct for VRM 0.x and
- *  1.0 alike without needing to know which (they face opposite ways on +Z,
- *  and the lateral vector flips with them, so the cross product cancels the
- *  convention out). Every value is a fresh vector; callers own them. */
+/** The rig's anatomical frame from rest WORLD positions: up the trunk, lateral across the shoulders (hips fallback),
+ *  forward their cross product (right for VRM 0.x and 1.0 alike). Every value is a fresh vector; callers own them. */
 export function rigFrameOf(restP) {
   const up = (restP.neck ?? restP.chest ?? restP.spine ?? restP.head)
     ?.clone().sub(restP.hips ?? new THREE.Vector3()).normalize() ?? new THREE.Vector3(0, 1, 0);
@@ -99,11 +93,8 @@ export function rigFrameOf(restP) {
 // the handover format
 // ---------------------------------------------------------------------------
 
-/** Builder for the {j,p,v} handover snapshot — joint names, world positions,
- *  world velocities, flat-packed and rounded. Rounded on purpose: this rides a
- *  presence message, and a millimetre and a millimetre-per-second are far
- *  below what anyone can see. Both engines' snapshot() speaks through this so
- *  the format cannot fork. */
+/** Builder for the {j,p,v} handover snapshot: joint names, world positions and velocities, flat-packed and rounded to
+ *  mm (it rides presence). Both engines' snapshot() speak through it so the format can't fork. */
 export function snapshotPacker() {
   const j = [], p = [], v = [];
   return {
@@ -118,10 +109,8 @@ export function snapshotPacker() {
   };
 }
 
-/** Iterate a handover snapshot ({j,p,v}, optional dy height shift): yields
- *  { name, px,py,pz, vx,vy,vz } per joint, dy already applied to the position.
- *  The parse half of snapshotPacker, and the other place the format used to
- *  be spelled twice. */
+/** Iterate a handover snapshot ({j,p,v}, optional dy height shift): yields { name, px,py,pz, vx,vy,vz } per joint,
+ *  dy applied. The parse half of snapshotPacker. */
 export function* seedJoints(seed) {
   const { j: names, p: pos, v: vel, dy = 0 } = seed;
   for (let i = 0; i < names.length; i++) {

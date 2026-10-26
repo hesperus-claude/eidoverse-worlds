@@ -22,13 +22,9 @@ const batches = new DrawBatches({ warm: async (mesh, live) => {
 batches.enabled = CONFIG.params.get('batching') !== '0';
 let lastRender = {};
 
-/** Render something that is NOT the world's eye pass — a sky bake, a thumbnail, a snapshot, the
- *  desktop mirror — without disturbing WebXR. three's XRManager.updateCamera(cam) runs inside EVERY
- *  renderer.render() while presenting and rewrites the SHARED stereo camera from `cam.parent`; a
- *  parentless bake/thumbnail camera leaves the eyes at the playspace origin for the frame (R's Steam
- *  Frame, 2026-09-05 21:45–23:30: 'I pop to the origin' — per-eye cameras at (0, 1.6, 0) while the
- *  base camera sat on the rig; sky_baked.js:351 had met the same class once). Pattern from porch-old
- *  :11176–11179: XR off around the pass, render target saved and restored. */
+/** Render something that isn't the world's eye pass (bake, thumbnail, snapshot, mirror) without disturbing WebXR:
+ *  while presenting, every renderer.render() rewrites the shared stereo camera from `cam.parent`, so a parentless camera
+ *  pops the eyes to the playspace origin. XR is off around the pass; the render target is saved and restored. */
 export function renderAside(sc, cam, target = null) {
   const xr = renderer.xr;
   if (!xr?.isPresenting) { const rt = renderer.getRenderTarget(); renderer.setRenderTarget(target); try { return renderer.render(sc, cam); } finally { renderer.setRenderTarget(rt); } }

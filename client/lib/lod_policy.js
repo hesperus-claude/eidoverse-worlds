@@ -44,19 +44,9 @@ export function makeModelQuality(store) {
   };
 }
 
-/** The tier to fetch for a placement.
- *  `dist` metres from the resident's eye; `radius` the entity's residency
- *  radius; `quality` the dial; `recipe` what /version published (null → no
- *  negotiation, ever); `pressure` gpu memory / budget (0..∞); `shed` the
- *  governor's session dial; `current` the tier it wears now, for hysteresis; `scale` the placement's uniform scale.
- *
- *  SCALE: the server budgets each LOD (2 px of error, 1 texel per pixel) at the unscaled model's closest switch
- *  distance, and a placement at scale s is s× bigger on screen at every distance — so its edge moves by exactly s: a
- *  3× pallet goes reduced at 3× the distance (its error stays 2 px, not 6), a 0.1× server rack at a tenth (down to
- *  LOD_NEAR_MIN). A scaled-UP placement can therefore skip the reduced tier altogether: residency (models.js) is
- *  unscaled, and a 3× pallet is demoted to its stand-in (~108 m) before its reduced edge (~150 m) — full detail until
- *  then, a memory cost, never a quality one. The scale is read as a number ("3" is 3, as three.js's setScalar reads
- *  it); anything that isn't a positive finite number is 1. */
+/** The tier to fetch for a placement. `dist` m from the eye; `recipe` null → never negotiate; `pressure` gpu memory /
+ *  budget (0..∞); `current` for hysteresis. `scale` s moves the LOD edge by exactly s (the server's 2 px budget is for
+ *  the unscaled model; floor LOD_NEAR_MIN); a non-positive or non-finite scale reads as 1. */
 export function chooseTier({ dist, radius, quality = 'auto', recipe = null, pressure = 0, shed = false, current = null, scale = 1 }) {
   if (!recipe || quality === 'full') return 'full';
   // 'eco' halves the edge but never reduces what you stand beside (near girders become slabs across the camera).
@@ -70,29 +60,17 @@ export function chooseTier({ dist, radius, quality = 'auto', recipe = null, pres
   return dist > edge ? 'lod' : 'full';
 }
 
-/** Which tier a parsed GLB actually is — the server's word, read off the
- *  identity stamp the reducer writes (#156: asset.extras {lodOf, recipe,
- *  tools}) and bound to the RUNNING recipe. Not "any recipe extra": the
- *  reducer preserves source extras, and an authored model may carry an
- *  unrelated `recipe` of its own (review of #170, point 1) — reading that as
- *  a lod would strip a full source model of its collider. lodOf must be
- *  present and recipe must equal what /version published; anything else —
- *  a wrong-generation stamp, a bare recipe, the original chain answering a
- *  lod ask — is 'full', honestly. */
+/** Which tier a parsed GLB is, from the reducer's stamp (asset.extras {lodOf, recipe}, #156): lod only if lodOf is
+ *  present AND recipe equals the running one; anything else is 'full' (an authored `recipe` extra must not strip a
+ *  source model of its collider). */
 export function tierOf(gltfJson, recipe) {
   const x = gltfJson?.asset?.extras;
   if (!recipe || !x || typeof x !== 'object') return 'full';
   return typeof x.lodOf === 'string' && x.lodOf.length > 0 && x.recipe === recipe ? 'lod' : 'full';
 }
 
-/** The WIRE truth of a tier choice (review of #170, point 2): the URL a load
- *  actually fetches and which tier that URL asks for. A lod ask rides the
- *  KTX2 negotiation because the reduced variant's textures ARE KTX2 — a
- *  browser without the transcoder (`capable` false), a sequencer that
- *  published no key or no recipe, or a non-.glb path cannot ask, and the
- *  answer says so: tier 'full', no `lod=` on the wire. The realizer keys
- *  its hysteresis and its reporting on THIS, never on what the policy
- *  wished. */
+/** The wire truth of a tier choice: the URL fetched and the tier it asks for. A lod ask rides KTX2 negotiation, so no
+ *  transcoder, no key/recipe or a non-.glb path means 'full' and no `lod=`. The realizer keys hysteresis on THIS. */
 export function askFor({ libPath, key = null, capable = false, recipe = null, tier = 'full' }) {
   const glb = typeof libPath === 'string' && libPath.endsWith('.glb');
   const k = glb && capable && key ? key : null;

@@ -47,10 +47,8 @@ export const ampOf = (m, def = 0) => {
   return Number.isFinite(v) ? v : def;
 };
 
-/** Seconds since the motion's epoch. A motion with NO t0 anchors to when
- *  this process first evaluated it — same per-client fallback motion.js has
- *  always had, held here in a WeakMap instead of a stowaway `_t0` property
- *  so evaluation never mutates a component bag it does not own. */
+/** Seconds since the motion's epoch; with no t0, since this process first evaluated it (a WeakMap, so evaluation
+ *  never mutates a component bag it doesn't own). */
 const t0Fallback = new WeakMap();
 export const since = (m, nowMs) => {
   let t0 = m.t0;
@@ -61,11 +59,8 @@ export const since = (m, nowMs) => {
   return Math.max(0, (nowMs - t0) / 1000);
 };
 
-/** A spin's or an orbit's rate in degrees a second: degPerSec, else a period
- *  (seconds a turn: 360 / period — review 10-07 N4: an orbit's period was
- *  ignored and it turned at the default), else an old world's rpm (× 6), else
- *  `def`. One reading for the renderer, the part path, the seat signals and
- *  the agent, so they can't disagree. */
+/** A spin's or orbit's rate in °/s: degPerSec, else 360 / period, else rpm × 6, else `def`. One reading for the
+ *  renderer, part path, seat signals and agent, so they can't disagree. */
 export function rateOf(m, def) {
   if (Number.isFinite(m.degPerSec)) return m.degPerSec;
   if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;
@@ -130,22 +125,8 @@ export function evalPath(m, t, base) {
   return { ok: true, pos, yaw: base.yaw ?? 0, quat: baseQuat(base), rot: false };
 }
 
-/**
- * Evaluate a WHOLE-ENTITY motion component at `nowMs`, composed on the
- * entity's logged base pose.
- *
- *   base:  {pos: [x,y,z], yaw}    — the spawn/place rest transform
- *   m:     the motion component's data ({type, ...params, t0?})
- *   nowMs: epoch ms on the sequencer's clock (caller's responsibility —
- *          motion.js passes serverNow(), the agent passes its own estimate)
- *
- * Returns {ok:true, pos, yaw, quat, rot} — `rot: false` means this motion
- * type leaves the entity's authored rotation alone (oscillate; face:false orbit
- * and path), which the renderer honors by not touching obj.rotation —
- * or {ok:false, why} for anything it will not vouch for: unknown types,
- * malformed paths, non-finite params. Part-frame motion (`m.part`) returns
- * the base pose unchanged with rot:false — parts swing, roots stand still.
- */
+/** Whole-entity motion at nowMs (epoch ms on the sequencer's clock), composed on base {pos, yaw}. Returns
+ *  {ok:true, pos, yaw, quat, rot} (rot:false = leave the authored rotation alone) or {ok:false, why}. */
 export function evalWholeMotion(base, m, nowMs) {
   if (!m || typeof m.type !== "string") return { ok: false, why: "no motion type" };
   if (typeof m.part === "string") {

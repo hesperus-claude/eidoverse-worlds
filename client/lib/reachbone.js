@@ -33,19 +33,8 @@ const dirLen = (u, v) => {
 };
 
 /**
- * Which way the palm faces, in the avatar root's frame with the rig at rest.
- *
- * Derived from the finger bones where a rig has them: the palm plane is
- * spanned by wrist->middle and little->index, and its normal is their cross
- * product. Only 8 of the 18 shipped rigs carry fingers, though — claude, the
- * default body, does not — so the rest fall back to the VRM rest convention,
- * a T-pose with the palms facing DOWN.
- *
- * That fallback is not an assumption anyone has to take on trust: on every one
- * of the nine rigs that CAN answer, the derived normal agrees with it to
- * within a hundredth (dot with body-up = 0.99-1.00, across VRM0 and VRM1
- * alike). The convention is checked wherever checking is possible, and used
- * only where it is not.
+ * Palm normal in the root frame at rest: wrist->middle × little->index where the rig has fingers; otherwise the VRM
+ * T-pose convention (palms down), which every finger rig agrees with.
  */
 function palmRestNormal(P, F, side) {
   const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -90,13 +79,8 @@ function restOrientations(avatar, nodes) {
 }
 
 /**
- * The fixed facts about one chain, measured once, in the avatar ROOT's local
- * frame — the frame in which the rest pose has identity rotations, which is
- * where shared/reach.js does its algebra.
- *
- * Measured from the REST skeleton, never the live one. The ragdoll learned
- * this the expensive way: measured against a moving body, the same avatar gets
- * different limits depending which frame of the walk cycle you asked on.
+ * One chain's fixed facts, in the avatar ROOT's frame (where rest has identity rotations; shared/reach.js's algebra).
+ * Measured from the REST skeleton, never the live one, or the limits depend on the walk-cycle frame.
  */
 export function measureChain(avatar, key) {
   const spec = REACH_CHAINS[key];
@@ -172,13 +156,8 @@ export function measureChain(avatar, key) {
 }
 
 /**
- * Solve one chain for a world-space target, at this instant.
- *
- * Everything the shoulder's limits are stated against is carried by the bone's
- * PARENT, which the locomotion clip rotates every frame — so the cone, the
- * frontal plane and the rest direction are all read live through it. A version
- * that used the rest frame instead is correct in T-pose and drifts as soon as
- * the torso turns.
+ * Solve one chain for a world-space target, now. The shoulder's limits are read live through the bone's PARENT
+ * (the clip rotates it every frame); the rest frame drifts once the torso turns.
  *
  * @param {object} chain from measureChain
  * @param {object} avatar needs .root

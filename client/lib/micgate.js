@@ -161,16 +161,8 @@ export const isGated = () => !!_gain;
 // ── MIX A SYNTHESIZED VOICE INTO THE SAME LANE: a synth mixes in after the gate, alongside the mic and never instead
 // of it; room noise must clear the threshold, but synthesized speech is already signal.
 
-/** Detach the DEVICE from the lane, keeping the lane itself alive.
- *
- *  🔴 This is the one that matters for reconnect cost. The GainNode and the
- *  MediaStreamDestination stay — so the track every peer's sender holds is still
- *  live, and no renegotiation is needed when the mic comes back. Only the
- *  source-side connection goes away, because its device track just stopped.
- *
- *  R, 2026-08-09: "we don't want to tear down audio tracks at all unless someone
- *  leaves or unchecks the connect-to-audio box — that's how we ran into people
- *  not hearing each other and unmute lag while it sets it all up again." */
+/** Detach the device, keep the lane: the GainNode and MediaStreamDestination stay, so every peer's sender track stays
+ *  live and the mic's return needs no renegotiation. Tear down tracks only on leave or audio opt-out. */
 export function detachSource() {
   try { _src?.disconnect(); } catch { /* already gone */ }
   _src = null;
@@ -233,14 +225,8 @@ export const monitorDelay = () => MONITOR_DELAY;
 // ── the onset machine + level meter, ONE copy (§24l R1): each transport instantiates it with its own stream/mute
 // closures
 
-/** RMS level meter over whatever stream `getMeasured` currently names —
- *  null means "muted or no stream": report 0 and learn nothing.
- *
- *  ONE CONTEXT, REUSED: this used to make a NEW AudioContext per stream
- *  change and never close the old one — Chrome caps a document at ~6, after
- *  which every further context is born unusable, SILENTLY. And the replaced
- *  analyser pair is DISCONNECTED — the shared context lives forever, so
- *  dropped-but-connected nodes accumulate in its graph otherwise. */
+/** RMS level meter over the stream `getMeasured` names (null = muted: report 0, learn nothing). One AudioContext,
+ *  reused (Chrome caps a document at ~6, silently); a replaced analyser pair is disconnected so the graph can't grow. */
 export function makeLevelMeter(getMeasured) {
   let _an = null, _anStream = null, _anBuf = null, _anSrc = null;
   return function level() {
@@ -270,10 +256,8 @@ export function makeLevelMeter(getMeasured) {
  *  utterance 🎙 announcement. `drive(open)` is the transport's gain hand
  *  (it applies its own lane/mute authority first); `level()` returning 0
  *  means muted — close, drop the speaking latch, learn nothing.
- *
- *  Laws kept from the twins' histories:
- *  - DRIVE THE GATE BEFORE ANY EARLY RETURN (a control loop that skips its
- *    output stage is not a control loop — the monitor played through);
+ *  Laws:
+ *  - DRIVE THE GATE BEFORE ANY EARLY RETURN;
  *  - LEARN BEFORE JUDGING (~1s settle window, or a loud room fires the 🎙
  *    at itself);
  *  - the floor is min-of-block-minima (6 × 0.4s), so SPEECH CAN NEVER

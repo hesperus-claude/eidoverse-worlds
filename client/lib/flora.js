@@ -28,12 +28,8 @@ export { retireField } from './flora_field.js';
 // ---- module ----------------------------------------------------------------
 
 let floraMod = null;
-/** Import the vegetation engine. §24j: it is a FIRST-CLASS CLIENT MODULE now
- *  (client/lib/vegetation/) — the upstream-patched /library override retired
- *  with the braid (eidoverse-video is an asset library, not an engine peer).
- *  Still a lazy dynamic import: the module reads globalThis.THREE and the
- *  Deno asset shim, both of which exist by the time flora work starts, and
- *  its weight stays off the boot path. */
+/** Import the vegetation engine (client/lib/vegetation/, §24j) lazily: it reads globalThis.THREE and the asset shim,
+ *  which exist by the time flora work starts, and its weight stays off the boot path. */
 export async function loadFloraModule() {
   if (!floraMod) {
     floraMod = import('./vegetation/vegetation.js').then(async (m) => {
@@ -258,13 +254,9 @@ const BLADE_LOD_IN = VLOD_ON ? 38 : Infinity;    // m — and back only inside t
 const _tv = new THREE.Vector3();
 const _eye = new THREE.Vector3();   // the camera in WORLD space (see applyTiles)
 
-/** The uniform-vs-attribute fork for the identity instanceMatrix, read off
- *  the live backend (WebGPU: device.limits.maxUniformBufferBindingSize —
- *  65536 with three's default device request; WebGL2 fallback:
- *  MAX_UNIFORM_BLOCK_SIZE). `threshold` is the occupancy the grid aims for;
- *  `cross` is the smallest ALLOCATION that takes the shared-program
- *  attribute path — 0 when an exotic limit would make forcing it wasteful
- *  (tiles then keep per-size programs: degraded, never wrong). */
+/** The uniform-vs-attribute fork for the identity instanceMatrix, read off the live backend's uniform-buffer limit.
+ *  `threshold` = the occupancy the grid aims for; `cross` = the smallest allocation on the shared-program attribute
+ *  path, 0 when an exotic limit makes forcing it wasteful (per-size programs: degraded, never wrong). */
 function matrixPathCaps() {
   let limit = 65536;
   try { limit = renderer.backend.capabilities.getUniformBufferLimit() || 65536; }
@@ -532,10 +524,8 @@ function wirePushers(field) {
 
 // ---- the field -------------------------------------------------------------
 
-/** Build a flora field from a `grass` verb bag. Returns a field shaped to
- *  terrain.js's setGrass contract: { mesh, material, update, autoHooks,
- *  setDensity, dispose }. The mesh is added to the scene here; setGrass owns
- *  removing and disposing it. */
+/** Build a flora field from a `grass` verb bag, shaped to terrain.js's setGrass contract. The mesh is added to the
+ *  scene here; setGrass owns removing and disposing it. */
 export async function buildFloraField(rawArgs, { scene, heightFn }) {
   const mod = await loadFloraModule();
   const args = mapGrassArgs(rawArgs);
@@ -632,10 +622,8 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
 // render, so each render object warms detached with culling defeated (sky.js pattern). LOD twins share the layout
 // cache key: no second pass.
 
-/** Compile every render object of a built field (tiles, untiled stroke
- *  meshes, shrub stems) off the render path, then re-settle tile counts
- *  against the live camera. Awaited by the grass build (world.js) between
- *  prepareObject and setGrass; errors are swallowed like every house warm. */
+/** Compile every render object of a built field off the render path, then re-settle tile counts against the live
+ *  camera. Awaited between prepareObject and setGrass (world.js); errors are swallowed like every warm. */
 export async function warmField(field, renderer, camera, scene) {
   const root = field?.mesh;
   if (!root) return;

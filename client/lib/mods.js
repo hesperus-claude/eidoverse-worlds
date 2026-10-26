@@ -120,15 +120,9 @@ export default ({ EW, ui, onTick }) => {
 };
 `;
 
-/** The scriptable face of the mod system — same acts as the panel buttons.
- *  (Also what the e2e drives: UI and API share one implementation.)
- *
- *  put and run need YOUR hand: a click or key press this moment (the browser's transient user activation). Installing
- *  or running code is a decision you make, and a mod you install can set itself to run on every arrival — so code that
- *  merely holds EW (a mod running on its own at load, or anything that found its way into the page) can't plant another
- *  that outlives it (the world-mod note, 09-28: one "run once" becoming permanent). Defence in depth, not a wall: code
- *  already in this page is same-origin and could reach the store another way; the walls are that nothing a world sends
- *  runs as code here (tools/protocol/modhole-check.ts) and the page's CSP. The 🧩 panel's own buttons are clicks. */
+/** The scriptable face of the mod system (same acts as the panel buttons). put and run need transient user activation,
+ *  so code that merely holds EW can't plant a mod that outlives it. Defence in depth: the walls are
+ *  tools/protocol/modhole-check.ts and the page's CSP. */
 const byHand = (what) => {
   if (globalThis.navigator?.userActivation && !navigator.userActivation.isActive) throw new Error(`EW.mods.${what} needs a click or key press from you (installing or running a mod is your decision)`);
 };

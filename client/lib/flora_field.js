@@ -33,10 +33,8 @@ export function strokeApplied(f, eff, i = 0) {
   };
 }
 
-/** The whole field's draw truth. `off` (eff ≤ 0) is enforced by group
- *  visibility — terrain hides the group — so it applies even where count
- *  dialing is unsupported; any positive factor needs every live stroke's
- *  actual count to match what densityCount requested. */
+/** The whole field's draw truth: `off` (eff ≤ 0) is enforced by group visibility, so it holds even where count
+ *  dialing is unsupported; a positive factor needs every live stroke's count to match densityCount. */
 export function fieldApplied({ fields, groupVisible }, eff) {
   if (eff <= 0) {
     const ok = groupVisible === false;
@@ -80,10 +78,8 @@ export function composeField({ group, fields, mask }) {
   };
 }
 
-/** Retire a field completely: unhook its per-frame updates, release its GPU
- *  resources, remove it from the scene. Prefers the field's own dispose()
- *  (engine fields know their textures); falls back to the legacy single-mesh
- *  teardown for fields that predate it. Safe against double-removal. */
+/** Retire a field completely. Prefers the field's own dispose() (engine fields know their textures), else the
+ *  single-mesh teardown. Safe against double-removal. */
 export function retireField(field, autos, scene) {
   if (!field) return;
   const hooks = field.autoHooks ?? (field.update ? [field.update] : []);
