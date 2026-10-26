@@ -80,7 +80,7 @@ export class SeatStore {
   // ---- the write lock (one per store directory, shared by every process) ---
 
   /** Exclusive-create ("wx"); ownership is the nonce, never the path. Liveness: `kill(pid, 0)`, only ESRCH means dead,
-   *  never inferred from age. A dead lock is broken by rename-steal with a nonce re-check (a newer lock is restored).
+   *  never inferred from age; a reused pid reads as live, so its lock is waited on. A dead lock is broken by rename-steal with a nonce re-check (a newer lock is restored).
    *  A bounded spin whose timeout refuses with no state touched. The lock rides the REAL fs even under fault injection. */
   private lockNonce: string | null = null;
 

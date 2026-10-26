@@ -114,7 +114,7 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       ws.send(JSON.stringify({ type: "error", error: "animation too large — keep custom clips small and sparse" }));
       return;
     }
-    // legacy packets omit replace and replace; a merge must carry an explicit false
+    // a packet without replace REPLACES the previous animation (legacy); a merge must say replace: false
     c.world.broadcast({ type: "anim", id: c.id, dur: msg.dur, tracks: msg.tracks, loop: !!msg.loop, replace: msg.replace !== false }, c);
   },
   "puppet": ({ c, ws, now, expel }, msg) => {

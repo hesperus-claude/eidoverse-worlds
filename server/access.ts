@@ -89,6 +89,7 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
     const off = !door.world && door.mod ? { mod: door.mod, now: () => now } : null;
     const bannedHere = (id: string) => door.world ? !!door.world.log?.bannedHere(id) : !!off && isBanned(off, id);
     const kickedHere = (id: string) => door.world ? door.world.log?.kickedHere(id) : off ? kickOf(off, id) : null;
+    // the instance-wide ban, then one scoped to this world, then the world's own moderator log
     const gb = findBan(globalBans, account, addr);
     const ban = gb ?? findBan(globalBans, account, addr, now, door.name) ?? (actorId && bannedHere(actorId) ? { by: "a moderator" } as any : null);
     if (ban) return { code: 4006, reason: "banned", why: `you are banned from ${gb ? "these worlds" : `"${door.name}"`}${ban.reason ? ` — ${ban.reason}` : ""}` };

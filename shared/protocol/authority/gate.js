@@ -250,6 +250,8 @@ function rights(w, st, s, who, role, op, at, made, pause) {
     // who may come in is the owners' call, never a script's: a script would skip the door's settle pass (server/access.ts)
     // and leave people inside who may no longer be. Ordinary role grants stay open to an owner's scripts.
     if (op.id === "@world" && (op.comp === "access" || op.comp === "default-role")) refuse("rights", `a script can't change ${at}: who may come into a world is changed by its owners directly`, "change it yourself: set {id: '@world', component: '" + op.comp + "', value}");
+    // a timed grant ends by the door's sweep, which a script skips; in a listed world a script's grant could demote the
+    // last listed owner and leave nobody able to open it
     if (op.id === "@world" && op.comp?.startsWith("roles:") && ((op.verb === "set" && op.value?.until !== undefined) || st.entities["@world"]?.c?.access?.join === "listed"))
       refuse("rights", `a script can't ${op.value?.until !== undefined ? "time a grant" : "grant in a world that admits only people listed"} (${at})`, "who may come into a world is changed by its owners directly");
     return scriptRights(w, st, cap, op, at, made);

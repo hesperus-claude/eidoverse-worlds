@@ -298,7 +298,7 @@ export class Sfu {
         state: l.pc.connectionState,
       })),
       forwarded: this.forwarded,
-      // beside delivery, or a load harness (tools/sfu-load.ts) calls a server that drops more healthier
+      // reported beside forwarded: a load harness (tools/sfu-load.ts) that can't see drops reads a server that drops more as healthier
       suppressed: { gated: this.gated, capped: this.capped },
       muted: [...this.muted],
       deafened: [...this.deafened],
