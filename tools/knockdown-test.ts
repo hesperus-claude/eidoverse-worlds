@@ -145,10 +145,8 @@ check("released with a nail: the agent's sim HANGS the body",
   ag3.pins.size === 1 && ag3.pos.y > -0.3, `pins=${ag3.pins.size} y=${ag3.pos.y.toFixed(2)}`);
 h.send({ type: "bodydrag", target: "kd-bot3", unpin: { joint: "head" } });
 await tryUntil("the unpinned body comes down off the nail", () => ag3.pins.size === 0 && ag3.pos.y < 0.7, { ms: 2500 });
-// A body released dead-still from a vertical head-hang drops feet-first and
-// can LAND STANDING — the solver has no reason to invent a stumble. So the
-// assertion is "came down off the nail", not "ended lying": no longer
-// suspended anywhere near the pin height.
+// a body released still from a head-hang drops feet-first and can land standing, so assert "came down off the
+// nail", not "ended lying"
 check("nail pulled: it comes down off the nail",
   ag3.pins.size === 0 && ag3.pos.y < 0.7, `y=${ag3.pos.y.toFixed(2)}`);
 ag3.close?.();
@@ -173,10 +171,8 @@ check("an unpin sent with an end: the nail comes out AND the drag ends",
   draggedMid != null && ag5.pins.size === 0 && (ag5 as any).draggedBy == null, `draggedMid=${draggedMid} pins=${ag5.pins.size} draggedBy=${(ag5 as any).draggedBy}`);
 ag5.close?.();
 
-// 7. explicit release carries a FINAL root sample. The dragger streams at
-// ~15Hz, so the hand can move between the last ordinary sample and release.
-// Browser targets apply end.p before rebuilding their sim; agents must not
-// combine a stale root with the release's fresh pose/sim state.
+// 7. explicit release carries a FINAL root sample: the dragger streams at ~15Hz, so the hand can move after the
+// last sample; agents must not combine a stale root with the release's fresh pose/sim state
 const ag4 = new WorldAgent({ url: URL, name: "kd-bot4", world: W });
 await ag4.connect();
 await sleep(400);

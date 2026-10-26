@@ -24,13 +24,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-// vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) asks once per browser when the microphone permission is
-// still open — and a fresh headless context always reads 'prompt'. Every probe that clicks the visor to reach a
-// session would stop at that 2D step instead, so contexts start as a browser that already answered "not now"
-// (the step's own remembered choice; a written value is never overwritten). tools/vrmic-probe.mjs passes null to
-// drive the step itself.
-/** SFU_TEST_CHROME override ▸ managed browser. `mic: true` adds the fake-media
- *  flags a microphone probe needs (and its contexts get mic permission). */
+// vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) would stop every visor-clicking probe in a fresh context
+// ('prompt'), so contexts start as a browser that answered "not now"; tools/vrmic-probe.mjs passes null to drive it
+/** SFU_TEST_CHROME override ▸ managed browser. `mic: true` adds the fake-media flags (and mic permission). */
 export async function launchBrowser({ mic = false, vrMicChoice = 'later' } = {}) {
   const exe = process.env.SFU_TEST_CHROME;
   const args = mic ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
@@ -42,11 +38,8 @@ export async function launchBrowser({ mic = false, vrMicChoice = 'later' } = {})
   const vp = (process.env.BOOT_CHECK_VIEWPORT || '').match(/^(\d+)x(\d+)$/);
   const viewport = vp ? { width: +vp[1], height: +vp[2] } : null;
   const page = async () => {
-    // TOUCH IS A PRECONDITION, not a nicety (antra-tess #185 B2): the dock only
-    // leaves the left edge when document.body has class 'touch' (controller.js:434,
-    // ui.js:489), so without it the rail never goes horizontal along the top and
-    // the landscape dock/action-bar overlap she reported is invisible to any probe
-    // by construction. BOOT_CHECK_TOUCH=1 turns it on.
+    // touch is a precondition: the dock leaves the left edge only when body has class 'touch', so without it the
+    // landscape dock/action-bar overlap is invisible to any probe. BOOT_CHECK_TOUCH=1 turns it on.
     const touch = process.env.BOOT_CHECK_TOUCH === '1';
     const ctx = await b.newContext({
       ...(mic ? { permissions: ['microphone'] } : {}),
@@ -71,15 +64,8 @@ function armSignals() {
     process.exit(sig === 'SIGINT' ? 130 : 143);
   };
   process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal);
-  // An UNCAUGHT THROW is neither signal: node prints the stack and exits
-  // without running the signal handlers, so a probe whose assertion arithmetic
-  // TypeErrors (or whose selector rejects) leaves its owned server child
-  // squatting on its port with its mkdtemp scratch dir. Same sweep, two more
-  // doors. boot-check and mic-hud-probe already reach cleanup via try/finally;
-  // panel-teardown-probe, tts-blocking-probe and mic-meter-states do not, and
-  // they come from 3ee7480 rather than this PR — fixed HERE so every probe is
-  // covered without editing three files this rung does not own.
-  // (agent review round 3)
+  // an UNCAUGHT throw skips the signal handlers, leaving the owned child on its port with its scratch dir: same
+  // sweep here, so every probe is covered whether or not it has a try/finally
   const onThrow = (err) => {
     for (const c of LIVE_CHILDREN) { try { c.kill('SIGKILL'); } catch { /* gone */ } try { rmSync(scratchOf.get(c), { recursive: true, force: true }); } catch {} }
     console.error(err?.stack ?? String(err));
@@ -93,10 +79,7 @@ function armSignals() {
 // that world founded first; staging and commons (the client's default) always are. `owner` founds them.
 export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'dev', env: extraEnv = {}, worlds = [], owner = 'owner' } = {}) {
   if (live) return { origin: live, key, owned: false, close: async () => {} };
-  // Wide range: with a narrow one, two concurrent runs collide ~1/15 and the
-  // loser's readiness poll can reach the WINNER's just-started server, which
-  // passes a freshness check — the nonce echo is what actually rejects it,
-  // and width makes the collision rare to begin with.
+  // a wide range makes concurrent-run collisions rare; the nonce echo is what actually rejects a winner's server
   const PORT = 8981 + Math.floor(Math.random() * 800);
   const scratch = mkdtempSync(join(tmpdir(), 'probe-'));
   const NONCE = randomUUID();
@@ -118,16 +101,9 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   const origin = `http://127.0.0.1:${PORT}`;
-  // Identity: the nonce echo, and ONLY the nonce echo (#131 re-review, item 4).
-  // The server's /version echoes EIDO_BOOT_NONCE (routes.ts, since #131), so an owned exact-head
-  // child always answers with our nonce; a startedAt-freshness fallback would
-  // reopen the just-started-impostor race for no one's benefit. A responder
-  // WITHOUT a nonce field is by definition not our child — some stale
-  // pre-nonce build squatting the port — and fails immediately. Probing a
-  // live deployment (not our child) is the explicit `live:` mode above.
-  // a SIGINT/SIGTERM that lands before the caller's finally exists (inside this poll, or before its browser is up)
-  // used to orphan the child on its port; every live child dies with us, whoever sends the signal — one handler
-  // over a module-level set, so two worlds open at once both go (eighth/ninth reviews 2026-09-10)
+  // identity is the nonce echo ONLY (/version echoes EIDO_BOOT_NONCE): a responder without one isn't our child and
+  // fails at once; a live deployment is the explicit `live:` mode. Every live child dies with us on any signal, even
+  // mid-poll (one handler over a module-level set).
   LIVE_CHILDREN.add(srv); scratchOf.set(srv, scratch); armSignals();
   const verdict = await proveOwned(origin, NONCE, { alive: () => (srv.exitCode === null ? true : `exited ${srv.exitCode}`) });
   const ours = verdict.ours, reason = verdict.reason;
@@ -142,12 +118,9 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
   return { origin, key, owned: true, close };
 }
 
-/** The identity check itself, callable on its own so a test can show the
- *  NEGATIVE: a responder that does not echo our nonce is refused, never
- *  judged (Mica, #192 review, blocker 3 — "an impostor cannot buy green").
- *  Polls `origin`/version up to `attempts` times, 250ms apart; `alive()`
- *  returns true while the thing we are waiting for could still come up, or
- *  a reason string once it cannot. Resolves { ours, reason }. */
+/** The identity check on its own, so a test can show the NEGATIVE (a responder without our nonce is refused, never
+ *  judged). Polls `origin`/version up to `attempts` times, 250ms apart; `alive()` is true while the awaited thing
+ *  could still come up, else a reason string. Resolves { ours, reason }. */
 export async function proveOwned(origin, nonce, { attempts = 60, alive = () => true } = {}) {
   let ours = false, reason = 'never answered';
   for (let i = 0; i < attempts && !ours; i++) {

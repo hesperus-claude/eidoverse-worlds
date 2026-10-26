@@ -31,13 +31,9 @@ try {
   const pop1 = await p.evaluate(() => document.getElementById('stpop')?.textContent ?? '');
   ok("…whose popover gives the reason ('Graphics reset' … 'webgl context lost')", /Graphics reset/.test(pop1) && /webgl context lost/.test(pop1), pop1.slice(0, 160));
   await p.keyboard.press('Escape');
-  // THE GATES (#228 review): instrument the page's own renderer BEFORE the second loss, on the module instances the page
-  // actually loaded (foliage-probe's pattern), and count entries into three UNDER render.js's wrappers: render →
-  // _renderScene, renderWorld's self-heal → getRenderTarget, compileAsync → its FIRST statement (three reads
-  // this._isDeviceLost before anything else), counted only inside a synchronous window around the call, so no backend
-  // work and no later frame can add or hide an entry. A LIVE control runs now, on a healthy backend with nothing lowered;
-  // after the loss, a second control lowers only the loss flag; then every gated call must count zero. Remove any gate
-  // and its line goes red. gpulost-gate-test.mjs binds the same three gates with no browser at all.
+  // THE GATES: instrument the page's own render.js instances BEFORE the second loss and count entries into three under
+  // its wrappers (render, the self-heal's getRenderTarget, compileAsync) inside a synchronous window. A live control,
+  // then a loss-flag-only control; then every gated call counts zero. Browserless twin: gpulost-gate-test.mjs.
   const live = await p.evaluate(async () => {
     const before = globalThis.EW.renderer.render, t0 = performance.now();   // captured BEFORE the imports: a second render.js instance would re-wrap it
     const { renderWorld } = await import('./lib/render.js'), { renderer: r, scene, camera } = await import('./lib/core.js');

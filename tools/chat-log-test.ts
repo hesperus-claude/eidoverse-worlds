@@ -113,10 +113,8 @@ logChat("keir", "unspoken t0 smuggle", "", { seq: 16, ts, t0: ts - 5000 });
 check("t0 outside the spoken protocol is ignored",
   texts()[1] === "unspoken t0 smuggle", JSON.stringify(texts()));
 
-// --- REGRESSION (#27 review): an inserted line derives its grouping from its
-// VISUAL neighbor, not chronological arrival — and the displaced anchor
-// reprints its name. All three fail on main (buildLine keys cont off
-// lastAuthor; nothing re-derives after a t0 insert).
+// --- REGRESSION (#27 review): an inserted line takes its grouping from its VISUAL neighbour, not arrival
+// order, and the displaced anchor reprints its name
 reset();
 ts = Date.now();
 logChat("rab", "alpha", "", { seq: 20, ts: ts - 4000 });
@@ -190,12 +188,8 @@ openPane();
 }
 const rows2 = () => [...frameStub.body!.querySelectorAll(".chat-side-list .who-row")];
 check("the People Here pane lists everyone", rows2().length === 3, `${rows2().length} rows`);
-// A BUTTON, not a div — this IS the fix. windows.js:_contentClaims exempts only
-// BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's drag surface, so a div row was
-// claimed by the frame's pointerdown and the dblclick never arrived. R,
-// 2026-09-11: "the Chat panel treats names in the roster as a
-// grab-and-move-the-pane surface". The previous dblclick assertion passed
-// against a div, so it could not see this at all.
+// a BUTTON, not a div: windows.js _contentClaims exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's
+// drag surface, so a div row's dblclick never arrived
 check("each roster row is a BUTTON, so the frame cannot claim it as a drag surface",
   rows2().every((r: any) => r.tagName === "BUTTON"), rows2().map((r: any) => r.tagName).join(","));
 const mica = rows2().find((r: any) => r.querySelector(".n")?.textContent?.trim() === "mica") as HTMLElement;
@@ -219,17 +213,8 @@ const allTab = tabs().querySelector(".tabscroll button") as HTMLElement;
 allTab?.click();
 check("...and `all` shows the room again", visible().some((l: any) => l.textContent.includes("a room line")), visible().length + " visible");
 
-// THE ACTIVE TAB IS SCROLLED INTO VIEW. R's screenshot showed `system| @H` —
-// the open tab clipped to two characters while `all` and `mentions` held the
-// full left. R, 2026-09-11: "should probably always preferentially display the
-// tab that it's on".
-//
-// The PIXELS are unbindable here and I checked that BEFORE writing this:
-// happy-dom performs no layout, so a deliberately overflowing row reports
-// scrollWidth=0 clientWidth=0 and scrollIntoView leaves scrollLeft at 0. What IS
-// bindable is the mechanism — that setFilter finds the active tab and asks for
-// it. Verified separately in real Chromium (clipped by 44px before, fully
-// visible after).
+// the active tab is scrolled into view. happy-dom does no layout, so only the mechanism is bindable here
+// (setFilter asks the active tab to scroll into view); the pixels were checked in real Chromium
 { const calls: string[] = [];
   const proto = (globalThis as any).HTMLElement?.prototype;
   const orig = proto?.scrollIntoView;

@@ -82,13 +82,8 @@ const light = () => ({ pos: [0, 1, 0], light: { color: 0xffd9a0, intensity: 16, 
   check("unknown distance is VISIBLE", bandForDistance(NaN) === P.VISIBLE);
 }
 
-// 8. whose collision is it?
-//
-// An entity whose collision is owned elsewhere must not have a box inferred
-// here. Mounted cargo collides as its carrier; a `structure` entity's collision
-// is DECLARED by the structure realizer. Inferring one from the structure's
-// placeholder lib left an invisible crate-sized obstacle at the origin of every
-// building — mesh hidden, collider not.
+// 8. whose collision is it? Collision owned elsewhere must not be inferred here: mounted cargo collides as its
+// carrier, and a `structure` entity's is declared by the structure realizer (not its placeholder lib)
 {
   check("an ordinary model owns its collision",
     !collisionOwnedElsewhere(model("crate.glb"), false));

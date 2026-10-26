@@ -31,10 +31,8 @@ for (const [src, expect] of [
   ["eidoverse/assets//x.png", false], ["other/x.png", false], ["eidoverse/assets/x.gif", false], ["eidoverse/assets/x.glb", false],
   ["eidoverse\\assets\\x.png", false], ["", false], [null, false],
 ] as [unknown, boolean][]) check(`allowedPictureSrc(${JSON.stringify(src)}) === ${expect}`, allowedPictureSrc(src) === expect);
-// Encoded traversal (Mica, #186 review, blocker 2): the rule is over the path
-// the FETCH canonicalizes to. A URL parser reads %2e%2e as a dot segment; a
-// server may decode %41 after the check ran. Library paths are plain: any %
-// is a refusal, and the parsed pathname must equal the declared one.
+// encoded traversal: the rule is over the path the FETCH canonicalizes to (%2e%2e is a dot segment; a server may
+// decode %41 after the check). Library paths are plain: any % is refused, and the parsed pathname must equal the declared one.
 for (const src of [
   "eidoverse/assets/%2e%2e/%2e%2e/store/x.png", "eidoverse/assets/%2E%2E/secret.jpg", "eidoverse/assets/.%2e/x.png",
   "eidoverse/assets/%2e./x.png", "eidoverse/assets/%2e/x.png", "eidoverse/assets/a%2fb/x.png", "eidoverse/assets/%41.png",

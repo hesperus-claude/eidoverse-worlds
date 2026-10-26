@@ -30,10 +30,8 @@ const asRole = (role: any) => { (stub.net as any).myRights = role === undefined 
 
 console.log('BUILD GATE — who may enter edit mode');
 
-// PERMISSIVE WHEN UNKNOWN. net.myRights has no declaration in net.js's object
-// literal; it lands at the snapshot or a live grant, so it is undefined for the
-// whole pre-snapshot window. Denying there would make a build click vanish on a
-// slow join. generate.js:144 (`net.myRights?.gen !== false`) is the same idiom.
+// permissive when unknown: net.myRights is undefined until the snapshot or a grant, and denying there would
+// make a build click vanish on a slow join (same idiom as generate.js's `net.myRights?.gen !== false`)
 asRole(undefined);
 check('rights not yet known: permitted (pre-snapshot, matches generate.js)', build.mayEdit() === true);
 asRole('builder');

@@ -27,10 +27,8 @@ const out = await pg.evaluate(() => {
 });
 console.log(out);
 await b.close();
-// The report must exist, carry the SERVED build (a stale page and a broken
-// probe are otherwise indistinguishable), and have no probe dead on arrival —
-// "unreadable" is the guarded-probe marker for a throw, and this caught a
-// missing import the whole node-side suite could not see.
+// the report must exist, carry the served build (a stale page looks like a broken probe), and have no
+// "unreadable" probe (the guarded-probe marker for a throw)
 const ok = /audio ▸/.test(out) && /build: [0-9a-f]{7}/.test(out) && !/unreadable/.test(out);
 console.log(ok ? 'PASS — /audio runs, every probe answers, build is stamped from /version' : 'FAIL');
 process.exit(ok ? 0 : 1);

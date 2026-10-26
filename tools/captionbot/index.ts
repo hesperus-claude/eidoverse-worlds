@@ -93,11 +93,8 @@ tap.attach(captioner);
 const file = env('FILE');
 if (file) {
   if (file.endsWith('.jsonl')) {
-    // a saved TRANSCRIPT (one {t0, t1, text, speaker?} per line, as this bot
-    // writes it): the lines go through the same door as live ones, with no
-    // audio decoded and no STT session opened. What an operator uses to
-    // re-run an event's captions against a world, and what the CLI process
-    // test drives the real exit owner with.
+    // a saved transcript (one {t0, t1, text, speaker?} per line, as this bot writes it) goes through the same
+    // door as live lines, with no audio or STT: for re-running an event, and for the CLI process test
     log(`replaying lines from ${file}`);
     // every row is checked before any is sent, with the caption checks the
     // door applies: a row that isn't a caption line fails the run with its

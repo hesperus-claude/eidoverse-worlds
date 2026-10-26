@@ -88,10 +88,7 @@ function stand({ constant = false } = {}) {
     cancelOnce() { this.onceAnim = null; },
   };
   self._composed = new Map();
-  // setLimp reaches into the eyes and the wings on the way past. Both find
-  // NOTHING on this fixture (no vrm.scene to traverse) and say so, which is the
-  // behaviour a rig without lids or wings needs anyway — but they have to be
-  // real methods, or setLimp throws and the whole suite stops at test two.
+  // setLimp reaches into eyes and wings: both find nothing here, but must be real methods or setLimp throws
   for (const m of ['setLimp', '_park', '_resolveBones', '_humanoidBones', 'setPose',
                    'clearPose', '_applyOverride', '_reachOwned', '_composeBegin', '_composeEnd',
                    '_applyPoseSlot', '_applyAnimSlot', '_handBack', '_rawBegin', '_rawEnd', '_rawRelease', 'playAnimation', '_sampleTrack',
@@ -221,19 +218,8 @@ for (const constant of [false, true]) {
 }
 
 // ---- eyelids: where "closed" comes from -------------------------------------
-// THREE sources, in descending authority, and the middle one failed silently.
-//
-// Janus removed the Limit Rotation constraints from the upper lids -- a
-// reasonable edit to a rig -- and the blink driver, which INFERRED the closing
-// angle from those constraints, found nothing and fell through to the generic
-// BLINK.closed of 1.2 rad (69 deg). His rig closes at 38-42. The lids swung
-// nearly 30 degrees too far and drove through the eye, and nothing anywhere
-// said so: a fallback that is reached by absence cannot announce itself.
-//
-// So: an authored POSE wins, a constraint is second, the dial is last. Each is
-// asserted here, including that the dial is still reached when a rig offers
-// neither -- the fallback is correct behaviour, it just must not be silent
-// about a rig that HAS an answer.
+// an authored POSE wins, a Limit Rotation constraint is second, the BLINK.closed dial last; the dial must
+// not be reached silently by a rig that HAS an answer
 {
   const lidNode = (name: string, extras: Record<string, unknown>) => {
     const o = new THREE.Object3D();
@@ -293,21 +279,8 @@ for (const constant of [false, true]) {
 }
 
 // ---- wings ------------------------------------------------------------------
-// The flap is geometry, and geometry is exactly the kind of thing that "runs
-// without throwing" while pointing the wrong way — the eyelids shipped rotating
-// about the wrong axis and passed every check there was, because every check
-// asked whether a number had changed. So these ask where the WING TIP went.
-//
-// The rest pose below is mythos's own, read out of mythos-wings.blend and
-// converted to glTF's Y-up (x, z, -y): wings that leave the shoulder blades and
-// sweep out, up and back.
-//
-// THREE bones per chain since 08-17, and the fixture is a list per chain rather
-// than named _1/_tip slots so that growing a chain again is a data edit. A
-// fixture that hard-codes the chain length cannot catch a depth bug — which is
-// exactly what happened: `_1` and `_2` both parsed as depth 1 (an underscore
-// COUNT, not the index), and with only two-bone chains in the fixture nothing
-// had a third segment to disagree about.
+// wing checks assert where the TIP went, not that a number changed. Rest pose from mythos-wings.blend in
+// glTF Y-up (x, z, -y); chains are lists so a depth bug shows.
 const WING_REST: Record<string, [number, number, number][]> = {
   // chain: [seg 0, seg 1, seg 2, ..., end of the last segment]
   L_Wing_Upper: [
@@ -538,11 +511,8 @@ console.log('\nwings:');
   check('sides are read off the name',
     self._wings.filter((w: any) => w.side === 1).length === 6
     && self._wings.filter((w: any) => w.side === -1).length === 6);
-  // WHEN a client first looks at a body must not change what it thinks rest is.
-  // Wings are springbones, so three-vrm has posed them before the first
-  // update(); capturing the live pose meant an observer who arrived while the
-  // body was ragdolled froze a FALLEN pose as rest and twisted every flap after
-  // — visible only to that observer, which is how Janus described it.
+  // when a client first looks at a body must not change its rest: wings are springbones posed before the
+  // first update(), so capturing the live pose froze a ragdolled pose as rest
   {
     const posed = wingStand();
     const authored = new Map();
@@ -591,18 +561,8 @@ console.log('\nwings:');
   check('the tips actually move', Object.keys(track).every((n) => span(n) > 0.02),
     Object.keys(track).map((n) => `${n} ${span(n).toFixed(3)}m`).join(' '));
 
-  // THE AXIS test — asked as "which axis", not "which direction the tip went".
-  //
-  // The first version asserted the swing was VERTICAL, which held while every
-  // wing pointed outward and broke the moment the lower chain was re-authored
-  // to hang DOWN: rotate a drooping wing about the body's forward axis and its
-  // tip travels sideways, correctly. That test was reading the rig's geometry
-  // and calling it the code's axis.
-  //
-  // What the flap actually promises is that it turns about the body's FORWARD
-  // axis, and a rotation about forward moves nothing along forward. So with the
-  // sweep off, every tip must stay in the frontal plane, whatever direction its
-  // bone happens to point. Geometry can change freely under this.
+  // THE AXIS test: the flap turns about the body's FORWARD axis, which moves nothing along forward, so with
+  // the sweep off every tip stays in the frontal plane whatever way its bone points
   {
     const sweep0 = WING_IDLE.sweep;
     WING_IDLE.sweep = 0;
@@ -642,10 +602,8 @@ console.log('\nwings:');
 }
 
 {
-  // THE SWEEP: tips have to travel FORWARD and BACK too, not only up and down.
-  // Rotating about the forward axis alone confines every tip to the frontal
-  // plane — "rotating on the X-Z plane", as Janus put it — and that reads as a
-  // hinge. Three things have to hold, and a silent no-op passes none of them.
+  // THE SWEEP: tips must also travel forward and back; rotating about forward alone confines them to the
+  // frontal plane and reads as a hinge. Three things must hold, and a silent no-op passes none.
   const { WING_IDLE } = await import('../client/lib/avatar.js');
   const { self, tipPos } = wingStand();
   const dt = 1 / 120;
@@ -682,16 +640,11 @@ console.log('\nwings:');
 }
 
 {
-  // Does not integrate. Every frame rebuilds from the captured rest, so after
-  // any number of whole cycles the pose is the pose it started in — the failure
-  // this prevents is a wing that winds slowly around its own axis over an hour
-  // and is invisible for the first ten minutes.
+  // does not integrate: every frame rebuilds from the captured rest, so whole cycles return the start pose
+  // (a slow wind-up would only show after minutes)
   const { self, nodes } = wingStand();
   const { WING_IDLE } = await import('../client/lib/avatar.js');
-  // dt chosen so a cycle is a WHOLE number of frames. With a round dt the last
-  // frame of each cycle lands short, and 300 cycles of that rounding is a
-  // quarter turn of phase — which the first version of this test dutifully
-  // reported as 30° of drift in the code. The test was the thing drifting.
+  // dt makes a cycle a WHOLE number of frames; a round dt's per-cycle rounding reads as phase drift
   const perCycle = 600;
   const dt = 1 / (WING_IDLE.hz * perCycle);
   self.tick(dt);
@@ -729,13 +682,8 @@ console.log('\nwings:');
 }
 
 // ---- one author per hair bone ----------------------------------------------
-// A rig with Hair_* chains has TWO simulators: ammodoll's Bullet bodies (system
-// 'me-drive') and three-vrm's springBoneManager, which runs inside vrm.update
-// one system later in 'me-update' and therefore always wrote last. The Bullet
-// boxes swung and the rendered hair did not follow.
-//
-// Nothing else can catch this: every bone is finite, every quaternion is
-// written, both sims are "working". The only observable is WHICH ran last.
+// two simulators (ammodoll's Bullet in 'me-drive', three-vrm's springBoneManager in 'me-update') can write the
+// hair; every bone looks fine either way, so the only observable is WHICH ran last
 {
   console.log('\nhair ownership while the sim drives it:');
   const mk = () => {
@@ -798,10 +746,8 @@ console.log('\nwings:');
     check('...and ownership is released', self.__simHair === false);
   }
 
-  // A limp body with NO sim of its own must hang its hair on the world. The
-  // springs are authored for standing — gravity near zero, stiffness pulling
-  // toward a rest direction that rotates WITH the body — so on a body lying on
-  // its side the hair is pulled sideways and gravity cannot argue.
+  // a limp body with no sim of its own hangs its hair on the world: the springs are authored for standing
+  // (their rest direction turns with the body), so a body on its side would pull its hair sideways
   {
     const { LIMP_SPRINGS } = await import('../client/lib/avatar.js');
     const hips = { name: 'Hip' };
@@ -850,11 +796,8 @@ console.log('\nwings:');
       `stiffness ${joint.settings.stiffness}`);
   }
 
-  // Letting go of a DRAGGED body disposes its doll mid-tumble. Adopting the
-  // fallen shape hands the hair back live; not handing it back at all left it
-  // owned by a sim that no longer existed and frozen in mid-air — seen on a
-  // dragged dummy, never on a body going limp on its own, because that one
-  // keeps its doll until it settles.
+  // letting go of a DRAGGED body disposes its doll mid-tumble: the hair must come back live (adopting the
+  // fallen shape), or a sim that no longer exists owns it and it freezes mid-air
   {
     const q = (x: number) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), x);
     const bone = { quaternion: q(0.9) };
@@ -947,26 +890,9 @@ console.log('\nthe capsule stand-in can be measured and reached (round 2 N1):');
 
 console.log('\nmeasured jump take-off (#196 review B2):');
 {
-  // The jump clip does not start at frame 0: it starts where the body actually LEAVES the ground —
-  // the hips coming back UP through rest height after the anticipation dip. Starting at 0 plays the
-  // squat while already airborne (the mid-air-squat bug). The measurement is read off the clip's own
-  // hips track, so it is bound here against synthetic tracks with known answers rather than constants.
-  //
-  // clipTakeoff is module-private; its consumer is setClip('jump') → `a.time = clipTakeoff(...)`,
-  // so driving the real setClip binds the measurement AND its wiring together.
-  // Each case needs its OWN clip object: the result is cached on clip.userData.takeoff.
-  //
-  // Red on: deleting the measurement (`a.time = 0`); clipTakeoff returning a constant — including
-  // 0.50, the CORRECT answer for the headline fixture, because the cases carry different shapes with
-  // different right answers; starting at the squat bottom instead of the rise; dropping the 1 cm
-  // noise guard; searching the whole clip instead of its first half; and removing the `slot ===
-  // 'jump'` gate so every clip gets re-timed.
-  // (An earlier header claimed the first-half restriction "would need a full landing clip to
-  // exercise". That was wrong — a synthetic 7-key track with a deeper landing crouch separates the
-  // two, and is the `withLanding` case below. Corrected rather than left standing.)
-  // ONE declared survivor: deleting the `clip.userData.takeoff` memo write. Without it the function
-  // recomputes and returns the same value, so it is a perf regression, not a behavioural one —
-  // genuinely equivalent. Poisoning the memo IS behavioural and is bound (the repeated-jump case).
+  // the jump starts at takeoff (hips rising back through rest), measured from the clip's hips track and bound
+  // through the real setClip; each case needs its own clip (memo on clip.userData.takeoff). Red on: no measurement,
+  // a constant, the squat bottom, no 1 cm guard, whole-clip search, no slot gate. Survivor: the memo write (perf only).
   const hips = (times: number[], ys: number[]) =>
     new THREE.VectorKeyframeTrack('hips.position', times, ys.flatMap((y) => [0, y, 0]));
   const jumpClip = (times: number[], ys: number[], name = 'jump') =>
@@ -1017,10 +943,8 @@ console.log('\nmeasured jump take-off (#196 review B2):');
   check('a deeper landing crouch later in the clip is not mistaken for the take-off',
     Math.abs(withLanding - 0.50) < 1e-6, `a.time = ${withLanding}`);
 
-  // THE CACHE, which is what actually ships. Every fixture above uses a fresh clip, so the memo at
-  // avatar.js:485 is written and never read back — but production calls setClip('jump') against the
-  // SAME loaded jump.vrma object on every jump, so from the second jump onward the cached value is
-  // the only thing that reaches the mixer. Deleting the memo, or poisoning it, was invisible here.
+  // THE CACHE, which is what ships: production reuses the same loaded jump.vrma clip on every jump, so from the
+  // second jump on only the memo reaches the mixer
   {
     const shared = jumpClip([0, 0.33, 0.50, 0.75], [0.864, 0.494, 0.870, 1.20]);
     const first = timeFor(shared);
@@ -1057,10 +981,8 @@ console.log('\nmeasured jump take-off (#196 review B2):');
     wa.time === 0, `walk time = ${wa.time}`);
 }
 
-// house review of #260, client/lib I2: setSeatBlend clears currentSlot, and occupants.js gated the seat profile on it, so
-// a seated body never met the gate (seatGate: currentSlot !== pose). playingSlot is the slot actually carrying the body:
-// currentSlot outside a blend, the blend's heaviest clip (by the slot it really is) inside one.
-// Mutation (must go red): make playingSlot return this.currentSlot always.
+// setSeatBlend clears currentSlot, so a seat gate on it never met a seated body; playingSlot is the slot carrying
+// the body (currentSlot outside a blend, the heaviest clip's slot inside). Mutation: return currentSlot always.
 {
   const sitchair = { n: 'sitchair' }, sit = { n: 'sit' }, idle = { n: 'idle' };
   const play = (Avatar.prototype as any).playingSlot;

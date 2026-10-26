@@ -222,9 +222,7 @@ console.log(`  ${dim(bootReady)}`);
 await sleep(3000);   // realizers settle; caster pass has run several times
 
 // -- the rig ------------------------------------------------------------------
-// A fresh request (the bolt adopting mid-poll) is assigned on the NEXT
-// updateRig tick, and headless rAF can lag that a second — re-read until
-// the assignment settles rather than asserting mid-window.
+// a fresh request is assigned on the NEXT updateRig tick, and headless rAF can lag a second: re-read until it settles
 let rig: any = null;
 for (let i = 0; i < 8; i++) {
   rig = await evalJson("EW.lightrig()");
@@ -260,23 +258,15 @@ check("day cycle: at noon only the day:false porch burns", burning.length === 1 
   `slot intensities: [${(slotIntensities ?? []).join(", ")}]`);
 
 // -- the factory's weather drive ---------------------------------------------
-// Rain folded before the client joined. The TARGETS must be exact (pure
-// functions of folded state). The easing contract is per-FRAME, not
-// wall-clock: headless rAF throttles toward 1Hz — or suspends outright
-// when the OS deprioritizes the page — so the probe measures across two
-// real frames INSIDE the page, with a timeout that reports "rAF suspended"
-// honestly instead of failing on an artifact of the bench environment.
+// rain folded before join: the TARGETS must be exact (pure fold); easing is per-FRAME and headless rAF throttles or
+// suspends, so the probe measures two real frames in the page and reports "rAF suspended" rather than failing
 const m1 = await evalJson("EW.materials()");
 check("factory: materials were prepared", (m1?.wrapped ?? 0) > 0, `wrapped=${m1?.wrapped} meshes=${m1?.meshes}`);
 check("factory: rain wet target derived from folded state", Math.abs((m1?.target?.wet ?? 0) - 0.85) < 1e-6,
   `target.wet=${m1?.target?.wet}`);
 check("factory: rain cover target derived from folded state", Math.abs((m1?.target?.cover ?? 0) - 0.9) < 1e-6,
   `target.cover=${m1?.target?.cover}`);
-// One rAF pair can sample dt=0 on a loaded headless box (two callbacks in
-// one batch → the eased value hasn't moved), which mis-reads the per-frame
-// contract as a failure. Sample up to 5 pairs and accept the first that
-// MOVED — the contract is "eases frame-over-frame", not "eases across the
-// specific pair we happened to catch".
+// one rAF pair can sample dt=0 on a loaded box (two callbacks in one batch): sample up to 5 pairs, accept the first that MOVED
 const ease = await evalJson(`(async () => {
   const pair = () => new Promise((res) => {
     const a = EW.materials(); let done = false;
@@ -303,9 +293,8 @@ if (ease) {
 }
 
 // -- the bolt seam ------------------------------------------------------------
-// The sky build primes ~7.5MB and may degrade on a headless box — if it built,
-// the weather system's lightning must be an ADOPTED request (mirror), never a
-// scene light. If it degraded, say so honestly rather than fake a green.
+// if the sky built (~7.5MB, may degrade headless), lightning must be an ADOPTED request (mirror), never a scene
+// light; if it degraded, say so rather than fake a green
 let impl = null;
 for (let i = 0; i < 90; i++) {
   impl = await evalJson("(() => { try { return EW.lightrig().requests.some(r => r.key.startsWith('foreign:')) ? 'adopted' : null; } catch { return null; } })()");
@@ -324,10 +313,8 @@ if (impl === "adopted") {
 }
 
 // -- residency (§13.3 R1) -----------------------------------------------------
-// The driver walks an entity across the residency boundary with `place`
-// verbs: far → the sweep demotes it to a stand-in; near again → the sweep
-// promotes it back through the ordinary load pipeline. Fold parity must
-// hold on BOTH sides — state never changed, only the projection.
+// `place` walks an entity across the residency boundary: far → stand-in, near → promoted back through the ordinary
+// load pipeline; fold parity holds on both sides (only the projection changed)
 async function residencyState(pred: (r: any) => boolean, label: string): Promise<any> {
   let r: any = null;
   for (let i = 0; i < 16; i++) {
@@ -458,11 +445,8 @@ for (let i = 0; i < 12 && JSON.stringify(sigJoin) !== JSON.stringify(sigLive); i
 const capJoin = await capOf();
 {
   const exact = JSON.stringify(sigJoin) === JSON.stringify(sigLive);
-  // The governor's slot cap is a CLIENT lever, not fold state: a slow live
-  // session may have shed sheddable lights a fresh join hasn't. Flags must
-  // match for every light, uniforms for every light casting on both sides,
-  // and every keep must cast on both (cap-exempt) — cast-ness of a sheddable
-  // is the only difference the cap may explain.
+  // the slot cap is a CLIENT lever, not fold state: flags match for every light, uniforms for every light casting on
+  // both sides, and every keep casts on both; only a sheddable's cast-ness may differ
   const byKey = (s: any[]) => Object.fromEntries((s ?? []).map((x: any) => [x.key, x]));
   const L: any = byKey(sigLive), J: any = byKey(sigJoin);
   const keys = [...new Set([...Object.keys(L), ...Object.keys(J)])];

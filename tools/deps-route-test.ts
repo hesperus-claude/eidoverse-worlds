@@ -22,16 +22,9 @@ const check = (name: string, ok: boolean, detail = "") => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
 };
 
-// ── PORT SAFETY + CHILD OWNERSHIP (r3 B2) ─────────────────────────────────
-// The revision-2 review hit this harness's false-receipt bug in the field: a
-// fixed default port was already occupied, the child failed to bind, and the
-// test fetched a STALE listener — reporting on a server it never spawned. Two
-// defenses, both required:
-//   1. pick a port that is verifiably FREE before spawning (random high port,
-//      preflight fetch must FAIL);
-//   2. prove the listener we then talk to is OUR child: a nonce file written
-//      into this checkout's served tree, fetched back. Only a server rooted at
-//      THIS tree can serve it — a squatter from another checkout cannot.
+// ── PORT SAFETY + CHILD OWNERSHIP ─────────────────────────────────────────
+// a fixed port can be squatted, and the test then reports on a server it never spawned. So: (1) a random high
+// port whose preflight fetch must FAIL; (2) a nonce file in this tree's served root, fetched back, proves our child.
 async function freePort(): Promise<number> {
   for (let i = 0; i < 20; i++) {
     const cand = 20000 + Math.floor(Math.random() * 20000);
@@ -45,10 +38,8 @@ const NONCE = `route-nonce-${crypto.randomUUID()}`;
 const clientDir = join(import.meta.dir, "..", "client");
 writeFileSync(join(clientDir, `${NONCE}.txt`), NONCE);
 
-// process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
-// whose pid dies the instant it has launched the real binary, so kill() below
-// reaps nothing and the server outlives the test still holding this port —
-// which is precisely the stale-listener trap described above.
+// process.execPath, not "bun": on Windows the PATH "bun" is a .cmd shim whose pid dies at once, so kill() reaps
+// nothing and the server outlives the test holding the port
 const server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: mkdtempSync(join(tmpdir(), "deps-route-")) },
   stdio: "ignore",
@@ -111,11 +102,8 @@ for (const [path, minBytes] of ROUTES) {
   }
 }
 
-// Truthful-unavailable: a page whose optional TTS chunk is missing must know.
-// engine-piper guards its dynamic imports; prove the guard path exists by
-// fetching a deliberately-wrong chunk and asserting the server 404s cleanly
-// (rather than serving index.html for everything, which would turn a missing
-// module into a cryptic parse error instead of a catchable load failure).
+// truthful-unavailable: a missing optional TTS chunk must 404 cleanly (not index.html), so engine-piper's guarded
+// dynamic import gets a catchable load failure, not a parse error
 {
   const res = await fetch(`http://127.0.0.1:${PORT}/node_modules/@mintplex-labs/piper-tts-web/dist/no-such-chunk.js`);
   const text = res.ok ? await res.text() : "";

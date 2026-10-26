@@ -410,10 +410,8 @@ console.log("\ntrusted drafts (the ladder's second rung):");
   check("TW3 remove writes the list without that name", JSON.stringify(flat(wr.ops)[0]?.args) === JSON.stringify({ id: "@world", component: "trusted-components", value: { components: ["hesperus/material"] } }) && wr.errors.length === 0, JSON.stringify(wr));
 }
 
-// F2 (10-12): a refused value writes NOTHING. Since C8a a mistyped light colour came back as an error AND a `set light`
-// carrying the colour it already had (inspect.js sends whenever there are ops). Every descriptor field the table writes, on
-// a thing that has its component: a value it refuses is an error and no op. A refused key in an edit with valid ones drops
-// alone; the others still commit (an agent's multi-field edit keeps what was right).
+// a refused value writes NOTHING (no error plus an unchanged `set`), for every descriptor field; a refused key in
+// a multi-field edit drops alone and the others still commit
 {
   const { DESCRIPTORS, materializedOf } = await import("../shared/protocol/descriptors.js");
   const BAD: Record<string, string> = { num: "zz", color: "zz", enum: "no-such-option" };

@@ -63,25 +63,15 @@ export const angleDelta = (a, b) => {
 // CONFIG.params.get('slots') at module scope, so an empty object is a
 // TypeError before any test runs. Empty query = every default.
 export const CONFIG = { params: new URLSearchParams(), name: 'test' };
-// warmqueue.js reaches for the shader-node namespace and the sun. Neither means
-// anything headless, but a MISSING export is a SyntaxError at import time, which
-// takes the whole suite down before a single test runs (see loadwork-stub).
-// A REAL DirectionalLight, not a hand-built stand-in: lightrig configures
-// sun.shadow.mapSize/bias and the frustum extents at module scope, and three
-// already ships that whole structure correctly. Cheaper to borrow than to
-// mimic field by field, and it cannot drift from what the real one has.
+// warmqueue.js needs the shader-node namespace and the sun: a MISSING export is a SyntaxError at import. A real
+// DirectionalLight, since lightrig configures its shadow fields at module scope.
 export const sun = (() => {
   const l = new THREE_RAW.DirectionalLight(0xffffff, 1);
   l.position.set(0, 1, 0);
   return l;
 })();
-// CHAINABLE, because materials.js builds real TSL graphs -- `clamp(x,0,1).pow(2)
-// .mul(U.wet)` and deeper. The old stub returned `() => {}`, so the first call
-// yielded undefined and the next `.pow` threw; any test that reached
-// prepareMaterial died on the shader graph rather than on its own subject.
-// A self-returning node lets the graph build into nothing, which is exactly
-// what a headless harness wants: the factory's WIRING is under test, never the
-// shader it emits.
+// CHAINABLE: materials.js builds real TSL graphs (`clamp(x,0,1).pow(2).mul(U.wet)`); a self-returning node lets
+// the graph build into nothing, since the factory's wiring is under test, never the shader
 const tslNode = new Proxy(function () {}, {
   get: (_t, k) => (k === 'then' ? undefined : tslNode),   // not a thenable
   apply: () => tslNode,

@@ -68,11 +68,8 @@ check('a lite boot is dramatically lighter overall',
   await page.close();
 }
 
-// Reported from a real phone, 2026-09-15: "my messages were not appearing... but once I
-// reloaded the client the chat history appeared". A lite client could SEND and never
-// see. The live path is realize/livechat.js turning a 'say' entry into a chat line, which
-// lite.js was not subscribing to; the reload path is social.js replaying history, which
-// it was — hence a chat that only worked in the past tense. This pins the live path.
+// the live chat path: realize/livechat.js turns a 'say' entry into a chat line, and lite.js must subscribe to it
+// (history replay alone makes a chat that only works in the past tense)
 {
   const page = await mkPage();
   const errs = [];
@@ -101,15 +98,8 @@ check('a lite boot is dramatically lighter overall',
   await page.close();
 }
 
-// The socket, observed from INSIDE the page.
-//
-// Playwright's `framesent` was the instrument here and it is not reliable: this suite
-// reported 19/19 locally while an independent reviewer got 18/19 on the same commit,
-// the gesture frame missing from the observer while an in-page receipt proved the product
-// had sent it (#188 B4). A gate that flakes is worse than no gate - it taught us the
-// wrong thing about our own code. So we patch WebSocket.prototype.send before any app
-// script runs and keep the frames ourselves: same object the client actually calls,
-// nothing between us and it.
+// the socket, observed from INSIDE the page: Playwright's `framesent` missed frames the product had sent (#188 B4),
+// so WebSocket.prototype.send is patched before any app script runs; the same object the client calls
 const SOCKET_SPY = `
   globalThis.__frames = { sent: [], opened: 0 };
   const _send = WebSocket.prototype.send;
@@ -124,11 +114,8 @@ const SOCKET_SPY = `
 `;
 const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: [], opened: 0 });
 
-// B1: one arrival, one socket generation. The inline early socket joins before the lite
-// decision exists, and net.js adopts it ONLY when the join it would send matches byte for
-// byte. lite asking for avatar:'' missed, so the early socket was discarded and a second
-// opened - the server saw arrive -> leave -> arrive, and anything delivered to the first
-// socket could be thrown away with it (it was a held whisper then; whisper was removed, R 10-18).
+// B1: one arrival, one socket generation. net.js adopts the inline early socket only when its join matches byte
+// for byte; a mismatch opens a second (arrive → leave → arrive) and can discard what the first delivered
 {
   const page = await mkPage();
   await page.addInitScript(SOCKET_SPY);
@@ -219,18 +206,9 @@ const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: []
   await page.close();
 }
 
-// ARRIVAL DELIVERY. The window between adopting the early socket and having somewhere
-// to put what it carries.
-//
-// Round two of the review found real message loss here: connect() adopts the early
-// socket and drains what raced ahead of us - the join snapshot and the first live
-// entries. A chat window that did not exist yet meant the drain threw, connect()
-// reported it and carried on, and a delivered message was gone for good (it was a held
-// whisper then). These gates hold the ordering that fixes it. Since R 10-18 speech is
-// arrival-only and whisper is removed: what was said before the reader arrived, and a
-// whisper sent while it was away, must NOT appear; the drain must still not throw.
-//
-// `raw` drives a plain socket from inside the page: a second participant, no client.
+// ARRIVAL DELIVERY: connect() adopts the early socket and drains what raced ahead (the join snapshot, first live
+// entries) before a chat window may exist; the drain must not throw, and with arrival-only speech earlier says must
+// NOT appear. `raw` drives a plain socket from inside the page: a second participant, no client.
 const RAW = `
   globalThis.__raw = async (msgs, { id, wait = 900 }) => {
     const q = new URLSearchParams(location.search);
@@ -316,12 +294,8 @@ const RAW = `
   await page.close();
 }
 
-// B3: a first-time visitor to a key-gated world must be able to GET IN from lite.
-// The owned world sets JOIN_TOKEN, so arriving without ?key= earns close code 4003, which
-// net.js turns into `bad-key`. The full client answers that by reopening openDoor - which
-// lives in ui.js and arrives with the engine attached. "Try the full world" is not a door
-// for someone whose phone the full world kills, so lite needs its own, and it has to work
-// without fetching a single engine byte.
+// B3: a first-time visitor to a key-gated world must get in from lite: close 4003 → `bad-key`, and the full client's
+// openDoor lives in ui.js with the engine, so lite needs its own door that fetches no engine bytes
 {
   const page = await mkPage();
   const asked = [];
@@ -358,20 +332,13 @@ const RAW = `
   await page.close();
 }
 
-// THE TRIPWIRE, which cannot be tested against the world that motivated it: the commons
-// is a different deployment serving its own client, and a world log only arrives over the
-// socket on join, so there is no way to mirror that load locally. What CAN be tested is
-// the mechanism, and the mechanism is cause-agnostic by design - it asks only "did a full
-// boot arm the flag and never come back to clear it". A tab the OS reaped for memory and
-// a tab killed by hand leave identical evidence, so the arming and the per-world keying
-// are the whole of what needs proving here.
+// THE TRIPWIRE: only the mechanism is testable locally, and it's cause-agnostic ("did a full boot arm the flag and
+// never clear it": an OOM reap and a hand kill look the same), so arming and per-world keying are what's proved
 {
   const page = await mkPage();
 
-  // 1. A world whose last full boot never finished: lite, and SAYS why.
-  // Plant the flag from a page that arms NOTHING (another world, lite). Planting it from a full boot of alpha itself
-  // (the old setup) is not a death: leaving that page fires pagehide, the clean-exit signal, which clears the flag
-  // it just planted. A real OOM kill runs no handler, and that's exactly the difference being tested.
+  // 1. a world whose last full boot never finished: lite, and SAYS why. Plant the flag from a page that arms nothing:
+  // leaving a full boot of alpha fires pagehide (a clean exit) and clears it, which an OOM kill never does
   await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => localStorage.setItem('ew-boot-attempt:alpha', String(Date.now())));
   await page.goto(`${world.origin}/?world=alpha&name=trip&key=${world.key}`, { waitUntil: 'load' });
@@ -398,18 +365,9 @@ const RAW = `
   // 3. A full boot that survives disarms its own world, and only after the load tail goes
   //    quiet - not at arrival, which is when the phone was still alive and about to die.
   const armedDuring = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:beta') !== null);
-  // The disarm has two paths, and this gates the one that carries the meaning: PAGEHIDE.
-  // Leaving deliberately fires it; an out-of-memory kill does not, and that asymmetry is
-  // the whole discrimination. Navigating away is exactly the event a real clean exit
-  // raises, so this is the product path, not a simulation of it.
-  //
-  // The 60s dwell is the other path and is deliberately NOT gated here: waiting it out
-  // costs the suite a minute and a half and turns a green run into a race against
-  // whatever else is loading the server - which is precisely how the previous version of
-  // this check passed on a 5s boot and failed on a 12s one, teaching us about the
-  // harness instead of the code.
-  // ARRIVE first, so this check is about a SURVIVING boot. (Leaving mid-load is also a clean exit now: index.html
-  // listens for pagehide from the moment it arms; lite-choice-test covers that case.)
+  // the disarm that carries the meaning is PAGEHIDE: a deliberate leave fires it, an OOM kill doesn't. The 60s dwell
+  // is the other path, deliberately not gated (slow, and racy under load). Arrive first, so this is a SURVIVING boot
+  // (leaving mid-load is a clean exit too; lite-choice-test covers it).
   const betaArrived = await page.waitForFunction(
     () => { const el = document.getElementById('splash'); return !el || el.classList.contains('gone'); },
     { timeout: 60000 },
@@ -434,13 +392,8 @@ const back = await weigh('&lite=0', 'escape hatch (?lite=0)');
 check('?lite=0 forces the full client back', back.lite === false && back.why === 'url');
 check('?lite=0 fetches the engine again', back.engine.length > 0);
 
-// THE FULL CLIENT MUST STILL BE ABLE TO PLAY A GESTURE.
-//
-// Splitting the gesture table out from behind avatar.js's engine imports left avatar.js
-// re-exporting ANIM_CLIPS without a local binding, so playOnce threw ReferenceError - and
-// nothing noticed, because every gate here boots the client and none of them presses a
-// button a person presses. Reported from a phone as a red "ANIM_CLIPS is not defined" toast.
-// tools/reexport-binding-test.mjs catches the class; this catches the behaviour.
+// the full client must still play a gesture: avatar.js re-exporting ANIM_CLIPS without a local binding threw in
+// playOnce; tools/reexport-binding-test.mjs catches the class, this catches the behaviour
 {
   const page = await mkPage();
   const errs = [];

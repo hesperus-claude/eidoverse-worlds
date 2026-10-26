@@ -173,10 +173,8 @@ try {
   check('...and when the field stops coming, it is 100 % again (absence = default, live)', !!vr1, JSON.stringify(await view(W.pg, 'ref')));
 
   // ---------------------------------------------------------------- the plate: auto vs +30 cm on the same body
-  // A plate rides the LIVE hips through a 2 cm dead zone (plateanchor.js smoothY), so it rests up to 2 cm short of its
-  // target on whichever side it came from. Measured (8 readings over 3 s, steady to 1 mm): sizer 1.862, ref 1.901 —
-  // the sizer had just come UP from 70 %, ref DOWN from its 200 % clamp test: −2 cm and +2 cm, 4 cm apart, as designed.
-  // So the auto-vs-auto check allows two dead zones, and the honest measure of the lift is the sizer against ITSELF.
+  // a plate rides the live hips through a 2 cm dead zone (plateanchor.js smoothY), so two bodies can rest 4 cm
+  // apart: the auto-vs-auto check allows two dead zones, and the lift is measured against the same body
   const over = async (id) => { let n = 0, sum = 0, lo = Infinity, hi = -Infinity;
     for (let i = 0; i < 8; i++) { const v = await view(W.pg, id); if (v) { const h = v.plateY - v.rootY; sum += h; n++; lo = Math.min(lo, h); hi = Math.max(hi, h); } await sleep(400); }
     return { mean: n ? sum / n : NaN, lo, hi, n }; };

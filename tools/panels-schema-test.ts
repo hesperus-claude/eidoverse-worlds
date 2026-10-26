@@ -171,12 +171,8 @@ const uvAt = (r: any, fx = 0.5, fy = 0.5) => [(r.x + r.w * fx) / cv.width, (r.y 
 check('a UV in the padding resolves to null', hitRegion(regions, cv, 0.5, 0.001) === null);
 { const [u, v] = uvAt(byAction('dim')[0]);
   check('a check hit hands back the flipped payload', hitRegion(regions, cv, u, v)?.payload === true); }
-// the track proper is the region inset 6px each side; frac is measured along it
-// DERIVED, not restated: renderCanvas lays the value column at `vx = width * 0.34`
-// (panels.js:228) and pushes the region out from it by the inset on each side
-// (`x: vx - 6, w: tw + 12`, panels.js:265). So the inset the product actually
-// used is recoverable from the emitted geometry — and asserting it pins the
-// number. A test-side literal would move WITH a mutation and hide the drift.
+// the track proper is the region inset 6px each side; frac is measured along it. The inset is DERIVED from the
+// emitted geometry (value column at width * 0.34), not restated, so a mutation can't move with the test
 const VX = W * 0.34;                       // the product's own value-column origin
 const INSET = VX - slider.x;               // what renderCanvas actually inset by
 check('the slider region is inset by exactly 6px each side (derived from the emitted region, not restated)', INSET === 6, `derived inset=${INSET} (x=${slider.x}, vx=${VX})`);

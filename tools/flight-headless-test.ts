@@ -72,10 +72,8 @@ check('every grafted bone has a finite world position in P',
         const v = P[n];
         return v && ['x', 'y', 'z'].every(k => Number.isFinite(v[k]));
       }));
-// The wing ROOTS sit above the hips; the lower tips sweep down PAST them,
-// which is what a folded wing does -- an earlier version of this asserted all
-// twelve were above the hips and failed a graft that was correct. Assert the
-// thing that is actually true: roots high, span wide, left and right opposed.
+// wing ROOTS sit above the hips; the lower tips sweep down past them (as a folded wing does), so assert roots high,
+// span wide, left and right opposed
 const roots = ['L_Wing_Upper', 'L_Wing_Lower', 'R_Wing_Upper', 'R_Wing_Lower'];
 check('wing ROOTS sit above the hips',
       roots.every(n => P[n].y > P.hips.y));
@@ -143,27 +141,9 @@ check('a broadside wing feels lift-ward drag', f.force.y > 0);
 check('and a flutter torque, not just drag', Math.abs(f.torque.y) > 1e-6);
 
 // ---------------------------------------------- live revocation, the real path
-//
-// mica, CHANGES REQUESTED on d8ceee5: "live grant revocation is still not
-// applied to headless/MCPL agents", with production evidence -- seq 15183
-// granted mythos fly:false, no later fly:true, and seq 15206 was a completed
-// sortie. `myRights` was written once from snapshot.yourRights and nothing
-// on the live path ever changed it, so the action-time provider read a
-// withdrawn grant forever.
-//
-// The pure capability test passed throughout, and that is the lesson worth
-// keeping: it called resolveFlight with a rights object it changed by hand.
-// It never crossed the path where the rights object stopped changing. So this
-// one drives the agent's REAL rights path and asks the REAL flightAllowed() --
-// the function every flight verb actually calls.
-//
-// The protocol: the live path is the server's `your-rights` message, re-sent to
-// every client whenever a role changes (server.ts rightsFor over the door's
-// roles record: who wins between a person's own record and the world's
-// default-role is the SERVER's rule, answered whole -- the agent never merges a
-// delta, so the v1 wildcard-precedence checks that lived here have no subject).
-// The agent's `your-rights` case hands msg.rights to acceptEffectiveRights;
-// that wiring is the mutation control at the end.
+// the server re-sends your-rights on every role change, the agent hands it to acceptEffectiveRights, and flightAllowed()
+// must see the withdrawn grant; a test that hand-edits the rights object never crosses that path. The your-rights
+// wiring is the mutation control at the end.
 console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');

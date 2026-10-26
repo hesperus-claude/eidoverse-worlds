@@ -72,11 +72,8 @@ let posting = false;
 const hookName = (actor: string) =>
   (actor.replace(/discord/gi, "disc0rd").replace(/clyde/gi, "clyd3").trim() || "someone").slice(0, 80);
 
-// Discord rejects content that RENDERS empty (API 50006) even when JS trim()
-// keeps it — zero-width and other invisible code points survive .trim().
-// 2026-08-15 incident: one such say tripped the webhook error path, which
-// (being meant for deleted webhooks) stuck the mirror in plain-post mode
-// for 12 hours. Filter these before they ever reach the API.
+// Discord rejects content that RENDERS empty (API 50006) even when trim() keeps it: filter invisible code points
+// before the API, or the webhook-error path sticks the mirror in plain-post mode
 const INVISIBLE =
   /[\s\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0]/gu;
 const sendable = (s: string) => s.replace(INVISIBLE, "").length > 0;
@@ -90,12 +87,8 @@ async function postOnce(actor: string, chunk: string) {
       await postHook.send({ content: chunk, username: hookName(actor), ...quiet });
       return;
     } catch (e) {
-      // Only a webhook that is actually GONE justifies the (sticky) fallback:
-      // 10015 Unknown Webhook / 10003 Unknown Channel. Anything else — content
-      // errors (50006 empty, 50035 invalid form body), rate limits, hiccups —
-      // is about THIS send; the retry in pumpDiscord gets one more shot at it,
-      // and per-speaker names stay on. (2026-08-15: a content error here cost
-      // the mirror 12 hours of nameless posts.)
+      // only a GONE webhook (10015 Unknown Webhook / 10003 Unknown Channel) justifies the sticky fallback; any other
+      // error is about this send, gets pumpDiscord's retry, and per-speaker names stay on
       const code = (e as any)?.code;
       if (code !== 10015 && code !== 10003) throw e;
       log(`webhook gone (${(e as Error).message}) — falling back to plain posts`);
@@ -205,10 +198,8 @@ function connectWorld() {
       joined = true;
       myId = msg.cut?.you ?? null;
       Object.assign(names, msg.cut?.names ?? {});
-      // live lines only: the channel is a window, not an archive. Everything at
-      // or before the snapshot's head is history (a reconnect replays none of
-      // it); the head, not a remembered high-water mark, so a reset world (a
-      // fresh, shorter log) isn't muted until it outgrows the old one
+      // live lines only: everything at or before the snapshot's head is history; the head, not a remembered
+      // high-water mark, so a reset world (a shorter log) isn't muted
       lastSeq = Number.isInteger(msg.cut?.head) ? msg.cut.head : lastSeq;
       log(`joined "${msg.world}" as ${msg.you} (${msg.state?.recentChat?.length ?? 0} recent lines skipped — live lines only)`);
       pumpWorld().catch((e) => log(`world pump error: ${e.message}`));

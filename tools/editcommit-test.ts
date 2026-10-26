@@ -146,11 +146,8 @@ console.log("\nthe channel box (step 3): rotations undo by q, and the editor rea
   check("…and one Ctrl+Z brings both back", ub.ok && c("r1").model === "swing.glb" && c("r1").collider?.shape === "box", JSON.stringify([ub.refused, c("r1")]));
 }
 
-// house review of #260, client/lib I23: a scrubbed RUN of channels (panels.js commitRun → editpanels.js __run) went to
-// commitMany for the primary thing only, and a World run was dropped. commitMany takes the multi-select (each thing from
-// its own record) and the world (worldEditOps over every field at once: two sky fields are ONE sky, where two planEdits
-// would each re-author the whole sky and the second undo the first) — one request, one Ctrl+Z, either way.
-// Mutation (must go red): make commitMany take only a single id again.
+// a scrubbed RUN of channels edits the whole multi-select and the world in one request and one Ctrl+Z; world
+// fields go through worldEditOps at once (two sky fields are ONE sky). Mutation: commitMany takes a single id again.
 console.log("\nI23. a scrubbed run edits the whole selection, and the world:");
 {
   const { commitMany } = await import("../client/lib/inspect.js");

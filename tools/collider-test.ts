@@ -122,10 +122,8 @@ console.log('\nbeing UNDERNEATH things:');
 
 console.log('\nthe vertical numbers follow the body:');
 {
-  // STEP is an EXACT-collider allowance (boxes have no step-up; the mantle
-  // system handles those). An avatar walking at the foot of a 0.4m interior
-  // ledge is lifted onto it; a ragdoll joint lying at the same spot must not
-  // be — a 55cm step-up applied to a wrist teleports it onto the furniture.
+  // STEP is an exact-collider allowance (boxes rely on the mantle): an avatar steps onto a 0.4m ledge, a ragdoll
+  // joint at the same spot must not (a 55cm step-up teleports a wrist onto the furniture)
   C.clearColliders(); twoLevel('room');
   check('an avatar at the foot of a 0.4m interior ledge steps up',
     at(2.5, 0, 0).ground > 0.3, `ground ${at(2.5, 0, 0).ground.toFixed(2)}`);
@@ -167,16 +165,8 @@ console.log('\nregression guards — the walking avatar must not have changed:')
 
 console.log('\nfloor-shaped things with lying tops (the blanket rule, issue #11):');
 {
-  // The smallest mesh that reproduces the bug: a 3×3m blanket, 4cm thick,
-  // three 0.5m cushions on it. NO collide override anywhere in this block —
-  // the auto rule is the thing under test.
-  //
-  // The cloth is TESSELLATED (12×12) on purpose. The lie probe buckets
-  // vertices, so it can only see surface a vertex lands on — a corner-only
-  // BoxGeometry cloth is invisible between its corners and the probe reads
-  // the cushion corners as the whole story. Real triggers for this rule are
-  // generated meshes at 10k–150k tris, which cover every cell many times
-  // over; the sparse case is pinned separately below as the fail-safe it is.
+  // the smallest repro: a 3×3m blanket, 4cm thick, three 0.5m cushions; no collide override (the auto rule is under
+  // test). The cloth is tessellated 12×12 because the lie probe buckets vertices; the sparse case is pinned below.
   const blanket = (id: string, seg = 12) => {
     const cloth = new THREE.BoxGeometry(3, 0.04, 3, seg, 1, seg); cloth.translate(0, 0.02, 0);
     const parts = [cloth];
@@ -220,11 +210,8 @@ console.log('\nfloor-shaped things with lying tops (the blanket rule, issue #11)
   C.clearColliders();
   check('a car-height hump stays a box (height gate)', !auto('car', 3, 0.9, 2.5, 0.36).exact);
   C.clearColliders();
-  // The probe's known blind spot, pinned as DELIBERATE: a corner-only
-  // low-poly mesh gives the probe nothing to see between its corners, so it
-  // under- or mis-reads the lie and the object keeps today's box. Wrong in
-  // the safe direction — sparse authored props stay exactly as they are;
-  // only dense (generated) meshes can earn the flip.
+  // the probe's known blind spot, pinned as deliberate: a corner-only low-poly mesh keeps its box (wrong in the
+  // safe direction; only dense generated meshes can earn the flip)
   blanket('sparse', 1);
   check('a corner-only low-poly blanket keeps the status quo (box)',
     !C.colliders.get('sparse').exact);
@@ -236,10 +223,9 @@ console.log('\nfloor-shaped things with lying tops (the blanket rule, issue #11)
   check('collide:"box" still wins over the blanket rule', !C.colliders.get('forced').exact);
 }
 
-// ---- a thing a tumbling engine laid down (review of b398d7e3 #1) ----
-// Every reader here works root-local with a yaw. A 1×2×0.5 slab lying on its side (90° about z) is 2 m long in -x and
-// 1 m tall; read through rotation.y alone it was still a 2 m-tall column at its origin: an invisible wall beside it and
-// no floor where it really is. A box yawed 180° by quaternion reads back from three's Euler as x = z = π, rotation.y 0.
+// ---- a thing a tumbling engine laid down ----
+// readers work root-local with a yaw: a slab on its side read through rotation.y alone is a wall with no floor, and
+// a box yawed 180° by quaternion reads back from three's Euler as x = z = π, rotation.y 0
 console.log('\ntumbled and quaternion-yawed things:');
 {
   const lay = (id: string, q: number[], at: number[], tx = 0) => { const g = new THREE.BoxGeometry(1, 2, 0.5); g.translate(tx, 1, 0);

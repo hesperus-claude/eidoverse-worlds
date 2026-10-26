@@ -15,21 +15,15 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
-// The bus is the REAL one (base.js), deliberately: micstate subscribes to
-// 'audio:ptt' to drop a held key on mode exit, and voiceconsent emits it. A
-// noop stub would pass a broken subscription silently — the exact class of
-// blindness these files keep writing warnings about.
+// the REAL bus (base.js): micstate subscribes to 'audio:ptt' to drop a held key on mode exit and voiceconsent emits
+// it, so a noop stub would hide a broken subscription
 let typed = 0;
 mock.module(fileURLToPath(new URL('../client/lib/net.js', import.meta.url)), () => ({
   sendTyping: () => { typed++; },
   say: () => {}, sendRequest: async () => ({ ok: true }), net: {},   // for mictoggle.js's graph (the stuck-key rows run it)
 }));
-// Full enough for the gate GRAPH to build (micstate-exec-test's stub lacks
-// createGain/createMediaStreamDestination, so its gate is always unavailable
-// — fine for its questions, blinding for these: an unbuilt gate reports
-// openness 0 forever and every assertion below would vacuously pass).
-// The analyser reports a level WE set, so the level side of the machine can
-// be driven: `room` is the RMS the "microphone" hears right now.
+// full enough for the gate GRAPH to build (an unbuilt gate reports openness 0 and every check passes vacuously);
+// the analyser reports a level WE set: `room` is the RMS the "microphone" hears now
 let room = 0;
 mock.module(fileURLToPath(new URL('../client/lib/audioctx.js', import.meta.url)), () => ({
   audioContext: () => ({
@@ -65,9 +59,7 @@ t('VA mode: holding the key does not open the gate', gate(0));
 ms.setPttHeld(false);
 
 // ── PTT: the key IS the gate ───────────────────────────────────────────────
-// The announce assertions ride the FIRST press: the 🎙 shares its 1500ms
-// rate-limit with the onset watcher through _lastOnset, so any earlier press
-// in this file would eat the window and make "did it announce" untestable.
+// the announce checks ride the FIRST press: the 🎙 shares a 1500ms rate-limit with the onset watcher (_lastOnset)
 vc.setPttMode(true);
 t('PTT armed: gate starts closed', gate(0));
 typed = 0;
@@ -92,11 +84,8 @@ t('PTT: unmuted re-press opens again', gate(1));
 t('PTT: unmuted+held reports speaking:true', ms.micGateInfo().speaking === true);
 
 // ── the transport's mic OFF outranks the key, exactly as mute does ─────────
-// setMicLive is how a transport reports device liveness (voicesfu.js sfuMic).
-// The lane is retained across OFF, so `_lane && !_muted` alone kept saying
-// "on": a held key drove the gain open over a device the transport had
-// disabled, and the pill said speaking:true (Mica, #148 round 3). Liveness is
-// the third leg of micOn() and the gate's authority must be the same answer.
+// setMicLive reports device liveness (voicesfu.js sfuMic); the lane survives OFF, so liveness is micOn()'s third
+// leg and the gate must give the same answer
 ms.setMicLive(false);
 t('PTT: held → mic OFF closes the gate', gate(0));
 t('PTT: held → mic OFF reports speaking:false', ms.micGateInfo().speaking === false);
@@ -112,15 +101,8 @@ t('mode exit drops the held key', ms.pttHeld() === false);
 t('mode exit closes the gate', gate(0));
 
 // ── the level side keeps running under PTT but must drive NOTHING ──────────
-// The onset machine (micgate.js makeOnsetGate) is ONE machine for both
-// regimes: the meter and noise floor learn either way, and the level's own
-// verdict — open the gate, fire the 🎙 — is what a held key replaces. Speech
-// next to an un-pressed key is exactly what the person who chose PTT does
-// not want the room to get; if the level's 🎙 fired, the pill over their
-// head would claim the room heard something it did not.
-//
-// The machine ticks on a real 20ms interval with a ~1s learn-before-judge
-// window, so these cases wait it out rather than poking its internals.
+// one onset machine (micgate.js makeOnsetGate) for both regimes: meter and floor learn either way, but under PTT the
+// level must not open the gate or fire the 🎙. It ticks at 20ms with ~1s learn-before-judge, so cases wait it out.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const speak = async () => { room = 0.5; await sleep(2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
 const hush  = async () => { room = 0;   await sleep(900);  };   // past the 700ms hang-time
@@ -146,9 +128,8 @@ await hush();
 t('VA: hush closes the gate after hang-time', gate(0));
 
 // ── the stuck-key class: a key-up and a window blur both drop the hold ─────
-// EXECUTED against the real mictoggle.js (#260 house I247: these were regexes over its source): its window listeners are
-// the shipped ones, driven with real events. Alt-tab with the key down is how every PTT implementation ships an open mic
-// that says it is closed.
+// executed against the real mictoggle.js listeners with real events: alt-tab with the key down must not leave an
+// open mic that says it's closed
 import { readFileSync } from 'fs';
 const mt = readFileSync(new URL('../client/lib/mictoggle.js', import.meta.url), 'utf8');
 // ui.js (reached through mictoggle's graph) takes its HUD elements at load: the page's shell, empty
@@ -166,10 +147,8 @@ window.dispatchEvent(new Event('blur'));
 t('mictoggle: window blur releases the hold', heldAgain && ms.pttHeld() === false && gate(0));
 vc.setPttMode(false);
 t('mictoggle: badge gold is gated on the key under PTT', /!pttMode\(\) \|\| pttHeld\(\)/.test(mt));
-// A focused CHECKBOX is not typing. The panel's push-to-talk box keeps focus
-// after the click, so a guard that skips V for any INPUT eats the first press
-// of the mode you just enabled (found by ear 2026-09-10). The guard must be
-// type-aware: text-like inputs and editable regions only.
+// a focused CHECKBOX isn't typing: the PTT box keeps focus after the click, so the V guard must be type-aware
+// (text-like inputs and editable regions only)
 t('mictoggle: V guard is typing-aware, not any-INPUT', !/\['INPUT', 'TEXTAREA'\]\.includes\(document\.activeElement/.test(mt) && /typingTarget\(\)/.test(mt) && /checkbox|TEXT_INPUT/.test(mt));
 const ap = readFileSync(new URL('../client/lib/audiopanel.js', import.meta.url), 'utf8');
 t('audiopanel: sensitivity row dims under PTT (no control that lies)', /audio:ptt.*dimFloor|dimFloor[\s\S]{0,400}audio:ptt/.test(ap.replace(/\n/g, ' ')) || (/dimFloor/.test(ap) && /bus\.on\('audio:ptt', dimFloor\)/.test(ap)));

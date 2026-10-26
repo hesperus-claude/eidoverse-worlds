@@ -71,12 +71,9 @@ try {
     const arm = { leftUpperArm: [0, 0, 0.3, Math.sqrt(0.91)] };
     const heldPose = () => held.evaluate(() => JSON.stringify((globalThis as any).EW.myState.pose ?? null));
     const hints = () => held.evaluate(() => (globalThis as any).__hints.slice() as string[]);
-    // held's avatar as a page draws it: "absent" when the page has none, else `targets`, each bone its pose override
-    // holds with its target rotation while the pose eases in or holds (wantWeight 1, avatar.js setPose; clearPose sets
-    // 0), `posed`, whether it holds a pose override at all (the ease-out drops it and hands the bones back), and
-    // `bone`, the arm's normalized bone as the renderer last drew it (avatar.js eases each held bone to its target).
-    // On poser's page that is held's remote avatar; on held's own page it is held's own avatar, which the client's
-    // held-pose system checks against EW.myState.pose each frame and sets when the state changes (client/main.js).
+    // held's avatar as a page draws it: "absent", or `targets` (each override bone's target while the pose holds),
+    // `posed` (any pose override at all) and `bone` (the arm's normalized bone as last drawn). Poser's page reads the
+    // remote avatar, held's page its own (client/main.js sets it from EW.myState.pose).
     const read = (pg: any, self: boolean) => pg.evaluate((self: boolean) => {
       const g = globalThis as any, av = self ? g.EW.me() : g.EW.remotes.get("held")?.avatar;
       if (!av?.vrm?.humanoid) return "absent";

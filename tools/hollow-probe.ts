@@ -116,9 +116,8 @@ const roomScale = footprint >= MIN_FOOTPRINT && height >= MIN_HEIGHT;
 const hollow = dist > HOLLOW_MIN_DIST;
 
 // ---- does it carry its own floor? (colliders.js hasFloor) -------------------
-// Rays straight down from mid-height, over the inset middle of the footprint.
-// A deck/platform is hit by most of them; a tree's open understorey by almost
-// none. Same 4×4 grid and 0.35 threshold as the client.
+// rays straight down from mid-height over the inset footprint: a deck catches most, a tree's understorey almost
+// none; same 4×4 grid and 0.35 threshold as the client
 const tris3: number[][][] = [...triangles()];
 function rayDownHitsFloor(ox: number, oz: number): boolean {
   const midY = centre[1]!;

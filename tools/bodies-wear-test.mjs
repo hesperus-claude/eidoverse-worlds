@@ -21,10 +21,8 @@ const dir = dirname(fileURLToPath(import.meta.url));
 // The body state the Profile reads. `me` is what is ACTUALLY on screen; `name` is what we intended.
 const state = (globalThis.__bodyState ||= { me: null, name: null });
 
-// bodies.js reads the worn list from localStorage AT IMPORT, so it must exist before the dynamic
-// import below — otherwise `mine` is empty, every row is undefined, and the checks below would be
-// asserting over absent rows (a green from an empty measurement is the failure this repo keeps
-// scarring on). A real browser has this key the moment you have ever worn anything.
+// bodies.js reads the worn list from localStorage AT IMPORT, so seed it before the dynamic import, or every
+// row is undefined and the checks pass over absent rows
 const store = new Map([['ew-worn', JSON.stringify(['claude'])]]);
 globalThis.localStorage = {
   getItem: (k) => store.get(k) ?? null,

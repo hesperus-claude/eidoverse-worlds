@@ -48,10 +48,8 @@ check('a stall cannot teleport the pose (dt is clamped)', /Math\.min\(0\.1,/.tes
 let clock = 0, buttons = { left: [], right: [] };
 const fingerCurl = { left: { index: 0, grip: 0 }, right: { index: 0, grip: 0 } };
 const sourceFor = (hand) => ({ gamepad: { buttons: buttons[hand] } });
-// A runnable MODEL of the product filter. It is not the product function (xr.js cannot be imported:
-// three, the renderer and the DOM come with it), so the text assertions above pin the product source
-// and the assertion below pins this model against it. If they ever disagree, the suite goes red
-// rather than quietly testing a copy.
+// a runnable MODEL of the product filter (xr.js can't be imported headless): the text assertions pin the product
+// source and the check below pins this model to it
 const st = { left: { index: null, grip: null }, right: { index: null, grip: null } };
 const alpha = (hz, dt) => { const te = 1 / (2 * Math.PI * hz); return 1 / (1 + te / dt); };
 const sample = (function () {
@@ -74,10 +72,7 @@ const sample = (function () {
     }
   };
 })();
-// the reimplementation above must match the product text, or this suite is testing a copy:
-// The model below is a COPY of the product filter (xr.js cannot be imported). These two assertions
-// are what stop it drifting into testing itself: BOTH lines of the product's filter are pinned by
-// text, so a mutation to either turns this red even though the behavioural checks run the copy.
+// the model is a COPY of the product filter: both product lines are pinned by text, so mutating either turns this red
 check('the runnable model matches the product’s filter expression',
   /st\.x \+= oneEuroAlpha\(CURL_MIN_CUTOFF \+ CURL_BETA \* Math\.abs\(st\.dx\), dt\) \* \(raw - st\.x\)/.test(fnSrc));
 check('…and the SPEED estimate is low-passed too, not taken raw',
@@ -88,9 +83,8 @@ const step = (ms, vIndex, vGrip = 0) => { clock += ms;
   sample(); };
 
 // ---- 1. a resting finger's noise is suppressed
-// A STRONGER noise case (#197, 2026-09-20): ±2% is gentle enough that an UNSMOOTHED speed estimate
-// still passes — the derivative's own noise has to be big enough to open the cutoff before the
-// D_CUTOFF low-pass earns its place. Real controller noise is nearer this.
+// a STRONGER noise case (#197): at ±2% an unsmoothed speed estimate still passes; this much opens the cutoff unless
+// the D_CUTOFF low-pass works (real controller noise is nearer this)
 { clock = 0; st.left.index = null; st.right.index = null; fingerCurl.left.index = 0.5;
   const ms = 1000 / 72; step(ms, 0.5); let worst = 0;
   for (let i = 0; i < 600; i++) { step(ms, 0.5 + (i % 2 ? 0.06 : -0.06)); if (i > 500) worst = Math.max(worst, Math.abs(fingerCurl.left.index - 0.5)); }

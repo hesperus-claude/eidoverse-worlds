@@ -216,11 +216,8 @@ try {
   const again = await knock();
   check("a body knocked over falls from the pose it was drawn in, whoever authored it",
     Number.isFinite(again) && eq(begun.at(-1)?.pose, slumped), JSON.stringify(begun.at(-1)?.pose)?.slice(0, 120));
-  // While the fall waits on its skeleton and ground (tumble's waits always
-  // yield, so what is done right after the blow lands before begin): a pose
-  // given then is the one it starts from, a release lets it start standing,
-  // and a second blow starts it from the slump the first one put up, which
-  // is what the body was drawn in by then.
+  // while the fall waits on skeleton and ground (tumble's waits always yield): a pose given then is its start, a
+  // release lets it start standing, and a second blow starts it from the first one's slump
   const waited = async (during: () => void) => {
     const before = kneeler.body?.rd, count = begun.length;
     kneeler.knockDown(poser.name, null, "(knocked over)");

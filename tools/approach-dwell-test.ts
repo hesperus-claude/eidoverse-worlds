@@ -56,10 +56,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 {
   const { at, count } = rig();
-  // A straight walk past the agent at 1.4 m/s (strolling), sampled at 5Hz:
-  // 0.28m per sample. The line runs along x at z = 1.5, so the closest
-  // approach is 1.5m — well inside arm's reach — and the body is genuinely
-  // within APPROACH_RADIUS for ~2.9s of the walk.
+  // a 1.4 m/s stroll sampled at 5Hz (0.28m/sample) along z = 1.5: closest approach 1.5m, ~2.9s inside APPROACH_RADIUS
   let t = 0, inside = 0;
   for (let x = -6; x <= 6.0001; x += 0.28) {
     at(t, x, 1.5);
@@ -198,13 +195,8 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 // ---------------------------------------------------------------- who moved? the wire must not author OUR walk as THEIRS
 
-// Antra's review vector (PR #145): after digi earns an approach at (1.5,0),
-// the AGENT teleports to (10,0) and digi's next sample is the same unmoved
-// pose. The bracket must close — the relation really did end — but the old
-// wire said "* digi walked away" about a body that never took a step. The
-// depart ping now carries its own text: "walked away" only when the departing
-// body is beyond the re-arm edge measured from where WE stood when the
-// approach fired; otherwise the actor-neutral "is no longer nearby".
+// a teleported AGENT must still close the bracket, but the depart text says "walked away" only if the body is
+// beyond the re-arm edge from where we stood at approach; otherwise "is no longer nearby" (PR #145)
 
 {
   const { ag, at, count, seen } = rig();

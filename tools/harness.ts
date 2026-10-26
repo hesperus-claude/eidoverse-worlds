@@ -24,10 +24,9 @@ export function freePort(from: number, tries = 40): number {
   throw new Error(`no free port in ${from}..${from + tries}`);
 }
 
-/** Found worlds in a scratch WORLDS_DIR before a server serves it. The server never founds a world on join (RFC-005
- *  §3.2.7, security review 10-06 H3: a name with no world behind it is refused), so a test that joins one founds it
- *  first, the way an operator does: `bun tools/protocol/world.ts found <name> --owner <who>`. `owner` is the name the owner
- *  joins with (on a TRUST_NAMES=1 server that typed name IS the founder's account local:<name>). */
+/** Found worlds in a scratch WORLDS_DIR before a server serves it: the server never founds on join (RFC-005 §3.2.7),
+ *  so a test founds first, as an operator does (`bun tools/protocol/world.ts found <name> --owner <who>`). `owner` is
+ *  the name the owner joins with (on TRUST_NAMES=1 that's the account local:<name>). */
 export function foundWorlds(worldsDir: string, names: string[], owner = "owner") {
   for (const name of names) {
     const r = Bun.spawnSync([process.execPath, join(ROOT, "tools/protocol/world.ts"), "found", name, "--owner", owner], {
@@ -185,10 +184,8 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   }
   const cws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((res, rej) => { cws.onopen = res as any; cws.onerror = rej as any; });
-  // Every page this bench drives runs under the server's Content-Security-Policy (server/csp.ts). A violation is the
-  // client trying something the policy refuses (an inline handler, a host connect-src doesn't name) — a feature that
-  // silently stopped working, so every browser probe is a CSP regression test: any violation fails the run at cleanup,
-  // unless the probe causes them on purpose (cspExpected).
+  // every probe page runs under server/csp.ts's policy, so every probe is a CSP regression test: any violation fails
+  // the run at cleanup unless the probe expects it (cspExpected)
   const cspViolations: string[] = [];
   cws.addEventListener("message", (ev) => {
     const m = JSON.parse(String(ev.data));
@@ -206,11 +203,9 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   // THE SKY GUARD, before any module reads localStorage: a cloudy sky bakes on the CPU in headless Chromium and has
   // frozen Burrow (memory: feedback_headless_sky_oom). Every page this browser loads from here on starts clouds-off.
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {}" });
-  // THE GPU GUARD: headless Chrome can't present WebGPU, so it destroys the device ~1 s into every page. The client's
-  // recovery (client/lib/gpulost.js) answers a browser-destroyed device with a reload, which would yank the page out
-  // from under a probe mid-check. Seed one recent loss so the rule "a second loss inside 2 min doesn't reload" applies:
-  // the renderer stops (no leak), the page stays, and DOM/state probes run as before. Recovery itself is
-  // gpulost-test.mjs (pure) and gpulost-probe.mjs (its own harness), neither of which loads this.
+  // THE GPU GUARD: headless Chrome destroys the WebGPU device ~1 s in, and gpulost.js answers with a reload. Seed one
+  // recent loss so a second loss inside 2 min doesn't reload: the renderer stops, the page stays. Recovery itself:
+  // gpulost-test.mjs, gpulost-probe.mjs.
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
   const evalJson = async (expr: string) => {
     const r = await cdp.send<any>("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });
@@ -231,11 +226,9 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   return { ...run, cleanup, browser, cws, cdp, evalJson, cspViolations };
 }
 
-/** The old authoring words a test written against main used on an agent (`a.verb("spawn", …)`), as the authority
- *  requests the protocol speaks (every world write is a door request; the agent has no raw verbs). Merging the stack
- *  (#235/#236/#239/#241, 10-15) brought tests in that author their scenes this way; this keeps their scenes as they
- *  wrote them. spawn's scale and collide become the transform's scale and the collider component; comp is a set;
- *  mount of the agent itself is the attach tool's path (presence), of a thing a parent set; light is a light thing. */
+/** Old agent authoring words (`a.verb("spawn", …)`) as the door requests the protocol speaks, so merged tests keep
+ *  their scenes as written: spawn's scale/collide → transform scale and collider; comp is a set; mount of the agent
+ *  is attach, of a thing a parent set; light is a light thing. */
 /** A scene's name for a thing (legacyVerb's spawn) → the id the authority minted for it. */
 export const sceneId = (a: any, n: string): string => a?.__sceneIds?.get(n) ?? n;
 export async function legacyVerb(a: any, v: string, x: any): Promise<any> {

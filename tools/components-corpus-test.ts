@@ -50,10 +50,9 @@ check('a tilted entity keeps q through the view', (() => { const e = { model: 'x
 // batch 2 (R 10-07): no part = a picture of its own, so Picture is offered on any thing, a model or not
 check('Picture is offered on any thing (batch 2: quad mode)', addable([{ type: 'Transform' }, { type: 'Light' }]).some((a) => a.name === 'Picture') && addable([{ type: 'Transform' }, { type: 'Model' }]).some((a) => a.name === 'Picture'));
 
-// ------------------------------------------------------------ the step-2 spellings (design §6)
-// No world in the corpus carries these yet, so the round trip is proven here
-// on synthetic records — and each case also says WHAT it must read as: a round
-// trip alone would pass if every new spelling fell through to an Annotation.
+// ------------------------------------------------------------ the step-2 spellings
+// synthetic records (no corpus world carries them yet); each case also says what it must READ as, since a round
+// trip alone passes if every spelling fell through to an Annotation
 console.log('\nthe step-2 spellings (synthetic):');
 const L = 'eidoverse/assets/models/lamp.glb';
 const st0 = { actor: 'a', ts: 1, born: 1 };
@@ -114,11 +113,8 @@ check('a lamp (Model + comp.light) cannot add a second Light; an Empty can add o
   && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a) => a.name === 'Collider'));
 
 // ------------------------------------------------------------ the corpus
-// Every world log we have: fold it (shared/protocol/fold.js), take the view a client reads (view.js viewState: the
-// entity records the editor's componentsOf reads), and every entity must read as components and write back exact.
-// (Protocol v1 removed, 2026-10-07: the v1 corpus went with it — every entry of every v1 log through the v1 fold, the
-//  @world sky/terrain/grass components after every v1 world verb, and each entity saved as a blueprint and PLACED
-//  through placeVerbs into the v1 fold. blueprints are the authority's: tools/blueprint-test.ts sections 6–7.)
+// every world log: fold it (shared/protocol/fold.js), take the client's view (view.js viewState), and every entity
+// must read as components and write back exact
 const { readLog, fold } = await import('../shared/protocol/fold.js');
 const { viewState } = await import('../shared/protocol/view.js');
 const logs: string[] = [];

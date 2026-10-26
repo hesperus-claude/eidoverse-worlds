@@ -20,10 +20,8 @@ import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
 import { createServer } from "node:net";
 
-/** A port nothing is listening on RIGHT NOW: bind :0, read what the kernel
- *  gave us, release it. Racy in principle (someone could take it in the gap)
- *  — which is why readiness below verifies ownership rather than trusting
- *  that whatever answers is ours. */
+/** A port nothing listens on RIGHT NOW (bind :0, read, release). Racy in principle, which is why readiness below
+ *  verifies ownership rather than trusting whatever answers. */
 async function freePort(): Promise<number> {
   return await new Promise((res, rej) => {
     const s = createServer();
@@ -69,15 +67,8 @@ const check = (name: string, ok: boolean, extra = "") => {
 // A nonce this run owns, echoed by the door's /healthz.
 const NONCE = `t${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
 
-// 🔴 EVERY CHILD IS REGISTERED BEFORE IT CAN BE LOST (adversarial review,
-// 2026-08-17). Round 3 moved the readiness PROBES inside the try but left the
-// ACQUISITIONS outside it, and the file then claimed "nothing that can throw
-// sits outside it" — which was false about the two lines that matter most. If
-// the second Bun.spawn throws (bad execPath resolution, EAGAIN), the first
-// child runs forever holding a port, with no teardown and no owner.
-//
-// A live registry the finally block drains covers both children AND any future
-// third one, rather than naming them individually and drifting again.
+// every child is registered BEFORE it can be lost: if a later spawn throws, the finally block still drains the live
+// registry, which covers any future child too
 const spawned: { pid: number; kill: (sig?: string) => void; exitCode: number | null }[] = [];
 function spawnChild(args: string[], env: Record<string, string>) {
   const child = Bun.spawn(args, { env: { ...process.env, ...env }, stdout: "ignore", stderr: "ignore" });
@@ -90,12 +81,8 @@ const world = spawnChild([process.execPath, "server/server.ts"], {
   // world honours the same enrolments, and the door asks it /access as the agent, so it must know the agent's bearer
   AGENT_TOKENS_PATH: tokensPath, HN_SESSIONS_FILE: join(worldsDir, "sessions.json"),
 });
-// Seed a stale tmp as if a previous incarnation died mid-write (SIGKILL
-// between write and rename). The door must sweep it at boot — which makes the
-// final "no temp file" receipt exercise the cleanup machinery on EVERY run,
-// instead of passing vacuously on runs where no write happened to be
-// interrupted (the pre-fix failure was a kill-timing flake for exactly that
-// reason: the check only bit when the race landed).
+// seed a stale tmp as if a previous run died mid-write: the door must sweep it at boot, so the final "no temp file"
+// receipt exercises the cleanup on every run, not only when a kill lands mid-write
 writeFileSync(`${statePath}.tmp`, "");
 const doorEnv = {
   MCPL_PORT: String(MPORT), WORLD_URL: `ws://127.0.0.1:${WPORT}/ws`,
@@ -120,15 +107,8 @@ const reap = () => { for (const c of spawned) { try { c.kill(); } catch { /* gon
 process.on("exit", reap);
 process.on("uncaughtException", (e) => { reap(); console.error(e); process.exit(1); });
 
-/** PIDs listening on a TCP port, from the OS. Returns null when this platform
- *  cannot answer — which is NOT the same as "nothing is listening", and
- *  conflating the two is how a portable-looking check silently stops checking.
- *
- *  🔴 LINUX-ONLY, AND THAT IS WHY IT IS THE SECOND OPINION (antra, 2026-08-16:
- *  the macOS review host has no `ss` and no /proc, so the exact-head run died
- *  before the first vector with `Executable not found in $PATH: "ss"`). The
- *  PORTABLE proof is the per-run nonce each child echoes; this is a stricter
- *  opinion offered where the platform can give one. */
+/** PIDs listening on a TCP port, from the OS; null when the platform can't answer (NOT "nothing is listening").
+ *  Linux-only (`ss`, /proc), so it's the second opinion; the per-run nonce each child echoes is the portable proof. */
 async function listenerPids(port: number): Promise<number[] | null> {
   try {
     const p = Bun.spawn(["ss", "-lntpH"], { stdout: "pipe", stderr: "ignore" });
@@ -161,10 +141,8 @@ function descendantsOf(root: number): number[] {
   return out;
 }
 
-/** Poll until `probe()` returns true, or throw. Replaces the fixed startup
- *  sleep: a sleep encodes a GUESS about startup time and fails in both
- *  directions — slow when it over-waits, flaky when it under-waits. Also fails
- *  FAST if either child dies, which is how a squatted port surfaces. */
+/** Poll until `probe()` returns true, or throw; fails FAST if either child dies (how a squatted port surfaces).
+ *  A fixed sleep would guess startup time and fail both ways. */
 async function waitFor(what: string, probe: () => Promise<boolean>, ms = 20_000) {
   const deadline = Date.now() + ms;
   let lastErr = "";
@@ -183,29 +161,13 @@ async function waitFor(what: string, probe: () => Promise<boolean>, ms = 20_000)
 function ownsPort(name: string, port: number, child: { pid: number }) {
   return async () => {
     const pids = await listenerPids(port);
-    // null = this platform cannot answer. Return true so the wait resolves: the
-    // nonce challenge above has ALREADY proved identity, and refusing to
-    // proceed here would make a portable receipt unrunnable on the very host
-    // that reviews it. A skip is recorded loudly (see osOwnership below) — a
-    // check that quietly stops checking is the failure mode this file exists
-    // to prevent.
+    // null = this platform can't answer: resolve, since the nonce already proved identity; the skip is recorded
+    // loudly (osOwnership below)
     if (pids === null) return true;
     if (pids.length === 0) return false;
     const ours = new Set([child.pid, ...descendantsOf(child.pid)]);
-    // 🔴 THE GUARD I ADDED LAST ROUND DISABLED THIS CHECK IN ITS MOST COMMON
-    // CONFIGURATION (adversarial review, 2026-08-17). It read
-    // `if (foreign.length && ours.size > 1)`, and ours.size > 1 is true ONLY
-    // when descendantsOf() found a forked child. When bun runs the .ts
-    // in-process — the ordinary Linux case — the set is just {child.pid}, so a
-    // genuinely foreign pid holding the port sailed through returning true.
-    // The one check written to catch a squatted port was off exactly where it
-    // was needed, and my reasoning for the guard ("no procfs but ss present")
-    // described a configuration that barely occurs while breaking the one that
-    // always does.
-    //
-    // A foreign listener is foreign regardless of how many pids we own. The
-    // only honest exemption is not being able to enumerate at all, and that is
-    // the `pids === null` early return above.
+    // a foreign listener is foreign however many pids we own (in-process bun owns just child.pid); the only
+    // exemption is not being able to enumerate, the `pids === null` return above
     const foreign = pids.filter((p) => !ours.has(p));
     if (foreign.length) {
       throw new Error(`${name} port ${port} held by pid(s) ${foreign.join(",")}, not our child ${child.pid} — stale listener`);
@@ -220,15 +182,8 @@ async function osOwnershipAvailable(): Promise<boolean> {
   return (await listenerPids(WPORT)) !== null && existsSync("/proc");
 }
 
-// 🔴 IDENTITY, NOT MERE LIVENESS. "The port answers" is exactly the check that
-// lets a stale listener report green.
-//
-// 🔴 AND EVERY PROBE BELOW RUNS INSIDE THE try (antra, 2026-08-16): readiness
-// and ownership used to run BEFORE the try/finally opened, so any startup or
-// identity failure bypassed the very teardown this file guarantees. Their
-// failed macOS run left both children to the shell. The `try` now opens here,
-// before the first spawn-dependent assertion, so nothing that can throw sits
-// outside it.
+// identity, not mere liveness ("the port answers" lets a stale listener report green). Every probe below runs
+// INSIDE the try, so a startup or identity failure still reaches the teardown.
 let osOwnership = false;
 try {
 await waitFor("world /version echoes our nonce", async () => {
@@ -243,10 +198,8 @@ await waitFor("world /version echoes our nonce", async () => {
   return body?.instance === NONCE;
 });
 await waitFor("world port is owned by OUR child", ownsPort("world", WPORT, world));
-// Two independent proofs for the door: it echoes a nonce only we set, AND the
-// OS says the port is our child's. The nonce is the PORTABLE one; the OS check
-// is a stricter second opinion, and is skipped (loudly, below) where the
-// platform cannot answer.
+// two proofs for the door: it echoes a nonce only we set (portable), AND the OS says the port is our child's (a
+// stricter second opinion, skipped loudly where the platform can't answer)
 await waitFor("door /healthz echoes our nonce", async () => {
   const r = await fetch(`http://127.0.0.1:${MPORT}/healthz`);
   if (!r.ok) return false;
@@ -270,10 +223,8 @@ console.log(osOwnership
 check("stale state tmp from a previous incarnation swept at boot", !existsSync(`${statePath}.tmp`));
 
 /** Minimal MCPL 0.5 host: initialize, grant, then request/notification I/O. */
-/** Every connection here starts at the credential's HOME unless it names a
- *  world: an agent with no world asked for now RESUMES where it last was
- *  (§4l), and these sections are about what happens from home. RESUME (the
- *  marker) dials with no world at all, which is what §4l tests. */
+/** Connections start at the credential's HOME unless they name a world (an agent asking for none RESUMES, §4l);
+ *  RESUME dials with no world at all, which is what §4l tests. */
 const RESUME = "__resume";
 const startAt = (query: string) => query === RESUME ? "" : /[?&]world=/.test(query) ? query : `${query}&world=commons`;
 async function connectHost(token: string, query = "", mode: "accept" | "decline" | "mute" | "error" = "accept") {
@@ -320,12 +271,8 @@ async function connectHost(token: string, query = "", mode: "accept" | "decline"
   return { ws, request, inbound, init };
 }
 
-/** A PLAIN-MCP client: identical transport, but `initialize` omits
- *  capabilities.experimental.mcpl, so the server sets mcplClient=false and
- *  granted() returns false for every capability by construction. This is the
- *  vector antra's finding #1 asked for — without it, the "plain-MCP travel
- *  lane" was advertised and never once exercised, which is exactly how it
- *  shipped always-denied. */
+/** A PLAIN-MCP client: same transport, but `initialize` omits capabilities.experimental.mcpl, so mcplClient=false
+ *  and granted() is false for every capability; it exercises the plain-MCP travel lane. */
 async function connectPlain(token: string) {
   const ws = new WebSocket(`ws://127.0.0.1:${MPORT}/?token=${token}${startAt("")}`);
   let nextId = 10;
@@ -402,11 +349,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   const joined = await roamer.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("policied travel arrives", !joined.result?.isError && /(Arrived in|Founded and entered) "annex"/.test(txt(joined)), txt(joined));
   await sleep(800);
-  // On a SUCCESSFUL travel the host learns both halves — but in two frames now,
-  // not one: the prepare asks (`added` only, so a question asserts nothing), and
-  // the commit states the departure once it is a fact. The old single-frame
-  // assertion was written against a prepare that claimed the removal up front,
-  // which is precisely the thing a declining host must never see (4f below).
+  // a successful travel tells the host both halves in two frames: the prepare asks (`added` only; a question asserts
+  // nothing) and the commit states the departure once it's a fact (a declining host must never see it, 4f)
   const changedFrames = roamer.inbound.filter((m) => m.method === "channels/changed");
   const addedAnnex = changedFrames.some((m) => m.params?.added?.[0]?.id === "world:annex");
   const retiredCommons = changedFrames.some((m) => m.params?.removed?.includes("world:commons"));
@@ -440,32 +384,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   const dl = await dialed.request("channels/list", {});
   check("?world= honored for a policied credential", dl.result?.channels?.[0]?.id === "world:annex", JSON.stringify(dl.result));
   dialed.ws.close();
-  // §3.3 (Mica #3): a denied dial-time destination REFUSES the connection —
-  // no silent fallback to the minted world.
-  // 🔴 ASSERT THE REFUSAL, NOT "SOMETHING WENT WRONG" (adversarial review,
-  // 2026-08-17). The previous version slept 1500ms and read `ws.readyState` —
-  // but refuseWithGuidance (net-server.ts:1415) closes on a FIFTEEN second
-  // timer, so that branch could never be true. The check passed only through a
-  // bare `catch { refused = true }`, which accepts ANY failure as proof of the
-  // specific behaviour under test: a door that OOM'd, timed out for an
-  // unrelated reason, or refused while naming the WRONG world all scored the
-  // identical green.
-  //
-  // The observable contract is narrow and worth pinning exactly: an
-  // -32001 error whose message names the refusal, then close 4001 (:1424-1428).
-  // So capture the error TEXT and require it to mention the world we were
-  // refused for.
-  // Dial RAW, not through connectHost(): its `request()` resolves on ANY reply
-  // carrying the matching id — including the -32001 refusal — so it reports a
-  // refused dial as a successful connect. (My first rewrite asserted on that
-  // and read `admitted=true` against a door whose refusal path is correct: the
-  // harness was wrong in the direction that looks like a product bug, which is
-  // the same trap as the on-disk control below.)
-  //
-  // What §3.3 actually promises is observable and narrow: the -32001 body NAMES
-  // the denied destination, and the socket then closes 4001 (net-server.ts
-  // :1424-1428). Assert both, and give the close a real deadline rather than
-  // the 1500ms sleep that could never have seen a 15s timer.
+  // §3.3: a denied dial-time destination refuses: the -32001 body names the world, then close 4001 within a real
+  // deadline. Dial raw: connectHost's request() resolves on any reply, refusal included.
   const denial = await new Promise<{ err: string; code: number }>((resolve) => {
     const ws = new WebSocket(`ws://127.0.0.1:${MPORT}/?token=bound-token&world=annex`);
     let err = "";
@@ -496,14 +416,7 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   const unknownVerb = await nofound.request("tools/call", { name: "act", arguments: { verb: "fly_away", args: {} } });
   check("an unknown verb goes to the world, which refuses it",
     unknownVerb.result?.isError === true && /"ok": false/.test(txt(unknownVerb)) && /fly_away|unknown/.test(txt(unknownVerb)), txt(unknownVerb).slice(0, 600));
-  // …and prove it wasn't created as a side effect anyway (review F)
-  // 🔴 PAIRED WITH ITS POSITIVE CONTROL (adversarial review, 2026-08-17).
-  // `!existsSync(...)` alone passes for a build where founding writes NOTHING
-  // anywhere — or where worlds land at a different path entirely — which makes
-  // it indistinguishable from `!existsSync("/tmp/definitely-not-a-path")`. The
-  // second assertion is what gives the first its meaning: a world that WAS
-  // founded appears at exactly this path, so a world that was refused being
-  // absent from it is now evidence rather than a tautology.
+  // …and prove it wasn't created as a side effect anyway; the positive control below gives this its meaning
   check("refused founding left NOTHING on disk", !existsSync(join(worldsDir, "brand-new-place")));
   nofound.ws.close();
   const founder = await connectHost("roamer-token");
@@ -514,26 +427,15 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   check("create:true doesn't found by travelling either: joining never founds, and the reply says so",
     founded.result?.isError === true && /joining never founds/.test(txt(founded)), txt(founded));
   check("…and that refusal left nothing on disk", !existsSync(join(worldsDir, "founded-place")));
-  // 🔴 THE POSITIVE CONTROL FOR THE on-disk CHECK ABOVE (adversarial review,
-  // 2026-08-17). `!existsSync(brand-new-place)` alone also passes for a build
-  // where founding writes nothing anywhere, or writes somewhere else entirely
-  // — indistinguishable from !existsSync("/tmp/not-a-real-path"). Pairing it
-  // with a world that WAS founded, at the SAME parent path, is what turns the
-  // negative into evidence.
-  //
-  // It has to run HERE, after the founding it controls for — my first attempt
-  // put it beside the negative check twenty lines earlier and asserted the
-  // directory existed before anything had created it. The control was itself
-  // wrong in the direction that would have looked like a product bug.
+  // the positive control for the on-disk check: a world that WAS founded appears at the same parent path, turning
+  // the negative into evidence; it runs here, after the founding it controls for
   await sleep(400);              // the sequencer writes the log dir on join
   check("…and the CONTROL: a world that WAS founded IS on disk at that path",
     existsSync(join(worldsDir, "annex")), `worldsDir=${worldsDir}`);
   // (ported) the first transition is a travel to an existing world, the second back
   await founder.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   // ── 4c. §3.2.3d epoch across transitions ─────────────────────────────────
-  // The epoch is read from the channels/changed descriptor the server pushes
-  // to the HOST — which is where §3.2.3d says a client learns it, and the only
-  // place it appears now that the sibling-open lane is gone.
+  // read from the channels/changed descriptor pushed to the HOST, where §3.2.3d says a client learns it
   await sleep(600);
   const epochOf = (c: any) => c.inbound.filter((m: any) => m.method === "channels/changed")
     .map((m: any) => m.params?.added?.[0]?.metadata?.epoch).filter((e: any) => typeof e === "number");
@@ -544,11 +446,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   const e2s = epochOf(founder);
   check("epoch increments across transitions", e2s.length > e1s.length && e2s[e2s.length - 1] > e1s[e1s.length - 1],
     `epochs=${JSON.stringify(e2s)}`);
-  // 🔴 The above reads the PREPARE announcement, which carries `epoch + 1` —
-  // the epoch the transition WOULD commit to (net-server.ts, §3.2.3d). A bug
-  // that announced +1 and then never incremented at commit would pass it.
-  // channels/list reports `metadata.epoch` from the live session, so read the
-  // COMMITTED value back and prove the promise was kept.
+  // the prepare announcement carries `epoch + 1` (what it WOULD commit); read the COMMITTED value back from
+  // channels/list's metadata.epoch, so an announce-but-never-increment bug fails
   const committed = await founder.request("channels/list", {});
   const cEpoch = committed.result?.channels?.[0]?.metadata?.epoch;
   check("…and the COMMITTED epoch matches what prepare promised",
@@ -588,15 +487,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
       && /still in "commons"/.test(txt(declined)), txt(declined));
   const stillHome = await decliner.request("channels/list", {});
   check("declined join left the body where it was", stillHome.result?.channels?.[0]?.id === "world:commons", JSON.stringify(stillHome.result));
-  // 🔴 …AND THE HOST WAS NOT TOLD OTHERWISE (adversarial review, 2026-08-17).
-  // "nothing moved" was checked from the BODY's side only. The prepare Request
-  // used to carry `removed: ["world:commons"]`, so a declining host had already
-  // been told its current channel was gone — and then kept receiving deliveries
-  // on it. Host and body disagreeing about the roster is the exact failure
-  // RFC-005 exists to prevent, and it was reachable by a merely SLOW host
-  // (5s timeout), not only a rejecting one.
-  //
-  // A prepare is a question; it must not assert a change it has not made.
+  // …and the host was not told otherwise: a prepare is a question and must not announce `removed` before the change
+  // is made, or a declining (or merely slow, 5s timeout) host and the body disagree about the roster
   const prepareFrames = decliner.inbound.filter((m: any) =>
     m.method === "channels/changed" && Array.isArray(m.params?.removed) && m.params.removed.length);
   check("…and the host was never told its channel was removed",
@@ -655,10 +547,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   tv.ws.close();
 
   // ── 4h. the tool honours join policy, and no second lane can disagree ─────
-  // NOTE (review): this is no longer a policy-PARITY check. channels/open now
-  // returns -32023 for any non-current channel whatever the credential, so that
-  // half is a tautology — kept only to pin that the lane stays shut, not as
-  // evidence about policy. The policy claim rests on the tool assertion above.
+  // not a policy-parity check: channels/open returns -32023 for any non-current channel, so this only pins that the
+  // lane stays shut; the policy claim rests on the tool assertion above
   const bound2 = await connectHost("bound-token");   // worlds: ["commons"] → may not roam
   await sleep(1200);
   const toolRefusal = await bound2.request("tools/call", { name: "travel", arguments: { world: "annex" } });
@@ -679,11 +569,9 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     badName.result?.isError === true && txt(badName) === `travel refused, so you're still in "commons": "../etc/passwd" isn't a valid world name; a name is 1 to 64 lowercase letters, digits, _ or -`, JSON.stringify(badName.result));
   bound2.ws.close();
 
-  // ── 4i. PLAIN-MCP travel: the lane the PR advertises and never tested ────
-  // antra #1: travelGate() unconditionally required channels.lifecycle, and
-  // granted() returns false for any non-MCPL client BY CONSTRUCTION — so every
-  // plain-MCP travel died with -32002 while toolsAllowed() listed the tool.
-  // These vectors are what makes the advertised lane real.
+  // ── 4i. PLAIN-MCP travel: the lane the PR advertises ─────────────────────
+  // granted() is false for any non-MCPL client by construction, so travelGate must not require channels.lifecycle
+  // of a plain-MCP host; these vectors make the advertised lane real
   {
     const plain = await connectPlain("roamer-token");     // NO experimental.mcpl
     await sleep(1200);
@@ -757,9 +645,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   }
 
   // ── 4l. AN AGENT RESUMES WHERE IT WAS ─────────────────────────────────────
-  // A reconnect with no world asked for lands where the agent last was, not
-  // at its home — unless that world no longer lets it in, or its home claim
-  // changed since. An explicit ?world= always wins.
+  // a reconnect with no world lands where the agent last was, unless that world no longer admits it or its home
+  // claim changed; an explicit ?world= always wins
   {
     const where = async (h: any) => (await h.request("channels/list", {})).result?.channels?.[0]?.id;
     const a1 = await connectHost("nofound-token");           // home commons, worlds ["*"]
@@ -837,11 +724,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     b3.ws.close(); await sleep(600);
   }
 
-  // ── 4j. THE FIX FOR #1 MUST NOT WIDEN MCPL AUTHORITY ─────────────────────
-  // Relaxing the capability gate for plain-MCP hosts is only safe if an MCPL
-  // host that DECLARES mcpl but is denied channels.lifecycle is still refused.
-  // Reading `this.mcplClient && !granted(...)` and believing it is exactly the
-  // habit that shipped the original bug, so: prove it.
+  // ── 4j. THE PLAIN-MCP RELAXATION MUST NOT WIDEN MCPL AUTHORITY ───────────
+  // an MCPL host that declares mcpl but is denied channels.lifecycle must still be refused
   {
     const stingy = await connectHost("roamer-token");
     await sleep(1200);
@@ -856,11 +740,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     check("…and that refusal moved nothing", where.result?.channels?.[0]?.id === "world:commons", JSON.stringify(where.result));
     stingy.ws.close();
 
-    // 🔴 DISCRIMINATING HALF. The check above passes even for a mutant that
-    // changed `this.mcplClient &&` to `true &&`, because the refusal message
-    // would be identical. What distinguishes the branch is that the SAME
-    // credential, declared as PLAIN MCP, must SUCCEED — capability-denied is a
-    // property of the host class, not of the token.
+    // discriminating half: the same credential declared as PLAIN MCP must SUCCEED (a `true &&` mutant refuses
+    // identically above); capability-denied is a property of the host class, not the token
     const samecred = await connectPlain("roamer-token");
     await sleep(1200);
     const plainOk = await samecred.request("tools/call", { name: "travel", arguments: { world: "annex" } });
@@ -868,23 +749,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
       !plainOk.result?.isError && /(Arrived in|Founded and entered) "annex"/.test(txt(plainOk)), txt(plainOk));
     samecred.ws.close();
 
-    // 🔴 WHAT MAKES THE CONJUNCT SOUND: MCPL-ness is FIXED AT INITIALIZE.
-    //
-    // An adversarial review (2026-08-17) read `this.mcplClient && !granted(...)`
-    // and reported a bypass: mcplClient comes from a CLIENT-SUPPLIED field, so
-    // a denied host should be able to escape by ceasing to declare MCPL. The
-    // premise is true. The conclusion does not follow, and I nearly shipped a
-    // `lifecycleDenied` latch defending against it before checking.
-    //
-    // mcplClient is assigned at exactly one site, inside the one-shot prelude:
-    // it awaits initialize, then notifications/initialized, and only then does
-    // the read loop start. A second initialize never reaches the assignment.
-    // So a host chooses its class ONCE, before any policy exchange — and a host
-    // that chose plain-MCP never had a denial to escape.
-    //
-    // This vector pins that property, because the refactor that WOULD open the
-    // hole is moving that assignment out of the prelude. If someone does, this
-    // fails instead of shipping.
+    // MCPL-ness is fixed at initialize (assigned once in the prelude), so a denied host can't escape by dropping
+    // MCPL. Moving that assignment out of the prelude fails here.
     const escapee = await connectHost("roamer-token");
     await sleep(1200);
     await escapee.request("featureSets/update", {
@@ -906,10 +772,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   }
 
   // ── 4k. the door must be OPEN in the new world (state-desync regression) ──
-  // channelOpen was session-long, but the new world's descriptor announces
-  // initiallyOpen:true — so an agent who closed their door and then travelled
-  // arrived with it shut while the host had been told otherwise, and nothing
-  // reconciled them. Per-world state, like the chat cursor.
+  // the new world's descriptor announces initiallyOpen:true, so door state is per-world (like the chat cursor), not
+  // session-long
   {
     const shutter = await connectHost("roamer-token");
     await sleep(1200);
@@ -950,14 +814,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   world.kill();                        // the sequencer goes away mid-session
   await sleep(500);
   const failed = await victim.request("tools/call", { name: "travel", arguments: { world: "annex" } });  // exists, so this tests ATTACH failure
-  // The TOOL lane reports failure as isError + text (the MCP contract), not as
-  // a JSON-RPC error code — but it must say plainly that the seat is gone, or
-  // an agent would keep issuing verbs into a closed connection. The -32024 code
-  // is still what the channels/open lane returns; both end in the same close.
-  // The travel gate now ASKS the world (/access) before detaching, so a dead
-  // sequencer is caught there: nothing moves, and the agent is told to retry.
-  // (The post-detach failure path below stays for a join that fails AFTER the
-  // gate — a race this harness cannot stage deterministically.)
+  // the TOOL lane reports isError + text (the MCP contract) and must say the seat is gone; channels/open returns
+  // -32024. The travel gate asks the world (/access) before detaching, so a dead sequencer moves nothing.
   check("an unreachable world server refuses travel before anything moves",
     failed.result?.isError === true
     && /didn't say whether you may go to "annex", so nothing moved/.test(txt(failed)), txt(failed));
@@ -977,10 +835,7 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     try { (c5 as any)?.ws?.close(); } catch { /* gone */ }
   }
 } finally {
-  // Verified termination: kill(), then AWAIT the exit. `kill()` alone returns
-  // immediately, so the old teardown could return while children still held
-  // ports and were mid-write — which is how a zero-byte state.json.tmp
-  // survived a run. Escalate to SIGKILL rather than hang the suite.
+  // verified termination: kill(), then AWAIT the exit (escalating to SIGKILL), or children still hold ports mid-write
   for (const [name, child] of [["world", world], ["door", mcpl]] as const) {
     try { child.kill(); } catch { /* already gone */ }
     const outcome = await Promise.race([
@@ -1010,26 +865,12 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // simply never persisted at all.
   check("the door persisted to OUR state path", existsSync(statePath), statePath);
   check("no temp file left in our state dir", !existsSync(`${statePath}.tmp`));
-  // 🔴 NO "-1" WATERMARK EVER REACHES DISK (adversarial review, 2026-08-17).
-  // WorldAgent.lastSeq is -1 until the first snapshot lands, and joinWorld
-  // assigns this.agent = next BEFORE awaiting next.connect(). A 60s tick — or
-  // the disconnect path — landing in that window persisted `{id}@{world}: -1`.
-  //
-  // -1 is not "nothing recorded", it is a NUMBER, so the reader takes it: it
-  // skips nothing and reaches back to the dawn of the log, replaying an entire
-  // world's history as wake-triggering mentions on the next connect. This PR's
-  // own per-world seqKey is what makes it reachable, so the regression would
-  // have shipped WITH the feature.
-  //
-  // The suite has travelled many times by now, including a fatal-attach case,
-  // so any window-write would be on disk here.
+  // no "-1" watermark ever reaches disk: lastSeq is -1 until the first snapshot and joinWorld assigns the agent
+  // before connect(); a persisted -1 replays the whole log as mentions. The suite has travelled by now, so any
+  // window-write would be on disk here.
   {
-    // 🔴 The watermark section is persisted under the `__seq` key (see
-    // persistState in mcpl/net-server.ts) — an earlier revision of this check
-    // read a `lastSeenSeq` key that the writer never uses, so it filtered an
-    // always-empty object and could not fail. Hence the non-emptiness guard:
-    // the suite has travelled by now, so a truthful read MUST see entries —
-    // an empty map here means the check went blind again, not that all is well.
+    // the watermarks persist under `__seq` (mcpl/net-server.ts persistState); the suite has travelled, so an empty
+    // map means the check went blind, not that all is well
     const persisted = JSON.parse(readFileSync(statePath, "utf8")) as
       { __seq?: Record<string, number> };
     const seqs = persisted.__seq ?? {};

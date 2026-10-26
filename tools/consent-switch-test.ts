@@ -113,10 +113,9 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('a malformed inbox is ignored', (box.take(null as any), box.take([{ type: 'body-ask' }, 7, { type: 'body-ask', ask: { id: 42 } }]), box.asks().length === 0));
 }
 
-// 4. (house review of #260, client/lib I1) an act the authority delivered ({type: 'body', kind, spec}: an ask answered yes,
-// or a standing allow through the body verb) is APPLIED to my body: it becomes the puppet message localbody.js applies.
-// The relay refuses a puppet while my switch is `ask` (server/messages.ts bodyRefusal), so this is the only way it lands.
-// Mutation (must go red): in consentinbox.js bodyActAsPuppet return null for every kind.
+// 4. an act the authority delivered ({type: 'body', kind, spec}) is APPLIED as the puppet message localbody.js
+// applies; the relay refuses a puppet while my switch is `ask` (server/messages.ts bodyRefusal), so this is the
+// only way it lands. Mutation: bodyActAsPuppet returns null for every kind.
 {
   const { bodyActAsPuppet } = await import('../client/lib/consentinbox.js');
   const q = [0, 0, 0.38, 0.92];

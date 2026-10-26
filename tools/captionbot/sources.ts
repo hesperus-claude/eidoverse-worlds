@@ -29,16 +29,9 @@ export function framer(tap: AudioTap): { write(chunk: Buffer): void; end(): void
   };
 }
 
-/** The appliance: ffmpeg decodes whatever mediamtx serves on RTSP into PCM16LE
- *  mono at the tap's rate. The exact command deploy/projector/smoke.sh checks.
- *
- *  Source loss is OWNED here, not a silent one-shot: when ffmpeg exits
- *  without being asked (the stream ended, the appliance restarted, the
- *  network blinked), the tap is flushed, `onReattach` is told — that is the
- *  caller's cue to rotate the caption session, because "seconds since
- *  attach" starts over — and ffmpeg is respawned after a backoff that
- *  doubles from 2 s to 30 s and resets on a healthy minute. `close()` ends
- *  it for good. */
+/** ffmpeg decodes mediamtx's RTSP into PCM16LE mono at the tap's rate (the command deploy/projector/smoke.sh checks).
+ *  On an unasked exit: flush the tap, call `onReattach` (rotate the caption session), respawn after a backoff
+ *  doubling 2 s → 30 s, reset by a healthy minute. `close()` ends it. */
 export function ffmpegSource(url: string, tap: AudioTap, log: (m: string) => void,
   opts: { onReattach?: () => void; spawnFn?: typeof spawn; minBackoffMs?: number; maxBackoffMs?: number } = {}): { close(): void; attempts: number } {
   const args = ['-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', url,

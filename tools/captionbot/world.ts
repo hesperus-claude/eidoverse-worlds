@@ -307,10 +307,8 @@ export class WorldClient {
       this.settle(p, { state: 'refused', key: p.key, why: error, at: Date.now() });
       return;
     }
-    // not a captioner of this screen / screen gone / a spectator: nothing will
-    // land until someone acts — hold everything, say so once, and try again
-    // later …and a NEWER leg holding the screen (another captioner joined
-    // after us): ours is superseded until we rejoin; hold, do not drop
+    // not a captioner / screen gone / spectator, or a newer captioner holds the screen: nothing lands until
+    // someone acts, so hold everything (never drop), say so once, retry later
     if (/^rights:|^not-found:|^no-such:|^spectator:|^banned:|superseded captioner/.test(error)) {
       if (this.ackTimer) { clearTimeout(this.ackTimer); this.ackTimer = null; }
       this.inflight = null; this.pending.unshift(p);

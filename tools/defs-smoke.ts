@@ -121,10 +121,8 @@ console.log(`\n${bold("── animations")}`);
 }
 
 // ---- avatar overlay ---------------------------------------------------------
-// Defs overlay the DISCOVERED roster (declared beats discovered): an
-// override def restates a scanned avatar's height, an alias def points a
-// new name at an existing .vrm, and a def with an unresolvable path is
-// refused without costing the roster anything.
+// defs overlay the discovered roster (declared beats discovered): an override restates a height, an alias points
+// a new name at an existing .vrm, and an unresolvable path is refused without costing the roster anything
 
 console.log(`\n${bold("── avatars")}`);
 {
@@ -251,9 +249,8 @@ await bootInto(WORLDS.std);
 }
 
 // ---- hot reload -------------------------------------------------------------
-// Edit a def on disk while a client stands in the meadow: the defs-watch
-// tick pushes `defs-updated`, the client re-hydrates and regrows from the
-// SAME authored args — no reboot, no log entry, new content.
+// edit a def under a live client: defs-watch pushes `defs-updated` and the client regrows from the same authored
+// args; no reboot, no log entry
 console.log(`\n${bold("── hot reload")}  ${dim("editing grass.json under a live client")}`);
 {
   const before = await evalJson(`(() => { try {

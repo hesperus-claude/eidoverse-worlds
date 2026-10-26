@@ -40,27 +40,19 @@ const rig = await import('../client/lib/lightrig.js');
 let pass = 0, fail = 0;
 const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
 
-// A body-like rig: root on the floor, chest bone at y=1.47, lamp geometry
-// authored in BIND space the way the VRM's is (absolute, not relative).
-// The bulb in BIND space: the chest bone's rest position plus the real
-// measured 1.55cm forward offset. Absolute, the way the VRM authors it.
+// a body-like rig: root on the floor, chest bone at y=1.47; the bulb in BIND space (absolute, as the VRM authors
+// it): the chest's rest position plus the measured 1.55cm forward offset
 const CHEST_REST = new THREE.Vector3(0.012 - 0.004 + 0.006, 1.0 + 0.24 + 0.23, -0.035 + 0.018 - 0.009);
 const BULB = CHEST_REST.clone().add(new THREE.Vector3(0, 0, 0.0155));
 function makeBody() {
   const root = new THREE.Group(); root.name = 'bodyRoot';
-  // VRM0 faces -Z and the importer flips the scene node 180 degrees about Y
-  // (VRMUtils.rotateVRM0), so the mesh node's world rotation is NOT the
-  // identity even on a standing body. That flip is half of why the old math
-  // drifted, and a test rig without it cannot show the defect.
+  // VRM0 faces -Z and the importer flips the scene 180° about Y (VRMUtils.rotateVRM0), so the mesh node's world
+  // rotation isn't identity even standing; a rig without that flip can't show the defect
   const scene0 = new THREE.Group(); scene0.name = 'vrmScene';
   scene0.rotation.set(0, Math.PI, 0);
   root.add(scene0);
-  // A REAL spine is not a straight vertical line: each joint carries its own
-  // rest offset, so the chest bone does not sit directly above the root and
-  // rotating the body moves bone and bind-offset along DIFFERENT arcs. The
-  // first cut of this test used a perfectly axial two-bone chain, where a pure
-  // yaw rotates both identically -- the old math passed, and the control could
-  // not fail. These offsets are what make the two disagree.
+  // a real spine isn't one straight line: per-joint rest offsets move bone and bind-offset along different arcs
+  // under rotation; with an axial chain the old math passed and the control couldn't fail
   const hips = new THREE.Bone(); hips.position.set(0.012, 1.0, -0.035); hips.name = 'Hips';
   const spine = new THREE.Bone(); spine.position.set(-0.004, 0.24, 0.018); spine.name = 'Spine';
   const chest = new THREE.Bone(); chest.position.set(0.006, 0.23, -0.009); chest.name = 'Spine02';
@@ -86,12 +78,8 @@ function makeBody() {
 
 const { root, chest, mesh, scene0 } = makeBody();
 rig.requestLight('lamp:test:0', { obj: mesh, offset: BULB.clone(), keep: true, intensity: 8, range: 10, shadows: true });
-// ZERO THE NUDGE for the geometry checks below. The shipped defaults place the
-// bulb 3.7cm forward and 1cm up of its bone (Janus's measured values), which is
-// a real offset that legitimately changes the sweep and the height -- three
-// checks here hardcoded the un-nudged numbers and failed honestly when the
-// defaults moved. The nudge has its own section at the end; what these checks
-// are about is the BIND-POSE bug, so they measure from a clean zero.
+// zero the nudge for the geometry checks below (the shipped defaults offset the bulb 3.7cm forward, 1cm up): they're
+// about the bind-pose bug; the nudge has its own section at the end
 rig.setLampShadow({ forward: 0, up: 0, side: 0 });
 const lampPos = () => rig.rigDebug()._slots[0].position;
 const at = (rx, ry, t) => { root.rotation.set(rx, ry, 0); root.updateMatrixWorld(true); rig.updateRig(t); return lampPos().clone(); };
@@ -118,31 +106,8 @@ const bone = chest.getWorldPosition(new THREE.Vector3());
 const d = p90.distanceTo(bone);
 check('the bulb stays with its BONE when pitched 90 degrees', d < 0.05,
   `bulb ${d.toFixed(4)} m from the chest bone at (${bone.x.toFixed(3)}, ${bone.y.toFixed(3)}, ${bone.z.toFixed(3)})`);
-// THE CONTROL, stated carefully. The old math was
-//     worldPos(node) + offset.applyQuaternion(worldQuat(node))
-// and its damage depends on where the NODE is. On the real VRM the skinned
-// mesh node sits at the body ROOT (the glTF importer parents every skinned
-// primitive there), so worldPos(node) is the feet and the rotated 1.47m offset
-// swings the light around them. This synthetic body must reproduce THAT
-// arrangement or the control proves nothing -- and in the first cut it did
-// not: the mesh was a child of the rotating root, so the old math happened to
-// land 15mm away and the control failed honestly.
-//
-// So: measure against a node that is where the importer puts it.
-// THE CONTROL, and it took three tries to state honestly.
-//
-// For a RIGID body under one rotation the old math and the bone math AGREE to
-// within the bulb's own 1.55cm offset -- the mesh node and the bones ride the
-// same transform, so rotating the bind-space centre gives the right answer by
-// coincidence. Two earlier versions of this control asserted a large error
-// under yaw and under pitch, and both failed correctly; the rig was not the
-// problem, my claim was.
-//
-// The old math diverges when the BONES MOVE RELATIVE TO THE BODY -- i.e. an
-// actual pose. That is the live case: Mythos breathes, walks, and flaps, and
-// his chest bone is driven every frame. A bind-space offset cannot see any of
-// it, so the light stays pinned to the rest pose while the body moves around
-// it. That is the directional bias Janus saw.
+// the control: old and bone math diverge only when bones move relative to the body (a pose), so the mesh node sits
+// at the root as the importer puts it, and the chest is posed
 root.rotation.set(0, 0.6, 0);
 chest.rotation.set(0.35, 0.25, -0.2);      // a posed chest, as breathing gives
 chest.position.set(0.006 + 0.05, 0.23 + 0.04, -0.009 - 0.03);
@@ -167,11 +132,8 @@ check('raising the chest bone 30cm raises the light 30cm', Math.abs((after.y - b
   `moved ${(after.y - before.y).toFixed(4)} m`);
 
 console.log('THE POSITION NUDGE — forward/up/side, in the bone\'s frame');
-// Janus thought `dist` was moving the light up and down. It never did (it only
-// divides into normalBias), but normalBias offsets along each surface's NORMAL,
-// and on a torso those point mostly up -- so raising it pushes shadows up and
-// off exactly as though the bulb had risen. There was no position dial; this
-// is it.
+// `dist` never moved the light (it only divides into normalBias), but normalBias offsets along surface normals,
+// which on a torso point mostly up, so it read as the bulb rising; the real position dial is the nudge
 root.rotation.set(0, 0, 0);
 chest.rotation.set(0, 0, 0);
 chest.position.set(0.006, 0.23, -0.009);
@@ -182,19 +144,9 @@ const base = lampPos().clone();
 rig.setLampShadow({ forward: 0.10 });
 rig.updateRig(21000);
 const fwd = lampPos().clone();
-// WHAT THIS CAN AND CANNOT CHECK. `forward` maps to -z in the BONE frame,
-// measured off the real rig: L_Eye/R_Eye sit at z = -0.085 relative to Head, so
-// the face looks down -z in bind space (assets.js calls VRMUtils.rotateVRM0
-// afterwards, flipping the SCENE node so the body faces +z in the world -- but
-// the nudge is applied inside the bone's frame, upstream of that).
-//
-// This synthetic skeleton has no eye bones and its own axis convention, so
-// asserting a world-space SIGN here would be pinning the stub's geometry, not
-// the product's. (My first cut did exactly that, twice: once claiming +z and
-// once claiming -z, and the check flipped with the code instead of holding it
-// still.) What IS checkable here, and is what the dial promises: forward moves
-// the bulb along the bone's z by the requested MAGNITUDE, touches no other
-// axis, and reads back as the positive number that was asked for.
+// `forward` maps to -z in the BONE frame (the real rig's eyes sit at z = -0.085 from Head); this stub's skeleton has
+// its own axes, so a world-space sign would pin the stub. Checked instead: the magnitude along bone z, no other
+// axis, and the positive readback.
 check('forward moves the bulb along the bone z axis by the amount asked',
   Math.abs(Math.abs(fwd.z - base.z) - 0.10) < 1e-3 && Math.abs(fwd.y - base.y) < 1e-3,
   `moved dz=${(fwd.z - base.z).toFixed(4)} dy=${(fwd.y - base.y).toFixed(4)}`);

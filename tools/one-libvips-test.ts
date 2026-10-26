@@ -58,10 +58,7 @@ const MAGIC: [number[], string][] = [
   [[0x89, 0x50, 0x4e, 0x47], "image/png"],
   [[0xff, 0xd8, 0xff], "image/jpeg"],
 ];
-/** Declared mimeType vs actual container magic — compared against what the
- *  image CLAIMS to be, never against one hardcoded format. (The first #122
- *  sweep tested every image for webp magic and reported untouched PNGs as
- *  corrupt; the blast radius came out 3× too high.) */
+/** Declared mimeType vs actual container magic: compared against what the image CLAIMS, never one hardcoded format. */
 function sniff(b: Uint8Array): string {
   if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
       && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
@@ -89,14 +86,8 @@ function imagesOf(glb: Uint8Array): { mime: string; bytes: Uint8Array }[] {
 console.log("\none libvips per optimize process (#122):\n");
 
 // ---------------------------------------------- 1. the encode, end to end
-// A JPEG source on purpose: JPEG and webp both route through the CONVERTING
-// path, which is where the two libvips meet. (The lantern's one surviving
-// texture was its PNG-sourced ORM map — the discriminator that named the
-// mechanism in the first place.)
-// The scaffolding resolves its OWN sharp — gltf-transform's copy, directly.
-// It must not go through the module under test: on main that returns the root
-// copy, the fixture encode is then the first place the two libvips meet, and
-// the file dies at setup instead of reporting which checks failed.
+// a JPEG source: JPEG and webp go through the CONVERTING path, where the two libvips meet. The scaffolding resolves
+// gltf-transform's own sharp directly, never through the module under test, so a setup failure can't mask the checks.
 const fixtureSharp = await (async () => {
   try {
     const fd = dirname(Bun.resolveSync("@gltf-transform/functions", join(import.meta.dir, "../server")));
@@ -186,15 +177,8 @@ if (nested && existsSync(nested)) {
 }
 
 // ------------------------------------------- 3. the process, not the resolver
-// Cases 1 and 2 show that optimize.ts ASKS for the right copy. This shows what
-// the process actually LOADED, which is the only claim that matters: the fix
-// is "one libvips per optimize process", so count the libvips.
-//
-// process.report.getReport().sharedObjects lists the native binaries mapped
-// into this process by absolute path. Two distinct install roots holding a
-// sharp binding means two libvips, whatever the resolver intended. Measured
-// AFTER case 1's real optimizeGlb run, so it covers the actual optimize path
-// and not a synthetic import.
+// count what the process LOADED: report.sharedObjects lists mapped native binaries, and two install roots with a
+// sharp binding means two libvips. Measured after case 1's real optimizeGlb run.
 const report = (process as any).report?.getReport?.();
 if (!report || !Array.isArray(report.sharedObjects)) {
   console.log("  [36m—[0m process.report unavailable on this runtime; skipping the load census");
@@ -212,16 +196,8 @@ if (!report || !Array.isArray(report.sharedObjects)) {
 
 
 // ----------------------------------------- 4. the fail-closed seam (#136 review)
-// Resolution and import are different facts. A nested copy that RESOLVES but
-// fails to IMPORT (ABI mismatch, missing dylib, damaged install) must not send
-// the process to the bare specifier — that loads the root copy beside the one
-// gltf-transform already has and rebuilds the two-libvips condition, in the
-// one situation where things are already going wrong.
-//
-// Driven through pickSharp's injected effects, so this is deterministic on
-// every box rather than dependent on an install actually being broken. The
-// load hook RECORDS every specifier it is handed: the assertion is not merely
-// that the call rejected, but that "sharp" was never reached for.
+// a nested copy that resolves but fails to IMPORT must not fall back to bare "sharp" (that rebuilds two libvips).
+// Driven through pickSharp's injected effects; the load hook records every specifier, and "sharp" must never appear.
 if (typeof (OPT as any).pickSharp !== "function") {
   check("pickSharp is exported (resolution split from import)", false, "absent — pre-#136 optimize.ts");
 } else {

@@ -311,10 +311,10 @@ fs.writeFileSync(path.join(root, "sessions.json"), JSON.stringify({
   const byOther = bansLiftedBy(R, "aid1:https://id.example.org:agent-7f3a-2", ["aid1:https://id.example.org:agent-7f3a-2"], fold);
   ok(byAgent.length === 1 && byAgent[0] === "old-agent" && byOther.length === 0,
     "A13c …and an unban by the aid1 account it holds against lifts it, while an unban by another account lifts nothing", { byAgent, byOther }); }
-// ---- A13c (door): the operator's global unban, as the door runs it, lifts a ban from before accounts by the aid1 account
-// it holds against, and by a name that account wears here; a third ban stays ----
-// ---- D12 (door, review of #260, server I14): a spectator's first sight under a 64-character name another account wears
-// is recorded as that name cut to keep a tag from its own account, never as the other account's name ----
+// ---- A13c (door): the operator's global unban lifts a pre-accounts ban by the aid1 account it holds against, and
+// by a name that account wears here; a third ban stays ----
+// ---- D12 (door): a spectator's first sight under a 64-char name another account wears is recorded cut to keep its
+// own account's tag, never as the other account's name ----
 { fs.writeFileSync(path.join(W, ".bans.json"), JSON.stringify({ "old-a": { by: "op", ts: 1, sub: "agent-7f3a" }, "old-b": { by: "op", ts: 1, sub: "agent-9c1d" }, "old-c": { by: "op", ts: 1, sub: "agent-5e2b" } }));
   const { directoryFor } = await import("../../server/directory.ts");
   directoryFor(W).resolve({ sub: "aid1:https://id.example.org:agent-9c1d", name: "Nine" });
@@ -363,11 +363,9 @@ const holdLock = (name, pid = process.pid) => { const { nonce, text } = lockText
 const replaceLock = (name, pid = process.pid) => { const { nonce, text } = lockText(pid), t = `${name}.${nonce}.held`;
   fs.writeFileSync(t, text); fs.renameSync(t, name); return nonce; };
 const exitedPid = async () => { const p = Bun.spawn(["bun", "-e", ""]); await p.exited; return p.pid; };
-// A child that opens its handle, marks `ready`, waits for `go` (sleeping, not spinning), mints `each` holder keys and the
-// sequencer key, and prints what it got, any error a mint threw, and how long its mints took by its own clock. Its fs is
-// watched from inside, so it leaves its own signs of where custody's lock has it: `met-lock` the first time the lock is
-// held, a dot in `tries` each time, `met-right` the first time another holds the right to remove a lock, and `holds-right`
-// once it holds one itself (with `pause`, it then waits for `resume` before going on).
+// a child that opens its handle, marks `ready`, waits for `go`, mints `each` holder keys plus the sequencer key and
+// prints the results and its own timing; it leaves signs of custody's lock: `met-lock`, a dot in `tries` per attempt,
+// `met-right`/`holds-right` for the right to remove a lock (with `pause`, it waits for `resume`)
 const minter = (dir, f, go, i, each, { pause = false } = {}) => Bun.spawn(["bun", "-e", `const fs = (await import("node:fs")).default;
   const lock = ${JSON.stringify(`${f}.lock`)}, at = (n) => ${JSON.stringify(dir)} + "/" + n + "-${i}", seen = new Set();
   const mark = (n) => { if (!seen.has(n)) { seen.add(n); fs.writeFileSync(at(n), ""); } };

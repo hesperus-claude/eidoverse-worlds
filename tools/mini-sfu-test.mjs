@@ -17,18 +17,12 @@ server.onTrack.subscribe(() => { fired = true; console.log('  🔔 SERVER ontrac
 const offer = await server.createOffer();
 await server.setLocalDescription(offer);
 
-// 🔴 PORTABLE (#130 review, item 5): this hardcoded one Linux machine's
-// chromium path, so the branch's own receipt exited 1 on any other host —
-// including the macOS review host. Playwright's managed browser is the
-// default; SFU_TEST_CHROME overrides it explicitly when an operator wants a
-// specific binary.
+// portable: Playwright's managed browser by default; SFU_TEST_CHROME overrides it
 const b = await chromium.launch({ ...(process.env.SFU_TEST_CHROME ? { executablePath: process.env.SFU_TEST_CHROME } : {}),
   args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required'] });
 const pg = await (await b.newContext({permissions:['microphone']})).newPage();
-// A real http(s) origin is required for getUserMedia's secure-context check —
-// but it must be OURS, not whatever ambient world happens to hold :8960 (the
-// #128 review lens: an ambient responder is not identity, and a clean
-// checkout has no responder at all). A one-page server owned by the test.
+// getUserMedia needs a secure-context origin, and it must be OURS (an ambient responder isn't identity): a one-page
+// server owned by the test
 const { createServer } = await import('node:http');
 const pageSrv = createServer((_, res) => { res.setHeader('content-type', 'text/html'); res.end('<!doctype html><title>mini-sfu</title>'); });
 await new Promise((r) => pageSrv.listen(0, '127.0.0.1', r));
@@ -43,10 +37,8 @@ const out = await pg.evaluate(async (offerSdp) => {
   r.first = (a.sdp.match(/a=(sendonly|recvonly|sendrecv|inactive)/g)||[]).join(',');
   // now the mic shows up, exactly as it does when a user clicks the button
   const s = await navigator.mediaDevices.getUserMedia({audio:true});
-  // THE FIX UNDER TEST: bind the mic to the transceiver the SERVER offered for
-  // it — the one whose remote direction is recvonly (it wants to receive us).
-  // addTrack picks the first *compatible* transceiver, which is a speaker
-  // route, and the floor never gets the track.
+  // the fix under test: bind the mic to the transceiver the SERVER offered for it (remote recvonly); addTrack picks
+  // the first compatible one, a speaker route, and the floor never gets the track
   const floor = pc.getTransceivers().find(t => t.currentDirection === 'inactive' || t.direction === 'inactive');
   if (floor) { await floor.sender.replaceTrack(s.getTracks()[0]); floor.direction = 'sendonly'; }
   else { for (const t of s.getTracks()) pc.addTrack(t, s); }
@@ -56,12 +48,8 @@ const out = await pg.evaluate(async (offerSdp) => {
   r.second = (a.sdp.match(/a=(sendonly|recvonly|sendrecv|inactive)/g)||[]).join(',');
   r.trx = pc.getTransceivers().map(t=>`${t.direction}${t.sender?.track?'+track':''}`).join(',');
 
-  // ── STAGE 3: SWAP THE SOURCE ON AN ALREADY-PUBLISHED PC (R's TTS bug,
-  // 2026-08-16: "can hear locally but not at the endpoint… toggling mic back
-  // on = silence"). The floor is now sendonly, so a hunt that only knows
-  // 'inactive' falls through to addTrack — and the server offers, ALWAYS: an
-  // answer cannot add an m-line, so the new sender lives locally, plays into
-  // the monitor, and never enters the SDP. Every later swap repeats it.
+  // ── STAGE 3: SWAP THE SOURCE ON AN ALREADY-PUBLISHED PC. The floor is sendonly now, so a hunt that knows only
+  // 'inactive' falls to addTrack, and an answer can't add an m-line: the new sender never enters the SDP.
   const ctx = new AudioContext();
   const dest = ctx.createMediaStreamDestination();       // a synthetic "TTS" track
   const synthTrack = dest.stream.getAudioTracks()[0];
@@ -71,22 +59,15 @@ const out = await pg.evaluate(async (offerSdp) => {
     if (floor) { await floor.sender.replaceTrack(synthTrack); floor.direction = 'sendonly'; }
     else { pc.addTrack(synthTrack, dest.stream); }
   }
-  // What actually happens (measured, not the orphan I predicted): addTrack
-  // HIJACKS a recvonly route transceiver — its sender slot is empty, so it is
-  // "compatible" — and the answer for that m-line can only ever say recvonly
-  // (the server offered it sendonly, their side). The synth track sits on a
-  // sender that will never transmit. Same silence, same mis-pick class as the
-  // original 2026-08-15 addTrack bug, resurrected on the swap path.
+  // measured: addTrack HIJACKS a recvonly route transceiver (its empty sender is "compatible"), whose answer can only
+  // say recvonly, so the synth track sits on a sender that never transmits
   r.oldHuntTrx = pc.getTransceivers().length;
   r.oldHuntPutSynthOnRecvRoute = pc.getTransceivers()
     .some(t => t.sender?.track === synthTrack && t.direction !== 'sendonly');
   r.oldHuntOwnedSenderHasSynth = pc.getTransceivers()
     .some(t => t.direction === 'sendonly' && t.sender?.track === synthTrack);
-  // the FIXED hunt — round-2 shape, kept in sync with voicesfu.js: the
-  // NEGOTIATED direction is the authority; the ask (direction) counts only
-  // pre-negotiation (currentDirection null). Round 1's direction-based match
-  // latched onto a sendrecv transceiver JSEP had associated with a recv
-  // route; currentDirection === 'recvonly' excludes it.
+  // the fixed hunt, kept in sync with voicesfu.js: the NEGOTIATED direction is the authority, the ask (direction)
+  // counts only pre-negotiation; currentDirection === 'recvonly' excludes a recv-associated sendrecv
   {
     const mine = pc.getTransceivers().find(t =>
       t.currentDirection === 'sendonly'

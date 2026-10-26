@@ -64,9 +64,7 @@ check('audioContextState() reports the shared instance', mod.audioContextState()
       `${mod.audioContextState()} vs ${a.state}`);
 
 // ── the regression guard ──────────────────────────────────────────────────────
-// The failure mode is not "audioctx.js breaks" — it is "somebody adds a direct
-// construction somewhere else and this module stops being the only door."
-// Reading the source is the only way to see that from here.
+// the failure is a direct AudioContext construction elsewhere; only reading the source sees that
 const src = await Bun.file(new URL('../client/lib/micstate.js', import.meta.url)).text();
 const direct = [...src.matchAll(/new\s+(?:\(window\.)?(?:webkit)?AudioContext/g)].length;
 check('micstate.js constructs no AudioContext directly', direct === 0,

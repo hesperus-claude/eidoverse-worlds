@@ -23,18 +23,13 @@ plugin({
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 
-// Seeded BEFORE the import: chat.js reads ew-chat-fs at module load (chat.js:782),
-// not inside initChat, so a later write cannot reach it. This is what makes the
-// boot-moment assertion below possible — the saved size must be on the log the
-// instant initChat returns.
+// seeded BEFORE the import: chat.js reads ew-chat-fs at module load, not in initChat
 localStorage.setItem('ew-chat-fs', '17');
 
 const { logChat, initChat, chat, recentChat, chatMarkdownOn } = await import('../client/lib/chat.js');
 const { frameStub } = await import('./chat-frames-stub.mjs');
-// MUST come from the stub graph: chat.js resolves './base.js' to
-// chat-base-stub.mjs (which re-exports the core stub), so importing
-// ../client/lib/base.js by path yields a DIFFERENT bus object and every
-// emit lands where paintSide is not listening — assertions that cannot fail.
+// MUST come from the stub graph: chat.js's './base.js' resolves to chat-base-stub.mjs, so importing base.js by
+// path gives a different bus and every emit goes unheard
 const { bus } = await import('./chat-base-stub.mjs');
 
 let pass = 0, fail = 0;
@@ -45,11 +40,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 let roster: any[] = [{ id: 'keir', declares: 'agent' }, { id: 'rab' }];
 initChat({ send: () => {}, people: () => roster });
 const log = () => document.getElementById('chatlog')!;
-// THE BOOT MOMENT. applyChatPrefs runs as initChatGear's last statement; if the
-// log handle is captured after that, the saved size silently never applies on
-// first load — which is exactly how the mod-hijack fix broke on its first
-// attempt, and the +A assertion further down CANNOT see it (by then logEl is
-// set either way). This is the one instant where the two differ.
+// the boot moment: applyChatPrefs runs last in initChatGear, so a log handle captured after it never gets the
+// saved size on first load; the +A check below can't see that, only this instant can
 check('the saved text size is on the log the moment initChat returns',
   log().style.fontSize === '17px', `"${log().style.fontSize}" (seeded 17)`);
 const rows = () => [...log().children].filter((c) => !c.classList.contains('sys')) as HTMLElement[];
@@ -150,27 +142,16 @@ console.log('CHAT — People Here swaps sides');
   const realSide = cols.querySelector(':scope > .chat-side')! as HTMLElement;
   check('the pane lists who is here', /2 others here/.test(realSide.querySelector(':scope > .chat-side-head')!.textContent!) && realSide.querySelectorAll('.who-row').length === 2);
 
-  // S1/F4: a mod's markup INSIDE the real .chat-side. My earlier claim that a
-  // mod cannot reach here was FALSE — mods.js:88 hands a mod makeFrame and
-  // windows.js returns the LIVE chat frame for a bare id, so a local mod (an
-  // in-page ES module, mods.js:5-8) can mount into this very body. Planted
-  // FIRST so an unbounded lookup finds it before the real head: the captures
-  // must address the nodes initChat wrote, not the first match by class.
+  // S1/F4: a mod can mount markup inside the real .chat-side (mods.js hands mods makeFrame, which returns the
+  // live chat frame for a bare id). Planted FIRST: captures must address initChat's nodes, not the first match.
   const nestedMod = document.createElement('div');
   nestedMod.className = 'mod-inside';
   nestedMod.innerHTML = `<div class="chat-side"><div class="chat-side-head">MOD-HEAD</div></div>`;
-  // PREPENDED INTO cols, ahead of the real .chat-side — not nested inside it.
-  // A descendant of the real pane can never win an unbounded lookup (its own
-  // ancestor comes first in document order), so nesting it would leave the
-  // capture's `:scope >` bound untested.
+  // prepended INTO cols, ahead of the real .chat-side, not nested: a descendant can never win an unbounded
+  // lookup, so nesting would leave `:scope >` untested
   cols.prepend(nestedMod);
-  // TWO decoys, because S1 and F4 mutate DIFFERENT hops and each is only
-  // visible from its own position:
-  //   F4 mutates the `side:` capture (cols.querySelector -> unbounded), so its
-  //     decoy must be an earlier SIBLING inside cols — above.
-  //   S1 mutates sideEl('head') -> side.querySelector('.chat-side-head'), which
-  //     resolves from the captured pane, so its decoy must sit INSIDE the real
-  //     .chat-side. A sibling is invisible to it.
+  // TWO decoys, since S1 and F4 mutate different hops: F4 (the `side:` capture) needs an earlier sibling in
+  // cols (above); S1 (sideEl('head'), resolved from the captured pane) needs one INSIDE the real .chat-side
   const insideMod = document.createElement('div');
   insideMod.className = 'mod-inside';
   insideMod.innerHTML = `<div class="chat-side-head">MOD-INNER-HEAD</div>`;
@@ -178,10 +159,8 @@ console.log('CHAT — People Here swaps sides');
   const innerHead = insideMod.querySelector('.chat-side-head')!;
   const modHead = nestedMod.querySelector('.chat-side-head')!;
   roster = [{ id: 'keir', declares: 'agent' }, { id: 'rab' }, { id: 'zzz' }];
-  // The pane is OPEN here (the check above read a painted head). paintSide bails
-  // at `if (!side || !sideSt.open) return`, so a closed pane would skip the very
-  // lines S1/F4 mutate and both mutants would survive — which is exactly what
-  // happened when this drove chat.open() (that opens the FRAME, not the pane).
+  // the pane is OPEN here: paintSide bails on `!sideSt.open`, so a closed pane would skip the lines S1/F4
+  // mutate (chat.open() opens the frame, not the pane)
   bus.emit('roster');                                    // the real trigger, chat.js:714
   check('a mod .chat-side-head nested inside the real pane is never written to (S1)',
     innerHead.textContent === 'MOD-INNER-HEAD', innerHead.textContent!);
@@ -190,13 +169,8 @@ console.log('CHAT — People Here swaps sides');
   check('...and the REAL head is the one that got the update (F4)',
     realSide.querySelector(':scope > .chat-side-head')!.textContent === '3 others here',
     realSide.querySelector(':scope > .chat-side-head')!.textContent!);
-  // applySide is what WRITES through the captured pane (classList 'closed' +
-  // style.width); paintSide only truthiness-checks it. Worth pinning on its own
-  // merits — but note what it does NOT cover: unbounding the `side:` capture is
-  // an EQUIVALENT mutation, because `cols` is created by the innerHTML write one
-  // statement above the capture block, so nothing can be inside it at that
-  // instant. That equivalence holds only while capture stays in the block that
-  // writes the markup; move it later and this needs a real binding.
+  // applySide WRITES through the captured pane (class 'closed', style.width). Unbounding the `side:` capture is
+  // an equivalent mutation only while the capture sits right after the innerHTML write that creates cols.
   (tog as HTMLElement).onclick!(new Event('click'));          // close
   check('applySide writes through the CAPTURED pane, never a mod\'s .chat-side',
     realSide.classList.contains('closed') && !(nestedMod.querySelector('.chat-side') as HTMLElement).classList.contains('closed'),
@@ -206,11 +180,8 @@ console.log('CHAT — People Here swaps sides');
   insideMod.remove();
   nestedMod.remove();
 
-  // LIFETIME (M-L): a capture fixes WHICH node, not that it still EXISTS. A mod
-  // can remove it; the handle stays valid, writes land on an orphan, nothing
-  // renders, no error. Quieter than the node-theft the capture was added to
-  // stop. sideEl reads through ?.isConnected, so a detached pane reads as
-  // absent and paintSide bails at its first line instead of painting a ghost.
+  // lifetime: a capture fixes which node, not that it exists; sideEl reads through ?.isConnected, so a detached
+  // pane reads as absent and paintSide bails instead of painting an orphan
   const detached = realSide;
   const headBefore = detached.querySelector(':scope > .chat-side-head')!.textContent;
   detached.remove();
@@ -221,14 +192,8 @@ console.log('CHAT — People Here swaps sides');
     threw === '' && detached.querySelector(':scope > .chat-side-head')!.textContent === headBefore,
     `threw=${threw} head=${detached.querySelector(':scope > .chat-side-head')!.textContent}`);
   cols.append(detached);                                  // put it back for later blocks
-  // M-D: paintSide's `!sideSt.open` guard. bus.on('roster'|'presence:me')
-  // (chat.js:714-715) call paintSide with NO open-check of their own, so
-  // dropping it repaints a CLOSED pane on every roster event. (The 2s tick at
-  // :716 gates itself on sideSt.open — it is not the path.)
-  // paintSide returns early when closed — it does NOT clear. So the binding is
-  // "the text does not CHANGE", not "the text is empty". (An earlier draft
-  // asserted === '' and failed: my assertion presumed a clean slate that never
-  // existed. The product was right; the test was wrong.)
+  // M-D: paintSide's `!sideSt.open` guard (the roster/presence:me listeners don't check open themselves). paintSide
+  // returns early when closed and doesn't clear, so the binding is "the text does not CHANGE".
   (tog as HTMLElement).onclick!(new Event('click'));          // close it
   const frozen = realSide.querySelector(':scope > .chat-side-head')!.textContent;
   roster = [{ id: 'keir', declares: 'agent' }, { id: 'rab' }, { id: 'zzz' }];   // a roster CHANGE while closed
@@ -240,18 +205,8 @@ console.log('CHAT — People Here swaps sides');
   // applySide/paintSide/applyChatPrefs must never have touched the decoy
   check('applySide writes onto the nodes initChat built, never a mod panel carrying the same classes', dCols.className === dBefore.cls && dTog.textContent === dBefore.txt, `${dCols.className} / ${dTog.textContent}`);
 
-  // applyChatPrefs was the ONE reader addressing a node by class at call time
-  // (`frame.body.querySelector('.chat-log')`), so a mod prepending .chat-log
-  // won the query: the size landed on the decoy, persisted, and the real log
-  // never changed — silently, no error. It now writes through the captured
-  // logEl. This binds the HIJACK only: the decoy must not get the size and the
-  // real log must. It does NOT bind the ordering bug the fix first shipped with
-  // (logEl captured after initChatGear, so the boot-time applyChatPrefs was a
-  // no-op) — by the time this block clicks +A, initChat has long returned and
-  // logEl is set either way. Instrumented to confirm: under that mutation the
-  // FIRST applyChatPrefs logs logEl=NULL and every later one logs logEl=set.
-  // The boot moment needs its own assertion; claiming this one covered both
-  // was wrong.
+  // applyChatPrefs writes through the captured logEl, so a mod's earlier .chat-log never takes the size. This binds
+  // the hijack only; the boot-moment ordering has its own check above.
   const dLog = document.createElement('div'); dLog.className = 'chat-log';
   frameStub.body.prepend(dLog);                            // a mod's log, earlier sibling
   const realLog = frameStub.body.querySelector('#chatlog') as HTMLElement;

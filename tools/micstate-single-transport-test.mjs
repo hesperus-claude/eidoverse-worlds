@@ -64,10 +64,8 @@ check("OFF→ back through the same hook", sfuCalls === 2 && s2 === false);
 const s3 = await m.toggleMic();
 check("ON→OFF→ON discriminator completes through the single transport", s3 === true);
 
-// ── 4: a world with NO voice relay, hook installed (R, gym 10-17 20:00: "the mic toggle just stays gray and doesn't do
-// anything"). The bridge installs __sfuMic at init whatever the server says, so the "this world has no voice relay" hint
-// sat behind `if (!fn)` and was unreachable: the click went to sfuMic, which parks the intent on a pc that will never
-// exist and returns off — grey, silent. The server's refusal (net.js sets __voiceRelayAbsent) must win over the hook.
+// ── 4: a world with NO voice relay, hook installed: the server's refusal (net.js __voiceRelayAbsent) must win over
+// the __sfuMic hook, or the click parks intent on a pc that never exists and the toggle stays grey and silent
 await m.toggleMic();   // back to OFF
 const callsBefore = sfuCalls; hints.length = 0;
 window.__voiceRelayAbsent = true;

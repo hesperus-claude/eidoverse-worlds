@@ -64,11 +64,8 @@ try {
     && !(await page.evaluate(() => document.getElementById('chatlog')?.textContent?.includes('from before arrival'))));
   const beforeControls = packets.filter(m => m.type === 'log').length;
   await page.locator('.chat-gear').click();
-  // Every control must remain hittable within a minimal chat frame. Lite's chat
-  // fills the viewport below its top bar (index.html, html.lite
-  // .frame.chat-frame), so the viewport sets the frame's size: a 360 px phone
-  // whose height leaves the chat about 100 px under the bar. The bar's own
-  // height can still move (a card under it), so only a short frame is required.
+  // every control must stay hittable in a minimal chat frame: a 360 px phone (lite's chat fills the viewport
+  // below its top bar: index.html, html.lite .frame.chat-frame)
   const oldViewport = page.viewportSize()!;
   await page.setViewportSize({ width: 360, height: oldViewport.height });
   const chatTop = await page.evaluate(() => (document.querySelector('.chat-frame') as HTMLElement).getBoundingClientRect().top);

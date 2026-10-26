@@ -137,16 +137,11 @@ try {
     page.on("pageerror", (e: Error) => errors.push(e.message));
     await page.addInitScript((loading) => {
       const g = globalThis as any;
-      // __hist follows each history request the page sends, by its reqId, until
-      // its answer arrives or requestHistory's own 8 s timer for it fires; `open`
-      // holds the reqIds still waiting. Once dropCatchup is set, the answer to
-      // the catch-up's request of that number is dropped (only resyncChatAfter
-      // sends `after`, so `catchups` counts its requests).
+      // __hist tracks each history request by reqId until answered or requestHistory's 8 s timer fires (`open` =
+      // still waiting). With dropCatchup set, that catch-up's answer is dropped (only resyncChatAfter sends `after`).
       g.__hist = { sent: 0, answered: 0, dropped: 0, timedOut: 0, open: new Set(), catchups: 0, dropCatchup: 0, dropId: null, armed: null };
-      // requestHistory arms its timer and then sends, in one synchronous run,
-      // so the last timer armed before a history request goes out is that
-      // request's own: every timer is tagged here, and a history send names
-      // the latest tag. Only a named tag counts when its timer fires.
+      // requestHistory arms its timer then sends synchronously, so the last timer armed before a send is that
+      // request's own: timers are tagged, a send names the latest tag, and only a named tag counts
       const setT = g.setTimeout;
       g.setTimeout = (fn: any, ...rest: any[]) => {
         if (typeof fn === "function") {

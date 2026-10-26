@@ -330,10 +330,8 @@ console.log("\n  the CLI — bodies and animation refused, objects reduced, iden
         && (rt.children ?? []).includes(nodes.indexOf(sk)), JSON.stringify(rt));
     }
 
-    // MUTATION CONTROLS (re-review blocker 1): each preservation guard gets a
-    // corruption injected through the pipeline's own test seam — delete the
-    // guard and its control goes red, because the corrupted variant would
-    // ship. In-process on purpose: the seam must never be CLI-reachable.
+    // mutation controls: each preservation guard gets a corruption through the pipeline's own test seam (delete the
+    // guard and its control goes red); in-process on purpose, since the seam must never be CLI-reachable
     const mutBytes = await gridGlb("mut", 160, false);
     let mres = await optimizeGlbLod(mutBytes, null, (doc) => { doc.getRoot().listNodes()[0].setName("renamed-by-mutation"); });
     check("mutation control, node guard: a node renamed after the reduce is REFUSED", mres.out === null && /node hierarchy/.test(mres.verdict ?? ""),
@@ -428,12 +426,9 @@ async function freePort(): Promise<number> {
  *  server, or TOCTOU winner on the probed port can answer with it. */
 const ownedBy = (version: any, nonce: string) => version != null && typeof version === "object" && version.instance === nonce;
 
-/** Spawn the sequencer PROCESS-OWNED (re-review blocker 2): a per-run
- *  WORLD_INSTANCE_NONCE goes INTO the child and must come back on /version
- *  before anything counts as up — readiness and identity are one check, so a
- *  foreign responder on the probed port never greens a claim. Logs piped (a
- *  failed boot prints its tail); stop() is the one cleanup owner and every
- *  section holds it in a finally. */
+/** Spawn the sequencer process-owned: a per-run WORLD_INSTANCE_NONCE must come back on /version before anything
+ *  counts as up (readiness and identity are one check). Logs piped; stop() is the one cleanup owner, held in a
+ *  finally by every section. */
 async function startServer(extra: Record<string, string | undefined>, lib?: string) {
   const PORT = await freePort();
   const nonce = crypto.randomUUID();
@@ -646,13 +641,8 @@ console.log("\n  the library arm — the sweep queues LODs, and mutable sources 
         writeFileSync(planted, readFileSync(lodPath));
         const tOld = new Date(t2.getTime() - 5000); utimesSync(planted, tOld, tOld);
       }
-      // the catalog humans pick from must not show the variant as a model. The
-      // store section asserts this for a store hash — where OPT_DIR is never
-      // walked as a models dir. THIS is the library side, where /library-models
-      // walks OPT_DIR/eidoverse/assets/models beside the originals (routes.ts):
-      // the walk's filter was written for the ktx2 arm alone, and every baked
-      // library LOD listed as a model of its own. Fails on main; the fix is one
-      // predicate, the one /library-list already used (isServingArtifact).
+      // the human catalog must not list a variant as a model: /library-models walks OPT_DIR/eidoverse/assets/models
+      // beside the originals (routes.ts), so it filters with isServingArtifact, as /library-list does
       const catalog: { path: string }[] = await fetch(`${S.base}/library-models`).then((r) => r.json());
       const leaked = catalog.filter((h) => isLodVariant(h.path)).map((h) => h.path);
       check("/library-models lists the library original once and NEVER its lod variant (the OPT_DIR walk)",

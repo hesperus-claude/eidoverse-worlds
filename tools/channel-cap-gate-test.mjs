@@ -1,22 +1,6 @@
 #!/usr/bin/env bun
-// The channel capability gates — do denied capabilities actually refuse?
-//
-// 🔴 WHY. `channels.publish`, `channels.lifecycle` and `channels.streaming` were
-// declared in CAP and were checked NOWHERE (found 2026-08-16; the stream is no
-// longer advertised or declared, since nothing reads it). Only
-// `channels.register` and `channels.incoming` had gates. So a host granting
-// `channels.incoming` alone — "receive, do not send" — still had its agent's
-// channels/publish answered: the DOOR SPOKE IN THE WORLD on behalf of an agent
-// whose host never granted speech.
-//
-// This is the same shape as toolsAllowed(), which existed with twelve lines of
-// spec-citing prose above it and NO CALLER. The logic was right; nothing asked.
-// So the test that matters is not "does the gate function return false" — it is
-// "does the REQUEST get refused", which is the thing that was broken.
-//
-// Spec (declaration.ts, §5.4): "absence is denial and there is no unspecified
-// state, so an ambiguous entry fails closed." A peer that declares NO grant at
-// all is a different case — plain MCP, no declaration — and keeps everything.
+// The channel capability gates: do denied capabilities refuse the REQUEST, not just the gate function?
+// Absence is denial (declaration.ts §5.4); a peer with no declaration at all keeps everything.
 
 import { capabilityMatches, CAP } from '../mcpl/declaration.ts';
 
@@ -26,17 +10,8 @@ const ok = (name, cond, detail = '') => {
   else { fail++; console.log(`FAIL ${name}${detail ? ' — ' + detail : ''}`); }
 };
 
-// The gate, extracted exactly as net-server implements it. If this drifts from
-// the source the door will pass here and fail in the world — so the shape is
-// kept trivial and the REAL assertion is the wiring check at the bottom.
-//
-// 🔴 REVISED 2026-08-17 (review agent): the first extraction was
-// `grant ? matches : true` — which faithfully copied a BUG and thereby pinned
-// it. capAllowed now shares granted()'s full semantics: plain-MCP hosts get
-// no channel verbs (channels are MCPL-only; the fallback-to-MCP rationale
-// that lets toolsAllowed default open applies to tools alone), and a 0.5+
-// host is denied until its first featureSets/update arrives (§5.3
-// deny-until-policy). The extraction takes (mcplClient, version, grant).
+// the gate, extracted as net-server implements it (the wiring check at the bottom is the real assertion):
+// plain-MCP hosts get no channel verbs, and a 0.5+ host is denied until its first featureSets/update (§5.3)
 const capAllowed = (mcplClient, version, grant, cap) => {
   if (!mcplClient) return false;
   if (grant) return grant.some((g) => capabilityMatches(g, cap));
@@ -73,10 +48,7 @@ ok('0.5 host whose featureSets/update OMITS effectiveCapabilities stays denied (
    !capAllowed(true, '0.5', null, CAP.channelsPublish));  // update-without-grant leaves grant null
 
 // ---- the wiring: is the gate actually CALLED at each verb? ------------------
-//
-// 🔴 THIS is the assertion that would have caught the original bug. A unit test
-// of the predicate passes happily while nothing invokes it. Read the source and
-// require a gate inside each case block, before the handler runs.
+// a predicate test passes while nothing invokes it, so read the source and require a gate in each case block
 
 const src = await Bun.file(new URL('../mcpl/net-server.ts', import.meta.url)).text();
 
@@ -100,10 +72,7 @@ for (const [caseName, capConst] of [
   ok(`${caseName} is gated on ${capConst}`, r.ok, r.why);
 }
 
-// The typing path is a NOTIFICATION — no response, so the gate must drop it
-// silently rather than refuse. Assert the drop happens before the relay starts.
-// (The generation stream, channels/outgoing/chunk, drives nothing any more, so
-// it has no gate to check.)
+// typing is a NOTIFICATION: the gate drops it silently (no refusal), before the relay starts
 {
   const at = src.indexOf('private onTyping(');
   const body = at >= 0 ? src.slice(at, at + 1400) : '';
@@ -120,10 +89,8 @@ for (const [caseName, capConst] of [
      /this\.conn\.on\("notification"[\s\S]{0,200}method\.CHANNELS_TYPING[\s\S]{0,200}this\.onTyping\(/.test(src));
 }
 
-// A host sends channels/typing only to a server whose grant has
-// channels.typing, and grants only what the server advertises, so the
-// advertisement and the feature set are what turn the dots on. Nothing reads
-// the generation stream, so the door doesn't ask for it.
+// a host sends channels/typing only under a channels.typing grant, and grants only what's advertised, so the
+// advertisement and the feature set turn the dots on
 {
   const { MCPL_ADVERTISEMENT, FEATURE_SETS } = await import('../mcpl/declaration.ts');
   ok('the door advertises channels.typing', MCPL_ADVERTISEMENT.channels.typing === true);
@@ -133,10 +100,8 @@ for (const [caseName, capConst] of [
      Object.values(FEATURE_SETS).every((fs) => !fs.uses.includes('channels.streaming')));
 }
 
-// The body's speech ends the dots: the session hands each body a hook that
-// stops the relay, and travel hands it on to the next body. (The live test
-// covers the say itself; these pin the wiring for a travelled body, which no
-// test drives.)
+// the body's speech ends the dots: each body gets a hook that stops the relay, and travel hands it on
+// (pinned here for a travelled body, which no test drives)
 {
   const ctorAt = src.indexOf('this.channelId = `world:${this.agent.world}`;');
   const ctor = ctorAt >= 0 ? src.slice(ctorAt, ctorAt + 400) : '';

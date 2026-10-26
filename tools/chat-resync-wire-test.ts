@@ -30,10 +30,8 @@ const snapshot = (throughSeq: number, entries: any[]) => ({ type: "snapshot", yo
 console.log("a re-join's snapshot resyncs chat from the last delivered seq");
 await _dispatch(snapshot(100, [say(101), say(102)]));
 check("the first snapshot resyncs nothing", stubs.resyncCalls.length === 0, JSON.stringify(stubs.resyncCalls));
-// (ported 10-17) this client folds the log stream itself ({type: "log", entries} through its replica, which needs an
-// adopted cut these stubs don't build), so the live says between the two joins aren't fed here; what this pins is the
-// call site: lastSeq — in the chat's numbering, seq × 1000, as the snapshot's throughSeq is — is what the resync asks
-// from, read before the new snapshot moves it on
+// this client folds the log stream itself, so the live says between the joins aren't fed here; this pins the call
+// site: the resync asks from lastSeq (chat numbering, seq × 1000, like throughSeq), read before the snapshot moves it
 // the socket drops; 30 more entries happen; the re-join's snapshot is past them
 await _dispatch(snapshot(130, [say(131), say(132)]));
 check("the second snapshot resyncs once", stubs.resyncCalls.length === 1, JSON.stringify(stubs.resyncCalls));

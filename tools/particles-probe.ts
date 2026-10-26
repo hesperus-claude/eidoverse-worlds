@@ -99,9 +99,7 @@ check("...and still reads as an emitter to a resident",
   /\[hearth\][^\n]*emitting "plasma"/.test(body.look()));
 
 // ---- put it out --------------------------------------------------------------
-// Past the open coalescing window first: the plasma change above is still
-// folding, and an ending inside that window is (correctly) reported when the
-// window closes rather than the instant it lands.
+// past the open coalescing window first: an ending inside it is reported when the window closes
 await sleep(WINDOW * 2);
 heard.length = 0;
 send(author, "comp", { id: "hearth", type: "particles", data: null });

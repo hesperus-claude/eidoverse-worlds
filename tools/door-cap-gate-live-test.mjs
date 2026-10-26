@@ -105,14 +105,8 @@ function awaitExit(p, ms = 5000) {
   });
 }
 
-/** PIDs listening on a TCP port, from the OS — Linux second opinion (no `ss`
- *  or /proc ⇒ null, and the per-run nonce remains the portable proof).
- *  Non-Linux returns null without spawning: the second opinion is Linux-only
- *  by design, and a macOS host must not pay a spawn to learn that. On Linux a
- *  missing `ss` surfaces as an ASYNC `error` event on the child (Node/Bun do
- *  not throw ENOENT synchronously from spawn) — an unhandled one is a process
- *  crash via `uncaughtException`, which is exactly the non-portability the
- *  #129 re-review caught. Handle it as: cannot answer ⇒ null. */
+/** PIDs listening on a TCP port, from `ss`: a Linux-only second opinion (the per-run nonce is the portable proof).
+ *  Non-Linux returns null without spawning; a missing `ss` arrives as an async `error` event and resolves null. */
 async function listenerPids(port, cmd = "ss") {
   if (process.platform !== "linux") return null;
   try {
@@ -193,12 +187,8 @@ const doorNonceProbe = (port) => async () => {
 }
 
 // ── NEGATIVE CONTROL 1b: the OS second opinion must DEGRADE, never crash. ──
-// (#129 re-review: on a host without `ss`, spawn ENOENT arrives as an async
-// `error` event; unhandled, it killed the whole harness before any behavioral
-// vector ran.) Force that exact path with a command that cannot exist and
-// require the documented contract: resolve null — the per-run nonce remains
-// the portable proof — with the process still alive to say so. On non-Linux
-// the platform guard answers null before any spawn; same contract, earlier.
+// force a missing command: listenerPids must resolve null (spawn ENOENT arrives as an async `error`) with the
+// process still alive; on non-Linux the platform guard answers null before any spawn
 {
   const r = await listenerPids(1, "ss-absent-for-portability-vector");
   check("negative control: missing `ss` ⇒ listenerPids resolves null (no crash, nonce stays the proof)",
@@ -372,10 +362,8 @@ try {
   // ---- phase 2: a granted host — allowed operations still work -------------
   const full = fullRef = new Rpc(`ws://127.0.0.1:${DOOR_PORT}/mcpl?token=gate-token`);
   await full.init(true);
-  // First, the grant a host gave this door before it used channels.typing:
-  // everything else, the stream included. The typing feature set is then
-  // unavailable for want of channels.typing, so the receipt is degraded and
-  // names it, and channels/typing from that host raises no dots.
+  // first, a grant from before the host used channels.typing (everything else, the stream too): the typing feature
+  // set is unavailable, the receipt is degraded and names it, and channels/typing raises no dots
   r = await full.request("featureSets/update", {
     effectiveCapabilities: ["tools", "channels.register", "channels.lifecycle",
       "channels.publish", "channels.incoming", "channels.streaming"] });

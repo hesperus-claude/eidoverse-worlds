@@ -83,11 +83,9 @@ async function loadVrm(bytes: Uint8Array) {
   return { vrm, root };
 }
 
-/** avatar.js, at full weight. A standing body: the clip's frame, the head
- *  pitch, the held pose's normalized layer, vrm.update, then its raw layer.
- *  A limp one (remotes.js sets a ragdoll limp): no clip under the sim's
- *  bones, no pitch and no raw layer. `clip: false` leaves out the clip alone,
- *  for the agent's reach body, which plays none. */
+/** avatar.js at full weight. Standing: the clip's frame, head pitch, the held pose's normalized layer, vrm.update,
+ *  its raw layer. Limp (remotes.js): no clip under the sim's bones, no pitch, no raw layer. `clip: false` drops
+ *  only the clip (the agent's reach body plays none). */
 function drawHeld(vrm: any, bones: Record<string, unknown>, { limp = false, clip = true, pitch = 0 } = {}) {
   const h = vrm.humanoid, rest = vrm.userData.boneRest;
   if (!limp && clip) {
@@ -179,10 +177,8 @@ try {
       !word.ok && word.error === NOT_A_MAP && word.unreadableBones === null, word.error);
   }
 
-  // The reach solver sees the held pose's normalized layer only: the
-  // renderer solves its IK before it lays a held translation on an arm or a
-  // scale (avatar.js update), so the solve is the same with or without them,
-  // and only the drawn hand moves.
+  // the reach solver sees only the normalized layer: the renderer solves IK before laying held translation/scale
+  // (avatar.js update), so the solve is the same and only the drawn hand moves
   {
     const reaching = (bones: Record<string, unknown>) => reader.read("reacher", "bones", undefined, () => ({ who: "reacher", avatar: "turned-vrm1.vrm",
       generation: 1, self: true, connected: true, source: "unknown", receivedAt: Date.now(),
@@ -199,10 +195,8 @@ try {
     check("...and the hand is drawn where they put it", moved > 0.01, `${(moved * 1000).toFixed(1)} mm`);
   }
 
-  // The ragdoll's start: every joint where the browser draws the body as its
-  // own sim starts, limp, its held rotations laid and its hips drop moved
-  // onto the root (avatar.js bakeHipsIntoRoot). A VRM0 body falls in the
-  // half-turned frame three-vrm gives it, as the browser's does.
+  // the ragdoll's start: limp, held rotations laid, hips drop baked onto the root (avatar.js bakeHipsIntoRoot); a
+  // VRM0 body falls in three-vrm's half-turned frame, as the browser's does
   for (const path of ["vrm1.vrm", "vrm0.vrm", "turned-vrm0.vrm"]) {
     const t = [0.1, -0.3, 0.05], yaw = 0.6, rootY = 0.5;
     const held = { hips: { q: turn(1, 0, 0, 40), t }, spine: turn(0, 0, 1, 25), leftUpperArm: turn(0, 1, 1, 70), rightLowerLeg: turn(1, 0, 0, -60) };

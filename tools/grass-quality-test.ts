@@ -55,11 +55,9 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
-// ---- behavioral delta — runs on BOTH trees -------------------------------
-// Evaluate the dial exactly as flora.js ships it, extracted from the tree's
-// own source (not retyped), so this one assertion is a live A/B: main's
-// inline expression floors at >=1 instance per stroke and keeps 50 of 1000
-// at factor 0; the branch delegates to densityCount and keeps 0.
+// ---- behavioral delta -----------------------------------------------------
+// the dial evaluated exactly as flora.js ships it, extracted from the source (not retyped): at factor 0 it must
+// keep 0 instances, not floor at 1 per stroke
 const gqMod = await import("../client/lib/grass_quality.js").then((m) => m, () => null);
 console.log("\nflora's shipped density dial (source-extracted, both trees)");
 {

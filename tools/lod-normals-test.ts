@@ -35,11 +35,8 @@ function sphere(seg: number, ring: number) {
   }
   return { pos, uv, tri };
 }
-// 6 m, not 1: the reducer's error budget is SCREEN-SPACE (gen 3: 2 px at the closest distance the LOD is shown), and the
-// field's size decides whether its relief is above it. Scanned 09-29 (weighted 0.25/1 vs zeroed, off-shaded share):
-//   1 m 14% vs 23% · 2 m 13% vs 23% · 3 m 10% vs 21% · 4 m 6% vs 17% · 6 m REFUSED vs 11% · 10 m refused vs refused.
-// Below ~4 m the facets are ~1–4 px at the LOD distance and their shading is noise a viewer can't resolve; at 10 m the
-// relief refuses either way and the weights bind nothing. 6 m is where the weights DECIDE: served smeared without them.
+// 6 m: the reducer's error budget is SCREEN-SPACE (2 px at the LOD's closest distance), and 6 m is where the weights
+// decide (served smeared without them); below ~4 m facets are sub-resolvable, at 10 m it refuses either way
 const FIELD = 6;
 /** A jagged heightfield: seeded heights about the cell size, so neighbouring facets differ by tens of degrees — the
  *  hard edges a position-only collapse smears (a hovercar's arches), unlike a sphere's few-degree facets. */

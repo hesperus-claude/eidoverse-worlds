@@ -1,19 +1,6 @@
 #!/usr/bin/env bun
-// Isolation headers — does every response actually carry COOP/COEP?
-//
-// 🔴 WHY THIS EXISTS. The PR that adds these headers had NO test. Its whole
-// claim is "wasm gets its threads back", which depends on `crossOriginIsolated`
-// being true in the browser, which depends on BOTH headers riding EVERY
-// response — not just the document. A worker script served without them
-// silently degrades the entire context back to single-threaded, and the only
-// symptom is the thing being slow, which is exactly the symptom we started with.
-//
-// The failure this guards is REGRESSION BY ROUTE: someone adds a route that
-// returns early, or wraps the table, and the document keeps its headers while
-// /client/lib/*.js quietly loses them. Testing only `/` would pass.
-//
-// It boots a real server on a scratch port and reads real responses. It does
-// NOT test that threads got faster — that is a benchmark, and a separate claim.
+// Isolation headers: every response, not just the document, must carry COOP/COEP, or crossOriginIsolated goes false
+// and wasm silently loses its threads. Guards against regression by route; boots a real server. Not a benchmark.
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -28,10 +15,8 @@ const ok = (name, cond, detail = '') => {
   else { fail++; console.log(`FAIL ${name}${detail ? ' — ' + detail : ''}`); }
 };
 
-// 🔴 IDENTITY, NOT JUST A LISTENER (review: "we have already had an old 89xx
-// listener buy a false green in this repository"). The child echoes this
-// per-run nonce on /version; readiness and every later probe are bound to it,
-// so a stale server that lost us to EADDRINUSE cannot answer for the child.
+// identity, not just a listener: the child echoes this per-run nonce on /version and every probe is bound to it, so
+// a stale server holding the port can't answer for the child
 const NONCE = randomUUID();
 const scratch = mkdtempSync(join(tmpdir(), 'iso-'));
 const srv = spawn(process.execPath, ['server/server.ts'], {
@@ -69,13 +54,8 @@ try {
      doc.headers.get('cross-origin-embedder-policy') === 'credentialless',
      `got ${doc.headers.get('cross-origin-embedder-policy')}`);
 
-  // 🔴 THE ONE THAT ACTUALLY MATTERS. A module script without COEP breaks
-  // isolation for the whole context even when the document has it.
-  // 🔴 REAL 200s, NOT 404s. The first draft asked for '/client/main.js', which
-  // the catch-all resolves under client/ — so it 404'd, and a 404 carrying the
-  // headers proves much less than a real module doing so. The static tree is
-  // rooted AT client/, so the module is '/main.js'. Checked the route table
-  // (routes.ts:677) rather than guessing a second time.
+  // the one that matters: a module script without COEP breaks isolation for the whole context. Real 200s, not 404s:
+  // the static tree is rooted AT client/, so the module is '/main.js'
   for (const path of ['/main.js', '/lib/core.js', '/nonexistent-404']) {
     const r = await fetch(`http://127.0.0.1:${PORT}${path}`);
     if (path !== '/nonexistent-404') ok(`${path} is really served (not a 404)`, r.status === 200, `status ${r.status}`);

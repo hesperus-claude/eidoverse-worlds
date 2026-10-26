@@ -109,14 +109,9 @@ const ident = new THREE.Quaternion();
   ok(forearmRoll > 70 && forearmRoll < 100, `forearm carried the bulk of the twist (${forearmRoll.toFixed(1)}° of 100°)`);
 }
 
-// 6. twist continuity (owner, 09-23, tigerbee: thumb-down/palm-out → thumb-out/palm-up and the forearm "tries to
-//    flip the other way"). Inside a forearm's real range — ~100° of pronation past palm-down to ~190° of supination
-//    — every roll of the grip, from any start, must move the forearm smoothly. The old split wrapped the twist to
-//    ±180° about the REST hand and faded 155–178°: 9.4° of forearm per degree of grip, near palm-up.
-//    NOT asked: 270° both ways from every start on the circle — no single-valued twist survives that (a first cut of
-//    this test asked it and failed both solvers). The rig mapping below is MEASURED on this synthetic humanoid
-//    (grip roll about the forearm → twist from rest, palm-down ≈ 0, supination + on the right, − on the left) and
-//    guarded, so a change to the rig or WRIST_R says so here instead of silently shifting the band.
+// 6. twist continuity: inside a forearm's real range (~100° pronation past palm-down to ~190° supination) every
+//    grip roll, from any start, moves the forearm smoothly. Not asked: 270° both ways (no single-valued twist
+//    survives that). The rig mapping below is measured and guarded, so a rig or WRIST_R change says so here.
 {
   for (const side of ['right', 'left']) {
     const sg = side === 'right' ? 1 : -1, gripOf = (tw: number) => sg * tw + sg * 120.7;

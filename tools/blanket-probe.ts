@@ -33,11 +33,8 @@ const flat = () => 0;
 const AVATAR = 1.9;
 
 // ---- loading a REAL mesh ----------------------------------------------------
-// Deliberately NOT three's GLTFLoader: it reaches for DOM Image/ImageBitmap to
-// build textures, which headless Bun has not got, and this probe only ever
-// asks about triangles. @gltf-transform is already a root dependency (it runs
-// the store's optimize pass) and reads draco'd GLBs — which /library serves,
-// since it prefers the store-min mirror.
+// not three's GLTFLoader (it needs DOM Image/ImageBitmap, absent in headless Bun); @gltf-transform reads the
+// draco'd GLBs /library serves
 async function loadGlbMesh(path: string) {
   const { NodeIO } = await import('@gltf-transform/core');
   const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
@@ -95,9 +92,7 @@ function truthSampler(mesh: any) {
 }
 
 // ---- the object under test --------------------------------------------------
-// A 3x3m blanket, 4cm thick, with three 50cm pillows sitting on it. Nothing
-// exotic: this is the smallest mesh that reproduces the bug, and its true
-// walkable height is known analytically (0.04 on cloth, 0.54 on a pillow).
+// a 3x3m blanket, 4cm thick, three 50cm pillows: the smallest repro, walkable height known (0.04 cloth, 0.54 pillow)
 
 const BLANKET_Y = 0.04;
 const PILLOW_Y = 0.04 + 0.50;
@@ -137,13 +132,8 @@ function probe(x: number, z: number, y = 0) {
   return { ground, push: Math.hypot(p.x - x, p.z - z) };
 }
 
-/** Walk a 7x7 grid over the blanket and score the ground each mode reports
- *  against what the geometry actually is.
- *
- *  `feetY` is the regime under test, and it matters more than anything else
- *  here. At cloth height you are measuring whether the thing WALLS you out;
- *  at pillow height you are measuring the reported bug — someone who has
- *  already mantled up and is now walking around on top. */
+/** Walk a 7x7 grid over the blanket and score each mode's reported ground against the geometry. `feetY` is the
+ *  regime: cloth height tests walling-out; pillow height tests the reported bug (walking on top after a mantle). */
 function sweep(label: string, feetY: number) {
   let worst = 0, sumErr = 0, n = 0, walled = 0, skipped = 0;
   const rows: string[] = [];
@@ -202,9 +192,7 @@ for (const [mode, forced] of [['box', 'box'], ['exact', 'exact']] as const) {
 }
 
 // ---- what does exact COST? --------------------------------------------------
-// The blanket above is 60 triangles. A Tripo conjure is not. Subdivide to a
-// realistic generated-mesh density and time the BVH build, because "just use
-// exact for everything" lives or dies on this number.
+// time the BVH build at generated-mesh density: "exact for everything" lives or dies on this number
 console.log('\n  cost of exact at generated-mesh density:');
 for (const target of [5_000, 50_000, 150_000]) {
   const seg = Math.max(1, Math.round(Math.sqrt(target / 12)));
@@ -232,8 +220,7 @@ console.log(`   exact ${fixed ? 'FIXES' : 'does NOT fix'} the float ` +
 
 // ---- the real thing ---------------------------------------------------------
 //   bun tools/blanket-probe.ts --glb <file> [--y <entity pos.y>] [--scale <s>]
-// Defaults are commons' entity 90094b0e (store/9a9d0239eca609b3.glb), the
-// violet blanket with mismatched cushions, as it actually stands in the world.
+// defaults: commons' entity 90094b0e (store/9a9d0239eca609b3.glb), as it stands in the world
 
 const argv = process.argv.slice(2);
 const argOf = (k: string, d: number) => {
@@ -254,10 +241,8 @@ if (glbIdx >= 0 && argv[glbIdx + 1]) {
     ` · footprint ${((bb.max.x - bb.min.x) * (bb.max.z - bb.min.z)).toFixed(1)}m²`);
   console.log(`  placed at world y=${entY}, scale ${entScale}`);
 
-  // What does the shipping classifier pick, and what ELSE does forcing exact
-  // turn on? `interior` is not a collision flag — it drives the grass clearing
-  // mask, so flipping a thing to exact also decides whether meadow grows
-  // through it. Worth knowing before recommending the flip.
+  // what does the classifier pick, and what else does forcing exact turn on? `interior` drives the grass
+  // clearing mask, not collision
   {
     C.clearColliders();
     const probeMesh = mesh.clone(); probeMesh.updateMatrixWorld(true);

@@ -48,12 +48,8 @@ for (const [mode, prefix] of [["renderer", "renderer-"], ["spectate", "retina-"]
 }
 
 // ---- net.js onSnapshot, the call itself ----------------------------------------------------
-// The checks above pin nameFromJoinAck as a function; this pins that onSnapshot
-// USES it, the one place that stops a spectator storing "retina-helen" (and
-// joining under it on their next visit as a person) or a renderer that
-// reconnects without reloading from joining as "renderer-renderer-helen".
-// Real net.js + base.js, fresh process per page load; only the DOM-touching UI
-// modules are stubbed.
+// pins that onSnapshot USES nameFromJoinAck, so a spectator's or renderer's prefix never snowballs into the stored
+// name. Real net.js + base.js, a fresh process per page load; only the DOM-touching UI modules are stubbed.
 console.log("net.js onSnapshot");
 type Step = { ack: string; sub?: string } | "join";
 function pageLoad(search: string, stored: string, steps: Step[]) {

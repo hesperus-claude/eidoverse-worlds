@@ -146,9 +146,7 @@ const policyArgs = {
 }
 
 // ---------------------------------------------------------------- three-plane parity across an override + boundary
-// (the review's required test: live client, folded late join, and MCPL
-//  perception agree through one manual override and the next scheduled
-//  boundary)
+// live client, folded late join and MCPL perception agree through one manual override and the next scheduled boundary
 
 {
   const entries = [
@@ -242,10 +240,8 @@ const policyArgs = {
   const perTickUs = (performance.now() - tick0) / 10;   // µs per tick over 10k ticks
   check(`cold year-old walk, default dwell (${coldMs.toFixed(1)}ms)`, coldMs < 2000);
   check(`cursor tick is O(1) (${perTickUs.toFixed(1)}µs/tick)`, perTickUs < 200);
-  // the WORST policy the floor allows: fixed 60s dwell = ~525,600 segments
-  // per year of age. This is the number the receipt has to be honest about —
-  // it is a one-time join cost, not a per-tick one; long-lived worlds that
-  // outgrow it want checkpoints, not a bigger budget here.
+  // the WORST policy the floor allows: fixed 60s dwell ≈ 525,600 segments per year of age, a one-time join cost
+  // (long-lived worlds want checkpoints, not a bigger budget)
   const worst = normalizePolicy({ seed: 1, states: ["clear", "rain"], dwellSec: [60, 60] })!;
   Object.assign(worst, { epoch: T0 });
   const w0 = performance.now();
@@ -317,14 +313,8 @@ const policyArgs = {
 
 
 // ---------------------------------------------------------------- clock contract (#65)
-// One clock governs, and the folded state says which. Accelerated → real →
-// accelerated is the acceptance path from the issue; the review's B1 path —
-// normalized real → unresolvable tz — is the regression guard: the parked
-// clock must survive the re-issue and genuinely govern (a typo dims nothing).
-//
-// The CONTROL checks below use only surfaces that exist on BOTH trees
-// (foldSkyEntry + hoursAt), so on main they fail with the actual stale
-// numbers — behavioral evidence, never a link-time missing-export.
+// one clock governs and the folded state says which: accelerated → real → accelerated, and normalized real →
+// unresolvable tz (the parked clock must survive the re-issue and govern; a typo dims nothing)
 
 {
   const synth = (bag: any) => foldSkyEntry(null, { verb: "sky", args: bag, ts: T0 + 9 * HOUR, seq: -1, actor: "world" });

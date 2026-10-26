@@ -37,10 +37,9 @@ document.body.innerHTML = `
 const { bus } = await import("./dock-stub.mjs");
 const { fsvg } = await import("../client/lib/icons.js");
 const { makeFrame, getFrame, isLocked } = await import("../client/lib/windows.js");
-// a returning person's storage from before the action bar's rename (ad90009f, 10-17): pins and frame state under its old
-// id. The old id is ui.js's ACTIONBAR_OLD_ID (the word lives on that one line, names-check E3); a literal copy here would
-// be a second spelling, so it is read the only way that does not import ui.js first: from the source line.
-// Seeded after windows.js has stamped its layout version (so the frame key is not purged) and before ui.js reads pins.
+// a returning person's storage from before the action bar's rename: pins and frame state under the old id, read from
+// ui.js's ACTIONBAR_OLD_ID source line (the word lives on that one line, names-check E3) without importing ui.js.
+// Seeded after windows.js stamps its layout version and before ui.js reads pins.
 const OLD = /export const ACTIONBAR_OLD_ID = '(\w+)';/.exec(await Bun.file(here("../client/lib/ui.js")).text())![1];
 const RENAMED_FRAME = JSON.stringify({ x: 336, y: 10, w: 352, h: 32 });
 localStorage.setItem("ew-dock-pins", JSON.stringify(["search", "profile", "world", "chat", OLD, "debug", "settings", "edit"]));
@@ -173,10 +172,8 @@ toggleEMenu(false);
 
 console.log("DOCK — the rail clears the joystick (mobile landscape)");
 {
-  // R, 2026-09-11: "it doesn't currently take into account the space needed for
-  // the mobile joystick". #stick is left:18 bottom:18, 116px square -> it owns
-  // the bottom 134px of the left column. The rail is taller than what is left
-  // above it at 844x390, so a LEFT edge runs through the thumb.
+  // the mobile joystick (#stick: left:18 bottom:18, 116px) owns the bottom 134px of the left column; at 844x390
+  // the rail is taller than what's left above it, so a LEFT edge runs through the thumb
   const { dockEdgeFitsLeft } = ui as any;
   const vw0 = innerWidth, vh0 = innerHeight;
   const setVp = (w: number, h: number) => { (window as any).innerWidth = w; (window as any).innerHeight = h; };
@@ -317,14 +314,9 @@ check("the wrench has a row while gated open", !!row("edit"));
   // itself when build rights arrive, with a manual unpin still winning — so it
   // must fire on closed->open, never on every repaint.
   const wasGate = editGate;
-  // OBSERVE WHAT THE PRODUCT OBSERVES. savedPins() reads localStorage, which is
-  // null until something calls savePins() — but `pins` already contains 'edit'
-  // from DEFAULT_PINS at block start. So a storage-based probe reports
-  // "unpinned" while the product considers it pinned, the opening unpin is
-  // skipped, and the grant finds nothing to do. The rail is the honest seam:
-  // paintDock hides an action button iff `!active && !pins.has(id)`
-  // (ui.js:553), so with the gate open and the mode off, visible == pinned.
-  // (Three instrumented runs to find this; the storage probe was mine.)
+  // observe what the product observes: `pins` starts with 'edit' from DEFAULT_PINS while savedPins() is null, so a
+  // storage probe lies. paintDock hides an action iff `!active && !pins.has(id)`, so with the gate open and mode
+  // off, visible == pinned.
   const isPinned = () => { editGate = true; bus.emit("frames"); return btn("edit")!.hidden === false; };
   // Re-QUERY the pin button every time: emenuKey() omits a gated-closed action
   // entry, so flipping editGate changes the key and buildEMenu rebuilds every
@@ -339,17 +331,8 @@ check("the wrench has a row while gated open", !!row("edit"));
   editGate = true; bus.emit("your-rights");            // THE GRANT
   check("a rights grant auto-pins the wrench", isPinned(), JSON.stringify(savedPins()));
 
-  // NOT ASSERTED HERE, and the reason is worth recording: the product now saves
-  // on every edge rather than only when the set changes, because `pins`
-  // hydrates from DEFAULT_PINS (ui.js:313) — which contains 'edit' — so a FIRST
-  // grant found the id already present, skipped savePins(), and wrote nothing.
-  // A browser probe measured it: LS stayed null across boot and first grant.
-  // This suite CANNOT bind it. Any setup that reaches a first grant from this
-  // block must pass through a revoke, and the revoke itself stamps the key —
-  // instrumented: `now=false pins.has=true` deletes and saves, so by the grant
-  // `pins.has=false` and even the OLD guard writes. Recreating the precondition
-  // needs `pins` seeded without a save, and `pins` is module-private.
-  // Disclosed rather than asserted vacuously. (round 6)
+  // not asserted: the product saves pins on every edge (pins hydrates from DEFAULT_PINS, so a first grant found
+  // 'edit' present and skipped the save). A first grant here needs a revoke first, which saves; `pins` is private.
 
   // R asked for BOTH verbs: "gray out AND UNPIN ... and it activates and pins
   // automatically when you do get it". Shipping only the pin left a demoted
@@ -370,11 +353,8 @@ check("the wrench has a row while gated open", !!row("edit"));
   check("a gated-closed row's pin is disabled, not merely un-hoverable",
     pinNow()?.disabled === true, `disabled=${pinNow()?.disabled}`);
 
-  // NEVER `on` AND `dead`. .on's brand ink and 2px edge-bar come later in the
-  // sheet at equal specificity, so a dead+on button rendered as "active but
-  // broken": 42% opacity in full brand colour. Reachable in the product —
-  // setEditMode has no rights check and KeyB is ungated, so a builder can
-  // enter edit mode and then lose rights mid-session. (round 5)
+  // never `on` AND `dead`: .on's ink comes later at equal specificity, so it painted "active but broken";
+  // reachable, since a builder can enter edit mode and then lose rights mid-session
   editOn = true; bus.emit("frames");
   check("a dead action button never also paints as active",
     btn("edit")!.classList.contains("dead") && !btn("edit")!.classList.contains("on"),
@@ -384,11 +364,8 @@ check("the wrench has a row while gated open", !!row("edit"));
   editGate = wasGate; bus.emit("frames");
 }
 
-// ORDER AT PAINT TIME. initDock sorts `last` to the end once; registerPanel
-// PUSHES later mods on after that sort has run, so the menu drifted while the
-// rail stayed right (addDockButton inserts before the first [data-last]).
-// Measured before the fix: dock [..., modx, mody, edit], menu [..., edit, modx,
-// mody]. R: "it should always be at the bottom of both until further notice."
+// order at paint time: registerPanel pushes later mods after initDock's one sort, so `last` must sort to the bottom
+// of both menu and rail when painted (the rail's addDockButton inserts before the first [data-last])
 { const rows = [...sub().querySelectorAll(".mrow[data-row]")].map((r: any) => r.dataset.row);
   const btns = [...dock().querySelectorAll("button[data-toggles]")].map((b: any) => b.dataset.toggles);
   const named = rows.filter((r: string) => !r.startsWith("glyph:"));
@@ -592,38 +569,19 @@ console.log("DOCK — the badge the dock button carries (the title bar is hidden
 
 console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePeopleHere)");
 { // togglePeopleHere reads the chat frame's side-pane markup (chat.js:696: a
-  // .chat-cols that carries side-closed, and the .chat-side-tog that flips it).
-  // initChat builds that; here we mirror just those two nodes onto the frame
-  // this suite already made, so the REAL togglePeopleHere runs against the real
-  // class contract instead of a recorder.
+  // .chat-cols with side-closed, and its .chat-side-tog); the real togglePeopleHere runs against this mirror
   const f = getFrame("chat")!;
-  // TWO decoys, because there are two ways to get this wrong and a decoy only
-  // binds the scope it sits outside of:
-  //   outer — elsewhere in the document (catches a document-wide lookup)
-  //   inner — INSIDE this frame's body, BEFORE the real cols (catches any
-  //           unbounded-depth lookup from the body, which is what registerPanel
-  //           actually enables: mount(body, frame) puts a mod's markup in here).
-  // chat.js writes .chat-cols as a DIRECT child of the body and the toggler as
-  // its child, so only a `:scope >` pair addresses the real pane.
+  // TWO decoys, each binding the scope it sits outside: outer (elsewhere in the document) and inner (in this body,
+  // before the real cols, where registerPanel's mount puts a mod). Only a `:scope >` pair addresses the real pane.
   const outer = document.createElement("div");
   outer.innerHTML = `<div class="chat-cols side-closed"><button class="chat-side-tog"></button></div>`;
   document.body.prepend(outer);
   let decoyClicks = 0;
   (outer.querySelector(".chat-side-tog") as HTMLElement).onclick = () => { decoyClicks++; };
 
-  // THREE decoys. The third is the one rounds 7-9 kept missing: chat.js nests
-  // the toggler INSIDE .chat-cols, so a mod's toggler can sit inside the REAL
-  // cols — and then an unbounded `cols.querySelector('.chat-side-tog')` finds
-  // the mod's before the chat's. Only `:scope >` on BOTH hops addresses the
-  // real pane; a decoy that is merely a sibling cannot see that mistake.
-  // Decoy ORDER — corrected by the ELEVENTH review, which falsified what this
-  // comment used to claim. I had written that a mod can only mount as a LATER
-  // sibling because initChat writes the chat's cols first. FALSE: mods.js:88
-  // hands a mod `makeFrame`, and windows.js:234 returns an EXISTING frame by
-  // bare id — so `makeFrame('chat')` returns the LIVE chat frame, and a local
-  // mod is an in-page ES module with the whole document (mods.js:5-8). It can
-  // PREPEND. So a decoy before the real cols is not a bent fixture; it is the
-  // product's reachable DOM, and it is what binds the first hop.
+  // THREE decoys: the toggler nests INSIDE .chat-cols, so a mod's toggler inside the real cols beats an unbounded
+  // `cols.querySelector`; only `:scope >` on BOTH hops is right. A decoy before the real cols is reachable:
+  // makeFrame('chat') hands a mod the live chat frame (mods.js, windows.js), so a mod can PREPEND.
   f.body.innerHTML = `<div class="chat-cols side-closed">`
     +   `<div class="mod-inside"><button class="chat-side-tog"></button></div>`
     +   `<button class="chat-side-tog"></button>`
@@ -633,22 +591,11 @@ console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePe
   late.innerHTML = `<button class="chat-side-tog"></button>`;
   f.body.append(late);
   (late.querySelector(".chat-side-tog") as HTMLElement).onclick = () => { decoyClicks++; };
-  // Capture the node initChat built BEFORE any decoy exists. Anchoring on a
-  // re-query would find the prepended decoy (also a direct child, and first) —
-  // the fixture would then measure the same wrong node the mutant picks, and
-  // the mutation survives. This is what let M-A through until round 11.
+  // capture initChat's node BEFORE any decoy exists: a re-query would find the prepended decoy, the same wrong
+  // node the mutant picks
   const real = f.body.querySelector(":scope > .chat-cols") as HTMLElement;
-  // Mirror initChat's MECHANISM, not just its markup: chat.js captures the
-  // nodes as it writes them and hangs the accessor on the frame it built
-  // (chat.js, right after sideEls). togglePeopleHere reads that. Handing it `real`
-  // is legitimate here precisely because `real` was captured before any decoy
-  // exists — the same discipline this block already uses above.
-  // This suite never imports chat.js — makeFrame/getFrame come from windows.js
-  // and the markup above is hand-mirrored — so this stand-in can bind WHICH
-  // node togglePeopleHere addresses (ownership/order) but NOT the lifetime guard
-  // on chat.js's own read path: a ?.isConnected here would only test this
-  // closure against itself. Lifetime is bound in chat-markdown, which drives
-  // real initChat / sideEl / paintSide.
+  // mirror initChat's mechanism: chat.js hangs the captured accessor on its frame, and togglePeopleHere reads it.
+  // This binds WHICH node, not chat.js's lifetime guard (chat-markdown-test drives the real read path).
   (f as any).sidePane = (k: string) => (k === "cols" ? real
     : k === "tog" ? real.querySelector(":scope > .chat-side-tog") : null);
   const pre = document.createElement("div");   // a mod PREPENDING via makeFrame('chat')

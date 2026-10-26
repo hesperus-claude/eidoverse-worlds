@@ -13,10 +13,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
-// happy-dom caches `selectedOptions` and does not refresh it after `sel.value = x` followed by
-// `sel.selectedIndex = n` (options[n].selected reads true, selectedOptions[0] still names the old one).
-// The module's label() reads selectedOptions[0], which is right in a browser — derive it from `options`
-// here so the harness can see what the product paints. A shim of the DOM, never of the module.
+// happy-dom doesn't refresh `selectedOptions` after `sel.value = x; sel.selectedIndex = n`; label() reads
+// selectedOptions[0] (right in a browser), so derive it from `options`. A DOM shim, never a module shim.
 Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
   get() { return [...this.options].filter((o: HTMLOptionElement) => o.selected); }, configurable: true,
 });

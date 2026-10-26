@@ -80,10 +80,8 @@ const windowOf = (entries: any[]) => {
 const groupedOk = (rows: HTMLElement[]) => rows.every((c, i) =>
   !c.classList.contains("cont") || rows[i - 1]?.dataset.author === c.dataset.author);
 
-// Yesterday a visitor said two things, with one regular's line between them;
-// today the regulars talked a lot. The window keeps both visitor lines (now
-// adjacent, so the second is grouped under the first's name) and trims the
-// regular's line out from between them. 200 says, text = "#<seq>".
+// yesterday a visitor said two things with one regular's line between; today the regulars talked a lot. The window
+// keeps both visitor lines (now adjacent, grouped) and trims the regular's. 200 says, text = "#<seq>".
 const day: any[] = [];
 {
   const t0 = Date.now() - 86_400_000;
@@ -222,11 +220,8 @@ console.log("a reconnect's new window does not leave a hole");
 
 console.log("lines the log trimmed off the top come back when paging");
 {
-  // 600 says arrive live (#601–#1200); the log keeps 400 rows, so #601–#800
-  // are trimmed from the top. They are history now, not "already shown":
-  // scrolling up must page them back in, in order, between #600 and #801.
-  // A visitor spoke once at #650; the fair window keeps that line, so a
-  // re-join's window replay offers #650 again after it was trimmed.
+  // 600 live says (#601–#1200) into a 400-row log trim #601–#800: history, so scrolling up pages them back between
+  // #600 and #801. A visitor's #650 survives in the fair window, so a re-join's replay offers it again.
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 3_600_000;
   const log: any[] = [];
@@ -254,10 +249,8 @@ console.log("lines the log trimmed off the top come back when paging");
 
 console.log("a trim after paging does not strand the walk below a new hole");
 {
-  // the reader paged back to the beginning, then live talk trimmed the log
-  // down to 400 again — taking the paged rows with it. The walk's cursor
-  // sits at the beginning; the next scroll-up must start over from the
-  // present rather than declare the world exhausted.
+  // paged back to the beginning, then live talk trimmed the paged rows: the next scroll-up starts over from the
+  // present rather than declare the world exhausted
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 3_600_000;
   const log: any[] = [];
@@ -279,11 +272,8 @@ console.log("a trim after paging does not strand the walk below a new hole");
 
 console.log("a reader following the bottom keeps following through a re-join fill");
 {
-  // the same fixed layout as above, with scrollHeight/clientHeight and a
-  // browser's clamping: a 60-row view (1200px) over 20px rows. The reader is
-  // at the end when the socket drops; the re-join's resync lands rows BELOW
-  // the first visible row, which the pin holds still — pushing the newest
-  // lines below the fold. A reader who was following must still be.
+  // fixed layout (60-row view, 20px rows, browser clamping); the reader is at the end when the socket drops and the
+  // resync lands rows below the first visible row: a reader who was following must still be
   const { logChat, logEl, resyncChatAfter } = await freshChat();
   const LOG_TOP = 100, ROW = 20, VIEW = 1200;
   const height = () => logEl.children.length * ROW;
@@ -346,11 +336,8 @@ const voices = ["cairn", "mythos", "apricot"];
 
 console.log("a row that merged a spoken utterance gives back all of it when trimmed");
 {
-  // one utterance aired as three says, #501–#503 under the same utt, which
-  // logChat merges into one row, and an aside with no seq merges after them.
-  // 400 later says trim that row, and only it, off the top: all three of its
-  // says are history again, and a live replay of the last one isn't appended
-  // under the newer talk.
+  // one utterance aired as three says (#501–#503) merges into one row, plus a seq-less aside; 400 later says trim
+  // that row alone: its says are history again, and a replay of the last isn't appended under newer talk
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 1_000_000;
   const ava = (s: number) => s >= 501 && s <= 503;
@@ -377,12 +364,8 @@ console.log("a row that merged a spoken utterance gives back all of it when trim
 
 console.log("a trim of a merged row that the walk's cursor sits inside restarts the walk");
 {
-  // #500 and #501 are one utterance, merged into one row at the top of the
-  // log, and #502–#506 are missing below it. One scroll-up walks down from the
-  // present to the page that ends at #501 and slots #502–#506 in, so the
-  // walk's cursor is #501, inside the merged row. A live line then trims that
-  // row alone. #501 is at the cursor, a seq the walk has passed, so the walk
-  // starts over, or #501 would never be paged back.
+  // #500–#501 merged in one top row, #502–#506 missing below: one scroll-up slots them in, leaving the cursor at #501
+  // inside the merged row. A live line trims that row; #501 is at the cursor, so the walk must start over.
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 1_000_000;
   const log = Array.from({ length: 901 }, (_, i) => say(i + 1, i + 1 === 500 || i + 1 === 501 ? "ava" : voices[(i + 1) % 3], t0 + (i + 1) * 1000));
@@ -406,10 +389,8 @@ console.log("a trim of a merged row that the walk's cursor sits inside restarts 
 
 console.log("a walk that ended at the present opens again once a trim makes history");
 {
-  // the reader scrolls up before anyone has said anything, so the walk's
-  // first page is empty and it ends at the present. 401 says later, a live
-  // line has trimmed #1 off the top: that is history now, and scrolling up
-  // must bring it back.
+  // scrolled up before anyone spoke (first page empty, the walk ends at the present); 401 says later #1 is trimmed:
+  // it's history now, and scrolling up must bring it back
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 500_000;
   const log = Array.from({ length: 401 }, (_, i) => say(i + 1, voices[(i + 1) % 3], t0 + (i + 1) * 1000));
@@ -428,10 +409,8 @@ console.log("a walk that ended at the present opens again once a trim makes hist
 
 console.log("a trim while a page is in flight does not send the walk past the new hole");
 {
-  // #601–#1000 arrive live, and one scroll-up pages #561–#600 in on top. The
-  // next page (#521–#560) is in flight when a live line trims the top rows,
-  // #561–#601 among them, so the walk restarts. The page that lands after
-  // that must not set the cursor below the hole it just left.
+  // one scroll-up pages #561–#600 in; while #521–#560 is in flight a live trim takes #561–#601 and restarts the
+  // walk. The late page must not set the cursor below the hole it left.
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 1_100_000;
   const log = Array.from({ length: 1001 }, (_, i) => say(i + 1, voices[(i + 1) % 3], t0 + (i + 1) * 1000));
@@ -458,10 +437,8 @@ console.log("a trim while a page is in flight does not send the walk past the ne
 
 console.log("a page that lands after a trim restarted the walk does not end it");
 {
-  // the walk has paged down to #1, the first say there is, and its next page
-  // (before #1, which will come back empty) is in flight when a live line
-  // trims #1–#41 off the top. That empty page belongs to the old walk: it
-  // must not declare the beginning reached while #1–#41 are history again.
+  // the walk reached #1 and its next (empty) page is in flight when a live trim takes #1–#41: that stale empty
+  // page must not declare the beginning reached
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 600_000;
   const log = Array.from({ length: 441 }, (_, i) => say(i + 1, voices[(i + 1) % 3], t0 + (i + 1) * 1000));
@@ -488,11 +465,8 @@ console.log("a page that lands after a trim restarted the walk does not end it")
 }
 
 // ------------------------------------------------- a catch-up that stops short
-//
-// The socket drops after #200 (day's last say) and `missed` more says follow.
-// The re-join replays its new window and catches up from #200, newest first,
-// 25 pages of 40 at most. Whatever the catch-up doesn't fetch is the walk's to
-// bring back, wherever the walk stood before the drop.
+// the socket drops after #200 and `missed` says follow; the re-join catches up from #200, newest first, at most
+// 25 pages of 40. Whatever it doesn't fetch is the walk's to bring back.
 const END = "— the beginning of this world —";
 const endMarkers = (logEl: HTMLElement) => [...logEl.children].filter((c) => c.textContent === END).length;
 // scroll until three scrolls in a row land nothing, not stopping at an end
@@ -598,12 +572,9 @@ console.log("a page that fails while scrolling up isn't the beginning");
 
 console.log("a trim during the catch-up keeps what it trimmed in the walk's reach");
 {
-  // The walk had ended at the beginning; 1,100 were missed. The catch-up's
-  // 25th page (#301–#340) is in flight when a live line trims the log to
-  // 400 rows, taking #1–#200 and the catch-up's oldest rows (#341–#901) off
-  // the top. The trim restarts the walk from the present. When the catch-up
-  // then stops at its cap, its own restart (from #301) must not move the
-  // walk's start down past #341–#901, or nothing would bring them back.
+  // the walk ended at the beginning, 1,100 missed. The catch-up's 25th page is in flight when a trim takes #1–#200
+  // and #341–#901, restarting the walk; the catch-up's own restart at its cap (from #301) must not move the walk's
+  // start past #341–#901
   const { logChat, logEl, resyncChatAfter } = await freshChat();
   setLog(day);
   for (const m of windowOf(day)) logChat(m.actor, m.text, "", { seq: m.seq, ts: m.ts });
@@ -629,14 +600,9 @@ console.log("a trim during the catch-up keeps what it trimmed in the walk's reac
 
 console.log("a catch-up's restart doesn't move a walk that stands higher down");
 {
-  // The walk had never moved; 1,100 were missed. The catch-up's first page is
-  // held while the window replays and a scroll-up walks back from the present
-  // to the first line the window lacks, above #1200. Its 20th page (#501–#540)
-  // is then held while a live line trims the log to 400 rows: #541–#901 go,
-  // all below the walk's cursor, so the trim restarts nothing. When the
-  // catch-up stops at its cap, its restart from #301 must leave the cursor
-  // where the walk stands, or #541–#901 would sit above it with nothing to
-  // bring them back.
+  // the walk never moved, 1,100 missed. A scroll-up walks back above #1200 while the catch-up is held; its 20th page
+  // is held while a trim takes #541–#901, all below the walk's cursor (no restart). The catch-up's restart at its cap
+  // must leave the cursor where the walk stands.
   const { logChat, logEl, resyncChatAfter } = await freshChat();
   setLog(day);
   for (const m of windowOf(day)) logChat(m.actor, m.text, "", { seq: m.seq, ts: m.ts });
@@ -671,10 +637,8 @@ console.log("a catch-up's restart doesn't move a walk that stands higher down");
 
 console.log("a trim that takes the end marker alone opens the walk where it stands");
 {
-  // The newest 360 of 399 says arrive live and the walk pages the other 39 in
-  // and ends: 399 rows and the marker. One live line trims the marker alone.
-  // The walk still stands at the beginning, so the next scroll-up asks once,
-  // finds nothing older, and puts the marker back.
+  // the walk pages in the last 39 of 399 and ends (399 rows + marker); one live line trims the marker alone, so
+  // the next scroll-up asks once, finds nothing older, and puts the marker back
   const { logChat, logEl } = await freshChat();
   const t0 = Date.now() - 500_000;
   const log = Array.from({ length: 400 }, (_, i) => say(i + 1, voices[(i + 1) % 3], t0 + (i + 1) * 1000));

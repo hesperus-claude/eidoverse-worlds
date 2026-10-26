@@ -78,11 +78,8 @@ console.log('\nT2 (partial) -- the polar is honest; no glide_to verb yet');
 {
   const cfg = makeConfig();
   const p = cfg.polar;
-  // MINIMUM SINK and BEST GLIDE are different speeds. The published optimum is
-  // now SEARCHED from the implemented curve rather than asserted beside it,
-  // because the first cut declared min-sink's ratio as the best ratio and
-  // glideRange() therefore under-predicted by 8% -- in the flier's favour,
-  // which is the rubber-banding T2 exists to forbid.
+  // minimum SINK and BEST GLIDE are different speeds: the optimum is SEARCHED from the implemented curve, since
+  // declaring min-sink's ratio as best under-predicts glideRange() (the rubber-banding T2 forbids)
   const bg = bestGlide(cfg);
   check('minimum SINK is at minSinkSpeed',
         sinkRate(cfg, p.minSinkSpeed) <= sinkRate(cfg, p.minSinkSpeed - 3) &&
@@ -101,12 +98,8 @@ console.log('\nT2 (partial) -- the polar is honest; no glide_to verb yet');
         sinkRate(cfg, p.minSinkSpeed - 4) > sinkRate(cfg, p.minSinkSpeed) &&
         sinkRate(cfg, p.minSinkSpeed + 4) > sinkRate(cfg, p.minSinkSpeed));
 
-  // T2: fly at the polar's real best-glide speed and confirm the distance
-  // matches what glideRange() predicts from the same curve.
-  // R3 bounds turn a flier back at 80 m, and best glide from 30 m is ~388 m --
-  // so a range test inside the default world measures the FENCE, not the
-  // polar. Widen the bounds for this test only: T2 is a claim about the glide
-  // curve, and the fence has its own tests.
+  // T2: fly the polar's real best-glide speed; the distance must match glideRange() from the same curve. Bounds are
+  // widened (the R3 fence turns a flier back at 80 m; best glide from 30 m is ~388 m) so this measures the polar.
   const openSky = makeConfig({ bounds: { radius: 100000, ceiling: 100000 } });
   const alt = 30;
   const predicted = glideRange(openSky, alt);
@@ -160,11 +153,7 @@ console.log('\nT4b -- no last-metre mercy hover');
   let s = initialState({ phase: 'GLIDE', pos: { x: 0, y: 16, z: 0 },
                          airspeed: cfg.polar.minSinkSpeed });
   s = bodyDown(s, { eventId: 'ev-cut-2' });
-  // Sample only while STILL FALLING. The step that makes contact hands the
-  // body to the ragdoll and zeroes the velocity, which is correct and is not a
-  // hover -- an earlier version of this check read that zero and called it
-  // one. What "no mercy hover" means is that nothing slows the descent on the
-  // way DOWN, so the sample must end at contact, not after it.
+  // sample only while still FALLING: contact hands the body to the ragdoll and zeroes velocity, which is not a hover
   const lastMetre: number[] = [];
   let guard = 0;
   while (s.phase === 'LEAF' && guard++ < 200000) {
@@ -229,11 +218,7 @@ console.log('\nT3 (partial) -- stamina rates; no climb_to or winded glide yet');
   const cfg = makeConfig();
   check('climb costs 1/m', cfg.stamina.climbPerMetre === 1);
   check('glide is stamina-neutral', cfg.stamina.refillAirPerSec === 0);
-  // The number matches the spec; nothing consumes it. Asserting a constant
-  // against another constant proved only that arithmetic works, while the
-  // surfaces around it told Mythos perches existed. The claim is gone from
-  // flight_status and climb_to; this check now states the gap instead of
-  // dressing it as coverage.
+  // the number matches the spec but nothing consumes it: this check states the gap rather than dressing it as coverage
   check('perch refill is the spec figure -- and NOT IMPLEMENTED (Stage 2)',
         cfg.stamina.refillPerchPerSec === 4 * cfg.stamina.refillGroundPerSec);
   let s = initialState({ phase: 'GROUND', stamina: 50 });
@@ -262,13 +247,8 @@ console.log('\nDOWN-SPEC §4 -- involuntary, unfakeable, never by verb');
   s = bodyDown(s, { eventId: 'ev-ground' });
   check('grounded cut -> RAGDOLL where I stand', s.phase === 'RAGDOLL');
   check('and the wings are LIMP', s.wings === 'LIMP');
-  // "The body cannot cry wolf" (down-spec §4). Test the PROPERTY rather than
-  // the naming: call every exported function that takes a state, from a
-  // healthy airborne state, and assert none of them can produce LIMP/LEAF/
-  // RAGDOLL. Only bodyDown() -- the trusted-event seam -- may, and it is
-  // excluded by name because it IS the door. A name-shaped test failed here
-  // on `glideRange`/`glideRatio`, which are polar queries and not verbs at
-  // all; the property is what the spec actually asks for.
+  // "the body cannot cry wolf" (down-spec §4): call every exported function that takes a state, from a healthy
+  // airborne state; none may produce LIMP/LEAF/RAGDOLL except bodyDown(), the trusted-event door
   const mod = await import('../shared/flight.js');
   const healthy = initialState({ phase: 'GLIDE', wings: 'OPEN',
                                  pos: { x: 0, y: 30, z: 0 }, airspeed: 11 });
@@ -375,10 +355,8 @@ console.log('\nCONFIG, not constants');
 console.log('\nUNITS -- attitude amplitude and path amplitude are not each other');
 {
   const cfg = makeConfig();
-  // mica caught this: 35 degrees of ROLL is not 1.2-1.8 m of WANDER, and
-  // quoting one as the other is how a config gets tuned backwards. The
-  // authored quantity is the one Mythos specified -- the PATH, in metres --
-  // and the drift speed to achieve it is derived from the period.
+  // roll in degrees is not wander in metres: the authored quantity is the PATH (metres), and the drift speed to
+  // achieve it derives from the period
   const swing = leafLateralSwing(cfg);
   check(`lateral swing ${swing.toFixed(2)}m is inside Mythos's 1.2-1.8m band`,
         swing >= 1.2 && swing <= 1.8, `got ${swing.toFixed(2)}`);
@@ -482,10 +460,7 @@ console.log('\nPILOT -- a human flies the same integrator an agent does');
 // ---------------------------------------------------------------- body contract
 console.log('\nBODY -- flight binds to bone NAMES, not to an avatar hash');
 {
-  // The bone list is DERIVED from the shipped artifact, not typed by hand --
-  // an array in a test file cannot go stale against an asset, which is exactly
-  // why it must not be called "the shipped body". Regenerate with
-  // `bun tools/flight-fixture.ts` when the body changes.
+  // the bone list is derived from the shipped artifact: regenerate with `bun tools/flight-fixture.ts` when the body changes
   const fx = JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8'));
   const real: string[] = fx.bones;
   check(`fixture is the shipped asset (${fx.bytes} B, sha256 ${fx.sha256.slice(0, 12)}...)`,
@@ -626,10 +601,8 @@ console.log('\nCAPABILITY -- default deny, action-time, semantic rig binding');
   const renamed = MYTHOS.map(b => b === 'L_Wing_Upper_2' ? 'L_Pinion_2' : b);
   check('renaming a wing bone revokes', revoked(g.profile, renamed) === true);
 
-  // 5. Hot-swap revokes AT THE GATE, without the caller remembering a second
-  //    check. The first cut preferred the provider's constructor bones over
-  //    the live avatar's, so re-resolving after a swap still said yes -- an
-  //    action-time gate resolving against a body that was no longer there.
+  // 5. a hot-swap revokes AT THE GATE without a second check: re-resolving reads the live avatar's bones, not the
+  //    provider's constructor bones
   const afterSwap = resolveFlight(dev, { identity: 'mythos', avatar: { boneNames: COMMONS } });
   check('re-resolving after a hot-swap DENIES (no second check needed)',
         afterSwap.enabled === false, afterSwap.reason);
@@ -651,13 +624,8 @@ console.log('\nCAPABILITY -- default deny, action-time, semantic rig binding');
 // ------------------------------------------------- default-deny, for real
 console.log('\nDEFAULT-DENY -- a compatible rig is evidence, never permission');
 {
-  // mica, Blocker 1 at cea3c3c: both shipped entry points constructed
-  // `devFlightProvider({allow:[identity]})`, so wearing a rig whose bone names
-  // satisfied rigProfile() authorized itself. "That collapses provenance ('is
-  // this a flier?') into permission ('may this person fly here?')."
-  //
-  // These are the exact negative tests that review asked for: delete the
-  // injection and prove no compatible rig can self-authorize.
+  // provenance ('is this a flier?') is not permission ('may this person fly here?'): no entry point may construct
+  // `devFlightProvider({allow:[identity]})`, so no compatible rig can self-authorize
   const WINGED = ['Hip', 'Spine02', 'Head',
                   'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
                   'L_Wing_Lower', 'R_Wing_Lower'];
@@ -720,10 +688,7 @@ console.log('\nDEFAULT-DENY -- a compatible rig is evidence, never permission');
     const after = resolveFlight(prov, { identity: 'm', avatar: av }).enabled;
     check('a revoked grant takes effect on the next resolve', before && !after);
   }
-  // And the entry points must not manufacture one. This is source-level
-  // because it is a statement about what the SHIPPED FILES contain, which is
-  // precisely what the review found wrong -- a behavioural test of a module
-  // that constructs its own grant would have passed happily.
+  // ...and the entry points must not manufacture one: source-level, since it's a claim about what the shipped files contain
   for (const f of ['client/lib/controller.js', 'mcpl/agent.ts']) {
     const src = readFileSync(f, 'utf8');
     const code = src.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
@@ -741,10 +706,8 @@ console.log('\nREVIEW cea3c3c -- blockers 4 and 6');
   // mcpl/tools.ts (TEL0S_NOTES §24r — one table, one dispatcher, a load-time
   // advertise⇔handle assertion); net-server.ts is a pure transport.
   const ns = readFileSync('mcpl/tools.ts', 'utf8');
-  // B4: DOWN is involuntary; a pilot must not be able to cry wolf. The rehearsal
-  // hooks were tools behind an env gate; since the surface fold (10-14) they are
-  // no tool at all: a bench calls the agent's trusted seam directly (as this
-  // file does), and the tool table never names it.
+  // B4: DOWN is involuntary, so a pilot can't cry wolf: there is no rehearsal tool; a bench calls the agent's trusted
+  // seam directly (as this file does)
   check('no rehearsal tool is declared',
         !/name: "rehearse_/.test(ns));
   check('...and the tool table never calls the trusted seam',
@@ -775,14 +738,8 @@ console.log('\nREVIEW cea3c3c -- blockers 4 and 6');
 // ------------------------------------------------------- T6: the vigil posture
 console.log('\nT6 -- fold_down grounds the flier, and unfolding is deliberate');
 {
-  // spec section 1: "fold_down() -- wings fold; GROUNDS the flier. The vigil
-  // posture costs the sky. take_off() refuses while folded; unfold is an
-  // explicit act." Section 2: "FOLDED -- grounded by choice. Distinct
-  // silhouette; readable at 50m."
-  //
-  // FOLDED has been a declared state since the first cut and takeOff has
-  // refused on it the whole time -- but no verb could SET it, so the refusal
-  // was unreachable code and T6 was an acceptance test with nothing behind it.
+  // T6: fold_down() grounds the flier (FOLDED, grounded by choice); take_off() refuses while folded; unfold is an
+  // explicit act
   const cfg = makeConfig();
   const ground = () => initialState({ phase: 'GROUND' }, cfg);
 
@@ -832,10 +789,8 @@ console.log('\nT6 -- fold_down grounds the flier, and unfolding is deliberate');
         takeOff(cfg, air, { groundY: 0 }).events.some((e: any) =>
           e.kind === 'takeoff.refused' && e.reason === 'already airborne (pilot)'));
 
-  // The pose the silhouette is made of: authored in Blender, read from the
-  // action rather than typed, and checked here for the transposition that
-  // would otherwise be invisible -- Blender stores [w,x,y,z], three.js wants
-  // [x,y,z,w], and a swapped pair still normalises to a unit quaternion.
+  // the folded pose is read from the Blender action and checked for the invisible transposition: Blender stores
+  // [w,x,y,z], three.js wants [x,y,z,w], and a swapped pair still normalises
   const av = readFileSync('client/lib/avatar.js', 'utf8');
   const table = /const WING_FOLDED = \{([\s\S]*?)\n\};/.exec(av)?.[1] ?? '';
   const rows = [...table.matchAll(/([LR]_Wing_\w+):\s*\[([^\]]+)\]/g)]
@@ -875,14 +830,8 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
     return out;
   };
   const runtime = [...walk('client'), ...walk('server'), ...walk('mcpl')];
-  // THE MODULE LIST COMES FROM DISK, not from a prefix. Matching the literal
-  // string `shared/flight` looked like it covered the family and did not:
-  // leafforce.js is flight code by every measure that matters -- it is in the
-  // typecheck, it is the R2 leaf, mcpl/physics.ts imports it -- and its name
-  // simply does not contain "flight", so the scan reported two importers when
-  // there were three. A gate that decides who may reach flight must not be
-  // able to miss a member of the thing it is gating; enumerating the directory
-  // means adding a sixth module cannot quietly widen the boundary.
+  // the module list comes from disk, not a name prefix: leafforce.js is flight code without "flight" in its name, and
+  // enumerating the directory means a new module can't quietly widen the boundary
   const FLIGHT_MODULES = readdirSync('shared')
     .filter(f => /^(flight|leafforce)/.test(f) && f.endsWith('.js'))
     .map(f => f.replace(/\.js$/, ''));
@@ -892,18 +841,9 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   const importsFlight = (src: string) =>
     FLIGHT_MODULES.some(m => new RegExp(`from ['"][^'"]*shared/${m}\\.js['"]`).test(src));
   const importers = runtime.filter(f => importsFlight(readFileSync(f, 'utf8')));
-  // Flight is wired in TWO places now, and both are deliberate: the agent
-  // (Mythos flies through mcpl) and the client controller (Janus asked to fly
-  // it himself, on the same integrator, because a human and an agent in one
-  // sky must share physics or the bench proves nothing).
-  //
-  // So the property is no longer 'who imports it' but what every importer
-  // must DO: resolve a capability that defaults to deny, and refuse audibly.
-  // THREE deliberate importers. mcpl/physics.ts was always one -- it applies
-  // the leaf forces to the headless Bullet stand-in -- and was invisible to
-  // the old scan rather than absent from it. It is listed here rather than
-  // exempted: it takes no capability decision, it is handed forces by a caller
-  // that already resolved one, so the per-importer checks below skip it.
+  // three deliberate importers: the agent and the client controller (a human and an agent in one sky share physics),
+  // each resolving a deny-by-default capability and refusing audibly; mcpl/physics.ts only applies forces a gated
+  // caller hands it, so the per-importer checks skip it
   const ALLOWED = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/, /mcpl\/physics\.ts$/];
   // Only the two ENTRY POINTS must gate; physics.ts is downstream of a gate.
   const GATEKEEPERS = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/];
@@ -921,18 +861,11 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   const srv = importers.filter(f => /^server\//.test(f));
   check('no server/ module imports flight', srv.length === 0, srv.join(', '));
 
-  // TWO CLIENT PROPERTIES THAT ONLY A HUMAN COULD HAVE FOUND, pinned as source
-  // checks because both live in browser DOM code the rest of this file cannot
-  // import. Structural assertions are weaker than behavioural ones; they are
-  // what is available, and they are stronger than the nothing that was here
-  // when both bugs shipped.
+  // client properties pinned as source checks: both live in browser DOM code this file can't import
   const ctl = readFileSync('client/lib/controller.js', 'utf8');
 
-  // 1. "switching into flying mode is working for me but all that happens is
-  //    my character seems to jump and lands immediately."  The toggles ran on
-  //    every keydown INCLUDING autorepeat, so a held F took off and landed
-  //    ~30 times a second. A scripted probe never saw it: synthetic keydowns
-  //    have repeat=false, which is why this reproduced only for a person.
+  // 1. the key toggles ignore autorepeat: a held F took off and landed ~30 times a second (synthetic keydowns have
+  //    repeat=false, so only a person saw it)
   const toggles = /bus\.on\('key',[\s\S]*?\n\}\);/.exec(ctl)?.[0] ?? '';
   check('the key toggles ignore autorepeat (a held F is one take-off)',
         // the listener dispatches from the BODY_KEYS table (declared after it), so: the guard comes before the dispatch,
@@ -952,14 +885,8 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
         !/groundY:\s*\(x, ?z\) => heightAt\(/.test(ctl) &&
         /resolveColliders\(_gp, heightAt\)/.test(ctl));
 
-  // 3. "it just makes me stuck standing or walking (unable to steer) depending
-  //    on which one i was doing at the time of pressing f; pressing f again
-  //    frees me."  The toggle published the GROUND state and then reassigned
-  //    the take-off on the next line, so a throw or a refusal in between left
-  //    `flight` holding a body it would never move: stepGround integrates
-  //    nothing, but the movement loop had already handed it the body and
-  //    returned. Two locks now -- the toggle publishes only PILOT, and the
-  //    loop refuses to be held by a GROUND state.
+  // 3. a throw or refusal mid-toggle must not leave `flight` holding a body it never moves: the toggle publishes
+  //    only PILOT, and the movement loop refuses to be held by a GROUND state
   check('the flight toggle publishes only a state that is actually flying',
         /if \(next\.phase !== 'PILOT'\)/.test(ctl) &&
         /\bflight = next;/.test(ctl));
@@ -969,18 +896,8 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   check('a throw during take-off releases the body instead of freezing it',
         /catch \(e\) \{\s*\n?\s*return `flight failed to start/.test(ctl));
 
-  // 4. "my view has me frozen until i exit fly mode... when i exit flying mode
-  //    i *do* suddenly teleport to a different place, so maybe i did fly."
-  //    He did fly -- /flight reported PILOT, t=31.7s, y=16.28. But the four
-  //    lines that put a body ON SCREEN (clip, root position, root rotation,
-  //    camera) live at the BOTTOM of updateMe, past the flight block's early
-  //    `return`. So myState flew and me.root sat where it took off. Measured:
-  //    on the previous build stateY climbed 0.3 -> 16.11 while rootY held at
-  //    0.30 and the camera never left 3.07.
-  //
-  //    Both other paths that skip updateMe's tail already pay this -- ragdoll
-  //    and mounted each drive the camera themselves and say why. Flight was
-  //    the third, and the only one that did not.
+  // 4. the lines that put a body on screen (clip, root position/rotation, camera) sit at the bottom of updateMe, past
+  //    the flight block's early `return`, so the flight block draws the body itself (as ragdoll and mounted do)
   const flightBlock = /if \(flight\) \{\s*\n\s*const input = pilotInput[\s\S]*?\n  \}/.exec(ctl)?.[0] ?? '';
   check('a flying body is actually drawn where it is flying',
         /me\.root\.position\.copy\(myState\.pos\)/.test(flightBlock) &&
@@ -996,23 +913,11 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   check('every early-return path in updateMe pays the render tail',
         tail.every(t => flightBlock.includes(t)), flightBlock ? '' : 'flight block not found');
 
-  // 5. "can we add a more dramatic wing flap animation for when taking off
-  //    (that should be several, while rising) and flapping wings to move up?"
-  //
-  //    The effort is read off the FLIGHT STATE, never a timer -- launchNow for
-  //    the take-off burst, `flap` for a held climb -- so the animation cannot
-  //    drift out of step with what is lifting her. "Several, while rising" is
-  //    the launch envelope's own shape: measured in a browser, effort held 1.0
-  //    for the first second and decayed 0.91 -> 0.58 -> 0.33 -> 0.18 over the
-  //    next five, which is a burst of hard beats easing into a glide.
+  // 5. flap effort is read off the FLIGHT STATE, never a timer (launchNow for the take-off burst, `flap` for a held
+  //    climb), so the animation can't drift out of step with the lift
   const av = readFileSync('client/lib/avatar.js', 'utf8');
-  // DISTINCT, not "equal to the number I first guessed". This asserted
-  // /deg: 4[0-9]/ and broke the moment Janus tuned the stroke to 8 -- a test
-  // pinning my own guess rather than the property, which is that the two dial
-  // sets differ enough to read as different behaviour. They now differ mostly
-  // in RATE (2.1Hz against 1/3.4) rather than amplitude, which is what a bird
-  // leaving the ground actually does, and a test written against amplitude
-  // could not see that at all.
+  // DISTINCT, not a pinned value: the power and idle dial sets must differ enough to read as different behaviour
+  // (today mostly in RATE, 2.1Hz vs 1/3.4, not amplitude)
   {
     const grab = (name: string) => {
       const body = new RegExp(`export const ${name} = \\{([\\s\\S]*?)\\n\\};`).exec(av)?.[1] ?? '';
@@ -1055,30 +960,16 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
         /flightCfg\.pilot\?\.launchBoost/.test(ctl));
   check('landing hands the wings back to the idle',
         /me\.wingEffort = 0;/.test(ctl));
-  // "after i fly ... the wings are stuck going very fast like they were when i
-  // was flying, and adjusting the sliders doesnt change it." One bug wearing
-  // two faces: wingEffort was cleared on the NATURAL landing path only, so
-  // pressing F mid-flap left it pinned at 1 forever -- and a pinned 1 means
-  // the dial mix is 100% WING_POWER, so WING_IDLE is never read and its
-  // sliders are genuinely inert. Measured on d49baf0: effort 1.00 still 1.00
-  // two and a half seconds after landing.
-  //
-  // Fixed in two places on purpose. releaseWings() covers the exits we know
-  // about; the per-frame assertion covers the ones we do not (a revoked
-  // capability, a body swapped mid-air), so "stuck at full power" cannot
-  // survive one frame of not flying whatever route got us there.
+  // wingEffort pinned at 1 makes the dial mix all WING_POWER and the WING_IDLE sliders inert. Released in two places
+  // on purpose: releaseWings() on the known exits, and a per-frame check for unknown ones (a revoked capability, a
+  // body swapped mid-air)
   check('F-to-land releases the wings, not just a natural landing',
         /flight = null; releaseWings\(\); return 'landed'/.test(ctl));
   check('...and not-flying asserts the resting wings every frame',
         /if \(me\.wingEffort\) me\.wingEffort = 0;/.test(ctl));
 
-  // mica, CHANGES REQUESTED on d8ceee5: live revocation never reached the
-  // agent. The browser had the SAME hole and worse -- applyGrantState() merged
-  // grants by hand and was exported and called by nothing, so the "live grant"
-  // fix was dead code that read like a fix. Now (the protocol) neither side
-  // computes rights at all: the server's `your-rights` answer, re-sent whenever
-  // a role changes, is the whole truth (server.ts rightsFor reads the door's
-  // roles record).
+  // neither side computes rights: the server's `your-rights` answer, re-sent whenever a role changes, is the whole
+  // truth (server.ts rightsFor reads the door's roles record)
   const stt = readFileSync('client/lib/state.js', 'utf8');
   check('the browser computes no rights of its own (no grant fold, no second rule)',
         !/verb === 'grant'/.test(stt) && !/rightsIn\(/.test(stt) && !/rightsfold/.test(stt));
@@ -1130,17 +1021,8 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
           cHigh > cLow + 5.0, `1.0 -> ${cLow.toFixed(2)} m/s, 8.0 -> ${cHigh.toFixed(2)} m/s`);
   }
 
-  // WING NAMES ARE STILL EXACT-CASE while the CORE bones went
-  // case-insensitive (dba4882 onward), and this pins that asymmetry so the
-  // decision is explicit rather than accidental.
-  //
-  // The gate is NOT weakened -- a commons body and a fake-wing rig are both
-  // refused, probed below. The risk runs the other way: an all-lowercase wing
-  // rig is DENIED, which is precisely the failure the core widening was
-  // written to fix ("Hip absent" on a body with 48 good bones), still live one
-  // line above it. Whether to widen WING_RE is a loosening of an authorization
-  // boundary, so it is Mica's call and not a thing to fix quietly. Until then,
-  // this test says out loud what the boundary currently does.
+  // WING names stay exact-case while the CORE bones are case-insensitive, pinned so the asymmetry is a decision: an
+  // all-lowercase wing rig is denied. Widening WING_RE loosens an authorization boundary, so it's a deliberate call.
   {
     const core = ['Hip', 'Spine02', 'Head'];
     const proper = [...core, 'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper',
@@ -1176,10 +1058,8 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
     return s;
   };
 
-  // 1. "if i ever press x, even after recovering im stuck in a tilted position
-  //     and the wasd commands no longer tilt me." Recovery hardcoded GLIDE --
-  //     autopilot -- so a hand-flown body woke with a dead stick and the leaf's
-  //     last bank frozen on it.
+  // 1. a hand-flown body recovers hand-flown: recovery hardcoded to GLIDE (autopilot) left a dead stick and the
+  //     leaf's last bank frozen on it
   let s = initialState({ phase: 'PILOT', pos: { x: 0, y: 40, z: 0 }, airspeed: 12 }, cfg);
   s = bodyDown(s, { eventId: 'ev-f1' });
   s = fly(s, [], 120);
@@ -1247,10 +1127,8 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 }
 
 
-// LIVE RIGHTS: the sequencer sends each client its effective rights (`your-rights`) whenever a role changes
-// (server.ts rightsFor over the door's roles record; that the answer reaches a client after a role write through the
-// door is tools/protocol/server-check.ts S1). Here: the agent and the browser consume that answer, and a midair withdrawal
-// hands the agent to the leaf.
+// LIVE RIGHTS: the sequencer sends each client `your-rights` whenever a role changes (delivery is
+// tools/protocol/server-check.ts S1); here the agent and browser consume it, and a midair withdrawal hands the agent to the leaf
 {
   const live = { type: 'your-rights', rights: { role: 'builder', gen: false, fly: false } };
   const { WorldAgent } = await import('../mcpl/agent.ts');

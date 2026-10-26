@@ -55,10 +55,8 @@ check("the wait can never sit below the safe bound",
   `wait=${APPROACH_MAX_WAIT_MS} safe=${APPROACH_SAFE_WAIT_MS}`);
 check("the stillness threshold is positive", APPROACH_STILL_MPS > 0, String(APPROACH_STILL_MPS));
 
-// A body crossing the bubble on a straight line at just above the effective
-// stillness threshold — the slowest crosser that never counts as still, i.e.
-// the one that spends the LONGEST possible time inside. If the clamp holds,
-// it exits before the max wait and is never announced.
+// the slowest crosser that never counts as still spends the longest inside; if the clamp holds it exits
+// before the max wait and is never announced
 const speed = APPROACH_STILL_MPS * 1.5;
 const ag = new WorldAgent({ name: "clamptest" }) as any;
 ag.pos = { x: 0, y: 0, z: 0 };

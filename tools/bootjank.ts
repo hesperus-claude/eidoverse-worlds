@@ -251,11 +251,8 @@ if (MBIT > 0) {
 }
 
 // ---- the document-start recorder --------------------------------------------
-// Installed before any module runs. Wraps the GPU entry points so each frame
-// knows what landed inside it; times the SYNCHRONOUS cost of pipeline/shader
-// creation (Chrome defers real compilation to the GPU process, so a long rAF
-// gap right AFTER creations is the compile stall even when the sync ms is 0 —
-// the correlation is the attribution, the sync ms is a bonus).
+// installed before any module runs; wraps the GPU entry points so each frame knows what landed in it. Chrome
+// compiles in the GPU process, so a long rAF gap right after creations is the stall even at 0 sync ms.
 
 const RECORDER = `(() => {
   if (globalThis.__jank) return;

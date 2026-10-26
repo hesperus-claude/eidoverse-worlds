@@ -31,10 +31,8 @@ try { new RegExp(`(@a(\\b|\\ba(\\b)`, 'i'); } catch { oldThrew = true; }
 check('control: the unescaped form does throw', oldThrew);
 
 // ── a body answers to its id AND its token display name ────────────
-// A display name's trailing ` (qualifier)` is the part people drop when they
-// address the body (the `#name (Guild)` label convention), so "@Artie" must
-// reach the body named "Artie (kube)". Uniqueness is not required: two bodies
-// that both answer to "Artie" are both addressed.
+// a trailing ` (qualifier)` is dropped when addressing, so "@Artie" reaches "Artie (kube)"; two bodies that both
+// answer to "Artie" are both addressed
 {
   const rx = mentionRegexFor(['artie-kube', 'Artie (kube)']);
   check('"@Artie, over here" reaches artie-kube', rx.test('@Artie, over here'));
@@ -98,10 +96,8 @@ check('control: the unescaped form does throw', oldThrew);
 }
 
 // ── malformed ids must DEGRADE, never throw ────────────────────────────────
-// The id comes from JSON.parse of an operator-edited tokens.json, and
-// `id: string` is erased at runtime. A missing or numeric id used to throw
-// `id.replace is not a function` inside the same catch-all that swallowed the
-// unescaped-regex throw — same deafness, different door.
+// the id comes from an operator-edited tokens.json (`id: string` is erased at runtime), and a throw there is
+// swallowed into deafness
 for (const [label, id] of [['undefined', undefined], ['null', null],
                            ['number', 42], ['empty string', ''],
                            ['object', {}]]) {

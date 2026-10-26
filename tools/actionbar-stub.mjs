@@ -56,11 +56,6 @@ export const getMe = () => ({ playOnce: (n) => played.push(n) });
 export const xrPanels = [];
 export function registerXRPanel(p) { xrPanels.push(p); }
 
-// ---- windows.js: chromeCost is RE-EXPORTED FROM THE REAL MODULE, not stubbed.
-// This suite drives the real actionbar.js against recorders, and roomFor()'s whole
-// job is the anchor arithmetic chromeCost() performs. A stubbed copy would make
-// every assertion a statement about THIS FILE rather than about the product.
-// The specifier is deliberately '../client/lib/...': actionbar-test's resolver
-// filter is `^\./windows\.js$`, anchored to a leading './', so this is not
-// rewritten back to the stub.
+// ---- windows.js: chromeCost is re-exported from the real module, not stubbed: roomFor()'s job is its arithmetic.
+// The '../client/lib/' specifier is deliberate: actionbar-test's resolver filter (`^\./windows\.js$`) won't rewrite it.
 export { chromeCost } from '../client/lib/windows.js';

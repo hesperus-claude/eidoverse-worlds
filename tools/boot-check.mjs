@@ -59,10 +59,8 @@ try {
   const errs = [], logs = [], bodyErrs = [];
   pg.on('pageerror', e => errs.push(e.message));
   pg.on('console', m => { const t = m.text(); if (/^\[boot\]|^\[body\]|^\[render\]/.test(t)) logs.push(t); if (/^avatar\b/.test(t)) bodyErrs.push(t); });
-  // domcontentloaded, not networkidle: a live client never goes network-idle (presence, tee, prefetch), and
-  // a goto that waits for it times out before the poll below ever asks the real question
-  // BOOT_CHECK_ABORT_VRM=1: every body request fails at the network — the failed-body arrival path (review
-  // 2026-09-10 #2: a failed body must SETTLE the boot, never hold the splash to the 45 s ceiling)
+  // domcontentloaded, not networkidle: a live client never goes network-idle
+  // BOOT_CHECK_ABORT_VRM=1: every body request fails; a failed body must settle the boot, never hold the splash to 45 s
   const ABORT_VRM = process.env.BOOT_CHECK_ABORT_VRM === '1';
   if (ABORT_VRM) await pg.route(/\.vrm(\?|$)/, (r) => r.abort());
   // BOOT_CHECK_QUERY='&webgl=1' / '&xr=0' / '&xr=1': the renderer-selection decisions, each its own owned run
@@ -82,24 +80,15 @@ try {
       // that runs past the viewport edge is simply unreachable and the document
       // never reports overflow (#185 review).
       vw: innerWidth, vh: innerHeight,
-      // CHROME, not just frames (antra-tess #185 B2). boot-check collected only
-      // .frame rects, so #dock, .capnotice, #micbtn/#earbtn and the joystick were
-      // structurally invisible — "boot-check checks only .frame pairs, so it
-      // cannot observe dock/touch-control occlusion" was exactly right. A control
-      // is REACHABLE only if the pixel at its centre belongs to it.
+      // chrome, not just frames: a control is reachable only if the pixel at its centre belongs to it
       chrome: ['#dock', '.capnotice', '#micbtn', '#earbtn', '#emenu', '#stick', '#hintbar', '#trayzone']
         .map((sel) => { const e = document.querySelector(sel); if (!e) return null;
           const r = e.getBoundingClientRect(); if (!r.width || !r.height) return null;
           return { id: sel, x: Math.round(r.x), y: Math.round(r.y), right: Math.round(r.right), bottom: Math.round(r.bottom),
                    pe: getComputedStyle(e).pointerEvents }; })
         .filter(Boolean),
-      // every visible control's centre, and who actually owns that pixel
-      // '.frame button' reaches the section headers (ui.js makeSection builds a
-      // BUTTON.head per collapsible section) as well as the tiles. The narrower
-      // '.frame .tile, #dock button' could not see BUTTON.head at all — the very
-      // element measured ~85% covered by .capnotice when the card sat top-right
-      // (index.html:1206). A hit-test that cannot sample the covered control is a
-      // check whose subject is absent. (agent review round 2, 2026-09-12)
+      // every visible control's centre and who owns that pixel; '.frame button' also reaches the section headers
+      // (ui.js makeSection's BUTTON.head), which the card can cover
       controls: [...document.querySelectorAll('.frame .tile, .frame button, #dock button')]
         .filter((t) => { const r = t.getBoundingClientRect(); return r.width && r.height; })
         .map((t) => { const r = t.getBoundingClientRect();
@@ -115,11 +104,8 @@ try {
       capDismissable: (() => { const bts = [...document.querySelectorAll('.capnotice .cn-ok')]; if (!bts.length) return null;
         return bts.every((bt) => { const r = bt.getBoundingClientRect(); if (!r.width || !r.height) return false;
           const h = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return bt === h || bt.contains(h); }); })(),   // EVERY item's (U4)
-      // how many control surfaces were MEASURABLE at all. A check that reports
-      // green from an empty collection is worse than no check: at 390x844 the
-      // action bar is hidden by fitsDefaults, so `.frame .tile` yields nine
-      // zero-size nodes, every one filtered out, and the run passed while my
-      // standalone probe measured a stolen tile at the same instant.
+      // how many control surfaces were measurable at all: at 390x844 the bar is hidden (fitsDefaults), so
+      // `.frame .tile` is nine zero-size nodes, and an empty collection must not read green
       tilesSized: [...document.querySelectorAll('.frame .tile')].filter((t) => { const r = t.getBoundingClientRect(); return r.width && r.height; }).length,
       tilesInDom: document.querySelectorAll('.frame .tile').length,
       rects: [...document.querySelectorAll('.frame')]
@@ -153,21 +139,10 @@ try {
   if (!s.xrShadow) { fail('the ShadowNode XR-off patch was not applied at boot (core.js → xrshadow.js)'); }
   if (!s.xrPass) { fail('stereo renders were not split into their own pass at boot (core.js → xrpass.js): every VR switch rebuilds'); }
   if (!s.xrPixelRatio) { fail('the XR pixel-ratio guard (#32 split vision) was not applied at boot (core.js → xrpixelratio.js)'); }
-  // REACHABILITY (#185 review). Every visible frame must lie inside the viewport.
-  // Not scrollWidth: html,body use overflow:hidden, so a frame past the edge is
-  // simply unreachable and the document reports no overflow at all. Run this at a
-  // narrow viewport with BOOT_CHECK_VIEWPORT=390x844 (and 800x700 for split-window).
-  // GEOMETRY, factored so a SECOND phase can re-run it (antra-tess #185 rereview B1).
-  // These two checks used to be inline and therefore ran exactly once, at the boot
-  // viewport. The review asked for a real setViewportSize() product test: a page
-  // that boots wide and is then narrowed keeps all three defaults open and they
-  // overlap (actions x world 352x46px at 390x844) — a state no fixed-viewport boot
-  // can reach. Same assertions, same failure text, plus the phase that produced it.
+  // reachability: every visible frame lies inside the viewport (not scrollWidth: html,body are overflow:hidden).
+  // Factored so the live-resize phase can re-run it; try BOOT_CHECK_VIEWPORT=390x844 and 800x700.
   const checkGeometry = (g, where) => {
-    // OVERLAP (#185 review req 2): two frames collide only when they overlap on
-    // BOTH axes. chat is bottom-LEFT and the action bar bottom-CENTRE, so at a wide
-    // viewport they miss entirely and at a narrow one the centred bar slides onto
-    // chat's composer. Checking one axis alone answers "always" or "never" — both wrong.
+    // overlap: two frames collide only when they overlap on BOTH axes (chat is bottom-left, the bar bottom-centre)
     const pairs = [];
     const rs = g.rects ?? [];
     for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
@@ -175,33 +150,16 @@ try {
       if (a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom) pairs.push(`${a.id} [${a.x},${a.y},${a.right},${a.bottom}] × ${b.id} [${b.x},${b.y},${b.right},${b.bottom}]`);
     }
     if (pairs.length) { fail(`frames overlap at ${g.vw}x${g.vh} (a covered control cannot be clicked):\n  ` + pairs.join('\n  ')); }
-    // A CONTROL WHOSE CENTRE BELONGS TO SOMETHING ELSE CANNOT BE TAPPED (#185 B2).
-    // Rect overlap alone is not the test: chrome may legitimately sit beside a
-    // frame. Hit-testing is, and it is the only thing that catches a z-60 card
-    // over a z-25 bar, or the rail once it reorients along the top edge.
-    // EVERY thief counts, including ones outside my selector list — dropping
-    // 'other' is how #earbtn's inner <rect> made a real occluder invisible.
-    // …except under the capability card while it can be dismissed (owner, 09-27; intentionally reverses #185 B2's
-    // reachability rule for this one dismissible notice). A card whose dismiss button can't be clicked still fails.
+    // a control whose centre pixel belongs to something else can't be tapped; every thief counts, including ones
+    // outside the selector list. Exception: the capability card while it can be dismissed.
     if (g.capDismissable === false) fail(`the capability card's dismiss button is not clickable at ${g.vw}x${g.vh} (${where})`);
     const stolen = (g.controls ?? []).filter((c) => !(c.owner === '.capnotice' && g.capDismissable));
     if (stolen.length) {
       fail(`controls unreachable at ${g.vw}x${g.vh} — the pixel at their centre belongs to other chrome (${where}):\n  `
         + stolen.map((c) => `"${c.id}" covered by ${c.owner}`).join('\n  '));
     }
-    // The PRODUCT promises right <= innerWidth - 8 (windows.js clamp, snapPosition,
-    // and the resize self-sizer all use the same 8px margin). Checking only
-    // `right > vw + 1` left a 9px band where a frame violates the clamp and still
-    // passes — so this could never catch the most likely way that invariant
-    // breaks: someone dropping the -8. Bind the promise, keeping the +1 sub-pixel
-    // allowance. (agent review round 3)
-    // x and y do NOT share a margin, and that is deliberate in the product:
-    // fit()/snapPosition clamp x to 8, but the SOUTH resize clamps to
-    // `innerHeight - s0.y - 4` (windows.js:144) so a resize can reach as low as a
-    // drag — the comment there records the choice. Asserting 8 on both axes made
-    // this probe stricter than the code it guards: a legal resize to the bottom
-    // edge produced bottom=840 against a limit of 837 and failed. Match each
-    // axis to its own promise. (agent review round 4, my own over-tightening)
+    // margins match the product's: x clamps at innerWidth - 8 (windows.js fit/snapPosition), the south resize at
+    // innerHeight - 4; the +1 is sub-pixel allowance
     const MARGIN_X = 8, MARGIN_Y = 4;
     const off = (g.rects ?? []).filter((r) => r.right > g.vw - MARGIN_X + 1 || r.bottom > g.vh - MARGIN_Y + 1);
     if (off.length) {
@@ -211,13 +169,8 @@ try {
   };
   checkGeometry(s, `boot ${s.vw}x${s.vh}`);
 
-  // OPEN THE CONTROLS THE REVIEW IS ABOUT, then look again (antra-tess #185 B2).
-  // At phone widths fitsDefaults() hides the action bar, so `.frame .tile` yields
-  // nine ZERO-SIZE nodes and the hit-test above has nothing to measure: the run
-  // goes green because the collection is empty, not because the tiles are
-  // reachable. Her repro is a user tapping the dock to open the bar — so do that,
-  // and assert what is on screen afterwards. tilesSized is printed on the ok line
-  // so an empty measurement can never again read as a pass.
+  // open the controls, then look again: at phone widths fitsDefaults() hides the bar, leaving the hit-test nothing
+  // to measure. Tap the dock as a user would; tilesSized rides the ok line so an empty measurement can't pass.
   const opened = await pg.evaluate(async () => {
     // TOGGLE, not open: at a wide viewport the bar is ALREADY open, so clicking
     // the dock button closed it and the guard below then fired on my own action
@@ -260,34 +213,15 @@ try {
   // the splash rays worker exists only where index.html carries a .sp-rays canvas (rung 4's markup); here it is
   // asserted when present and reported DORMANT when not — never claimed released when it never ran
   let rays;
-  // STARTED is cumulative (__raysStarted, never cleared); the HANDLE is transient.
-  // Polling only the handle raced the worker's own lifetime — 2 of 8 owned runs
-  // failed here with the worker perfectly healthy (antra-tess #185 B4).
-  // The cumulative flag is asserted ON ITS OWN, not as the second half of an &&
-  // that raysSeen short-circuits (agent review 2026-09-12). raysSeen comes from
-  // the 250ms handle poll and is true on a normal run, so `!raysSeen && !started`
-  // never consulted __raysStarted — the very flag added for B4 carried nothing
-  // and could have been deleted with CI green until the sampling race recurred.
-  // 2026-09-12, antra-tess #185 exact-head rereview B4: __raysStarted is set by the MAIN thread on the
-  // line after new Worker(), and constructing a Worker whose module fails to parse does NOT throw
-  // synchronously — so appending invalid JS to the real worker left this green. The receipt is now
-  // WORKER-ORIGINATED: splashrays.worker.js posts {type:'ready'} after its first real drawArrays.
-  // Three outcomes are kept apart: ACK (it drew and said so) / NOGL (it reached us and declined —
-  // a legitimate fallback, not a failure) / SILENCE (neither: broken module, or a suppressed ack) = RED.
-  // __raysStarted is KEPT and still asserted: it fixed a real sampling race (the transient handle was
-  // polled at 250 ms and missed workers that started and finished between samples — 2 of 8 owned runs).
+  // __raysStarted (cumulative, set by the main thread) catches the start; the worker's own ack (or nogl) catches a
+  // broken module, since a Worker that fails to parse doesn't throw. ACK and NOGL pass; silence fails.
   if (s.raysCanvas) { if (!s.raysStarted) { fail('.sp-rays canvas present but __raysStarted was never set (main never reached the start block)'); }
     if (!s.raysAck && !s.raysNoGl) { fail('.sp-rays canvas present but the worker never acknowledged: no first-frame ready and no nogl — a broken worker or a suppressed ack looks exactly like this'); }
     if (s.raysHandle) { fail('the rays worker handle is still advertised after boot (stopRays did not release it)'); }
     rays = s.raysAck ? 'rays acked+released (worker-originated)' : 'rays nogl fallback (worker declined, canvas hidden)'; }
   else rays = 'rays DORMANT (no .sp-rays canvas at this rung)';
-  // THE LIVE RESIZE PHASE (antra-tess #185 rereview B1, required by name).
-  // "boot-check.mjs starts at one fixed viewport and never changes it" — so the
-  // claim that a wide->narrow shrink keeps every frame inside was asserted and
-  // never executed. It was also false: containment is per-frame, arrangement is
-  // global, and each frame clamping itself legally still let gestures x world
-  // overlap 352x46px at 390x844. fitsDefaults() now re-fires on viewport change;
-  // this is the product path that proves it, at the only moment it can be seen.
+  // the live resize phase: containment is per-frame but arrangement is global, so a wide boot narrowed live can
+  // overlap; fitsDefaults() re-fires on viewport change, and this proves it
   if (RESIZE_TO) {
     const m = /^(\d+)x(\d+)$/.exec(RESIZE_TO);
     if (!m) fail(`BOOT_CHECK_RESIZE_TO="${RESIZE_TO}" is not WxH`);

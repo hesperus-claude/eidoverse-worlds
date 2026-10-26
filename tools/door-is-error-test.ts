@@ -28,11 +28,8 @@ const said = (r: any) => r?.rejected != null ? `(rejected: ${r.rejected})` : Str
 const failed = (r: any) => r?.isError === true;
 /** A call that answered and wasn't failed: a { rejected } stand-in, from settle() or midway(), is neither. */
 const ok = (r: any) => r != null && r.rejected == null && !failed(r);
-/** Run a call whose wait is the real flightAwait. Once its waiter is registered,
- *  set what the flight tick would have (`happen`) and settle it, as the tick does.
- *  The checks that need a wait to time out stand in for flightAwait instead (the
- *  climb's and the flare's timeouts, and the cut glide's flare), since a real
- *  one would take its whole budget. */
+/** Run a call whose wait is the real flightAwait: once its waiter registers, apply `happen` and settle it as the
+ *  tick does. Checks needing a timeout stand in for flightAwait instead (a real one takes its whole budget). */
 const midway = async (agent: any, start: Promise<any>, happen: () => void) => {
   // A waiter left by an earlier call could answer for this one, so none may be waiting yet.
   if (agent.flightWaiters.length) return { rejected: 'a flight waiter from an earlier call was still registered' };
@@ -109,11 +106,9 @@ check('a climb that times out is failed, not reported at its target',
   failed(r) && /^timed out aloft at .*short of the climb; the climbing stops there and you fly on$/.test(said(r)), said(r));
 check('...and it stops climbing, so the body is where the answer says', !!ag.flight && ag.flight.climbTo == null, String(ag.flight?.climbTo));
 ag.flightAwait = realAwait;
-// A climb, a descent and a landing's flare, flown by the agent's own flight tick, each end inside their wait. A climb
-// rises at its lift less the polar's sink once the lift has eased in, about 1.5 m/s where the lift alone is 2 m/s,
-// and a flare comes down at the polar's sink, about 0.46 m/s.
-/** Fly an act through the agent's own flight tick, 0.1 s a tick as the main tick steps, until it answers. Its waits are
- *  the real flightAwait's, with flight time standing in for the clock: each wait's length is kept, with the flight time it took. */
+// a climb, a descent and a flare, flown by the agent's own tick, each end inside their wait (a climb nets ~1.5 m/s
+// after sink, a flare sinks ~0.46 m/s)
+/** Fly an act through the agent's flight tick, 0.1 s a tick, until it answers; waits are flightAwait's, in flight time. */
 const flownByTicks = async (act: () => Promise<any>) => {
   const waits: { ms: number; took: number }[] = [];
   let t = 0, answered = false;
@@ -430,11 +425,9 @@ ag.glideTo = realGlide; ag.flightAwait = realAwait;
 check('a landing whose flare timed out is failed, and the body is set down from 20 m where the flare had it, saying where',
   failed(r) && said(r).endsWith(' — the flare timed out aloft, so the body was set down at (7.0, 3.0)') && ag.flight === null && ag.pos.y < 20,
   `${said(r)}; flight ${ag.flight === null ? 'ended' : ag.flight?.phase}; y ${ag.pos.y}`);
-// A later call that sets the flight's course takes it over, so a landing whose flare then ends, whether its wait hears
-// the body come down or runs out, leaves the flight to that call: on the stdio door, a host that stopped waiting for
-// the landing can send its next call while the flare still waits. A take-off's fresh flight takes it over too.
-/** Hold the next flight wait open, whichever act asks for it first, and give later ones the real wait; `end` answers
- *  it. Later calls then wait for real, so a held act that starts late still meets this hold rather than a real wait. */
+// a later course-setting call takes the flight over, so a landing whose flare ends leaves the flight to it (a stdio
+// host can send its next call mid-flare); a take-off's fresh flight takes it over too
+/** Hold the next flight wait open (whichever act asks first; later ones wait for real); `end` answers it. */
 const holdNextWait = () => {
   const h = { held: false, end: (_v: string) => {} };
   ag.flightAwait = (test: (s: any) => string | null, ms?: number) => {
@@ -564,11 +557,8 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     failed(answer) && said(answer) === 'you cannot fly here — flight was withdrawn' && !hold.held, `${said(answer)}; flare ${hold.held ? 'waited' : 'none'}`);
   hold.end('timed out aloft');
 }
-// A refused take-off makes no fresh flight in the air, so it takes nothing over: the flight's course is as it was, and
-// a climb waiting on the flight still answers for itself. The state is built by hand, the flight's wings folded and
-// the posture's not: a body doesn't meet this refusal with a call waiting, since fold_wings folds both and take_off
-// refuses on the posture first, and a recovery stands the flight up with its wings open. The check pins the order, so
-// that a refusal flightTakeOff gains later still takes nothing over.
+// a refused take-off makes no fresh flight, so it takes nothing over. The state is hand-built (wings folded,
+// posture not) since no real body meets this refusal with a call waiting; it pins the order for later refusals.
 {
   await relaunch(); ag.flight.stamina = 1e6;
   const hold = holdNextWait();

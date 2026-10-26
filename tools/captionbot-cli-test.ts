@@ -93,11 +93,8 @@ console.log('\nâ€” E. the spool goes after the lines are on it, before the end â
 {
   const spool = join(dir, 'spool-end.jsonl');
   const rowsIn = (p: string) => existsSync(p) ? readFileSync(p, 'utf8').split('\n').filter(Boolean).length : 0;
-  // the CLI waits 2 s after the replay before it ends the session: once both
-  // lines' rows are on disk, a directory takes the spool's place, so the
-  // end's append is the first write to fail. A process stalled past those
-  // 2 s misses the window (the end's row lands first), which says nothing
-  // about the CLI, so that attempt is run again, up to three times.
+  // the CLI waits 2 s after the replay before ending; once both rows are on disk a directory replaces the spool,
+  // so the end's append fails first. A process stalled past 2 s misses that window: retry, up to three times.
   let rows = 0, caught = false, code: number | null = null, out = '';
   for (let attempt = 1; attempt <= 3 && !caught; attempt++) {
     rmSync(spool, { recursive: true, force: true }); rmSync(`${spool}.lines`, { force: true });

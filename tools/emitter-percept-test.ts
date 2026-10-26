@@ -174,9 +174,8 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
 }
 
 // ---------------------------------------------------------------- C: several emitters, a scaled one
-// Upstream #256 gave a v1 thing several emitters (`particles:<name>`). Here a thing carries one `particles`: emitters
-// that burn together are one effect document's emitters, and one lit and put out on its own is a child thing with its
-// own `particles` (the translator writes particles:<name> that way). Each reads and narrates on its own terms.
+// a thing carries one `particles`: emitters that burn together are one effect document's, and one lit on its own is
+// a child thing with its own `particles` (how the translator writes particles:<name>). Each narrates on its own terms.
 {
   const { ag, events, spawn, comp, door } = await rig();
   await spawn("hearth", [2, 0, 0]);

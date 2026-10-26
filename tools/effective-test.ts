@@ -43,10 +43,8 @@ function offlineAgent(): WorldAgent {
 let seqN = 0;
 /** A socket child's id here: "<host>.<slot>" (the door mints its own; any stable id serves a fixture). */
 const SID = (host: string, slot: string) => `${host}.${slot}`;
-/** The scenes are old-protocol entries, so a seat arrives as a `sockets` map and cargo as mount {to, slot}. Every world is
- *  lifted into socket children (PLAN-sockets-entities: the maintenance command); this does the same to the folded records — a
- *  socket child {pos, yaw/q, socket: {name, …}, parent: {to: host, offset, yaw/q}}, and cargo on a slot rides it
- *  (no offset: on the socket itself) — so the agent reads exactly what a lifted world gives it. */
+/** The scenes are old-protocol (seat = `sockets` map, cargo = mount {to, slot}); lift them into socket children as
+ *  a lifted world has them ({pos, yaw/q, socket: {name, …}, parent: {to, offset, yaw/q}}; cargo on a slot rides it). */
 function liftV1(E: Record<string, any>) {
   // the v1 fold's records speak the old protocol (lib, a comp bag): today's record is flat, in the protocol's names (view.js)
   for (const [id, e] of Object.entries<any>({ ...E })) { const { lib, comp, ...rest } = e; E[id] = { ...rest, ...(lib != null ? { model: lib } : {}), ...(comp ?? {}) }; }

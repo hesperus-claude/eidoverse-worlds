@@ -208,11 +208,8 @@ for (const t of [0.05, 0.10, 0.15, 0.20, 0.30]) {
 }
 
 // ---- the candidate rule -----------------------------------------------------
-// A bare lie threshold flags cars, sharks and rubble alongside the blanket,
-// because a rounded 1.2m-tall thing also sits below its own bbox top. The
-// distinguishing fact about a blanket is not that it lies — it is that it is
-// FLOOR-SHAPED and lies: wide enough to stand on, low enough that standing on
-// it is the only thing you would ever do with it. So gate on shape first.
+// a bare lie threshold also flags cars and rubble; a blanket is FLOOR-SHAPED and lies (wide enough to stand on,
+// low enough that's all you'd do), so gate on shape first
 const FOOT_MIN = 2.0;    // m² — smaller than this and nobody stands on it
 const H_MAX = 0.8;       // m  — taller than this it is furniture, not ground
 const LIE_MIN = 0.10;    // m  — below this the box top is honest enough
@@ -242,9 +239,7 @@ if (flat.length) {
 }
 
 // ---- sensitivity ------------------------------------------------------------
-// H_MAX is the knob with teeth: it decides whether "floor-shaped" means only
-// blankets and rugs, or reaches up into sofas, wrecks and vehicles. Nobody
-// should pick it from taste, so show what each setting actually reclassifies.
+// H_MAX is the knob with teeth (rugs only, or up into sofas and vehicles): show what each setting reclassifies
 console.log('\n  sensitivity — what each height gate would reclassify (foot >= 2m², lie > 0.10m):');
 for (const hmax of [0.6, 0.8, 1.0, 1.2, 1.5, 2.2]) {
   const hit = rows.filter((r) => r.kind === 'box' && r.foot >= FOOT_MIN && r.h <= hmax && r.lieRay > LIE_MIN);

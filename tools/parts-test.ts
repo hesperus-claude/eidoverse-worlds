@@ -12,11 +12,8 @@
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 
-// Bun 1.3.x caches transpiled module graphs globally by content. A failed
-// plugin-resolved path can therefore survive into a later checkout and bypass
-// onResolve entirely. Tests need deterministic resolver behavior; production
-// runtime keeps Bun's normal cache. Re-exec once because this setting is read
-// at process startup.
+// Bun 1.3.x caches transpiled module graphs by content, so a failed plugin-resolved path can survive and bypass
+// onResolve; re-exec once with the cache off (read at process startup). Production keeps Bun's cache.
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -39,10 +36,8 @@ const REMOTES = fileURLToPath(new URL('./remotes-stub.mjs', import.meta.url));
 plugin({
   name: 'parts-stub',
   setup(build) {
-    // one specifier, one file — './colliders.js' goes through a re-export
-    // shim over parts-stub rather than to parts-stub itself. Two specifiers
-    // resolving to one plugin-returned path is the configuration that breaks
-    // on macOS Bun 1.3.14 (see colliders-stub.mjs for the evidence).
+    // one specifier, one file: './colliders.js' goes through a re-export shim, since two specifiers resolving to one
+    // plugin path breaks on macOS Bun 1.3.14 (see colliders-stub.mjs)
     build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: CORE }));
     build.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: PARTS }));
     build.onResolve({ filter: /^\.\/colliders\.js$/ }, () => ({ path: COLLIDERS }));
@@ -144,10 +139,8 @@ console.log('\n━━ regression: whole-entity motion unchanged ━━');
   check('root bob still works', Math.abs(root.position.y - 0.3) < 0.02, `y=${root.position.y.toFixed(3)}`);
 }
 
-// house review of #260, client/lib I37: every parented thing carries userData.mountedTo (models.js execMount), and a
-// parent record is only ever the hierarchy (sitting and holding are presence), so skipping mountedTo froze every child's
-// own motion. A child moves in its parent's frame: its base is the local pose the mount gave it.
-// Mutation (must go red): restore `|| obj.userData.mountedTo` in motion.js's skip.
+// a parented thing keeps its own motion: every parented thing carries userData.mountedTo, and a child moves in its
+// parent's frame from the local pose the mount gave it. Mutation: restore `|| obj.userData.mountedTo` in motion.js's skip.
 console.log('\n━━ a parented thing keeps its own motion, in its parent\'s frame ━━');
 {
   const parent = new THREE.Object3D(); parent.position.set(40, 0, 0);

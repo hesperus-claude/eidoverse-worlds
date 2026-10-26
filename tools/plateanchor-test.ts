@@ -321,11 +321,8 @@ console.log('avatar.js:');
   const noeye = rig({ eyes: false, hair: 1.0 });
   check('no eye bones, mesh under the head: head + 0.45·(head − hips)', near(noeye.self._plateRest?.crown, 1.5 + 0.45 * 0.55, 1e-6), J(noeye.self._plateRest));
 
-  // THE JUMP (owner, 10-01: "big noticeable lag on the nameplate on jumping"). Standing — idle, walking, running,
-  // jumping, falling — the plate rides the REST crown over the root, rigidly: the jump clip's crouch, tuck and landing
-  // move the hips under it and it does not move. Only a posture change (stand ↔ sit ↔ lie) eases. Driven through the
-  // real setClip (the controller and remotes.js both call it with the wire's clip), so the slot it records is the one
-  // the plate reads.
+  // THE JUMP: standing (idle through falling) the plate rides the REST crown over the root rigidly, so a jump's crouch
+  // doesn't move it; only a posture change eases. Driven through the real setClip, so the slot it records is the one read.
   {
     const J2 = rig(); const a = J2.self, hp = J2.hips, rt = J2.root;
     a.actions = {};

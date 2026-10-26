@@ -11,10 +11,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const { check, done } = checker();
 const pairs = (process.env.LOD_LOOK_PAIRS ?? '').split(';').filter(Boolean).map((p) => p.split('='));
 const OUT = process.env.LOD_LOOK_OUT ?? '/tmp/lod-look.png';
-// REPORT-ONLY by default. A per-pixel threshold is not a look judgement: on the rubble pile the TEXTURE conversion
-// alone (original vs its served KTX2, identical geometry) scored 64% 'visibly different', and the LOD vs what is served
-// 52% — the number says nothing a person should trust. The contact sheet is for eyes (the owner's); LOD_LOOK_MAX turns on a
-// gate for anyone who has calibrated one.
+// REPORT-ONLY by default: a per-pixel threshold isn't a look judgement (texture conversion alone scored 64%
+// "different" on identical geometry); the contact sheet is for eyes, and LOD_LOOK_MAX gates for whoever calibrates one
 const MAX_BAD = process.env.LOD_LOOK_MAX != null ? Number(process.env.LOD_LOOK_MAX) : null;
 if (!pairs.length) { check('pairs given (LOD_LOOK_PAIRS)', false, 'none'); done(); process.exit(1); }
 const world = await ownedWorld({});

@@ -102,10 +102,8 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   check('…with NO gizmo mesh inside the model itself (it would join the collider, the lamp scan, the caster scan); the bulb\'s gizmo hangs on the child', !lampGizmo && !!lampLight?.children.some((c: any) => c.userData.gizmo));
   // where the rig puts a request's light (lightrig.js worldPosOf): its object's world position, else its parked pos
   const lit = (id: string) => { const r = rq(id); if (!r) return null; const p = r.obj ? r.obj.getWorldPosition(new stub.THREE.Vector3()).toArray() : r.pos; return p?.map((x: number) => +x.toFixed(6) + 0); };
-  // F1 (10-12): a child's record pos is carrier-LOCAL; with no realized carrier to mount into, the child Empty stood
-  // in the Scene at that local pos and its light shone at the world origin. It stands at its folded WORLD pose now.
-  // round 2 (review S1/S2): it waits mounted in the far lamp's STAND-IN, a bare Group at the lamp's folded world pose, so
-  // its own transform stays local like every mounted child's
+  // a child's record pos is carrier-LOCAL: with no realized carrier it waits mounted in the carrier's STAND-IN (a
+  // bare Group at the carrier's folded world pose), so its own transform stays local
   const farChild = stub.entities.get('farlamp-light');
   const inStandIn = (o: any, carrier: string) => o?.parent?.userData?.standIn === carrier && o.userData.mountedTo === carrier;
   check('a far lamp\'s light (beyond its residency radius, never loaded) still lights, over the far lamp: its child waits in the lamp\'s stand-in and the request rides it',
@@ -240,9 +238,8 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
 }
 
 // ---- 5. the inspector ----------------------------------------------------------
-// the protocol port (2026-10-06): editOps plans door requests; what an edit DOES is checked through the real authority on a
-// scratch world (tools/protocol/scratchworld.ts). Light-verb lights are gone from the planner (a lamp is a thing with a
-// light component), so the "old light-verb light keeps the light verb" checks are dropped.
+// editOps plans door requests; what an edit DOES is checked through the real authority on a scratch world
+// (tools/protocol/scratchworld.ts)
 console.log('\n5. the inspector (shared/editschema.js: reads either spelling, writes new on edit, through the authority)');
 {
   const { inspectSchema, editOps, fieldAt } = await import('../shared/editschema.js');

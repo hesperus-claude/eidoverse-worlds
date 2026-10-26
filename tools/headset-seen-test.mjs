@@ -62,10 +62,7 @@ check('…and one millisecond inside it still is',
 // check at a large epoch passes even with the guard deleted (the sweep caught this as a false green).
 check('the legacy 0 is rejected by the GUARD, not by TTL arithmetic',
   headsetSeenAt('1') === 0 && headsetSeenRecently(HEADSET_SEEN_TTL_MS - 1, '1') === false);
-// THE LEGACY MARKER MUST NOT BE PERMANENT (#197 round-two review B3). This suite previously
-// asserted `headsetSeenRecently(NOW, '1') === true` — pinning the defect in place: '1' mapped to 0
-// and 0 returned true unconditionally, so exactly the users carrying the old marker stayed
-// "headset-capable" forever, with a gone headset or a new machine.
+// the legacy marker must not be permanent: '1' carries no time, so it must not read as "recent" forever
 check('an UNMIGRATED legacy marker is not "recent" — unknown time is not a licence',
   headsetSeenRecently(NOW, '1') === false);
 check('migrating a legacy marker stamps it with the time it was first seen under this build',

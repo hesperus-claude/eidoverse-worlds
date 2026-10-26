@@ -152,13 +152,9 @@ function accessorFloats(g: G, bin: Uint8Array, accIdx: number, comps: number): F
   return new Float32Array(bin.buffer, off, acc.count * comps);
 }
 
-/** VRM requires a NORMALIZED skeleton: humanoid bone nodes with zero rest
- *  rotation (world-aligned axes). Animation retargeting writes rotations that
- *  assume identity rest — on a rig with rotated rest bones (Tripo: every
- *  joint, plus a -90°X Z-up root) the result is a scrambled heap. So: zero
- *  every joint's rotation, turn locals into world-space translation deltas,
- *  and fold the old orientations into the inverse bind matrices. The rendered
- *  rest pose is unchanged; the bone axes become what VRM expects. */
+/** VRM requires a NORMALIZED skeleton (zero rest rotation); retargeting on rotated rest bones scrambles the rig.
+ *  Zero every joint's rotation, turn locals into world-space translation deltas, and fold the old orientations
+ *  into the inverse bind matrices: the rendered rest pose is unchanged. */
 function normalizeSkeleton(g: G, bin: Uint8Array, rootName: string) {
   const rootIdx = nodeByName(g, rootName);
   const W = worldMatrices(g);
@@ -210,20 +206,9 @@ const TRIPO_MAP: Record<string, string> = {
   rightToes: "R_ToeBase",
 };
 
-// Digits are OPTIONAL: many rigs have no finger bones, and TRIPO_MAP is checked
-// with fail-fast nodeByName, so these cannot live in it. Any entry whose bone is
-// missing is simply skipped.
-//
-// Worth mapping, because ammodoll.js ports the source's finger springs and
-// tendon coupling and asks for these exact joints — without them a rig with a
-// full hand rig arrives with no finger physics at all.
-//
-// Tripo's naming, and two traps in it:
-//   *0 is the METACARPAL. VRM has a slot for the thumb's and NOT for the other
-//      fingers — which matches the source rig's own choice to keep metacarpals
-//      fused to the hand body. So Index0/Middle0/Ring0/Pinky0 are deliberately
-//      unmapped, and Index1 is the PROXIMAL.
-//   VRM says "Little" where Tripo says "Pinky".
+// optional digits (many rigs have none; TRIPO_MAP's nodeByName is fail-fast), skipped when missing; ammodoll.js's
+// finger springs need these joints. *0 is the METACARPAL: only the thumb's has a VRM slot, so Index1 is the
+// PROXIMAL. VRM says "Little" where Tripo says "Pinky".
 const TRIPO_DIGITS: Record<string, string> = (() => {
   const m: Record<string, string> = {};
   for (const [vrmSide, t] of [["left", "L"], ["right", "R"]] as const) {
@@ -278,10 +263,8 @@ const out = flag("out") ?? join(import.meta.dir, "..", "assets", "opt", "eidover
 
 for (const vrmBone of Object.values(TRIPO_MAP)) nodeByName(g, vrmBone); // fail fast on unknown rigs
 
-// Facing quadrant, measured ONCE before any pose surgery and reused by both
-// the T-pose step (its side axes are facing-relative!) and the final yaw bake.
-// Tripo rigs often face +X; T-posing their arms to world ±X would bake them
-// front/back — the one-arm-forward-one-arm-back bug.
+// facing quadrant, measured ONCE before pose surgery and reused by the T-pose (its side axes are facing-relative)
+// and the yaw bake; T-posing a +X-facing rig to world ±X bakes one arm forward, one back
 const FACE_YAW: Record<string, number> = { "+z": 0, "-z": Math.PI, "+x": Math.PI / 2, "-x": -Math.PI / 2 };
 const faceFlag = flag("face")?.toLowerCase();
 if (faceFlag !== undefined && !(faceFlag in FACE_YAW)) throw new Error("--face must be one of +z -z +x -x");
@@ -295,10 +278,7 @@ const leftAxis = new THREE.Vector3(fwdAxis.z, 0, -fwdAxis.x); // up × forward
 // wherever the left leg lives along that axis (don't assume anything).
 if (!has("no-tpose")) {
   const W = worldMatrices(g);
-  // Compare the two sides to each other instead of to the scene origin. Some
-  // scans (Sydney in particular) have the whole armature translated sideways,
-  // so both thighs can have the same world-side sign even though the rig
-  // itself is not mirrored.
+  // compare the two sides to each other, not the origin: some scans translate the whole armature sideways
   const dThigh = posOf(W[nodeByName(g, "L_Thigh")]).clone()
     .sub(posOf(W[nodeByName(g, "R_Thigh")]));
   const leftSign = Math.sign(dThigh.dot(leftAxis)) || 1;
@@ -307,12 +287,8 @@ if (!has("no-tpose")) {
   const DOWN = new THREE.Vector3(0, -1, 0);
   const UP = new THREE.Vector3(0, 1, 0);
   const fixes: [string, string, THREE.Vector3][] = [
-    // Torso first: scanned figures keep their stance (fashion-mannequin
-    // S-posture = shoulders ~10cm behind hips). Clip rotations are absolute
-    // and can't move where the shoulder SOCKETS are — a leaned-back chest
-    // makes every animation put the hands inside the lower back. Stack the
-    // spine chain vertical so shoulders sit neutrally above the hips, THEN
-    // pose the limbs relative to that.
+    // torso first: clip rotations are absolute and can't move the shoulder sockets, so a scanned S-posture puts hands
+    // in the lower back. Stack the spine vertical, then pose the limbs relative to it.
     ["Waist", "Spine01", UP], ["Spine01", "Spine02", UP],
     ["Spine02", "NeckTwist01", UP], ["NeckTwist01", "NeckTwist02", UP],
     ["NeckTwist02", "Head", UP],
@@ -334,11 +310,8 @@ if (!has("no-normalize")) {
   console.log("  normalized: joint rotations zeroed, orientations folded into IBMs");
 }
 
-// Some generated characters have a neutral mesh pose with the face pitched
-// toward the floor even though their neck joint chain is already vertical.
-// A small rotation on the unmapped NeckTwist02 joint re-poses that character's
-// head without changing shared VRMA clips or the humanoid mapping. Apply this
-// after normalization so the offset remains part of the avatar's neutral pose.
+// some generated characters' neutral pose pitches the face down on a vertical neck: a small rotation on the unmapped
+// NeckTwist02 fixes the head without touching clips or mapping. After normalization, so it stays in the neutral pose.
 const headPitch = Number(flag("head-pitch") ?? 0);
 if (!Number.isFinite(headPitch)) throw new Error("--head-pitch must be a number");
 if (headPitch !== 0) {

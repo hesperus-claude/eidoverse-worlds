@@ -19,10 +19,8 @@ export interface Caption { t0: number; t1: number; text: string; speaker?: strin
 export interface CaptionerOptions {
   rateHz: number;
   provider: SttProvider;
-  /** The stage cue: who is speaking through the screen right now, if the
-   *  operator has said. Read when a SEGMENT ENDS — the line was spoken under
-   *  that cue — so a cue change lands on the next line, never on one already
-   *  spoken, and never depends on how long the STT takes to settle. */
+  /** The stage cue: who speaks through the screen now, if the operator said. Read when a segment ENDS, so a
+   *  cue change lands on the next line, never on one already spoken. */
   speaker?: () => string | undefined;
   /** Quiet period after `final` before a caption is emitted (default 300). */
   settleMs?: number;
@@ -101,10 +99,8 @@ export class Captioner implements PcmConsumer {
     // The boundary is ours (the surface's own silence detector fired): commit,
     // then let finals settle; close once everything pending has emitted.
     s?.commit();
-    // finals settle within settleMs of arriving; the session closes at 4×,
-    // and after that the segment is SEALED — anything later is a revision
-    // of a line already in the log, counted and dropped, and the segment's
-    // own bookkeeping goes with it
+    // finals settle within settleMs; the session closes at 4×, then the segment is SEALED: later revisions are
+    // counted and dropped
     setTimeout(() => s?.close(), this.settleMs * 4);
     setTimeout(() => { seg.sealed = true; for (const e of seg.pending.values()) if (e.timer) clearTimeout(e.timer); seg.pending.clear(); seg.emitted.clear(); }, this.settleMs * 8);
   }

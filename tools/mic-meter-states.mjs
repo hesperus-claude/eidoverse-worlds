@@ -43,11 +43,8 @@ const r = await pg.evaluate(async () => {
   const colour = () => getComputedStyle(lvl).backgroundColor;
   const at = async (v) => { fake = v; await settle(); await settle(); return colour(); };
 
-  // 🔴 ASK THE MODULE, DO NOT PARSE THE CSS. The marker's left is written as
-  // `calc(N% - 1px)`, so parseFloat returns garbage and the first run of this
-  // probe read floor=0 — which makes `floor * 3` also 0 and the OVER case
-  // unreachable. A test whose setup silently degrades to a no-op reports the
-  // code as broken while proving nothing.
+  // ask the module, don't parse the CSS: the marker's left is `calc(N% - 1px)`, which parseFloat misreads
+  // (floor=0 would make the OVER case unreachable)
   const vc = await import('./lib/voiceconsent.js');
   let floor = vc.micFloor();
   if (!(floor > 0)) { vc.setMicFloor(0.02); floor = vc.micFloor(); }

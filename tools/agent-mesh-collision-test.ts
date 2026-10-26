@@ -163,11 +163,8 @@ try {
       through && Math.abs(other.pos.z + 2) < 0.05 && near(other.pos.y, other.heightAt(0, -2)), `at (${other.pos.x.toFixed(2)}, ${other.pos.y.toFixed(3)}, ${other.pos.z.toFixed(2)})`);
     other.close();
   }
-  // Something solid that arrives AFTER the walk was planned: a barrier
-  // spawned across the upper floor while the body is on its way. The feet
-  // meet it (its collider is fitted like any other), and the walk ends
-  // promptly, saying where — the route planner is not the only thing
-  // standing between a body and a wall.
+  // a barrier spawned across the upper floor mid-walk: the feet meet its fitted collider and the walk ends,
+  // saying where (the route planner isn't the only guard)
   const bar = await (await fetch(`${h.BASE}/upload?name=barrier`, { method: "POST",
     body: await buildGlb([[-1.4, 0, -0.1, 1.4, 1.4, 0.1]]) })).json() as { path: string };
   const crossing = walk(0, 1.8);

@@ -31,9 +31,7 @@ const track = { kind: 'audio', enabled: true, stop() {} };
 const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
 
 // ── acquisition order: PTT ARMED BEFORE the raw lane exists ─────────────
-// A persisted pttMode, or a mode set before the device is acquired, must
-// govern the lane the moment gateFor returns — not one watcher tick later.
-// No timers in this leg: every assertion is synchronous with the call.
+// a mode set before the device is acquired governs the lane the moment gateFor returns; no timers, all synchronous
 mg.allowUngated(true);
 vc.setPttMode(true);
 const early = ms.gateFor(stream);
@@ -82,14 +80,9 @@ vc.setPttMode(true); vc.setPttMode(false);
 t('mode exit while muted does NOT reopen the raw lane', track.enabled === false);
 ms.toggleMute(false);
 
-// ── the transport's mic OFF outranks the key too (Mica, round 3) ──────────
-// voicesfu.js sfuMic(false) with no synth provider is: disable the tracks,
-// then setMicLive(false). sfuMic(true) on a retained device is: enable the
-// tracks, then setMicLive(true). Reproduced here verbatim, in that order —
-// the ungated lane keeps its sender lane across mic OFF, so `_lane` alone
-// said "on" and a later onset tick (or a mode exit) re-enabled a raw track
-// the microphone control had turned off. The onset watcher is running on a
-// real 20 ms interval throughout; "ticks" below are real ticks.
+// ── the transport's mic OFF outranks the key too ──────────────────────────
+// sfuMic(false)/sfuMic(true) reproduced in order (tracks, then setMicLive); the ungated lane survives mic OFF, so
+// `_lane` alone would let an onset tick re-enable a disabled track. The watcher runs on a real 20 ms interval.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const transportMicOff = () => { track.enabled = false; ms.setMicLive(false); };
 const transportMicOn  = () => { track.enabled = true;  ms.setMicLive(true);  };

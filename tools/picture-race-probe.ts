@@ -28,12 +28,8 @@ import * as OP from '../shared/protocol/requests.js';
 import { qFromYaw } from '../shared/rot.js';
 
 const LIB = 'eidoverse/assets/models/scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower.glb';
-// ONE UNPRIMED IMAGE PER HELD LEG. The host caches library bytes for the
-// session (assets.js primeFiles → denoFiles), so a second load of the same
-// path never fetches — and a hold on a fetch that never happens holds
-// nothing: the load completes before the intent changes and the leg proves
-// nothing (found 2026-09-14 when a mutation stayed green). Every held leg
-// takes a fresh preview from this pool and asserts the hold engaged.
+// ONE UNPRIMED IMAGE PER HELD LEG: the host caches library bytes per session (assets.js primeFiles), so a reload of a
+// path never fetches and a hold on it holds nothing. Each held leg takes a fresh preview and asserts the hold engaged.
 const M = 'eidoverse/assets/models/';
 const POOL = [
   'scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower_preview.jpg',

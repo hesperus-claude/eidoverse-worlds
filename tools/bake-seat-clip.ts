@@ -86,10 +86,7 @@ const deltaArg = process.argv.find((a) => a.startsWith("--delta="));
 const DELTA = deltaArg ? Number(deltaArg.slice("--delta=".length)) : 0.409;
 if (!Number.isFinite(DELTA)) { console.error(`bad --delta`); process.exit(1); }
 
-// The exact upstream bytes this delta was derived against. If the source no
-// longer hashes to this, the derivation above was measured on a DIFFERENT clip
-// and Δ must be re-measured rather than reapplied — a silent re-export is
-// precisely how a hand-tuned constant goes quietly wrong.
+// the exact upstream bytes Δ was derived against: if the source hash differs, re-measure Δ, don't reapply it
 const EXPECT_SRC = "c5f1828ffb222875f1ef1201189f032d22984ece24cc12122e7e450977dcb3e1";
 const EXPECT_OUT = "ea31ca53057f3302b6103f323dbcf47c0220d2a9742039ae150c45674ca47456";
 

@@ -307,10 +307,8 @@ const cleanup = () => {
 };
 process.on('exit', cleanup);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { cleanup(); process.exit(1); });
-// a run killed mid-way may have left last time's variants in OPT_DIR: a STALE
-// variant (older than the fixture written below) is exactly what the server
-// refuses to serve (#156 freshness), so clear before writing, and wait for a
-// variant NEWER than its source, never for a file that merely exists
+// a killed run may leave stale variants in OPT_DIR, which the server refuses (#156 freshness): clear before writing,
+// and wait for a variant NEWER than its source, not one that merely exists
 for (const rel of mine) try { rmSync(join(OPT, rel), { force: true }); } catch { /* best effort */ }
 
 async function gridGlb(tag: string, cells: number, extras: object | null): Promise<Uint8Array> {

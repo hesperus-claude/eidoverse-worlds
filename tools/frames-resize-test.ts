@@ -25,12 +25,8 @@ plugin({
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
 
-// happy-dom has no pointer capture. Model it on ELEMENTS only — deliberately
-// NOT on `document`, because stubbing document.releasePointerCapture is what
-// masked the original bug: capture was taken on documentElement and released
-// on document, which owns nothing, so the release was a silent no-op and the
-// test still passed. The stub now tracks who holds what, so the assertions
-// below can check that the acquirer is the releaser.
+// happy-dom has no pointer capture: modelled on ELEMENTS only, never `document` (which owns nothing), tracking
+// who holds what so the assertions can check the acquirer is the releaser
 const _captured = new Set<number>();
 (Element.prototype as any).setPointerCapture = function (id: number) { _captured.add(id); (this as any).__cap = id; };
 (Element.prototype as any).releasePointerCapture = function (id: number) { _captured.delete(id); (this as any).__cap = undefined; };
@@ -47,11 +43,8 @@ const check = (name: string, ok: boolean, detail = "") => {
 const f = makeFrame("t", { title: "t", x: 100, y: 100, w: 300, h: 200, minW: 100, minH: 80 });
 f.show();
 
-// happy-dom returns an all-zero DOMRect, and the module's zone math is entirely
-// getBoundingClientRect-based — so without this the pointer never lands in any
-// zone and even the happy path silently fails. Report the frame's real state
-// instead. (First run of this test failed its own baseline for exactly that
-// reason, which is the honest way to find out your harness cannot see.)
+// happy-dom returns an all-zero DOMRect and the zone math is getBoundingClientRect-based, so report the frame's
+// real state, or the pointer lands in no zone
 (f.el as any).getBoundingClientRect = () => ({
   left: f.state.x, top: f.state.y, width: f.state.w, height: f.state.h,
   right: f.state.x + f.state.w, bottom: f.state.y + f.state.h, x: f.state.x, y: f.state.y,
@@ -60,11 +53,8 @@ f.show();
 // nothing interactive is under the pointer in these synthetic drags
 (document as any).elementFromPoint = () => null;
 
-// CHROME. state.h is the BODY's height; the rendered frame is taller by the
-// title bar plus .fr-body's 5px top/bottom padding. Without an offsetHeight
-// this suite reports chrome = 0, which makes the south clamp's viewport budget
-// look exact and any assertion about it vacuous — the blindness that hid a 6px
-// overflow through five review rounds. (round 6)
+// CHROME: state.h is the BODY's height; the frame is taller by the title bar and .fr-body padding. Without an
+// offsetHeight chrome reads 0 and the south clamp's budget looks exact.
 const CHROME = 30;
 Object.defineProperty(f.el, "offsetHeight", { get: () => f.state.h + CHROME, configurable: true });
 
@@ -138,11 +128,8 @@ _captured.clear();
 dragEast(20, "cancel");
 check("pointercancel also releases the capture", _captured.size === 0, `${_captured.size} held`);
 
-// --- corners are a real target (antra's live receipt: the corner used to be
-// the intersection of two 2px bands — geometrically present, practically
-// absent). 8px in from the corner point sits INSIDE the 15px corner square
-// but OUTSIDE the 4px edge bands, so a diagonal here proves the corner rule
-// specifically, not a lucky band overlap.
+// --- corners are a real target: 8px in from the corner point is inside the 15px corner square but outside the
+// 4px edge bands, so a diagonal here proves the corner rule, not a lucky band overlap
 function dragFrom(px: number, py: number, dx: number, dy: number) {
   const w0 = f.state.w, h0 = f.state.h;
   document.dispatchEvent(pd(px, py));
@@ -194,14 +181,8 @@ check("width clamps at minW", f.state.w >= 100, `w=${f.state.w} (delta ${tiny})`
     `rendered bottom=${bottom} viewport=${innerHeight} state.h=${f.state.h} chrome=${CHROME}`);
 }
 
-// THE FRAME PUBLISHES ITS OWN FLOOR. index.html carries `.frame { min-width:
-// 170px }`, a CSS floor sitting BENEATH the JS one — it silently won for any
-// frame declaring a smaller minW. Measured in Chromium before the fix: the gesture
-// bar asking for w=48/86/124/162 ALL rendered at frameW=170, cols=4, rows=3.
-// That is R's report in one line ("won't go thinner than 4x, but will forcibly
-// go 9x down and not wrap"): the body was painted 336px tall while the clipped
-// width could only lay out three rows. Three rounds of fixing snapTo changed
-// nothing visible, because the arithmetic was right and the RENDER was floored.
+// the frame publishes its own floor: index.html's `.frame { min-width: 170px }` sat beneath the JS one and won for
+// any smaller minW, so the arithmetic was right but the RENDER was floored
 { const narrow = makeFrame("floor", { title: "floor", x: 10, y: 10, w: 48, h: 32, minW: 48, minH: 32 });
   narrow.show();
   check("a frame publishes its OWN minW to the DOM, not the sheet's blanket 170",
@@ -211,10 +192,8 @@ check("width clamps at minW", f.state.w >= 100, `w=${f.state.w} (delta ${tiny})`
   check("...and a frame with a LARGER floor keeps it", (wide.el as HTMLElement).style.minWidth === "320px",
     `minWidth=${(wide.el as HTMLElement).style.minWidth}`); }
 
-// --- a glyph button over the edge band keeps its press (measured in the browser, 10-01: the ∃ menu's Panels flyout
-// hangs over the chat frame's top band, and its gestures pin never pinned — the topmost element under the pointer was
-// the glyph's SVG <path>, which is not an HTMLElement, so the walk up to its <button> never started and the resize
-// took the press). Inside a frame the same: a glyph button within 6px of the frame's edge.
+// --- a glyph button over the edge band keeps its press: the topmost element under the pointer is the glyph's SVG
+// <path>, not an HTMLElement, and the walk up to its <button> must still start. Inside a frame too, within 6px of its edge.
 for (const where of ["over the band, outside the frame", "inside the frame, at its edge"]) {
   const b = document.createElement("button");
   b.innerHTML = '<svg viewBox="0 0 10 10"><path d="M0 0h10v10z"/></svg>';

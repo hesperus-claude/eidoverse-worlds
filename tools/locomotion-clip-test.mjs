@@ -34,9 +34,7 @@ check('key down but below the move epsilon → idle',
   selectClip({ wantMove: true, speed: 0.01 }).clip === 'idle');
 
 // ---- the SEQUENCE, not just the states: press → hold → release → coast → stop.
-// The single-state checks above prove the mapping; this proves the TIMING, which is what the change
-// is actually about — the clip must leave for idle on the frame the key goes up, while the speed is
-// still coasting down over ~0.3 s, and it must not come back while it coasts.
+// the clip leaves for idle on the frame the key goes up while speed still coasts down (~0.3 s), and doesn't come back
 {
   const frames = [];
   const step = (wantMove, speed) => { const s = selectClip({ wantMove, speed }); frames.push(s.clip); return s; };
@@ -135,11 +133,8 @@ check('controller.js CALLS selectClip in its tick',
   /\bselectClip\s*\(/.test(ctl));
 check('controller.js passes the selected opts to setClip (not a re-derived literal)',
   /setClip\([^)]*\.opts\s*\)/.test(ctl));
-// Scoped to the setClip call, not the whole file: a file-wide grep for `fade: 0.5` would go red on
-// an unrelated future fade elsewhere in controller.js — an assertion that fails on innocent code is
-// as bad as one that passes on broken code.
-// The LOCOMOTION call specifically: controller.js also has the flight path's `me.setClip(clip, speed)`
-// at :625, which takes no options at all — matching the first `me.setClip(` would assert the wrong line.
+// scoped to the LOCOMOTION setClip call (the one with options), not the whole file: a file-wide grep would fail on
+// innocent fades, and the flight path's `me.setClip(clip, speed)` takes no options
 const setClipCall = ctl.split('\n').find((l) => /me\.setClip\([^)]*,[^)]*,/.test(l)) ?? '';
 check('the tick hands setClip the SELECTED opts, with no fade re-derived at the call site',
   /\.opts\s*\)/.test(setClipCall) && !/fade:/.test(setClipCall), `call site: ${setClipCall.slice(0, 80)}`);

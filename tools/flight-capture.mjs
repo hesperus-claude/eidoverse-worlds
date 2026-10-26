@@ -76,13 +76,8 @@ async function take(page, { name, seconds, injectRecoverAt }) {
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames, { recursive: true });
 
-  // IDENTICAL initial state and config for both takes -- that is what makes
-  // them matched, and matched is what lets Mythos attribute the difference to
-  // the recovery rather than to the drop.
-  // 30 m, so BOTH takes are legible: A has room for several full oscillations
-  // before contact, and B's recovery finishes with real air underneath rather
-  // than skimming the dirt -- a recovery that completes at 0.2 m is correct and
-  // unmeasurable, which is not what the take is for.
+  // identical initial state and config for both takes, so the difference is the recovery, not the drop; 30 m so A
+  // oscillates before contact and B's recovery finishes with real air under it
   const START_Y = 30;
   const r = await page.evaluate(({ bones, startY }) => {
     window.__flightBench.setTop(startY);

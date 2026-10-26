@@ -28,10 +28,8 @@ export const CONFIG = {};
 // scenegraph.js: chat.js
 export const logChat = () => {};
 
-// ui.js makeSection, faithfully enough: toggle(true) runs onOpen
-// SYNCHRONOUSLY up to its first await (the real one does too — that is what
-// lets sceneSelect paint before the roster round-trip lands), and the body
-// is a real element so paintScene has somewhere to write.
+// ui.js makeSection, faithfully enough: toggle(true) runs onOpen synchronously up to its first await (so sceneSelect
+// paints before the roster lands), and the body is a real element
 export const sections = new Map();
 export function makeSection(title, onOpen, { id = '' } = {}) {
   const body = document.createElement('div');

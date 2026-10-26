@@ -196,11 +196,8 @@ assert.equal(assetDisposed, 1);
 batches.dispose();
 console.log('draw batches: lifecycle, fallback, transforms, shadows, layers, warm retirement passed');
 
-// XR MAIN PASS (VR alpha, 2026-09-05 'I pop to the origin'): while presenting, three hands the main pass an
-// ArrayCamera that is NOT the camera batches.render() was called with; ShadowNode then re-renders the same
-// scene from a light camera. Prepare against the array camera (xr.getCamera()), never the light camera —
-// excluding every ArrayCamera made the light camera the first 'main' caller and the batches were culled to
-// the sun's box around the origin. Own scene: the sections above leave the shared one with nothing eligible.
+// XR main pass: while presenting, three hands the main pass an ArrayCamera and ShadowNode re-renders from a light
+// camera; prepare against xr.getCamera(), never the light camera (or batches cull to the sun's box). Own scene.
 {
   const xrScene = new T.Scene();
   const xrMeshes = Array.from({ length: 130 }, (_, i) => { const m = new T.Mesh(geometry, material); m.position.set(1 + (i % 10), 1, 1 + Math.floor(i / 10)); xrScene.add(m); return m; });

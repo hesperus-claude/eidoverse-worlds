@@ -62,11 +62,8 @@ check('the body casts', meshes(lamped).filter((m) => !NO_CAST.includes(m.name)).
 // the kintsugi seams self-shadow into scratches at any map size
 check('GOLD does NOT cast', byName(lamped, 'GOLD').castShadow === false);
 check('...but GOLD still receives', byName(lamped, 'GOLD').receiveShadow === true);
-// THE WINGS, at Janus's ask. castShadow is per OBJECT and both wings are one
-// mesh, so dropping `wings` from the caster set is what "no wing-on-wing
-// shadowing" actually means -- there is no per-pair exclusion in three. They
-// keep receiving, so the chest lamp still lights them and the body still
-// shadows them.
+// the wings: castShadow is per object and both wings are one mesh, so "no wing-on-wing shadowing" means
+// dropping wings from the caster set; they still receive
 check('the wings do NOT cast', byName(lamped, 'wings').castShadow === false);
 check('...but the wings still receive', byName(lamped, 'wings').receiveShadow === true);
 // the silhouette that reads as a person is still thrown

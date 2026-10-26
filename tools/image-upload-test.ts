@@ -39,13 +39,8 @@ function check(name: string, ok: boolean, detail = "") {
   else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
 }
 
-// A real 1×1 PNG (the smallest well-formed one), a JPEG whose header gives its
-// size (1024×512, tools/protocol/fixtures), and a WebP RIFF header with a VP8
-// frame header that gives its size — the sniffer reads magic and the door reads
-// the size (the pixel cap), the store does not decode, so headers are enough.
-// (house 6340433633: the WebP read 0×0, and the door took that as a size; a zero
-// side is now an unknown size, refused 415 like any unreadable one: WEBP0. The
-// JPEG had no SOF, so the size check refused it since that check landed.)
+// a real 1×1 PNG, a JPEG whose header gives 1024×512 (tools/protocol/fixtures), and a WebP header with a VP8 frame
+// size: the sniffer reads magic, the door reads the size (pixel cap), nothing decodes. A zero side is unknown (415).
 const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 const JPG = new Uint8Array(readFileSync(new URL("./protocol/fixtures/dims-1024x512.jpg", import.meta.url)));
 const vp8 = (w: number, h: number) => new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20, 0x14, 0x00, 0x00, 0x00,
@@ -75,9 +70,8 @@ async function post(body: Uint8Array, q: Record<string, string>, token: string |
 console.log(`\nimage door — ${HTTP}\n`);
 
 // ---- the door judges by bytes ------------------------------------------------
-// The upload window is 4/min per IP and every POST past the token check
-// spends it (refusals included), so the door is exercised four at a time
-// with a window's rest between: three windows, twelve uploads.
+// the upload window is 4/min per IP and every POST past the token check spends it, so uploads go four at a time
+// with a window's rest between
 let r = await post(PNG, { as: "image", name: "hearth at dusk.png" });
 check("a PNG lands: 200 with a store path", r.status === 200 && typeof r.json?.path === "string", r.text);
 const pngPath: string = r.json?.path ?? "";

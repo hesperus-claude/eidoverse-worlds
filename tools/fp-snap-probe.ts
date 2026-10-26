@@ -118,9 +118,8 @@ const ctl = await joinPuppet("ctl", "eidoverse/assets/vrms/claude.vrm", [3, 0, -
 console.log("[probe] puppets joined");
 
 // ---- 3. scene ---------------------------------------------------------------
-// Tower at origin, seats facing +z. Eye lines: ground socket seat y=0.8 →
-// head ≈ 1.9; elevated socket seat y=4 → head ≈ 5.1. Markers 4m ahead on
-// those lines; a red crate on the ground for the on-foot case.
+// tower at origin, seats facing +z: ground seat y=0.8 → head ≈ 1.9, elevated seat y=4 → head ≈ 5.1; markers 4m
+// ahead on those lines, and a red crate on the ground for the on-foot case
 
 await puppet.verb("spawn", { id: "tower", lib: "eidoverse/assets/models/crate_large_yellow.glb", pos: [0, 0, 0], yaw: 0 });
 await puppet.verb("comp", {

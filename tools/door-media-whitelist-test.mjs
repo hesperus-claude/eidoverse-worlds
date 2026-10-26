@@ -41,11 +41,8 @@ for (const fwd of ['relay-cred', 'sfu-offer', 'sfu-ice', 'sfu-route',
 }
 
 // ---- negative controls: both matchers must be able to fail ----
-// 🔴 The first version tested string literals against themselves — constants
-// that pass regardless of what ships (review agent, 2026-08-17: "the comment
-// claims the matchers were shown falsifiable; they weren't"). A control must
-// run the SAME predicate on a corruption of the REAL extracted text, so it
-// also fails if the extraction anchors ever drift off the source.
+// a control runs the SAME predicate on a corruption of the REAL extracted text, so it also fails if the
+// extraction anchors drift off the source
 check('control: both extraction anchors were actually found',
   src.indexOf('const t = String(frame?.type ?? "")') >= 0 && src.indexOf('case "relay-cred":') >= 0
   && guard.length > 40 && inbound.length > 40);

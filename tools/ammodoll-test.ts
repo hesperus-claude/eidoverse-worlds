@@ -66,10 +66,8 @@ function run(av: any, lean: any = null, { maxSteps = 900, seedVel = null as any 
 }
 
 {
-  // rapierdoll's launch-day failure report, kept as permanent assertions:
-  // "body just crumples, self intersection not respected, head spins
-  // endlessly, everything is twisted". Anatomy is measured DURING the run —
-  // dispose() frees the wasm objects at capture.
+  // permanent assertions against crumple, self-intersection, endless head spin and twist; measured DURING the
+  // run, since dispose() frees the wasm objects at capture
   const bad: Record<string, string[]> = {
     rest: [], finite: [], lying: [], poses: [], twist: [], crumple: [], spin: [], knees: [],
   };
@@ -86,14 +84,8 @@ function run(av: any, lean: any = null, { maxSteps = 900, seedVel = null as any 
     if (tw < -Math.PI) tw += 2 * Math.PI;
     return Math.abs(tw);
   };
-  // Crumple: angle between the pelvis→chest axis and the chest→neck axis.
-  // The lower axis is hips→CHEST, not hips→spine, because the direction of a
-  // bone is only as trustworthy as its length: mythos-wings authors its spine
-  // 7.2mm above its hips (the real span is in upperChest), and a 7mm segment's
-  // direction swings tens of degrees on the millimeter of linear slack a
-  // Bullet constraint carries — the suite read 78° of "crumple" while both
-  // spine joints sat exactly at their 10°/20° stops. Same function measures
-  // both engines, so the parity comparison stays fair.
+  // crumple: angle between hips→chest and chest→neck. hips→CHEST, not hips→spine: a 7mm spine segment's
+  // direction swings tens of degrees on a Bullet constraint's mm of slack. Same function for both engines.
   const foldOf = (p: any) => {
     const lo = (p.chest ?? p.spine)?.clone().sub(p.hips ?? p.spine)?.normalize();
     const b = p.neck?.clone().sub(p.chest ?? p.spine)?.normalize();
@@ -133,27 +125,9 @@ function run(av: any, lean: any = null, { maxSteps = 900, seedVel = null as any 
         spinRing.push(now);
         if (spinRing.length > 60) spinRing.shift();
         lastFold = foldOf(rd.p);
-        // KNEES FOLD THE WAY A KNEE FOLDS — measured from POSITIONS, because
-        // this is the failure a quaternion instrument hid once already: the
-        // constraint held aletheia's knees at +140° hyperextension while the
-        // (aliased-temp) angle reader printed 0°, and antra's eyes were the
-        // only working instrument ("aletheia knees bend only backwards",
-        // live). Positions cannot alias: shin deviation from the thigh line.
-        //
-        // The reference DIRECTION must ride the thigh, not the torso. The
-        // first version compared the deviation against the torso's current
-        // forward, which is only valid while the thigh stays under 90° of
-        // flexion in the torso frame: in a fetal collapse (hips at their 90°
-        // stop plus legal spine curl) a LEGAL backward fold reads a forward
-        // component of exactly -cos(thigh angle) — measured 117°/126° of
-        // phantom "hyperextension" on both fleet rigs while every leg joint
-        // sat within 6° of its table. So: predict where a legal fold's
-        // deviation would point by carrying rest-backward through the thigh's
-        // own swing-from-rest (shortest arc, torso frame — twist-free, and
-        // the hip's twist axis is locked at zero), and flag only a deviation
-        // OPPOSITE that prediction. A genuinely wrong-way knee reads ≈ -1
-        // (the wrap-point bug held one there for the whole fall); the legal
-        // fetal fold reads +0.97.
+        // knees fold the right way, measured from positions (a quaternion reader can alias). The reference rides
+        // the thigh's own swing, not the torso, so a legal fetal fold passes; only a deviation opposite the
+        // predicted fold fails (wrong-way ≈ -1, legal ≈ +0.97)
         bodyQuat(rd.torsoBody, tq);
         for (const side of ['left', 'right']) {
           const hip = rd.p[side + 'UpperLeg'], knee = rd.p[side + 'LowerLeg'], foot = rd.p[side + 'Foot'];
@@ -198,16 +172,8 @@ function run(av: any, lean: any = null, { maxSteps = 900, seedVel = null as any 
 }
 
 // ---------------------------------------------------------------------------
-// AXIS ROLES — the port's most-likely-silent failure, asserted at build.
-//
-// rigdef.py's limit tables are written against Blender's bone-local frame;
-// this engine re-derives an anatomical frame per joint. web_export.py grew
-// axis_roles() because the wrist's axes came out "the other way round than I
-// assumed" — a limit on the wrong axis is not an error the solver reports, it
-// is a knee that bends sideways. So: for every directional joint, take the
-// built flexion axis and the SIGN the wide side of the range implies, compute
-// which way that rotation moves the child's tip, and demand it is the
-// anatomical direction. Every rig, both sides.
+// AXIS ROLES, at build: a limit on the wrong axis isn't a solver error, it's a knee bending sideways. Each
+// directional joint's flexion axis and sign must move the child's tip anatomically; every rig, both sides.
 console.log('\naxis roles (elbows fold forward, knees back, fingers curl to the palm):');
 {
   const bad: string[] = [];
@@ -239,11 +205,8 @@ console.log('\naxis roles (elbows fold forward, knees back, fingers curl to the 
 }
 
 // ---------------------------------------------------------------------------
-// ANATOMY UNDER YAW — rapierdoll's hard-won sweep, kept. The hinge/flex axes
-// are built from the rig's own frame, so they must turn with the body
-// (equivariance) and stay perpendicular to their bone; joints must contain
-// the pose they were born in; limits must hold under load; the trunk must
-// carry a trunk's share of the mass.
+// ANATOMY UNDER YAW: hinge/flex axes turn with the body and stay perpendicular to their bone; joints contain
+// their birth pose; limits hold under load; the trunk carries a trunk's share of the mass.
 console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
 {
   const YAWS = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
@@ -253,20 +216,9 @@ console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
   const STRIDES = [0, 1];
   const EQUIV_DOT = Math.cos((10 * Math.PI) / 180);
   const PERP_DOT = Math.cos((60 * Math.PI) / 180);
-  // Per-axis excursion beyond the (born-widened) bounds, asserted on
-  // DURATION, not instantaneous peak: Bullet's limit rows are impulses with
-  // ERP recovery, so a hard impact legitimately overshoots for a few frames
-  // and gets pulled back — measured +60-80° single-frame spikes on shoulders
-  // at impact, gone within a quarter second. What must never happen is a
-  // limit HELD in violation (the wrap-point class: aletheia's knees sat 130°
-  // over for the entire fall).
-  // Spring joints (fingers) are EXCLUDED: btGeneric6DofSpringConstraint
-  // replaces hard-limit semantics on sprung axes — the spring is the
-  // authority and sagging past the table under load is its designed
-  // behavior (the source measured the sag curve). And the depth/duration
-  // tolerate a limb TRAPPED under a resting body (a hip held ~20° over by
-  // the torso lying on it is physics, not a broken limit) while still
-  // catching the wrap-point class, which held knees 130° over indefinitely.
+  // excursion beyond the (born-widened) bounds is judged on DURATION, not peak: Bullet's limits are impulses
+  // with ERP recovery, so impacts overshoot briefly. Sprung finger axes are excluded (the spring is the
+  // authority); depth/duration tolerate a limb trapped under a resting body.
   const OVER_SUSTAIN = 0.6;    // rad, ~34° — a violation this deep...
   const OVER_SECS = 1.0;       // ...held this long is a broken limit
   let overSamples = 0;
@@ -284,10 +236,8 @@ console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
     return out;
   };
   for (const rig of FLEET) {
-    // realParent HERE TOO: the sweep avatars carry the rig's real hierarchy,
-    // and toe/finger bones exist only there — a reference built on the
-    // simplified chain extrapolates a foot tip DOWN the shin where the real
-    // rig's toes point forward, and its ankle axis lands 90° away
+    // realParent here too: toe/finger bones exist only in the real hierarchy; the simplified chain puts the
+    // foot tip down the shin and the ankle axis 90° off
     const refAv = makeAvatar(rig.P, { realParent: rig.realParent });
     refAv.root.updateMatrixWorld(true);
     const refRd: any = new AmmoRagdoll(refAv, null, refAv.restBonePositions());
@@ -329,25 +279,15 @@ console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
             break;
           }
         }
-        // BORN INSIDE ITS OWN JOINTS: the annihilation class this guards
-        // against is a limit that does not contain the build pose — the
-        // widening exists precisely to make this zero, so assert the
-        // guarantee itself, at the instrument.
+        // a limit must contain the build pose (the widening exists to make this zero): assert it at the instrument
         for (const j of rd.jointAngles()) {
           if (j.over > 0.02) {
             bad.born.push(`${tag}:${j.name}(born ${((j.over * 180) / Math.PI).toFixed(1)}° over)`);
             break;
           }
         }
-        // Spin MAGNITUDE at birth or during impact is not an instrument: a
-        // mid-stride foot is a tilted light box whose corner touches the
-        // ground at build, and the crash itself runs bodies to the 20 rad/s
-        // ceiling transiently (measured; capsules take the same contacts more
-        // gently). What separates a transient from an annihilation is that an
-        // annihilation SUSTAINS: the born-joint assertion above catches the
-        // cause, and the late-fall spin bound in the loop below catches the
-        // effect — here swept across yaw AND stride, which is where the
-        // world-frame bugs lived.
+        // spin magnitude at birth/impact isn't an instrument (transients reach the 20 rad/s ceiling); an
+        // annihilation SUSTAINS: the born-joint check above catches the cause, the late-fall spin bound the effect
         rd.step(1 / 60);
 
         // flex axes are a BUILD-time property — equivariance against north
@@ -376,11 +316,8 @@ console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
             overRun.set(j.name, run);
             if (run > worstRun) { worstRun = run; worstRunAt = `${j.name}/${j.spec}`; }
           }
-          // spin in the LAST second before capture — a fixed "past step 240"
-          // window overlaps live tumbling on slow-settling yaw combos (a
-          // west-facing princess0 is still rolling at t=5s, honestly); what
-          // must never happen is residual spin AT the moment the pose locks,
-          // which renders as the corpse popping
+          // spin in the LAST second before capture (slow yaw combos still tumble at t=5s): residual spin when
+          // the pose locks renders as the corpse popping
           let now = 0;
           for (const s of rd.segs.values()) {
             if (s.finger) continue;
@@ -407,10 +344,8 @@ console.log('\nanatomy under yaw (limits, axes, mass — swept N/E/S/W):');
 }
 
 // ---------------------------------------------------------------------------
-// GOING LIMP MUST NOT TELEPORT — rendered-pose check, rapierdoll's lesson:
-// the drive's reference direction and orientation must describe the SAME
-// pose, or frame one renders every driven bone at twice its offset. Only a
-// POSED rig can see it.
+// GOING LIMP MUST NOT TELEPORT: the drive's reference direction and orientation must describe the same pose,
+// or frame one renders every driven bone at twice its offset. Only a POSED rig can see it.
 console.log('\ngoing limp does not teleport the skeleton (rendered pose):');
 {
   const bad: string[] = [];
@@ -462,10 +397,8 @@ console.log('\ngoing limp does not teleport the skeleton (rendered pose):');
 }
 
 // ---------------------------------------------------------------------------
-// FINGERS — the port's addition over both incumbents. Spring phalanges exist
-// where the rig has digit bones, are absent (and harmless) where it does not,
-// ride the pose rotation-only, and pull back toward the pose they were born
-// in (the source's setEquilibriumPoint contract).
+// FINGERS: spring phalanges exist where the rig has digit bones, are harmlessly absent otherwise, ride the
+// pose rotation-only, and pull back toward their birth pose (setEquilibriumPoint)
 console.log('\nfingers (spring phalanges, additive by absence):');
 {
   const fingered = FLEET.filter((r: any) => r.P.leftIndexProximal && r.P.leftIndexIntermediate);
@@ -519,10 +452,8 @@ console.log('\nfingers (spring phalanges, additive by absence):');
       .getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.35, 0));
     for (let i = 0; i < 240; i++) { rd.setPin('head', hold); rd.step(1 / 60); }
     const seg = rd._fingerSegs[0];
-    // measure the phalanx RELATIVE TO ITS HAND: the tug also swings the whole
-    // arm through the pin, so the finger's world orientation moves even when
-    // the spring returns it perfectly — the spring's own coordinate is the
-    // hand-relative rotation, and that is what the equilibrium promises
+    // measure the phalanx relative to its HAND: the tug swings the whole arm, and the spring's own coordinate
+    // is the hand-relative rotation
     const side = seg.a.startsWith('left') ? 'left' : 'right';
     const handSeg: any = rd.segs.get(`${side}Hand|${side}MiddleProximal`);
     const relQ = () => {
@@ -532,17 +463,12 @@ console.log('\nfingers (spring phalanges, additive by absence):');
     };
     const born = relQ();
     const angleTo = () => 2 * Math.acos(Math.min(1, Math.abs(born.dot(relQ()))));
-    // hold the HAND still while tugging — at TWO points, because a p2p holds
-    // a point, not an orientation: held at the wrist alone, the tug rotates
-    // the whole hand about the pin and the fingertip reaches its target with
-    // ~5° of actual finger bend (measured; the arm yields first without any
-    // hold at all, for the same softer-joint reason)
+    // hold the hand at TWO points: a p2p holds a point, not an orientation, so a wrist-only hold lets the hand
+    // rotate about the pin and the finger barely bends
     const handHold = rd.p[`${side}Hand`].clone();
     const knuckleHold = rd.p[`${side}MiddleProximal`].clone();
-    // ...and tug in the joint's OWN flexion direction, carried through the
-    // hand's current rotation: after four seconds hanging by the head the
-    // arms dangle, and a fixed world direction pulls along the finger
-    // (traction) and into the ±12° deviation limit instead of the 90° curl
+    // tug along the joint's own flexion direction through the hand's current rotation: a fixed world direction
+    // pulls along the dangling finger into the ±12° deviation limit, not the 90° curl
     const J: any = rd.flexAxes().find((x: any) => x.name === seg.a);
     const flexSign = J.hi[0] > -J.lo[0] ? 1 : -1;
     const moveRest = new THREE.Vector3().crossVectors(J.axisX, J.axisY).multiplyScalar(flexSign);
@@ -566,12 +492,8 @@ console.log('\nfingers (spring phalanges, additive by absence):');
 }
 
 // ---------------------------------------------------------------------------
-// SLOPED TERRAIN — the ground must follow the field, not one sample. The
-// Verlet resolves heightAt per joint per step; the first ammo build laid a
-// single flat cuboid at heightAt(hips) and heads buried wherever the field
-// rose above that sample (antra, live on a meadow hillside). The terrain
-// module is headless-injectable by design (issue #17), so the suite tilts
-// the world and drops a body on the grade.
+// SLOPED TERRAIN: the ground follows the field per joint, not one heightAt(hips) sample. The terrain module is
+// headless-injectable (issue #17), so the suite tilts the world and drops a body on the grade.
 console.log('\nsloped terrain (the ground follows the field):');
 {
   const { setTerrain, heightAt } = await import('../client/lib/terrain.js');
@@ -598,12 +520,8 @@ console.log('\nsloped terrain (the ground follows the field):');
 }
 
 // ---------------------------------------------------------------------------
-// FACE-PLANT — the skull is collision volume, not just the head bone. VRM
-// puts the head bone at the skull base; a head box ending there leaves the
-// face and crown hollow, and a prone body sinks face-first to the ears
-// before its neck stub touches ground (antra, live, on FLAT terrain). Shove
-// a body over face-first and demand the head bone rests clear of the floor
-// by more than a neck's half-width.
+// FACE-PLANT: VRM's head bone sits at the skull base, so the skull needs its own volume; shove a body over
+// face-first and the head bone must rest clear of the floor by more than a neck's half-width.
 console.log('\nface-plant (the skull keeps the face out of the floor):');
 {
   const bad: string[] = [];
@@ -701,24 +619,14 @@ console.log('\nlifecycle (one rig, every downstream contract):');
 }
 
 // ---- wings ------------------------------------------------------------------
-// The fleet above cannot reach this code. makeAvatar builds HUMANOID bones and
-// nothing else, so a stand-in skeleton has no [LR]_Wing_* nodes for ammodoll to
-// find — which is the same gap that left headless bodies with no hair for a
-// month while the browser ran 75 locks of it (mcpl/physics.ts:216). So the wing
-// bones are grafted on here, from the shipped rig, the way physics.ts grafts
-// hair: read out of the VRM's node tree, parented to their real humanoid
-// ancestor.
+// makeAvatar builds humanoid bones only, so the wing bones are grafted on from the shipped VRM's node tree,
+// parented to their real humanoid ancestor (as mcpl/physics.ts grafts hair)
 {
   const { humanBones, worldPositions } = await import('./rig-load.mjs');
   console.log('\nwings (the ragdoll takes them over):');
   {
-    // The CONTROL is the same rig as the fleet sees it — humanoid bones and the
-    // rig's real parent chain. Building the control with makeAvatar(P) instead
-    // would silently compare two different skeletons: with `realParent` passed,
-    // makeAvatar walks P's keys (54 bones, upperChest and shoulders and
-    // fingers) and without it walks PARENT's (16). The first version of this
-    // test did exactly that and reported 308mm of "wing shove" that was really
-    // 38 extra bones.
+    // the control is the same rig the fleet sees: makeAvatar with `realParent` walks P's keys (54 bones),
+    // without it PARENT's (16), so building it without would compare two different skeletons
     const rigW: any = wingRig;
     const g = dollGltf;
     const bones = humanBones(g);
@@ -756,11 +664,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
     const rd: any = new AmmoRagdoll(av, toppleLean(), av.restBonePositions());
     check('the doll builds Bullet chains for them',
       rd._wingSegs?.length === 12, `${rd._wingSegs?.length ?? 0} segments`);
-    // Chain ORDER is what the depth index buys: each segment's Bullet parent
-    // must be the body of its own parent BONE. Counting underscores made _1 and
-    // _2 the same depth, and the sort then left it to traversal luck which of
-    // them got built as the other's parent — a wing hinged in the wrong place,
-    // with nothing in the log to say so.
+    // chain order: each segment's Bullet parent must be its parent BONE's body (depth from the index, not an
+    // underscore count, or _1 and _2 tie and the hinge lands by traversal luck)
     const segOf = new Map(rd._wingSegs.map((s: any) => [s.node, s]));
     const misparented = rd._wingSegs.filter((s: any) => s.j > 0
       && rd._wingSegs[rd._wingSegs.indexOf(s) - 1]?.node !== s.node.parent);
@@ -781,27 +686,9 @@ console.log('\nlifecycle (one rig, every downstream contract):');
     check('wings are excluded from the settle metric (not in _cores)',
       rd._wingSegs.every((s: any) => !rd._cores.includes(s.body)));
 
-    // NO WING PLATE IS BORN INSIDE THE BODY.
-    //
-    // This is the hair's "poof" at wing scale: a contact born penetrating
-    // cannot be resolved — split impulse converts only 2cm of it and the rest
-    // is paid off as kinetic energy — and on a plate half a metre wide that is
-    // not a puff of hair, it is a body launched across the room. Hair solves it
-    // by excluding j===0 from the skull; wings are added with mask G_STATIC,
-    // which is a precaution and not a fix, so the geometry has to hold too.
-    //
-    // Measured as world AABBs at build time, which is deterministic. The
-    // obvious alternative — compare against a wingless twin — does NOT work:
-    // tried at settle it read 1m of divergence that was pure chaos, tried over
-    // the first half second it passed *even with the wings set to collide with
-    // everything*, i.e. it could not fail. This one can, and the head/torso
-    // pair below proves the instrument sees an overlap when there is one.
-    // "Inside" is asked of the actual boxes, not of bounding boxes: an AABB
-    // around a plate that sweeps out and back is enormous and overlaps the
-    // torso's for every root segment, which the first version of this reported
-    // as four wings born inside the body. The question that matters is whether
-    // the plate's CENTRE — where a penetrating contact would push from — sits
-    // within a core body's boxes.
+    // no wing plate is born inside the body: a contact born penetrating launches it. Checked on the real boxes
+    // at build (deterministic): is each plate's centre within a core body's boxes? (A sweeping plate's AABB
+    // overlaps everything.) The head/torso pair proves the check can fail.
     const worldOf = (body: any) => {
       const t = body.getCenterOfMassTransform();
       const o = t.getOrigin(), r = t.getRotation();
@@ -845,10 +732,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
     check('...with finite quaternions throughout',
       wingNodes.every((n: any) => Number.isFinite(n.quaternion.x)
         && Number.isFinite(n.quaternion.w)));
-    // the other half of the hair-ownership handshake (avatar-test has the
-    // consumer side): the doll must CLAIM the hair while it drives it, and
-    // hand it back reset, or three-vrm resumes from state captured before the
-    // fall and yanks the hair there in one frame
+    // the doll's half of the hair-ownership handshake (avatar-test has the consumer side): claim the hair while
+    // driving it and hand it back reset, or three-vrm resumes from pre-fall state and yanks the hair there
     {
       const hav = makeAvatar(P, { realParent: RP2 });
       let didReset = false, adopted: any = null;
@@ -863,12 +748,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
       check('a doll with Bullet hair claims those bones from three-vrm',
         hav.__simHair === true, `hair segments: ${hrd._hairSegs?.length ?? 0}`);
       hrd.dispose();
-      // A SETTLED BODY KEEPS THE HAIR THE FALL GAVE IT. dispose() used to hand
-      // the hair back and reset the springs, and since dispose fires the moment
-      // a body settles, the hair snapped to combed a few seconds into every
-      // fall while she was still lying there. Release belongs to getting up.
-      // dispose hands the hair back ADOPTING the fallen pose — live again, so a
-      // body let go mid-drag keeps falling with its hair instead of freezing
+      // dispose hands the hair back ADOPTING the fallen pose, live again: a settled body keeps the hair the
+      // fall gave it, and one let go mid-drag keeps falling with its hair
       check('...and hands them back on dispose, adopting the fallen pose',
         hav.__simHair === false && adopted?.adopt === true,
         `adopt=${adopted?.adopt}`);
@@ -880,16 +761,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
 }
 
 // ---- wing boxes come from the MESH, not the bone length ---------------------
-// The failure: mythos's upper wing chain has a 16cm middle bone carrying 44cm
-// of membrane, and its outermost bone is a leaf where the builder had nothing
-// to measure and copied the previous segment's length. Both distal boxes came
-// out about a third of the wing they stood for — "the collider boxes are much
-// smaller than the actual wing sections", and the reason those sections would
-// not drape.
-//
-// Built here as a real THREE.SkinnedMesh rather than measured off the shipped
-// VRM, so the test states the contract instead of restating today's rig: a
-// SHORT bone with LONG geometry on it must get the geometry's box.
+// a short bone with long geometry (or a leaf bone with nothing to measure) must get the geometry's box; built
+// as a real THREE.SkinnedMesh so the test states the contract, not today's rig
 {
   console.log('\nwing boxes (sized by the mesh, not the bone):');
   const { AmmoRagdoll } = await import('../client/lib/ammodoll.js');
@@ -901,11 +774,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
   const shoulder = P.leftShoulder ?? P.leftUpperArm;
   P.L_Wing_Upper = shoulder.clone().add(new THREE.Vector3(0.05, 0.05, 0));
   P.L_Wing_Upper_1 = P.L_Wing_Upper.clone().add(new THREE.Vector3(BONE_LEN, 0, 0));
-  // ...and a hair chain, because the hair asks for its extents FIRST. Both
-  // families share one cache, and an unkeyed cache hands the second caller the
-  // first caller's map — wings would drop back to bone-length boxes on every
-  // rig that also has hair, which is every rig that matters, with nothing in
-  // the log to say the fix had stopped working.
+  // ...and a hair chain, which asks for its extents FIRST: the two families share one cache, and an unkeyed
+  // cache would hand the wings the hair's map
   P.Hair_0_0 = P.head.clone().add(new THREE.Vector3(0, 0.05, 0));
   P.Hair_0_1 = P.Hair_0_0.clone().add(new THREE.Vector3(0, -0.04, 0));
   const wingParent = {
@@ -973,17 +843,8 @@ console.log('\nlifecycle (one rig, every downstream contract):');
 }
 
 // ---- the sim's writes must SURVIVE matrixAutoUpdate = false ----------------
-// three-vrm sets `bone.matrixAutoUpdate = false` on every spring-bone joint
-// (three-vrm.module.js:5279) and drives matrix/matrixWorld itself. On such a
-// bone, assigning `.quaternion` composes into `.matrix` never, so the renderer
-// shows the bone exactly where it was — while the Bullet body, the debug box
-// and every headless assertion move correctly.
-//
-// That is why this took four rounds to find: EVERY measurement agreed the
-// writeback was perfect (residual 0.01 deg), because they all read .quaternion,
-// which is exactly the thing that was being ignored. The instrument and the bug
-// shared a blind spot. So this test reads the WORLD MATRIX, the way a renderer
-// does, on bones configured the way three-vrm configures them.
+// three-vrm sets matrixAutoUpdate = false on spring-bone joints, so a .quaternion write never reaches .matrix
+// and everything reading .quaternion agrees while the renderer doesn't. So this reads the WORLD MATRIX.
 {
   console.log('\nhair writes reach the renderer (matrixAutoUpdate = false):');
   const rigW: any = wingRig;
@@ -1037,20 +898,14 @@ console.log('\nlifecycle (one rig, every downstream contract):');
   const s0 = watch[0];
   s0.node.matrix.decompose(new THREE.Vector3(), qm, new THREE.Vector3());
   q.copy(s0.node.quaternion);
-  // 0.5 deg, not 1e-6: compose->decompose is a lossy round trip and the first
-  // threshold here flagged 0.02 deg of ordinary numeric drift as a defect. What
-  // this is actually watching for is a matrix that was never recomposed at all,
-  // which shows up as TENS of degrees (measured 40+ with the fix removed).
+  // 0.5°, not 1e-6: compose→decompose drifts ~0.02°; a matrix never recomposed shows tens of degrees
   check('...and its matrix agrees with its quaternion (the two never diverge)',
     qm.angleTo(q) < 0.5 * Math.PI / 180, `${(qm.angleTo(q) * 180 / Math.PI).toFixed(2)}° apart`);
 }
 
 // ---- the collision filter fits in a SHORT --------------------------------
-// ammo.js declares addRigidBody's group and mask as short, not int. Anything
-// above bit 14 truncates on the way into wasm, and a group of 0 collides with
-// NOTHING -- which is why hair, wings and fingers fell through the floor, and
-// why both feet (the last two bits under the old 16-bit budget) were ghosts.
-// The failure is completely silent, so it is asserted rather than remembered.
+// ammo.js declares addRigidBody's group and mask as short: bits above 14 truncate, and group 0 collides with
+// nothing, silently
 {
   console.log('\ncollision groups fit the short the binding declares:');
   const rig: any = wingRig;
