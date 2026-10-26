@@ -31,6 +31,8 @@ const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? a
 const MUTANTS: [string, string, string, string, string[]][] = [
   // C1, C2, C3, C6 and their five rows RETIRED with the cases (recut A2: delegates and the friends tier are gone)
   ["the door doesn't take the retired words", "shared/protocol/verbspec.js", ", delegate: { type: \"any\", doc: \"retired (recut A2)\" }", ", delegateX: { type: \"any\", doc: \"retired (recut A2)\" }", ["C5"]],
+  ["a stored table migrates only narrower: a pause still refuses", "shared/protocol/consent.js", "t.switch = t.paused || modes.includes(\"deny\") ? \"refuse\"", "t.switch = modes.includes(\"deny\") ? \"refuse\"", ["C4"]],
+  ["a stored table migrates only narrower: a closed cell still refuses", "shared/protocol/consent.js", "t.switch = t.paused || modes.includes(\"deny\") ? \"refuse\"", "t.switch = t.paused ? \"refuse\"", ["C4"]],
   ["§7 forgets rename-components", "spec/PROTOCOL.md", "\n| components and fields renamed before release (§4), by the explicit `repair` command (never at load) | its own act `rename-components {renamed, why, failed?}` and its change | `system` | the system's capability, per thing | the actor |", "", ["X1"]],
   ["§4 forgets the rename", "spec/PROTOCOL.md", "**A pure rename is the command's second step, idempotent.**", "**A pure rename runs.**", ["X1"]],
   ["a seated declaration says nothing", "mcpl/tools.ts", "and grants nothing${seated}`); }", "and grants nothing`); }", ["B1"]],
