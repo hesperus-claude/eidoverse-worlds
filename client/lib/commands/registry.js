@@ -38,10 +38,7 @@ export const COMMANDS = [
   { name: 'epoch', aliases: ['physics'], help: '/epoch [tickMs] | off — owner: run physics in this world (throws and punts fly; the log records where they rest)' },
   { name: 'who', help: 'list everyone present' },
   { name: 'panels', help: '/panels <0.3–1> — desktop panel opacity, for when glass fails over a bright scene' },
-  // Registered so it is DISCOVERABLE. It was added on 2026-08-16 to debug voice
-  // on a phone with no console, and stayed unregistered for the rest of that
-  // session — a diagnostic nobody can find is one nobody uses, and the next
-  // person with a silent mic is exactly who needs it.
+  // registered so it's discoverable: the voice diagnostic for a phone with no console
   { name: 'audio', help: '/audio [stt|say] — why voice or captions are not working; `say` posts it to the room' },
   { name: 'role', help: 'what you may do here (or /role <name>: anyone this world has seen)' },
   { name: 'grant', help: '/grant <name> <role> [for 2h|forever] — owner (or grantRoles, below your rank); /grant * builder|inhabitant sets the newcomer role for everyone signed in' },

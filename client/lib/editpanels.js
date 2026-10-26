@@ -111,11 +111,8 @@ function revealPath(id) {
 let visibleRows = [];          // the rows as last painted, for ↑/↓
 
 // ---------------------------------------------------------------- the world entity
-// `@world` (design §3, shared/worldentity.js) is not in `entities` — it is the
-// fold's sky / terrain / grass read as one entity — so it has no outline and no
-// scenegraph selection. Selecting it clears the thing selection and shows its
-// components in the Inspector; selecting any thing clears it again. Both live in edit/selection.js
-// (kind 'world', or 'env:<key>' with one of its environment cards in focus).
+// `@world` (design §3, shared/worldentity.js) is the fold's sky/terrain/grass as one entity, not in `entities`.
+// Its selection is edit/selection.js kind 'world' (or 'env:<key>'), exclusive with a thing selection.
 const worldSel = () => { const k = Sel.selection().kind; return k === 'world' || String(k).startsWith('env:'); };
 const envFocus = () => { const k = Sel.selection().kind; return String(k).startsWith('env:') ? k.slice(4) : null; };
 /** Create ▸ Environment (editlayout.js): select the world with one of its cards open and the Build tab's World presets
@@ -142,10 +139,7 @@ const worldName = () => replica.st?.entities?.['@world']?.c?.about?.name || CONF
 // the world entity, or maybe put the 'world' icon in-line with it": all three.
 const worldRowFields = () => ({ t: 'list', k: 'wsel', rows: [{ id: WORLD_ID, icon: 'globe', kind: 'World', label: worldName(), sub: describeWorld(state.st, Date.now(), { presets: skyPresets, clock: false }), active: worldSel(),
   title: 'the world itself: its sky, weather, rules and settings. Click to edit them in the Inspector.' }, ...envRows()] });
-// R 10-11: "no way to get rid of the weather, sky, or terrain once created… We really need those components or entities
-// to appear under the world entity in the Hierarchy… so they can be deleted". Unreal's Outliner lists the sky and the
-// landscape as actors, Godot's scene tree a WorldEnvironment node, Roblox Terrain under Workspace: things in the tree.
-// Here they are @world's components, so they hang under the World row; a click opens their card, ✕ removes them.
+// @world's components hang under the World row so they can be found and removed: a click opens the card, ✕ removes.
 const ENV = [
   { key: 'sky', label: 'Sky', icon: 'sun', gone: 'a plain clear sky' },
   { key: 'weather', label: 'Weather', icon: 'sparkle', gone: 'clear weather (a forecast stops too)' },
@@ -187,11 +181,8 @@ try { Object.assign(hopts, JSON.parse(localStorage.getItem('ew.hierarchy.view') 
 const saveHopts = () => { try { localStorage.setItem('ew.hierarchy.view', JSON.stringify(hopts)); } catch { /* no storage */ } };
 
 // ---------------------------------------------------------------- multi-selection
-// One store (edit/selection.js): ids ordered, the PRIMARY first (the outline, every
-// single-thing path). A Shift/Ctrl-click in the tree or a Ctrl-click in the viewport
-// toggles more ids into it. The inspector then shows the channels every selected thing
-// has (Godot's MultiNodeEdit intersects), typing writes the value to each, and the undo
-// is one compound step. A plain click anywhere collapses back to one.
+// One store (edit/selection.js), PRIMARY first. The inspector shows the channels all selected things share;
+// typing writes each, undone as one compound step.
 const outlines = new Map();    // id → BoxHelper for the non-primary ids (the primary keeps build.js's outline)
 /** Find a painted field by its dispatch key (`ed:look.target`, `ch:pos.x`). */
 function fieldByKey(fields, action) { return (fields ?? []).find((f) => f.k === action); }
@@ -435,13 +426,8 @@ function hierarchyDispatch(action, payload, _field, opts = {}) {
   repaintAll();
 }
 
-/** Drag-reparent: `id` onto `onto` (null = make it a root), where it stands.
- *  The same edit as the inspector's Parent field (`parent.to`, shared/
- *  hierarchy.js parentVerbs through the shared commit path): the child keeps
- *  its world pose, a cycle / lock / guard is refused before anything is sent
- *  and the reason shown the way the inspector shows refusals, and the drag is
- *  ONE undo step however many verbs it took (a mount, plus a place when a
- *  scaled parent means the child's own scale must change to keep its size). */
+/** Drag-reparent `id` onto `onto` (null = root), keeping its world pose: the Parent field's edit (shared/
+ *  hierarchy.js parentVerbs). Refusals are shown before sending; ONE undo step however many verbs. */
 function reparent(id, onto) {
   if (!id || !foldRecord(id)) return;
   if (onto === id) return;
@@ -451,12 +437,9 @@ function reparent(id, onto) {
   return r;
 }
 
-/** A copy of a thing: same lib/pose (nudged so it is not on top of the
- *  original), same components, same carrier — composed on the client from
- *  ordinary verbs, ONE undo entry (remove the copy). Lights copy through
- *  `light`. Locks are not copied: a copy is a fresh thing to place. */
-// copies are independent: the second time you copy the same unlinked thing, say how to make copies that stay in step
-// (R 10-04: "suggest that they blueprint something first… unless making unique copies is really their intention")
+/** A copy of a thing (nudged pose, same components and carrier) from ordinary verbs: ONE undo entry. Locks are
+ *  not copied. */
+// copies are independent: the second copy of the same unlinked thing suggests a blueprint instead
 const dupCount = new Map();
 function duplicate(id) {
   const rec = foldRecord(id); const obj = entities.get(id);
@@ -469,11 +452,8 @@ function duplicate(id) {
     const out = Edits.idOut(nid); flashHint(html`<b>${called(out)}</b> — a copy of ${called(id)}${nudge}`, nudge ? 8000 : 4000); setTimeout(() => { if (entities.has(out) && Sel.mark() === since) sceneSelect(out); }, 400); });
 }
 
-// a lock's strength is its setter's rank now (recut B2): the authority's inspect says it (lock.rank); this only keeps
-// the padlock honest, the authority decides
-// asked ONCE per lock, not per component change: authorityInspect keys on the whole bag, so a dragged locked thing
-// re-asked every frame and tripped the rate limit (client-check D1, 10-20). Dropped when the lock goes; a demotion
-// after that can leave it stale, which is fine: the authority decides, the padlock only asks.
+// A lock's strength (lock.rank) is asked ONCE per lock, not per component change, or a dragged locked thing trips
+// the rate limit. It can go stale; fine, since the authority decides and the padlock only shows.
 const lockStrength = new Map();
 const lockStrengthOf = (id) => {
   if (!bagOf(id)?.lock) { lockStrength.delete(id); return RANK.builder; }
@@ -541,10 +521,8 @@ function restPose(id, obj) {
     : { pos: [round(obj.position.x), round(obj.position.y), round(obj.position.z)], yaw: round(obj.rotation.y, 4), scale: round(obj.scale?.x ?? 1) };
 }
 
-/** Godot's MultiNodeEdit, Unity's multi-object editing: the channels EVERY selected thing has, the ACTIVE one's value
- *  shown and '—' where they differ (Unity's convention; R, gym 10-17 20:39); flags intersect the same way. The top line
- *  is the active (last-clicked) thing's name line, '<name> #<handle> + N more': the single Inspector's handle; hovering
- *  '+ N more' names the others (never a raw id). */
+/** Channels EVERY selected thing has: the ACTIVE one's value, '—' where they differ; flags intersect too.
+ *  Top line '<name> #<handle> + N more' (hover names the others, never a raw id). */
 function multiFields(ids) {
   const act = ids.includes(Sel.active()) ? Sel.active() : ids[0];
   const order = [act, ...ids.filter((x) => x !== act)];   // the active one's values lead
@@ -576,10 +554,7 @@ function multiFields(ids) {
 }
 
 // ---------------------------------------------------------------- inspector filter
-// Hide non-matches and OPEN the groups that hold a hit — the two known-failed designs are
-// Blender's highlight-only search and Godot's hits left buried under a collapsed header
-// (proposals#10043). Matches a field's label or key; a group whose name matches keeps all
-// of its fields. The header lines and the filter box itself always stay.
+// Hide non-matches and OPEN groups holding a hit (by label or key); a matching group name keeps all its fields.
 let ifilter = '';
 function filterFields(f, q) {
   const needle = String(q ?? '').trim().toLowerCase();
@@ -631,11 +606,8 @@ function pushCards(f, schema, id, opts = {}) {
       const r = cardRow(schema, id, addr); if (!r || r.alias) continue;
       if (r.row === 'quat' || addr === 'rot.order') quat.push(r); else f.push(r);   // R, 10-04: rarely needed until rigs
     }
-    // groups are FLAT markers (renderDOM, the VR quad): a sub-header reopens
-    // its rows even under a folded card, so a folded Transform omits it. A
-    // filter is the exception: filterFields opens whatever holds a hit.
-    // R 10-10 23:38: 'Remember to move the Advanced component stuff into Attributes': rotation order and the stored
-    // quaternion live in the Attributes tab now; only a thing in quaternion mode (where they ARE its rotation) keeps them here
+    // groups are FLAT markers, so a folded Transform omits its sub-header (unless the filter opens it). Rotation
+    // order and the quaternion live in Attributes, except in quaternion mode, where they ARE the rotation.
     if (quat.length && sec.quatOpen && (isOpen(id, key) || ifilter.trim())) {
       const qk = `${key}:quat`;
       f.push({ t: 'group', k: qk, label: 'Advanced', hint: 'rotation order and the quaternion (the rotation as it is stored: four numbers that never gimbal-lock) — rarely needed until rigs', open: sec.quatOpen ? isOpen(id, qk) : !isOpen(id, qk) });
@@ -745,10 +717,8 @@ function inspectorFields() {
   // B: one card per component (shared/components.js via schema.sections), each
   // owning its fields by their unchanged group.k address, then Add Component.
   if (schema.sections) {
-    // the name leads (Unity's name box), the id under it; the rest of the header after the facts
-    // THE NAME LINE (R 10-10 23:48: "make the 'name' attribute be like Maya, where it just kinda looks like a normal inline
-    // title? The eye and lock and disable icons can be on this line to the right"): the name as a title, then the eye
-    // (hidden in MY view only; the Hierarchy's eye is the same switch) and the padlock. 'disable' waits on its rules.
+    // the name line: the name as a title, the id under it, then the eye (my view only; same switch as the
+    // Hierarchy's) and the padlock
     let nameRow = null;
     for (const a of schema.sections.header ?? []) { const r = cardRow(schema, id, a); if (r && !a.startsWith('parent.') && a !== 'flags.hidden' && a !== 'flags.disabled') { if (a === 'flags.label') nameRow = r; else f.push(r); } }   // flags.disabled: the ENABLED box leads the header (one switch, one place)
     { const mine = isMineHidden(id), lk = bagOf(id)?.lock;
@@ -988,9 +958,7 @@ function inspectorDispatch(action, payload, field, opts = {}) {
 }
 
 // ---------------------------------------------------------------- console
-// The behavior runtime made visible (the legacy World panel's 📜 scripts): every
-// script bound in this world, and one script's live console.log() ring, polled
-// while the frame is open. Agents read the same thing through world_debug.
+// Every script bound in this world and one's live console.log() ring, polled while open (agents: world_debug).
 let watching = null;           // behavior id whose log is open
 let watchLog = null;           // { status, lines } from the last poll
 async function refreshWatch() {
@@ -1036,25 +1004,9 @@ function removeMany(ids) {
 }
 
 // ---------------------------------------------------------------- build
-// Things INTO the world, in the left column beside the Hierarchy (Build | Hierarchy; design §5),
-// so the viewport carries nothing but the world. B opens edit mode on this tab the first time;
-// editlayout.js remembers the last tab after that (edittabs.js). Three sections, every one a
-// RE-HOST of something that already worked — nothing here is a second implementation:
-//   Blueprints  the starters and the library (catalog.js, /library-models): a raw model is a
-//               blueprint of one Model, and placing one is exactly what placing from the library
-//               always did (build.js holdGhost → spawn). "add light" is a blueprint of one Light.
-//               Saved blueprints arrive with step 6; the group is there, empty, saying so.
-//   Tools       the transform tools (build.js setTool — the same call as Q/G/E/R), the building
-//               tools (structure_ui.js — its TOOLS, its setTool; a building edit is one act, so Ctrl+Z undoes it)
-//               and seat placement (socketedit.js armSocketPlacement, on the selected thing).
-//   World       the world entity's presets (shared/worldentity.js worldPick): Sky from
-//               defs/sky/_presets.json, Terrain and Grass from defs/ground/_palette.json (the same
-//               args groundpanel writes, shared/grounddefs.js), Weather. A pick replaces the
-//               current choice through the existing sky / terrain / grass / weather verbs, as one
-//               Ctrl+Z step. "World" selects @world: its every field, in the Inspector.
-// The VR body says what it cannot do: the building tools pick cells with a mouse ray on the canvas,
-// and the transform tools drag with one, which a headset does not have yet — so the quad names
-// that, offers the Library (placing a model 1.5 m ahead: worldquad.js spawnAhead) and the World.
+// Build tab (design §5): re-hosts of existing paths, never second implementations: Blueprints via build.js
+// holdGhost, Tools via build.js / structure_ui.js / socketedit.js, World via shared/worldentity.js worldPick.
+// VR has no mouse ray yet, so its quad offers Library (worldquad.js spawnAhead) and World only.
 const buildFolds = {};
 let libQ = '';            // the Library search box
 let libHits = null;       // search results; null = the curated starters (an empty box shows those, as catalog.js does)
@@ -1088,11 +1040,8 @@ const blueprintFields = (pics) => [
   libTiles(pics),
   ...savedFields(pics),
 ];
-/** The blueprints this world's store holds (state.blueprints, folded from `blueprint` entries),
- *  oldest publish first, each with its version and how many copies stand. A pick carries a copy
- *  as the ghost (build.js holdBlueprint) on desktop, or places one 1.5 m ahead in VR. Save as
- *  Blueprint (a selection → a record) is step 6c; until then records arrive through the
- *  door's publish (a person here, or an agent). */
+/** The world's blueprints (state.blueprints), oldest first with version and copy count. A pick carries a copy as
+ *  the ghost (build.js holdBlueprint), or in VR places one 1.5 m ahead. */
 function savedFields(pics) { return savedFieldsHere(); }
 /** This world's blueprints are @world blueprints:<hash> (the authority's publish writes them); a copy is the authority's
  *  create {from: hash, at} 1.5 m ahead, and Save as blueprint is the authority's publish {from, name} on the selection. */
@@ -1215,12 +1164,8 @@ function buildVRDispatch(action, payload) {
 }
 
 // ---------------------------------------------------------------- History
-// the right column's second page (R 10-04, research 56): the selected thing's acts, newest first, or the whole world's
-// with nothing selected — read from the log on demand through the same request an agent uses (history {id,
-// before}), a page at a time: recent by default, Older… for the deep search. Nothing stored.
-// Credits are filter modes here (R 10-07: no third tab, no hand credits): by time, by person, biggest contributors, by
-// what changed (client/lib/historyrows.js historyView). The view's mode is this viewer's, never logged.
-// (mergeHistory: client/lib/historyrows.js)
+// The selected thing's acts (or the world's), paged from the log via the agent's `history` request; nothing stored.
+// Credits are view modes (historyrows.js historyView), this viewer's only, never logged.
 const hist = { key: null, entries: [], next: null, loading: false, id: null, mode: 'time', who: null, gen: 0, paged: false, failed: null };
 const histRetry = backoff(2000, 30000);
 // A thing's history is re-read whenever the thing changes (its components are in the key). A refresh shows the newest page;

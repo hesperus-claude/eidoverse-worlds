@@ -1,23 +1,8 @@
 // autohooks — who owns what in the engine's per-frame hook array.
 //
-// `globalThis._autoParticleSystems` is a GLOBAL the toolkit drains every frame
-// (sky.js's updateAutoSystems). Three different owners push into it: the sky
-// system (cloud drift, weather), the meadow (wind, avatar pushers), and now
-// every entity emitter. Nobody announces which entries are theirs.
-//
-// The sky owns its entries by DIFFING the array around its own async build,
-// which is sound only while nothing else registers during that build. It is a
-// real window: a `comp {type:"particles"}` folding while the sky is still
-// awaiting its modules registers a hook the sky then claims and, at its next
-// teardown, silently removes — leaving the emitter in the scene, frozen,
-// facing wherever the camera was. The scene-children half of that diff already
-// refuses to claim what the world owns (`userData.entityId`); this is the same
-// refusal for the hook half, and it is deliberately general rather than a
-// particles-shaped special case: any host subsystem that keeps a per-frame
-// hook should mark it, and any subsystem that claims by diff should skip
-// marked hooks.
-//
-// DOM-free and THREE-free; unit-tested in tools/particles-test.ts.
+// Ownership marks for the toolkit's global per-frame hook array (globalThis._autoParticleSystems). A subsystem
+// that claims hooks by diffing the array (the sky) must skip marked hooks, or it steals one registered mid-build
+// and later removes it. DOM/THREE-free; tested in tools/particles-test.ts.
 
 /** The engine's hook array, created on demand. Never captured in a module
  *  const — the toolkit makes it lazily and this file may load first. */
@@ -53,13 +38,8 @@ export function releaseHook(fn, autos = autoHooks()) {
 
 export const isHostOwned = (fn) => hostOwned.has(fn);
 
-/**
- * What a subsystem that claims by DIFF may legitimately call its own: hooks
- * that appeared since `before` (a Set snapshotted at build start) and that no
- * host subsystem has claimed. The second condition is what makes the claim
- * safe across an await — a hook registered DURING the build is new, but it is
- * not therefore the builder's.
- */
+/** What a claim-by-diff may call its own: hooks new since `before` (a Set snapshotted at build start) AND
+ *  unmarked; a hook registered during the build is new but not the builder's. */
 export function claimUnowned(before, autos = autoHooks()) {
   const seen = before instanceof Set ? before : new Set(before ?? []);
   return (autos ?? []).filter((h) => !seen.has(h) && !hostOwned.has(h));

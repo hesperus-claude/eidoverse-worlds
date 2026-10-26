@@ -1,7 +1,6 @@
 // bodyengine — the shared spine of every body-physics engine.
 //
-// THE ENGINE CONTRACT (inherited from the retired rapierdoll, via ammodoll's
-// header, now stated where both engines can stand on it):
+// THE ENGINE CONTRACT:
 //
 //   constructor(avatar, lean, rest, seedVel)
 //   step(dt)            → sparse local-quat pose (drives the avatar directly),
@@ -49,13 +48,8 @@ export class BodyEngineBase {
    *  the same here. */
   get pinned() { return (this.pins?.size ?? 0) > 0; }
 
-  /** Shove a body whose sim is still running — a second push landing on
-   *  someone already going down, or a blast reaching a body mid-tumble.
-   *  Same application as the constructor's lean (the engine's _topple).
-   *  The body is moving again: settle starts over, and so does the deadline —
-   *  a shove at 7.9s of an 8s window must not capture a body still in the
-   *  air. Restarting elapsed grants the new motion the same full window the
-   *  original fall had.
+  /** Shove a body mid-tumble (via _topple, like the constructor's lean). Settle AND the deadline restart, so a
+   *  late shove can't capture a body still in the air.
    *  @param v THREE.Vector3, m/s. */
   impulse(v) {
     if (this.done) return;
@@ -66,13 +60,8 @@ export class BodyEngineBase {
     this.elapsed = 0;
   }
 
-  /** The settle CLOCK law, one copy: a held body neither settles nor
-   *  deadlines (a pin is ongoing input, and capturing would freeze a hung
-   *  body's constraint enforcement); quiet time accumulates in SECONDS;
-   *  `cancel` clears the clock — the verlet passes a hysteresis band here
-   *  (it takes real motion to restart the countdown, not a flicker), the
-   *  bullet rig cancels on any noise. Thresholds stay engine-owned: the
-   *  caller compares settledFor / elapsed against its own tuned numbers. */
+  /** The settle CLOCK law, one copy: a held body neither settles nor deadlines; quiet time accumulates in SECONDS;
+   *  `cancel` clears the clock (the verlet passes a hysteresis band). Thresholds stay engine-owned. */
   _settleTick(dt, quiet, cancel = !quiet) {
     this.elapsed += dt;
     if (this.pinned) { this.settledFor = 0; this.elapsed = 0; return; }
@@ -80,22 +69,8 @@ export class BodyEngineBase {
     else if (cancel) this.settledFor = 0;
   }
 
-  /** Root follows the hips so the body lies where it fell.
-   *
-   *  FALLING, the root only ever descends: Math.min against where it started
-   *  guards against a solve-overshoot frame popping the whole mesh above the
-   *  ground. But a PINNED body is being CARRIED — the hand may lift it, so
-   *  the root must follow the hips upward too, or the sim rises while the
-   *  rendered body stays floor-bound (the pose curls into a dangle a few
-   *  centimetres up and stops — exactly what that looked like). Once lifted,
-   *  the ceiling moves up with the body: releasing from a height starts the
-   *  NEXT sim's rootStartY there, and the fall brings it back down. */
-  /** Where the hips sit relative to the root, horizontally, in the ROOT's own
-   *  frame — measured from the rest pose once at build. Most rigs author the
-   *  pelvis above the origin and this is ~0; tel0s authors its whole skeleton
-   *  0.233m forward of it, and a root-follow that assumed zero drew that body
-   *  23cm from where its particles were — and, worse, fed the drive a hips
-   *  bone position 23cm off the hips particle (§24t-8). */
+  /** Hips offset from the root in the root's frame, measured once from rest (non-zero on rigs that author the
+   *  skeleton forward of the origin, §24t-8). */
   _measureHipsLocal(restHipsWorld) {
     const root = this.avatar.root;
     if (!restHipsWorld || !root) { this.hipsLocalX = 0; this.hipsLocalZ = 0; return; }
@@ -107,6 +82,8 @@ export class BodyEngineBase {
     this.hipsLocalZ = dx * s + dz * c;
   }
 
+  /** Root follows the hips. Falling, it only descends (guards overshoot pops); pinned or floating, it follows the
+   *  hips up and the ceiling rises with it. */
   _followRoot() {
     const hips = this.p.hips;
     if (!hips) return;

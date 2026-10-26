@@ -43,10 +43,8 @@ export const EDIT_VR = Object.freeze({
   labelFrac: 0.38, labelMin: 72, labelMax: 170, gutter: 8,
 });
 
-/** Pictographs that edit chrome strings still carry (badges, a guard line from shared/editschema)
- *  → the icons.js glyph drawn in their place. The canvas emoji trap (a missing glyph paints
- *  NOTHING, silently, on the viewer's machine) makes this mandatory on the painter, and the DOM
- *  wears the same glyphs so the two surfaces agree. */
+/** Pictographs in edit chrome strings → icons.js glyphs: a missing emoji paints NOTHING on canvas, and the DOM
+ *  wears the same glyphs so both surfaces agree. */
 export const PICTO_ICON = Object.freeze({
   '🔒': 'lock', '🔓': 'lockOpen', '🛡': 'shield', '📜': 'scrollText', '🧍': 'personStanding',
   '🚪': 'doorOpen', '🪟': 'appWindow',

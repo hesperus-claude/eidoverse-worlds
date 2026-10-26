@@ -139,11 +139,8 @@ function build() {
         title: 'Where a reset button sends the selected things back to: where they stand now.' },
       { label: 'leave builder mode\tB', run: () => setEditMode(false) },
     ]),
-    // CREATE (R 10-11: "a Create panel on the top line… to the RIGHT of Edit. Same as Maya. File, then Edit, then Create…
-    // empty entity, model primitives, lights, blueprints, whatever we want to call the sky/ground/grass/weather stuff since
-    // that seems to be all one suite"). Every item opens a path that already exists: the ghost in hand (build.js
-    // holdGhost), the Build tab's library and blueprints, the World's cards and presets. The suite is Environment (Godot's
-    // WorldEnvironment; SkyeSharkie's "environment… sky system").
+    // CREATE: every item opens an existing path (build.js holdGhost, the Build tab's library and blueprints, the
+    // World's cards); sky/ground/grass/weather are one suite, Environment.
     menu('Create', () => [
       { label: 'Empty', run: () => holdGhost('@empty', 'empty'), title: 'a bare entity: a place to parent things under (Unity\'s Create Empty)' },
       { label: 'Light', run: () => holdGhost('@light', 'light'), title: 'a point light, placed where you click' },
@@ -347,11 +344,8 @@ function paintTools() {
   for (const b of els.tools.querySelectorAll('.edit-tool')) b.classList.toggle('on', b.dataset.tool === getTool());
 }
 
-/** The dock in builder mode (R, 10-10: "a collapsible dock in Edit mode with a special '...' icon that you could click
- *  to expand into the full dock, and click again to shrink to just E and the wrench"). Folded (the default): the ∃,
- *  the ⋯ and the wrench. Open: every pinned panel button; if the column would still push the tools off the screen
- *  (a 1366×768 laptop leaves ~650 px) the trailing ones stay hidden, and HUD Panels ▾ in the bar has them all.
- *  Returns the dock's bottom edge. */
+/** The edit-mode dock: folded (default) is ∃, ⋯ and the wrench; open adds the pinned panels, hiding trailing ones
+ *  that won't fit (Panels ▾ has them all). Returns the dock's bottom edge. */
 const TOOLS_H = () => TOOLS.length * 36 + 16;
 let dockOpen = false;
 try { dockOpen = localStorage.getItem('ew.edit.dock') === 'open'; } catch { /* no storage: folded */ }

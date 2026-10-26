@@ -66,10 +66,7 @@ register('panels', (arg) => {
   logChat('*', `panels at ${Math.round(v * 100)}% opacity`);
 });
 
-// Eyelids are BONES on rigs that have them (L_/R_Eyelid_Upper) — most VRMs
-// blink with a blendshape instead and have none, so this says so plainly
-// rather than appearing to work. Local: your eyes are yours to close, and
-// nothing about them is on the wire yet.
+// Eyelid BONES only (most VRMs have none, and are told so); local, nothing on the wire.
 register('eyes', (arg) => {
   const me = getMe();
   const want = /^(close|closed|shut)$/i.test((arg || '').trim()) ? true
@@ -117,11 +114,8 @@ register('role', (arg) => {
 });
 
 register('grant', (arg) => {
-  // /grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever] — a role is any role this world has (inhabitant, builder,
-  // moderator, owner, or one its owner defined); +gen/+fly are per-person exceptions (roles:<id>.can.generate / .fly,
-  // research roles S5); `for <duration>` ends the grant then (roles:<id>.until; 30m, 2h, 1d, 1w), `forever` clears an end
-  // (upstream #258). The authority decides: owners grant anything, a grantRoles holder only roles ranked below their own,
-  // with permissions they hold; ownership never ends by itself.
+  // /grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever]: +gen/+fly are roles:<id>.can exceptions, `for`
+  // sets roles:<id>.until (30m, 2h, 1d, 1w), `forever` clears it (upstream #258). The authority decides rank.
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const id = parts[0];
   const forAt = parts.findIndex((p, i) => i > 0 && p.toLowerCase() === 'for');
@@ -151,9 +145,7 @@ register('grant', (arg) => {
     const cur = worldComponents()[`roles:${who}`];
     // a time or exceptions alone change a grant, so there must be one: a role-less record is refused by the authority (I42)
     if (!role && !cur) return logChat('*', `${id} holds no role here to ${dur || forever ? 'time' : 'add exceptions to'} — /grant ${id} <role>${dur ? ` for ${durWord}` : ''}`);
-    // the whole grant, changed only where the command says (house review I6: a new role kept neither the person's
-    // exceptions nor their end): a new duration replaces the end, forever drops it (a set, not a merge: a merge can't
-    // remove a field), and new exceptions join the old ones
+    // the whole grant, changed only where the command says: a set, not a merge (a merge can't remove an end)
     // an owner's grant never ends: the authority refuses an owner with an end, so none is kept or sent
     if (isOwner(role) && dur) return logChat('*', `ownership never expires — /grant ${id} owner, without a time`);
     const { until: was, ...rest } = cur ?? {};
@@ -198,9 +190,7 @@ function showMembers() {
 }
 
 // /kick <name> [minutes] [reason…], /ban <name> [days|forever] [reason…], /mute <name> [minutes] [voice|chat] [reason…],
-// /warn <name> <reason…>: the authority enforces the permission and the rank (only below you);
-// everyone else is told "A removed B" by the server. A kick takes someone out now (they must be here); the others also
-// reach someone who has left (the world's lookup).
+// /warn <name> <reason…>: the authority enforces permission and rank; only /kick needs them present.
 function moderate(cmd, arg) {
   const [id, ...rest0] = (arg || '').trim().split(/\s+/).filter(Boolean);
   const USAGE = { kick: '<name> [minutes, default 10] [reason]', ban: '<name> [days | forever] [reason]', mute: '<name> [minutes, default 60] [voice|chat] [reason]', warn: '<name> <reason>' };
@@ -223,12 +213,7 @@ for (const verb of ['unmute']) register(verb, (arg) => { const id = (arg || '').
   if (!id) return logChat('*', `usage: /${verb} <name>`);
   onePerson(id, verb).then((who) => { if (who) send({ verb: verb, args: { who } }, { what: `${verb} ${id}`, record: false }); }); });
 
-// /kick is MODERATION, solidly (tel0s ruling, playtest 2026-08-31). The old
-// one-word-two-acts overload sent a typo'd object name into the moderation
-// path and made "kick the barrel" and "kick the visitor" the same word for
-// two very different acts. /punt owns the physics wholly now — and gained
-// the fun half: punting a PERSON is the consented ragdoll shove (their
-// client owns their body and decides, exactly as /push).
+// /kick is moderation only; /punt owns the physics (a person punted gets the consented shove, as /push).
 register('kick', (arg) => moderate('kick', arg));
 register('punt', (arg) => {
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
@@ -302,10 +287,8 @@ register('gunban', (arg) => moderateGlobal('gunban', arg));
 register('gbans', () => sendMod('global-bans'));
 
 register('push', (arg) => {
-  // /push [name] [power] — a REQUEST to the target's client, which owns the
-  // body and decides (pushable). Range-gated here out of honesty, not
-  // security: a shove is an arm's reach, and the receiver caps magnitude
-  // anyway. No name = the nearest person within reach.
+  // /push [name] [power]: a REQUEST the target's client decides (pushable). The reach gate is honesty, not
+  // security. No name = the nearest person within reach.
   const REACH = SHOVE_REACH;
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const named = parts.find((p) => !/^[\d.]+$/.test(p));
@@ -346,9 +329,7 @@ function shovePerson(target, pow, word) {
 }
 
 // ---- /touch — the human hand on the reach surface (shared/reachwire.js).
-// The same descriptor an agent's `reach` tool streams: every client
-// re-solves it, the arm tracks the person, and THEY hear about it (a
-// "reaches toward you" line, then a "rests on" line when the hand lands).
+// The same descriptor an agent's `reach` streams; the touched person hears "reaches toward you", then "rests on".
 const LIMB_WORD = { leftHand: 'left hand', rightHand: 'right hand', leftFoot: 'left foot', rightFoot: 'right foot' };
 const pointOf = (words) => {
   const joined = words.join(' ');
@@ -568,11 +549,8 @@ export function initCommands() {
 
   bus.on('command', ({ cmd, arg }) => dispatch(cmd, arg));
 
-  // Hands aimed at YOUR body (reachnet's bus edges) become chat lines — the
-  // human ear for the same events an agent hears through its door. Reach and
-  // touch carry a per-(person, hand) quiet window because a hand trembling
-  // across the touch threshold re-fires the edge; a release only happens on
-  // purpose, so it always speaks.
+  // Hands aimed at YOUR body become chat lines. Reach and touch get a per-(person, hand) quiet window (a trembling
+  // hand re-fires the edge); a release always speaks.
   const recentReach = new Map();
   const narrate = (type, { who, limb, point }) => {
     const lw = LIMB_WORD[limb] ?? limb;

@@ -30,9 +30,7 @@ export const bus = {
 };
 
 // ------------------------------------------------------------ config
-// One place that reads the URL and localStorage, so no module has to re-derive
-// "who am I" from query params. Both are guarded: headless hosts have neither,
-// and get the defaults.
+// One place reads the URL and localStorage; both guarded (headless hosts have neither and get defaults).
 
 const params = new URLSearchParams(globalThis.location?.search ?? '');
 const store = globalThis.localStorage ?? null;
@@ -60,11 +58,8 @@ store?.setItem('ew-name', CONFIG.name);
   if (!acct && !/^guest-/.test(CONFIG.name)) acct = CONFIG.name;
   CONFIG.account = acct || null; if (acct) store?.setItem('ew-account', acct); }
 
-/** The name a join ack says we have, minus the transport prefix sendJoin put
- *  on the wire id ("renderer-" / "retina-"). Pure, for net.js onSnapshot.
- *  A VERIFIED identity (the ack carries yourSub) is the server's own name for
- *  us — it ignored the requested id — so it is kept whole: a signed-in viewer
- *  really called "retina-helen" must not be shortened to "helen". */
+/** The join ack's name minus sendJoin's transport prefix ("renderer-" / "retina-"); pure, for net.js onSnapshot.
+ *  A VERIFIED identity (yourSub) is the server's own name and is kept whole, prefix-like or not. */
 export function nameFromJoinAck(you, { renderer = false, spectate = false, verified = false } = {}) {
   if (!you || verified) return you;
   const prefix = renderer ? 'renderer-' : spectate ? 'retina-' : '';
@@ -90,16 +85,10 @@ export function setToken(token) {
 let errorSink = null;
 export function setErrorSink(fn) { errorSink = fn; }
 
-// A fault inside the frame loop reports 60 times a second. Identical messages
-// are counted and re-reported on a decaying schedule instead of flooding the
-// console and the toast stack — the first one is the useful one, and the
-// hundredth actively hides everything else.
+// A frame-loop fault reports 60×/s: identical messages are counted and re-reported on a decaying schedule.
 const seenErrors = new Map(); // key -> { n, nextAt }
-// ---- console tee: what a visitor's page says, where the operator can read it.
-// Every report() plus window errors post to /clientlog (key-gated, bounded
-// server-side). Off the hot path (queued, one flush per second), never throws,
-// and never carries the key in the payload or the URL — it rides the Authorization header
-// (Bearer), below. `tee(line)` is for lines worth keeping ([xr] etc).
+// ---- console tee: report() and window errors post to /clientlog, queued (one flush/s), never throwing.
+// The key never goes in the payload or URL, only the Authorization header. `tee(line)` keeps a line ([xr] etc).
 let teeQ = [], teeTimer = 0, teeMuted = false;
 function teeFlush() {
   teeTimer = 0;
@@ -180,18 +169,8 @@ export async function parallelMap(items, fn, limit = 6) {
 }
 
 // ---- per-participant colour --------------------------------------------------
-// A wall of chat all in one colour makes you read every name to follow a
-// conversation. Each participant gets a stable colour instead, derived from
-// their name alone — so it is the SAME colour in every client, and "the blue
-// one" means the same person to everyone in the world. No assignment, no
-// server state, nothing to keep in sync.
-//
-// A curated palette rather than hue = hash % 360: hand-picked entries are all
-// legible on the dark panel and reliably distinct from each other, which a
-// continuous hue wheel is not (it wanders through muddy olives and near-blacks
-// at fixed lightness). Amber and mint are deliberately absent — those are the
-// UI's own words for "you were mentioned" and "link/accent", and a person
-// wearing them would be reading as punctuation.
+// Colour from the name alone, so it matches in every client with no server state. A curated palette (legible,
+// distinct) beats hue = hash; amber and mint are absent because the UI uses them for mentions and links.
 const NAME_COLORS = [
   '#7cc4ff', '#ff9fc4', '#b8e06a', '#ffab6b',
   '#c4a6ff', '#6ee0d0', '#ff9a8f', '#9fb8ff',
@@ -208,18 +187,8 @@ export function preferredColor(name) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
-// Hashing alone is not enough. With twelve colours and six people in a room
-// there is a ~78% chance two of them collide — and two speakers wearing one
-// colour is exactly the confusion this was meant to remove. (Measured, not
-// theorised: the first build put lyra and antra both on #ffab6b.)
-//
-// So the hash is a PREFERENCE, and the people actually present negotiate. Every
-// client runs the same assignment over the same roster in the same order, so
-// the answer is identical everywhere without a byte crossing the wire: sort the
-// names, let each take its preferred colour, and linear-probe when it is taken.
-// Whoever sorts first keeps their preference, so a colour only ever moves for
-// the loser of a collision. People who have left keep the colour they had —
-// their lines are still on the screen.
+// The hash is only a preference (12 colours, 6 people: ~78% collide): every client sorts the same roster and
+// linear-probes, so all agree with nothing on the wire. Assigned colours stick, even after someone leaves.
 const claimed = new Map();   // name -> colour, sticky once assigned
 
 /** The colour to draw `name` in, anywhere in the UI. */

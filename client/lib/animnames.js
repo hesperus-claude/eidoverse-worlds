@@ -11,11 +11,8 @@
 import { bus } from './base.js';
 import { defsRegistry } from './defs.js';
 
-// §24l R1: the vocabulary itself is DATA now — defs/animations/_actionbar.json,
-// hydrated below (object identity preserved, the FLORA_SPECIES trick) and
-// re-hydrated on the defs-updated push. It used to live in four places
-// (this table, actionbar.js's ICON map, the slash command's help string, the help
-// sheet's prose), each drifted from the others.
+// §24l R1: the vocabulary is DATA (defs/animations/_actionbar.json), hydrated below with object identity preserved
+// and re-hydrated on defs-updated, so the bar, slash command and help sheet can't drift.
 export const ANIM_CLIPS = {};      // name → clip
 export const ANIM_ORDER = []; // listed names, def key order = bar/number-key order
 export const ANIM_ICONS = {}; // name → bar glyph

@@ -34,13 +34,8 @@ function ensureStage() {
   // XR-only chrome for the staged frames: HTMLMesh's mini-renderer has no blur/shadow, so none is asked
   // for; desktop-only furniture (✕, resize, collapse) is hidden on the quad
   const css = document.createElement('style'); css.id = 'xr-stage-css';
-  // The panel is the TOKEN (--panel-rgb), opaque by default: its desktop glass (--panel-a) composites over a viewport a
-  // quad does not have. No lift: the panel was mixed 18% toward the text tone (09-05, when it read near-black) — that
-  // was the ACES output pass darkening it, which quadcolour.js now undoes, so the lift only made it lighter than
-  // authored (owner, 09-30). --xr-panel-a is Settings › Style's "VR panel opacity" (setXrPanelAlpha below).
-  // rgb(var()) computes to a plain rgb()/rgba(): HTMLMesh parses computed colours itself, and Chrome serialises a
-  // color-mix() result as color(srgb …), which that parser mangled to PURPLE (pairs probe, 09-05 23:40).
-  // The head strip keeps its desktop rgb(0 0 0 / .3), composited on the quad's own canvas over the panel.
+  // The panel is the --panel-rgb token, opaque by default (desktop glass has no viewport to composite over);
+  // --xr-panel-a is "VR panel opacity". rgb(var()), never color-mix(): HTMLMesh's parser mangles color(srgb …).
   css.textContent = `#xr-stage .frame.panel { box-shadow: none; backdrop-filter: none; background: rgb(var(--panel-rgb) / var(--xr-panel-a, 1)); }
 #xr-stage .fr-head { backdrop-filter: none; }
 #xr-stage .fr-btns { display: none; }`;
@@ -51,12 +46,8 @@ function ensureStage() {
   return stage;
 }
 
-// SOFT SWAP (Basis: build once, hide/show). A quad is STAGED every session — its element must leave the
-// desktop while presenting and come back after — but its mesh is BUILT only when first shown (quads start
-// hidden, and HTMLTexture's constructor rasterises the whole frame synchronously on the main thread: six of
-// those ran at every entry for panels nobody had opened) and then KEPT across sessions, paused and with its
-// observer suspended while the element lives on the desktop. A frame resized on the desktop since the mesh
-// was built rebuilds at its next show (HTMLMesh fixes its geometry at construction).
+// Soft swap: a quad is STAGED every session but its mesh is BUILT on first show (HTMLTexture rasterises
+// synchronously) and kept across sessions, paused on the desktop. A frame resized since rebuilds at next show.
 function stageEl(q) {
   const el = q.el, api = q.api;
   q.restore = { parent: el.parentNode, next: el.nextSibling, display: el.style.display, left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height, position: el.style.position, collapsed: el.classList.contains('collapsed') };
@@ -103,14 +94,9 @@ function build(q) {
 /** The quad's material: undoes the renderer's ACES output pass and applies the VR panel grade (exported for the probe). */
 export const prepareQuadMaterial = (mesh) => quadMaterial(mesh, renderer);
 
-// VR panel opacity (Settings › Style; stylepanel.js stores it as the --xr-panel-a token, default 1). It is the PANEL
-// BACKGROUND's alpha, as --panel-a is on the desktop — text and controls stay opaque — carried by the raster's own alpha
-// (the #xr-stage rule above). At 1 the quad is exactly what it always was: opaque pass, alphaTest cutting the corners.
-// Below 1 it must blend, so it joins the transparent pass: three sorts those back-to-front by distance after every
-// opaque thing, so the world shows through; depthWrite stays ON so a nearer panel still hides what is behind it and a
-// laser/particle drawn later can't paint through the text. alphaTest drops to 0.01: it still cuts the clear corners.
-// The ACES undo (quadcolour.js) is exact only where alpha is 1: the blend with the world happens BEFORE the output
-// pass tone-maps the mix, so a see-through panel's background lands near, not on, its authored colour.
+// VR panel opacity (--xr-panel-a, stylepanel.js): the background's alpha only. Below 1 the quad joins the
+// transparent pass with depthWrite ON (nothing later paints through the text) and alphaTest 0.01. The ACES undo
+// (quadcolour.js) is exact only at alpha 1.
 export const xrPanelAlpha = () => {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--xr-panel-a'));
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
@@ -237,11 +223,8 @@ export function domQuadsPick(handRay, click = false) {
   return hit.distance;
 }
 
-// Trigger on a panel, the way touch works (and Resonite / VRChat panels): every press is a PRESS: drag past DRAG_PX and
-// the panel scrolls with the laser, release without dragging and it clicks where it was pressed. Buttons, checkboxes,
-// dropdowns and links click on release, so a drag that starts on one scrolls instead of toggling it: the debug panel
-// is mostly checkbox rows and section-head buttons, and pressing to scroll it flipped them (owner 09-27, review P2).
-// Only controls that need the press ITSELF click at once: a slider (it drags its own thumb) and text fields (focus).
+// Trigger works like touch: drag past DRAG_PX scrolls, release without dragging clicks, so a scroll starting on a
+// checkbox doesn't flip it. Only sliders and text fields act on the press itself.
 // the text fields (a press focuses them for typing) — also the VR pointer's "type" icon (xr.js targetKind)
 export const TEXT_SEL = 'input:not([type]),input[type=text],input[type=search],input[type=number],input[type=password],input[type=email],input[type=url],'
   + 'textarea,[contenteditable=""],[contenteditable="true"]';
@@ -292,10 +275,8 @@ export function domQuadsRelease(press, cancel = false) {
   fire(press.mesh, press.data);
 }
 
-// WHAT IS A CONTROL on a panel: anything a click there does something to — the house's buttons, inputs, the dropdown
-// skin, tabs, links, a <label> (a checkRow is a label around its box), anything focusable or with an onclick handler,
-// and anything styled with a pointer cursor where its parent is not (how a row wired with addEventListener says it is
-// clickable). The stickiness (xr.js, xrpointer.js) holds the laser on one; a grip over one does not grab the panel.
+// A control = anything a click acts on (incl. labels, and a pointer cursor its parent lacks). The laser sticks
+// to one (xr.js, xrpointer.js); a grip over one doesn't grab the panel.
 export const CONTROL_SEL = 'a[href],button,input,select,textarea,label,summary,.dd,[role=button],[role=checkbox],[role=radio],[role=switch],'
   + '[role=slider],[role=tab],[role=option],[role=link],[role=menuitem],[contenteditable=""],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
 /** The interactive element at uv (x, y down) on a quad's texture, or null (background, title, text). */
@@ -329,11 +310,8 @@ export function domQuadsAt(handRay) {
     scroll: !control && hit.uv ? scrollableAt(map, hit.uv.x, 1 - hit.uv.y) : false };
 }
 
-// ---- ZONES: a panel's RESIZE corners and edges (owner, 10-02) ------------------------------------------------------
-// In frame CSS px: the four corners (ZONE_CORNER_PX squares, within ZONE_EDGE_PX of an edge) and the left, right and
-// bottom edges resize (a frame the desktop can resize; windows.js frameResizeInfo); the rest is 'body' (grip there moves
-// the panel, the fallback grab). The MOVE handle is not on the panel any more: it is the bar under it (below). A
-// control under the laser outranks every zone: grip there does nothing.
+// ---- ZONES: resize corners and left/right/bottom edges, in frame CSS px (windows.js frameResizeInfo) --------------
+// The rest is 'body' (a fallback move grab); a control under the laser outranks every zone.
 export const ZONE_EDGE_PX = 12, ZONE_CORNER_PX = 24;
 export function zoneAt(root, x, y) {
   const fr = root.getBoundingClientRect(), W = fr.width, H = fr.height;
@@ -352,11 +330,8 @@ export function zoneAt(root, x, y) {
   return 'body';
 }
 
-// THE HANDLE BAR (owner, 10-02, SteamOS-style): a small floating bar just BELOW each panel, centred — the primary way to
-// grab and move it ("the bottom of labels tends to be around waist height", where a hand rests). It is always there,
-// faint, so it can be found; a laser dwelling on it (or a hand holding the panel) brings it up to full. Grip on it
-// grabs; the panel's background stays the fallback. A child of the quad in its CSS-px-by-mm units, so it scales with
-// the panel's density and rides along when the panel is carried.
+// The handle bar: a faint bar below each panel, the primary move grab (full on laser dwell or hold). A child of the
+// quad in its units, so it scales and rides along.
 export const HANDLE_W_PX = 120, HANDLE_H_PX = 14, HANDLE_GAP_PX = 10;
 export const HANDLE_IDLE = 0.35, HANDLE_ON = 0.95;
 let handleTex = null;
@@ -430,13 +405,8 @@ export function domQuadsRevealOnly(keep) {
 export const domQuadAids = (id) => { const q = all.find((x) => x.id === id);   // probe window: what is revealed ('move' = the bar at full)
   return [...(q?.handle?.material.opacity === HANDLE_ON ? ['move'] : []), ...(q?.aids?.children ?? []).filter((c) => c.visible).map((c) => c.userData.zone)]; };
 
-// ---- RESIZE in VR: grip on a corner or an edge (owner, 10-02). While held, the gripped corner/edge follows the laser
-// across the panel's plane and an outline shows the new size; the opposite side stays put. On release the size is VR's
-// OWN (owner, 10-02, revising the first pass, which wrote the desktop layout): it goes on the staged frame (windows.js
-// _setVrSize) and is saved with the panel's VR place (ew-xr-quads: w, bh, mpp, pos, yaw, pitch); the desktop frame's
-// size and saved layout are untouched, and come back when the frame leaves the headset. Whether a panel is open and
-// which tab is chosen stay one state for both. The quad is rebuilt at the SAME pixel density, so the panel grows
-// rather than its text shrinking. Floors are the frame's own (minW/minH); the ceiling is RESIZE_MAX_M across.
+// ---- RESIZE in VR: the gripped corner/edge follows the laser. The size is VR's OWN (windows.js _setVrSize, saved in
+// ew-xr-quads); the desktop layout is untouched. Rebuilt at the same pixel density; floor minW/minH, ceiling RESIZE_MAX_M.
 export const RESIZE_MAX_M = 1.6;
 const _rp = new THREE.Plane(), _rv = new THREE.Vector3(), _rn = new THREE.Vector3(), _rq = new THREE.Quaternion();
 export function domQuadResizeBegin(at) {
@@ -534,11 +504,8 @@ export function domQuadShow(id, on = null) {
 export const domQuadIds = () => (quads ?? []).map((q) => q.id);
 export const domQuadOpen = (id) => !!quads?.find((q) => q.id === id)?.mesh?.visible;
 
-// ---- grabbable, following panels (gap list C17; Basis's design over rig-locked quads). A grip
-// on a quad's background or title takes the QUAD — never on a control (owner, 10-02; it was the
-// grip+trigger chord): the mesh rides the hand; on release it goes back to the rig where it
-// visually is, roll stripped so text stays upright, pitch clamped so it never lies flat. Where you
-// put a panel is remembered per browser (ew-xr-quads in localStorage, above).
+// ---- grabbable panels: a grip on background or title (never a control) takes the quad; on release it rejoins the
+// rig where it is, roll stripped and pitch clamped. Placement is kept per browser (ew-xr-quads).
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 export function domQuadsGrab(handRay) {
   const at = domQuadsAt(handRay);

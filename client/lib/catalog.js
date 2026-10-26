@@ -68,10 +68,8 @@ async function paintBuild(body) {
   grid.className = 'grid';
   body.appendChild(grid);
 
-  // Every optimization's status, from the server's own verdicts (/library-models `opt`, store-variants.ts
-  // variantStatus — owner, 09-24: nothing may fail silently). A pass that was refused / deferred / is stale shows an
-  // amber chip; a built LOD a quiet one; the hover lists every pass and why. Text goes through textContent/title
-  // only — reasons are server-written but derived from uploaded content.
+  // Every optimization's status from the server's verdicts (store-variants.ts variantStatus): nothing fails silently.
+  // textContent/title only: reasons are derived from uploaded content.
   const PASS = { min: 'compressed copy', ktx2: 'GPU textures', lod: 'LOD' };
   const WORD = { built: 'built', 'not-needed': 'not needed', unsupported: 'not supported', refused: 'refused',
     stale: 'will be re-checked', deferred: 'deferred', pending: 'not processed yet' };
@@ -196,10 +194,8 @@ async function paintBuild(body) {
   // catalog instead of a list of filenames.
   const starter = () => STARTER.map(([name, path]) =>
     ({ name, path, preview: path.replace(/\.glb$/, '_preview.jpg') }));
-  // the starters are painted at once from the list, then again with the catalog's record for each (opt / perf /
-  // rebuildable), so the view the panel opens on carries the same rank, chips and ↻ as a search (Greptile #207). One
-  // request: the route scores filename tokens, and each starter's full stem matches only itself. Curated names and
-  // order are kept; a starter the catalog doesn't know stays plain.
+  // starters paint at once, then again with the catalog's record (one request), so they carry a search's chips;
+  // curated names and order are kept
   const enrichStarters = async () => {
     const rows = starter();
     const stems = STARTER.map(([, p]) => p.split('/').pop().replace(/\.glb$/, '').toLowerCase());
@@ -262,10 +258,7 @@ async function paintAvatars(body) {
   for (const { name, path, perf } of list) {
     const card = document.createElement('button');
     card.className = `card panel ${path === myAvatarPath ? 'on' : ''}`;
-    // the portrait BOX sizes the card, never the image: a lazy <img> that has
-    // not loaded (or 404s) has no size, and a card sized by it collapsed —
-    // that was the two-sizes grid. The placeholder sits under the image and
-    // simply shows through until a portrait covers it.
+    // the portrait BOX sizes the card, never the image (an unloaded lazy <img> has no size)
     card.innerHTML =
       `<div class="av-shot"><div class="ph">🧍</div><img alt="" loading="lazy" src="/thumb/${encodeURIComponent(name)}.png"></div>
        <span>${escapeHtml(name)}</span>`;

@@ -11,10 +11,7 @@ import { switchAvatar } from './catalog.js';
 import { getMyAvatarName, getMe, myBodyPrefs, setMyBodyPref } from './mybody.js';
 import { BODY_SCALE_MIN, BODY_SCALE_MAX, PLATE_Y_MIN, PLATE_Y_MAX } from './bodyscale.js';
 
-// MY avatars = the bodies you have actually worn (live, 09-05: the world offers a
-// wardrobe to try on — World›avatar — and only what you've worn is yours).
-// Kept per browser (ew-worn) until the server grows a per-person field; the
-// roster is consulted only to resolve a name to its path.
+// MY avatars = the bodies you have actually worn, kept per browser (ew-worn); the roster only resolves name -> path.
 const WORN_LS = 'ew-worn';
 let worn = [];
 try { worn = JSON.parse(localStorage.getItem(WORN_LS) || '[]'); } catch { worn = []; }
@@ -40,10 +37,8 @@ function fields() {
     { t: 'list', label: 'my avatars', empty: 'nothing worn yet — try one from World › avatar',
       rows: mine.map((n) => {
         const a = roster.find((x) => x.name === n);
-        // `cur` is INTENT and survives a failed load, so gating the wear action
-        // on it left the body that just failed marked active with no way to
-        // retry — the one body a first-time user owns (#196 review B1). When
-        // the capsule is worn nothing is active and everything is wearable.
+        // `cur` is intent and survives a failed load, so gate on the live body or a failed one can't be retried.
+        // Wearing the capsule, nothing is active and everything is wearable.
         const onMe = n === cur && !!getMe() && !getMe()?.isCapsule;
         return { id: n, label: n, sub: a?.height ? `${a.height.toFixed(2)} m` : undefined, active: onMe,
           actions: onMe ? [] : [{ k: 'wear', label: 'wear' }] };
@@ -71,10 +66,8 @@ function thisBodyFields() {
     ...(cm !== 0 ? [{ t: 'btn', k: 'plate-y-reset', label: 'nameplate: back to auto' }] : []),
   ];
 }
-// A drag fires `input` per pixel. The body follows every tick; the store (a JSON rewrite of every body's prefs) is
-// written once the value has rested SAVE_MS, or at once on release (mountBodies' `change`). The VR quad has no release
-// event of its own, so the rest timer is what saves there. The pending value carries the body it was dragged on: a
-// switch inside the window must not file it under the next body.
+// The body follows every `input`; the store is written after SAVE_MS of rest (the VR quad has no release) or on
+// `change`. The pending value carries its body, so a switch mid-window can't file it under the next one.
 const SAVE_MS = 250;
 let pending = null, saveTimer = 0;
 function flushBodyPrefs() {

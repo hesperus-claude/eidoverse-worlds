@@ -1,28 +1,14 @@
 // emitter_field — the `particles` component's LIFECYCLE, DOM-free and
 // THREE-free so it can be unit-tested without a browser (tools/particles-test.ts).
 //
-// The upstream builder (`eidoverse/particles.js`) is a one-way door: it makes a
-// mesh, adds it to a scene, pushes its billboard `update` into the global
-// `_autoParticleSystems` array, and hands back no way to undo any of that.
-// Flora taught the same lesson and got `dispose()` upstream; until particles
-// does, THIS is where the undo lives — one registry that owns every emitter in
-// the world, so "replace the fire with smoke" retires the fire instead of
-// stacking a second system and a second per-frame hook on top of it.
-//
-// Everything here is idempotent by construction: applying the same state twice
-// is a no-op, removing something that is already gone is a no-op, and a build
-// that finishes AFTER its own entity was replaced or removed retires itself on
-// arrival rather than leaking into the scene.
+// Upstream particles.js gives no undo, so this registry owns every emitter's lifecycle. Apply and remove are
+// idempotent; a build that lands after its entity changed retires itself.
 
 import { releaseHook } from './autohooks.js';
 
 /**
- * Retire one built emitter completely: unhook its per-frame update, release
- * its GPU resources, detach its mesh. Safe to call twice.
- *
- * Hooks come off by IDENTITY, never by index — the array is global and shared
- * with grass wind and the sky, so an index captured at build time means
- * unhooking somebody else's emitter.
+ * Retire one built emitter completely (hook, GPU resources, mesh); safe twice. Hooks come off by IDENTITY,
+ * never index: the array is global and shared.
  */
 export function retireEmitter(handle, autos) {
   if (!handle || handle.retired) return;
@@ -35,18 +21,8 @@ export function retireEmitter(handle, autos) {
 }
 
 /**
- * Give back a RAW upstream system — one that `makeParticles()` has already
- * allocated but that no handle owns yet.
- *
- * This is the window the adapter promised to close and initially did not: the
- * moment the builder returns, its mesh is in the scene and its update is in
- * the global hook array. If any host step after that point throws (parenting,
- * marking, tier), `build()` rejects before a handle exists and the registry's
- * catch has nothing to retire. Every one of those steps therefore runs inside
- * `adoptSystem`, and this is what it unwinds to.
- *
- * Disposes what the SYSTEM owns — geometry and material — and never the
- * texture, which is cached and shared (see emitters.js).
+ * Give back a RAW upstream system that no handle owns yet (adoptSystem unwinds to this if a host step throws).
+ * Disposes geometry and material, never the texture: it is cached and shared (emitters.js).
  */
 export function retireRawSystem(sys, autos) {
   if (!sys || sys.__retired) return;
@@ -63,10 +39,7 @@ export function retireRawSystem(sys, autos) {
 }
 
 /**
- * Run the host's own attach steps over a freshly-built upstream system, and
- * unwind the raw allocation if any of them throws. The handle it returns is
- * the first moment anything else can retire this system, so everything before
- * it belongs here.
+ * Run the host's attach steps over a fresh upstream system, unwinding it if any throws (no handle exists yet).
  */
 export function adoptSystem(sys, autos, attach) {
   try {
@@ -78,14 +51,9 @@ export function adoptSystem(sys, autos, attach) {
 }
 
 /**
- * The world's emitter registry.
- *
- * `build(emitter, {id})` is the host's (THREE-bound) half: it returns — or
- * resolves to — a handle `{mesh?, update?, hooks?, dispose()}`. `autos` is the
- * per-frame hook array the engine drains (`globalThis._autoParticleSystems`).
- *
- * `apply(id, emitter)` is the ONLY entry point the fold uses: pass the
- * normalized emitter to attach or replace, `null` to end it.
+ * The world's emitter registry. `build(emitter, {id})` (THREE-bound) returns or resolves to a handle
+ * `{mesh?, update?, hooks?, dispose()}`; `autos` = globalThis._autoParticleSystems.
+ * `apply(id, emitter)` is the fold's ONLY entry point: an emitter to attach or replace, `null` to end it.
  */
 export function makeEmitterRegistry({ autos, build, onError } = {}) {
   /** id -> { gen, key, handle|null, emitter } — one live emitter per entity. */
@@ -97,10 +65,7 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
   async function apply(id, emitter) {
     const key = keyOf(emitter);
     const cur = live.get(id);
-    // Idempotence: re-authoring the identical bag (a replay of the same entry,
-    // a snapshot that repeats what the log already said) must not rebuild the
-    // fire — a rebuilt emitter re-rolls nothing (the seed is stable) but it
-    // does churn GPU resources and re-registers a hook.
+    // an identical bag (a replay) must not rebuild: it would churn GPU resources and re-register a hook
     if (cur && cur.key === key) return cur.handle;
 
     const mine = ++gen;

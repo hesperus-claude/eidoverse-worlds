@@ -1,4 +1,4 @@
-// assets — every byte the client pulls, and the host shims that let Skye's
+// assets — every byte the client pulls, and the host shims that let the
 // toolkit modules run unmodified in a browser.
 //
 // Four caches, all keyed by library path and all "download+parse once":
@@ -34,9 +34,7 @@ import { markDrawBatchSource } from './draw_batches.js';
 import { libRelOf, modelWord } from '../../shared/eido.js';
 
 // ---- loading tray -----------------------------------------------------------
-// Every in-flight asset (downloads with byte progress, builds as spinners) is
-// listed so "nothing is happening" never looks like nothing is happening.
-// ui.js renders it; this module only owns the data.
+// Every in-flight asset is listed (downloads with bytes, builds as spinners); ui.js renders it, this owns the data.
 
 const loads = new Map(); // key -> { label, done, total }
 // Cumulative byte counters for the boot progress bar. Per-asset entries vanish
@@ -58,11 +56,8 @@ export function loadProgress(key, done, total) {
 export function loadDone(key) { loads.delete(key); announce(); }
 
 // ---- demand activity ----------------------------------------------------------
-// The background prefetcher (prefetch.js) streams the library into the HTTP
-// cache during idle time, and it must never cost a real load a millisecond.
-// Every demand fetch marks itself here: the 'demand' event aborts prefetch's
-// in-flight stream immediately, and demandState() keeps it parked until the
-// network has been quiet for a while.
+// The prefetcher (prefetch.js) must never cost a real load: each demand fetch emits 'demand', which aborts its
+// stream, and demandState() keeps it parked until the network has been quiet a while.
 
 let demandActive = 0;
 let lastDemandAt = 0;
@@ -83,12 +78,8 @@ export function forgetBytes(match) {
 }
 
 // ---- the byte tier's budget (§13.3 R3) --------------------------------------
-// byteCache retained the raw bytes of everything ever fetched, forever —
-// including 29.5MB VRMs after one glance. Pure JS heap, no GPU coupling: an
-// LRU with a byte budget reclaims it risk-free. Map iteration order IS the
-// LRU (touched entries re-insert at the tail). The HTTP cache still holds
-// the wire bytes (immutable/etag), so a re-fetch after eviction is a disk
-// read, not a download — prefetch made that assumption load-bearing.
+// An LRU byte budget on byteCache (JS heap only); Map order IS the LRU (touch re-inserts). The HTTP cache keeps
+// the wire bytes, so a re-fetch after eviction is a disk read, which prefetch relies on.
 const BYTE_BUDGET = 128 * 1024 * 1024;
 const byteSizes = new Map();   // path -> resolved byteLength, insertion = LRU
 let byteTotal = 0;
@@ -119,10 +110,8 @@ export async function fetchBytes(path) {
       loadTrack(path, path.split('/').pop().split('?')[0]);
       demandStart();
       try {
-        // R 09-07 22:22: 'first load after you change something, no avatar; reload and it's fine'. Her tee: 530s
-        // from the tunnel edge under load. One failed fetch was final here — worse, a REJECTED fetch
-        // stayed in byteCache and poisoned every later ask for the same path until reload. Retry 5xx and
-        // network failures (3 tries, 0.7 s then 1.8 s); evict on final failure so the next ask starts clean.
+        // Retry 5xx and network failures (3 tries, 0.7 s then 1.8 s); evict on final failure, or a rejected fetch
+        // in byteCache poisons every later ask for that path.
         let r;
         for (let attempt = 0; ; attempt++) {
           try { r = await fetch(path); } catch (err) { if (attempt >= 2) throw err; r = null; }
@@ -164,29 +153,16 @@ export async function fetchBytes(path) {
 // the decoder three ships, served by the /node_modules route like the KTX2 transcoder below: no third-party origin at run
 // time (the page's CSP connect-src names none for it; security pass 3 N3)
 const draco = new DRACOLoader().setDecoderPath('/node_modules/three/examples/jsm/libs/draco/gltf/');
-// §20b: ONE KTX2 transcoder for every parse site (VRM, GLB, loadGLBBytes).
-// The transcoder is the vendored basis wasm, served by the /node_modules
-// route. detectSupport at module scope is ordering-safe: core.js top-level-
-// awaits renderer.init() (core.js:100) before this module evaluates, which
-// is exactly what the deprecated detectSupportAsync shim would re-await.
+// §20b: ONE KTX2 transcoder (vendored basis wasm via /node_modules) for every parse site. detectSupport at module
+// scope is safe: core.js top-level-awaits renderer.init() before this module evaluates.
 const ktx2 = new KTX2Loader()
   .setTranscoderPath('/node_modules/three/examples/jsm/libs/basis/')
   .detectSupport(renderer);
 /** Whether this GPU/browser negotiates KTX2 variants (?ktx2=<key>, shared/ktx2.js) — prefetch
  *  must warm the SAME cache key demand fetches will use. */
 export const ktx2Capable = () => !!ktx2.workerConfig;
-// The negotiation key comes from the RUNNING sequencer, never from a file it
-// merely serves. In the window between `git pull` and the restart the old
-// process serves the new shared/ktx2.js; a client that read the key off that
-// file asked a server that had never heard of it, got an unflagged answer
-// (webp, immutable), and nginx pinned it under the new key — the =2
-// collision of 2026-08-24, retired within minutes. /version is the running
-// process talking (no-store; resolved at ITS boot). No key there — an older
-// sequencer, a failed fetch — means no negotiation at all: an unflagged
-// fetch is always the right answer for its URL, so nothing can be pinned
-// wrong, on any deploy, in any order. One fetch per page, awaited by every
-// negotiating load (they are all async already; the prefetcher awaits it
-// once before building its queue).
+// The negotiation key comes from the RUNNING server (/version, no-store), never from shared/ktx2.js it serves:
+// between pull and restart those differ and a cache pins the wrong answer. No key = no negotiation. One fetch/page.
 const versionReady = fetch('/version', { cache: 'no-store' })
   .then((r) => (r.ok ? r.json() : null)).catch(() => null);
 export const ktx2KeyReady = versionReady.then(keyFromVersion);
@@ -203,20 +179,11 @@ lodRecipeReady.then((r) => { lodRecipe = r; }).catch(() => {});
 /** Settles once /version has answered (or failed) — a tier choice made
  *  after this knows whether a lod ask can cross the wire. Never rejects. */
 export const negotiationReady = Promise.all([ktx2KeyReady, lodRecipeReady]).then(() => {}, () => {});
-/** Can a lod ask for this lib CROSS THE WIRE from this browser, right now
- *  (review of #170, point 2)? The reduced variant's textures are KTX2, so
- *  the ask rides the ktx2 negotiation: the transcoder must have detected
- *  support, the running sequencer must have published a key AND a recipe,
- *  and only bare .glb paths negotiate. The policy treats "no" as no recipe
- *  — nothing is asked that could not be, and nothing is reported as asked. */
+/** Can a lod ask for this lib cross the wire now (#170)? It rides KTX2 negotiation: transcoder support, a running
+ *  key AND recipe, a bare .glb path. "No" means no recipe: nothing is asked, or reported asked, that couldn't be. */
 export const lodNegotiable = (libPath) => resolveLoadRequest(libPath, 'lod').tier === 'lod';
-/** THE decision seam of a tiered load (review of #170, round three): from a
- *  tier wish to everything loadGLB derives from it — the URL it fetches, the
- *  tier that URL asks (askFor over this module's LIVE state: the running key
- *  and recipe, this GPU's transcoder) and the cache identity it keys. One
- *  function, exported, so the product-door gate executes the real seam and
- *  never a restatement of it: tools/lod-loader-probe.ts runs THIS module
- *  against an owned sequencer, and a mutation here fails it. */
+/** THE decision seam of a tiered load (#170): tier wish -> URL, asked tier (askFor over live state) and cache key.
+ *  Exported so tools/lod-loader-probe.ts gates the real seam, not a restatement. */
 export function resolveLoadRequest(libPath, tier = 'full') {
   // a model named by its content address (eido:sha256/…, review 10-07 H3) is fetched as /library/eido/sha256/<hex>.glb:
   // the host serves its rendition of the file it names; the cache keys stay the model value itself
@@ -247,22 +214,8 @@ export function makeLoader(vrm = false) {   // exported for tools/glbperf-parity
 }
 
 // ---- texture priming --------------------------------------------------------
-// GPU texture creation + upload otherwise happens inside the first compile or
-// render that binds each texture — batched into one frame. Walking the object
-// and uploading a budget-slice per frame moves that cost off the stall.
-//
-// Coverage (§16.1c, investigated 8d): the Object.values(m) walk sees every own
-// enumerable property, and that IS where the model/body texture set lives —
-// three's material classes and MToonNodeMaterial (vendored 3.5.2) assign
-// every map in their constructors (map, normalMap, emissiveMap,
-// shadeMultiplyTexture, shadingShiftTexture, rimMultiplyTexture,
-// matcapTexture, outlineWidthMultiplyTexture, uvAnimationMaskTexture — all
-// plain `this.X = …`), and their TSL graphs reference those PROPERTIES via
-// materialReference, so no MToon texture lives only inside a node. The one
-// node-graph-only texture in the client is the factory's shared cloud
-// noiseTex (a TSL texture(...) node holds it as node.value inside every PBR
-// wrap's colorNode) — primed once at factory init (materials.js), not
-// collected here. No graph walk needed; nothing unbounded.
+// Upload textures a budget-slice per frame so the first compile/render doesn't stall. Every material map is an
+// own property, so the Object.values walk covers them (§16.1c); node-only textures are primed on decode below.
 function collectTextures(obj) {
   const seen = new Set();
   const out = [];
@@ -276,12 +229,8 @@ function collectTextures(obj) {
   });
   return out;
 }
-// Bytes-per-frame budget for uploads. work.tick's CPU-ms budget alone let
-// several 4K textures land in one tick window: renderer.initTexture returns
-// in microseconds while the GPU process swallows upload + mipgen — measured
-// 59-112MB single-frame spikes, 75-141ms hitches at t≈1.4-2s (bootjank
-// worst-15, §16.1g). Estimate what each upload will cost and take a REAL
-// frame once a frame's budget is spent.
+// Bytes-per-frame upload budget: initTexture returns at once while the GPU does the work, so a CPU-ms budget
+// alone lets several 4K textures land in one frame (§16.1g). Spent budget = wait a real frame.
 const TEX_FRAME_BYTES = 16 * 1024 * 1024;
 function textureUploadBytes(t) {
   const img = t.image;
@@ -314,15 +263,8 @@ async function primeTextures(obj, work) {
   }
 }
 
-// Prime-on-decode (§17a): toolkit textures ride TSL node graphs
-// (vegetation.js texNode(maps.albedo), the sky's domes) — invisible to
-// collectTextures' property walk, so they used to upload at first bind
-// INSIDE a warm's compileAsync (measured: three 41ms frames as the strokes
-// built, one 108ms frame for the 4K starmap — tel0s's trace, §17). Every
-// one of them passes through loadImageTexture, so each decoded texture
-// queues here and uploads through the same bytes-per-frame budget BEFORE
-// any compile binds it. A compile that wins the race anyway just uploads
-// at bind, exactly as before — this spreads, never gates.
+// Prime-on-decode (§17a): node-graph textures are invisible to collectTextures, but all pass loadImageTexture, so
+// each queues here under the same budget before a compile binds it. This spreads, never gates.
 const texPrimeQueue = [];
 let texPrimePumping = false;
 function queueTexturePrime(tex) {
@@ -357,31 +299,19 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
   const work = beginWork(`vrm ${libPath.split('/').pop()}`);
   try {
     work.phase('download');
-    // §20c: bodies negotiate KTX2 exactly like GLBs (loadGLB above) — when
-    // the transcoder detected support, ask and the server answers with the
-    // surgical-rewrite variant when a fresh one exists, the original
-    // otherwise. avatarPath arrives in BOTH forms — bare library rels and
-    // roster paths already carrying ?v=mtime — so the flag APPENDS (&) after
-    // an existing query rather than assuming one. The full URL keys
-    // byteCache (variant and original are distinct byte entries — correct),
-    // while the vrmPool and its vrmMeta ledger key on libPath UNTOUCHED, so
-    // pool identity is unaffected by negotiation.
+    // §20c: bodies negotiate KTX2 like GLBs; paths may already carry ?v=, so the flag appends. The full URL keys
+    // byteCache; vrmPool and vrmMeta key on the untouched libPath.
     const url = await negotiated(libPath, libPath.split('?')[0].endsWith('.vrm'));
     const buf = await fetchBytes(`/library/${url}`);
     work.phase('queued');
-    // The parse and skeleton passes are the irreducibly-synchronous chunk of a
-    // body: serialize so two arrivals can't stack theirs into the same frames,
-    // and yield between passes so each stall is one pass long, not their sum.
-    // Bodies default to priority 1 — people materialize before furniture.
+    // Serialize the synchronous parse/skeleton passes and yield between them, so each stall is one pass long.
+    // Bodies default to priority 1: people before furniture.
     return await enqueue(async () => {
       work.phase('parse');
       const gltf = await new Promise((res, rej) => makeLoader(true).parse(buf, '', res, rej));
       const vrm = gltf.userData.vrm;
-      // Every bone's rest, read NOW — before a clip, a spring or a wing has
-      // written any of them. A held pose on a raw bone is measured against it
-      // (avatar.js _rawRest). The skin's bind data cannot stand in: the
-      // skeleton pass below drops every joint that weights no vertex, and
-      // that includes humanoid bones (L_Calf, on mythos-alpha).
+      // Every bone's rest, read before anything writes it (avatar.js _rawRest); bind data can't stand in, since
+      // the skeleton pass below drops unweighted joints, humanoid ones included.
       vrm.userData ??= {};
       vrm.userData.boneRest = {};
       vrm.scene.traverse((o) => {
@@ -395,18 +325,8 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
       await work.yield();
       work.phase('skeleton');
       VRMUtils.combineSkeletons?.(vrm.scene) ?? VRMUtils.removeUnnecessaryJoints?.(vrm.scene);
-      // A SkinnedMesh's bounding sphere comes from BIND-POSE positions, so it
-      // stops bounding the mesh the moment the skeleton poses — and three.js
-      // then culls against that stale sphere, so parts of a body vanish
-      // depending on camera angle.
-      //
-      // Invisible on a one-primitive avatar, whose bounds are body-sized and
-      // effectively never leave the frustum. A multi-material body splits into
-      // one SkinnedMesh PER PRIMITIVE, each with region-tight bounds: measured
-      // on a 6-primitive rig, the hair primitive (bounds y 0.83..1.00 — the head
-      // alone) disappeared from most angles while the seam primitive (bounds
-      // spanning the whole body) never did. That reads as "the hair is missing
-      // but its gold highlights are still there".
+      // A SkinnedMesh's bounds are bind-pose, so a posed multi-primitive body (region-tight bounds per primitive)
+      // loses parts to culling by camera angle.
       vrm.scene.traverse((o) => { if (o.isSkinnedMesh) o.frustumCulled = false; });
       VRMUtils.rotateVRM0(vrm); // VRM0 → faces +Z
       // through the factory BEFORE the first compile: the final graph shape
@@ -421,23 +341,9 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
 }
 
 // ---- the VRM instance pool (§19b) -------------------------------------------
-// GLBs cache a proto and hand out skeleton clones; VRMs cannot — three-vrm
-// binds humanoid/expressions/springBones/lookAt to SPECIFIC nodes, and the
-// vendored 3.5.2 ships no deep-clone that rebinds them (VRMUtils has exactly
-// combineMorphs/combineSkeletons/deepDispose/removeUnnecessaryJoints/
-// removeUnnecessaryVertices/rotateVRM0; the lookAt/humanoid clone()s reference
-// the SAME nodes — verified). So switching bodies pools WHOLE PARSED
-// INSTANCES: release resets one to rest and shelves it intact; take hands it
-// back out and the whole download+parse+skeleton+textures pipeline is
-// skipped. One instance serves one body at a time — two residents wearing the
-// same VRM are two instances, and the second ALSO pools on release.
-//
-// THE POOL OWNS DISPOSAL (the §13.3 landmine, recorded since step 5½):
-// Avatar.dispose used to deepDispose the body's geometry/materials/textures,
-// and a disposed-then-pooled instance is a black-avatar bug. Bodies now come
-// back here UNTOUCHED; the real deepDispose happens only at pool eviction —
-// LRU under the caps below, or the residency sweep's GPU-budget drain
-// (pooled bodies are zero-ref by construction, so they evict before protos).
+// VRMs can't share a proto (three-vrm binds to specific nodes; no rebinding clone), so the pool shelves whole
+// parsed instances, one body each. THE POOL OWNS DISPOSAL: never deepDispose a pooled body elsewhere (black
+// avatar); only eviction (LRU caps or the GPU-budget drain) disposes.
 const vrmPool = new Map();        // libPath -> [{ vrm, bytes, at }], oldest first
 const vrmMeta = new WeakMap();    // vrm -> { libPath, bytes }, stamped at parse
 const warmedVrms = new WeakSet(); // instances whose pipelines warmed once
@@ -447,24 +353,13 @@ let vrmPoolBytes = 0;
 let vrmPoolCount = 0;
 let vrmPoolEvictions = 0;
 
-/** Has this INSTANCE been through makeAvatar's conductor warm? A pooled
- *  body's pipelines are live in the renderer's cache — a re-warm would be a
- *  cheap no-op that still occupies the conductor, so makeAvatar skips it.
- *  Instance-keyed, not lib-keyed: a second fresh parse of the same lib has
- *  brand-new material objects and warms like any first wear. */
+/** Has this INSTANCE been warmed by makeAvatar? A pooled body's pipelines are cached, so it skips the conductor.
+ *  Instance-keyed: a fresh parse of the same lib has new materials and warms like a first wear. */
 export const vrmWarmed = (vrm) => warmedVrms.has(vrm);
 export const markVrmWarmed = (vrm) => { warmedVrms.add(vrm); };
 
-/** Reset a parsed instance to rest — every call verified supported in the
- *  vendored @pixiv/three-vrm 3.5.2 (lib/three-vrm.module.js):
- *    humanoid.resetNormalizedPose / resetRawPose  (:1959, :1965)
- *    expressionManager.resetValues                 (:370)
- *    lookAt.reset                                  (:2500)
- *    springBoneManager.reset                       (:5540 — per-joint rest
- *      rotation, tails re-derived from the freshly-reset world matrices)
- *  The closing vrm.update(0) pushes it all through the managers (normalized →
- *  raw copy, neutral morph weights applied, lookAt applier at 0/0); spring
- *  joints hard-guard `delta <= 0` (:5368), so the settled state survives it. */
+/** Reset a parsed instance to rest (humanoid, expressions, lookAt, springs; vendored three-vrm 3.5.2). The closing
+ *  vrm.update(0) applies it; spring joints guard `delta <= 0`, so the settled state survives. */
 function resetVrmInstance(vrm) {
   if (vrm.lookAt) { vrm.lookAt.target = null; vrm.lookAt.reset(); }
   vrm.humanoid?.resetNormalizedPose();
@@ -521,10 +416,8 @@ export function releaseVRM(vrm) {
     && evictOldestPooled(entry)) { /* LRU out until within budget */ }
 }
 
-/** Pop an instance for re-wear. Defensively re-resets — a borrower (the
- *  thumbnail pass runs behind whenCalm and can outlive a fast switch) may
- *  have posed a body mid-pool; if THAT reset throws, the instance is disposed
- *  and the caller re-parses — a miss, never a haunted hit. */
+/** Pop an instance for re-wear. Re-resets (a borrower like the thumbnail pass may have posed it); if that throws,
+ *  dispose and re-parse: a miss, never a haunted hit. */
 function takePooledVrm(libPath) {
   const list = vrmPool.get(libPath);
   if (!list?.length) return null;
@@ -576,12 +469,8 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
       const work = beginWork(`glb ${short}`);
       try {
         work.phase('download');
-        // §20 + #156: the URL was decided above (resolveLoadRequest) — the running
-        // server's key when this GPU decodes KTX2 and the path negotiates,
-        // the lod recipe on top only when the ask is real. The server answers
-        // the variant when one exists, the original chain otherwise
-        // (provisional): a lod request is never a worse model. The full URL
-        // keys byteCache, so variant and original are distinct entries.
+        // §20 + #156: URL from resolveLoadRequest; a lod request is never a worse model (the server falls back to the
+        // original). The full URL keys byteCache, so variant and original are distinct entries.
         const buf = await fetchBytes(`/library/${req.url}`);
         // body first: bytes are in hand, but the PARSE waits for your own
         // body (bodygate.js) — capped at 12 s so nothing can hold the world
@@ -618,36 +507,18 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
   const proto = await glbCache.get(glbKey);
   const obj = skeletonClone(proto); // safe for rigged + static alike
   registerFoliage(obj);             // this placement's foliage cores (foliage.js: per instance, state per material)
-  // Precompile pipelines OFF the render path — otherwise the first frame that
-  // sees a new material stalls the main thread (the ~1.5s spawn freeze).
-  // ALL THREE compile paths run through the warm conductor (warmqueue.js,
-  // §16.2.A): the repeat-clone and racing-second-caller paths used to call
-  // compileAsync BARE — up to 6 concurrent compiles starving rAF, invisible
-  // to jank attribution (§16.1d) — and the gpu lane's 2-wide concurrency let
-  // even the laned ones fight each other. Only the FIRST use of a model pays
-  // real codegen + pipeline creation; repeats are cache hits — prod trace:
-  // "queued 19311ms · compile 5ms".
+  // Precompile off the render path, or a new material's first frame stalls. ALL THREE compile paths go through
+  // the warm conductor (warmqueue.js, §16.2.A); a bare compileAsync starves rAF. Repeats are cache hits.
   if (compiledLibs.has(glbKey)) {
     await warm(`compile ${short}`, () => renderer.compileAsync(obj, camera, scene).catch(() => {}));
     return obj;
   }
-  // Two spawns of the same model racing used to BOTH queue a full compile —
-  // each paying the whole codegen+pipeline cost (Safari: ~6s each, twice,
-  // for one model). Clones share material references, so one compile warms
-  // them all: the first caller compiles, everyone else awaits it and then
-  // cache-hits.
+  // Clones share materials, so one compile warms them all: the first caller compiles, racers await it and cache-hit.
   if (!libCompiles.has(glbKey)) {
-    // In the loading tray too: on Safari a single material graph compiles for
-    // SECONDS — a spinner named after the model turns that from mystery jank
-    // into visible progress. (The conductor's own beginWork carries the
-    // queued/warm phases the old record here tracked.)
+    // In the loading tray too: a compile can take seconds (Safari), and a named spinner beats mystery jank.
     loadTrack(`compile:${glbKey}`, `⚙ ${short}`);
-    // Per-MESH inside the item, a real frame between: one compileAsync over a
-    // multi-material object batches every pipeline into one GPU-process gulp
-    // (the CRT monitor's 1123ms warm still stalled a frame 617ms even
-    // serialized). Mesh-by-mesh, shared materials cache-hit after their
-    // first mesh and the burst spreads. frustumCulled defeats the walk's
-    // culling for detached clones whose world matrices are still stale.
+    // Per mesh with a real frame between: one compileAsync over a multi-material object is one GPU gulp.
+    // frustumCulled defeats culling for detached clones with stale world matrices.
     const p = warm(`compile ${short}`, async () => {
       const meshes = [];
       obj.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -665,10 +536,7 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
     await p;
     return obj;
   }
-  // The racing second caller awaits the first-of-lib compile OUTSIDE the
-  // conductor (a conductor item must never await another conductor item —
-  // that is item-awaits-item, a deadlock at concurrency 1), then queues its
-  // own now-cheap warm.
+  // Await the first compile OUTSIDE the conductor (item-awaits-item deadlocks at concurrency 1), then warm cheaply.
   await libCompiles.get(glbKey).catch(() => {});
   await warm(`compile ${short}`, () => renderer.compileAsync(obj, camera, scene).catch(() => {}));
   return obj;
@@ -686,13 +554,8 @@ const libCompiles = new Map(); // libPath -> in-flight first compile
 const loadsInFlight = new Map();
 
 // ---- proto residency (§13.3 R2) ---------------------------------------------
-// All GPU bytes live on the PROTOTYPES (clones share everything), and three
-// pins every uploaded geometry/texture in strong maps — only explicit
-// dispose() frees VRAM. So protos are refcounted by realized clones, and
-// when GPU memory crosses the budget, zero-ref protos evict: dispose their
-// unique resources, drop the cache entries. The compressed bytes stay
-// available (byteCache/HTTP cache), so a re-promote is a parse, not a
-// download. NEVER call this per-entity — disposal here reaches every clone.
+// GPU bytes live on the protos and only dispose() frees VRAM, so protos are refcounted by clones and zero-ref ones
+// evict over budget (a re-promote is a parse). NEVER call this per-entity: disposal reaches every clone.
 const libRefs = new Map();     // lib -> count of realized clones in the scene
 export function retainGLB(lib) { libRefs.set(lib, (libRefs.get(lib) ?? 0) + 1); }
 export function releaseGLB(lib) {
@@ -742,38 +605,16 @@ export const protoStats = () => ({
 
 // ---- VRMA clips -------------------------------------------------------------
 
-// 'fly' and 'soar' are the airborne pair. Janus, watching a body climb on the
-// run cycle: "the running animation during flying is a bit goofy" -- and it is,
-// a stride is legs doing work against ground that is not there. fallIdle is the
-// library's free-fall pose: limbs trailing, no contact implied, which is what a
-// body hanging under its own wings actually looks like.
+// 'fly' and 'soar' are the airborne pair: fallIdle (limbs trailing, no contact), not a run cycle.
 
 const vrmaCache = new Map();
-// Digest of the clip bytes THIS PAGE actually loaded, hashed once at fetch
-// (#101 B3): the seat gate compares it to the digest the server judged the
-// profile against, so a fallback clip or a divergent file can never wear a
-// profile that was derived from different bytes. A filename is not an
-// identity; the hash of what arrived is.
+// sha256 of the clip bytes this page loaded (#101): the seat gate matches it to the server's profile digest,
+// so a fallback or divergent clip can't wear a profile derived from other bytes.
 const vrmaSha = new Map(); // slot → hex sha256, present only once resolved
 export function vrmaShaLoaded(slot) { return vrmaSha.get(slot) ?? null; }
-// Clip URLs carry ?v=<mtime>, exactly as avatar URLs do — the server's
-// /animations roster mints the stamp against the file it would actually
-// SERVE (upstream-patched over opt over library), so a fork and its original
-// never share a version. Without it a clip has no invalidation story at all:
-// prod 2026-08-19, a corrected sit clip was live and byte-verified on the
-// wire while a browser kept animating from a copy stored under the older
-// `immutable` headers and never re-requested it — no 304s, nothing this end
-// could purge. A version in the URL is the only invalidation that reaches a
-// cache we do not control; with one, `serveFrom` may also hand the clip the
-// year-long immutable lifetime, so an UNCHANGED clip costs zero requests.
-//
-// Fetched lazily rather than at module load: the first call rides alongside
-// loadVRM, whose megabytes dwarf this JSON, so it costs no wall-clock — and a
-// top-level fetch here is what once gated the whole module graph.
-//
-// A roster failure degrades to the bare, unversioned URL: exactly today's
-// behaviour (no-cache + ETag), never worse. Clips must not stop loading
-// because a listing did.
+// Clip URLs carry ?v=<mtime> from /animations (stamped on the file actually served), the only invalidation that
+// reaches caches we don't control. Fetched lazily (a top-level fetch gates the module graph); a roster failure
+// falls back to the bare URL, never worse.
 let clipRoster = null;
 function clipPath(file) {
   clipRoster ??= fetch('/animations', { cache: 'no-store' })
@@ -798,10 +639,7 @@ export function vrmaBytes(slot) {
   return vrmaCache.get(slot);
 }
 
-// The parsed VRMAnimation is avatar-independent — only createVRMAnimationClip
-// (a cheap retarget against the humanoid rig) needs the vrm. This used to
-// re-parse the whole ~1.9MB VRMA per slot PER AVATAR, so every body arriving
-// re-paid nine GLTF parses the first one had already done.
+// The parsed VRMAnimation is avatar-independent (only the cheap createVRMAnimationClip needs the vrm): parse once.
 const vrmaAnimCache = new Map(); // slot -> Promise<VRMAnimation>
 function vrmaAnimation(slot, priority = 1) {
   if (!vrmaAnimCache.has(slot)) {
@@ -853,24 +691,14 @@ export function noiseTexture(hex, scale = 0.22) {
 // ============================================================================
 // The eidoverse module host
 // ============================================================================
-// Skye's modules are written for a Deno host: they read their own dependencies
-// and assets with SYNCHRONOUS file reads (`eval(Deno.readTextFileSync(...))`,
-// `Deno.readFileSync(tex)`). A browser cannot do a synchronous network read, so
-// the contract is honoured the only way it can be: prime an in-memory file
-// system first, then let the synchronous reads hit it.
-//
-// This is what lets `sky_worlds.js` — 2000+ lines of world packaging that
-// assumes a filesystem — run in a browser tab with ZERO edits to Skye's source.
-// Every future toolkit module gets the same deal for free.
+// Toolkit modules are written for Deno and read files SYNCHRONOUSLY; a browser can't, so prime an in-memory
+// file system first and let the sync reads hit it (sky_worlds.js runs unedited).
 
 const denoFiles = new Map(); // library-relative path -> Uint8Array
 const textDecoder = new TextDecoder();
 
-/** Warm the virtual filesystem. Call before anything that eval-loads toolkit
- *  modules or reads toolkit assets. Paths are library-relative
- *  ("eidoverse/sky_system.js"). Missing files are reported, not fatal —
- *  a world package that references an asset we failed to fetch should degrade,
- *  not abort the whole sky. */
+/** Warm the virtual filesystem before any toolkit eval-load or asset read. Paths are library-relative
+ *  ("eidoverse/sky_system.js"); missing files are reported, not fatal, so a world degrades rather than aborts. */
 export async function primeFiles(paths, { concurrency = 6 } = {}) {
   const missing = [];
   const q = paths.filter((p) => !denoFiles.has(p));
@@ -878,14 +706,8 @@ export async function primeFiles(paths, { concurrency = 6 } = {}) {
     while (q.length) {
       const p = q.shift();
       try {
-        // §20d: loose images negotiate KTX2 at the FILE layer — capable
-        // clients ask, and the server answers with the flip-baked .ktx2
-        // sibling when the sweep built one (curated dirs), the original
-        // otherwise. Only the WIRE URL changes: denoFiles still keys on the
-        // bare library path, so readFileSync, the bytes-identity texture
-        // cache (§16.2.B), and every toolkit module see the same identities —
-        // the bytes just arrive GPU-native, and loadImageTexture sniffs the
-        // container magic to tell which shape it got.
+        // §20d: loose images negotiate KTX2; only the WIRE URL changes, denoFiles keys on the bare path (identities
+        // hold), and loadImageTexture sniffs the container magic.
         const url = await negotiated(p, /\.(png|jpe?g)$/i.test(p));
         const buf = await fetchBytes(`/library/${url}`);
         denoFiles.set(p, new Uint8Array(buf));
@@ -922,17 +744,11 @@ globalThis.Deno = {
   },
   async readFile(p) { return globalThis.Deno.readFileSync(p); },
   async readTextFile(p) { return globalThis.Deno.readTextFileSync(p); },
-  // Bake/export paths in the toolkit write intermediates to disk. In a browser
-  // there is nowhere to put them and nothing that reads them back in the same
-  // session — swallowing the write is correct, and louder than it looks
-  // because anything that then READS the file gets a clear "not primed".
+  // Toolkit writes are swallowed (nowhere to put them); a later read gets a clear "not primed".
   writeFileSync() {}, writeTextFileSync() {},
   async writeFile() {}, async writeTextFile() {},
   mkdirSync() {}, statSync() { throw new Error('[host] statSync unsupported'); },
-  // Engine-side look-dev gates. Skye's modules read these deliberately as
-  // ENGINE knobs rather than parameters (a scene tuning cloud pass counts is a
-  // scene doing look development it doesn't own). We honour that: the client
-  // doesn't invent options, it just supplies the tier the hardware can hold.
+  // Engine-side look-dev knobs, not scene parameters: the client supplies only the tier the hardware can hold.
   env: {
     get: (k) => globalThis.__ewEnv?.[k],
     set: (k, v) => { (globalThis.__ewEnv ??= {})[k] = v; },
@@ -944,34 +760,16 @@ globalThis.Deno = {
   build: { os: 'browser' },
 };
 
-/** Decode image bytes into a three texture — the browser implementation of the
- *  engine's loadImageTexture contract (render_scene.mjs). createImageBitmap is
- *  native here, so this is the short version of the Deno one.
- *
- *  Decoded textures are CACHED by bytes-object identity + the constructing
- *  options (§16.2.B): Skye's loaders (vegetation.js loadMap, sky_worlds
- *  readTex, …) have no cache of their own and re-read the same primed file
- *  per stroke/build — and Deno.readFileSync returns the SAME Uint8Array per
- *  path, so object identity IS the URL. Mojave decoded and uploaded 38
- *  vegetation textures where 24 were unique (§16.1). A WeakMap, so callers
- *  handing us fresh buffers simply miss — nothing transient gets pinned.
- *
- *  Cached textures are session-pinned: an upstream stroke's dispose()
- *  (vegetation.js:1006-1013) frees its map set on every regrow, and a
- *  disposed shared texture served from cache is a black-field bug — so a
- *  cached texture's dispose becomes a no-op, marked userData.ewShared.
- *  Accepted in the §16 design (~24 grass maps); a regrow now REUSES its
- *  textures instead of leaking freshly decoded copies of them. */
+/** Decode image bytes into a three texture: the browser side of the engine's loadImageTexture (render_scene.mjs).
+ *  Cached by bytes identity + opts in a WeakMap (readFileSync returns the same Uint8Array per path, §16.2.B). Cached
+ *  textures are shared, so their dispose() is a no-op (userData.ewShared): a disposed shared texture is black. */
 const imageTexCache = new WeakMap(); // bytes object -> Map<opts key, Promise<Texture>>
 // The full 12-byte KTX2 identifier («KTX 20»\r\n\x1a\n) — the file-format spec's
 // own magic, matched byte-for-byte so nothing else can ever route to the
 // transcoder by accident.
 const KTX2_MAGIC = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
 globalThis.loadImageTexture = async (bytes, opts = {}) => {
-  // srgb + flipY are the only options that alter the CONSTRUCTED texture;
-  // wrap/anisotropy are caller-side mutations, identical for every same-URL
-  // same-opts call site (vegetation.js keeps leaf sets ClampToEdge and stem
-  // sets Repeat on different files — verified, they never diverge)
+  // only srgb + flipY alter the constructed texture; wrap/anisotropy are caller-side and agree per URL
   const cacheable = typeof bytes === 'object' && bytes !== null;
   const key = `${opts.srgb ? 's' : 'l'}:${opts.flipY !== false ? 'f' : 'n'}`;
   if (cacheable) {
@@ -982,27 +780,12 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
     const u8 = bytes instanceof Uint8Array ? bytes
       : bytes instanceof ArrayBuffer ? new Uint8Array(bytes)
         : new Uint8Array(bytes);
-    // §20d: the file layer negotiates KTX2 (primeFiles ?ktx2=<key>), so library
-    // bytes may arrive GPU-native — route by the container itself, never the
-    // path. The 12-byte KTX2 identifier can't prefix a PNG/JPEG, so non-KTX2
-    // bytes fall through to EXACTLY today's path.
+    // §20d: bytes may arrive as KTX2: route by the 12-byte container magic, never the path.
     if (u8.length >= 12 && KTX2_MAGIC.every((v, i) => u8[i] === v)) {
-      // Both engine contracts were baked at ENCODE (server --ktx2-img):
-      //   - the vertical flip is in the PIXELS (three's KTX2Loader ignores
-      //     KTX orientation metadata, so it could not be honoured later);
-      //   - colorSpace comes from the container's DFD transfer, which the
-      //     encoder matched to this call site's opts.srgb — do NOT override
-      //     it here (parseColorSpace already set it).
-      // ktx2.parse TRANSFERS its buffer to the transcoder worker (detached on
-      // return) — hand it a COPY, never the primed file's own storage: Deno.
-      // readFileSync returns the same Uint8Array per path, and detaching it
-      // would corrupt every later read. One copy per bytes+opts, then cached.
+      // Flip and colorSpace were baked at encode (server --ktx2-img): don't override colorSpace here.
+      // ktx2.parse DETACHES its buffer, so pass a copy: readFileSync returns the same Uint8Array per path.
       const tex = await new Promise((res, rej) => ktx2.parse(u8.slice().buffer, res, rej));
-      // Same property treatment as the raster path where applicable: repeat
-      // wrap (callers retighten to ClampToEdge exactly as they do today);
-      // flipY stays false (CompressedTexture's only valid value — the flip is
-      // baked); generateMipmaps stays false and min/mag filters are already
-      // set by the loader (the mips are IN the container).
+      // As the raster path: repeat wrap; flipY false (the flip is baked); mips and filters come from the container.
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       if (cacheable) {
         tex.userData.ewShared = true;   // served from cache — teardowns must skip it
@@ -1011,12 +794,8 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
       queueTexturePrime(tex);           // §17a: initTexture sums literal mip bytes
       return tex;
     }
-    // Engine contract (render_scene.mjs loadImageTexture): the vertical flip is
-    // BAKED into the pixels (browser flipY convention) and tex.flipY stays
-    // false, so it composes with repeat tiling; { flipY: false } skips the bake
-    // for glTF-convention images. This shim must match or every texture sampled
-    // through authored UVs (the vegetation trim sheets were the first) arrives
-    // vertically mirrored.
+    // Engine contract (render_scene.mjs loadImageTexture): the flip is BAKED into the pixels and tex.flipY stays
+    // false; { flipY: false } skips it for glTF images. Must match, or authored-UV textures arrive mirrored.
     const bitmap = await createImageBitmap(new Blob([u8]), {
       colorSpaceConversion: 'none',
       imageOrientation: opts.flipY !== false ? 'flipY' : 'none',

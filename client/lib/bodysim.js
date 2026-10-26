@@ -30,11 +30,7 @@ const ENGINES = new Map([
   }],
 ]);
 
-// The DEFAULT is the Bullet engine (antra, after a day of live falls across
-// old and new avatars: "these physics are just plainly better than anything
-// else we had so far"). The ladder below keeps every promise the old default
-// made: while the wasm warms — or if it never opens — falls run verlet, and
-// a stored choice always wins over the default.
+// Default is Bullet; while its wasm warms (or if it never opens) falls run verlet, and a stored choice always wins.
 const stored = localStorage.getItem(KEY);
 let engine = ENGINES.has(stored) ? stored : 'ammo';
 
@@ -78,21 +74,11 @@ export function setBodyEngine(name) {
   if (e?.load && !e.cls) loadEngine(engine);
 }
 
-/** The one door every fall goes through. Same signature as `new Ragdoll`.
- *
- *  seedVel is LOAD-BEARING and was silently dropped here until 2026-08-04:
- *  main.js hands the drag-release handover through this door as the 4th
- *  argument (`msg?.sim ?? dragVel`), and a 3-parameter signature ate it. Both
- *  engines' snapshot()/seed paths were therefore unreachable in the shipped
- *  client — every release reset the body to zero velocity and re-baked the
- *  rendered bone positions as the new sim's shape, which is what "really bad
- *  with drags" was. A dropped optional argument is invisible in JS; the
- *  parity suites never saw it because they construct the engines directly. */
+/** The one door every fall goes through; same signature as `new Ragdoll`. seedVel is LOAD-BEARING: main.js passes
+ *  the drag-release handover as the 4th argument, and dropping it silently resets every release. */
 export function makeRagdoll(avatar, lean = null, rest = null, seedVel = null) {
-  // A held pose that lowers the hips (kneeling) hands its drop to the root
-  // first (avatar.js bakeHipsIntoRoot). The caller's rest map was read with
-  // the drop still in the skeleton, so it is re-read — the sim measures its
-  // hips offset against it.
+  // A kneeling pose hands its hip drop to the root (avatar.js bakeHipsIntoRoot), so re-read rest: the sim measures
+  // its hips offset against it.
   if (avatar.bakeHipsIntoRoot?.() && rest) rest = avatar.restBonePositions();
   const e = ENGINES.get(engine);
   if (e?.cls && e.cls !== Ragdoll) {

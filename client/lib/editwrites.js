@@ -55,9 +55,7 @@ export function writesOf(req) {
 }
 
 /** May this viewer lift a lock (§5: builders and owners)? The lock question and the Hierarchy's lock icons ask this. */
-// may I lift a lock (so the page offers "move anyway")? An inhabitant never does (decided by the role:
-// client-check's inhabitant case drives an inhabitant by the role alone); any other role by its build switch (a moderator, a custom role).
-// The authority decides either way; this only chooses between the dialog and the refusal.
+// An inhabitant never may; any other role by its build switch. The authority decides; this picks dialog vs refusal.
 export const mayLift = () => { const r = net.myRights; if (!r) return false;
   return Array.isArray(r.permissions) ? r.permissions.includes('build') : isOwner(r); };   // recut B1: the build permission, never a role name
 
@@ -102,12 +100,8 @@ const remember = (act) => { undoStack.push(act); if (undoStack.length > 200) und
 async function sendNow(req, { what = req.verb, revert = null, record = true } = {}) {
   bus.emit('edit-sending', { req, what });
   let r = await sendRequest(req.verb, req.args);
-  // A lock (§5, R's dialog): someone who may lift it is asked "This is locked. Move anyway?" —
-  //   ✓ through: the SAME request with throughLock: one act, the lock stays on;
-  //   ✕ cancel:  nothing is written, and the thing goes back (revert);
-  //   🔓 unlock: delete the lock, then the request as it was: two acts on my stack, so Ctrl+Z undoes the edit first.
-  //     Undo and redo aren't offered it: their act isn't mine to stack under an unlock (Ctrl+Z would then undo the unlock).
-  // An inhabitant (who may not lift locks) gets the refusal as a toast, no buttons. Another lock further up asks again.
+  // A lock (§5) asks those who may lift it: ✓ the same request with throughLock; ✕ revert; 🔓 delete the lock then
+  // send (two acts, so Ctrl+Z undoes the edit first; never offered to undo/redo). Others get a toast.
   let cancelled = false;
   // a lock above your level (lock {rank}, R 10-07: refused with mayLift: false) isn't yours to go through or lift: its
   // refusal shows as words, no buttons

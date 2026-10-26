@@ -56,10 +56,7 @@ function grabbables() {
   return out;
 }
 
-// Picking is done against the JOINT positions, not the skinned mesh: a
-// SkinnedMesh raycast tests the bind pose — a standing silhouette — while a
-// grabbable body is by definition lying in some other shape entirely. The
-// normalized bone nodes ARE where the body visually is, on any rig.
+// Pick against JOINT positions: a SkinnedMesh raycast tests the bind pose, and a grabbable body is lying elsewhere.
 const PICK_R = 0.3;           // how close the ray must pass to a joint (m)
 
 function pickBody(ndc) {
@@ -85,12 +82,8 @@ function pickBody(ndc) {
 }
 
 // ---------------------------------------------------------------- pins
-// A nail you can see is a nail you can pull. P while dragging nails the held
-// joint where it is — the release message carries the pin, and from then on
-// the body's OWNER enforces it (their sim, their consent, their movement key
-// tears every nail out at once). One small marker per pin, rendered from the
-// pins each body streams in its presence; clicking a marker asks its owner
-// to pull that nail. Grabbing a nailed joint takes it back into your hand.
+// P while dragging nails the held joint; the release carries the pin and the OWNER enforces it (a movement key
+// pulls every nail). Markers come from presence; clicking one asks the owner to pull it; grabbing takes it back.
 
 const markers = new Map();          // "bodyId:joint" -> mesh
 let _markerGeo = null, _markerMat = null;
@@ -181,13 +174,7 @@ function beginGrab(e) {
 
   hitR.avatar.root.updateMatrixWorld(true);
   const rd = makeRagdoll(hitR.avatar, null, hitR.avatar.restBonePositions());
-  // Keep the offset between the joint and the cursor RAY. pickBody finds the
-  // joint nearest the ray, which is up to PICK_R away from it — so pinning the
-  // joint straight onto the ray teleports the limb sideways the instant you
-  // grab, by as much as the pick radius. You grab a wrist and the wrist jumps
-  // to your cursor; nail it there and the nail lands somewhere you never
-  // pointed at. Held as a world offset, the limb keeps the relationship it had
-  // when you took hold of it.
+  // Keep the joint-to-ray offset: the picked joint is up to PICK_R off the ray, and snapping it on would jump the limb.
   const jn = hitR.avatar.vrm.humanoid?.getNormalizedBoneNode?.(joint);
   const off = new THREE.Vector3();
   if (jn) {
@@ -223,13 +210,8 @@ function endGrab() {
   drag = null;
 }
 
-/** The dragged person LEFT (#95): release custody BEFORE the avatar is
- *  disposed — endGrab's normal path sends a handover to the departed id and
- *  disposes a sim built over bones that are about to go through
- *  deepDispose (the one-frame-late recovery double-disposed the VRM). This
- *  is the quiet version: no wire send to a ghost, drop the sim, clear the
- *  custody set, done. Runs on net's 'participant-teardown', which every
- *  leave-shaped exit emits before touching the body. */
+/** The dragged person LEFT (#95): release custody quietly (no send, drop the sim) BEFORE the avatar is disposed,
+ *  or the VRM is double-disposed. net emits 'participant-teardown' on every leave before touching the body. */
 bus.on('participant-teardown', (id) => {
   if (drag?.id === id) {
     drag.rd.setPin(null);
@@ -329,9 +311,7 @@ bus.on('bodydrag', (msg) => {
 // ---------------------------------------------------------------- tick
 
 /** Dev introspection — what the drag module believes right now. */
-/** The takeover sim, while a body is in your hand. The debug panel wants it:
- *  a dragged body is a DIFFERENT Ragdoll from your own, and a panel that only
- *  ever reads main.js's shows nothing for the body you are actually holding. */
+/** The takeover sim while a body is in your hand (a different Ragdoll from main.js's), for the debug panel. */
 export function dragSim() { return drag?.rd ?? null; }
 
 export function dragState() {
@@ -343,10 +323,7 @@ export function updateBodyDrag(dt, now = performance.now()) {
   if (drag) {
     const r = remotes.get(drag.id);
     if (!r?.avatar) { endGrab(); return; }       // they left mid-drag
-    // Self-heal on the owner's own word: presence samples keep arriving while
-    // we suppress their APPLICATION, and the owner streaming any non-ragdoll
-    // clip means they took themselves back — whether or not the revoke
-    // message survived the trip. Their stream outranks our sim, always.
+    // Self-heal: an owner streaming any non-ragdoll clip took themselves back, revoke or no; their stream outranks our sim.
     const newest = r.buf[r.buf.length - 1];
     if (newest?.clip && newest.clip !== 'ragdoll') {
       drag.rd.setPin(null);

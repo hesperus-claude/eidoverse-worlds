@@ -186,13 +186,8 @@ function onEnter() {
 }
 
 // ---------------------------------------------------------------- placement
-// One horizontal axis for the resting line, the hint bar that borrows its spot,
-// and the open panel: the viewport's centre, unless that would sit on the chat
-// frame's compose box — then the centre of the free span beside the frame.
-// A pill MOVED in HUD layout mode (owner, 10-01) sits where it was put instead: --ln-x
-// and --ln-b carry its centre and bottom to the hint bar too, and the open panel
-// takes its own clamped centre (--ln-px) and hangs DOWN from a pill in the top half.
-// Phones keep the corner glyph (index.html's ≤600px rules); the spot is a desktop one.
+// One axis for the resting line, hint bar and panel: the viewport centre, or the free span beside chat's compose box.
+// A pill moved in HUD layout mode stays put (--ln-x / --ln-b; the panel clamps to --ln-px). Phones keep the corner glyph.
 const POS_LS = 'ew-lantern-pos';   // {x: centre as a fraction of the width, b: px from the bottom}
 let spot = null;
 try { spot = JSON.parse(localStorage.getItem(POS_LS) || 'null'); } catch { /* private mode */ }
@@ -279,12 +274,8 @@ function initPillDrag() {
 
 // ---------------------------------------------------------------- boot
 
-// THE RESTING LINE'S TWO PERMISSIONS (owner, 10-01: "add it as a pin feature for the reverse-E menu … and have it obey
-// the 'esc to hide' feature"). PINNED (the default, so nobody who leaves it alone sees a change) = the pill rests
-// bottom-centre; unpinned = no resting pill, but Ctrl/Cmd+K and the rail's search entry still open the lantern —
-// unpinning puts away its resting place, not the command line. QUIET = Tab put the panels away (windows.js
-// panelsToggle, relayed by ui.js; Esc was the key until R 10-15 moved it): the pill goes with them and comes back with them. Either hides it, as a class
-// (index.html: display:none — the pill's own display:flex would beat [hidden]); the hint bar keeps the spot either way.
+// PINNED (default) rests the pill; unpinned hides it but Ctrl/Cmd+K still opens the lantern. QUIET (Tab, windows.js
+// panelsToggle) hides it with the panels. Either hides by class, since the pill's display:flex beats [hidden].
 const PIN_LS = 'ew-lantern-pinned';
 let pinned = true;
 try { pinned = localStorage.getItem(PIN_LS) !== '0'; } catch { /* private mode */ }

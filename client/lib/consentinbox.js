@@ -56,11 +56,9 @@ export function makeConsentInbox({ now = () => Date.now(), onChange = () => {} }
   return { take, sweep, asks, askFrom, answer, ring: () => ring.slice() };
 }
 
-/** An act the authority let reach my body (`{type: "body", kind, spec}`: an ask I answered yes, or a standing allow through
- *  the body verb) as the puppet message localbody.js already applies, or null when there is nothing to apply here. The
- *  relay refuses a puppet while my switch is `ask` (server/messages.ts bodyRefusal), so a yes lands only through this.
- *  spec is what the act carries (verbspec `body`): a pose is its bones (or {pose, merge}), an anim its tracks, a shove an
- *  optional {lean}. drag, occupy and carry are streamed live by the actor, not carried in one message. */
+/** An allowed body act (`{type: "body", kind, spec}`) as the puppet message localbody.js applies, or null. While my
+ *  switch is `ask` the relay refuses puppets (server/messages.ts bodyRefusal), so a yes lands only through this.
+ *  drag, occupy and carry are streamed live, not carried here. */
 export function bodyActAsPuppet(m) {
   if (!m || m.type !== 'body') return null;
   const spec = m.spec && typeof m.spec === 'object' && !Array.isArray(m.spec) ? m.spec : null;

@@ -1,24 +1,8 @@
 // browservoice — BRING YOUR OWN VOICE.
 //
-// A synthesized voice for anyone in a browser, with the server serving nothing. The obvious
-// alternative was bundling an in-browser TTS (kokoro-js, ~82MB), and it works —
-// but it charges every visitor 82MB of bandwidth for a generic voice they did
-// not choose, including everyone who only ever wanted a microphone. Wrong cost
-// in the wrong place (R, 2026-08-08).
-//
-// So: a file field. You point at a model or an endpoint you already have, it
-// stays on your machine, and nobody else pays for it.
-//
-//   ws://  / http://   a synthesizer you are already running — the same
-//                      protocol a headless harness speaks, so a browser and a
-//                      harness point at the same kind of thing through the
-//                      same call. Piper, Coqui, a cloud TTS, a two-line Flask app.
-//
-// Why not the browser's own speechSynthesis: it plays straight to the output
-// device and offers no route to an AudioNode, MediaStream or Blob — on Linux
-// synthesis is not even in the browser (speech-dispatcher over a socket).
-// WICG/speech-api#69 asks for exactly that and is still open. A voice that can
-// be SENT must come from a synthesizer that returns bytes.
+// Point at a ws:// or http:// synthesizer you already run (the headless harness protocol); the server serves
+// nothing. Not a bundled TTS (~82 MB per visitor for a voice they didn't choose), and not speechSynthesis (no
+// route to an AudioNode or MediaStream; WICG/speech-api#69).
 
 import { setTtsSource } from './tts.js';
 import { report } from './base.js';
@@ -89,8 +73,4 @@ export async function setEndpointVoice(url, label) {
   return true;
 }
 
-// NOT OFFERED YET: a raw .onnx voice model from disk. Piper's graph takes
-// PHONEME IDS, not text, so it needs the espeak-ng phonemizer (a second wasm
-// blob) before a file picker could do anything but fail silently. A field that
-// accepts a model and then never speaks is worse than no field. When the
-// phonemizer is wired this is where it goes — the seam does not change.
+// Not offered yet: a raw .onnx Piper model, which takes phoneme ids and so needs the espeak-ng phonemizer first.

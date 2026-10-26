@@ -33,14 +33,8 @@ import {
 } from './fp_view.js';
 
 // ---------------------------------------------------------------- flight
-// Janus: "would it be possible to add the ability for me to also fly through
-// the client ... controls like the flightbench". Yes, and it is the SAME
-// integrator an agent flies -- shared/flight.js, one function, every runtime.
-// A human and an agent in the same sky must be flying the same physics or the
-// bench proves nothing about the world.
-//
-// Default OFF and gated: F toggles it, and only when the capability provider
-// grants this body a rig. A commons avatar with no wings gets nothing.
+// The SAME integrator an agent flies (shared/flight.js), so humans and agents share one physics.
+// Off by default: F toggles it, only when the capability provider grants this body a rig.
 import {
   makeConfig as flightConfig, initialState as flightState, step as flightStep,
   takeOff as flightTakeOff, bestGlide, bodyDown as flightDown,
@@ -54,28 +48,16 @@ let flight = null, flightCfg = null, flightProv = null;
 let lastFlightEnd = null;   // why the last flight ended -- 'F did nothing' has causes
 let flightBones = null;
 
-/** Called once the body is known.
- *
- *  THE PROVIDER IS THE WORLD'S, NOT OURS. This used to construct
- *  `devFlightProvider({allow:[identity]})` -- an allow-SELF grant, manufactured
- *  in the shipped client, on every body load. Wearing a winged rig was
- *  therefore both the evidence and the permission, which is default-ON dressed
- *  as default-deny (mica, reviewing cea3c3c, Blocker 1). The grant now comes
- *  from the server's `yourRights.fly`, which no query string can forge, and a
- *  compatible body with no grant gets a refusal that names the fix. */
+/** Called once the body is known. The grant is the server's `yourRights.fly`, never a client-made allow-self;
+ *  a compatible body with no grant gets a refusal that names the fix. */
 export function armFlight(boneNames, identity = 'me') {
   flightBones = boneNames ?? [];
   flightProv = worldFlightProvider({ rights: myRights, label: 'world-grant' });
   return resolveFlight(flightProv, { identity, avatar: { boneNames: flightBones } }).enabled;
 }
 
-// The world's grant, read through a hook rather than an import: net.js keeps
-// itself free of this module on purpose ("net can read/write body state
-// without importing the controller, which imports ui, which imports
-// assets..."), and the same reason runs in this direction. main.js wires it.
-//
-// The DEFAULT RETURNS NULL, and worldFlightProvider reads null as "nobody has
-// said you may". A forgotten wiring must ground the body, never free it.
+// The world's grant comes through a hook main.js wires (an import would cycle via net.js). The default returns
+// null, read as "not granted": a forgotten wiring grounds the body, never frees it.
 /** Hand the wings back to the idle. Every exit from flight goes through here
  *  -- F, a landing, a ragdoll, a revoked capability -- because "clear it at
  *  each exit" is a rule with as many holes as it has exits. */
@@ -91,16 +73,8 @@ export function setRightsHook(fn) { myRights = typeof fn === 'function' ? fn : (
 let meRef = () => null;
 export function setMeHook(fn) { meRef = typeof fn === 'function' ? fn : (() => null); }
 
-// THE SAME FLOOR WALKING STANDS ON. Flight was handed raw `heightAt` while
-// take-off measured `resolveColliders` -- two different answers for "where is
-// the ground", differing by the whole height of every deck, slab and structure
-// floor in the world. A flier launched from the resolved floor and then tested
-// against bare terrain is airborne by one measure and buried by the other.
-//
-// The scratch vector is load-bearing twice over: resolveColliders MUTATES the
-// x/z it is given (wall push-out) and resets the module's `blockedTop`, so
-// probing with the live body would shove the flier sideways and steal the
-// mantle probe the walk path reads on the same frame.
+// Flight's ground is the floor walking stands on (resolveColliders), not raw heightAt. Probe with a scratch
+// vector: resolveColliders mutates x/z and resets `blockedTop`, which the walk path reads the same frame.
 const _gp = new THREE.Vector3();
 const _float = { on: false, y: 0, vy: 0, at: 0 };   // the swimmer's buoyant column (shared/buoyancy.js)
 function groundUnder(pos, cap = null) {
@@ -122,12 +96,8 @@ export const flying = () => !!flight;
 let speedCap = null;
 export function capSpeed(v, ms) { if (Number.isFinite(v) && ms > 0) speedCap = { v: Math.max(0, v), until: performance.now() + ms }; }
 
-// THE VIGIL POSTURE (spec section 1 fold_down, section 2 FOLDED, T6).
-//
-// Kept as controller state rather than inside `flight`, because folding is
-// something a body does STANDING and the flight state only exists once she is
-// flying. `takeOff` reads it as a precondition and refuses -- which is the
-// whole point of the posture: it costs the sky until you explicitly unfold.
+// The vigil posture (flight spec §1 fold_down, §2 FOLDED): controller state, since folding happens standing;
+// takeOff refuses while folded.
 let wingsFolded = false;
 export const folded = () => wingsFolded;
 export function setFolded(fold, me = meRef()) {
@@ -148,14 +118,7 @@ function toggleFold(me) {
   return cap?.enabled ? 'wings open' : 'wings open — propulsion is still not granted here';
 }
 
-/** WHY FLIGHT IS DOING THAT, in words, for a person with no devtools open.
- *
- *  The __flightDebug probe below is the same information, and it was useless
- *  twice running: a browser console is not where the person who hits the bug
- *  is standing, and every report that reached me was a DESCRIPTION ("it jumps
- *  and lands", "I'm stuck standing") that I then spent a session translating
- *  back into state. /audio exists for the same reason and says so: "a
- *  diagnostic nobody can find is one nobody uses". */
+/** Why flight is doing that, in words, for a person with no devtools open (__flightDebug is the console twin). */
 export function flightReport() {
   const v = flightProv
     ? resolveFlight(flightProv, { identity: 'me', avatar: { boneNames: flightBones } })
@@ -198,13 +161,7 @@ if (typeof globalThis !== 'undefined') {
 }
 
 function toggleFlight() {
-  // RELEASING THE WINGS IS PART OF LANDING. `wingEffort` was cleared on the
-  // natural landing path only, so pressing F mid-flap left the avatar holding
-  // the last value forever: wings beating at full power on a body standing
-  // still, and the idle sliders apparently dead because a stuck effort of 1
-  // means the mix is 100% WING_POWER and WING_IDLE is not being read at all.
-  // Janus: "the wings are stuck going very fast like they were when i was
-  // flying, and adjusting the sliders doesnt change it." One bug, two faces.
+  // releasing the wings is part of every landing, or a stuck effort of 1 keeps them beating
   if (flight) { flight = null; releaseWings(); return 'landed'; }
   if (!flightProv) return 'flight not armed for this body';
   // The spec's precondition, enforced where the human meets it. takeOff would
@@ -214,16 +171,7 @@ function toggleFlight() {
   const r = resolveFlight(flightProv, { identity: 'me', avatar: { boneNames: flightBones } });
   if (!r.enabled) return `no: ${r.reason}`;
   flightCfg ??= flightConfig();
-  // ARM IT IN A LOCAL, PUBLISH IT ONCE. The first cut assigned the GROUND state
-  // to `flight` and then reassigned the result of takeOff on the next line --
-  // so anything that threw in between (or any refusal takeOff returned) left
-  // `flight` holding a body that had never left the ground. That state is
-  // TRUTHY, so the movement loop handed it the body, `stepGround` integrated
-  // nothing, and the person was frozen in whatever clip they were wearing until
-  // they pressed F again. "Stuck standing or walking depending on which one I
-  // was doing at the time."
-  //
-  // A toggle either flies or it does not. Nothing observes a partial one.
+  // Arm it in a local, publish once: a GROUND state left in `flight` is truthy and freezes the body.
   let next;
   try {
     next = flightState({
@@ -233,18 +181,12 @@ function toggleFlight() {
       // atan2(dz,dx). Convert, both ways, at this boundary only.
       yaw: Math.PI / 2 - myState.yaw,
     }, flightCfg);
-    // THE GROUND UNDER HER FEET, resolved the way walking resolves it. Passing
-    // `myState.pos.y` -- where she IS -- is the same number only while she is
-    // standing still on flat ground; mid-jump or a frame after a step-up it is
-    // metres off, and takeOff builds its launch height from it.
+    // the resolved ground, not myState.pos.y (metres off mid-jump), since takeOff builds launch height from it
     next = flightTakeOff(flightCfg, next, { groundY: groundUnder(myState.pos) });
   } catch (e) {
     return `flight failed to start: ${e?.message ?? e}`;
   }
-  // A REFUSAL IS NOT A TAKE-OFF. takeOff returns a state with a `takeoff.refused`
-  // event rather than throwing, and the phase it returns is the phase it was
-  // given -- which is the other way the body ended up frozen on the ground
-  // holding the controls.
+  // a refusal is not a take-off: takeOff returns the given phase with a `takeoff.refused` event, never throws
   if (next.phase !== 'PILOT') {
     const why = next.events?.find(ev => ev.kind === 'takeoff.refused')?.reason ?? next.phase;
     return `cannot take off: ${why}`;
@@ -309,11 +251,8 @@ export function walkTo(x, z, { until = null, ms = 12000 } = {}) {
 }
 function endAutoWalk(why) { const a = autoWalk; if (!a) return; autoWalk = null; a.done(why); }
 export const isAutoWalking = () => !!autoWalk;
-// FREE CAMERA (R, 10-10: "maybe we need an 'editor camera' mode on the top line ... fly the camera in free mode with
-// WASD ... the character can hit an 'I'm working on this' pose"). Edit mode only. The orbit's centre is a point in the
-// WORLD, not an offset from my body: WASD flies that point, the body stays where it stood, and walls don't push the eye.
-// Leaving edit mode (B) puts the view back on the body at once and KEEPS the spot: B again returns to it. The Body/Free
-// switch is the full reset.
+// Free camera, edit mode only: WASD flies a WORLD point; the body stays put and walls don't push the eye.
+// Leaving edit mode (B) returns the view to the body but keeps the spot; the Body/Free switch is the full reset.
 const freeCam = { on: false, focus: new THREE.Vector3(), dist: 6, yaw: 0, pitch: 0.32, saved: false };
 export const isFreeCam = () => freeCam.on && editingNow();
 export const freeCamState = () => ({ on: freeCam.on, focus: freeCam.focus.toArray(), dist: freeCam.dist });
@@ -360,17 +299,8 @@ addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 
 bus.on('key', (e) => {
-  // AUTOREPEAT IS NOT A SECOND PRESS. A held key re-fires keydown at the OS
-  // repeat rate (~30Hz after a ~500ms delay) and every binding here is a
-  // TOGGLE, so holding F for two thirds of a second took off and landed and
-  // took off and landed -- which is exactly what "switching into flying mode
-  // just makes my character jump and land immediately" looks like from the
-  // outside, and why it reproduced for a person and never for a scripted
-  // probe that synthesises one clean keydown.
-  //
-  // Guarded HERE and not on the emit, because the repeat is wanted elsewhere:
-  // build.js binds R/F and the arrows to nudge/raise/turn, where holding the
-  // key to keep moving a thing is the whole interaction.
+  // Autorepeat is not a second press: every binding here toggles. Guarded here, not on the emit, because
+  // build.js's nudge keys want the repeat.
   if (e.repeat) return;
   // the body's toggles yield while editing: X/F/G are the editor's there
   // (remove / find / move tool) and a chorded Z is undo, never 'lie'
@@ -389,12 +319,8 @@ const BODY_KEYS = [
 ];
 for (const { code, ...a } of BODY_KEYS) registerAction({ ...a, id: `body:${a.id}`, group: 'body' });
 
-// Declared seats (socket children with a body block — use verb, rides motion) live in
-// main.js with the rest of the world vocabulary; the controller only knows
-// postures. main.js registers a hook so X reaches BOTH systems: sockets get
-// first claim (a swing that carries you beats sitting frozen mid-air where
-// its collider used to be), and a mounted body's X means "get up". Returns
-// true when the hook consumed the press. Same probe pattern as build.js.
+// Declared seats live in main.js; its hook gets first claim on X (and a mounted body's X means "get up").
+// Returns true when it consumed the press.
 let occupyHook = () => false;
 export function setOccupyHook(fn) { occupyHook = fn; }
 
@@ -417,14 +343,12 @@ function toggleSit() {
 }
 
 // ---------------------------------------------------------------- mouse
-// Everything here is gated on the event actually being on the canvas. It used
-// to be bound to the window with no target check, so dragging a sky slider
-// spun the camera and scrolling the palette dollied it.
+// Everything here is gated on the event being on the canvas, so UI drags and scrolls never move the camera.
 
 canvas.addEventListener('mousedown', (e) => {
   if (pointerClaimed()) return;
   // Outside edit mode either button looks. In edit mode a left-drag belongs to the object under it, so the camera
-  // has an editor's controls (R, 10-10: "we need camera moving controls in edit mode. I would suggest Blender or Maya"):
+  // has an editor's controls:
   //   Alt+left  orbit (over anything)      middle, or Alt+middle  pan      Alt+right  dolly      right  orbit
   //   left on bare space  orbit (build.js says so: 'edit-bare-press')       wheel  dolly      F  frame the selection
   if (editingNow()) {
@@ -444,36 +368,12 @@ let editingNow = () => false;
 export function setEditingProbe(fn) { editingNow = fn; }
 addEventListener('mouseup', () => { dragging = false; });
 // ---- mouselook --------------------------------------------------------------
-// The desktop-game standard (VRChat, WoW): the canvas captures the pointer,
-// looking is free, Esc hands the cursor back. Drag-orbit stays untouched as
-// the fallback and the edit-mode behavior — a mode this module already has,
-// because looking-vs-editing was settled the same way in build.js.
-// While locked the cursor is parked, so `mouse` pins to (0,0): hover and
-// picking read the screen centre — crosshair semantics — instead of wherever
-// the pointer happened to die.
+// The canvas captures the pointer; drag-orbit stays as the fallback and the edit-mode behaviour.
 let locked = false, lockHinted = false;
 export const isMouselook = () => locked;
 
-// MOUSELOOK: M toggles, Esc frees. Two keys, one behaviour each.
-//
-//   M     toggle: locked <-> free, both directions. Bare M only — modified
-//         presses belong to the browser and the OS (Ctrl+M etc).
-//   Esc   always frees the cursor. One-way by browser law: every engine
-//         hardcodes Esc to RELEASE a pointer lock and refuses to let a page
-//         grant one from it, because that is exactly how a hostile page would
-//         trap a cursor. So Esc can never be the way back IN — hence M.
-//
-// M rather than C: M is the name of the mode and matches Second Life's
-// binding, while Ctrl+C is the most-pressed shortcut on any machine and a
-// guard regression there would bite someone mid-copy.
-//
-// Clicking the world does NOT enter mouselook. It used to, and that made
-// cursor mode nearly unusable — every click on anything dropped you back into
-// capture, so you could never interact freely.
-//
-// While locked the cursor is parked, so `mouse` pins to (0,0): hover and
-// picking read the screen centre — crosshair semantics — instead of wherever
-// the pointer happened to die.
+// Mouselook: bare M toggles the lock; Esc always frees it (browsers never grant a lock from Esc, hence M).
+// Clicking the world does not lock, on purpose. While locked, `mouse` pins to (0,0) so picking reads screen centre.
 
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
@@ -507,11 +407,8 @@ addEventListener('keydown', (e) => {
   else relock();
 });
 
-// An Esc-initiated unlock leaves the canvas unfocused, and Chrome wants
-// requestPointerLock from a focused target — a bare window keydown listener
-// was not enough to get back IN (R, 00:33). Focus first, then ask; and if the
-// browser refuses anyway, say so instead of failing silently, which is how
-// this hid in the first place.
+// Chrome wants requestPointerLock from a focused target and an Esc unlock leaves the canvas unfocused:
+// focus first, then ask, and say so if the browser refuses.
 function relock() {
   if (document.pointerLockElement === canvas) return;
   try { canvas.focus?.({ preventScroll: true }); } catch { /* not focusable, fine */ }
@@ -547,9 +444,7 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // ---------------------------------------------------------------- touch
-// No touch support at all meant a spectator on a phone got nothing. A left
-// thumbstick plus look-drag on the rest of the screen is the minimum that
-// makes a body usable.
+// A left thumbstick plus look-drag on the rest of the screen: the minimum that makes a body usable on a phone.
 
 const touchState = { moveX: 0, moveZ: 0, lookId: null, lastX: 0, lastY: 0 };
 export function enableTouch() {
@@ -595,11 +490,7 @@ export function enableTouch() {
   canvas.addEventListener('pointerup', lookEnd);
   canvas.addEventListener('pointercancel', lookEnd);
 
-  // Jump only. The 💬 button predates the dock carrying chat; now that the rail
-  // has a chat icon on every viewport, a second door to the same panel just
-  // spends bottom-right space the thumb wants. Chat is still one tap (rail) or
-  // one key (Enter) away. NOTE: the chat import stays — Enter opens chat and
-  // chat.isOpen gates movement.
+  // Jump only: chat is on the rail. The chat import stays (Enter opens chat; chat.isOpen gates movement).
   const btns = document.getElementById('touchbtns');
   for (const [label, code] of [['⤒', 'Space'], ['⤓', 'KeyC']]) {
     const b = document.createElement('button');
@@ -632,10 +523,8 @@ export function constrainMovement(pos) {
   const [x, z] = clampToBounds(pos.x, pos.z); pos.x = x; pos.z = z;
   if (!worldBounds()) { const r = Math.hypot(pos.x, pos.z); if (r > 78) { pos.x *= 78 / r; pos.z *= 78 / r; } }
 }
-// DIVING in the world's water LEVEL (water.js: lakes, rivers, the sea). Swimming there is a surface float
-// (shared/buoyancy.js, below in updateMe); diving takes the body under it into the same 3D swim the authored volumes
-// use — WASD where you look, Space up, C / Ctrl down — with the surface at the wave above you. Coming back up to the
-// surface (not diving) hands the body back to the float.
+// Diving in the water level (water.js): the same 3D swim as authored volumes (Space up, C / Ctrl down), surface at
+// the wave above; surfacing hands the body back to the float (shared/buoyancy.js).
 let levelDiving = false;
 const levelDiveKeys = () => keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight');
 function levelDiveWater(me) {
@@ -731,10 +620,8 @@ export function updateMe(dt, me) {
   if (!Number.isFinite(myState.speed)) myState.speed = 0;
   if (!Number.isFinite(camYaw)) camYaw = 0;
   if (!(Number.isFinite(myState.pos.x) && Number.isFinite(myState.pos.y) && Number.isFinite(myState.pos.z))) myState.pos.copy(_lastFinitePos); else _lastFinitePos.copy(myState.pos);
-  // AUTO-WALK (R, 10-10: click something out of reach and "your avatar could sprint/walk over until it's in grabbing
-  // distance and get it"). The same inputs a hand on the keys would give, so everything downstream (speed, collision,
-  // the walk clip, what the authority sees) is ordinary walking. Any real input ends it; so does arriving, getting
-  // nowhere, or running out of time.
+  // Auto-walk to something out of reach, with the same inputs keys give, so downstream it is ordinary walking.
+  // Any real input ends it; so does arriving, getting nowhere, or running out of time.
   if (autoWalk) {
     const a = autoWalk, dx = a.x - myState.pos.x, dz = a.z - myState.pos.z, d = Math.hypot(dx, dz), now = performance.now();
     if (Math.abs(fwd) > 0.08 || Math.abs(strafe) > 0.08 || editingNow()) endAutoWalk('cancelled');
@@ -773,11 +660,8 @@ export function updateMe(dt, me) {
   // want it at 1.55 m/s is a fight.
   const creeping = keys.has('AltLeft') || keys.has('AltRight');
   const mag = Math.min(1, Math.hypot(fwd, strafe));
-  // VR stick (owner, 09-06 12:53): half deflection = walking speed, full = sprint — the stick IS the shift key
-  // (mover.stickSpeed ramps walk→run). Desktop keeps shift/alt (mover.walkSpeed). The chosen size (Profile › Avatar):
-  // the stride grows with the legs, so a 150% body walks 150% as fast — the mover scales it.
-  // `fast` is the run flag the mover sees: Shift, or (VR) the stick past half deflection — on land the same stride as
-  // before (the gain is relative to `full`), in water the hard stroke (MOVER.swim.run) instead of the steady one.
+  // VR stick: half deflection walks, full sprints (mover.stickSpeed); desktop keeps shift/alt. The mover scales
+  // stride with chosen size. `fast` = Shift or stick past half: on land the run, in water MOVER.swim.run.
   const fast = xrIntent.active ? mag > 0.5 : running;
   const full = walkSpeed({ run: fast, creep: creeping, scale: me.userScale });   // the mover's speed for these keys
   const target = moving ? (xrIntent.active ? stickSpeed(mag, me.userScale) : full * mag) : 0;
@@ -796,11 +680,8 @@ export function updateMe(dt, me) {
     _dir.set(strafe, 0, -fwd).normalize().applyAxisAngle(UP, camYaw);
     const targetYaw = Math.atan2(_dir.x, _dir.z);
     myState.yaw += angleDelta(myState.yaw, targetYaw) * Math.min(1, 12 * dt); myState.yaw = Math.atan2(Math.sin(myState.yaw), Math.cos(myState.yaw));   // the accumulator wraps too (the owner's recorder: root 7.62 = 1.34 + 2π after setCamYaw already wrapped)
-    // the stride is the mover's: my eased speed as a fraction of its full one, so the metres per frame are exactly what
-    // an agent's tick covers and the authority's track accepts. The floor and what pushes back are the collider pass
-    // below (resolveColliders), which answers the mover's floor rule from the drawn geometry.
-    // In water the mover also needs the floor (the stance is judged on it): the collider pass's own answer, probed as the
-    // move itself will be. Dry, it is not asked — the collider pass below is the floor, as it always was.
+    // the stride is the mover's, so metres per frame match an agent's tick and the authority's track. The floor is
+    // the collider pass below; in water the mover also needs it (stance), probed as the move will be.
     const wcap = wl == null ? null : colliderFor(me.userScale);
     const groundHere = wl == null ? Infinity : groundUnder(myState.pos, wcap);
     const stride = stepWalk({ pos: [myState.pos.x, myState.pos.y, myState.pos.z], dir: [_dir.x, _dir.z], dt, run: fast, creep: creeping, scale: me.userScale, gain: myState.speed / full, height: wadeH || undefined },
@@ -828,28 +709,14 @@ export function updateMe(dt, me) {
   // FLIGHT OWNS THE BODY while it lasts -- position, heading and clip -- the
   // same way a mantle or a ragdoll does. Walking resumes the moment she lands.
   if (flight) {
-    // A GROUNDED FLIGHT DOES NOT OWN A BODY. `stepGround` integrates nothing,
-    // so a state that reaches here still in GROUND freezes the person in place
-    // and swallows their controls -- flight's grip on the body has to be
-    // conditional on flight actually happening. The toggle already refuses to
-    // publish a non-PILOT state; this is the second lock, because "the body is
-    // held by something that is not moving it" is the failure worth making
-    // structurally impossible rather than merely unlikely.
+    // A grounded flight does not own a body (stepGround integrates nothing); second lock after the toggle's.
     if (flight.phase === 'GROUND') {
       flashHint?.('flight did not start — released');
       flight = null; grounded = true; vy = 0;
     }
   }
-  // A REVOKED GRANT GROUNDS A BODY THAT IS ALREADY UP. Checking only at the
-  // next ACTION satisfies the letter of "the next action refuses" and misses
-  // the point: a pilot whose permission was withdrawn mid-sortie kept flying
-  // indefinitely as long as they touched nothing. Re-resolved every frame --
-  // which is what "action-time, never cached" was always supposed to mean --
-  // and a withdrawal becomes a descent she can see, not a silent one.
-  //
-  // She is handed to the leaf rather than deleted: dropping `flight` at 15m
-  // would teleport her to the ground. Losing permission to fly is not the same
-  // as ceasing to exist.
+  // The grant is re-resolved every frame, so a revocation grounds a body already up: handed to the leaf
+  // (a visible descent), never dropped, which would teleport it to the ground.
   if (flight && flight.phase !== 'RAGDOLL') {
     const still = resolveFlight(flightProv, { identity: 'me', avatar: { boneNames: flightBones } });
     if (!still.enabled) {
@@ -870,22 +737,8 @@ export function updateMe(dt, me) {
     myState.clip = flight.wings === 'LIMP' ? 'ragdoll'
       : (input.flap ? 'fly' : 'soar');
     myState.bodyMode = flight.wings === 'LIMP' ? 'fall' : 'fly';   // the mover's flight state, reported (shared/bodymode.js)
-    // WINGS THAT WORK WHEN THE PHYSICS IS WORKING. Effort is read off the
-    // flight state rather than off a timer, so the animation cannot drift out
-    // of step with what is actually lifting her:
-    //
-    //   launchNow  the shaped take-off impulse, which SPOOLS UP over ~1.5s and
-    //              fades by ~3s. Janus asked for "several, while rising" and
-    //              this is exactly that curve -- the first beat as her feet
-    //              leave, the hardest ones as she is climbing through the
-    //              second, easing off as the glide takes over. Nothing here
-    //              counts beats; the launch envelope already has the shape.
-    //   flap       Space held. A sustained climb IS the wings, so they beat
-    //              full-power for as long as it lasts.
-    //
-    // Normalised against the config's own launch boost, so retuning the
-    // take-off retunes the animation with it instead of leaving a hardcoded
-    // divisor behind to disagree.
+    // Wing effort follows flight state, not a timer: the launch envelope (normalised to the config's launchBoost)
+    // or full power while flap (Space) is held.
     const boost = flightCfg.pilot?.launchBoost ?? 9.0;
     const fromLaunch = Math.min(1, (flight.launchNow ?? 0) / (boost * 0.55));
     me.wingEffort = input.flap ? 1 : fromLaunch;
@@ -894,11 +747,7 @@ export function updateMe(dt, me) {
       lastFlightEnd = { phase: flight.phase, y: +flight.pos.y.toFixed(2),
                         ground: +flightGround(flight.pos.x, flight.pos.z).toFixed(2),
                         t: endedAt };
-      // A FLIGHT THAT ENDS IN ITS FIRST SECOND IS A BUG REPORTING ITSELF.
-      // "It jumps and lands immediately" arrived as a description because the
-      // client had no way to say WHY -- the receipt existed only in a devtools
-      // probe. A landing is normal; a landing before the launch has finished
-      // spooling is not, and it should arrive with its numbers attached.
+      // a landing before the launch finishes spooling is a bug: report it with its numbers
       if (endedAt < 1.5) {
         flashHint?.(`flight ended after ${endedAt}s — landed at y=${lastFlightEnd.y}, ` +
                     `ground ${lastFlightEnd.ground}`, 6000);
@@ -908,20 +757,8 @@ export function updateMe(dt, me) {
       me.wingEffort = 0;              // back to the resting flap, eased in _flap
       releaseWings();                 // ...and for any body the loop is not holding
     }
-    // AND NOW PUT HER ON THE SCREEN. Everything above moves `myState`, which
-    // is the streamed, authoritative body -- but the four lines that make a
-    // body VISIBLE (clip, root position, root rotation, camera) live at the
-    // bottom of this function, past the `return` below. So flight ran for
-    // thirty-one seconds at 16m while `me.root` sat on the ground where she
-    // took off, the camera watched that empty spot, and pressing F to land
-    // handed the walk path a position 100m away that it applied in one frame.
-    // From inside: frozen, then a teleport. From /flight: a perfect sortie.
-    //
-    // Both other paths that skip updateMe's tail already learned this and left
-    // a note -- stepRagdoll ("the camera lives in updateMe, which we skip
-    // while limp -- so drive it here too, or it freezes on the frame you
-    // fell") and updateMountedMe (#75, the same fix for seats). This was the
-    // third and the only one that had not paid it.
+    // Draw the body here: the clip/root/camera lines at updateMe's tail are past the `return` below
+    // (stepRagdoll and updateMountedMe do the same).
     me.setClip(myState.clip, myState.speed);
     me.root.position.copy(myState.pos);
     me.root.rotation.y = myState.yaw;
@@ -929,13 +766,7 @@ export function updateMe(dt, me) {
     updateFollowCamera(dt, me);
     return;                                           // nothing else drives her
   }
-  // NOT FLYING MEANS NOT WORKING THE WINGS. Asserted every frame rather than
-  // cleared at each exit: releaseWings() covers the exits we know about, and
-  // this covers the ones we do not -- a capability revoked mid-air, a body
-  // swapped while flying, an exception between the flap and the landing. The
-  // cost is one assignment per frame on a value _flap already eases, and the
-  // benefit is that "wings stuck at full power" cannot survive a single frame
-  // of not flying, whatever route got us here.
+  // not flying means no wing effort, asserted every frame to cover exits releaseWings() doesn't know about
   if (me.wingEffort) me.wingEffort = 0;
   if (mantle) {
     mantle.t += dt / 0.55;
@@ -955,18 +786,13 @@ export function updateMe(dt, me) {
       } else { vy = 5.6; grounded = false; jumped = true; }   // a DELIBERATE jump: the clip may start this frame, no airborne grace
     }
     if (!mantle) {
-      // reaching the water, not last frame's footing, starts the float: a body walking off a high bank
-      // falls through the air first (and lands in the water moving, so it dunks)
-      // A float picks up from the body as it is now: a frame this code did not run (a ragdoll, a mantle, a
-      // flight, a drained world) means something else moved the body, and the old float is stale.
+      // reaching the water starts the float (a body off a high bank falls first, then dunks); a frame this code
+      // didn't run means something else moved the body, so the old float is stale
       const nowMs = performance.now();
       const afloat = _float.on && nowMs - _float.at <= 250;
       if (swimming && (afloat || myState.pos.y <= support + 0.3)) {
-        // FLOATING (shared/buoyancy.js): the body is a buoyant column on the moving surface (shared/
-        // waves.js, the same swell the water draws, on the world's clock). A long swell lifts it; a short
-        // steep wave climbs the body before it bobs up. It takes over from wherever the body was, moving
-        // as it was — so a drop into deep water dunks you and bobs you back up. Ahead of the falling
-        // branch, so a crest lifting the swimmer above its resting depth is not mistaken for a fall.
+        // Floating (shared/buoyancy.js): a buoyant column on shared/waves.js's swell, picking up the body's motion.
+        // Ahead of the falling branch, so a crest lifting the swimmer is not mistaken for a fall.
         if (!afloat) { _float.on = true; _float.y = myState.pos.y; _float.vy = vy; }
         _float.at = nowMs;
         const t = waveTime();
@@ -1035,15 +861,8 @@ export function updateFollowCamera(dt, me) {
   if (editingNow() && !firstPerson) focus.add(editPan);   // the edit camera's centre (pan, frame)
 
   if (firstPerson) {
-    // Seated/lying (and any held ragdoll pose) put the head somewhere the
-    // standing offset can't predict — a chair leans you back, lying puts the
-    // head a body-length from the root near the floor. Anchor on the LIVE
-    // head bone instead (#75's contract, same as the snap/spectator views):
-    // me.update() keeps the mixer animating while the mesh is hidden in
-    // first person, so the bone tracks the sit-down/lie-down transition
-    // frame by frame and rides a moving socket. Standing locomotion keeps
-    // the fixed height — bolting the eye to the bone there would add the
-    // walk cycle's head bob to every step.
+    // Posed or not standing: anchor on the LIVE head bone (#75; the mixer runs while hidden). Standing keeps the
+    // fixed height, or the walk cycle's head bob reaches the eye.
     if (me && (myState.pose || !STANDING_CLIPS.has(myState.clip))) {
       const hp = me.headWorldPosition(_headWp);
       if (hp) focus.set(hp.x, hp.y + FP_EYE_LIFT, hp.z);
@@ -1073,10 +892,7 @@ export function updateFollowCamera(dt, me) {
     .multiplyScalar(THREE.MathUtils.clamp(camDist * 0.16, 0, 0.62));
   const want = _camWant.set(dirX, dirY, dirZ).multiplyScalar(camDist).add(focus).add(shoulder);
 
-  // ---- collision: pull the eye in so orbiting into a wall or hillside never
-  // puts the camera inside the world. One grid segment query (§14.2 6a) —
-  // this used to be a recursive raycast into every mesh of every entity,
-  // with three fresh Vector3s per frame, to learn this one number.
+  // ---- collision: pull the eye in so it never ends up inside the world; one grid segment query (§14.2 6a)
   const farD = focus.distanceTo(want);
   _cdir.copy(want).sub(focus).normalize();
   // the free camera is an editor's: it passes through. So does the body camera once its centre has left the body (F, a
@@ -1102,25 +918,13 @@ const _cdir = new THREE.Vector3();
 // grid's raySegment answers from collider entries, no entity list needed.)
 
 // ---- photo mode -------------------------------------------------------------
-// The pitch is "the video toolkit becomes the camera crew" and there was no
-// screenshot key, no UI hide, no free camera. This is the human-facing version
-// of the retina path that already exists for agents.
+// Screenshot key, UI hide and free camera: the human-facing version of the agents' retina path.
 
-// Damping. A camera that starts and stops on the exact frame a key goes down
-// reads as a debug flythrough, not a shot: the eye is a physical object and an
-// operator's hands have mass. Everything here eases with an exponential
-// half-life — frame-rate independent (no `dt` term in a lerp factor, which
-// silently changes feel between 60 and 144Hz), and it cannot overshoot after a
-// long frame the way a spring would.
+// Exponential-half-life damping: frame-rate independent, and no overshoot after a long frame (unlike a spring).
 const MOVE_TAU = 0.22;   // dolly weight: pushes off, glides to a stop
 const LOOK_TAU = 0.09;   // pans settle instead of snapping; short enough to not feel laggy
 const FOV_TAU = 0.16;    // the lens breathes
-// Alt is the fine-adjust modifier: the last few metres and the last few degrees
-// of a frame. It slows the dolly to a walking pace AND puts the head on a
-// geared tripod — the same hand movement that whips the camera around at full
-// speed becomes a slow, smooth swing, so a shot can be settled precisely
-// instead of hunted. Damping only changes HOW it gets there: the mouse still
-// commands the same angle, it just arrives without the jitter of the wrist.
+// Alt = fine adjust: a slower dolly and heavier look damping; the mouse still commands the same angle.
 const LOOK_TAU_FINE = 0.5;
 const FINE_MPS = 2.5;    // absolute, not a fraction — "creep at 2.5 m/s"
 const damp = (cur, target, tau, dt) => target + (cur - target) * Math.exp(-dt / tau);
@@ -1153,10 +957,7 @@ export function togglePhotoMode() {
 }
 function updatePhotoCamera(dt) {
   if (dragging) { /* handled by the shared mousemove */ }
-  // The mouse sets a TARGET orientation; the camera chases it. Framing against
-  // the damped angles (not the raw ones) is what makes a pan feel operated
-  // rather than teleported — and the fly keys steer by where the camera is
-  // actually looking, so movement never fights the settle.
+  // The mouse sets a target the camera chases; fly keys steer by the damped look, so movement never fights the settle.
   const fine = keys.has('AltLeft');
   const lookTau = fine ? LOOK_TAU_FINE : LOOK_TAU;
   photo.yaw = dampAngle(photo.yaw, camYaw, lookTau, dt);
@@ -1191,11 +992,8 @@ function updatePhotoCamera(dt) {
   camera.lookAt(_f.add(photo.pos));   // _f is spent here — recomputed next frame
 }
 
-/** Spectator/retina camera: first person from a followed body's head.
- *  Same eye/exclusion semantics as the snap `first` view (#75): the eye
- *  anchors on the live head bone (bounds when the rig has none) so it follows
- *  a mounted socket, and the followed body is hidden — a first-person view
- *  of someone is not improved by the inside of their skull. */
+/** Spectator/retina camera: first person from a followed body's live head bone (as the snap `first` view, #75),
+ *  with that body hidden. */
 const _specHead = new THREE.Vector3();
 const _specBox = new THREE.Box3();
 export function updateSpectator(dt, remote) {
