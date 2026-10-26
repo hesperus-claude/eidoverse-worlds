@@ -30,8 +30,8 @@ const BASE = "bbc9ac22";
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
 // each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red, as an exact text
 // replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list)
-const MUTANTS: [string, string, string, string[]][] = [
-  // [name, file, find, replace, cases]
+const MUTANTS: [string, string, string | [string, string, string?][], string, string[]][] = [
+  // [name, file, find, replace, cases]; find may be [find, replace, file?][] for a gate held in two places
   ["install: scope within installer's rights", "authority/scripts.js", "if (need) refuse(\"rights\", `${at}'s scope reaches", "if (false) refuse(\"rights\", `${at}'s scope reaches", ["B1"]],
   ["sponsor's role NOW", "authority/scripts.js", "const need = lacks(w, st, cap.sponsor, op,", "const need = null && lacks(w, st, cap.sponsor, op,", ["B2", "B3", "B24"]],
   ["scope narrowing", "authority/scripts.js", "if (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp))", "if (false && (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp)))", ["B4"]],
@@ -44,16 +44,16 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["script count", "authority/scripts.js", "if (n > cfg.max) refuse(\"too-many\"", "if (false) refuse(\"too-many\"", ["B7"]],
   ["cascade depth", "authority/scriptrun.js", "if (depth > cfg.depth) return out(\"refused\"", "if (false) return out(\"refused\"", ["B8"]],
   ["locks bind scripts", "authority/gate.js", "if (k) lockCheck(w, st, who, role, k, op, at); }", "if (k && !cap) lockCheck(w, st, who, role, k, op, at); }", ["B9"]],
-  ["in flight binds scripts", "authority.js", "if (inFlight(op.id)) refuse(\"in-flight\"", "if (inFlight(op.id) && cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
+  ["in flight binds scripts", "authority/gate.js", "if (inFlight(op.id) && !fu) refuse(\"in-flight\"", "if (inFlight(op.id) && !fu && who.cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
   ["hygiene at install", "authority/scripts.js", "const dirty = SR.hygiene(blob.text); if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", "const dirty = null; if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", ["H2"]],
   ["hygiene at upload", "authority/scriptrun.js", "const dirty = SR.hygiene(a.text); if (dirty) refuse(dirty.code, dirty.reason", "const dirty = null; if (dirty) refuse(dirty.code, dirty.reason", ["H1"]],
   ["scope names checked for typos at install", "authority/scripts.js", "if (near.length) refuse(\"schema\", `${at}.scope.comps:", "if (false) refuse(\"schema\", `${at}.scope.comps:", ["H4"]],
   ["syntax at install", "authority/scripts.js", "const syn = w.scripts?.checkSyntax?.(blob.text); if (syn)", "const syn = null; if (syn)", ["H3"]],
   ["banned → suspended", "authority/scriptrun.js", "if (isBanned(w, sp.sponsor)) return out(\"suspended\"", "if (false) return out(\"suspended\"", ["B15"]],
   ["adopt base", "authority/scriptrun.js", "if (base !== undefined && lt && lt.seq > base) refuse(\"stale\", `${a.id}.${key}", "if (false) refuse(\"stale\", `${a.id}.${key}", ["B14"]],
-  ["always needs an owner", "authority/scripts.js", "if (v.always === true && prev?.always !== true && role !== \"owner\")", "if (false)", ["B17"]],
+  ["always needs an owner", "authority/scripts.js", "if (v.always === true && prev?.always !== true && !Roles.isOwner(role))", "if (false)", ["B17"]],
   ["install rank", "authority/scripts.js", "if (!may(st, installer, \"scripts\")) refuse(\"rights\"", "if (false) refuse(\"rights\"", ["B17"]],
-  ["timer floor", "authority/scripts.js", "if (v.every !== undefined && !(typeof v.every === \"number\" && v.every >= 5))", "if (false)", ["B17"]],
+  ["timer floor", "authority/scripts.js", [["if (v.every !== undefined && !(typeof v.every === \"number\" && v.every >= 5))", "if (false)"], ["ranges: { every: { min: 5 } },", "", "componentspec.js"]], "", ["B17"]],
   ["paused", "authority/scriptrun.js", "if (v.paused === true) { const pb = pausedBy(w, id, key); return out(\"paused\"", "if (false) { const pb = pausedBy(w, id, key); return out(\"paused\"", ["B20", "PA1"]],
   ["run: false", "authority/scriptrun.js", "if (cfg.run === false) return out(\"stopped\"", "if (false) return out(\"stopped\"", ["B20"]],
   ["pause after repeated failures", "authority/scriptrun.js", "if (!dry && (rt.fails ?? 0) >= cfg.fails) return out(\"paused\"", "if (false) return out(\"paused\"", ["B20"]],
@@ -64,7 +64,7 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["the beat drains scripts", "authority/scriptrun.js", "drainAll(w);   // what the beat logged reaches scripts", "/* mutant */   // what the beat logged reaches scripts", ["E6"]],
   ["enter() restores the outer call's queues", "authority.js", "Object.assign(CTX, outer); w.changedQ = wq.changedQ; w.sayQ = wq.sayQ;", "Object.assign(CTX, outer); w.sayQ = wq.sayQ;", ["E5"]],
   ["bodies need scope.bodies", "authority/scriptrun.js", "for (const b of res.bodies) if (!(v.scope?.bodies ?? []).includes(b.kind)) return mark(\"scope\"", "for (const b of res.bodies) if (false) return mark(\"scope\"", ["C2"]],
-  ["sponsor-wide body allowance", "authority/bodyconsent.js", "&& C.tableOf(P, to).overrides[`scripts-by:${extra.sponsor}`]?.[cls]) d = C.decide(P, `scripts-by:${extra.sponsor}`, to, cls, now);", "&& false) d = null;", ["C3"]],
+  ["sponsor-wide body allowance", "authority/bodyconsent.js", "&& o[`scripts-by:${sponsor}`]?.[cls] ? C.decide(P, `scripts-by:${sponsor}`, to, cls, now) : C.decide(P, from, to, cls, now);", "&& false ? null : C.decide(P, from, to, cls, now);", ["C3"]],
   ["frozen clock", "sandbox.js", "FrozenDate.now = () => NOW;", "FrozenDate.now = () => RealDate.now();", ["D2"]],
   ["seeded randomness", "sandbox.js", "Math.random = function random() { return sfc(); };", "", ["D2"]],
   ["presence reads replayed from the act (stand-ins for who)", "sandbox.js", "const ids = x.reads ? (Array.isArray(was?.ids) ? was.ids : standIns(nearAt, was?.n)) : (x.near ? x.near(r) : []);", "const ids = x.near ? x.near(r) : [];", ["D1"]],
@@ -93,7 +93,7 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["the auditor reads a say's text from the say", "scriptaudit.js", "event.text = trig.body.text;", "", ["E1"]],
   ["an authority runs activations isolated (in a killable process)", "sandbox.js", "run: (x) => (canIsolate() ? runIsolated(x) : runScript(x))", "run: (x) => runScript(x)", ["I1", "I2"]],
   ["the kill at the deadline", "sandbox.js", "deadline = sentAt + L.wallMs + GRACE,", "deadline = sentAt + L.wallMs + GRACE + 60000,", ["I1"]],
-  ["a pause write adopts nothing (sponsor skips it)", "authority.js", "if (k === W.length - 1 || !pauseOnly(W[k].value, W[k + 1].value)) return", "if (true) return", ["PA1"]],
+  ["a pause write adopts nothing (sponsor skips it)", "authority/scripts.js", "if (k === W.length - 1 || !pauseOnly(W[k].value, W[k + 1].value)) {", "if (true) {", ["PA1"]],
   ["the auditor's sponsor skips pause writes too", "scriptaudit.js", "|| jcs(unp(W[k].value)) !== jcs(unp(W[k + 1].value))) return by(L, W[k].seq);", "|| true) return by(L, W[k].seq);", ["PA1"]],
   ["a pause write skips install checks", "authority/gate.js", "&& !pauseOnly(op.value, prevOf.get(op))) installCheck(", ") installCheck(", ["PA2"]],
   ["the inspector's script permission", "../editschema.js", "ops.push(OP.set(id, `script:${k}`, { paused: bool(raw) }, { merge: true }));", "", ["PA3"]],
@@ -107,11 +107,11 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["read-your-writes without copying the world", "sandbox.js", "const writable = (id) => { if (ov.has(id)) return ov.get(id); const b = base[id]; if (!b) return null; const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", "const writable = (id) => { const b = ov.has(id) ? ov.get(id) : base[id]; if (!b) return null; for (const k of Object.keys(base)) JSON.parse(JSON.stringify(base[k])); const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", ["I5"]],
   // (not a mutation: the check between host answers is defence in depth; a process can't send its next call before its
   // answer arrives, so the authority finds the pipe empty first and its ordinary deadline check fires, as I9 measures)
-  ["time spent answering isn't the process's starvation", "sandbox.js", "if (used !== null && own > 0.5 * wall && used < STARVED * own)", "if (used !== null && used < STARVED * wall)", ["I9"]],
+  ["time spent answering isn't the process's starvation", "sandbox.js", "used !== null ? own > 0.5 * wall && used < STARVED * own :", "used !== null ? used < STARVED * wall :", ["I9"]],
   ["a starved process isn't the script's failure", "sandbox.js", "export const STARVED = 0.3;", "export const STARVED = 0;", ["I8"]],
   ["end of file means the process died", "sandbox.js", "if ((n === 0 && c.opened) || c.proc.exitCode !== null", "if (c.proc.exitCode !== null", ["I6"]],
   ["the process's script duty", "authority/scriptrun.js", "if (dutyLeft(w.worldId) <= 0) return out(\"refused\", { code: \"busy\"", "if (false) return out(\"refused\", { code: \"busy\"", ["I2", "I4", "I7"]],
-  ["CONTROL (no-op: must stay green)", "authority/scripts.js", "// ---------- behaviours (L4, L7 as revised;", "// ---------- behaviours (L4, L7  as revised;", []],
+  ["CONTROL (no-op: must stay green)", "authority/scripts.js", "// ---------- behaviours (L4, L7; research 41) ----------", "// ---------- behaviours (L4,  L7; research 41) ----------", []],
 ];
 async function runSelf(tree: string, only: string[] | null, extra: string[] = []) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/scripts-check.ts"), "--tree", tree, "--no-server", ...(only ? ["--only", only.join(",")] : []), ...extra];
@@ -124,9 +124,11 @@ if (argv.includes("--mutants")) {
   const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
     if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
-    ran++; const d = copyShared("mut"); const f = path.join(d, "shared/protocol", file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    ran++; const d = copyShared("mut");
+    const edits: [string, string, string][] = (Array.isArray(find) ? find : [[find, repl]]).map(([a, b, g]) => [path.join(d, "shared/protocol", g ?? file), a, b]);
+    const miss = edits.find(([f, a]) => fs.readFileSync(f, "utf8").split(a).length !== 2);
+    if (miss) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${path.relative(path.join(d, "shared/protocol"), miss[0])} (the gate moved?)`); continue; }
+    for (const [f, a, b] of edits) fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(a, () => b));
     const r = await runSelf(d, cases.length ? cases : null);
     const redIds = [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => redIds.includes(c)) : r.code === 0;
@@ -784,7 +786,7 @@ console.log(JSON.stringify(r.ops?.[0]?.value ?? r));\n`);
       install(s, "bob", "box", "heavy", HEAVY, { scope: { ids: "self", comps: ["t/n", "t/m"] }, on: ["use"] });
       s.call("bob", "set", { id: "box", component: "reactions", value: { go: { kind: "script", script: "heavy" } } });
       // the same script on an empty world, on this host, now: the run's cost without a world to copy. A whole-world copy per
-      // write (the mutants below) costs ~32 copies of 1500 x 300 numbers, far past both bounds
+      // write (the I5 mutants) is ~32 copies of 1500 x 300 numbers: on a fast host about 0.2 s, under the 400 ms floor, so they survive there
       const s0 = session(); cast(s0); s0.call("bob", "create", { id: "box", model: "crate", place: { at: [0, 0] } });
       install(s0, "bob", "box", "heavy", HEAVY, { scope: { ids: "self", comps: ["t/n", "t/m"] }, on: ["use"] });
       s0.call("bob", "set", { id: "box", component: "reactions", value: { go: { kind: "script", script: "heavy" } } });
