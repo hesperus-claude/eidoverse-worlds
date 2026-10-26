@@ -9,6 +9,9 @@
 //   H4  a guest is never given the world's default role; a door ban removes the person now; a guest's ban names the
 //       connection, so reconnecting as a fresh guest is refused
 //   H5  an owner can't demote the founder; default-role can't be owner; an owner can't be banned
+//   H2  rights are read by identity: a visitor can't set the world; a role granted to an id is that socket's, never a name's
+//   RK  owner seniority by grant: (founder, senior, junior) × (demote, re-affirm, ban), the junior refused every time
+//   M2  joins at once each get their own id, and the directory file keeps every one
 //   ID  one account is the same identity in every world on the authority (no per-world ids)
 //   HB  presence is keyed by identity, never a display name: a second account asking to be "Marigold" is shown
 //       with a disambiguator, and doesn't get the first one's remembered pose; the real one does
@@ -141,7 +144,9 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   const g = await sock(S2.port); const jg = await g.join("garden", "Annbot");
   await sleep(200);
   ok(ann.closed == null && jg.snapshot && /\(guest\)/.test(jg.snapshot.you) && you(jg) !== you(ja), "H1 a guest typing a present agent's name is a separate guest, shown as one; nobody is kicked", [jg.snapshot?.you, ann.closed]);
-  ann.close(); g.close(); }
+  const g2 = await sock(S2.port); const jg2 = await g2.join("garden", "Annbot");
+  ok(!!jg2.snapshot && you(jg2) !== you(jg) && you(jg2) !== you(ja) && g.closed == null, "H1 two guests typing the same name are two identities; neither is kicked", [you(jg), you(jg2), g.closed]);
+  ann.close(); g.close(); g2.close(); }
 
 // ---- H4 / H5 on the public door ----
 { // the founder (local:ann) can't reach the public door; make a world whose owner is an agent account we can prove
@@ -153,6 +158,8 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok((await own.req("set", { id: "@world", component: "default-role", value: { role: "builder" } })).ok, "(H setup) meadow's default role: builder");
   const g = await sock(S3.port); const jg = await g.join("meadow", "drifter");
   ok(jg.snapshot?.yourRights?.role === "inhabitant" && (await g.req("create", { id: "box1", model: "crate" })).refused?.code === "rights", "H4 a guest is never given the default role: an inhabitant, and refused a build", jg.snapshot?.yourRights);
+  { const sky = await g.req("set", { id: "@world", component: "sky", value: { hours: 18 } });
+    ok(sky.refused?.code === "rights", "H2 a visitor can't set a world property (rights read by identity)", sky); }
   const wren = await sock(S3.port); const jw = await wren.join("meadow", "Wren", { agentToken: "tok-wren" });
   ok(jw.snapshot?.yourRights?.role === "builder", "H4 …while a proven account does get it (builder)", jw.snapshot?.yourRights);
   // …unless the world's owner opts guests in (whether strangers without an account may build is the world's choice).
@@ -176,7 +183,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok((await own.req("set", { id: "@world", component: `roles:${you(jw)}`, value: { role: "builder" } })).ok, "H5 …but the senior owner can demote the junior one");
   // H4: a door ban removes the guest now, and the guest's reconnect is refused
   const ban = await own.req("ban", { who: you(jg), reason: "test" }); await sleep(300);
-  ok(ban.ok && g.closed != null, "H4 a door ban removes the banned guest at once", [ban, g.closed]);
+  ok(ban.ok && g.closed != null && g.msgs.some((m) => m.type === "error" && /banned/.test(m.error ?? "")), "H4 a door ban removes the banned guest at once, telling it on its open socket", [ban, g.closed, g.msgs.filter((m) => m.type === "error")]);
   const again = await sock(S3.port); const ja2 = await again.join("meadow", "someone-new");
   ok(!ja2.snapshot && /banned/.test(ja2.errors.join(" ")), "H4 the banned guest reconnecting as a fresh guest is refused (their connection is named)", ja2.errors);
   // world-bans reads the authority's moderation record (never v1 state.bans, which always said "nobody is banned")
@@ -417,6 +424,38 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   const b = await sock(S2.port); const jb = await b.join("orchard", "x", { agentToken: "tok-rowan" });
   ok(you(ja) && you(ja) === you(jb), "ID one account is the same identity in every world on the authority", [you(ja), you(jb)]);
   a.close(); b.close(); }
+
+// ---- M2: joins at once each get their own id, and the directory file keeps every one ----
+{ const names = ["Guest0", "Guest1", "Guest2", "Guest3", "Guest4"];
+  const socks = await Promise.all(names.map(() => sock(srv.port)));
+  const ids = (await Promise.all(socks.map((s, i) => s.join("garden", names[i])))).map(you);
+  const { directoryFileIn } = await import("../../server/keyfiles.ts");
+  const dir = JSON.parse(fs.readFileSync(directoryFileIn(W), "utf8"));
+  ok(ids.every(Boolean) && new Set(ids).size === ids.length && ids.every((id) => dir.ids?.[id]?.subs?.length), "M2 five joins at once each get their own id, and the directory file holds every one", [ids, ids.map((id) => !!dir.ids?.[id])]);
+  for (const s of socks) s.close(); }
+
+// ---- RK: owner seniority over (founder, senior, junior) × (demote, re-affirm, ban); owners granted in DESCENDING id order,
+// so a rank read off the id string instead of the grant disagrees on every pair ----
+{ ok(tool(["found", "fen", "--owner", "agent:token:rowan"]).code === 0, "(RK setup) found fen owned by the Rowan enrolment");
+  const S6 = await start({ TRUST_NAMES: "" });
+  const at = async (n, t) => { const s = await sock(S6.port); const j = await s.join("fen", n, { agentToken: t }); return { s, id: you(j), n }; };
+  const F = await at("Rowan", "tok-rowan"), x = await at("Wren", "tok-wren"), y = await at("Fern", "tok-fern"), m = await at("x", mint({ kind: "agent", name: "Bracken", sub: "agent:bracken@home.test" }));
+  const [A, B] = [x, y].sort((p, q) => (p.id < q.id ? 1 : -1));   // A (larger id) granted first: senior
+  const role = (by, who, r) => by.s.req("set", { id: "@world", component: `roles:${who.id}`, value: { role: r } });
+  ok((await role(F, A, "owner")).ok && (await role(F, B, "owner")).ok && A.id > B.id, "(RK setup) the founder makes A, then B, owners; A's id sorts after B's", [A.id, B.id]);
+  const pairs = [["founder", F, "senior", A], ["founder", F, "junior", B], ["senior", A, "junior", B]];
+  for (const [sn, S, jn, J] of pairs) {
+    for (const [op, run] of [["demote", () => role(J, S, "inhabitant")], ["re-affirm", () => role(J, S, "owner")], ["ban", () => J.s.req("ban", { who: S.id })]]) {
+      const r = await run();
+      ok(r.refused?.code === "rights" && (op === "ban" || /longer than you/.test(r.refused.reason ?? "")), `RK the ${jn} owner can't ${op} the ${sn} owner`, r.refused ?? r); } }
+  ok((await role(A, B, "owner")).ok, "RK a senior owner may re-affirm a junior one");
+  ok((await role(A, B, "builder")).ok && (await role(F, A, "builder")).ok, "RK …and demote them: the senior owner demotes the junior, the founder the senior");
+  // H2: a role granted under the opaque id is what that socket's rights read; a guest typing the name gets none of it
+  ok((await F.s.req("set", { id: "@world", component: "default-role", value: { role: "inhabitant" } })).ok && (await m.s.req("create", { id: "rk-box0", model: "crate_large_red.glb" })).refused?.code === "rights", "(H2 setup) newcomers are inhabitants: Bracken can't build yet");
+  ok((await role(F, m, "builder")).ok && (await m.s.req("create", { id: "rk-box", model: "crate_large_red.glb" })).ok, "H2 a role granted to an identity is what its socket's rights read (Bracken builds now)");
+  { const g = await sock(S6.port); const jg = await g.join("fen", "Bracken");
+    ok(!!jg.snapshot && you(jg) !== m.id && (await g.req("create", { id: "rk-box2", model: "crate_large_red.glb" })).refused?.code === "rights", "H2 …and a guest typing that name is someone else, with no build", [you(jg), m.id]); g.close(); }
+  for (const p of [F, x, y, m]) p.s.close(); S6.proc.kill(); }
 
 // ---- HB: presence by identity. Marigold (an aid1 human) leaves; a different account (TRUST_NAMES: a typed name is
 // local:<name>) joins wearing her name: no remembered pose ----
