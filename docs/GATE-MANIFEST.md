@@ -301,7 +301,7 @@ time.
 | 131 | door-wording | main | `tools/door-wording-test.ts` | bun | ? | 300 s |
 | 132 | consent-replay | main | `tools/consent-replay-test.ts` | bun | ? | 300 s |
 | 133 | history-request | main | `tools/history-request-test.ts` | bun | 0.3 s | 180 s |
-| 134 | wing-fold-presence | main | `tools/wing-fold-presence-test.ts` | bun | 0.3 s | 180 s |
+| 134 | named-pose | main | `tools/named-pose-test.ts` | bun | 2.6 s | 180 s |
 | 135 | skystamp | main | `tools/skystamp-test.ts` | bun | 0.5 s | 180 s |
 | 136 | grant-command | main | `tools/grant-command-test.ts` | bun | 0.3 s | 180 s |
 | 137 | environment-realizer | main | `tools/environment-realizer-test.ts` | bun | 0.3 s | 180 s |
@@ -333,5 +333,5 @@ time.
 | 163 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
 | 164 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
 
-Lanes: core 18 suites (~79 s), main 136 (~1674 s), browser 10 (~1123 s); 164 suites in all.
+Lanes: core 18 suites (~79 s), main 136 (~1676 s), browser 10 (~1123 s); 164 suites in all.
 <!-- END GENERATED -->

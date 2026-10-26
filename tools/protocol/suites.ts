@@ -150,7 +150,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["door-wording", "../door-wording-test.ts", 1],   // #270: the door's refusals say what wasn't done and why
   ["consent-replay", "../consent-replay-test.ts", 0.1],   // an agent's switch replay on arrival sends the switch it holds when the read returns
   ["history-request", "../history-request-test.ts", 1], // #267: a history request with no answer rejects, so scrolling up can reach what a long disconnect missed
-  ["wing-fold-presence", "../wing-fold-presence-test.ts", 1], // #159: a held posture rides the presence wire (absence is not release; survives late join, reconnect, swap)
+  ["named-pose", "../named-pose-test.ts", 1], // #159: every named pose rides the presence wire (absence is not release; survives late join, reconnect, swap)
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
   ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
