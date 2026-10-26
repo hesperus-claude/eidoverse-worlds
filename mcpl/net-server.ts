@@ -46,7 +46,7 @@ import { atomicWrite } from "../server/fsutil.ts";
 import { displayNameIndex, lookupToken, readTokenRegistry, wireAuthors, type TokenAuth } from "./token-registry.ts";
 
 const PORT = Number(process.env.MCPL_PORT ?? 8941);
-// archipelago-home door (home-node.md §7): a `?token=aid1.…` credential is an
+// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` credential is an
 // identity token minted by the home node — verified OFFLINE right here, no
 // tokens.json entry needed. That is how non-connectome guest agents arrive:
 // `hn mint --name ferro --aud eidoverse --scopes worlds:join` and the operator

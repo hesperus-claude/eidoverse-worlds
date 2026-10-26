@@ -237,7 +237,7 @@ type Person = { id: string; avatar: string; pose: Pose | null; declares?: string
 
 // ---- walking through buildings (#218, Sage; ported onto the one walker 10-15) ----
 /** What a walk's feet stand on: the terrain (followed live, tick by tick), or one identified floor of one structure at a
- *  fixed height (the storey-standing work, #200, answers this; on this branch walkSupport answers terrain only). */
+ *  fixed height. */
 type WalkSupport = { kind: "terrain"; height: number } |
   { kind: "floor"; height: number; entity: string; level: number };
 
