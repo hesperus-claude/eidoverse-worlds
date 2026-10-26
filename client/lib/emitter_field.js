@@ -1,5 +1,5 @@
 // emitter_field — the `particles` component's LIFECYCLE, DOM-free and
-// THREE-free so it can be unit-tested without a browser (tools/emitters-test.ts).
+// THREE-free so it can be unit-tested without a browser (tools/particles-test.ts).
 //
 // The upstream builder (`eidoverse/particles.js`) is a one-way door: it makes a
 // mesh, adds it to a scene, pushes its billboard `update` into the global

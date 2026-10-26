@@ -2,8 +2,7 @@
 // declaration is a desktop frame and a VR quad. Every action here is a verb
 // scenegraph.js already speaks; this file only decides what the rows are.
 //
-// P1 of notes/proposals/2026-09-04-edit-mode-spec.md, at parity with the
-// World›Scene section it retires: transform, lock, every registered component
+// At parity with the World›Scene section it retires: transform, lock, every registered component
 // editor (inspect.js), raw JSON for the rest, add/remove component, find /
 // attach / detach / remove, script badges and a Behaviors group.
 //
