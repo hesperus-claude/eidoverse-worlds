@@ -5,6 +5,7 @@
 // Mutation (must go red): in client/lib/consentsync.js drop the `on('hydrated', …)` line, or the timer retry, or the toast.
 import { setConsent, decide, SWITCHES } from '../shared/protocol/consent.js';
 import { makeConsentSync } from '../client/lib/consentsync.js';
+import { WorldAgent } from '../mcpl/agent.ts';
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
@@ -25,6 +26,8 @@ for (const v of SWITCHES) {
 check('setPushable(false) is refuse, (true) is accept — the old /pushable meaning', (C.setPushable(false), C.mySwitch() === 'refuse') && (C.setPushable(true), C.mySwitch() === 'accept'));
 
 // 2. a refused sync is heard (toast) and retried: on the next hydration, and on a timer before that
+// the stubs hold no timers: one turn of the event loop settles whatever a handler left in flight
+const settle = () => new Promise((r) => setImmediate(r));
 const run = async (reply: (n: number) => any, want = 'refuse') => {
   const sent: any[] = [], toasts: any[] = [], handlers: Record<string, Function[]> = {}, timers: Function[] = [];
   const s = makeConsentSync({
@@ -34,16 +37,53 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
     on: (ev: string, fn: Function) => { (handlers[ev] ??= []).push(fn); },
     later: (fn: Function) => { timers.push(fn); },
   });
-  const fire = async (ev: string) => { for (const f of handlers[ev] ?? []) await f(); await new Promise((r) => setTimeout(r, 5)); };
-  const tick = async () => { const t = timers.splice(0); for (const f of t) await f(); await new Promise((r) => setTimeout(r, 5)); };
+  const fire = async (ev: string) => { for (const f of handlers[ev] ?? []) await f(); await settle(); };
+  const tick = async () => { const t = timers.splice(0); for (const f of t) await f(); await settle(); };
   return { s, sent, toasts, handlers, timers, fire, tick };
 };
-{ const t = await run(() => ({ ok: true }));
-  await t.fire('hydrated');
-  check('arrival reads the authority, then sends the switch once', t.sent.length === 2 && t.sent[1][1].switch === 'refuse', JSON.stringify(t.sent));
-  check('a sync that lands says nothing', t.toasts.length === 0 && t.timers.length === 0, JSON.stringify(t.toasts)); }
-{ const sent: any[] = []; const s = makeConsentSync({ table: () => ({ switch: 'ask' }), send: async (v: string, a: any) => { sent.push(a); return { ok: true, table: { switch: 'ask' } }; }, toast: () => {}, on: () => {}, later: () => {} });
-  await s.sync(); check('a switch the authority already holds is not sent again', sent.length === 1, JSON.stringify(sent)); }
+// the replay contract on arrival, one table over both implementations (mcpl/agent.ts replaySwitch, consentsync.js sync):
+// differs → mine is sent; same → no switch sent; never chosen → none; set while the read is out → the newest stands and is
+// the last sent (never the one the replay began with); a burst of changes → the latest. reads: a per-driver count.
+type Row = { name: string; held: string | null; mine: string | null; during?: string[]; heldAfter: string | null; sets?: string[]; reads?: { agent?: number; browser?: number } };
+const REPLAY: Row[] = [
+  { name: 'mine differs from what the authority holds', held: 'accept', mine: 'refuse', heldAfter: 'refuse', sets: ['refuse'], reads: { agent: 1, browser: 1 } },
+  { name: 'the same', held: 'refuse', mine: 'refuse', heldAfter: 'refuse', sets: [] },
+  { name: 'never chosen: the world default stands', held: null, mine: null, heldAfter: null, sets: [], reads: { agent: 0 } },
+  { name: 'a switch set while the read is out', held: 'refuse', mine: 'refuse', during: ['ask'], heldAfter: 'ask' },
+  { name: 'a burst of changes', held: 'accept', mine: 'accept', during: ['ask', 'refuse'], heldAfter: 'refuse', reads: { browser: 2 } },
+];
+// a driver's authority answers the first read after the `during` changes are made (the body's own sets, landed first)
+const authority = (r: Row, change: (v: string) => unknown) => {
+  const st = { held: r.held, reads: 0, sets: [] as string[], first: true };
+  const send = async (args: any) => {
+    if (args.switch !== undefined) { st.sets.push(args.switch); st.held = args.switch; return { ok: true }; }
+    st.reads++; await settle();
+    if (st.first) { st.first = false; for (const v of r.during ?? []) await change(v); }
+    return { ok: true, table: { switch: st.held } };
+  };
+  return { st, send };
+};
+const drivers: Record<string, (r: Row) => Promise<{ held: string | null; sets: string[]; reads: number; heard: number }>> = {
+  agent: async (r) => {
+    const ag = new WorldAgent({ name: 'replay' }) as any; ag.consentSwitch = r.mine;
+    const { st, send } = authority(r, (v) => { ag.consentSwitch = v; return ag.request('consent', { switch: v }); });
+    ag.request = async (verb: string, args: any) => (verb === 'consent' ? send(args) : { ok: false });
+    await ag.replaySwitch();
+    return { ...st, heard: 0 };
+  },
+  browser: async (r) => {
+    let mine = r.mine, heard = 0, s: any = null;   // a toast or a retry timer: a sync that lands says nothing
+    const { st, send } = authority(r, (v) => { mine = v; void s.sync(); });   // consent.js syncs on each change
+    s = makeConsentSync({ table: () => ({ switch: mine }), send: (_: string, a: any) => send(a), toast: () => { heard++; }, on: () => {}, later: () => { heard++; } });
+    await s.sync(); await settle();
+    return { ...st, heard };
+  },
+};
+for (const [d, drive] of Object.entries(drivers)) for (const r of REPLAY) {
+  const got = await drive(r), latest = r.during?.at(-1) ?? r.mine, reads = r.reads?.[d as 'agent'];
+  check(`${d}: ${r.name}`, got.held === r.heldAfter && (r.sets ? JSON.stringify(got.sets) === JSON.stringify(r.sets) : got.sets.at(-1) === latest)
+    && (reads === undefined || got.reads === reads) && got.heard === 0, JSON.stringify(got));
+}
 { let down = true;
   const t = await run(() => (down ? { ok: false, refused: { code: 'offline', reason: 'the connection dropped before the authority answered' } } : { ok: true }));
   await t.fire('hydrated');
@@ -56,12 +96,6 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('the next arrival resends and lands (the read and the switch)', t.sent.length === b2 + 2 && t.toasts.length === 1, `${t.sent.length - b2} sent`);
   check('landed: the pending timer retry does nothing new', await (async () => { const n = t.sent.length; await t.tick(); return t.sent.length === n; })());
   check('the next failure is heard again', await (async () => { down = true; await t.fire('hydrated'); return t.toasts.length === 2; })()); }
-{ let v = 'accept'; const sent: any[] = []; let release: Function = () => {}; const gate = new Promise((r) => { release = r; });
-  const s = makeConsentSync({ table: () => ({ switch: v }), send: async (_: string, a: any) => { sent.push(a); await gate; return { ok: true, table: { switch: null } }; }, toast: () => {}, on: () => {}, later: () => {} });
-  const p1 = s.sync(); v = 'ask'; const p2 = s.sync(); v = 'refuse'; const p3 = s.sync();
-  release(); await Promise.all([p1, p2, p3]); await new Promise((r) => setTimeout(r, 5));
-  check('a burst of changes syncs twice (now, then once with the latest)', sent.filter((a) => a.switch === undefined).length === 2, `${sent.length} sent`);
-  check('…and the last switch sent is the latest', sent[sent.length - 1]?.switch === 'refuse', JSON.stringify(sent[sent.length - 1])); }
 { const sent: any[] = [];
   const s = makeConsentSync({ table: () => ({ switch: 'accept' }), send: async (v: string, a: any) => { sent.push(a); return { ok: true }; }, toast: () => {}, on: () => {}, later: () => {}, enabled: () => false });
   await s.sync(); check('a bodiless client sends nothing', sent.length === 0); }

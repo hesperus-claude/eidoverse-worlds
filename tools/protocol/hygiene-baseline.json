@@ -17,9 +17,6 @@
  "tools/colour-picker-bench.ts": {
   "bare-wait": 3
  },
- "tools/consent-replay-test.ts": {
-  "bare-wait": 2
- },
  "tools/debug-tabs-test.ts": {
   "bare-wait": 1
  },
