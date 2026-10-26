@@ -45,7 +45,7 @@ export type Client = {
   legGen?: number;     // WORLD-scoped, survives restarts; never reused: takeover retires the GENERATION, deferred verbs recheck it
   presenceSession?: string; // `session` on arrive and snapshot.present: the page's id, else a token for this leg
   surface?: string;    // "world" = the embodied primary (default); anything else = an aux media leg (voice, vr-hands, …):
-                       // invisible, poseless, log-mute, rtc-capable, REAPED with its primary; last-writer-wins per surface
+                       // invisible, poseless, log-mute, REAPED with its primary; last-writer-wins per surface
   renderer?: boolean;  // an invisible browser renderer (legacy): donates rendering for its world
   roam?: boolean;      // a renderer the snapshot broker may send to any world that has none (snapshots.ts)
   capture?: import("./snapshots.ts").CaptureCapability; // opt-in embodied/native donor

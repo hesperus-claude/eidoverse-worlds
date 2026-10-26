@@ -175,6 +175,7 @@ const FINGER_DAMPING = 0.9;
 const FINGER_TENDON = 8.0;
 
 const ERP_LIMIT = 0.35;         // source default: how hard limits are held
+// limits go through setParam: this ammo build binds no getRotationalLimitMotor (so no muscle-tone motors)
 const BT_CONSTRAINT_STOP_ERP = 3; // this build's setParam id (source, verbatim)
 const ACTIVE_TAG = 1;
 // Bullet's enum values: ammo.js exports no constants, and an undefined global throws at the first hair lock.
@@ -1849,10 +1850,9 @@ export class AmmoRagdoll extends BodyEngineBase {
     this._freed = true;
     // Hair is left where the sim ended, on purpose; rebuilds still start from __hairRest, so a crumple never becomes rest.
     this.done = true;
-    // Hand the hair back ADOPTING its pose: a doll disposed mid-tumble must not leave it frozen; the authored
-    // shape returns on standing (avatar.js _combHair).
+    // Hand the hair back ADOPTING its pose (never springBoneManager.reset(): that snaps to combed), so a doll disposed
+    // mid-tumble doesn't freeze it; the comb returns on standing (avatar.js setLimp → _combHair).
     this.avatar?._releaseHair?.({ adopt: true });
-    // Not springBoneManager.reset(): that snaps to the combed pose. Ownership goes back on standing (avatar.js setLimp).
     try {
       for (const c of this._constraints) this.world.removeConstraint(c);
       for (const [, pin] of this._pinCons) this.world.removeConstraint(pin.con);

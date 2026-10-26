@@ -88,12 +88,12 @@ function entryBy(w, e) {
     return { seq: e.seq, by, rights: b.capability?.author || (isScriptActor(c.actor) && b.sponsor) || by }; }
   return { seq: e.seq, by, rights: by };
 }
-// the creator of a thing (or component) in its CURRENT life: the entry that made it present after it was last absent
 // the change entries that may touch `id`, newest first: a live world keeps an id → seqs index; the suites scan all
 function* backward(w, id) {
   if (w.touching) { const a = w.touching(id); for (let k = a.length - 1; k >= 0; k--) yield a[k]; return; }
   for (let i = w.entries.length - 1; i >= 0; i--) yield i;
 }
+// the creator of a thing (or component) in its CURRENT life: the entry that made it present after it was last absent.
 // A follow-up set that put a value back (an undo's restore) also steps over the follow-up delete it reverses, so the
 // restored value keeps its author and its life; any write of the asker's own in between ends that (a key re-created by
 // someone else after a clear is a new life, never merged with the old one).

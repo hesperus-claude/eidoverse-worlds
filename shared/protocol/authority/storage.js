@@ -136,6 +136,8 @@ export const wedgedOf = (w) => ({ log: !!w.wedged?.log, mod: !!w.wedged?.["moder
 // txnOutcome (PROTOCOL §7, "Every request ends in one of three outcomes"): committed {from, to} (durable and in entries);
 // rolled-back (none reached disk); ambiguous {from, wedged} (a durable write threw, world or moderator log, or was cut off
 // mid-write). Never reported as ok or a plain failure; a throw that wedges no new file rolls back.
+// from: lines below it stand. The authority's own lines (attempt records, due rests) may still be written, and are not
+// the asker's.
 export function txnOutcome(w, from, { threw = false, error = null, refused = false, wedgedBefore = { log: false, mod: false } } = {}) {
   const grew = w.entries.length > from;
   if (!threw) return refused ? { outcome: "rolled-back" } : { outcome: "committed", from, to: w.entries.length };
@@ -169,7 +171,7 @@ export function purgedSeqs(w) {
   return c.seqs;
 }
 const isCommitStub = (b) => !!b && typeof b === "object" && !Array.isArray(b) && Object.keys(b).length > 0 && Object.keys(b).every((k) => k === "commit" || k === "salt");
-/** Or null when it is purged (unknown). */
+/** An entry's body as the authority reads it back; null when purged (unknown: each reader says what that means). */
 export function readback(w, seq) {
   const e = w.entries[seq]; if (!isE(e) || !e.body || typeof e.body !== "object") return null;
   if (!["act", "say", "sim"].includes(e.kind)) return e.body;   // a change's ops and genesis are never purged whole

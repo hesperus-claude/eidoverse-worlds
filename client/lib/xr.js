@@ -690,6 +690,8 @@ async function enterVR({ retryOf = null } = {}) {
     bus.emit('xr:loop');   // frameloop.js hands the loop to three BEFORE setSession saves+wraps it (see frameloop.js)
     const tReq = performance.now();
     // installFrameClock: the restore must register BEFORE setSession, ahead of three's 'end' (tools/xr-session-lifecycle-test.mjs)
+    // window.rAF crawls at ~2 Hz in a WebXR session, stalling all that yields on it: this clock shim reroutes it
+    // saved: the page's FIRST capture, re-passed every entry; a fresh capture would save the old shim as native
     sessionEnded = false;
     frameClock = installEntryClock({
       win: window, session, saved: nativeRAF ? { raf: nativeRAF, caf: nativeCAF } : null,
@@ -737,13 +739,12 @@ async function enterVR({ retryOf = null } = {}) {
       markXrAbsent(true); toast('no headset detected — put it on (or wake it) and click the visor again', 'warn', 8000);
       leaveVR('no-headset');
     }, 2500);
-    // window.rAF crawls at ~2 Hz in a WebXR session, stalling all that yields on it: the clock shim above reroutes it
     // SHADER ERROR TEE: a material failing in the eye context draws black and only console.error()s; tee the first 6
     if (!consoleTapped) { consoleTapped = true; for (const k of ['error', 'warn']) { const orig = console[k].bind(console);
       console[k] = (...a) => { try { const m = a.map((x) => (typeof x === 'string' ? x : x?.message ?? '')).join(' '); if (presenting && shaderTees < 6 && /shader|program|link|compile|GLSL|uniform|invalid/i.test(m)) { shaderTees++; tee(`[xr] console.${k}: ${m.slice(0, 300)}`); } } catch {} orig(...a); }; } }
     // we own the stereo camera update (render.js): with cameraAutoUpdate, ShadowNode's nested render put the eyes at the origin
     renderer.xr.cameraAutoUpdate = false;
-    // shadows stay as on the desktop: shadowMap.enabled is pipeline-shape (lightrig.js), so flipping it recompiles all
+    // never toggle shadowMap.enabled for XR: it is pipeline-shape (lightrig.js), so a flip recompiles everything both ways
     xrIntent.active = true;
     selfFirstPerson(true);
     { const t = performance.now(); xrPanelsEnter(rig); tee(`[xr] panels enter ${(performance.now() - t).toFixed(1)} ms`); }   // every registered frame as a physical surface (soft swap: staged each time, built on first show)
@@ -1263,7 +1264,6 @@ export async function initXR() {
   // machine reporting immersive-vr. Content warmed before this compiles its stereo variant under the entry curtain.
   if (renderer.backend?.isWebGLBackend) globalThis.__xrDualWarm = installDualWarm({ THREE, renderer, camera, presenting: () => presenting });
 
-  // the third glyph of the mic/ear trio; exists only where a headset can present.
   // Pre-warm the hand meshes: their first draw compiled on the frame the controllers arrived (a ~0.5 s spike);
   // build them now, parked under the rig, and let the conductor compile them off-screen.
   slots[0] ??= makeHand(0); slots[1] ??= makeHand(1);
@@ -1279,6 +1279,7 @@ export async function initXR() {
   }, { p: P_AMBIENT });
 
   { let tries = 0; const iv = setInterval(() => { warmXRPipelines(); if (xrWarmed || ++tries > 240) clearInterval(iv); }, 500); }   // poll until the body is in; give up after 2 min (a viewer page has no body)
+  // the third glyph of the mic/ear trio; exists only where a headset can present
   registerXrGlyph({
     // ?xr=1 alone is enough: core.js picks the backend that can present (WebGL until Chrome's
     // WebGPU-XR ships unflagged; ?webgpu=1 opts in early).

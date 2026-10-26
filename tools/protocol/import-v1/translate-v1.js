@@ -107,14 +107,15 @@ export const TRANSLATOR = "eidoverse/translate-v1@20";
 /** The version number in a translator name ("eidoverse/translate-v1@20" → 20), or NaN. Compare numbers, never a regex
  *  of version digits. */
 export const translatorVersion = (name) => { const m = /@(\d+)$/.exec(String(name ?? "")); return m ? Number(m[1]) : NaN; };
-// the name says which output you got: bump it (and TRANSLATOR above) on any change to the output; two translators
-// never share a name. Live rules sit beside the code that applies them (withoutAccounts, isAccount, noAcct)
+// the name says which output you got: bump BOTH names (TRANSLATOR, TRANSLATOR_SIM) on any change to the output; two
+// translators never share a name. Live rules sit beside the code that applies them (withoutAccounts, isAccount, noAcct)
 export const TRANSLATOR_SIM = "eidoverse/translate-v1@20";
 export const LAB_DOOR_KEY = "ed25519:rRoIPhqlc8rDxC1GZlfHOe1IBJYWQ8MDNg9QuZzMsic"; // the conformance suite's fixed sequencer key
 const b64url = (bytes) => { let s = ""; for (const x of bytes) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 // a real authority passes the operator's governance key (tier 1, never the sequencer's) and a random nonce; pure tests get a
 // source-derived nonce and one fixed key. Tier 0 stays EMPTY: v1 logs record accounts, never keys, so a translation names no
-// founder (README.md, "The Commons and governance keys")
+// founder (README.md, "The Commons and governance keys"). The governance draft (§13) must allow one attested fill of it
+// later.
 export function translatedGenesis(oldEntries, { key = LAB_DOOR_KEY, operator = key, nonce } = {}) {
   if (!nonce) { const h = sha256(oldEntries.map((e) => JSON.stringify(e)).join("\n")); nonce = b64url(Uint8Array.from(h.slice(0, 32).match(/../g), (x) => parseInt(x, 16))); }
   return { dialect: DIALECT, v: VERSION, minor: 0, nonce, owners: [[], [operator]], sequencer: key };

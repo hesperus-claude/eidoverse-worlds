@@ -19,7 +19,7 @@ export const IMAGE_CAP = Number(process.env.IMAGE_CAP_MB ?? 8) * 1_000_000;
 // RECORD_FRAMES=1: stage frames + roster deltas to worlds/<name>/frames-<bootTs>.jsonl. Clients are told at join:
 // recording is never invisible.
 export const RECORD = process.env.RECORD_FRAMES === "1";
-// SKIP_OPT_SWEEP=1: both boot optimize sweeps (encode pump + ktx2/lod)
+// SKIP_OPT_SWEEP=1 skips both boot optimize sweeps (encode pump + ktx2/lod)
 export const SKIP_OPT_SWEEP = process.env.SKIP_OPT_SWEEP === "1";
 // TRUST_NAMES=1: a PRIVATE server takes a typed name as an account (`local:<name>`). Never on a server strangers can
 // reach: anyone typing the owner's name would BE the owner.

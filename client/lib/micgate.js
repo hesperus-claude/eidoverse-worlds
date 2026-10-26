@@ -4,14 +4,16 @@
 //                                               ↑                     ↓
 //                                        gate (this file)    the track WebRTC sends
 //
-// The analyser reads the SOURCE side, never the gated side, or the gate latches shut. Humans and agents both pass
-// through voiceSource() (voicesource.js), so one path gates both.
+// The analyser reads the SOURCE side, never the gated side, or the gate latches shut. A device always passes the gate;
+// a synthetic source bypasses it (micstate.js gateFor).
 
 import { audioContext } from './audioctx.js';
 import { report } from './base.js';
 
-// seconds; attack ≤ ~44 ms to open on a 20 ms tick (a plosive is ~20-40 ms), always faster than release
+// seconds; worst-case open = 20 ms tick + 3τ ≈ 44 ms (a plosive is ~20-40 ms); attack faster than release (a late open
+// loses a consonant, an early close cuts a word)
 // one smoothing stage only (see driveGate)
+// release: a ~360 ms tail AFTER the 700 ms hang; never copy BasisVR's 0.10/0.05 (per audio frame, not per tick)
 const ATTACK_TAU = 0.008;
 const RELEASE_TAU = 0.12;
 // delay the AUDIO, not the detector, so an unvoiced onset (/h/) is still in the line when the gate opens; costs 50 ms
@@ -74,7 +76,7 @@ export function gateStream(stream, levelFn) {
 
 export function driveGate(open) {
   if (!_gain || !_ctx) return;
-  // DO NOT DOUBLE-SMOOTH: setTargetAtTime is the envelope; target 1 or 0, as a lerped step never fully closes
+  // DO NOT DOUBLE-SMOOTH: setTargetAtTime IS the envelope; target 1 or 0 directly (a lerped step fed to it never closes)
   const target = open ? 1 : 0;
   const tau = open ? ATTACK_TAU : RELEASE_TAU;
   try {
@@ -134,8 +136,6 @@ export const monitoring = () => !!_mon;
 export const gateOpenness = () => (_gain ? _wanted : (_gateUnavailable && _rawStream ? _rawWanted : 0));
 export const gateGainNow = () => (_gain ? _gain.gain.value : 0);
 export const isGated = () => !!_gain;
-
-// ── a synthesized voice mixes in AFTER the gate, beside the mic, never instead of it: it is already signal
 
 /** Detach the device, keep the lane: sender tracks stay live, so the mic's return needs no renegotiation.
  *  Tear down tracks only on leave or audio opt-out. */

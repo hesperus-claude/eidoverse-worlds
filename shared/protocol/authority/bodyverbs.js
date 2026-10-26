@@ -205,7 +205,7 @@ const EMBODIED_VERBS = {
     // a socket that accepts it, within that socket's radius of where it's let go
     const snap = snapTarget(st, a.id, g, a.pos ?? h.pose.pos, w);
     if (snap.to) { const x = snap.to;
-    // at the socket's own pose (identity under it); its size in the world is kept
+      // at the socket's own pose (identity under it); its size in the world is kept
       const hs = worldT(st, x.id).scale; const scale = t.scale.map((v, i) => r3(v / hs[i]));
       const ops = [setOp(a.id, "parent", { to: x.id }), setOp(a.id, "transform", { pos: [0, 0, 0], q: [0, 0, 0, 1], scale })];
       const plan = admit(w, st, { actor, cap: { kind: "handle", ids: [a.id], comps: ["transform", "parent"] } }, ops);

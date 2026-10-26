@@ -1,8 +1,9 @@
 import { routeLevel, prepareWallCheck, routeGeometryFor, terrainCells, ROUTE_STEP_METRES, NON_FINITE_ENDPOINT } from './structure-route.js';
 export { ROUTE_STEP_METRES };
-// structure — the griddled building's pure half: the boxes to draw and collide, the rooms the walls enclose, and the doorways
-// that join them. client/lib/realize/structure.js executes the plan; tools/structure-field-test.ts holds it to the light. A
-// grid writes topology down, so "you are in the kitchen; the hall is through the south door" is a derivation, not a guess.
+// structure — the griddled building's pure half (§11.4: no THREE, no DOM, no scheduler): the boxes to draw and collide,
+// the rooms the walls enclose, and the doorways that join them. client/lib/realize/structure.js executes the plan;
+// tools/structure-field-test.ts holds it to the light. A grid writes topology down, so "you are in the kitchen; the hall
+// is through the south door" is a derivation, not a guess.
 // Walls live on grid EDGES, not in cells: an edge is shared by exactly two cells, so a wall between two rooms is ONE wall,
 // with no ownership rule to leak.
 // COORDINATES. Cell (x, z) covers grid-local [x, x+1) × [z, z+1) on the ground plane. Edges are canonical by construction:
@@ -706,7 +707,8 @@ export function openingsOf(level, room) {
 
 /** One sentence for the room a point stands in, or null. Sides are the GRID's compass, and the phrasing says so. */
 export function describeHere(plan, lx, lz, ly = 0) {
-  // resolve the room's own level, never one from the cell key alone (keys are x,z: on a stacked building that's the ground floor)
+  // resolve the room's own level, never one from the cell key alone (keys are x,z: on a stacked building that's the ground
+  // floor; ew#140)
   const here = levelAt(plan, lx, lz, ly);
   if (!here) return null;
   const { level, room } = here;
@@ -798,8 +800,9 @@ export function routeCells(level, fromKey, toKey) {
 }
 
 /** Prepare one immutable plan snapshot against a walking basis (owned by the standing resolver): terrain {heightAt(localX,
- * localZ), step?, scale?} or floor {height, level?, step?, scale?}; a floor's `level` makes THIS structure the support owner.
- * step is the feet-to-step band in local metres; scale only puts refusals in world metres. A preparation that can't be made
+ * localZ), step?, scale?} or floor {height, level?, step?, scale?}; a floor's `level` makes THIS structure the support
+ * owner (omit it on other structures: they constrain walls but offer no support). step is the feet-to-step band in
+ * local metres; scale (world metres per local metre, 1 when omitted) only puts refusals in world metres. A preparation that can't be made
  * says why in `failed` (route() refuses, clear() is false). */
 export function prepareRouteLocal(plan, basis) {
   // freeze the chosen mode/identity and function for this walk: a floor can't turn into terrain halfway through validation

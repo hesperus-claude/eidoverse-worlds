@@ -44,7 +44,6 @@ export function mentionsMe(text) {
   return mentionRx(CONFIG.name).test(String(text ?? ''));
 }
 
-/** Never puts untrusted text through innerHTML. */
 // inline markdown only (**bold**, *italic* / _italic_, `code`), as text nodes: no HTML is ever parsed from a message
 const MD_RX = /(\*\*([^*\n]+)\*\*)|(`([^`\n]+)`)|((?<![\w*])\*([^*\n]+)\*(?![\w*]))|((?<!\w)_([^_\n]+)_(?!\w))/g;
 function inline(run) {
@@ -61,6 +60,7 @@ function inline(run) {
   if (i < run.length) frag.append(document.createTextNode(run.slice(i)));
   return frag;
 }
+/** Never puts untrusted text through innerHTML. */
 function renderBody(text, names) {
   const frag = document.createDocumentFragment();
   const pattern = new RegExp(
@@ -539,7 +539,6 @@ fetch('/version').then((r) => r.json())
   .catch(() => { /* 'unknown' is itself a diagnostic */ });
 
 /** For a person with no console; each probe is guarded, so a missing subsystem can't take the report down. */
-
 function audioReport() {
   const L = [];
   const probe = (label, fn) => {

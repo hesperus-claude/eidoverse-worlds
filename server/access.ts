@@ -83,7 +83,8 @@ export function doorFor(name: string): Door | null {
 /** null = yes. `here` (embodied joins only): bodies in the world now, for access.max. */
 export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now(), here = null as number | null } = {}): Refusal | null {
   const { account, actorId, addr } = who;
-  // exclusion outranks everything but the operator, watching included: a ban is exclusion, not just silencing
+  // exclusion outranks everything but the operator (never locked out: the unban path of last resort), watching included:
+  // a ban is exclusion, not just silencing
   if (!isOperator(account)) {
     // the loaded world's moderator log, else the one read with its door
     const off = !door.world && door.mod ? { mod: door.mod, now: () => now } : null;

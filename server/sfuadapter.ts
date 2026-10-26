@@ -89,7 +89,6 @@ function iceServers(): { urls: string; username?: string; credential?: string }[
   return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
-/** Admission: amendment 1's seven refusals, from the shared decision layer; synchronous, as we are the SFU. */
 /** Adds `useinbandfec=1`, DTX stays off (silence-suppressed and dead look the same to a listener). Idempotent. */
 export function withOpusFec(sdp: string): string {
   const pt = /a=rtpmap:(\d+)\s+opus\/48000/i.exec(sdp)?.[1];
@@ -113,6 +112,7 @@ export function liveLegState(world: string, id: string, primaryGen?: number): Li
 export const sfuLegAdmitted = (world: string, id: string) => !!worlds.get(world)?.admitted.has(id);
 export const markSfuLegAdmitted = (world: string, id: string) => { sfuState(world).admitted.add(id); };
 
+/** Admission: amendment 1's seven refusals, from the shared decision layer; synchronous, as we are the SFU. */
 export function admitSfuLeg(world: string, claims: RelayClaims, live: LiveLegState) {
   const s = sfuState(world);
   const verdict = admitParticipant(claims, { ...live, usedNonces: s.usedNonces });

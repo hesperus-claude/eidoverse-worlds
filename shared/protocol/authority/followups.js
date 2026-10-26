@@ -183,7 +183,8 @@ const stripDry = ({ dry, ...rest }) => rest;
 const warnOrNot = (ws) => (ws.length ? { warnings: ws } : {});
 
 // authored: skip the authority's follow-ups, so an owner's cleanup never re-authors someone else's handler with the owner's
-// rights. A follow-up that removed it leaves no author (null).
+// rights. A follow-up that removed it leaves no author (null). Without it: the last write of any kind (a version, a
+// conflict check).
 function lastTouch(w, id, comp, { editsOnly = false, authored = false } = {}) {
   let restored = false;
   for (const i of backward(w, id)) { const e = w.entries[i]; if (!isE(e) || e.kind !== "change") continue;

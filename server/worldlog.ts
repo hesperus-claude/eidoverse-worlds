@@ -221,9 +221,9 @@ export class WorldLog {
     if (this.retired) return false;
     return reachLetGo(this.live, from, aimed);
   }
-  /** PROTOCOL L6; the inbox is left as is, so `inbox` still answers an agent that polls. */
   /** the last forwarded `n`, never the array's length (it caps at 200) */
   private inboxSent = new Map<string, number>();
+  /** PROTOCOL L6; the inbox is left as is, so `inbox` still answers an agent that polls. */
   private forwardInbox() {
     const box = this.live.presence?.inbox as Record<string, { n?: number }[]> | undefined; if (!box || !this.host?.toActor) return;
     for (const [who, msgs] of Object.entries(box)) {

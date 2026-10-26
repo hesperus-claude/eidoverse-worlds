@@ -149,8 +149,8 @@ export async function registerSupport(
 export const supportHolders = (): Record<string, string[]> =>
   Object.fromEntries([...holders].map(([id, hs]) => [id, [...hs]]));
 
-/** Heightfield support from a served topGrid (#84), for floors whose box top lies. False when refused (validTopGrid, non-finite transform): the caller must then
- *  abstain, never fall back to the box top. */
+/** Heightfield support from a served topGrid (#84), for floors whose box top lies. False when refused (validTopGrid,
+ *  non-finite transform): the caller must then abstain, never fall back to the box top. */
 export async function registerSupportGrid(
   holder: string, id: string, topGrid: unknown,
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },

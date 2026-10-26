@@ -70,10 +70,10 @@ export function queueOptimize(absPath: string) {
   }
   if (pushed) pumpOptimize();
 }
-/** POST /rebuild. `rel`: `eidoverse/assets/models/<f>.glb` or `store/<hash>.glb`. A built variant keeps serving until
- *  the new one lands over it. null = not a rebuildable object. */
 // per model (0 disables): the route's per-address limit caps presses, not the ~2×9 s of encode each buys
 const lastRebuild = new Map<string, number>();
+/** POST /rebuild. `rel`: `eidoverse/assets/models/<f>.glb` or `store/<hash>.glb`. A built variant keeps serving until
+ *  the new one lands over it. null = not a rebuildable object. */
 // forced passes wait behind every upload / sweep item: rebuild presses can delay other rebuilds, never uploads
 export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: number; busy?: boolean } | null {
   if (!/^(eidoverse\/assets\/models\/[^/]+|store\/[^/]+)\.glb$/.test(rel) || rel.includes("..")) return null;

@@ -275,7 +275,7 @@ function lev(a, b) { const d = Array.from({ length: b.length + 1 }, (_, j) => j)
   return d[b.length]; }
 // registered names one letter-slip from an unregistered bare one (R8): a typo, refused at admit
 const nearMiss = (name) => Object.keys(COMPONENTS).filter((k) => k !== name && Math.abs(k.length - name.length) <= 2 && lev(k, name) <= (k.length > 4 ? 2 : 1));
-/** Its shape only (no state, no rights), or null. For tools asking whether a translated world is one the authority takes as it is (sweep). */
+/** Why the catalogue refuses this value by its shape alone (no state, no rights), or null. For tools asking whether a translated world is one the authority takes as it is (sweep). */
 export function schemaRefusal(comp, v) { try { schemaCheck(comp, comp, v);
     // the enums too (valueCheck's): else a translated motion {type: 'path'} passes here and is refused at the first edit
     const ob = v && typeof v === "object" && !Array.isArray(v);
@@ -358,7 +358,7 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
     if (bad) refuse("shape", `${at}.${k} ${bad.why}`, bad.fix); }
 }
 // a handler is checked when WRITTEN, as the authority would check its write: a field it changes must be inside a
-// component the thing has; toggle flips booleans; an impulse swings a pendulum. Rights stay a use-time question (reactionCap).
+// component the thing has; toggle flips booleans. Rights stay a use-time question (reactionCap).
 function effectCheck(s, id, act, h) {
   const c = s.entities[id]?.c ?? {}; const isObj = (x) => x && typeof x === "object" && !Array.isArray(x) && x !== PURGED;
   const where = `reactions.${act}`;

@@ -153,9 +153,9 @@ export function sendPuppet(target, { pose = null, merge = false, anim = null, ra
   }
 }
 
-/** No answer (not joined, or nothing within 8 s) rejects, so a caller can tell it from an empty page. */
 const pendingHistory = new Map();
 let histId = 0;
+/** No answer (not joined, or nothing within 8 s) rejects, so a caller can tell it from an empty page. */
 export function requestHistory(opts = {}) {
   if (!net.joined || net.ws?.readyState !== 1) return Promise.reject(new Error('history: not connected'));
   const reqId = `h${++histId}`;
@@ -386,8 +386,7 @@ export function sendPoseExact(pose) {
   return true;
 }
 
-/** The server keys a client by id, so a rename is a visible leave and arrive; what was filed under the old name
- *  (the remembered sleeping place) doesn't follow. */
+/** Drop the socket and dial again (a resync, a travel). */
 export function rejoin() {
   intentionalClose = net.ws ?? true;   // the socket being replaced: its close is the one rejoin() answers for
   try { net.ws?.close(); } catch { /* already gone */ }

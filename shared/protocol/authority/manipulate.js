@@ -159,8 +159,6 @@ function returnDue(w) {
       console.warn(`[authority] ${id} is due to go home (let go at seq ${r.release}) but its return is refused: ${why}; it stays where it is`); }
   }
 }
-// a home is stamped when a returning grabbable is written without one; an edit moving a thing whose home was where it stood
-// carries the home along; a home set elsewhere is left alone
 // home scale keeps its size in the world: its scale × every ancestor's now ÷ the home parent chain's
 const vec3s = (v) => (typeof v === "number" ? [v, v, v] : Array.isArray(v) && v.length === 3 ? v : [1, 1, 1]);
 const chainScale = (st, id) => { let k = [1, 1, 1], p = id, n = 0; while (p && n++ < 33) { const c = st.entities[p]?.c; if (!c) break; const sc = vec3s(c.transform?.scale); k = k.map((x, i) => x * sc[i]); p = c.parent?.to; } return k; };
@@ -184,7 +182,8 @@ function stampResetHomes(ctx, ops) {
     const home = homeHere(after, t); out.push(setOp(t, "home", home)); ctx.notes.push({ id: t, component: "home", kept: home, why: "stamped for the reset that names it: where it stands now" }); }
   return out;
 }
-// a returning grabbable's home is its home component
+// a returning grabbable's home is its home component: stamped when one is written without it; an edit moving a thing
+// whose home was where it stood carries the home along; a home set elsewhere is left alone
 function stampHomes(ctx, ops) {
   if (ctx.cap || !ops.length) return ops;
   const after = scratch(ctx.st, ops); const out = ops.slice();

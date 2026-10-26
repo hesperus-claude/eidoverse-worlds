@@ -51,13 +51,13 @@ const LIST = [
 ];
 export const PERMISSIONS = Object.freeze(Object.fromEntries(LIST.map(([k, text, needs]) => [k, Object.freeze({ text, needs: Object.freeze(needs) })])));
 export const PERMISSION_NAMES = Object.freeze(LIST.map(([k]) => k));
-/** Holding any shows the Moderation panel and the moderation log. */
 /** Owner-only powers go through this one test: a grant value or effective rights whose role is the built-in owner. */
 export const OWNER = "owner";
 /** The base rung (inhabitant), one test like owner: "anyone here" for a who, the badge that isn't shown. */
 export const BASE = "inhabitant";
 export const isBase = (x) => (typeof x === "string" ? x : x?.role) === BASE;
 export const isOwner = (x) => (typeof x === "string" ? x : x?.role) === OWNER;   // a role string, a grant or effective rights
+/** Holding any shows the Moderation panel and the moderation log. */
 export const MOD_POWERS = Object.freeze(["mute", "kick", "ban", "pauseScripts"]);
 /** warn isn't a permission (research §2): the gentlest act comes with any of these. */
 export const WARN_POWERS = Object.freeze(["mute", "kick", "ban"]);

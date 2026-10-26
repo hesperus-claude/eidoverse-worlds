@@ -85,7 +85,7 @@ export const DEFAULT_CONFIG = {
     dampingPerCycle: 0.08,      // FRACTION of swing lost per CYCLE (spec 0.05-0.1); converted to a per-second rate in leafAt
     dampingFloor: 0.35,         // the swing decays TOWARD this, not to zero: a body going rigid on the way down reads as a prop
     // terminalV is contested: the spec's 2-3 m/s (survivable by design) is the default; LEAF_PRESETS offer a heavier fall to
-    // try. The spec's acceptance authority decides.
+    // try
     terminalV: 2.5,             // m/s downward. Spec says 2-3.
     spinUpTime: 0.9,            // s to reach terminalV from whatever v it had
     yawPerBank: 0.55,           // rad/s of yaw per radian of bank: the spiral
@@ -448,7 +448,7 @@ function stepPilot(cfg, s, dt, env) {
     if (s.stamina === 0) s.events.push({ t: s.t, kind: 'winded' });
   }
 
-  // a launch impulse eases IN over the first beat, peaks, then bleeds off: stepPilot assigns vel.y from the polar every frame,
+  // a launch impulse eases IN over ~1.5 s, peaks, then bleeds off: stepPilot assigns vel.y from the polar every frame,
   // so a one-frame boost would be thrown away
   if (s.launchV > 0.01 || (s.launchT ?? 0) > 0) {
     s.launchT = (s.launchT ?? 0) + dt;

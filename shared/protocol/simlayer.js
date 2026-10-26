@@ -31,7 +31,7 @@ export const carried = (spec) => !!spec && typeof spec.engine === "string" && Ob
 export const engineName = (e) => String(e).split("@")[0];
 const semver = (e) => (String(e).split("@")[1] ?? "").split(".").map((x) => Number(x) || 0);
 const newer = (a, b) => { const x = semver(a), y = semver(b); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
-/** Its newest carried one, or null when it carries none of that name. */
+/** The version of engine `name` this server stamps: its newest carried one, or null when it carries none of that name. */
 export const stampOf = (name) => Object.keys(ENGINES).filter((k) => engineName(k) === name).reduce((best, k) => (best === null || newer(k, best) ? k : best), null);
 
 // P7: what releases a body (or reseats a collider) is WHICH COMPONENT changed, never which verb carried it.

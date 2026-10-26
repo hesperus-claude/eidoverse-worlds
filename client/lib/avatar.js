@@ -1395,7 +1395,7 @@ export class Avatar {
     return out;
   }
 
-  /** t in seconds. */
+  /** One bone's rotation at time t (seconds): slerped between keys, clamped to the ends. */
   _sampleTrack(keys, t, out) {
     if (t <= keys[0].t) return out.copy(keys[0].q);
     const last = keys[keys.length - 1];

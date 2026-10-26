@@ -22,8 +22,8 @@ import { globalBans, saveGlobalBans, banKey, ADDR_BAN_MS, bansLiftedBy } from ".
 import { isOwner } from "../shared/protocol/roles.js";
 
 /** An opaque actor id (`targetActor` / `toActor`) names that identity's embodied leg, and the name beside it is NOT a
- *  fallback (it would hand the message to whoever wears the name). Without one it reaches by name; names can't be shaped
- *  like actor ids. */
+ *  fallback (it would hand the message to whoever wears the name). Without one it reaches by name: names are unique
+ *  among the people here and, for accounts, across the directory (server.ts join); none is shaped like an actor id. */
 const ACTOR_ID = /^u-[a-z2-7]{20}$/;
 
 /** Body consent (PROTOCOL L6): an act on someone else's body is checked against THEIR table (shared/protocol/consent.js;
@@ -169,8 +169,8 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     // a grab takes someone's body (move, L6): their consent and reach, at the server; stream and release only ever go to a
     // body that accepted the grab
     if (msg.grab != null) { const why = bodyRefusal(c, tc, "displace", "drag"); if (why) { ws.send(JSON.stringify({ type: "error", error: why })); return; } }
-      // what follows a grab is held to the same table: pulling a nail needs displace or a granted drag; once displace is deny
-      // nothing more of a drag reaches them; an end always goes through, minus a refused nail
+    // what follows a grab is held to the same table: pulling a nail needs displace or a granted drag; once displace is deny
+    // nothing more of a drag reaches them; an end always goes through, minus a refused nail
     else if ((msg.end == null || msg.unpin != null || msg.pinAt != null || msg.pins != null) && !(c.actorId && c.actorId === tc.actorId)) {
       const nail = msg.unpin != null || msg.pinAt != null || msg.pins != null;
       const endAlone = () => { if (msg.end == null) return true; delete msg.unpin; delete msg.pinAt; delete msg.pins; return false; };   // refused: an end still goes, bare
@@ -256,7 +256,8 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     // pure presence: never logged or queued; the bound voice leg may pace it too (#57)
     const voiceLeg = c.surface === "voice" && c.auxBound === true;
     if (!c.world || (c.spectator && !voiceLeg)) return;
-    // an agent's affordance glyph (ear, think, tool, mic), whitelisted so presence stays presence
+    // an agent's affordance glyph, whitelisted so presence stays presence: ear = hearing you, think = composing,
+    // tool = working, mic = a live voice from this body
     const st = typeof msg.state === "string" && ["ear", "think", "tool", "mic"].includes(msg.state) ? msg.state : null;
     // `to` names someone present, or nobody; by identity when the sender names one (toActor), else by name
     const tt = presenceTarget(c.world, msg.toActor, typeof msg.to === "string" ? msg.to : "", false).tc;

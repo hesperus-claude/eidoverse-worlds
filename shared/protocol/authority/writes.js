@@ -156,12 +156,13 @@ function needThing(ctx, id) {
   return e;
 }
 
-// resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
-// admit's. A malformed @world.bounds already in a log is treated as no bounds; the floor is the terrain's.
+// a malformed @world.bounds already in a log is treated as no bounds; the floor is the terrain's
 const outsideWorld = (B, p) => p[0] < B.min[0] || p[0] > B.max[0] || p[2] < B.min[2] || p[2] > B.max[2] || p[1] > B.max[1];
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
 const MOTION_AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };   // motioneval.js AXES
+// resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
+// admit's
 function resolve(ctx, id, comp, value, prev) {
   const def = !comp.includes(":") || comp.startsWith("look-at:") ? defOf(comp) : undefined;   // an alias has its registered name's defaults; a part's look-at the whole one's
   if (comp === "transform") {

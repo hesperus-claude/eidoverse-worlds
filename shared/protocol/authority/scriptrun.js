@@ -135,10 +135,6 @@ function withAuthority(w, fn) {
   try { return fn(); } finally { exit(); if (w.presenceDirty) { w.savePresence(); w.presenceDirty = false; } }
 }
 /**
- * Timers: a due script with nobody present sleeps unless `always`, then gets ONE `wake {slept}`; missed periods coalesce.
- * A timer act's cause is its sponsor's latest install. A host calls this on its own clock, never inside a request.
- */
-/**
  * The engine's heartbeat: advances the sim toward the authority's clock, at most `maxTicks` a pass (a stall catches up over
  * passes, never by a longer step), logs rests, returns what is due back, expires asks. → entries written.
  */
@@ -174,6 +170,10 @@ function checkpointSim(w) {
   const state = w.putBlob({ cutJson: JSON.stringify(cut) });
   w.append({ kind: "sim", actor: "sim", verb: "checkpoint", body: { at: E.length - 1, engine: { engine: sf.spec.engine }, tick: sf.sim.tick, clock: sf.clock, sim: digestOf(sf.sim), state } });
 }
+/**
+ * Timers: a due script with nobody present sleeps unless `always`, then gets ONE `wake {slept}`; missed periods coalesce.
+ * A timer act's cause is its sponsor's latest install. A host calls this on its own clock, never inside a request.
+ */
 export function tick(w) {
   // without the world's key nothing a script writes can be logged, so (as settle() and expireRoles()) the timers don't start
   if (!w.exists || w.state().status !== "ok" || !holdsCustody(w)) return [];
@@ -194,7 +194,8 @@ export function tick(w) {
   });
 }
 /** TIMED GRANTS end (PROTOCOL §7 Roles): every roles:<id> past its `until` is deleted in one system act `expire-roles {ids}`,
- *  so the end is in the log. The host calls it about once a second. → the identities whose grant ended. */
+ *  so the end is in the log. The host calls it about once a second; until then the grant stands on the log (reads judge
+ *  `until` themselves: access.js listedIn). → the identities whose grant ended. */
 export function expireRoles(w) {
   if (!w.exists || w.state().status !== "ok" || !holdsCustody(w)) return [];
   return withAuthority(w, () => {
@@ -320,7 +321,7 @@ export function maintain(w, { by = null, operator = false, dryRun = false } = {}
         const plan = admit(w, st, { actor: "system", cap: { kind: "system", ids, comps }, lifting: true }, ops);
         if (!dryRun) changeEntry(w, plan, w.append({ kind: "act", actor: "system", verb: "lift-sockets", body: { id: h, made, moved, ...(author ? { capability: { author } } : {}), ...prov } }));
         lift.made.push({ host: h, made, moved });
-      } catch (x) { if (!(x instanceof Refusal)) throw x;   // r14 H1 (10-18)
+      } catch (x) { if (!(x instanceof Refusal)) throw x;   // r14 H1 (10-18): a durable-write throw is the caller's ambiguous outcome, never a "refused" host
         lift.failed.push({ host: h, code: x.code, reason: String(x.reason ?? "").slice(0, 300) }); } }
     steps.lift = lift;
     // 2. rename-components: one system act, admitted PER THING

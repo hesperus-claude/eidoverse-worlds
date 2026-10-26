@@ -113,13 +113,13 @@ export function ktx2EncodeArgs(encoder: string, isToktx: boolean, srgb: boolean,
        inPath, outPath];
 }
 
-/** In place, toktx or `ktx create`. A texture that won't convert is skipped and NAMED in the tally; the caller decides
- *  whether a partial result ships. Every output is checked for the KTX2 container magic. */
 /** A ktx-create LINEAR image without this has the sRGB curve baked in (tools/ktx2-tf-purge.ts; metadata can't tell). */
 export const KTX2_TF_MARK = "ktx2Tf";
 export type Ktx2Tally = { eligible: number; converted: number; failed: string[] };
 const KTX2_MAGIC = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
 export const isKtx2Container = (b: Uint8Array) => b.length >= 12 && KTX2_MAGIC.every((v, i) => b[i] === v);
+/** In place, toktx or `ktx create`. A texture that won't convert is skipped and NAMED in the tally; the caller decides
+ *  whether a partial result ships. Every output is checked for the KTX2 container magic. */
 async function ktx2CompressTextures(doc: Document, encoder: string, caps?: Map<Texture, number>): Promise<Ktx2Tally> {
   const isToktx = basename(encoder).toLowerCase().includes("toktx");
   // sharp converts non-PNG sources and 4-aligns (KHR_texture_basisu wants % 4 == 0); without it, only aligned PNGs encode
@@ -697,7 +697,7 @@ export async function transcodeVrmKtx2(bytes: Uint8Array, encoder: string):
   let sharp: any = null;
   try { sharp = (await getSharp()).sharp; } catch { /* aligned-PNG/JPEG-only pass below */ }
   const tmp = mkdtempSync(join(tmpdir(), "ew-ktx2vrm-"));
-  const newImageBytes = new Map<number, Uint8Array>(); // image idx ->
+  const newImageBytes = new Map<number, Uint8Array>(); // image idx -> ktx2 bytes
   let etc1s = 0, uastcN = 0;
   try {
     for (const [i, img] of (json.images ?? []).entries()) {
@@ -758,7 +758,7 @@ export async function transcodeVrmKtx2(bytes: Uint8Array, encoder: string):
   // ---- rebuild: image bytes swapped IN PLACE, zero reindexing ----
   // a pristine second parse: `json` is about to mutate, and the validator diffs against the original
   const srcJson = parseGlb(bytes).json;
-  const replaced = new Map<number, Uint8Array>(); // bufferView idx ->
+  const replaced = new Map<number, Uint8Array>(); // bufferView idx -> new bytes
   for (const [i, data] of newImageBytes) replaced.set(json.images[i].bufferView, data);
   let cursor = 0;
   const placements: { idx: number; data: Uint8Array; off: number }[] = [];

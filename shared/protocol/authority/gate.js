@@ -49,7 +49,8 @@ const bytesOf = (e) => e.bytes ?? utf8Len(JSON.stringify(e));   // UTF-8 bytes, 
 // FOLLOW_UP / followUp (the authority's own follow-up ops inside a person's write): authority/storage.js
 class Admitted { constructor(who, ops, after, notes = [], vacate = [], followUps = []) { this.who = who; this.ops = ops; this.after = after; this.notes = notes; this.vacate = vacate; this.followUps = followUps; Object.freeze(this); } }
 // L7 rate over EVERYTHING the actor makes the log hold (acts and says): admit calls it for state writes, and every word
-// that logs without one (say, lift, throw, drop, teleport) calls it before appending. Refusals aren't logged.
+// that logs without one (say, lift, throw, drop, teleport) calls it before appending. A refused write is logged (R7,
+// authority.js logRefusal) inside the same budget.
 function rateCheck(w, actor, kind = "act", extra = 0) {
   if (w.leaving === actor) return; // a disconnect's settlement is the authority's duty, not the leaver's request: never rate-refused
   const r = rateOf(w, actor); const cap = w.kindOf?.(actor) === "anon" ? RATE.anonBytes : RATE.bytes;
@@ -228,13 +229,14 @@ function lacks(w, st, holder, op, made, { viaCap = false } = {}) {
 const needWords = (n) => (n === "owner" ? "owner" : n === "build" ? "builder" : n === "grantRoles" ? "owner or grantRoles" : `the ${n} permission`);
 function rights(w, st, s, who, role, op, at, made, pause) {
   const { actor, cap } = who;
-  // captions are written by the caption request only; an owner may set them whole, an editor of the screen may delete them
-  // an imported world's records are carried, never written by a request (nothing reads them as live); an owner may
+  // an imported world's records are carried, never written by a request (nothing reads them as live); an owner may (a copy
+  // of the world, a repair); deleting one is an ordinary edit
   if (!cap && op.verb === "set" && !R.isOwner(role) && IMPORTED_ONLY(op.comp)) refuse("imported", `${at} is an imported world's record, carried as it was; it isn't written by hand`, "what it meant lives elsewhere now: lock for a guard, the moderator log for bans (ban/unban), script:<name> for a behaviour");
   // a server-written component (componentspec writtenBy: copy-of): the authority's own verbs write it (a copy, a rebase,
   // a duplicate); no capability (a handler, a script) ever does, and a hand set or create below owner is refused where the
   // request is built (serverWritten, buildSet and buildCreate)
   if (op.verb === "set" && cap && ["reaction", "script"].includes(cap.kind) && defOf(op.comp)?.writtenBy === "server") serverWritten(at);
+  // captions are written by the caption request only; an owner may set them whole, an editor of the screen may delete them
   if (!cap && op.comp === "captions" && op.verb === "set" && !R.isOwner(role)) refuse("caption-only", `${at} is written by the caption request, one line at a time`, "caption {id, session, n, t0, t1, text, speaker?, title?} (or {id, session, end: true}); who may is the screen's captioners {ids}");
   if (cap?.kind === "caption") { if (!cap.ids.includes(op.id) || op.comp !== "captions") refuse("rights", `a caption writes only ${cap.ids.join(", ")}'s captions`, "");
     const ids = st.entities[op.id]?.c.captioners?.ids;

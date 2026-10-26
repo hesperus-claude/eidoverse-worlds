@@ -46,9 +46,10 @@ export const APPROACH_STILL_MPS = (() => {
   console.warn(`[denoise] EW_APPROACH_STILL_MPS=${v} rejected (must be > 0); using 0.35`);
   return 0.35;
 })();
-/** Deliver anyway after this long in the radius (a pacer has still approached). Clamped to
- *  2·APPROACH_RADIUS / APPROACH_STILL_MPS so a straight pass-through can never reach it, whatever the env says. */
+/** APPROACH_MAX_WAIT_MS's floor: 2·APPROACH_RADIUS / APPROACH_STILL_MPS. */
 export const APPROACH_SAFE_WAIT_MS = Math.ceil(((2 * APPROACH_RADIUS) / APPROACH_STILL_MPS) * 1000);
+/** Deliver anyway after this long in the radius (a pacer has still approached). Clamped to APPROACH_SAFE_WAIT_MS so a
+ *  straight pass-through can never reach it, whatever the env says. */
 export const APPROACH_MAX_WAIT_MS = (() => {
   const v = env("EW_APPROACH_MAX_WAIT_SEC", 20) * 1000;
   if (v >= APPROACH_SAFE_WAIT_MS) return v;

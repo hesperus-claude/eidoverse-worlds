@@ -180,8 +180,8 @@ initDock([
   { id: 'world', label: '🧱' },
   { id: 'actions', label: '👋' },
   { id: 'debug', label: '🐞' },
-  // edit is a MODE, not a window. Its gate reads net.myRights: an operator owns every world but isn't in the fold's roles
   { id: 'settings', label: '⚙️', icon: 'gear-six' },
+  // edit is a MODE, not a window. Its gate reads net.myRights: an operator owns every world but isn't in the fold's roles
   {
     id: 'edit', label: '🔧', icon: 'wrench', last: true,
     action: toggleEditMode,
@@ -358,7 +358,7 @@ wireNet({
 
 bus.on('sky-degraded', ({ msg }) => toast(msg, 'warn', 12000));
 
-initOccupants();   // seat-profile verdicts (upstream #101)
+initOccupants();   // seat-profile verdicts (#101)
 
 // ---------------------------------------------------------------- my body
 // the avatar swap is mybody.js; a body's physics localbody.js (§14.2)

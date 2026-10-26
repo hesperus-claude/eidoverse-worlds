@@ -86,7 +86,7 @@ export function occupiedBody() {
 // ESCAPE_HOLD_S, always gets you up.
 let escapeArmedAt = -Infinity, escapeHeld = 0, escapeTile = false;
 bus.on('escape-hold', (on) => { escapeTile = !!on; });   // the stand tile held (actionbar.js) counts as X held
-/** Off my seat, if the socket allows this kind ('move' | 'jump' | 'menu' | 'script'); true when off or leaving.
+/** Off my seat, if the socket allows this kind ('move' | 'jump' | 'menu' | 'script' | 'escape'); true when off or leaving.
  *  `at`: the authority's `vacated.at` [x, y, z]; I stand there, so my body and its track start together. */
 export function dismountMe(kind = 'menu', at = null) {
   const m = avatarMounts.get(CONFIG.name);

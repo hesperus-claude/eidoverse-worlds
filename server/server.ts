@@ -414,11 +414,12 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
       }
     }
     if (w.log && c.actorId && !isOperator(c.account)) {
-      // re-written as the moderator's own act on each new guest from the address, so it shows, applies and lifts as any
+      // a guest's address mute (moderation.ts) is re-written as the moderator's own act on each new guest from that address,
+      // so it shows, applies and lifts like any other
       if (c.anonymous && c.addr && !c.spectator && (c.surface ?? "world") === "world") {
         let carried = 0;
         for (const s of addrSanctionsFor(w.name, c.addr)) {
-          if (s.kind !== "mute" || w.log.mutedHere(c.actorId)) continue;   // only mutes carry
+          if (s.kind !== "mute" || w.log.mutedHere(c.actorId)) continue;   // only mutes carry, never onto someone muted here
           w.log.live.appendMod({ actor: s.actor, verb: s.kind, who: c.actorId, ...(s.kind === "mute" ? { channels: s.channels ?? ["voice", "chat"] } : {}), until: s.until, ...(s.reason ? { reason: s.reason } : {}), carried: "address" });
           if (!s.ids.includes(c.actorId)) s.ids.push(c.actorId); carried++;
         }
@@ -590,7 +591,8 @@ function buildSnapshot(w: World, c: Client) {
 const server = Bun.serve({
   port: PORT,
   hostname: HOST,
-  // Bun's maximum (s): the 10 s default cuts a big download over a slow link
+  // Bun's maximum (s): the 10 s default cuts a big download over a slow link. A WebSocket has its own
+  // websocket.idleTimeout (left at Bun's default)
   idleTimeout: 255,
   async fetch(req, srv) {
     // the whole HTTP surface is routes.ts's table (§15, 7c); a successful /ws upgrade returns no Response
@@ -720,7 +722,7 @@ const server = Bun.serve({
         // one end IS the sequencer: no recipient to address; never logged, SDP-sized cap, dropped if the leg is gone
         case "sfu-answer": {
           if (!c.world || !relayEnabled()) return;
-          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id, so without it it reaches a real SFU leg
+          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id and would otherwise reach a real SFU leg
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           // admission (admitSfuLeg's refusals) runs on the first answer: it must prove it is the leg the credential was minted for
           {
@@ -754,7 +756,7 @@ const server = Bun.serve({
         }
         case "sfu-ice": {
           if (!c.world || !relayEnabled()) return;
-          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id, so without it it reaches a real SFU leg
+          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id and would otherwise reach a real SFU leg
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           // gen required end-to-end (#130): the adapter refuses a missing or stale one
           sfuAcceptIce(c.world.name, c.id, msg.candidate, typeof msg.gen === "number" ? msg.gen : undefined);
@@ -763,7 +765,7 @@ const server = Bun.serve({
         case "sfu-pos": {
           // optional: the proximity gate fails open on unknown positions
           if (!c.world || !relayEnabled()) return;
-          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id, so without it it reaches a real SFU leg
+          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id and would otherwise reach a real SFU leg
           // (here, a forged distant position for someone else is a remote mute)
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -773,7 +775,7 @@ const server = Bun.serve({
         case "sfu-want-negotiate": {
           // the client asks for an offer rather than offering: the server owns every offer (glare)
           if (!c.world || !relayEnabled()) return;
-          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id, so without it it reaches a real SFU leg
+          // relay-cred's gate: a spectator or aux leg keeps the primary's c.id and would otherwise reach a real SFU leg
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           sfuNegotiate(c.world.name, c.id, (payload) => ws.send(JSON.stringify(payload)));
           return;

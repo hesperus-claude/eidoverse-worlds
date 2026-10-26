@@ -51,10 +51,10 @@ const done = (text: string): ActResult => ({ ok: true, text });
 const refused = (text: string): ActResult => ({ ok: false, text });
 /** A body down: limp wings, in the air (LEAF), on the ground (RAGDOLL) or sitting up (RECOVER). */
 const isDown = (phase: string) => phase === "LEAF" || phase === "RAGDOLL" || phase === "RECOVER";
-// in the air a limp fall ends at the ground (RAGDOLL) or in a recovery (shared/flight.js bodyRecovered);
-// on the ground, take_off launches afresh from where the body lies (takeOff)
-/** And what gets it flying again. A limp fall whose recovery began in the air (LEAF with recoverAt set) flies on by
- *  itself once done, unless it meets the ground first (shared/flight.js). */
+/** What a body that's down is told, and what gets it flying again. In the air a limp fall ends at the ground (RAGDOLL)
+ *  or in a recovery (shared/flight.js bodyRecovered); one whose recovery began in the air (LEAF with recoverAt set) flies
+ *  on by itself once done, unless it meets the ground first. On the ground, move {mode: "fly"} launches afresh from where
+ *  the body lies (takeOff). */
 const downRefusal = (f: { phase: string; recoverAt?: number | null }) => f.phase === "LEAF"
   ? f.recoverAt != null
     ? "you're falling limp (leaf) with your recovery under way — you fly again once it's done, unless you reach the ground first"
@@ -122,14 +122,14 @@ const SHOVE_TRIES = 5, SHOVE_WAIT_MS = 2500, SHOVE_SETTLE_MS = 800;
 type Blocker = { id: string; ref: any; phase: "approach" | "pushed"; until: number };
 type WalkGate = { mode: "sync" | "tracked" | "open"; permit: number[] | null; busy: boolean; blocker?: Blocker | null; shoves?: number; slow?: number; waitUntil?: number; hold?: number; retrackAt?: number };
 const STATURE_FALLBACK = MOVER.body.height;   // an ordinary adult (the mover's body), while a body's own height is being read (main #242)
-/** A 0.4 m run tick checked only at its end leaps a 0.2 m wall (navgrid.ts NAV_SUBSTEP says why it is a browser
- *  frame's worth). */
+/** Longest horizontal move between collision checks: a 0.4 m run tick checked only at its end leaps a 0.2 m wall
+ *  (navgrid.ts NAV_SUBSTEP says why it is a browser frame's worth). */
 const COLLIDE_SUBSTEP = NAV_SUBSTEP;
 /** Less than this fraction of intended progress for STALL_TICKS ticks: held by something solid, so the walk ends,
  *  saying so, instead of pressing against the wall until the 90s timeout. */
 const STALL_PROGRESS = 0.2, STALL_TICKS = 15;
 const GRAVITY = 16;   // client/lib/controller.js: vy -= 16 * dt
-/** A settled ragdoll's root, below its supporting surface. */
+/** Metres a settled ragdoll's root lies below its supporting surface. */
 const RAGDOLL_ROOT_DROP = 0.7;
 const BONES_NOT_KNOWN = "this body's bones aren't known (its model hasn't loaded, or couldn't be read), so whether it has wings can't be checked";
 /** shared/flight.js's refusals (main #245) name the fix as an act ("unfold them first", "land first"); here those are
@@ -151,7 +151,8 @@ const modelMeta = new Map<string, unknown>();
 /** The colliders fitted from a model hold its geometry while they stand; this only bounds what is kept for fits yet
  *  to come. Least recently used goes first; downloads in flight stay. */
 const MESH_CACHE_BYTES = 256 * 1024 * 1024, MESH_FETCH_MS = 8000;
-/** How long a walk waits for placed geometry still loading before it is refused (see walkTo); covers a fetch's own timeout plus some queueing. */
+/** How long a walk waits for placed geometry still loading before it is refused (see walkTo); covers a fetch's own
+ *  timeout plus some queueing. */
 const WALK_READY_MS = 15_000;
 /** The world entity (places that belong to no thing live on it), and how far and how many places look lists (only
  *  what you can see, nearest first; move {to: "?"} lists every one). */
@@ -304,10 +305,10 @@ const fillOf = (t: { area: number; x: number[]; z: number[] }) => {
  *  library. Open decks are abstained on rather than inventing geometry. */
 const DECK_FILL = 0.45;
 
-// for headless agents, which cannot simulate
 /** A rotation, or {q, t, s} (shared/humanoid.js poseChannels). */
 type PoseValue = number[] | { q?: number[]; t?: number[]; s?: number[] | number };
 
+/** A canned "knocked over" pose: headless agents can't simulate one. */
 const DOWNED_POSE: Record<string, number[]> = {
   spine: [0.6, 0, 0, 0.8], chest: [0.5, 0, 0, 0.87], neck: [0.3, 0, 0, 0.95],
   leftUpperArm: [0, 0, -0.9, 0.44], rightUpperArm: [0, 0, 0.9, 0.44],
@@ -358,7 +359,7 @@ export class WorldAgent {
   private waterKey: string | null = null;
   /** A swimming body's buoyant column (shared/buoyancy.js), on the same swell everyone's water draws. */
   private float = { on: false, y: 0, vy: 0 };
-  /** When something stopped it mid-way. */
+  /** Why the last walk stopped mid-way, or null. */
   walkStopReason: string | null = null;
   /** The world's water (shared/terrainshape.js), from the terrain bag; null when it has none. */
   water: { level: number } | null = null;
@@ -1307,7 +1308,7 @@ export class WorldAgent {
     for (const a of acts) this.gate.act(id, a.key, a.text);
   }
 
-  /** The hierarchy tools walk them. */
+  /** Every entity id in the fold (what the hierarchy tools walk). */
   foldedIds(): string[] { return Object.keys(this.st.entities); }
   /** state.sky / terrain / grass, which shared/worldentity.js reads as the world entity `@world`. */
   worldFold(): { sky: unknown; terrain: unknown; grass: unknown } {
@@ -1318,7 +1319,6 @@ export class WorldAgent {
   blueprintStore(): Record<string, { record: unknown; by: string; ts: number }> {
     return ((this.st as any).blueprints ?? {}) as Record<string, { record: unknown; by: string; ts: number }>;
   }
-  /** @world blueprints:<hash> -> {name, parts?} (the authority's publish). */
   /** the authority stamps copy-of {from, key} on every part; the copy is the part whose parent isn't of the same copy */
   copyLine(id: string): string | null {
     const E = this.st.entities as Record<string, any>; const f = E[id]?.["copy-of"]?.from; if (typeof f !== "string") return null;
@@ -1326,6 +1326,7 @@ export class WorldAgent {
     let root = id; for (let i = 0; i < 64; i++) { const p = E[root]?.parent?.to; if (!p || E[p]?.["copy-of"]?.from !== f) break; root = p; }
     return root === id ? `a copy of "${name}"` : `part "${E[id]["copy-of"].key}" of ${root} (a copy of "${name}")`;
   }
+  /** @world blueprints:<hash> -> {name, parts?} (the authority's publish). */
   worldBlueprints(): Record<string, { name?: string }> {
     const w = this.replica?.st?.entities?.["@world"]?.c ?? {};
     const out: Record<string, { name?: string }> = {};
@@ -1530,9 +1531,9 @@ export class WorldAgent {
     this.emitterNarration.set(id, { announced, latest: announced, actor, timer });
   }
 
+  private skyStamp: { seq: number; by: string } | null = null;
   /** The push half of sky perception (look() is the pull), at 1 Hz off tick(): the first observation after a join is
    *  silent; it speaks only on change. `nowMs` is injectable. */
-  private skyStamp: { seq: number; by: string } | null = null;
   checkSky(nowMs = Date.now()) {
     if (!this.skyState) return;
     const eff = effectiveSky(this.skyState, nowMs, this.skyCursor);

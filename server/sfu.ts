@@ -64,7 +64,8 @@ export class Sfu {
   maxAudiblePerListener = 0;
   /** A newcomer must be MEANINGFULLY closer, or two near-equal speakers swap the last slot every tick. */
   private static readonly STICKINESS = 0.8;
-  /** hysteresis memory; NESTED for the same reason as consent */
+  /** hysteresis memory; NESTED for the same reason as consent (a fourth pair key should extract a PairMap<T>: NUL-joined
+   *  keys collided here twice) */
   private inRange = new Map<string, Map<string, boolean>>();
 
   /** OPTIONAL: a world that never calls this never gates. */
@@ -157,9 +158,8 @@ export class Sfu {
     return leg;
   }
 
-  /** The hot path: checks in the order that fails cheapest first. */
-  // P2P offload (#104 phase 2) hooks in beside the proximity gate: both answer "does this packet need the relay?"
-  // a fourth pair key should extract a PairMap<T>: NUL-joined keys collided here twice
+  /** The hot path: checks in the order that fails cheapest first; P2P offload (#104 phase 2) hooks in beside the
+   *  proximity gate (both answer "does this packet need the relay?"). */
   private fanout(from: SfuLeg, rtp: RtpPacket) {
     // the closed check comes FIRST: werift's onReceiveRtp outlives the leg, and counting late packets makes a corpse look live
     if (from.closed || this.muted.has(from.id)) return;   // moderator mute: at the source

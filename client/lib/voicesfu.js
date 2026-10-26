@@ -1,5 +1,6 @@
 // voicesfu — the browser half of the in-process SFU in plain WebRTC; the only voice transport.
 // THE SERVER OFFERS, ALWAYS: an answer can't add a receive direction the offer never proposed, so we only answer.
+// The browser supplies AGC/NS/AEC and NetEq: no SDK DSP or jitter buffer.
 import { bus } from './base.js';
 import { audioContext } from './audioctx.js';
 // a dead media path must reach the person, not only the console: the mic meter shows capture, not transmission
@@ -11,7 +12,7 @@ import { rawMicStream, setMicLive } from './micstate.js';
 let pc = null, cred = null, micStream = null, wantMic = false;
 // declared up here: sfuConnect() clears these, and a later `let` would be in the TDZ during module evaluation
 let _myAn = null, _myBuf = null, _myStream = null;
-/** subscribed ONCE at module level: core.js has no `off` */
+/** subscribed ONCE at module level (base.js bus; nothing here unsubscribes) */
 const routeQueue = [];
 bus.on('sfu-route', (m) => routeQueue.push(m.speaker));
 const speakers = new Map();           // id → { audio, stream, wantVolume, an, buf }
@@ -159,7 +160,6 @@ export async function sfuOnIce(candidate) {
   try { await pc.addIceCandidate(candidate); } catch { /* stale/dup candidate */ }
 }
 
-/** The browser supplies AGC/NS/AEC and NetEq: no SDK DSP or jitter buffer. */
 // one acquisition at a time, or two senders publish and the orphan keeps the mic light on
 let micPending = null;
 // a stale pending (pc replaced) is awaited, then treated as absent
@@ -187,7 +187,7 @@ export async function sfuMic(on = true) {
     try { (await import('./micstate.js')).setMicLive(false); } catch { /* module may be absent in probes */ }
     return;
   }
-  // a synthetic stream must re-acquire; setMicLive(true) is synchronous with the enable, as liveness gates the lane
+  // a synthetic stream must re-acquire; no await between the enable and setMicLive(true): liveness gates the lane
   if (micStream && !micStream.synthetic) {
     micStream.getTracks().forEach((t) => (t.enabled = true));
     setMicLive(true);
@@ -229,7 +229,7 @@ async function sfuPublish() {
       if (!raw?.synthetic) { try { (await import('./micstate.js')).setMicLive(false); } catch { /* probe env */ } }
       return 'intent-changed';
     }
-    // gate before the sender, or the SFU sends room tone; synthetic passes untouched (headless clock is stalled)
+    // gate before the sender, or the SFU sends room tone; a synthetic source bypasses it (micstate.js gateFor)
     const { gateFor, gateIsUnavailable, ungatedAllowed, setMicLive } = await import('./micstate.js');
     const s = gateFor(raw);
     // tell micstate whether a DEVICE is capturing: sfuMicOn() can't tell a muted mic from a live one
@@ -353,7 +353,8 @@ export function sfuDiagClient() {
 /** live records, mutated in place; entries so a caller can't add or delete speakers behind ontrack's back */
 export function sfuSpeakerEntries() { return [...speakers.entries()]; }
 
-/** time-stretch and PLC are counted apart so delivered and lost audio can be measured separately */
+/** NetEq's own counters, time-stretch (inserted/removed) apart from PLC (concealed), so delivered and lost audio
+ *  measure separately */
 export async function sfuInboundStats() {
   if (!pc) return [];
   const out = [];

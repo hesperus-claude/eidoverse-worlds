@@ -3,6 +3,7 @@
  * ICMP port-unreachable after a peer leaves is an uncaught ECONNREFUSED that kills the world server.
  * At UdpTransport.init, benign errnos on werift-created sockets are swallowed (counted in /relay-diag); all else, and
  * an unowned socket of the same shape (tools/sfu-test.ts), and bind-time errors, are fatal with their stack.
+ * Unreached: werift/nonstandard (its own UdpTransport) and MediaStreamTrackFactory.rtpSource; import neither.
  */
 
 import { UdpTransport } from "werift";

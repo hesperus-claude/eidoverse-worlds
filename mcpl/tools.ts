@@ -324,8 +324,6 @@ const cutSpeech = (t: string) => {
  *  blank, a list or an object doesn't. */
 const notANumber = (v: unknown) => typeof v === "number" ? !Number.isFinite(v)
   : typeof v !== "string" || v.trim() === "" || !Number.isFinite(Number(v));
-/** The code, why, and what to do instead. */
-// the words a person in edit mode sees for the same refusal (shared/protocol/refusal.js)
 /** One line of a world's history: who did what, with what arguments. An entry imported from an old log (an act
  *  `imported`) shows the verb and args it was written with, not `imported {}`; a refused request says it was refused,
  *  never reads as a thing that happened. */
@@ -349,6 +347,7 @@ async function presenceRefusal(ag: ToolAgent, t0: number, ms = 700): Promise<str
 // a script activation's statuses that mean it ran (or, dry, would run): authority/scriptrun.js activate's out(); anything else
 // (refused, failed, unavailable, paused, stopped, suspended, not-installed) means it didn't
 const SCRIPT_RAN = new Set(["ran", "nothing", "would-run"]);
+// the code, why, and what to do instead: the words edit mode shows for the same refusal (shared/protocol/refusal.js)
 const refusedBy = (r: any, what: string) => ({ content: [{ type: "text", text: refusalText(what, r) }], isError: true });
 // a thing-naming arg takes an id, a label or a unique 4+ id prefix, via one resolver (WorldAgent.thingRef); a shared
 // label is refused with candidates, never picked; no match passes on as typed for the authority's not-found
@@ -737,8 +736,9 @@ export const HANDLERS: Record<string, ToolHandler> = {
   stop: async (ag, a, ctx, name) => { ag.stop(); return text("stopped"); },
   // spoken-say keys ride through; utt/t0 are author metadata, not proof of performance (only attest/performed is)
   say: async (ag, a, ctx, name) => {
-      // forward only the spoken-say trio (spoken, utt, t0), validated as a unit and refused loudly rather than degraded to
-      // chat; text is checked too (a schema isn't a boundary), or the trio lands a fabricated "undefined" utterance
+      // forward only the spoken-say trio (spoken, utt, t0), validated as a unit (the server drops all three unless spoken is
+      // true and utt a safe non-negative integer) and refused loudly rather than degraded to chat; text is checked too (a
+      // schema isn't a boundary), or the trio lands a fabricated "undefined" utterance
       if (typeof a.text !== "string" || a.text.length === 0) {
         return { content: [{ type: "text", text: `say refused: \`text\` is required and must be a non-empty string, so nothing was said; you sent ${shown(a.text)}` }], isError: true };
       }

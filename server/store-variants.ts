@@ -305,12 +305,11 @@ export function storeShadowsMissing(
 export type VariantState = "built" | "not-needed" | "unsupported" | "refused" | "stale" | "deferred" | "pending";
 export type VariantStatus = { state: VariantState; reason: string | null };
 
-/** `recipe`: the one its size verdicts are stamped with. */
-
 /** `lod`: via lodVerdictKind, so card and x-eidoverse-lod header agree. `source`: the MUTABLE file judged; not
  *  freshOver it = `stale`. */
 export type ClassifyOpts = { lod?: boolean; source?: string | null; stat?: StatFn };
 
+/** One variant, from what is on disk beside it. `recipe`: the one its size verdicts are stamped with. */
 export function classifyVariant(path: string, exists: (p: string) => boolean, read: (p: string) => string, recipe?: string,
   opts: ClassifyOpts = {}): VariantStatus {
   const fresh = (p: string) => freshOver(p, opts.source ?? null, { read, stat: opts.stat });
