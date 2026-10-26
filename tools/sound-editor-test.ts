@@ -1,21 +1,11 @@
-// sound-clock-test — the shared playhead runs on the SERVER clock, not the
-// machine's, and the editor leaves `t0` to the authority, which stamps it on
-// its own clock.
+// sound-editor-test — client/lib/sounds.js under the house stubs: the shared playhead runs on the SERVER clock, not the
+// machine's; the editor leaves `t0` to the authority, which stamps it on its own clock; and the editor reads no guard.
 //
-//   bun tools/sound-clock-test.ts
+//   bun tools/sound-editor-test.ts
 //
-// #192's clock note says every client seeks to the same playhead from `t0`.
-// It did — against Date.now(), while motion (Hesperus finding #4, #192's own
-// tickMotion) runs on the estimated server clock (client/lib/serverclock.js). Two listeners
-// whose clocks disagree by Δ heard the same radio Δ apart, and an author whose
-// clock was off shifted everyone by their own skew (I.M., instruments findings,
-// 2026-09-23). This loads the real sounds.js under stubs, skews Date.now()
-// from the server clock by a known amount, and checks that the seek reads the
-// server clock (mutating it back to Date.now() turns that case red), and that
-// the editor's play sends no `t0` of its own: the authority stamps it when the
-// sound starts playing (shared/sound.js THE CLOCK), so no machine's clock is
-// ever the playhead's origin. (tools/protocol/soundclock-check.ts holds the
-// playhead arithmetic itself.)
+// The seek reads the server clock: Date.now() is skewed from it by a known amount, and a seek on Date.now() goes red.
+// Play sends no `t0`: the authority stamps it (shared/sound.js THE CLOCK). tools/protocol/soundclock-check.ts holds
+// the playhead arithmetic.
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -25,7 +15,7 @@ const check = (name: string, ok: unknown, detail = '') => {
   if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
-plugin({ name: 'sound-clock-stubs', setup(b) {
+plugin({ name: 'sound-editor-stubs', setup(b) {
   for (const m of ['core', 'base', 'world', 'net'])
     b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('./guard-label-stub.mjs') }));
   for (const m of ['inspect', 'ui', 'audioctx', 'audiounlock', 'voiceconsent', 'serverclock'])
@@ -85,5 +75,37 @@ check('…with no t0 of its own: neither the machine\'s clock nor its estimate o
   play && !('t0' in (play.value ?? {})), play ? `t0=${play.value?.t0} server=${seams.clock.server} machine=${Date.now()}` : '');
 
 Date.now = realNow;
+
+console.log('\n— the editor reads no guard —\n');
+// the #190 fixture shape: bobbie placed and guarded the radio, the owner later changed its volume
+const SUB_BOB = 'human:discord:9002', SUB_CAROL = 'human:discord:9003', SUB_RA = 'human:discord:9001';
+const PLACER = { id: 'bobbie', sub: SUB_BOB };
+const radio = { userData: {} };
+stub.entities.set('radio1', radio);
+stub.entityMeta.set('radio1', { actor: 'ra', kind: 'model', ts: 1, placer: { ...PLACER } });   // the owner's partial update moved actor; the placer stays
+stub.comps.set('radio1', { guard: true, sound: { src: 'store/audio/0123456789abcdef.mp3', look: 'rain on the awning', playing: true, volume: 0.6, radius: 12, loop: true } });
+const as = (id: string, sub: string, role: string) => { const n = stub.net; n.myId = id; n.mySub = sub; n.myRights = { role }; };
+const render = () => editor({ id: 'radio1', obj: radio, meta: stub.entityMeta.get('radio1'), bag: stub.bagOf('radio1'), commit() {}, esc: (t: string) => t })?.html ?? '';
+
+// The guard is gone (one lock for everything, the authority decides at the door; the house's §5): the editor no longer
+// reads a placer or a role, so a block that still carries a stored `guard` offers the same form to everyone, and nothing
+// claims anyone guards it (#260 house I399: these rows expected 'guarded by bobbie', which no client code emits).
+const VIEWERS = [
+  { who: 'the stranger', id: 'carol', sub: SUB_CAROL, role: 'builder' },
+  { who: 'the placer', id: 'bobbie', sub: SUB_BOB, role: 'builder' },
+  { who: 'the owner', id: 'ra', sub: SUB_RA, role: 'owner' },
+  { who: 'someone under the placer\'s display id', id: 'bobbie', sub: SUB_CAROL, role: 'builder' },
+];
+for (const v of VIEWERS) {
+  as(v.id, v.sub, v.role);
+  const html = render();
+  check(`${v.who}: the form is offered (a stored guard decides nothing in the editor)`, /data-se-root/.test(html), html.slice(0, 300));
+  check(`${v.who}: …and nothing says anyone guards it`, !/guarded by/.test(html), html.slice(0, 300));
+}
+// and without the stored guard, the same
+stub.comps.set('radio1', { sound: stub.bagOf('radio1').sound });
+as('carol', SUB_CAROL, 'builder');
+check('no stored guard: the stranger gets the form too', /data-se-root/.test(render()));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
