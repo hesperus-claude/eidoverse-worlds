@@ -150,7 +150,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the translator keeps bob", "tools/protocol/import-v1/translate-v1.js", "  const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };", "  const m = m0;", ["OS6"]],
   ["AGENTS.md says bob", "AGENTS.md", "`{type: pendulum\\|spin\\|orbit\\|oscillate\\|path, …}`", "`{type: pendulum\\|spin\\|orbit\\|bob\\|path, …}`", ["OS7"]],
   ["the history forgets oscillate", "spec/PROTOCOL.md", "; and a motion's back-and-forth along an axis is `oscillate` (R 10-17 21:40; was `bob`:", "; and a motion's back-and-forth along an axis is the new word (R 10-17 21:40; was the old:", ["OS7"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "// Ported from the protocol lab (2026-10-05);", "//  Ported from the protocol lab (2026-10-05);", []],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "export const MODES = [\"allow\", \"ask\", \"deny\"];", "export const MODES = [\"allow\", \"ask\",  \"deny\"];", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/names-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
