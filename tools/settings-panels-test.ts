@@ -54,56 +54,67 @@ const fire = (el: Element, type: string) => el.dispatchEvent(new Event(type, { b
 // Settings is TABBED (ui.js makeSection): #sec-<id>-tab chooses the pane #sec-<id>
 const openSection = async (id: string) => { (document.getElementById(`sec-${id}-tab`) as HTMLElement).click(); await tick(); return document.getElementById(`sec-${id}`)!.querySelector('.body')!; };
 
-// ============================================================ style: --panel-a
-console.log('STYLE — setPanelAlpha persists and repaints --panel-a');
+// ============================================================ style: every swatch and dial
+console.log('STYLE — every swatch and dial repaints its token, persists it, survives a re-apply; reset clears them all');
 { style.initStylePanel();
   const body = await openSection('style');
-  const slider = body.querySelector('input[type=range]') as HTMLInputElement;
-  const readout = slider.nextElementSibling as HTMLElement;
-  check('the slider starts from the sheet\'s value', slider.value === '0.9', slider.value);
-  slider.value = '0.5'; fire(slider, 'input');
-  check('dragging the dial repaints --panel-a on :root', computed('--panel-a') === '0.5', computed('--panel-a'));
-  check('the readout follows', readout.textContent === '0.50', readout.textContent ?? '');
-  check('the value is persisted with the style tokens', tokens()['--panel-a'] === '0.5', JSON.stringify(tokens()));
-  style.setPanelAlpha(0.66);
-  check('setPanelAlpha(0.66) repaints', computed('--panel-a') === '0.66', computed('--panel-a'));
-  check('…and persists', tokens()['--panel-a'] === '0.66', JSON.stringify(tokens()));
-  // persistence is what a reload would read: wipe the live property and re-apply from storage
-  root().removeProperty('--panel-a');
-  check('(control) the sheet value shows once the live property is gone', computed('--panel-a') === '.9', computed('--panel-a'));
-  style.applyStyleTokens();
-  check('survives a re-apply from storage (what the next boot does)', computed('--panel-a') === '0.66', computed('--panel-a'));
-  // a colour swatch: live token + persisted + the repaint event sprites listen for
-  const e0 = emitted.length;
-  const sw = body.querySelectorAll('input[type=color]')[1] as HTMLInputElement;   // accent (--brand)
-  sw.value = '#112233'; fire(sw, 'input');
-  check('a swatch repaints its token', computed('--brand') === '#112233', computed('--brand'));
-  check('…persists it', tokens()['--brand'] === '#112233');
-  check('…and emits style{--brand}', emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === '--brand'));
+  const SHEET: Record<string, string> = { '--panel-rgb': '20 24 28', '--brand': '#aabbcc', '--attn': '#ff5533', '--fg': '#eeeeee', '--panel-a': '.9', '--xr-panel-a': '1' };
+  const inline = () => Object.fromEntries(Array.from({ length: root().length }, (_, i) => root().item(i)).map((k) => [k, root().getPropertyValue(k)]));
+  // the key a control wrote is read off :root, not off its own emit, so a swatch that forgets to emit still has a row
+  const wrote = (before: Record<string, string>) => Object.keys(inline()).filter((k) => before[k] !== root().getPropertyValue(k));
+  const survives = (key: string) => {
+    const v = computed(key);
+    root().removeProperty(key);
+    check(`${key}: (control) the sheet value shows once the live property is gone`, computed(key) === SHEET[key], computed(key));
+    style.applyStyleTokens();
+    check(`${key}: survives a re-apply from storage (what the next boot does)`, computed(key) === v, computed(key));
+  };
+  const swatchKeys: string[] = [];
+  for (const [i, sw] of ([...body.querySelectorAll('input[type=color]')] as HTMLInputElement[]).entries()) {
+    const before = inline(), e0 = emitted.length;
+    sw.value = `#1122${(0x30 + i).toString(16)}`; fire(sw, 'input');
+    const [key, ...more] = wrote(before);
+    const name = sw.nextElementSibling?.textContent ?? `swatch ${i}`;
+    check(`the ${name} swatch repaints one token the sheet declares`, !!key && key in SHEET && more.length === 0 && computed(key) !== SHEET[key], `${key} ${more}`);
+    if (!key) continue;
+    swatchKeys.push(key);
+    check(`${key}: …persists it`, tokens()[key] === computed(key), JSON.stringify(tokens()));
+    check(`${key}: …and emits style{${key}} (what token-baked sprites repaint on)`, emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === key));
+    survives(key);
+  }
+  check('every colour token the sheet declares has a swatch', ['--panel-rgb', '--brand', '--attn', '--fg'].every((k) => swatchKeys.includes(k)), swatchKeys.join(' '));
+
   // the two opacity dials: the desktop one says it is the desktop's, and VR has its own
+  const DIALS = [
+    { label: 'desktop panel opacity', key: '--panel-a', start: '0.9', min: '0.3', max: '1', drag: '0.5', set: style.setPanelAlpha, code: 0.66, emits: false, follows: false },
+    { label: 'VR panel opacity', key: '--xr-panel-a', start: '1', min: '0.6', max: '1', drag: '0.6', set: style.setXrPanelAlpha, code: 0.7, emits: true, follows: true, clamp: [0.2, '0.6'] as const },
+  ];
   const dials = [...body.querySelectorAll('input[type=range]')] as HTMLInputElement[];
   const label = (el: Element) => el.closest('.row')?.querySelector('.nm')?.textContent ?? '';
-  check('two opacity dials: desktop, then VR', dials.length === 2 && label(dials[0]) === 'desktop panel opacity' && label(dials[1]) === 'VR panel opacity',
-    dials.map(label).join(' | '));
-  const xr = dials[1];
-  check('the VR dial starts opaque (1) and spans 0.6–1', xr?.value === '1' && xr?.min === '0.6' && xr?.max === '1', `${xr?.value} ${xr?.min}–${xr?.max}`);
-  const e1 = emitted.length;
-  xr.value = '0.6'; fire(xr, 'input');
-  check('dragging the VR dial repaints --xr-panel-a (and leaves --panel-a alone)', computed('--xr-panel-a') === '0.6' && computed('--panel-a') === '0.66', `${computed('--xr-panel-a')} ${computed('--panel-a')}`);
-  check('…persists it with the style tokens', tokens()['--xr-panel-a'] === '0.6', JSON.stringify(tokens()));
-  check('…and emits style{--xr-panel-a} (what the VR quads re-raster on)', emitted.slice(e1).some((e) => e[0] === 'style' && e[1]?.key === '--xr-panel-a'));
-  style.setXrPanelAlpha(0.7);
-  const xrReadout = xr.nextElementSibling as HTMLElement;
-  check('setXrPanelAlpha from code moves the VR dial too (value and readout)', xr.value === '0.7' && xrReadout.textContent === '0.70', `${xr.value} ${xrReadout.textContent}`);
-  style.setXrPanelAlpha(0.2);
-  check('setXrPanelAlpha clamps to the dial\'s range', computed('--xr-panel-a') === '0.6', computed('--xr-panel-a'));
-  root().removeProperty('--xr-panel-a'); style.applyStyleTokens();
-  check('the VR value survives a re-apply from storage', computed('--xr-panel-a') === '0.6', computed('--xr-panel-a'));
+  check('two opacity dials: desktop, then VR', dials.length === DIALS.length && DIALS.every((d, i) => label(dials[i]!) === d.label), dials.map(label).join(' | '));
+  for (const [i, d] of DIALS.entries()) {
+    const el = dials[i]!, readout = el.nextElementSibling as HTMLElement;
+    const others = () => DIALS.filter((o) => o !== d).map((o) => computed(o.key)).join();
+    check(`${d.key}: the dial starts from the sheet's value and spans ${d.min}–${d.max}`, el.value === d.start && el.min === d.min && el.max === d.max, `${el.value} ${el.min}–${el.max}`);
+    const o0 = others(), e0 = emitted.length;
+    el.value = d.drag; fire(el, 'input');
+    check(`${d.key}: dragging the dial repaints it on :root, and leaves the other dial's token alone`, computed(d.key) === d.drag && others() === o0, `${computed(d.key)} ${others()}`);
+    check(`${d.key}: the readout follows`, readout.textContent === Number(d.drag).toFixed(2), readout.textContent ?? '');
+    check(`${d.key}: …persists it with the style tokens`, tokens()[d.key] === d.drag, JSON.stringify(tokens()));
+    if (d.emits) check(`${d.key}: …and emits style{${d.key}} (what the VR quads re-raster on)`, emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === d.key));
+    d.set(d.code);
+    check(`${d.key}: setting it from code (${d.code}) repaints and persists`, computed(d.key) === String(d.code) && tokens()[d.key] === String(d.code), `${computed(d.key)} ${JSON.stringify(tokens())}`);
+    if (d.follows) check(`${d.key}: …and moves the dial too (value and readout)`, el.value === String(d.code) && readout.textContent === d.code.toFixed(2), `${el.value} ${readout.textContent}`);
+    if (d.clamp) { d.set(d.clamp[0]); check(`${d.key}: setting it from code clamps to the dial's range`, computed(d.key) === d.clamp[1], computed(d.key)); }
+    survives(d.key);
+  }
+
   (body.querySelector('button') as HTMLElement).click();   // reset to defaults
-  check('reset clears the live tokens', computed('--panel-a') === '.9' && computed('--brand') === '#aabbcc', `${computed('--panel-a')} ${computed('--brand')}`);
+  const all = [...swatchKeys, ...DIALS.map((d) => d.key)];
+  const left = all.filter((k) => computed(k) !== SHEET[k]);
+  check('reset clears every live token back to the sheet', left.length === 0, left.map((k) => `${k}=${computed(k)}`).join(' '));
   check('reset empties the store', Object.keys(tokens()).length === 0, JSON.stringify(tokens()));
-  check('reset repaints the slider from the sheet', slider.value === '0.9', slider.value);
-  check('reset returns VR panels to opaque, dial included', computed('--xr-panel-a') === '1' && xr.value === '1', `${computed('--xr-panel-a')} ${xr.value}`);
+  check('reset repaints every dial from the sheet', DIALS.every((d, i) => dials[i]!.value === d.start), dials.map((x) => x.value).join(' '));
 }
 
 // ============================================================ video rows
