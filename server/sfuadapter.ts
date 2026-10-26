@@ -1,26 +1,6 @@
-// sfuadapter — the in-process SFU behind relayadapter.ts's interface.
-//
-// WHY THIS FILE EXISTS AND WHAT IT DELIBERATELY DOES NOT DO:
-// relayadapter.ts already defines the shape server.ts depends on (mint, admit,
-// consent, moderator mute, revoke, diag). That interface is the seam #104's
-// acceptance table is written against, so a third hypothesis — ours — earns its
-// row by implementing THE SAME SURFACE rather than by changing the protocol.
-// Nothing in server.ts should need to know which one is running.
-//
-// 🔴 The decision layer is NOT re-implemented here. `admitParticipant`,
-// `applyConsentUpdate`, `parseRelayIdentity` and `nextIncarnation` live in
-// relaydecision.ts, are transport-agnostic, and carry all seven of amendment
-// 1's refusals with 23 tests. The security-shaped half never belonged to any
-// particular transport.
-//
-// What being in-process buys, structurally:
-//   • no JWT — a browser talks SDP to a process it is already authenticated to
-//     over the world websocket, so the credential is a nonce we mint and burn,
-//     not a bearer token a third party validates;
-//   • no webhook — admission is synchronous, at the moment we create the leg,
-//     instead of a round trip we react to after the fact;
-//   • no API secret exists at all, so amendment 1's "never expose API secrets
-//     to a browser or resident tool surface" is satisfied vacuously.
+// sfuadapter — the in-process SFU behind the relay-adapter surface server.ts depends on (mint, admit, consent, moderator
+// mute, revoke, diag); decisions stay in relaydecision.ts. In-process means no JWT (a one-shot nonce over the
+// authenticated world websocket), synchronous admission, and no API secret at all.
 import { currentIncarnation } from "./transport.ts";
 import { voiceServiceState, markVoiceLive } from "./sfusupervisor.ts";
 import { Sfu } from "./sfu.ts";
@@ -33,27 +13,10 @@ export type SfuWorldState = {
   legs: Map<string, { id: string; gen: number; primaryGen: number; nonce: string }>;
   consent: Map<string, { gen: number; consent: boolean }>;
   usedNonces: Set<string>;
-  /** listener → their last stated answer, applied to speakers who arrive LATER.
-   *
-   *  🔴 THIS IS ROOM-LEVEL, NOT PER-SPEAKER, AND THAT IS DELIBERATE. A listener
-   *  who says YES is consenting to *hear the room*, so someone joining later is
-   *  audible without a fresh consent event — which is what the audio panel's
-   *  single "receive voice" toggle actually means to a user. A per-speaker ACL
-   *  would be a different product (and a worse one: it would silence a newcomer
-   *  until the listener noticed them and opted in individually).
-   *
-   *  The safety property that makes it acceptable is that it dies with the leg:
-   *  revokeSfuLeg deletes this entry, so a RECONNECT starts fail-closed and
-   *  cannot inherit a yes the fresh leg never gave. That invariant was broken
-   *  until 2026-08-14 — the live path never called revokeSfuLeg at all — so if
-   *  you are reading this while changing retirement, that is the thing not to
-   *  break. Reviewer found it by reconnecting a real websocket; no unit test
-   *  could, because the tests called revokeSfuLeg themselves. */
+  /** listener → last answer, applied to speakers who arrive later. Room-level on purpose ("receive voice" = hear the
+   *  room). INVARIANT: it dies with the leg (revokeSfuLeg), so a reconnect starts fail-closed. */
   standingConsent: Map<string, boolean>;
-  /** Legs that have already proven their credential. Per-world like everything
-   *  else here — it was a module-level Set with its own `world\0id` keying, the
-   *  FOURTH key scheme in this file, and the only piece of leg state that did
-   *  not die when a world did. */
+  /** Legs that have already proven their credential; per-world, so it dies with its world. */
   admitted: Set<string>;
 };
 
@@ -64,20 +27,7 @@ export function sfuState(world: string): SfuWorldState {
   let s = worlds.get(world);
   if (!s) {
     s = {
-      // 🔴 The incarnation is opaque, NOT monotonic — amendment 2 explicitly
-      // rejects an in-memory epoch++ that "resets when the adapter dies and can
-      // accidentally reuse an old value". In-process makes this easier rather
-      // than harder (the SFU cannot outlive or predecease the sequencer), but
-      // "easier" is not "proven", so we still refuse to call it monotonic.
-      //
-      // 🔴 THIS PASSED A HARDCODED `null` PREV UNTIL 2026-08-16, which is
-      // exactly the reset amendment 2 rejects: every process start produced
-      // `i1-…` again, so a credential minted before a restart was
-      // indistinguishable from one minted after. The comment above defends
-      // OPACITY and never noticed it was also describing a RESET. The durable
-      // implementation (atomic tmp+rename) existed the whole time two files
-      // away — now in transport.ts, booted by server.ts, so there is ONE
-      // incarnation per process and it survives a restart. Found by audit.
+      // the incarnation is opaque, NOT monotonic (amendment 2), and durable across restarts (transport.ts)
       incarnation: currentIncarnation(),
       sfu: new Sfu({ onNegotiationNeeded: (legId) => {
         const send = senders.get(wkey(world, legId));
@@ -91,26 +41,11 @@ export function sfuState(world: string): SfuWorldState {
   return s;
 }
 
-/** legId → how to reach that leg's browser. The SFU itself never learns about
- *  websockets (it speaks SDP and RTP); the adapter owns this seam.
- *
- *  🔴 This replaces a per-WORLD callback that server.ts was supposed to install
- *  and never did — so onNegotiationNeeded fired into an empty map and a route
- *  that consent had already created sat in `pendingRoutes` forever. Measured:
- *  the listener showed pending:['smoke-a'] while the speaker pushed 1764
- *  packets into the SFU and nobody heard anything. A per-LEG registry cannot
- *  have that bug, because the same call that creates the leg registers it. */
-/** The one per-world key everything module-global uses — senders and waiting
- *  both collided on bare ids before adopting it. */
+/** The one per-world key everything module-global uses. */
 const wkey = (world: string, legId: string) => `${world}\u0000${legId}`;
 
-// 🔴 KEYED BY world+legId — the same fix `waiting` below already carries, for
-// the same reason its comment names: two worlds hosting the same participant
-// id are ROUTINE (ids are per-identity, not per-world). Bare-id keying meant
-// the second world's register overwrote the first's, so world A's offers went
-// down world B's websocket — and revokeSfuLeg(worldA, id) deleted world B's
-// sender. Found by reading the file after the waiting-map fix; the two maps
-// sat twenty lines apart with the same shape and different keys.
+// legId → how to reach that leg's browser (the SFU never learns about websockets); registered by the call that creates
+// the leg. KEYED BY world+legId: two worlds hosting the same participant id are routine.
 const senders = new Map<string, (payload: unknown) => void>();
 export function registerSfuSender(world: string, legId: string, send: (payload: unknown) => void) {
   senders.set(wkey(world, legId), send);
@@ -118,31 +53,12 @@ export function registerSfuSender(world: string, legId: string, send: (payload: 
 
 /** Mint: same shape as mintRelayCredential, minus the JWT that has no analogue. */
 export function mintSfuCredential(world: string, id: string, primaryGen: number, mediaGen: number) {
-  // 🔴 A MINT IS A RETIREMENT FIRST (review agent, 2026-08-17). Re-minting
-  // without funnelling through revokeSfuLeg resurrected three pieces of the
-  // predecessor's state onto the fresh leg: its standing consent YES (via
-  // applyStandingConsent below — directly against the fail-closed invariant
-  // documented on SfuWorldState.standingConsent), its ADMISSION (s.admitted
-  // uncleaned, so the new leg never had to present its new credential), and
-  // its pending answer-resolver/15s timer. The funnel exists; use it. Note
-  // for callers: revoke also unregisters the leg's sender, so
-  // registerSfuSender must come AFTER the mint (server.ts does).
-  //
-  // 🔴 …EXCEPT consent given while NO leg existed (round-2 review). The
-  // invariant kills a PREDECESSOR's standing yes; consent recorded before any
-  // leg was minted (server.ts accepts pre-cred consent) has no predecessor to
-  // inherit from — it is the very case applyStandingConsent's "consent given
-  // before this leg existed still counts" comment describes, and the blanket
-  // revoke was silently wiping it. Preserve it only when there was no leg.
+  // a mint retires the old leg via revokeSfuLeg first (consent, admission, pending answer), except consent given while
+  // no leg existed; revoke unregisters the sender, so registerSfuSender must come after the mint (server.ts does)
   const s0 = worlds.get(world);
   const hadLeg = !!s0?.legs.has(id);
   const preConsent = hadLeg ? undefined : s0?.standingConsent.get(id);
-  // …and its GEN WATERMARK rides along (round-3 review): setSfuConsent writes
-  // both maps, and the watermark is what refuses an out-of-order replay.
-  // Preserving the answer while dropping the watermark meant a delayed
-  // yes(gen1) after a preserved no(gen2) was accepted as "no prev" and
-  // re-GRANTED consent against the listener's last word — the one direction
-  // quiet-is-safe does not cover.
+  // …and its gen watermark rides along: without it a delayed yes(gen1) after a preserved no(gen2) would re-grant
   const preWatermark = hadLeg ? undefined : s0?.consent.get(id);
   revokeSfuLeg(world, id);
   const s = sfuState(world);
@@ -150,11 +66,7 @@ export function mintSfuCredential(world: string, id: string, primaryGen: number,
   if (preWatermark !== undefined) s.consent.set(id, preWatermark);
   const nonce = crypto.randomUUID();
   s.legs.set(id, { id, gen: mediaGen, primaryGen, nonce });
-  // 🔴 CREATE THE ACTUAL LEG. The first version recorded the bookkeeping entry
-  // and stopped there, so negotiate() found "no leg <id>" and every browser sat
-  // at active:false forever with no error anywhere — the credential minted, the
-  // identity assigned, and nothing behind it. A record of a peer connection is
-  // not a peer connection.
+  // create the actual leg: a bookkeeping record of a peer connection is not one
   s.sfu.createLeg(id, mediaGen);
   applyStandingConsent(s, id);   // consent given before this leg existed still counts
   // world/id/primaryGen ride along so the client can PRESENT the full claim set
@@ -165,38 +77,15 @@ export function mintSfuCredential(world: string, id: string, primaryGen: number,
            transport: "sfu" as const, iceServers: iceServers() };
 }
 
-/** ICE servers handed to the browser with its credential — the `iceServers?`
- *  field SFU-SPEC.md:113 designed into mintLeg and nobody ever populated.
- *
- *  🔴 WHY THIS IS NOT "PHASE 2" (R, 2026-08-16, from a phone that could not be
- *  heard). SFU-SPEC.md:135 says "No TURN for phase 1 — TURN is a phase-2
- *  direct-pair concern", and I let that stand for STUN too. The reasoning was
- *  imported from the wrong topology: in a direct P2P pair BOTH ends sit behind
- *  NAT, which is the hard case deferred to phase 2. An SFU has exactly one
- *  reachable endpoint and every client dials OUT to it — so a client needs only
- *  to discover its own public address, which is what STUN does, statelessly and
- *  for free.
- *
- *  The mesh has always had this (client/lib/voice.js:33) and that is precisely
- *  why phone↔desktop worked on mesh and not here. Shipping an SFU that only
- *  carries audio between tabs on one machine would make "voice works" false for
- *  everyone not sitting at the server.
- *
- *  TURN genuinely IS deferred: it relays media, costs bandwidth, needs
- *  credentials, and is only required when STUN fails (symmetric NAT). Set
- *  SFU_ICE_SERVERS to a JSON array to add one, or to `[]` to force host-only
- *  (which is what the tests want — a loopback pair must not wait on a public
- *  STUN server that may not answer in CI).
- */
+/** ICE servers for the credential. STUN even in phase 1: every client dials out to one SFU and must learn its public
+ *  address, or a client behind NAT can't be heard. TURN is deferred (symmetric NAT only). SFU_ICE_SERVERS = a JSON array
+ *  to add one; `[]` forces host-only (tests: a loopback pair must not wait on a public STUN server). */
 function iceServers(): { urls: string; username?: string; credential?: string }[] {
   const raw = process.env.SFU_ICE_SERVERS;
   if (raw !== undefined) {
     try { return JSON.parse(raw); }
     catch (e) {
-      // 🔴 Do NOT silently fall back to the default here. An operator who set
-      // this meant to change it; swallowing a typo would hand out a config they
-      // did not choose and the symptom would be unreachable voice for exactly
-      // the remote users this exists to serve.
+      // never fall back silently: an operator who set this meant to change it
       console.error(`[sfu] SFU_ICE_SERVERS is not valid JSON — refusing to guess:`,
         (e as Error).message);
       return [];
@@ -205,13 +94,9 @@ function iceServers(): { urls: string; username?: string; credential?: string }[
   return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
-/** Admission — amendment 1's seven refusals, decided by the SHARED decision
- *  layer. Synchronous here because we are the SFU: there is no third party to
- *  ask and no webhook to wait for. */
-/** Add `useinbandfec=1` (and keep DTX off — a silence-suppressed stream and a
- *  dead one are indistinguishable to a listener, and our proximity gate already
- *  decides who is worth sending). Idempotent: an fmtp line that already asks
- *  for FEC is left alone rather than accumulating duplicate params. */
+/** Admission: amendment 1's seven refusals, decided by the shared decision layer; synchronous, as we are the SFU. */
+/** Add `useinbandfec=1`, keeping DTX off (a silence-suppressed stream and a dead one look the same to a listener).
+ *  Idempotent: an fmtp line that already asks for FEC is left alone. */
 export function withOpusFec(sdp: string): string {
   const pt = /a=rtpmap:(\d+)\s+opus\/48000/i.exec(sdp)?.[1];
   if (!pt) return sdp;                       // no opus offered — nothing to ask for
@@ -240,17 +125,12 @@ export const markSfuLegAdmitted = (world: string, id: string) => { sfuState(worl
 export function admitSfuLeg(world: string, claims: RelayClaims, live: LiveLegState) {
   const s = sfuState(world);
   const verdict = admitParticipant(claims, { ...live, usedNonces: s.usedNonces });
-  // Burn on FIRST admission — the removed-participant replay hole is real
-  // (probed and measured, 2026-08-13) and the nonce is what closes it.
+  // Burn on FIRST admission — the removed-participant replay hole is real,
+  // and the nonce is what closes it.
   if (verdict.admit) {
     s.usedNonces.add(claims.nonce);
-    // 🔴 BOUNDED (security review, 2026-08-17): one entry per admission,
-    // never pruned — a slow leak for the life of the process. Evicting the
-    // OLDEST is safe because the nonce is only the replay guard for a
-    // credential whose generations are still live: by the time an admission
-    // is 4096 mints old, its gens are long retired and admitParticipant
-    // refuses it on "retired generation" before the nonce check matters.
-    // (Sets iterate in insertion order, so first() is oldest.)
+    // BOUNDED: evicting the oldest nonce is safe, as a credential 4096 mints old has retired gens that admitParticipant
+    // refuses before the nonce matters (a Set iterates in insertion order)
     if (s.usedNonces.size > 4096) {
       const oldest = s.usedNonces.values().next().value;
       if (oldest !== undefined) s.usedNonces.delete(oldest);
@@ -266,39 +146,16 @@ export function setSfuConsent(world: string, listenerId: string, listenerGen: nu
   const s = sfuState(world);
   const r = applyConsentUpdate(s.consent, listenerId, listenerGen, recv);
   if (!r.changed) {
-    // 🔴 A REFUSED REVOKE IS A PRIVACY FAILURE, NOT A NO-OP. Consent recorded
-    // at one gen and revoked at another was rejected as a "stale listener
-    // generation" — the browser showed consent OFF while audio kept flowing,
-    // and the smoke caught it as `audio survived revocation`. Idempotence may
-    // swallow a repeated YES; it must NEVER swallow a NO. When in doubt, the
-    // quiet answer is the safe one, so a refused revoke still stops the audio.
+    // a refused revoke still stops the audio: idempotence may swallow a repeated YES, never a NO
     if (!recv) {
       for (const speakerId of s.legs.keys()) s.sfu.setConsent(listenerId, speakerId, false);
-      // 🔴 ...AND THE FUTURE TENSE TOO (review agent, 2026-08-17). Denying the
-      // legs that exist silences the present, but the STANDING answer is what
-      // joinSfuLeg consults for every speaker who arrives later — leaving it
-      // true meant a listener whose revoke was refused (stale gen) heard
-      // nothing from the current room and then heard EVERYONE who joined
-      // afterwards. The fail-safe fixed today and missed tomorrow.
-      //
-      // DELIBERATE TRADE (round-2 review named it): an out-of-order STALE
-      // revoke — one older than a newer recorded YES — also lands here and
-      // clobbers that newer grant. That is an availability cost (silence
-      // until the listener re-toggles), accepted because the alternative is
-      // trusting message ordering to decide who can hear whom, and when in
-      // doubt the quiet answer is the safe one. Re-mint now clears consent
-      // (mintSfuCredential funnels through revoke), so the legitimate
-      // refused-revoke class this guards is nearly empty — but "nearly" is
-      // not a consent guarantee.
+      // …and clears the standing answer, or later speakers become audible. Deliberate: a stale revoke may clobber a
+      // newer yes; silence is the safe failure.
       s.standingConsent.set(listenerId, false);
     }
     return r;
   }
-  // 🔴 Apply to legs that DO NOT EXIST YET, too. This loop over s.legs misses
-  // any speaker who joins after the listener consents — measured: consent ON
-  // produced `hears: []` because the speaker's leg was registered later, and
-  // the route only appeared by accident of ordering. Record the standing
-  // answer so joinSfuLeg can honour it on arrival.
+  // record the standing answer too, so joinSfuLeg honours it for speakers who join later
   s.standingConsent.set(listenerId, recv);
   for (const speakerId of s.legs.keys()) {
     if (speakerId === listenerId) continue;
@@ -307,11 +164,8 @@ export function setSfuConsent(world: string, listenerId: string, listenerGen: nu
   return r;
 }
 
-/** Apply every existing listener's standing consent to a newly-arrived speaker,
- *  and the newcomer's own standing consent to everyone already here. Called
- *  when a leg is created, because consent is a STANDING answer about the room,
- *  not a statement about the participants who happened to be present when it
- *  was given. */
+/** Apply every listener's standing consent to a newly-arrived speaker, and the newcomer's to everyone here: consent is a
+ *  standing answer about the room, not about who was present when it was given. */
 function applyStandingConsent(s: SfuWorldState, newLegId: string) {
   for (const [listenerId, recv] of s.standingConsent) {
     if (listenerId !== newLegId) s.sfu.setConsent(listenerId, newLegId, recv);
@@ -325,18 +179,11 @@ function applyStandingConsent(s: SfuWorldState, newLegId: string) {
 /** Moderator/global mute — a different state than consent (amendment 3),
  *  enforced at the SOURCE so one call silences a speaker for everyone. */
 export function setSfuModeratorMute(world: string, speakerId: string, mutedFlag: boolean) {
-  // 🔴 ONE STORE. This kept its own `moderatorMuted` Set alongside sfu.muted,
-  // and they DIVERGED in production: revokeSfuLeg cleared one and not the other,
-  // so /relay-diag and the moderator UI showed nobody muted while fanout still
-  // gagged the speaker at ingress. The fix at the time was to clear both — which
-  // treats the symptom and leaves the shape that caused it.
-  //
-  // The SFU is the enforcement point, so the SFU owns the fact. Nothing else
-  // needs a copy; sfuDiag reads it back through diag().muted.
+  // ONE STORE: the SFU enforces the mute, so the SFU owns the fact; sfuDiag reads it back through diag().muted
   sfuState(world).sfu.setMuted(speakerId, mutedFlag);
 }
 
-/** Server-held deafness: the listener hears nobody, whatever its own consent says. No caller since ghost was removed (10-20); kept for the relay (sfu-test) and a future spectator role. */
+/** Server-held deafness: the listener hears nobody, whatever its own consent says. No caller now; kept for the relay (sfu-test) and a future spectator role. */
 export function setSfuDeafened(world: string, listenerId: string, deaf: boolean) {
   sfuState(world).sfu.setDeafened(listenerId, deaf);
 }
@@ -344,11 +191,7 @@ export function setSfuDeafened(world: string, listenerId: string, deaf: boolean)
 /** Retirement funnel — the same one every other surface uses. */
 export function revokeSfuLeg(world: string, id: string) {
   senders.delete(wkey(world, id));
-  // A leg revoked mid-negotiation must not leave its resolver behind: for up to
-  // 15s sfuAcceptAnswer would otherwise feed an SDP answer into a CLOSED pc,
-  // where setRemoteDescription throws into a bare .catch and the failure is
-  // swallowed into a console.error. Fails safe, but it is still a leak of a
-  // live promise and a silenced error.
+  // a leg revoked mid-negotiation must not leave its resolver behind to feed an answer into a closed pc
   waiting.delete(wkey(world, id));
   const s = worlds.get(world);
   if (!s) return null;
@@ -371,13 +214,7 @@ export function sfuDiag(world: string) {
   const s = worlds.get(world);
   if (!s) return { transport: "sfu", active: false };
   const d = s.sfu.diag();
-  // 🔴 PASS THE INNER DIAG THROUGH, do not re-shape it. This rebuilt the object
-  // field by field and silently DROPPED transportErrorsSwallowed — the guard's
-  // count of swallowed werift UDP errors, which is the one number that says
-  // "peers are dying faster than they should". A diagnostic that quietly loses a
-  // field is worse than one that never had it: the field exists, the instrument
-  // exists, and nobody sees it. Found reading sfu.ts end to end (R: "you should
-  // have already read the applicable code from top to bottom").
+  // pass the inner diag through, don't re-shape it, or fields like transportErrorsSwallowed silently drop
   return {
     ...d,
     transport: "sfu", active: true, incarnation: s.incarnation,
@@ -390,16 +227,8 @@ export function sfuDiag(world: string) {
 }
 
 // ── signaling: the server always OFFERS ───────────────────────────────────
-// One pending answer-resolver per leg. `Sfu.negotiate()` serialises offers per
-// leg internally (the promise chain that fixed SDP glare), so this map can
-// never hold more than one entry per leg — if it somehow did, the second offer
-// would be answering a question the browser was never asked.
-// 🔴 KEYED BY world+legId, NOT legId (independent review, 2026-08-16). Two
-// worlds hosting the same participant id — routine, since ids are per-identity
-// and not per-world — collided in this map: whichever leg answered first
-// resolved the OTHER world's pending offer. Keyed properly, and cleared on
-// revoke (see revokeSfuLeg) so a leg torn down mid-negotiation cannot leave a
-// resolver behind for 15s waiting to feed an SDP answer to a closed pc.
+// One pending answer-resolver per leg (Sfu.negotiate() serialises offers per leg). KEYED BY world+legId, and cleared on
+// revoke (revokeSfuLeg).
 const waiting = new Map<string, (sdp: string) => void>();
 
 /** Create the offer for `legId` and hand it to `send`. The browser answers via
@@ -408,33 +237,8 @@ export async function sfuNegotiate(world: string, legId: string,
   send: (payload: unknown) => void) {
   const s = worlds.get(world);
   if (!s) return;
-  // 🔴 AN OFFER WITH NOTHING IN IT NEVER CONNECTS. A leg with no routes yet
-  // produces an SDP with ZERO m-lines: signaling completes (have-remote-offer →
-  // stable) and ICE never starts, so connectionState sits at "new" forever with
-  // no error on either side. Measured — the browser reported exactly that.
-  //
-  // A leg only gains routes when some OTHER participant consents to hear it, so
-  // the first offer is empty by construction. We add a recvonly audio
-  // transceiver as the floor: it gives ICE something to gather for, and it is
-  // also honest — this leg WILL receive audio, we just do not know whose yet.
-  // 🔴 THE FLOOR IS ABOUT *RECEIVING*, NOT ABOUT BEING EMPTY (2026-08-15).
-  //
-  // This used to read `getTransceivers().length === 0`, which is only true for
-  // a leg that has no OUTBOUND routes yet. The moment a second person is in the
-  // room, each leg gets a `sendonly` route to the other BEFORE its first
-  // negotiation — so length is already 1, the floor is skipped, and the offer
-  // contains no recvonly m-line at all. The server then never proposes to
-  // RECEIVE, `ontrack` never fires, `leg.ingress` stays null, and diag reports
-  // `publishing:false, rxPackets:0` while the publisher's own client correctly
-  // reports `micPublished:true` and its stats show thousands of packets sent.
-  //
-  // Both ends were telling the truth about different halves of a connection
-  // that was only ever negotiated in one direction. It reproduced as "my mic
-  // doesn't work" for a human and "my voice doesn't work" for an agent — the
-  // same defect, and it hid because the ALONE case (no routes → floor applied)
-  // is exactly what every fresh single-client probe exercises.
-  //
-  // The honest condition: does this leg have a way to receive? If not, add one.
+  // every leg needs a way to RECEIVE: without a recvonly/sendrecv transceiver the offer proposes no receive (alone: zero
+  // m-lines and ICE never starts; with others: ontrack never fires), so add a recvonly audio floor
   const leg = s.sfu.getLeg(legId);
   if (leg && !leg.pc.getTransceivers().some((t: { direction?: string }) =>
         t.direction === "recvonly" || t.direction === "sendrecv")) {
@@ -446,58 +250,27 @@ export async function sfuNegotiate(world: string, legId: string,
     for (const speakerId of s.sfu.routesFor(legId)) send({ type: "sfu-route", speaker: speakerId });
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    // 🔴 ASK FOR FEC EXPLICITLY (#104 §8 item 4, "steal Basis's Opus
-    // discipline"). We forward ENCODED Opus and never decode it, so the
-    // BROWSER's encoder owns in-band FEC end-to-end — Chromium enables it by
-    // default, which is why this worked without ever being requested. But
-    // "works by default" is not a contract: a default can change, and a browser
-    // that does not enable it fails silently and identically to packet loss.
-    // Stating useinbandfec=1 in the fmtp makes it an agreed parameter rather
-    // than a hope, and the client already measures fecPacketsReceived so the
-    // claim has an instrument at the other end.
+    // ask for in-band FEC explicitly (#104 §8 item 4): the browser's encoder owns it end to end, and a default is not a
+    // contract; the client measures fecPacketsReceived
     send({ type: "sfu-offer", sdp: withOpusFec(pc.localDescription!.sdp) });
     const sdp = await new Promise<string>((resolve, reject) => {
       const k = wkey(world, legId);
       waiting.set(k, resolve);
-      // A browser that never answers must not wedge the leg's promise chain
-      // forever — every later offer for this leg would queue behind it and the
-      // participant would go permanently silent with no error anywhere.
-      // 🔴 Delete by IDENTITY, not by key (review agent, 2026-08-17): a stale
-      // timer from a superseded offer would otherwise clobber the SUCCESSOR
-      // offer's resolver — its answer then found no resolver and was dropped,
-      // and the leg sat routeless with no error. The same twin-map lesson a
-      // third time: the map was world-keyed correctly, its timer was not
-      // identity-checked.
+      // a browser that never answers must not wedge the leg's chain; delete by IDENTITY, not key, so a superseded offer's
+      // timer can't clobber its successor's resolver
       setTimeout(() => {
         if (waiting.get(k) === resolve) { waiting.delete(k); reject(new Error("answer timeout")); }
       }, 15000);
     });
     await pc.setRemoteDescription({ type: "answer", sdp });
-    // The POSITIVE health receipt (#130 review, item 2): an owned negotiation
-    // that completed end-to-end — offer created, browser answered, answer
-    // applied — is evidence the SFU is doing its job. This is the ONLY path
-    // back from degraded; silence never is.
+    // the POSITIVE health receipt: the only path back from degraded; silence never is
     markVoiceLive(`negotiation completed for ${legId}`);
   }).catch((e) => console.error(`[sfu] negotiate ${legId}:`, (e as Error).message));
 }
 
 export function sfuAcceptAnswer(world: string, legId: string, sdp: string, claimedGen?: number) {
-  // 🔴 ENFORCE THE GENERATION (A2). `gen` was threaded through create, store and
-  // diag and NEVER COMPARED — sfu.ts:417 still said "a wrong-generation offer
-  // once gen is enforced", in future tense, in shipped code. So a stale client
-  // that reconnected (new leg, new gen) could still answer an offer made to its
-  // PREDECESSOR, and the answer would be accepted for the live leg.
-  //
-  // The waiting-promise keying already caught the common case by accident
-  // (a revoked leg's resolver is deleted), but "accidentally unreachable" is
-  // not "checked". An answer names the generation it believes it is answering
-  // under; if that is not the leg's current generation, it belongs to a leg
-  // that no longer exists.
-  // 🔴 REQUIRED, not opt-in (review agent, 2026-08-17): `if (gen != null)` let
-  // a client skip the A2 check by omitting the field — and a stale predecessor
-  // browser is exactly the client that WOULD omit it. Our client has always
-  // sent it (voicesfu.js `gen: cred?.mediaGen`); an answer that cannot name
-  // its generation belongs to no live leg.
+  // an answer must name its leg's current generation (A2). Required, not opt-in: a stale predecessor is exactly the client
+  // that would omit it.
   if (claimedGen == null) {
     console.warn(`[sfu] answer for ${legId} names no generation — dropped`);
     return;
@@ -516,13 +289,8 @@ export function sfuAcceptAnswer(world: string, legId: string, sdp: string, claim
 }
 
 export function sfuAcceptIce(world: string, legId: string, candidate: unknown, claimedGen?: number) {
-  // 🔴 ICE IS GENERATION-BOUND, EXACTLY AS ANSWERS ARE (#130 review, item 4).
-  // sfuAcceptAnswer requires the generation and refuses a mismatch; this
-  // function took none, so a stale predecessor browser could trickle
-  // candidates into the SUCCESSOR's peer connection after a same-id takeover.
-  // Same contract, same required-not-opt-in stance: a candidate that cannot
-  // name its generation belongs to no live leg. (Our client has always been
-  // able to send it — voicesfu.js holds the credential that carries mediaGen.)
+  // ICE is generation-bound exactly as answers are, required not opt-in: a stale predecessor must not trickle candidates
+  // into its successor's pc
   if (claimedGen == null) return;                    // late/stale churn, drop quietly
   const leg = worlds.get(world)?.legs.get(legId);
   if (!leg || leg.gen !== claimedGen) return;        // predecessor's candidate, drop

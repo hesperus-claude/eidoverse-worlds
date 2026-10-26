@@ -8,10 +8,8 @@ export const align4 = (n: number) => (n + 3) & ~3;
 
 export type GlbParts = { json: any; bin: Uint8Array; total: number };
 
-/** glTF 2.0 binary layout, validated: magic/version, chunk 0 = JSON
- *  (0x4E4F534A), BIN chunk = 0x004E4942. Chunk lengths INCLUDE the spec's
- *  4-byte padding (JSON pads with 0x20 — JSON.parse tolerates it; BIN pads
- *  with zeros — buffers[0].byteLength names the real end). */
+/** glTF 2.0 binary layout, validated: magic/version, chunk 0 = JSON (0x4E4F534A), BIN = 0x004E4942. Chunk lengths
+ *  INCLUDE the 4-byte padding (JSON pads 0x20, which JSON.parse tolerates; BIN pads zeros, buffers[0].byteLength is the end). */
 export function parseGlb(bytes: Uint8Array): GlbParts {
   if (bytes.length < 20) throw new Error("truncated GLB header");
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

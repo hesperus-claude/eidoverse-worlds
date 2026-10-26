@@ -106,14 +106,9 @@ export function ingestHeightmap(body: Uint8Array, hash: string):
   return { grid, png, w, h, bits: img.data instanceof Uint16Array ? 16 : img.depth, meta };
 }
 
-// Exports run on the thread that serves the worlds (review on #237), so their work is BOUNDED, and the
-// bound is checked BEFORE any work is done:
-//   · at most EXPORT_MAX samples a side;
-//   · the last EXPORT_CACHE results kept by (terrain, resolution) — a terrain that has not changed is
-//     never re-sampled, and a cached answer costs nothing and is never refused;
-//   · an uncached export must first be granted a slot: EXPORT_PER_ADDRESS a minute per address, and
-//     EXPORT_PER_MINUTE a minute for the whole process (so many addresses cannot add up to a busy thread),
-//     and only one at a time. A refused request does no sampling and caches nothing.
+// Exports run on the thread that serves the worlds, so the bound is checked BEFORE any work: at most EXPORT_MAX a side;
+// the last EXPORT_CACHE results kept (a cached answer is never refused); an uncached one needs a slot (EXPORT_PER_ADDRESS
+// and EXPORT_PER_MINUTE a minute, one at a time). A refused request samples and caches nothing.
 export const EXPORT_MAX = 513;
 export const EXPORT_CACHE = 6;
 export const EXPORT_PER_ADDRESS = 6;

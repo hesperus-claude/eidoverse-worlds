@@ -11,11 +11,8 @@ import { join } from "node:path";
 import { WORLDS_DIR } from "./config.ts";
 
 // ---- global bans ------------------------------------------------------------
-// The door's own list, across all its worlds (each world's own bans are its door's moderator log). There is no global
-// log, so it is a JSON file INSIDE WORLDS_DIR (bans are world data: a scratch WORLDS_DIR gets a scratch list).
-// Keyed by ACCOUNT (security review 10-06 H4/L4): a display name is typed, not proven, so banning a name hit every
-// namesake and missed the person the moment they picked another. A guest has no account: their ban names their
-// connection's address (hashed, never stored raw) and expires (ADDR_BAN_MS) — an address is shared and reassigned.
+// The door's own list across all its worlds, a JSON file INSIDE WORLDS_DIR (a scratch WORLDS_DIR gets a scratch list).
+// Keyed by ACCOUNT: a display name is typed, not proven. A guest's ban names its HASHED address and expires (ADDR_BAN_MS).
 export type BanRec = { by: string; ts: number; reason?: string; name?: string; account?: string; addr?: string; until?: number; world?: string; legacySub?: boolean };
 export const ADDR_BAN_MS = 24 * 3600 * 1000;
 export const BANS_FILE = join(WORLDS_DIR, ".bans.json");
@@ -25,10 +22,8 @@ export function saveGlobalBans() {
     atomicWrite(BANS_FILE, JSON.stringify(globalBans, null, 2), { mode: 0o600 });
   } catch (e) { console.log(`[mod] global ban save failed: ${e}`); }
 }
-/** The ban list as stored, made current. A record from before accounts carried the principal's bare `sub`: a signed-in
- *  person's account is that sub still, but an aid1 agent's is now `aid1:<iss>:<sub>`, so such a record is kept with
- *  `legacySub` and matches the aid1 account whose sub it names (review of #260). A name-keyed record with
- *  neither can't be honoured safely (it would hit namesakes) and is dropped, said once. */
+/** The ban list as stored, made current: a pre-account record's bare `sub` is kept as `legacySub` and matches the aid1
+ *  account with that sub; a name-keyed record with neither would hit namesakes, so it is dropped, said once. */
 export function restoreBans(raw: Record<string, BanRec>): Record<string, BanRec> {
   const out: Record<string, BanRec> = {}; const dropped: string[] = [];
   for (const [k, b] of Object.entries(raw ?? {})) {
@@ -76,12 +71,9 @@ export function findBan(map: Record<string, BanRec> | undefined, account: string
 /** The key a ban is filed under. */
 export const banKey = (account: string | null | undefined, addr?: string | null, world?: string | null) => `${world ? `world:${world}:` : ""}${account ? `acct:${account}` : `addr:${addr}`}`;
 
-// ---- a guest's mute, by address (R 10-07) ----------------------
-// A guest is a fresh identity per connection, so a mute on one was shed by reconnecting. Like a guest's ban
-// and kick (above), the sanction is also filed against the connection's HASHED address in that world, for at most
-// ADDR_BAN_MS (or the sanction's own shorter end), and every new guest joining that world from the address is given
-// the same sanction (server.ts, at join). Lifting it on any identity it was carried to lifts the address record. Kept
-// apart from the ban list so nothing that reads bans (findBan, the operator's list) can mistake a mute for a ban.
+// ---- a guest's mute, by address ----------------------
+// a guest's mute is also filed against its HASHED address in that world (≤ ADDR_BAN_MS) and given to new guests from it
+// (server.ts, at join); kept apart from the ban list so nothing reading bans mistakes a mute for a ban
 export type AddrSanction = { kind: "mute"; world: string; addr: string; actor: string; by: string; ts: number; until: number; channels?: string[]; reason?: string; ids: string[] };
 export const ADDR_SANCTIONS_FILE = join(WORLDS_DIR, ".addr-sanctions.json");
 export const addrSanctions: Record<string, AddrSanction> = {};

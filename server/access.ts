@@ -1,24 +1,10 @@
 // eidoverse-worlds sequencer — WORLD ACCESS: who may come in, decided by the world (upstream #258 / #259,
-// docs/DESIGN-world-access.md; ported to this protocol 2026-10-17).
+// docs/DESIGN-world-access.md, which also lists what was not ported).
 //
-// Upstream wrote access as the bottom rungs of its `grant` ladder (`none`, `spectator`). Here the facts are the world's own
-// components, read by one pure function both the server and the client import (shared/protocol/access.js):
+// The facts are the world's own components, read by one pure function server and client share (shared/protocol/access.js):
 //   @world.access {join: anyone|signed-in|listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //   @world.default-role, roles:<id> {role, …, until?}
-// This module is the one place every DOOR asks:
-//   entryFor      — the decision for a connection or an HTTP caller: bans → kick → operator / moderation powers →
-//                   the world's access (shared entryOf) → account age → capacity (embodied joins only)
-//   httpCaller    — who is asking over HTTP (cookie session, or a bearer the door takes)
-//   doorFor       — a world's door, read from disk when the world isn't loaded (a /worlds listing never loads one)
-//   settleAccess  — after roles or access change: remove whoever may no longer stay (4010)
-//   sweepAccess   — timed grants: warn five minutes out, then the authority writes the end (expire-roles) and settle
-// It never imports server.ts: the session's expel is injected by the caller.
-//
-// Not ported from upstream (and why): a FOUNDING CAP (joining never founds a world here; founding is `world-found`, which
-// has its own caps, and an agent's account doesn't found); the directory SEARCH of everyone who has signed in (this
-// server's whois is scoped to a world's own people: a roster of sign-ins isn't an owner's to browse); `grant <name>
-// spectator` for ONE person (a role is membership here, never a state: a world that admits only people listed lets
-// everyone else watch with access.watch, or no one).
+// This module is the one place every DOOR asks. It never imports server.ts: the session's expel is injected by the caller.
 
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -59,12 +45,8 @@ export function doorOfWorld(w: World): Door { const wc = wcOfWorld(w); return { 
 export function doorOf(w: World): string { return doorOfWc(wcOfWorld(w)); }
 
 // ---- a world's door, without loading the world ----------------------------------------------------------------------
-// Listing and HTTP reads must answer "may this caller see world X?" for worlds nobody is in. Loading them would do it,
-// but a loaded world is never unloaded, so a /worlds call would pull every world on disk into memory for good. Instead:
-// the change entries in world.jsonl that touch @world's access, default-role, role-defs and roles:*, folded set/delete in order,
-// cached until the file changes. (Only those keys: nothing else about the world is read.) Its moderator log
-// (world.mod.jsonl, never in the world log) comes with it: a ban or kick there must close the door before the world is
-// loaded, as after (Antra's review of f91840e5 P1: a banned member's first /geom after a restart answered 200).
+// a loaded world is never unloaded, so /worlds and HTTP reads fold only @world's access/role keys from world.jsonl (cached
+// by file) plus world.mod.jsonl: a ban or kick must close the door before the world loads, as after
 const doorCache = new Map<string, { key: string; wc: Record<string, any>; mod: any[] }>();
 const DOOR_LINE = /"id"\s*:\s*"@world"/;
 const isDoorComp = (k: unknown) => typeof k === "string" && (k === "access" || k === "default-role" || k === "role-defs" || k.startsWith("roles:"));   // role-defs: a custom role's powers (the moderation bypass)
@@ -124,10 +106,8 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
   }
   // operators, owners and holders of a moderation power always get in (what @world.access always said)
   const eff = actorId ? effectiveOf(door.wc, actorId, { anon: !account }) : null;
-  // the bypass is for people this world LISTS (an explicit role row): a power handed to everyone through default-role or
-  // role-defs must not open a members-only door (final review M1, 10-18)
-  // an ended timed grant is absent at `now` (security review 10-18 M6): the door reads it as not listed, loaded or not, before the
-  // authority's sweep writes its end (expire-roles) — so an unloaded world's HTTP reads and a join don't honour it indefinitely
+  // the bypass is for people this world LISTS: a power given through default-role or role-defs opens no members-only door;
+  // an ended timed grant reads as unlisted before the authority's expire-roles sweep writes its end
   const listed = !!actorId && listedIn(door.wc, actorId, now);
   const bypass = isOperator(account) || (listed && (isOwner(eff) || MOD_POWERS.some((p: string) => eff?.permissions?.includes(p))));
   const e = entryOf(door.wc, { actor: actorId ?? undefined, anon: !account, bypass, trustedRenderer: !!who.trustedRenderer }, door.name, now);
@@ -135,7 +115,7 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
   if (bypass) return null;
   const acc = door.wc.access && typeof door.wc.access === "object" ? door.wc.access : null;
   // a trusted renderer has no account and never embodies: the door let it watch above, and the account-age rule is about
-  // accounts (review of #260, server I52)
+  // accounts (#260)
   const age = acc && !who.trustedRenderer ? accountAgeRefusal({ world: door.name, minDays: acc.minAccountDays, account, anonymous: !account, now }) : null;
   if (age && !(mode === "watch" && acc?.watch === "anyone")) return { code: ACCESS_CLOSE, reason: "age", why: age };
   // "full" is transient (someone leaves): its own close (4005 "full"), which clients wait out and try again

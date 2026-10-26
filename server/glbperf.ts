@@ -30,12 +30,9 @@ function webpDims(b: Uint8Array): [number, number] | null {
   if (kind === "VP8 ") return [dv.getUint16(26, true) & 0x3fff, dv.getUint16(28, true) & 0x3fff];
   return null;
 }
-/** KTX2 size + the bytes/texel the GPU holds after transcode. three's KTX2Loader (priorityETC1S) takes ETC2 first,
- *  then BC7: a desktop with BPTC and no ETC2 (most Windows/Linux GPUs) holds ETC1S as BC7, so the CARD bills the worst
- *  case: 1 B/texel for
- *  everything. `bptc:false` is the regime of a device without it (ETC1S → BC1 0.5, or BC3 1 with an alpha sample) —
- *  the parity probe passes the regime its headless loader actually got. UASTC → BC7 (1) either way. An uncompressed
- *  fallback would be 4 — the card says "estimated". Samples are counted from the DFD's basic descriptor block. */
+/** KTX2 size + the bytes/texel the GPU holds after transcode. KTX2Loader takes ETC2 first, then BC7, so a BPTC desktop
+ *  holds ETC1S as BC7 and the card bills 1 B/texel; `bptc:false` is a device without it (ETC1S → BC1 0.5, or BC3 1 with
+ *  alpha). UASTC → BC7 (1) either way. Samples are counted from the DFD's basic descriptor block. */
 function ktx2Info(b: Uint8Array, bptc = true): { dims: [number, number]; bpp: number } | null {
   if (b.length < 80 || b[0] !== 0xab || b[1] !== 0x4b) return null;
   const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);

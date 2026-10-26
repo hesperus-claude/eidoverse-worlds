@@ -118,10 +118,8 @@ export function projectEntity(id: string, e: any) {
   return { ...out, revision: hash(out) };
 }
 
-// Parameters for client-side evaluation, so native renderers animate at frame
-// rate from the same closed forms instead of polling sampled transforms.
-// A missing t0 is resolved to this process's anchor: every native client then
-// agrees with the server's own sampled transform.
+// closed-form motion parameters, so native renderers animate at frame rate; a missing t0 resolves to this process's
+// anchor, so every native client agrees with the server's own sampled transform
 export function localMotion(raw: any, nowMs: number, simBody: boolean) {
   const m = raw?.comp?.motion;
   if (raw?.parent || simBody || !m || typeof m.type !== "string" || typeof m.part === "string") return null;
@@ -171,10 +169,8 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
   // Rate-limit errors too. Commit delivered revisions only after size checks.
   old.at = now; clients.set(c, old);
   if (msg.version !== RENDER_VERSION) return { type: "render-scene", version: 1, world: w.name, error: "unsupported_version" };
-  // A saved heightmap whose grid has not loaded yet would project the noise fallback as the ground, and
-  // cache it as success (terrain, water and plant positions all wrong until some unrelated edit). Refuse
-  // until it is ready, caching nothing; `moving` keeps native clients polling at their usual interval.
-  // (the NORMALIZED shape: a malformed grid ref the height law ignores must not hold the scene forever)
+  // a saved heightmap whose grid hasn't loaded would project (and cache) the noise fallback as ground: refuse until ready,
+  // caching nothing (`moving` keeps clients polling). Judged on the NORMALIZED shape: a malformed grid ref can't hold it forever
   if (!shapeReady(shapeParams(w.state.terrain ?? {})))
     return { type: "render-scene", version: 1, world: w.name, error: "terrain_pending", moving: true, updateIntervalMs: 300,
       detail: `heightmap grid ${String(w.state.terrain?.heightmap?.grid ?? "").slice(0, 120)} is not available yet` };
@@ -203,10 +199,8 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
       });
       cached = { seq, entities, environment, signature: hash(environment), envSource }; worlds.set(w, cached);
     }
-    // Evaluate the SAME versioned physics law as the browser, at this render
-    // time. Never advance the authoritative sim as a side effect of a read.
-    // Snapshot fields alias the sim, so clone before advancing. Foreign epochs
-    // retain their barrier poses without pretending to know their physics.
+    // the SAME versioned physics law as the browser, on a clone (snapshot fields alias the sim): a read never advances the
+    // authoritative sim. Foreign epochs keep their barrier poses.
     const sim = w.sim?.epoch ? structuredClone(simSnapshot(w.sim)) : null;
     if (sim && !sim.epoch?.foreign) advanceSim(sim, tickOf(sim, now));
     const activeBodies = sim && !sim.epoch?.foreign ? Object.values(sim.bodies).filter(b => !b.resting).length : 0;

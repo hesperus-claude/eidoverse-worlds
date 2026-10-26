@@ -18,11 +18,9 @@ function holderOf(f: string): { pid: number; nonce: string } | null {
   const [p, nonce] = s.split(" "); const pid = Number(p);
   return Number.isInteger(pid) && pid > 0 && /^[0-9a-f]{16}$/.test(nonce ?? "") ? { pid, nonce } : null;
 }
-/** Whether the holder `pid` named in a lock is gone: its process exited (same host: the keys file is local), or it is this
- *  process. A mint holds the lock only inside one synchronous call, and only the main thread mints, so a lock naming this
- *  process that the call doesn't hold was left by an earlier process with the same pid: a restart can get its old pid
- *  back. A worker thread that minted would share this pid and could clear a live sibling's lock: one that does needs the
- *  thread in the lock's holder. */
+/** Whether the holder `pid` named in a lock is gone: exited (same host), or this process: only the main thread mints,
+ *  inside one synchronous call, so a lock naming our pid is an earlier process's (a restart can get its pid back).
+ *  A worker thread that minted would need its thread in the lock's holder. */
 function gone(pid: number): boolean {
   if (pid === process.pid) return true;
   try { process.kill(pid, 0); return false; } catch (e) { return (e as NodeJS.ErrnoException).code === "ESRCH"; }
@@ -38,10 +36,9 @@ function take(name: string): string | null {
   catch (e) { if ((e as NodeJS.ErrnoException).code === "EEXIST") return null; throw e; }
   finally { fs.rmSync(tmp, { force: true }); }
 }
-/** Removes the lock file `f` if its holder is gone (above), as one step. Two waiters can both see the same dead holder, so the
- *  one that removes it first takes `<lock>.<its nonce>`, the right to remove that one lock, and removes `f` only if `f`
- *  still holds that nonce. A nonce is never reused, so a lock that has since replaced it is never removed. A right whose
- *  holder is gone before giving it back is removed the same way. Whether it removed `f`. */
+/** Removes lock `f` if its holder is gone, as one step: the first waiter takes `<lock>.<its nonce>` and removes `f` only if
+ *  `f` still holds that nonce (never reused), so a newer lock is never removed; a right whose holder is gone is removed
+ *  the same way. Whether it removed `f`. */
 function clearIfGone(lock: string, f: string): boolean {
   const h = holderOf(f); if (!h || !gone(h.pid)) return false;
   const right = `${lock}.${h.nonce}`;
@@ -54,7 +51,7 @@ const mk = (): Key => {
   return { pub: "ed25519:" + (publicKey.export({ format: "jwk" }) as { x: string }).x, priv: privateKey.export({ format: "der", type: "pkcs8" }).toString("base64") };
 };
 
-/** One custody per keys file per process (review of #260, server I5): every world under a worlds root opens the same file,
+/** One custody per keys file per process (#260): every world under a worlds root opens the same file,
  *  and separate handles, each with its own cache, each minting a missing key and writing its whole cache back, overwrote
  *  one another's keys. */
 const byFile = new Map<string, ReturnType<typeof openCustody>>();
@@ -72,10 +69,8 @@ function openCustody(file: string) {
     c.sequencer ??= d.sequencer; c.operator ??= d.operator; c.holders = { ...(d.holders ?? {}), ...c.holders }; };
   // durably: a key handed out must survive a crash, or the genesis it signed (already synced) names a key no one holds
   const save = () => replaceDurable(file, JSON.stringify(c, null, 1), 0o600);
-  // A mint reads the file, adds a key and writes the whole file back, so two processes minting at once (the server and a
-  // found / translate tool) would each write back what it read and the later rename would drop the other's key. The read,
-  // the mint and the write therefore run holding `<file>.lock` (take above): a process waits for it, and removes one whose
-  // holder is gone (clearIfGone above).
+  // read + mint + write run holding `<file>.lock`: two processes minting at once (the server and a found / translate tool)
+  // would each write back what it read, and the later rename would drop the other's key
   const lock = `${file}.lock`;
   const minting = (missing: () => boolean, mint: () => void) => {
     if (!missing()) return;
@@ -114,7 +109,7 @@ function openCustody(file: string) {
 
 /** A world's moderator log (§2.1: never in the world log): read it, and append one record per line. */
 export function modLogAt(file: string) {
-  // read as a reader; the first append repairs a torn tail first, as the log's writer (review of #260, server I127)
+  // read as a reader; the first append repairs a torn tail first, as the log's writer
   const mod = fs.existsSync(file) ? readLogBytes(file, { cut: false }).toString("utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
   let repaired = false;
   return { mod, appendMod: (r: object) => { if (!repaired) { readLogBytes(file); repaired = true; } appendDurable(file, JSON.stringify(r)); } };

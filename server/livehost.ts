@@ -1,15 +1,9 @@
-// server/livehost.ts — a world as a running server holds it: the authority (shared/protocol/authority.js) over one directory, with
-// every view the authority reads kept INCREMENTALLY (research 35, slice-2 #5):
-//   state   the strict fold, advanced per appended entry (copy-on-write: only the entities an entry touches are
-//           copied, so a held state never changes under its holder, and a write costs the world's touched part, not
-//           the log). A purge refolds from the log (purge is retroactive by law, L1).
-//   sim     the sim layer as a running folder (simFolder), viewed at the authority's clock. The lab simFolded the whole
-//           log on EVERY request (settleSim calls it first).
+// server/livehost.ts — the authority (shared/protocol/authority.js) over one world directory, every view kept INCREMENTALLY:
+//   state   the strict fold, copy-on-write per entry (a held state never changes); a purge refolds (L1).
+//   sim     the sim layer as a running folder (simFolder), viewed at the authority's clock.
 //   index   id → seqs of the change entries that touch it, so creatorOf / lastTouch cost a thing's own history.
-//   clock   monotonic: max(wall clock, every ts already written). §2.1 says ts never decreases; a monotonic authority
-//           clock also makes "advance the sim for a read, then fold a later entry" equal to folding it first.
-//   presence the authority's presence plane (bodies, holds): memory only, never a file (L6: never logged; the lab kept a
-//           file because its CLI ran one process per request).
+//   clock   monotonic: max(wall clock, every ts already written) (§2.1).
+//   presence the presence plane (bodies, holds): memory only, never a file (L6).
 // The log file is <dir>/world.jsonl (UTF-8 JSONL, §2.4); blobs are <dir>/blobs/sha256-<hex>.json, named by the full
 // hash of their JCS bytes, written once, verified on read (§2.2). Each line is appended and fsynced (durable.ts) before
 // the request returns: the authority has already re-read it with the strict reader.
@@ -45,7 +39,7 @@ export type LiveOpts = { now?: () => number; /** the speed track's elapsed-time 
   /** id → account|anon|imported (the directory; the authority reads only "anon"); default: that worlds dir's directory */ kindOf?: (id: string) => string | null;
   /** the script sandbox (default QuickJS, shared/protocol/sandbox.js; null = none) */ scripts?: Any;
   /** who is connected beyond the authority's own bodies: [{id, at}] (server/worldlog.ts, from the World's clients) */ present?: () => { id: string; at: number[] | null }[];
-  /** speech is arrival-only (R 10-18): the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null };
+  /** speech is arrival-only: the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null };
 
 /** Open (or prepare to found) the world stored in `dir`. */
 export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
@@ -106,7 +100,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
     return null;
   })();
   // the cut carries the engine and what's lifted/launched, not the fold: the layer's engine view needs the state AT the
-  // cut (second review 10-11 S1-1: without it the first edit after a reopen removed the thing from the engine)
+  // cut, or the first edit after a reopen drops the thing from the engine
   let sim = simFolder(entries, { models: opts.simModels ?? {}, purged: purgesIn(entries), ...(ckpt ? { from: { ...ckpt.cut, st: fold(entries, { until: ckpt.seq }) } } : {}) });
   const index = (seq: number, e: Any) => { if (!isE(e) || e.kind !== "change") return;
     for (const id of new Set(opsQuiet(e).map((o: Any) => o.id))) { let a = touching.get(id as string); if (!a) touching.set(id as string, (a = [])); a.push(seq); } };
@@ -156,7 +150,7 @@ export function isWorldDir(dir: string): boolean {
   const g = genesisAt(path.join(dir, "world.jsonl"));
   return !!g && g.body?.dialect === DIALECT && g.body?.v === VERSION;
 }
-/** A log of this protocol's family (an entry-kind genesis) that this server can't read: saved before the 2026-10-07
+/** A log of this protocol's family (an entry-kind genesis) that this server can't read: saved before the
  *  names pass (an older file name, or a genesis that stated its number in its own field). Refounded, or re-translated
  *  from its original log; never opened. */
 export function isPreNamesDir(dir: string): boolean {

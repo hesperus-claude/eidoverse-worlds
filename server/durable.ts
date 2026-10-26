@@ -1,4 +1,4 @@
-// server/durable.ts — the disk practice a sequencer owes its readers (platforms review 10-06, #5):
+// server/durable.ts — the disk practice a sequencer owes its readers:
 //  - a line is on disk (fsync) BEFORE anyone is told about it: otherwise a crash after a broadcast loses the tail, the
 //    restarted server re-issues the same seq with a different head, and every client holding (seq, head) holds "proof"
 //    the authority equivocated;
@@ -8,9 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { sha256 } from "../shared/protocol/hash.js";
 
-/** The log's bytes, with a torn tail (no final newline) cut off the file first. `cut: false` is a reader's: it leaves the
- *  file alone and only leaves the tail out, since a line without its newline may be one a writer is appending now (review
- *  of #260, server I127: a reader that cut it made the writer's line land broken). Only the log's writer cuts. */
+/** The log's bytes, with a torn tail (no final newline) cut off the file first. `cut: false` is a reader's: it only leaves the
+ *  tail out, since a line without its newline may be one a writer is appending now. Only the log's writer cuts. */
 export function readLogBytes(logPath: string, { cut = true } = {}): Buffer {
   if (!fs.existsSync(logPath)) return Buffer.alloc(0);
   const b = fs.readFileSync(logPath);
@@ -39,7 +38,7 @@ export function appendDurable(logPath: string, line: string) {
   const fresh = !fs.existsSync(logPath);
   const fd = fs.openSync(logPath, "a");
   try { writeAll(fd, Buffer.from(line + "\n", "utf8")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is (review of #260, server I17)
+  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is
 }
 /** fsync a directory, so a file just created or renamed into it survives a crash (POSIX: the entry lives in the directory,
  *  not the file). Windows can't open a directory for this, and NTFS journals names itself: skipped there. */
@@ -61,10 +60,8 @@ export function syncTree(dir: string) {
   syncDir(dir);
 }
 
-/** Make `dir` and any missing parents, durably: a directory mkdir just made is named by an entry in its parent, which a
- *  crash can lose like any other new name, taking the directory and what was written in it. So each parent that gained an
- *  entry is synced, from `dir`'s own parent up to the parent of the first directory made. `dir` itself is the caller's to
- *  sync once its file is in it. */
+/** Make `dir` and missing parents durably: each parent that gained an entry is synced (a crash can lose a new name);
+ *  `dir` itself is the caller's to sync once its file is in it. */
 export function mkdirDurable(dir: string) {
   const first = fs.mkdirSync(dir, { recursive: true });
   if (first === undefined) return;

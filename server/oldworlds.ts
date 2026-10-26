@@ -1,13 +1,11 @@
-// server/oldworlds.ts — worlds saved in an old format, found and named (owner 10-15: "when someone tries to open a world
-// saved by the old protocol, ping them with 'use the translator'"). The server serves only worlds in this protocol; a
-// directory holding an old log is never opened. Before this file it was skipped in silence at boot (the operator was
-// never told) and a visitor was handed a command line they can't run. Now:
+// server/oldworlds.ts — worlds saved in an old format, found and named. The server serves only worlds in this protocol; a
+// directory holding an old log is never opened. Instead:
 //   - the OPERATOR is told at boot, one block per world, with the exact command (bootNotice);
 //   - a VISITOR is told in plain words that the world is safe and needs a one-time conversion (visitorText).
 // Two kinds, never confused:
 //   translatable  a log.jsonl of the first protocol's verbs: tools/protocol/world.ts translate <name> translates it in
 //                 place (the world keeps its name; the old log is renamed log.original.jsonl beside it, never written);
-//   pre-names     a log of this protocol's family saved before the 2026-10-07 names pass (livehost isPreNamesDir): it
+//   pre-names     a log of this protocol's family saved before the names pass (livehost isPreNamesDir): it
 //                 can't be translated as it stands; it's re-translated from its ORIGINAL old log, or refounded.
 // Pure reads of the directory: nothing here writes, and nothing here loads the translator.
 import fs from "node:fs";
@@ -32,10 +30,8 @@ export type OldWorld = {
   visitor: string;
 };
 
-/** What a client that doesn't fold the log is told at join (server.ts, the 4005 refusal). A NATIVE session (the Unreal client,
- *  signed in through native-login: isNativeSession, native: true or an older nativeWorld) is told the truth about itself: it hasn't been ported to this protocol
- *  yet (review of PR #260, Mica, item 7); until 2026-10-18 it was told to "reload the page", which it has none of. Anyone else
- *  (an old page, an old agent build) is told to reload or update. */
+/** What a client that doesn't fold the log is told at join (server.ts, the 4005 refusal): a NATIVE session (isNativeSession)
+ *  that it hasn't been ported to this protocol yet, since it has no page to reload; anyone else to reload or update. */
 export function noFoldRefusal(world: string, native: boolean): string {
   return native
     ? `"${world}" is a world of the current protocol, and the Unreal client hasn't been ported to it yet: it doesn't fold the world's log, so it can't join. Nothing is wrong with your sign-in or with the world; a browser client can join it now, and the Unreal client will when its port lands.`

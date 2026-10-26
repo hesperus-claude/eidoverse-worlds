@@ -11,17 +11,10 @@ import { ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 
 // ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
-// The second door, alongside JOIN_TOKEN: humans log in with Discord at the
-// home node, arrive at /auth with an aid1 token in the URL fragment, swap it
-// for a session cookie here, and join with a VERIFIED identity. Verification
-// is offline (issuer pubkey below); the home node down = existing sessions
-// and the JOIN_TOKEN door keep working.
-//   HN_ISSUER_KEY   pinned issuer pubkey `ed25519:…` — unset disables the door
-//   HN_ISS          issuer domain            (default id.animalabs.ai)
-//   HN_AUD          token audience to verify (default eidoverse; staging uses eidoverse2)
-//   HN_LOGIN_URL    where "Login with Discord" sends people
-//   HN_REQUIRE_LOGIN=1  browser clients without a session are sent to login
-//                       (JOIN_TOKEN joins still pass — invite links keep working)
+// The second door beside JOIN_TOKEN: an aid1 token from the home node swaps for a session cookie at /auth.
+// Verification is offline (pinned key), so with the home node down sessions and JOIN_TOKEN keep working.
+//   HN_ISSUER_KEY (pinned `ed25519:…`, unset disables the door), HN_ISS, HN_AUD (staging: eidoverse2), HN_LOGIN_URL,
+//   HN_REQUIRE_LOGIN=1 (sessionless browser clients go to login; JOIN_TOKEN joins still pass)
 export const HN_ISSUER_KEY = process.env.HN_ISSUER_KEY ?? "";
 export const HN_ISS = process.env.HN_ISS ?? "id.animalabs.ai";
 export const HN_AUD = process.env.HN_AUD ?? "eidoverse";
@@ -29,10 +22,8 @@ export const HN_LOGIN_URL = process.env.HN_LOGIN_URL ?? `https://${HN_ISS}/login
 export const HN_REQUIRE_LOGIN = process.env.HN_REQUIRE_LOGIN === "1";
 export const SESSION_TTL_MS = 12 * 60 * 60_000; // event-length; re-login is two clicks
 
-/** Verify a forwarded aid1 credential at a join-scoped door and hand back
- *  the identity it vouches for (§24l R1): the ws join and the upload door
- *  each hand-rolled this verify-then-slug pair; the MCPL door (its own
- *  process, its own HN_* env) shares aid1Slug and keeps its own verify. */
+/** Verify a forwarded aid1 credential at a join-scoped door and return its identity (§24l R1); the MCPL door
+ *  shares aid1Slug but keeps its own verify. */
 export function aid1JoinIdentity(tok: string): { slug: string; payload: Aid1Payload } | null {
   if (!HN_ISSUER_KEY || !tok.startsWith("aid1.")) return null;
   const v = verifyToken(tok, { issuerId: HN_ISSUER_KEY, iss: HN_ISS, aud: HN_AUD, requireScopes: ["worlds:join"] });
@@ -55,20 +46,13 @@ export function sessionFromCookie(cookie: string | null): HnSession | null {
 }
 
 // ---- session persistence ----------------------------------------------------
-// Sessions used to be memory-only, so every deploy logged the whole show out
-// and sent verified humans back to the door mid-event. They survive restarts
-// now. The file holds bearer-equivalent session ids — 0600 and gitignored,
-// same posture as mcpl/tokens.json.
-// SESSIONS_PATH (or main's HN_SESSIONS_FILE): a self-contained test keeps its sessions in its scratch dir (like
-// AGENT_TOKENS_PATH), never the checkout's
+// Sessions survive restarts; the file holds bearer-equivalent ids, so 0600 and gitignored (as mcpl/tokens.json).
+// SESSIONS_PATH (or HN_SESSIONS_FILE) keeps a self-contained test's sessions in its scratch dir
 export const SESSIONS_FILE = resolve(process.env.SESSIONS_PATH ?? process.env.HN_SESSIONS_FILE ?? join(ROOT, ".sessions.json"));
 export function saveSessions() {
   try {
     const live = [...hnSessions].filter(([, s]) => s.exp > Date.now());
-    // atomicWrite IS the write-then-rename: a crash mid-write never truncates
-    // the live file. A second rename of the already-consumed .tmp threw on
-    // every successful save and logged "session save failed" each time,
-    // burying the signal for a real failure (PR #160 review).
+    // atomicWrite IS the write-then-rename: renaming the consumed .tmp again would throw on every good save
     atomicWrite(SESSIONS_FILE, JSON.stringify(Object.fromEntries(live)), { mode: 0o600 });
   } catch (e) { console.log(`[auth] session save failed: ${e}`); }
 }
@@ -82,14 +66,9 @@ try {
   }
 } catch (e) { console.log(`[auth] session restore failed (starting empty): ${e}`); }
 
-// Agent identity: the MCPL door (mcpl/tokens.json) already holds per-agent
-// bearer tokens. The sequencer reads the same file so (a) an agent's name is
-// RESERVED — a plain browser join cannot claim it — and (b) a join carrying
-// the right token is a verified agent. Hot-reloaded by mtime, like the MCPL
-// server does.
-// Path is env-overridable so a self-contained test can own its credential
-// fixture (a scratch tokens.json) without mutating the checkout — same posture
-// as WORLDS_DIR. Production leaves it unset and reads the real mcpl/tokens.json.
+// Agent identity from the MCPL door's per-agent tokens (hot-reloaded by mtime): an agent's name is RESERVED against
+// plain browser joins, and a join with the right token is a verified agent.
+// AGENT_TOKENS_PATH lets a self-contained test own a scratch tokens.json; production leaves it unset.
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
 let agentTokCache: { mtime: number; byToken: Map<string, string>; names: Set<string>; bySub: Map<string, string> } | null = null;
 export function agentTokens() {
@@ -99,7 +78,7 @@ export function agentTokens() {
       const byToken = new Map<string, string>();
       const names = new Set<string>();
       // an enrolled agent may also arrive through the home node with an aid1 credential: `subs` lists the aid1 subjects
-      // that ARE this agent (security review 10-06 C2: a reserved name is satisfied by a proven subject, never by a
+      // that ARE this agent (a reserved name is satisfied by a proven subject, never by a
       // display name that happens to slug the same)
       const bySub = new Map<string, string>();
       if (mtime) {
