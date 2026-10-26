@@ -804,6 +804,35 @@ const HOUSE = {
   const boxW = boxes[0].x1 - boxes[0].x0;
   check("no gap a body could slip through", biggestGap < boxW,
     `gap ${biggestGap.toFixed(3)} vs box ${boxW.toFixed(3)}`);
+
+  // every diagonal × opening × tile × cell: authored cell, sweep and collider share the diagonal; an opening is open below
+  // the lintel in collider and sweep alike, and a window keeps a solid collider and no sweep between sill and head
+  for (const tile of [1, 2]) for (const [cx, cz] of [[0, 0], [4, -3]]) for (const axis of [2, 3]) for (const aperture of [null, "door", "window", "arch"]) {
+    const at = `axis ${axis} ${aperture ?? "solid"} tile ${tile} cell ${cx},${cz}`;
+    const plan = planStructure({ tile, levels: [{ tiles: [[cx, cz]], walls: [[axis, cx, cz]], apertures: aperture ? [[axis, cx, cz, aperture]] : [] }] });
+    const level = plan.levels[0];
+    const x0 = cx * tile, z0 = cz * tile, x1 = x0 + tile, z1 = z0 + tile;
+    const ends = segmentEnds({ axis, x: cx, z: cz }, plan.grid);
+    const want = axis === 2 ? [[x0, z0], [x1, z1]] : [[x1, z0], [x0, z1]];
+    check(`${at}: segment ends on the cell's corners`, JSON.stringify(ends) === JSON.stringify(want), JSON.stringify(ends));
+    const xs: number[] = [], ys: number[] = [], zs: number[] = [];
+    for (const p of level.sweeps) for (let i = 0; i < p.positions.length; i += 3) { xs.push(p.positions[i]); ys.push(p.positions[i + 1]); zs.push(p.positions[i + 2]); }
+    // the profile may protrude by its wall/skirting thickness, never shift into the next cell
+    const lo = (v: number, e: number) => v > e - 0.3 && v < e + 0.2, hi = (v: number, e: number) => v > e - 0.2 && v < e + 0.3;
+    check(`${at}: the sweep stays in its cell`, xs.length > 0 && lo(Math.min(...xs), x0) && hi(Math.max(...xs), x1) && Math.min(...zs) > z0 - 0.3 && Math.max(...zs) < z1 + 0.3,
+      `x ${Math.min(...xs).toFixed(2)}..${Math.max(...xs).toFixed(2)} z ${Math.min(...zs).toFixed(2)}..${Math.max(...zs).toFixed(2)}`);
+    const walls = plan.boxes.filter((b: any) => b.kind === "wall");
+    const off = walls.map((b: any) => { const x = (b.x0 + b.x1) / 2 - x0, z = (b.z0 + b.z1) / 2 - z0; return axis === 2 ? x - z : x + z - tile; });
+    check(`${at}: 9 collider boxes, each centred on the diagonal`, walls.length === 9 && off.every((r: number) => Math.abs(r) < 1e-9), `${walls.length} boxes, residual ${Math.max(...off.map(Math.abs))}`);
+    const open = aperture === "door" || aperture === "arch";
+    const lintel = level.y + (open ? APERTURES[aperture].top : 0);
+    check(`${at}: collider and sweep start at the ${open ? "lintel" : "floor"}`, walls.every((b: any) => Math.abs(b.y0 - lintel) < 1e-9) && Math.abs(Math.min(...ys) - lintel) < 1e-9,
+      `boxes ${walls.map((b: any) => b.y0)} sweep ${Math.min(...ys)}`);
+    if (aperture === "window") {
+      const sill = level.y + APERTURES.window.bottom, head = level.y + APERTURES.window.top;
+      check(`${at}: no sweep between sill and head`, !ys.some((y) => y > sill + 1e-9 && y < head - 1e-9));
+    }
+  }
 }
 
 // 23. HALF-FLOORED CELLS: a cut corner is a corner, not a wall on a floor
