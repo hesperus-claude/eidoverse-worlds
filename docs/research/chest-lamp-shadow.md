@@ -14,7 +14,7 @@ The values were tuned by eye with the live dials (`setLampShadow`) against a mov
 |---|---|---|
 | `SHADOW_MAP` | 256 | a point light renders six cube faces; 2048 would be ~24 MB of cube map for a 12 cm bulb |
 | `SHADOW_WORK_DIST` | 12 | the lamp's range, so the texel and the bias scale to the whole volume it reaches |
-| `SHADOW_BIAS_TEXELS` | 8 | texel = 2 × 12 / 256 = 93.75 mm, so normalBias = 0.75 m |
+| `SHADOW_BIAS_TEXELS` | 8 | texel = 2 × 12 / 256 = 93.75 mm, so normalBias = 0.75 m at the default shadow resolution (2048); `setLampShadow` scales the map with `ew-shadow-res` (128 at 1024, 512 at 4096) and re-derives the bias (1.5 m, 0.375 m) |
 | `SHADOW_FORWARD` | −0.02 | the bulb sits 2 cm back into the chest, toward the wings |
 | `SHADOW_UP` | 0.15 | 15 cm up, about collarbone height |
 

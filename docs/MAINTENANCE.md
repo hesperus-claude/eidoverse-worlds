@@ -14,9 +14,9 @@ text names the command. Each step is backed up first and can be rolled back.
 
 `shared/protocol/shaperepair.js` turns a value stored before the shape audit into today's spelling, with the meaning its
 readers gave it. It is pure: a thing's components in, the repaired components out. Three callers share one rule set: the
-repair command (the authority's `repairShapes`, never a load: one system `repair-shapes` act, ONCE per world), the old-world
-translator's projection (translate-v1@12 and later, so a translated world needs no repair and is marked), and the old-world
-oracle's mirror of the load.
+repair command (`maintain`'s `repair-shapes` step, never a load: one system `repair-shapes` act, ONCE per world), the old-world
+translator's projection (translate-v1@12 and later, so a translated world needs no repair and is marked), and the snapshot
+oracle's `liftPlain`, which repairs its projection only when the translated log is unmarked.
 
 The rules that read an absent field may only ever see values stored before the audit. That is the marker's job, not the
 rules': `shapesMarked` is true once the log holds the system's `repair-shapes` act, a founding `create-world` stamped with

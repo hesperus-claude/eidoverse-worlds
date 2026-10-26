@@ -15,8 +15,8 @@ written (`captionRefusal`), so a resend can never write twice, and that refusal 
 
 ## Order
 
-One line in flight, FIFO, paced (`paceMs`, default 500 ms) under the door's rate (60 entries per 10 s; a caption
-is two entries), so a burst of finals queues rather than tripping the limiter. Which captioner holds the screen is
+One line in flight, FIFO, paced (`paceMs`, default 500 ms) under the authority's rate (60 acts per 10 s per actor; a caption
+is one act, its change entry counting only toward the byte budget), so a burst of finals queues rather than tripping the limiter. Which captioner holds the screen is
 the server's fact, not the bot's: the door stamps the leg generation. A restart's old-session tail drains first,
 FIFO, so the session switches once.
 

@@ -67,7 +67,7 @@ translated world is an ordinary world from then on.
 
 `world.ts` is the operator's tool for world files (its header lists every command). `found <name> --owner <id>` makes a
 new world through the authority's own `create-world` request (`server/worldlog.ts`
-`foundWorld`), so the founding act writes `@world` (about, bounds, `roles:<owner>`) as a live request would. Genesis
+`foundWorld`), so the founding act writes `@world` (about, bounds, `roles:<owner>`, `default-role` builder) as a live request would. Genesis
 names no owner key (`found` passes none, so tier 0 is empty and the operator's custody key is tier 1). A bare owner
 name is the `local:` account of that name (lowercased), resolved through the shared directory. (A person can also found a world over the
 wire with the `world-found` request; the server never founds one unasked, and a directory holding only an old log is
@@ -90,13 +90,14 @@ snapshot that isn't complete is skipped with its reason, never compared.
 Per world, the log is translated with the real path (`translateV1World`, as `translate --no-founder-key`) into a
 scratch worlds directory with its own custody, directory and model index; the source is only read. Then:
 
-- **A.** The translated `world.jsonl`, read by the strict reader and folded by the real fold, against the snapshot put
+- **A.** The translated `world.jsonl` up to its `lift-sockets` act, read by the strict reader and folded by the real fold, against the snapshot put
   through the translator's own mapping (`project`), with the translated world's identities (read back from its
   directory) and model hashes beside the paths.
-- **B.** The server's view: the world opened as the server opens it (`openLive`) and lifted as at first load
-  (`liftWorld`: a stored `sockets` map becomes socket child entities, a mounted thing's parent names the child, its
-  pose re-expressed in the child's frame), against side A's projection put through the same lift (`legacyHosts`,
-  `liftHostOps`) and the shape repair, plus a check that every old seat is a child entity with that name at that pose.
+- **B.** The server's view: the world opened as the server opens it (`openLive`), its socket children already written by
+  the translation's own `lift-sockets` act (`liftWorld` must report nothing left to do), against side A's projection put
+  through the same lift (`legacyHosts`, `liftHostOps`: a stored `sockets` map becomes socket child entities, a mounted
+  thing's parent names the child, its pose re-expressed in the child's frame; shape-repaired only when the log is
+  unmarked, which a translation never is), plus a check that every old seat is a child entity with that name at that pose.
 - **C.** Independent of `project` (so a bug that A shares still shows): the fields the snapshot states plainly, each
   thing's id, model and model hash, its pose when unparented and its parent, and the world's terrain and grass.
 
@@ -110,4 +111,4 @@ Windows), each distinct complete snapshot once. A world translated in place is r
 `OPT_DIR` points at the serving checkout's `assets/opt` so store models get the model hash they get on that host;
 `ORACLE_SCRATCH` (default `PROTOCOL_SCRATCH`, else the OS temp directory) holds the scratch worlds, and
 `ORACLE_KEEP=1` keeps them. It exits 0 only when at least one world was compared and every compared world agrees.
-`translate` runs it before an in-place swap and reads its one-line `ORACLE_SUMMARY` result.
+`translate` runs it before an in-place swap and runs it with `ORACLE_SUMMARY=1` and reads its one-line `oracle-summary <json>` result.

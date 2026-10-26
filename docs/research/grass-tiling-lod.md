@@ -18,7 +18,8 @@ Bucketing is a stable scan, so any count-prefix of a tile is still a uniform ran
 **The grid comes from occupancy, not a fixed edge.** A fixed ~12 m edge shredded a sparse desert stroke into dozens of
 tiles of ~50 instances, and every InstancedMesh is its own node-builder codegen run (the material cache key carries the
 object for instanced objects). The grid aims at `threshold` instances per tile (`matrixPathCaps`: the uniform-buffer
-limit / 64), is capped at `TILE_MAX_AXIS` per axis and `TILE_MAX_EDGE` metres per tile, and refuses strokes under
+limit / 64), is capped at `TILE_MAX_AXIS` per axis (`?grasstiles=N` overrides it) and then raised so no tile exceeds
+`TILE_MAX_EDGE` metres (the edge rule wins over the axis cap), and refuses strokes under
 `TILE_MIN_INSTANCES` or under `TILE_MIN_OCC` per tile (their whole-stroke sphere already culls them), and anything that
 comes out under 2×2.
 

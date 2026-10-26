@@ -25,7 +25,8 @@ Six library models rendered at the client's LOD switch distances, compared again
   reach the reduction bar and went `ineffective`.
 - **No locking.** Protecting UV-seam and crease vertices (`meshopt_SimplifyVertex_Protect`) froze the seamed models and
   changed nothing on the rest. Weighted UVs let the simplifier trade instead of refuse; a model that can't reach the bar
-  without tearing its UVs is refused `ineffective` (a pallet) rather than served torn.
+  without tearing its UVs keeps its geometry: served as a texture-only LOD when its textures shrink enough (`LOD_TEX_ONLY`),
+  otherwise refused `ineffective` (a pallet); never served torn.
 - **`ErrorClamped` (meshoptimizer 1.3)** clamps attribute error to the position-error scale. Without it the normal error
   used up the budget and every pass stopped early: all six test models went `ineffective`. The README recommends it for
   any attribute-aware use.

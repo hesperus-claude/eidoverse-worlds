@@ -1,7 +1,7 @@
 # Shadow-depth pre-warm: how three keys depth pipelines, and the restore trap
 
 Code: `client/lib/warmqueue.js` (`ensureDepthWarm`, `configureFor`, `compileDepthRound`, `warmDepth`). Read against the
-three.js build the client loads (`node_modules/three/build/three.webgpu.js`, the version `package.json` pins); three's
+three.js build the client loads (`node_modules/three/build/three.webgpu.js`, 0.186.0 installed; `package.json` allows `^0.186.0`); three's
 internals move between releases, so this describes the mechanism, not line numbers.
 
 ## Decision

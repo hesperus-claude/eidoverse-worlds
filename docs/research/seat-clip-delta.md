@@ -1,6 +1,7 @@
 # The seated clip's hips offset
 
-`tools/bake-seat-clip.ts` regenerates `upstream-patched/…/sitting_normal_chair.vrma` with the hips track lowered by
+`tools/bake-seat-clip.ts` regenerates `sitting_normal_chair.vrma` (committed under `patched/eidoverse/assets/animations/`; the tool's `OUT` still
+names the retired `upstream-patched/`) with the hips track lowered by
 Δ (`DELTA`, 0.409 track units).
 
 ## The fault
@@ -40,4 +41,5 @@ and a person looking at the thing disagree, the measurement is the hypothesis.
 
 After an upstream re-export (the source hash `EXPECT_SRC` will differ), don't reapply Δ: pose a body, find the lowest
 point of the mass that should rest (buttocks and thigh undersides, never a single minimum vertex), and Δ = that height
-/ 0.865. `--delta=<n>` writes a calibration bake without claiming the recorded hash.
+/ 0.865. `--delta=<n>` writes a calibration bake without claiming `EXPECT_OUT`, but only against the recorded source: after a
+re-export, update `EXPECT_SRC` first or the tool exits before baking.

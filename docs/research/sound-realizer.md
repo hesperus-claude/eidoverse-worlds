@@ -23,7 +23,8 @@ listener follows the camera.
    world volume (`voiceconsent.js` `volumeFor('world')`, live on `audio:volume`). The authored volume stays its own
    node: what you hear is authored × yours.
 6. **Silent at radius.** Distance gain is `gainAt` (1 inside `near`, inverse beyond, a `(1−t)²` taper over the last
-   5% of the radius to exactly 0), applied on the sound's own gain node in the tick. The panner only places it
+   5% of the radius to exactly 0; a `spatial: false` sound is 1 up to the taper, no inverse), applied on the sound's own
+   gain node in the tick. The panner only places it
    (`rolloffFactor = 0`): Web Audio's `inverse` model clamps at `maxDistance` instead of reaching zero, so a radio
    stayed audible everywhere past its radius.
 7. **At most `VOICES` (8) heard at once**, the loudest by what each would be heard at. The rest are paused and find

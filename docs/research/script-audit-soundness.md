@@ -14,7 +14,7 @@ each `name()` with null. Those reads are inputs the auditor can't replay, and it
 1. The re-run must ask the SAME reads (radii, counts, how many names). A different shape is flagged `reads`.
 2. When the re-run's writes and says equal the logged ones, the act is verified: its result didn't depend on who was there.
 3. When they differ and the act read who was near or what someone is called, the act is `skipped` with that reason, never
-   flagged and never counted verified. An act with no such reads that differs is still flagged `rerun`.
+   flagged and never counted verified. An act with no such reads that differs is still flagged: `rerun` for its writes, `rerun-say` for its says.
 
 Soundness: everything but the identities is still checked (sponsor, depth, seed, source, the read shape), and an
 identity-independent result is checked in full. Flagging a who-dependent mismatch would accuse an honest authority of a

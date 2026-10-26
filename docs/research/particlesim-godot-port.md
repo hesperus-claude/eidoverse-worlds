@@ -13,7 +13,7 @@ ParticleProcessMaterial's. Each divergence, and why:
   the identity and every radial/tangential force is about the emitter's own origin.
 - **Gravity alone is world-down** (Unity's convention). The document's gravity is a world-space vector; the renderer turns
   it into the emitter's frame every frame (`setGravity(localGravity(…))`: the inverse of the emitter's world rotation,
-  its world scale undone), so a tipped brazier's smoke still rises. Godot's `local_coords` turns gravity with the node.
+  its stretch undone, so it still scales with the emitter's mean size), so a tipped brazier's smoke still rises. Godot's `local_coords` turns gravity with the node.
   Velocity, linear/radial/tangential acceleration and the shape stay in the emitter's frame; tangential's axis is the
   document's gravity as written, read in that frame.
 - **Not ported:** 2D (`DISABLE_Z`), emission points, attractors, turbulence, orbit velocity (Godot's is 2D-only here).

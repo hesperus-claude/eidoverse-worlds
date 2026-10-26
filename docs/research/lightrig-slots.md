@@ -20,7 +20,7 @@ Deterministic in (state, camera), so two clients standing in the same spot light
 
 1. Adopted foreign lights (the lightning) hold reserved slots, outside distance ranking and the governor's cap, so a
    pool shed to zero can't delete a storm's strikes.
-2. Then by tier: `keep` (PROTOCOL §3.1: exempt from governor shedding), then authored placed lights, then inferred lamps;
+2. Then by tier: `keep` (`spec/history/PROTOCOL-v1.md` §3.1: exempt from governor shedding), then authored placed lights, then inferred lamps;
    within a tier by camera distance, with incumbents' distance scored at 85% so a walk along the boundary doesn't flicker
    a porch light.
 3. `keep` is priority, not a budget escape: with more keeps than slots the nearest win and the rest go unlit by a slot.

@@ -15,7 +15,7 @@ tumbles the way a falling leaf does.
 A flat plate falling is unstable: it stalls, slips sideways, sheds a vortex and rolls the other way (the "flutter"
 mode). Two terms reproduce it:
 
-1. **Normal drag.** Drag scales with the velocity component along the plate normal, not with speed: huge broadside,
+1. **Normal drag.** Drag opposes the velocity at ½ρ·speed²·Cd·A, with Cd blended from `cdEdge` to `cdNormal` by |vn|/speed: huge broadside,
    nearly nothing edge-on (`cdNormal` 1.28, a flat plate's classic value; `cdEdge` 0.06). That alone makes a plate
    seek edge-on, and overshoot, because it has inertia.
 2. **A displaced centre of pressure** (`copOffset`). On a plate at an angle the aerodynamic force acts forward of

@@ -1,7 +1,7 @@
 # Deck fill: when a model's top surface is believed as a floor
 
-`mcpl/agent.ts` `DECK_FILL = 0.45`. A headless body has no mesh colliders, so a room-scale model's flat top surfaces
-(`topSurfaces` from the model's geometry) are registered as supports. A surface counts only when its fill (its area
+`mcpl/agent.ts` `DECK_FILL = 0.45`. When a model's triangles aren't available or the mesh fit (`registerMeshSupport`) fails, a
+room-scale model's flat top surfaces (`topSurfaces` from `/geom`, area ≥ 1 m², at most six) are registered as box supports. A surface counts only when its fill (its area
 over its bounding rectangle's) is at least `DECK_FILL`.
 
 **Decision.** 0.45, from a survey of the shipped library, not from taste. Sparse surfaces and real decks separate

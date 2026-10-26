@@ -11,8 +11,8 @@ Making physics deterministic across machines is unwinnable, so it isn't attempte
 - the owner streams sparse bone rotations on the presence `pose` field, the channel a held pose already uses, so
   remotes render a tumble with no new receiver code: it is a pose that changes every frame;
 - when it settles, the owner captures the bones as a held pose, so a late joiner or a reconnect gets the result,
-  never a replay; a permanent result commits as a `pose` verb. A tumble always ends as a held pose (a capture is
-  forced after a deadline), so presence never streams forever.
+  never a replay; a permanent result commits as a `pose` verb. An unpinned tumble always ends as a held pose (a capture is
+  forced after a deadline; a shove restarts it, a held body never deadlines), so presence never streams forever.
 
 Physics lives on the presence plane (lossy, ephemeral, one authority) and only its outcome becomes state. The server
 never simulates and never sees a bone.
@@ -41,7 +41,8 @@ out". A drag is that with a sim attached:
   pinned to the cursor ray: zero latency where the hand is;
 - it streams pose and root to the **owner** (a targeted `bodydrag` relay, presence semantics, never logged), who
   applies them and rebroadcasts through its normal presence: one source of truth, nothing new for anyone else;
-- consent is the owner's: the grab is a request (gated by pushable), a movement key revokes mid-drag, and 1.2 s of
+- consent is the owner's: the grab is a request (the server refuses it unless displace consent allows; the owner refuses unless its body is
+  downed and not already dragged), a movement key revokes mid-drag, and 1.2 s of
   dragger silence (`SILENCE_MS`) auto-resumes, so a crashed dragger never leaves a body possessed;
 - on release the owner settles from where it was left, so the body lands under the authority that owns it. The
   takeover is only ever the moving part.

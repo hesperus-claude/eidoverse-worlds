@@ -59,9 +59,10 @@ whose items send `edit(item.k, id)`. `kids > 0` draws a disclosure (`edit('open'
 
 ## Number entry (desktop)
 
-Drag the number to scrub. The value is always start + step × distance, never accumulated, so a drag that wanders
+Drag the number to scrub. The value is always start + `scrubTravel(distance)` × (`drag` ?? step × 0.2), never accumulated, so a drag that wanders
 comes back to exactly where it began (the shape of Godot's `EditorSpinSlider`; Blender's #37453 drift is the failure
 this avoids). Shift scrubs at 0.1×, Ctrl snaps to whole units, Esc mid-drag restores the start value; the arrow keys
 step by `step` (× 10 with Shift). A click without travel focuses the box to type, and typed entry takes relative math
 as Maya does (`shared/editschema.js` `parseEntry`): `+=2`, `-=.5`, `*=-1`, `/=2`, `+=10%`. Soft limits
-(`softMin`/`softMax`) bound the drag; hard limits (`min`/`max`) bound everything.
+(`softMin`/`softMax`) bound the drag; hard limits (`min`/`max`) bound the drag, the arrow keys and the ± buttons. A
+typed value is sent as typed; the edit schema refuses one outside the component's range.

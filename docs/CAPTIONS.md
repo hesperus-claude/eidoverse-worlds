@@ -79,9 +79,10 @@ In **characters** (`String.length`, UTF-16 code units), not bytes:
 | `title` | 120 (`CAPTIONS_TITLE_MAX`) |
 | `speaker` | 48 (`CAPTIONS_SPEAKER_MAX`) |
 | `session` | 64 (`CAPTION_SESSION_MAX`) |
-| `id` | 64 (longer is cut, not refused) |
+| `id` | 64 |
 
-Whitespace runs collapse to one space and text is trimmed before the bound applies; an empty text is refused.
+Whitespace runs collapse to one space and text is trimmed before the bound applies; `text`, `title`, `speaker` and `id`
+are cut to their bound, a `session` over 64 is refused, and an empty text is refused.
 `CAPTIONS_MAX_LINES` (20) clips an older value's `window` on read and is the default for `captionsDetail`; the bag
 itself holds one line. Every stored value is also under the authority's 64 KiB of UTF-8 (`gate.js`).
 

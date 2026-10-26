@@ -28,7 +28,8 @@ other value, or none, runs WASM. Why opt-in rather than auto:
    piper-plus both say so), and short utterances are the common case.
 4. An experiment that can cost someone a working voice is a flag, not a default.
 
-Because of (1), `speak()` catches a WebGPU failure in `run()` as well as `create()` and rebuilds the session on WASM.
+Because of (1), the fallback covers both steps: `load()` builds the session on WASM when the WebGPU `create()` throws,
+and `speak()` catches a WebGPU failure in `run()` and rebuilds the session on WASM.
 With WebGPU on, ORT's verbose logging is enabled so the next attempt shows which ops ran where.
 
 ## Session options
