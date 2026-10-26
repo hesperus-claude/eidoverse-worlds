@@ -1,6 +1,6 @@
 // The door's typing relay (mcpl/typing-relay.ts) on a short clock: signals at `start`, keeps on while the host re-says
 // `start`, stops at `stop` or when the refresh is overdue (a lost `stop` can't leave the dots up), and only through the
-// body the latest `start` named. The wire is typing-mcpl.test.ts. Waits poll with a deadline, never a fixed sleep.
+// body the latest `start` named. The wire is typing-mcpl-test.ts. Waits poll with a deadline, never a fixed sleep.
 
 import { TypingRelay, TYPING_REASSERT_MS, TYPING_OVERDUE_MS } from "../mcpl/typing-relay.ts";
 

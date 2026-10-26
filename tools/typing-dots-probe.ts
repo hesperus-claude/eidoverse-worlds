@@ -9,7 +9,8 @@
 // agent-framework (start when a turn begins and every 7 s, stop when it ends); the full client runs in Chromium in the
 // same world, and a raw socket beside it logs what the world broadcasts, in order.
 //
-// Judged by the client's own state at each update. Method: docs/research/typing-dots-probe.md.
+// Judged by the client's own state at each update. Method: docs/research/typing-dots-probe.md. The door's frame contract
+// (latency, cadence, what ends or never starts the relay) is tools/typing-mcpl-test.ts; this keeps the page's side.
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
@@ -125,13 +126,11 @@ try {
   await pg.waitForFunction(() => document.getElementById("splash")?.classList.contains("gone") && !!(globalThis as any).EW?.me?.(),
     null, { timeout: 120000 });
 
-  // a raw socket in the same world, beside the browser: what the world broadcasts, by this side's clock and in order (the
-  // door's contract): each typing frame for the agent, and the log entry of its speech
+  // a raw socket in the same world, beside the browser: each typing frame the world broadcasts for the agent, by this
+  // side's clock and in order
   type Seen = { t: number; seq: number };
   const frames: Seen[] = [];
-  let sayEntry = null as Seen | null;   // set by the watcher's handler, so not narrowed to null here
   let seen = 0;
-  const names: Record<string, string> = {};
   const watcher = new WebSocket(`ws://127.0.0.1:${WPORT}/ws`);
   await new Promise<void>((res, rej) => {
     const t = setTimeout(() => rej(new Error("watcher join timeout")), 10000);
@@ -140,12 +139,6 @@ try {
       let m: any; try { m = JSON.parse(String(ev.data)); } catch { return; }
       if (m.type === "snapshot") { clearTimeout(t); res(); }
       if (m.type === "typing" && m.id === "claude") frames.push({ t: at, seq });
-      // a say is a log entry of kind "say" by an opaque actor, whose name the snapshot's cut and each log message carry
-      if (m.type === "snapshot" && m.cut?.names) Object.assign(names, m.cut.names);
-      if (m.type === "log") {
-        if (m.names) Object.assign(names, m.names);
-        if ((m.entries ?? []).some((e: any) => e?.kind === "say" && /^claude$/i.test(String(names[e.actor] ?? e.actor)))) sayEntry ??= { t: at, seq };
-      }
     };
     // replica: a world speaks only to clients that fold its log
     watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
@@ -171,9 +164,8 @@ try {
     params: { channelId: "world:commons", content: [{ type: "text", text }] } });
   const walk = (x: number) => { const id = nextId++; rpc({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "move", arguments: { to: [x, 0] } } }); return id; };
   // each start this side sends for this world, by its clock, read once sent; nextStart() resolves on the next one
-  const starts: number[] = [];
   let onStart: (() => void) | null = null;
-  const sendStart = () => { typing("start"); const at = Date.now(); starts.push(at); onStart?.(); return at; };
+  const sendStart = () => { typing("start"); const at = Date.now(); onStart?.(); return at; };
   const nextStart = () => new Promise<void>((res) => { onStart = () => { onStart = null; res(); }; });
 
   await pg.waitForFunction(() => !!(globalThis as any).EW?.remotes?.get("claude")?.avatar?.label, null, { timeout: 90000 });
@@ -269,9 +261,8 @@ try {
   await sleep(9000);
   const walkId = walk(15);   // a walk the door answers on arrival, about 19 s on
   await sleep(15000);
-  const walkPending15 = !responses.has(walkId);
   // the door reads one request at a time (mcpl/net-server.ts), so the speech waits for the walk's reply and goes 300 ms
-  // after a start: ~6.7 s to the next one shows the relay stopped (it would otherwise signal every 2.5 s)
+  // after a start
   await waitFor("the walk's reply", async () => responses.has(walkId), 30000).catch(() => {});
   const walkReply = responses.get(walkId);
   await nextStart(); await sleep(300);
@@ -302,11 +293,10 @@ try {
 
   // the host disconnects mid-walk, no stop, 300 ms after a start: the door's relay ends with the connection and the dots
   // go with their window; a relay that outlived it would signal ~10 s more, until its own overdue stop
-  const backWalk = walk(0);
+  walk(0);
   await sleep(1500);
   const goneFrom = sendStart();
   await sleep(300);
-  const backPending = !responses.has(backWalk);
   host.close(); const closeAt = Date.now();
   // its start opened one 4 s window: a page updating further apart may never draw the dots in it (the machine's pace, not
   // a defect); receipt is the receipt checks', and drawing nothing once shut is the update rule's
@@ -316,37 +306,14 @@ try {
   const log = await readLog();
   const U = log.updates, S = log.signals;
 
-  // the door's contract, at the world, by this side's clock
   const late = (f: Seen, from: number) => f.t - waitedIn(f.t) - from;
-  const firstFrame = frames.find((f) => f.t >= starts[0]!) ?? null;
-  check("the world sends the first start's frame at once, within 1 s less the stall it waited in", firstFrame !== null && late(firstFrame, starts[0]!) < 1000,
-    firstFrame === null ? "none came" : `${firstFrame.t - starts[0]!} ms after the start, ${waitedIn(firstFrame.t)} ms of it a stall of this side's`);
-  const turnFrames = sayEntry === null ? [] : frames.filter((f) => f.t >= starts[0]! && f.seq < sayEntry!.seq);
-  const marks = [{ t: starts[0]!, stall: 0 }, ...[...turnFrames, ...(sayEntry ? [sayEntry] : [])].map((f) => ({ t: f.t, stall: waitedIn(f.t) }))];
-  const steps = marks.slice(1).map((b, i) => ({ step: b.t - marks[i]!.t, stall: b.stall }));
-  const slowest = steps.reduce((m, s) => (s.step - s.stall > m.step - m.stall ? s : m), { step: 0, stall: 0 });
-  check("from the first start to the speech, the world sent a typing frame at least every 4 s, the window each one opens, less the stall each waited in",
-    turnFrames.length > 0 && sayEntry !== null && steps.every((s) => s.step - s.stall < 4000),
-    sayEntry === null ? "the world logged no speech" : `${turnFrames.length} frames; the start to the first ${steps[0]?.step} ms, the last to the speech ${steps.at(-1)?.step} ms; the longest step less its stall ${slowest.step - slowest.stall} ms (${slowest.step} ms, ${slowest.stall} ms of it a stall)`);
-  // a frame after the speech's log entry (as read) and before the host's next start was sent can only be the relay's;
-  // a stall only makes frames look later, and a relay that went on signals within 2.5 s, so only a stall longer than the
-  // window less 2.5 s could hide it. The run prints the window and the longest stall
-  const nextAfterSay = sayEntry === null ? null : starts.find((s) => s > sayEntry!.t) ?? null;
-  const relayed = sayEntry === null || nextAfterSay === null ? null : frames.filter((f) => f.seq > sayEntry!.seq && f.t < nextAfterSay);
-  check("the speech ends the door's relay: no typing frame comes after the world logs it and before the host's next start is sent",
-    relayed !== null && nextAfterSay! - sayEntry!.t >= 3000 && relayed.length === 0,
-    sayEntry === null ? "the world logged no speech" : `logged ${sayEntry.t - sayAt} ms after it was sent; the next start went ${nextAfterSay === null ? "never" : nextAfterSay - sayEntry.t + " ms"} after that; frames between: ${relayed?.length ?? "-"}`);
-  // after a stop or the close, nothing more until the next start for this world, but a frame already on its way
+  // at the world, by this side's clock: after a stop or the close, nothing more until the next start for this world,
+  // but a frame already on its way
   const quiet = (name: string, from: number, to: number) => {
     const after = frames.filter((f) => f.t > from && f.t < to && late(f, from) > 500);
     check(name, after.length === 0, after.length ? `at ${after.map((f) => `${f.t - from} ms (${waitedIn(f.t)} ms of it a stall)`).join(", ")} after it` : "");
   };
   quiet("after the host's stop, the world sends no typing frame later than 500 ms on, less the stall it waited in", stopAt, otherAt);
-  // every frame from the other channel's start on counts, the same millisecond's included: a door that took the start
-  // would signal at once, read within a few ms of the send
-  const elsewhere = frames.filter((f) => f.t >= otherAt && f.t < ctlAt);
-  check("a start for another channel sends no typing frame for this world", ctlAt - otherAt >= 1000 && elsewhere.length === 0,
-    `${elsewhere.length} frames in the ${ctlAt - otherAt} ms before this world's next start was sent`);
   check("…and a start for this world then draws the dots", ctl !== null, ctl === null ? "" : `drawn ${Math.round(ctl.t - ctlAt)} ms after it`);
   quiet("…and after its stop, again no typing frame later than 500 ms on", ctlStopAt, goneFrom);
   quiet("once the host disconnects, the world sends no typing frame later than 500 ms on, less the stall it waited in", closeAt, Infinity);
@@ -374,7 +341,6 @@ try {
     `${R.length} received, ${S.length} applied${o0 ? `; ${outOfTurn.length} out of turn, the first received at ${Math.round(o0.r.t - T0)} ms and ${o0.s ? `applied ${o0.s.t - o0.r.t} ms from it` : "never applied"}` : ""}; the agent's avatar wrapped ${log.avatars} times`);
 
   // what the turn showed
-  check("the walk is still under way 15 s in", walkPending15);
   const bubbled = U.filter((u) => u.bubble && u.t >= sayAt);
   check("the speech shows as a bubble", !!bubbleShown);
   check("…a typing window opened while it showed, so the bubble rule was in play", bubbled.some((u) => u.win),
@@ -387,7 +353,6 @@ try {
   const arrived = /^arrived at \((-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?)\)/.exec(walkReply?.result?.content?.[0]?.text ?? "");
   check("the turn's walk arrived within 0.5 m of where it was sent, x = 15", !!arrived && !walkReply.result.isError && Math.hypot(Number(arrived[1]) - 15, Number(arrived[2])) <= 0.5,
     JSON.stringify(walkReply ?? null).slice(0, 160));
-  check("the host's walk back is still under way when it disconnects", backPending, JSON.stringify(responses.get(backWalk) ?? null).slice(0, 160));
 
   check("the page threw nothing", errs.length === 0, errs.slice(0, 3).join(" | "));
   const long = hb.filter(([, excess]) => excess > 250);

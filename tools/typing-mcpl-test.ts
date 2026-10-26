@@ -33,6 +33,11 @@ const waitUntil = async (pred: () => boolean, ms: number) => {
   while (Date.now() < until) { if (pred()) return true; await sleep(50); }
   return pred();
 };
+// this side's event-loop stalls delay the watcher's stamps: each heartbeat gap past 100 ms, as [end, excess]
+let hbLast = Date.now();
+const hb: Array<[number, number]> = [];
+const heartbeat = setInterval(() => { const now = Date.now(); if (now - hbLast > 100) hb.push([now, now - hbLast - 100]); hbLast = now; }, 100);
+const waitedIn = (b: number) => Math.max(0, ...hb.filter(([end]) => Math.abs(b - end) <= 20).map(([, excess]) => excess));
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, extra = "") => {
   console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
@@ -56,10 +61,12 @@ try {
 
   // a raw world-WS watcher, present in the world, listening for typing relays
   const seen: any[] = [], all: any[] = [];   // all: never cleared, so the stream's names (sent once per actor) stay read
+  const frames: number[] = [];   // when each of the agent's typing frames was read, never cleared
   const watcher = new WebSocket(`ws://127.0.0.1:${WPORT}/ws`);
   await new Promise<void>((res, rej) => {
     const t = setTimeout(() => rej(new Error("watcher join timeout")), 6000);
     watcher.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); seen.push(m); all.push(m);
+      if (m.type === "typing" && m.id === "claude") frames.push(Date.now());
       if (m.type === "snapshot") { clearTimeout(t); res(); } };
     watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
   });
@@ -105,9 +112,13 @@ try {
   };
 
   // the host says the agent's turn has begun for this world
-  typingFor("world:commons", "start");
+  typingFor("world:commons", "start"); const t0 = Date.now();
   check("the host's typing start surfaces as an in-world typing signal", await waitUntil(() => typingSeen() >= 1, 3000),
     `saw types: ${[...new Set(seen.map((m) => m.type))].join(",")}`);
+  const late = (t: number, from: number) => t - waitedIn(t) - from;
+  const first = frames.find((t) => t >= t0);
+  check("the world sends the first start's frame within 1 s, less the stall it waited in", first !== undefined && late(first, t0) < 1000,
+    first === undefined ? "none came" : `${first - t0} ms, ${waitedIn(first)} ms of it a stall`);
 
   // the world's dots last 4 s and the host repeats start only every 7 s: the door keeps them up itself, about every 2.5 s
   seen.length = 0;
@@ -118,6 +129,12 @@ try {
   // the say reached the world, plus a moment for a signal in flight
   sayInWorld("hello from the typing test");
   check("the say reaches the world", await waitUntil(() => saidSeen("hello from the typing test"), 5000));
+  // the measured cadence: from the start to the say, every step between frames is under the 4 s window the frame opens
+  const saidAt = Date.now();
+  const marks = [t0, ...frames.filter((t) => t >= t0 && t <= saidAt)];
+  const steps = marks.slice(1).map((t, i) => late(t, marks[i]!));
+  check("from the start to the say, a typing frame came at least every 4 s, less the stall each waited in",
+    marks.length >= 3 && steps.every((d) => d < 4000), `${marks.length - 1} frames; steps ${steps.join(", ")} ms`);
   await sleep(500);
   seen.length = 0;
   await sleep(3500);
@@ -209,8 +226,10 @@ try {
   seen.length = 0;
   typingFor("world:commons", "start");
   check("the dots are up as a second walk begins", await waitUntil(() => typingSeen() >= 1, 3000));
-  rpc({ jsonrpc: "2.0", id: nextId++, method: "tools/call", params: { name: "walk_to", arguments: { x: 0, z: 0 } } });
+  const backWalk = nextId++;
+  rpc({ jsonrpc: "2.0", id: backWalk, method: "tools/call", params: { name: "walk_to", arguments: { x: 0, z: 0 } } });
   await sleep(500);
+  check("the walk back is still under way when the host disconnects", !responses.has(backWalk));
   host.close();
   await sleep(1000);
   seen.length = 0;
@@ -223,7 +242,7 @@ try {
   fail++;
   console.log(`\x1b[31mFATAL\x1b[0m ${(e as Error).message}\n${(e as Error).stack}`);
 } finally {
-  world.kill(); mcpl.kill();
+  clearInterval(heartbeat); world.kill(); mcpl.kill();
 }
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
