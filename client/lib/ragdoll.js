@@ -1,45 +1,18 @@
 // ragdoll — a body going limp, simulated by ONE machine and streamed.
 //
-// The sync model is the whole point, and it is not "make physics
-// deterministic" — that is unwinnable across machines. It is single authority:
+// Single authority, not determinism: only the body's OWNER simulates; it streams sparse bone rotations on the
+// presence `pose` field (remotes see an ordinary changing pose); when it settles the owner CAPTURES the bones as a
+// held pose, so late joiners get the result, never a replay (a permanent one commits as a `pose` verb). The server
+// never simulates and never sees a bone.
 //
-//   * Only the body's OWNER simulates (the VRChat model the design mandates:
-//     you own your avatar). Nobody else runs physics.
-//   * The owner streams the resulting sparse bone rotations through the
-//     presence `pose` field — the exact channel a held pose already uses, so
-//     remotes render a ragdoll with zero new receiver code: it is just a pose
-//     that changes every frame.
-//   * When it settles, the owner CAPTURES the final bones as a held pose. That
-//     rides lastPose, so a late joiner or a reconnect gets the settled RESULT,
-//     never a replay of the tumble. If it should be permanent, the same bones
-//     commit as a `pose` verb into the log.
+// A Verlet particle skeleton, not a rigid-body solver, carrying four things:
+//   MASS         — constraints split by inverse mass, so a hand can't throw the pelvis around.
+//   VOLUME       — bones are CAPSULES, not beads, or limbs pass through the torso.
+//   HANDEDNESS   — knees and elbows bend one way, from a body frame the particles supply (see _frame).
+//   A FIXED STEP — Verlet's inertia term is a position delta, so raw frame time makes physics framerate-dependent.
 //
-// So physics lives on the presence plane (lossy, ephemeral, one authority) and
-// its outcome becomes state. The server never simulates and never sees a bone.
-//
-// The simulator is a Verlet particle skeleton — small, stable, and more than
-// convincing enough for a cosmetic flop. It is NOT a jointed rigid-body
-// solver; it does not need to be. What it DOES need, and for a long time did
-// not have, is four things a particle sim can carry perfectly well:
-//
-//   MASS         — a hand must not throw the pelvis around. Every constraint
-//                  splits by inverse mass, so heavy parts win.
-//   VOLUME       — bones are CAPSULES, not beads. Colliding only the joints
-//                  left every shaft hollow, and limbs passed clean through the
-//                  torso on all 14 shipped rigs (measured: 100% shaft overlap).
-//   HANDEDNESS   — knees bend backward, elbows forward. That needs a body
-//                  frame, which the particles themselves supply (see _frame).
-//   A FIXED STEP — Verlet's inertia term is a POSITION delta, so it silently
-//                  assumes every frame lasted as long as the last one. Feeding
-//                  it raw frame time made the physics a function of the
-//                  framerate: measured 15.7% peak bone stretch at 60fps vs
-//                  54.6% at 30fps, landing the body 10m apart.
-//
-// Everything anatomical is MEASURED from the rig at construction rather than
-// hardcoded, because the shipped avatars disagree about nearly everything:
-// heights run 0.63m to 1.53m, rests run T-pose to A-pose, and half the rigs
-// carry an upperChest + shoulder pair between the chest and the arm. Absolute
-// numbers tuned on one body are wrong on the next one.
+// Everything anatomical is MEASURED from the rig at construction: shipped avatars disagree on height, rest pose
+// (T to A) and whether an upperChest + shoulder pair sits between chest and arm.
 
 import { THREE } from './core.js';
 import { BEHIND, CONE, HINGE, TWIST, TWIST_PARENT, RADIUS_FRAC, torsoRadius } from '../../shared/joints.js';
@@ -52,32 +25,21 @@ import { BodyEngineBase } from './bodyengine.js';
 // topology
 // ---------------------------------------------------------------------------
 
-// The body cut, the joint list and the driven-bone list live in rigmeasure.js
-// now — one table for both engines (it was byte-identical here and in
-// ammodoll). Re-exported so avatar.setLimp and bodydrag keep their historic
-// import site.
+// body cut, joint list and driven bones live in rigmeasure.js (one table for both engines); re-exported for
+// avatar.setLimp and bodydrag
 const CHAINS = SEGMENTS;
 export { JOINTS, DRIVEN_BONES, closestParams };
 
-// BONES are the segments that have physical volume — the things that collide
-// and the things a viewer sees. hips->upperLeg and chest->upperArm are real
-// bones here even though no CHAIN drives them: on rigs that carry an
-// upperChest/shoulder pair those spans cover three actual bones, which is
-// exactly why goLimp neutralizes the in-between bones first (see avatar.js
-// setLimp) — it makes the span rigid, which is what this model assumes.
+// BONES: segments with physical volume (collided and drawn). On rigs with an upperChest/shoulder pair a span covers
+// three real bones, which is why goLimp neutralizes the in-between bones first (avatar.js setLimp).
 const BONES = [
   ...CHAINS,
   ['hips', 'leftUpperLeg'], ['hips', 'rightUpperLeg'],
   ['chest', 'leftUpperArm'], ['chest', 'rightUpperArm'],
 ];
 
-// BRACES carry no volume and are never drawn or collided. They exist because a
-// pure parent->child chain is a noodle: the torso could shear and fold with
-// nothing resisting it, which is most of what read as "no stiffness". Bracing
-// the trunk into a truss makes it behave like one body that limbs hang off,
-// and costs four distance constraints. Their rest lengths must come from the
-// NEUTRAL pose (see the `rest` constructor argument) — unlike a bone, a
-// diagonal's length changes with the pose it was measured in.
+// BRACES: volumeless diagonals that truss the trunk so it can't shear and fold like a noodle. Rest lengths come from
+// the NEUTRAL pose (the `rest` constructor argument): a diagonal's length changes with the pose it's measured in.
 const BRACES = [
   ['leftUpperArm', 'rightUpperArm'],     // shoulder bar
   ['leftUpperLeg', 'rightUpperLeg'],     // pelvis bar
@@ -86,11 +48,8 @@ const BRACES = [
 ];
 const LINKS = [...BONES, ...BRACES];
 
-// Relative mass per joint. Only ratios matter — every constraint splits by
-// inverse mass, so these decide who moves when two parts disagree. Roughly
-// anatomical: the pelvis and chest are the body, everything else is hung off
-// them. Before this existed every particle weighed the same and a flailing
-// forearm could hurl the torso across the floor.
+// relative mass per joint (only ratios matter: constraints split by inverse mass); roughly anatomical, so a
+// flailing forearm can't hurl the torso
 const MASS = {
   hips: 12, spine: 8, chest: 10, neck: 2, head: 5,
   leftUpperArm: 2.5, rightUpperArm: 2.5,
@@ -110,24 +69,12 @@ const PIN_JUMP = 0.12;     // metres/frame — past this a pin jumped, it did no
 // its findings were never re-checked against anything.
 export const TUNING = {
   GRAVITY: -9.8,
-  // Splitting the TIME step buys more than relaxing one big step harder, and
-  // costs the same (SUBSTEPS*ITER constraint passes either way). It is worth
-  // most to framerate independence: at 1 substep the same fall landed 31mm
-  // apart at 30fps vs 120fps, at 2 it lands 1mm apart. Past 2 it stops paying
-  // — the fleet needs a few relaxation passes per substep to keep the braced
-  // torso rigid, and starving those to buy more substeps loses more than it
-  // gains. Both numbers are swept in tools/rag-tune.mjs; this pair settles all
-  // 14 rigs, the neighbours settle 6 to 11.
+  // substeps buy framerate independence (2 lands a fall within 1mm across 30–120fps) at the same constraint-pass
+  // cost; past 2 the braced torso starves for relaxation passes. Swept in tools/rag-tune.mjs.
   SUBSTEPS: 2,
   ITER: 3,                 // relaxation passes per substep
-  // A body HANGING from a pin needs far more than a body falling. Gauss-Seidel
-  // propagates tension one link per pass, so a chain held at one end and loaded
-  // at the other stretches until the passes reach it — and a dragged body is
-  // exactly that chain, held by a hand with the pelvis swinging off the far
-  // end. Measured while dragging: 69% bone stretch at 3 passes, 23% at 8, 8% at
-  // 16. A body stretched half again its length reads as the limbs twisting,
-  // because the drive takes its directions from where the joints ended up.
-  // Only paid while something is actually pinned.
+  // a body hanging from a pin needs far more passes: Gauss-Seidel moves tension one link per pass, so a dragged body
+  // stretches until they reach the far end (69% at 3 passes, 8% at 16). Paid only while something is pinned.
   ITER_PINNED: 16,
   DAMP: 0.98,              // per FRAME, spread across the substeps
   SLEEP_DAMP: 0.8,         // ...harder once nearly still, see _solve
@@ -135,40 +82,19 @@ export const TUNING = {
   CAPSULE_SOFT: 0.6,       // fraction of an overlap resolved per pass
   TWIST_DAMP: 0.88,        // per frame, on the twist velocity
   TWIST_STIFF: 26,         // rad/s per rad — passive pull back to neutral
-  // A driver for twist, off by default. A limp bone lagging its parent's roll
-  // is the one physically motivated source of twist in a model with no angular
-  // momentum about bone axes — and measured, it only ever ADDS twist: mean
-  // limb twist 8° at 0, 18° at 0.05, 34° at 0.2, with the worst case unmoved.
-  // There is no torque here for it to be answering, so the honest value is
-  // zero and the state below is what bounds it if anything ever drives it (a
-  // dragged or puppeted limb would).
+  // twist driver, off: with no torque to answer, any lag only ADDS twist; the state below bounds it if a dragged or
+  // puppeted limb ever drives it
   TWIST_LAG: 0,
-  // Live switches for the debug panel. Everything here can be turned off while
-  // a body is mid-tumble, which is the fastest way to find which rule is
-  // responsible for a shape that looks wrong — and eyes on the actual render
-  // have caught things every headless metric in this repo has missed.
+  // live debug-panel switches: turn rules off mid-tumble to find which one makes a shape look wrong
   ON_FLEX: 1, ON_CONE: 1, ON_BEHIND: 1, ON_HINGE: 1,
   ON_CAPSULE: 1, ON_BRACE: 1, ON_TWIST: 1, ON_GROUND: 1,
   PAUSED: 0,
-  // A pin sets a joint's POSITION and, as shipped, nothing else — so in Verlet
-  // the joint's velocity becomes the whole distance the pin travelled, every
-  // substep. Dragging a body by one hand injects energy in proportion to cursor
-  // speed, and it comes out as torsion: measured against an unpinned fall, a
-  // moving pin takes peak joint speed 1.7 -> 5.6 m/s, stretch 3% -> 16% and
-  // twist 101° -> 180°.
-  //
-  // PIN_VEL gives the joint the PIN's velocity instead. It is off by default
-  // because the synthetic drag I can write headless does not agree that it
-  // helps, and a cursor in a real hand is the only instrument that has been
-  // right about this body all week. It is a switch in the debug panel so that
-  // instrument can settle it.
+  // PIN_VEL: give a pinned joint the PIN's velocity rather than the distance it travelled (which injects energy as
+  // torsion). Off by default: headless drags don't show it helping; a switch so a real hand can settle it.
   PIN_VEL: 0,
   SETTLE_V: 0.06,          // speed below which we call it settled...
-  SETTLE_TIME: 0.4,        // ...for this long, in SECONDS (was 24 FRAMES, which
-                           // meant 0.17s at 144Hz and 0.8s at 30Hz)
-  // The settle test takes the fastest joint in the body, so one joint ticking
-  // over the line resets the whole countdown. Hysteresis: it takes real motion
-  // to restart the clock, not a flicker.
+  SETTLE_TIME: 0.4,        // ...for this long, in SECONDS (not frames: framerate-independent)
+  // hysteresis: the settle test takes the fastest joint, so restarting the countdown needs real motion, not a flicker
   SETTLE_RESET: 3,         // multiple of SETTLE_V that cancels a settle
   // Force the capture after this long even if the velocity test never fires:
   // the contract is that a tumble always ENDS as a held pose, it must never
@@ -178,29 +104,11 @@ export const TUNING = {
 
 // ---------------------------------------------------------------------------
 // joint limits
-//
-// Three kinds, because three different things were being asked of one table.
-// The old single unsigned-bend table could not express any of them: anchored
-// to `Math.max(0, rest - lo)` with a rest angle near zero, its entire `lo`
-// column resolved to 0° on all 14 rigs — the elbow's "no hyperextension" did
-// literally nothing — while its shoulder entry resolved to a full 0..180° (no
-// constraint at all) on every A-pose rig, and its hip entry varied 3x across
-// the fleet because it measured against the sideways hip-to-thigh offset.
 // ---------------------------------------------------------------------------
 
-// FLEX — symmetric cones between two adjacent links, for the spine and neck.
-//
-// Symmetric is anatomically WRONG and deliberately kept: a trunk curls far
-// forward and arches barely at all, and the fleet duly reaches ~30° of
-// backbend where a body has about 15°. The signed version is written and does
-// not work. Choosing the limit by which way the joint leans needs the sign of
-// the distal link's lean, and near straight that vector is nearly zero and its
-// sign is noise — so the limit flickers between the two values, which is the
-// same flip-a-constraint-every-frame failure the hinge axis had, and it threw
-// a foot at 24 m/s. Guarding the sign with a deadband trades the flicker for a
-// dead zone the joint simply sits in. Doing this properly wants a real bone
-// frame with a stable up-vector, which is a rigid-body solver, which this
-// deliberately is not. Backbend is the price.
+// FLEX — symmetric cones between two adjacent links, for the spine and neck. Symmetric is anatomically wrong (too
+// much backbend) and deliberate: a signed limit needs the sign of a near-zero lean, which flickers; doing it
+// properly needs a stable rigid-body bone frame, which this deliberately is not.
 const FLEX = [
   // a         b        c         max° from the rig's own rest angle
   ['hips',   'spine', 'chest',    25],   // lower spine: stiff
@@ -208,10 +116,8 @@ const FLEX = [
   ['chest',  'neck',  'head',     45],   // neck: floppier
 ];
 
-// The joint envelope — BEHIND, CONE, HINGE, TWIST — now lives in
-// shared/joints.js, because the reach solver clamps to the same numbers and a
-// second copy would be mirrored math. The comments explaining what each value
-// cost to find moved with the values; read them there.
+// the joint envelope (BEHIND, CONE, HINGE, TWIST) lives in shared/joints.js, shared with the reach solver; each
+// value's rationale is there
 
 // Self-collision radii moved to shared/joints.js with the joint envelope —
 // the reach solver needs the same idea of how thick a body is.
@@ -337,19 +243,14 @@ export class Ragdoll extends BodyEngineBase {
       this.nodes[j] = node;
       const wp = node.getWorldPosition(new THREE.Vector3());
       this.p[j] = wp.clone();
-      // A sim built mid-motion must INHERIT that motion. Verlet keeps velocity
-      // in p - prev, and a fresh sim sets prev = p, which is a body at a dead
-      // stop — so releasing a body swung at 3 m/s dropped it where it was and
-      // settled it on the spot, and every re-creation (a nail pulled, a drag
-      // let go) silently threw the momentum away.
+      // a sim built mid-motion must INHERIT that motion: Verlet keeps velocity in p - prev, and prev = p is a dead stop,
+      // which would drop every re-created body (a nail pulled, a drag let go) where it was
       const v = seedVel?.get?.(j) ?? (seedVel && !seedVel.j ? seedVel[j] : null);
       this.prev[j] = v ? wp.clone().addScaledVector(v, -FIXED_DT) : wp.clone();
       this.pre[j] = wp.clone();      // step-start position, for the settle test
     }
-    // A handover snapshot outranks the bones: it is where the particles
-    // actually were, at what speed, on the machine that was simulating. The
-    // bones only ever showed where they POINTED. Applied after the bone read
-    // above so a caller with no snapshot still works.
+    // a handover snapshot outranks the bones (it's where the particles actually were, at what speed); applied after the
+    // bone read so a caller with no snapshot still works
     if (seedVel?.j) {
       for (const s of seedJoints(seedVel)) {
         if (!this.p[s.name]) continue;
@@ -366,22 +267,8 @@ export class Ragdoll extends BodyEngineBase {
       this.rest[j] = (rest && rest[j]) ? rest[j].clone() : this.p[j].clone();
     }
 
-    // ---- how it goes over.
-    //
-    // `lean` is a velocity in m/s, and it is applied weighted by HEIGHT: none
-    // at the lowest joint, all of it at the highest. That is a topple about the
-    // feet, which is what a body whose support fails actually does — the mass
-    // above the feet keeps going while the feet stay put.
-    //
-    // A uniform shove (what this used to be, on the one code path nothing ever
-    // called) does not topple anything; it slides the whole body sideways and
-    // leaves it to pancake straight down. A vertical pancake has nowhere to put
-    // its leg length: both ends of a 0.8m leg end up on the floor, so the knee
-    // folds until it jams against its stop under the torso's whole weight, and
-    // then unwinds. That is the "lands on its butt, then the legs kick out"
-    // flop. Toppling spends the same energy on rotation instead: measured
-    // across the fleet, worst foot speed after landing 4.1 -> 1.6 m/s, and it
-    // settles sooner rather than later.
+    // ---- how it goes over: `lean` (m/s) is weighted by height, zero at the lowest joint: a topple about the feet.
+    // A uniform shove pancakes the body straight down and jams the knees against their stops.
     if (lean) this._topple(lean);
 
     // inverse mass. A missing entry gets the lightest plausible weight rather
@@ -405,18 +292,9 @@ export class Ragdoll extends BodyEngineBase {
     const toLocal = (world, out) =>
       out.set(world.dot(r0), world.dot(u0), world.dot(f0));
 
-    // ---- FLEX: symmetric cones between adjacent links, off the rest angle
-    //
-    // A link only has a DIRECTION if it has a LENGTH. mythos-wings authors its
-    // spine 7.2mm above its hips (the real span is in upperChest), so the
-    // hips→spine link's direction is noise — a millimeter of solver jitter
-    // reads as ~8° of flexion — and this constraint answered the noise by
-    // swinging the real spine→chest link, every substep, in whatever direction
-    // the jitter pointed. Measured: 65 m/s peak particle velocity at ground
-    // impact on a plain topple (claude_suit: 3.8), a six-second thrash that
-    // drowned the shove test's 2.5 m/s signal entirely. A row whose rest link
-    // cannot carry a direction is skipped; the next row's longer links keep
-    // bounding the trunk, and CONE/BEHIND/HINGE never read torso micro-links.
+    // ---- FLEX: symmetric cones between adjacent links, off the rest angle. A row whose rest link is too short to
+    // carry a direction (FLEX_MIN_LINK; e.g. a spine authored millimetres above the hips) is skipped, or solver jitter
+    // reads as flexion and thrashes the real spine link; the next row's longer links still bound the trunk.
     this.flex = [];
     const FLEX_MIN_LINK = 0.03;
     for (const [a, b, c, max] of FLEX) {
@@ -469,16 +347,9 @@ export class Ragdoll extends BodyEngineBase {
         n: new THREE.Vector3().crossVectors(_a, _c.normalize()).normalize(),
       });
     }
-    // A HANDOVER MUST CARRY THE TRANSPORTED AXES. The hinge normal is physical
-    // state: it turns with the limb every step, and a doll rebuilt mid-tumble
-    // from the REST normals measures its elbows and knees against axes the
-    // limbs left forty frames ago — the first step then fires the full
-    // correction into the lightest particles: hands 12–22cm off after ONE
-    // step on 41 of 44 fleet rigs (§24t-8; the old one-rig check happened to
-    // sit on a rig that barely moved its arms). A snapshot carries them (`h`,
-    // in this.hinge order); one that does not (another engine's) gets the
-    // next best thing — normals derived from where the limbs ARE, not where
-    // they rested.
+    // a handover must carry the transported hinge axes (`h`, in this.hinge order, §24t-8): rest normals mid-tumble
+    // fire the full correction into the hands on the first step. A snapshot without them (another engine's) gets normals
+    // derived from where the limbs ARE.
     if (seedVel?.j) {
       const h = Array.isArray(seedVel.h) && seedVel.h.length === this.hinge.length * 3 ? seedVel.h : null;
       this.hinge.forEach((H, i) => {
@@ -497,13 +368,8 @@ export class Ragdoll extends BodyEngineBase {
     // ---- capsules: every BONE is a fat segment, and pairs of them push apart
     this._buildCapsules();
 
-    // per-driven-bone rest reference, expressed in its TWIST PARENT's frame.
-    //
-    // restLocal is this bone's rest frame seen from the frame it hangs off. Each
-    // step the live direction is expressed in that same parent frame and the
-    // minimal arc from restLocal's own axis carries the frame across — a
-    // function of current state only, with no memory and therefore no drift.
-    // Roll is then nobody's accident: it is `tw`, integrated below.
+    // per-driven-bone rest reference, in its TWIST PARENT's frame: each step the live direction is carried across by the
+    // minimal arc from restLocal's axis (current state only, so no drift); roll is `tw`, integrated below.
     this._frame(this.p);
     _mat.makeBasis(this.frame.r, this.frame.u, this.frame.f);
     const bodyRest = new THREE.Quaternion().setFromRotationMatrix(_mat);
@@ -552,11 +418,8 @@ export class Ragdoll extends BodyEngineBase {
     this.bodyRest = bodyRest;
 
     this.rootStartY = avatar.root.position.y;
-    // How far the model origin sits below the hips — MEASURED, never assumed:
-    // avatars range from ~0.55 (youngopus) to ~0.91 (aporia). A hardcoded value
-    // put the pelvis ~25cm underground on a short avatar and folded the whole
-    // body around a buried anchor. Taken from the NEUTRAL pose, since a walk
-    // cycle bobs the hips and that bob would bake in as a permanent offset.
+    // model origin below the hips, MEASURED (avatars range ~0.55–0.91) and from the NEUTRAL pose, or a walk cycle's
+    // hip bob bakes in as a permanent offset
     this.hipsOffset = this.rest.hips
       ? this.rest.hips.y - avatar.root.position.y
       : 0.82;
@@ -583,10 +446,8 @@ export class Ragdoll extends BodyEngineBase {
     if (r.lengthSq() < 1e-10) r.set(1, 0, 0);
     if (u.lengthSq() < 1e-10) u.set(0, 1, 0);
     r.normalize(); u.normalize();
-    // A body folded until the spine lies along the pelvis bar has no definable
-    // forward. Keep the last good one — the frame is persistent for exactly
-    // this reason, and a hinge whose handedness jumps on a degenerate frame is
-    // how a knee decides it is bent 180° the wrong way.
+    // a fully folded body has no definable forward: keep the last good one, or a hinge's handedness jumps and a knee
+    // reads as bent 180° the wrong way
     _v.crossVectors(r, u);
     if (_v.lengthSq() > 1e-8) f.copy(_v).normalize();
     else if (f.lengthSq() < 1e-8) f.set(0, 0, 1);      // first call, none to keep
@@ -604,10 +465,7 @@ export class Ragdoll extends BodyEngineBase {
    *  constraint, it is a motor that would inflate the torso forever. Measuring
    *  that per rig is the same trick RADIUS_FRAC uses for the radii. */
   _buildCapsules() {
-    // shared/joints.js's torsoRadius IS this derivation — its comment has
-    // promised "the same derivation the ragdoll uses" since the reach solver
-    // extracted it, and this call is what makes that structural instead of a
-    // mirror. It takes plain [x,y,z] triples (the reach side's currency).
+    // shared/joints.js's torsoRadius IS this derivation (the reach solver uses it too); it takes plain [x,y,z] triples
     const P = {};
     for (const j of ['leftUpperArm', 'rightUpperArm', 'leftUpperLeg', 'rightUpperLeg', 'hips', 'head']) {
       if (this.rest[j]) P[j] = [this.rest[j].x, this.rest[j].y, this.rest[j].z];
@@ -638,13 +496,8 @@ export class Ragdoll extends BodyEngineBase {
 
   // ---- one rendered frame's worth of physics --------------------------------
   _solve() {
-    // Approach to sleep. Once the body is nearly still, damp hard — every real
-    // solver does this (island sleeping), and without it the lightest, most
-    // distal particle keeps a residual millimetre of chatter forever. It is
-    // always a hand: a hand carries 1/24th the pelvis's mass and sits four
-    // links out, so it inherits whatever error the relaxation could not place
-    // anywhere else, and a body that has visibly stopped goes on streaming
-    // presence to the deadline because of it.
+    // approach to sleep (island sleeping): once nearly still, damp hard, or the lightest distal particle (a hand) keeps
+    // chattering and the body streams presence to the deadline
     const damp = this.maxV < TUNING.SETTLE_V * 4 ? TUNING.SLEEP_DAMP : TUNING.DAMP;
     const n = Math.max(1, TUNING.SUBSTEPS | 0);
     const sdt = FIXED_DT / n;
@@ -656,23 +509,13 @@ export class Ragdoll extends BodyEngineBase {
     const iters = this.pinned ? TUNING.ITER_PINNED : TUNING.ITER;
     for (let s = 0; s < n; s++) this._substep(sdt, sdamp, iters);
 
-    // Full world collision (props AND terrain) once per FRAME rather than once
-    // per relaxation pass: resolveColliders is a spatial-hash query, and
-    // running it in the inner loop cost 100+ queries a frame for detail no one
-    // can see. The substeps keep a cheap terrain clamp so nothing tunnels.
+    // full world collision once per FRAME (resolveColliders is a spatial-hash query); substeps keep a cheap terrain
+    // clamp so nothing tunnels
     this._world();
     this._limits();
 
-    // ---- how fast is it REALLY moving?
-    //
-    // Measured as distance actually travelled this frame, not as the Verlet
-    // (p - prev). Those are not the same number, and the difference is why no
-    // body used to settle: every angular limit carries its correction into
-    // prev so the snap does not read as velocity, and a joint parked ON its
-    // limit gets that carry from every pass, every step, forever. The sum is a
-    // `prev` sitting a fixed distance from `p` that describes no motion at all
-    // — a hand travelling 0.11mm per step reported 0.54 m/s and held the whole
-    // body above the settle threshold to the 8s deadline.
+    // ---- how fast is it REALLY moving? Distance travelled this frame, not Verlet's p - prev: limit corrections carry
+    // into prev, so a joint parked on its limit shows phantom velocity and would never settle.
     let moved = 0;
     for (const j of JOINTS) {
       const p = this.p[j]; if (!p) continue;
@@ -732,10 +575,8 @@ export class Ragdoll extends BodyEngineBase {
       const from = this._pinFrom.get(j);
       this.p[j].copy(t);
       if (!TUNING.PIN_VEL) continue;                       // position only
-      // A pin that has just been set, or dragged faster than any hand moves,
-      // is a TELEPORT — land it dead. Only continuous motion carries velocity.
-      // Converting a jump into speed is how the first frame of a grab threw
-      // the joint at 45 m/s, ten times worse than the bug it was fixing.
+      // a pin just set, or one that jumped (> PIN_JUMP), is a TELEPORT: land it dead; only continuous motion carries
+      // velocity
       _v.copy(t).sub(from ?? t);
       if (!from || _v.lengthSq() > PIN_JUMP * PIN_JUMP) this.prev[j].copy(t);
       else this.prev[j].copy(t).sub(_v.multiplyScalar(k));
@@ -782,12 +623,8 @@ export class Ragdoll extends BodyEngineBase {
       a1.addScaledVector(_n, -pen * wA1);
       b0.addScaledVector(_n, pen * wB0);
       b1.addScaledVector(_n, pen * wB1);
-      // Inelastic, for the same reason the joint limits are (see _stop): a
-      // SOFT push never fully clears the overlap, so a limb resting against
-      // another gets pushed every single frame, and if each push is allowed to
-      // read as separation velocity the pair trade energy forever. A wide rig
-      // whose legs come to rest touching sat in exactly that cycle — 1mm a
-      // step, 83mm of travel to show 5mm of progress, right up to the deadline.
+      // inelastic, like the joint limits (see _stop): a soft push never fully clears an overlap, so if each push read as
+      // separation velocity two resting limbs would trade energy forever
       _s1.copy(_n);
       this._stop(A.a, -1); this._stop(A.b, -1);
       this._stop(B.a, 1); this._stop(B.b, 1);
@@ -795,12 +632,8 @@ export class Ragdoll extends BodyEngineBase {
   }
 
   _terrain() {
-    // NOTE (§24t-8): this contact is a pure vertical clamp — a grounded joint
-    // keeps whatever horizontal velocity it has. That is why a body already
-    // down can CREEP while an arm fights its limits (mythos-2 after a shove:
-    // 39cm over 5.5s; ragdoll-test names it). A sleep-regime grip was tried
-    // and made the fleet worse (feline flailing at capture): the fix is a
-    // tuned ground-friction law, swept in rag-tune — colleague territory.
+    // this contact is a pure vertical clamp, so a grounded joint keeps its horizontal velocity and a downed body can
+    // creep (ragdoll-test names it, §24t-8). The fix is a tuned ground-friction law (tools/rag-tune.mjs).
     for (const j of JOINTS) {
       const p = this.p[j]; if (!p) continue;
       const g = heightAt(p.x, p.z) + this._clear(j);
@@ -828,10 +661,8 @@ export class Ragdoll extends BodyEngineBase {
       const p = this.p[j]; if (!p) continue;
       const x0 = p.x, z0 = p.z;
       const r = this._clear(j);
-      // `r` twice over: once as the horizontal radius, once as the body height
-      // above the point — a joint is a bead, not a standing figure, and saying
-      // so is what lets a limb come to rest UNDER a table instead of being
-      // ejected from its footprint.
+      // `r` twice: horizontal radius and height above the point (a joint is a bead, not a standing figure), so a limb
+      // can rest UNDER a table
       const g = resolveColliders(p, heightAt, r, r) + r;
       const pushed = Math.abs(p.x - x0) > 1e-5 || Math.abs(p.z - z0) > 1e-5;
       if (p.y < g) {
@@ -861,13 +692,8 @@ export class Ragdoll extends BodyEngineBase {
     const wb = this.iw[b], wc = this.iw[c], ws = wb + wc;
     if (ws <= 0) return;
     _t.copy(dir).multiplyScalar(lb).sub(pc).add(pb);   // Δ = dir·lb − (pc − pb)
-    // A correction worth half the bone is a teleport, not a nudge, and handing
-    // the limb that displacement as velocity is how one bad frame becomes a
-    // projectile. Land it DEAD — prev = p, zero velocity. Merely skipping the
-    // carry is the opposite of that: it leaves prev behind while p jumps, so
-    // the next integrate reads the whole teleport as speed and flings the limb
-    // (measured: hands orbiting at 5 m/s, nothing settling). The two look
-    // similar and behave inversely.
+    // a correction worth half the bone is a teleport: land it DEAD (prev = p). Merely skipping the carry is the opposite:
+    // prev stays behind while p jumps, and the next integrate flings the limb.
     const dead = _t.lengthSq() > lb * lb * 0.25;
     _s1.copy(_t).normalize();                // the direction we are correcting
     _u.copy(_t).multiplyScalar(wc / ws);
@@ -911,12 +737,8 @@ export class Ragdoll extends BodyEngineBase {
       _n.crossVectors(_a, _b);
       if (_n.lengthSq() < 1e-10) continue;      // parallel: already at 0, can't exceed
       _n.normalize();
-      // SOFT correction — a fraction of the excess per pass. An EXACT snap
-      // teleports a hard-overshot limb across the body in one pass and the
-      // length constraints convert that into velocity; a fixed per-pass angle
-      // CAP starves whenever another constraint contests the joint. A
-      // multiplicative yield does neither: big violations correct fast
-      // (TUNING.YIELD^ITER per step), contested joints just lean on the limit.
+      // SOFT correction, a fraction of the excess per pass: an exact snap teleports a limb (length constraints turn it into
+      // velocity) and a fixed per-pass cap starves when contested; a multiplicative yield does neither
       _qd.setFromAxisAngle(_n, (max - ang) * TUNING.YIELD);
       this._swing(b, c, _b.applyQuaternion(_qd), lb);
     }
@@ -969,14 +791,8 @@ export class Ragdoll extends BodyEngineBase {
       _b.copy(pc).sub(pb); const lb = _b.length();
       if (la < 1e-5 || lb < 1e-5) continue;
       _a.divideScalar(la); _b.divideScalar(lb);
-      // TRANSPORT the hinge axis to stay perpendicular to the upper link,
-      // never rebuild it from the body frame. Rebuilding projects the body's
-      // forward onto the plane perpendicular to the limb, and that projection
-      // flips sign whenever the limb happens to line up with forward — which
-      // for one pass means "hyperextended by 180°", so the clamp slammed the
-      // foot across the body. Carried into prev as velocity, that made the
-      // feet 13 m/s projectiles and no body ever settled: all 14 rigs ran to
-      // the 8s deadline. Transporting the axis cannot flip it.
+      // TRANSPORT the hinge axis, never rebuild it from the body frame: the projection of forward flips sign when the limb
+      // lines up with it, which reads as hyperextended by 180° and throws the foot
       const n = _n.copy(H.n);
       n.addScaledVector(_a, -n.dot(_a));
       if (n.lengthSq() < 1e-8) {
@@ -991,13 +807,8 @@ export class Ragdoll extends BodyEngineBase {
       const oop = _b.dot(n);
       const lim2 = THREE.MathUtils.clamp(oop, -H.side, H.side);
       if (oop !== lim2) { _b.addScaledVector(n, (lim2 - oop) * TUNING.YIELD); changed = true; }
-      // hyperextension: the lower link must never cross to the wrong side of
-      // straight. This is the constraint the old unsigned table could not
-      // express at all — an unsigned angle cannot tell a knee's forward from
-      // its backward, so its "no hyperextension" column resolved to 0° and did
-      // nothing on every rig in the fleet. The deadband matters: a limb resting
-      // exactly straight sits at flex 0, where sign is numerical noise, and
-      // correcting on every flicker chatters instead of settling.
+      // hyperextension: the lower link never crosses to the wrong side of straight. Deadband: at flex 0 the sign is noise,
+      // and correcting every flicker chatters instead of settling.
       const flexC = _b.dot(_c);
       if (flexC < -0.03) { _b.addScaledVector(_c, -flexC * TUNING.YIELD); changed = true; }
       if (changed) _b.normalize();
@@ -1099,20 +910,14 @@ export class Ragdoll extends BodyEngineBase {
     if (this.done) return null;
     dt = Math.min(0.25, Math.max(0, dt || 0));
 
-    // ---- fixed timestep. The sim only ever advances in FIXED_DT slices, so
-    // the outcome no longer depends on the display rate or on frame jitter —
-    // which used to change peak bone stretch by 3.5x and land the body metres
-    // apart for the same fall. A long hitch drops its backlog rather than
-    // simulating a second of physics in one frame and exploding.
+    // ---- fixed timestep: the sim advances only in FIXED_DT slices, so the outcome doesn't depend on display rate;
+    // a long hitch drops its backlog (MAX_FRAMES) rather than simulating a second in one frame
     if (TUNING.PAUSED) dt = 0;
     this.acc += dt;
     let n = 0;
     while (this.acc >= FIXED_DT && n < MAX_FRAMES) { this._solve(); this.acc -= FIXED_DT; n++; }
     if (n === MAX_FRAMES) this.acc = 0;
-    // remember where each pin was THIS frame; next frame's velocity is measured
-    // against it. Per frame, because that is the rate the cursor moves it at —
-    // sampling per substep reads the same target twice and calls the second
-    // one motionless.
+    // pin positions sampled per FRAME (the cursor's rate): per substep would read the same target twice and call it still
     if (this.pins?.size) {
       for (const [j, t] of this.pins) {
         const f = this._pinFrom.get(j);
@@ -1140,13 +945,8 @@ export class Ragdoll extends BodyEngineBase {
     const pose = {};
     for (const d of this.drive) {
       const bn = this.nodes[d.bone];
-      // the bone's direction runs from where the sim says the joint IS —
-      // its particle — to its child's. The bone's world position is the
-      // skeleton's word, and the skeleton is only ever placed by
-      // _followRoot: on a rig whose hips sit off its root origin (tel0s:
-      // 23cm forward) the two disagreed by exactly that, the hips→spine
-      // direction was noise, the spine read antiparallel to rest and held
-      // a stale frame, and the chest inherited 42° of roll (§24t-8).
+      // a bone's direction runs from the joint's PARTICLE to its child's, not the skeleton's bone position: on a rig whose
+      // hips sit off the root origin the two disagree and the chest inherits a bogus roll (§24t-8)
       const bwp = this.p[d.bone] ?? bn.getWorldPosition(_a);
       _b.copy(this.p[d.child]).sub(bwp);
       if (_b.lengthSq() < 1e-6) continue;

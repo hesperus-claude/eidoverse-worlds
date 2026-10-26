@@ -53,10 +53,8 @@ export const remoteGen = (id) => gens.get(id) ?? 0;
  *  nobody and is disposed. Bounded: RETRY_MAX attempts with backoff, so a
  *  genuinely dead asset costs a few requests, not a hot loop. */
 const RETRY_MAX = 3;
-// Mutable so a test can shrink it: with the shipped delays the third attempt's 5 s timer outlives any
-// sane test window, `retrying` never clears, and every announce early-returns — which made a suite
-// that deleted the cap outright still look green (review round 2). The cap is only observable once
-// the backoff is short enough for the latch to clear.
+// Mutable so a test can shrink it: with the shipped delays the latch never clears in a test window, so the cap
+// would be unobservable.
 let RETRY_BACKOFF_MS = [400, 1600, 5000];
 export function __setRetryBackoffForTest(ms) { RETRY_BACKOFF_MS = ms; }
 function retryBody(r) {
@@ -88,25 +86,15 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
   const existing = remotes.get(id);
   if (existing) {
     if (meta.declares !== undefined) existing.declares = meta.declares;   // the word they declared at the door (§6a), or null
-    // same person, new body: rebuild (live avatar switching re-announces via
-    // join). A switch that lands while the OLD body is still loading must not
-    // be dropped — delete the map entry and let the stale load's own guard
-    // dispose it when it completes. This dispose is the §19b release point:
-    // the old VRM returns to the instance pool intact, so a switch back —
-    // or anyone else arriving in this body — skips the re-parse.
+    // same person, new body: rebuild. A switch landing while the OLD body still loads deletes the entry and lets the
+    // stale load's guard dispose it. This dispose is the §19b release point: the VRM returns to the pool for a fast switch back.
     if (avatarPath && existing.avatarPath !== avatarPath) {
       remotes.delete(id);
       existing.avatar?.dispose();
     } else {
-      // Same body re-announced = a TAKEOVER (the server suppresses the old
-      // connection's leave and re-arrives the identity — server.ts ~2023).
-      // The successor must be a FRESH RECORD OBJECT, not the predecessor's
-      // with fields wiped: every continuation guard in this file compares
-      // record identity, and a reused object makes a predecessor's captured
-      // reference pass as current (#97 review B2). The loaded avatar itself
-      // transplants — same mesh, no flicker, single ownership moves to the
-      // successor — while streamed state (the pose buffer) stays behind on
-      // the orphaned record, uninherited (#95 acceptance 4).
+      // Same body re-announced = a TAKEOVER (the server re-arrives the identity). The successor must be a FRESH record:
+      // every continuation guard compares record identity. The loaded avatar transplants; streamed state (the pose
+      // buffer) stays behind on the orphaned record (#95 acceptance 4).
       if (meta.authority) {
         // the mesh transplants; its EXPRESSIONS do not — typing, bubble,
         // held pose, limp, gaze were the predecessor generation's (#97 B2':
@@ -118,22 +106,15 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
           gen: (gens.get(id) ?? 0) + 1,
           buf: [], lastClip: 'idle', lodAcc: 0, lodTick: 0, speakingUntil: 0,
         };
-        // a capsule transplants as the floor, but the debt transplants with it:
-        // the successor owes the same body, and takeover is a natural moment to
-        // try again (#196 B1 — takeover used to make the substitution permanent).
-        // The ATTEMPT COUNT transplants too: a fresh record would read `retries`
-        // as 0 and re-arm at the shortest backoff, so a flapping peer with a
-        // genuinely dead asset would refetch every reconnect and never reach the
-        // cap — the bound has to survive the takeover it is meant to bound.
+        // a capsule transplants with its debt (the successor owes the same body, #196), and so does the attempt count,
+        // or a flapping peer with a dead asset would re-arm at the shortest backoff forever.
         fresh.capsuleFor = existing.capsuleFor ?? null;
         fresh.retries = existing.retries ?? 0;
         gens.set(id, fresh.gen);
         remotes.set(id, fresh);
         if (fresh.avatar && fresh.capsuleFor) retryBody(fresh);
-        // predecessor still mid-load: its completion will see a record that
-        // isn't its own and dispose (the stale-load guard below); the
-        // successor starts its OWN load — bytes are cached, so this is
-        // cheap, and ownership stays unambiguous
+        // predecessor still mid-load: its completion sees a record not its own and disposes; the successor starts its OWN
+        // (cached) load, so ownership stays unambiguous
         if (!fresh.avatar) {
           fresh.loading = true;
           try {
@@ -146,10 +127,8 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
         }
         return fresh;
       }
-      // Same body re-announced with no authority change: nothing to rebuild,
-      // but if this record is wearing the capsule it still owes a body. A
-      // reannounce is evidence the peer is live and the network is back —
-      // pay the debt rather than returning the substitution forever (#196 B1).
+      // Same body, no authority change: nothing to rebuild, but a capsule still owes a body, and a reannounce means the
+      // peer is live, so retry (#196).
       if (existing.capsuleFor) retryBody(existing);
       return existing;
     }
@@ -166,10 +145,8 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
   remotes.set(id, r);
   try {
     r.avatar = await loadBody(id, avatarPath || DEFAULT_AVATAR).catch((e) => { report(`avatar ${id}`, e); r.capsuleFor = avatarPath || DEFAULT_AVATAR; return makeCapsuleAvatar(id); });   // the capsule floor
-    // Stale-load guard: they left OR switched bodies while this one loaded.
-    // Compare against OUR record, not mere key presence — a replacement body
-    // re-occupies the key, and checking has(id) let the old avatar finish
-    // loading into the scene as an undisposable ghost.
+    // Stale-load guard: compare against OUR record, not key presence (a replacement re-occupies the key, and the old
+    // avatar would finish loading as an undisposable ghost).
     if (remotes.get(id) !== r) { r.avatar.dispose(); return r; }
     if (r.buf.length) applyImmediate(r);
   } catch (e) { report(`avatar ${id}`, e); }
@@ -256,10 +233,8 @@ function applyPose(r, a, b, k) {
   r.avatar.setPose(r.poseOut);
 }
 
-// ---- C18: a tracked (VR) body's head + hands. The sample rides presence as `xr`
-// (see xrbody.js for the frame); here it is blended a→b like the root, handed to
-// the avatar's pre-vrm.update seam, and re-solved there. No sample → hook off, the
-// clip owns the bones again.
+// ---- C18: a tracked (VR) body's head + hands, riding presence as `xr` (frame: xrbody.js): blended a→b like the root
+// and re-solved at the avatar's pre-vrm.update seam. No sample → hook off, the clip owns the bones.
 const _xq1 = new THREE.Quaternion(), _xq2 = new THREE.Quaternion(), _xv1 = new THREE.Vector3(), _xv2 = new THREE.Vector3();
 const blendQ = (qa, qb, k) => { _xq1.fromArray(qa); _xq2.fromArray(qb); return _xq1.slerp(_xq2, k).toArray(); };
 const blendGrip = (ga, gb, k) => {
@@ -338,11 +313,7 @@ function applyPresenceExtras(r, s) {
     // later (lastAnim never resetting meant nobody could wave twice)
     if (!once) r.lastAnim = null;
     if (clip !== r.lastClip) r.lastClip = clip;
-    // 'ragdoll' is not a clip and never was: setClip walks CLIP_FALLBACK,
-    // finds no entry for it, and hands _setAction undefined — which returns at
-    // its first line. So the locomotion clip went on playing underneath every
-    // remote tumble, animating the shoulders, hands and head of a body that
-    // was supposed to be limp. The streamed pose owns the bones while down.
+    // 'ragdoll' is not a clip (setClip would no-op and leave locomotion animating the limp body): the streamed pose owns the bones while down.
     if (clip === 'ragdoll') r.avatar.setLimp(true);
     else {
       r.avatar.setLimp(false); r.avatar.setClip(clip, s.speed ?? 0);
@@ -359,20 +330,14 @@ function applyPresenceExtras(r, s) {
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 
-// Camera-aware animation LOD: with a full stage (24 bodies) a midrange laptop
-// cannot run 24 complete VRM updates (spring bones, expressions, look-at) every
-// frame. Position interpolation stays per-frame (cheap, keeps motion glued);
-// skeletal updates tick at 1×/2×/4× by distance, integrating accumulated dt so
-// motion SPEED is unchanged — a far avatar animates at lower temporal
-// resolution, not in slow motion.
+// Camera-aware animation LOD: positions interpolate every frame; skeletal updates tick 1×/2×/4× by distance on
+// accumulated dt, so far bodies animate at lower temporal resolution, not in slow motion.
 const LOD_NEAR = 8, LOD_MID = 20;
 export let lodBias = 1;                 // raised by the perf governor under load
 export function setLodBias(v) { lodBias = v; }
 
-// Bodies whose sim runs on THIS machine right now (bodydrag takeover). Their
-// inbound presence is our own stream echoed back through the owner — applying
-// it would make the body fight its own past by one round trip. The local sim
-// owns root and bones; springs/expressions still tick.
+// Bodies whose sim runs on THIS machine (bodydrag takeover): their inbound presence is our own echo, so applying it
+// would fight our past by a round trip. The local sim owns root and bones; springs/expressions still tick.
 export const draggedLocal = new Set();
 
 const _eye = new THREE.Vector3();
@@ -388,11 +353,8 @@ export function updateRemotes(dt, now = performance.now()) {
     const buf = r.buf;
     const renderAt = now0 - interpDelay(r.late ?? null);
 
-    // A mounted body is DERIVED, not streamed: its transform comes from the
-    // parent entity's live transform (already ticked by motion.js this frame)
-    // composed with the socket. This is what makes an occupant visibly ride the
-    // swing mid-pendulum — presence samples are ignored while mounted, so a
-    // stale stream can't fight the seat.
+    // A mounted body is DERIVED, not streamed: parent's live transform (motion.js ticked it) composed with the socket;
+    // presence samples are ignored while mounted so a stale stream can't fight the seat.
     if (avatarMounts.has(r.id)) {
       const s0 = buf[buf.length - 1];
       // the same driver my own seat runs (occupybody.js): socket, anchor, signals, pose, reach, look — so an occupant looks
@@ -408,11 +370,8 @@ export function updateRemotes(dt, now = performance.now()) {
         // never silently.
         r.avatar.setSeatApprox(sw.seatState === 'approximate');
         declareOccupyState(r.id, sw.host ?? sw.to, sw.slot, sw.seatState, sw.seatReason);
-        // The seat owns WHERE the body is and its base clip — never its
-        // expressiveness. The newest presence sample still delivers gestures
-        // (one-shots layer over the sit; setClip is gesture-aware and won't
-        // cut a wave short) and held bone poses (gesturing from the seat).
-        // `animate` streams arrive on their own channel and never pass here.
+        // The seat owns where the body is and its base clip, never its expressiveness: gestures and held bone poses still
+        // apply from the newest sample. `animate` streams arrive on their own channel.
         const s = buf[buf.length - 1];
         if (s) {
           applyPose(r, s, s, 1);
@@ -473,10 +432,7 @@ export function updateRemotes(dt, now = performance.now()) {
       applyPresenceExtras(r, b);
     } else if (buf.length === 1) {
       applyImmediate(r);
-      // A late joiner with only the snapshot's single pose must still apply
-      // its held bones — otherwise a body that fell before you arrived shows
-      // as a STANDING figure sunk into the ground (the root lowers, the pose
-      // never folds). This ran only in the interpolation branch before.
+      // A late joiner with only the snapshot's pose still applies its held bones, or a fallen body shows standing, sunk into the ground.
       applyPose(r, buf[0], buf[0], 1);
       applyXRPresence(r, buf[0], buf[0], 1);
       applyPresenceExtras(r, buf[0]);
@@ -502,10 +458,7 @@ export function noteSpeaking(id, ms = 4000) {
  *  was ever aiming it, so every avatar had dead eyes. */
 let _gazeAt = 0;
 export function updateGaze(myPos, myAvatar, myName, now = performance.now()) {
-  // Attention changes at conversational rate, not frame rate — the O(n²)
-  // focus pass at 60Hz was hot-path offender #3 (§14.1). 4Hz is beyond
-  // perceptual limits for gaze retargeting (the VRM lookAt rig eases the
-  // turn itself); the scan is unchanged, just honestly paced.
+  // Attention changes at conversational rate: 4 Hz is past perceptual limits for gaze (the lookAt rig eases the turn; §14.1).
   if (now - _gazeAt < 250) return;
   _gazeAt = now;
   let speaker = null;

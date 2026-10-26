@@ -1,21 +1,7 @@
 // gpulost — when the GPU takes the page's context away, go back to the live world.
-//
-// A frame that keeps the GPU busy for more than ~2 s trips the OS watchdog (Windows TDR)
-// and the driver resets; the browser then loses every WebGL context on it
-// ('CONTEXT_LOST_WEBGL: loseContext: context lost', seen by the owner 2026-09-26 after a 4.3 s sky bake
-// frame in VR). three does not rebuild its resources on a lost context, so the page kept
-// running at 60 fps into a black canvas with nothing to say why. Nothing listened.
-//
-// Rebuilding in place means re-creating every GPU object the realizers own (the same work
-// as swapping renderers mid-page; FEATURE-WISHLIST), so recovery is a reload into the same
-// world: the server remembers the pose, the HTTP cache is warm, and a VR session is gone
-// either way. The ?xr=1 boot flag is dropped so a crash out of VR lands on the desktop.
-//
-// A second loss inside the window does NOT reload again: a device that resets on every
-// boot would otherwise loop. It says so and leaves the reload to the person. Nor does a THIRD
-// loss inside 15 min, however far apart (review 10a M2): a loop whose period is boot time plus
-// time-to-the-fatal-draw — the 89–94 s sky link above plus a cold boot — runs longer than 2 min,
-// saw an empty short window every time and reloaded forever, a driver reset each cycle.
+// On WebGL context loss (e.g. a TDR reset), reload into the same world: three can't rebuild its resources in place,
+// the server keeps the pose, and ?xr=1 is dropped so a VR crash lands on the desktop. Loop guard: no auto-reload on a
+// second loss inside GPU_LOST_WINDOW_MS, or a third inside GPU_LOST_LONG_MS (a boot-then-crash loop outlasts the short one).
 
 export const GPU_LOST_KEY = 'ew-gpu-lost';           // sessionStorage: ms timestamps of recent losses
 export const GPU_RECOVERED_KEY = 'ew-gpu-recovered'; // sessionStorage: the reason, read once by the next boot's notice
@@ -62,12 +48,8 @@ export function installGpuLostRecovery({ canvas, renderer, tee = () => {}, onSto
   };
   // preventDefault: the spec's "we intend to handle this"; without it no restore event is ever offered
   canvas?.addEventListener('webglcontextlost', (e) => { e.preventDefault?.(); handle('webgl context lost'); });
-  // 'destroyed' is deliberate only when WE called destroy(): Chrome also reports it for a device it tore down itself
-  // (10-08, headless: the swap chain's shared image failed). Ignoring that left the page rendering into a dead device,
-  // throwing every frame — and each throw skips three's callDepth--, so every frame was a new render context and a
-  // fresh shader build for everything after the throw, until the tab died. (three's own device.lost handler ignores
-  // 'destroyed' the same way, so renderer.onDeviceLost never fires here.) three's dispose() calls destroy() through
-  // this same object, so it counts as ours.
+  // 'destroyed' is ours only when WE called destroy() (three's dispose() goes through this object): Chrome also
+  // reports it for a device it tore down itself, and ignoring that renders into a dead device every frame.
   const device = renderer?.backend?.device;
   let destroyedByUs = false;
   if (device?.destroy) { const d0 = device.destroy; device.destroy = function (...a) { destroyedByUs = true; return d0.apply(this, a); }; }

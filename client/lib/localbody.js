@@ -39,23 +39,16 @@ import { getMe } from './mybody.js';
 
 let logChat = () => {};
 
-// Ragdoll — owner-simulated, presence-streamed, captured to a held pose.
-//
-// Only this client simulates its own body; the result rides the pose field
-// like any other pose, so remotes need no ragdoll code at all. On settle the
-// final bones stay as a held pose (lastPose), so a reconnect or a late joiner
-// gets the settled RESULT, not a replay of the flop.
+// Ragdoll: only this client simulates its own body; the result rides the pose field (remotes need no ragdoll code)
+// and the settled bones stay as a held pose, so a late joiner gets the result, not a replay of the flop.
 let ragdoll = null;
 let downed = false;
 
 export function isDowned() { return downed; }
 export function activeRagdoll() { return ragdoll; }
 
-// Which way you go over. A limp body does not drop straight down — its support
-// fails and the mass above the feet keeps going — and one that DOES drop
-// straight down has nowhere to put its leg length, so it folds its knees into
-// their stops under its own weight and then kicks them back out. You fall the
-// way you were facing, harder the faster you were moving.
+// Fall the way you were facing, harder the faster you moved: a body dropped straight down folds its knees into
+// their stops and kicks them back out.
 const _fall = new THREE.Vector3();
 function toppleVelocity() {
   return _fall.set(Math.sin(myState.yaw), 0, Math.cos(myState.yaw))
@@ -66,10 +59,7 @@ export function goLimp(lean = null) {
   const me = getMe();
   if (!me || downed) return;
   downed = true;
-  // Park the undriven bones and stop the clip BEFORE constructing the sim.
-  // Both of the sim's reference skeletons are read in here — the neutral rest
-  // it measures its limits against, and the live pose the tumble starts from —
-  // and neither may still have the walk cycle in it.
+  // Park the undriven bones and stop the clip BEFORE constructing the sim: it reads both its rest and live skeletons here.
   me.setLimp(true);
   clearMyReach();   // a knocked-over body's reach is gone — descriptor AND arm (mirrors agent.ts knockDown)
   ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
@@ -90,12 +80,8 @@ export function getUp() {
   myState.pos.y = 0;
 }
 // ---------------------------------------------------------------- mounted
-// While I occupy a seat, my body is DERIVED from the parent entity's live
-// transform + socket (same math remotes use for me: occupybody.js) — so I visibly
-// swing on the swing I'm sitting on. Getting off is the socket's to allow
-// (body.leaveBy, shared/sockbody.js mayLeave): moving, jumping, the explicit
-// get-up (X, the stand tile, the radial menu), or only a script. Getting off
-// emits no verb — my next frame simply carries no seat — and stamps where I land.
+// Seated, my body is derived from the parent's live transform + socket (occupybody.js, same math remotes use).
+// Getting off is the socket's to allow (shared/sockbody.js mayLeave) and emits no verb: the next frame just carries no seat.
 const _seatP = new THREE.Vector3();
 let leaving = null;            // {from, to, yaw, clip, t0, dur}: carried off the seat while a leave clip plays
 export const seatLeaving = () => !!leaving;
@@ -212,10 +198,7 @@ export function updateMountedMe(dt) {
   me.root.quaternion.copy(r.q);   // the socket's whole rotation: upright on a chair, on your back in a rocket
   // look locked: the view faces the way the seat does (the camera sits behind it)
   if (body.input.look === 'locked') setCamYaw(r.yaw + Math.PI);
-  // The camera lives in updateMe, which we skip while seated — so drive it
-  // here too (the ragdoll path learned this the same way), or it freezes on
-  // the frame you sat down and never rides the seat (#75). First person keeps
-  // its own-mesh exclusion; both modes follow the socket, moving or not.
+  // updateMe (which owns the camera) is skipped while seated, so drive the camera here or it freezes on the seat (#75).
   updateFollowCamera(dt, me);
   // look.up 'socket': the view rolls with the thing (a rocket, a loop-the-loop); 'world' keeps the horizon level
   if (body.look.up === 'socket') {
@@ -307,13 +290,8 @@ export function trySitOn(arg, slot = null) {
   return true;
 }
 
-// "I'm working on this" (R, 10-10): while my camera is free of my body in edit mode, the body holds a working pose, so
-// the people around it can see I've stepped out: forearms raised as at a console, head bent to it. Mine to give up: it
-// ends when the camera comes back (the Body switch, or B), and any pose I held before is not restored (moving ends a
-// pose anyway).
-// R, 10-10, on seeing it: "extend the arms out further in front of the body and rotate the hands palm out, kind of like a
-// mage casting magic". Arms forward and a little down (Y −80°, Z −15°), elbows barely bent, wrists back 80° so the palms face out.
-// R 10-10 23:33: 'relax the elbows and spread the arms apart like 15 degrees' (7.5° each arm, elbows 15° → 35°)
+// While my camera is free of my body in edit mode, the body holds a working pose (arms forward, palms out, head
+// bent) so people nearby see I've stepped out; it ends when the camera returns and doesn't restore a prior pose.
 const WORKING_POSE = { leftUpperArm: [0.0772, -0.5863, -0.1053, 0.7995], rightUpperArm: [0.0772, 0.5863, 0.1053, 0.7995], leftLowerArm: [0, -0.3007, 0, 0.9537], rightLowerArm: [0, 0.3007, 0, 0.9537],
   leftHand: [0, 0, 0.6428, 0.766], rightHand: [0, 0, -0.6428, 0.766], head: [0.0872, 0, 0, 0.9962] };
 let working = false;
@@ -362,10 +340,8 @@ export function stepRagdoll(dt) {
 }
 
 // ---------------------------------------------------------------- dragged
-// Someone else's sim is driving my limp body (bodydrag takeover — the drag
-// module holds the protocol; these are the hands it moves). My client stays
-// the authority: it APPLIES the stream to itself and rebroadcasts through
-// normal presence, so everyone else sees the drag as ordinary motion of mine.
+// Someone else's sim drives my limp body (bodydrag.js holds the protocol); my client stays the authority, applying
+// the stream to itself and rebroadcasting it as ordinary presence.
 
 function beginDraggedMode(by) {
   const me = getMe();
@@ -392,10 +368,7 @@ function applyDraggedSample({ pose, p, yaw }) {
   myState.speed = 0;
 }
 
-// While a hand holds me, my body is a stream of poses with no sim behind it —
-// so its VELOCITY only exists as the difference between the frames arriving.
-// Sampled here so the moment the hand lets go the sim can start with the
-// motion the body already had, instead of at a dead stop.
+// A dragged body's velocity exists only as the difference between arriving frames; sampled so release keeps it.
 let dragSnap = null, dragVel = null;
 function noteDraggedMotion() {
   const me = getMe();
@@ -429,11 +402,8 @@ function endDraggedMode(msg) {
 }
 
 // ---------------------------------------------------------------- pins
-// Nails through my body (bodydrag's persistent pins): MY state, MY sim
-// enforcing them, streamed in MY presence so everyone sees the markers. A
-// dragger may place one (the release message carries it) or ask to pull one;
-// my movement key tears them all out — the body is always its own final
-// authority. Session-scoped on purpose: pins are presence, not history.
+// Pins through my body (bodydrag.js): my state, enforced by my sim, streamed in my presence. My movement key tears
+// them all out; session-scoped on purpose: pins are presence, not history.
 const myPins = new Map();            // joint -> [x, y, z]
 const _pinV = new THREE.Vector3();
 const MAX_PINS = 8;
@@ -443,11 +413,7 @@ function syncPins() {
 }
 function applyMyPins() {
   if (!ragdoll) return;
-  // §24k R0: everything in myPins is a NAIL (placed on release / pulled on
-  // request), so it takes the nail's firm tuning — the dragger's takeover
-  // sim already passed firm=true (bodydrag.js), while the owner's own
-  // re-apply here didn't: the same nail held with different physics
-  // depending on whose machine was simulating.
+  // Every pin here is a nail: firm=true, matching the dragger's takeover sim (bodydrag.js), or physics depends on whose machine simulates.
   for (const [j, at] of myPins) ragdoll.setPin(j, _pinV.set(at[0], at[1], at[2]), true);
 }
 function addPin(j, at) {
@@ -572,10 +538,7 @@ function applyPuppet({ by, pose, merge, anim, ragdoll: rag }) {
     applyShove(l, by);
     return;
   }
-  // merge: only the bones they sent (null releases one); otherwise their
-  // pose replaces mine whole — and an EMPTY one is a release. It used to
-  // become an empty held pose, which setPose ignores: `clear_pose target`
-  // never let a human go.
+  // merge: only the bones they sent (null releases one); otherwise their pose replaces mine whole, and an EMPTY one is a release.
   if (pose) {
     myState.pose = merge ? mergePose(myState.pose, pose) : (Object.keys(pose).length ? pose : null);
     flashHint(myState.pose ? `${by} posed you` : `${by} released your pose`);

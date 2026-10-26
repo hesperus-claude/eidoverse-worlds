@@ -1,23 +1,7 @@
-// rigmeasure — what the body engines MEASURE and how they SPEAK, extracted.
-//
-// Two engines simulate a body going limp (bodysim.js's seam): the Verlet
-// particle skeleton (ragdoll.js) and the Bullet rig (ammodoll.js). They are
-// deliberately different machines — one relaxes particles, one solves rigid
-// bodies — and this file is NOT an attempt to merge them. It holds only the
-// truths they must AGREE on, which used to live as hand-mirrored copies
-// (survey §B2, the disease house rule 1 exists to kill):
-//
-//   * the BODY CUT — which 12 segments a humanoid is, for either solver;
-//   * the segment-vs-segment closest-point solve, spelled once;
-//   * the rig frame measured from rest positions (up/lateral/forward);
-//   * the HANDOVER FORMAT — the {j,p,v} snapshot a drag-release hands the
-//     next sim, across engines and across machines. That one is a wire
-//     surface: a verlet on this machine seeds a bullet rig on another, so
-//     the pack and the parse must be one truth or the seam drops motion
-//     (the dropped-seedVel incident, 2026-08-04).
-//
-// The lifecycle spine the engines also share (settle clocks, impulse law,
-// root-follow) is a class, not a measurement — see bodyengine.js.
+// rigmeasure — what the body engines MEASURE and how they SPEAK. The Verlet (ragdoll.js) and Bullet (ammodoll.js)
+// engines stay different machines; this holds only what they must agree on: the 12-segment body cut, the
+// segment-vs-segment closest-point solve, the rest rig frame, and the {j,p,v} handover snapshot. That snapshot is a
+// wire format across engines and machines, so pack and parse stay one. Shared lifecycle: bodyengine.js.
 
 import { THREE } from './core.js';
 
@@ -25,18 +9,9 @@ import { THREE } from './core.js';
 // the body cut
 // ---------------------------------------------------------------------------
 
-// Which bones a body engine drives, each as (bone -> the child joint it points
-// at). A reduced set: enough to read as a body, few enough to stay stable and
-// to keep the streamed pose small. Order matters: parents before children —
-// the verlet's drive walk and feed-forward limit sweep, and the bullet rig's
-// build order, both lean on it.
-//
-// Driving the PELVIS is what lets a body actually lie down — without it the
-// pelvis keeps its standing orientation forever and every limb folds ~90°
-// around an upright anchor, which reads as a crumple.
-//
-// This table was byte-identical in three engines (survey §B2); it is the one
-// place a segment can be added or renamed now.
+// Which bones a body engine drives, each as (bone -> the child joint it points at): a reduced set, stable and small on
+// the wire. Order matters: parents before children (verlet drive walk and limit sweep, bullet build order).
+// Driving the PELVIS is what lets a body lie down. The one place a segment is added or renamed.
 export const SEGMENTS = [
   ['hips', 'spine'],
   ['spine', 'chest'], ['chest', 'neck'], ['neck', 'head'],
@@ -49,11 +24,7 @@ export const SEGMENTS = [
 // Every joint tracked as a particle / segment endpoint (bones + leaf children).
 export const JOINTS = [...new Set(SEGMENTS.flat())];
 
-// The bones an engine actually writes a rotation for. Everything else in the
-// humanoid — upperChest, the shoulders, hands, feet, toes, every finger — is
-// the locomotion mixer's, and must be parked before a tumble starts or the
-// clip keeps animating a corpse. avatar.setLimp does the parking; this is the
-// list it parks around, exported so the two cannot drift apart.
+// The bones an engine writes; everything else is the locomotion mixer's and is parked by avatar.setLimp around this list.
 export const DRIVEN_BONES = SEGMENTS.map(([bone]) => bone);
 
 // ---------------------------------------------------------------------------
@@ -138,12 +109,8 @@ export function snapshotPacker() {
   return {
     add(name, pos, vel) {
       j.push(name);
-      // FULL PRECISION. A handover is the SAME body continuing on another
-      // machine, and a tumbling body is chaotic: rounding positions to 0.1mm
-      // and velocities to 1mm/s here read as 0.01cm after one step and
-      // 1–35cm after eighty on 20 of 44 fleet rigs, while the exact numbers
-      // continue to 0.00cm (§24t-8). JSON's shortest-round-trip formatting
-      // is exact; a snapshot is a rare event and ~1KB is nothing on the wire.
+      // FULL PRECISION: a handover is the same chaotic body on another machine, and rounding diverges by cm within
+      // eighty steps (§24t-8). JSON's shortest round-trip formatting is exact.
       p.push(pos.x, pos.y, pos.z);
       v.push(vel.x, vel.y, vel.z);
     },

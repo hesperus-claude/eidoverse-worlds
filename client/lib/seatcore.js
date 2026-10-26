@@ -1,31 +1,12 @@
-// seatcore — the seat-profile contract as pure functions (#101).
-//
-// A socket owns the WORLD ANCHOR of a seat; an avatar's seat profile owns
-// where that body's posed contact sits relative to its own root. This module
-// is the single place both halves of that sentence become arithmetic: schema
-// validation for profiles, the serve-time status verdict, the runtime gate
-// that decides whether a profile may move a body, and the one subtraction
-// that finally puts a pelvis on a cushion.
-//
-// Shared verbatim by three runtimes (the forecast.js/motioneval.js pattern):
-// the browser's mountTransform, the sequencer's /avatars judgment, and the
-// mcpl agent's effective-transform seat branch all import THIS file — the
-// only way three consumers agree forever is to evaluate the same code.
-// Deliberately dependency-free beyond motioneval's quaternion lines: no
-// THREE, no DOM, no clock, no fetch. Callers pass state in.
-//
-// Contract highlights, each one a review scar from the #101 design round:
-//  - a profile applies ONLY behind the full gate (authored surface socket ∧
-//    countersigned profile ∧ the action that ACTUALLY ran ∧ exact clip
-//    bytes) — everything else is a DECLARED approximation, never silence;
-//  - the correction subtracts along the body's actual up (world +Y this
-//    slice): mounted bodies render upright, and subtracting along a tilted
-//    parent normal smears them sideways (B2 — conceded and pinned by test);
-//  - no minimum vertex is promoted to truth without its support patch: a
-//    skirt hem or loose accessory is an isolated winner, and isolation is
-//    detectable (B-evidence);
-//  - a stale hash can never be read as fresh, and an old fetch can never
-//    overwrite a newer generation (B3 — the #95 lesson, generalized).
+// seatcore — the seat-profile contract (#101) as pure functions: validation, the serve-time verdict, the runtime
+// gate, and the subtraction that puts a pelvis on a cushion. Shared verbatim by the browser (mountTransform), the
+// sequencer (/avatars) and the mcpl agent so all three agree; no THREE, DOM, clock or fetch.
+// Invariants:
+//  - a profile applies ONLY behind the full gate (surface socket ∧ countersigned profile ∧ the action that actually
+//    ran ∧ exact clip bytes); otherwise a DECLARED approximation, never silence;
+//  - the correction subtracts along world +Y (a tilted parent normal smears bodies sideways);
+//  - no minimum vertex is promoted to truth without its support patch (an isolated hem is detectable);
+//  - a stale hash never reads as fresh, and an old fetch never overwrites a newer generation.
 
 import { qApply } from "./motioneval.js";
 
@@ -56,10 +37,8 @@ const fin3 = (v) => Array.isArray(v) && v.length === 3 && v.every(fin);
  *  is a FINDING worth storing — it converts "missing" into a named reason). */
 export function validateProfile(p) {
   if (!p || typeof p !== "object") return { ok: false, why: "profile must be an object" };
-  // The store indexes maps with these two strings and a profile moves every
-  // wearer of an avatar (#105 review B2): the name is roster syntax exactly
-  // (the same character class /avatars sanitizes to — "__proto__" and
-  // friends cannot pass), and this slice supports ONE pose.
+  // The store indexes maps by these strings and a profile moves every wearer: the name is exact roster syntax
+  // ("__proto__" can't pass), and this slice supports ONE pose.
   if (typeof p.avatar !== "string" || !SAFE_NAME.test(p.avatar))
     return { ok: false, why: "avatar must be a roster name ([a-zA-Z0-9_-], ≤48 chars)" };
   // legal SYNTAX but reserved by the language: these index inherited slots on

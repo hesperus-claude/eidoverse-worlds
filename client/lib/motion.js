@@ -1,14 +1,8 @@
 // motion — the world's moving parts, as functions of time.
 //
-// A motion component is PARAMETERS, never frames: the log stores "a pendulum
-// with this amp/period/phase since t0" and every client — live, joining late,
-// replaying a fork — evaluates the same closed form at its own `now`. Nothing
-// integrates, nothing accumulates error, everyone agrees with zero ongoing
-// traffic. Sequencer-not-simulator, applied to dynamics.
-//
-// Evaluators are pure f(params, t) → transform, composed onto the entity's
-// logged base pose (spawn/place). Adding a motion type = adding a case here;
-// the server folds it blindly, and older clients simply don't animate it.
+// A motion component is PARAMETERS, never frames: every client evaluates the same closed form f(params, t) at its own
+// now, composed onto the logged base pose. Nothing integrates; zero ongoing traffic. The server folds types blindly;
+// older clients just don't animate them.
 //
 // Types:
 //   pendulum {axis, pivot, amp, period, phase, damp, maxAmp, t0}   — swings
@@ -17,30 +11,16 @@
 //   oscillate {axis?, amp, period, phase?, t0}                     — back and forth along an axis (a sine): hover, buoys, pistons
 //   path     {points, speed|duration, loop?: 'loop'|'pingpong'|'once', face?, t0}
 //
-// SUB-OBJECTS: a component keyed `motion:<slot>` whose value names a `node`
-// (its name as the model file spells it; motioneval.js motionNode — or, in a
-// value stored before 10-16, the key's tag or a whole `motion`'s `part`) animates ONE NAMED NODE inside the entity's model
-// instead of the whole thing (Orrery's segmented exports name their parts:
-// tripo_part_0, …). Several `motion:<part>` components coexist on one entity,
-// so a machine can have many moving parts. Coordinates are the PART's frame:
-// pivot/axis are relative to the part node's own origin (default pivot
-// [0,0,0] = the node origin, where a hinge usually lives), oscillate/orbit/path
-// positions are in the part's parent frame. `measure` reports each part's
-// `local` center/size in exactly this frame — a local center IS a pivot
-// candidate verbatim. The server folds all of it blindly; clients that
-// predate this file simply don't animate parts. When a part's motion is
-// removed, the part eases back to its authored rest pose.
+// Parts: a `motion:<slot>` component naming a `node` (motioneval.js motionNode) animates one named node of the model.
+// Pivot/axis are in the part node's own frame (default pivot = its origin); oscillate/orbit/path positions in its
+// parent's frame, the frame `measure` reports. A removed part motion eases back to rest.
 
 import { THREE, camera } from './core.js';
 import { entities, bags, bagOf, findPart } from './world.js';
 import { reindexCollider } from './colliders.js';
 import { serverNow } from './remotes.js';
-// The closed forms themselves live in motioneval.js — a dependency-free
-// module shared verbatim with the agent's text-tier perception (#82), the
-// same arrangement forecast.js has. The generous reader (axis synonyms,
-// `amplitude`, missing t0) lives there too; this file is what remains:
-// applying evaluated transforms to THREE objects, and the part-frame
-// machinery only a renderer with a loaded model can have.
+// The closed forms and the generous reader live in motioneval.js (shared with the agent's perception, #82); this
+// file applies evaluated transforms to THREE objects and owns the part-frame machinery.
 import { evalWholeMotion, evalPath, axisOf, ampOf, since, pendulumTheta, rateOf } from './motioneval.js';
 import { motionNode, motionType } from '../../shared/protocol/names.js';
 
@@ -129,12 +109,7 @@ const _eye = new THREE.Vector3();
 const _wp = new THREE.Vector3();
 export function tickMotion() {
   camera.getWorldPosition(_eye);   // in XR camera.position is only the head's offset inside the rig
-  // The SEQUENCER's clock, not the wall's: t0s are server stamps, and an
-  // NTP-skewed client rendering motion at wrong phase disagrees with every
-  // other window into the same world (Hesperus finding #4). serverNow() is
-  // estimated from the server's stamps (the clock message just before each
-  // snapshot of a join that asks, as net.js's do, and every frame) and is
-  // local time only before the first.
+  // The sequencer's clock, not the wall's: t0s are server stamps, and a skewed client would render the wrong phase.
   const nowMs = serverNow();
   _seenParts.clear();
   for (const [id, bag] of bags()) {
@@ -145,11 +120,8 @@ export function tickMotion() {
       if (!m || !m.type) continue;
       const obj = entities.get(id);
       if (!obj) continue;
-      // a parented thing (userData.mountedTo: the hierarchy; sitting and holding are presence) moves in its parent's
-      // frame too: its base is the local pose execMount gave it, and the parent carries the result (house review I37)
-      // distance gate (§14.2 6a, offender #4): motion is CLOSED-FORM f(t),
-      // so a far swing skipped this frame lands at exactly the right phase
-      // the frame it re-enters range — nothing drifts, nothing catches up
+      // a parented thing (userData.mountedTo) moves in its parent's frame: its base is execMount's local pose
+      // distance gate (§14.2 6a): closed-form f(t), so a skipped far swing re-enters at exactly the right phase
       const at = obj.userData.mountedTo ? obj.getWorldPosition(_wp) : obj.position;
       if (at.distanceToSquared(_eye) > 8100) continue;   // 90m, from the camera's WORLD position (review 11a M1)
       const t = since(m, nowMs);
@@ -168,10 +140,8 @@ export function tickMotion() {
       } else {
         const base = obj.userData.base
           ?? (obj.userData.base = { pos: obj.position.toArray(), yaw: obj.rotation.y });
-        // The shared evaluator (motioneval.js) is the single source of the
-        // closed forms — the agent's look() runs the SAME call, which is the
-        // whole point (#82). This side just applies the result to the object.
-        // the entity's pivot component is the default hinge (research 52), in its parent's units: scaled by its own scale
+        // motioneval.js is the single source of the closed forms; the agent's look() runs the same call (#82)
+        // the entity's pivot component is the default hinge, in its parent's units: scaled by its own scale
         const pv = bagOf(id)?.pivot?.pos;
         const r = evalWholeMotion(Array.isArray(pv) && pv.length === 3 ? { ...base, pivot: [pv[0] * obj.scale.x, pv[1] * obj.scale.y, pv[2] * obj.scale.z] } : base, m, nowMs);
         if (!r.ok) {
@@ -202,13 +172,7 @@ export function tickMotion() {
   }
 }
 
-// Motion ended (`{type: null}`): world.js restores the base pose itself (it
-// owns the bag and the base — and importing us back would make the module
-// graph circular). For anything that rests AWAY from base (a ferry stopping
-// mid-route), the stopper emits `place` alongside — that IS the
-// plane-transition stamp.
+// Motion ended ({type: null}): world.js restores the base pose itself (importing us back would be circular). A thing
+// resting away from base (a ferry stopping mid-route) gets a `place` from the stopper.
 
-// The inspector's motion fields are declared in shared/editschema.js (one
-// declaration for the desktop, the VR quad and a model's inspect/edit).
-// There is no live preview on purpose: a component is parameters the log
-// owns, and previewing would mean writing a bag this module does not own.
+// Motion fields are declared in shared/editschema.js. No live preview on purpose: this module doesn't own the bag.

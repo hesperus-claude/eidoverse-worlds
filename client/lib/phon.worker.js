@@ -30,10 +30,8 @@
 
 let _mod = null;
 let _building = null;
-// Where the CURRENT call wants stdout to go. Emscripten captures Module.print
-// ONCE at construction (piper-o91UDS6e.js:292 — `var out = Module["print"] ||
-// console.log`), so the handler must be permanent and the sink swappable.
-// Reassigning print per call silently sent every result to console.log.
+// Where the CURRENT call's stdout goes: Emscripten captures Module.print once at construction, so the handler is
+// permanent and the sink swappable.
 let _sink = null, _errSink = null;
 
 async function build(wasmPaths) {
@@ -56,10 +54,7 @@ async function build(wasmPaths) {
 function run(mod, text, voice) {
   let ids = null;
   _sink = (data) => { try { ids = JSON.parse(data).phoneme_ids; } catch { /* not our line */ } };
-  // stderr is CHATTER until proven otherwise (r5 self-review): Emscripten's
-  // printErr carries espeak warnings and info lines, and throwing on any of
-  // them failed the whole phonemize call on output that wasn't an error.
-  // Collect; it becomes the diagnostic only if the run produces no ids.
+  // stderr is chatter (espeak warnings/info), not failure: collect it; it becomes the diagnostic only if no ids come back.
   const errLines = [];
   _errSink = (msg) => { errLines.push(String(msg)); };
   try {

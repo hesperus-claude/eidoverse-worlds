@@ -1,23 +1,7 @@
-// scheduler — the one loader (TEL0S_NOTES §11.3).
-//
-// Every piece of deferred work the client does — byte fetches, parses,
-// pipeline compiles, realizer catch-up — goes through here, with a key
-// (dedupe identity), an owner (cancellation scope), a lane (measured
-// concurrency cap), and a priority band re-evaluated at dequeue. The
-// curtain and the loading UI read queue state (`pending`, `onIdle`);
-// nothing anywhere waits on a timeout.
-//
-// DOM-free and THREE-free on purpose (headless-tested in
-// tools/scheduler-test.ts): pumping rides queueMicrotask, which Bun and
-// the browser both have, so correctness never depends on a renderer.
-// Budget slicing inside a job stays loadwork's business (work records,
-// tick/yield); this module replaces only the LANES.
-//
-// Lane caps carry the measured history (loadwork.js:126-137, the
-// "queued 19311ms · compile 5ms" trace): cpu and gpu at 2 — enough that
-// one stuck decode can't serialize a body behind crates, few enough that
-// compiles don't trample the frame — and net at 6 (assets.js's byte-fetch
-// pool). The numbers move only with a new measurement.
+// scheduler — the one loader (TEL0S_NOTES §11.3): every deferred job (fetch, parse, compile, realizer catch-up) has a
+// key (dedupe), owner (cancel scope), lane (cap) and priority re-read at dequeue; nothing waits on a timeout.
+// DOM/THREE-free (tools/scheduler-test.ts); in-job budget slicing stays loadwork's.
+// Lane caps are measured (cpu/gpu 2, net 6 = assets.js's pool): change them only with a new measurement.
 
 /** Priority bands. FIFO within a band; a function priority is re-read at
  *  dequeue so "near" can follow the camera without rescheduling. */

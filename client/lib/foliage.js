@@ -1,13 +1,10 @@
 // foliage — alpha-blended, TEXTURED see-through surfaces drawn as two passes in 'fast' mode (Video › textured
 // transparency). Named for the case that motivated it; it applies to every qualifying surface, not only leaves.
 //
-// A blended leaf writes no depth, so every layer of a canopy is shaded in full: EW.overdraw measured the Commons'
-// two date palms at 41% of the frame facing them, 2.95 layers per covered pixel, 17+ at the crown (2026-09-24).
-// fast = the classic foliage split: a CUTOUT twin of the mesh (alphaTest 0.999, writes depth, no blending) draws the
-// solid interior of each leaf in the opaque pass, then the original blend draws after it with depthFunc Less, so it
-// only fills what the cutout left — the soft edges — and everything hidden behind a solid leaf is rejected by depth.
-// Measured on the palms: 1.65 layers/px (−45%, frame −25%) for 0.36% of pixels changed; owner, 09-24: "very close …
-// some jagged pixels in the center mass". 0.999 (not 0.98) halved those speckles; pure cutout buys no more fill.
+// A blended leaf writes no depth, so every canopy layer is shaded in full (EW.overdraw: ~3 layers/px on two palms).
+// fast = the classic foliage split: a CUTOUT twin (alphaTest 0.999, writes depth, no blend) draws each leaf's solid
+// interior in the opaque pass, then the original blend draws with depthFunc Less and only fills the soft edges
+// (−45% layers/px; 0.999 rather than 0.98 halves the centre speckles; pure cutout buys no more fill).
 // soft = the original single blended pass. auto = fast while presenting in a headset, soft on the desktop.
 //
 // Who qualifies: world models (prepareObject kind 'model'), not skinned, one material, transparent, textured, opacity
@@ -22,11 +19,8 @@ const lsGet = () => { try { return localStorage.getItem(KEY); } catch { return n
 const lsSet = (v) => { try { localStorage.setItem(KEY, v); } catch { /* private mode */ } };
 
 let mode = FOLIAGE_MODES.includes(lsGet()) ? lsGet() : 'auto';
-// Per SOURCE MATERIAL, not per mesh: every placed model is a skeletonClone of its loaded prototype and shares the
-// prototype's materials, so the mode lives on shared state. Each placed instance gets its own core mesh (a child of its
-// leaf mesh, answering no raycasts); all cores of a material share one cutout material, and that material's `visible`
-// switches the whole family on or off. (Registering on the prototype, as this first did, gave clones made before the
-// core existed no core at all, and clones made after a frozen copy the mode switch never reached.)
+// per SOURCE MATERIAL, not per mesh: placed models are skeletonClones sharing the prototype's materials. Each
+// instance gets its own core mesh (no raycasts); the family's shared cutout material's `visible` switches them all.
 const byMat = new Map();            // source material → { m, depthFunc, cut, warmed, warming, cores }
 const noRaycast = () => {};
 

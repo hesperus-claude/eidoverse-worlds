@@ -1,34 +1,7 @@
-// scenegraph — the world as a tree, and the scripts that animate it.
-//
-// Two sections in the world panel:
-//
-//   🌳 scene    every entity as a row; mounted things indent under their
-//               parent, seated bodies show as occupants. Click a row → the
-//               INSPECTOR, which is layered the same way the fold is:
-//               · a generic transform editor (pos / yaw / scale → `place`);
-//               · SEMANTIC editors registered by evaluator modules via
-//                 inspect.js (lights register color/brightness/range/keep —
-//                 drag previews locally, release commits one partial verb);
-//               · a generic component editor — every comp type as a row,
-//                 editable as raw JSON, removable, addable. Meaning-free by
-//                 design: a comp type invented this morning is editable
-//                 today. A saved edit replaces that type's data WHOLESALE
-//                 (the comp verb's contract).
-//               · actions: find, attach (pick a new parent by clicking it),
-//                 detach, remove. Attach PRESERVES the current world
-//                 transform — the thing glues where it stands, never jumps
-//                 (the shared parenting edit: shared/hierarchy.js).
-//
-//   📜 scripts  the world's scripts made visible (the authority's status view):
-//               every script:<name> with its status (active / asleep /
-//               dormant / paused, and why), what it's on, its timers — and,
-//               selected, its last activations (what console.log() wrote),
-//               polled while you watch. This is the
-//               debug UI for the scripting tier; agents get the same data via
-//               world_debug, this is the human window onto it.
-//
-// Everything here READS client state and SENDS requests — no private
-// channel, no authority. The authority enforces rights; buttons just try.
+// scenegraph — the world panel's 🌳 scene tree (rows, plus an inspector: transform, semantic editors via inspect.js,
+// raw component JSON, actions) and 📜 scripts view (the authority's status: state, timers, last activations).
+// Reads client state and only sends requests; the authority enforces rights. Attach keeps the world transform
+// (shared/hierarchy.js); a saved comp edit replaces that type's data WHOLESALE.
 
 import { THREE } from './core.js';
 import { CONFIG, bus } from './base.js';
@@ -95,11 +68,8 @@ let editingComp = null;    // comp type whose JSON is open, or true for a new on
 function paintScene(force = false) {
   if (!sceneBody) return;
   const selected = sceneSelected();
-  // don't yank an editor out from under the user: an open JSON textarea, or
-  // any focused editor control (a light slider mid-drag, a half-typed pos
-  // field), holds repaints — the echo of a committed verb queues one, and it
-  // must not rebuild the DOM under the pointer. Interior state changes
-  // (opening/closing an editor) repaint with force.
+  // don't rebuild an editor under the user: a focused editor control or open JSON textarea holds repaints (a verb's
+  // echo queues one); interior state changes repaint with force.
   if (!force) {
     if (editingComp != null) return;
     const ae = document.activeElement;
@@ -154,10 +124,8 @@ function paintScene(force = false) {
     eds = editorsFor({ id: selected, obj, meta, bag, esc,
       commit: (component, value) => sendOps([value == null ? OP.unset(target, component) : OP.set(target, component, value)], { what: `${component} on ${target}` }) });
 
-    // generic component editor — meaning-free by design, the UI twin of the
-    // blind fold: any comp type, known or invented this morning, shows as a
-    // row and edits as raw JSON. A saved edit replaces that type's data
-    // WHOLESALE (that is the comp verb's contract); ✕ removes (data: null).
+    // generic component editor, meaning-free like the blind fold: any comp type edits as raw JSON. A saved edit replaces
+    // that type's data WHOLESALE (the comp verb's contract); ✕ removes (data: null).
     const compRows = compEntries(bag).map(([type, data]) => {
       if (editingComp === type) {
         return `<div style="margin:2px 0"><b>${esc(type)}</b>
@@ -297,10 +265,8 @@ function followSelection({ ids, kind }) {
     sceneBody?.querySelector(`.sg-row[data-id="${CSS.escape(id)}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   };
-  // toggle(true) surfaces the panel frame (even when the section is already
-  // open) and — on first open — assigns sceneBody synchronously BEFORE its
-  // async roster fetch. So paint now: selection must never be hostage to a
-  // network round-trip. Repaint when the roster lands (📜 badges refine).
+  // toggle(true) assigns sceneBody synchronously before its roster fetch, so paint now (selection must not wait on the
+  // network) and repaint when the roster lands.
   const t = sceneApi.toggle(true);
   reveal();
   Promise.resolve(t).then(reveal).catch(() => {});
@@ -316,11 +282,8 @@ export function sceneAttach(childId, parentId, slot) {
   }
   doAttach(childId, parentId);
 }
-// One path for every attach and detach — this section, /mount, /dismount, the
-// edit-mode Hierarchy and the inspector's Parent field: the shared parenting
-// edit (shared/hierarchy.js parentVerbs via inspect.js commitEdit). It keeps
-// the FULL world pose (q and scale, not just a yaw), refuses a loop / lock /
-// guard by name, and lands on the undo stack as one step.
+// One path for every attach and detach: shared/hierarchy.js parentVerbs via inspect.js commitEdit. It keeps the full
+// world pose, refuses a loop / lock / guard by name, and is one undo step.
 function doAttach(childId, parentId) {
   if (childId === parentId) return;
   const r = commitEdit(childId, 'parent.to', parentId);

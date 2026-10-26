@@ -1,25 +1,6 @@
-// icons — one Lucide registry, three renderers, no font dependency anywhere.
-//
-// WHY THIS EXISTS (R, 00:19: "replace all the icons if you can"): canvas
-// `fillText` of an emoji silently paints NOTHING when the platform lacks that
-// glyph. No error, no fallback, no warning — just a UI element that means
-// something and shows nothing. It happened live on a Windows 11 desktop with
-// two different codepoints, BOTH of which rasterized correctly in headless
-// Chromium, so the fault was invisible to the tests as well as to me. Any
-// emoji that carries meaning in this UI is a silent-failure risk.
-//
-// Path data is verbatim from lucide-icons/lucide (ISC licence), 24x24 viewBox.
-// Same technique as porch-old's PORCH_ICONS: store the `d` strings, build
-// Path2D lazily, and let each surface render them its own way.
-//
-//   stroke(ctx, name, size)  → canvas / 3D sprite (Path2D, cached)
-//   svg(name, size)          → inline <svg> markup for DOM chrome
-//   has(name)                → registry probe
-//
-// Adding an icon: curl the SVG from
-// raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg and
-// paste its path `d` strings here. Do NOT hand-draw replacements — that was
-// tried first and read as blobs at 26px.
+// icons — one Lucide registry (ISC, verbatim `d` strings, 24x24), three renderers, no font dependency.
+// No emoji glyphs: canvas fillText of a missing glyph paints nothing, silently.
+// Add an icon by copying its path `d` from lucide's repo; don't hand-draw (it reads as blobs at 26px).
 
 const P = {
   // the world, for the Hierarchy's World row (R, 10-10: the filled planet was a blot at 13 px): a circle, its equator, one meridian
@@ -160,10 +141,8 @@ export function svg(name, size = 18) {
 }
 
 // ---- Phosphor FILL set (MIT, phosphoricons.com) ---------------------------
-// R's call 2026-08-29: stroke glyphs go visually weak at small sizes; menu
-// and hotbar chrome uses Phosphor's fill weight instead. 256 viewBox, filled
-// paths, rendered via fsvg(). Same registry discipline as P above — path
-// data verbatim from @phosphor-icons/core assets/fill.
+// stroke glyphs go weak small, so menu and hotbar chrome use the fill weight: 256 viewBox, fsvg(), path data
+// verbatim from @phosphor-icons/core assets/fill.
 const PF = {
   'backpack': ['M168,40.58V32A24,24,0,0,0,144,8H112A24,24,0,0,0,88,32v8.58A56.09,56.09,0,0,0,40,96V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V96A56.09,56.09,0,0,0,168,40.58ZM104,32a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8v8H104Zm8,40h32a8,8,0,0,1,0,16H112a8,8,0,0,1,0-16Zm64,144H80V176h56v8a8,8,0,0,0,16,0v-8h24Zm0-56H80v-8a16,16,0,0,1,16-16h64a16,16,0,0,1,16,16Z'],   // R asked for the satchel to wear a backpack (2026-09-11); verbatim from @phosphor-icons/core assets/fill
   // the ∃ menu (the waterfall, owner 10-01): save / load / the Panels submenu's caret / help / keys / log in · out /
@@ -178,10 +157,8 @@ const PF = {
   'layout': ['M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H216V96H40ZM216,200H112V112H216v88Z'],
   'arrows-out-cardinal': ['M96,136H64v24a8,8,0,0,1-13.66,5.66l-32-32a8,8,0,0,1,0-11.32l32-32A8,8,0,0,1,64,96v24H96a8,8,0,0,1,0,16Zm0-72h24V96a8,8,0,0,0,16,0V64h24a8,8,0,0,0,5.66-13.66l-32-32a8,8,0,0,0-11.32,0l-32,32A8,8,0,0,0,96,64Zm141.66,58.34-32-32A8,8,0,0,0,192,96v24H160a8,8,0,0,0,0,16h32v24a8,8,0,0,0,13.66,5.66l32-32A8,8,0,0,0,237.66,122.34ZM160,192H136V160a8,8,0,0,0-16,0v32H96a8,8,0,0,0-5.66,13.66l32,32a8,8,0,0,0,11.32,0l32-32A8,8,0,0,0,160,192Z'],   // HUD layout mode
   'info': ['M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-4,48a12,12,0,1,1-12,12A12,12,0,0,1,124,72Zm12,112a16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40a8,8,0,0,1,0,16Z'],   // About
-  // the lantern (R, 10-08: the HUD lantern wears a lantern, not the stand-in lighthouse). Phosphor has no lantern, so this
-  // one is hand-traced in Phosphor's fill style (256 grid, 16-wide strokes, holes as opposite-wound subpaths) from R's
-  // reference; source + preview: Hesperus notes/eidoverse/icons/lantern.py.
-  // redrawn 10-10 to R's notes (it smudged at 16 px): a wider bell, no side bars, a low cap for the knob, a bigger flame; evenodd cuts the flame
+  // the lantern: Phosphor has none, so it's hand-traced in its fill style (256 grid, 16-wide strokes, holes as
+  // opposite-wound subpaths); evenodd cuts the flame
   'lantern': ['M72,84V74a56,56,0,0,1,112,0V84a10,10,0,0,1-20,0V74a36,36,0,0,0-72,0V84a10,10,0,0,1-20,0Z', 'M108,100a20,12,0,0,1,40,0Z', 'M72,104H184a8,8,0,0,1,0,16H72a8,8,0,0,1,0-16Z', 'M88,124H168L204,184a14,14,0,0,1-12,22H64a14,14,0,0,1-12-22ZM128,132c-11,13-24,25-24,40a24,22,0,0,0,48,0c0-15-13-27-24-40Z', 'M56,212H200a10,10,0,0,1,0,20H56a10,10,0,0,1,0-20Z'],
   // the Moderation and World Settings dock panels (research roles 10-06) — verbatim from @phosphor-icons/core 2.1.1 assets/fill
   'shield': ['M224,56v56c0,52.72-25.52,84.67-46.93,102.19-23.06,18.86-46,25.27-47,25.53a8,8,0,0,1-4.2,0c-1-.26-23.91-6.67-47-25.53C57.52,196.67,32,164.72,32,112V56A16,16,0,0,1,48,40H208A16,16,0,0,1,224,56Z'],
@@ -231,10 +208,8 @@ export function fsvg(name, size = 18) {
 }
 export const hasFill = (name) => !!PF[name];
 
-// ---- Phosphor REGULAR set (MIT) — the LINE weight of the fill glyphs above.
-// The dock wears regular at rest and fill when a window is open (R, 09-04:
-// inactive should feel darker without being darker by color). Path data
-// verbatim from @phosphor-icons/core assets/regular; same 256 viewBox.
+// ---- Phosphor REGULAR set (MIT): the line weight of the fill glyphs above (assets/regular, 256 viewBox).
+// The dock wears regular at rest and fill when a window is open.
 const PR = {
   'shield': 'M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.27,47,25.53a8,8,0,0,0,4.2,0c1-.26,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0Z',
   'flag': 'M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z',

@@ -1,23 +1,11 @@
-// overdraw — how many times is each pixel SHADED in one frame, and by whom? (debug; EW.overdraw())
+// overdraw — how many times each pixel is shaded in one frame, and by whom (debug; EW.overdraw())
 //
-// A VR frame here is GPU/fill-bound (CPU 3–5 ms of 25–100), so the question behind every fill optimisation is where
-// the fragment work goes. This renders the live scene once through the live camera with every material swapped for a
-// CLONE whose fragment output is a constant 1, blended additively into a half-float target: the red channel ends up
-// as the number of fragments shaded at that pixel. Clones keep the whole vertex stage (NodeMaterial.copy shares the
-// node graph — the meadow places its instances in positionNode, which a scene.overrideMaterial would lose).
-//
-//   mode 'actual' — each clone keeps its material's depth state and the scene's real draw order: fragments that PASS
-//                   depth (what early-Z lets through). Alpha-tested fragments count — they are shaded, then discarded.
-//   mode 'raw'    — depth test off: every fragment rasterised. raw − actual is what ordering/early-Z already saves.
-// perTag adds one pass per category (grass, terrain, sky, avatars, entities, …): that category counts, everything
-// else writes depth only — so the split is in the same real order as the total.
-//
-// Known, unexplained: the per-category passes sum to the total within ~0.1%, not exactly — ±1 at a few hundred far-
-// horizon pixels where subpixel grass stacks (2026-09-24: identical total passes are pixel-identical, so it is not
-// animation or nondeterminism; no single category ever exceeds the total at a pixel). `stable` checks the frame itself.
-// Honest limits: the capture draws the scene UNBATCHED (batching merges draws, not geometry — fragments are the same,
-// opaque order within a batch can differ); it is one mono view from the desktop/head camera, not both eyes; the live
-// frame is held for the capture (a desktop keeps its last image; in a headset expect a brief black blink).
+// Renders the live scene once with every material cloned to output a constant 1, additive into a half-float target:
+// red = fragments shaded per pixel. Clones keep the vertex stage (scene.overrideMaterial would lose meadow placement).
+//   mode 'actual' — real depth state and draw order: fragments that pass depth (alpha-tested ones count).
+//   mode 'raw'    — depth test off: every fragment rasterised. raw − actual is what early-Z already saves.
+// perTag adds one pass per category (that category counts, the rest write depth only); the passes sum to the total
+// within ~0.1% (unexplained). Limits: unbatched, one mono view, the live frame is held (a brief blink in a headset).
 import { THREE, TSL, renderer, scene, camera } from './core.js';
 import { renderAside, setWorldHold } from './render.js';
 import { reassertShadowPref } from './lightrig.js';

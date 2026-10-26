@@ -13,12 +13,8 @@ export function worldHistoryRows(entries, nameOf) {
   });
 }
 
-// Credits, inside History (R 10-07: "Credits = filter modes inside History (by person / biggest contributors / list-by
-// rules), not a third tab"). The same rows, seen four ways; a refused attempt is shown (as an attempt) but is never a deed.
-//   time    every row, newest first (the default)
-//   person  one person's rows (opts.who: their identity)
-//   top     the biggest contributors: people ranked by deeds (acts that changed something), with their rows
-//   kind    rows grouped by what was changed (a component, or the verb when it names none)
+// Credits are History's filter modes: the same rows seen four ways; a refused attempt is shown but is never a deed.
+// top = people ranked by deeds (acts that changed something); kind = grouped by component, or the verb if it names none
 export const HISTORY_MODES = [['time', 'by time'], ['person', 'by person'], ['top', 'biggest contributors'], ['kind', 'by what changed']];
 const asRows = (list, nameOf) => (list.length && list[0]?.kind !== undefined ? worldHistoryRows(list, nameOf) : list);
 export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {

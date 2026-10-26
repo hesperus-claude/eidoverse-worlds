@@ -1,27 +1,7 @@
-// fp_view — first-person view composition for a body seen from its own eyes.
-//
-// One module owns the snapshot renderer's answer to "where is this avatar's
-// eye and what must be hidden so it can see". Future first-person render paths
-// should reuse this contract rather than invent another private head-height
-// guess. Issue #75 is what happens when the guess drifts from the
-// rig: a mounted resident's fixed `root + 1.52` camera sat INSIDE their own
-// head geometry, and nothing hid that geometry, so the watchtower view was
-// their own petals.
-//
-// Deliberately DOM-free and import-free: callers hand in live world-space
-// numbers (head bone position, mesh bounds, root yaw) and callbacks (hide,
-// render). That keeps the eye/exclusion semantics runnable under bun with no
-// renderer — tools/fp-view-test.ts pins them.
-//
-// The contract (issue #75):
-//   - the eye anchors on the LIVE rig — head bone when the rig has one, mesh
-//     bounds when it doesn't — so it follows whatever drives the root,
-//     including a socket on moving furniture;
-//   - the resident's whole own visual root (mesh plus labels/bubbles) is never
-//     in the snapshot frame;
-//   - other bodies are untouched — exclusion is scoped to the one avatar;
-//   - a rig offering neither anchor fails with a message naming the rig,
-//     not a frame from inside its chest.
+// fp_view — first-person eye placement and own-body exclusion; reuse it rather than guess a head height (#75).
+// The eye anchors on the LIVE rig (head bone, else mesh bounds), so it follows a moving socket; the avatar's whole
+// own visual root is hidden for the frame and nobody else's is; a rig with neither anchor fails naming the rig.
+// DOM-free and import-free so tools/fp-view-test.ts can pin it under bun.
 
 // Eye placement. FORWARD matches the local first-person eye (controller.js
 // places the eye 0.16 ahead of the head so geometry behind the eye plane

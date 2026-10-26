@@ -3,19 +3,15 @@
 
 import { CONFIG, report, bus, nameFromJoinAck } from './base.js';
 import { avatarMounts } from './mounts.js';   // not world.js: that pulls core.js (the renderer) into lite
-// The world as data (TEL0S_NOTES §11.2): every snapshot and live entry
-// folds here — synchronously, through shared/protocol/replica.js (the
-// same fold the sequencer runs) — and the realizers project it into the scene.
+// The world as data (TEL0S_NOTES §11.2): every snapshot and live entry folds here, synchronously, through
+// shared/protocol/replica.js (the same fold the sequencer runs), and the realizers project it into the scene.
 // EW.foldParity() measures fold-vs-scene drift on demand.
 import { hydrate as shadowHydrate, reset as shadowReset, state as shadowState, applyView } from './state.js';
 import { hear } from '../../shared/chatwindow.js';
 import { refusalText } from '../../shared/protocol/refusal.js';
 import { pending, P } from './scheduler.js';
-// The realizers (TEL0S_NOTES §11.4) own the scene: state verbs realize
-// FROM the fold, and fold-inert causes (use/punt/force, moderation
-// narration, live say) dispatch over the bus as 'live-entry' (livechat.js
-// listens — emitted rather than imported so this file adds no lap around
-// the net → chat → net cycle). One writer per verb, always.
+// The realizers (TEL0S_NOTES §11.4) own the scene; fold-inert causes (use/punt/force, moderation narration, live say)
+// go over the bus as 'live-entry' (livechat.js), emitted rather than imported to stay out of the net → chat → net cycle.
 
 import { wingFoldPresence } from '../../shared/wingpresence.js';
 import { presenceWire, voiceWire, bodyWire } from '../../shared/presencewire.js';
@@ -33,10 +29,7 @@ import { actorName } from '../../shared/protocol/names.js';
 export const replica = makeReplica({ freeze: CONFIG.dev });
 /** Is this client in a world (it has adopted the authority's cut)? */
 export const replicaActive = () => replica.active;
-// ui.js is the desktop shell and reaches the engine through its panels (videopanel,
-// profile). The wire only ever wanted to SAY something to the user, so it takes a
-// notifier instead of importing a whole UI. Default logs: a dropped connection notice
-// must not itself go missing in a client that wired nothing.
+// the wire takes a notifier rather than importing the UI; the default logs, so a dropped-connection notice can't vanish
 let toast = (m, kind) => console.log(`[net:${kind ?? 'info'}] ${m}`);
 
 export const net = {
@@ -68,20 +61,9 @@ let hooks = {
   myVoice: () => null,   // { mic, hear } — main.js reads the HUD glyphs' own state (mictoggle.js)
 };
 
-// The participant registry, the asset ledger and the capture renderer are INJECTED
-// for the same reason the hooks above are: this file is the wire, and the wire is the
-// one part of the client that a renderer-less client still needs in full. remotes.js
-// builds three.js bodies, assets.js and capture.js reach the GPU — importing any of
-// them here would drag the engine into lite.js through the side door and undo the
-// point of having a lite client at all.
-//
-// They are `let` bindings with the ORIGINAL names on purpose: every call site below
-// reads exactly as it did when these were imports, so this indirection costs the
-// protocol code nothing and leaves almost no diff for the next merge to fight over.
-//
-// Defaults are inert rather than lite: an unwired net should do nothing surprising.
-// Both entry points wire explicitly (main.js the real ones, lite.js the DOM-only
-// registry in participants_lite.js).
+// The participant registry, asset ledger and capture renderer are INJECTED: importing them (three.js, the GPU) would
+// drag the engine into lite.js. `let` bindings keep the original names so call sites read as imports did; defaults
+// are inert, and main.js / lite.js (participants_lite.js) wire them explicitly.
 let remotes = new Map();
 let ensureRemote = async () => null;
 let dropRemote = () => null;
@@ -279,20 +261,9 @@ const PAGE_SESSION = (globalThis.__ewPageSession ??= globalThis.crypto?.randomUU
 export function sendJoin() {
   const id = CONFIG.renderer ? `renderer-${CONFIG.name}`
     : CONFIG.spectate ? `retina-${CONFIG.name}` : CONFIG.name;
-  // ?renderer asks to be a renderer; only a client that can render is one. The server
-  // takes the flag at its word: it sends this client snapshots, and if it roams, sends
-  // it to worlds that have no renderer. A lite page with ?renderer used to send it
-  // anyway, and a roaming one was sent into a world where it answered every snapshot
-  // "this client has no renderer". With a renderer present, the world was never sent
-  // a working one (2026-10-24). A client with no capture renderer wired (lite.js wires
-  // none) claims neither flag. What happens next depends on how it came. On a door key
-  // or a login it is admitted as an invisible spectator. On the renderers' own
-  // credential, which admits renderers only, it is refused at the door (4003,
-  // tools/access-test.ts 11b). Either way, no snapshot is routed to it. Its id keeps the
-  // renderer- prefix, since that is its name.
-  //
-  // This reads `capture` when the join is SENT. main.js wires it before start() opens
-  // the socket (tools/renderer-join-test.ts pins that order).
+  // ?renderer asks to be a renderer; only a client with a capture renderer wired is one (lite.js wires none), since the
+  // server routes snapshots and roaming by the flag. Without one it's an invisible spectator, or refused (4003) on the
+  // renderers' own credential. Reads `capture` at send; main.js wires it before start() (tools/renderer-join-test.ts).
   const rendering = CONFIG.renderer && capture !== noRenderer;
   if (CONFIG.renderer && !rendering && !warnedNoRenderer) {
     warnedNoRenderer = true;
@@ -482,10 +453,8 @@ export function rejoin() {
 
 let intentionalClose = false;   // false, or the socket whose close rejoin() drives (true: one with no socket to name)
 
-// archipelago-home session (home-node.md §7): the server may know who we are
-// from the ew_sess cookie (set by /auth after a Discord login). Fetched once;
-// a verified name OVERRIDES whatever localStorage remembers — the server will
-// ignore our self-asserted id anyway, so the label should match the identity.
+// archipelago-home session: the server may know us from the ew_sess cookie (set by /auth after a Discord login);
+// fetched once, and a verified name overrides localStorage (the server ignores a self-asserted id anyway)
 let identity;   // undefined = not asked yet, null = no session
 let authCfg = null;
 
@@ -550,13 +519,8 @@ export async function connect() {
   // re-login is silent while Discord still authorizes, so don't make them
   // rediscover the authority.
   if (bounceToLogin()) return;
-  // The early socket (inline boot script in index.html): the HTML may have
-  // already opened the WS and sent this exact join while the module graph
-  // was still parsing — the snapshot downloaded DURING parse instead of
-  // after it. Adopt it only when the join it sent is byte-for-byte the one
-  // we would send now; on ANY mismatch (rename at the authority, avatar switch,
-  // a login flow) close it and connect fresh. The early socket is an
-  // optimization, never an authority.
+  // the early socket (index.html's boot script) may have sent this exact join while modules parsed: adopt it only when
+  // that join is byte-identical to ours, else close it and connect fresh. An optimization, never an authority.
   const early = globalThis.__ewEarlySocket;
   globalThis.__ewEarlySocket = null;
   if (early) {
@@ -568,10 +532,8 @@ export async function connect() {
       bus.emit('net', net);
       net.ws = early.ws;
       joinRefusal = null;
-      // Drain what raced ahead of us IN ORDER while the boot script's own
-      // buffering handler still catches anything arriving mid-drain; the
-      // rewire below is synchronous with the final empty check, so no
-      // message can slip between the two.
+      // drain what raced ahead IN ORDER while the boot script's handler still buffers; the rewire below is synchronous
+      // with the final empty check, so nothing slips between
       while (early.buffered.length) {
         const raw = early.buffered.shift();
         // When the boot script's message handler ran, so the server's `t` it
@@ -589,12 +551,8 @@ export async function connect() {
     if (!early.closeInfo && early.ws.readyState === 2) await new Promise((res) => {
       const prev = early.ws.onclose; early.ws.onclose = (ev) => { try { prev?.(ev); } finally { res(); } }; setTimeout(res, 2000);
     });
-    // The world REFUSED the early join (a 4xxx close: an old-format world, no such world, a removal, a bad key): that
-    // refusal is the answer, not a reason to dial again. Read the server's words out of what the boot script buffered
-    // and close exactly as a live socket would (R 10-16 00:02: this socket and its refusal were thrown away, the
-    // redial's 4005 toasted a wrong "not a valid world name" under the splash, and she stepped into an empty world).
-    // Only for the join this page would send (review r3 F6): a refusal of some OTHER join (a token, a name, a world the
-    // page doesn't mean) is no answer to this page — it is discarded with the socket, and the page connects fresh.
+    // a 4xxx close of the early join is the answer, not a reason to redial: close as a live socket would, with the
+    // server's buffered words. Only for this page's own join; a refusal of any other join is discarded with the socket.
     if (same && early.closeInfo?.code >= 4000) {
       net.status = 'connecting';
       for (const raw of early.buffered) {
@@ -664,10 +622,7 @@ function onSocketClosed(ev) {
     toast(`"${CONFIG.name}" is connected in another tab. This one has yielded — reload to take over.`, 'warn', 60000);
     return;
   }
-  // 4006 = removed by moderation (kicked or banned). The server already
-  // explained itself in an error toast just before closing. No retry: a
-  // banned door will not open, and auto-rejoining after a kick would make
-  // the kick meaningless — coming back is a deliberate reload.
+  // 4006 = removed by moderation; the server already explained. No retry: an auto-rejoin would make a kick meaningless.
   if (ev.code === 4006) {
     net.status = 'rejected';
     bus.emit('net', net);
@@ -690,11 +645,8 @@ function onSocketClosed(ev) {
     setTimeout(connect, redial.next(REDIAL.full));
     return;
   }
-  // 4005 = a refused join: a malformed name, no such world, an old-format world, a client that doesn't fold the log.
-  // No retry — the answer won't change, so reconnecting is just hammering the authority. The server says why in an `error` just before this close; that sentence is shown. Without one, the close
-  // reason picks the words (the server's reasons: "old-format world", "no such world", "bad world name", …).
-  // 4005 "full" = the world is at its access max: TRANSIENT — someone leaving makes room. Say the server's words (on
-  // the splash if it is still up, else a toast) and try again, backing off; never pinned as the answer (review r3 F6).
+  // 4005 = a refused join: no retry (the answer won't change); show the server's preceding `error`, else words from the
+  // close reason. 4005 "full" is TRANSIENT (the access max): say so and retry with backoff, never pinned as the answer.
   if (ev.code === 4005 && String(ev.reason ?? '') === 'full') {
     const text = `${joinRefusal ?? `"${CONFIG.world}" is full`} — trying again by itself`;
     if (!waitBoot(text)) toast(text, 'warn', 8000);
@@ -719,10 +671,8 @@ function onSocketClosed(ev) {
     net.status = 'rejected';
     bus.emit('net', net);
     failSays();
-    // If we entered verified, this refusal means the session died
-    // server-side (TTL lapsed mid-visit). The cached identity is stale —
-    // drop it and go back through the login rather than asking for a key
-    // this person never had.
+    // entered verified: this refusal means the session died server-side; drop the stale identity and re-login rather
+    // than ask for a key this person never had
     if (CONFIG.authed) {
       identity = null;
       CONFIG.authed = false;
@@ -750,18 +700,10 @@ function onSocketClosed(ev) {
  *  fed by its frames: dropRemote clears it with the body.
  *  `expected` makes the drop generation-conditional (see dropRemote). */
 export function teardownParticipant(id, expected) {
-  // The generation check comes BEFORE any side effect: a predecessor's stale
-  // cleanup must be a COMPLETE no-op — emitting the custody event first let
-  // it strip the successor's drag state even though the drop itself refused
-  // (#97 review B1). Only a caller who owns the current record may tear.
+  // the generation check comes BEFORE any side effect: a predecessor's stale cleanup must be a complete no-op
   if (expected && remotes.get(id) !== expected) return null;
   bus.emit('participant-teardown', id);   // bodydrag releases custody before the bones vanish
   const dropped = dropRemote(id, expected);
-  // The voice peer (and its analyser) rides the 'roster' sweep every caller
-  // emits right after this — voice.js imports net, so calling into it here
-  // would close an import cycle; the sweep is the same teardown, one event
-  // later in the same turn, and it is generation-safe because it keys on
-  // absence from `remotes`, which this drop just established.
   return dropped;
 }
 
@@ -786,10 +728,8 @@ async function handle(msg, at) {
   switch (msg.type) {
     case 'snapshot': startClock(); return onSnapshot(msg);
 
-    // Two answers share the name: a round trip's ({t0, t}: the ask in askClock below), and the server's time sent
-    // just before each snapshot to a join that asks ({t} alone: sendJoin's and the boot script's do), a one-way sample
-    // taken before the snapshot's sounds are seeked, so the first seek isn't on this machine's own clock
-    // (client/lib/serverclock.js says how each is kept).
+    // two answers share the name: a round trip's ({t0, t}, askClock) and the server's one-way time sent before each
+    // snapshot ({t} alone), so the first seek isn't on this machine's clock (serverclock.js says how each is kept)
     case 'clock': if (msg.t0 !== undefined) noteRoundTrip(msg.t0, msg.t, localNow()); else noteServerTime(msg.t, at); break;
 
     case 'your-rights': {
@@ -804,14 +744,9 @@ async function handle(msg, at) {
     }
 
     case 'arrive':
-      // `authority: true` — an arrive is the world SAYING this person exists.
-      // On a takeover (same id re-arriving; the server suppresses the old
-      // connection's leave) the predecessor generation RETIRES WHOLE before
-      // the successor takes ownership (#97 review): the same generation-end
-      // event a leave emits releases drag custody and drops the voice peer
-      // + analyser — the roster sweep cannot, because the id remains
-      // present — and ensureRemote resets the mesh's transient expressions
-      // before transplanting it into a fresh record.
+      // `authority: true`: an arrive is the world SAYING this person exists. On a takeover (same id re-arriving) the
+      // predecessor retires whole first (the teardown event releases drag custody), and ensureRemote resets the mesh's
+      // transient expressions
       if (remotes.has(msg.id)) bus.emit('participant-teardown', msg.id);
       bus.emit('participant-session', { id: msg.id, session: msg.session });
       ensureRemote(msg.id, msg.avatar, { declares: msg.declares ?? null, authority: true });   // §6a: a declared status (any word), absent = undeclared; shown as said, never sorted into kinds
@@ -828,24 +763,15 @@ async function handle(msg, at) {
       break;
 
     case 'pose': {
-      // Presence UPDATES bodies; it never creates them (#95). A pose for an
-      // id we don't hold is a straggler from a departed generation — the
-      // server's per-socket order guarantees a living body's authority
-      // (snapshot roster or arrive) precedes its first sample, so there is
-      // no legitimate frame-before-authority to buffer for. Creating here
-      // is how one stale sample rebuilt the departed as a default-avatar
-      // ghost with a live nametag (the sunflower specimen, and #56's
-      // stand-forever race through the same door).
+      // presence UPDATES bodies, never creates them (#95): the server orders a living body's authority before its
+      // first sample, so a pose for an unknown id is a departed generation's straggler, and creating would rebuild a ghost
       if (remotes.has(msg.id)) pushPose(msg.id, msg.pose, msg.t);
       else noteStalePresence(msg.id);
       break;
     }
 
     case 'frame': {
-      // Batched embodied plane: one message per server tick, latest pose per
-      // id. Same law as `pose`: update-only, never create — and with no
-      // creation there is no fire-and-forget load whose completion could
-      // deliver a departed generation's sample into a successor's buffer.
+      // batched poses (latest per id per tick): same law as `pose`, update-only, never create
       noteServerTime(msg.t, at);
       for (const [id, pose] of Object.entries(msg.poses)) {
         if (id === net.myId) continue; // our own echo — local prediction owns this body
@@ -867,10 +793,7 @@ async function handle(msg, at) {
       break;
     }
 
-    // SFU transport (VOICE_TRANSPORT=sfu). This switch has NO default branch —
-    // an unrouted type is silently dropped — which is why the first version of
-    // the SFU client sat at active:false forever: the server offered, the
-    // browser never saw it, and nothing anywhere said so.
+    // SFU transport (VOICE_TRANSPORT=sfu). No default branch: an unrouted type is dropped silently
     case 'sfu-offer': bus.emit('sfu-offer', msg); break;
     case 'sfu-ice':   bus.emit('sfu-ice', msg);   break;
     case 'sfu-route': bus.emit('sfu-route', msg); break;
@@ -1006,10 +929,8 @@ async function handle(msg, at) {
     }
 
     case 'world-reset': {
-      // The world we are standing in just ceased to exist as we know it.
-      // Everything client-side — terrain, grass, sky, entities, chat — was
-      // built from a log that is now empty; a reload through the normal join
-      // path is the one rebuild that cannot disagree with the server.
+      // the world was reset: everything here was built from a now-empty log, and a reload through the normal join is
+      // the one rebuild that can't disagree with the server
       toast(`${msg.by} reset "${msg.world}" to zero — reloading…`, 'warn', 4000);
       logChat('*', `${msg.by} reset this world to zero`);
       shadowReset();
@@ -1046,10 +967,8 @@ async function handle(msg, at) {
       break;
 
     case 'notice':
-      // The world telling YOU something that is not a refusal — today, that
-      // your access here ends soon. Toast (it matters now) and chat (so it is
-      // still there when you look). Not an `error`: that would also tell every
-      // optimistic preview its verb was refused.
+      // a notice that isn't a refusal (today: access ending soon): toast and chat. Not an `error`, which would tell
+      // every optimistic preview its verb was refused.
       toast(String(msg.text ?? ''), 'warn', 20000);
       logChat('*', String(msg.text ?? ''));
       break;
@@ -1061,10 +980,8 @@ async function handle(msg, at) {
       noteRefusal(msg.error);   // before the snapshot, an error is the join's refusal: its close shows these words
       // Server-side refusals are the user's problem to see, not the console's.
       toast(msg.error, 'warn');
-      // ...and any module holding an optimistic preview needs to hear it: a
-      // refused verb never folds, so a preview kept past this moment is a
-      // world that never existed (lights.js rolls its edits back off this).
-      // The wire names no verb — every refusal on this socket is ours.
+      // ...and optimistic previews must hear it: a refused verb never folds (lights.js rolls back off this). The wire
+      // names no verb; every refusal on this socket is ours.
       bus.emit('verb-refused', { error: String(msg.error ?? '') });
       break;
   }
@@ -1087,14 +1004,9 @@ async function onSnapshot(msg) {
   net.renameAfter = msg.renameAfter ?? null; net.renameCooldownDays = msg.renameCooldownDays ?? null;   // profile.js's name dialog
   if (msg.renameRefused) { const d = new Date(msg.renameRefused.until);
     toast(`still “${msg.you}”: names change once every ${msg.renameCooldownDays} days — “${msg.renameRefused.tried}” can be yours from ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`, 'info', 12000); }   // the durable subject the authority vouched for, if any — what guarded things match on
-  // The server's `you` is authoritative (verified identity, or a suffixed name
-  // when two people share a nick). If it differs from what this client thinks,
-  // adopt it — and say so, a silently different nameplate is confusing.
-  // Renderer/spectator clients join under a transport prefix ("renderer-" /
-  // "retina-", see sendJoin) that is part of the wire id, not the name. Strip
-  // it before comparing and storing, or ew-name grows one prefix per reload
-  // (renderer-renderer-…) — unless the ack is a verified identity, which the
-  // server named itself (base.js nameFromJoinAck).
+  // the server's `you` is authoritative (verified identity, or a suffixed name): adopt it and say so. Strip the
+  // transport prefix ("renderer-"/"retina-") first or ew-name grows one per reload, unless the ack is a verified
+  // identity (base.js nameFromJoinAck)
   const you = nameFromJoinAck(msg.you, { renderer: CONFIG.renderer, spectate: CONFIG.spectate, verified: !!msg.yourSub });
   if (you && you !== CONFIG.name && !msg.renameRefused) {
     CONFIG.name = you;
@@ -1102,10 +1014,8 @@ async function onSnapshot(msg) {
     toast(`you're appearing as “${msg.you}”`, 'info', 8000);
   } else if (msg.renameRefused) { CONFIG.name = msg.you; localStorage.setItem('ew-name', msg.you);
     try { const u = new URL(location.href); if (u.searchParams.has('name')) { u.searchParams.set('name', msg.you); history.replaceState(null, '', u); } } catch { /* fine */ } }
-  // a RE-join: lastSeq is still the last entry the old socket delivered, and
-  // what was said after it may be trimmed out of this snapshot's chat window
-  // (fair, not contiguous). Fetch it before lastSeq moves on. A first join has rendered nothing and is a no-op.
-  // lastSeq is already in the chat's numbering (seq × 1000: onLog, the server's window and readHistory alike).
+  // a RE-join: what was said after lastSeq may be trimmed from this snapshot's chat window, so fetch it first (lastSeq
+  // is in chat numbering, seq × 1000). A first join is a no-op.
   if (lastSeq >= 0) void resyncChatAfter(lastSeq);
   if (typeof msg.throughSeq === 'number' && msg.throughSeq > lastSeq) lastSeq = msg.throughSeq;
   bus.emit('net', net);
@@ -1123,23 +1033,16 @@ async function onSnapshot(msg) {
   // wake where you fell asleep — but never teleport a body that has already
   // moved this session (mid-session reconnects keep local truth)
   const s = hooks.myState;
-  // `s &&` used to be part of this test, which quietly made the restore undeliverable to
-  // any client without a live body - and a renderer-free one has none by construction
-  // (#188 B2: its gesture went out carrying defaults because the remembered body never
-  // arrived to carry instead). What the guard actually protects is a body that has
-  // ALREADY MOVED this session; no body cannot have moved, so it has nothing to protect
-  // and the restore should land.
+  // no live body can't have moved, so the restore lands (a renderer-free client has none, #188); the guard only
+  // protects a body that already moved this session
   if (msg.restore && !restoredPose && (!s || s.speed === 0)) {
     restoredPose = true;
     hooks.onRestore(msg.restore);
   }
   restoredPose = true; // first snapshot decides, restore or not
 
-  // reconcile: the snapshot is authoritative — tear down any participant no
-  // longer present, through the SAME funnel a leave uses (custody, then
-  // body; the voice peer rides the roster emit below). Stale ghosts
-  // otherwise survive reconnects forever — and before #95 they survived
-  // with their side tables intact.
+  // reconcile: the snapshot is authoritative; tear down absent participants through the same funnel a leave uses
+  // (custody, then body), or stale ghosts survive reconnects
   const present = new Set(msg.present.map((p) => p.id));
   for (const id of [...remotes.keys()]) if (!present.has(id)) teardownParticipant(id);
 
@@ -1173,19 +1076,14 @@ async function onSnapshot(msg) {
   const rc = msg.state?.recentChat ?? [];
   noteHistoryContext({
     total: msg.state?.chatTotal ?? null,
-    // what was ACTUALLY rendered: the window is exactly state.recentChat
-    // (tail says beyond its 40-line cap are not re-played — they are
-    // fetchable by paging, and this count is what makes the "showing N of
-    // M" hint appear so a reader knows to page; review B2).
+    // what was actually rendered (state.recentChat, 40-line cap); older lines are fetchable by paging, and this count
+    // drives the "showing N of M" hint
     shown: rc.length,
     spanMs: rc.length > 1 ? rc[rc.length - 1].ts - rc[0].ts : null,
   });
 
-  // Honest world progress: the phase tracks the scheduler's outstanding
-  // entity loads instead of jumping 0→1 (boot.js weights 'world' at 40 —
-  // this is the bar's biggest segment actually moving with the loads).
-  // The curtain does NOT wait on this; checkReady gates on body + state +
-  // terrain + the first sky's capped pipeline warm (world.applySkyFolded).
+  // world progress tracks the scheduler's outstanding entity loads (boot.js weights 'world' at 40); the curtain
+  // doesn't wait on it (checkReady: body + state + terrain + the first sky's warm)
   const initialPending = pending(P.FAR);
   if (initialPending > 0) {
     markPhase('world', Math.max(0.15, 1 - initialPending / (initialPending + 1)));

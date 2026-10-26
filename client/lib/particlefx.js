@@ -1,20 +1,7 @@
-// particlefx — draws one resolved particles emitter (shared/particle_effects.js) with three.js: the simulation is
-// shared/particlesim.js (Godot's CPUParticles3D, ported), stepped on this viewer's clock; this file owns the GPU half.
-//
-// One InstancedMesh per emitter, one quad per particle. The CPU writes each living particle's centre, colour, size,
-// angle and flipbook frame into instanced attributes once a frame (compacted: only the living are drawn); the node
-// material billboards the quad toward the camera and does the texture, the soft dot and the blend. Node materials (TSL)
-// compile for both of three's backends, WebGL 2 and WebGPU; nothing here is backend-specific, and there is no compute
-// pass (WebGL 2 has none), so headsets and desktops run the same path.
-//
-// Billboarding is in the mesh's own frame: the camera's right and up are carried into the emitter's local space each
-// frame, so a quad faces the viewer however its thing is turned, and grows with its thing's scale (the builder used the
-// world basis in the local frame, which tilted every quad on a turned thing). A headset's two eyes share the head's
-// basis, as they did.
-//
-// Cost is bounded three ways: what an effect may hold (EFFECT_LIMITS, checked at the door), the viewer's tier (the perf
-// governor thins drawn particles, never the simulation's meaning), and distance (an emitter farther than FAR is neither
-// stepped nor drawn: a cosmetic, per-viewer simulation needs no continuity nobody sees).
+// particlefx — draws one resolved particles emitter (shared/particle_effects.js): the sim is shared/particlesim.js
+// on this viewer's clock; this file is the GPU half. One InstancedMesh per emitter, CPU-written instance attributes,
+// a TSL billboard in the mesh's own frame (faces the viewer however its thing turns); WebGL 2 and WebGPU, no compute.
+// Cost bounded by EFFECT_LIMITS (at the door), the governor's tier (drawn count only), and FAR (neither stepped nor drawn).
 import { THREE, TSL, camera } from './core.js';
 import { makeSim, localGravity } from '../../shared/particlesim.js';
 

@@ -22,10 +22,9 @@ import { SWITCHES, SWITCH_WORDS, CLASS_WORDS, mySwitch, setSwitch } from './cons
 let deps = { mentionPerson: () => {}, presenting: () => false, openModLog: () => {}, toast: () => {} };
 export function initPeople(d) { deps = { ...deps, ...d }; }
 
-// ---------------------------------------------------------------- asks waiting for me (PROTOCOL L6; R 10-14: wire `ask`)
-// The authority files an ask when someone's act on my body meets an `ask` cell and pushes it here as body-inbox (net.js).
-// It marks the asker's row in People Here (badgeHtml), is said once as a toast in the authority's words, and the person's
-// menu answers it: Allow (this once) / Not now / Never. Gone when answered or at its 20 s expiry (consentinbox.js).
+// ---------------------------------------------------------------- asks waiting for me (PROTOCOL L6: wire `ask`)
+// The authority pushes an ask as body-inbox (net.js): it badges the asker's row, toasts once, and the person's menu
+// answers it (Allow / Not now / Never); gone when answered or at its 20 s expiry (consentinbox.js).
 export const consentInbox = makeConsentInbox({ onChange: (ev) => {
   for (const k of ev.added ?? []) deps.toast(`${displayOf(k.from)} asks to ${CLASS_WORDS[k.cls] ?? k.cls}${k.why ? ` — "${k.why}"` : ''}. Right-click them in People Here to answer; no answer in 20 s is no.`, 'warn', 10000);
   bus.emit('roster');   // People Here repaints its rows (the mark comes and goes)
@@ -172,20 +171,16 @@ function roleMenu(display, surface) {
 /** Allow (this once) / Not now / Never. Never also files a standing `deny` for that person and class at the authority
  *  (consent {deny, class}: PROTOCOL L6's per-person override, presence-only — it lasts this stay, like the authority's
  *  table itself; my table (consent.js) has no per-person cell to persist it in). */
-// The row answers the ask it showed, by its id (consent {answer: <id>}): never "whatever this person asks now", which
-// could be a newer, different ask the person never saw (review of #260). If that one is gone, nothing is sent.
+// The row answers the ask it showed, by its id: never "whatever this person asks now", which could be a newer ask
+// they never saw. If that one is gone, nothing is sent.
 async function answerAsk(item, display, askId) {
   const k = askId ? consentInbox.asks().find((x) => x.id === askId) ?? null : null;
   if (!k) { deps.toast(`the ask from ${display} you were answering is gone (answered, or past its 20 s); nothing was sent`, 'info'); bus.emit('roster'); return null; }
   const yes = item === 'ask-allow'; const words = askWords(k);
   const r = await consentInbox.answer(k.id, yes, sendRequest);
-  // Never's standing no is filed whatever became of the answer to an ask still here at the press: if the authority
-  // refuses the answer (its ask lapsed or was answered there a moment before), that is still a person I said Never to
-  // (review of #260). An ask already gone here by the press (answered, or past its 20 s) returned above, with nothing
-  // sent, so no standing no is filed for it.
-  // The deny goes to the ask's own sender (k.from), never to whoever holds that display name now, which a guest who
-  // left can have passed to another within the ask's 20 s; so the toast names them as the one who asked as `display`.
-  // A reply that never came (mayHaveLanded) isn't a refusal: the answer or the deny may have landed, so the toast says so.
+  // Never's standing no is filed even if the authority refuses the answer (that ask lapsed there); an ask already gone
+  // here returned above. The deny goes to k.from, never to whoever holds that display name now. A reply that never came
+  // (mayHaveLanded) isn't a refusal, so the toast says it may have landed.
   if (item === 'ask-never') { const d = await sendRequest('consent', { deny: k.from, class: k.cls });
     const gone = r?.ok ? '' : r?.refused?.mayHaveLanded ? `the answer may have landed (${r.refused.reason}); ` : `the ask had gone (${r?.refused?.reason ?? 'refused'}); `;
     deps.toast(d?.ok ? `${gone}the one who asked as ${display} may not ${words} — not now, and not when they ask again`

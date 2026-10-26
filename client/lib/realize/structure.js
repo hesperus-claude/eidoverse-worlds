@@ -1,34 +1,7 @@
-// structure — the griddled-building realizer (TEL0S_NOTES §11.4).
-//
-// Projects every entity carrying a `structure` component into the scene: merged
-// geometry through the material factory, declared boxes into the collider hash,
-// and nothing else. The thinking half is shared/structure.js, which is
-// pure and headless-tested; this file is the hosted half that executes its plan.
-//
-// WHOLESALE REBUILD, ON PURPOSE. A building's geometry is rebuilt from scratch
-// whenever its component changes — no incremental patching of walls. Buildings
-// are edited rarely and rendered constantly, a rebuild is a few hundred boxes,
-// and a full rebuild cannot drift from the folded state the way an incremental
-// patch can. That is the same trade `reconcile ∘ reconcile = reconcile` asks for
-// one level up, taken one level down.
-//
-// MERGED, NOT INSTANCED — for now. One merged BufferGeometry per palette
-// material gives one draw call per material per building, which is the win that
-// matters at this scale, and it is markedly simpler than InstancedMesh (whose
-// per-instance transforms buy nothing for geometry that never moves relative to
-// its building). Instancing becomes worth it when a world holds dozens of
-// buildings sharing one kit; client/lib/flora.js is the in-tree precedent for
-// that day. Nothing outside this file addresses a wall as an Object3D, which is
-// exactly what keeps that swap a private matter.
-//
-// TOPOLOGY IS BORN AT INIT. The palette below is created once, at module load,
-// and every building indexes into it. This is the lightrig.js/materials.js
-// doctrine restated: r184 keys its pipeline cache on material graph identity,
-// upstream's rewrap-after-the-fact measured 44 rewraps at 2–6s each on one
-// Safari join, and a runtime light-topology flip measured 388–1523ms frames. A
-// building that minted a fresh node graph per style would hitch the whole scene
-// every time somebody painted a wall. Style is an INDEX and a uniform, never a
-// new graph.
+// structure — the griddled-building realizer (TEL0S_NOTES §11.4): the hosted half of shared/structure.js, merged
+// geometry per palette material plus collider boxes. Rebuilt wholesale on any change, on purpose (it can't drift from
+// the fold). Merged, not instanced, for now; nothing outside this file addresses a wall. The palette is built once at
+// load: style is an index and a uniform, never a new node graph (a new graph recompiles pipelines and hitches the scene).
 
 import { THREE, TSL, scene } from '../core.js';
 import { bus, report } from '../base.js';
@@ -40,16 +13,8 @@ import { entities } from '../world.js';
 import { planStructure, makeShader } from '../../../shared/structure.js';
 import { defsRegistry } from '../defs.js';
 
-// PROCEDURAL, NOT TEXTURED. Surface detail is computed in the shader from
-// grid-local position, which buys three things this stack specifically needs:
-// zero texture bytes (there is no KTX2 encoder on either box, and texture
-// memory is the profiled frame-budget eater at 1.19GB), tiling that never
-// visibly repeats at any scale, and a style that costs a few uniforms in an
-// 8KB component instead of megabytes in the store.
-//
-// Every graph below is built ONCE, here, at module load. Style must never mint
-// a new graph at runtime — that is the same hazard class as a light-topology
-// flip, and it is why the palette is a fixed set of slots.
+// procedural, not textured: detail is computed from grid-local position (zero texture bytes, no visible repeat).
+// Every graph is built ONCE at module load; style must never mint one at runtime, hence the fixed palette slots.
 const {
   positionLocal, attribute, vec3, float, floor: tslFloor, fract, abs: tslAbs,
   smoothstep, mx_noise_float, mx_fractal_noise_float,
@@ -100,11 +65,8 @@ const lit = (hex, roughness, node) => {
   return m;
 };
 
-// §24 defs: the palette VALUES are style, and style is data — the def at
-// defs/structure/_palette.json overlays these built-in defaults (the
-// "style catalog seam" slotFor's comment anticipated). Slots and finish
-// nodes stay engine; applyPaletteStyle mutates the LIVE shared materials,
-// so a def edit restyles standing buildings on the defs-updated push.
+// §24 defs: palette VALUES are style data, overlaid from defs/structure/_palette.json; applyPaletteStyle mutates the
+// live shared materials, so a def edit restyles standing buildings
 const FINISHES = { plaster, boards, painted };
 const PALETTE = {
   wall: lit(0xe4ded1, 0.94, plaster),    // warm plaster
@@ -208,11 +170,7 @@ function buildGroup(plan) {
   const bySlot = new Map();
   for (const lv of plan.levels) {
     const shade = makeShader(lv.level, plan.grid, lv.y);
-    // Swept walls: geometry built from the wall's own direction, mitred at
-    // every turn. Made NON-INDEXED before normals so each profile facet gets a
-    // flat normal — shared ring vertices would average the chamfer into a soft
-    // roll, and a chamfer that does not catch a hard highlight line is a
-    // chamfer nobody can see.
+    // swept walls, mitred at every turn; NON-INDEXED before normals so each chamfer facet gets a flat normal (a hard highlight)
     for (const sw of lv.sweeps ?? []) {
       if (!sw.positions.length) continue;
       const geo = new THREE.BufferGeometry();
@@ -247,11 +205,8 @@ function buildGroup(plan) {
   for (const [slot, entries] of bySlot) {
     // paint BEFORE the merge, so every part is shaded by its own level's field
     if (slot !== 'glass') for (const { g, shade } of entries) paintGeometry(g, shade);
-    // mergeGeometries refuses ANY disagreement — a stray index, one extra
-    // attribute — and it fails the whole slot rather than the offending piece,
-    // so a single mismatch silently drops a building's worth of geometry. It
-    // reports only "index 6", which names nothing you can act on. Normalise to
-    // one shape, and say plainly if something arrived wearing another.
+    // mergeGeometries fails the whole slot on ANY attribute/index mismatch (reporting only "index 6"): normalise to one
+    // shape, and say plainly what arrived wearing another
     const want = slot === 'glass' ? ['position', 'normal'] : ['position', 'normal', 'color'];
     for (const e of entries) {
       let g2 = e.g;
@@ -303,12 +258,8 @@ function hideAnchor(id) {
   const anchor = entities.get(id);
   if (!anchor) return;
   anchor.visible = false;
-  // AND TAKE ITS COLLIDER. Hiding the mesh only stops you SEEING the crate —
-  // the models realizer fitted a box for it at spawn, so it stayed solid: an
-  // invisible obstacle the size of a large crate, sitting at the origin of
-  // every building. The building declares its own boxes (fitStructureBoxes,
-  // keyed <id>#sN); this one is keyed by the bare entity id, so dropping it
-  // touches nothing of ours.
+  // and take its collider: the models realizer fitted one at spawn (an invisible crate); ours are keyed <id>#sN, this
+  // one by the bare id
   removeCollider(id);
 }
 
@@ -395,20 +346,15 @@ function onChange({ id, what, comp }) {
 
 /** Wire the realizer to state. Called once from main.js, beside the others. */
 export function initStructureRealizer() {
-  // The style overlay (§24 defs): applied whenever the registry lands or a
-  // defs-updated push invalidates it. The materials are shared by reference
-  // with every standing building, so a restyle reaches them live. A failed
-  // fetch keeps the built-in style — the overlay is style, never a gate.
+  // the style overlay (§24 defs): applied when the registry lands or a defs-updated push invalidates it; a failed fetch
+  // keeps the built-in style
   const restyle = () => defsRegistry()
     .then((reg) => applyPaletteStyle(reg.structurePalette))
     .catch((e) => report('structure palette', e));
   restyle();
   bus.on('defs-updated', restyle);
-  // The anchor can arrive at any time after we realize — the models realizer
-  // announces every object it creates or moves on this bus, which is the only
-  // moment we can be sure there is something to hide.
-  // 'collider' included: models announces a late collider fit under that kind,
-  // and hideAnchor emits nothing, so there is no loop to guard against
+  // the anchor can arrive any time after we realize: models announces every object it creates or moves here ('collider'
+  // too, for a late fit), and hideAnchor emits nothing, so no loop
   bus.on('entity', (ev) => { if (ev?.id && tracked.has(ev.id)) hideAnchor(ev.id); });
   onWorldChange((ev) => {
     if (ev.type === 'hydrated') reconcileStructures();

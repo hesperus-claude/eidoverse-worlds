@@ -1,18 +1,6 @@
-// flora_lod — blade-level LOD index subsets for tiled 'blades' strokes,
-// DOM-free (unit-tested in tools/flora.test.ts). §17b.
-//
-// The upstream tuft (vegetation.js bunchGeometry) builds perBunch blades as
-// CONTIGUOUS runs: each blade pushes (LOOPS+1)×2 = 10 vertices, then LOOPS×6
-// = 24 index entries referencing only its own 10 (meadow grass 8 blades →
-// 80 verts/192 entries; galleta 34 → 340/816). A far-LOD geometry keeps
-// whole blades by keeping whole 24-entry runs: the subset index still points
-// into the SHARED vertex buffers — dropped blades' vertices simply go
-// unreferenced — so the far variant costs one small index buffer per stroke
-// and not one byte of copied vertex data.
-//
-// The layout is verified against the construction loop upstream AND
-// re-verified structurally here at runtime, entry by entry: version skew in
-// vegetation.js degrades to "no LOD" (null), never to a torn tuft.
+// flora_lod — far-LOD index subsets for tiled 'blades' strokes, DOM-free (tools/flora.test.ts). §17b.
+// Keeps whole 24-entry blade runs over the SHARED vertex buffers (one small index buffer per stroke, no copied
+// vertices). The layout is re-verified at runtime: vegetation.js skew degrades to null (no LOD), never a torn tuft.
 
 export const BLADE_VERTS = 10;    // (LOOPS+1) × 2 — vegetation.js LOOPS = 4
 export const BLADE_INDICES = 24;  // LOOPS × 6
@@ -47,14 +35,8 @@ export function bladeLodIndex(index, vertexCount, keep) {
   return out;
 }
 
-// §22n — VERTEX LOD, the successor to the retired blade-count subset above.
-// With opaque blades (§22m) the fragment bill collapsed and the vertex
-// program became the far field's cost. The coarse index keeps EVERY blade
-// (no count pop — the §22d lesson) but spans its quads across loops 0→2→4
-// instead of 0→1→2→3→4: 12 index entries referencing 6 of the blade's 10
-// verts. Same fitted silhouette sampled coarser, same shared buffers, and —
-// because an index subset never renumbers vertices — the §22h dither's
-// bladeId (vertexIndex / 10) still lands on the right blade.
+// §22n vertex LOD: keeps EVERY blade (no count pop, §22d) but spans quads across loops 0→2→4: 12 entries over 6 of
+// 10 verts. An index subset never renumbers vertices, so the §22h dither's bladeId (vertexIndex / 10) still holds.
 export const BLADE_COARSE_INDICES = 12;   // 2 quads: loops 0→2→4
 const COARSE_QUADS = [0, 1, 4, 1, 5, 4, 4, 5, 8, 5, 9, 8];  // original winding, loops skipped
 

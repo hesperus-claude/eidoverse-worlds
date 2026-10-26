@@ -22,17 +22,9 @@ export function makePointerLine({ segments = 24, tint = 0x8fb0d6, opacity = 0.85
   return line;
 }
 
-// THE SURFACE DOT (owner, 10-02): a small mark where the laser meets what it points at — a panel quad, a nameplate, a
-// world entity — lying ON the surface and facing out, so you can see exactly what a press would land on. Constant in
-// angular size (scaled by its distance from the eye each frame): readable at any distance, never a blob up close. It is
-// drawn whenever there is a target, whatever the pointer visibility setting says (in 'never' it is the only mark).
-// ONE place: xr.js only ever calls makeSurfaceDot / setSurfaceDotKind / placeSurfaceDot / hideSurfaceDot.
-//
-// THE CONTEXTUAL ICON (owner, 10-02): the dot becomes an icon for what a press would do there — click (a control), type
-// (a text field), scroll (an area that scrolls), move (a panel's handle or background: grip takes it), resize (a corner
-// or an edge: grip resizes) — and stays a plain dot where nothing is actionable (a nameplate: resting there is the
-// action). Icons are icons.js glyphs (Lucide; Phosphor's arrows-out-cardinal for move) on a dark disc, drawn once per
-// kind; constant in angle like the dot, a little larger so a glyph is readable.
+// THE SURFACE DOT: a mark where the laser meets its target, on the surface and constant in angular size; drawn
+// whenever there is a target, whatever the visibility setting. xr.js only calls make/setKind/place/hideSurfaceDot.
+// It becomes an icons.js glyph for what a press would do (click, type, scroll, move, resize); a plain dot elsewhere.
 import { stroke, fillPath } from './icons.js';
 export const DOT_RAD = 0.007;      // its diameter as an angle at the eye: ≈0.4°, 6 mm at arm's length, 2 cm at 3 m
 export const ICON_RAD = 0.014;     // an icon's diameter: ≈0.8°, 11 mm at arm's length — a glyph needs about twice a dot

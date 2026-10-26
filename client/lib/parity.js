@@ -41,12 +41,8 @@ export function foldParity() {
     }
   }
 
-  // entity→entity mounts: the fold's parent record vs the scene's linkage —
-  // AND, when linked, the child's parent-local transform vs the mount's own
-  // offset. The link can be right while the pose is wrong (a reconcile that
-  // re-applies an absolute pos in the parent's frame — review finding B1),
-  // so both are buckets. Part-socket mounts skip the pose check: attach
-  // bakes the part's live phase into the offset, honestly.
+  // entity→entity mounts: fold's parent vs scene linkage AND, when linked, the child's local transform vs the mount offset
+  // (the link can be right while the pose is wrong). Part-socket mounts skip the pose check: attach bakes the part's phase in.
   for (const id of shadowIds) {
     if (!legacyIds.has(id)) continue;
     const rel = shadow.entities[id].parent ?? null;

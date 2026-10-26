@@ -27,10 +27,8 @@ export function noteServerTime(t, at = performance.now()) {
 export function noteRoundTrip(t0, t, t1) {
   if (![t0, t, t1].every((x) => typeof x === 'number' && Number.isFinite(x)) || t1 < t0) return;
   const s = { rtt: t1 - t0, offset: t - (t0 + t1) / 2 };
-  // Two honest samples of one clock agree within half their round trips summed (queuing can only misplace a sample by
-  // its own rtt/2). One that doesn't was taken on a clock that has since STEPPED (a wall-clock resync, a laptop waking:
-  // the page's monotonic clock and the authority's wall clock part by the jump): the older ones are retired, or the
-  // minimum filter keeps the stale offset for up to RTT_KEEP asks and every flight is drawn behind the sim (10-18).
+  // Honest samples of one clock agree within half their rtts summed; one that doesn't means the clock STEPPED, so retire
+  // the older ones, or the minimum filter keeps the stale offset for up to RTT_KEEP asks.
   rtt = rtt.filter((x) => Math.abs(x.offset - s.offset) <= (x.rtt + s.rtt) / 2 + STEP_SLACK_MS);
   rtt.push(s);
   if (rtt.length > RTT_KEEP) rtt.shift();
@@ -52,10 +50,8 @@ export const serverNow = () => localNow() + shownOffset();
 /** A time `ms` from now on the authority's clock, in whole milliseconds: what a written time (a timed grant's until) must
  *  be, since the authority refuses a fraction (Number.isSafeInteger) and serverNow() carries performance.now()'s. */
 export const serverUntil = (ms) => Math.round(serverNow() + ms);
-// A floor: anything the authority stamped (a log entry's ts, a frame's t) was true on its clock no later than now, so the
-// offset is at least t − localNow(). A floor above the estimate by more than its slack means the clock stepped since the
-// last round trip: ask again at once (net.js hands askClock in) instead of drawing what the replica already folded seconds
-// behind until the next CLOCK_MS ask (10-18: the thrown crate waited in the hand). One ask a second at most.
+// A floor: anything the authority stamped is ≤ its now, so offset ≥ t − localNow(). A floor above the estimate by more
+// than its slack means the clock stepped: ask again at once (askClock from net.js), at most once a second.
 let doubt = null, doubtAt = -Infinity;
 const DOUBT_EVERY_MS = 1000;
 export const onClockDoubt = (fn) => { doubt = fn; };

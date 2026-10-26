@@ -1,22 +1,6 @@
-// piperphon — build the phonemizer ONCE, not once per word.
-//
-// 🔴 MEASURED, 2026-08-09: 30,359ms. Thirty seconds, per utterance, to rebuild
-// an emscripten module that wraps a 17 MB espeak-ng data file — and
-// @mintplex-labs/piper-tts-web's predict() calls that factory on EVERY call.
-// Inference itself is nearly free; this was the whole delay R heard as "waaaay
-// delayed (10s+) and distorted".
-//
-// She spotted it this morning and I dismissed it, twice, on bad measurements:
-// first timing the factory in BUN against local files (34-52ms, meaningless for
-// a browser), then blaming single-threaded ONNX (real, but worth almost nothing
-// here — cross-origin isolation landed and the delay did not move). The lesson
-// is not "the phonemizer is slow". It is: I measured the neighbour of the thing
-// I suspected, twice, and concluded about the thing.
-//
-// Why the library cannot be configured out of this: the factory lives in a
-// WeakMap private field, so it cannot be wrapped, and predict() hardcodes the
-// build. So we do the same call ourselves and keep the module. Verified
-// re-entrant in Bun this morning: first callMain 44ms, second 4ms.
+// piperphon — build the phonemizer ONCE, not once per word. @mintplex-labs/piper-tts-web's predict() rebuilds the
+// espeak-ng emscripten module on every call (~30 s per utterance) and keeps the factory private, so we make that
+// call ourselves and keep the (re-entrant) module.
 
 // 🔴 THE BUILD RUNS IN A WORKER, AND THAT IS WHAT MAKES IT FAST (2026-08-09).
 // Measured: 57ms in Bun vs 27,551ms on the browser main thread, SAME BYTES — so

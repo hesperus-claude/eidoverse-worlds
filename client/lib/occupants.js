@@ -1,27 +1,13 @@
-// seats — the browser's seat-profile cache and gate assembly (#101).
-//
-// One judge, three readers: this is reader one and two (the local body and
-// every remote both route through mountTransform, which asks here). The
-// cache holds SERVER-JUDGED verdicts from /avatars — never a rehashed file,
-// never a default — refreshed on connect and on the two update events, with
-// per-name fetch generations so a slow response from before an acceptance
-// can never roll the acceptance back (seatcore.makeGenerationGuard; the #95
-// lesson wearing seat-profile clothes).
-//
-// The runtime gate (seatcore.seatGate) additionally needs two local truths
-// the server cannot know: which mixer slot is ACTUALLY playing on the occupant
-// (setClip's fallback walk must never let "sit" consume a chair profile),
-// and the digest of the clip bytes this page really loaded (assets.js
-// hashes them once at fetch — a filename is not an identity).
+// occupants — the browser's seat-profile cache and gate assembly (#101). The cache holds server-judged verdicts
+// from /avatars, refreshed on connect and on the update events, generation-guarded (seatcore.makeGenerationGuard).
+// seatGate also needs two local truths: the mixer slot actually playing (a fallback must never let "sit" consume a chair
+// profile) and the digest of the clip bytes loaded (assets.js; a filename is not an identity).
 
 import { bus } from './base.js';
 import { vrmaShaLoaded } from './assets.js';
 import { makeVerdictCache, seatGate, occupantScalar, nameFromAvatarPath, SEAT_CLIP_FILE } from './seatcore.js';
 
-// The cache logic — epochs, pending demotion, event-rev floors — lives ONCE
-// in seatcore.makeVerdictCache, shared verbatim with the headless agent and
-// pinned by bun against the #105 review's four vectors. This module supplies
-// only the browser's transport and wiring.
+// The cache logic lives once in seatcore.makeVerdictCache (shared with the headless agent); this is the browser's transport.
 const cache = makeVerdictCache(async () => {
   const res = await fetch('/avatars', { cache: 'no-store' });
   if (!res.ok) throw new Error(`roster ${res.status}`);
@@ -68,9 +54,7 @@ export function occupyCorrectionFor(occ, sock) {
 }
 
 // ---- declaration bookkeeping ------------------------------------------------
-// One console line per state CHANGE per occupant — a seat that stays approximate
-// through a whole sit logs once, not per frame; standing up clears the key so
-// the next sit declares afresh.
+// One console line per state CHANGE per occupant; standing up clears the key so the next sit declares afresh.
 
 const declared = new Map(); // occupantId → last declared "to/slot state reason"
 export function declareOccupyState(occupantId, to, slot, state, reason) {

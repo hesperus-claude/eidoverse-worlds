@@ -1,26 +1,7 @@
-// mods — runtime-loaded client scripts: physics, animation, in-game UI.
-//
-// The trust model, decided deliberately (docs/MODDING-UI.md):
-//
-//   * A mod is LOCAL and TRUSTED — full access, an in-page ES module with
-//     the whole EW surface (your bones, the scene, door requests, the wire).
-//     It can act as you; loading one is a mod-install decision, like a
-//     browser extension. Stored in IndexedDB, yours alone, survives reloads.
-//     (A world doesn't offer client mods: what runs in a world is its own
-//     scripts, on the server, through the door — docs/SCRIPTS.md.)
-//
-// What a mod can DO needs no new machinery: it animates your own body freely
-// (it is you), other bodies by their consent (bodydrag), objects through the
-// door as you would (EW.physics: grab/put/throw/drop/punt), and it may
-// build in-game UI through the
-// same panel primitives the client itself uses. The engine cannot tell a
-// mod's output from anyone else's, which is the point.
-//
-// Contract: a mod is an ES module. Its default export (if any) is called
-// with a context: { name, world, EW, ui, onTick, onDispose }. Ticks are
-// wrapped; five consecutive throws pause the mod loudly. Disabling runs your onDispose handlers and removes your
-// panels — but a module, once imported, cannot be UNLOADED; a mod that
-// grabbed globals keeps them until reload. Trusted means trusted.
+// mods — LOCAL, TRUSTED client modules: full EW access (they can act as you), like a browser extension; stored in
+// IndexedDB. Trust model: docs/MODDING-UI.md. A world doesn't offer client mods; world scripts run server-side (docs/SCRIPTS.md).
+// Contract: the default export gets { name, world, EW, ui, onTick, onDispose }; five consecutive tick throws pause it;
+// disabling can't unload a module (globals persist until reload).
 
 import { bus, CONFIG, report } from './base.js';
 import { makeSection, toast, flashHint } from './ui.js';
@@ -164,10 +145,7 @@ export function initMods() {
     let editing = null;      // name being edited, '' = new
     const render = async () => {
       const mine = await listScripts();
-      // THE LAYOUT (owner, 09-29: "the mod area was a bit of a hot mess"): every entry is one .mod-row —
-      // its name, a quiet line saying what it is, and its controls on the right (or under it, when a
-      // row carries more than one) — grouped under the pane's captions. No inline button runs in prose,
-      // no rules, no nested scroller.
+      // Every entry is one .mod-row (name, a quiet line saying what it is, controls), grouped under the pane's captions.
       const rows = mine.map((s) => {
         const on = running.has(s.name);
         return `<div class="mod-row stacked">
@@ -200,12 +178,8 @@ export function initMods() {
         const b = e.target.closest('button');
         if (!b) return;
         const d = b.dataset;
-        // The built-in toggles answer BEFORE any await. listScripts() touches
-        // storage and the network, and this is an async handler with no catch:
-        // one rejection there killed every button in the panel silently,
-        // including the two that need nothing from it. The body-engine toggle
-        // then read as permanently stuck — the engine never changed because
-        // the click never arrived, not because the switch was wrong.
+        // The built-in toggles answer BEFORE any await: listScripts() can reject in this catch-less handler and would
+        // otherwise kill every button silently.
         if (d.bodyeng) {
           const names = listBodyEngines();
           setBodyEngine(names[(names.indexOf(currentBodyEngine()) + 1) % names.length]);

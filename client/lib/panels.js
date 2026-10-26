@@ -1,4 +1,4 @@
-// panels — schema-driven edit surfaces (design of 2026-08-04 21:52).
+// panels — schema-driven edit surfaces.
 //
 // A panel is a FRAME on desktop and a laser-clickable QUAD in VR, and the way
 // that stays true is that a panel never owns bespoke DOM: it declares FIELDS —
@@ -9,7 +9,7 @@
 //   renderCanvas(canvas, fields) → hit regions → quad texture (VR); a laser
 //     UV-hit resolves to a region and dispatches the SAME edit(action, payload)
 //
-// Field design rule (live, 21:58): every field must be operable with no keyboard —
+// Field design rule: every field must be operable with no keyboard —
 // numbers are steppers, actions are buttons, lists are rows. Free-text exists
 // on desktop (rename, comp JSON) and degrades to display-only in VR rather
 // than summoning a keyboard nobody wants to float-type on.
@@ -95,10 +95,7 @@ export function makeSchemaFrame(key, opts) {
 
   function set(fields, edit) {
     lastFields = { fields, edit };
-    // Same shape as what is on screen → update values in place: no node is
-    // destroyed, a hovered button stays hovered, a scroll position holds.
-    // (Godot routes a changed property to its one widget through
-    // editor_property_map, editor_inspector.cpp:4870; this is that.)
+    // Same shape as on screen → update values in place: no node destroyed, hover and scroll hold (Godot's editor_property_map).
     const key = shapeKey(fields);
     if (live && live.key === key) {
       live.box.edit = edit;
@@ -124,12 +121,8 @@ export function makeSchemaFrame(key, opts) {
     if (!scroll.contains(a) || !/INPUT|TEXTAREA/.test(a.tagName)) return false;
     if (!pendingWhileFocused) {
       pendingWhileFocused = true;
-      // repaint DIRECTLY, not via set(): during 'blur' some engines still report
-      // the input as active, so update() would skip it again and the hold would
-      // re-arm on an element that will never blur twice. The input is leaving;
-      // a rebuild can no longer eat its caret.
-      // a tick later, so the focus move has landed: Tab (or a click) into ANOTHER field of this panel holds again on it
-      // instead of rebuilding the panel under the field just focused (house I198)
+      // repaint DIRECTLY, not via set(): during 'blur' some engines still report the input active, so update() would skip it
+      // a tick later, so the focus move has landed: tabbing into ANOTHER field of this panel holds again on it
       a.addEventListener('blur', () => setTimeout(() => {
         pendingWhileFocused = false;
         if (holdUntilBlur()) return;
@@ -220,10 +213,8 @@ export function closeContextMenu() {
 }
 
 
-// scrub feel (R 10-04, Maya's Channel Box icons): how dragging a number feels, per viewer, never logged. speed: slow /
-// medium / fast; accel: the further you drag the faster it goes (Maya's "hyperbolic"; R's default). Modifiers while
-// dragging: Shift = 10× finer, Ctrl = whole numbers. Said in every number's tooltip and when a drag starts, because
-// a modifier nobody can find doesn't exist (R: "SOOOO much hidden knowledge").
+// scrub feel: per viewer, never logged. speed: slow/medium/fast; accel: the further you drag the faster it goes.
+// Shift = 10× finer, Ctrl = whole numbers; said in every number's tooltip, since a hidden modifier doesn't exist.
 export const SCRUB_SPEEDS = { slow: 0.3, medium: 1, fast: 3 };
 let scrubFeel = { speed: 'medium', accel: true };
 try { scrubFeel = { ...scrubFeel, ...JSON.parse(localStorage.getItem('ew-scrub-feel') ?? '{}') }; } catch { /* defaults */ }
@@ -258,10 +249,8 @@ function stepper(value, f, commit) {
   // editOps, D4a) refuses what the door would refuse and says why, so nothing here clamps (tools/editor-range-test.ts)
   const sendTyped = (w) => { cur.mixed = false; wire = w; show(wire); commit(wire); };
 
-  // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter commits and
-  // blurs, and the blur's own native `change` must not commit again with a stale expect (review 10-07 B2: every Enter
-  // wrote the edit, then a second identical set that the authority refused as `changed`, with a red toast). A change
-  // whose text is what the field last showed is no edit at all.
+  // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter commits
+  // and blurs, and the blur's native `change` must not commit again with a stale expect. Unchanged text is no edit.
   num.onchange = () => {
     if (num.value === shownFace) return;
     const face = parseEntry(num.value, +toFace(wire));
@@ -296,10 +285,8 @@ function stepper(value, f, commit) {
     scrubHint(false);
     if (d.armed) { cur.mixed = d.mixed; show(d.w0); commit(d.w0, { live: true }); wire = d.w0; for (const q of d.peers ?? []) q.p.peer.restore(q.w0); }
   };
-  // the same drag from the value box and from the channel's NAME (R, 10-10: "make the channel lines themselves
-  // selectable and scrub-able just like their value boxes. This is a Maya feature that I love")
-  // a peer is another selected channel's stepper: it begins where it stands, follows the same face delta, and commits
-  // or restores with the leader (the channel box's run, R 10-11 23:13: "scrubbing on then only affects one still")
+  // the same drag from the value box and from the channel's name
+  // a peer is another selected channel's stepper: it starts where it stands, follows the leader's face delta, commits or restores with it
   wrap.peer = { begin: () => ({ w0: wire, face0: +toFace(wire) }),
     to: (face, live) => { cur.mixed = false; const w = soft(toWire(face)); wire = w; show(w); commit(w, live ? { live: true } : undefined); },
     restore: (w0) => { show(w0); commit(w0, { live: true }); wire = w0; } };
@@ -511,10 +498,8 @@ function fieldDOM(f, edit, ro = {}) {
     };
     row.append(menuButton(row));
   }
-  // revert-to-default (Godot's ↺ / Blender's Backspace): a field that declares `def` grows a
-  // small ↺ while its value differs; clicking commits the default through the same edit path
-  // …except the transform's channels: there the reset is the right-click menu's (R, 10-10: "why does only scale get
-  // the 'reset to default'? it feels like a right-click menu item anyway")
+  // revert-to-default: a field that declares `def` grows a ↺ while its value differs; clicking commits the default
+  // …except the transform's pos/rot channels: their reset is on the right-click menu
   if (f.def !== undefined && ['num', 'enum', 'color', 'range'].includes(f.t) && !/(?:^|:)(?:pos|rot)\./.test(f.k ?? '')) {
     const same = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b)) : a === b);
     const face = f.t === 'color' ? FACTS.hex(+f.def) : f.deg ? `${Math.round(f.def * R2D)}°` : String(f.def);
@@ -529,15 +514,11 @@ function fieldDOM(f, edit, ro = {}) {
 }
 
 // ---------------------------------------------------------------- canvas renderer
-// The VR seam. Same fields, painted to a 2D canvas; returns hit REGIONS in
-// canvas pixels so xr.js can turn a laser UV-hit into the same edit() call.
+// The VR seam: same fields painted to a 2D canvas, returning hit regions (canvas px) so xr.js maps a laser hit to edit().
 // Text fields render display-only here on purpose (no floating keyboards).
 
-// The quad wears the PANELS' skin, not its own (in-headset, 09-04: "looks
-// hand-rolled — go with the panels"): colors come from the same tokens the
-// desktop frames use, read at paint time; a quad has no alpha, so the panel
-// ground is the solid --panel-rgb. Fallbacks keep a headless/tokenless page
-// painting the old palette.
+// The quad wears the panels' tokens, read at paint time; a quad has no alpha, so the ground is the solid --panel-rgb.
+// Fallbacks keep a tokenless page painting the old palette.
 function tokens() {
   let cs = null;
   try { cs = getComputedStyle(document.documentElement); } catch { /* no DOM */ }

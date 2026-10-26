@@ -67,11 +67,8 @@ export const foldRecord = (id) => state.st.entities?.[id] ?? null;
 /** The fold record of a placed thing — exactly what the schema reads (C7b: shared/editschema.js takes `c`). Frozen in
  *  dev; never written here. */
 export const recordFor = (id) => replica.st?.entities?.[enc(String(id))]?.c ?? null;
-// The Rotate channels' hint (shared/euler.js): the Euler triple THIS viewer
-// last composed for a thing, so its channels read back exactly as typed
-// (the branch past 90°, the inner channel at gimbal lock). Only honoured
-// while the folded q is still the one it was composed for — anyone else's
-// turn (a gizmo, a peer, an undo) voids it. Client memory, never stored.
+// Rotate channels' hint (shared/euler.js): the Euler triple this viewer last composed, so channels read back as typed
+// (past 90°, at gimbal lock); void once the folded q differs. Client memory, never stored.
 const eulerHints = new Map();   // id → { order, e, q }
 function eulerHint(id, rec) {
   const h = eulerHints.get(id);
@@ -106,11 +103,8 @@ export function liveFor(id) {
 }
 export const trustedHere = () => trustedOf(replica.st?.entities?.['@world']?.c);
 export const mayTrust = () => (net.myRights?.role === undefined ? undefined : isOwner(net.myRights));
-// The world entity `@world` (design §3, shared/worldentity.js): an alias of
-// state.sky/terrain/grass, edited through the sky/weather/terrain/grass verbs.
-// Those are owner-rank: false = this viewer is known not to be the owner
-// (WORLD_ADMIN operators fold to owner), undefined = not known yet.
-// shaping the world's look is the editWorld switch (research roles S2); the owner's on an older server
+// `@world` (shared/worldentity.js) aliases state.sky/terrain/grass, edited through their verbs. mayShape: false =
+// known not allowed, undefined = not known yet; the right is editWorld, an older server's falls back to owner rank.
 export const mayShape = () => { const r = net.myRights; if (Array.isArray(r?.permissions)) return r.permissions.includes('editWorld'); return r?.role === undefined ? undefined : isOwner(r); };
 export const worldLive = () => ({ now: Date.now(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
 export function schemaFor(id) {
@@ -184,9 +178,8 @@ export function commitEdit(id, key, value, opts = {}) {
 
 /** Several channels of one thing in ONE request (so one undo step): {'pos.x': 0, 'pos.y': 0, …}, FACE values (degrees
  *  for rotate), as editOps takes them. The transform's reset keys use it. */
-// `id` may be an array (a multi-select: each thing edited from its own record) or WORLD_ID (worldEditOps over every field
-// at once, so two fields of one component are one write, not two that each set the whole of it): a scrubbed run of
-// channels edits whatever the Inspector shows (house review I23). Either way ONE request, one Ctrl+Z.
+// `id` may be an array (a multi-select, each from its own record) or WORLD_ID (worldEditOps over every field at once,
+// so two fields of one component are one write). Either way ONE request, one Ctrl+Z.
 export function commitMany(id, edits, what) {
   if (id === WORLD_ID) {
     const { ops, errors } = worldEditOps(state.st, edits, worldLive());

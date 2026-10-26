@@ -17,13 +17,8 @@ import { warmDepth, warmLit } from './warmqueue.js';
 
 // ---------------------------------------------------------------- identity
 
-// No boot-blocking roster round-trip: the top-level `await fetch('/avatars')`
-// that lived here gated the ENTIRE module graph on one RTT (the bench's
-// "engine" number silently included it). A bare name now resolves from
-// (1) the cached last resolution, or (2) the roster the join snapshot
-// carries — and the server resolves names for everyone ELSE's view either
-// way, so the wire never waits on us. UI that wants the full roster (the
-// first-run door, the avatar panel) fetches it lazily at open.
+// No boot-blocking roster fetch: a bare name resolves from the cached last resolution or the join snapshot's roster.
+// UI that wants the full roster (first-run door, avatar panel) fetches it lazily at open.
 const want = CONFIG.params.get('avatar') || localStorage.getItem('ew-avatar-name') || 'claude';
 let myAvatarName = want.includes('/') ? want.split('/').pop().replace(/\.vrm.*$/, '') : want;
 let myAvatarPath = want.includes('/') ? want : null;
@@ -35,20 +30,10 @@ if (!myAvatarPath) {
 }
 if (myAvatarPath) setMyAvatarPath(myAvatarPath);
 export const rosterLazy = () => fetch('/avatars').then((r) => r.json()).catch(() => []);
-// Cold cache only: START the roster fetch now, await it never — it rides in
-// parallel with module parse and GPU init instead of gating them, and the
-// body begins downloading as early as the old blocking prologue allowed.
-// (Measured: making the body wait for the SNAPSHOT's roster instead cost
-// +350ms at 25mbit/40ms — the multi-MB VRM is the long pole, and its start
-// time is the boot.) Warm boots have the cached path and skip the request.
+// Cold cache only: start the roster fetch now and never await it, so it rides in parallel with parse and GPU init.
 const rosterEarly = myAvatarPath ? null : rosterLazy();
-// Warm boots must still REFRESH the stored resolution: the cached path
-// carries a frozen ?v= stamp, so an avatar redeployed under the same name
-// would otherwise replay from HTTP cache forever (bit 08-12: three hair
-// retunes deployed to the box, zero ever reached a returning client — the
-// live sim was running the day-one file). The cached path still wins THIS
-// boot — nothing here blocks — but the roster re-resolves in the background
-// and rewrites the cache, so the next reload wears the new version.
+// Warm boots still refresh the stored resolution: the cached path carries a frozen ?v= stamp, so a redeployed avatar
+// would replay from HTTP cache forever. The cached path wins this boot; the next reload wears the new version.
 if (myAvatarPath) {
   rosterLazy().then((list) => {
     const fresh = (list ?? []).find((a) => a.name === myAvatarName)?.path;
@@ -97,9 +82,7 @@ let me = null;
 let seenFirstBody = false;
 export function getMe() { return me; }
 // ---------------------------------------------------------------- this body's size / plate lift
-// Per body, per browser (bodyscale.js: ew-body-prefs, keyed by the worn body's NAME, like ew-xr-scale). Applied on
-// every setMe — boot, a switch, a server-side refresh — so wearing a body again restores what you chose for it. The
-// wire (net.js sendPose → bodyWire) reads it off the Avatar; nothing else needs telling.
+// Per body name, per browser (bodyscale.js: ew-body-prefs), applied on every setMe; net.js sendPose reads it off the Avatar.
 let lsRef = null;
 try { lsRef = globalThis.localStorage ?? null; } catch { lsRef = null; }
 export function myBodyPrefs() { return loadBodyPrefs(lsRef, getMyAvatarName()); }
@@ -156,18 +139,12 @@ function armFlightFor(av) {
 // ---------------------------------------------------------------- avatar swap
 
 wireAvatarSwitch(async (path, name) => {
-  // Same path is normally a no-op — but not when the body on screen is the
-  // capsule: `myAvatarPath` records what we INTENDED to wear and survives a
-  // failed load, so this early return was the last link that made a transient
-  // failure permanent (#196 review B1). Wearing the body we already "have" is
-  // exactly the retry a user reaches for.
+  // Same path is a no-op, except on the capsule: myAvatarPath survives a failed load, and re-wearing is the retry (#196).
   if (path === myAvatarPath && !me?.isCapsule) return;
   toast(`changing into ${name}…`, 'info', 3000);
   try {
-    // The switch order is load-bearing (§19b): NEW body fully ready (pool-hit
-    // or parse+compile; the Avatar constructor is the swap into the scene) →
-    // only then does the old body shed. dispose() releases its VRM to the
-    // instance pool, so switching BACK is a 0ms pool-hit, not a re-parse.
+    // Switch order is load-bearing (§19b): the new body is fully ready before the old one sheds; dispose() returns its
+    // VRM to the pool, so switching back is a pool-hit.
     const next = await makeAvatar(CONFIG.name, path, { urgent: true }); // build before shedding the old
     me?.dispose();
     // name and path FIRST: setMe announces 'avatar-worn' with the current name,

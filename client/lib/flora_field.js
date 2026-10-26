@@ -5,14 +5,8 @@
 import { ownHook, releaseHook } from './autohooks.js';
 import { densityCount } from './grass_quality.js';
 
-// ---- applied truth (#74) ---------------------------------------------------
-// The density dial can silently no-op: wireDensityDial returns early when a
-// stroke's expected instanced attributes are absent (vegetation.js version
-// skew), leaving the stroke without setDensity, and the composed dial
-// optional-chains every child. Policy arithmetic then reports a density the
-// renderer never applied. These reports read the LIVE draw state — the
-// instanced mesh's actual count — never the arithmetic, so a resident-facing
-// surface can say when the cap did not take.
+// ---- applied truth (#74): reports read the LIVE instanced count, never the policy arithmetic, since
+// wireDensityDial can silently no-op on vegetation.js version skew
 
 /** One stroke's draw truth for a requested density factor. */
 export function strokeApplied(f, eff, i = 0) {
@@ -25,10 +19,8 @@ export function strokeApplied(f, eff, i = 0) {
   const expected = densityCount(total, eff);
   const dial = typeof f.setDensity === 'function';
   if (f.tiled) {
-    // a tiled stroke legitimately draws FEWER than the cap: distance
-    // falloff and frustum-culled tiles are deliberate under-draw, not a
-    // dial that failed to take. The cap still binds from above (small
-    // slack: per-tile rounding and the max(1,…) floor).
+    // a tiled stroke legitimately under-draws (distance falloff, culled tiles); the cap binds from above, with
+    // slack for per-tile rounding and the max(1,…) floor
     const slack = f.tiles?.length ?? 0;
     const ok = dial && drawn <= expected + slack;
     return { stroke, total, drawn, expected, dial, ok, falloff: true,
@@ -79,10 +71,7 @@ export function composeField({ group, fields, mask }) {
     /** live draw truth for a requested factor (#74) — group.visible read at
      *  call time so `off` reports what the scene actually shows */
     applied: (eff) => fieldApplied({ fields, groupVisible: group.visible }, eff),
-    // The engine registered these itself; marking them says the meadow retires
-    // them, so no subsystem that claims per-frame hooks by diffing the global
-    // array may adopt one that appeared while ITS own async build was in
-    // flight (see autohooks.js).
+    // marks the meadow as these hooks' owner, so a subsystem diffing the global hook array can't adopt them (autohooks.js)
     autoHooks: fields.map((f) => ownHook(f.update)).filter(Boolean),
     dispose: () => {
       for (const f of fields) f.dispose?.();

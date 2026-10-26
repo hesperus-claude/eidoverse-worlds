@@ -38,10 +38,8 @@ export function renderAside(sc, cam, target = null) {
   finally { renderer.setRenderTarget(rt); xr.enabled = was; if (xr.isPresenting) xr.updateCamera(camera); }   // the eyes are rebuilt from the RIG before anything else renders
 }
 
-// RENDER CENSUS (owner, 09-06 12:22: per-eye fisheye + right eye bleeding into the left, spontaneous, mirror OFF):
-// count every renderer.render() per animation frame while presenting and remember the last one that was
-// NOT the main pass — camera type/fov/parent and whether it targeted a render target. A second render
-// into the eye framebuffer with a non-XR camera is exactly a wide frame stamped across both eyes.
+// RENDER CENSUS: count renderer.render() calls per frame while presenting and remember the last non-main pass; a second
+// render into the eye framebuffer with a non-XR camera stamps a wide frame across both eyes.
 export const renderCensus = { perFrame: 0, maxPerFrame: 0, foreign: null, frames: 0 };
 let mainPassCam = null;
 if (typeof renderer.render === 'function') { const orig = renderer.render.bind(renderer);   // node-side suites mock core.js with a renderer that has no render (wing-owner-wire-test)
@@ -111,10 +109,8 @@ export function renderWorld() {
   if (worldHold) return;
   if (globalThis.__gpuLost?.fired) return;   // a lost GPU draws nothing (see renderer.render above); skip the rest of renderWorld too
   mainPassCam = camera;
-  // SELF-HEAL (09-07 00:30, the black desktop's second half): three captures `outputRenderTarget = _renderTarget || …`
-  // at the top of every render. A frame that aborts between binding its frame-buffer target and restoring leaves
-  // that target bound; every later frame then renders INTO it and blits it onto ITSELF — the canvas never sees a
-  // pixel again, with no further errors. Off-XR, a bound target at the top of the main pass can only be that.
+  // SELF-HEAL: a frame that aborts mid-render leaves its target bound, and every later frame renders into it and never
+  // reaches the canvas. Off-XR, a bound target at the top of the main pass can only be that.
   if (!renderer.xr?.isPresenting && renderer.getRenderTarget() !== null) {
     const rt = renderer.getRenderTarget(); renderer.setRenderTarget(null);
     if (healed++ < 3) tee(`[render] unbound a stale target at frame start (${rt.constructor.name} ${rt.width}x${rt.height}) — an earlier frame aborted mid-render`);

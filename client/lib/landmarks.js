@@ -1,28 +1,6 @@
-// landmarks — where a named contact point actually IS on a particular body.
-//
-// shared/contact.js says "the top of the head" and which way that is. This
-// finds the millimetre, per avatar, by asking the mesh.
-//
-// It casts a ray from outside the body toward the bone and takes the first
-// surface it meets. That is deliberately NOT the obvious method. The obvious
-// method is a statistic over the skinned vertices that belong to a bone —
-// lowest, outermost, mean — and that is exactly the reader that got the
-// seated pelvis wrong (#seat): it locked onto a vertex hanging below the
-// visible mass and reported a confident number 0.2m from the truth, and
-// because the number was then VERIFIED with the same reader, derivation and
-// verification agreed perfectly while both were wrong.
-//
-// A cast has a property no vertex statistic has: it returns the surface a
-// hand would actually meet, because that is the same question. A stray vertex
-// inside the body is not on the ray; a stray vertex outside it gets hit, which
-// is visible rather than silent. And it yields a NORMAL, which a contact point
-// needs as much as a position — a palm on a shoulder has to lie along the
-// surface, and without one hands go through people.
-//
-// Two rules this file obeys, both learned expensively:
-//   - measure in the REST pose, never the live one;
-//   - store the answer in the BONE's local space, so it follows the body for
-//     free and is never re-derived from a moving skeleton.
+// landmarks — where a named contact point (shared/contact.js) actually IS on a particular body.
+// Casts from outside toward the bone and takes the first surface hit (position and normal). Not a vertex statistic,
+// on purpose: a stray vertex gives a confident wrong answer. Measure in the REST pose; store in the bone's local space.
 
 import { THREE } from './core.js';
 import { CONTACT_POINTS, contactSeed } from '../../shared/contact.js';
@@ -104,18 +82,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
   const scene = avatar?.vrm?.scene;
   if (!h || !scene) return new Map();
 
-  // ---- rest pose, and put it back afterwards whatever happens.
-  //
-  // humanoid.update() is NOT optional here, and leaving it out is a trap that
-  // looks like it works: identity-ing the NORMALIZED bones and calling
-  // updateMatrixWorld refreshes the normalized hierarchy only. The mesh is
-  // skinned to the RAW rig, which three-vrm writes from the normalized one
-  // inside humanoid.update() — so without it the bones are in a T-pose while
-  // the geometry is still wherever the idle clip left it, and rays are cast at
-  // a skeleton the mesh is not wearing. Measured on the claude rig: the left
-  // hand bone stood 0.12m beyond ANY geometry, every hand cast missed, and the
-  // ray sailed on to hit the far side of the torso. The fallback flag is what
-  // made that visible instead of a plausible wrong number.
+  // ---- rest pose, put back afterwards whatever happens. humanoid.update() is required: the mesh is skinned to the RAW
+  // rig, which three-vrm writes from the normalized bones only there, or rays hit a skeleton the mesh isn't wearing.
   const saved = [];
   for (const name of Object.keys(h.humanBones ?? {})) {
     const n = h.getNormalizedBoneNode(name);
@@ -127,21 +95,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
     h.update();
     avatar.root.updateMatrixWorld(true);
     refreshBounds(scene, bounds);
-    // ⚠ AND the skinning has to be recomputed, or the rays are cast at one
-    // pose and hit another.
-    //
-    // three only refreshes Skeleton.boneMatrices at DRAW time. Posing the rig
-    // and calling updateMatrixWorld moves the bones but leaves those matrices
-    // describing the last RENDERED pose — so a cast aimed at a rest-pose bone
-    // meets a mesh still skinned to the idle pose. Deriving from the console
-    // (after a render) hides it; deriving inside a frame, which is what the
-    // first contactAt() in a reach does, does not.
-    //
-    // On claude the idle and rest poses are close enough that the answers
-    // agreed and this looked fine for a day. On orion they are not: hip_l came
-    // out ABOVE the shoulder, the reach dutifully raised the arm to it, and
-    // the landmark table dumped afterwards from the console read perfectly
-    // correct — the two derivations disagreeing was the whole bug.
+    // ⚠ recompute skinning too: three refreshes boneMatrices only at draw time, so a freshly rest-posed rig is still
+    // skinned to the last rendered pose (deriving inside a frame, as a reach's first contactAt() does, exposes it)
     for (const o of meshesOf(scene)) o.skeleton?.update?.();
     const P = {};
     for (const name of Object.keys(h.humanBones ?? {})) {
@@ -181,20 +136,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
         normal = hit.face
           ? hit.face.normal.clone().applyMatrix3(_m.getNormalMatrix(hit.object.matrixWorld)).normalize()
           : dir.clone();
-        // ⚠ SIGN. The ray travels along -dir (from outside, inward), so a
-        // surface facing OUT of the body has its normal along +dir — back the
-        // way the ray came. This test used to negate exactly those, which
-        // inverted every landmark normal in the table.
-        //
-        // It went unnoticed because nothing consumed the normal until the palm
-        // did, and then it was wrong in the one way that is hard to see: the
-        // hand still arrived at the right PLACE, just turned inside out. antra
-        // caught it on head_top, where a palm facing the sky is unmistakable —
-        // on a shoulder or a hip the same error reads as merely an awkward
-        // wrist.
-        //
-        // A normal pointing along -dir means the ray began inside the mesh (an
-        // accessory wrapping the cast origin); THOSE are the ones to flip.
+        // ⚠ SIGN: the ray travels along -dir, so an outward surface's normal is along +dir; one along -dir means the
+        // ray began inside the mesh (an accessory wrapping the cast origin), and only those flip
         if (normal.dot(dir) < 0) normal.negate();
         how = seed.estimated ? 'fallback' : 'surface';
       } else {

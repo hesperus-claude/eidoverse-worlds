@@ -1,55 +1,19 @@
-// governor — one quality controller, session-scoped, two-way.
+// governor — one quality controller, session-scoped, two-way (TEL0S_NOTES §12.6): every lever moves both ways,
+// nothing persists (machine pressure is not a preference), and the cloud tier is never touched (it's the resident's ⚙).
 //
-// The old governor (main.js) was five one-way ratchets and two recovering
-// levers: shed grass never grew back, a doused light stayed doused
-// (MAX_CAST-- was permanent), the shadow map never re-sharpened — and the
-// cloud lever both PERSISTED its degradation to localStorage across
-// sessions and answered "this machine is slow right now" with a full sky
-// rebuild, the single most expensive operation the client has. One bad
-// three-second window (a tab restore, a burst of arrivals) could
-// permanently degrade a world.
-//
-// The new contract (TEL0S_NOTES §12.6):
-//   * every lever moves BOTH ways — what a slow minute takes, a smooth
-//     minute gives back;
-//   * session-scoped, never a localStorage write — machine pressure is not
-//     a preference;
-//   * the governor never touches the cloud tier at all. Cloud quality is
-//     the resident's ⚙ choice (a preference, persisted as one); the levers
-//     below are cheaper, reversible, and measured. The old cloud lever is
-//     simply gone.
-//
-// The ladder, in shed order (recovery unwinds it back-to-front, so pixels —
-// shed late — return first, and content comes back last):
-//
-//   casters   distant objects stop casting shadows (castShadow is in no
-//             pipeline key — free toggles, §12.1)
+// The ladder, in shed order (recovery unwinds back-to-front, so pixels return first and content last):
+//   casters   distant objects stop casting shadows (castShadow is in no pipeline key, §12.1)
 //   slots     the light-slot cap drops (idle slots are uniform zeros)
 //   emitters  per-emitter instance counts thin (auto → med → low)
-//   grass     the meadow thins (instanced count — no rebuild)
-//   lod       far placed objects fetch their reduced tier sooner (#156: the
-//             policy's edge halves; swaps happen on the residency sweep)
+//   grass     the meadow thins (instanced count, no rebuild)
+//   lod       far placed objects fetch their reduced tier sooner (#156; swaps ride the residency sweep)
 //   pixels    render scale, −0.25 steps to 0.7
 //   detail    LOD bias 2 (far bodies at half rate) + shadow map 1024
 //
-// Pacing: a shed needs 3 consecutive slow seconds and resets the counter —
-// one lever per window, so a hitch cannot cascade the whole ladder. A
-// restore needs 5 consecutive smooth seconds. The 26/52 fps gap between
-// the two thresholds is the hysteresis that keeps shed/restore from
-// chattering; the dead band between them counts toward neither ladder —
-// but see the cruise lever below (§22j): a sustained cruise inside the
-// band steps pixels alone down, because pixel-bound machines live there.
-//
-// Loading grace (§16.2.D): while the engine is LOADING — warm conductor
-// items queued or running, loadwork lanes busy, promote tails pending —
-// storm fps is not a performance regime and lever moves make it worse
-// (each pixels notch is a render-target realloc, each detail flip a 16MB
-// shadow-map realloc, §16.1g). Both directions freeze and the streak
-// counters reset, so a storm never carries partial counts into calm.
-// whenCalm() is the storm-edge signal the deferred extras (thumbnail
-// contribution, roster prefetch) wait on: 5 consecutive smooth seconds
-// with no loading work in flight — the restore ladder's own 1Hz fps read,
-// not a second meter.
+// Pacing: a shed needs 3 consecutive slow seconds (<26 fps), one lever per window; a restore needs 5 smooth (>52).
+// The dead band counts toward neither, except the cruise lever below (§22j).
+// Loading grace (§16.2.D): while loading work is in flight both directions freeze and streaks reset (each move is a
+// realloc, §16.1g). whenCalm() = 5 smooth seconds with no loading work, read off the restore ladder's own 1 Hz fps.
 
 import { renderer, sun, BASE_PIXEL_RATIO } from './core.js';
 import { CONFIG, bus } from './base.js';
@@ -73,18 +37,12 @@ export const REDUCED_CHIP = {
 };
 
 let reducedChipHidden = false;   // the viewer put the chip away (for this visit)
-// builder mode: the governor's frame-rate toasts landed on the selection bar (review 10-07 S11); the work still happens
+// builder mode: the governor's frame-rate toasts landed on the selection bar; the work still happens
 const building = () => typeof document !== 'undefined' && document.body?.classList.contains('edit-mode');
 
-// ---- the resident's render-scale dial (§22k) --------------------------------
-// The §22j A/B proved pixel-bound machines exist; the cruise answers them
-// automatically. This is the MANUAL override, a preference like clouds⚙ and
-// grass⚙ (persisted — an explicit choice is a preference; machine pressure
-// stays session-only): 'auto' lets the cruise drive, a pinned factor sets
-// the base outright and turns the cruise off — the resident's word is not
-// something the governor argues with. The emergency <26fps pixels lever
-// still sheds below a pinned base (and restores back to it): a crisis
-// outranks a preference, but only for as long as it lasts.
+// ---- the resident's render-scale dial (§22k): a persisted preference. 'auto' lets the cruise drive; a pinned factor
+// sets the base and turns the cruise off. The emergency <26 fps pixels lever still sheds below a pinned base, and
+// restores back to it: a crisis outranks a preference only while it lasts.
 const RS_KEY = 'ew-render-scale';
 export const RENDER_SCALES = ['auto', '1', '0.85', '0.7'];
 let renderScale = RENDER_SCALES.includes(localStorage.getItem(RS_KEY))
@@ -93,15 +51,12 @@ const residentBase = () =>
   renderScale === 'auto' ? BASE_PIXEL_RATIO : BASE_PIXEL_RATIO * Number(renderScale);
 
 let pixelRatio = BASE_PIXEL_RATIO;
-// A pixel-ratio change RESIZES THE CANVAS (three writes canvas.width), and resizing a canvas clears its drawing buffer.
-// The governor decides after the frame is drawn (the 1 Hz pulse runs after 'render'), so applying here wiped the frame
-// just drawn and the compositor showed it empty: the sporadic single black frames (owner, 09-27; ~9/min = the cruise's
-// shed/restore rhythm, only while compiles held fps in the 26–52 band). The change waits for the next frame's start
-// instead (applyPendingPixelRatio, registered just before 'render').
+// A pixel-ratio change resizes the canvas, which clears its drawing buffer; the 1 Hz pulse runs after 'render', so
+// applying here would blank the frame just drawn. It waits for the next frame's start (applyPendingPixelRatio).
 let pendingPR = null;
 const setPR = (v) => { pixelRatio = v; pendingPR = v; };
 // VR exit resizes the canvas outside the governor (xr.js); its stored ratio is still the truth (a pinned render scale,
-// a cruise step), so it's re-asserted at the next frame start (final review, MED; the same stale ratio exists on main)
+// a cruise step), so it's re-asserted at the next frame start
 bus.on('xr:exit-resized', () => { pendingPR = pixelRatio; });
 /** Apply a pixel-ratio change the governor made, BEFORE this frame renders. */
 export function applyPendingPixelRatio() {
@@ -123,13 +78,9 @@ export function setRenderScale(v) {
 }
 if (renderScale !== 'auto') setPR(residentBase());
 
-// ---- the resident's particle and avatar-detail dials (§22k siblings) --------
-// Same contract as render scale: 'auto' lets the governor drive; a pinned
-// value is a persisted preference the levers below leave alone — and going
-// back to 'auto' re-anchors outright rather than climbing the restore ladder,
-// as an explicit render-scale move does. Applied at
-// module init so a pin survives a reload — emitters created later inherit the
-// tier (emitters.js:157), remotes read lodBias live.
+// ---- the resident's particle and avatar-detail dials (§22k siblings): same contract as render scale; back to 'auto'
+// re-anchors outright. Applied at module init so a pin survives a reload (emitters inherit the tier; remotes read
+// lodBias live).
 const EP_KEY = 'ew-particles';
 export const PARTICLE_TIERS = ['auto', 'med', 'low'];
 let particleTier = PARTICLE_TIERS.includes(localStorage.getItem(EP_KEY)) ? localStorage.getItem(EP_KEY) : 'auto';
@@ -158,16 +109,9 @@ export function setAvatarDetail(v) {
 }
 if (avatarDetail !== 'auto') setLodBias(AVATAR_DETAILS[avatarDetail]);
 
-// ---- the resident's master switch -------------------------------------------
-// 'keep full detail': the governor never sheds and the cruise never steps
-// pixels — a builder looking at the world wants it as it is, not smooth at
-// any cost. Turning it on hands back everything already shed, at once.
-// Persisted like the dials above; loading grace and the calm signal still run.
-// What it overrides today: all eight levers, INCLUDING the emergency pixels
-// rung below 26fps that a pinned render scale still yields to (§22k, "a
-// crisis outranks a preference, only while it lasts"). Whether this switch
-// should outrank that crisis rule is an open question for the maintainers;
-// record the decision here.
+// ---- the resident's master switch, 'keep full detail': the governor never sheds and the cruise never steps pixels;
+// turning it on hands back everything shed. Overrides all eight levers, including the <26 fps emergency rung (an open
+// question: should it outrank the crisis rule?). Loading grace and the calm signal still run.
 const FD_KEY = 'ew-full-detail';
 let fullDetail = (() => { try { return localStorage.getItem(FD_KEY) === '1'; } catch { return false; } })();
 export const getFullDetail = () => fullDetail;
@@ -200,7 +144,7 @@ const LEVERS = [
     name: 'casters',
     // step to the largest ladder value strictly below/above the current
     // budget — robust to an off-ladder value if anything else ever calls
-    // setCasterBudget (review note 6: indexOf-based stepping could RAISE it)
+    // setCasterBudget (indexOf-based stepping could RAISE it)
     shed() {
       if (casterCount() === 0) return false;   // nothing casting → no relief,
                                                // don't burn the shed window
@@ -218,7 +162,7 @@ const LEVERS = [
     name: 'lights',
     shed() {
       // a cap cut only relieves GPU if something is actually casting — an
-      // empty world must not eat shed windows and toast lies (review note 3)
+      // empty world must not eat shed windows and toast lies
       if (getSlotCap() === 0 || litCount() === 0) return false;
       setSlotCap(getSlotCap() - 1);
       if (!building()) toast('turned a light down to keep the frame rate — it still glows', 'warn', 6000);
@@ -266,13 +210,8 @@ const LEVERS = [
   },
   {
     name: 'grass',
-    // The governor tracks its OWN dial. Effective density = min(resident's
-    // grass⚙ cap, this dial) — shed still steps from EFFECTIVE (a meadow
-    // the cap already holds below the step must not toast a no-op), but
-    // restore answers for the dial alone: restoring against effective
-    // returned "true" forever under a capped resident (min() ate the
-    // change), wedging the unwind so casters/lights/emitters never
-    // recovered (review blocker 1 — the exact ratchet §12.6 exists to kill).
+    // The governor tracks its OWN dial (effective density = min(resident cap, dial)): shed steps from effective, but restore
+    // answers for the dial alone, or a capped resident's min() wedges the unwind forever (§12.6's ratchet).
     shed() {
       const eff = getGrassDensity();
       if (!hasGrass() || eff <= GRASS_STEPS[GRASS_STEPS.length - 1]) return false;
@@ -290,17 +229,13 @@ const LEVERS = [
   },
   {
     name: 'lod',
-    // The tier policy's session dial (lod_policy.js shed): under load the
-    // reduce-at edge halves, so placed objects at middling distance fetch the
-    // reduced variant on their next sweep; restore widens it again. Nothing
-    // rebuilds — the swap rides the residency sweep's own retier path.
+    // The tier policy's session dial (lod_policy.js shed): under load the reduce-at edge halves; restore widens it. Nothing
+    // rebuilds: the swap rides the residency sweep's retier path.
     shed() {
       if (modelQuality.shed || modelQuality.quality !== 'auto') return false;
       modelQuality.setShed(true);
-      // a STATE, not an event: the chip stays while the reduction is in effect and goes when restore() lifts it (a
-      // toast said it once and was gone while the world stayed reduced)
-      // put away (review 10-07 B1: it couldn't be dismissed): for this visit; the reduction itself carries on, and
-      // Settings still says so
+      // a STATE, not an event: the chip stays while the reduction holds and goes on restore(); putting it away hides it
+      // for this visit only (Settings still says so)
       if (!reducedChipHidden) statusChip(REDUCED_CHIP);
       return true;
     },
@@ -359,23 +294,9 @@ const LEVERS = [
 let shedDetail = false;
 let grassDial = 1;
 
-// ---- the cruise lever (§22j — reopens §17d with evidence) -------------------
-//
-// The dead band was designed as neutral ground: neither slow enough to shed
-// nor smooth enough to restore, so nothing moves. Then the grasslod A/B on
-// the pixel-bound Air (§22i, drift-controlled) measured the law directly:
-// at 1× render scale EVERY grass shader runs 60fps, at 2× EVERY one runs
-// ~30 — the machine's whole steady state lives inside 26–52, where the
-// ladder never engages, and resolution is the only lever that moves it.
-//
-// So ONE lever — pixels, the least visible and the first to restore — also
-// answers a *sustained* mid-band cruise. Deliberately gentler than the
-// emergency ladder: an 8s streak (vs 3), and a higher floor — 70% of BASE,
-// never the emergency 0.7 absolute (on a 2× panel that floor is 1.4, still
-// a 1.4× effective ratio; ~51% of the pixels for roughly +20fps by the A/B's
-// own render-scale rows). Restore is the shared silent +0.125 above 52fps;
-// its smaller step and the 5s-vs-8s streak asymmetry damp the boundary
-// oscillation. ?cruise=off disables the whole thing (the §17d A/B lever).
+// ---- the cruise lever (§22j): pixel-bound machines live inside the 26–52 dead band, where the ladder never engages,
+// so a SUSTAINED cruise there steps pixels alone down. Gentler than the ladder: an 8 s streak, floor 70% of BASE;
+// restore is the shared +0.125 above 52 fps. ?cruise=off disables it (the §17d A/B lever).
 const CRUISE = (CONFIG.params.get('cruise') ?? 'on') !== 'off';
 const cruiseFloor = () => Math.max(0.7, residentBase() * 0.7);
 const cruiseActive = () => CRUISE && renderScale === 'auto' && !fullDetail;   // a pinned scale is the resident's word
@@ -424,8 +345,7 @@ export function whenCalm() {
 export function governPerformance(fps) {
   // the share follows the machine, not the storm: a second that loading itself slowed must not shrink loading's slice
   if (!loadingBusy()) setShare(backgroundShare(fps));
-  // …but the headset's cap holds while loading too (review 10a M3: entering VR mid-load, the usual cold entry, kept the
-  // desktop's 0.36 — ~4 ms of an 11 ms frame — for the heaviest stretch of the session). Only ever lowers it.
+  // …but the headset's cap holds while loading too (entering VR mid-load is the usual cold entry). Only ever lowers it.
   else if (renderer.xr?.isPresenting) setShare(Math.min(budgetStats().share, XR_SHARE_CAP));
   if (loadingBusy()) {
     // freeze BOTH directions and reset every streak: a storm-dip shed and a
@@ -479,10 +399,8 @@ export function governPerformance(fps) {
       }
     }
   } else {
-    // the dead band: neither slow nor provably smooth — the ladder counters
-    // re-earn their streaks. But a SUSTAINED cruise here is the pixel-bound
-    // regime (§22j above): pixels alone may step down, gently, to its own
-    // higher floor.
+    // the dead band: ladder counters re-earn their streaks, but a SUSTAINED cruise here is the pixel-bound regime
+    // (§22j): pixels alone may step down, to the cruise floor
     slowFor = 0;
     goodFor = 0;
     calmFor = 0;

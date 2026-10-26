@@ -1,29 +1,10 @@
-// perfscope — viewer-local perf instrumentation: false-color cost modes over
-// the viewport + a hover loupe of deep per-object stats + a heaviest table.
-//
-// Why the overlay keeps textures: it is much easier to navigate a big world
-// on an Easter-egg hunt for perf violators when the objects still look like
-// themselves.
-// The conventional replace-everything view is the `solid colors` checkbox.
-//
-// Doctrine:
-// · VIEWER-LOCAL. No world verb is ever sent; nothing here mutates the log.
-// · MEASURED vs ESTIMATED stays explicit: renderer.info counts are measured;
-//   memory/cost numbers are estimates and say so. No GPU timers in v0 —
-//   WebGL timer queries are dead-by-default post-Spectre and WebGPU
-//   timestamps are a later bonus, so pretending estimates are hardware
-//   measurements would be the one dishonest pixel in a debug tool.
-// · Fixed absolute thresholds (UE/VRChat convention), not percentiles — a
-//   scene of all-cheap objects must not invent red, and numbers stay
-//   comparable across worlds. Rank = worst category wins (VRChat).
-// · Survives scene churn: stats rebuild on a timer while active; tint
-//   overlays are diffed against the census each cycle (originals untouched).
-//
-// Cost attribution is per SUBJECT, not per mesh: a subject is a world entity
-// (nearest ancestor in `entities`), a person (remotes / the local body), or
-// the residual 'world fabric' bucket (terrain, sky, grass). That's the
-// granularity questions actually arrive at ("what is heavy?" — "the fountain",
-// not "mesh #217").
+// perfscope — viewer-local perf instrumentation: false-color cost modes, a hover loupe, a heaviest table.
+// The overlay keeps textures so objects stay recognisable; `solid colors` is the conventional replace view.
+// · VIEWER-LOCAL: no world verb is ever sent.
+// · Measured (renderer.info) vs estimated numbers stay labelled; no GPU timers.
+// · Fixed absolute thresholds (shared/perfrank.js), not percentiles; rank = worst category wins.
+// · Survives churn: stats rebuild on a timer; tints diff against the census (originals untouched).
+// Cost is per SUBJECT: a world entity, a person, or the 'world fabric' bucket (terrain, sky, grass).
 
 import { PERF_THRESHOLDS, TIER_NAMES, TIER_COLORS, rankOf } from '../../shared/perfrank.js';
 import { THREE, scene, camera, renderer, canvas } from './core.js';
@@ -38,14 +19,8 @@ const fsvg = (name, size) => (typeof icons.fsvg === 'function' ? icons.fsvg(name
 // a real hover threw ReferenceError; mocked-innerHTML shots never caught it).
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// data colors, not chrome: a perceptual cheap→dear ramp shared by every mode
-// (VRChat's five ranks). Deliberately literal — these mean the same thing in
-// every world and every theme, like a heatmap's, so they do NOT follow the
-// accent picker.
-// perceptually-separated ramp (an earlier ramp blurred: green≈lime, and the
-// top three were all one warm tone). Even hue walk + rising chroma:
-// emerald → spring-green → amber → tangerine → hot-red. Each tier is its own
-// hue AND its own lightness, so they separate at a glance and for CVD eyes.
+// data colors, not chrome: a perceptual cheap→dear ramp (each tier its own hue and lightness, CVD-safe) that means
+// the same in every world and theme, so it does NOT follow the accent picker.
 export const TIERS = TIER_COLORS;   // shared/perfrank.js — the server ranks library cards with the same rule
 
 const T = PERF_THRESHOLDS;   // thresholds + tierOf live in shared/perfrank.js (one rule, client and server)
@@ -135,10 +110,7 @@ function accumulate(rec, o, vis) {
     if (!m) continue;
     rec.mats.add(m);
     if (m.transparent) rec.alpha += 1;
-    // exhaustive texture sweep: any own value that IS a texture, plus
-    // shader-style uniforms. Named-key lists missed everything MToon and
-    // node materials carry (unoptimized textures are the real VRAM hit, so
-    // the census must not have blind spots).
+    // exhaustive texture sweep (any own texture value plus shader uniforms): named-key lists miss MToon and node materials.
     const seen = (t) => { if (t?.isTexture && !rec.texs.has(t)) { rec.texs.add(t); rec.texBytes += texBytes(t); } };
     for (const v of Object.values(m)) seen(v);
     if (m.uniforms) for (const u of Object.values(m.uniforms)) seen(u?.value);
@@ -160,10 +132,8 @@ function collect() {
     if (!o.isMesh && !o.isSkinnedMesh) return;
     if (o.userData?.perfscopeIgnore) return;          // our own helpers etc.
 
-    // walk up: entity? a named remote/local body? else the fabric bucket.
-    // Also learn whether the mesh is actually shown: hidden LOD levels /
-    // outfits keep their VRAM but draw nothing, so tris/draws bill only the
-    // visible chain while textures count regardless.
+    // walk up: entity? a named body? else the fabric bucket. Hidden LOD levels/outfits keep VRAM but draw nothing, so
+    // tris/draws bill only the visible chain while textures count regardless.
     let rec = null, vis = true;
     for (let p = o; p; p = p.parent) {
       if (!p.visible) vis = false;
@@ -220,14 +190,9 @@ export const MODES = {
 };
 
 let mode = 'off';
-// Tint is an OVERLAY, never a replacement: a 25% veil sharing the original's
-// geometry plus an inverted-hull silhouette in the tier color, so the object's
-// own textures stay readable and originals are never touched. The industry
-// cost views (UE Shader Complexity, Unity/Godot Overdraw) are flat material
-// OVERRIDES answering "where are the pixels dear?"; ours answers "WHAT is
-// heavy?". `solid` flips to the conventional override (fabric included);
-// overlay leaves the world fabric untinted and un-hulled — a hull on instanced
-// grass would double the grass draw, a perf tool costing perf.
+// Tint is an OVERLAY: a 25% veil plus an inverted-hull silhouette in the tier color; originals are never touched.
+// `solid` flips to a flat material override (fabric included); overlay leaves the fabric untinted (a hull on instanced
+// grass would double the grass draw).
 let solidOn = false;
 export function setSolid(on) { solidOn = !!on; if (mode !== 'off') applyTint(); onSolidChange?.(); }
 export const isSolid = () => solidOn;
@@ -246,13 +211,8 @@ const tintMats = TIERS.map((c) => {
   m.name = `perfscope-tint-${c}`;
   return m;
 });
-// Silhouette hull width is screen-constant: local displacement = K · distance
-// to camera ÷ the object's world scale (a scale-3 cat and a scale-0.55 ruin get
-// the same pixel edge). K≈2px at 720p/70°. The scale is read in-shader from the
-// model matrix, so there are exactly TIERS×2 hull materials (thin / hot).
-// Thin by default, THICK only on the subject the loupe is hovering or has
-// pinned — the edge is a rank cue everywhere and a
-// spotlight on the thing you're actually asking about.
+// Hull width is screen-constant: displacement = K · camera distance ÷ world scale (read in-shader), so there are exactly
+// TIERS×2 hull materials. K≈2px at 720p/70°; THICK only on the subject the loupe hovers or pins.
 const HULL_K = 0.0022, HULL_K_HOT = 0.0060;
 const hullMats = new Map();
 function hullMatFor(tier, k = HULL_K) {
@@ -368,10 +328,8 @@ function clearTint() {
 }
 
 let timer = null, idleRelease = null;
-// one census loop serves both the tint and the loupe: while either is on the
-// scene is re-walked every 3 s (churn survival); tints are diffed only when a
-// mode is active. Both off → timer cleared and the census dropped, so this
-// module holds no references into a scene it isn't watching.
+// one census loop serves tint and loupe: re-walked every 3 s while either is on; both off → timer cleared and census
+// dropped, so this module holds no references into a scene it isn't watching.
 function syncCycle() {
   clearTimeout(timer); timer = null;
   clearTimeout(idleRelease); idleRelease = null;
@@ -528,12 +486,8 @@ function castAt(ev) {
   return null;
 }
 
-// The title is clipped at 2 lines by max-height + clip-path (the
-// float-wrapped header can't use -webkit-box line-clamp — any BFC-maker stops
-// lines flowing around the floats), so the '…' truncation cue is drawn by hand:
-// measure the last VISIBLE line's end via Range rects and pin an absolutely-
-// positioned ellipsis there (absolute = out of flow, can't disturb the wrap).
-// Skipped entirely when the whole name fits.
+// The title clips at 2 lines (max-height + clip-path; line-clamp would stop lines flowing around the floats), so the
+// '…' is drawn by hand at the last visible line's end (Range rects); skipped when the name fits.
 function dressLoupeName() {
   const nm = loupeEl.querySelector('.pl-name');
   if (!nm || nm.scrollHeight <= nm.clientHeight + 1) return;

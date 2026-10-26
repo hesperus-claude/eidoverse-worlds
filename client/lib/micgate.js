@@ -1,73 +1,22 @@
-// micgate — the noise gate as a GAIN, not a switch.
-//
-// R, 2026-08-09: "why not do the WebAudio graph now? I'm worried we'll forget
-// about it if we wait." Right on both counts — and "later" is how a boolean gate
-// becomes permanent.
-//
-// WHY A GRAPH AT ALL. Gating with `track.enabled` is binary and abrupt: the
-// track goes from full to digital silence between one 40ms tick and the next.
-// That is an audible click at both ends, and the opening click lands on your
-// first consonant — the worst possible place. BasisVR gates with a smoothed
-// gain (BasisLocalMicrophoneDriver: `_noiseGateGain` lerped toward 0/1 with
-// attack/release coefficients), which is the right shape and needs per-sample
-// access we did not have while handing the raw device track to WebRTC.
-//
-// The graph:
+// micgate — the noise gate as a smoothed GAIN, not a switch: `track.enabled` is binary and clicks on the first
+// consonant.
 //
 //     voiceSource()  →  MediaStreamSource  →  GainNode  →  MediaStreamDestination
 //                                               ↑                     ↓
 //                                        gate (this file)    the track WebRTC sends
 //
-// The analyser still reads the SOURCE side, not the gated side — measuring after
-// the gate would be a feedback loop: gain drops, measured level drops, gate
-// closes harder, and it latches shut. The gate must always judge the true input.
-//
-// 🔴 This wraps humans AND agents alike, because voiceSource() is the one seam
-// both come through (a human gets a microphone, an agent gets its synthesizer).
-// An agent's speech is loud and continuous, so it sails through the gate — but
-// it means an agent whose synth emits room tone between utterances is quiet for
-// the same reason a human is, with no second code path to maintain.
+// The analyser reads the SOURCE side, never the gated side, or the gate latches shut. Humans and agents both come
+// through voiceSource() (voicesource.js), so both are gated by the one path.
 
 import { audioContext } from './audioctx.js';
 import { report } from './base.js';
 
-// 🔴 THE ENVELOPE IS setTargetAtTime, AND THE TICK IS A FLOOR UNDER IT.
-//
-// Two things ate the first syllable and only one of them was a constant.
-// R, 2026-08-09: "lower the gate time to start capturing? The first syllable
-// sounds a little chopped off."
-//
-//   1. THE TICK. driveGate() cannot react faster than it is called. That was a
-//      40ms onset tick; it is 20ms now, below the ~30ms where a missing onset
-//      becomes audible.
-//   2. THE TIME CONSTANT. setTargetAtTime reaches ~63% of target in one tau and
-//      ~95% in three, so tau 0.008s is ~95% open in 24ms.
-//
-// Worst case is tick + envelope: ~44ms now, against ~160ms before. A plosive is
-// ~20-40ms, so that is the difference between "puh" and "uh".
-//
-// Release stays slow on purpose: 0.12s is a soft ~360ms tail, and the 700ms
-// hang-time runs BEFORE the fade begins, so a pause mid-sentence never reaches
-// it. Attack always faster than release — opening late loses a consonant,
-// closing early cuts a word in half.
-//
-// (Superseded, kept only as a warning: BasisVR's 0.10/0.05 are per 20ms audio
-// FRAME, and copying them onto our tick took 300ms to reach 90% — an audible
-// fade-in on the first word, worse than the click it replaced. Their rates are
-// not our rates. An earlier lerp-based pass here used 0.35/0.18 and is gone
-// entirely; do not resurrect a second smoothing stage, see driveGate.)
+// Attack: tau 0.008 s on a 20 ms tick, ~44 ms worst case to open (a plosive is ~20-40 ms). Release is slow on purpose
+// (tau 0.12 s, after the 700 ms hang): attack always faster than release. One smoothing stage only (see driveGate).
 const ATTACK_TAU = 0.008;
 const RELEASE_TAU = 0.12;
-// 🔴 LOOKAHEAD — the third thing that ate first syllables, and the one no
-// attack speed can fix (R, 2026-08-16: "Hello often sounds like 'ello'").
-// An unvoiced /h/ is LOW-ENERGY: it never crosses the threshold at all, so
-// the gate opens on the vowel and the consonant is already gone — a detector
-// problem, not an envelope problem. The fix every hardware gate uses: delay
-// the AUDIO, not the DETECTOR. The analyser reads the raw side (pre-delay),
-// so when the vowel trips the gate, the /h/ is still inside the delay line
-// and passes through the opening gain. Cost: 50ms of outbound latency, well
-// under the network's own jitter buffer; the close tail grows by the same
-// 50ms, which the 700ms hang-time already dwarfs.
+// LOOKAHEAD: an unvoiced /h/ never crosses the threshold, so delay the AUDIO, not the detector: the analyser reads
+// pre-delay, and the onset is still in the delay line when the gate opens. Cost: 50 ms outbound latency.
 const LOOKAHEAD = 0.05;
 
 let _ctx = null, _src = null, _gain = null, _dest = null, _look = null;
@@ -76,13 +25,8 @@ let _rawStream = null, _gatedStream = null, _level = () => 0;
 /** Wrap a mic stream in the gate graph. Returns the stream to hand to WebRTC —
  *  or the original stream unchanged if the graph cannot be built, because a
  *  voice that works ungated beats no voice at all. */
-// ── declared vs effective (#90 review B2, 2026-08-11) ───────────────────────
-// If the gate graph cannot be built, the OLD behavior returned the raw device
-// stream — every room sound transmitted ungated while the UI still showed
-// sensitivity controls. A privacy control that silently downgrades to "off"
-// is worse than none. Now: construction failure REFUSES the stream (caller
-// gets null and must not transmit) unless the user has explicitly chosen
-// ungated transmission via allowUngated(true). Machine-visible either way.
+// ── declared vs effective: if the gate graph can't be built, the stream is REFUSED (null; caller must not transmit)
+// unless the user chose ungated transmission via allowUngated(true). A privacy control must not silently go "off".
 let _gateUnavailable = false;   // the graph could not be built on this device
 let _ungatedConsent = false;    // explicit "transmit raw anyway" choice
 export const gateUnavailable = () => _gateUnavailable;
@@ -107,21 +51,12 @@ export function gateStream(stream, levelFn) {
     // is doing at the instant the mic opens — the exact leak the settle window
     // exists to prevent, and the one R heard as "picking up background noise".
     _gain.gain.value = 0;
-  // A fresh lane IS closed — say so. `_wanted` outlives the graph it described;
-  // without this reset gateOpenness() reports the pre-release value (1 if the
-  // gate was open when the device was released), so micTransmitting() claims
-  // "audible now" before a single driveGate tick has run on the new lane.
+  // a fresh lane IS closed: `_wanted` outlives its graph, so without this reset micTransmitting() claims "audible"
+  // before the first driveGate tick
   _wanted = 0;
     _dest = _ctx.createMediaStreamDestination();
-    // src → lookahead delay → gate gain → destination. See LOOKAHEAD.
-    //
-    // 🔴 THE LOOKAHEAD IS POLISH, THE GATE IS THE PRODUCT (#131 re-review).
-    // Built unguarded, a context without createDelay (a minimal WebAudio
-    // environment — the lifecycle suite's fake, and any constrained embedder)
-    // threw here, and the catch below turned "no 50ms lookahead" into the
-    // fail-closed NO-GATE-AT-ALL path: mic on yielded no lane, no raw stream,
-    // no senders — the whole voice stack regressed to protect a nicety. An
-    // enhancement's absence must cost exactly the enhancement.
+    // src → lookahead delay → gate gain → destination. The lookahead is polish, the gate is the product: a context
+    // without createDelay must still get a gate (an enhancement's absence costs only the enhancement).
     _look = null;
     if (typeof _ctx.createDelay === "function") {
       try {
@@ -153,14 +88,8 @@ export function gateStream(stream, levelFn) {
  *  smoothing lives here so the decision logic stays readable. */
 export function driveGate(open) {
   if (!_gain || !_ctx) return;
-  // 🔴 DO NOT DOUBLE-SMOOTH. This used to compute a lerped step and then hand it
-  // to setTargetAtTime — which is ITSELF an exponential approach, so the gain
-  // never actually reached the step, and reading .value back on the next tick
-  // fed that lag forward. The result was a gate that never fully closed: R heard
-  // her own monitor ignoring the sensitivity setting entirely (2026-08-09).
-  //
-  // setTargetAtTime already IS the envelope. Target the true endpoint (1 or 0)
-  // and let the time constant do the shaping — one smoothing stage, not two.
+  // DO NOT DOUBLE-SMOOTH: setTargetAtTime already is the envelope. Target the true endpoint (1 or 0); a lerped step
+  // fed into it never reaches the target and the gate never fully closes.
   const target = open ? 1 : 0;
   const tau = open ? ATTACK_TAU : RELEASE_TAU;
   try {
@@ -169,18 +98,9 @@ export function driveGate(open) {
   _wanted = target;
 }
 
-// ── THE UNGATED LANE'S ONLY GATE ─────────────────────────────────────────────
-// When the graph could not be built and the person allowed raw transmission
-// (allowUngated), the wire carries the device stream ITSELF: there is no gain
-// for driveGate() to drive, and every decision above lands on nothing. That was
-// acceptable while the only regime was voice activation — "transmit UNGATED"
-// is exactly what the consent row said. Push-to-talk makes a new promise on the
-// same lane ("release V and the room hears nothing") that a nonexistent gain
-// cannot keep (Mica, #148 review: raw audio left while the key was up). So on
-// that lane PTT drives the raw tracks' `enabled` flag instead: binary and
-// abrupt — the very reason the graph exists, see the top of this file — but
-// TRUE, and the same mechanism mute already uses. Intent is recorded so
-// gateOpenness() tells the badge what the wire is doing.
+// ── the ungated lane's only gate: with allowUngated the wire carries the raw device stream and there is no gain to
+// drive, so push-to-talk drives the raw tracks' `enabled` instead (abrupt but true, as mute does). Intent is recorded
+// so gateOpenness() tells the badge what the wire is doing.
 let _rawWanted = 0;
 export function driveRawTracks(open) {
   if (!_rawStream) return false;
@@ -190,18 +110,8 @@ export function driveRawTracks(open) {
 }
 
 
-// ── MONITOR: hear your own lane, exactly as the room hears it ───────────────
-// R, 2026-08-09: "can you feed my own audio lane back to me for this test so I
-// can hear myself?" — the only way to judge whether the gate clips a consonant
-// or trails too long is to hear the GATED signal, not the raw mic.
-//
-// 🔴 Tapped AFTER the gain node, so it carries the gate: when the gate closes,
-// the monitor goes quiet too. A monitor on the raw source would sound perfect
-// while the room heard nothing, which is precisely the confusion this is meant
-// to resolve.
-//
-// 🔴 FEEDBACK: on speakers this WILL howl — mic hears monitor hears mic. Ship it
-// at a low default, and say so in the UI rather than discovering it at volume.
+// ── MONITOR: hear your own lane as the room does. Tapped AFTER the gain, so it carries the gate (a raw-side monitor
+// would sound fine while the room heard nothing). On speakers it will howl: low default, said in the UI.
 let _mon = null, _delay = null, _wanted = 0;
 // Long enough to be heard as a separate event rather than as an echo of your
 // own voice. Tunable live via setMonitorDelay() while testing.
@@ -218,19 +128,8 @@ export function setMonitor(on, level = 0.35) {
   }
   if (!_mon) {
     _mon = _ctx.createGain();
-    // A DELIBERATE DELAY. R, 2026-08-09: "can you delay the sound a bit so it's
-    // easier to hear? It's so quick it's actually hard to tell if I'm hearing it
-    // in the environment or in my headphones." Zero-latency monitoring is
-    // correct for performing and useless for TESTING — it phases with your own
-    // voice conducting through your skull and becomes indistinguishable from the
-    // room. 400ms is past the echo threshold (~50ms), so it reads as a distinct
-    // repeat you can compare against what you just said: did the gate clip the
-    // start of that word, or not?
-    // Same guard as the lookahead above: the delay is the FEATURE here rather
-    // than polish, but a context without createDelay should yield zero-latency
-    // monitoring (degraded, still audible), not an uncaught throw from a
-    // settings checkbox (second-agent review of 6231c37 — the exact class the
-    // lookahead fix closed, one function over).
+    // A deliberate delay (MONITOR_DELAY, past the ~50 ms echo threshold) so the repeat is distinguishable from bone
+    // conduction. Same guard as the lookahead: no createDelay → zero-latency monitoring, not a throw.
     _delay = null;
     if (typeof _ctx.createDelay === "function") {
       try {
@@ -259,21 +158,8 @@ export const gateOpenness = () => (_gain ? _wanted : (_gateUnavailable && _rawSt
 export const gateGainNow = () => (_gain ? _gain.gain.value : 0);
 export const isGated = () => !!_gain;
 
-// ── MIX A SYNTHESIZED VOICE INTO THE SAME LANE ─────────────────────────────
-// 🔴 R, 2026-08-09: "sometimes I toggle the mic and it seems to be live and
-// sometimes not... fine if I toggle it first before touching TTS, and it breaks
-// forever if I touch TTS first."
-//
-// Exact diagnosis. voiceSource() was an EITHER/OR: `if (isTtsEnabled()) return
-// synth-track; else return microphone`. That is an agent-shaped assumption — a
-// synthesizer REPLACES the mic — and it is wrong for a human who has a voice AND
-// wants TTS. Enable TTS first and the mic toggle silently hands the mesh a
-// generator instead of a microphone, forever, with every check reporting healthy.
-//
-// A synth is not a replacement for a mouth; it is another thing that makes sound
-// in the same room. So it mixes in AFTER the gate: your room noise must clear a
-// threshold, but synthesized speech is already the signal and must never be
-// gated by it.
+// ── MIX A SYNTHESIZED VOICE INTO THE SAME LANE: a synth mixes in after the gate, alongside the mic and never instead
+// of it; room noise must clear the threshold, but synthesized speech is already signal.
 
 /** Detach the DEVICE from the lane, keeping the lane itself alive.
  *
@@ -314,7 +200,7 @@ export function release() {
   try { _look?.disconnect(); } catch { /* already gone */ }
   _look = null;
   try { _gain?.disconnect(); } catch { /* already gone */ }
-  // Disposal OWNERSHIP (#90 review): this module built the monitor tap and the
+  // Disposal OWNERSHIP (#90): this module built the monitor tap and the
   // synth mix-in, so this module disconnects them — a release that leaves its
   // own nodes wired into a dead graph is the asymmetric repair again.
   try { _mon?.disconnect(); } catch { /* already gone */ }
@@ -344,13 +230,8 @@ export function setMonitorDelay(sec) {
 }
 export const monitorDelay = () => MONITOR_DELAY;
 
-// ── the onset machine + level meter, ONE copy (§24l R1, survey A1) ──────────
-// This state machine lived twice — voice.js (the mesh) and micstate.js (the
-// transport seam) — as a ~200-line verbatim fork, and fixes landed in one
-// copy at a time (the speaking-latch and analyser-leak fixes sat in the copy
-// that never ran until R0 ported them back). One factory now; each transport
-// instantiates with its own stream/mute closures. Every comment below was
-// paid for in production — they travel with the machine.
+// ── the onset machine + level meter, ONE copy (§24l R1): each transport instantiates it with its own stream/mute
+// closures
 
 /** RMS level meter over whatever stream `getMeasured` currently names —
  *  null means "muted or no stream": report 0 and learn nothing.
@@ -409,15 +290,9 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
   let _blocks = new Array(6).fill(Infinity), _blockIdx = 0, _blocksFilled = 0,
       _blockMin = Infinity, _blockStart = 0;
 
-  // PUSH-TO-TALK IS A MODE OF THIS MACHINE, not a bypass around it. `held()`
-  // returns null when the level decides (the default), or the key's boolean
-  // when a held key decides. The level side keeps running either way — it
-  // still feeds the meter and the noise floor, and the envelope + lookahead
-  // downstream still shape the open — but under a held answer the level's
-  // verdict drives nothing and its 🎙 must not fire: a person talking next to
-  // an un-pressed key is exactly the person who chose PTT so the room would
-  // NOT hear that. The press announces instead (press(), below), through
-  // the same rate-limit, so the pill and the audio still agree.
+  // Push-to-talk is a mode of this machine: `held()` is null when the level decides, else the key's boolean. The level
+  // side keeps running (meter, noise floor), but under a held answer its verdict drives nothing and its 🎙 must not fire;
+  // press() announces instead, through the same rate-limit, so the pill and audio agree.
   const decide = (now) => { const h = held(); return h === null ? (_above || now <= _openUntil) : h; };
   const apply = (now) => drive(decide(now));
 

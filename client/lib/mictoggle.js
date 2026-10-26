@@ -17,21 +17,9 @@ import { bus } from './base.js';
 import { register as registerAction } from './actions.js';
 import { pathData } from './icons.js';
 
-// three states: off = grey + slash · live = clean bright white ·
-// hot (picking up your voice for STT) = warm yellow glow. No rings.
-// ONE palette for both glyphs. They sit side by side and are read as a pair,
-// so any divergence reads as a state difference that is not there (in the
-// field the off-states looked noticeably unalike). The apparent
-// weight difference was never the hex — it was INK COVERAGE: the headphone
-// carries two filled earcups and a long band, the mic is thin strokes with
-// air between them, so identical stroke colour lands heavier on the ear.
-// Equalising by giving the heavier glyph a slightly thinner stroke, which
-// matches perceived weight rather than nominal colour.
-// glyph inks come from the token sheet (no hex outside it) —
-// read fresh each paint (1Hz + events): live token edits restyle us too.
-// Read off the BUTTON (it inherits the sheet's tokens): edit mode re-points the OFF inks on the glyphs alone
-// (index.html body.edit-workspace #micbtn…: --dim, --edge-hi) so an off glyph sits grey-on-grey in the editor bar;
-// live stays the brand and hot the attention gold there too (R, gym 10-17 20:44: they stayed grey when live).
+// states: off = grey + slash · live = bright white · hot (voice picked up for STT) = warm yellow glow. No rings.
+// One palette for both glyphs (read as a pair); the headphone's thinner stroke matches ink coverage, not hex.
+// Inks are read fresh off the button's tokens each paint, so edit mode's re-pointed OFF inks (--dim, --edge-hi) apply.
 const tok = (n, fb) => (getComputedStyle((micBtn?.isConnected && micBtn) || document.documentElement).getPropertyValue(n) || fb).trim();
 const INK = {
   get off()   { return tok('--dim', '#7d8f8a'); },
@@ -58,15 +46,8 @@ const MIC_SVG = (on, hot) => {
 </svg>`;
 };
 
-// The headphone: consent to HEAR, independent of consent to SPEAK. Off by
-// default like the mic — voice is opt-in in both directions. This mutes
-// VOICES only (peer speech and agent TTS, which is a resident speaking);
-// world ambience has its own slider in settings, because ambience is taste
-// you set once, not a thing you toggle situationally. That split is the
-// convention everywhere it matters (Discord's deafen, VRChat's voice
-// controls) and it is the one people already have hands for.
-// The glyph lives in icons.js ('headphonesOff' = the phones + the slash), shared with the nameplate mark and the
-// hover card; drawn here on its 24 grid at 1.35 wide, which is the old 32-grid 1.8 to the pixel.
+// The headphone: consent to HEAR voices (peers and agent TTS), off by default like the mic; ambience has its own
+// slider. Glyph: icons.js 'headphonesOff', drawn on its 24 grid at 1.35 wide.
 const EAR_SVG = (on) => {
   const c = on ? INK.on : INK.off;
   const [band, cupL, cupR, slash] = pathData('headphonesOff');
@@ -81,10 +62,7 @@ const EAR_SVG = (on) => {
 </svg>`;
 };
 
-// Phosphor 'visor' (MIT; live: "the visor reads better"): the
-// REGULAR weight in every state — its neighbours are line drawings (live,
-// 09-04 23:48: "keep it just the outline"). Ink follows the pair: --dim
-// off, --brand live.
+// Phosphor 'visor' (MIT): regular weight in every state, like its line-drawn neighbours; ink --dim off, --brand live.
 const VISOR = { regular: 'M183.05,56H72A72,72,0,0,0,.08,131.4c1.69,36.69,31.76,66.79,68.45,68.52,15.85.74,32-5.9,49.38-20.3a15.88,15.88,0,0,1,20.24,0C148.72,188.39,165,200,184,200a72,72,0,0,0,72-72.95C255.49,87.87,222.76,56,183.05,56Zm40.81,111.34A55.63,55.63,0,0,1,184,184c-13.88,0-27-9.51-35.65-16.67a31.91,31.91,0,0,0-40.65,0C93.52,179,80.94,184.49,69.28,183.94a56.36,56.36,0,0,1-53.22-53.28A56,56,0,0,1,72,72H183.05c31,0,56.55,24.79,56.95,55.25A55.66,55.66,0,0,1,223.86,167.34ZM184,96a8,8,0,0,1-8,8H80a8,8,0,0,1,0-16h96A8,8,0,0,1,184,96Z', fill: 'M183.05,56H72A72,72,0,0,0,.08,131.4c1.69,36.69,31.76,66.79,68.45,68.52,15.84.72,32-5.9,49.38-20.3a15.87,15.87,0,0,1,20.24,0C148.72,188.39,165,200,184,200a72,72,0,0,0,72-72.95C255.49,87.87,222.76,56,183.05,56ZM176,104H80a8,8,0,0,1,0-16h96a8,8,0,0,1,0,16Z' };
 const XR_SVG = (on) => {
   const c = on ? INK.on : INK.off;
@@ -112,28 +90,11 @@ export const xrLive = () => { try { return !!xrHook?.live?.(); } catch { return 
 export function flipXr() { xrHook?.onclick?.(); }
 
 let micHot = false;
-// 🔴 THE GLYPH MUST READ WHICHEVER TRANSPORT IS LIVE.
-// micOn() is voice.js's MESH state — `!!micStream && _micLive && !muted` — and
-// on the SFU path micStream is never set, so it is permanently false while the
-// SFU happily publishes. Measured in a real browser: relayDiag().micPublished
-// true, glyph slashed, tooltip "mic off (V to talk)".
-//
-// A control that says PRIVATE while the room hears you is the one failure this
-// UI must never have — micgate fails CLOSED for the same reason. toggleMic
-// already routes by transport; the indicator has to make the same turn or the
-// button and the badge describe different bodies.
+// the glyph reads the LIVE transport: a control that says private while the room hears you is the one failure this UI
+// must never have (micgate fails closed for the same reason)
 const micIsOn = () => {
-  // 🔴 NEVER THROW OUT OF THE INDICATOR. The first version
-  // was `window.relayDiag ? !!window.relayDiag().micPublished : micOn()` — no
-  // try, no `?.` on the CALL. voicerelay.js installs window.relayDiag at module
-  // top level, so it exists before its state does; a throw there aborts the tick
-  // before paint(), FREEZING the glyph at its last value — and a frozen glyph
-  // that says "off" while the room hears you is the exact bug fb33ffb existed to
-  // kill, re-entered through a different door. Worse in flipMic(), where the
-  // throw escapes the click handler AFTER toggleMic already succeeded.
-  //
-  // Prefer the CHEAP dedicated getter over the diag blob: sfuDiagClient()
-  // allocates an object and spreads the speaker map, and this runs 8×/second.
+  // never throw out of the indicator: a throw aborts the tick before paint() and freezes the glyph (in flipMic, after
+  // toggleMic succeeded). Prefer the cheap getter: relayDiag() allocates, and this runs 8×/second.
   try {
     if (typeof window.__sfuMicOn === 'function') return !!window.__sfuMicOn();
     return window.relayDiag?.().micPublished ?? micOn();
@@ -148,10 +109,7 @@ function paint() {
   const deaf = on && !receivingVoice();
   micBtn.innerHTML = MIC_SVG(on, on && micHot);
   micBtn.style.opacity = deaf ? '0.55' : '1';
-  // Under PTT an armed mic is NOT "the world hears you" — the gate is shut
-  // until the key is down, and the tooltip must not claim otherwise. Same
-  // doctrine as micIsOn() below, mirrored: never say LIVE while private,
-  // never say private while live.
+  // under PTT an armed mic isn't heard until the key is down: never say live while private, or private while live
   micBtn.title = !on ? (pttMode() ? 'mic off (click to arm push-to-talk)' : 'mic off (V to talk)')
     : pttMode() ? (pttHeld() ? 'transmitting — release V to stop'
                              : 'push-to-talk armed — hold V to speak')
@@ -168,11 +126,7 @@ function paint() {
     const consented = receivingVoice();
     const on = consented && !isHushed();
     earBtn.innerHTML = EAR_SVG(on);
-    // hushed reads as OFF (grey, slashed) like any other off-state — it used
-    // to also carry opacity:0.5, which made this glyph literally translucent
-    // beside a fully-opaque mic and was most of the 'they look different'
-    // report. The distinction between hushed and revoked lives in the
-    // tooltip and the panel, not in a second visual language.
+    // hushed reads as OFF like any other off-state, at full opacity; hushed vs revoked lives in the tooltip and panel
     earBtn.style.opacity = '1';
     earBtn.title = !consented
       ? 'not receiving voices at all — click to allow (world sound unaffected)'
@@ -185,12 +139,7 @@ function paint() {
 // hot = your voice is actually registering: a tiny analyser on the mic track,
 // polled at 8Hz, drives the yellow glow in step with STT pickup
 import { micAnalyserLevel as meshMicLevel } from './micstate.js';
-// 🔴 ASK THE LIVE TRANSPORT (seen in the HUD: the mic icon stopped turning
-// gold while transmitting). voice.js's
-// micAnalyserLevel() reads the MESH's micStream, which is null forever on an
-// SFU client — so it returns 0 at line one and the glyph can never go hot, and
-// the sensitivity bar sits at zero while looking merely quiet. Fifth instance
-// of this defect class; see stt.js / voicemouths.js / tts.js.
+// ask the live transport's level first (the SFU's), or the glyph can never go hot
 function micLevelNow() {
   try {
     if (typeof window.__sfuMyLevel === 'function') return window.__sfuMyLevel();
@@ -201,10 +150,7 @@ function micLevelNow() {
 setInterval(() => {
   if (!micIsOn()) { if (micHot) { micHot = false; paint(); } return; }
   const lvl = micLevelNow();
-  // The analyser reads the RAW side of the gate (micgate.js — it must, or the
-  // gate self-latches), so under PTT the level runs hot while nothing leaves
-  // the machine. Gold means "the room is getting this"; gate the glow on the
-  // key, or the badge claims transmission the release just ended.
+  // the analyser reads the gate's RAW side, so under PTT gate the glow on the key: gold means "the room is getting this"
   const hot = lvl > 0.02 && (!pttMode() || pttHeld());
   if (hot !== micHot) { micHot = hot; paint(); }
 }, 125);
@@ -248,26 +194,15 @@ export const earGlyph = (size = 16) => { let on = false; try { on = receivingVoi
 
 async function flipMic() {
   const on = await toggleMic(CONFIG.name);
-  // Speech-to-text is a SEPARATE consent from speaking: it ships microphone
-  // audio to the browser vendor's cloud service. Turning a mic on in a world
-  // is not agreement to that, so we ask once, plainly, and remember either
-  // answer. Voice chat works fine without it.
+  // speech-to-text is a separate consent (audio goes to the browser vendor's cloud): ask once, remember either answer
   if (on && sttAvailable()) {
     if (await ensureSttConsent()) setSTT(true);
   } else setSTT(false);
   paint();
 }
 
-// Two acts, deliberately separated (in-world, deafening cut the
-// utterance and jumped to the next one, because consent-off tears the peer
-// down and the in-flight audio dies with it):
-//   CLICK    = hush — a gain change. The stream keeps arriving and advancing,
-//              so unhushing rejoins the line already in progress, same as a
-//              human voice you stopped attending to.
-//   SHIFT+V  = consent — the privacy act. Tears the inbound path down so no
-//              media is negotiated at all (the review's requirement).
-// Clicking while unconsented grants consent first, so the button is never a
-// dead end for someone who just wants to hear people.
+// Two acts, kept apart: CLICK = hush (a gain change; the stream keeps advancing, so unhushing rejoins mid-line);
+// SHIFT+V = consent (tears the inbound path down, no media negotiated). Clicking while unconsented grants consent first.
 function flipEar() {
   if (!receivingVoice()) { setReceiveVoice(true); setHush(false); }
   else setHush(!isHushed());
@@ -277,10 +212,7 @@ function flipEar() {
 function ensure() {
   const hud = document.querySelector('#hud');
   if (!hud || (document.contains(micBtn) && document.contains(earBtn) && document.contains(xrBtn))) return;
-  // IN LINE with the bar: a bare glyph riding at the end of the
-  // hud's own row — no box, no chrome, just the mic. The hud repaints via
-  // setHud(innerHTML) which would erase a child, so we sit AFTER the hud text
-  // as a sibling-styled inline element inside the same visual bar.
+  // inline at the end of the hud's row: setHud(innerHTML) would erase a child, so this sits AFTER the hud as a sibling
   micBtn = document.createElement('span');
   micBtn.id = 'micbtn'; micBtn.style.cssText = 'cursor:pointer;display:inline-block;line-height:0;position:fixed;z-index:45;';
   micBtn.onclick = flipMic;
@@ -297,14 +229,8 @@ function ensure() {
   applyPairVisibility();
   placeMic();          // position + bind the observer the moment we exist
 }
-// Anchored to the hud panel's LIVE box. This used to re-measure on a 1s
-// setInterval, which is exactly what it looked like: the mic visibly chased
-// the panel for a second or two whenever the hud changed width (it never rode
-// with it cleanly, always a second or two behind). A poll is
-// the wrong instrument for "follow this box" — ResizeObserver fires in the
-// same frame the box changes, so the mic moves WITH the panel instead of
-// after it. The interval remains only as a slow safety net for changes
-// neither observer sees (font swaps, zoom).
+// anchored to the hud panel's live box by ResizeObserver (moves in the same frame); the slow interval is only a
+// safety net for what no observer sees (font swaps, zoom)
 let _hudRO = null, _hudSeen = null;
 function placeMic() {
   const hud = document.querySelector('#hud');
@@ -313,15 +239,8 @@ function placeMic() {
   // hang off the ∃ ALONG its own edge (the rail's line continues through
   // them); fold perpendicular only when a corner leaves no room
   const edge = document.getElementById('dock')?.dataset.edge || 'left';
-  // PUBLISH IT. windows.js CHROME_ANCHOR reads `dataset.edge` off these buttons to
-  // charge them to the correct side, and nothing ever wrote it — the map entry, the
-  // consumer and a comment claiming the behaviour all existed, with no producer, so
-  // `|| 'left'` won unconditionally. Invisible at the default left dock; measured at
-  // 1280x720 with the rail dragged RIGHT, a 26px glyph welded 44px off the right edge
-  // was charged 1236px of LEFT consumption and floored world from its declared 407 to
-  // 200 (agent review round 1). Correct in BOTH placement branches below: stacked
-  // along the rail the glyph sits on the rail's edge, and folded round the corner it
-  // sits inboard of the rail — still consuming from that same side.
+  // publish the edge: windows.js CHROME_ANCHOR reads `dataset.edge` to charge these to the right side (else
+  // `|| 'left'` wins); true in both placements below, stacked on the rail or folded round its corner
   for (const b of [micBtn, earBtn, xrBtn]) if (b) b.dataset.edge = edge;
   const cx = Math.round(r.left + (r.width - 26) / 2);
   const cy = Math.round(r.top + (r.height - 26) / 2);
@@ -378,13 +297,8 @@ bus.on('edit-mode', () => requestAnimationFrame(() => { paint(); placeMic(); }))
 setInterval(ensure, 1000);
 ensure();
 
-// 🔴 "TYPING" MEANS A TEXT FIELD, NOT ANY INPUT. The old guard skipped V
-// whenever an INPUT had focus — which includes the checkbox you just
-// clicked to turn push-to-talk on. Focus stays on a checkbox after the
-// click, so the very first V after enabling PTT was silently eaten: the
-// mode looked broken while the gate was fine (R, 2026-09-10, found by ear;
-// the two-tab probe reproduced it with a focused checkbox → held=false).
-// Only a place where V would insert a character is a reason to ignore it.
+// "typing" means a text field, not any input: focus stays on a checkbox after a click (e.g. enabling PTT), and V must
+// still work there; only where V would insert a character is it ignored
 const TEXT_INPUT = /^(text|search|url|email|password|number|tel|)$/i;   // '' = default type
 const typingTarget = () => {
   const el = document.activeElement;
@@ -396,15 +310,8 @@ const typingTarget = () => {
 window.addEventListener('keydown', (e) => {
   if (e.repeat || typingTarget()) return;
   if (e.code !== 'KeyV' || e.shiftKey) return;
-  // V speaks. Hushing is a CLICK on the 🎧, and revoking consent entirely
-  // lives only in the Audio panel — deliberately not on a key next to the
-  // hush, because two near-identical gestures with different guarantees is
-  // how someone ends up believing they are private when they are not. The
-  // frequent act gets the fast path; the structural one you go looking for.
-  //
-  // In PTT mode V is HOLD-to-speak (VRChat's binding, same key both modes so
-  // there is one thing to learn). Turning the mic on/off entirely moves to
-  // the glyph and the panel — a deliberate act for a deliberate state.
+  // V speaks; hush is a click on 🎧 and revoking consent lives only in the Audio panel (two near-identical gestures
+  // with different guarantees mislead). In PTT mode V is hold-to-speak; on/off moves to the glyph and the panel.
   if (pttMode()) {
     if (micIsOn()) { setPttHeld(true); paint(); }
     return;

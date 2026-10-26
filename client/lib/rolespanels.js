@@ -1,23 +1,7 @@
-// rolespanels.js — the two dock panels of roles and moderation (research roles 10-06, S7 and S8; PLAN decisions 10-06).
-// Each thing lives in exactly one place (research §7):
-//   MODERATION (dock: a shield; shown only while you hold mute, kick, ban or pauseScripts — it follows your-rights)
-//     Bans     bans in force, then mutes and kicks cooling down, each with its lift where you may; ended bans
-//              collapsed. Lifting follows the authority's rule (an owner, the author, or someone who outranks the author).
-//     Log      the moderator log, newest first, with role changes merged in; a person filter and verb chips; older.
-//     Scripts  every script here: thing, name, sponsor, status, who paused it, Pause / Resume where you may.
-//   WORLD SETTINGS (dock: a flag; everyone reads, owners edit; editWorld holders edit Card and Places)
-//     Roles    the grid: permissions down, roles across (owner first, locked); dependencies grey a cell with the reason;
-//              place a role above another; holders under it; + Role; delete a held role by moving its people (one batch).
-//              Narrow (a phone, or the panel squeezed): one role at a time.
-//     Access   who can come in, what arrivals and guests are, how many at once; a warning when the default role holds
-//              moderation powers or generate.
-//     World    capacity (entities, guests' entities together, largest avatar), physics on/off (R 10-14 14:13:
-//              "not being able to edit these things would annoy people"). Opening it writes NOTHING: the effective value
-//              (what is written, else this server's default as schema reports it) is shown grey; an edit sends ONLY the
-//              field that changed (a policy number's absence is the server's default, PROTOCOL §9.2).
-//     Card     the world's name and blurb (@world.about).   Places  spawn and bounds.   Old world  what translation carried.
-// Rows here are DOM like every panel; in a headset they are the same frame as a quad (domquad.js XR_FRAMES), rows stay
-// rows, and every control is a button or a select (no hover, no long-press).
+// rolespanels — the Moderation (Bans, Log, Scripts; shown only while you hold a moderation right) and World settings
+// (Roles, Access, World, Card, Places, Old world; everyone reads, owners edit) dock panels. World writes only the field
+// that changed, never on open (absence = the server's default, PROTOCOL §9.2). In a headset these are the same frames
+// as quads (domquad.js XR_FRAMES): every control is a button or select (no hover, no long-press).
 import { bus, report } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
@@ -245,10 +229,8 @@ function paintAccess(body) {
       else { v[k] = x.value; if (k === 'join' && x.value !== 'listed') delete v.watch; }
       act('set', { id: '@world', component: 'access', value: v }, 'access').then(() => paintAccess(body)); } }; });
 }
-// World: the owner's dials over @world components that already exist (capacity, physics-engine).
-// The ONE hard rule: write only on an explicit edit, never on open, and only the field that changed: capacity is a policy
-// number (PROTOCOL §9.2), so an absent field is this server's current default (schema reports it, and it may change) and a
-// panel that wrote the others too would freeze today's defaults into the log. Everyone reads; owners edit.
+// World: owner dials over existing @world components. Write only on an explicit edit and only the changed field: an
+// absent capacity field is the server's current default (PROTOCOL §9.2), and writing it would freeze that into the log.
 const CAP = 'capacity', CAP_FIELDS = ['entities', 'guestEntities', 'avatar'];
 const CAP_WORDS = { entities: 'Entities in this world', guestEntities: "Guests' entities, together", avatar: 'Largest avatar (entities)' };
 const CAP_DOCS = COMPONENTS[CAP].docs ?? {};   // each says per what first: the whole world's, all account-less people's together, one worn avatar's

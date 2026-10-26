@@ -1,18 +1,5 @@
-// loadwork — where load-time CPU goes, measured and spread.
-//
-// "The client freezes for seconds when things load into the world." Two causes,
-// two jobs here:
-//
-//   MEASURE — every heavy materialization (a body, a spawned model) runs as a
-//   labelled work record with phases. The browser's own long-task entries are
-//   attributed to whatever work was active when they happened, so a freeze
-//   names its culprit in the console instead of being a vibe.
-//
-//   SPREAD + SERIALIZE — heavy main-thread work yields to the frame loop on a
-//   per-frame budget, and at most ONE materialization finalizes at a time.
-//   Three bodies arriving together used to stack their parse/compile bursts
-//   into the same frames; now they queue, and the queue wait is visible as its
-//   own phase rather than masquerading as parse time.
+// loadwork — labels heavy materializations (long tasks are attributed to them) and spreads/serializes their
+// main-thread work on a per-frame budget.
 //
 // ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one
 // compile). Never call serialize() from inside a serialized function and never
@@ -144,10 +131,7 @@ export function loadNote(line) {
  *
  *  Priority: 2 = your own body, 1 = anyone's body, 0 = objects. People
  *  materialize before furniture, always. Reorders WAITING work only. */
-// cpu at 2: a parse's WALL time is dominated by draco workers and image
-// decode — awaits, not main-thread work (one conjured model held the serial
-// lane 18s on Safari while its webp decoded). Two in flight overlap the
-// waits; the genuinely-synchronous chunks still interleave through frames.
+// cpu at 2: a parse's wall time is mostly awaits (draco workers, image decode), so two in flight overlap them
 const lanes = {
   cpu: { jobs: [], running: 0, max: 2 },
   gpu: { jobs: [], running: 0, max: 2 },
@@ -162,10 +146,6 @@ export function enqueue(fn, { lane = 'cpu', priority = 0 } = {}) {
     reportLanes();
   });
 }
-// (holdObjectCompiles lived here — object compiles paused while a sky was
-// building, because the sky's wraps rewrote every graph after the fact. The
-// material factory ended that: materials are born with their final shape,
-// so there is no wrong moment to compile one. TEL0S_NOTES §12.7.)
 function pumpLane(l) {
   while (l.running < l.max && l.jobs.length) {
     const job = l.jobs.shift();
@@ -205,16 +185,8 @@ export function serialize(fn, { urgent = false, lane = 'cpu', priority } = {}) {
   return enqueue(fn, { lane, priority: priority ?? (urgent ? 2 : 0) });
 }
 
-// (holdFrames lived here — presentation paused for one bounded beat while a
-// whole-scene recompile settled behind it. Nothing invalidates the whole
-// scene anymore — the factory fixes graph shapes at birth, the light rig
-// freezes topology at boot, the env texture is persistent — so there is
-// nothing left to hold for. TEL0S_NOTES §12.7.)
-
 // ---- long-task attribution --------------------------------------------------
-// The browser already measures every main-thread stall over 50ms; all that was
-// missing is knowing WHOSE stall it was. Anything unattributed logs as such —
-// an honest "the freeze came from somewhere we are not measuring yet".
+// the browser measures every main-thread stall over 50ms; this names whose it was (unattributed ones log as such)
 
 const activeLabels = () => [...active]
   .map((w) => w.phaseName ? `${w.label}[${w.phaseName}]` : w.label)
@@ -229,19 +201,9 @@ try {
   }).observe({ type: 'longtask', buffered: true });
 } catch { /* not supported — the frame-gap watchdog below still measures */ }
 
-// Frame-gap watchdog — Safari has no longtask observer, so frame gaps are the
-// portable truth about felt freezes. Anything that holds a frame >150ms logs
-// with the same attribution.
-// ---- perf beacon ------------------------------------------------------------
-// Safari's console can't be read over WebDriver and most visitors never open
-// one — so the profile phones home instead: one small POST per session at
-// 40s (the load window) and one at 120s (the Safari compile tail), to the
-// sequencer's /perflog. That is how WebKit performance gets diagnosed from
-// real visits instead of asked-for console screenshots.
-// Steady-state smoothness never shows in the jank lines — a constant 25fps
-// has no >150ms gaps (exactly how Safari's grass cost stayed invisible). The
-// watchdog's own rAF ticks double as an fps estimator; the beacon carries a
-// recent-median so per-browser render cost is visible from real visits.
+// Frame-gap watchdog: Safari has no longtask observer, so any frame held >150ms logs with the same attribution.
+// ---- perf beacon: a POST to the sequencer's /perflog at 40s (load window) and 120s (Safari compile tail), with a
+// recent fps median from the watchdog's rAF ticks (a steady low fps never shows as >150ms gaps)
 const fpsWindow = [];
 let fpsTick = 0;
 setInterval(() => {

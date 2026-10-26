@@ -1,24 +1,6 @@
-// pictures — the browser host for the `picture` component.
-//
-// Owns the THREE-bound half: loading the image off the library route, finding
-// the named part on the owning entity, swapping that part's material for a
-// clone carrying the image, and putting the original back when the picture
-// comes down. The split mirrors emitters.js:
-//
-//   shared/picture.js — what a `picture` bag MEANS (shared with the mcpl agent)
-//   this file         — hosting
-//
-// Two rules that are easy to get wrong and are therefore stated:
-//
-//   1. NEVER mutate the part's material. glTF materials are shared across
-//      primitives and across instances of the same model; painting one
-//      screen by writing `map` on its material paints every screen in the
-//      world. The host clones, textures the clone, and restores the original
-//      on removal — the clone is ours to dispose, the original never was.
-//   2. NEVER dispose the texture. loadImageTexture caches by bytes and pins
-//      the texture for the session (assets.js §16.2.B: `dispose` is a no-op
-//      on cached textures); the cache owns it, the picture borrows it. Same
-//      ownership rule as emitter sprites.
+// pictures — the browser host for the `picture` component (what a bag means: shared/picture.js).
+// 1. NEVER mutate the part's material: glTF materials are shared, so clone, texture the clone, restore on removal.
+// 2. NEVER dispose the texture: loadImageTexture's cache owns it; the picture borrows it.
 
 import { THREE } from './core.js';
 import { bus } from './base.js';
@@ -32,15 +14,9 @@ import { normalizePicture, PICTURE_LIT, PICTURE_ALT_MAX, PICTURE_STORE, ALT_HINT
 import { clientMayFetch } from '../../shared/mediasrc.js';
 import { allowUntrusted, RIGHTS_WARNING } from './mediaprefs.js';
 
-// Batch 2 (R 10-07):
-//   3. No part = a QUAD of its own (Godot Sprite3D, a Resonite image import): `width` metres wide, its height from the
-//      image's aspect, standing on the thing's origin and facing its front (+Z), readable from behind too (a second
-//      plane turned π, so the back isn't mirrored). Until the image is decoded, a 1:1 plate at 30% stands in, so the
-//      editor's gizmo has something to grab. Cutout transparency (alphaTest 0.5: no sorting, fine in VR). Its world
-//      extent is held to 50 m whatever the transform's scale.
-//   4. Where the bytes come from (shared/mediasrc.js): a store file always; a trusted host's link always; any other
-//      link only if this viewer turned on "allow untrusted links" — otherwise nothing is fetched (a quad shows its empty
-//      plate). A link is fetched without credentials or a referrer, and decoded at most 2048 px on its long side.
+// No part = a QUAD of its own: `width` m wide, height from the image's aspect, on the origin facing +Z (a second plane
+// turned π so the back isn't mirrored); a 1:1 plate stands in until decode. alphaTest 0.5; world extent held to 50 m.
+// Bytes per shared/mediasrc.js: untrusted links only if this viewer allows them; no credentials or referrer; ≤2048 px.
 export const QUAD_MAX_EXTENT = 50;
 export const MAX_TEXTURE_PX = 2048;
 const blocked = new Map();   // id → why this browser didn't fetch it (probes)
@@ -76,14 +52,8 @@ function holdExtent(root, g, picture, aspect) {
 
 // id → { picture, part, original, material } for every picture currently hung
 const hung = new Map();
-// id → revision of the CURRENT intent for that id. Every change of intent —
-// a new bag, a removal, a malformed bag, the entity leaving or being
-// re-realized, a world reset — bumps it, and an async hang installs only if
-// the revision it was issued under is still the current one. Without this a
-// held image load installed after `data: null`, and an older bag's load
-// finishing late overwrote a newer one (Mica, #186 review, blocker 1). The
-// bag in the fold is the authority; a load is a request to realize it, and a
-// request outlives its authority all the time.
+// id → revision of the CURRENT intent for that id: every change of intent bumps it, and an async hang installs only
+// if its revision is still current (a late load must not overwrite a newer bag or a removal).
 const revision = new Map();
 const bump = (id) => { const r = (revision.get(id) ?? 0) + 1; revision.set(id, r); return r; };
 const current = (id, r) => revision.get(id) === r;
@@ -100,11 +70,7 @@ async function pictureTexture(picture, quad = false) {
   if (/^https:/i.test(picture.src)) { const t = await linkTexture(picture.src); t.flipY = flipY; t.needsUpdate = true; return t; }
   await primeFiles([picture.src]);
   const bytes = globalThis.Deno.readFileSync(picture.src);
-  // glTF UVs are authored in glTF convention (no vertical flip); the shim's
-  // default bakes the browser flip for procedurally-mapped surfaces. A picture
-  // on a modelled part wants the glTF convention, so flipY:false — `flip` is
-  // the author's escape hatch for a part whose UVs were exported the other
-  // way, which the by-eye check tells you in one glance.
+  // a picture on a modelled part wants the glTF UV convention (flipY:false); `flip` is the escape hatch for UVs exported the other way
   return globalThis.loadImageTexture(bytes, { srgb: true, flipY });
 }
 
@@ -120,11 +86,7 @@ function takeDown(id) {
 }
 
 async function hang(id, picture, rev) {
-  // The bag is pending from the moment it is current until a hang INSTALLS
-  // it — including while a load is in flight with the entity present. A
-  // demote/promote during that load bumps the load stale, and the promote's
-  // spawn must still find the bag to rehang (Mica, #186 round 2): a picture
-  // that is still authored never silently stops being shown.
+  // The bag stays pending until a hang INSTALLS it, so a demote/promote mid-load still finds it to rehang.
   pending.set(id, picture);
   const root = entities.get(id);
   if (!root) return;
@@ -206,12 +168,8 @@ bus.on('comp', ({ id, type, data }) => {
 
 bus.on('entity', ({ id, kind }) => {
   if (kind === 'remove' || kind === 'demote') {
-    // the subtree left the scene with our clone on it; forget the handle
-    // (restoring a material on a detached mesh is harmless but pointless).
-    // A load in flight for the departed subtree must not install: bump.
-    // DEMOTE keeps the bag pending so the promote re-hangs it (the entity
-    // and its comp still exist in the fold); REMOVE clears it — the entity
-    // is gone, and a later spawn of the same id starts from its own comps.
+    // the subtree left the scene: forget the handle and bump so an in-flight load doesn't install. DEMOTE keeps the bag
+    // pending for the promote; REMOVE clears it (a later spawn of the same id starts from its own comps).
     bump(id);
     const h = hung.get(id);
     if (h) { hung.delete(id); if (h.quad) h.quad.userData.dispose?.(); else h.material.dispose(); if (kind === 'demote') pending.set(id, h.picture); }
@@ -232,27 +190,9 @@ bus.on('entity', ({ id, kind }) => {
   }
 });
 
-// The block's status line, per entity, kept OUTSIDE the DOM. The scene panel
-// rebuilds every editor on the echo of a committed verb (scenegraph.js
-// repaint, ~300ms after the comp lands), and a refusal is exactly the case
-// with no echo to wait for: the user pressed hang, the block said why not,
-// and the previous hang's echo then wiped the line under them (Mica, #191
-// round 1). The render reads this back, so a repaint carries the last word.
-//
-// A line is about ONE state of ONE entity, though, and both can move under
-// it (Mica, round 2):
-//   · the entity can be removed and a new one spawned under the same id — a
-//     different thing that must not open with its predecessor's "taken
-//     down". The client's entity lifecycle names that case (`kind: 'remove'`,
-//     below); a demote/promote is the SAME entity leaving and re-entering
-//     residency, and keeps its line.
-//   · the bag can change by someone else's hand. Every line is stamped with
-//     the picture it was said ABOUT — for `hang` the bag it committed, for
-//     `take down` none, for a refusal or an upload note the bag as it stood —
-//     and a picture echo that disagrees with the stamp retires the line: a
-//     local status must never read as newer than the world. An echo that
-//     AGREES (the hang's own, or a late repeat of it) keeps it, which is the
-//     round-1 case and why this is a comparison, not a clear-on-every-echo.
+// Status lines live outside the DOM (scenegraph.js rebuilds editors on every echo). Each is stamped with the picture
+// it describes: an echo that disagrees retires it (a local status never reads newer than the world), one that agrees
+// keeps it. Remove + respawn under one id clears it (`kind: 'remove'`); demote/promote doesn't.
 const notes = new Map();   // id → { text, warn, about }   (about = pictureKey of the bag the line describes)
 
 /** The four fields a picture IS, normalized, as one comparable string; `none`
@@ -289,16 +229,8 @@ export const pictureCount = () => hung.size;
 export { THREE as _THREE };
 
 // ---- the editor block: how a HUMAN hangs a picture -------------------------
-//
-// The scene panel's generic layer already edits the comp as raw JSON; this is
-// the semantic block (client/lib/inspect.js): a file door that lands the image
-// in the store and fills `src`, the alt line with its bound, and lit. One verb per
-// gesture — `hang` commits the whole bag, `take down` commits null — and the
-// bag goes through normalizePicture FIRST so a refusal is a hint here, not a
-// console warning after the round-trip.
-//
-// A thing guarded by someone else (comp {type: "guard"}, rights.ts) gets a
-// read-only line: the server would refuse the comp, so the block says who may.
+// The semantic block (inspect.js): one verb per gesture (`hang` commits the whole bag, `take down` commits null), run
+// through normalizePicture first so a refusal is a hint here. A guarded thing gets a read-only line saying who may.
 
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
 const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

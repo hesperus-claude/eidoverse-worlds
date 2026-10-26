@@ -1,21 +1,8 @@
-// motioneval — the whole-entity motion closed forms, as pure math.
-//
-// Extracted from motion.js (#82 review): the browser render loop and the
-// agent's text-tier perception must agree on where a moving thing IS, and
-// the only way two runtimes agree forever is to evaluate the same file.
-// This module is deliberately dependency-free — no THREE, no DOM, no scene,
-// no clock (its imports are pure: names.js motionType, and shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
-// motion.js consumes it per frame; mcpl/agent.ts consumes it at read time.
-//
-// Contract: evalWholeMotion returns a FINITE transform or an explicit
-// refusal ({ok:false, why}) — never a partially-composed number. Unknown
-// motion types are a refusal here even though the renderer quietly shows
-// such things at rest: a renderer that draws stillness is visibly guessing,
-// but a printed coordinate claims to be truth (#82's whole disease).
-//
-// Part-frame motion (`motion:<slot> {node}` keys, or an old `motion` carrying `part`: shared/protocol/names.js motionNode)
-// does not displace the entity's ROOT transform at all — those stay in
-// motion.js, THREE-side, and this module reports the root as unmoved.
+// motioneval — whole-entity motion as pure math, shared by motion.js (render) and mcpl/agent.ts (perception) so both
+// agree where a thing is (#82). No THREE, DOM, scene or clock: callers pass {base, motion, nowMs}.
+// evalWholeMotion returns a finite transform or an explicit refusal ({ok:false, why}), never a partial number; unknown
+// types are refused, since a printed coordinate claims to be truth.
+// Part-frame motion (shared/protocol/names.js motionNode) leaves the root unmoved; it stays in motion.js.
 import { motionType } from '../../shared/protocol/names.js';
 import { qMul, qRotate as qApply, qAxisAngle as qAxisAngleUnit } from '../../shared/rot.js';
 
@@ -42,10 +29,8 @@ const yawQuat = (yaw) => qAxisAngle([0, 1, 0], yaw ?? 0);
 // is tilted (PROTOCOL §9 amendment), else its yaw
 const baseQuat = (base) => (Array.isArray(base?.q) && base.q.length === 4 ? base.q : yawQuat(base?.yaw));
 
-// ---- the generous reader (verbatim from motion.js — see its history) -------
-// Text-tier authors improvise dialect: `amplitude` for amp, `axis: "x"` for
-// [1,0,0], no t0 at all. Parsing is where generosity lives; the closed form
-// stays exact.
+// ---- the generous reader -------
+// Authors improvise dialect (`amplitude`, `axis: "x"`, no t0); parsing is generous, the closed form stays exact.
 
 export const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1],
   '-x': [-1, 0, 0], '-y': [0, -1, 0], '-z': [0, 0, -1] };
