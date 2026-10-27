@@ -10,6 +10,7 @@
  * own arm, attesting `reached`, and hearing about other people's hands.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "./no-world-test-helper.ts";
 import { ReachBody } from "./physics.ts";
 import { normalizeReachBag } from "../shared/reachwire.js";
 
@@ -27,7 +28,7 @@ if (!rig) process.exit(1);
 
 const DEFAULT_BODY = "eidoverse/assets/vrms/claude.vrm";
 const mkAgent = async () => {
-  const ag: any = new WorldAgent({ name: "me", world: "test" });
+  const ag: any = new WorldAgent({ name: "me", world: "test", url: noWorldUrl() });
   // pre-seed the solver bodies the way a live join's fetch would
   ag.reachBodies.set(DEFAULT_BODY, await ReachBody.fromSkeleton(rig.P));
   return ag as any;

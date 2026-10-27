@@ -9,6 +9,7 @@
  * rejoin is the agent's own: its snapshot resumes the walk.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "./no-world-test-helper.ts";
 import { pointClass } from "../shared/protocol/consent.js";
 import { wireState } from "../shared/protocol/replica.js";
 import { emptyState } from "../shared/protocol/fold.js";
@@ -24,7 +25,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 console.log("a tracks loop");
 {
   // Treading water is a swimmer at rest. A loop started while treading plays on; a swim stroke is a move, and ends it.
-  const ag: any = new WorldAgent({ name: "me", world: "w" });
+  const ag: any = new WorldAgent({ name: "me", world: "w", url: noWorldUrl() });
   ag.anims = [{ name: "wave", mode: "loop", kind: "track" }];
   ag.clip = "tread"; ag.target = null;
   ag.watchAnim();
@@ -40,7 +41,7 @@ console.log("a reach held to two bodies");
 // touched) and strips it if any of them refuses.
 const pose = (p: number[], extra: Record<string, unknown> = {}) => ({ p, yaw: 0, speed: 0, clip: "idle", ...extra });
 const reacher = (cal: number[], ann: Record<string, unknown> = {}) => {
-  const ag: any = new WorldAgent({ name: "me", world: "w" });
+  const ag: any = new WorldAgent({ name: "me", world: "w", url: noWorldUrl() });
   ag.people.set("Ann", { id: "Ann", avatar: "", pose: pose([0, 0, 0], ann) });
   ag.people.set("Cal", { id: "Cal", avatar: "", pose: pose(cal) });
   ag.actorIds.set("Ann", "a-ann"); ag.actorIds.set("Cal", "a-cal");

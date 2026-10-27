@@ -5,6 +5,7 @@
  * walk, idle, stand-up and flight; the body's y only picks which floor qualifies, never becomes the height.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "./no-world-test-helper.ts";
 import { tryUntil, pause } from "../tools/protocol/wait.ts";
 import { describeHere, planStructure } from "../shared/structure.js";
 import { NAV_STEP } from "./navgrid.ts";
@@ -34,7 +35,7 @@ const plan = planStructure(HOUSE);
 const upperY = plan.levels[1].y;      // the upstairs walk surface; grid-local == world here (building at origin, scale 1)
 
 function agentIn(y: number, opts: { pos?: number[]; scale?: number; before?: Record<string, any>; house?: any } = {}) {
-  const ag: any = new WorldAgent({ name: "climber", world: "test" });
+  const ag: any = new WorldAgent({ name: "climber", world: "test", url: noWorldUrl() });
   // entities the agent learned about BEFORE the house: a Map folds in insertion order
   for (const [id, ent] of Object.entries(opts.before ?? {})) ag.entities.set(id, { id, pos: [50, 0, 50], yaw: 0, actor: "test", ...ent });
   ag.entities.set("house", { id: "house", model: "house", pos: opts.pos ?? [0, 0, 0], yaw: 0, actor: "test",
@@ -503,7 +504,7 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
     ["in a canned slump beside a box a metre high", "ragdoll", UPPER, boxBy],
     ["lying limp on a bed 0.5 m high", "ragdoll", UPPER + 0.5 - 0.7, bed(0.5)], ["lying limp on a bed 0.9 m high", "ragdoll", UPPER + 0.9 - 0.7, bed(0.9)],
     ["lying in a physics pose under another clip", "idle", UPPER - 0.7, null], ["standing", "idle", UPPER, null]] as const) {
-    const ag: any = new WorldAgent({ name: "climber", world: "test" });
+    const ag: any = new WorldAgent({ name: "climber", world: "test", url: noWorldUrl() });
     ag.heightAt = () => 0;
     const tower = `${ag.world}/limp-tower`;
     let fitted = await registerMeshSupport("storey-walk-test", tower, { positions: new Float32Array(pos), indices: new Uint32Array(idx) }, { position: [20, 0, 20], yaw: 0, scale: 1 });

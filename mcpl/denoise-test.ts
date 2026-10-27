@@ -21,6 +21,7 @@ process.env.EW_ACTIVITY_REFRESH_SEC = "0.35";
 
 const { NoiseGate } = await import("./denoise.ts");
 const { WorldAgent } = await import("./agent.ts");
+const { noWorldUrl } = await import("./no-world-test-helper.ts");
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
@@ -86,7 +87,7 @@ console.log("\n━━ acts: a burst speaks once per window ━━");
 // ---- agent-level: jump stint, self-echo, approach --------------------------
 console.log("\n━━ agent: jump = one thing not two; long sits still narrate ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const acts: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "act") acts.push(ev.text!); };
   const np = (id: string, clip: string, x = 5, z = 5) =>
@@ -108,7 +109,7 @@ console.log("\n━━ agent: jump = one thing not two; long sits still narrate �
 
 console.log("\n━━ agent: own say is not an event ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const heard: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "say") heard.push(`${ev.who}:${ev.text}`); };
   (agent as any).hearSay({ verb: "say", args: { text: "me talking" }, actor: "claude", ts: Date.now(), seq: 1 }, true);
@@ -121,7 +122,7 @@ console.log("\n━━ agent: own say is not an event ━━");
 
 console.log("\n━━ agent: approach = knock once, not a metronome ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // agent at origin
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // agent at origin
   // virtual clock (notePose takes `now`): real sleeps would race the 300ms refractory. Offset from a real epoch:
   // `cooled` compares to a last-approach time defaulting to 0
   const T0 = Date.now();
@@ -165,7 +166,7 @@ console.log("\n━━ agent: approach = knock once, not a metronome ━━");
 
 console.log("\n━━ agent: activity pulse — regular wakes only while life is near ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // at origin
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // at origin
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   // digi 10m away, walking and talking: inside the 30m radius
@@ -189,7 +190,7 @@ console.log("\n━━ agent: activity pulse — regular wakes only while life is
 
 console.log("\n━━ agent: recurrence is not novelty — ambient scenery dedupes ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // at origin
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // at origin
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   const np = (x: number) => (agent as any).notePose("digi", { p: [x, 0, 0], yaw: 0, speed: 1.5, clip: "walk" });
@@ -221,7 +222,7 @@ console.log("\n━━ agent: recurrence is not novelty — ambient scenery dedup
 
 console.log("\n━━ agent: idle jitter is not movement ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   // fidgeting: many pose packets, centimetres of travel
@@ -234,7 +235,7 @@ console.log("\n━━ agent: idle jitter is not movement ━━");
 
 console.log("\n━━ agent: activity dial — the sense is the agent's own to tune ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   let cur = agent.setActivity({ radiusM: 5 });
