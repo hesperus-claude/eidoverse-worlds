@@ -847,11 +847,6 @@ async function handle(msg, at) {
       bus.emit('roster');
       break;
 
-    case 'access-state':        // the world panel's 🔒 access tab reads these off the bus
-    case 'access-directory':
-      bus.emit(msg.type, msg);
-      break;
-
     case 'notice':
       // not an `error`, which would tell every optimistic preview its verb was refused
       toast(String(msg.text ?? ''), 'warn', 20000);
