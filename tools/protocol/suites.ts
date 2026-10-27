@@ -133,7 +133,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["places", "../places-test.ts", 1],    // #239: named places (move {to: "thing/place"}, which room you're in, name_place), look's places in sight, "?"
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
-  ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
+  ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],
+  ["headless-core", "../../mcpl/headless-core-test.ts", 0.3], // the agent's stand-in core exports each shared name as core.js does: a function where it is a function   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
   ["effective", "../effective-test.ts", 0.5],   // the same seen from a seated body (occupant size, seat correction)
   ["stretched-support", "../../mcpl/stretched-support-test.ts", 1], // a stretched thing's support (box, heightfield, triangles, lying down) holds a body where it's drawn
   ["stretched-places", "../../mcpl/stretched-places-test.ts", 1], // a named place on a stretched thing is stretched with it; a region's floor slack stays 0.1 m
