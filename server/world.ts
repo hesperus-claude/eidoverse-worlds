@@ -10,6 +10,7 @@ import { WorldScripts, type ScriptHost } from "./scripts.ts";
 import type { HnSession } from "./auth.ts";
 import { isOperator } from "./operators.ts";
 import { gateReach } from "./reachgate.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 
 // the settle rule stays in server.ts, pinned by tools/settled-pose-test.ts's source gates (§15.1); injected at boot
 let settle: (pose: unknown) => Record<string, unknown> | null = () => {
@@ -191,12 +192,12 @@ export const worlds = new Map<string, World>();
 // a function DECLARATION on purpose (§15.1): module-scope callers rely on hoisting
 /** In memory or on disk, WITHOUT founding it (getWorld founds on miss; RFC-005 §3.2.7: founding is not joining). */
 export function worldExists(name: string): boolean {
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return false;
+  if (!WORLD_NAME_RE.test(name)) return false;
   return worlds.has(name) || existsSync(join(WORLDS_DIR, name));
 }
 
 export function getWorld(name: string): World {
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) throw new Error(`bad world name: ${name}`);
+  if (!WORLD_NAME_RE.test(name)) throw new Error(`bad world name: ${name}`);
   let w = worlds.get(name);
   if (!w) { w = new World(name); worlds.set(name, w); }
   return w;

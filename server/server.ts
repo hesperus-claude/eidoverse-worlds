@@ -32,7 +32,7 @@ import { route, avatarRoster } from "./routes.ts";
 import { snapshots } from "./snapshots.ts";
 import { registerSystem, startTick } from "./tick.ts";
 import { MESSAGES } from "./messages.ts";
-import { LIMITS, envNumber } from "./limits.ts";
+import { LIMITS, envNumber, WORLD_NAME_RE } from "./limits.ts";
 import { defsFingerprint } from "./defs.ts";
 // seat profiles (#101, §24r): routes.ts owns the HTTP half, seats.ts the one store and the update push
 import { seatStore } from "./seats.ts";
@@ -192,7 +192,7 @@ try {
   let woken = 0;
   for (const name of readdirSync(WORLDS_DIR)) {
     try {
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name) || !isWorldSaved(name)) continue;
+      if (!WORLD_NAME_RE.test(name) || !isWorldSaved(name)) continue;
       if (readFileSync(join(WORLDS_DIR, name, "world.jsonl"), "utf8").includes('"script:')) { getWorld(name); woken++; }
     } catch (err) { console.error(`[boot] world ${name} peek failed`, err); }
   }
@@ -248,7 +248,7 @@ function declarationOf(v: unknown): string | null {
 function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, reason?: string): void }, msg: any, auth: HnSession | null): World | null {
     // a malformed world name is a bad LINK: refuse with a close code the client won't retry
     const wname = String(msg.world ?? "commons");
-    if (!/^[a-z0-9_-]{1,64}$/i.test(wname)) {
+    if (!WORLD_NAME_RE.test(wname)) {
       ws.send(JSON.stringify({ type: "error", error: `"${wname}" is not a world name — check the link that brought you here` }));
       c.ws.close?.(4005, "bad world name");
       return null;

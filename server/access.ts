@@ -18,6 +18,7 @@ import { isBanned, kickOf } from "../shared/protocol/authority.js";
 import { modLogAt } from "./custody.ts";
 import { entryOf, doorOf as doorOfWc, listedIn, timedGrants, leftWords, ACCESS_WARN_MS } from "../shared/protocol/access.js";
 import type { World, Client } from "./world.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 
 /** "This world is not open to you", at the door or on removal. Clients don't redial it (4006 moderation, 4005 a refused join; only 4005 "full" is retried). */
 export const ACCESS_CLOSE = 4010;
@@ -52,7 +53,7 @@ export function setLoadedWorlds(fn: () => Map<string, World>) { loadedWorlds = f
 export function doorFor(name: string): Door | null {
   const live = loadedWorlds().get(name);
   if (live) return doorOfWorld(live);
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return null;
+  if (!WORLD_NAME_RE.test(name)) return null;
   const file = join(WORLDS_DIR, name, "world.jsonl");
   let st; try { st = statSync(file); } catch { return null; }
   const modFile = join(WORLDS_DIR, name, "world.mod.jsonl");

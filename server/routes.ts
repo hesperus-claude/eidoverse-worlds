@@ -77,6 +77,7 @@ import { agentTokens, aid1JoinIdentity, bearerOf } from "./auth.ts";
 import { httpCaller, visibleTo, doorFor, youAt } from "./access.ts";
 
 import { recordComponents } from "../shared/protocol/view.js";
+import { WORLD_NAME_RE } from "./limits.ts";
 /** What the routes need from Bun's server object: the WS upgrade and the socket address (X-Real-IP's fallback). */
 export type Srv = {
   upgrade(req: Request, opts?: { data?: unknown }): boolean;
@@ -486,7 +487,7 @@ const ROUTES: Route[] = [
       if (!mayRead(req)) return unauthorized();
       // read-only, LOADED or on-disk worlds, never creates one; a world closed to this caller reads exactly like one that
       // does not exist (access.ts)
-      if (!/^[a-z0-9_-]{1,64}$/i.test(wname)
+      if (!WORLD_NAME_RE.test(wname)
         || (!worlds.has(wname) && !hasWorldLog(wname))) {
         return j({ error: "no such world" }, 404);
       }
@@ -575,7 +576,7 @@ const ROUTES: Route[] = [
     handler: ({ req, url, srv }) => {
       if (!mayRead(req)) return unauthorized();
       const name = url.searchParams.get("world") ?? "commons";
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return new Response("bad world name", { status: 400 });
+      if (!WORLD_NAME_RE.test(name)) return new Response("bad world name", { status: 400 });
       if (!worlds.has(name) && !hasWorldLog(name)) return new Response("no such world", { status: 404 });
       { const door = doorFor(name); if (!door || !visibleTo(door, httpCaller(req))) return new Response("no such world", { status: 404 }); }
       const t = getWorld(name).state.terrain;
@@ -602,7 +603,7 @@ const ROUTES: Route[] = [
       const names = new Set<string>(worlds.keys());
       try {
         for (const n of readdirSync(WORLDS_DIR)) {
-          if (/^[a-z0-9_-]{1,64}$/i.test(n) && hasWorldLog(n)) names.add(n);
+          if (WORLD_NAME_RE.test(n) && hasWorldLog(n)) names.add(n);
         }
       } catch { /* no worlds dir yet: only loaded worlds */ }
       // PER CALLER (cookie session or bearer): a world closed to the caller is not on their map at all (access.ts)
@@ -636,7 +637,7 @@ const ROUTES: Route[] = [
       const caller = httpCaller(req);
       if (!caller) return j({ error: "sign in (cookie) or send Authorization: Bearer <your credential>" }, 401);
       const name = url.searchParams.get("world") ?? "";
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return j({ error: `"${name}" is not a world name` }, 400);
+      if (!WORLD_NAME_RE.test(name)) return j({ error: `"${name}" is not a world name` }, 400);
       const door = doorFor(name);
       // joining never founds a world here: `found` says so (a person founds with world-found; an operator for an agent)
       if (!door) return j({ world: name, exists: false, you: "none", found: { ok: false, why: `there's no world called "${name}" — joining never founds one here (a signed-in person founds a world with world-found; an operator founds one for an agent)` } });

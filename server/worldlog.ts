@@ -369,7 +369,7 @@ export class WorldLog {
 // ---- founding and translating (tools/protocol/world.ts is the command line) ----
 import { opsOf, DIALECT, VERSION } from "../shared/protocol/fold.js";
 import { isOwner } from "../shared/protocol/roles.js";
-import { envNumber } from "./limits.ts";
+import { envNumber, WORLD_NAME_RE } from "./limits.ts";
 
 /** `dir` must not hold a world. */
 export function foundWorld(dir: string, name: string, owner: string, title?: string, now?: () => number) {
@@ -431,7 +431,6 @@ export function foundOwnedWorld(name: string, actor: string, account: string, ti
 }
 
 // ---------- fork and reset ----------
-const WORLD_NAME = /^[a-z0-9_-]{1,64}$/i;
 const headOf = (live: Any) => live.headAt(live.entries.length - 1);
 function parentsFirst(st: Any): string[] {
   const out: string[] = [], seen = new Set<string>();
@@ -461,7 +460,7 @@ const canonOf = (st: Any, skipWorld: (k: string) => boolean) => JSON.stringify(O
 
 /** A NEW world naming its source, renamed into place only once its state equals the source's. Chat isn't copied. */
 export function forkWorld(src: WorldLog, to: string, forker: string): { ok: true; worldId: string; things: number; acts: number } | { ok: false; err: string } {
-  if (!WORLD_NAME.test(to)) return { ok: false, err: `bad world name "${to}" — letters, digits, - and _ only` };
+  if (!WORLD_NAME_RE.test(to)) return { ok: false, err: `bad world name "${to}" — letters, digits, - and _ only` };
   if (to === src.name) return { ok: false, err: "a world can't be copied onto itself" };
   const dest = path.join(WORLDS_DIR, to);
   if (fs.existsSync(dest)) return { ok: false, err: `world "${to}" already exists` };

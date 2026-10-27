@@ -13,6 +13,8 @@ export function envNumber(name: string, fallback: number, ok: (n: number) => boo
   return fallback;
 }
 const env = (k: string, d: number) => envNumber(k, d);
+/** A world's name, at every door (the sequencer, the agent door, the routes): letters, digits, - and _, at most 64. */
+export const WORLD_NAME_RE = /^[a-z0-9_-]{1,64}$/i;
 
 export const LIMITS = {
   // identity + naming

@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isWorldDir, isPreNamesDir } from "./livehost.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 
 export type OldWorldKind = "translatable" | "pre-names";
 export type OldWorld = {
@@ -35,7 +36,6 @@ export function noFoldRefusal(world: string, native: boolean): string {
     : `"${world}" needs a client that folds its log, and this one doesn't — reload the page for the current client, or update the agent`;
 }
 
-const NAME = /^[a-z0-9_-]{1,64}$/i;
 const TOOL = "bun tools/protocol/world.ts";
 export const HASH_PLACEHOLDER = "<the report hash the dry run printed>";
 const APPROVAL = "The dry run writes nothing: it prints what the translation would do (what is dropped by design, what it would refuse) and the report's hash. Read it; then translate it, bound to that hash:";
@@ -62,7 +62,7 @@ export function visitorText(name: string, kind: OldWorldKind): string {
 
 /** null for a current world, an empty directory, or a missing one. */
 export function oldWorldAt(dir: string, name: string): OldWorld | null {
-  if (!NAME.test(name)) return null;
+  if (!WORLD_NAME_RE.test(name)) return null;
   const d = path.join(dir, name);
   let st: fs.Stats; try { st = fs.statSync(d); } catch { return null; }
   if (!st.isDirectory() || isWorldDir(d)) return null;
