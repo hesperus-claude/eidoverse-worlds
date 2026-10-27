@@ -23,7 +23,12 @@ GlobalRegistrator.register();
 // seeded BEFORE the import: chat.js reads ew-chat-fs at module load, not in initChat
 localStorage.setItem('ew-chat-fs', '17');
 
+// /version is asked once per page (client/lib/version.js): chat.js reads that answer, never a fetch of its own
+const versionAsks: string[] = []; const realFetch = globalThis.fetch;
+globalThis.fetch = ((u: any, o?: any) => { if (String(u).includes('/version')) versionAsks.push(String(u)); return Promise.resolve(new Response('{"sha":"abcdef1234"}')); }) as any;
+await import('../client/lib/version.js');
 const { logChat, initChat, chat, recentChat, chatMarkdownOn } = await import('../client/lib/chat.js');
+globalThis.fetch = realFetch;
 const { frameStub } = await import('./chat-frames-stub.mjs');
 // MUST come from the stub graph: chat.js's './base.js' resolves to chat-base-stub.mjs, so importing base.js by path
 // gives a different bus and every emit goes unheard
@@ -34,6 +39,7 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
+check('/version is fetched once: chat.js reads version.js\'s answer', versionAsks.length === 1, JSON.stringify(versionAsks));
 let roster: any[] = [{ id: 'keir', declares: 'agent' }, { id: 'rab' }];
 initChat({ send: () => {}, people: () => roster });
 const log = () => document.getElementById('chatlog')!;

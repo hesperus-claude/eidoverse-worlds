@@ -12,6 +12,7 @@ import { requestHistory } from './net.js';
 import { COMMANDS, resolveCommand } from './commands/registry.js';
 import { register as registerAction } from './actions.js';
 import { escapeHtml as esc } from './markup.js';
+import { versionReady } from './version.js';
 
 const MAX_LINES = 400;
 const HISTORY = 'ew-chat-history';
@@ -536,9 +537,7 @@ function acceptAC() {
 
 // the build served, so a stale page is distinguishable from a broken probe
 let _build = 'unknown';
-fetch('/version').then((r) => r.json())
-  .then((v) => { _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; })
-  .catch(() => { /* 'unknown' is itself a diagnostic */ });
+versionReady.then((v) => { if (v) _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; });   // null: 'unknown' is itself a diagnostic
 
 /** For a person with no console; each probe is guarded, so a missing subsystem can't take the report down. */
 function audioReport() {

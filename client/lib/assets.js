@@ -12,6 +12,7 @@ import { awaitBodyGate, bodyGateArmed, bodyGateOpen } from './bodygate.js';
 const BODY_FIRST = CONFIG.params.get('bodyfirst') !== '0';
 import { THREE, renderer, camera, scene } from './core.js';
 import { report, bus, CONFIG } from './base.js';
+import { versionReady } from './version.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
@@ -149,9 +150,7 @@ const ktx2 = new KTX2Loader()
   .detectSupport(renderer);
 /** Whether this GPU negotiates KTX2 variants: prefetch must warm the SAME cache key demand fetches use. */
 export const ktx2Capable = () => !!ktx2.workerConfig;
-// key from the RUNNING server (/version), never the shared/ktx2.js it serves: they differ between pull and restart
-const versionReady = fetch('/version', { cache: 'no-store' })
-  .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+// key from the RUNNING server (/version, version.js), never the shared/ktx2.js it serves: they differ between pull and restart
 export const ktx2KeyReady = versionReady.then(keyFromVersion);
 /** The running sequencer's geometry-LOD recipe (#156), or null: never ask for a tier the running process didn't declare. */
 export const lodRecipeReady = versionReady.then(lodFromVersion);
