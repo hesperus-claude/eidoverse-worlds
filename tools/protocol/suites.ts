@@ -128,9 +128,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   // the pathfinding stack (#235/#236/#239/#241): its own suites, as it ships them
   ["agent-mesh-collision", "../agent-mesh-collision-test.ts", 1], // #235: an agent's body collides with placed models (the support barrier, the 3-at-once governor)
   ["navgrid", "../navgrid-test.ts", 1],  // #236: move routes through placed models (round furniture, through doors, up stairs; y picks the floor)
-  ["navgrid-edge", "../navgrid-edge-test.ts", 1],
+  ["navgrid-rows", "../navgrid-rows-test.ts", 1], // a route on built boxes ends where a body stands or says why; a scaled thing scales its places, never the body's tolerances
   ["places", "../places-test.ts", 1],    // #239: named places (move {to: "thing/place"}, which room you're in, name_place), look's places in sight, "?"
-  ["places-scale", "../places-scale-test.ts", 1], // #239: a scaled thing's places scale; the walking body's tolerances don't
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
   ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
