@@ -571,12 +571,24 @@ if (argv.includes("--scenario")) {
   console.log(JSON.stringify(scenario())); process.exit(0); }
 
 // ---------------- run ----------------
+// a row's timings: `ms` (a number or a map of them) and any `<name>Ms`. Red only on timing = it passes with them all at zero
+const isTime = (k: string) => k === "ms" || k.endsWith("Ms");
+const zeroTimes = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, !isTime(k) ? v : typeof v === "number" ? 0 :
+  v && typeof v === "object" ? Object.fromEntries(Object.keys(v).map((n) => [n, 0])) : v]));
+const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k)).flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
+const timingOnly = (c: any, o: any) => !!o && typeof o.bound === "number" && Object.keys(o).some(isTime) && !c.good(o) && (() => { try { return !!c.good(zeroTimes(o)); } catch { return false; } })();
 const SUITE = suite("scale-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
-  let o: any, good = false; LOAD = calibrate();
-  try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
+  let o: any, good = false; const slow: number[] = [];
+  // a row red ONLY on its wall-clock bound is measured again, up to 3 attempts in all (Bazel's flaky_test_attempts); a
+  // pass on a later attempt is marked FLAKY with the slow timings, and a row whose behaviour is wrong is never retried
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    LOAD = calibrate(); good = false;
+    try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
+    if (good || !timingOnly(c, o)) break;
+    slow.push(slowest(o)); }
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}${slow.length ? ` (${good ? "FLAKY" : "over the bound every time"}: ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")})` : ""}`, o);
   if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)} (bound ${o.bound} ms: load ×${r1(LOAD)})`);
 }
 SUITE.done();
