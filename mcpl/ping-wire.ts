@@ -23,8 +23,8 @@ export function pingLine(p: WirePing): string {
 }
 
 /** null for kinds the event path already delivers (a mention rides its say). approach/reach/touch: chat:addressed
- *  + mentioned; depart: ambient, never mentioned. `declares` (PROTOCOL §6a rule 3) rides verbatim; only "agent"
- *  maps to a tag (declaration.ts senderFacet). */
+ *  + mentioned; depart: ambient + chat:system (nobody said it), never mentioned. `declares` (PROTOCOL §6a rule 3)
+ *  rides verbatim; only "agent" maps to a tag (declaration.ts senderFacet). */
 export function pingDelivery(p: WirePing, declares: string | null):
   { text: string; tags: string[]; mentioned?: true; declares?: string } | null {
   const d = typeof declares === "string" && declares ? { declares } : {};
@@ -33,7 +33,7 @@ export function pingDelivery(p: WirePing, declares: string | null):
     case "approach":
       return { text: `* ${p.who} walked up to you`, tags: tags(CHAT.addressed, EIDO.approach, from), mentioned: true, ...d };
     case "depart":
-      return { text: `* ${p.who} ${p.text ?? "is no longer nearby"}`, tags: tags(CHAT.ambient, EIDO.depart, from), ...d };
+      return { text: `* ${p.who} ${p.text ?? "is no longer nearby"}`, tags: tags(CHAT.ambient, CHAT.system, EIDO.depart, from), ...d };
     case "reach":
     case "touch":
       return { text: `* ${p.who} ${p.text}`, tags: tags(CHAT.addressed, p.kind === "touch" ? EIDO.touch : EIDO.reach, from), mentioned: true, ...d };

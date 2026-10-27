@@ -7,7 +7,7 @@ import { say } from './lib/net.js';
 import { chooseClient } from './lib/litechoice.js';
 import { THREE, scene, camera, renderer, canvas } from './lib/core.js';
 import { releaseBodyGate, armBodyGate } from './lib/bodygate.js';
-import { CONFIG, bus, report, tee, colorFor } from './lib/base.js';
+import { CONFIG, bus, report, tee, colorFor, emptyWorldNotice } from './lib/base.js';
 import { versionReady } from './lib/version.js';
 import { contributeThumbnail, makeAvatar, makeCapsuleAvatar, ANIM_ORDER } from './lib/avatar.js';
 import { updateSky, updateAutoSystems, skyArgs, setCloudQuality, hideSkyForWater } from './lib/sky.js';
@@ -44,7 +44,7 @@ import { setWaveClock } from './lib/water.js';
 import { myReachBag } from './lib/reachnet.js';
 import {
   replica, net, connect, initIdentity, loginUrl, wireNet, sendRequest, sendPose, sendTyping,
-  setPoseOverride, sendPuppet, sendAnim,
+  setPoseOverride, sendPuppet, sendAnim, builtIn,
 } from './lib/net.js';
 import { poseCommands } from './lib/posecommands.js';
 import { updateBuild, toggleEditMode, isEditing, editSurface } from './lib/build.js';
@@ -52,6 +52,7 @@ import { updateBuild, toggleEditMode, isEditing, editSurface } from './lib/build
 const mayBuildStrict = () => (Array.isArray(net.myRights?.permissions) ? net.myRights.permissions.includes('build') : isOwner(net.myRights));
 import { initPalette } from './lib/catalog.js';
 import { initConjure } from './lib/generate.js';
+import { state as worldState } from './lib/state.js';
 import { micLive, earOn } from './lib/mictoggle.js'; // both off by default
 import { initAudioPanel } from './lib/audiopanel.js';
 import { initSceneGraph, sceneSelect } from './lib/scenegraph.js';
@@ -447,11 +448,9 @@ bus.on('world-reset', () => { restoredPosition=false;myState.q=undefined;myState
 
 // an empty world is indistinguishable from a broken one, so say so
 bus.on('hydrated', () => {
-  if (entities.size > 0) return;
-  const named = CONFIG.params.has('world');
-  logChat('*', named
-    ? `"${CONFIG.world}" is empty — nothing has ever been built here.`
-    : `you are in "${CONFIG.world}", which is empty. Add ?world=<name> to the link to go somewhere else.`);
+  // net.js builtIn, so the notice and the remembered world agree on "empty"
+  if (entities.size > 0 || builtIn(worldState.st)) return;
+  logChat('*', emptyWorldNotice(CONFIG));
   logChat('*', 'press B to start building, or ? for the controls.');
   toast(`"${CONFIG.world}" is an empty world — press B to build in it`, 'warn', 14000);
 });

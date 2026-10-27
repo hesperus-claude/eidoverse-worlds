@@ -1,7 +1,7 @@
 // net — the wire. One socket, two planes: the world log (ordered, persisted, replayed on join) and presence
 // (batched, lossy, never persisted).
 
-import { CONFIG, report, bus, nameFromJoinAck } from './base.js';
+import { CONFIG, report, bus, nameFromJoinAck, LAST_WORLD_KEY, TAB_WORLD_KEY, pickWorld, rememberedWorlds, isWorldName } from './base.js';
 import { avatarMounts } from './mounts.js';   // not world.js: that pulls core.js (the renderer) into lite
 // The world as data (TEL0S_NOTES §11.2): every snapshot and live entry folds here, synchronously, through the
 // sequencer's own fold (shared/protocol/replica.js); edit mode sends requests (editwrites.js) and waits for the authority.
@@ -302,6 +302,7 @@ function onLog(msg) {
     else if (e.seq > lastSeq) { lastSeq = e.seq; bus.emit('live-entry', e); noteSpeaking(e.actor); }
   }
   if (r.changed) narrate(applyView(replica.view(shadowState.st), { ts: r.ts ?? undefined }), r.actor);
+  if (r.changed && !worldSaved) rememberWorld();   // a new world, the moment something is built in it
   bus.emit('log-applied', { from: msg.from, n: msg.entries?.length ?? 0, entries: msg.entries ?? [] });
 }
 /** The world's own narration (a ban or a kick arrives as `moderated`). */
@@ -400,6 +401,73 @@ export function rejoin() {
 }
 
 let intentionalClose = false;   // false, or the socket whose close rejoin() drives (true: one with no socket to name)
+let everJoined = false;   // has this page been let in at all (a snapshot arrived)
+let worldSaved = false;   // has this join remembered its world yet (rememberWorld)
+let browserSaved = false;   // has this PAGE written the browser's last world (once: see rememberWorld)
+
+/** Has anyone made anything here; an empty world (a mistyped ?world= founds one: server.ts admitJoin) is never remembered. */
+export const builtIn = (st) => {
+  if (!st) return false;
+  for (const _ in st.entities ?? {}) return true;   // one is enough: no key list built over a big world
+  return st.terrain != null || st.grass != null || st.sky != null || st.water != null;
+};
+
+/** Remember the world a person is IN (base.js pickWorld, #281): the tab's on every join, the browser's once per page
+ *  (a reconnect is not arriving). Called at the door's yes and on live entries until it sticks. */
+function rememberWorld() {
+  if (worldSaved || CONFIG.spectate || CONFIG.renderer || !builtIn(shadowState.st)) return;
+  worldSaved = true;   // decided for this join either way, so live entries stop asking
+  if (loggedOutElsewhere()) return;   // the person this page was signed in as has left this browser
+  try { sessionStorage.setItem(TAB_WORLD_KEY, CONFIG.world); } catch { /* private mode */ }
+  if (browserSaved) return;
+  browserSaved = true;
+  try { localStorage.setItem(LAST_WORLD_KEY, CONFIG.world); } catch { /* private mode */ }
+}
+
+/** This page entered signed in and the browser has since been logged out (ui.js logOut): write nothing back. */
+function loggedOutElsewhere() {
+  try { return !!CONFIG.authed && localStorage.getItem('ew-authed') !== '1'; } catch { return false; }
+}
+/** The browser was signed in and this page is not: a refusal may be about who, not where, so it keeps the memory. */
+function identityMissing() {
+  if (CONFIG.authed || CONFIG.token) return false;   // a door key is an identity of its own, never bounced to the login
+  try { return localStorage.getItem('ew-authed') === '1'; } catch { return false; }
+}
+
+/** Forget a world from both memories (this tab's and the browser's) wherever it is the one held. */
+function forgetWorld(name) {
+  for (const [s, k] of [[globalThis.localStorage, LAST_WORLD_KEY], [globalThis.sessionStorage, TAB_WORLD_KEY]]) {
+    try { if (s?.getItem(k) === name) s.removeItem(k); } catch { /* storage blocked */ }
+  }
+}
+
+/** rememberWorld's other half: a world found empty at the door is forgotten; the page stays (main.js says so). */
+function forgetEmptyWorld() {
+  if (CONFIG.spectate || CONFIG.renderer || builtIn(shadowState.st)) return;
+  forgetWorld(CONFIG.world);
+}
+
+/** A door refused us (4010, 4006): forget that world; if a memory brought us and we never got in, reload to where a
+ *  bare link now leads. Each refusal removes its memory, so this ends in a world that admits us or the commons. */
+function forgetRefusedWorld() {
+  if (CONFIG.spectate || CONFIG.renderer) return false;   // their refusals are theirs: the memory is a person's
+  if (identityMissing()) return false;   // maybe refused for who we are: keep the memory, say the old words
+  forgetWorld(CONFIG.world);
+  if (!CONFIG.worldRemembered || everJoined) return false;
+  toast(`you can't go back into "${CONFIG.world}" — taking you to ${whereNext()}`, 'warn', 8000);
+  setTimeout(() => location.reload(), 3000);
+  return true;
+}
+/** Where a reload of this page leads now (after any forgetting), for the words. */
+function whereNext() {
+  const next = pickWorld(CONFIG.params, ...rememberedWorlds()).world;
+  return next === 'commons' ? 'the commons' : `"${next}"`;
+}
+/** A refusal toast's tail: where a reload goes now that the memory is forgotten, and how to come back on purpose. */
+function reloadHint(plain) {
+  if (!CONFIG.worldRemembered || CONFIG.spectate || CONFIG.renderer || identityMissing()) return plain;
+  return `a reload now takes you to ${whereNext()} — ?world=${CONFIG.world} comes back here`;
+}
 
 // the ew_sess cookie (set by /auth after a Discord login), fetched once; a verified name overrides localStorage
 let identity;   // undefined = not asked yet, null = no session
@@ -557,13 +625,15 @@ function onSocketClosed(ev) {
     net.status = 'rejected';
     bus.emit('net', net);
     failSays();
-    toast('you were removed from this world — reload if you believe you may return', 'warn', 60000);
+    if (forgetRefusedWorld()) return;
+    toast(`you were removed from this world — ${reloadHint('reload if you believe you may return')}`, 'warn', 60000);
     return;
   }
   // 4010 = not open to you, or your access just changed (access.ts ACCESS_CLOSE; the `error` before said why).
   // No retry: coming back is a deliberate reload (or ?spectate, when it said you may watch).
   if (ev.code === 4010) {
-    showRefusal(joinRefusal ?? `you're not in "${CONFIG.world}" — reload if your access changes`);
+    if (forgetRefusedWorld()) return;
+    showRefusal(joinRefusal ?? `you're not in "${CONFIG.world}" — ${reloadHint('reload if your access changes')}`);
     return;
   }
   // 4011 = nothing to watch YET (an unfounded world): not a refusal; retry with backoff
@@ -767,7 +837,7 @@ async function handle(msg, at) {
 
     case 'renderer-travel':
       // server/snapshots.ts summon: only a roaming renderer obeys, by the same in-page re-join travel uses
-      if (CONFIG.renderer && CONFIG.roam && typeof msg.world === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(msg.world) && msg.world !== CONFIG.world) {
+      if (CONFIG.renderer && CONFIG.roam && isWorldName(msg.world) && msg.world !== CONFIG.world) {
         CONFIG.world = msg.world; rejoin();
       }
       return;
@@ -874,6 +944,8 @@ async function onSnapshot(msg) {
   markPhase('connect', 1);
   net.joined = true;
   redial.reset();
+  everJoined = true;
+  worldSaved = false;   // every join remembers afresh (after the shadow adopts the snapshot, below)
   net.status = 'live';
   net.myId = msg.you;
   net.mySub = msg.yourSub ?? null;
@@ -930,6 +1002,8 @@ async function onSnapshot(msg) {
   if (!msg.cut?.state) { replica.reset(); report('snapshot', new Error('the server sent no world cut (an old server?)')); return; }
   replica.adopt(msg.cut); bus.emit('my-acts', msg.cut.mine ?? []); bus.emit('cut-adopted'); bus.emit('holds', msg.cut.holds ?? {});
   shadowHydrate(replica.view(msg.state), typeof msg.throughSeq === 'number' ? msg.throughSeq : -1);
+  rememberWorld();   // the door said yes, and the shadow now holds what is here
+  forgetEmptyWorld();   // …or holds nothing, and a bare link should stop leading here
 
   hydrating = true; pendingLive = [];
   // flush raced chat lines after the hydration window, so they land below it, not above

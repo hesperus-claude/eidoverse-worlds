@@ -3,7 +3,7 @@
 
 import { chooseClient } from './litechoice.js';
 import { confirmCenter } from './confirmcenter.js';
-import { bus, CONFIG, setName, setToken, setErrorSink, report } from './base.js';
+import { bus, CONFIG, setName, setToken, setErrorSink, report, forgetRememberedWorlds } from './base.js';
 import { resizeZoneAt, fitTabStrip } from './windows.js';
 import { flipMic, flipEar, micLive, earOn, glyphPinned, setGlyphPinned, micGlyph, earGlyph, xrGlyph, xrGlyphAvailable, xrLive, flipXr } from './mictoggle.js';
 import { svg, fsvg, hasFill, rsvg, hasLine } from './icons.js';
@@ -905,7 +905,9 @@ async function logOut() {
   try { await fetch('/logout', { credentials: 'same-origin' }); } catch { /* the reload below still drops the session's page */ }
   // forget ew-authed, or net.js silently logs a once-signed-in browser straight back in
   try { localStorage.removeItem('ew-authed'); } catch { /* private mode */ }
-  location.reload();
+  // and where they have been; the bare path, since a reload keeps ?world= and remembers it again (#281)
+  forgetRememberedWorlds();
+  location.replace(location.pathname);
 }
 function topItems() {
   const rights = !!menuSrc.buildRights?.();

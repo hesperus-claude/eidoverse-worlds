@@ -22,11 +22,48 @@ export const bus = {
 // ------------------------------------------------------------ config
 // One place reads the URL and localStorage; both guarded (headless hosts have neither and get defaults).
 
+// which world (#281): ?world=, else this tab's last, else this browser's, else the commons; only a person remembers.
+// index.html's early-socket script makes the same choice as __ewWorld (tools/last-world-test.ts holds them equal)
+export const LAST_WORLD_KEY = 'ew-world';      // localStorage: the browser's last world
+export const TAB_WORLD_KEY = 'ew-world-tab';   // sessionStorage: this tab's
+/** A name a world can have: server.ts admitJoin's rule (index.html's early-socket script carries its own copy). */
+export const isWorldName = (w) => typeof w === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(w);
+export function pickWorld(params, last, tab = null) {
+  const asked = params.get('world');
+  if (asked) return { world: asked, remembered: false };
+  const person = !(params.has('spectate') || params.has('renderer') || params.has('mintthumbs'));
+  if (person && isWorldName(tab)) return { world: tab, remembered: true };
+  if (person && isWorldName(last)) return { world: last, remembered: true };
+  return { world: 'commons', remembered: false };
+}
+/** The two memories as pickWorld takes them; storage that throws reads as none. */
+export function rememberedWorlds() {
+  const read = (s, k) => { try { return s?.getItem(k) ?? null; } catch { return null; } };
+  return [read(globalThis.localStorage, LAST_WORLD_KEY), read(globalThis.sessionStorage, TAB_WORLD_KEY)];
+}
+/** What arriving in an empty world says (main.js), by how the page got here: the link, a memory, or the default. */
+export function emptyWorldNotice({ world, params, worldRemembered }) {
+  if (params.get('world')) return `"${world}" is empty — nothing has ever been built here.`;
+  if (worldRemembered && world !== 'commons') {
+    return `"${world}", the last world you were in, is empty now. Add ?world=<name> to the link to go somewhere else (?world=commons for the commons).`;
+  }
+  return `you are in "${world}", which is empty. Add ?world=<name> to the link to go somewhere else.`;
+}
+
+/** Forget where this person has been (ui.js logOut): the browser may be the next person's. */
+export function forgetRememberedWorlds() {
+  try { globalThis.localStorage?.removeItem(LAST_WORLD_KEY); } catch { /* private mode */ }
+  try { globalThis.sessionStorage?.removeItem(TAB_WORLD_KEY); } catch { /* private mode */ }
+}
+
 const params = new URLSearchParams(globalThis.location?.search ?? '');
 const store = globalThis.localStorage ?? null;
+const picked = globalThis.__ewWorld ?? pickWorld(params, ...rememberedWorlds());
 export const CONFIG = {
   params,
-  world: params.get('world') || 'commons',
+  world: picked.world,
+  // a memory chose the world, not the link: a refusal at its door forgets it (net.js forgetRefusedWorld)
+  worldRemembered: picked.remembered,
   spectate: params.has('spectate'),
   renderer: params.has('renderer'),
   // a roaming renderer: the server may send it to any world a snapshot is asked of (server/snapshots.ts)
