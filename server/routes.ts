@@ -20,7 +20,7 @@ import { rankOf, TIER_NAMES } from "../shared/perfrank.js";
 import { wantsKtx2, KTX2_KEY } from "../shared/ktx2.js";
 import { normalizeSnapFrame } from "../shared/snapframe.js";
 import { LOD_RECIPE, lodVariantPath, lodVerdictKind, lodVerdictFinal } from "./store-variants.ts";
-import { hnSessions, hnJti, sessionFromCookie, saveSessions, SESSION_TTL_MS, HN_ISSUER_KEY, HN_ISS, HN_AUD, HN_LOGIN_URL, HN_REQUIRE_LOGIN } from "./auth.ts";
+import { hnSessions, hnJti, sessionFromCookie, sessionIdOf, saveSessions, SESSION_TTL_MS, HN_ISSUER_KEY, HN_ISS, HN_AUD, HN_LOGIN_URL, HN_REQUIRE_LOGIN } from "./auth.ts";
 import { verifyToken } from "./aid1.ts";
 import { createNativeLogin } from "./native-login.ts";
 const nativeLogin = createNativeLogin({
@@ -439,8 +439,8 @@ const ROUTES: Route[] = [
   {
     match: (u) => u.pathname === "/logout",
     handler: ({ req }) => {
-      const m = /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(req.headers.get("cookie") ?? "");
-      if (m && hnSessions.delete(m[1]!)) saveSessions();
+      const sid = sessionIdOf(req.headers.get("cookie"));
+      if (sid && hnSessions.delete(sid)) saveSessions();
       return new Response(JSON.stringify({ ok: true }), {
         headers: { "content-type": "application/json", "set-cookie": "ew_sess=; Path=/; HttpOnly; Max-Age=0" },
       });

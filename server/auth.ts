@@ -35,12 +35,14 @@ export const hnSessions = new Map<string, HnSession>();
 export const hnJti = new JtiCache();
 /** The credential in `Authorization: Bearer <key>` (the scheme case-insensitive, RFC 7235), or "". Never the URL. */
 export const bearerOf = (req: Request): string => /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
+/** The session id an `ew_sess` cookie carries, or null. */
+export const sessionIdOf = (cookie: string | null): string | null => /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(cookie ?? "")?.[1] ?? null;
 export function sessionFromCookie(cookie: string | null): HnSession | null {
-  const m = /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(cookie ?? "");
-  if (!m) return null;
-  const s = hnSessions.get(m[1]!);
+  const sid = sessionIdOf(cookie);
+  if (!sid) return null;
+  const s = hnSessions.get(sid);
   if (!s) return null;
-  if (s.exp < Date.now()) { hnSessions.delete(m[1]!); return null; }
+  if (s.exp < Date.now()) { hnSessions.delete(sid); return null; }
   return s;
 }
 
