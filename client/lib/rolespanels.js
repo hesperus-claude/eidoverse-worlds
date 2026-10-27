@@ -1,7 +1,7 @@
 // rolespanels — the Moderation (only while you hold a moderation right) and World Settings (everyone reads, owners
 // edit) dock panels. Writes only the field that changed, never on open (absence = the server's default, PROTOCOL
 // §9.2). In a headset these are quads: every control is a button or select (no hover, no long-press).
-import { bus, report } from './base.js';
+import { bus, report, CONFIG } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
 import * as R from '../../shared/protocol/roles.js';
@@ -274,7 +274,7 @@ function paintCard(body) {
   const ab = wc().about ?? {}; const edit = has('editWorld');
   body.innerHTML = `<label class="rp-field">Name <input data-k="name" maxlength="80" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
     + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" maxlength="2000" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
-    + `<p class="rp-dim">address: <code>${esc(new URLSearchParams(location.search).get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
+    + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
 }

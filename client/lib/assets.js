@@ -9,9 +9,9 @@ import { keyFromVersion, negotiate, lodFromVersion } from '../../shared/ktx2.js'
 import { tierOf, askFor } from './lod_policy.js';
 import { awaitBodyGate, bodyGateArmed, bodyGateOpen } from './bodygate.js';
 // ?bodyfirst=0: world parses stop waiting for the body (A/B measurement, body-less tests)
-const BODY_FIRST = new URLSearchParams(globalThis.location?.search ?? '').get('bodyfirst') !== '0';   // globalThis: node-side suites import this without a window
+const BODY_FIRST = CONFIG.params.get('bodyfirst') !== '0';
 import { THREE, renderer, camera, scene } from './core.js';
-import { report, bus } from './base.js';
+import { report, bus, CONFIG } from './base.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';

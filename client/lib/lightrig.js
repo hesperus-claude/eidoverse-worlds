@@ -529,7 +529,7 @@ function trackShadowFar(pl) {
 
 // ---- the spot pool: a spot is its own light type, so it gets its own fixed pool born at boot (a pool change is a
 // recompile). Same ranking as the point pool; no shadows (the one casting slot is a point light).
-const _spotRaw = new URLSearchParams(globalThis.location?.search ?? '').get('spots');   // null when absent: Number(null) is 0
+const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
 const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
 const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
 const spotSlots = [];

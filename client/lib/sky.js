@@ -7,7 +7,7 @@
 
 import { THREE, scene, sun, hemi, renderer, camera } from './core.js';
 // ?shadowdebug=1 dims the fill to a fifth so the shadow map's coverage is legible (sun shadows read only ~10% darker)
-const SHADOW_DEBUG_FILL = new URLSearchParams(globalThis.location?.search ?? '').has('shadowdebug') ? 0.2 : 1;
+const SHADOW_DEBUG_FILL = CONFIG.params.has('shadowdebug') ? 0.2 : 1;
 import { report, bus, tee, teeNow, CONFIG } from './base.js';
 import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
 import { loadEidoModule, primeFiles, listLibrary, fetchBytes } from './assets.js';

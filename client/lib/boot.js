@@ -1,7 +1,7 @@
 // boot — the first fifteen seconds: the splash (static markup in index.html, painting before any JS), progress in
 // real bytes and phases (never a fake timer), and the controls to learn while it waits.
 
-import { bus } from './base.js';
+import { bus, CONFIG } from './base.js';
 import { escapeHtml } from './markup.js';
 // Injected, not imported: assets.js pulls in the engine, and this splash also serves a client with no assets.
 // main.js wires the real counters.
@@ -141,7 +141,7 @@ export function initBoot({ world, name }) {
   const WHY = {
     'vr-webgl': 'restarted on WebGL 2 for VR — this browser can\'t present VR from WebGPU yet (Video settings › VR renderer)',
     'vr': 'restarted in VR mode',
-  }[new URLSearchParams(location.search).get('why')];
+  }[CONFIG.params.get('why')];
   if (WHY) { const w = document.createElement('div'); w.className = 'sp-why'; w.textContent = WHY; el.querySelector('.sp-status')?.after(w); }
   bus.on('loading', paintItems);
   itemsTimer = setInterval(paintItems, 500);   // the > 2 s gate needs a clock, not just events
@@ -171,7 +171,7 @@ export function initBoot({ world, name }) {
 }
 
 // ?holdsplash=N keeps the splash up until N s after boot began, to preview a long load; only the dismissal waits.
-const HOLD_S = Number(new URLSearchParams(globalThis.location?.search ?? '').get('holdsplash')) || 0;   // module scope: node-side suites import this without a window
+const HOLD_S = Number(CONFIG.params.get('holdsplash')) || 0;
 export function finishBoot(reason = 'ready') {
   if (done || !el) return;
   if (HOLD_S > 0) {
@@ -263,7 +263,7 @@ let raysWorker = null, raysResize = null;
 export function startRays(el) {
   const cv = el.querySelector('.sp-rays');
   if (!cv || typeof OffscreenCanvas === 'undefined' || !cv.transferControlToOffscreen) return;
-  if (new URLSearchParams(location.search).get('rays') === '0') return;   // A/B: does the splash shader slow the load?
+  if (CONFIG.params.get('rays') === '0') return;   // A/B: does the splash shader slow the load?
   stopRays();   // a second start releases the first worker + listener instead of stacking them
   try {
     const calm = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.3 : 1;

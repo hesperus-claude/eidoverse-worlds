@@ -21,7 +21,7 @@ export function ensureXRBodyHook() {
 }
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-const _qs = new URLSearchParams(location.search);
+const _qs = CONFIG.params;
 const TORSO_DEADBAND = (+(_qs.get('torsoplay') ?? 0) || 0) * Math.PI / 180;   // Basis VR default 0° (rigid); 30° = VSpineTorsoYawPlayInVR; desktop 45°
 const TORSO_BLEND = 8;                                                          // BasisSettingsDefaults.cs:2111
 const TORSO_RELOCK = 6 * Math.PI / 180;                                         // TorsoYawRelockSpeedDeg (BasisVirtualSpineCore.cs:18)

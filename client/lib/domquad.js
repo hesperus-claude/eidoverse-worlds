@@ -3,7 +3,7 @@
 // While presenting, the frame moves into an offscreen-but-laid-out stage (HTMLMesh measures with getBoundingClientRect,
 // so negative coordinates are fine) and returns, with its display state, on exit. Fallback: ?canvasquads=1.
 import { THREE, renderer } from './core.js';
-import { tee, bus } from './base.js';
+import { tee, bus, CONFIG } from './base.js';
 import { allFrames, getFrame, frameResizeInfo } from './windows.js';
 import { HTMLMesh } from './vendor/htmlmesh.js';
 import { quadMaterial } from './quadcolour.js';
@@ -131,7 +131,7 @@ function unstageEl(q) {
   q.api?._setVrSize?.(null);   // the desktop size back (the VR one stays saved with the panel's place)
 }
 
-export const domQuadsEnabled = () => !new URLSearchParams(location.search).has('canvasquads');
+export const domQuadsEnabled = () => !CONFIG.params.has('canvasquads');
 
 export function domQuadsEnter(rig) {
   const apis = XR_FRAMES.map((id) => getFrame(id)).filter(Boolean);
@@ -150,7 +150,7 @@ export function domQuadsEnter(rig) {
     if (q.mesh) { rig.add(q.mesh); q.mesh.material.map.unsuspend?.(); }
   }
   // OFF by default (staged, hidden, unbuilt); the ring's 'panels' slot or a text-focus shows them. ?quads=1 restores the old default.
-  shown = new URLSearchParams(location.search).get('quads') === '1';
+  shown = CONFIG.params.get('quads') === '1';
   for (const q of quads) setVisible(q, shown);
   bus.emit('xr:domquads', quads.map((q) => q.id));
 }

@@ -90,7 +90,7 @@ export const xrFingerCurl = () => fingerCurl;
 const CURL_MIN_CUTOFF = 2.0;   // Hz. Lower = quieter at rest, and the floor on responsiveness.
 const CURL_BETA = 3.0;         // how hard the cutoff opens with speed. Higher = less lag, more noise.
 const CURL_D_CUTOFF = 1.0;     // Hz, for the speed estimate itself — its own noise must not open the gate.
-const CURL_PROBE = new URLSearchParams(location.search).has('curlprobe');
+const CURL_PROBE = CONFIG.params.has('curlprobe');
 const curlProbe = { left: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } },
                     right: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } } };
 export function curlProbeTake() { const out = {};
@@ -230,12 +230,12 @@ const PREF_XR = 'ew-xr-prefs';
 // dotVisibility: the surface dot, the same three words, its own setting
 const XR_PREF_DEFAULTS = { turn: 'smooth', vignette: false, mirror: 'first', seated: false, res: 'auto', pointerVisibility: POINTER_VIS_DEFAULT, dotVisibility: POINTER_VIS_DEFAULT };
 export const xrPrefs = (() => { try { return { ...XR_PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_XR) || '{}') }; } catch { return { ...XR_PREF_DEFAULTS }; } })();
-{ const m = new URLSearchParams(location.search).get('mirror'); if (m === 'off' || m === 'first' || m === 'third') xrPrefs.mirror = m; }   // URL override for A/B
+{ const m = CONFIG.params.get('mirror'); if (m === 'off' || m === 'first' || m === 'third') xrPrefs.mirror = m; }   // URL override for A/B
 // Eye resolution as WebXR framebufferScaleFactor ('auto' = 1.0, the runtime's size). Chrome clamps it to
 // 0.2–1.0 and it's read once at session start. ?xrres=0.2..1 overrides for an A/B.
 export const XR_RES_SCALES = { auto: 1, 85: 0.85, 70: 0.7, 50: 0.5 };
 export function xrResScale() {
-  const q = +new URLSearchParams(location.search).get('xrres');
+  const q = +CONFIG.params.get('xrres');
   if (q >= 0.2 && q <= 1) return q;
   return XR_RES_SCALES[xrPrefs.res] ?? 1;
 }

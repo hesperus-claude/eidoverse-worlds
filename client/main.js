@@ -579,13 +579,13 @@ async function setVoice(name) {
 }
 if (typeof window !== 'undefined') window.setVoice = setVoice;
 {
-  const want = new URLSearchParams(location.search).get('voice');
+  const want = CONFIG.params.get('voice');
   if (want) setVoice(want).catch((e) => console.warn('[voice] ?voice failed:', e));
 }
 
 // opt-in synthesized voice, ?tts[=<port>]: absent, nothing connects and a human client is byte-for-byte unaffected
 {
-  const q = new URLSearchParams(location.search);
+  const q = CONFIG.params;
   if (q.has('tts')) {
     const port = Number(q.get('tts')) || 8927;
     import('./lib/piperbridge.js')
