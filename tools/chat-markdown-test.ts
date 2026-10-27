@@ -94,6 +94,13 @@ reset(); frameStub.visible = true;
 say('rab', 'seen'); say('keir', 'tester hi', 'agent');
 check('frame visible + at bottom: nothing counts', JSON.stringify(chat.unreadCounts()) === '{"unread":0,"mentions":0}', JSON.stringify(chat.unreadCounts()));
 frameStub.visible = false;
+// a mod's #chat-jump mounted ahead of chat's: the counts must still land on chat's own pill
+const decoyJump = document.createElement('button'); decoyJump.id = 'chat-jump'; document.body.prepend(decoyJump);
+// a browser resolves an id in document order (the decoy); happy-dom in registration order (chat's), so the lookup is pinned
+const byId = document.getElementById.bind(document); document.getElementById = (id: string) => (id === 'chat-jump' ? decoyJump : byId(id));
+check('the decoy #chat-jump is the one a document lookup finds', document.getElementById('chat-jump') === decoyJump);
+const realJump = [...document.querySelectorAll('#chat-jump')].find((e) => e !== decoyJump) as HTMLElement;
+check('chat\'s own pill is in the document too', !!realJump);
 say('rab', 'one'); say('rab', 'two');
 check('two plain lines while hidden → unread 2, mentions 0', JSON.stringify(chat.unreadCounts()) === '{"unread":2,"mentions":0}', JSON.stringify(chat.unreadCounts()));
 say('keir', 'hey @tester', 'agent');
@@ -106,10 +113,12 @@ say('*', 'the world turns');
 check('a system line never counts', chat.unreadCounts().unread === 5, JSON.stringify(chat.unreadCounts()));
 say('tester', 'my own line');
 check('my own line counts as unread but never as a mention of me', JSON.stringify(chat.unreadCounts()) === '{"unread":6,"mentions":2}', JSON.stringify(chat.unreadCounts()));
-{ const jump = document.getElementById('chat-jump')!;
-  check('the jump pill shows the counts', jump.style.display === 'block' && /6 new/.test(jump.textContent!) && /2 ✱/.test(jump.textContent!) && jump.classList.contains('ping'), jump.textContent!); }
+{ const jump = realJump;
+  check('the jump pill shows the counts', jump.style.display === 'block' && /6 new/.test(jump.textContent!) && /2 ✱/.test(jump.textContent!) && jump.classList.contains('ping'), jump.textContent!);
+  check('the decoy #chat-jump is untouched', decoyJump.textContent === '' && !decoyJump.style.display, decoyJump.textContent!); }
 chat.markRead();
-check('markRead zeroes both', JSON.stringify(chat.unreadCounts()) === '{"unread":0,"mentions":0}' && document.getElementById('chat-jump')!.style.display === 'none');
+check('markRead zeroes both', JSON.stringify(chat.unreadCounts()) === '{"unread":0,"mentions":0}' && realJump.style.display === 'none');
+decoyJump.remove(); document.getElementById = byId;
 frameStub.visible = true;
 say('rab', 'back');
 check('visible again: nothing counts', chat.unreadCounts().unread === 0);
