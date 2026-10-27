@@ -3,10 +3,10 @@
 //   comp {id, type: "picture", data: null}          # take it down
 // SOURCES. A library path under `eidoverse/assets/` or `store/images/` (uploaded via `POST /upload?as=image`: content-addressed,
 // sniffed by bytes), or an https link, which shared/mediasrc.js gates per viewer (an untrusted host only for a viewer who opted in).
-// ALT. No `alt` reads as "a picture (<file>)"; the author's ≤200-char line is what look() carries. Nothing about pixels is ever claimed.
+// ALT. No `alt` reads as "a picture (<file>)"; the author's ≤200-char line (longer is refused) is what look() carries. Nothing about pixels is ever claimed.
 
 import { mediaTier } from './mediasrc.js';
-import { graphemes, graphemeList, quoted } from './text.js';
+import { graphemes, quoted } from './text.js';
 
 export const PICTURE_DIR = 'eidoverse/assets/';
 export const PICTURE_STORE = 'store/images/';
@@ -54,8 +54,8 @@ export function normalizePicture(data) {
   if (data.width !== undefined) { const w = Number(data.width); if (Number.isFinite(w) && w > 0) picture.width = Math.min(PICTURE_MAX_WIDTH, w); else notes.push('width is a number of metres above 0 — using 1'); }
   if (altOf(data) != null) {
     const alt = String(altOf(data)).replace(/\s+/g, ' ').trim();
-    if (graphemes(alt) > PICTURE_ALT_MAX) { notes.push(`alt clipped to ${PICTURE_ALT_MAX} characters`); picture.alt = graphemeList(alt).slice(0, PICTURE_ALT_MAX).join(''); }
-    else if (alt) picture.alt = alt;
+    if (graphemes(alt) > PICTURE_ALT_MAX) return { ok: false, why: `alt is ${graphemes(alt).toLocaleString('en')} characters; it must be ≤ ${PICTURE_ALT_MAX}` };   // the door's bound and words (checks.js maxLen)
+    if (alt) picture.alt = alt;
   }
   if (!picture.alt) notes.push('no alt text — anyone who can\'t see it (or reads the world as text) gets only the file name; say what it shows');
   if (data.lit != null) {
