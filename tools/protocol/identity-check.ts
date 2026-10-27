@@ -282,6 +282,10 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const mt = await fern.req("mute", { who: you(jw), minutes: 10, channels: ["chat"] }); await sleep(2500);
     ok(wn.ok && rejoin.msgs.some((m) => m.type === "warned" && m.reason === "keep it kind") && mt.ok && wren.msgs.some((m) => m.type === "moderated" && m.verb === "mute" && m.you)
       && own.msgs.some((m) => m.type === "mod-state" && m.muted?.[you(jw)]), "RS5 a warning reaches its person; a mute is told to its person and to everyone's badges (mod-state)", [wn.ok, mt.ok]);
+    // RS5b: the warning's moderator is told it went (as a mute or kick tells them), and no bystander is
+    const toldWarn = (x: { msgs: any[] }) => x.msgs.filter((m) => m.type === "moderated" && m.verb === "warn");
+    ok(wn.ok && toldWarn(fern).length === 1 && /warned Moss/.test(toldWarn(fern)[0].text ?? "") && toldWarn(own).length === 0 && toldWarn(rejoin).length === 0,
+      "RS5b the moderator's /warn is confirmed to the moderator alone", [toldWarn(fern), toldWarn(own).length, toldWarn(rejoin).length]);
     // RS6: access: 'listed' admits only people with a role here; a moderator gets in past max
     await own.req("set", { id: "@world", component: "access", value: { join: "listed" } });
     const st = await sock(S4.port); const js = await st.join("heath", "Stranger", { agentToken: mint({ kind: "agent", name: "Stranger", sub: "agent:stranger@home.test" }) });
