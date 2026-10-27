@@ -5,8 +5,8 @@
 import * as S from "../../shared/sim.js";
 import { restsOf, ENGINES } from "../../shared/protocol/simlayer.js";
 import { makeReplica } from "../../shared/protocol/replica.js";
-let pass = 0, fail = 0;
-const ok = (c: boolean, name: string, info?: unknown) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
+import { suite } from "./suite.ts";
+const { ok, done } = suite("eidosim-check", { quiet: true, cap: Infinity });
 const J = (x: unknown) => JSON.stringify(x), clone = (x: any) => JSON.parse(J(x));
 const BOX = [[-0.25, 0, -0.25], [0.25, 0.5, 0.25]], PLANK = [[-1, 0, -0.1], [1, 0.1, 0.1]];
 function mk(ents: any, launches: any[], terrain: any = { amplitude: 0 }) {
@@ -184,4 +184,4 @@ const schedules = (mkf: () => any, T: number) => {
   woken = Object.values(a.bodies).filter((x: any) => x.woken).length;
   ok(diverged < 0 && negZero === 0 && woken >= 4, "S11 a cascade with a JSON round trip every tick equals the straight advance, and never holds a -0", { diverged, negZero, woken });
 }
-console.log(`eidosim-check: ${pass} passed, ${fail} failed`); if (fail) process.exit(1);
+done();

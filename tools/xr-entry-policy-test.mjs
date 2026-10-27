@@ -1,13 +1,11 @@
-// xr-entry-policy-test — what a failed immersive-session request means (#197 review B1).
-//
-// Drives the REAL client/lib/xr_entry_policy.js (it has no imports, so there is nothing to stub and
-// nothing a stub could invent), plus wiring checks that xr.js actually consults it and that the
-// retry is generation-guarded and cancellable.
+// xr-entry-policy-test: what a failed immersive-session request means (#197). Drives the REAL client/lib/xr_entry_policy.js
+// (no imports, so nothing to stub), plus wiring checks that xr.js consults it and the retry is generation-guarded and
+// cancellable.
 //
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xr-entry-policy-test.mjs
 //
 // Each of these mutations must turn a named check red:
-//   policy: `isRetry ? give-up : retry-once` → always retry-once   (the infinite retry, as shipped)
+//   policy: `isRetry ? give-up : retry-once` → always retry-once   (infinite retry)
 //   policy: busy detection drops the message test                  (any InvalidStateError retries)
 //   policy: absent detection dropped                               (no headset reads as unknown)
 //   policy: the gpu branch moved AFTER the absent branch           (a WebGPU refusal marks a present headset absent)
@@ -39,8 +37,7 @@ console.log('busy session — exactly one automatic retry:');
   check('…after a short wait, not immediately', first.delayMs === 1500, `delayMs=${first.delayMs}`);
   check('…and says so', /retrying/i.test(first.toast ?? ''));
 
-  // THE bug: the shipped code reset its own flag inside the retry timer, so this second failure
-  // looked exactly like the first and scheduled again — forever.
+  // a second failure must not look like the first (a flag reset inside the retry timer scheduled again forever)
   const second = decideEntryFailure(busy(), { isRetry: true });
   check('a SECOND busy failure gives up rather than retrying again',
     second.action === 'give-up' && second.retry === false, `action=${second.action} retry=${second.retry}`);
@@ -49,9 +46,8 @@ console.log('busy session — exactly one automatic retry:');
   check('giving up does not mark the headset absent (it is held, not missing)', second.markAbsent === false);
 }
 
-// An InvalidStateError that is NOT the busy one — e.g. a request made from a detached document, or
-// a backend that rejects state for its own reasons. Retrying that is guessing, and retrying it
-// forever is the bug twice over: the name alone must not be the test.
+// an InvalidStateError that is NOT the busy one (a detached document, a backend's own reasons): retrying it is guessing,
+// forever is the bug twice over: the name alone must not be the test
 {
   const otherInvalid = Object.assign(new Error('The renderer is in an invalid state'), { name: 'InvalidStateError' });
   const v = decideEntryFailure(otherInvalid, { isRetry: false });
@@ -65,23 +61,17 @@ console.log('\nthe other outcomes:');
   check('no device: absent, no retry', a.action === 'absent' && a.retry === false && a.markAbsent === true);
   const b = decideEntryFailure(notSupported(), { isRetry: false });
   check('not supported: absent, no retry', b.action === 'absent' && b.retry === false);
-  // EACH ARM OF isAbsent ON ITS OWN (#197 review, 2026-09-20). Both fixtures above carry a matching
-  // NAME *and* a matching MESSAGE, so the two arms masked each other: deleting the message regex
-  // entirely passed green. The message arm exists for runtimes that throw a generic name with a
-  // descriptive message — the case that was never constructed.
+  // EACH ARM OF isAbsent ON ITS OWN (#197): a generic-name error with a descriptive message drives the message arm alone
   const genericRuntime = Object.assign(new Error('no XR runtime available'), { name: 'Error' });
   check('an absent-shaped MESSAGE is absent even under a generic error name',
     decideEntryFailure(genericRuntime, { isRetry: false }).action === 'absent');
-  // BOTH names, each with a message the regex does NOT match. The previous pass added this fixture
-  // for NotSupportedError only, so every NotFoundError fixture still carried 'no XR device found' —
-  // which the message arm matches — and dropping the NotFoundError arm entirely stayed green.
+  // BOTH names, each with a message the regex does NOT match, so dropping either name arm goes red
   for (const name of ['NotSupportedError', 'NotFoundError']) {
     const bare = Object.assign(new Error('nope'), { name });
     check(`an absent NAME is absent even when the message says nothing (${name})`,
       decideEntryFailure(bare, { isRetry: false }).action === 'absent');
   }
-  // isBusy must test the SPECIFIC message, not merely 'already': an InvalidStateError about anything
-  // else already-ish would otherwise enter the retry path instead of surfacing.
+  // isBusy must test the SPECIFIC message, not merely 'already', or an unrelated InvalidStateError enters the retry path
   const alreadyOther = Object.assign(new Error('the renderer is already reserved for something else'), { name: 'InvalidStateError' });
   check('an InvalidStateError that says "already" but not "already an active" is NOT busy',
     decideEntryFailure(alreadyOther, { isRetry: false }).action === 'surface',
@@ -97,12 +87,8 @@ console.log('\nthe other outcomes:');
   const gBusy = decideEntryFailure(busy(), { isRetry: false, gpu: true });
   check('a BUSY session on WebGPU still retries — busy outranks the backend',
     gBusy.action === 'retry-once', `action=${gBusy.action}`);
-  // THE GPU/ABSENT INTERSECTION — the ordering this suite's mutation list protects (#197 review,
-  // 2026-09-20). It is only observable for an error that is BOTH absent-shaped AND on a WebGPU
-  // backend, and no check drove that pair, so a swap of the two branches passed green.
-  // The order is NOT arbitrary: 'webgpu' is a REQUIRED feature (xr.js:527), and the spec rejects an
-  // ungrantable requiredFeature with NotSupportedError — which isAbsent matches. So absent-first
-  // would read every WebGPU refusal as "no headset" and permanently mark a PRESENT headset absent.
+  // THE GPU/ABSENT INTERSECTION (#197): an ungrantable REQUIRED 'webgpu' is rejected with NotSupportedError, which isAbsent
+  // matches; absent-first would mark a PRESENT headset absent
   for (const [label, err] of [['NotFoundError', noDevice()], ['NotSupportedError', notSupported()]]) {
     const ga = decideEntryFailure(err, { isRetry: false, gpu: true });
     check(`a WebGPU refusal reloads even when the error is absent-shaped (${label})`,
@@ -131,8 +117,7 @@ const xr = readFileSync(join(dir, '../client/lib/xr.js'), 'utf8');
   /deps\.setTimer\(/.test(eff) && /verdict\.delayMs/.test(eff));   // the EFFECT OWNER holds this now
   check('the pending retry is generation-checked before it fires',
   /if \(pendingFor !== intent\)/.test(eff));   // …and xr-entry-effects-test EXECUTES it
-  // Assert the ORDER, not the spacing: a character-budgeted regex between the two lines fails on an
-  // intervening comment, which is a false red on innocent code.
+  // assert the ORDER, not the spacing: a character-budgeted regex fails on an intervening comment, a false red
   const leave = xr.slice(xr.indexOf('export function leaveVR'));
   const cancelAt = leave.indexOf('cancelBusyRetry(');
   const noSessionAt = leave.indexOf('if (!session)');

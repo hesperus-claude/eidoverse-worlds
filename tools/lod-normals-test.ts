@@ -1,21 +1,16 @@
-// bun tools/lod-normals-test.ts — a served LOD keeps its shading: the reducer weighs normals and UVs (optimize.ts
-// simplifyAttributes), so a collapse across a hard edge or a UV seam costs what it breaks.
-//
-// The bug this binds (09-29): gltf-transform's simplify() handed meshoptimizer positions only, and the permissive
-// retry then collapsed freely across normal and UV seams — a hovercar lost a wheel and went dark along its flank, a
-// Joshua tree's foliage went dull. Two synthetic models, so the test needs no library files:
-//   - a FACETED jagged heightfield: every triangle carries its own normal, neighbours tens of degrees apart, so every vertex is on a seam and the regular pass can't
-//     reduce; the permissive retry runs. Position-only, it smears the facet normals across neighbours. Whatever is served
-//     must shade like the surface it covers (area with a vertex normal > 60° off its face ≤ 5%); refusing is fine.
-//   - a SMOOTH UV sphere with a UV seam: the reducer must still reduce it (≤ 40% of its vertices), so a reducer that
-//     refuses everything can't pass.
+// bun tools/lod-normals-test.ts: a served LOD keeps its shading: the reducer weighs normals and UVs (optimize.ts
+// simplifyAttributes), so a collapse across a hard edge or UV seam costs what it breaks (position-only, the permissive
+// retry smeared normal and UV seams). Two synthetic models, no library files:
+//   - a FACETED jagged heightfield: every vertex is on a seam, so only the permissive retry reduces it; whatever is
+//     served must shade like the surface (area with a vertex normal > 60° off its face ≤ 5%); refusing is fine.
+//   - a SMOOTH UV sphere with a UV seam: must still reduce (≤ 40% of its vertices), so refuse-everything can't pass.
 // Mutation witnessed red: normals and UVs weighted 0 in simplifyAttributes (= the old position-only behaviour).
 import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
 import { optimizeGlbLod } from "../server/optimize.ts";
-// these tests exercise the REDUCER's mechanics on fixtures sized around a 1,000-vertex floor; the production floor
-// (LOD_MIN_VERTS, a policy) is pinned in store-variants-test
+// these exercise the REDUCER's mechanics around a 1,000-vertex floor; the production floor (LOD_MIN_VERTS) is pinned in
+// store-variants-test
 const lodAtTestFloor = (b: Uint8Array, e: string | null, m?: (d: any) => void) => optimizeGlbLod(b, e, m, { minVerts: 1_000 });
 
 let pass = 0, fail = 0;
@@ -35,14 +30,11 @@ function sphere(seg: number, ring: number) {
   }
   return { pos, uv, tri };
 }
-// 6 m, not 1: the reducer's error budget is SCREEN-SPACE (gen 3: 2 px at the closest distance the LOD is shown), and the
-// field's size decides whether its relief is above it. Scanned 09-29 (weighted 0.25/1 vs zeroed, off-shaded share):
-//   1 m 14% vs 23% · 2 m 13% vs 23% · 3 m 10% vs 21% · 4 m 6% vs 17% · 6 m REFUSED vs 11% · 10 m refused vs refused.
-// Below ~4 m the facets are ~1–4 px at the LOD distance and their shading is noise a viewer can't resolve; at 10 m the
-// relief refuses either way and the weights bind nothing. 6 m is where the weights DECIDE: served smeared without them.
+// 6 m: the error budget is SCREEN-SPACE (2 px at the LOD's closest distance), and 6 m is where the weights decide;
+// below ~4 m facets are sub-resolvable, at 10 m it refuses either way
 const FIELD = 6;
-/** A jagged heightfield: seeded heights about the cell size, so neighbouring facets differ by tens of degrees — the
- *  hard edges a position-only collapse smears (a hovercar's arches), unlike a sphere's few-degree facets. */
+/** A jagged heightfield: seeded heights about the cell size, so neighbouring facets differ by tens of degrees (the hard
+ *  edges a position-only collapse smears), unlike a sphere's few-degree facets. */
 function jagged(n: number) {
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const pos: number[][] = [], uv: number[][] = [], tri: number[] = [];
@@ -75,7 +67,7 @@ async function glb(faceted: boolean) {
 /** Share of triangle area whose vertex normals point more than 60° away from the triangle's own facing (either side). */
 const reader = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "draco3d.decoder": await draco3d.createDecoderModule() });
 async function offShading(bytes: Uint8Array) {
-  const doc = await reader.readBinary(bytes);   // LODs ship Draco-compressed
+  const doc = await reader.readBinary(bytes);  // LODs ship Draco-compressed
   let area = 0, off = 0;
   for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) {
     const pos = p.getAttribute("POSITION")!, nor = p.getAttribute("NORMAL")!, idx = p.getIndices()!.getArray()!;

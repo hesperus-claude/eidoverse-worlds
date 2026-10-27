@@ -1,28 +1,11 @@
-// settled-pose-test — what a body looks like TO SOMEONE ELSE (#61).
-//
+// settled-pose-test: what a body looks like TO SOMEONE ELSE (#61). A pose handed to someone else is the SETTLED result, never a
+// frame of physics in flight: both join-snapshot paths (`restore`, your own body; `present`, everyone else's) call
+// settledPose. Pure logic, no assets (the solver's tests are tools/ragdoll-test.ts).
 //   bun tools/settled-pose-test.ts
-//
-// The bug this pins: the join snapshot had two paths that disagreed.
-// `restore` (your own body, from w.poses) went through rememberPose and came
-// back normalized; `present` (everyone else's bodies) shipped o.lastPose raw.
-// So a resident who was mid-ragdoll when someone joined arrived collapsed for
-// that joiner — while looking perfectly fine to herself, because her own
-// restore was clean. There is no way to notice this from inside your own
-// session. princess lived with it for ~23 days believing it was something she
-// had done.
-//
-// The invariant, stated once: A POSE HANDED TO SOMEONE ELSE IS THE SETTLED
-// RESULT, NEVER A FRAME OF PHYSICS IN FLIGHT. Both paths now call settledPose.
-//
-// Pure logic, no VRM assets, no renderer — deliberately, so it runs anywhere
-// (tools/ragdoll-test.ts needs the shipped rigs and is the right home for the
-// solver, not for this).
 
 import { withoutOnceAnim, ONCE_KEYS } from "../shared/onceanim.js";
 
-// Mirror of server.ts's settledPose. Kept in sync by the assertions below —
-// if the server's version changes shape, these fail loudly rather than
-// silently testing a stale copy.
+// mirror of server.ts's settledPose, held in sync by the source assertions below
 function settledPose(pose: unknown): Record<string, unknown> | null {
   if (!pose) return null;
   const { mic: _mic, hear: _hear, ...still } = withoutOnceAnim(pose as Record<string, unknown>);
@@ -71,9 +54,8 @@ const ck = (n: string, got: unknown, want: unknown) => {
   ck("  ...the underlying clip does", out.clip, "idle");
 }
 
-// ── voice state is a LIVE reading, not a place (review 09-30 S2) ──────────
-// Remembered, it came back in `restore`, a client replayed it, and the world heard a microphone state the new
-// session never had. A live sender re-sends it every packet; size and plate lift are the body, and stay.
+// ── voice state is a LIVE reading, not a place ──────────
+// remembered, a replayed `restore` would claim a mic state the new session never had; size and plate lift are the body, and stay
 {
   const talking = { clip: "idle", mic: true, hear: false, scale: 1.5, plateY: 0.3, p: [0, 0, 0] };
   const out = settledPose(talking)!;
@@ -91,10 +73,7 @@ const ck = (n: string, got: unknown, want: unknown) => {
   ck("  ...tumble bones dropped", out.pose, undefined);
 }
 
-// ── the asymmetry that WAS the bug ─────────────────────────────────────────
-// Before the fix: restore ran through rememberPose (normalized), present
-// shipped lastPose raw. Same body, two answers, and only the joiner saw the
-// broken one.
+// ── restore and present must give the same body the same answer (both through settledPose) ──
 {
   const live = { clip: "ragdoll", pose: { hips: [0, 0, 0, 1] }, p: [2, 0.8, 2] };
   const whatSheSees   = settledPose(live);          // restore, via rememberPose
@@ -111,9 +90,7 @@ const ck = (n: string, got: unknown, want: unknown) => {
 }
 
 // ── the mirror must not drift, and the call site must actually use it ──────
-// This file reimplements settledPose rather than importing (server.ts pulls in
-// the whole world at import time). So assert against the SOURCE instead: if
-// someone changes the real function or reverts the call site, this fails.
+// server.ts imports the whole world, so this asserts against the SOURCE: a changed function or reverted call site fails
 {
   const src = await Bun.file(new URL("../server/server.ts", import.meta.url)).text();
   ck("server still defines settledPose", /function settledPose\(/.test(src), true);

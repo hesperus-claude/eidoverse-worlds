@@ -1,13 +1,9 @@
-// components-corpus-test — the component view is lossless on every world we have.
-//
-// The primitives (sha256, canon), the step-2 spellings (synthetic entity records), and then the corpus: for every
-// world log, fold it (shared/protocol/fold.js), take the view a client reads (shared/protocol/view.js viewState), and read every
-// entity as components (shared/components.js componentsOf) and back (entityOf). The bytes must come back identical
-// (canonical JSON), and every key must land in a component parameter, a declared stamp, or `extra` (which is counted
-// and printed, never silently dropped). One differing entity anywhere = red.
-//
-// Corpus: spec/conformance (always), plus any dirs in COMPONENTS_CORPUS (colon-separated; each is searched for
-// <world>/world.jsonl).
+// components-corpus-test: the component view is lossless on every world we have.
+// The primitives (sha256, canon), the step-2 spellings (synthetic records), then the corpus: fold each world log
+// (shared/protocol/fold.js), take the client's view (view.js viewState), read every entity as components
+// (shared/components.js componentsOf) and back (entityOf). Bytes must come back identical (canonical JSON), and every key
+// lands in a component parameter, a declared stamp, or `extra` (counted and printed, never dropped). One differing entity = red.
+// Corpus: spec/conformance, plus any dirs in COMPONENTS_CORPUS (colon-separated; each searched for <world>/world.jsonl).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-corpus-test.ts
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,13 +43,12 @@ check(`every record has a distinct 64-hex hash (${hashes.length} records)`, hash
 }
 check('Pendulum is not addable twice on a part-less basis but motion types repeat', addable([{ type: 'Transform' }, { type: 'Pendulum' }]).some((a) => a.name === 'Pendulum'));
 check('a tilted entity keeps q through the view', (() => { const e = { model: 'x.glb', pos: [0, 1, 0], q: [0.2588, 0, 0, 0.9659], yaw: 0, lock: true }; return canon(entityOf(componentsOf(e))) === canon(e); })());
-// batch 2 (R 10-07): no part = a picture of its own, so Picture is offered on any thing, a model or not
+// no part = a picture of its own, so Picture is offered on any thing, a model or not
 check('Picture is offered on any thing (batch 2: quad mode)', addable([{ type: 'Transform' }, { type: 'Light' }]).some((a) => a.name === 'Picture') && addable([{ type: 'Transform' }, { type: 'Model' }]).some((a) => a.name === 'Picture'));
 
-// ------------------------------------------------------------ the step-2 spellings (design §6)
-// No world in the corpus carries these yet, so the round trip is proven here
-// on synthetic records — and each case also says WHAT it must read as: a round
-// trip alone would pass if every new spelling fell through to an Annotation.
+// ------------------------------------------------------------ the step-2 spellings
+// synthetic records (no corpus world carries them yet); each case says what it must READ as, since a round trip alone
+// passes if every spelling fell through to an Annotation
 console.log('\nthe step-2 spellings (synthetic):');
 const L = 'eidoverse/assets/models/lamp.glb';
 const st0 = { actor: 'a', ts: 1, born: 1 };
@@ -69,8 +64,8 @@ const cases: [string, any, string[]][] = [
   ['a comp.collider array stays an Annotation', { model: L, pos: [0, 0, 0], yaw: 0, collider: ['box'], ...st0 }, ['Model:', 'Annotation:collider']],
   ['an Empty: nothing but a Transform', { pos: [1, 2, 3], yaw: 0.5, ...st0 }, []],
   ['an Empty with a scale, a q and a comp.light', { pos: [1, 2, 3], yaw: 0, q: [0, 0, 0, 1], scale: 2, light: { intensity: 4 }, placer: { id: 'p' }, ...st0 }, ['Light:light']],
-  // the rotate order is the VIEWER's (PROTOCOL §9.1: Euler channels are a view; client/lib/viewprefs.js keeps it), so the
-  // Transform card has none: a rotOrder a record still carries is an Annotation like any unknown key, bytes kept (#260 I242)
+  // the rotate order is the VIEWER's (PROTOCOL §9.1; client/lib/viewprefs.js), so Transform has none: a stored rotOrder is
+  // an Annotation like any unknown key, bytes kept
   ['a stored rotOrder is not part of the Transform: an Annotation, bytes kept', { model: L, pos: [0, 0, 0], yaw: 0, q: [0, 0.38, 0, 0.92], rotOrder: 'ZXY', lock: true, ...st0 }, ['Model:', 'Annotation:rotOrder', 'Lock:lock']],
   ['…on an Empty too', { pos: [0, 0, 0], yaw: 0, rotOrder: 'quat', ...st0 }, ['Annotation:rotOrder']],
   ['a rotOrder that is not one of the seven names stays an Annotation (bytes kept)', { model: L, pos: [0, 0, 0], yaw: 0, rotOrder: 'zxy', ...st0 }, ['Model:', 'Annotation:rotOrder']],
@@ -80,7 +75,7 @@ check('the Transform card has no rotOrder (the order is the viewer\'s), neither 
   !('rotOrder' in componentsOf({ pos: [0, 0, 0], rotOrder: 'YZX' }).components[0].params)
   && !('rotOrder' in componentsOf({ pos: [0, 0, 0] }).components[0].params) && !('comp' in entityOf(componentsOf({ pos: [0, 0, 0], yaw: 0 }))));
 {
-  // a blueprint record from before (its root Transform says rotOrder): placing it writes no rotOrder, and it isn't refused
+  // a blueprint record from before (root Transform says rotOrder): placing it writes no rotOrder, and it isn't refused
   const rec: any = { kind: 'eido.blueprint', v: 1, name: 'Old', root: { components: [{ type: 'Transform', params: { rotOrder: 'ZXY' } }, { type: 'Model', params: { lib: L } }], children: [] } };
   const pv: any = placeVerbs(rec, { id: 'old1', pos: [1, 0, 1], yaw: 0 });
   const all = [...(pv?.verbs ?? []), ...(pv?.rules ?? [])];
@@ -96,7 +91,7 @@ for (const [name, ent, want] of cases) {
     canon(back) === canon(ent) && canon(got) === canon(['Transform:', ...want]), `got ${got.join(' + ')} / ${canon(back)}`);
 }
 check('lightOf reads comp.light with the fold\'s defaults; a v1 kind:"light" record is not a spelling the view has',
-  canon(lightOf({ model: L, light: {} })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, decay: 1.7, daytime: 'dim' })   /* shape audit 10-16: an older light falls off as decay 1.7; day → daytime */
+  canon(lightOf({ model: L, light: {} })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, decay: 1.7, daytime: 'dim' })   /* an older light falls off as decay 1.7; day → daytime */
   && lightOf({ light: { color: 1, intensity: 2, range: 3, day: false } })?.daytime === 'full'
   && lightOf({ kind: 'light', color: 1, intensity: 2, range: 3, day: false }) === null
   && lightOf({ model: L, light: 'on' }) === null && lightOf({ model: L }) === null);
@@ -114,11 +109,7 @@ check('a lamp (Model + comp.light) cannot add a second Light; an Empty can add o
   && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a) => a.name === 'Collider'));
 
 // ------------------------------------------------------------ the corpus
-// Every world log we have: fold it (shared/protocol/fold.js), take the view a client reads (view.js viewState: the
-// entity records the editor's componentsOf reads), and every entity must read as components and write back exact.
-// (Protocol v1 removed, 2026-10-07: the v1 corpus went with it — every entry of every v1 log through the v1 fold, the
-//  @world sky/terrain/grass components after every v1 world verb, and each entity saved as a blueprint and PLACED
-//  through placeVerbs into the v1 fold. blueprints are the authority's: tools/blueprint-test.ts sections 6–7.)
+// every world log folded, the client's view taken; every entity reads as components and writes back exact
 const { readLog, fold } = await import('../shared/protocol/fold.js');
 const { viewState } = await import('../shared/protocol/view.js');
 const logs: string[] = [];
@@ -141,7 +132,7 @@ for (const path of unique) {
   let view: any;
   try { view = viewState(fold(readLog(readFileSync(path)))); } catch (e) { bad.push(`${path}: unreadable (${(e as Error).message})`); continue; }
   for (const [id, ent] of Object.entries(view.entities ?? {}) as [string, any][]) {
-    const { born, ...rec } = ent;   // the fold's creation stamp rides beside the record, not in it
+    const { born, ...rec } = ent;  // the fold's creation stamp rides beside the record, not in it
     const comps = componentsOf(rec);
     checkedE++;
     if (canon(entityOf(comps)) !== canon(rec) && bad.length < 12) bad.push(`${path.replace(/^.*?(worlds|fixtures)\//, '$1/')} ${id}\n     was ${canon(rec).slice(0, 300)}\n     got ${canon(entityOf(comps)).slice(0, 300)}`);

@@ -9,6 +9,7 @@
  * rejoin is the agent's own: its snapshot resumes the walk.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { pointClass } from "../shared/protocol/consent.js";
 import { wireState } from "../shared/protocol/replica.js";
 import { emptyState } from "../shared/protocol/fold.js";
@@ -24,7 +25,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 console.log("a tracks loop");
 {
   // Treading water is a swimmer at rest. A loop started while treading plays on; a swim stroke is a move, and ends it.
-  const ag: any = new WorldAgent({ name: "me", world: "w" });
+  const ag: any = new WorldAgent({ name: "me", world: "w", url: noWorldUrl() });
   ag.anims = [{ name: "wave", mode: "loop", kind: "track" }];
   ag.clip = "tread"; ag.target = null;
   ag.watchAnim();
@@ -40,7 +41,7 @@ console.log("a reach held to two bodies");
 // touched) and strips it if any of them refuses.
 const pose = (p: number[], extra: Record<string, unknown> = {}) => ({ p, yaw: 0, speed: 0, clip: "idle", ...extra });
 const reacher = (cal: number[], ann: Record<string, unknown> = {}) => {
-  const ag: any = new WorldAgent({ name: "me", world: "w" });
+  const ag: any = new WorldAgent({ name: "me", world: "w", url: noWorldUrl() });
   ag.people.set("Ann", { id: "Ann", avatar: "", pose: pose([0, 0, 0], ann) });
   ag.people.set("Cal", { id: "Cal", avatar: "", pose: pose(cal) });
   ag.actorIds.set("Ann", "a-ann"); ag.actorIds.set("Cal", "a-cal");
@@ -96,15 +97,23 @@ check("(2 m in front of a body is beside it, not in it)", !pointClass([0, 0, 0],
   check("...and so is a point in this body's own frame, by its yaw", fresh(r, "Cal"), r.text);
 }
 {
-  // Ann at twice her size, pitched back a quarter about x by her pose's q (her yaw still 0): her frame's [0, 1, 0.6] is
-  // [0, 2, 1.2] at her size, and pitched back it is [0, 1.2, -2], in Cal standing there. Read without her size it lands
-  // [0, 0.6, -1], 1 m short of Cal; turned by her yaw alone, [0, 2, 1.2], in nobody.
+  // Ann at twice her size, pitched back a quarter about x by her pose's q (her yaw still 0). A point in her frame is metres
+  // at any size (docs/body-state.md): [0, 2, 1.2] pitched back is [0, 1.2, -2], in Cal standing there. Scaled by her size
+  // it would land [0, 2.4, -4], in nobody; turned by her yaw alone, [0, 2, 1.2], in nobody.
   const ag = reacher([0, 0, -2], { q: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2], scale: 2 });
-  const local = [0, 1, 0.6];
-  check("(that point is beside Ann, not in her)", !pointClass([0, 0, 0], local));
+  const local = [0, 2, 1.2];
+  check("(that point is beside Ann, not in her)", !ag.reachHolders({ p: local, space: "Ann" }).some((h: any) => h.name === "Ann"));
   setTimeout(() => ag.reachRefusals.push(refusal("a-cal", calThere)), 60);
   const r = await ag.reach("rightHand", { p: local, space: "Ann" });
-  check("...and in a pitched, scaled body's frame, by her pose's q and her size", fresh(r, "Cal"), r.text);
+  check("...and in a pitched, scaled body's frame, by her pose's q, the point unscaled by her size", fresh(r, "Cal"), r.text);
+}
+{
+  // a point in a 2x body's own frame is held to her by her capsule at her size: 0.4 m out at 1 m up is in her (0.2 m out at
+  // 0.5 m up at authored size), where an authored-size body would have it beside her; 1.5 m out is beside her either way
+  const ag = reacher([5, 0, 0], { scale: 2 });
+  const own = (p: number[]) => ag.reachHolders({ p, space: "Ann" }).find((h: any) => h.name === "Ann")?.cls ?? null;
+  check("a point 0.4 m out in a 2x body's frame is in her, by her capsule at her size", own([0.4, 1, 0]) === "touch", String(own([0.4, 1, 0])));
+  check("...and one 1.5 m out is outside her capsule, not in her", own([1.5, 1, 0]) === null, String(own([1.5, 1, 0])));
 }
 {
   // a reach that streamed, and is refused later by a body its point lands in that it doesn't name

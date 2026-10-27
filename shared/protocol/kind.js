@@ -4,7 +4,7 @@
 // (the same components flat on the record, shared/protocol/view.js viewOf). A model wins over a light (an imported lamp carries both;
 // the authority's one-place rule refuses writing that pairing natively); a mesh is a drawn thing like a model and wins over a
 // light the same way. A light component counts only as a plain object; a mesh only as a plain object whose shape is one the
-// registry names (componentspec `mesh`; a malformed mesh is absent, the thing an Empty, never a throw — review primitives S2):
+// registry names (componentspec `mesh`; a malformed mesh is absent, the thing an Empty, never a throw):
 // anything else is an annotation on an Empty. A socket (an attachment point, a child of its host) is decided first: it has no
 // body of its own, whatever else it carries.
 // A view record never carries `kind` (the old-world importer rewrites an old light to c.light and drops the field; viewOf emits none):

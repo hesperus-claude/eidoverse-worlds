@@ -1,15 +1,9 @@
-// The projector's captioner — voicebot run backwards.
-//
+// The projector's captioner: voicebot run backwards.
 //   mediamtx (RTSP audio) ──▶ ffmpeg ──▶ AudioTap ──▶ Captioner (VAD + STT)
 //        ──▶ the world's door: caption {id: <screen>, session, n, t0, t1, text, speaker?}
-//
-// One door `caption` request per final line, once; the door folds the bounded
-// window on the screen (shared/captions.js). Captions are durable world
-// testimony like `say`; `end` clears current perception, not history.
-// The bot needs to be one of its screen's captioners — whoever may edit the
-// screen sets `captioners {ids: [<the bot's identity>]}` on it (the bot logs
-// its identity when it joins) — and nothing more: it joins as a visitor.
-//
+// One door `caption` request per final line, once; the door folds the bounded window on the screen (shared/captions.js).
+// Captions are durable world testimony like `say`; `end` clears perception, not history. The bot joins as a visitor
+// and must be in its screen's `captioners {ids}` (set by whoever may edit the screen; the bot logs its identity on join).
 // Env:
 //   STREAM_URL     rtsp://127.0.0.1:8554/screen   (deploy/projector; or FILE=path.wav to rehearse,
 //                  or FILE=path.jsonl to replay a saved TRANSCRIPT's lines with no audio and no STT)
@@ -24,25 +18,14 @@
 //   ELEVEN_KEY / ASSEMBLYAI_KEY                    the provider's key
 //   LANGUAGE       BCP-47 hint                     (optional)
 //   VAD_DB         voiced threshold dBFS           (default -45; raise for noisy feeds)
-//   SPOOL          JSONL path of every line tried and every receipt (default
-//                  ./captionbot.spool.jsonl; SPOOL= empty for none). A restart
-//                  re-queues each line the world never confirmed, except
-//                  one whose overflow or refused row is on disk. Append-only:
-//                  rotate it between events. The spool is a promise, so it
-//                  fails closed: if a line's row cannot be written the line is
-//                  refused and intake halts, out loud, until a restart.
-//   SPOOL_BEST_EFFORT=1  the weaker promise: a spool failure is said once
-//                  (then every 100th line) and the line queues anyway — a
-//                  restart may then miss it. Either way a FILE run exits
-//                  non-zero when the spool's promise was not kept for a line
-//                  or for its end, or when lines were dropped for overflow.
-//   MAX_PENDING    queue bound in lines (default 600); past it the oldest
-//                  queued lines are dropped, out loud, into the spool as
-//                  overflow, and a FILE run that drops any exits non-zero
+//   SPOOL          JSONL of every line tried and every receipt (default ./captionbot.spool.jsonl; SPOOL= for none).
+//                  A restart re-queues unconfirmed lines (minus overflow/refused rows); append-only, rotate between
+//                  events. Fails closed: an unwritable row refuses the line and halts intake, out loud, until a restart.
+//   SPOOL_BEST_EFFORT=1  a spool failure is said once (then every 100th) and the line queues anyway. Either way a FILE
+//                  run exits non-zero when the promise wasn't kept for a line or its end, or lines overflowed.
+//   MAX_PENDING    queue bound in lines (default 600); past it the oldest drop, out loud, into the spool as overflow
 //   DRY_RUN=1      no world: print each line as it would be sent
-//   TRANSCRIPT     optional local JSONL copy of every final line — a
-//                  convenience for the operator, not the record: the world
-//                  log is the record
+//   TRANSCRIPT     optional local JSONL copy of every final line, for the operator; the world log is the record
 import { appendFileSync, readFileSync } from 'node:fs';
 import { ScribeSttProvider, AssemblyAiSttProvider } from '@animalabs/voice-kit';
 import { AudioTap } from './tap.ts';
@@ -79,8 +62,7 @@ const captioner = new Captioner({
   thresholdDb: Number(env('VAD_DB', '-45')), speaker: () => world?.speaker(), log,
 });
 let lines = 0;
-// one path for every final line, wherever it came from: the live captioner,
-// a rehearsed audio file, or a replayed transcript
+// one path for every final line: the live captioner, a rehearsed audio file, or a replayed transcript
 const onLine = (c: Caption) => {
   lines++;
   log(`📝 [${c.t0.toFixed(1)}–${c.t1.toFixed(1)}] ${c.speaker ? c.speaker + ': ' : ''}${c.text}`);
@@ -93,15 +75,10 @@ tap.attach(captioner);
 const file = env('FILE');
 if (file) {
   if (file.endsWith('.jsonl')) {
-    // a saved TRANSCRIPT (one {t0, t1, text, speaker?} per line, as this bot
-    // writes it): the lines go through the same door as live ones, with no
-    // audio decoded and no STT session opened. What an operator uses to
-    // re-run an event's captions against a world, and what the CLI process
-    // test drives the real exit owner with.
+    // a saved transcript ({t0, t1, text, speaker?} per line) goes through the same door with no audio or STT: for
+    // re-running an event, and for the CLI process test
     log(`replaying lines from ${file}`);
-    // every row is checked before any is sent, with the caption checks the
-    // door applies: a row that isn't a caption line fails the run with its
-    // line number, rather than being counted here and dropped at the door
+    // every row is checked with the door's caption checks before any is sent: a bad row fails the run with its line number
     const replay: Caption[] = [];
     const refuse: (n: number, why: string) => never = (n, why) => { log(`⛔ ${file}:${n}: ${why}; nothing was sent`); world?.close(); process.exit(1); };
     readFileSync(file, 'utf8').split('\n').forEach((row, i) => {
@@ -117,26 +94,22 @@ if (file) {
     log(`rehearsing from ${file}`);
     await fileSource(file, tap);
   }
-  await new Promise((r) => setTimeout(r, 2000)); // let the last final settle
+  await new Promise((r) => setTimeout(r, 2000));  // let the last final settle
   world?.end();
-  await new Promise((r) => setTimeout(r, 1500)); // and the receipts land
-  // where the unconfirmed entries are: the spool, memory only, or partly
-  // memory only, by which entries
+  await new Promise((r) => setTimeout(r, 1500));  // and the receipts land
+  // where the unconfirmed entries are: the spool, memory only, or partly memory only, by which entries
   const missing = world ? [world.spoolMissed ? `${world.spoolMissed} of this run's lines` : '', world.endMissed ? 'its end' : ''].filter(Boolean) : [];
   const where = !spool ? ' (in memory only: there is no spool)'
     : missing.length ? ` (${missing.join(' and ')} ${missing.length > 1 || (world?.spoolMissed ?? 0) > 1 ? 'are' : 'is'} NOT in the spool: ${world?.spoolFailed})`
     : ' (in the spool)';
   log(`done — ${lines} lines, ${captioner.lateRevisions} late revisions dropped${world ? `; ${world.acked} confirmed, ${world.pendingCount} unconfirmed${where}${world.spoolRefused ? `, ${world.spoolRefused} REFUSED (spool unwritable: ${world.spoolFailed})` : ''}${world.overflow ? `, ${world.overflow} DROPPED for overflow` : ''}` : ''}`);
   world?.close();
-  // a batch caller reads the exit status: a run that refused lines, or
-  // queued lines or its end without their rows, did not keep the spool's
-  // promise, and lines dropped for overflow didn't reach the world
+  // the exit status: refused lines, lines or end queued without rows, or overflow drops all mean the promise wasn't kept
   process.exit(world && (world.spoolLost || world.overflow) ? 1 : 0);
 } else {
   const url = env('STREAM_URL', 'rtsp://127.0.0.1:8554/screen');
   log(`listening to ${url}`);
-  // a reattach is a new time origin: the session rotates so no two lines
-  // share a clock they do not share
+  // a reattach is a new time origin: the session rotates so no two lines share a clock they don't share
   const src = ffmpegSource(url, tap, log, { onReattach: () => world?.rotateSession() });
   process.on('SIGINT', () => { src.close(); world?.end(); setTimeout(() => process.exit(0), 1500); });
 }

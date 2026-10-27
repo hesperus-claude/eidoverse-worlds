@@ -1,17 +1,12 @@
-// The sim layer (design 20, P4–P7): a second fold beside the blind one. It reads the log's change entries (through
-// fold.js, untouched) and its `sim` entries (intents that start motion), and runs the engine @world.physics-engine names.
-// It never writes the log. Determinism is local: it holds only for a carried engine build, inside one epoch.
-//
-// PROTOCOL L3: a change entry whose `cause` is a sim entry IS a rest, and its value must equal the engine's. There
-// is no annotation to trust: carriers compare the value the fold applies with where the engine has the body.
-// Time: the engine's clock is the envelope's `ts` (§2.1: the authority's admission time, the one clock readers trust),
-// never running backwards: an entry without one happens at the latest time stated before it.
-// The engine is eidosim (shared/sim.js, its adapter, over shared/eidosim.js, its core): rigid bodies that tumble and
-// roll, soft contacts after Box3D, swept against what rests, on terrain; things at rest that are dynamic and free can be
-// knocked. It is named name@version; a version is carried when this server reproduces its conformance digests
-// (spec/conformance/physics/, engine-check), and a change meant to alter results is a new version (Covenant II). The first eidosim (eidosim@0.1.0–0.5.0, PROTOCOL_v2 dialect 3) is no longer
-// carried at runtime (R 2026-10-09: "stomp the existing eidosim engine"); the old-world importer keeps its own copy, to
-// say where old punts came to rest, and writes those rests as plain changes.
+// The sim layer (design 20, P4–P7): a second fold beside the blind one. It reads the log's change entries (through fold.js,
+// untouched) and its `sim` entries (intents that start motion), and runs the engine @world.physics-engine names. It never
+// writes the log. Determinism is local: it holds only for a carried engine build, inside one epoch.
+// PROTOCOL L3: a change entry whose `cause` is a sim entry IS a rest, and its value must equal the engine's. No annotation
+// to trust: carriers compare the value the fold applies with where the engine has the body.
+// Time: the engine's clock is the envelope's `ts` (§2.1, the one clock readers trust), never running backwards: an entry
+// without one happens at the latest time stated before it.
+// The engine is eidosim (shared/sim.js over shared/eidosim.js), named name@version. The first eidosim (0.1.0–0.5.0) is not
+// carried at runtime; the old-world importer keeps its own copy and writes its rests as plain changes.
 import { sha256 } from "./hash.js";
 import { fold, opsOf, applyOps, applyInPlace, emptyState, Malformed, PURGED, purgesIn } from "./fold.js";
 import { MODELS } from "./labmodels.js";
@@ -21,14 +16,14 @@ import { r3, r2 } from "./round.js";
 import { composePose } from "../rot.js";
 import { scale3 } from "../scale3.js";
 
-// An engine is named by its VERSION (house answer, #260 10-21): a server carries a version when its implementation reproduces
-// that version's conformance digests (spec/conformance/physics/, held by engine-check). A change that still reproduces them
-// is the same version; a change meant to alter results is a new version with its own digests.
+// An engine is named by its VERSION (#260): a server carries a version when it reproduces that version's conformance digests
+// (spec/conformance/physics/, engine-check). A change that still reproduces them is the same version; a change meant to
+// alter results is a new version with its own digests (Covenant II).
 export const ENGINES = { [eidosim.SIM_ID]: { module: eidosim, rotates: true, maxSpeed: 20,
   about: "eidosim: rigid boxes and spheres that tumble and roll, soft contacts (after Box3D), swept against what rests, terrain; free dynamic things at rest can be knocked" } };
 export const DEFAULT_ENGINE = eidosim.SIM_ID;
 export const TICK_MS = eidosim.TICK_MS;
-// a sim state advanced by its engine (readers that hold a clone: the replica, the client's flights)
+// a sim state advanced by its engine (readers holding a clone: the replica, the client's flights)
 export const advanceSim = (sim, tick) => eidosim.advanceSim(sim, tick);
 export const tickOf = (sim, ts) => eidosim.tickOf(sim, ts);
 export const carried = (spec) => !!spec && typeof spec.engine === "string" && Object.hasOwn(ENGINES, spec.engine);   // a version this server reproduces
@@ -36,20 +31,18 @@ export const carried = (spec) => !!spec && typeof spec.engine === "string" && Ob
 export const engineName = (e) => String(e).split("@")[0];
 const semver = (e) => (String(e).split("@")[1] ?? "").split(".").map((x) => Number(x) || 0);
 const newer = (a, b) => { const x = semver(a), y = semver(b); for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
-/** the version of `name` this server would stamp today (its newest carried one), or null when it carries none of that name */
+/** The version of engine `name` this server stamps: its newest carried one, or null when it carries none of that name. */
 export const stampOf = (name) => Object.keys(ENGINES).filter((k) => engineName(k) === name).reduce((best, k) => (best === null || newer(k, best) ? k : best), null);
 
 // P7: what releases a body (or reseats a collider) is WHICH COMPONENT changed, never which verb carried it.
 const PHYSICAL = new Set(["transform", "parent", "model", "mesh", "physics", "disabled"]);
-// the writes that end a hold, as the authority's commit() reads them (writes.js): a transform, a parent or a whole delete of the
-// thing, or switching it off (disabled set true; setting it false ends nothing). Switching off or deleting a thing also ends the
-// holds of whatever hangs under it. Keep these two in step with commit()
+// the writes that end a hold, as commit() (writes.js) reads them: a transform, a parent or a whole delete, or switching it off
+// (disabled true; false ends nothing). Switching off or deleting a thing also ends the holds under it. Keep in step with commit()
 export const ends = (o) => (o.verb === "delete" ? o.comp === undefined || o.comp === "transform" || o.comp === "parent" : o.comp === "transform" || o.comp === "parent" || (o.comp === "disabled" && o.value === true));
 export const endsUnder = (o) => (o.verb === "delete" && o.comp === undefined) || (o.verb === "set" && o.comp === "disabled" && o.value === true);
 
 const yawOf = (q) => (Array.isArray(q) ? 2 * Math.atan2(q[1], q[3]) : 0);
-// A thing's world pose, composed down its parent chain by shared/rot.js composePose (glTF's rule, PROTOCOL §9.3). The
-// chain stops at a missing parent or 33 links up.
+// composed down its parent chain by shared/rot.js composePose (glTF's rule, PROTOCOL §9.3); stops at a missing parent or 33 links up
 export function worldPose(st, id) {
   if (!st.entities[id]) return null;
   const chain = [];
@@ -62,19 +55,18 @@ export function worldPose(st, id) {
   }
   return composePose(chain);
 }
-// eidosim carries boxes only (PHYSICS.md §3.1): a stamped physics.shape is its collider when it's a bare box; any other
-// shape is no body to it (rather than a tagged object misread as [[min], [max]]). An engine that carries spheres reads them.
+// eidosim carries boxes only (PHYSICS.md §3.1): a stamped physics.shape is its collider when a bare box; any other shape is no
+// body to it (never a tagged object misread as [[min], [max]]). An engine that carries spheres reads them.
 export const engineBox = (ph) => (isBoxShape(ph?.shape) ? ph.shape : null);
-// eidosim keys its boxes by model name (sim.boxes[lib]); a model-less thing with a stamped box (a `mesh`) is keyed by the
-// box itself, so two meshes of one size share an entry and a resize is a new key. A tagged cylinder has no box here: no body
+// eidosim keys boxes by model name (sim.boxes[lib]); a model-less thing with a stamped box (a `mesh`) is keyed by the box
+// itself, so two meshes of one size share an entry and a resize is a new key. A tagged cylinder has no box here: no body
 const meshKey = (ph) => { const b = engineBox(ph); return b ? `mesh:${b[0].join(",")}|${b[1].join(",")}` : undefined; };
 export const libOf = (e) => (typeof e?.c.model === "string" ? e.c.model : e?.c.mesh !== undefined ? meshKey(e.c.physics) : undefined);
-// The engine sees the world through its own entity view: one entry per modelled thing (its "lib" is its model).
+// the engine's own entity view: one entry per modelled thing (its "lib" is its model)
 const lockedC = (c) => { const v = c?.lock; return v !== undefined && v !== PURGED && !!v; };   // as authority.lockedC
 const sphereShape = (ph) => ph?.shape?.type === "sphere" && !shapeError(ph.shape);
-// what a flying thing may knock (engines that collide moving bodies with resting ones): a dynamic thing that no hand rule
-// holds fixed — not locked, under nothing locked, and holding nothing locked (a hand can't take those either:
-// authority grab/punt/lift check the same three). Everything else at rest is a collider.
+// what a flying thing may knock: a dynamic thing no hand rule holds fixed (not locked, under nothing locked, holding nothing
+// locked: grab/punt/lift check the same three). Everything else at rest is a collider.
 function fixedSet(st) {
   const fixed = new Set(), up = (k) => st.entities[k]?.c.parent?.to;
   for (const id of Object.keys(st.entities)) { if (!lockedC(st.entities[id].c)) continue;
@@ -84,19 +76,18 @@ function fixedSet(st) {
 }
 // switched off (componentspec disabled), itself or anything it hangs under: no body, no collider
 export function offChain(st, id) { for (let k = id, n = 0; k && n < 33; k = st.entities[k]?.c.parent?.to, n++) if (st.entities[k]?.c.disabled === true) return k; return null; }
-// a purged physical value is no body: the strict fold holds PURGED there, and this layer follows it (review of #260)
+// a purged physical value is no body: the strict fold holds PURGED there, and this layer follows it
 const purgedPhysical = (c) => [...PHYSICAL].some((k) => c[k] === PURGED);
-// a place the record lost: a transform or parent purged, or stripped to its commit with no purge naming it (§12), on the
-// thing or on anything it hangs from. Its pose is unknown (§1), so nothing derives a place or a scale from it: it has no
-// body here, and the authority's sweeps (a return, an orphaned lift's settling) leave it where the record lost it
+// a place the record lost: a transform or parent purged, or stripped to its commit with no purge naming it (§12), on the thing
+// or anything it hangs from. Its pose is unknown (§1), so nothing derives a place or scale from it: no body here, and the
+// authority's sweeps (a return, an orphaned lift's settling) leave it where the record lost it
 export function lostPlace(st, id) {
   for (let k = id, n = 0; k && n < 33; n++) { const c = st.entities[k]?.c; if (!c) return false;
     if (c.transform === PURGED || c.parent === PURGED) return true; k = c.parent?.to; }
   return false;
 }
-// a body this layer's engine lacks only because a purge took what it is read from (purgedPhysical, lostPlace): the engine
-// that wrote the log had it, so what this one computes beside it is unknown (review of #260). A thing that would be no
-// body either way (physics none, switched off, a model that isn't a collider) is no loss
+// a body this engine lacks only because a purge took what it is read from (purgedPhysical, lostPlace): the engine that wrote
+// the log had it, so what this one computes beside it is unknown. A thing that would be no body either way is no loss
 function lostBody(st, id, models) {
   const e = st.entities[id], c = e?.c; if (!c || !(purgedPhysical(c) || lostPlace(st, id))) return false;
   if (c.physics !== PURGED && c.physics?.kind === "none") return false;
@@ -107,7 +98,7 @@ function engineEntity(st, id, models = MODELS, fixed = null) {
   const e = st.entities[id]; if (!e || purgedPhysical(e.c) || lostPlace(st, id) || !(models[e.c.model] || engineBox(e.c.physics) || sphereShape(e.c.physics)) || e.c.physics?.kind === "none") return null;
   if (offChain(st, id)) return null;
   const t = worldPose(st, id);
-  const sh = e.c.physics?.shape;   // a tagged shape rides along (eidosim reads a sphere from it)
+  const sh = e.c.physics?.shape;   // a tagged shape goes along (eidosim reads a sphere from it)
   return { pos: t.pos, yaw: yawOf(t.q), q: t.q, model: libOf(e), scale: t.scale[1], scale3: t.scale, ...(sh && !isBoxShape(sh) ? { shape: sh } : {}),
     ...(e.c.physics?.kind === "dynamic" && !(fixed ?? fixedSet(st)).has(id) ? { kind: "dynamic" } : {}) };
 }
@@ -126,15 +117,14 @@ function boxesForM(st, models = MODELS) {
 }
 const opsSafe = (e) => { try { return opsOf(e); } catch (x) { if (x instanceof Malformed) return []; throw x; } };
 const isEntry = (e) => e && !(e instanceof Malformed) && typeof e === "object";
-// A sim (or act) entry's body as a replay may read it, or null when a purge took it whole (§12): the purge names it, or the
-// body on disk is already its {commit} stub. Null is unknown, as in the authority's readback: never a value to compare with.
+// a sim (or act) entry's body as a replay may read it, or null when a purge took it whole (§12): named by a purge, or already
+// its {commit} stub on disk. Null is unknown, as the authority's readback: never a value to compare with.
 const isCommitStub = (b) => !!b && typeof b === "object" && !Array.isArray(b) && Object.keys(b).length > 0 && Object.keys(b).every((k) => k === "commit" || k === "salt");
 const bodyIn = (entries, purged, seq) => { const e = entries[seq]; if (!isEntry(e) || !e.body || typeof e.body !== "object") return null;
   return purged?.has(`${seq}:-`) || isCommitStub(e.body) ? null : e.body; };
 
-// Fold the whole log: the blind state, plus the sim epoch's live bodies and what came to rest (not yet logged).
-// (Engine, slice 2: this is now simFolder fed every valid entry, then viewed at `now` — the same code the server runs
-// incrementally, so every suite that calls simFold exercises the incremental path.)
+// the blind state plus the sim epoch's live bodies and what came to rest (not yet logged): simFolder fed every valid entry,
+// then viewed at `now`, the same code the server runs incrementally
 export function simFold(entries, now, opts = {}) {
   const blind = fold(entries); // the strict fold decides which entries count; this layer replays the same ones
   const bad = new Set(blind.diagnostics.filter(([, c]) => c.startsWith("malformed")).map(([q]) => q));
@@ -142,26 +132,15 @@ export function simFold(entries, now, opts = {}) {
   if (blind.status === "ok") for (let s = 0; s < entries.length; s++) if (isEntry(entries[s]) && !bad.has(s)) f.feed(s);
   return f.view(now);
 }
-// The sim layer as a running fold (engine, slice 2; the lab re-folded the whole log on every call, O(n) per request).
-// feed(seq) takes the next VALID entry (the caller decides validity: the strict fold on load, the authority's own re-read
-// on append), in log order; view(now) advances the engine to `now` and returns what simFold returned. `now` must not
-// run backwards relative to later entries' ts (the server's clock is monotonic and every ts it writes is ≥ it), so
-// advancing early for a read and then folding a later entry is the same as folding it first: advancement is
-// schedule-independent. opts.models: the catalogue whose models count as colliders (default the lab's; the server
-// passes {} so geometry enters the sim only through the log's physics.shape, Covenant III).
-// opts.from: start from a cut instead of the empty world ({st, clock, spec, foreign, sim, launched, lifted, unknownEpoch,
-// unknownHold}, simCutOf's shape):
-// a joining client can't refold the whole log, so it adopts the authority's sim where the authority's clock stood, then feeds
-// every later entry (their ts are never earlier than that clock). Advancement is schedule-independent, so this is exact.
-// opts.purged: the log's purges (purgesIn), so a replay writes PURGED where the strict fold does; a live host that sees a new purge
-// builds a fresh folder with them (a purge is retroactive), rather than feeding it.
+// a running fold: feed(seq) takes the next VALID entry (the caller judges); view(now) advances to `now`, exact whenever read
+// since ts never runs backwards. opts.models: colliders (the server passes {}: Covenant III); opts.from: a cut (simCutOf)
+// for a joiner; opts.purged: the log's purges (a new purge means a fresh folder).
 export function simFolder(entries, { models = MODELS, from = null, purged = null } = {}) {
   const st = from?.st ?? emptyState(); let clock = from?.clock ?? 0;
   const out = { st, spec: from?.spec ?? null, foreign: from?.foreign ?? false, sim: from?.sim ?? null, launched: from?.launched ?? {}, lifted: new Set(from?.lifted ?? []), rested: [], checks: { agree: 0, disagree: [] }, restTicks: {},
     unknownEpoch: !!from?.unknownEpoch, unknownHold: !!from?.unknownHold };
   const E = () => eidosim;
-  // every engine write counts (out.rev): a client re-copies its presentation sim only when this moved, not on every entry
-  // (STRIKES PH-S2: ~100 JSON copies of the whole sim during a cascade, one per chat line too)
+  // every engine write counts (out.rev): a client re-copies its presentation sim only when this moved, never per entry
   out.rev = from?.rev ?? 0; const SE = (...args) => { out.rev++; return eidosim.simEntry(...args); };
   const tickOf = (ts) => (out.sim ? E().tickOf(out.sim, ts) : 0);
   const advance = (ts) => {
@@ -173,7 +152,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
       if (!flying.length) { E().advanceSim(out.sim, target); break; }
       E().advanceSim(out.sim, out.sim.tick + 1);
       for (const id of flying) if (out.sim.bodies[id]?.resting && out.launched[id]) out.launched[id].restTick ??= out.sim.tick;
-      for (const [id, l] of Object.entries(out.launched)) if (l.restTick !== undefined && out.sim.bodies[id] && !out.sim.bodies[id].resting) delete l.restTick;   // woken again before its rest was logged (review #9)
+      for (const [id, l] of Object.entries(out.launched)) if (l.restTick !== undefined && out.sim.bodies[id] && !out.sim.bodies[id].resting) delete l.restTick;   // woken again before its rest was logged
       // a body a flight woke is that launch's to rest (PHYSICS §1): it rests and is logged under the launch the engine names
       for (const [id, b] of Object.entries(out.sim.bodies)) if (b.woken && !b.resting && out.launched[id]?.seq !== b.seq) {
         const src = Object.values(out.launched).find((l) => l.seq === b.seq);
@@ -182,19 +161,14 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     }
   };
   const disagree = (x) => out.checks.disagree.push(x);
-  // Where a purge took what the engine read, the engine that wrote the log and this one differ from there on (a body skipped
-  // or seated otherwise moves what the engine allocates and what it collides with, and nothing later restores that), so
-  // nothing this engine computes is set beside the log: no digest, rest or in-flight check. out.unknownEpoch, until the
-  // next cut: a purged launch, or an engine view built while a body is lost to a purge (lostBody: a rest's transform
-  // purged, say, which the fold reads as gone where the engine that wrote the log kept it), the new epoch's own view
-  // included, so a cut leaves it unknown while such a body stands. out.unknownHold, to the log's end: a purged lift or
-  // catch hides which thing is held, and a hold outlives an epoch while its end can't be read from the log. Both ride in
-  // a cut (simCutOf), so a folder resumed from one judges what an uninterrupted one does
+  // past a purge of what the engine read, this engine and the log's may differ, so nothing computed is set beside the log:
+  // out.unknownEpoch until the next cut (a purged launch, or a body lost to a purge), out.unknownHold to the log's end (a
+  // purged lift or catch). Both travel in a cut (simCutOf).
   const unknown = () => out.unknownEpoch || out.unknownHold;
-  // a value reads PURGED only where the feed's purge map names it (without one, applyInPlace refuses a stripped value) or in
-  // the state a cut starts from, so with neither the lost-body scan below is skipped
+  // a value reads PURGED only where the feed's purge map names it or in a cut's starting state, so with neither the lost-body
+  // scan below is skipped
   const mayLose = (purged?.size ?? 0) > 0 || (!!from?.st && Object.values(from.st.entities).some((e) => Object.values(e.c).some((v) => v === PURGED)));
-  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it (review 64d26822 #3)
+  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it
   const engineView = (s) => { const v = engineViewM(s, models); for (const id of out.lifted) delete v.entities[id];
     if (mayLose && !out.unknownEpoch && Object.keys(s.entities).some((id) => !v.entities[id] && !out.lifted.has(id) && lostBody(s, id, models))) out.unknownEpoch = true;
     return v; }, boxesFor = (s) => boxesForM(s, models);
@@ -220,7 +194,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
           else if (!l || l.seq !== e.cause) disagree({ seq, id, why: "its launch is not this body's current flight (caught, re-thrown or moved since)" });
           // a body still flying past the world's edge is lost there: its rest is where it crossed (view(), restCheck's `lost`)
           else if (!b || (!b.resting && !(B && outside(B, b.p)))) disagree({ seq, id, why: "the engine still has it in flight" });
-          // a rest whose transform a purge took is unknown here: there is no logged pose to set beside the engine's
+          // a rest whose transform a purge took is unknown: there is no logged pose to set beside the engine's
           else if (after.entities[id]?.c.transform === PURGED) out.unknownEpoch = true;
           else { const wp = worldPose(after, id), mine = wp?.pos; if (JSON.stringify(mine) !== JSON.stringify(b.p) || (b.q && JSON.stringify(wp?.q) !== JSON.stringify(b.q))) disagree({ seq, id, logged: mine, engine: b.p, ...(b.q ? { loggedQ: wp?.q, engineQ: b.q } : {}) }); else { out.checks.agree++; out.restTicks[seq] = l.restTick ?? out.sim.tick; } }
         }
@@ -231,16 +205,16 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
           else if (PHYSICAL.has(o.comp) && !(e.cause > l.seq)) disagree({ seq, id: o.id, why: `changes a body in flight, but its cause (${e.cause}) is not after the launch (${l.seq})` }); }
       }
       applyInPlace(st, ops, seq, purged, e.verb === "batch");
-      // a hold ends on the record whatever the engine is doing (physics off included): the hand lets go of the thing, and of
-      // what hangs under a thing switched off or deleted (the authority's commit() lets those go too). Before an epoch's
-      // rebuild below, so a write that starts a new epoch and ends a hold seats the thing in the new engine's world
+      // a hold ends on the record whatever the engine does (physics off included): the hand lets go of the thing, and of what
+      // hangs under one switched off or deleted (as commit()). Before the epoch rebuild, so a write starting a new epoch and
+      // ending a hold seats the thing in the new engine's world
       for (const o of ops) if (o.id !== "@world") {
         if (out.lifted.has(o.id) && ends(o)) out.lifted.delete(o.id);
         if (endsUnder(o)) for (const k of [...out.lifted]) if (isUnder(st, k, o.id) || !st.entities[k]) out.lifted.delete(k);
       }
       const spec = st.entities["@world"]?.c["physics-engine"] ?? null;
       if (JSON.stringify(spec) !== wasSpec) { // an epoch boundary. The authority makes it a real cut: nothing in flight (P6).
-        out.spec = spec; out.launched = {}; out.foreign = !!spec && !carried(spec); out.sim = null; out.rev++; out.unknownEpoch = false;   // a cut: nothing in flight   // a lift outlives an epoch (authority orphanLifts says the same); the view keeps it out
+        out.spec = spec; out.launched = {}; out.foreign = !!spec && !carried(spec); out.sim = null; out.rev++; out.unknownEpoch = false;   // a cut: nothing in flight; a lift outlives an epoch (authority orphanLifts), the view keeps it out
         if (spec && !out.foreign) {
           out.sim = eidosim.emptySim();
           SE(out.sim, { seq, ts: clock, actor: "system", verb: "epoch", args: { sim: spec.engine, tickMs: spec.tickMs, boxes: boxesFor(st) } }, engineView(st));
@@ -250,42 +224,39 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
       if (!out.sim) return;
       let relock = false;
       for (const o of ops) { // P7, keyed by component
-        if (o.id === "@world") { // the ground itself changed: re-ground, release every body, rebuild colliders (her law)
-          if (o.comp === "terrain") { SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "terrain", args: st.entities["@world"].c.terrain ?? { amplitude: 0 } }, engineView(st)); out.launched = {}; }   // removed: flat y = 0, as at boot (line 80), never the toolkit's default hills
+        if (o.id === "@world") { // the ground itself changed: re-ground, release every body, rebuild colliders
+          if (o.comp === "terrain") { SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "terrain", args: st.entities["@world"].c.terrain ?? { amplitude: 0 } }, engineView(st)); out.launched = {}; }   // removed: flat y = 0, as at boot, never the toolkit's default hills
           continue; }
         const shape = engineBox(st.entities[o.id]?.c.physics), model = libOf(st.entities[o.id]);
         if (shape && out.sim.boxes && typeof model === "string") out.sim.boxes[model] ??= shape;
         const whole = o.verb === "create" || (o.verb === "delete" && o.comp === undefined);
         if (o.comp === "lock" || o.comp === "parent" || whole) relock = true;   // a thing made or deleted changes what's under a lock
         if (!whole && !PHYSICAL.has(o.comp)) continue;
-        // a write that ends a hold (the authority's commit(): transform, parent, disabled, or the whole thing) puts it back in the
-        // world; any other physical write to a held thing (its physics, its model) leaves it in the hand (review 64d26822 #1–#2)
+        // a write ending a hold (as commit(): transform, parent, disabled, or the whole thing) puts it back in the world; any
+        // other physical write to a held thing (its physics, its model) leaves it in the hand
         if (out.lifted.has(o.id)) continue;   // still in the hand: a hold's end was read above
         const ids = [o.id, ...Object.keys(st.entities).filter((k) => isUnder(st, k, o.id))];
-        const view = engineView(st);   // one view per op (review 10-14 C4: it was rebuilt per affected id — 51 views for a shelf of 50)
+        const view = engineView(st);   // one view per op, never per affected id
         for (const id of ids) {
-          // in someone's hand (lifted or caught, not yet put down or thrown): its record still stands where it was taken, under
-          // whatever it rested on, and a move of that thing must not put a body back there (R 10-11: a crate she caught was
-          // re-placed under the crate below it, rested there, and she held a thing that lay on the floor)
+          // in someone's hand (lifted or caught, not yet put down or thrown): its record still stands where it was taken,
+          // under whatever it rested on, and a move of that thing must not put a body back there
           if (id !== o.id && out.lifted.has(id)) continue;
-          // a thing under it that a launch set moving is the engine's until its own rest is LOGGED (L6), flying or come to
-          // rest unlogged: its parent's rest or a write to its parent doesn't cancel it (review of 8377ec52 #6)
+          // a thing under it that a launch set moving is the engine's until its own rest is LOGGED (L6), flying or at rest
+          // unlogged: its parent's rest or a write to its parent doesn't cancel it
           if (id !== o.id && out.launched[id] && out.sim.bodies[id]) continue;
           const gone = !view.entities[id];
           SE(out.sim, { seq, ts: clock, actor: e.actor, verb: gone ? "remove" : "place", args: { id } }, view);
           if (out.launched[id]) delete out.launched[id];
         }
       }
-      // a lock or a parent changed: what may be knocked changes for the thing, what's under it and what it's under.
-      // Re-seat every thing at rest whose knockability no longer matches (review of 8377ec52 #3–#5)
+      // a lock or a parent changed: knockability changes for the thing, what's under it and what it's under. Re-seat every
+      // thing at rest whose knockability no longer matches
       if (relock) { const view = engineView(st);
         for (const id of Object.keys(out.sim.statics ?? {})) if (!!out.sim.statics[id].dyn !== (view.entities[id]?.kind === "dynamic"))
           SE(out.sim, { seq, ts: clock, actor: e.actor, verb: view.entities[id] ? "place" : "remove", args: { id } }, view); }
     } else if (e.kind === "sim" && out.sim) {
-      // purged whole: the engine can't fly or lift what it can't read, so until the next cut the engine that read it and this
-      // one may differ, and what this one computes meanwhile is unknown here: a launch until the next cut (out.unknownEpoch), a
-      // lift or catch to the log's end (out.unknownHold). The authority's readback reads such a body as unknown too, for its own
-      // question: restampEngine counts a purged launch as a flight its cut ends (endedUnknown), which this needn't follow
+      // purged whole: unknown until the next cut (a launch) or the log's end (a lift or catch); restampEngine's own reading
+      // (endedUnknown) needn't match this
       const a = bodyIn(entries, purged, seq); if (!a) { if (e.verb === "launch") out.unknownEpoch = true; else if (e.verb === "lift" || e.verb === "catch") out.unknownHold = true; return; }
       if (e.verb === "launch" && st.entities[a.id] && Array.isArray(a.p) && Array.isArray(a.v)) {
         out.lifted.delete(a.id);   // thrown or dropped: out of the hand, into the engine (before the view, which hides lifted things)
@@ -295,8 +266,8 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
         SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "launch", args: { id: a.id, p: a.p, v: a.v, q: a.q, w: a.w } }, view);
         out.launched[a.id] = { seq, cause: e.cause, by: e.actor, handled: a.handled ?? [e.actor] };
       } else if ((e.verb === "lift" || e.verb === "catch") && st.entities[a.id]) {
-        // picked up (or caught mid-air): it leaves the world's physics — no body, no collider at its old spot — until
-        // it's put down (an authored transform reseats it) or thrown (a launch)
+        // picked up (or caught mid-air): out of the world's physics (no body, no collider at its old spot) until put down
+        // (an authored transform reseats it) or thrown (a launch)
         SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "remove", args: { id: a.id } }, { entities: {} });
         delete out.launched[a.id];
         out.lifted.add(a.id);
@@ -307,8 +278,8 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     if (now !== undefined) { if (now > clock) clock = now; advance(clock); }
     out.clock = clock;
     out.rested = [];
-    // a flying body that has crossed the world's edge is lost THERE: it rests on the record where it is now, and the
-    // authority sends it home (attack-physics P1: a ball flew 300 m out for a minute, untouchable, simulated every pass)
+    // a flying body past the world's edge is lost THERE: it rests on the record where it is now, and the authority sends it
+    // home (never untouchable and simulated every pass)
     const B = boundsIn(st);
     if (out.sim) for (const [id, l] of Object.entries(out.launched)) {
       const b = out.sim.bodies[id]; if (!b) continue;
@@ -319,9 +290,9 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     return out;
   };
   // the clock a pass bounded to `maxTicks` engine ticks may reach (DESIGN-physics-responsiveness §1): a stall catches up over
-  // several passes, never by a longer step (Covenant I/IV: the bits are the law's). null: no engine, nothing to bound.
+  // several passes, never by a longer step (Covenant I/IV). null: no engine, nothing to bound.
   const capTs = (maxTicks) => { if (!out.sim) return null;
-    // nothing in flight: advancing is one jump, so no bound (bounded, a heartbeat slower than maxTicks ticks fell behind for good)
+    // nothing in flight: advancing is one jump, so no bound (bounded, a slow heartbeat fell behind for good)
     if (!Object.values(out.sim.bodies).some((b) => !b.resting)) return null;
     return out.sim.epoch.ts + (out.sim.tick + maxTicks) * out.sim.epoch.tickMs; };
   return { feed, view, capTs };
@@ -356,16 +327,16 @@ export function livePoses(sf) {
   for (const [id, b] of Object.entries(sf.sim.bodies)) if (!b.resting && sf.launched[id]) out[id] = { pos: b.p.map(r3), v: b.v.map(r2) };
   return out;
 }
-/** Where the engine has each body it owns (launched, its rest not logged yet): {pos, v} while it flies, {pos, resting: true} once
- *  it has stopped but its rest isn't on the record yet (a launch's rests are logged together). livePoses stays the flying ones. */
+/** {pos, v} while it flies, {pos, resting: true} once stopped but its rest isn't on the record yet (a launch's rests are
+ *  logged together). livePoses stays the flying ones. */
 export function enginePoses(sf) {
   const out = {};
   if (!sf.sim) return out;
   for (const [id, b] of Object.entries(sf.sim.bodies)) if (sf.launched[id]) out[id] = b.resting ? { pos: b.p.map(r3), resting: true } : { pos: b.p.map(r3), v: b.v.map(r2) };
   return out;
 }
-/** The sim's cut for a joiner (the authority's side of simFolder's opts.from), as plain JSON: where the engine stands at the
- *  view's clock, what is in flight, and the launch entries those flights came from (so a later rest's cause resolves). */
+/** The authority's side of simFolder's opts.from, as plain JSON: where the engine stands at the view's clock, what is in
+ *  flight, and the launch entries those flights came from (so a later rest's cause resolves). */
 export function simCutOf(sf, entries) {
   const launched = JSON.parse(JSON.stringify(sf.launched ?? {}));
   const launches = {}; for (const l of Object.values(launched)) if (entries[l.seq]) launches[l.seq] = entries[l.seq];
@@ -373,9 +344,9 @@ export function simCutOf(sf, entries) {
     ...(sf.unknownEpoch ? { unknownEpoch: true } : {}), ...(sf.unknownHold ? { unknownHold: true } : {}) };   // what the replay can't judge from here (simFolder)
 }
 export const digestOf = (sim) => sha256(JSON.stringify(eidosim.simSnapshot(sim))).slice(0, 16);
-// A cut, in our own format: the engine state as plain JSON, restorable. (For eidosim the format IS its snapshot.)
+// a cut in our own format: the engine state as plain JSON, restorable (for eidosim the format IS its snapshot)
 export const snapshotOf = (sim) => JSON.parse(JSON.stringify(eidosim.simSnapshot(sim)));
-// Predict when everything now in flight will be at rest (a carrier can look ahead; a barrier waits for it).
+// when everything now in flight will be at rest (a carrier can look ahead; a barrier waits for it)
 export function restEta(sf) {
   if (!sf.sim) return null;
   const s = JSON.parse(JSON.stringify(sf.sim)); const live = () => Object.values(s.bodies).filter((b) => !b.resting).length;

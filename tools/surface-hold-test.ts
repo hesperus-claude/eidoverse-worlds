@@ -1,16 +1,7 @@
-// surface-hold-test.ts — B3 (#57 review): the client half's founding receipt.
-// surface-test.py exercises the server's matrix over an external door; NOTHING
-// in-tree executed the browser's hold-then-fallback path. This does, headless,
-// through the real client/lib/world.js with only its heavy deps stubbed
-// (tools/world-hold-stub.mjs — a REAL bus, because the whole contract is bus
-// traffic). The six pinned behaviors are Antra's list, verbatim.
-//
+// surface-hold-test.ts (#57): the browser's hold-then-fallback path, headless, through the live-cause dispatcher
+// (client/lib/realize/livechat.js handleLiveCause, as net.js's 'live-entry' drives it) with only heavy deps stubbed
+// (tools/world-hold-stub.mjs; a REAL bus, because the whole contract is bus traffic). Six pinned behaviours.
 //   bun tools/surface-hold-test.ts
-//
-// Recut (#57 B1 re-review): the hold path lives in the live-cause dispatcher
-// (client/lib/realize/livechat.js) now, not world.js — the applyEntry switch is
-// gone (TEL0S_NOTES §11). Same six pinned behaviors, same real bus, driven
-// through handleLiveCause exactly as net.js's 'live-entry' does.
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
 import { tryUntil, pause } from "./protocol/wait.ts";
@@ -19,9 +10,8 @@ const STUB = fileURLToPath(new URL("./world-hold-stub.mjs", import.meta.url));
 plugin({
   name: "world-hold-stub",
   setup(build) {
-    // livechat.js imports ../core.js and ../chat.js (from realize/) and ./models.js (PORTED only), all stubbed; its bus
-    // comes from ../base.js, left REAL so it is the same bus the test drives below (#260 house I394/I240: two repairs of
-    // this one fault met in a merge; one bus, not both fixes)
+    // livechat.js's ../core.js, ../chat.js and ./models.js are stubbed; its bus comes from ../base.js, left REAL so it is
+    // the same bus the test drives below: one bus
     for (const f of ["^\\.\\./core\\.js$", "^\\.\\./chat\\.js$", "^\\./models\\.js$"]) {
       build.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
     }
@@ -29,7 +19,7 @@ plugin({
 });
 
 const stub = await import("./world-hold-stub.mjs");
-// livechat.js takes its bus from ../base.js now (not core.js): drive THAT bus, or nothing reaches it
+// livechat.js takes its bus from ../base.js (not core.js): drive THAT bus, or nothing reaches it
 const { bus } = await import("../client/lib/base.js");
 const causes = await import("../client/lib/realize/livechat.js");
 
@@ -71,21 +61,17 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
   await say("norrin", "unreceipted line");
   bus.emit("performed", { actor: "norrin", seq: receipted, gen: 7 });
   await pause("past the hold window", HOLD_MS + 400);
-  // (the receipt's display-only re-emit carries performed:true — §8; a
-  // FALLBACK is a speech event without it)
+  // (the receipt's display-only re-emit carries performed:true, §8; a FALLBACK is a speech event without it)
   check("receipted say never falls back to local speech", !spoken.some((s) => s.text === "receipted line" && !s.performed),
     JSON.stringify(spoken));
   check("the OTHER pending say still falls back (receipt cancelled exactly one)",
     spoken.filter((s) => s.text === "unreceipted line").length === 1, JSON.stringify(spoken));
 }
 
-// ── 2b. a receipt cancels on the right author and a NON-stale generation (B2):
-//        wrong actor → no cancel (falls back); predecessor gen → no cancel
-//        (a retired leg's late frame); successor gen → DOES cancel (a takeover
-//        leg legitimately performed the inherited say). gen is matched `>=`. ──
+// ── 2b. a receipt cancels on the right author and gen >= (wrong actor or a retired leg's late frame: no cancel;
+//        a takeover leg's successor gen: cancels) ──
 {
-  // hold three says while gen 7 is live, then fire receipts that differ on one
-  // composite member each.
+  // hold three says while gen 7 is live, then fire receipts that differ on one composite member each
   spoken.length = 0;
   await say("norrin", "wrong-actor receipt");
   const sWrongActor = seq;
@@ -169,15 +155,10 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
     spoken.length === 1, JSON.stringify(spoken));
 }
 
-// ── 7. B2 (re-review): `spoken` is DISPLAY metadata, never performance truth.
-//    #100's typed say door exposes {spoken,utt,t0} as author-controlled fields,
-//    so an agent can send spoken:true — and before this recut that skipped the
-//    receipt path entirely: a live leg that never attested left SILENCE, the
-//    exact presence-derived hole #57 exists to remove. Three vectors, per the
-//    review: no leg / live leg + no receipt / live leg + matching receipt.
+// ── 7. `spoken` is DISPLAY metadata, never performance truth: an author-sent spoken:true must not skip the receipt
+//    path (#57). No leg / live leg + no receipt / live leg + matching receipt.
 {
-  // (a) spoken:true with NO voice leg → speaks immediately (the flag alone
-  //     must not suppress local speech)
+  // (a) spoken:true with NO voice leg → speaks immediately (the flag alone must not suppress local speech)
   spoken.length = 0;
   await say("miri", "spoken flag, no leg", { spoken: true, utt: 1, t0: Date.now() });
   check("spoken:true with no voice leg speaks IMMEDIATELY (flag is not capability)",
@@ -204,12 +185,8 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
   bus.emit("surface-transition", { actor: "miri", surface: "voice", gen: null, retired: 21 });
 }
 
-// ── 8. receipt SUCCESS still performs visually (review finding 9) ───────────
-//    A cancel-only receipt made the system look broken exactly when it worked:
-//    fallback drew bubble+mouth, success drew nothing. A matching receipt
-//    re-emits 'speech' with performed:true — display consumers draw, TTS
-//    consumers skip. Not for spoken:true says: that field owns display/caption
-//    continuation, so a caption-paced bubble is never drawn twice.
+// ── 8. receipt SUCCESS still performs visually: a matching receipt re-emits 'speech' with performed:true (display
+//    draws, TTS skips); not for spoken:true says, whose caption-paced bubble must not be drawn twice
 {
   bus.emit("surface-transition", { actor: "vex", surface: "voice", gen: 31, retired: null });
   spoken.length = 0;
@@ -232,7 +209,7 @@ const say = (actor: string, text: string, extra: Record<string, unknown> = {}) =
   bus.emit("surface-transition", { actor: "vex", surface: "voice", gen: null, retired: 31 });
 }
 
-// ── 9 (house I240, #260): a voice-RELAY leg (the SFU's surface, server.ts / voicesfubridge.js) holds the same way ──
+// ── 9: a voice-RELAY leg (the SFU's surface, server.ts / voicesfubridge.js) holds the same way ──
 {
   bus.emit("surface-transition", { actor: "rell", surface: "voice-relay", gen: 41, retired: null });
   spoken.length = 0;

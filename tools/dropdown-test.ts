@@ -1,22 +1,15 @@
-// dropdown — the house <select> skin, run headless against the REAL module.
-//
-//   bun tools/dropdown-test.ts
-//
-// The contract dropdown.js makes with every panel: the <select> stays the VALUE STORE (panels keep reading
-// sel.value and listening for 'change' exactly as before), the button is only a skin. So the assertions are
-// about that seam — a row click writes the select and dispatches ONE bubbling 'change'; arrow keys on the
-// closed button step the value and dispatch too; Esc / an outside pointerdown / a second click close the pop;
-// `sel.value = x` from code repaints the label synchronously (the value setter is wrapped); options rebuilt
-// by a panel repaint the label on the next tick (the MutationObserver); data-native opts out; initDropdowns
-// skins selects that land later inside chrome, and only inside chrome.
+// dropdown: the house <select> skin, headless against the REAL module (`bun tools/dropdown-test.ts`).
+// The <select> stays the VALUE STORE (panels keep reading sel.value and 'change'); the button is only a skin. A row click
+// writes the select and dispatches ONE bubbling 'change'; arrow keys on the closed button step and dispatch too; Esc /
+// an outside pointerdown / a second click close the pop; `sel.value = x` repaints the label synchronously (the setter is
+// wrapped); rebuilt options repaint on the next tick (MutationObserver); data-native opts out; initDropdowns skins
+// selects that land later inside chrome, and only there.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
-// happy-dom caches `selectedOptions` and does not refresh it after `sel.value = x` followed by
-// `sel.selectedIndex = n` (options[n].selected reads true, selectedOptions[0] still names the old one).
-// The module's label() reads selectedOptions[0], which is right in a browser — derive it from `options`
-// here so the harness can see what the product paints. A shim of the DOM, never of the module.
+// happy-dom doesn't refresh `selectedOptions` after `sel.value = x; sel.selectedIndex = n`, so label() is fed from
+// `options`: a DOM shim, never a module shim
 Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
   get() { return [...this.options].filter((o: HTMLOptionElement) => o.selected); }, configurable: true,
 });
@@ -29,8 +22,8 @@ const check = (name: string, ok: boolean, detail = "") => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
-// the observer delivers on happy-dom's microtask queue, which under bun does not always drain before a
-// setTimeout(0) — so positive observer assertions wait for the DELIVERY (bounded), not for a guessed tick
+// the observer delivers on happy-dom's microtask queue, which under bun may not drain before setTimeout(0): positive
+// observer assertions wait for the DELIVERY (bounded), not a guessed tick
 const settle = async (pred: () => boolean, ms = 250) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await tick(); return pred(); };
 
 document.body.innerHTML = `<div class="frame" id="host">
@@ -44,7 +37,7 @@ const rows = () => [...(pop()?.querySelectorAll(".dd-opt") ?? [])] as HTMLButton
 const rowFor = (text: string) => rows().find((r) => r.textContent === text)!;
 let changes = 0;
 sel.addEventListener("change", () => changes++);
-// panels listen on their FRAME, not the select — the event must bubble
+// panels listen on their FRAME, not the select: the event must bubble
 let bubbled = 0;
 document.getElementById("host")!.addEventListener("change", () => bubbled++);
 
@@ -116,9 +109,8 @@ btn().click();
 console.log("DROPDOWN — MutationObserver repaint");
 sel.innerHTML = `<option value="x">ex</option><option value="y" selected>why</option>`;
 check("a rebuilt option list repaints the label once the observer delivers", await settle(() => label() === "why"), String(label()));
-// (the observer also mirrors sel.disabled onto the button; the house harness's happy-dom 20.11.1 reports NO
-// attribute records on a <select> — only childList — so that mirror is proven through the synchronous
-// repaint below rather than asserted on a record the harness cannot deliver)
+// (the observer also mirrors sel.disabled onto the button; happy-dom 20.11.1 reports NO attribute records on a <select>,
+// only childList, so that mirror is proven through the synchronous repaint below)
 sel.disabled = true; sel.value = "y";
 check("sel.disabled is mirrored onto the button at the next repaint", btn().disabled);
 sel.disabled = false; sel.value = "y";

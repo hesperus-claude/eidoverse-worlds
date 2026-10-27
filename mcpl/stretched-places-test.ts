@@ -12,6 +12,7 @@
  * body stands in first, read the scale per axis too.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { toWorld, toLocal, inRegion, destinationOf } from "./places.ts";
 
 let failures = 0;
@@ -21,7 +22,7 @@ const check = (label: string, ok: boolean, detail?: string) => {
 };
 const same = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
 
-const ag: any = new WorldAgent({ name: "walker", world: "w" });
+const ag: any = new WorldAgent({ name: "walker", world: "w", url: noWorldUrl() });
 ag.entities.set("shed", { id: "shed", model: "zz/shed.glb", kind: "thing", pos: [10, 0, 0], yaw: 0, actor: "x", scale: 1, scale3: [2, 1, 4] });
 const h = ag.placeHolder(ag.entities.get("shed"));
 check("a stretched thing's places are framed at its per-axis scale", h && same(toWorld(h, [1, 0, 1]), [12, 0, 4]), JSON.stringify(h && toWorld(h, [1, 0, 1])));
@@ -65,7 +66,7 @@ console.log("which room a body is in first");
   // The rooms a body stands in come smallest first, each by its size in the world: its own size times the scale its
   // places are framed at. Each row is two rooms around the origin whose own sizes would order them the other way.
   const order = (a: { scale: number; scale3?: number[]; box: number }, b: { scale: number; scale3?: number[]; box: number }) => {
-    const ag2: any = new WorldAgent({ name: "walker", world: "w" });
+    const ag2: any = new WorldAgent({ name: "walker", world: "w", url: noWorldUrl() });
     const room = (id: string, x: { scale: number; scale3?: number[]; box: number }) => ag2.entities.set(id, {
       id, model: `zz/${id}.glb`, kind: "thing", pos: [0, 0, 0], yaw: 0, actor: "x", scale: x.scale, ...(x.scale3 ? { scale3: x.scale3 } : {}),
       places: { [id]: { min: [-x.box / 2, 0, -x.box / 2], max: [x.box / 2, x.box, x.box / 2] } } });

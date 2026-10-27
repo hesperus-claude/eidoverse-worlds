@@ -28,10 +28,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { readLog } from "../../shared/protocol/fold.js";
+import { suite } from "./suite.ts";
 
 const root = scratch("agentshove");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 700)}` : ""}`); } };
+const S = suite("agentshove-check", { cap: 700 }), { ok } = S;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const T = (r) => r?.content?.[0]?.text ?? "";
 
@@ -63,7 +63,7 @@ let port = 9640; for (; port < 9740; port++) { try { const s = Bun.listen({ host
 const logf = path.join(root, "srv.log");
 const proc = Bun.spawn(["bun", "server/server.ts"], { cwd: ENGINE, env: env({ PORT: String(port) }), stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });
 let ag = null, ann = null;
-const done = (code) => { try { ag?.close(); } catch {} try { ann?.close(); } catch {} try { proc.kill(); } catch {} console.log(`agentshove: ${pass} pass, ${fail} fail`); process.exit(code); };
+const done = (code) => { try { ag?.close(); } catch {} try { ann?.close(); } catch {} try { proc.kill(); } catch {} S.done("", code !== 0); };
 process.on("exit", () => { try { proc.kill(); } catch {} });
 try {
   let up = false; for (let i = 0; i < 80 && !up; i++) { await sleep(150); try { up = (await fetch(`http://127.0.0.1:${port}/version`, { signal: AbortSignal.timeout(800) })).ok; } catch {} }
@@ -292,4 +292,4 @@ try {
     ok(before === false, "(AS14 setup) a crate found solid stays solid while nothing about it changes", { before });
     ok(after === true, "AS14 the same crate rescaled in place (its centre unmoved) is judged afresh: walked into again", { after }); }
 } catch (e) { ok(false, "threw", String(e?.stack ?? e).slice(0, 600)); }
-done(fail ? 1 : 0);
+done(S.fail ? 1 : 0);

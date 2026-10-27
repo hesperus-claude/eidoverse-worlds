@@ -1,24 +1,11 @@
-// shove — walking into a loose thing pushes it (R's queue: "body shove"). The walker's side: one body (mine, never a remote's;
-// an agent's process runs its own) finds the loose things its walking capsule is against and says which to punt, and how
-// hard. The punt itself is the authority's (punt {id, v, contact: true}: shoveGate in authority.js, its limits SHOVE in
-// physconst.js); nothing here writes anything.
-//
-// Contact: the thing's ORIENTED box (its physics.shape, in the world: what the authority measures to through obbs()) within
-// the body's radius + `slack` of the feet, the thing neither under the feet nor over the head (its axis-aligned box). The
-// push: the body's WALKING INTENT (speed along its heading: what the keys or walk_to ask for), not its motion, which the
-// collider has already stopped at the thing's face; only the part along the contact normal counts (and only when the walk
-// heads into it, within 60°: brushing a corner on the way past is no push). How hard is momentum (R 10-12, "avatars need a
-// presumptive mass, like presumptive reach"): a body of BODY_MASS walking at u gives a thing of mass m an elastic
-// 2·BODY_MASS/(BODY_MASS + m) · u, under the flat ceiling SHOVE.maxV, and keeps (BODY_MASS − m)/(BODY_MASS + m) · u itself
-// (a heavy crate stops you, a ball barely does). Lifted a little so it slides rather than grinds. Standing still sends
-// nothing. Never a shove that would move a body: not a thing someone sits on or stands on (or anything carrying it), not one
-// whose slide would run into someone.
-//
-// One punt per contact: a thing is shoved when contact begins, and again only after it has moved (`moved`) and `againMs`
-// has passed, so walking on behind a crate keeps pushing it while a wall of crates that won't budge hears one punt each.
-// Across every thing, at most `perSec` a second and `per10s` in ten (a third of the authority's act rate, RATE.n, so
-// walking about a warehouse never rate-limits a person's own edits). A refusal that stands (rights, a lock, a hand) quiets that thing for
-// `quietMs`; one that passes by itself (it was already moving, the track lagged, the rate) only for `againMs`.
+// shove — walking into a loose thing pushes it. The walker's side: one body (mine, never a remote's) finds the loose things
+// its capsule is against and says which to punt and how hard; the punt is the authority's (shoveGate, SHOVE in physconst.js).
+// Nothing here writes anything.
+// Contact: the thing's ORIENTED box within radius + `slack` of the feet, neither underfoot nor overhead. The push is the
+// WALKING INTENT along the contact normal (within 60°), passed on elastically by mass (BODY_MASS), capped at SHOVE.maxV.
+// Never a shove that would move a body (a thing someone sits or stands on, or a slide into someone).
+// One punt per contact, again only after it moved and `againMs` passed; at most `perSec`/`per10s` overall, well under
+// the authority's act rate. A standing refusal quiets that thing for `quietMs`, a passing one for `againMs`.
 import { SHOVE, BODY_MASS } from "./protocol/physconst.js";
 import { worldPose, offChain } from "./protocol/simlayer.js";
 import { isBoxShape, shapeVolume } from "./protocol/shapes.js";
@@ -33,15 +20,15 @@ const locked = (c) => { const v = c?.lock; return v !== undefined && v !== null 
 const up = (st, id) => st.entities[id]?.c.parent?.to;
 const G = 9.81;
 
-/** The thing and everything riding it (its descendants), by parent links. */
+/** Its descendants, by parent links. */
 export function familyOf(st, id) {
   const fam = new Set([id]); let grew = true;
   while (grew) { grew = false; for (const k in st.entities) if (!fam.has(k) && fam.has(up(st, k))) { fam.add(k); grew = true; } }
   return fam;
 }
 
-/** May this body shove it at all? The punt's own gates, read from the fold: dynamic, switched on, nothing locked over it,
- *  in nobody's hand (nor riding on what is), and physics.who at or under `rank` (null: not known, the authority decides). */
+/** The punt's own gates, read from the fold: dynamic, switched on, nothing locked over it, in nobody's hand (nor carried by
+ *  what is), and physics.who at or under `rank` (null: not known, the authority decides). */
 export function shoveable(st, id, { rank = null, holds = {} } = {}) {
   const e = st?.entities?.[id]; if (e?.c.physics?.kind !== "dynamic" || !isBoxShape(e.c.physics.shape) || offChain(st, id)) return false;
   for (let k = id, n = 0; k && n < 33; k = up(st, k), n++) { if (locked(st.entities[k]?.c) || holds[k]) return false; }
@@ -52,7 +39,7 @@ export function shoveable(st, id, { rank = null, holds = {} } = {}) {
 
 const qrot = ([x, y, z, w], v) => { const tx = 2 * (y * v[2] - z * v[1]), ty = 2 * (z * v[0] - x * v[2]), tz = 2 * (x * v[1] - y * v[0]);
   return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]; };
-/** Its oriented box in the world, from its physics.shape: {c, ax: [3 unit axes], h: [3 half sizes]} (authority/math.js obbs' shape). */
+/** From its physics.shape: {c, ax: [3 unit axes], h: [3 half sizes]} (authority/math.js obbs' shape). */
 export function obbOf(st, id) {
   const sh = st?.entities?.[id]?.c.physics?.shape; if (!isBoxShape(sh)) return null;
   const t = worldPose(st, id); if (!t) return null;
@@ -64,11 +51,11 @@ export function aabbOfObb(o) {
   const e = [0, 1, 2].map((i) => o.ax.reduce((a, axv, j) => a + Math.abs(axv[i]) * o.h[j], 0));
   return { min: o.c.map((v, i) => v - e[i]), max: o.c.map((v, i) => v + e[i]) };
 }
-/** Its footprint in the world: the axis-aligned box around its physics.shape, as it stands in the fold. */
+/** The axis-aligned box around its physics.shape, as it stands in the fold. */
 export function footprint(st, id) { const o = obbOf(st, id); return o ? aabbOfObb(o) : null; }
 
-/** How far a body's feet are from a set of oriented boxes along the ground, measured at heights up the body (a tilted box
- *  is nearest somewhere up it): {d, n: [x, z] from the feet toward it} (n null when the feet are inside). */
+/** Measured at heights up the body (a tilted box is nearest somewhere up it): {d, n: [x, z] from the feet toward it}
+ *  (n null when the feet are inside). */
 export function reachTo(boxes, feet, tall = SHOVE.above) {
   let best = null;
   for (const o of boxes) for (const k of [0.15, 0.5, 1, 1.5]) { if (k > tall) continue;
@@ -80,8 +67,7 @@ export function reachTo(boxes, feet, tall = SHOVE.above) {
   return best;
 }
 
-/** Is a body (feet [x, y, z], radius r, height tall) against this thing ({obb, box})? {d, n: [x, z] the way a push sends
- *  it} or null. Under the feet or over the head is no contact. */
+/** Feet [x, y, z], radius r, height tall: {d, n: [x, z] the way a push sends it} or null. Under the feet or over the head is no contact. */
 export function contactOf(feet, r, tall, thing, slack = SHOVE_FEEL.slack) {
   const { obb, box } = thing;
   if (box.max[1] <= feet[1] + SHOVE.beneath || box.min[1] >= feet[1] + Math.min(tall, SHOVE.above)) return null;
@@ -90,48 +76,43 @@ export function contactOf(feet, r, tall, thing, slack = SHOVE_FEEL.slack) {
   return { d: m.d, n };
 }
 
-/** Its mass (kg): physics.mass, else density (its own, its surface's, else water's) × its shape's volume at its scale. */
+/** kg: physics.mass, else density (its own, its surface's, else water's) × its shape's volume at its scale. */
 export function massOf(st, id) {
   const e = st?.entities?.[id]; const ph = e?.c.physics; if (!ph) return null;
   if (Number.isFinite(ph.mass) && ph.mass > 0) return ph.mass;
   const v = shapeVolume(ph.shape); if (!Number.isFinite(v)) return null;
-  const sname = typeof ph.surface === "string" ? ph.surface : ph.material;   // physics.surface (reserved; `material` before 10-16): carried values only
+  const sname = typeof ph.surface === "string" ? ph.surface : ph.material;   // physics.surface (reserved; once `material`): carried values only
   const mat = typeof sname === "string" ? st.entities["@world"]?.c?.[sname.startsWith("surface:") ? sname : `surface:${sname}`] : null;
   const rho = Number.isFinite(ph.density) && ph.density > 0 ? ph.density : Number.isFinite(mat?.density) && mat.density > 0 ? mat.density : 1000;
   const sc = worldPose(st, id)?.scale ?? [1, 1, 1];
   return Math.max(1e-6, rho * v * Math.abs(sc[0] * sc[1] * sc[2]));
 }
-/** The fastest a shove may send a thing of mass m along the ground: a run's push (SHOVE.run) passed on elastically, under
- *  the flat ceiling. What the authority admits; what a walker sends never exceeds it. */
+/** A run's push (SHOVE.run) passed on elastically, under the flat ceiling: what the authority admits; a walker never exceeds it. */
 export const shoveCap = (m) => Math.min(SHOVE.maxV, SHOVE.run * 2 * BODY_MASS / (BODY_MASS + (Number.isFinite(m) ? m : 0)));
-/** What the walker keeps of its speed after giving a thing of mass m its push (0: a heavy thing stops you). */
+/** 0: a heavy thing stops you. */
 export const keptOf = (m) => Math.max(0, (BODY_MASS - m) / (BODY_MASS + m));
 
-/** The shove's velocity for a body walking at vel [x, z] against a contact's normal into a thing of mass m, or null when it
- *  isn't walking into it. */
+/** For a body walking at vel [x, z] against a contact's normal, or null when it isn't walking into it. */
 export function shoveV(vel, n, m, F = SHOVE_FEEL) {
   const along = vel[0] * n[0] + vel[1] * n[1]; if (!(along >= F.minSpeed) || along < F.headOn * Math.hypot(vel[0], vel[1])) return null;
   const s = Math.min(shoveCap(m), Math.min(along, SHOVE.run) * 2 * BODY_MASS / (BODY_MASS + m)), lift = Math.min(F.lift, SHOVE.lift);
   return [noNeg0(r3(n[0] * s)), noNeg0(r3(s * lift)), noNeg0(r3(n[1] * s))];
 }
 
-/** How far a shove slides a thing of mass m when a body walking at u m/s walks straight into it: shoveV's push (head-on),
- *  slid out under the slide's friction (SHOVE.mu, eidosim's own: what sweptCovers reads), the lift left out (it only carries
- *  the thing a little further). */
+/** shoveV's head-on push slid out under SHOVE.mu (eidosim's own: what sweptCovers reads), the lift left out (it only carries
+ *  it a little further). */
 export function shoveSlide(m, u) {
   if (!Number.isFinite(m) || !(m > 0) || !Number.isFinite(u)) return 0;
   const s = Math.min(shoveCap(m), Math.min(u, SHOVE.run) * 2 * BODY_MASS / (BODY_MASS + m));
   return s * s / (2 * SHOVE.mu * G);
 }
-/** Will a body walking at u move it out of the way? Its shove must slide it at least as far as the shover needs to see a
- *  thing move before it shoves it again (F.moved): short of that, the walker shoves it once and stands against it — to a
- *  walk it is a wall. Unknown mass: no. (BODY_MASS 70, SHOVE.mu 0.6, moved 0.05 m: a walk at 1.55 m/s moves up to ~213 kg,
- *  a run at 4 m/s up to ~660 kg.) */
+/** Its shove must slide it at least F.moved, or the walker shoves it once and stands against it: to a walk it is a wall.
+ *  Unknown mass: no. (BODY_MASS 70, SHOVE.mu 0.6, moved 0.05 m: a walk at 1.55 m/s moves up to ~213 kg, a run at 4 m/s ~660 kg.) */
 export const budges = (m, u, F = SHOVE_FEEL) => shoveSlide(m, u) >= F.moved;
 
 /** Are a body's feet on top of this box (standing on it)? */
 export const feetOn = (box, p) => p[0] > box.min[0] - 0.1 && p[0] < box.max[0] + 0.1 && p[2] > box.min[2] - 0.1 && p[2] < box.max[2] + 0.1 && p[1] >= box.max[1] - 0.15 && p[1] <= box.max[1] + 0.3;
-/** Would this box, sliding along v (horizontal) until friction stops it, run into a body standing at p (radius r)? */
+/** Sliding along v (horizontal) until friction stops it, would it run into a body standing at p (radius r)? */
 export function sweptCovers(box, v, p, r = 0.32) {
   const vh = Math.hypot(v[0], v[2]); if (vh < 1e-6) return false;
   if (p[1] >= box.max[1] - 0.15 || p[1] + 1.9 <= box.min[1]) return false;   // on it (feetOn's business) or under it
@@ -141,8 +122,8 @@ export function sweptCovers(box, v, p, r = 0.32) {
     if (p[0] > box.min[0] + dx * k - r && p[0] < box.max[0] + dx * k + r && p[2] > box.min[2] + dz * k - r && p[2] < box.max[2] + dz * k + r) return true; }
   return false;
 }
-/** Who a shove of `id` at v would move: a body seated on it (or on anything riding it: `mounted`, the seats' things), one
- *  standing on it, or one in its slide. {why: 'seat' | 'standing' | 'in-the-way'} or null. `bodies`: the other bodies' feet. */
+/** A body seated on it (or on anything carried by it: `mounted`), one standing on it, or one in its slide.
+ *  {why: 'seat' | 'standing' | 'in-the-way'} or null. `bodies`: the other bodies' feet. */
 export function occupied(st, id, v, { mounted = null, bodies = [] } = {}) {
   const fam = familyOf(st, id);
   if (mounted) for (const k of fam) if (mounted.has(k)) return { why: "seat" };
@@ -154,8 +135,8 @@ export function occupied(st, id, v, { mounted = null, bodies = [] } = {}) {
   return null;
 }
 
-/** A smoothed horizontal velocity from successive positions (an exponential average over tau seconds): VR room-scale walking
- *  shoves by the body's motion only above SHOVE_FEEL.vrSpeed, so leaning over a table or tracking jitter never does. */
+/** An exponential average over tau seconds: VR room-scale walking shoves only above SHOVE_FEEL.vrSpeed, so leaning over a
+ *  table or tracking jitter never does. */
 export function smoother(tau = SHOVE_FEEL.vrTau) {
   let last = null, v = [0, 0];
   return { step(p, t) { if (last && t > last.t) { const dt = (t - last.t) / 1000, k = 1 - Math.exp(-dt / tau);
@@ -163,8 +144,8 @@ export function smoother(tau = SHOVE_FEEL.vrTau) {
     last = { p: [p[0], p[1], p[2]], t }; return v; }, get: () => v, reset() { last = null; v = [0, 0]; } };
 }
 
-/** One walker's shoves. step() each frame (or tick) with where the body is and what it wants; it returns the punts to send
- *  now: [{id, v, kept}] (kept: the speed the walker keeps after giving it). refused(id) after a refusal quiets that thing. */
+/** step() each frame (or tick) with where the body is and what it wants → punts to send now: [{id, v, kept}] (kept: the
+ *  walker's speed after). refused(id) after a refusal quiets that thing. */
 export function createShover(opts = {}) {
   const F = { ...SHOVE_FEEL, ...opts };
   const touched = new Map();   // id -> {at: [x, z] its footprint's centre when shoved, t}
@@ -180,7 +161,7 @@ export function createShover(opts = {}) {
         const e = st.entities[id]; const ph = e?.c.physics;
         if (ph?.kind !== "dynamic" || !isBoxShape(ph.shape) || skip(id)) continue;
         // broad phase: a top-level thing's origin farther than its own size plus the body's reach is no contact
-        // (riding something, its origin in the world: a pose, not the oriented box and the reach)
+        // (a carried thing's origin is a pose, not the oriented box and the reach)
         const t = e.c.parent ? worldPose(st, id) : e.c.transform; if (Array.isArray(t?.pos)) { const sc = t.scale ?? [1, 1, 1];
           let ext = 0; for (let i = 0; i < 3; i++) ext = Math.max(ext, Math.max(Math.abs(ph.shape[0][i]), Math.abs(ph.shape[1][i])) * Math.abs(sc[i] ?? 1));
           if (Math.hypot(t.pos[0] - feet[0], t.pos[2] - feet[2]) > ext * 1.75 + r + F.slack) { touched.delete(id); continue; } }

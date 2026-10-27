@@ -1,38 +1,25 @@
-// shared/protocol/names.js — the ONE mapping from an engine name (an actor, entity id, role key, component name) to the
-// §2.3 grammar, used by both the translator (old logs) and the live authority (server: who is asking). If the two ever
-// spelled one person differently, nobody in a translated world would match their own role (research 35, slice-2 #3).
+// shared/protocol/names.js — the ONE mapping from an engine name (actor, entity id, role key, component name) to the §2.3
+// grammar, shared by translator and live authority: spelled two ways, nobody in a translated world would match their own role.
 //
 //   enc(s)     an identity / entity id / key: [a-z0-9-]{1,64}. A name the grammar already accepts, and that doesn't
 //              start with an escape prefix, is kept as it is. Anything else becomes "x--" + hex(utf8) or, when that
 //              would pass 64 characters, "h--" + the first 61 hex of its sha256 (not invertible: decode says so).
-//              An id already in that hashed form is kept as it is: it's what readers hold and send back.
+//              An id already hashed is kept: it's what readers hold and send back.
 //   encName(s) a component name: [a-z][a-z0-9-]* (+ domain/version/key per §2.3). A name the grammar accepts is
 //              kept; anything else is escaped the same way (x--/h--, which start with a letter), except the hashed form.
 //   dec(s)     the inverse of enc for x-- names, but for a lone surrogate (below), which comes back as U+FFFD; null for
 //              an h-- name (a hash can't be read back).
 //
-// Injective but for two cases: a kept name never starts with x--, and starts with h-- only in the hashed form; an escaped
-// one always starts with one or the other, and x-- names are distinct hex; h-- names collide only if sha256 does. The
-// cases: a literal name in the hashed form is kept, so it encodes to the same key as the name whose sha256 it prefixes
-// (HASHED, below); and a lone surrogate (half of a UTF-16 pair, with no other half) is written in UTF-8 as U+FFFD's
-// bytes, so names that differ only in which lone surrogate they hold escape alike. Import (translate-v1.js) maps an old
-// log's names with encRaw and encNameRaw (below), which escape a name in the hashed form like any other, so the first
-// case can't arise there. Nor can the second: a log holding a lone surrogate anywhere doesn't import at all, since the
-// translated log would carry it in an act's request, which the strict reader refuses (not I-JSON), so nothing is
-// written.
-//
-// The engine fix (research 35, "a real enc collision"): the lab's encName escaped a name like "0abc" (valid as an
-// identity, not as a component, which must start with a letter) by prefixing "n", giving "n0abc" — which is also
-// what a genuine component called "n0abc" keeps. Two different old names, one name. Here a component name the
-// grammar refuses always takes the x-- form, so "0abc" → "x--30616263" and "n0abc" stays "n0abc". The lab still
-// has the old rule (noted for it in research 37; the lab is not edited from here).
+// Injective but for two cases, neither reachable on import (encRaw/encNameRaw escape the hashed form; a lone surrogate
+// fails the strict reader): a literal name in the hashed form (HASHED), and names differing only in a lone surrogate
+// (both written as U+FFFD's bytes). A refused component name always takes the x-- form, never a letter prefix, so
+// "0abc" and "n0abc" can't collide. See docs/research/name-escaping.md.
 import { sha256, utf8Hex } from "./hash.js";
 import { isComponent } from "./fold.js";
 
 const ESC = /^[xh]--/;
-// a hashed id is the one spelling the view can't decode (dec gives null), so readers hold it and send it back as it is:
-// enc keeps it. Anyone can compute a name's sha256 and write that spelling as a literal name, which then encodes to the
-// same key as the name it was computed from (what import does with both is above)
+// a hashed id is the one spelling the view can't decode, so readers send it back as is and enc keeps it. Anyone can write a
+// name's sha256 spelling as a literal name, which then encodes to the same key (what import does with both is above)
 const HASHED = /^h--[0-9a-f]{61}$/;
 const escape = (s) => { const hex = utf8Hex(s); return hex.length + 3 <= 64 ? `x--${hex}` : `h--${sha256(s).slice(0, 61)}`; };
 
@@ -46,9 +33,8 @@ export function encName(s) {
   s = String(s);
   return HASHED.test(s) || (isComponent(s) && !ESC.test(s)) ? s : escape(s);
 }
-/** enc and encName for a name that was never an id: an old log's (the translator's, tools/protocol/import-v1). Old logs
- *  never held a hashed id, so a name already in that form is escaped like any other, never kept: a raw name equal to a long
- *  name's hashed form would otherwise be that long name's id (house 6340433633).
+/** For a name that was never an id (an old log's, for the translator): one already in the hashed form is escaped, never
+ *  kept, or it would become that long name's id.
  *  @param {unknown} s @returns {string} */
 export function encRaw(s) {
   s = String(s);
@@ -59,13 +45,9 @@ export function encNameRaw(s) {
   s = String(s);
   return isComponent(s) && !ESC.test(s) ? s : escape(s);
 }
-/** The local tag of the component that moves one node of a thing's model: motion:<partSlot(node)> {node, …}. A node's name
- *  comes from a model file and is DATA (any characters: tripo_part_3, "Seat Plank", 座席); the key needs a §2.3 tag
- *  ([a-z0-9-]{1,64}). A name that already is one, and isn't an escape, is its own tag ("seat", "arm-2"); any other is
- *  lowercased, its runs of other characters become one dash, cut to 48, and given 8 hex of its sha256 so two names that
- *  sanitize alike ("Tripo_Part", "tripo-part") still differ: tripo_part_3 → tripo-part-3-<8 hex>. Pure: every server, the
- *  maintenance command's repair, the translator and the editors write the same key for the same node. Readers never parse it: they read
- *  the value's `node`.
+/** motion:<partSlot(node)> {node, …}. A node's name is DATA: a valid §2.3 tag that isn't an escape is its own tag; any other
+ *  is lowercased, dashed, cut to 48 and given 8 hex of its sha256 ("Tripo_Part" and "tripo-part" still differ). Readers never
+ *  parse it, they read `node`.
  *  @param {unknown} node @returns {string} */
 export function partSlot(node) {
   const s = String(node);
@@ -73,10 +55,8 @@ export function partSlot(node) {
   const base = s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48).replace(/-+$/, "");
   return `${base || "node"}-${sha256(s).slice(0, 8)}`;
 }
-// The node a motion moves, by its key and value (review r7, R 10-16: a node's name is DATA): a keyed motion's `node`
-// (motion:<slot> {node}); a keyed one stored before the node was data, its key's tag (the maintenance command's
-// repair writes that down); a whole motion naming `part` (the first spelling, before that repair), that part. Null: the whole
-// thing. The one reading every reader shares (renderer, seat signals, editor, agent).
+// the node a motion moves: a keyed motion's `node`, else its key's tag (older), else a whole motion's `part` (oldest);
+// null = the whole thing. The one reading every reader shares.
 /** @param {string} key @param {any} m @returns {string | null} */
 export function motionNode(key, m) {
   if (key === "motion") return m && typeof m.part === "string" && m.part ? m.part : null;
@@ -84,11 +64,8 @@ export function motionNode(key, m) {
   return m && typeof m.node === "string" && m.node ? m.node : key.slice(7);
 }
 
-// A motion's type (R 10-17 21:40: the back-and-forth along an axis is `oscillate`; it was bob before release). The old
-// spelling is READ for one release (a value an older log stored, a replica that folded it before the rename); the door
-// takes it and stores today's, and the maintenance command renames a stored one (shaperepair.js renameFields, rename-components).
-// The one reading every reader shares (renderer, seat signals, editor, agent): the old word is spelled here and nowhere
-// else in a reader (tools/protocol/vocab-check.ts).
+// a motion's type: the old spelling (OLD_MOTION_TYPES) is now `oscillate`, READ for one release (the door stores today's,
+// shaperepair.js renameFields renames stored ones). Spelled here only (tools/protocol/vocab-check.ts).
 export const OLD_MOTION_TYPES = Object.freeze({ bob: "oscillate" });
 /** @param {any} m a motion value @returns {any} its type in today's spelling (anything else as it is) */
 export function motionType(m) {
@@ -107,11 +84,9 @@ export function dec(s) {
   catch { return null; }
 }
 
-// ---- display names for actors (round-2 review R1) ----
-// A actor is an opaque id, u- + 20 base32 (server/directory.ts). Its display name lives in the authority's
-// directory, outside the log (§2.3), and reaches clients beside the entries ({names: {id: name}}). Every client in a
-// process feeds this one registry (ids are random, so worlds and doors can't collide), and every place that shows a
-// person reads it: actorName(id) is the name, else an old escaped identity read back, else the id itself.
+// ---- display names for actors ----
+// An actor is an opaque id (u- + 20 base32); its name lives in the directory, outside the log (§2.3).
+// actorName(id): the name, else an escaped identity read back, else the id.
 export const ACTOR_ID = /\bu-[a-z2-7]{20}\b/g;
 const NAMES = Object.create(null);
 export function learnNames(o) { if (o && typeof o === "object") for (const [k, n] of Object.entries(o)) if (typeof n === "string" && n) NAMES[k] = n; }

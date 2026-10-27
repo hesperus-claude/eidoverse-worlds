@@ -1,6 +1,5 @@
-// bun tools/xr-quad-colour-probe.mjs [--shots <dir>] — WHAT THE VR PANELS ACTUALLY PAINT (R's headset pass, 09-30:
-// "little black squares like checkboxes" in World › Sky, "all colours washed out", "Style colour hexes don't render").
-// The real client, ?xr=1, IWER session, the real domquad staging (its #xr-stage CSS) and the real vendored HTMLMesh.
+// bun tools/xr-quad-colour-probe.mjs [--shots <dir>]: WHAT THE VR PANELS ACTUALLY PAINT. The real client, ?xr=1, an
+// IWER session, the real domquad staging (#xr-stage CSS) and the real vendored HTMLMesh.
 //   raster  — each quad's canvas (texture.image) is dumped next to the desktop DOM shot of the same frame
 //   swatch  — Settings › Style: every <input type=color> paints ITS colour on the quad (not the hex as text)
 //   squares — World › Sky: no dark square is painted where the DOM shows none (hidden/unrendered form controls)
@@ -8,21 +7,16 @@
 //   panel   — the quad's panel background IS the --panel-rgb token (no lift), in the raster and on screen
 //   dimmed  — partial opacity (a disabled range, a dead row) lands as the browser composites it: group, multiplied
 //   vr-a    — Settings › Style › VR panel opacity: default 1 (opaque pass), lower → the quad's panel alpha, reset → 1
-// On Chromium the engine runs WebGPURenderer's WebGL 2 backend in the headset too (owner, 09-30), so this headless
-// path IS the user path for the output transform. What it can't show: the headset's own compositor/display.
+// Chromium runs WebGPURenderer's WebGL 2 backend in the headset too, so this headless path IS the user path for the
+// output transform; it can't show the headset's own compositor/display.
 // Run one headless browser at a time; clouds are forced off before boot here.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const { check, done } = checker();
 const shotDir = (() => { const i = process.argv.indexOf('--shots'); return i > 0 ? process.argv[i + 1] : null; })();
 const shotBase = Number(process.env.SHOT_BASE ?? 100);
 if (shotDir) mkdirSync(shotDir, { recursive: true });
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` +
-  IWER_RAW.replace(DEVICE_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ env: { SKIP_OPT_SWEEP: '1' } });
 const { browser, page } = await launchBrowser();
@@ -33,16 +27,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let shotN = shotBase;
 const save = (name, dataUrl) => { if (!shotDir || !dataUrl) return; const f = `${shotDir}/${shotN++}-${name}.png`; writeFileSync(f, Buffer.from(dataUrl.split(',')[1], 'base64')); console.log(`  · shot ${f}`); };
 
-await pg.addInitScript(() => { try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {} });   // THE SKY GUARD, before boot
-await pg.addInitScript(IWER);
+await iwerInit(pg, { cloud: 'off' });   // THE SKY GUARD, before boot
 await pg.addInitScript(() => {
   if (window.__probe) return;
-  const { XRDevice, metaQuest3 } = window.IWER ?? {};
-  if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
-  const device = new XRDevice(metaQuest3);
-  device.installRuntime({ forceInstall: true });
-  window.__iwerDevice = device;
-  try { delete window.IWER; } catch { window.IWER = undefined; }
+  if (!window.__iwerDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   window.__probe = { grants: 0 };
   const real = navigator.xr.requestSession.bind(navigator.xr);
   navigator.xr.requestSession = async (...a) => { const s = await real(...a); window.__probe.grants++; return s; };
@@ -62,11 +50,8 @@ try {
   const backend = await ev(async () => (await import('./lib/core.js')).backendName());
   console.log(`  · backend: ${backend}`);
 
-  // ── dimmed, a REAL control: Settings › Audio's mic-sensitivity row, which push-to-talk dims to .45 (audiopanel.js
-  // dimFloor) — the state made through the UI's own path (the PTT checkbox). Dimming is measured as the row's mean
-  // contrast against its own background, dimmed ÷ live: blending is linear in sRGB on both paths, so that ratio IS the
-  // effective alpha whatever each renderer draws for a slider. Desktop: Chrome's compositor (panel made opaque for the
-  // shot, so both sit on the same ground). VR: the quad's raster. ──
+  // ── dimmed, a REAL control: the mic-sensitivity row push-to-talk dims to .45 (audiopanel.js dimFloor), via the PTT
+  // checkbox; contrast dimmed ÷ live is the effective alpha (blending is linear in sRGB on both paths) ──
   const CONTRAST = `(d) => { const h = new Map(); for (let i = 0; i < d.length; i += 4) { const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]; h.set(k, (h.get(k) ?? 0) + 1); }
     let mk = 0, mn = -1; for (const [k, n] of h) if (n > mn) { mk = k; mn = n; } const bg = [mk >> 16, (mk >> 8) & 255, mk & 255];
     let sum = 0; for (let i = 0; i < d.length; i += 4) sum += Math.max(Math.abs(d[i] - bg[0]), Math.abs(d[i + 1] - bg[1]), Math.abs(d[i + 2] - bg[2]));
@@ -151,7 +136,7 @@ try {
   check('style: every swatch paints its own colour at its centre (±6)', colours.length > 0 && colours.every((c) => near(c.centre, hexRgb(c.value), 6)),
     JSON.stringify(colours.map((c) => `${c.value} → rgb(${c.centre?.slice(0, 3)})`)));
 
-  // ── panel: the quad's background is the token, no lift (R, 09-30: the 18% lift was ACES compensation, obsolete) ──
+  // ── panel: the quad's background is the token, no lift ──
   const panelTok = await ev(() => getComputedStyle(document.documentElement).getPropertyValue('--panel-rgb').trim().split(/\s+/).map(Number));
   for (const id of ['settings', 'world']) {
     const r = raster[id];
@@ -240,8 +225,8 @@ try {
   console.log(`  · sky paint census: ${squares.natives} skinned native selects; ${squares.hidden} elements the DOM doesn't render; painted for them: ${JSON.stringify(squares.hits.slice(0, 12))}${squares.hits.length > 12 ? ` (+${squares.hits.length - 12})` : ''}`);
   check('sky: the quad paints NOTHING for an element the DOM does not render', squares.hits.length === 0, `${squares.hits.length} paints`);
 
-  // ── caption: World › Mods' sub-area captions (.sec-cap) paint as headings on the quad, not as body text — the rule
-  // above (a one-sided border), the capitals and the brand tint all reach the raster (owner, 10-01) ──
+  // ── caption: World › Mods' sub-area captions (.sec-cap) paint as headings on the quad, not body text: the rule above
+  // (a one-sided border), the capitals and the brand tint all reach the raster ──
   const caps = await ev(async () => {
     document.getElementById('sec-mods-tab').click();
     await new Promise((r) => setTimeout(r, 400));
@@ -269,9 +254,8 @@ try {
     caps.caps.length > 0 && caps.caps.every((c) => c.first ? c.strokes.length === 0 : c.strokes.length === 1), JSON.stringify(caps.caps.map((c) => [c.text, c.first, c.strokes])));
 
   // ── dimmed: partial opacity, desktop (Chrome's own compositor) vs the quad's raster, pixel for pixel ──
-  // A: one element at .5 · B: a .5 GROUP whose child covers its own background (per-paint alpha would let the parent's
-  // amber bleed through the child) · C: .5 inside .5 = .25 · D: a dead row at .42 (the house `.mrow.dead`) · E: an
-  // inline <svg> icon with its own inline opacity .5 (the layer applies it; the serialised clone must not apply it again)
+  // A: one element at .5 · B: a .5 GROUP over a child covering its own background (no parent bleed) · C: .5 in .5 = .25
+  // · D: a dead row at .42 (`.mrow.dead`) · E: an inline <svg> at .5 (the serialised clone must not apply it again)
   const fx = await ev(() => {
     const d = document.createElement('div'); d.id = 'dimfx';
     d.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;width:310px;height:60px;background:rgb(5,20,20);display:flex;gap:10px;padding:10px;box-sizing:border-box';
@@ -291,7 +275,7 @@ try {
     const desk = pts.map(([px, py]) => Array.from(x.getImageData(Math.floor(px), Math.floor(py), 1, 1).data).slice(0, 3));
     const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
     const d = document.getElementById('dimfx'); const mesh = new HTMLMesh(d, { scale: 1 }); mesh.material.map.pause();
-    const svg = d.querySelector('svg'), t0 = performance.now();   // EIDO (2): the icon draws once its image has loaded
+    const svg = d.querySelector('svg'), t0 = performance.now();   // the icon draws once its image has loaded
     while (!svg.__eidoReady && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 50));
     mesh.material.map.resume(); mesh.material.map.pause();   // one raster with the icon in it
     const q = mesh.material.map.image.getContext('2d');
@@ -308,12 +292,8 @@ try {
   check('dimmed: every partial-opacity case lands on the quad as on the desktop (Δ ≤ 3 of 255)', dimRows.every((r) => r.d <= 3), dimRows.map((r) => `${r.k} Δ${r.d}`).join(', '));
 
   // ── exit, then #2: the quad material through the real renderer's output pass ──
-  // EXIT IS SLOW HERE, NOT HUNG (09-30, chased): session.end() resolves at once, then the desktop's first frames
-  // rebuild its pipelines (the TSL warning burst) on a headless main thread already at ~0.7 s/frame, and the page can
-  // stay unresponsive for more than ev()'s 30 s. Through the product's own leaveVR (scratch exit-diag, with and without
-  // PTT toggled in VR) the session ended ~10 s after the call either way, getUserMedia was never called, and the page
-  // answered every 5 s poll after. So: wait for the page to answer again (up to 3 min, measured and printed); if it
-  // never does, pause it over CDP and print the JS stack it is stuck in.
+  // EXIT IS SLOW HERE, NOT HUNG: the desktop's first frames rebuild its pipelines on a slow headless thread, so wait up
+  // to 3 min for the page to answer (printed); if it never does, pause it over CDP and print the stuck stack
   { const t0 = Date.now();
     await pg.evaluate(() => { window.__iwerDevice.activeSession?.end(); });
     let ok = false;

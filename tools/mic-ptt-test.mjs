@@ -1,35 +1,21 @@
-// Push-to-talk: EXECUTE the gate decision under both regimes. Not a source
-// grep — the stubs stop at the browser boundary (AudioContext, bus, net) and
-// the code under test is the shipped code, same doctrine as
-// micstate-exec-test.mjs and for the same reason: every prior mic defect in
-// this repo passed source-level checks and failed only when run.
-//
-// The observable is micgate's gateOpenness() — the gate's INTENT, the same
-// value the "am I being heard" indicator trusts — and gateGainNow(), the gain
-// node's value, which says the decision was written. If these tests and that
-// indicator ever disagree, believe neither and go listen.
-//
+// Push-to-talk: EXECUTE the gate decision under both regimes, not a source grep: stubs stop at the browser boundary
+// (AudioContext, bus, net) and the code under test is shipped code (as micstate-exec-test.mjs; mic defects pass source
+// checks and fail when run). Observables: micgate's gateOpenness() (the gate's INTENT, which the "am I being heard"
+// indicator trusts) and gateGainNow() (the decision was written). If these and the indicator disagree, go listen.
 // Run: bun tools/mic-ptt-test.mjs
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
-// The bus is the REAL one (base.js), deliberately: micstate subscribes to
-// 'audio:ptt' to drop a held key on mode exit, and voiceconsent emits it. A
-// noop stub would pass a broken subscription silently — the exact class of
-// blindness these files keep writing warnings about.
+// the REAL bus (base.js): micstate subscribes to 'audio:ptt' and voiceconsent emits it, so a noop stub hides a broken subscription
 let typed = 0;
 mock.module(fileURLToPath(new URL('../client/lib/net.js', import.meta.url)), () => ({
   sendTyping: () => { typed++; },
-  say: () => {}, sendRequest: async () => ({ ok: true }), net: {},   // for mictoggle.js's graph (the stuck-key rows run it)
+  say: () => {}, sendRequest: async () => ({ ok: true }), net: {},  // for mictoggle.js's graph (the stuck-key rows run it)
 }));
-// Full enough for the gate GRAPH to build (micstate-exec-test's stub lacks
-// createGain/createMediaStreamDestination, so its gate is always unavailable
-// — fine for its questions, blinding for these: an unbuilt gate reports
-// openness 0 forever and every assertion below would vacuously pass).
-// The analyser reports a level WE set, so the level side of the machine can
-// be driven: `room` is the RMS the "microphone" hears right now.
+// full enough for the gate GRAPH to build (an unbuilt gate reports 0 and every check passes vacuously); `room` is the
+// RMS the "microphone" hears now
 let room = 0;
 mock.module(fileURLToPath(new URL('../client/lib/audioctx.js', import.meta.url)), () => ({
   audioContext: () => ({
@@ -53,11 +39,11 @@ const stream = { getTracks: () => [track], getAudioTracks: () => [track] };
 let ok = 0, bad = 0;
 const t = (n, cond) => { cond ? ok++ : bad++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${n}`); };
 
-// the gate's intent AND what reached the gain (#260 house I246): the stub's setTargetAtTime lands at once, so a write that
-// never happened shows here even when the intent says it should have
+// the intent AND what reached the gain: the stub's setTargetAtTime lands at once, so a missing write shows even when
+// the intent says it happened
 const gate = (v) => mg.gateOpenness() === v && mg.gateGainNow() === v;
 
-ms.gateFor(stream);   // lane up, device live — the state every case below assumes
+ms.gateFor(stream);  // lane up, device live: the state every case below assumes
 
 // ── voice activation (the default): the key is NOT the gate ────────────────
 ms.setPttHeld(true);
@@ -65,9 +51,7 @@ t('VA mode: holding the key does not open the gate', gate(0));
 ms.setPttHeld(false);
 
 // ── PTT: the key IS the gate ───────────────────────────────────────────────
-// The announce assertions ride the FIRST press: the 🎙 shares its 1500ms
-// rate-limit with the onset watcher through _lastOnset, so any earlier press
-// in this file would eat the window and make "did it announce" untestable.
+// the announce checks ride the FIRST press: the 🎙 shares a 1500ms rate-limit with the onset watcher (_lastOnset)
 vc.setPttMode(true);
 t('PTT armed: gate starts closed', gate(0));
 typed = 0;
@@ -76,7 +60,7 @@ t('PTT: press opens', gate(1));
 t('press announces the 🎙 gesture', typed === 1);
 ms.setPttHeld(false);
 t('PTT: release closes', gate(0));
-ms.setPttHeld(true);   // re-press inside the 1500ms window
+ms.setPttHeld(true);  // re-press inside the 1500ms window
 t('rapid re-press does not spam the announce', typed === 1);
 ms.setPttHeld(false);
 
@@ -84,19 +68,15 @@ ms.setPttHeld(false);
 ms.toggleMute(true);
 ms.setPttHeld(true);
 t('PTT: mute is authoritative over a held key', gate(0));
-// The pill must not lie: held + muted is NOT speaking, whatever the key says.
+// the pill must not lie: held + muted is NOT speaking
 t('PTT: held+muted reports speaking:false (agrees with the gate at 0)', ms.micGateInfo().speaking === false);
 ms.toggleMute(false);
-ms.setPttHeld(false); ms.setPttHeld(true);   // re-press now that mute is off
+ms.setPttHeld(false); ms.setPttHeld(true);  // re-press now that mute is off
 t('PTT: unmuted re-press opens again', gate(1));
 t('PTT: unmuted+held reports speaking:true', ms.micGateInfo().speaking === true);
 
 // ── the transport's mic OFF outranks the key, exactly as mute does ─────────
-// setMicLive is how a transport reports device liveness (voicesfu.js sfuMic).
-// The lane is retained across OFF, so `_lane && !_muted` alone kept saying
-// "on": a held key drove the gain open over a device the transport had
-// disabled, and the pill said speaking:true (Mica, #148 round 3). Liveness is
-// the third leg of micOn() and the gate's authority must be the same answer.
+// setMicLive reports device liveness (voicesfu.js sfuMic); the lane survives OFF, so liveness is micOn()'s third leg
 ms.setMicLive(false);
 t('PTT: held → mic OFF closes the gate', gate(0));
 t('PTT: held → mic OFF reports speaking:false', ms.micGateInfo().speaking === false);
@@ -112,19 +92,12 @@ t('mode exit drops the held key', ms.pttHeld() === false);
 t('mode exit closes the gate', gate(0));
 
 // ── the level side keeps running under PTT but must drive NOTHING ──────────
-// The onset machine (micgate.js makeOnsetGate) is ONE machine for both
-// regimes: the meter and noise floor learn either way, and the level's own
-// verdict — open the gate, fire the 🎙 — is what a held key replaces. Speech
-// next to an un-pressed key is exactly what the person who chose PTT does
-// not want the room to get; if the level's 🎙 fired, the pill over their
-// head would claim the room heard something it did not.
-//
-// The machine ticks on a real 20ms interval with a ~1s learn-before-judge
-// window, so these cases wait it out rather than poking its internals.
+// one onset machine (micgate.js makeOnsetGate) for both regimes: under PTT the level must not open the gate or fire
+// the 🎙. It ticks at 20ms with ~1s learn-before-judge, so cases wait it out.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const speak = async () => { room = 0.5; await sleep(2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
-const hush  = async () => { room = 0;   await sleep(900);  };   // past the 700ms hang-time
-// Re-arm the lane so the machine restarts its learn window on a quiet room.
+const speak = async () => { room = 0.5; await sleep(2600); };  // settle + 60ms, and PAST the 1.5s 🎙 rate-limit of the last press, or a missing guard hides behind it
+const hush  = async () => { room = 0;   await sleep(900);  };  // past the 700ms hang-time
+// re-arm the lane so the machine relearns on a quiet room
 ms.gateRelease(); room = 0; ms.gateFor(stream);
 vc.setPttMode(true);
 typed = 0;
@@ -133,9 +106,7 @@ t('PTT: speech without the key does not open the gate', gate(0));
 t('PTT: speech without the key does not fire the 🎙', typed === 0);
 t('PTT: info().speaking agrees with the audio (closed)', ms.micGateInfo().speaking === false);
 await hush();
-// The same room, the same machine, the level regime: proves the level side
-// was alive under PTT (its floor was learning) and that the guard above is
-// the mode, not a dead meter.
+// the same room in the level regime: the level side was alive under PTT, so the guard above is the mode, not a dead meter
 vc.setPttMode(false);
 typed = 0;
 await speak();
@@ -146,12 +117,10 @@ await hush();
 t('VA: hush closes the gate after hang-time', gate(0));
 
 // ── the stuck-key class: a key-up and a window blur both drop the hold ─────
-// EXECUTED against the real mictoggle.js (#260 house I247: these were regexes over its source): its window listeners are
-// the shipped ones, driven with real events. Alt-tab with the key down is how every PTT implementation ships an open mic
-// that says it is closed.
+// against the real mictoggle.js listeners with real events: alt-tab with the key down must not leave an open mic that says it's closed
 import { readFileSync } from 'fs';
 const mt = readFileSync(new URL('../client/lib/mictoggle.js', import.meta.url), 'utf8');
-// ui.js (reached through mictoggle's graph) takes its HUD elements at load: the page's shell, empty
+// ui.js (via mictoggle's graph) takes its HUD elements at load: the page's shell, empty
 for (const id of ['hud', 'loading', 'toasts', 'hintbar', 'door', 'help', 'dock', 'touch']) { const d = document.createElement('div'); d.id = id; document.body.append(d); }
 await import('../client/lib/mictoggle.js');
 vc.setPttMode(true);
@@ -166,10 +135,7 @@ window.dispatchEvent(new Event('blur'));
 t('mictoggle: window blur releases the hold', heldAgain && ms.pttHeld() === false && gate(0));
 vc.setPttMode(false);
 t('mictoggle: badge gold is gated on the key under PTT', /!pttMode\(\) \|\| pttHeld\(\)/.test(mt));
-// A focused CHECKBOX is not typing. The panel's push-to-talk box keeps focus
-// after the click, so a guard that skips V for any INPUT eats the first press
-// of the mode you just enabled (found by ear 2026-09-10). The guard must be
-// type-aware: text-like inputs and editable regions only.
+// a focused CHECKBOX isn't typing: the PTT box keeps focus after the click, so the V guard is type-aware
 t('mictoggle: V guard is typing-aware, not any-INPUT', !/\['INPUT', 'TEXTAREA'\]\.includes\(document\.activeElement/.test(mt) && /typingTarget\(\)/.test(mt) && /checkbox|TEXT_INPUT/.test(mt));
 const ap = readFileSync(new URL('../client/lib/audiopanel.js', import.meta.url), 'utf8');
 t('audiopanel: sensitivity row dims under PTT (no control that lies)', /audio:ptt.*dimFloor|dimFloor[\s\S]{0,400}audio:ptt/.test(ap.replace(/\n/g, ' ')) || (/dimFloor/.test(ap) && /bus\.on\('audio:ptt', dimFloor\)/.test(ap)));

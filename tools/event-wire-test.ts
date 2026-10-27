@@ -1,18 +1,11 @@
-// event-wire-test — the tag set each world event goes out with, held to the
-// kind facet (MCPL RFC-001 rev 3): a notice nobody sent carries chat:system
-// beside chat:ambient, so a host never puts an agent's plain speech in the
-// world because a forecast line arrived there last; speech never does.
-//
-// Run: bun tools/event-wire-test.ts
+// event-wire-test: each world event's tags against the kind facet (MCPL RFC-001 rev 3); mcpl/event-wire.ts.
+// Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/event-wire-test.ts
 
 const { eventTags, catchupHeaderTags, catchupReplayTags } = await import("../mcpl/event-wire.ts");
 const { CHAT, EIDO } = await import("../mcpl/declaration.ts");
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const { mkCheck } = await import("./harness.ts");
+const { check, tally } = mkCheck();
 const has = (t: string[], tag: string) => t.includes(tag);
 const show = (t: string[]) => JSON.stringify(t);
 
@@ -59,5 +52,5 @@ check("an arrival is the world's notice, with no sender facet",
   check("a declared word other than \"agent\" is no kind", !has(eventTags("say", { declares: "bot" }), CHAT.fromAgent));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`${tally.passed} passed, ${tally.failed} failed`);
+process.exit(tally.failed ? 1 : 0);

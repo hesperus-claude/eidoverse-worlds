@@ -1,11 +1,10 @@
 // wingpresence — the folded-wing posture on the existing presence plane, as a NAMED POSE.
 //
-// R 10-17 15:09: a pose is one frame (only the bones it names), held by name; folded wings are just the pose
-// "wings-folded". The pose packet carries `poses: [names]`, the named poses this body holds (one frame each; each
-// renderer resolves a name through its own rig: "wings-folded" through the worn rig's own fold path, never
-// rig-specific quaternions on the wire). Presence is lossy but the newest pose is remembered for reconnect/late join,
-// exactly like position, clip and held pose. The packet's old boolean `wingsFolded` (before 10-17) is still READ, as
-// the same pose; nothing writes it.
+// A pose is one frame (only the bones it names), held by name; folded wings are just the pose "wings-folded". The pose
+// packet carries `poses: [names]`, the named poses this body holds (one frame each; each renderer resolves a name through
+// its own rig: "wings-folded" through the worn rig's own fold path, never rig-specific quaternions on the wire). Presence
+// is lossy but the newest pose is remembered for reconnect/late join, exactly like position, clip and held pose. The
+// packet's old boolean `wingsFolded` is still READ, as the same pose; nothing writes it.
 
 export const WINGS_FOLDED = 'wings-folded';
 /** A pose name on the wire: the animation library's and the rigs' grammar (shared/grab.js ANIM_RE). */
@@ -19,7 +18,7 @@ export function wingFoldPresence(folded) {
 }
 
 /** Does this sample say the wings are folded? true / false, or null when it says nothing (an older or partial sample
- * abstains rather than inventing a posture). Reads `poses` and, from a sample written before 10-17, `wingsFolded`. */
+ * abstains rather than inventing a posture). Reads `poses` and, from an older sample, `wingsFolded`. */
 export function foldedIn(sample) {
   if (!sample || typeof sample !== 'object') return null;
   if (Array.isArray(sample.poses)) return sample.poses.includes(WINGS_FOLDED);

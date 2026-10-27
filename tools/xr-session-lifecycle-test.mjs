@@ -1,18 +1,8 @@
-// bun tools/xr-session-lifecycle-test.mjs — THE SESSION CLOCK LIFECYCLE, EXECUTED.
-//
-// Required by the #197 round-two review (Blocker 2). The reviewer mutated the product's install to
-//     if (false && shouldShim({ emulated: !!globalThis.IWER })) {
-// and xr-frame-clock-test passed 29/29, because it drove the pure pieces and then source-checked the
-// wiring. The ORDER — capture (save-once) → restore listener BEFORE setSession → shim — was never
-// executed by any test.
-//
-// This drives client/lib/xr_frame_clock.js's installFrameClock(), the same function xr.js calls, over
-// the sequence the review named:
+// bun tools/xr-session-lifecycle-test.mjs: THE SESSION CLOCK LIFECYCLE, EXECUTED. The ORDER (capture, save-once →
+// restore listener BEFORE setSession → shim) runs through xr_frame_clock.js's installFrameClock(), the function xr.js calls:
 //     requestSession → setSession → session clock owns frames → end latch → desktop clock restored
 //     → second session enters and exits → stale first-session completion cannot affect the second
-//
-// The session objects are IWER's where it can supply them and a minimal fake otherwise; what matters
-// is that the PRODUCT'S install sequence runs. Removing the install turns this red.
+// Sessions are IWER's where it can supply them, else a minimal fake; removing the install turns this red.
 import { installFrameClock, installEntryClock, clockIsRestored } from '../client/lib/xr_frame_clock.js';
 import { readFileSync } from 'node:fs';
 
@@ -20,12 +10,8 @@ let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${n}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${n}${extra ? ` — ${extra}` : ''}`); } };
 
-// THE FAKE MUST BE AS FUSSY AS A BROWSER. A real window.requestAnimationFrame is a native method
-// that requires its receiver: calling it detached throws "Illegal invocation". An arrow-function
-// fake ignores `this`, so dropping captureNative's `.bind(win)` — which is FATAL in a browser, the
-// desktop clock never comes back after any session — passed every test. Verified against this
-// stand-in: bound works, unbound throws. This is the class of bug the suites were structurally
-// blind to, so the fake now enforces the receiver.
+// THE FAKE MUST BE AS FUSSY AS A BROWSER: a detached window.requestAnimationFrame throws "Illegal invocation", so dropping
+// captureNative's `.bind(win)` must go red
 function fakeWindow() {
   const w = { calls: [], cancelled: [], _n: 0 };
   w.requestAnimationFrame = function (cb) {
@@ -38,10 +24,8 @@ function fakeWindow() {
   };
   return w;
 }
-// The fake has to be as UNCOOPERATIVE as the real thing, or the transition paths go untested: an
-// adversarial mutation sweep found the restore listener could be registered LAST — the catastrophic
-// case this module's header names — with every check still green, because nothing else ever
-// registered an 'end' listener to be ordered against. Same for a session that throws.
+// the fake is as UNCOOPERATIVE as the real thing (other 'end' listeners, throwing sessions), or a restore listener
+// registered LAST would pass
 function fakeSession({ throwOnRaf = false, throwOnCaf = false } = {}) {
   const s = { calls: [], cancelled: [], _n: 0, _end: [], ended: false, endOrder: [] };
   s.requestAnimationFrame = (cb) => { if (throwOnRaf) throw new Error('session is gone'); s.calls.push(cb); return `ses-${++s._n}`; };
@@ -59,11 +43,7 @@ const nat = { raf: win.requestAnimationFrame, caf: win.cancelAnimationFrame };
 const s1 = fakeSession();
 const fc1 = installFrameClock({ win, session: s1, saved: null });
 check('the install reports that it installed', fc1.installed === true);
-// captureNative BINDS the window's methods, so the saved pair is a wrapper, never === the original.
-// Assert what it DOES: calling it reaches the window.
-// Called DETACHED, exactly as the restore does it — `win.requestAnimationFrame = native.raf` then a
-// bare call. An unbound capture throws "Illegal invocation" here, which is what a browser does and
-// what every arrow-function fake used to hide. Caught so it prints ✗ rather than aborting the run.
+// captureNative BINDS: called DETACHED as the restore does, the saved pair must reach the window
 { let threw = null;
   try { const detached = fc1.native.raf; detached(() => {}); } catch (e) { threw = e?.message ?? String(e); }
   check('the saved native pair is BOUND — it survives being called detached, as the restore calls it',
@@ -80,9 +60,8 @@ check('a cancel goes to the session too', (win.cancelAnimationFrame('ses-1'), s1
 
 console.log('\n— ORDERING: our restore must run before a listener registered after us —');
 {
-  // three registers its own 'end' listener inside setSession, i.e. AFTER ours. Listeners fire in
-  // registration order, so ours must be first: if three's restarts the desktop loop against a dead
-  // session first, no frame ever ticks again (the module header's 09-07 22:41 receipt).
+  // three registers its own 'end' listener inside setSession, AFTER ours, and listeners fire in order: ours must be first,
+  // or three restarts the desktop loop against a dead session and no frame ever ticks again
   const w = fakeWindow(); const s = fakeSession();
   s.tagNext('decoy-before');
   s.addEventListener('end', () => {}, {});           // something already listening
@@ -100,9 +79,8 @@ console.log('\n— ORDERING: our restore must run before a listener registered a
 
 console.log('\n— the latch, in the window it exists for —');
 {
-  // Between 'end' firing and the restore completing, a caller can still hold the shim. The latch is
-  // the only thing that keeps that frame off a dead session — and it is invisible to any test that
-  // only looks after the restore.
+  // between 'end' and the restore completing a caller can still hold the shim: only the latch keeps that frame off a dead
+  // session, invisible to a test that looks only after the restore
   const w = fakeWindow(); const s = fakeSession();
   const fc = installFrameClock({ win: w, session: s, saved: null });
   const shim = w.requestAnimationFrame;            // a caller that grabbed the shim earlier
@@ -115,9 +93,7 @@ console.log('\n— the latch, in the window it exists for —');
 {
   const w = fakeWindow(); const s = fakeSession({ throwOnRaf: true });
   installFrameClock({ win: w, session: s, saved: null });
-  // Caught, so a missing try/catch in the shim fails as a printed ✗ rather than crashing the run:
-  // a harness gating on a ✗ COUNT would read an abort as zero failures (it gates on exit code too,
-  // but the failure should be legible either way).
+  // caught, so a missing try/catch in the shim prints ✗ rather than crashing the run (an abort would count as zero ✗)
   let threw = null;
   try { w.calls.length = 0; w.requestAnimationFrame(() => {}); } catch (e) { threw = e?.message ?? String(e); }
   check('a session that THROWS from requestAnimationFrame falls back to the window',
@@ -133,10 +109,8 @@ console.log('\n— the latch, in the window it exists for —');
 }
 
 {
-  // CANCEL REACHES BOTH CLOCKS, even when the session throws. The two try blocks are separate on
-  // purpose — an id handed out before the swap may belong to either clock — and collapsing them into
-  // one passed every test, because no fake ever threw from cancelAnimationFrame. A dead session
-  // throwing then swallowed the NATIVE cancel too, leaking the window-side callback.
+  // CANCEL REACHES BOTH CLOCKS even when the session throws: separate try blocks on purpose (an id may belong to either
+  // clock), or a dead session's throw would swallow the NATIVE cancel
   const w = fakeWindow(); const s = fakeSession({ throwOnCaf: true });
   installFrameClock({ win: w, session: s, saved: null });
   let threw = null;
@@ -177,11 +151,8 @@ console.log('\n— a stale first-session completion cannot affect the second —
   check('a late end from the superseded session does not steal the clock back',
     w.requestAnimationFrame(() => {}) === 'ses-1' && b.calls.length === 1,
     `window got ${w.calls.length}`);
-  // THE SUPERSEDED SESSION'S OWN SHIM (round-two sweep, the worst survivor): moving `ended = true`
-  // below the generation guard passed every test, because no test ever called session A's captured
-  // shim after A ended. three.js holds such a shim across a fast re-entry — and with the latch unset
-  // it keeps feeding frames to a DEAD session forever. That is the 09-07 22:41 receipt this module
-  // exists to prevent, reachable again through the overlap path.
+  // THE SUPERSEDED SESSION'S OWN SHIM: three holds A's shim across a fast re-entry, so after A ends it must be latched
+  // (`ended = true` above the generation guard), or it feeds frames to a dead session forever
   { let threw = null, landed = null;
     try { shimA(() => {}); } catch (e) { threw = e?.message ?? String(e); }
     landed = a.calls.length ? 'the DEAD session' : (w.calls.length ? 'the window' : 'nowhere');
@@ -189,7 +160,7 @@ console.log('\n— a stale first-session completion cannot affect the second —
       threw === null && a.calls.length === 0, threw ? `threw: ${threw}` : `landed on ${landed}`); }
   b.end();
   check('…and when the live session ends, the desktop clock comes back', clockIsRestored(w, fb.native) === true);
-  // onEnd must still run for a superseded install — xr.js hangs teardown off it.
+  // onEnd must still run for a superseded install: xr.js hangs teardown off it
   check('the superseded install’s onEnd still fired', staleOnEnd === true);
 }
 
@@ -204,10 +175,7 @@ console.log('\n— the emulator drives its own frames —');
 
 console.log('\n— THE INSTALL SEAM, including what `emulated` MEANS —');
 {
-  // The round-three mutation changed the shipping argument to `emulated: true || !!globalThis.IWER`,
-  // so the product never shimmed on any real runtime — while every source check still matched and the
-  // suite stayed at 38/38. The argument construction now lives inside installEntryClock, so a test
-  // can prove that a runtime WITHOUT an emulator actually gets a shim.
+  // the `emulated` argument is built inside installEntryClock, so a test can prove a runtime WITHOUT an emulator gets a shim
   { const w = fakeWindow(); const s = fakeSession();
     const fc = installEntryClock({ win: w, session: s, saved: null, globals: {} });   // a real runtime
     check('on a real runtime (no IWER) the session clock IS installed', fc.installed === true);
@@ -233,19 +201,14 @@ console.log('\n— the PRODUCT runs this sequence (the wiring the reviewer broke
   check('…and calls it', /frameClock = installEntryClock\(\{/.test(xr));
   check('…without constructing `emulated` at the call site, where no test could reach it',
     !/emulated:/.test(xr));
-  // `globals` is a TEST seam. If the product passed it, it could disable the shim exactly the way
-  // the round-three mutation did — a parameter added for testability becoming a new bypass. Found by
-  // trying it: passing `globals: { IWER: {} }` from xr.js left this suite green.
+  // `globals` is a TEST seam: if the product passed it, it would disable the shim, a testability parameter turned bypass
   check('…and without passing `globals`, which would be the same bypass by another name',
     !/globals:/.test(xr));
   check('…passing the saved pair, so save-once holds across entries', /saved: nativeRAF \? \{ raf: nativeRAF, caf: nativeCAF \} : null/.test(xr));
   check('…before setSession', xr.indexOf('installEntryClock({') < xr.indexOf('await renderer.xr.setSession('));
   check('NO second shim install survives', !/window\.requestAnimationFrame = makeFrameShim/.test(xr));
-  // THE SEAM, which is where both round-two regressions lived (agent review). The suites drove the
-  // modules; the glue that calls them was still only prose. A second 'end' listener in xr.js used to
-  // restore the clock UNCONDITIONALLY from the module-global native pair — which the newer session's
-  // install overwrites — so a stale session's teardown reached straight around the generation guard
-  // and handed the desktop clock back mid-session. Reproduced against the real module before fixing.
+  // THE SEAM: an unguarded 'end' listener in xr.js restoring from the module-global native pair would let a stale
+  // session's teardown hand the desktop clock back mid-session
   check('ONLY the owner restores the clock — no unguarded restore survives in xr.js',
     !/window\.requestAnimationFrame = nativeRAF/.test(xr), 'an end listener still restores directly');
   check('…so nativeRAF/nativeCAF are save-once bookkeeping only, never a restore path',

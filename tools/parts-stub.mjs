@@ -9,17 +9,12 @@ export function* bags() { yield* comps; }
 export const metaOf = (id) => entityMeta.get(id) ?? null;
 export const reindexCollider = () => {};
 
-// motion.js itself needs only the four names above, but its import cone now
-// reaches ragdoll.js (via remotes.js), which imports resolveColliders from the
-// same stubbed './colliders.js' — so a stub missing it fails the whole module
-// graph with "Export named 'resolveColliders' not found". Nothing under test
-// here collides; return the bare terrain height, which is what an empty world
-// of colliders would report.
+// motion.js's import cone reaches ragdoll.js, which imports resolveColliders from this stubbed './colliders.js';
+// nothing here collides, so return the bare terrain height
 export const resolveColliders = (pos, terrainAt) => terrainAt(pos.x, pos.z);
 
-// remotes.js (same cone, via motion.js) reads the mount table. Nothing under
-// test mounts anything, so an empty table and a "not riding" answer are the
-// honest stubs — mountTransform returns null for an occupant with no mount.
+// remotes.js (same cone) reads the mount table; nothing here mounts, so an empty table and a null mountTransform (an
+// occupant with no mount) are the honest stubs
 export const avatarMounts = new Map();
 export const mountTransform = () => null;
 

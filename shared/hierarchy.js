@@ -1,20 +1,11 @@
-// hierarchy — the scene tree as a pure function of the fold (design §3
-// "Children", §5 "Left: Hierarchy"). Dependency-free beyond shared/rot.js;
-// read by the desktop Hierarchy panel, its VR quad, the inspector's Parent
-// field and the agent's `inspect` / `hierarchy` tools.
-//
-// `world` is the fold's entities map ({ id: record }) — state.st.entities in
-// the browser, the agent's folded records in mcpl. A record's `parent`
-// ({ to, socket?, offset?, yaw?, q? }) is the only edge.
-//
-// A child's transform is LOCAL to its parent, exactly as the renderer
-// realizes it (client/lib/realize/models.js execMount): the child is added
-// to its carrier's Object3D, so
+// hierarchy — the scene tree as a pure function of the fold (design §3 "Children", §5 "Left: Hierarchy"). Pure (no DOM,
+// no renderer); read by the Hierarchy panel, its VR quad, the inspector's Parent field and the agent's tools.
+// `world` is the fold's entities map ({ id: record }). A record's `parent` ({ to, socket?, offset?, yaw?, q? }) is the only edge.
+// A child's transform is LOCAL to its parent, exactly as the renderer realizes it (client/lib/realize/models.js execMount):
 //   position = parent.offset ?? socket.pos ?? [0,0,0]   (carrier frame)
 //   rotation = parent.q ?? R_y(parent.yaw ?? socket.yaw ?? 0)
 //   scale    = the child's own `scale` (the carrier's scale multiplies it)
-// and while mounted the fold's `pos`/`q` on the child are its pre-mount pose,
-// unused until a dismount stamps a new one.
+// and while mounted the fold's `pos`/`q` on the child are its pre-mount pose, unused until a dismount stamps a new one.
 
 import * as OP from './protocol/requests.js';
 import { enc } from './protocol/names.js';
@@ -26,26 +17,23 @@ import { socketRole } from './sockbody.js';
 import { r9 } from './protocol/round.js';
 import { modelWord } from './eido.js';
 
-/** A pure turn about +Y (no tilt): such an orientation travels as a bare yaw. */
+/** No tilt: such an orientation travels as a bare yaw. */
 const upright = (q) => Math.abs(q[0]) < 1e-9 && Math.abs(q[2]) < 1e-9;
 
-/** The socket a mount names, resolved on its carrier — or null. Only a record in the old spelling has one: an imported old-protocol fold's
- *  (tools/protocol/import-v1/fold.js, which authority-check's M checks draw old-protocol logs by) and a blueprint's own published parts
- *  (blueprint.js). A live record's socket is a child entity, and its mount names that entity (PLAN-sockets-entities). */
+/** Resolved on its carrier, or null. Only the old spelling has one: an imported old-protocol fold's
+ *  (tools/protocol/import-v1/fold.js) and a blueprint's own published parts (blueprint.js). A live record's socket is a
+ *  child entity, and its mount names that entity (PLAN-sockets-entities). */
 export function socketOf(world, rel) {
   if (!rel?.socket) return null;
   const s = world?.[rel.to]?.sockets?.[rel.socket];
   return s && typeof s === 'object' ? s : null;
 }
 
-/** Is `rel.to` a carrier this record actually rides (present in the world)?
- *  The renderer leaves a child whose carrier is missing where the fold put it. */
+/** Is `rel.to` present in the world? The renderer leaves a child whose carrier is missing where the fold put it. */
 const ridden = (world, ent) => !!ent?.parent?.to && !!world?.[ent.parent.to];
 
-/** An entity's LOCAL transform: its own pose for a root, the mount's for a
- *  child (see the header). `q` is null for a yaw-only pose. `part` names the
- *  carrier's moving part a part socket glues it into (its pose is then baked
- *  at the part's current phase, not editable as an offset). */
+/** Its own pose for a root, the mount's for a child (see the header). `q` is null for a yaw-only pose. `part` names the
+ *  carrier's moving part a part socket glues it into (its pose is then baked at the part's current phase). */
 export function localOf(ent, world = null) {
   if (!ent) return null;
   const scale = entScale(ent) ?? 1;
@@ -63,8 +51,7 @@ export function localOf(ent, world = null) {
   };
 }
 
-/** The ids above `id`, nearest first. Stops at a missing carrier or a cycle
- *  (an old log may hold one; the authority refuses new ones). */
+/** Nearest first. Stops at a missing carrier or a cycle (an old log may hold one; the authority refuses new ones). */
 export function ancestors(world, id) {
   const out = [];
   const seen = new Set([id]);
@@ -74,14 +61,12 @@ export function ancestors(world, id) {
   return out;
 }
 
-/** World pose { pos, q, scale } of `id`, composing its chain the way three.js
- *  composes the realized Object3Ds: parent ∘ local (shared/rot.js composePose,
- *  the authority's composer). */
+/** Composing its chain as three.js composes the realized Object3Ds: parent ∘ local (shared/rot.js composePose, the authority's composer). */
 export function worldPose(world, id) {
   const ent = world?.[id];
   if (!ent) return null;
   const ids = [id, ...ancestors(world, id)].reverse();
-  // the top of the chain is a root: its own pose IS its world pose ({} = "treat as root": no carrier lookups)
+  // a root's own pose IS its world pose ({} = "treat as root": no carrier lookups)
   const chain = ids.map((k, i) => { const L = localOf(world[k], i === 0 ? {} : world); return { pos: L.pos, q: L.q ?? qFromYaw(L.yaw), scale: L.scale }; });
   if (chain.length === 1) return chain[0];
   // a scale is one number or [x,y,z] (shared/scale3.js)
@@ -89,8 +74,7 @@ export function worldPose(world, id) {
   return { ...w, scale: scaleWire(w.scale) };
 }
 
-/** The local transform that puts a thing at world pose `child` under a
- *  carrier at world pose `parent` — the inverse of worldPose's compose step. */
+/** The inverse of worldPose's compose step. */
 export function localUnder(parent, child) {
   const inv = conj(parent.q);
   const d = qRotate(inv, [child.pos[0] - parent.pos[0], child.pos[1] - parent.pos[1], child.pos[2] - parent.pos[2]]);
@@ -98,8 +82,7 @@ export function localUnder(parent, child) {
   return { offset: d.map((v, i) => v / (s[i] || 1)), q: qNorm(qMul(inv, child.q)), scale: scaleWire(cs.map((v, i) => v / (s[i] || 1))) };
 }
 
-/** Why `id` may not go under `to`, or null. A thing cannot be its own parent,
- *  nor be dropped onto anything inside it. */
+/** Or null. A thing cannot be its own parent, nor be dropped onto anything inside it. */
 export function cycleRefusal(world, id, to) {
   if (to == null) return null;
   if (to === id) return `${id} can't be its own parent`;
@@ -110,28 +93,26 @@ export function cycleRefusal(world, id, to) {
   return `${to} is inside ${id} (${path}) — a thing can't be parented under its own child`;
 }
 
-/** Children of `id`, in id order (the fold's edges, not the realized scene). */
+/** In id order (the fold's edges, not the realized scene). */
 export function childrenOf(world, id) {
   return Object.keys(world ?? {}).filter((k) => world[k]?.parent?.to === id).sort();
 }
 
-/** What a row says a thing IS, in a word or two: kindOf's word, or a model's file stem (+ light for an imported lamp). */
+/** In a word or two: kindOf's word, or a model's file stem (+ light for an imported lamp). */
 export function kindHint(ent) {
   if (!ent) return '?';
   const kind = kindOf(ent);
-  if (kind === 'socket') return socketRole(ent.c ?? ent);   // what it is for: station, snap or attach (never stored)
+  if (kind === 'socket') return socketRole(ent.c ?? ent);   // station, snap or attach (never stored)
   const plus = lightOf(ent) ? ' + light' : '';
   if (kind === 'mesh') return `${(ent.c ?? ent).mesh.shape}${plus}`;
   if (kind !== 'model') return kind;
-  return `${modelWord(ent.model).split('_').slice(0, 3).join(' ')}${plus}`;   // an address: the word for it, never its hex (shared/eido.js)
+  return `${modelWord(ent.model).split('_').slice(0, 3).join(' ')}${plus}`;   // the word for an address, never its hex (shared/eido.js)
 }
 
-/** { roots, kids } from the fold: a thing whose carrier is absent, or whose
- *  chain loops back on itself, is a root (so a hand-written cycle cannot hide
- *  its members from the tree). */
+/** A thing whose carrier is absent, or whose chain loops back, is a root (a hand-written cycle can't hide its members). */
 export function treeOf(world) {
   const kids = new Map(); const roots = [];
-  // ordered by the name a person sees, numbers as numbers (R 10-10: 'domino 11, domino 12, domino 3')
+  // by the name a person sees, numbers as numbers ('domino 3' before 'domino 11')
   const nm = (id) => { const l = world[id]?.label; return typeof l === 'string' && l ? l : id; };
   const order = Object.keys(world ?? {}).sort((a, b) => nm(a).localeCompare(nm(b), 'en', { numeric: true, sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0));
   for (const id of order) {
@@ -143,12 +124,8 @@ export function treeOf(world) {
   return { roots, kids };
 }
 
-/** The rows a tree view paints, in order: [{ id, depth, kids, open, dim }].
- *  `collapsed` folds a node's children away; `matches(id)` (when given) is the
- *  filter: a row shows if it matches or anything under it does, its
- *  non-matching ancestors show dimmed, and a match inside a FOLDED parent still
- *  shows — the filter opens the path to it. `extra(id)` lists non-entity rows
- *  under a node (seated people), as { id, match } — they count as children. */
+/** [{ id, depth, kids, open, dim }] in paint order. `collapsed` folds children away; `matches(id)` filters (non-matching
+ *  ancestors dimmed; a match in a folded parent still shows); `extra(id)` lists non-entity rows (seated people) as children. */
 export function treeRows(world, { collapsed = new Set(), matches = null, extra = null } = {}) {
   const { roots, kids } = treeOf(world);
   const rows = [];
@@ -172,16 +149,14 @@ export function treeRows(world, { collapsed = new Set(), matches = null, extra =
   return rows;
 }
 
-/** Parent `id` under `to` (or make it a root when `to` is null) WHERE IT STANDS: the authority requests (shared/protocol/requests.js)
- *  for the Hierarchy's drag, the Parent card and the agent's edit. Its world pose is kept: under a parent the transform
- *  becomes local to it (pos, q and scale: the renderer composes a child's scale with its carrier's); as a root it is the
- *  world pose. One gesture, one batch, one act — the authority's undo is the way back. Locks are the authority's to ask about. */
+/** Parent `id` under `to` (null: a root) WHERE IT STANDS: the world pose is kept. One gesture, one act; undo and locks are the
+ *  authority's. */
 export function parentOps(world, id, to) {
   const errors = [];
   const ent = world?.[id];
   if (!ent) return { ops: [], errors: [`${id} is not in the world`] };
   to = to == null || to === '' ? null : String(to);
-  const was = ent.parent?.to ?? null;   // a carrier that is gone still counts: unparenting clears the dangling edge
+  const was = ent.parent?.to ?? null;   // a gone carrier still counts: unparenting clears the dangling edge
   if (to === was) return { ops: [], errors: [to ? `${id} is already under ${to}` : `${id} already has no parent`] };
   if (to && !world[to]) return { ops: [], errors: [`no ${to} here to parent under`] };
   const cyc = cycleRefusal(world, id, to);

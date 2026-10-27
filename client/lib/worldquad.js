@@ -3,8 +3,8 @@
 // minting, same undo entry), and preview the sky presets through the SAME
 // previewSky the desk's preset buttons call. The desk's 'log to world' for
 // the sky lives in a closure with the clock rules (skypanel gather()) — not
-// duplicated here; the quad says 'preview' and the desk commits. owner, 09-04
-// 22:02: every slot opens that frame's quad; this is the world frame's.
+// duplicated here; the quad says 'preview' and the desk commits. Every slot
+// opens that frame's quad; this is the world frame's.
 import * as OP from '../../shared/protocol/requests.js';
 import { sendOps } from './editwrites.js';
 import { bus } from './base.js';

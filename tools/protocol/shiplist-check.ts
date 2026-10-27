@@ -23,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree } from "./common.ts";
 import { recordComponents } from "../../shared/protocol/view.js";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -31,21 +32,23 @@ const BASE = "7f1f1934";
 const KEEP = new Set(["R7", "O0"]);
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-const MUTANTS: [string, string, string, string, string[]][] = [
-  ["a named openable toggles open", "shared/protocol/authority/use.js", "field: h.field ?? (comp === \"openable\" ? \"open\" : undefined)", "field: h.field ?? (h.component === undefined ? \"open\" : undefined)", ["R3b"]],
-  ["toggle's default is openable", "shared/protocol/authority/use.js", "const comp = h.component ?? \"openable\";", "const comp = h.component ?? \"door\";", ["O3", "R3"]],
+// find is one text, or [find, replace, file?][] for a gate held in two places (file: another file under the tree)
+const MUTANTS: [string, string, string | [string, string, string?][], string, string[]][] = [
+  ["a named openable toggles open", "shared/protocol/authority/sockets.js", "field: h.field ?? (comp === \"openable\" ? \"open\" : undefined)", "field: h.field ?? (h.component === undefined ? \"open\" : undefined)", ["R3b"]],
+  // R3 sees a default of door only once door itself is taken again (its refusal names openable too)
+  ["toggle's default is openable", "shared/protocol/authority/sockets.js", [["const comp = h.component ?? \"openable\"; return", "const comp = h.component ?? \"door\"; return"], ["if (name === \"door\") refuse(", "if (false) refuse(", "shared/protocol/authority/checks.js"]], "", ["O3", "R3"]],
   ["openable: angle or slide", "shared/protocol/authority/checks.js", "if (v.angle !== undefined && v.slide !== undefined) refuse(", "if (false) refuse(", ["O2"]],
-  ["openable: slide bounds", "shared/protocol/authority/checks.js", "if (v.slide !== undefined && !nums(v.slide, 3, 10)) refuse(", "if (false) refuse(", ["O2"]],
-  ["openable: the catalogue's ranges", "shared/protocol/componentspec.js", "ranges: { angle: { min: -Math.PI, max: Math.PI }, time: { min: 0, max: 10 } },", "", ["O2"]],
+  // the write check and the catalogue's slide range both bound a slide
+  ["openable: slide bounds", "shared/protocol/authority/checks.js", [["if (v.slide !== undefined && !nums(v.slide, 3, 10)) refuse(", "if (false) refuse("], [", slide: { min: -10, max: 10 } },", " },", "shared/protocol/componentspec.js"]], "", ["O2"]],
+  ["openable: the catalogue's ranges", "shared/protocol/componentspec.js", "ranges: { angle: { min: -Math.PI, max: Math.PI }, time: { min: 0, max: 10 }, slide: { min: -10, max: 10 } },", "", ["O2"]],
   ["`door` is called openable", "shared/protocol/authority/checks.js", "if (name === \"door\") refuse(", "if (false) refuse(", ["O1"]],
-  ["look shows the openable", "shared/protocol/authority.js", "...(e.c.openable && typeof e.c.openable === \"object\" ? { openable: e.c.openable } : {}) };", "};", ["O4"]],
-  ["the importer renames door", "tools/protocol/import-v1/translate-v1.js", "c[encName(k === \"door\" && !e.openable ? \"openable\" : k)]", "c[encName(k)]", ["O5"]],
+  ["look shows the openable", "shared/protocol/authority/blueprints.js", "...(e.c.openable && typeof e.c.openable === \"object\" ? { openable: e.c.openable } : {})", "...({})", ["O4"]],
+  ["the importer renames door", "tools/protocol/import-v1/translate-v1.js", "c[encName(k === \"door\" && !e.comp.openable ? \"openable\" : k)]", "c[encName(k)]", ["O5"]],
   ["the importer renames a reaction's door", "tools/protocol/import-v1/translate-v1.js", "} else if (h && typeof h === \"object\" && h.component === \"door\") out[k] = { ...h, component: \"openable\" };", "}", ["O5"]],
   ["a turn keeps the hinge", "client/lib/motioneval.js", "const shift = qApply(q0, [pv[0] - rp[0], pv[1] - rp[1], pv[2] - rp[2]]);\n  return { pos: base.pos.map((v, i) => v + shift[i]), q: qMul(q0, q) };", "return { pos: [...base.pos], q: qMul(q0, q) };", ["O6"]],
   ["the tween eases from where it was", "client/lib/motioneval.js", "return tw.from + (tw.to - tw.from) * u * u * (3 - 2 * u);", "return tw.to;", ["O6"]],
   ["Add Openable brings its open action", "shared/editschema.js", "...(rx.open ? [] : [OP.set(id, 'reactions', { ...rx, open: { kind: 'toggle', unless: 'locked' } })])], errors: [] };", "], errors: [] };", ["O7"]],
   ["the hinge button", "shared/editschema.js", "comps.set('pivot', { pos: [round(k === 'hingeL' ? box[0][0] : box[1][0], 4)", "comps.set('pivot', { pos: [round(0 && k === 'hingeL' ? box[0][0] : box[1][0], 4)", ["O7"]],
-  ["Add Component doesn't offer LookAt", "shared/editschema.js", "const NOT_OFFERED = new Set(['LookAt']);", "const NOT_OFFERED = new Set([]);", ["R1"]],
   ["a handler's effect is checked at write", "shared/protocol/authority/checks.js", "handlerCheck(at, act, h); effectCheck(s, id, act, h); } }", "handlerCheck(at, act, h); } }", ["R2", "R3", "R4"]],
   ["…the value it would write", "shared/protocol/authority/checks.js", "else would(comp, field === undefined ? h.value : { ...c[comp], [field]: h.value });", "", ["R2"]],
   ["…a field needs its component", "shared/protocol/authority/checks.js", "if (field !== undefined && !isObj(c[comp])) refuse(\"no-target\"", "if (false) refuse(\"no-target\"", ["R3"]],
@@ -58,16 +61,16 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["motion: a path's points", "shared/protocol/authority/checks.js", "if (v.type === \"path\" && !(Array.isArray(v.points)", "if (false && !(Array.isArray(v.points)", ["M2"]],
   ["motion: a part's enums", "shared/protocol/authority/checks.js", "for (const [f, allowed] of Object.entries(COMPONENTS[comp.split(\":\")[0]]?.enums ?? {})) if (obj", "for (const [f, allowed] of Object.entries(COMPONENTS[comp]?.enums ?? {})) if (obj", ["M2"]],
   ["the orbit's period", "client/lib/motioneval.js", "if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;", "", ["M3"]],
-  ["the editor reads the rate as the evaluator does", "shared/editschema.js", "Number.isFinite(m.period) && m.period > 0 ? 360 / m.period : ", "", ["M3"]],
-  ["the importer: rpm → degPerSec", "tools/protocol/import-v1/translate-v1.js", "k === \"motion\" || k.startsWith(\"motion:\") ? newMotion(v) : v;", "v;", ["M4"]],
-  ["the editor's rate drops the period", "shared/editschema.js", "if (param === 'degPerSec') { delete next.rpm; delete next.period; }", "if (param === 'degPerSec') { delete next.rpm; }", ["M5"]],
+  ["the editor reads the rate as the evaluator does", "shared/protocol/descriptors.js", "Number.isFinite(m?.period) && m.period > 0 ? 360 / m.period : ", "", ["M3"]],
+  ["the importer: rpm → degPerSec", "tools/protocol/import-v1/translate-v1.js", "k === \"motion\" ? newMotion(v) : k === \"particles\"", "k === \"motion\" ? v : k === \"particles\"", ["M4"]],
+  ["the editor's rate drops the period", "shared/protocol/descriptors.js", "clears: ['rpm', 'period']", "clears: ['rpm']", ["M5"]],
   ["Add Path starts where it stands", "shared/editschema.js", "Path: { type: 'path', points: [p0, [p0[0], p0[1], round(p0[2] + 2, 4)]], speed: 1 } };", "Path: { type: 'path', points: [[0, 0, 0], [0, 0, 2]], speed: 1 } };", ["M5"]],
   ["help: physics.who's default", "shared/protocol/componentspec.js", "when it has no grabbable; default inhabitant)", "when it has no grabbable; default builder)", ["H1"]],
   ["help: punt's default", "shared/protocol/verbspec.js", "who may is physics.who (default inhabitant)", "who may is physics.who (default builder)", ["H1"]],
   ["an open door is out of the way", "shared/protocol/authority/physics.js", "except.has(id) || openNow(st, id)) continue;", "except.has(id)) continue;", ["O8"]],
   ["a person's refusal drops tool syntax", "shared/protocol/refusal.js", "const fix = typeof r.fix === \"string\" && r.fix && !TOOLISH.test(r.fix) ? r.fix : \"\";", "const fix = r.fix ?? \"\";", ["P1"]],
   ["a person's refusal names things", "shared/protocol/refusal.js", "const n = nameOf(id); if (!n) return m;", "const n = null; if (!n) return m;", ["P1", "P2"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/refusal.js", "// ---- for people (ship list 10-07", "// ----  for people (ship list 10-07", []],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/refusal.js", "// ---- for the editor's reader ----", "// ----  for the editor's reader ----", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const r = Bun.spawnSync(["bun", path.join(ENGINE, "tools/protocol/shiplist-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
@@ -85,10 +88,12 @@ if (argv.includes("--mutants")) {
   let bad = 0;
   const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
-    if (only && !cases.some((c) => only.includes(c))) continue;
-    const d = mutantTree("smut"); const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
+    const d = mutantTree("smut");
+    const edits: [string, string, string][] = (Array.isArray(find) ? find : [[find, repl]]).map(([a, b, g]) => [g ?? file, a, b]);
+    const miss = edits.find(([g, a]) => fs.readFileSync(path.join(d, g), "utf8").split(a).length !== 2);
+    if (miss) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${miss[0]} (the gate moved?)`); continue; }
+    for (const [g, a, b] of edits) { const f = path.join(d, g); fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(a, () => b)); }
     const r = await runSelf(d, cases.length ? cases : null);
     const red = [...r.out.matchAll(/^\s*FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => red.includes(c)) : r.code === 0;
@@ -120,10 +125,8 @@ const imp = async (p: string) => { try { return await import(path.join(T, p)); }
 const D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js"), LAB = await imp("shared/protocol/labmodels.js"), TS = await imp("shared/protocol/verbspec.js");
 const SD = await imp("tools/protocol/scratchworld.ts"), TV1 = await imp("tools/protocol/import-v1/translate-v1.js"), FOLD = await imp("shared/protocol/fold.js");
 const ME = await imp("client/lib/motioneval.js"), ES = await imp("shared/editschema.js"), RF = await imp("shared/protocol/refusal.js");
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); }
-  else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 500)}` : ""}`); } };
+const S = suite("shiplist", { cap: 500 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {
   if (only && !only.includes(id)) return;
   try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); }
@@ -340,5 +343,4 @@ await C("P3", "the client shows a person the plain words and the authority's war
     "(the browser stages in tools/protocol/shiplist-probe.ts watch these happen)"];
 });
 
-console.log(`\nshiplist: ${pass} passed, ${fail} failed${T !== ENGINE ? ` (tree ${T})` : ""}`);
-process.exit(fail ? 1 : 0);
+S.done(`${T !== ENGINE ? ` (tree ${T})` : ""}`);

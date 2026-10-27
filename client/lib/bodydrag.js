@@ -1,28 +1,10 @@
-// bodydrag — grabbing a limp body and dragging it, interactively.
-//
-// The sync model is a TAKEOVER, and it has a precedent: the seat. While you
-// are seated, something else owns your body's place and your client renders
-// the derived result; movement input means "I want out". Dragging is that,
-// with a sim attached:
-//
-//   * The DRAGGER runs the Verlet on its own remote copy of the target's rig
-//     (same Avatar class — the sim does not care whose body it is), with the
-//     grabbed joint pinned to the cursor ray. Zero latency where the hand is.
-//   * The dragger streams the resulting pose + root to the body's OWNER
-//     (targeted `bodydrag` relay, presence semantics, never logged). The
-//     owner applies it to itself and REBROADCASTS through its normal
-//     presence — one source of truth, and everyone else needs no new code.
-//   * Consent is the owner's, always: the grab is a request (pushable gates
-//     it), a movement key revokes mid-drag, and 1.2s of dragger silence
-//     auto-resumes — a crashed dragger never leaves a body possessed.
-//   * On release the owner runs its OWN settle sim from wherever it was left
-//     (the corpse-kick path), so the body lands and rests under the authority
-//     that owns it. The takeover is only ever the moving part.
-//
-// This is also why dragging works on AGENT bodies: a headless client cannot
-// run a Verlet on itself (which is why agents slump instead of tumbling), but
-// under takeover the dragger sims and the agent only has to accept-and-
-// rebroadcast — the same thing it already does for puppet poses.
+// bodydrag — grabbing a limp body and dragging it: a TAKEOVER, like a seat, with a sim attached.
+//   * The DRAGGER sims its copy of the target's rig, grabbed joint pinned to the cursor ray, and streams pose + root
+//     to the OWNER (targeted `bodydrag`, presence, never logged), who REBROADCASTS it: one source of truth.
+//   * Consent is the owner's, always: the grab is a request, a movement key revokes, and 1.2 s of dragger silence
+//     auto-resumes; a crashed dragger never leaves a body possessed.
+//   * On release the owner settles from where it was left. Agents only accept and rebroadcast, so they drag too.
+//   See docs/research/ragdoll-sync.md.
 
 import { THREE, camera, canvas, scene } from './core.js';
 import { bus } from './base.js';
@@ -56,10 +38,7 @@ function grabbables() {
   return out;
 }
 
-// Picking is done against the JOINT positions, not the skinned mesh: a
-// SkinnedMesh raycast tests the bind pose — a standing silhouette — while a
-// grabbable body is by definition lying in some other shape entirely. The
-// normalized bone nodes ARE where the body visually is, on any rig.
+// Pick against JOINT positions: a SkinnedMesh raycast tests the bind pose, and a grabbable body is lying elsewhere.
 const PICK_R = 0.3;           // how close the ray must pass to a joint (m)
 
 function pickBody(ndc) {
@@ -85,12 +64,7 @@ function pickBody(ndc) {
 }
 
 // ---------------------------------------------------------------- pins
-// A nail you can see is a nail you can pull. P while dragging nails the held
-// joint where it is — the release message carries the pin, and from then on
-// the body's OWNER enforces it (their sim, their consent, their movement key
-// tears every nail out at once). One small marker per pin, rendered from the
-// pins each body streams in its presence; clicking a marker asks its owner
-// to pull that nail. Grabbing a nailed joint takes it back into your hand.
+// P while dragging nails the held joint; the OWNER enforces it, and a movement key pulls every nail
 
 const markers = new Map();          // "bodyId:joint" -> mesh
 let _markerGeo = null, _markerMat = null;
@@ -113,7 +87,6 @@ function syncMarkers(wanted) {
   for (const [key, m] of markers) if (!wanted.has(key)) { scene.remove(m); markers.delete(key); }
 }
 
-/** The pin marker under the cursor ray, if any. */
 function pickMarker() {
   let best = null;
   for (const [key, m] of markers) {
@@ -126,17 +99,14 @@ function pickMarker() {
 function pinCurrent() {
   if (!drag) return;
   const r = remotes.get(drag.id);
-  // where the joint IS, not where the cursor is. They agree — a pinned joint
-  // is held at its target — but the joint is the thing being nailed, and
-  // saying so keeps the nail on the limb if that ever stops being true.
+  // where the joint IS, not the cursor: keeps the nail on the limb if the two ever disagree
   const t = drag.rd.p?.[drag.joint] ?? drag.rd.pins?.get(drag.joint);
   if (!t) return;
   sendBodyDrag(drag.id, {
     end: true,
     pinAt: { joint: drag.joint, at: [t.x, t.y, t.z] },
     ...(drag.rd.pose ? { pose: drag.rd.pose } : {}),
-    // a nail is a handover too: the owner takes over enforcing it, and should
-    // continue this sim rather than rebuild a guess of it from the bones
+    // a nail is a handover too: the owner continues this sim rather than guess it from the bones
     sim: drag.rd.snapshot(),
     ...(r?.avatar ? {
       p: r.avatar.root.position.toArray(),
@@ -181,13 +151,7 @@ function beginGrab(e) {
 
   hitR.avatar.root.updateMatrixWorld(true);
   const rd = makeRagdoll(hitR.avatar, null, hitR.avatar.restBonePositions());
-  // Keep the offset between the joint and the cursor RAY. pickBody finds the
-  // joint nearest the ray, which is up to PICK_R away from it — so pinning the
-  // joint straight onto the ray teleports the limb sideways the instant you
-  // grab, by as much as the pick radius. You grab a wrist and the wrist jumps
-  // to your cursor; nail it there and the nail lands somewhere you never
-  // pointed at. Held as a world offset, the limb keeps the relationship it had
-  // when you took hold of it.
+  // keep the joint-to-ray offset (up to PICK_R): snapping would jump the limb
   const jn = hitR.avatar.vrm.humanoid?.getNormalizedBoneNode?.(joint);
   const off = new THREE.Vector3();
   if (jn) {
@@ -210,8 +174,7 @@ function endGrab() {
   sendBodyDrag(drag.id, {
     end: true,
     ...(drag.rd.pose ? { pose: drag.rd.pose } : {}),
-    // the handover: exactly where every joint is and how fast, so the owner
-    // CONTINUES this sim instead of rebuilding a guess of it from the bones
+    // the handover: every joint's place and speed, so the owner CONTINUES this sim
     sim: drag.rd.snapshot(),
     ...(r?.avatar ? {
       p: r.avatar.root.position.toArray(),
@@ -223,13 +186,7 @@ function endGrab() {
   drag = null;
 }
 
-/** The dragged person LEFT (#95): release custody BEFORE the avatar is
- *  disposed — endGrab's normal path sends a handover to the departed id and
- *  disposes a sim built over bones that are about to go through
- *  deepDispose (the one-frame-late recovery double-disposed the VRM). This
- *  is the quiet version: no wire send to a ghost, drop the sim, clear the
- *  custody set, done. Runs on net's 'participant-teardown', which every
- *  leave-shaped exit emits before touching the body. */
+/** The dragged person left (#95): release quietly BEFORE the avatar is disposed, or the VRM is double-disposed ('participant-teardown' comes first). */
 bus.on('participant-teardown', (id) => {
   if (drag?.id === id) {
     drag.rd.setPin(null);
@@ -255,10 +212,10 @@ canvas.addEventListener('wheel', (e) => {
 let draggedBy = null;        // who currently drives MY body
 let lastSampleAt = 0;
 
-/** True while someone else's sim owns this body — main.js consults it. */
+/** main.js consults it. */
 export function beingDragged() { return draggedBy != null; }
 
-/** Break free (movement key, getUp): tell the dragger and take myself back. */
+/** Movement key or getUp. */
 export function revokeDragged() {
   if (!draggedBy) return;
   sendBodyDrag(draggedBy, { end: true });
@@ -277,8 +234,7 @@ bus.on('bodydrag', (msg) => {
     draggedBy = by;
     lastSampleAt = performance.now();
     hooks.beginDragged(by);
-    // grabbing a nailed joint takes it back into the hand; the OTHER nails
-    // stay mine, and the dragger's takeover sim needs to know about them
+    // grabbing a nailed joint takes it back; the OTHER nails stay mine and the takeover sim must know them
     if (msg.grab.joint) hooks.removePin?.(String(msg.grab.joint));
     const pins = hooks.getPins?.() ?? [];
     if (pins.length) sendBodyDrag(by, { pins });
@@ -290,8 +246,7 @@ bus.on('bodydrag', (msg) => {
     return;
   }
   if (Array.isArray(msg.pins)) {
-    // the owner's other nails, sent back on grab accept — my takeover sim
-    // must keep enforcing them while I hold the body by something else
+    // the owner's other nails, sent on accept: my takeover sim keeps enforcing them
     if (drag && drag.id === by) {
       for (const p of msg.pins) {
         if (p?.j && Array.isArray(p.at) && p.at.length === 3) {
@@ -302,9 +257,7 @@ bus.on('bodydrag', (msg) => {
     return;
   }
   if (msg.end != null) {
-    // my dragger let go (or a refused grabber acknowledging) — resume myself.
-    // A release may carry a nail: the dragger pinned the held joint where it
-    // was, and from here MY sim enforces it.
+    // my dragger let go: resume myself; a nail it carries is MY sim's to enforce from here
     if (draggedBy === by) {
       draggedBy = null;
       if (msg.pinAt?.joint && Array.isArray(msg.pinAt.at)) hooks.addPin?.(String(msg.pinAt.joint), msg.pinAt.at);
@@ -328,10 +281,7 @@ bus.on('bodydrag', (msg) => {
 
 // ---------------------------------------------------------------- tick
 
-/** Dev introspection — what the drag module believes right now. */
-/** The takeover sim, while a body is in your hand. The debug panel wants it:
- *  a dragged body is a DIFFERENT Ragdoll from your own, and a panel that only
- *  ever reads main.js's shows nothing for the body you are actually holding. */
+/** The takeover sim (not main.js's Ragdoll), for the debug panel. */
 export function dragSim() { return drag?.rd ?? null; }
 
 export function dragState() {
@@ -343,10 +293,7 @@ export function updateBodyDrag(dt, now = performance.now()) {
   if (drag) {
     const r = remotes.get(drag.id);
     if (!r?.avatar) { endGrab(); return; }       // they left mid-drag
-    // Self-heal on the owner's own word: presence samples keep arriving while
-    // we suppress their APPLICATION, and the owner streaming any non-ragdoll
-    // clip means they took themselves back — whether or not the revoke
-    // message survived the trip. Their stream outranks our sim, always.
+    // Self-heal: an owner streaming any non-ragdoll clip took themselves back, revoke or no; their stream outranks our sim.
     const newest = r.buf[r.buf.length - 1];
     if (newest?.clip && newest.clip !== 'ragdoll') {
       drag.rd.setPin(null);
@@ -375,8 +322,7 @@ export function updateBodyDrag(dt, now = performance.now()) {
     hooks?.endDragged({});
   }
 
-  // nails, drawn where the world says they are: every body streams its pins
-  // in presence, mine come from my own state
+  // nails, drawn where presence says; mine from my own state
   const wanted = new Map();
   for (const r of remotes.values()) {
     const pins = r.buf?.[r.buf.length - 1]?.pins;

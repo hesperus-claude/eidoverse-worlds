@@ -260,4 +260,14 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
   const says = (t: string) => /part geometry unavailable here/.test(t) && /asking again won't change that/.test(t) && /face \{x, z\}|move \{to: \[x, z\]\}/.test(t);
   ok(!r.ok && !faced.length && out.isError && says(out.content[0].text) && says(beside.refusal ?? ""), "on a part-riding socket, face and beside say a retry won't help and coordinates near it will", { face: out.content[0].text, beside }); }
 
+// a world server that takes the request and never answers: the door's read is bounded (tools.ts HTTP_READ_MS), and the
+// tool answers as a failed call instead of hanging the agent's turn
+{ const { HTTP_READ_MS } = await import("./tools.ts"); const { pause } = await import("../tools/protocol/wait.ts");
+  const hung = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) });
+  const ag: any = { httpBase: `http://127.0.0.1:${hung.port}`, readHeaders: {} };
+  const t0 = Date.now();
+  const out: any = await Promise.race([handleTool({ agent: ag } as any, "set_avatar", { avatar: "x" }), pause("the hang guard: past the read bound and its slack, the tool hung", HTTP_READ_MS + 5_000).then(() => "hung")]);
+  ok(Number.isFinite(HTTP_READ_MS) && out !== "hung" && out.isError && Date.now() - t0 < HTTP_READ_MS + 5_000, "a world server that never answers: set_avatar fails within the read bound, it doesn't hang", out);
+  hung.stop(true); }
+
 console.log(`door-unit-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);

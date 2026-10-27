@@ -27,7 +27,7 @@ batches.render({ render(s, c) {
   assert.equal(batches.debug().batches, 3);
   assert.equal(batches.debug().savedColorDraws, 127);
   assert(meshes.every((m) => m.layers.mask === 0));
-  // A recursive shadow render must not re-collect the temporarily hidden scene.
+  // a recursive shadow render must not re-collect the temporarily hidden scene
   s.onBeforeRender(this, s, c);
   assert.equal(batches.debug().instanced, 130);
   const instance = s.children.find((o) => o.isInstancedMesh);
@@ -48,7 +48,7 @@ assert.equal(scene.children.length, 130);
 assert(meshes.every((m) => m.layers.mask === 1));
 assert.equal(batches.active, false);
 
-// Dynamic parts retain their Object3D identity and live world transform.
+// dynamic parts retain their Object3D identity and live world transform
 const parent = new T.Group();
 scene.add(parent);
 parent.attach(meshes[0]);
@@ -68,7 +68,7 @@ batches.render(renderer, scene, camera);
 assert.equal(batches.debug().eligible, 128);
 parent.scale.set(1, 1, 1);
 
-// A hidden source mesh must not swallow visible children with their own layers.
+// a hidden source mesh must not swallow visible children with their own layers
 meshes[2].add(new T.Mesh(new T.SphereGeometry(), material));
 batches.render({ render(s, c) {
   renderer.render(s, c);
@@ -100,7 +100,7 @@ assert(!instanceTransformSafe(new T.Matrix4().makeScale(-1, 1, 1)));
 assert(!instanceTransformSafe(new T.Matrix4().makeScale(0, 1, 1)));
 assert(!instanceTransformSafe(new T.Matrix4().makeShear(1, 0, 0, 0, 0, 0)));
 
-// Cast/receive policy and layers never bleed across a batch.
+// cast/receive policy and layers never bleed across a batch
 meshes[4].castShadow = meshes[5].castShadow = true;
 meshes[6].receiveShadow = meshes[7].receiveShadow = true;
 meshes[8].layers.set(2); meshes[9].layers.set(2);
@@ -109,13 +109,13 @@ batches.render({ render(s, c) {
   const proxies = s.children.filter((o) => o.isInstancedMesh);
   assert(proxies.some((o) => o.castShadow && o.count === 2));
   assert(proxies.some((o) => o.receiveShadow && o.count === 2));
-  // Camera-invisible layers remain original draws (including their shadows).
+  // camera-invisible layers remain original draws (including their shadows)
   assert(!proxies.some((o) => o.layers.mask === 4));
 }}, scene, camera);
 assert.equal(meshes[8].layers.mask, 4);
 
-// Pending warm never hides originals; retiring during warm releases ONLY the
-// instance buffer after that warm finishes, without disposing borrowed assets.
+// pending warm never hides originals; retiring during warm releases ONLY the instance buffer after that warm finishes,
+// without disposing borrowed assets
 let finish;
 let disposed = 0, assetDisposed = 0;
 geometry.addEventListener('dispose', () => assetDisposed++);
@@ -141,7 +141,7 @@ await new Promise((r) => setTimeout(r, 0));
 assert.equal(disposed, 1);
 assert.equal(assetDisposed, 0);
 
-// Coplanar sheets and intersecting solids preserve original depth tie order.
+// coplanar sheets and intersecting solids preserve original depth tie order
 const overlapScene = new T.Scene();
 const sheet = new T.PlaneGeometry(3,3);
 for (let i=0;i<2;i++) {
@@ -154,8 +154,7 @@ batches.render(renderer,overlapScene,camera);
 assert.equal(batches.debug().overlapping,2);
 assert.equal(batches.debug().instanced,0);
 
-// Prototype disposal evicts borrowed pools immediately, without reaching any
-// other prototype's storage or keeping the retired source Object3D alive.
+// prototype disposal evicts borrowed pools at once, without touching another prototype's storage or keeping the source alive
 const disposable = new DrawBatches();
 disposable.render(renderer,tiny,camera);
 assert.equal(disposable.debug().pools,1);
@@ -165,8 +164,7 @@ assert.equal(disposable.debug().pools,0);
 assert.equal(assetDisposed,1);
 disposable.dispose();
 
-// Shared animated tangent bases reuse their pool as the angle changes, rather
-// than enqueueing one compile per frame. Instance matrices remain translations.
+// shared animated tangent bases reuse their pool as the angle changes (not one compile per frame); instance matrices stay translations
 const spinning = new T.Scene();
 const spinRoot = new T.Group();
 spinRoot.position.set(7,0,7);
@@ -187,7 +185,7 @@ for(let i=0;i<10;i++) {
 }
 spinBatches.dispose();
 
-// Removed entities leave no proxy draws; idle cells release instance buffers.
+// removed entities leave no proxy draws; idle cells release instance buffers
 scene.clear();
 for (let i = 0; i < 121; i++) batches.render(renderer, scene, camera);
 assert.equal(batches.debug().pools, 0);
@@ -196,11 +194,8 @@ assert.equal(assetDisposed, 1);
 batches.dispose();
 console.log('draw batches: lifecycle, fallback, transforms, shadows, layers, warm retirement passed');
 
-// XR MAIN PASS (VR alpha, 2026-09-05 'I pop to the origin'): while presenting, three hands the main pass an
-// ArrayCamera that is NOT the camera batches.render() was called with; ShadowNode then re-renders the same
-// scene from a light camera. Prepare against the array camera (xr.getCamera()), never the light camera —
-// excluding every ArrayCamera made the light camera the first 'main' caller and the batches were culled to
-// the sun's box around the origin. Own scene: the sections above leave the shared one with nothing eligible.
+// XR main pass: presenting, three hands the main pass an ArrayCamera and ShadowNode re-renders from a light camera;
+// prepare against xr.getCamera(), never the light camera (or batches cull to the sun's box). Own scene.
 {
   const xrScene = new T.Scene();
   const xrMeshes = Array.from({ length: 130 }, (_, i) => { const m = new T.Mesh(geometry, material); m.position.set(1 + (i % 10), 1, 1 + Math.floor(i / 10)); xrScene.add(m); return m; });
@@ -212,11 +207,11 @@ console.log('draw batches: lifecycle, fallback, transforms, shadows, layers, war
   const xrBatches = new DrawBatches();
   xrBatches.render({ xr: { isPresenting: true, getCamera: () => arrayCam }, render(s, c) {
     s.updateMatrixWorld(true);
-    s.onBeforeRender(this, s, lightCam);                                   // a shadow pass arrives FIRST
+    s.onBeforeRender(this, s, lightCam);  // a shadow pass arrives FIRST
     assert.equal(xrBatches.debug().instanced ?? 0, 0, 'a light camera must not prepare the batches');
-    s.onBeforeRender(this, s, arrayCam);                                   // the XR main pass, as three hands it over
+    s.onBeforeRender(this, s, arrayCam);  // the XR main pass, as three hands it over
     assert.equal(xrBatches.debug().instanced, 130, 'the presenting ArrayCamera IS the main pass: ' + JSON.stringify(xrBatches.debug()));
-  } }, xrScene, rigCam);                                                   // called with the RIG camera, as render.js does
+  } }, xrScene, rigCam);  // called with the RIG camera, as render.js does
   assert(xrMeshes.every((m) => m.layers.mask === 1));
   xrBatches.dispose();
   // not presenting: a stray ArrayCamera is not the main pass

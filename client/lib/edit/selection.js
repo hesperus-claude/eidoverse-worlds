@@ -1,11 +1,6 @@
-// selection — the editor's ONE selection (C6, 2026-10-12; review S2-1 / debt #7).
+// selection — the editor's ONE selection (C6).
 //
-// Before this, six modules each held a piece of it (scenegraph's `selected` as the declared
-// truth, build.js's `selected` reconciled to it every frame, editpanels' `extra` set plus
-// `worldSel`/`envFocus`, structure_ui's `selectedId`), and an `extending` flag existed so the
-// `sg:selected` a re-primary emitted mid-change would not clear the set it was changing.
-//
-// Now: `{ ids, kind }`, ids ordered with the PRIMARY first; one 'selection' bus event per change,
+// `{ ids, kind }`, ids ordered with the PRIMARY first; one 'selection' bus event per change,
 // carrying the new state, and none for a no-op. Nothing here knows whether an id exists — callers
 // that need a live thing check `entities` first — so it is headless and has no three.
 //
@@ -18,7 +13,7 @@ import { bus } from '../base.js';
 
 let ids = [];
 let kind = null;
-let act = null;   // the ACTIVE id: the last one clicked (R, gym 10-17 20:39). null = the primary stands in
+let act = null;   // the ACTIVE id: the last one clicked. null = the primary stands in
 let gen = 0;      // bumped on every change: a selection made later (when an async reply lands) checks it hasn't moved
 
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);

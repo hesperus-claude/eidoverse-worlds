@@ -1,4 +1,4 @@
-// onceanim — the pose packet's `anim` (R 10-17 16:26; spec/PROTOCOL.md pose.anim): the name of an anim the body plays
+// onceanim — the pose packet's `anim` (spec/PROTOCOL.md pose.anim): the name of an anim the body plays
 // ONCE (a gesture, a pose or a clip by name), riding exactly one packet. A receiver plays it over whatever the body holds
 // and returns to that; nothing remembers it (a joiner never replays it: server.ts settledPose drops ONCE_KEYS).
 // Pure: no imports, no DOM — the browser, the agent and the server read it alike.

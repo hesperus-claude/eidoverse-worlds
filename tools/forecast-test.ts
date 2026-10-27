@@ -1,25 +1,14 @@
-// forecast-test — the deterministic-weather contract, serverless.
-//
-// The claims under test (issue #29, review fences):
-//   - derivation is deterministic: same policy + epoch + now → same segment,
-//     from a cold walk, a resumed cursor, or another process entirely
-//   - the three planes agree: live incremental folding (browser client /
-//     mcpl agent), the sequencer's fold, and a late joiner replaying the
-//     folded snapshot through stateToEntries' synthetic entries — including
-//     across a manual override and the next scheduled boundary
+// forecast-test: the deterministic-weather contract (issue #29), serverless (`bun tools/forecast-test.ts`).
+//   - deterministic: same policy + epoch + now → same segment, from a cold walk, a resumed cursor, or another process
+//   - the three planes agree (live incremental fold, the sequencer's fold, a late joiner replaying the snapshot via
+//     stateToEntries), across a manual override and the next scheduled boundary
 //   - a weather verb under a rated sky REBASES hours (no day-snap)
-//   - provenance is server-stamped, never authored (spoof-proof), yet
-//     synthetic pre-history replay preserves the real stamps
+//   - provenance is server-stamped, never authored, yet synthetic pre-history replay keeps the real stamps
 //   - live ticking is O(1) via the cursor (fence #3)
 //   - the dwell floor bounds both strobe rate and walk length
-//
-// Run: bun tools/forecast-test.ts
 
-// Namespace import ON PURPOSE (#65 N2): a named import of an export main
-// doesn't have dies at LINK time, so not one assertion runs there and the
-// suite can't serve as a negative control. This way the shared checks and the
-// both-tree behavioral controls run on any tree; only the canonical-clock
-// checks gate on the export existing (labeled as novelty when absent).
+// namespace import ON PURPOSE (#65): a named import of a missing export dies at LINK time and no assertion runs, so the
+// suite couldn't be a negative control; only the canonical-clock checks gate on the export existing
 import * as F from "../shared/forecast.js";
 const { WEATHERS, normalizePolicy, segmentAt, effectiveSky, foldSkyEntry, hoursAt, describeSky } = F as any;
 const effectiveClock = (F as any).effectiveClock;
@@ -30,7 +19,7 @@ function check(name: string, ok: boolean, detail = "") {
   else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
 }
 
-const T0 = 1_754_000_000_000;   // fixed epoch — tests never touch the wall clock
+const T0 = 1_754_000_000_000;  // fixed epoch: tests never touch the wall clock
 const HOUR = 3600e3, MIN = 60e3;
 
 // ---------------------------------------------------------------- policy + determinism
@@ -52,7 +41,7 @@ const policyArgs = {
   const p = normalizePolicy(folded.forecast)!;
   check("policy normalizes", !!p && p.states.length === 4 && p.epoch === T0);
 
-  // same answer, ten times, at scattered offsets — and from a second normalize
+  // same answer ten times at scattered offsets, and from a second normalize
   let deterministic = true;
   const p2 = normalizePolicy(folded.forecast)!;
   for (let i = 0; i < 200; i++) {
@@ -83,7 +72,7 @@ const policyArgs = {
   }
   check("dwell floor holds (60s minimum)", floorOk);
 
-  // consecutive segments never repeat a state when there is anywhere else to go
+  // consecutive segments never repeat a state when there's anywhere else to go
   let noRepeat = true;
   let seg = segmentAt(p, T0);
   for (let i = 0; i < 100; i++) {
@@ -93,7 +82,6 @@ const policyArgs = {
   }
   check("no segment repeats its predecessor's state", noRepeat);
 
-  // every derived state is a policy state
   let statesOk = true;
   let g = segmentAt(p, T0);
   for (let i = 0; i < 100; i++) {
@@ -146,31 +134,28 @@ const policyArgs = {
 }
 
 // ---------------------------------------------------------------- three-plane parity across an override + boundary
-// (the review's required test: live client, folded late join, and MCPL
-//  perception agree through one manual override and the next scheduled
-//  boundary)
 
 {
   const entries = [
     { verb: "sky", args: { hours: 8, rate: 24, weather: "clear", forecast: policyArgs }, ts: T0, seq: 100, actor: "antra" },
   ];
-  // find the segment that contains T0+20min so we can land the override inside it
+  // the segment containing T0+20min, to land the override inside it
   const pre = foldSkyEntry(null, entries[0]);
   const p = normalizePolicy(pre.forecast)!;
   const segAtOverride = segmentAt(p, T0 + 20 * MIN);
   const tOverride = T0 + 20 * MIN;
   entries.push({ verb: "weather", args: { weather: "darkstorm", weatherK: 1.2, weatherSeconds: 10 }, ts: tOverride, seq: 101, actor: "digi" });
 
-  // plane A — live incremental fold (browser client applyEntry / mcpl agent)
+  // plane A: live incremental fold (browser client applyEntry / mcpl agent)
   let live: any = null;
   for (const e of entries) live = foldSkyEntry(e.verb === "sky" ? null : live, e);
 
-  // plane B — the sequencer's fold (identical calls; asserting the object is shared)
+  // plane B: the sequencer's fold (identical calls; asserting the object is shared)
   let server: any = null;
   for (const e of entries) server = foldSkyEntry(e.verb === "sky" ? null : server, e);
   check("live and server folds are identical", JSON.stringify(live) === JSON.stringify(server));
 
-  // plane C — late join: server's folded sky replayed as a synthetic entry
+  // plane C: late join, the server's folded sky replayed as a synthetic entry
   const late = foldSkyEntry(null, { verb: "sky", args: server, ts: Date.now(), seq: -1, actor: "world" });
 
   const times: [string, number][] = [
@@ -186,7 +171,7 @@ const policyArgs = {
       `live ${a.source}/${a.weather} vs late ${c.source}/${c.weather}`);
   }
 
-  // the override actually takes, and actually yields
+  // the override takes, and yields
   const during = effectiveSky(live, tOverride + 2 * MIN);
   check("override holds inside its segment (manual darkstorm)",
     during.source === "manual" && during.weather === "darkstorm" && during.k === 1.2);
@@ -196,11 +181,11 @@ const policyArgs = {
   const beforeO = effectiveSky(live, tOverride - 5 * MIN);
   check("before the override the forecast governs", beforeO.source === "forecast");
 
-  // hour parity — the shared-fact boundary's other half
+  // hour parity: the shared-fact boundary's other half
   const t = segAtOverride.endMs + 1 * MIN;
   check("hour parity live vs late join", Math.abs(hoursAt(live, t) - hoursAt(late, t)) < 1e-9);
 
-  // MCPL text perception names the policy and the actor (provenance requirement)
+  // MCPL text perception names the policy and the actor (provenance)
   const textDuring = describeSky(live, tOverride + 2 * MIN)!;
   check("perception narrates the manual override with its actor",
     textDuring.includes("manual override") && textDuring.includes("digi"), textDuring);
@@ -242,10 +227,8 @@ const policyArgs = {
   const perTickUs = (performance.now() - tick0) / 10;   // µs per tick over 10k ticks
   check(`cold year-old walk, default dwell (${coldMs.toFixed(1)}ms)`, coldMs < 2000);
   check(`cursor tick is O(1) (${perTickUs.toFixed(1)}µs/tick)`, perTickUs < 200);
-  // the WORST policy the floor allows: fixed 60s dwell = ~525,600 segments
-  // per year of age. This is the number the receipt has to be honest about —
-  // it is a one-time join cost, not a per-tick one; long-lived worlds that
-  // outgrow it want checkpoints, not a bigger budget here.
+  // the WORST policy the floor allows: fixed 60s dwell ≈ 525,600 segments per year, a one-time join cost (long-lived
+  // worlds want checkpoints, not a bigger budget)
   const worst = normalizePolicy({ seed: 1, states: ["clear", "rain"], dwellSec: [60, 60] })!;
   Object.assign(worst, { epoch: T0 });
   const w0 = performance.now();
@@ -259,10 +242,9 @@ const policyArgs = {
 {
   const standing = foldSkyEntry(null, { verb: "sky", args: { hours: 8, rate: 24, clouds: "cumulus", forecast: policyArgs }, ts: T0, seq: 1, actor: "antra" });
   const e = { verb: "weather", args: { weather: "rain", keepSky: false }, ts: T0 + HOUR, seq: 2, actor: "digi" };
-  // the server folds with the standing sky, the client folds with its clock
-  // args — keepSky must yield the SAME result through both calls
+  // server folds with the standing sky, client with its clock args: keepSky must yield the SAME through both
   const asServer = foldSkyEntry(standing, e);
-  const asClient = foldSkyEntry(standing, e);   // world.js now always passes the standing sky too
+  const asClient = foldSkyEntry(standing, e);  // world.js always passes the standing sky too
   check("keepSky:false discards the standing sky in the helper",
     asServer.clouds === undefined && asServer.forecast === undefined && asServer.weather === "rain");
   check("keepSky parity: identical through server and client calls",
@@ -287,8 +269,7 @@ const policyArgs = {
 
 // ---------------------------------------------------------------- real clock
 {
-  // hoursAt in clock mode = the named timezone's wall hour at tMs, DST and
-  // all — fixed instants, no ambient clock, so every plane derives the same
+  // clock mode: the named timezone's wall hour at tMs, DST and all; fixed instants, so every plane derives the same
   const real = { clock: "real" };                       // tz defaults to LA
   const jan = Date.UTC(2026, 0, 15, 20, 30, 0);        // LA = UTC-8 (PST)
   const jul = Date.UTC(2026, 6, 15, 19, 0, 0);         // LA = UTC-7 (PDT)
@@ -300,15 +281,14 @@ const policyArgs = {
     String(hoursAt({ clock: "real", tz: "UTC" }, jan)));
   check("real clock: authored hours/rate are ignored",
     Math.abs(hoursAt({ clock: "real", hours: 3, rate: 24, ts: T0 }, jan) - 12.5) < 1e-9);
-  // a typo'd tz must not freeze the sun — the rated clock takes over
+  // a typo'd tz must not freeze the sun: the rated clock takes over
   const typo = { clock: "real", tz: "America/Nowhere", hours: 6, rate: 1, ts: T0 };
   check("real clock: unknown tz falls back to the rated formula",
     Math.abs(hoursAt(typo, T0 + 2 * HOUR) - 8) < 1e-9, String(hoursAt(typo, T0 + 2 * HOUR)));
-  // the fold carries clock mode through a weather merge — a passing storm
-  // must not knock a world back onto the frozen authored clock
+  // the fold carries clock mode through a weather merge: a passing storm must not revert to the frozen authored clock
   const sky = foldSkyEntry(null, { verb: "sky", args: { clock: "real", tz: "America/Los_Angeles" }, ts: T0, seq: 1, actor: "antra" });
   const wet = foldSkyEntry(sky, { verb: "weather", args: { weather: "rain" }, ts: T0 + HOUR, seq: 2, actor: "world" });
-  // shape audit 10-16: clock 'real' is stored as its tz (a tz present is the wall clock)
+  // clock 'real' is stored as its tz (a tz present is the wall clock)
   check("fold: weather merge keeps the tz (the wall clock)", wet.clock === undefined && wet.tz === "America/Los_Angeles",
     JSON.stringify({ clock: wet.clock, tz: wet.tz }));
   check("describeSky names the real clock", (describeSky(sky, jan) ?? "").includes("real time, America/Los_Angeles"),
@@ -317,33 +297,25 @@ const policyArgs = {
 
 
 // ---------------------------------------------------------------- clock contract (#65)
-// One clock governs, and the folded state says which. Accelerated → real →
-// accelerated is the acceptance path from the issue; the review's B1 path —
-// normalized real → unresolvable tz — is the regression guard: the parked
-// clock must survive the re-issue and genuinely govern (a typo dims nothing).
-//
-// The CONTROL checks below use only surfaces that exist on BOTH trees
-// (foldSkyEntry + hoursAt), so on main they fail with the actual stale
-// numbers — behavioral evidence, never a link-time missing-export.
+// one clock governs and the folded state says which: accelerated → real → accelerated, and normalized real →
+// unresolvable tz (the parked clock must survive the re-issue and govern; a typo dims nothing)
 
 {
   const synth = (bag: any) => foldSkyEntry(null, { verb: "sky", args: bag, ts: T0 + 9 * HOUR, seq: -1, actor: "world" });
 
-  // 1 — author accelerated policy (the commons shape: seq 2561)
+  // 1: author accelerated policy (the commons shape)
   const rated = foldSkyEntry(null,
     { verb: "sky", args: { hours: 6.8, rate: 24, clouds: "cumulus", forecast: policyArgs }, ts: T0, seq: 2561, actor: "mica" });
   check("#65 rated: hours/rate are top-level active state", rated.hours === 6.8 && rated.rate === 24);
   check("#65 rated: late join re-fold is identical",
     JSON.stringify(synth(rated)) === JSON.stringify(rated));
 
-  // 2 — flip to real time, re-issuing the FULL standing bag (the tuner's
-  // gather() spreads skyArgs(), so the stale hours/rate ride along — the
-  // exact authoring shape that produced the issue's receipt at seq 4777)
+  // 2: flip to real time, re-issuing the FULL standing bag (the tuner's gather() spreads skyArgs(), so stale hours/rate ride along)
   const T1 = T0 + 2 * HOUR;
   const real = foldSkyEntry(null,
     { verb: "sky", args: { ...rated, clock: "real", tz: "America/Los_Angeles" }, ts: T1, seq: 4777, actor: "antra" });
-  // shape audit 10-16 (render-media-env §13): one clock governs and the stored sky says which by its tz alone; hours/rate/ts
-  // stay put as the rated fallback (no dormantRated park: fold bookkeeping in the authored value)
+  // (render-media-env §13) the stored sky says which clock by its tz alone; hours/rate/ts stay as the rated fallback
+  // (no dormantRated park: fold bookkeeping in the authored value)
   check("#65 CONTROL: the effective clock is the wall clock after the flip, never ×24",
     effectiveClock(real, T1).mode === "real" && !("rate" in effectiveClock(real, T1)),
     JSON.stringify(effectiveClock(real, T1)));
@@ -355,9 +327,7 @@ const policyArgs = {
   check("#65 real: late join re-fold is identical",
     JSON.stringify(synth(real)) === JSON.stringify(real));
 
-  // 3 — B1: re-issue the NORMALIZED standing bag with an unresolvable tz.
-  // The parked clock must survive and govern — rev-1 of this contract
-  // destroyed it here and froze the world at the `?? 12` default noon.
+  // 3: re-issue the NORMALIZED bag with an unresolvable tz: the parked clock must survive and govern, not freeze at `?? 12` noon
   const T2 = T0 + 3 * HOUR;
   const typo = foldSkyEntry(null,
     { verb: "sky", args: { ...real, tz: "America/Nowhere" }, ts: T2, seq: 4800, actor: "antra" });
@@ -373,8 +343,7 @@ const policyArgs = {
   check("#65 B1: late join re-fold of the typo bag is identical",
     JSON.stringify(synth(typo)) === JSON.stringify(typo));
 
-  // 4 — weather lands during the bad-tz fallback: merge restamps sky.ts but
-  // the parked clock's own ts anchor keeps the fallback day continuous
+  // 4: weather during the bad-tz fallback restamps sky.ts, but the parked clock's own ts anchor keeps the day continuous
   const T3 = T0 + 4 * HOUR;
   const wetTypo = foldSkyEntry(typo, { verb: "weather", args: { weather: "rain" }, ts: T3, seq: 4900, actor: "digi" });
   check("#65 B1: weather merge does not snap the fallback day",
@@ -385,8 +354,7 @@ const policyArgs = {
   check("#65 weather verb cannot claim bag authorship", wetTypo.seq === 4800 && wetTypo.by === "antra",
     JSON.stringify({ seq: wetTypo.seq, by: wetTypo.by }));
 
-  // 5 — bad tz → back to accelerated: full bag re-issue with the clock
-  // cleared restores the rated fields as active state, dormant drops
+  // 5: bad tz → back to accelerated: a full re-issue with the clock cleared restores the rated fields, dormant drops
   const back = foldSkyEntry(null,
     { verb: "sky", args: { ...wetTypo, clock: undefined, tz: undefined, hours: 6.8, rate: 24 }, ts: T0 + 5 * HOUR, seq: 5100, actor: "antra" });
   check("#65 back to rated: hours/rate active again, dormant dropped",
@@ -396,15 +364,13 @@ const policyArgs = {
   check("#65 back to rated: late join re-fold is identical",
     JSON.stringify(synth(back)) === JSON.stringify(back));
 
-  // 6 — dormantRated guards: weather verbs are locked out entirely; sky-verb
-  // values are authored config (same rank as authoring rate itself) but
-  // shape-sanitized — junk keys and non-finite values can never land
+  // 6: dormantRated guards: weather verbs are locked out; sky-verb values are authored config but shape-sanitized
+  // (junk keys and non-finite values never land)
   const wSpoof = foldSkyEntry(real,
     { verb: "weather", args: { weather: "rain", dormantRated: { rate: 666 } } as any, ts: T3, seq: 5200, actor: "digi" });
   check("#65 guard: weather verb cannot author the clock under a tz",
     wSpoof.rate === 24 && wSpoof.dormantRated === undefined, JSON.stringify(wSpoof));
-  // the indirect route (review N1'): top-level hours/rate on a weather verb
-  // while the standing clock is real must not reach the park either
+  // the indirect route: top-level hours/rate on a weather verb while the clock is real must not reach the park either
   const wIndirect = foldSkyEntry(real,
     { verb: "weather", args: { weather: "rain", hours: 1, rate: 666 }, ts: T3, seq: 5250, actor: "digi" });
   check("#65 guard: weather-verb hours/rate cannot reach the fallback clock under a tz",
@@ -420,9 +386,7 @@ const policyArgs = {
   check("#65 guard: rated mode drops dormantRated and fold owns seq/by",
     spoof.seq === 6000 && spoof.by === "antra" && spoof.dormantRated === undefined, JSON.stringify(spoof));
 
-  // 7 — a legacy bag (folded before the contract: stale top-level fields
-  // beside clock:'real' — the live commons shape) heals on synthetic replay,
-  // provenance untouched
+  // 7: a legacy bag (stale top-level fields beside clock:'real') heals on synthetic replay, provenance untouched
   const legacy = { hours: 6.8, rate: 24, clouds: "cumulus", clock: "real", tz: "America/Los_Angeles",
     forecast: { ...policyArgs, epoch: T0, seq: 4777, by: "antra" }, ts: T1 };
   const healed = synth(legacy);
@@ -433,8 +397,7 @@ const policyArgs = {
     healed.forecast.epoch === T0 && healed.forecast.seq === 4777 && healed.forecast.by === "antra"
       && healed.ts === T1);
 
-  // ---- canonical clock (branch-only export; absence is NOVELTY, the
-  //      CONTROL failures above are the behavioral evidence on main)
+  // ---- canonical clock (branch-only export; its absence is novelty, the controls above are the behavioural evidence)
   if (!effectiveClock) {
     console.log("  (novelty) effectiveClock export absent on this tree — canonical-clock checks skipped;"
       + " the #65 CONTROL failures above are the behavioral evidence");

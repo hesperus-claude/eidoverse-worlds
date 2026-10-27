@@ -1,22 +1,7 @@
-/**
- * Remotes lifecycle test — #95: a departed participant must die whole, and
- * nothing but an AUTHORITY (arrive, roster) may bring a body into being.
- * Presence — pose, frame, RTC — updates generations; it never creates them.
- *
- * Drives net.js's dispatch directly (the server's per-socket FIFO — proven
- * in the #95 inventory: synchronous handler, interval-driven frames, FIFO
- * ws sends — is the license to sequence messages by hand). Avatar loads are
- * held open and resolved by the test, so every race is forced, never timed.
- *
- * Run: bun run tools/remotes-lifecycle-test.ts
- *
- * Fail-on-main vectors (each named in the checks): leave→straggler frame /
- * pose (the default-avatar sunflower ghost, and #56's stand-forever race),
- * takeover buffer inheritance, predecessor cleanup vs successor, frame-
- * before-legitimate-arrive, reconnect roster seed, custody-before-dispose
- * ordering. leave→delayed-load and takeover→old-load ride the stale-load
- * guard, asserted here as regressions.
- */
+/** Remotes lifecycle (#95): a departed participant must die whole, and only an AUTHORITY (arrive, roster) may create a body;
+ *  presence (pose, frame, RTC) updates generations, never creates them. net.js's dispatch is driven by hand (the server's
+ *  per-socket FIFO licenses it) with avatar loads held open, so every race is forced, never timed.
+ *  Run: bun run tools/remotes-lifecycle-test.ts */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
@@ -30,7 +15,7 @@ const settle = () => new Promise((r) => setTimeout(r, 10));
 
 const stubs = await import("./remotes-stubs.mjs");
 const { mock } = await import("bun:test");
-for (const m of ["core", "assets", "world", "chat", "fp_view", "boot", "ui", "avatar", "xrbody"]) {   // xrbody: remotes.js imports applyRemoteXR/resetFingers (VR PR); its cone reaches xr.js
+for (const m of ["core", "assets", "world", "chat", "fp_view", "boot", "ui", "avatar", "xrbody"]) {   // remotes.js imports applyRemoteXR/resetFingers; its cone reaches xr.js
   mock.module(`${import.meta.dir}/../client/lib/${m}.js`, () => stubs);
 }
 const remotesMod = await import("../client/lib/remotes.js");
@@ -38,10 +23,7 @@ const netMod = await import("../client/lib/net.js");
 const { remotes, dropRemote, ensureRemote, pushPose } = remotesMod as any;
 const { _dispatch, teardownParticipant, stalePresenceCount } = netMod as any;
 
-// ---- pre-#95 head: net exports no dispatch seam. Fail by name, with the
-// ghost visible in each detail — the control stays a control (assert the
-// FIXED contracts against the components main actually exports; main's
-// pose path is literally `ensureRemote(id, null)`, net.js:359).
+// ---- a net with no dispatch seam (pre-#95): fail by name, asserting the FIXED contracts against what it exports
 if (typeof _dispatch !== "function") {
   console.log("\n━━ pre-#95 head detected — component receipts ━━");
   check("net exposes the participant-teardown funnel", false, "teardownParticipant absent");
@@ -66,8 +48,7 @@ const DEFAULTISH = (p: string) => /claudesona|default|sunflower/i.test(p) || p =
 const defaultBuilds = () => stubs.avatarCalls.filter((c: any) => DEFAULTISH(c.path)).length;
 const pose = (over = {}) => ({ p: [1, 0, 1], yaw: 0.5, speed: 0, clip: "idle", ...over });
 
-// house review of #260, client/lib I15: a body's seat rides its frames (setBodySeat, presence), so dropping the body must
-// clear it, or a leave keeps that person on the seat in avatarMounts (occupied, for every seat check) forever.
+// a body's seat rides its frames (setBodySeat), so dropping the body must clear it, or a leave keeps that person seated forever.
 // Mutation (must go red): drop the setBodySeat(id, null) line in remotes.js dropRemote.
 console.log("\n━━ a dropped body leaves its seat ━━");
 {
@@ -84,7 +65,7 @@ console.log("\n━━ a dropped body leaves its seat ━━");
 
 console.log("\n━━ the sunflower door: presence never creates a body ━━");
 {
-  // leave → straggler FRAME (Digi's specimen; #56's race)
+  // leave → straggler FRAME (#56's race)
   await _dispatch({ type: "arrive", id: "shoalstone", avatar: "vrms/shoalstone.vrm" });
   await settle();
   check("an arrive builds the announced body", remotes.has("shoalstone") && stubs.avatarCalls.at(-1).path === "vrms/shoalstone.vrm");
@@ -157,9 +138,8 @@ console.log("\n━━ takeover: a successor inherits nothing, and outlives its p
   const pre = remotes.get("helen");                                     // the TRUE predecessor record (#97 B2)
   check("the predecessor holds streamed poses", pre.buf.length === 1);
   const preGen = pre.gen;
-  // the takeover must RETIRE the predecessor generation whole: the same
-  // generation-end event a leave emits (custody + voice listen to it),
-  // fired while the id is STILL PRESENT — the roster sweep cannot do this
+  // the takeover must RETIRE the predecessor generation whole, with a leave's generation-end event, while the id is STILL
+  // PRESENT: the roster sweep cannot do this
   const retire: string[] = [];
   stubs.bus.on("participant-teardown", (id: string) => retire.push(id));
   // same avatar re-announced = server-suppressed-leave takeover
@@ -178,8 +158,7 @@ console.log("\n━━ takeover: a successor inherits nothing, and outlives its p
     `gen ${preGen} → ${post.gen} (on main: no generations, buffer inherited)`);
   check("…the predecessor's pose buffer is NOT inherited", post.buf.length === 0, `buf=${post.buf.length}`);
   check("…and the mesh transplanted without a reload flicker", post.avatar === pre.avatar && !post.loading);
-  // predecessor cleanup — holding the REAL predecessor record — is a
-  // COMPLETE no-op: no drop, no custody event, no side effect at all
+  // predecessor cleanup holding the REAL predecessor record is a COMPLETE no-op: no drop, no custody event, no side effect
   const events: string[] = [];
   stubs.bus.on("participant-teardown", (id: string) => events.push(id));
   const dropped = dropRemote("helen", pre);
@@ -236,9 +215,7 @@ console.log("\n━━ reconnect roster seed: the snapshot prunes through the fun
 
 console.log("\n━━ kick/ban: the expel's leave broadcast walks the same funnel ━━");
 {
-  // the server accompanies every 4006 expel with an ordinary leave broadcast
-  // (server.ts ~1109, verified in the #95 inventory) — so moderation removal
-  // IS the leave path; this pins that the funnel treats it as such
+  // the server follows every 4006 expel with an ordinary leave broadcast, so moderation removal IS the leave path
   const torn: string[] = [];
   stubs.bus.on("participant-teardown", (id: string) => torn.push(id));
   await _dispatch({ type: "arrive", id: "banned", avatar: "vrms/banned.vrm" });

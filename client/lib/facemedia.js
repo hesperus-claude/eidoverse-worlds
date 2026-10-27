@@ -1,7 +1,7 @@
-// facemedia — a sign or a picture added to a MODEL goes on its front face, where people can see it (review 10-07 S4).
+// facemedia — a sign or a picture added to a MODEL goes on its front face, where people can see it.
 //
 // A text or picture component with no part draws at its thing's origin, facing +Z: on a crate that's inside the crate,
-// half under the floor, and nobody saw it (B 07-picture-set). Roblox's SurfaceGui picks a face (Front by default) and
+// half under the floor, where nobody sees it. Roblox's SurfaceGui picks a face (Front by default) and
 // fits the part; Unity puts a canvas at the object's front. Here the sign is its OWN thing, a child of the model, stood
 // just past the model's front (+Z) face, centred on it and sized to it — one create, one undo, and it rides the model
 // wherever it goes. The parent's scale is undone on the child so the sign keeps its own size on a stretched crate.
@@ -46,7 +46,7 @@ export function frontOf(id) {
  *  reply; the new sign is selected once it lands. Returns null (nothing sent) when `id` has no model of its own. */
 export async function addOnFace(id, comp, data) {
   const f = frontOf(id); if (!f) return null;
-  const cid = '$sign';   // the authority mints its id (R 10-17); the reply's ids map says what it became
+  const cid = '$sign';   // the authority mints its id; the reply's ids map says what it became
   const value = { ...data };
   let pos = f.pos;
   if (comp === 'picture') {

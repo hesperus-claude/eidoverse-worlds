@@ -1,20 +1,12 @@
-/**
- * The number that decides the design: pure-JS SRTP cost at room scale.
- *
- * werift encrypts in JavaScript. #104's acceptance table wants N=2/6/12 load,
- * and my own spec pre-registered this as gotcha 3 — "the number that decides
- * whether the design survives". Everyone talks at once (worst case; real rooms
- * have one or two speakers), so this is a ceiling, not an average.
- *
- * Run: bun tools/sfu-load.ts [N] [seconds]
- */
+/** Pure-JS SRTP cost at room scale (werift encrypts in JavaScript; #104's acceptance table wants N=2/6/12): the number that decides whether the design survives.
+ *  Everyone talks at once, so this is a ceiling, not an average.
+ *  Run: bun tools/sfu-load.ts [N] [seconds] */
 import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, RtpHeader } from "werift";
 import { Sfu } from "../server/sfu.ts";
 
 const N = Number(process.argv[2] ?? 12);
 const SECONDS = Number(process.argv[3] ?? 10);
-/** How many of the N are actually talking. Everyone-at-once is the ceiling;
- *  a real room has 1-2. Pass as arg 4 to measure the realistic case. */
+/** how many of the N talk; a real room has 1-2. Arg 4 measures the realistic case. */
 const SPEAKERS = Number(process.argv[4] ?? N);
 const CODEC = new RTCRtpCodecParameters({ mimeType: "audio/opus", clockRate: 48000, channels: 2, payloadType: 111 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -48,7 +40,7 @@ console.log(`  ${N} legs up`);
 
 // full mesh of consent: everyone hears everyone (N*(N-1) routes)
 for (const l of peers) for (const s of peers) if (l.id !== s.id) sfu.setConsent(l.id, s.id, true);
-// the SFU offers (see sfu.ts: server offers, never answers)
+// the SFU offers, never answers (sfu.ts)
 for (const p of peers) await negotiate(sfu.getLeg(p.id)!.pc, p.pc);
 await sleep(1500);
 const routes = peers.reduce((n, p) => n + (sfu.getLeg(p.id)?.outbound.size ?? 0), 0);
@@ -67,23 +59,18 @@ for (let tick = 0; tick < ticks; tick++) {
   }
   await sleep(PTIME_MS);
 }
-// 🔴 TWO WINDOWS, REPORTED SEPARATELY (#130 review). `elapsed` used to include
-// this drain, understating sustained CPU/egress (reviewer's check: reported
-// 3.48 Mbps where the active-send arithmetic gives ~4.86). The drain still
-// exists — delivery accounting needs in-flight packets to land — but rates are
-// computed over the ACTIVE send window and the drain is reported as itself.
+// 🔴 TWO WINDOWS (#130): rates over the ACTIVE send window; the drain (in-flight packets landing) is reported as itself, or it
+// understates sustained CPU/egress
 const activeSec = (Date.now() - t0) / 1000;
 await sleep(1000);
 
 const elapsed = (Date.now() - t0) / 1000;
 const cpu = process.cpuUsage(cpu0);
-const cpuPct = ((cpu.user + cpu.system) / 1000 / (activeSec * 1000)) * 100;  // over the active send window — the drain is idle time
+const cpuPct = ((cpu.user + cpu.system) / 1000 / (activeSec * 1000)) * 100;  // over the active send window: the drain is idle time
 const memMB = (process.memoryUsage().rss - mem0) / 1048576;
 const d = sfu.diag();
 const heard = peers.reduce((n, p) => n + p.heard, 0);
-// `sent` already sums EVERY peer's packets, so the fanout multiplier is
-// (N-1) per packet — not per peer. (First run read 200%: the formula was
-// wrong, not the SFU. forwarded == sent*(N-1) exactly, which is the proof.)
+// `sent` already sums EVERY peer's packets, so the fanout is (N-1) per packet, not per peer: forwarded == sent*(N-1)
 const expected = sent * (N - 1);
 const egressBps = (d.forwarded / activeSec) * (OPUS_BYTES + 12) * 8;
 

@@ -1,8 +1,7 @@
 // shared/protocol/authority/moderation.js — acting on a person: the rule every person-act shares (personAct), lifting a
 // sanction (personLift), and the moderation verbs (warn, mute/unmute, kick, ban/unban, modlog, bans) as
-// MOD_VERBS, which authority.js spreads into VERBS where they stood (refactor split, 2026-10-17; moved from authority.js's
-// "acting on a person" section and the VERBS table unchanged). Moderation is the separate moderator log (§2.1): nothing
-// here writes the world log.
+// MOD_VERBS, which authority.js spreads into VERBS. Moderation is the separate moderator log: nothing here writes the
+// world log.
 import { isIdentity } from "../fold.js";
 import * as R from "../roles.js";
 import { CTX } from "./ctx.js";
@@ -40,8 +39,8 @@ function personAct(w, actor, a, verb, powers, { noOwner } = {}) {
 function personLift(w, actor, a, verb, recs, { strict, power = verb }) {
   const st = w.state(); if (!isIdentity(a.who)) refuse("shape", `un${verb} {who}`, "");
   if (!may(st, actor, power) && roleOf(st, actor) !== "owner") refuse("rights", `lifting a ${verb} needs ${power}; you are ${roleOf(st, actor)}`, "ask a moderator or an owner", { needs: power });
-  if (a.who === actor) refuse("rank", `you can't lift a ${verb} on yourself`, "ask someone ranked above whoever made it");   // review 10-07
-  // a lift ends every record of its kind in force, so it must be allowed over each one (stacked sanctions: review 10-07);
+  if (a.who === actor) refuse("rank", `you can't lift a ${verb} on yourself`, "ask someone ranked above whoever made it");
+  // a lift ends every record of its kind in force, so it must be allowed over each one (stacked sanctions);
   // with none in force (never made, or already ended) it answers ok and changes nothing: no record is logged, and nobody is
   // told (server-check CM4: "a second unban changes nothing, and tells nobody anything"). Returns whether any was in force
   const inForce = Array.isArray(recs) ? recs : recs ? [recs] : [];
@@ -53,7 +52,7 @@ function personLift(w, actor, a, verb, recs, { strict, power = verb }) {
   return inForce.length > 0;
 }
 const MOD_VERBS = {
-  // moderation (§2.1): a separate log, enforced by the authority; never a world entry. Research roles §5–6: every act on a
+  // moderation: a separate log, enforced by the authority; never a world entry. Research roles §5–6: every act on a
   // person needs its permission and a target ranked strictly below you (never yourself, never your equal, never an owner);
   // its duration is capped below owner; its record names identities. Expiry is the authority's clock (sanction views above).
   warn: (w, actor, a) => { const t = personAct(w, actor, a, "warn", R.WARN_POWERS);

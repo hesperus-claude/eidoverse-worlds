@@ -1,6 +1,5 @@
-// shared/protocol/authority/math.js — rotation, frames, boxes and surfaces (refactor C11, 2026-10-12; moved from
-// authority.js's "math" section unchanged). A leaf: it reads a thing's geometry through the catalogue and rounds a
-// rotation through storage's qr3, and nothing here reaches the index or the gate.
+// shared/protocol/authority/math.js — rotation, frames, boxes and surfaces. A leaf: geometry through the catalogue,
+// rotation rounded through storage's qr3; nothing here reaches the index or the gate.
 import { COMPONENTS } from "../componentspec.js";
 import { r3 } from "../round.js";
 import { boxOfM, geomE } from "./catalogue.js";
@@ -52,7 +51,7 @@ function solids(st, id) {
     for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) { const p = qrot(t.q, [x * t.scale[0], y * t.scale[1], z * t.scale[2]]); cs.push(p.map((v, i) => v + t.pos[i])); }
     return { min: [0, 1, 2].map((i) => Math.min(...cs.map((c) => c[i]))), max: [0, 1, 2].map((i) => Math.max(...cs.map((c) => c[i]))) }; });
 }
-// Oriented boxes + the separating-axis test (F21): world-AABBs of rotated solids fatten into false overlaps.
+// Oriented boxes + the separating-axis test: world-AABBs of rotated solids fatten into false overlaps.
 function obbs(st, id) {
   const e = st.entities[id]; const m = geomE(e); if (!m) return [];
   const t = worldT(st, id); const boxes = m.solids ?? [boxOfM(m)];
@@ -65,12 +64,10 @@ const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0
 const satCost = (A, B) => (isI(A.ax) && isI(B.ax) ? 1 : 10);   // work units (the spatial index's budget): measured 0.1 / 1 µs
 const NONE = new Set();
 const isI = (ax) => ax[0][0] === 1 && ax[0][1] === 0 && ax[0][2] === 0 && ax[1][0] === 0 && ax[1][1] === 1 && ax[1][2] === 0 && ax[2][0] === 0 && ax[2][1] === 0 && ax[2][2] === 1;
-function satDepth(A, B) { // smallest penetration over the 15 axes; <= 0 means separated
-  // two unrotated boxes (most pairs): the 15 axes are the world's three, so the same numbers in the same order, without
-  // building them (a place's search tests thousands of pairs)
+function satDepth(A, B) { // <= 0 means separated
+  // two unrotated boxes: the 15 axes are the world's three, same numbers in the same order, without building them
   if (isI(A.ax) && isI(B.ax)) { let b = Infinity; for (let i = 0; i < 3; i++) { const p = A.h[i] + B.h[i] - Math.abs(B.c[i] - A.c[i]); if (p < b) b = p; if (b <= 0) return b; } return b; }
-  // the general case: the same axes in the same order (A's, B's, then their normalized cross products) and the same
-  // sums in the same order as ever (ra and rb summed from 0), without allocating them (a rotated pair cost ~8 µs)
+  // general case: same axes and sums in the same order as ever (ra and rb summed from 0), without allocating them
   const Ah = A.h, Bh = B.h, Aa = A.ax, Ba = B.ax; const d0 = B.c[0] - A.c[0], d1 = B.c[1] - A.c[1], d2 = B.c[2] - A.c[2]; let best = Infinity;
   const p = (L0, L1, L2) => (0 + Ah[0] * Math.abs(Aa[0][0] * L0 + Aa[0][1] * L1 + Aa[0][2] * L2) + Ah[1] * Math.abs(Aa[1][0] * L0 + Aa[1][1] * L1 + Aa[1][2] * L2) + Ah[2] * Math.abs(Aa[2][0] * L0 + Aa[2][1] * L1 + Aa[2][2] * L2))
     + (0 + Bh[0] * Math.abs(Ba[0][0] * L0 + Ba[0][1] * L1 + Ba[0][2] * L2) + Bh[1] * Math.abs(Ba[1][0] * L0 + Ba[1][1] * L1 + Ba[1][2] * L2) + Bh[2] * Math.abs(Ba[2][0] * L0 + Ba[2][1] * L1 + Ba[2][2] * L2))
@@ -89,28 +86,24 @@ const descendants = (st, id) => Object.keys(st.entities).filter((k) => {
 });
 const ancestors = (st, id) => { const out = []; let p = st.entities[id]?.c.parent?.to, n = 0; while (p && n++ < 32) { out.push(p); p = st.entities[p]?.c.parent?.to; } return out; };
 
-// A surface is where something can stand. The model's measured surfaces are in its own frame with its own up, so they
-// hold while the thing stands (its up within UPRIGHT of the world's); a thing a tumbling engine laid on its side or upside
-// down has instead the face of each oriented box that now faces up (none, balanced on an edge). Heights and footprints
-// come from the full rotation (yaw-only reading put a tumbled crate's top half its height off).
+// where something can stand: the model's measured surfaces while upright (within UPRIGHT), else each oriented box's
+// up-facing face; heights and footprints from the full rotation
 const UPRIGHT = Math.cos(10 * Math.PI / 180);
 function surfacesOf(st, id) {
   const e = st.entities[id]; const m = geomE(e); const b = aabb(st, id); if (!m || !b) return [];
   const t = worldT(st, id);
   const at = (x, y, z) => { const p = qrot(t.q, [x * t.scale[0], y * t.scale[1], z * t.scale[2]]); return [p[0] + t.pos[0], p[1] + t.pos[1], p[2] + t.pos[2]]; };
-  // A surface off the world's axes also carries its own rectangle on the ground, rect {c, u, hx, hz} (centre, its x axis, half
-  // extents after the inset): min/max stay the axis-aligned box of its corners, the broad phase (near(), the index), and what
-  // supports a point or a footprint is read against the rectangle (inRect, rectMeets). A tilted surface (not yaw-only) is
-  // projected onto the ground the same way, an approximation, with y its highest corner's as before.
+  // off the world's axes a surface carries rect {c, u, hx, hz}; min/max stay its corners' AABB for the broad phase and
+  // support is read against the rectangle. A tilted one is projected, y its highest.
   const rectOf = (cs, k) => { const ex = [cs[2][0] - cs[0][0], cs[2][2] - cs[0][2]], ez = [cs[1][0] - cs[0][0], cs[1][2] - cs[0][2]];
     const lx = Math.hypot(...ex); if (!(lx > 1e-9)) return null; const u = [ex[0] / lx, ex[1] / lx];
     if (Math.abs(u[0]) < 1e-9 || Math.abs(u[1]) < 1e-9) return null;   // on the world's axes: the box is the rectangle
     const hz = Math.abs(ez[0] * -u[1] + ez[1] * u[0]) / 2;
     return { c: [(cs[0][0] + cs[3][0]) / 2, (cs[0][2] + cs[3][2]) / 2], u, hx: Math.max(0, lx / 2 - k), hz: Math.max(0, hz - k) }; };
   if (qrot(t.q, [0, 1, 0])[1] * Math.sign(t.scale[1] || 1) < UPRIGHT) {
-    if (m.round) return [];   // a round thing (a ball, a bell) offers no face in any pose; an empty UPRIGHT list (a door, a wall) says nothing about lying
+    if (m.round) return [];   // a round thing offers no face in any pose; an empty UPRIGHT list (a door) says nothing about lying
     const out = []; const boxes = obbs(st, id);
-    // a point inside one of the thing's own boxes (a face flush under its back panel is no place to put anything)
+    // inside one of the thing's own boxes (a face flush under its back panel is no place to put anything)
     const buried = (p, self) => boxes.some((o, k) => k !== self && o.ax.every((ax, i) => Math.abs(dot([p[0] - o.c[0], p[1] - o.c[1], p[2] - o.c[2]], ax)) < o.h[i] - 1e-6));
     for (const [bi, o] of boxes.entries()) for (let j = 0; j < 3; j++) {
       const u = o.ax[j][1]; if (Math.abs(u) < UPRIGHT) continue;
@@ -118,23 +111,21 @@ function surfacesOf(st, id) {
       if (buried([top[0] + n[0] * 0.002, top[1] + n[1] * 0.002, top[2] + n[2] * 0.002], bi)) continue;
       const [a, c] = [0, 1, 2].filter((k) => k !== j);
       const cs = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sa, sc]) => [0, 2].map((i) => top[i] + o.ax[a][i] * o.h[a] * sa + o.ax[c][i] * o.h[c] * sc));
-      // its own rectangle when it's off the world's axes, as a standing thing's top has (house 6340433633)
+      // its own rectangle when off the world's axes, as a standing thing's top has
       const rect = rectOf(cs.map(([x, z]) => [x, 0, z]), 0);
       out.push({ id, level: 0, y: top[1], ar: 4 * o.h[a] * o.h[c], min: [Math.min(...cs.map((p) => p[0])), Math.min(...cs.map((p) => p[1]))], max: [Math.max(...cs.map((p) => p[0])), Math.max(...cs.map((p) => p[1]))], ...(rect ? { rect } : {}) });
     }
-    // levels go bottom to top, as standing ones do (place's default, the last level, is the top)
-    // Faces within 1e-6 of each other are one height (float noise): each group takes its highest y, so the levels stay
-    // bottom to top however they're rounded, and orders by the face's own area (not its footprint, which grows with
-    // yaw), larger last: a shelf face-down offers its back, not its 3 cm side strips (reviews r7, r8)
+    // levels bottom to top (place's default, the last, is the top); faces within 1e-6 are one height, larger area last
+    // (a shelf face-down offers its back, not its side strips)
     out.sort((p, q) => p.y - q.y);
     for (let i = 0; i < out.length;) { let k = i + 1; while (k < out.length && out[k].y - out[i].y <= 1e-6) k++;
       const y = out[k - 1].y; const g = out.slice(i, k).map((x) => ({ ...x, y })).sort((p, q) => p.ar - q.ar); out.splice(i, k - i, ...g); i = k; }
     return out.map(({ ar, ...x }, i) => ({ ...x, level: i }));
   }
-  const yawOnly = t.q[0] === 0 && t.q[2] === 0;   // the common case keeps its exact arithmetic
+  const yawOnly = t.q[0] === 0 && t.q[2] === 0;   // keeps its exact arithmetic
   const yOf = (sy) => (yawOnly ? t.pos[1] + sy * t.scale[1] : at(0, sy, 0)[1]);
   return (m.surfaces ?? []).map((s, i) => { const k = s.inset ?? 0;
-    if (s.x && s.z) { // a measured zone: its own rectangle, carried into the world (min/max: the axis-aligned box of its corners)
+    if (s.x && s.z) { // a measured zone: its own rectangle, into the world (min/max: its corners' axis-aligned box)
       const cs = [[s.x[0], s.z[0]], [s.x[0], s.z[1]], [s.x[1], s.z[0]], [s.x[1], s.z[1]]].map(([x, z]) => at(x, s.y, z));
       const rect = rectOf(cs, k);
       return { id, level: i, y: yawOnly ? yOf(s.y) : Math.max(...cs.map((c) => c[1])), min: [Math.min(...cs.map((c) => c[0])) + k, Math.min(...cs.map((c) => c[2])) + k], max: [Math.max(...cs.map((c) => c[0])) - k, Math.max(...cs.map((c) => c[2])) - k], ...(rect ? { rect } : {}) };
@@ -145,7 +136,7 @@ function surfacesOf(st, id) {
 /** (x, z) over surface s: its box, and its own rectangle when it has one */
 const inRect = (s, x, z) => x >= s.min[0] && x <= s.max[0] && z >= s.min[1] && z <= s.max[1]
   && (!s.rect || ((dx, dz) => Math.abs(dx * s.rect.u[0] + dz * s.rect.u[1]) <= s.rect.hx + 1e-9 && Math.abs(-dx * s.rect.u[1] + dz * s.rect.u[0]) <= s.rect.hz + 1e-9)(x - s.rect.c[0], z - s.rect.c[1]));
-/** an axis-aligned footprint (min/max as [x, z]) overlapping surface s: the box test, and a 2D separating-axis test against its rectangle */
+/** footprint (min/max as [x, z]) vs surface s: the box test, plus 2D SAT against its rectangle */
 function rectMeets(s, min, max) {
   if (!(max[0] > s.min[0] && min[0] < s.max[0] && max[1] > s.min[1] && min[1] < s.max[1])) return false;
   if (!s.rect) return true; const { c, u, hx, hz } = s.rect; const v = [-u[1], u[0]];

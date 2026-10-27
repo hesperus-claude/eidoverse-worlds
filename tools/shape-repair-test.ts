@@ -1,13 +1,11 @@
-// shape-repair-test — the load's shape repair after review round 7 (notes/eidoverse/REVIEW-holes-r7-2026-10-16.md F1, F2, F5)
-// and R's rulings of 10-16: a node's name from a model file is DATA (motion:<slot> {node}), the repair runs ONCE per world
-// (a marker the log carries), and one bad value never blocks the rest. Reviewer item 9 (10-18): the repair is an EXPLICIT maintenance
-// command (authority repairShapes; world.ts repair, with a backup and --rollback; an operator's operator-repair), never the load's. Each row was written red against wt/repair @
-// 080a8fef. Stored "pre-audit" worlds are built in memory (worldOf, unsigned, no custody): their founding has no stamp,
-// so liftWorld treats them as old, which is exactly what a log written before the audit looks like.
+// shape-repair-test: the shape repair is an explicit maintenance command (authority repairShapes; world.ts repair, with a
+// backup and --rollback), never the load's: a node's name from a model file is DATA (motion:<slot> {node}), the repair
+// runs ONCE per world (a marker the log carries), and one bad value never blocks the rest. "Pre-audit" worlds are built in
+// memory (worldOf, unsigned, no custody): no founding stamp, so liftWorld treats them as old.
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-repair-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from 'node:fs';
 import { scratchWorld } from './protocol/scratchworld.ts';
 import { worldOf, CHANGE } from '../shared/protocol/authority/storage.js';
@@ -44,7 +42,7 @@ function legacyWorld(things: Record<string, Record<string, any>>, world: Record<
 }
 const C = (w, id) => w.state().entities[id]?.c ?? {};
 const repairOf = (out) => out.find((x) => x.repair)?.repair;
-// reviewer item 9 (10-18): the load never repairs; a stored world is repaired by the explicit command. These rows load, then run it
+// the load never repairs; a stored world is repaired by the explicit command: these rows load, then run it
 const repairOut = (w) => { liftWorld(w); const r = repairShapes(w); return [{ repair: { repaired: r.repaired ?? [], failed: r.failed ?? [] } }]; };
 
 // ===================================================================== F1: a node's name is data (motion:<slot> {node})
@@ -151,7 +149,7 @@ await tryRow('RP8', () => {
   check('RP8 …and its log is marked (a translated world never runs the load\'s repair)', shapesMarked(t.out), t.out?.slice(0, 2));
 });
 
-// ===================================================================== R 10-16: no empty stations by default
+// ===================================================================== no empty stations by default
 await tryRow('RP9', () => {
   const W = scratchWorld('repair');
   W.call('create', { id: 'hatstand', model: 'crate', components: { transform: TF } });
@@ -167,9 +165,9 @@ await tryRow('RP9', () => {
   check('RP9 …nor a stored world\'s socket map with no body, lifted by the command', k3.length === 1 && !k3[0][1].c.station, k3);
 });
 
-// ===================================================================== R 10-17: a model is its library path again. A world stored with
-// content addresses (a translation by translate-v1@8–@11, before the path was kept) gets its paths back from the repair where
-// this host's index knows the file, the address kept beside it as model-hash; an address no file here names stays and loads
+// ===================================================================== a model is its library path. A world stored with
+// content addresses (translate-v1@8–@11) gets its paths back from the repair where this host's index knows the file (the
+// address kept beside it as model-hash); an address no file here names stays and loads
 await tryRow('RP10', () => {
   const H = '7'.repeat(64), H2 = '8'.repeat(64);
   const CAT = { ...ANY, get: ANY.get, list: ANY.list, pathOf: (m: string) => (m === `eido:sha256/${H}` ? 'eidoverse/assets/models/crow.glb' : null) };
@@ -184,8 +182,7 @@ await tryRow('RP10', () => {
   check('RP10 the pure rule with no resolver changes nothing (the translator and the lab have none)', R.set.length === 0, R);
 });
 
-// ===================================================================== reviewer item 9 (10-18): repair is an explicit maintenance command, never the load's
-// Each row below was red first: RP11 against the load that still repaired (a732d74e), RP12/RP13 against a world.ts with no `repair`.
+// ===================================================================== repair is an explicit maintenance command, never the load's
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -197,8 +194,8 @@ await tryRow('RP11', async () => {
   check('RP11 …but says the world needs repair, naming the command', out.some((x) => x.repairNeeded && /world\.ts repair/.test(x.repairNeeded.fix ?? '')), out);
   const wr = request(w, 'olive', 'create', { id: 'new1', model: 'crate', components: { transform: TF } }), rd = request(w, 'olive', 'look', {});
   check('RP11 …the world loads (folds ok) and reads, but every write is refused with repair-needed naming the command: the shape audit\'s old values (a sky in degrees, an address model) have no reader that serves them (lead 10-18: fail closed, never silently wrong)', w.state().status === 'ok' && rd.ok && !wr.ok && wr.refused.code === 'repair-needed' && /world\.ts repair/.test(wr.refused.fix) && /repair-shapes/.test(wr.refused.reason), [wr.refused, rd.ok]);
-  // …and the refusal says who can repair it, to an agent and to a person in the editor alike: only whoever runs the server
-  // can, asking again won't help, reads still work. The person's words keep that remedy (plainRefusal drops a tool-syntax fix)
+  // …and the refusal says who can repair it, to an agent and a person alike: only whoever runs the server; asking again
+  // won't help, reads still work. The person's words keep that remedy (plainRefusal drops a tool-syntax fix)
   const { plainRefusal } = await import('../shared/protocol/refusal.js');
   const pr = plainRefusal('make it', wr);
   check('RP11b the repair-needed refusal says only whoever runs the server can repair the world and asking again won\'t help, and a person in the editor reads that too', /whoever runs this server/.test(wr.refused.fix) && /won't change/.test(wr.refused.fix) && /reads still work/.test(wr.refused.fix + wr.refused.reason) && /whoever runs this server/.test(pr), [wr.refused, pr]);
@@ -213,7 +210,7 @@ await tryRow('RP11', async () => {
 });
 
 await tryRow('RP12', async () => {
-  // a legacy world on disk, the server's layout (<WORLDS_DIR>/<name>/world.jsonl), repaired by the CLI and rolled back byte-identical
+  // a legacy world on disk in the server's layout (<WORLDS_DIR>/<name>/world.jsonl), repaired by the CLI, rolled back byte-identical
   const root = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? process.env.TMPDIR ?? '/tmp', 'rp12-')); const dir = path.join(root, 'oldw'); fs.mkdirSync(dir);
   // the CLI signs with the worlds dir's custody (<root>/.custody.json): the stored world's sequencer must be that key
   const { custodyAt } = await import('../server/custody.ts'); const { custodyFileIn } = await import('../server/keyfiles.ts');
@@ -249,8 +246,7 @@ await tryRow('RP13', async () => {
   check('RP13 a server operator\'s repair-shapes through operatorRepair runs the same repair, recorded with the operator\'s id', r.ok && r.repaired?.includes('lamp') && act?.body.by === 'opie' && act.body.operator === true && act.body.command === 'repair' && C(w, 'lamp').light?.decay === 1.7, [r, act?.body]);
 });
 
-// ===================================================================== lead's ruling (10-18): a load never writes. lift-sockets and rename-components join the command
-// Rows red first against 685879c4 (the load still lifted and renamed): shown by reverting scriptrun.js to that commit and running them.
+// ===================================================================== a load never writes: lift-sockets and rename-components join the command
 await tryRow('RP14', () => {
   const w = legacyWorld({ bench: { model: 'crate', sockets: { seat: { pos: [0, 0.5, 0], body: { action: 'sit' } } } } });
   const n = w.entries.length; const out = liftWorld(w); const need = out.find((x) => x.repairNeeded)?.repairNeeded;
@@ -263,7 +259,7 @@ await tryRow('RP14', () => {
 });
 
 await tryRow('RP15', () => {
-  // renames whose old spelling today's readers serve (trusted → drafts.trustedOf; bob → motionType; a station's pose → bodyOf): the world works as it is
+  // renames whose old spelling today's readers serve (trusted → drafts.trustedOf; the old motion type → motionType; a station's pose → bodyOf): the world works as it is
   const a = legacyWorld({ buoy: { model: 'crate', motion: { type: 'bob', amp: 0.2, period: 3, axis: [0, 1, 0], phase: 0 } } }, { trusted: { components: ['hesperus/material'] } });
   // …a stored world that is otherwise in today's spelling (marked): only the renames are needed
   a.append({ kind: 'act', actor: 'system', verb: 'repair-shapes', body: { v: SHAPES_VERSION, ids: [], founding: true } });
@@ -288,7 +284,7 @@ await tryRow('RP16', async () => {
     { seq: 4, ts: 5, actor: 'ann', verb: 'comp', args: { id: 'cup', type: 'grabbable', data: { pose: 'pistol' } } },
     { seq: 5, ts: 6, actor: 'ann', verb: 'comp', args: { id: 'cup', type: 'motion', data: { type: 'bob', amp: 0.1, period: 2 } } },
     { seq: 6, ts: 7, actor: 'ann', verb: 'comp', args: { id: 'bench', type: 'light', data: { kind: 'point', day: true } } }];
-  // the translate COMMAND (import-v1/world.ts translateV1World, what `world.ts translate` runs): its projection renames and repairs, and it runs the maintenance command on its output (lift-sockets)
+  // the translate COMMAND (import-v1/world.ts translateV1World): its projection renames and repairs, then it runs the maintenance command (lift-sockets)
   const { translateV1World } = await import('./protocol/import-v1/world.ts');
   const root = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? process.env.TMPDIR ?? '/tmp', 'rp16-')); fs.mkdirSync(path.join(root, 'old'));
   fs.writeFileSync(path.join(root, 'old', 'log.jsonl'), old.map((e) => JSON.stringify(e)).join('\n') + '\n');
@@ -298,8 +294,8 @@ await tryRow('RP16', async () => {
   check('RP16 a v1 world translated today (sockets, a grabbable pose, a bob motion, a light with day) needs no step when served: the translation lifted its seats (one lift-sockets act, by: translate), renamed and repaired in its projection; the load writes nothing and writes work', r.maintenance.lifted === 1 && lifts.length === 1 && lifts[0].body.by === 'translate' && w.state().status === 'ok' && need.steps.length === 0 && liftWorld(w).length === 0 && Object.values(E).some((e) => e.c.socket?.name === 'seat') && !Object.values(E).some((e) => e.c.sockets || e.c.grabbable?.pose || e.c.motion?.type === 'bob' || 'day' in (e.c.light ?? {})) && request(w, 'n' + 'ann', 'look', {}).ok, [need, r.maintenance, Object.values(E).map((e) => Object.keys(e.c))]);
 });
 
-// ===================================================================== lead 10-18: a catalogue model that GAINED sockets is a library update, not a stale stored format
-// Red first (the old classification refused the write with repair-needed); green once modelSeatsDue is an optional step.
+// ===================================================================== a catalogue model that GAINED sockets is a library update, not a stale stored format
+// (modelSeatsDue is an optional step, never a repair-needed refusal)
 await tryRow('RP17', () => {
   const CAT = { ...ANY, get: (n) => (n === 'chair' ? { label: 'chair', surfaces: [], sockets: { seat: { pos: [0, 0.5, 0], body: { action: 'sit' } } } } : ANY.get(n)) };
   const w = legacyWorld({ ch: { model: 'chair' } }, {}, CAT);
@@ -312,25 +308,23 @@ await tryRow('RP17', () => {
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
-// RP18 (r14 H1, 10-18): maintain's lift-sockets and rename-components catches swallow REFUSALS only; a durable-write throw (the
-// file wedged, EIO) must propagate, so the caller (world.ts repair, the translation) reports ambiguous instead of "repaired"
+// RP18: maintain's lift-sockets and rename-components catches swallow REFUSALS only; a durable-write throw (EIO) must
+// propagate, so the caller (world.ts repair, the translation) reports ambiguous instead of "repaired"
 await tryRow('RP18', () => {
   const w = legacyWorld({ coatrack: { model: 'crate', sockets: { peg: { pos: [0, 1.5, 0] } } } });
-  // the lift-sockets act's durable write throws (as a full disk would); every other write is fine, so a swallowed throw would let
-  // maintain run on to repair-shapes and return "ok" with the host merely listed as failed
+  // the lift-sockets act's durable write throws (as a full disk would): a swallowed throw would let maintain run on to
+  // repair-shapes and return "ok" with the host merely listed as failed
   const real = w.append.bind(w); w.append = (e: any, ...more: any[]) => { if (e.kind === 'act' && e.verb === 'lift-sockets') throw new Error('EIO: disk gone'); return real(e, ...more); };
   let threw: any = null, r: any = null; try { r = maintain(w, { by: 'olive' }); } catch (x) { threw = x; }
   check('RP18 a durable-write throw inside lift-sockets propagates out of maintain (not swallowed into steps.lift.failed as code "error" while the rest runs on)', !!threw && /EIO/.test(String(threw?.message)) && r === null, [String(threw?.message).slice(0, 200), r?.steps?.lift]);
 });
-// RP19: the repair moves an old amplitude to amp as the old reader read it (Number(m.amp ?? m.amplitude)): a numeric
-// string is that number, null and '' are 0 as Number reads them (house 6340433633: null was dropped, so the motion took
-// today's default amp where the old reader stood it still), an amp of null gave way to the amplitude, and a value the
-// old reader couldn't read is dropped, as before
+// RP19: an old amplitude moves to amp as the old reader read it (Number(m.amp ?? m.amplitude)): a numeric string is that
+// number, null and '' are 0, an amp of null gives way to the amplitude, an unreadable value is dropped
 { const { repairMotion } = await import('../shared/protocol/shaperepair.js');
   const r = (amplitude: any) => repairMotion({ type: 'pendulum', amplitude, period: 2 });
   check('RP19 a numeric-string amplitude is kept as amp, null and empty are 0; a non-number one goes, as the old reader read none', r('0.4').amp === 0.4 && r(0.3).amp === 0.3 && r('wide').amp === undefined && r(null).amp === 0 && r('').amp === 0 && !('amplitude' in r('0.4')) && !('amplitude' in r(null)) && repairMotion({ amp: 0.2, amplitude: '0.9' }).amp === 0.2 && repairMotion({ amp: null, amplitude: '0.9' }).amp === 0.9,
     [r('0.4'), r('wide'), r(null), r(''), repairMotion({ amp: null, amplitude: '0.9' })]); }
-// RP20 (review of #260): a thing with one purged component still has its other components repaired
+// RP20: a thing with one purged component still has its other components repaired
 { const { shapeRepairOps } = await import('../shared/protocol/shaperepair.js'); const { PURGED } = await import('../shared/protocol/fold.js');
   const st = { entities: { bob: { c: { label: PURGED, motion: { type: 'pendulum', amplitude: 0.3, period: 2 } } } } };
   const ops = shapeRepairOps(st, PURGED);

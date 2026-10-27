@@ -1,6 +1,5 @@
-// CPU rig primitives for runtime body perception and physics.
-// Inputs are GLB bytes or parsed node data; no I/O, fixture paths, corpus
-// enumeration, renderer initialization or test dependencies live here.
+// CPU rig primitives for runtime body perception and physics. GLB bytes or parsed node data in; no I/O, fixtures,
+// renderer or test dependencies here.
 
 /** The JSON chunk of a .glb / .vrm. */
 export function glbJson(buf) {
@@ -17,8 +16,7 @@ export function glbJson(buf) {
   throw new Error('no JSON chunk');
 }
 
-/** VRM0 normalized bones have a half-turn about Y relative to the root,
- * matching the browser's conversion from -Z-facing VRM0 to +Z-facing VRM1. */
+/** VRM0 normalized bones have a half-turn about Y relative to the root, as the browser's -Z → +Z conversion. */
 export function isVrm0(g) {
   return !g.extensions?.VRMC_vrm && !!g.extensions?.VRM;
 }
@@ -28,8 +26,7 @@ export function humanBones(g) {
   if (v1) return Object.fromEntries(Object.entries(v1).map(([b, v]) => [b, v.node]));
   const v0 = g.extensions?.VRM?.humanoid?.humanBones;
   if (v0) {
-    // Match three-vrm's VRM0 -> normalized VRM1 humanoid vocabulary. Keeping
-    // the old thumb names shifts every thumb rotation onto the wrong joint.
+    // three-vrm's VRM0 → VRM1 vocabulary: the old thumb names would shift every thumb rotation onto the wrong joint
     const rename = { leftThumbProximal: 'leftThumbMetacarpal', leftThumbIntermediate: 'leftThumbProximal',
       rightThumbProximal: 'rightThumbMetacarpal', rightThumbIntermediate: 'rightThumbProximal' };
     return Object.fromEntries(v0.map((h) => [rename[h.bone] ?? h.bone, h.node]));
@@ -37,9 +34,7 @@ export function humanBones(g) {
   return null;
 }
 
-// The humanoid parent chain the ragdoll's particle model assumes. Rigs that
-// carry upperChest/shoulder collapse onto this: goLimp parks those bones at
-// rest before the sim starts, which is what makes the span rigid.
+// The parent chain the ragdoll's particle model assumes: upperChest/shoulder collapse onto it (goLimp parks them at rest).
 export const PARENT = {
   hips: null, spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck',
   leftUpperArm: 'chest', leftLowerArm: 'leftUpperArm', leftHand: 'leftLowerArm',
@@ -48,9 +43,7 @@ export const PARENT = {
   rightUpperLeg: 'hips', rightLowerLeg: 'rightUpperLeg', rightFoot: 'rightLowerLeg',
 };
 
-/** Bind the small vector/matrix API supplied by the host. This keeps shared
- * parsing free of package-layout assumptions; runtime and fixtures use their
- * own already-installed Three dependency. */
+/** Binds the host's vector/matrix API, so shared parsing makes no package-layout assumptions. */
 export function rigMath(THREE) {
   /** World rest position of any node, by walking the TRS tree. */
   function worldPositions(g) {
@@ -58,9 +51,7 @@ export function rigMath(THREE) {
     return (i) => new THREE.Vector3().setFromMatrixPosition(world(i));
   }
 
-  /** World rest rotation of any node: the axes a node's own scale acts in,
-   *  which a skinned rig rarely leaves aligned with the model's (the four
-   *  library avatars turn nearly every humanoid bone at rest). */
+  /** The axes a node's own scale acts in, which a skinned rig rarely leaves aligned with the model's. */
   function worldRotations(g) {
     const world = worldMatrices(g);
     return (i) => {
@@ -74,15 +65,8 @@ export function rigMath(THREE) {
     const parent = new Map();
     g.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => parent.set(c, i)));
     const memo = new Map();
-    // Full matrices, because SCALE is load-bearing here. Composing only
-    // translation and rotation (and reading a matrix node's translation column
-    // while dropping its basis) silently drops any scale on an ancestor — and
-    // glb2vrm bakes a uniform scale on the Armature to bring a ~1m Tripo export
-    // to human height, so mythospaint's armature carries 1.651. The headless
-    // skeleton came out 0.86m tall while the browser rendered her at 1.65m.
-    // Bone quaternions are scale-free, so limbs still looked right and nothing
-    // complained; only the streamed ROOT was in the small frame, which put her
-    // ~0.46m — a foot and a half — above the floor for everyone watching.
+    // full matrices: ancestor SCALE is load-bearing (glb2vrm bakes one on the Armature); dropping it shrinks the skeleton
+    // and floats the streamed root above the floor
     const localMatrix = (n) => (n.matrix
       ? new THREE.Matrix4().fromArray(n.matrix)
       : new THREE.Matrix4().compose(
@@ -104,17 +88,12 @@ export function rigMath(THREE) {
   /** Build private normalized bone nodes from world rest positions. */
   function makeAvatar(P, { realParent = null, vrm0 = false } = {}) {
     const root = new THREE.Object3D();
-    // three-vrm's half-turn for VRM0, reproduced as a pivot the bones hang from,
-    // so every normalized bone reads a 180° world rotation against the root
-    // exactly as it does in the browser. Without it the harness silently models
-    // a VRM1 body and any frame error on the other six goes unseen.
+    // three-vrm's VRM0 half-turn, reproduced as a pivot, so normalized bones read the same 180° as in the browser
     const pivot = new THREE.Object3D();
     if (vrm0) pivot.rotation.y = Math.PI;
     root.add(pivot);
     const nodes = {};
-    // `realParent` builds the rig's ACTUAL humanoid hierarchy — upperChest,
-    // shoulders and all — so `d.parent` is the node the shipped rig would give.
-    // Without it every rig is tested as though it were one of the simple ones.
+    // `realParent` builds the rig's ACTUAL humanoid hierarchy, so `d.parent` is the node the shipped rig would give
     const par = realParent ?? PARENT;
     const order = Object.keys(realParent ? P : PARENT).filter((j) => P[j]);
     const depth = (j) => { let d = 0, k = j; while (par[k]) { k = par[k]; if (++d > 40) break; } return d; };
@@ -130,10 +109,8 @@ export function rigMath(THREE) {
     }
     root.updateMatrixWorld(true);
 
-    // `pivot` is this stand-in's vrm.scene: the node a chosen body size lives on
-    // (client/lib/avatar.js _applyBodyScale), between the unscaled root that
-    // carries position/yaw and the bones. Never aliased as vrm.scene — readers
-    // of that (landmarks.js) expect a mesh-bearing scene this has none of.
+    // `pivot` is this stand-in's vrm.scene, where body size lives (client/lib/avatar.js _applyBodyScale). Never aliased
+    // as vrm.scene: its readers (landmarks.js) expect a mesh-bearing scene.
     const av = {
       root, pivot, nodes, poses: 0, limp: false,
       vrm: { meta: { metaVersion: vrm0 ? "0" : "1" }, humanoid: {
@@ -159,12 +136,8 @@ export function rigMath(THREE) {
     return av;
   }
 
-  /** A body's standing height in metres: its humanoid head joint at rest plus
-   *  a forehead, the rule the browser's Avatar.bodyHeight and portrait pass use
-   *  (client/lib/avatar.js). Meshes don't count, so hair or a crown weighted to
-   *  the head bone doesn't raise it. Null for a file with no humanoid head, or
-   *  a height outside 0.5 to 4 m, which the browser clamps into that range
-   *  instead (avatar.js bodyHeight). */
+  /** Standing height in metres: the humanoid head joint at rest plus a forehead, as client/lib/avatar.js bodyHeight. Meshes
+   *  don't count (hair or a crown can't raise it). Null with no humanoid head, or outside 0.5–4 m (the browser clamps). */
   function stature(g) {
     const hb = humanBones(g);
     if (!hb || !Number.isInteger(hb.head)) return null;

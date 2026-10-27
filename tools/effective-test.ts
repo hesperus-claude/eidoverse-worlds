@@ -1,17 +1,9 @@
 /**
- * Effective-transform test — #82: agent perception must report mounted cargo
- * (and moving things) where they ACTUALLY are, or refuse to give a number.
- * No servers needed; time is injected everywhere.
+ * Effective-transform test (#82): agent perception reports mounted cargo (and moving things) where they ACTUALLY are, or
+ * refuses to give a number. No servers; time injected everywhere. Run: bun tools/effective-test.ts
  *
- * Run: bun tools/effective-test.ts
- *
- * The scenes are written as old-protocol entries (that is how these cases were
- * first recorded) and folded by the old-world importer's fold
- * (tools/protocol/import-v1/fold.js) into entity records the agent reads as its view
- * — the record shape (shared/protocol/view.js) began as that fold's projection.
- *
- * Expected values are HAND-COMPUTED from the closed forms — never from the
- * code under test. Worked math is inline at each case.
+ * Scenes are old-protocol entries folded by tools/protocol/import-v1/fold.js into the records the agent reads
+ * (shared/protocol/view.js). Expected values are HAND-COMPUTED from the closed forms, never from the code under test.
  */
 
 import { WorldAgent } from "../mcpl/agent.ts";
@@ -25,15 +17,13 @@ const check = (label: string, ok: boolean, detail?: string) => {
 const near = (a: number, b: number, eps = 1e-4) => Math.abs(a - b) < eps;
 const near3 = (a: number[], b: number[], eps = 1e-4) => a.length === 3 && a.every((v, i) => near(v, b[i], eps));
 
-// effective.ts does not exist on main — load it dynamically so the
-// look()-level receipts still run there.
+// loaded dynamically so the look()-level receipts still run where effective.ts doesn't exist
 let EFF: typeof import("./effective.ts") | null = null;
 try { EFF = await import("../mcpl/effective.ts"); } catch { /* pre-#82 checkout */ }
 
 const T0 = 1_700_000_000_000;                       // fixed epoch; all time injected
 
-/** An agent that never connects: each scene is folded into entity records and handed to the agent as its view (its
- *  entities and mounts are reconciled from that, as from a joined world's view). */
+/** An agent that never connects: each scene is folded into records and handed to it as its view. */
 const scenes = new WeakMap<WorldAgent, any>();
 function offlineAgent(): WorldAgent {
   const a = new WorldAgent({ url: "ws://127.0.0.1:9/ws", name: "tester", world: "efftest" });
@@ -41,14 +31,12 @@ function offlineAgent(): WorldAgent {
   return a;
 }
 let seqN = 0;
-/** A socket child's id here: "<host>.<slot>" (the door mints its own; any stable id serves a fixture). */
+/** A socket child's id: "<host>.<slot>" (the door mints its own; any stable id serves a fixture). */
 const SID = (host: string, slot: string) => `${host}.${slot}`;
-/** The scenes are old-protocol entries, so a seat arrives as a `sockets` map and cargo as mount {to, slot}. Every world is
- *  lifted into socket children (PLAN-sockets-entities: the maintenance command); this does the same to the folded records — a
- *  socket child {pos, yaw/q, socket: {name, …}, parent: {to: host, offset, yaw/q}}, and cargo on a slot rides it
- *  (no offset: on the socket itself) — so the agent reads exactly what a lifted world gives it. */
+/** Lift old-protocol scenes (seat = `sockets` map, cargo = mount {to, slot}) into socket children as a lifted world
+ *  has them ({pos, yaw/q, socket: {name, …}, parent: {to, offset, yaw/q}}; cargo on a slot rides it). */
 function liftV1(E: Record<string, any>) {
-  // the v1 fold's records speak the old protocol (lib, a comp bag): today's record is flat, in the protocol's names (view.js)
+  // the v1 fold speaks the old protocol (lib, a comp bag); today's record is flat, in the protocol's names (view.js)
   for (const [id, e] of Object.entries<any>({ ...E })) { const { lib, comp, ...rest } = e; E[id] = { ...rest, ...(lib != null ? { model: lib } : {}), ...(comp ?? {}) }; }
   for (const [id, e] of Object.entries<any>({ ...E })) {
     const S = e?.sockets; if (!S) continue;
@@ -71,11 +59,11 @@ const fold = (a: WorldAgent, entry: { verb: string; args: any; actor?: string },
   A.st = { ...A.st, entities: liftV1(structuredClone(st.entities)) };
   A.reconcileFromFold();
   for (const id of Object.keys(st.entities)) A.trackSupport?.(A.syncSupport?.(id));
-  // a change seen live: the agent's own change handler (what a door write it watched would run)
+  // a change seen live: the agent's own change handler
   if (live && entry.verb === "comp") A.onThingChange({ id: entry.args.id, what: "comp", comp: entry.args.type }, was, true, entry.actor ?? "t", T0);
 };
 
-// A fake view for the pure module — plain data, no agent.
+// a fake view for the pure module: plain data, no agent
 const view = (ents: Record<string, any>, mounts: Record<string, any>) => ({
   entity: (id: string) => ents[id],
   mount: (id: string) => mounts[id],
@@ -96,8 +84,7 @@ if (!EFF) {
     check("static parent + offset: composed, not stale", r.ok && near3(r.pos, [10, 0.55, 10]), JSON.stringify(r));
   }
 
-  // a socket is a child entity (PLAN-sockets-entities): cargo on it lands on the socket's own frame; its own local pose
-  // composes in that frame
+  // a socket is a child entity: cargo on it lands in the socket's frame, its local pose composed there
   {
     const ents = { swing: { pos: [0, 0, 0], yaw: 0 }, "swing.seat": { pos: [0, 1, 0], yaw: 1, socket: { name: "seat" } }, crate: { pos: [9, 9, 9], yaw: 0 } };
     const sock = { "swing.seat": { to: "swing", offset: [0, 1, 0], yaw: 1 } };
@@ -105,8 +92,7 @@ if (!EFF) {
     check("socket supplies the local frame", bySock.ok && near3(bySock.pos, [0, 1, 0]) && near(bySock.yaw, 1), JSON.stringify(bySock));
     const byMount = eff("crate", view(ents, { ...sock, crate: { to: "swing.seat", offset: [0, 1, 0], yaw: 0.5 } }), T0);
     check("the cargo's own local pose composes in the socket's frame", byMount.ok && near3(byMount.pos, [0, 2, 0]) && near(byMount.yaw, 1.5), JSON.stringify(byMount));
-    // a tilted socket (a rocket's seat on its back: pitch −90°): its whole rotation carries what rides it — [0, 0, 1] in
-    // the socket's frame is world up (Rx(−90°)·[0,0,1] = [0, 1, 0])
+    // a tilted socket (pitch −90°) carries what rides it: [0, 0, 1] in its frame is world up (Rx(−90°)·[0,0,1] = [0, 1, 0])
     const tilt = { "swing.seat": { to: "swing", offset: [0, 1, 0], q: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] } };
     const byTilt = eff("crate", view(ents, { ...tilt, crate: { to: "swing.seat", offset: [0, 0, 1] } }), T0);
     check("a tilted socket's whole rotation carries its cargo (q, not just a heading)", byTilt.ok && near3(byTilt.pos, [0, 2, 0]), JSON.stringify(byTilt));
@@ -122,7 +108,7 @@ if (!EFF) {
     check("parent scale scales the offset, scales multiply down", r.ok && near(r.yaw, Math.PI / 2) && near(r.scale, 6), JSON.stringify(r));
   }
 
-  // moving parent (pendulum) at two explicit nowMs.
+  // moving parent (pendulum) at two explicit nowMs
   // θ(t) = amp·e^{-damp·t}·cos(2π t/period + phase); axis x, pivot p, socket s.
   // Swing shift = p − q·p (yaw 0); crate = swingPos + q·s.
   //   t=0: θ=0.5 → y = 2.4 − 1.85·cos(0.5), z = 10 − 1.85·sin(0.5)
@@ -143,7 +129,7 @@ if (!EFF) {
     check("the moving link is named", r1.ok && r1.moving === "pendulum", JSON.stringify(r1.ok && r1.moving));
   }
 
-  // nested root mounts on a path-motion grandparent.
+  // nested root mounts on a path-motion grandparent
   // path [[0,0,0]→[10,0,0]], speed 1, 'once', t=5s → ferry (5,0,0), yaw atan2(10,0)=π/2.
   // Offsets [0,1,0] are yaw-invariant → pallet (5,1,0), crate (5,2,0).
   {
@@ -190,7 +176,7 @@ if (!EFF) {
     check("unknown motion type on a link: refused and named", !wig.ok && /wiggle/.test((wig as any).why), JSON.stringify(wig));
   }
 
-  // part-frame motion does not displace the root (and reports the chain still)
+  // part-frame motion doesn't displace the root (and the chain is still reported)
   {
     const r = eff("mill", view({ mill: { pos: [7, 0, 7], yaw: 0.3, motion: { type: "spin", part: "blades", t0: T0 } } }, {}), T0 + 9000);
     check("part motion leaves the root at base", r.ok && near3(r.pos, [7, 0, 7]) && r.moving === null, JSON.stringify(r));
@@ -215,7 +201,7 @@ const distOf = (line: string) => { const m = line.match(/:\s*([\d.]+)m\s+(\w+)\s
   check("the stale pre-mount coordinate is GONE", !line.includes("(3.0, 0.0, 3.0)"), line);
   check("still says what it rides", line.includes("mounted on swing1 (seat)"), line);
 
-  // dismount stamps an authoritative absolute — perception returns to it
+  // dismount stamps an authoritative absolute; perception returns to it
   await fold(a, { verb: "dismount", args: { id: "crate1", pos: [1, 2, 3], yaw: 0.7 } });
   const after = crateLine(a.look(T0));
   check("dismount restores the stamped absolute", after.includes("at (1.0, 2.0, 3.0)") && !after.includes("mounted on"), after);
@@ -241,8 +227,7 @@ const distOf = (line: string) => { const m = line.match(/:\s*([\d.]+)m\s+(\w+)\s
 // the sort walks the composed world too: cargo on a far carrier lists far
 {
   const a = offlineAgent();
-  // near1 sits at 5m — FARTHER than the crate's stale 4.2m, so a sort on
-  // stale positions lists the crate first and this check fails on main
+  // near1 at 5m is FARTHER than the crate's stale 4.2m, so a stale-position sort lists the crate first
   await fold(a, { verb: "spawn", args: { id: "near1", lib: "models/rock.glb", pos: [5, 0, 0], yaw: 0 } });
   await fold(a, { verb: "spawn", args: { id: "far1", lib: "models/bench.glb", pos: [30, 0, 30], yaw: 0 } });
   await fold(a, { verb: "spawn", args: { id: "crate1", lib: "models/crate.glb", pos: [3, 0, 3], yaw: 0 } });
@@ -283,7 +268,7 @@ const distOf = (line: string) => { const m = line.match(/:\s*([\d.]+)m\s+(\w+)\s
 }
 
 // another body's seat rides its presence frame as a socket id; an older client's {to: host, slot} names that host's
-// socket child of that name (shared/sockbody.js resolveSeat, one release) — and its line says where, by name
+// socket child (shared/sockbody.js resolveSeat), and its line names where
 {
   const a = offlineAgent();
   await fold(a, { verb: "spawn", args: { id: "swing1", lib: "models/bench.glb", pos: [10, 0, 10], yaw: 0 } });
@@ -324,8 +309,7 @@ const distOf = (line: string) => { const m = line.match(/:\s*([\d.]+)m\s+(\w+)\s
   await fold(live, { verb: "mount", args: { id: "crate1", to: "swing1", slot: "seat" } }, true);
 
   const folded = offlineAgent();
-  // the synthetic order a folded join produces (stateToEntries): spawns,
-  // then comps, then the mount recovered from entities[].parent — live=false
+  // a folded join's synthetic order (stateToEntries): spawns, comps, then the mount from entities[].parent, live=false
   for (const e of [
     { verb: "spawn", args: { id: "swing1", lib: "models/bench.glb", pos: [10, 0, 10], yaw: 0 } },
     { verb: "spawn", args: { id: "crate1", lib: "models/crate.glb", pos: [3, 0, 3], yaw: 0 } },
@@ -338,16 +322,13 @@ const distOf = (line: string) => { const m = line.match(/:\s*([\d.]+)m\s+(\w+)\s
   live.close(); folded.close();
 }
 
-// ---- #92 review: B1 — motion runs on SEQUENCER time, not the host clock ----
+// ---- motion runs on SEQUENCER time, not the host clock ----
 console.log("\n━━ B1: sequencer-relative clock ━━");
 {
   const a = offlineAgent();
-  // the embodied plane's frame stamps say the sequencer is 7s AHEAD of this
-  // host; the motion's t0 is in the host's present — so the true phase is
-  // t ≈ 7s, and a host-clock evaluation reads t ≈ 0 instead
+  // frame stamps put the sequencer 7s AHEAD of this host and the motion's t0 is host-present: true phase t ≈ 7s, host clock reads ≈ 0
   const skew = 7000;
-  // optional-called so a pre-revision head FAILS the checks below by phase
-  // rather than crashing the file — the control stays a control
+  // optional-called so a pre-revision head FAILS by phase rather than crashing the file
   for (let i = 0; i < 3; i++) (a as any).noteServerTime?.(Date.now() + skew);
   const t0 = Date.now();
   await fold(a, { verb: "spawn", args: { id: "swing1", lib: "models/bench.glb", pos: [10, 0, 10], yaw: 0 } });
@@ -364,7 +345,7 @@ console.log("\n━━ B1: sequencer-relative clock ━━");
   a.close();
 }
 
-// ---- #92 review: B2 — refusals never fall back to stale coordinates --------
+// ---- refusals never fall back to stale coordinates --------
 console.log("\n━━ B2: no stale fallbacks ━━");
 
 // (1) the sort: an unresolved thing makes no spatial claim — it lists last
@@ -413,7 +394,7 @@ console.log("\n━━ B2: no stale fallbacks ━━");
   a.close();
 }
 
-// ---- #92 review, precision: cargo's own root motion is inert while mounted -
+// ---- cargo's own root motion is inert while mounted -
 console.log("\n━━ precision: mount chain wins over own motion ━━");
 {
   const a = offlineAgent();
@@ -422,8 +403,7 @@ console.log("\n━━ precision: mount chain wins over own motion ━━");
   await fold(a, { verb: "spawn", args: { id: "crate1", lib: "models/crate.glb", pos: [3, 0, 3], yaw: 0 } });
   await fold(a, { verb: "motion", args: { id: "crate1", type: "orbit", center: [3, 0, 3], radius: 4, degPerSec: 90, t0: T0 - 60_000 } });
   await fold(a, { verb: "mount", args: { id: "crate1", to: "swing1", slot: "seat" } });
-  // the renderer skips a mounted entity's own motion (motion.js tickMotion:
-  // `obj.userData.mountedTo` guard) — the seat, not the orbit, is the truth
+  // the renderer skips a mounted entity's own motion (motion.js tickMotion `obj.userData.mountedTo`): the seat is the truth
   const line = crateLine(a.look(T0));
   check("own root motion is inert while mounted (matches the renderer)", line.includes("at (10.0, 0.6, 10.0)"), line);
   await fold(a, { verb: "dismount", args: { id: "crate1", pos: [3, 0, 3], yaw: 0 } });
@@ -433,14 +413,13 @@ console.log("\n━━ precision: mount chain wins over own motion ━━");
   a.close();
 }
 
-// ---- body size (pose.scale): a profiled seat's contact is measured at the
-// occupant's AUTHORED size, so it multiplies the occupant's chosen size — the
-// browser's occupants.js occupantScalar(root × avatar.bodyScale()) — and nothing else.
+// ---- body size (pose.scale): a profiled seat's contact is measured at the occupant's AUTHORED size, multiplied by
+// the occupant's chosen size (occupants.js occupantScalar(root × avatar.bodyScale())) and nothing else.
 console.log("\n━━ body size: a profiled seat lowers a scaled occupant in proportion ━━");
 if (EFF) {
   // chair at the origin, unscaled; a surface socket 0.5 up; contact plane 0.45
   // below the occupant root at authored size → root y = 0.5 − 0.45·u
-  // the seat: a socket child whose station anchors at the surface (D14; the station since the shape audit 10-16)
+  // the seat: a socket child whose station anchors at the surface (D14)
   const chair = { pos: [0, 0, 0], yaw: 0, scale: 1 };
   const seat = { pos: [0, 0.5, 0], yaw: 0, socket: { name: "seat" }, station: { action: "sit", anchor: "surface", anim: "sitchair" } };
   const seatMount = { to: "chair", offset: [0, 0.5, 0] };
@@ -457,8 +436,7 @@ if (EFF) {
   const absent = EFF.effectiveWorldTransform("occupant", view(), T0);
   check("a view without occupantScale reads the occupant as 1×", absent.ok && near3(absent.pos, [0, 0.05, 0]), JSON.stringify(absent));
 
-  // the agent's own view feeds occupantScale from the occupant's presence sample
-  // (clamped; absent = 1) — the seam the text tier's seated perception reads
+  // occupantScale from the occupant's presence sample (clamped; absent = 1): the seam the text tier's seated perception reads
   const a = offlineAgent() as any;
   a.entities.set("chair", { id: "chair", model: "x.glb", actor: "t", ...chair });
   a.entities.set("chair.seat", { id: "chair.seat", model: "", actor: "t", ...seat });

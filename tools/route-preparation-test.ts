@@ -1,69 +1,22 @@
-// bun tools/route-preparation-test.ts — exact cap and authored-cache boundaries.
-// Real editor operations and received-entry fold; unrelated geometry I/O is
-// disabled so this suite cannot fetch assets from a running sequencer.
+// bun tools/route-preparation-test.ts: the authored-plan cache's boundaries, through real editor operations and the
+// received-entry fold; unrelated geometry I/O is disabled so this suite cannot fetch assets from a running sequencer.
+// The cap rows (16384 admitted, 16385 refused, the worst case's time) are tools/structure-route-test.ts's.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent } from "../mcpl/agent.ts";
-import { planStructure, prepareRouteLocal, planRouteLocal } from "../shared/structure.js";
-import { ROUTE_MAX_CELLS, routeGeometryFor } from "../shared/structure-route.js";
+import { prepareRouteLocal } from "../shared/structure.js";
+import { routeGeometryFor } from "../shared/structure-route.js";
 import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../shared/structure_edit.js";
 import { agentOnDoor } from "./agent-scratch.ts";
 import { qFromYaw } from "../shared/rot.js";
 let count=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);count++;console.log("✓ "+label);};
 const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
-function capPlan(x:number,z:number) {
- return planStructure({levels:[{y:0,tiles:[[x,z]],walls:[[1,0,0]],apertures:[]}]});
-}
-// The search region is the authored geometry's cells, padded by one: count it
-// from the plan itself, not from the planner, so the fixtures are measured.
-function paddedCells(plan:any) {
- let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
- const include=(x:number,z:number)=>{minX=Math.min(minX,x);minZ=Math.min(minZ,z);maxX=Math.max(maxX,x);maxZ=Math.max(maxZ,z);};
- for(const lv of plan.levels){
-  for(const k of lv.level.tiles.keys()){const [x,z]=k.split(",").map(Number);include(x,z);include(x+1,z+1);}
-  for(const e of lv.level.walls.values()){include(e.x,e.z);include(e.x+1,e.z+1);}
- }
- return (maxX-minX+2)*(maxZ-minZ+2);
-}
-check(paddedCells(capPlan(125,125))===ROUTE_MAX_CELLS&&paddedCells(capPlan(2,3274))===ROUTE_MAX_CELLS+1,"the fixtures' padded regions are 16384 and 16385 cells");
-const exact=prepareRouteLocal(capPlan(125,125),terrain()).route(-.5,.5,.5,.5);
-// The wall [1,0,0] stands at x = 0 for z in [0, 1]; a leg meeting it there crosses it.
-const meetsWall=(p:number[],q:number[])=>{
- if(p[0]*q[0]>0||p[0]===q[0]) return false;
- const z=p[1]+(0-p[0])/(q[0]-p[0])*(q[1]-p[1]);return z>=0&&z<=1;
-};
-check(exact.kind==="routed"&&exact.points.length>2&&!exact.points.some((p:number[],i:number)=>i>0&&meetsWall(exact.points[i-1],p)),
- "16384-cell region is admitted and routes around the obstructing wall");
-const over=prepareRouteLocal(capPlan(2,3274),terrain()).route(-.5,.5,.5,.5);
-check(over.kind==="blocked"&&over.reason.includes("5×3277 cells (5×3277 m)")&&over.reason.includes("over the 16384-cell routing limit")
- &&over.reason.includes("nearer endpoints won't help"),"16385-cell region refuses before search, naming its footprint in metres: "+over.reason);
-const scaled=prepareRouteLocal(capPlan(2,3274),{...terrain(),scale:2}).route(-.5,.5,.5,.5);
-check(scaled.kind==="blocked"&&scaled.reason.includes("(10×6554 m)"),"a scaled structure's footprint is given in world metres");
-const empty=prepareRouteLocal(planStructure({levels:[{y:0,tiles:[],walls:[]},{y:3,tiles:[],walls:[]}]}),{kind:"floor",level:1,height:3.1,step:.5}).route(.5,.5,1.5,.5);
-check(empty.kind==="blocked"&&empty.reason==="the identified floor has no cells","a walk on an empty floor is refused as one, not as over the limit");
-
-// The worst case the cap admits: a 126×126 field of short walls, padded to the
-// 16,384-cell limit, and a sealed destination, so the search visits every cell
-// it can reach. Each wall check reads only the walls filed under the cells its
-// leg touches, so the search costs about its cells (this took 38 s when every
-// check read every wall).
-const field:number[][]=[];
-for(let x=0;x<126;x+=2)for(let z=0;z<126;z+=2)field.push([0,x,z]);
-field.push([0,63,63],[0,63,64],[1,63,63],[1,64,63],[1,125,125]);
-const fieldPlan=planStructure({levels:[{y:0,tiles:[],walls:field,apertures:[]}]});
-check(paddedCells(fieldPlan)===ROUTE_MAX_CELLS,"the worst-case field is padded to exactly the limit");
-const worstFrom=performance.now();
-const worst=planRouteLocal(fieldPlan,-.5,-.5,63.5,63.5);
-const worstMs=performance.now()-worstFrom;
-check(worst.kind==="blocked"&&worst.reason==="no path through its doorways and arches connects the start to the destination (windows don't count); pick a destination you can reach through an opening"&&worstMs<2000,
- `a search of every cell at the limit, among ${field.length} walls, finishes in ${worstMs.toFixed(0)} ms (bound 2000)`);
-
 const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
-const agent=new WorldAgent({name:"cache-test",avatar:"",world:"cache-test"});
+const agent=new WorldAgent({ url: noWorldUrl(), name:"cache-test",avatar:"",world:"cache-test"});
 (agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test
-// the old format fed hand-written log entries to agent.applyEntry; the current agent folds the authority's log itself (its replica), so each
-// old entry is the current write that does the same (spawn → create, comp → set/delete a component, place → set transform)
-// through the real door, and the agent takes its next view (tools/agent-scratch.ts agentOnDoor).
+// the agent folds the authority's log itself, so each old hand-written entry is the current write doing the same (spawn →
+// create, comp → set/delete a component, place → set transform) through the real door (tools/agent-scratch.ts agentOnDoor)
 const door=agentOnDoor(agent,"route-prep");
 async function receive(verb:string,args:any) {
  const a=JSON.parse(JSON.stringify(args));
@@ -72,8 +25,7 @@ async function receive(verb:string,args:any) {
  let r:any;
  if(verb==="spawn"){
   if(now){
-   // the old spawn over an id replaced the thing. the authority never reuses an id: the old thing is deleted, and the door refuses the
-   // id's return ("reused"), so nothing can come back under it, structure or not.
+   // the authority never reuses an id: the old thing is deleted and the door refuses the id's return ("reused"), structure or not
    const gone=await door.act("delete",{id:a.id});
    if(!gone.ok) throw new Error("delete refused: "+JSON.stringify(gone.refused));
    r=door.call("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
@@ -87,7 +39,7 @@ async function receive(verb:string,args:any) {
  if(!r.ok) throw new Error(verb+" refused: "+JSON.stringify(r.refused));
  return {verb,args:a};
 }
-/** The same value (the fold hands the agent a copy of what was written, never the writer's object). */
+/** The same value: the fold hands the agent a copy of what was written, never the writer's object. */
 const same=(x:any,y:any)=>JSON.stringify(x)===JSON.stringify(y);
 const data=()=>agent.entities.get("house")?.structure;
 const cached=(d:any)=>(agent as any).planOf(d);
@@ -135,7 +87,7 @@ try{
  await receive("comp",{id:"house",type:"structure",data:door});
  const doorPlan=cached(data());
  check(prepareRouteLocal(doorPlan,terrain()).clear(.5,.5,1.5,.5),"replacement opening invalidates old blocking geometry");
- // The editor clearing that door: the wall it leaves blocks again.
+ // the editor clearing that door: the wall it leaves blocks again
  await receive("comp",{id:"house",type:"structure",data:setAperture(door,edge,null)});
  const clearedPlan=cached(data());
  check(clearedPlan!==doorPlan&&!prepareRouteLocal(clearedPlan,terrain()).clear(.5,.5,1.5,.5),"clearing an existing door through the editor closes the opening");
@@ -154,8 +106,7 @@ try{
  check(cached(data())===undonePlan&&detour(await planned([11,-8])),"same geometry uses fresh rotation, scale and terrain origin");
  (agent as any).terrain={heightAt:()=>8};
  check(straight(await planned([11,-8]),[11,-8]),"later walk uses changed terrain height with the same authored plan");
- // walkTo plans each received revision once: a second walk over the same
- // component reads none of its data again (the plan is the cached one).
+ // walkTo plans each received revision once: a second walk over the same component reads none of its data again
  let reads=0;
  const counted={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}]};
  const watched={get levels(){reads++;return counted.levels;}};

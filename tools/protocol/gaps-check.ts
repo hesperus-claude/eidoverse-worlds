@@ -1,14 +1,13 @@
-// Four gaps 26 left open (research note 34), as the SAME requests through the authority before this work (c9b4a67,
-// extracted by git into .baseline-gaps/) and through today's. An attack must be accepted there and refused now; a
-// guard (co-building, owner flows) must work in both. usage: bun gaps-check.js
+// Four gaps left open (research note 34), as the SAME requests through the authority before this work (c9b4a67, extracted by git into
+// .baseline-gaps/) and through today's: an attack must be accepted there and refused now; a guard (co-building, owner
+// flows) must work in both. The "before" door is the control arm and runs only with PROTOCOL_LAB (see common.ts).
 //   G1  creator rights on keyed components (PROTOCOL §5): "the creator of this key, or an owner", a view over the log
-//   G2  presence plausibility (L6, 25d M3): the authority's own track of each body; settlements check against it
+//   G2  presence plausibility (L6): the authority's own track of each body; settlements check against it
 //   G3  rate per actor (L7): every logged word, not only state writes
-//   G4  two hands, one crate (25c L6 falsifier)
-// Ported from the protocol lab's gaps-check.js @ 11db981; the "before" door (lab c9b4a67) is the control arm and runs only
-// with PROTOCOL_LAB (see common.ts). usage: bun tools/protocol/gaps-check.ts
+//   G4  two hands, one crate (L6 falsifier)
+// usage: bun tools/protocol/gaps-check.ts
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import { scratch, labAt, controlNote } from "./common.ts";
 import * as doorNow from "../../shared/protocol/authority.js";
@@ -44,7 +43,7 @@ const posOf = (s, id) => JSON.stringify(s.call("olive", "inspect", { id }).world
 function cast(s) {
   s.call("olive", "create-world", { title: s.name });
   for (const [who, role] of [["bob", "builder"], ["ann", "builder"], ["vic", "inhabitant"]]) s.call("olive", "set", { id: "@world", component: `roles:${who}`, value: { role } });
-  s.call("olive", "set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });   // strangers can't build here (R 10-21: a new world's newcomers do)
+  s.call("olive", "set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });   // strangers can't build here (a new world's newcomers do)
 }
 const publishCrate = (s, who) => { s.call(who, "create", { id: `${who}-crate`, model: "crate", place: { at: [3, 3] } });
   const p = s.call(who, "publish", { from: `${who}-crate`, name: `${who}'s crate` }); return p.notes?.find((n) => n.record)?.record; };
@@ -116,10 +115,9 @@ const cases = [
       const arrive = s.call("vic", "move", { to: [0, 0, 0.4] });
       const ok8 = s.call("vic", "move", { to: [0.5, 0, 8] }); const tp = s.call("vic", "move", { to: [0, 0, 0.4], teleport: true });
       const L = s.world().entries; const all = L.filter((e) => e.kind === "act" && e.actor === "vic" && e.verb === "move"); const acts = all.filter((e) => !e.body?.refused);
-      // round-2 R7 recorded refused requests, but a body's track is presence: a refused move (arrival and teleport included)
-      // is never recorded (review 10-06 S0-3: a client indoors wrote one every ~3 s). The accepted arrivals are acts.
+      // a body's track is presence: a refused move (arrival and teleport included) is never recorded; accepted arrivals are acts
       return { arrive, ok8, tp, moveActs: acts.length, refusedActs: all.filter((e) => e.body?.refused).length, recorded: acts[0]?.body?.presence ?? null }; },
-    // review 10-07 M3: an arrival is presence, never logged (it was an act with where from and to); only a teleport while present is
+    // an arrival is presence, never logged; only a teleport while present is
     baseBad: (o) => ok(o.arrive), nowGood: (o) => code(o.arrive) === "spawn" && ok(o.ok8) && code(o.tp) === "spawn" && o.moveActs === 0 && o.refusedActs === 0 && !o.recorded },
   { id: "G2d", guard: true, what: "walking at a plausible speed while carrying still works, and the put records no body position (review 10-07 M3)", run(s) { cast(s);
       s.call("olive", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "inhabitant" } }, place: { at: [0, 0] } });
@@ -203,7 +201,7 @@ const cases = [
       return { bob: b, takenFrom: b.notes?.find((n) => n.takenFrom)?.takenFrom ?? null, annPut: s.call("ann", "put", { id: "cart" }) }; },
     nowGood: (o) => ok(o.bob) && o.takenFrom === "ann" && code(o.annPut) === "not-holding" },
 
-  // ---------------- R: the fresh red team's findings (note 33), folded in ----------------
+  // ---------------- R: the red team's findings (note 33), folded in ----------------
   { id: "R1", what: "33 F1: a builder rewrites a ball's transform and model while it flies", run(s) { phys(s);
       s.call("bob", "move", { to: [0, 0, 0.3] }); s.call("bob", "grab", { id: "ball-2" }); s.call("bob", "throw", { id: "ball-2", v: [0, 6, 0] });
       const tr = s.call("ann", "set", { id: "ball-2", component: "transform", value: { pos: [5, 0, 5] } }, 200);
@@ -226,7 +224,7 @@ const cases = [
       s.call("vic", "move", { to: [2, 0, 0.3] }, 1000); s.call("vic", "grab", { id: "ball-3" }); s.call("vic", "throw", { id: "ball-3", v: [0, 3, 0] });
       s.call("vic", "wait", {}, 8000); s.call("vic", "wait", {}, 100);
       return { g, pin, t, rests: restIds(s) }; },
-    baseBad: (o) => ok(o.g) && ok(o.pin) && ok(o.t) && !o.rests.includes("cup") && !o.rests.includes("ball-3"), nowGood: (o) => ok(o.t) && o.rests.includes("cup") && o.rests.includes("ball-3") }, // PROTOCOL §5: holding suspends parent constraints until it settles, so the throw goes and both rest (the lab refused the throw instead: note 34 #11; either way nothing stalls)
+    baseBad: (o) => ok(o.g) && ok(o.pin) && ok(o.t) && !o.rests.includes("cup") && !o.rests.includes("ball-3"), nowGood: (o) => ok(o.t) && o.rests.includes("cup") && o.rests.includes("ball-3") }, // PROTOCOL §5: holding suspends parent constraints until it settles, so the throw goes and both rest (note 34 #11; either way nothing stalls)
   { id: "R2c", what: "…and by a third: the cup is thrown off the table, then the TABLE is locked while the cup flies (a flying thing keeps its logged parent)", run(s) { phys(s);
       s.call("olive", "create", { id: "tbl", model: "table", place: { at: [0, 3] } }); s.call("bob", "move", { to: [0, 0, 2.6] }, 1000);
       s.call("olive", "create", { id: "cup", model: "ball", components: { physics: { kind: "dynamic", who: "inhabitant" } }, place: { on: "tbl" } });
@@ -269,13 +267,13 @@ const cases = [
       const r = s.call("bob", "batch", { ops: Array.from({ length: 20 }, (_, i) => ({ verb: "create", args: { from: h, id: `fat-${i}` } })) });
       const L = s.world().entries.slice(n0); return { r: show(r), newActs: L.filter((e) => e.kind === "act").length, newChanges: L.filter((e) => e.kind === "change").length,
         refusedAct: L.filter((e) => e.kind === "act" && e.body?.refused?.code === "too-big").length }; },
-    // never an act that claims success with no result (33 C2); since round-2 R7 the refusal itself IS recorded, as an act
-    // that says it was refused (its request cut to 2 KiB), with no state
+    // never an act that claims success with no result; the refusal itself IS recorded, as an act that says it was refused
+    // (its request cut to 2 KiB), with no state
     baseBad: (o) => o.newActs === 1 && o.newChanges === 0, nowGood: (o) => /refused too-big/.test(o.r) && o.newActs === 1 && o.refusedAct === 1 && o.newChanges === 0 },
   { id: "R6b", what: "33 C2: say with 1.1 MB of text throws inside the authority instead of refusing", run(s) { cast(s);
       const r = s.call("vic", "say", { text: "y".repeat(1100000) }); return { r: show(r) }; },
     baseBad: (o) => /CRASH/.test(o.r), nowGood: (o) => /refused too-big/.test(o.r) },
-  // ---------------- review 10-14 night C0/C2: the byte budget is post-paid; say.to unvalidated; the body inbox unbounded ----------------
+  // ---------------- the byte budget is post-paid; say.to unvalidated; the body inbox unbounded ----------------
   { id: "G3f", guard: true, what: "say.to is a short identity, never a 100 KiB payload", run(s) { cast(s);
       const r = s.call("vic", "say", { text: "hi", to: "x".repeat(100000) }); return { r: show(r), code: code(r) }; },
     nowGood: (o) => o.code === "shape" },
@@ -285,10 +283,8 @@ const cases = [
       const r = s.call("bob", "batch", { ops: Array.from({ length: 600 }, (_, i) => ({ verb: "set", args: { id: "c", component: "description", value: `${i} ` + "d".repeat(490) } })) }, 10000);
       return { r: show(r), code: code(r), written: s.world().entries.length - before }; },
     nowGood: (o) => o.code === "rate" && o.written === 0 },
-  // H1 (holes review 10-15): the cap above kept the authority's array at 200, and forwardInbox forwarded by array LENGTH,
-  // so a browser that never drains its queue stuck at 200 and heard nothing more, ever (every ask to it expired "silence is
-  // no"). This row reads DELIVERY: a real WorldLog (server/worldlog.ts) with a toActor sink that never calls `inbox`.
-  // Mutation (must go red): forward by msgs.length again in forwardInbox, or drop the `n` stamp in authority.js inboxPush.
+  // a capped inbox must not stop delivery to a browser that never drains it (a real server/worldlog.ts, a sink that never
+  // calls `inbox`); red if forwardInbox forwards by msgs.length or inboxPush drops its `n` stamp
   { id: "G3h", guard: true, what: "300 allowed body acts: at most 200 kept in the target's inbox, and all 300 reach their socket (a browser never drains it)", run() {
       const name = `g3h-${++g3hRuns}`; const { owner } = WL.foundWorld(`${WL_DIR}/${name}`, name, "olive");
       const log = new WL.WorldLog(name); const got = [];

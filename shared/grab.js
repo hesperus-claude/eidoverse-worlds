@@ -1,40 +1,8 @@
-// grab — what a hand may do with a thing: the `grabbable` component, as data.
+// grab — what a hand may do with a thing: the `grabbable` component, as data. Grabbing is its OWN component, apart from
+// dynamics; a grip is a named point in the thing's frame (none: held where grabbed); use-while-held has a down and an up;
+// theft, who and reach are per thing; a release can snap into a socket that accepts it, or go home. Fields: docs/GRABBABLE.md.
 //
-// One component for every way a person picks a thing up (research: notes/eidoverse/RESEARCH-grab-2026-10-06.md, "The
-// shape we build"). The cross-platform pattern it follows: grabbing is its OWN component, apart from dynamics (Meta's
-// physics-less hand grab, Resonite Grabbable, Horizon's Interaction vs Motion); a grip is a named point in the thing's
-// frame (VRChat ExactGrip, Unity Attach Transform, Godot GrabPoint); no grip means it's held where it was grabbed
-// (Unreal Free); use-while-held is its own button with a down and an up (VRChat OnPickupUseDown/Up, Unity Activated);
-// theft, who may and reach are per-thing (VRChat Disallow Theft, Horizon Who Can Grab, VRChat Proximity); a release
-// can snap into a socket that accepts it (Resonite Snapper, XRI Socket, Godot SnapZone) or go home.
-//
-//   grabbable: {
-//     enabled     true          can it be picked up now (false: a dynamic ball you can only kick)
-//     who         'builder'     inhabitant | builder | owner: who may pick it up
-//     steal       true          may someone take it from a holder's hand (owners always may)
-//     range       1.5           m from the hand; past 1.5 it flies to the hand (0.1..10)
-//     priority    0             -10..10: wins over lower when several things are in reach (the key, not the table)
-//     hold        'auto'        auto (press-to-hold in VR, sticky on desktop and phone) | press | toggle
-//     anim        (by size)     how a body without tracked hands holds it: a pose or clip by NAME, open (R 10-17 15:09/15:11;
-//                               was pose, a closed enum): built in hand | carry | torch | pistol | shoulder (HOLD_POSES); a name
-//                               the body doesn't know is its default hold (by size), never a refusal. two-hand is twoHanded.
-//     grips       {}            {<name>: {pos, q?, hand?, role?, grasp?, part?}}: where the PALM goes, in the
-//                               thing's own frame (+Z out of the palm, +Y along the fingers' base)
-//     twoHanded   false         a second hand on a secondary grip steers it (false: a second hand takes it over)
-//     carries     (absent=false) a tray: what rests on it comes along when it is picked up (false: it falls off; R 10-10)
-//     throw       1             0..3: scales the release velocity (0: it can only be dropped)
-//     release     'drop'        drop | stay (hangs where you let go) | return (goes home)
-//     returnAfter 0             s, 0..3600: goes home after this long unheld (0: never)
-//     (home)                    where it goes home to is the thing's own `home` component (shape audit 10-16: one home;
-//                               the authority stamps it when a returning grabbable is written without one)
-//     fits        []            keywords: it snaps into a socket whose `accepts` shares one, released within its radius
-//     use         null          a reactions action, or {down, up}: what the use button fires while held
-//     prompt      null          hover text (≤ 40); absent: "Pick up <label>"
-//     (fx)                      reserved (shape audit 10-16): refused; presence-only particles while use is held come back
-//                               as an addition if wanted. A grip's bone overrides (hold) are cut.
-//   }
-//
-// Pure: no DOM, no three, no clock. The authority validates with checkGrabbable; the browser, the door and the agent process read with grabOf.
+// Pure: no DOM, no three, no clock. The authority validates with checkGrabbable; browser, door and agent read with grabOf.
 
 import { REACH } from './protocol/physconst.js';
 import { materialize, COMPONENTS } from './protocol/componentspec.js';
@@ -44,35 +12,34 @@ import { isPurged } from './protocol/fold.js';
 
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
-const isWho = isWhoValue;   // a role id, {permission} or {roles} (recut item 8)
+const isWho = isWhoValue;   // a role id, {permission} or {roles}
 // the registry's (componentspec.js grabbable: its fields and enums are the shape; this file reads and checks it)
 export const HOLDS = COMPONENTS.grabbable.enums.hold;      // auto, press, toggle
-/** The hold poses every body knows by name (an anim may name any pose or clip; these are the built-in ones). */
+/** Every body knows these by name (an anim may name any pose or clip; these are the built-in ones). */
 export const HOLD_POSES = ['hand', 'carry', 'torch', 'pistol', 'shoulder'];
-/** An anim names a pose or clip: the animation library's file names or a presence slot (sockbody.js CLIP_RE, one grammar). */
+/** The animation library's file names or a presence slot (sockbody.js CLIP_RE, one grammar). */
 export const ANIM_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 export const HANDS = ['left', 'right', 'either'];
 export const ROLES = ['primary', 'secondary'];
-/** A grip's grasp (R 10-17: was fingers; the XR-hands / robotics word): how the hand closes on it. */
+/** How the hand closes on it (the XR-hands / robotics word; once `fingers`). */
 export const GRASPS = ['fist', 'pinch', 'point', 'flat', 'open', 'trigger'];
 export const RELEASES = COMPONENTS.grabbable.enums.release; // drop, stay, return
 export const KEYS = Object.keys(COMPONENTS.grabbable.fields);
 export const RESERVED_KEYS = COMPONENTS.grabbable.reservedFields;   // fx
 export const GRIP_KEYS = ['pos', 'q', 'hand', 'role', 'grasp', 'part'];
 // Who may carry or punt a thing that doesn't say (grabbable.who, physics.who absent): ONE value, read by the hand here and by
-// the authority's punt (review 10-06 finding 5: the old protocol let visitors punt and carry, rank 0; the grabbable migration chose builder).
-// Flipping it to 'inhabitant' is this one line plus the cases that pin builder today: grab-check M2, G6, I1 and phys-check F.
-export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'inhabitant' (R 10-07: "I vote for visitors being able to grab and throw"; a world narrows it per thing with who)
+// the authority's punt. Flipping it is this one line plus the cases that pin it: grab-check M2, G6, I1 and phys-check F.
+export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'inhabitant' (anyone may grab and throw; a world narrows it per thing with who)
 // the written defaults are the registry's (componentspec.js grabbable.defaults: what the authority writes into a bare
 // {grabbable: {}}); the rest is what a reader fills in for a field the authority leaves absent
 export const DEFAULTS = Object.freeze({ ...materialize('grabbable', {}).value, anim: null, grips: Object.freeze({}), home: null, fits: Object.freeze([]), use: null, prompt: null, fx: null });
-/** The authority's hand reach (physconst.js REACH): a range past it is granted as a pull (the thing flies to the hand). */
+/** physconst.js REACH: a range past it is granted as a pull (the thing flies to the hand). */
 export const HAND_REACH = REACH;
 /** A free socket takes a released thing that fits within this many metres of it, unless it says otherwise. */
 export const SOCKET_RADIUS = 0.15;
-/** VR near-grab: the hover sphere around a hand, × the avatar's scale (VRChat's number). */
+/** VR near-grab: the hover sphere around a hand, × the avatar's scale. */
 export const NEAR_GRAB = 0.4;
-/** The largest side under which a thing is carried in one hand on desktop and phone (else in both arms). */
+/** Under this largest side a thing is carried in one hand on desktop and phone (else in both arms). */
 export const HAND_SIZE = 0.5;
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
 const ACTION_RE = /^[a-z][a-z0-9_-]{0,31}$/i;
@@ -86,22 +53,18 @@ const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3
 
 // ---------------------------------------------------------------- reading
 
-/** A grip, read generously with its defaults. */
+/** Read generously with its defaults. */
 export function gripOf(g) {
   if (!isObj(g) || !nums(g.pos, 3)) return null;
   return { pos: g.pos, q: unitQ(g.q) ? g.q : [0, 0, 0, 1], hand: HANDS.includes(g.hand) ? g.hand : 'either', role: ROLES.includes(g.role) ? g.role : 'primary',
-    grasp: GRASPS.includes(g.grasp) ? g.grasp : GRASPS.includes(g.fingers) ? g.fingers : 'fist', hold: {},   // fingers: its spelling before 10-17 (a stored grip the maintenance command hasn't renamed yet); a grip's bone overrides are cut (shape audit 10-16)
+    grasp: GRASPS.includes(g.grasp) ? g.grasp : GRASPS.includes(g.fingers) ? g.fingers : 'fist', hold: {},   // fingers: its older spelling (not yet renamed by the maintenance command); a grip's bone overrides are cut
     part: typeof g.part === 'string' && g.part ? g.part : null };
 }
 
 /**
- * What a hand may do with a thing, read from its components (an entity's `c`) with every default filled in, or null
- * when it can't be held at all. The ONE reader: the authority's gates, the client and the agent all ask this.
- *
- * Migration (research §Decisions 5): a thing with `physics {kind: 'dynamic'}` and no `grabbable` reads as
- * {who: physics.who ?? 'builder'} plus the defaults, which reproduce what the authority did before grabbable existed: the
- * latest grab wins, reach 1.5 m from the hand, held by its centre in the right hand, dropped or thrown on release.
- * `source` says which it was ('grabbable' or 'physics').
+ * With every default filled in, or null when it can't be held. The ONE reader (authority gates, client, agent). A dynamic
+ * `physics` thing with no `grabbable` reads as {who: physics.who ?? 'builder'} plus the defaults; `source` says which
+ * ('grabbable' or 'physics').
  */
 export function grabOf(c) {
   if (!isObj(c)) return null;
@@ -110,7 +73,7 @@ export function grabOf(c) {
   if (v === undefined && isObj(c.physics) && c.physics.kind === 'dynamic') return fill({ who: isWho(c.physics.who) ? c.physics.who : DEFAULT_WHO }, 'physics', c.home);
   return null;
 }
-/** A `home` component, read with its defaults ({pos, q, parent?, scale?}), or null. The one home (shape audit 10-16). */
+/** {pos, q, parent?, scale?} with its defaults, or null. The one home. */
 export function homeOf(h) {
   return isObj(h) && nums(h.pos, 3, 1e5) ? { pos: h.pos, q: unitQ(h.q) ? h.q : [0, 0, 0, 1], ...(isObj(h.parent) && typeof h.parent.to === 'string' ? { parent: { to: h.parent.to } } : {}), ...(h.scale !== undefined ? { scale: h.scale } : {}) } : null;
 }
@@ -122,7 +85,7 @@ function fill(v, source, home) {
   g.range = num(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
   g.priority = Number.isInteger(v.priority) ? Math.max(-10, Math.min(10, v.priority)) : 0;
   g.hold = HOLDS.includes(v.hold) ? v.hold : 'auto';
-  // anim: any name (the body resolves it; unknown → its default hold). pose: the spelling before 10-17, a stored value not yet renamed
+  // anim: any name (the body resolves it; unknown → its default hold). pose: the older spelling, a stored value not yet renamed
   const anim = v.anim !== undefined ? v.anim : v.pose === 'two-hand' ? undefined : v.pose;
   g.anim = typeof anim === 'string' && ANIM_RE.test(anim) ? anim : null;
   g.grips = isObj(v.grips) ? Object.fromEntries(Object.entries(v.grips).map(([k, x]) => [k, gripOf(x)]).filter(([k, x]) => x && NAME_RE.test(k))) : {};
@@ -131,14 +94,14 @@ function fill(v, source, home) {
   g.throw = num(v.throw) ? Math.min(3, Math.max(0, v.throw)) : 1;
   g.release = RELEASES.includes(v.release) ? v.release : 'drop';
   g.returnAfter = num(v.returnAfter) ? Math.min(3600, Math.max(0, v.returnAfter)) : 0;
-  g.home = homeOf(home);   // the thing's home component (grabbable.home is gone)
+  g.home = homeOf(home);   // the thing's home component
   g.fits = Array.isArray(v.fits) ? v.fits.filter((x) => typeof x === 'string' && WORD_RE.test(x)).map((x) => x.toLowerCase()) : [];
   g.use = useOf(v.use);
   g.prompt = typeof v.prompt === 'string' && v.prompt ? v.prompt.slice(0, 40) : null;
-  g.fx = null;   // reserved (shape audit 10-16)
+  g.fx = null;   // reserved
   return g;
 }
-/** `use` as {down, up} (either may be null): a bare action name is its down. */
+/** A bare action name is its down; either may be null. */
 export function useOf(u) {
   if (typeof u === 'string' && ACTION_RE.test(u)) return { down: u, up: null };
   if (isObj(u)) { const d = typeof u.down === 'string' && ACTION_RE.test(u.down) ? u.down : null, p = typeof u.up === 'string' && ACTION_RE.test(u.up) ? u.up : null; return d || p ? { down: d, up: p } : null; }
@@ -147,9 +110,8 @@ export function useOf(u) {
 /** The returning modes need a home: stamped by the authority when one is wanted and none is set. */
 export const wantsHome = (v) => isObj(v) && (v.release === 'return' || (num(v.returnAfter) && v.returnAfter > 0));
 
-/** The hold pose a body without tracked hands takes for this thing: the named one when the body knows it (HOLD_POSES
- *  today; a world's anim-pose later), else its default: by size (one hand under HAND_SIZE, both arms at or above it; a
- *  two-handed thing in both hands). An unknown name is never an error, only the default. size = [x, y, z] metres, or null. */
+/** The named one when the body knows it (HOLD_POSES), else its default by size (one hand under HAND_SIZE, both arms at or
+ *  above it; a two-handed thing in both hands). An unknown name is never an error. size = [x, y, z] metres, or null. */
 export function holdPoseOf(g, size) {
   if (g?.anim && ARMS[g.anim] && g.anim !== BOTH_HANDS) return g.anim;
   if (g?.source === 'physics') return 'hand';   // migration: a dynamic thing with no grabbable is held as before, by its centre in one hand
@@ -157,9 +119,8 @@ export function holdPoseOf(g, size) {
   return Array.isArray(size) && Math.max(...size) >= HAND_SIZE ? 'carry' : 'hand';
 }
 
-/** Which grip a hand takes (Godot GrabPointHand's fitness: hand match, then role, then the declared order). With
- *  `named`, that grip if this hand may take it. role: 'primary' for the first hand, 'secondary' for a second.
- *  Returns the grip's name, or null (no grips declared, or none for this hand: held where grabbed). */
+/** Hand match, then role, then declared order. With `named`, that grip if this hand may take it. role: 'primary' for the
+ *  first hand, 'secondary' for a second. → the grip's name, or null (none for this hand: held where grabbed). */
 export function pickGrip(g, hand, { named = null, role = 'primary' } = {}) {
   const ok = (x) => x.hand === 'either' || x.hand === hand;
   if (named != null) { const x = g?.grips?.[named]; return x && ok(x) ? named : null; }
@@ -168,27 +129,25 @@ export function pickGrip(g, hand, { named = null, role = 'primary' } = {}) {
   return exact ? exact[0] : role === 'primary' && all.length ? all[0][0] : null;
 }
 
-/** Does a socket take this thing? Its `accepts` and the thing's `fits` share a keyword. */
+/** Its `accepts` and the thing's `fits` share a keyword. */
 export function fitsSocket(g, sock) {
   const acc = Array.isArray(sock?.accepts) ? sock.accepts.map((x) => String(x).toLowerCase()) : [];
   return !!g && acc.length > 0 && g.fits.some((k) => acc.includes(k));
 }
 export const socketRadius = (sock) => (num(sock?.radius) ? sock.radius : SOCKET_RADIUS);
 
-/** What every client is told of a hold (the authority's presence plane, sent whenever it changes and in every join cut):
- *  who holds it, with which hand, by which grip or at which offset, and the second hand. Never logged. */
+/** What every client is told of a hold (presence, sent whenever it changes and in every join cut): who holds it, which
+ *  hand, which grip or offset, and the second hand. Never logged. */
 export function holdWire(h) {
   if (!isObj(h)) return null;
   return { by: h.by, ...(h.hand ? { hand: h.hand } : {}), ...(h.grip ? { grip: h.grip } : {}), ...(h.offset ? { offset: h.offset } : {}), ...(h.second ? { second: h.second } : {}) };
 }
-/** An offset as a hand may send it: {pos: [x, y, z] (≤ 2 m), q: [x, y, z, w]}. */
+/** {pos: [x, y, z] (≤ 2 m), q: [x, y, z, w]}. */
 export const offsetOk = (o) => isObj(o) && nums(o.pos, 3, 2) && unitQ(o.q) && Object.keys(o).every((k) => k === 'pos' || k === 'q');
 
 // ---------------------------------------------------------------- finger presets (VRM normalized bones)
-// A curl per segment in radians, as each finger bends toward the palm: [proximal, intermediate, distal]; the thumb's are
-// [metacarpal, proximal, distal]. Normalized VRM bones rest in a T-pose (identity), the right hand's fingers along -X and
-// the left's along +X, palms down: a finger bends toward the palm about +Z on the right and -Z on the left, and the thumb
-// folds in about Y. Every client poses fingers from the same table (presence: what the preset IS is data, never streamed).
+// a curl per segment in radians toward the palm: [proximal, intermediate, distal] (thumb: [metacarpal, proximal, distal]);
+// about +Z on the right hand, -Z on the left, thumb about Y. Every client poses from this table (never streamed).
 const CURL = {
   fist:    { f: [1.45, 1.55, 1.0], thumb: [0.35, 0.6, 0.6] },
   pinch:   { f: [0.55, 0.75, 0.45], thumb: [0.45, 0.5, 0.45], index: [0.8, 0.9, 0.6] },
@@ -199,7 +158,7 @@ const CURL = {
 };
 const SEG = { Thumb: ['Metacarpal', 'Proximal', 'Distal'], Index: ['Proximal', 'Intermediate', 'Distal'], Middle: ['Proximal', 'Intermediate', 'Distal'], Ring: ['Proximal', 'Intermediate', 'Distal'], Little: ['Proximal', 'Intermediate', 'Distal'] };
 const axisQ = (ax, a) => { const s = Math.sin(a / 2), c = Math.cos(a / 2); return [ax[0] * s, ax[1] * s, ax[2] * s, c].map((x) => Math.round(x * 1e6) / 1e6); };
-/** {<finger bone>: [x, y, z, w]} for one hand: the preset's curl, then the grip's sparse `hold` overrides on top. */
+/** One hand: the preset's curl, then the grip's sparse `hold` overrides on top. */
 export function fingerPose(preset, side, hold = {}) {
   const p = CURL[preset] ?? CURL.fist; const sgn = side === 'left' ? -1 : 1; const out = {};
   for (const [f, segs] of Object.entries(SEG)) {
@@ -211,12 +170,8 @@ export function fingerPose(preset, side, hold = {}) {
 }
 
 // ---------------------------------------------------------------- the body's hold pose (no tracked hands)
-// Where each arm points for a preset, in the body's frame (+Z forward, +Y up, the right arm's side is -X): the upper arm,
-// then the forearm. Every client turns these into normalized-bone rotations (shortest arc from the T-pose: a rest arm
-// lies along -X on the right, +X on the left), so a desktop or phone body visibly holds what it holds, the same for
-// everyone. Every direction is written for a RIGHT arm and mirrored for a left one; `other` is the other arm of a
-// two-armed preset (carry: both arms round it; both-hands, a twoHanded thing: the support hand forward on it). both-hands
-// is not a name an anim may give (twoHanded says it); the others are HOLD_POSES.
+// upper arm then forearm directions per preset, body frame (+Z forward, +Y up), for a RIGHT arm and mirrored; `other` is a
+// two-armed preset's other arm. both-hands is not an anim name (twoHanded says it).
 const BOTH_HANDS = 'both-hands';
 const ARMS = {
   hand:       { hold: [[-0.12, -0.95, 0.28], [-0.05, -0.3, 0.95]] },
@@ -230,7 +185,7 @@ const vnorm = (v) => { const n = Math.hypot(...v) || 1; return v.map((x) => x / 
 const vcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const qmulA = (a, b) => [a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0], a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
 const qrotA = (q, v) => { const p = qmulA(qmulA(q, [v[0], v[1], v[2], 0]), [-q[0], -q[1], -q[2], q[3]]); return [p[0], p[1], p[2]]; };
-/** The shortest-arc rotation taking unit a onto unit b (three.js setFromUnitVectors). */
+/** three.js setFromUnitVectors. */
 export function arc(a, b) {
   const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   if (d < -0.999999) { const ax = Math.abs(a[0]) > 0.9 ? [0, 1, 0] : [1, 0, 0]; const c = vnorm(vcross(a, ax)); return [c[0], c[1], c[2], 0]; }
@@ -245,19 +200,18 @@ function armQ(side, upper, lower) {
   const inv = [-qu[0], -qu[1], -qu[2], qu[3]];
   return { [`${side}UpperArm`]: r6(qu), [`${side}LowerArm`]: r6(arc(rest, vnorm(qrotA(inv, l)))) };
 }
-/** {<normalized bone>: [x, y, z, w]} for a body without tracked hands holding a thing in `hand` with `preset`. */
+/** For a body without tracked hands holding a thing in `hand` with `preset`. */
 export function armPose(preset, hand = 'right') {
   const a = ARMS[preset] ?? ARMS.hand; const other = hand === 'left' ? 'right' : 'left';
   return { ...armQ(hand, ...a.hold), ...(a.other ? armQ(other, ...a.other) : {}) };
 }
-/** Does this preset take both arms (the thing sits between the hands)? */
+/** The thing sits between the hands. */
 export const bothArms = (preset) => !!ARMS[preset]?.other;
 
 // ---------------------------------------------------------------- the authority's check
 
-/** The whole `grabbable` component, checked (closed keys, ranges, enums, grips). Null when good, else
- *  {code: 'shape'|'schema'|'bounds', reason, fix, didYouMean?} — the authority refuses with it verbatim, and the inspector's
- *  planner speaks the same words. */
+/** Closed keys, ranges, enums, grips. Null when good, else {code: 'shape'|'schema'|'bounds', reason, fix, didYouMean?}:
+ *  the authority refuses with it verbatim, and the inspector's planner speaks the same words. */
 export function checkGrabbable(v, at = 'grabbable') {
   if (!isObj(v)) return bad('shape', `${at} must be an object {who?, grips?, release?, …} ({} takes every default)`);
   const held = Object.keys(v).find((k) => RESERVED_KEYS.includes(k));
@@ -295,7 +249,7 @@ export function checkGrabbable(v, at = 'grabbable') {
   return null;
 }
 
-/** A socket's `accepts`/`radius`, checked (sockbody.js calls this for each socket). */
+/** sockbody.js calls this for each socket. */
 export function checkAccepts(sk, sat) {
   if (sk.accepts !== undefined && !(Array.isArray(sk.accepts) && sk.accepts.length >= 1 && sk.accepts.length <= MAX_FITS && sk.accepts.every((x) => typeof x === 'string' && WORD_RE.test(x))))
     return bad('shape', `${sat}.accepts is 1 to ${MAX_FITS} keywords: a released thing whose grabbable.fits shares one snaps in`);
@@ -317,7 +271,7 @@ function near(k, allowed) {
   return allowed.filter((a) => { const y = a.toLowerCase(); return (x.length > 2 && (y.startsWith(x) || x.startsWith(y))) || lev(x, y) <= Math.max(1, Math.floor(y.length / 3)); }).slice(0, 3);
 }
 
-/** One line saying what a hand may do with it, for anyone reading it as text (the agent process's look). */
+/** For anyone reading it as text (the agent's look). */
 export function describeGrab(g, label = 'it') {
   if (!g) return null;
   if (!g.enabled) return `${label} can't be picked up now`;

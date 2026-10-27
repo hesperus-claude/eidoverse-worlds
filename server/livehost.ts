@@ -1,18 +1,11 @@
-// server/livehost.ts — a world as a running server holds it: the authority (shared/protocol/authority.js) over one directory, with
-// every view the authority reads kept INCREMENTALLY (research 35, slice-2 #5):
-//   state   the strict fold, advanced per appended entry (copy-on-write: only the entities an entry touches are
-//           copied, so a held state never changes under its holder, and a write costs the world's touched part, not
-//           the log). A purge refolds from the log (purge is retroactive by law, L1).
-//   sim     the sim layer as a running folder (simFolder), viewed at the authority's clock. The lab simFolded the whole
-//           log on EVERY request (settleSim calls it first).
+// The authority (shared/protocol/authority.js) over one world directory, every view kept INCREMENTALLY:
+//   state   the strict fold, copy-on-write per entry (a held state never changes); a purge refolds (L1).
+//   sim     the sim layer as a running folder (simFolder), viewed at the authority's clock.
 //   index   id → seqs of the change entries that touch it, so creatorOf / lastTouch cost a thing's own history.
-//   clock   monotonic: max(wall clock, every ts already written). §2.1 says ts never decreases; a monotonic authority
-//           clock also makes "advance the sim for a read, then fold a later entry" equal to folding it first.
-//   presence the authority's presence plane (bodies, holds): memory only, never a file (L6: never logged; the lab kept a
-//           file because its CLI ran one process per request).
-// The log file is <dir>/world.jsonl (UTF-8 JSONL, §2.4); blobs are <dir>/blobs/sha256-<hex>.json, named by the full
-// hash of their JCS bytes, written once, verified on read (§2.2). Each line is appended and fsynced (durable.ts) before
-// the request returns: the authority has already re-read it with the strict reader.
+//   clock   monotonic: max(wall clock, every ts already written) (§2.1).
+//   presence the presence plane (bodies, holds): memory only, never a file (L6).
+// <dir>/world.jsonl (§2.4); blobs at <dir>/blobs/sha256-<hex>.json, the full hash of their JCS bytes, written once,
+// verified on read (§2.2). Each line is fsynced (durable.ts) before the request returns.
 import fs from "node:fs";
 import path from "node:path";
 import { custodyFileIn } from "./keyfiles.ts";
@@ -29,7 +22,7 @@ type Any = any; // the authority is JSDoc-typed JS; the server holds it structur
 const isE = (e: Any) => e && !(e instanceof Malformed) && typeof e === "object";
 const opsQuiet = (e: Any) => { try { return opsOf(e); } catch { return []; } };
 
-/** Apply one change entry's ops to a COPY of st that shares every entity the entry doesn't touch. */
+/** A COPY of st sharing every entity the entry doesn't touch. */
 export function applyShared(st: Any, ops: Any[], seq: number) {
   const entities = Object.create(null);
   for (const id of Object.keys(st.entities)) entities[id] = st.entities[id];
@@ -41,13 +34,12 @@ export function applyShared(st: Any, ops: Any[], seq: number) {
 
 export type LiveOpts = { now?: () => number; /** the speed track's elapsed-time clock (ms); default: performance.now, or `now` when given */ pace?: () => number; catalogue?: Any; simModels?: Any; onAppend?: (seq: number, e: Any) => void;
   /** the authority's governance keys file (§2.4); default <worlds dir>/.custody.json, shared by every world in it */ custodyFile?: string;
-  /** id → display name (the authority directory, server/directory.ts); default: that worlds dir's directory */ nameOf?: (id: string) => string | null;
-  /** id → account|anon|imported (the directory; the authority reads only "anon"); default: that worlds dir's directory */ kindOf?: (id: string) => string | null;
+  /** default: that worlds dir's directory (server/directory.ts) */ nameOf?: (id: string) => string | null;
+  /** account|anon|imported (the authority reads only "anon") */ kindOf?: (id: string) => string | null;
   /** the script sandbox (default QuickJS, shared/protocol/sandbox.js; null = none) */ scripts?: Any;
-  /** who is connected beyond the authority's own bodies: [{id, at}] (server/worldlog.ts, from the World's clients) */ present?: () => { id: string; at: number[] | null }[];
-  /** speech is arrival-only (R 10-18): the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null };
+  /** connected beyond the authority's own bodies (server/worldlog.ts) */ present?: () => { id: string; at: number[] | null }[];
+  /** speech is arrival-only: the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null };
 
-/** Open (or prepare to found) the world stored in `dir`. */
 export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   const logPath = path.join(dir, "world.jsonl");
   const blobDir = path.join(dir, "blobs");
@@ -73,9 +65,8 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   for (let i = entries.length - 1; i >= 0; i--) if (isE(entries[i]) && Number.isInteger(entries[i].ts)) { lastNow = entries[i].ts; break; }
   const wall = opts.now ?? (() => Date.now());
   const now = () => (lastNow = Math.max(lastNow, Math.floor(wall())));
-  // the speed track's pace: elapsed time from the monotonic clock. The wall is stepped back by NTP or a VM's host sync (WSL2
-  // pulls Burrow's back ~1.4 s every ~30 s), and `now` then holds still until the wall catches up — right for ts, but a body's
-  // allowance would refill nothing meanwhile. A host that brings its own clock (a lab pinning time) is paced by it.
+  // monotonic: a stepped-back wall (NTP, a VM host sync) holds `now` still, and a body's allowance would refill nothing.
+  // A host that brings its own clock (a lab pinning time) is paced by it.
   const pace = opts.pace ?? (opts.now ? now : () => performance.now());
 
   const w: Any = worldOf({
@@ -92,9 +83,8 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   // ---- the views, built once from the log, then advanced per entry ----
   let st = fold(entries);
   const touching = new Map<string, number[]>();
-  // the sim starts from the last VALID checkpoint (authority checkpointSim): its blob present and hashing to its name, written
-  // right after the entry it says (at = seq - 1), no purge after it (a purge is retroactive: its bytes may sit in the cut), an
-  // engine this host carries, and the cut's sim hashing to the digest the entry recorded. Anything else: from genesis, as before.
+  // the last VALID checkpoint (checkpointSim): blob verifies, at = seq - 1, no purge after it (its bytes may sit in the cut),
+  // an engine this host carries, and the cut's sim matches the recorded digest. Anything else: from genesis.
   const ckpt = (() => {
     let lastPurge = -1; for (let s = entries.length - 1; s >= 0; s--) if (isE(entries[s]) && entries[s].kind === "purge") { lastPurge = s; break; }
     for (let s = entries.length - 1; s > lastPurge; s--) { const e = entries[s]; if (!isE(e) || e.kind !== "sim" || e.verb !== "checkpoint") continue;
@@ -105,8 +95,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
       return { seq: s, cut }; }
     return null;
   })();
-  // the cut carries the engine and what's lifted/launched, not the fold: the layer's engine view needs the state AT the
-  // cut (second review 10-11 S1-1: without it the first edit after a reopen removed the thing from the engine)
+  // the engine view needs the state AT the cut, or the first edit after a reopen drops the thing from the engine
   let sim = simFolder(entries, { models: opts.simModels ?? {}, purged: purgesIn(entries), ...(ckpt ? { from: { ...ckpt.cut, st: fold(entries, { until: ckpt.seq }) } } : {}) });
   const index = (seq: number, e: Any) => { if (!isE(e) || e.kind !== "change") return;
     for (const id of new Set(opsQuiet(e).map((o: Any) => o.id))) { let a = touching.get(id as string); if (!a) touching.set(id as string, (a = [])); a.push(seq); } };
@@ -114,7 +103,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   for (let s = 0; s < entries.length; s++) { index(s, entries[s]); if (st.status === "ok" && isE(entries[s]) && !bad.has(s) && (!ckpt || s > ckpt.seq)) sim.feed(s); }
   w.bootedFrom = ckpt ? ckpt.seq : null;
 
-  // a world that holds scripts starts its sandbox processes now, so its first activation doesn't wait for one
+  // sandboxes start now, so a first activation doesn't wait for one
   if (st.status === "ok" && Object.values(st.entities ?? {}).some((e: Any) => Object.keys(e.c).some((k) => k.startsWith("script:")))) w.scripts?.warm?.();
   w.state = () => st;
   w.sim = () => sim.view(w.now()); // the authority's clock: one per request (authority.js request pins it)
@@ -129,8 +118,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
     if (x.kind === "purge") for (const e of entries) if (isE(e) && e.kind === "sim" && e.verb === "checkpoint" && typeof e.body?.state === "string") {   // the purged bytes may sit in a cut: gone (§12)
       try { fs.unlinkSync(blobPath(e.body.state)); } catch { /* already gone */ } }
     index(seq, x);
-    // a purge is retroactive, so the engine's world is rebuilt from the whole log with it, as a fresh reader would fold it
-    // (the sim fold reads a purged physical value as no body); a checkpoint can't stand in, since it may hold the purged bytes
+    // rebuilt from the whole log, as a fresh reader folds it; a checkpoint can't stand in (it may hold the purged bytes)
     if (x.kind === "purge") { const bad = new Set(st.diagnostics.filter(([, c]: Any) => String(c).startsWith("malformed")).map(([q]: Any) => q));
       sim = simFolder(entries, { models: opts.simModels ?? {}, purged: purgesIn(entries) });
       if (st.status === "ok") for (let s = 0; s < entries.length; s++) if (isE(entries[s]) && !bad.has(s)) sim.feed(s); }
@@ -141,7 +129,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   return w;
 }
 
-/** Line 0 of the log at `p`, read (only the first 64 KiB is looked at), or null. */
+/** Only the first 64 KiB is looked at. */
 function genesisAt(p: string): any {
   if (!fs.existsSync(p)) return null;
   try {
@@ -150,15 +138,13 @@ function genesisAt(p: string): any {
     return isE(g) && g.kind === "genesis" ? g : null;
   } catch { return null; }
 }
-/** Is `dir` a world this server reads? Its log exists and line 0 is a genesis saying {dialect: "eidoverse-log", v: 4}
- *  (§2.4: the protocol's number is stated there and nowhere else). */
+/** Line 0 is a genesis saying {dialect: "eidoverse-log", v: 4} (§2.4: the number is stated there and nowhere else). */
 export function isWorldDir(dir: string): boolean {
   const g = genesisAt(path.join(dir, "world.jsonl"));
   return !!g && g.body?.dialect === DIALECT && g.body?.v === VERSION;
 }
-/** A log of this protocol's family (an entry-kind genesis) that this server can't read: saved before the 2026-10-07
- *  names pass (an older file name, or a genesis that stated its number in its own field). Refounded, or re-translated
- *  from its original log; never opened. */
+/** This protocol's family, saved before the names pass (older file name, or the number in its own field).
+ *  Never opened. */
 export function isPreNamesDir(dir: string): boolean {
   if (isWorldDir(dir) || !fs.existsSync(dir)) return false;
   try { return fs.readdirSync(dir).some((f) => f.endsWith(".jsonl") && !!genesisAt(path.join(dir, f))); } catch { return false; }

@@ -1,35 +1,16 @@
-// forecast — the deterministic ambient-weather oracle, and the one sky fold
-// every plane shares.
-//
-// PURE and dependency-free ON PURPOSE: three species of runtime import this
-// file — the browser client (sky.js / world.js), the sequencer's fold
-// (server/server.ts), and embodied agents (mcpl/agent.ts). Shared facts (time
-// of day, weather state, transition phase) must be DERIVED identically
-// everywhere, so the derivation lives in exactly one place. No three, no DOM,
-// and no Date.now() of its own — callers pass `now`, tests pass whatever they
-// like.
-//
-// The shape (issue #29): a world's `sky` verb may carry a `forecast` policy —
-// seed, allowed states, dwell ranges, transition time. The POLICY is authored
-// (an actor, a log seq); every weather change derived from it is a
-// world-system realization of that policy, computed independently by each
-// client from (policy, epoch, now). No server simulation, no per-frame log
-// entries, no per-client randomness: late join, reconnect, and two
-// simultaneous clients all land on the same segment of the same forecast.
+// forecast — the deterministic ambient-weather oracle, and the one sky fold every plane shares. PURE: browser, sequencer
+// fold and agents must derive time of day and weather identically, so no Date.now() of its own (callers pass `now`). A
+// `sky` may carry a `forecast` policy (#29); every weather change is derived from (policy, epoch, now) by each reader:
+// no server sim, no per-frame entries, no per-client randomness.
 
 export const WEATHERS = ['clear', 'fair', 'sunshower', 'overcast', 'rain', 'storm', 'cyclone', 'darkstorm'];
-// The cloud kinds the sky realizes (client/lib/sky.js re-exports this; the
-// world entity's Sky record names the same list).
+// the cloud kinds the sky realizes (client/lib/sky.js re-exports this; the Sky record names the same list)
 export const CLOUDS = ['clear', 'cumulus', 'stratus', 'cirrus'];
 
 // ---------------------------------------------------------------- day clock
 
-// Wall-clock mode: `sky {clock: "real", tz: "America/Los_Angeles"}` makes the
-// world's hour BE the named timezone's hour — noon in the world is noon on
-// that clock, DST included (Intl owns the tz database; ECMA-402, present in
-// every runtime that folds a sky). Formatters are cached per tz: hoursAt runs
-// per frame under the sun. An unknown tz caches null and the rated clock
-// takes over — a typo dims nothing.
+// wall-clock mode: `sky {clock: "real", tz}` makes the hour the tz's, DST included (Intl). Formatters cached per tz (hoursAt
+// runs per frame); an unknown tz caches null and the rated clock takes over.
 const _tzFmt = new Map();
 function tzFormatter(tz) {
   if (_tzFmt.has(tz)) return _tzFmt.get(tz);
@@ -38,21 +19,17 @@ function tzFormatter(tz) {
     f = new Intl.DateTimeFormat('en-US', {
       timeZone: tz, hour12: false, hour: 'numeric', minute: 'numeric', second: 'numeric',
     });
-  } catch { /* unknown tz — remembered as null */ }
+  } catch { /* unknown tz: remembered as null */ }
   _tzFmt.set(tz, f);
   return f;
 }
 
-/** The hour of day a sky's authored epoch implies at time `tMs`. This is THE
- *  formula — sky.js's sun and the fold's rebase both call it, which is what
- *  keeps a weather verb from snapping the day (see foldSkyEntry). No ambient
- *  Date.now() even in clock mode: the wall hour is derived from the caller's
- *  tMs, so tests can freeze time and every plane derives identically. */
-// A tz present is the wall clock (shape audit 10-16: clock and dormantRated are gone from the stored sky; hours, rate and ts
-// stay put as the rated fallback). An older value said so with clock: 'real' (tz absent = Los Angeles), and parked its
-// rated clock under dormantRated: both still read.
+/** THE formula (sky.js's sun and the fold's rebase both call it, so a weather verb never snaps the day). Wall hours derive
+ *  from the caller's tMs, never Date.now(). */
+// A tz present is the wall clock; hours, rate and ts stay as the rated fallback. An older value said clock: 'real' (tz
+// absent = Los Angeles) and parked its rated clock under dormantRated: both still read.
 export const isRealClock = (sky) => !!sky && (typeof sky.tz === 'string' || sky.clock === 'real');
-/** The rated clock's hour at tMs: hours + rate × elapsed since ts (an older value's parked clock when it has one). */
+/** hours + rate × elapsed since ts (an older value's parked clock when it has one). */
 export function ratedHoursAt(sky, tMs) {
   if (!sky) return 12;
   const d = sky.dormantRated;
@@ -73,10 +50,8 @@ export function hoursAt(sky, tMs) {
 }
 
 // ---------------------------------------------------------------- rng
-// One independent draw stream per (seed, segment index): mulberry32 keyed by
-// mixing the index into the seed. Draw ORDER within a segment is part of the
-// wire contract (dwell, then state, then intensity) — reordering draws would
-// silently fork every deployed world's forecast.
+// One draw stream per (seed, segment index). Draw ORDER within a segment (dwell, state, intensity) is wire contract:
+// reordering forks every deployed world's forecast.
 
 function hashSeed(seed) {
   const s = String(seed ?? 1);
@@ -101,17 +76,13 @@ function segRng(seed, idx) {
 
 // ---------------------------------------------------------------- policy
 
-// The dwell floor bounds two things at once: how often the sky may lurch
-// (a strobing forecast is a griefing vector, not a weather system) and how
-// long the late-join segment walk can get — at 60s minimum, a year-old
-// policy is ~525k iterations of cheap integer math, a few milliseconds once.
+// the dwell floor bounds how often the sky may lurch (strobing is griefing) and the late-join walk (a year-old policy at
+// 60 s is ~525k cheap iterations)
 const DWELL_FLOOR_S = 60;
 const DWELL_CAP_S = 6 * 3600;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(x) ? x : lo));
 
-/** Validate + normalize an authored policy bag. Returns null when the bag
- *  doesn't amount to a usable policy (no valid states, not an object) —
- *  callers treat null as "forecast off". */
+/** Null when the bag doesn't amount to a usable policy (no valid states, not an object): callers treat null as "forecast off". */
 export function normalizePolicy(f) {
   if (!f || typeof f !== 'object') return null;
   const states = [];
@@ -121,7 +92,7 @@ export function normalizePolicy(f) {
     if (WEATHERS.includes(name) && weight > 0) states.push({ state: name, weight });
   }
   if (!states.length) return null;
-  // dwell and transition (shape audit 10-16: no unit in a name); an older policy's dwellSec / transitionSec read too
+  // dwell and transition (no unit in a name); an older policy's dwellSec / transitionSec read too
   const dw = Array.isArray(f.dwell) ? f.dwell : f.dwellSec;
   const d = Array.isArray(dw) ? dw : [600, 1800];
   const dwellMin = clamp(d[0], DWELL_FLOOR_S, DWELL_CAP_S);
@@ -135,8 +106,7 @@ export function normalizePolicy(f) {
     dwellMinMs: dwellMin * 1000,
     dwellMaxMs: dwellMax * 1000,
     kMin, kMax,
-    // a transition may never outlive the shortest segment — otherwise a new
-    // ease can begin before the previous one finishes, forever
+    // a transition may never outlive the shortest segment, or a new ease begins before the last finishes, forever
     transitionSec: clamp(f.transition ?? f.transitionSec ?? 30, 1, Math.min(600, dwellMin)),
     epoch: Number.isFinite(f.epoch) ? f.epoch : 0,   // stamped at fold; 0 = never folded
     seq: f.seq, by: f.by,
@@ -146,8 +116,7 @@ export function normalizePolicy(f) {
 // ---------------------------------------------------------------- segments
 
 function pickState(states, prev, r) {
-  // never re-draw the state we're already in when there is anywhere else to
-  // go — a forecast whose transitions are invisible isn't one
+  // never re-draw the current state when there is anywhere else to go: a forecast whose transitions are invisible isn't one
   const pool = states.filter((s) => s.state !== prev);
   const use = pool.length ? pool : states;
   let x = r() * use.reduce((t, s) => t + s.weight, 0);
@@ -155,9 +124,8 @@ function pickState(states, prev, r) {
   return use[use.length - 1].state;
 }
 
-/** The forecast segment containing `nowMs`. Pure oracle: same answer from a
- *  cold walk or a resumed cursor (the returned segment IS the cursor — feed
- *  it back on the next tick and the walk is O(1) from then on; fence #3). */
+/** Pure oracle: the same from a cold walk or a resumed cursor (the returned segment IS the cursor: fed back on the next tick
+ *  the walk is O(1) from then on; fence #3). */
 export function segmentAt(p, nowMs, cursor = null) {
   let idx = 0, start = p.epoch, prev = null;
   if (cursor && cursor.seed === p.seed && cursor.epoch === p.epoch
@@ -179,14 +147,8 @@ export function segmentAt(p, nowMs, cursor = null) {
 
 // ---------------------------------------------------------------- the answer
 
-/** What the sky should SHOW at `nowMs` — the one question client, agent, and
- *  tests all ask. Sources:
- *    'authored' — no active policy; the folded weather verb is the truth
- *    'forecast' — the policy's current segment
- *    'manual'   — a weather verb landed inside the current segment; it holds
- *                 until the segment boundary, then the forecast resumes
- *  `cursor` in / `cursor` out keeps live ticking O(1); omit it for a cold
- *  (late-join / test) derivation. */
+/** What the sky should SHOW at `nowMs`. Sources: 'authored' (no active policy), 'forecast' (the current segment), 'manual'
+ *  (a weather verb inside the segment, holding until its boundary). `cursor` in/out keeps ticking O(1); omit it to derive cold. */
 export function effectiveSky(sky, nowMs, cursor = null) {
   const authored = {
     source: 'authored',
@@ -199,8 +161,7 @@ export function effectiveSky(sky, nowMs, cursor = null) {
   if (!p || !p.epoch) return authored;
   const seg = segmentAt(p, Math.max(nowMs, p.epoch), cursor);
   const o = sky.override;
-  // an override governs from the moment it LANDED to the end of its segment —
-  // never earlier (a skewed clock must not see a "future" override in force)
+  // an override governs from the moment it LANDED to its segment's end, never earlier (a skewed clock must not see a "future" one)
   if (o && WEATHERS.includes(o.state) && nowMs >= o.ts && o.ts >= seg.startMs && o.ts < seg.endMs) {
     return {
       source: 'manual', weather: o.state, k: o.k ?? 1,
@@ -216,13 +177,9 @@ export function effectiveSky(sky, nowMs, cursor = null) {
   };
 }
 
-// ---------------------------------------------------------------- fold
-
-// ---------------------------------------------------------------- spelling (shape audit 10-16)
-// What a sky or weather act may still SAY the old way, stored the one way: clock 'real' is a tz (the old default zone when
-// none was named); any other clock is a rated sky (no tz); weatherSeconds is transition; a forecast's dwellSec and
-// transitionSec are dwell and transition; a re-issued dormantRated {hours, rate, ts} (the old park) is the rated clock,
-// re-anchored at the entry's ts so the day doesn't snap. Pure; a value already in today's spelling comes back unchanged.
+// ---------------------------------------------------------------- spelling
+// What a sky or weather act may still SAY the old way, stored the one way (clock 'real' → tz, weatherSeconds → transition,
+// dwellSec/transitionSec, dormantRated re-anchored at the entry's ts). Today's spelling comes back unchanged.
 const FIX = (o) => o && typeof o === 'object' && !Array.isArray(o);
 export function skySpelling(args, ts) {
   if (!FIX(args)) return args;
@@ -241,23 +198,8 @@ export function skySpelling(args, ts) {
   return out;
 }
 
-/** Fold a `sky` or `weather` log entry onto the standing sky state. The
- *  sequencer, the live browser client, and the embodied agent all fold
- *  through here — one code path, three planes, no drift.
- *
- *  Server-owned stamps: `forecast.{epoch,seq,by}`, the whole `override` bag,
- *  and the top-level `seq`/`by` (which sky entry authored this bag — the
- *  effective clock's provenance, issue #65) come from the ENTRY, never from
- *  the authored args — a policy bag cannot spoof its own provenance. The one
- *  exception is synthetic pre-history replay (negative seqs: a snapshot re-read as entries):
- *  those args ARE the already-stamped fold, so stamps pass through untouched —
- *  restamping them with the synthetic entry would re-epoch the forecast on
- *  every late join.
- *
- *  A weather verb under a rated sky also REBASES `hours` to the hour the old
- *  epoch implies at the entry's ts. Without this the merge re-epochs t0 while
- *  `hours` stays at the authored value, and the sun snaps back to it on every
- *  weather change — on both planes, live and fold. */
+/** One path, all planes. Stamps come from the ENTRY, never args (no spoofed provenance), except synthetic replay (negative
+ *  seq), already stamped. A weather verb under a rated sky rebases hours, or the sun snaps back. */
 export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
   const synthetic = (seq ?? 0) < 0;
   args = skySpelling(args, ts);
@@ -272,20 +214,18 @@ export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
       }
       out.seq = seq; out.by = actor;
     }
-    // no parking (shape audit 10-16): under a tz, hours and rate stay put as the rated fallback
+    // no parking: under a tz, hours and rate stay as the rated fallback
     return out;
   }
-  // weather — merges onto the standing sky (DESIGN.md: a thing that HAPPENS,
-  // not a property you set). `keepSky: false` discards the standing sky and
-  // starts fresh from this verb alone — the helper owns that semantic so the
-  // sequencer's fold and the live client can never disagree about it.
+  // weather merges onto the standing sky (a thing that HAPPENS, not a property); `keepSky: false` starts fresh. One helper,
+  // so the sequencer's fold and the client can't disagree.
   const base = args.keepSky === false ? {} : (prev ?? {});
   const out = { ...base, ...args, ts };
   delete out.keepSky;   // an instruction to the fold, not a sky property
   // the rated clock re-anchors at ts (its hour then, never the wall clock's: under a tz, hours/rate are the fallback)
   if ((base.rate ?? 0) !== 0 && args.hours == null) out.hours = ratedHoursAt(base, ts);
   if (!synthetic) {
-    // a weather verb cannot author or clear policy — that is the sky verb's job
+    // a weather verb cannot author or clear policy: that is the sky verb's job
     if (base.forecast) out.forecast = base.forecast; else delete out.forecast;
     if (base.forecast && WEATHERS.includes(args.weather)) {
       out.override = {
@@ -295,7 +235,7 @@ export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
       };
     } else if (base.override) out.override = base.override;
     else delete out.override;
-    // nor can it claim authorship of the bag — seq/by stay the sky entry's
+    // nor claim authorship of the bag: seq/by stay the sky entry's
     if (base.seq != null) out.seq = base.seq; else delete out.seq;
     if (base.by != null) out.by = base.by; else delete out.by;
   }
@@ -305,16 +245,11 @@ export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
   return out;
 }
 
-/** The canonical answer to "what clock governs this sky?" (issue #65) — no
- *  precedence folklore. Mirrors hoursAt's ACTUAL behavior, including the
- *  unknown-tz fallback: `mode` is what is effective right now, never what was
- *  merely requested. Shapes:
+/** "What clock governs this sky?" (#65), mirroring hoursAt's ACTUAL behaviour: `mode` is what's effective now.
  *    { mode:'real',  tz, hour, seq?, by? }
  *    { mode:'rated', rate, hour, seq?, by?, requestedTz? }
  *    { mode:'fixed', hour, seq?, by?, requestedTz? }
- *  `requestedTz` appears only when `clock:'real'` was authored with a tz Intl
- *  cannot resolve — the fallback governs and says so. `seq`/`by` are the
- *  fold-stamped provenance of the sky entry that authored this bag. */
+ *  `requestedTz`: a tz Intl can't resolve (the fallback governs). `seq`/`by`: the authoring entry's provenance. */
 export function effectiveClock(sky, nowMs) {
   if (!sky) return { mode: 'fixed', hour: 12 };
   const hour = hoursAt(sky, nowMs);
@@ -325,8 +260,7 @@ export function effectiveClock(sky, nowMs) {
   if (isRealClock(sky)) {
     const tz = sky.tz ?? 'America/Los_Angeles';
     if (tzFormatter(tz)) return { mode: 'real', tz, hour, ...prov };
-    // fallback mirrors hoursAt exactly: the parked clock on a normalized
-    // bag, the top-level fields on a bag that never folded (preview args)
+    // as hoursAt: the parked clock on a normalized bag, the top-level fields on one that never folded (preview args)
     const rate = (sky.dormantRated && typeof sky.dormantRated === 'object')
       ? (sky.dormantRated.rate ?? 0) : (sky.rate ?? 0);
     return rate !== 0
@@ -337,8 +271,7 @@ export function effectiveClock(sky, nowMs) {
   return rate !== 0 ? { mode: 'rated', rate, hour, ...prov } : { mode: 'fixed', hour, ...prov };
 }
 
-/** Coarse day phase — the granularity ambient perception actually wants.
- *  Continuous hour updates would be spam; crossing dawn is an event. */
+/** The granularity ambient perception wants: continuous hour updates would be spam; crossing dawn is an event. */
 export function dayPhase(hours) {
   if (hours >= 5 && hours < 8) return 'dawn';
   if (hours >= 8 && hours < 18) return 'day';
@@ -348,8 +281,7 @@ export function dayPhase(hours) {
 
 // ---------------------------------------------------------------- narration
 
-/** One legible line for text perception and debug output — who set the sky
- *  in motion, and what it is doing right now. */
+/** For text perception and debug output: who set the sky in motion, and what it is doing now. */
 export function describeSky(sky, nowMs) {
   if (!sky) return null;
   const bits = [];

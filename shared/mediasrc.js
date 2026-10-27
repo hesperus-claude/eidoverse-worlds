@@ -1,4 +1,4 @@
-// mediasrc — where a picture's or a sound's bytes may come from, and whose browser may fetch them (batch 2, R 10-07).
+// mediasrc — where a picture's or a sound's bytes may come from, and whose browser may fetch them.
 //
 // THE HOLE THIS CLOSES. A link in the world is a fetch every visitor's browser makes: whoever runs the far server sees
 // each visitor's IP address, when they came, and what browser they use. Before this, the authority took any src (an https

@@ -1,25 +1,20 @@
-// shared/protocol/access.js — who may come INTO a world (upstream #258 "world access", in this protocol's terms).
-//
-// Pure: no state, no clock, no imports but roles.js. The server's door (server/access.ts) asks it at every join, after any
-// change to the world's roles or access, and for every HTTP read of a world; the client's /access, /members and the World
-// panel read the same function, so "may I be here" never has two answers.
-//
+// shared/protocol/access.js — who may come INTO a world (upstream #258 "world access"). Pure: no state, no clock, no imports
+// but roles.js. The door (server/access.ts) asks at every join, after any roles/access change and for every HTTP read;
+// /access, /members and the World panel read the same function, so "may I be here" never has two answers.
 // The facts are the world's own components on @world (PROTOCOL §7 Roles, §4 access):
 //   access {join: anyone | signed-in | listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //     join    who may come in with a body: anyone; people with an account; or only people LISTED here (a roles:<id> grant).
 //     watch   "anyone": whoever `join` turns away may still WATCH (a spectator: no body, no voice, nothing written). Absent,
 //             watching follows `join`: a listed-only world is then invisible to everyone it doesn't list.
-//   default-role {role}   the NEWCOMER role: what everyone without a grant holds once inside. Absent: inhabitant (every world
-//             founded before R 10-21 keeps that meaning); a world founded since starts with builder (starter config).
+//   default-role {role}   the NEWCOMER role: what everyone without a grant holds once inside. Absent: inhabitant (worlds
+//             founded before the starter config keep that meaning); a world founded since starts with builder.
 //   roles:<id> {role, can?, note?, until?}   `until` (epoch ms): when the grant ends. The authority writes its end
 //             (`expire-roles`, a system act) within a second of it, and warns the holder five minutes before.
 //
-// Upstream spelled the same doors as rungs below visitor on one ladder (`grant * none` = members-only, `grant * spectator` =
-// watch-only, `grant bob spectator`); here a rank is membership and entry is the world's `access` (roles.js: "a state is
-// never a rank"). The four doors upstream's panel offers map onto these components exactly (DOORS below).
+// Upstream's spectator and none rungs are entry here, not ranks ("a state is never a rank"); DOORS maps its four buttons.
 
 import * as R from "./roles.js";
-/** The four doors an owner picks between (upstream's World › access buttons), in this protocol's components. */
+/** The four doors an owner picks between, in this protocol's components. */
 export const DOORS = Object.freeze({
   open:          "anyone may come in, and build (newcomers are builders)",
   public:        "anyone may come in and play; building is for builders and above (newcomers are inhabitants)",
@@ -31,9 +26,8 @@ export const ACCESS_WARN_MS = 5 * 60_000;   // a timed grant's holder is told th
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 const accessOf = (wc) => (isObj(wc?.access) ? wc.access : null);
 
-/** Is `actor` LISTED here: a live roles:<actor> grant whose `until`, if any,
- *  hasn't passed at `now` (security review 10-18 M6: an ended grant is absent on every READ — the door, the map, the HTTP reads
- *  of an unloaded world — before the authority's sweep writes its end). `now` null: no clock, until is not judged. */
+/** Is `actor` LISTED: a live roles:<actor> grant whose `until`, if any, hasn't passed at `now` (an ended grant is absent on
+ *  every READ, before the authority's sweep writes its end). `now` null: no clock, until is not judged. */
 export function listedIn(wc, actor, now = null) {
   const r = actor ? wc?.[`roles:${actor}`] : null;
   if (!(isObj(r) && typeof r.role === "string")) return false;
@@ -50,10 +44,9 @@ export function doorOf(wc) {
   return dr === "builder" ? "open" : "public";
 }
 
-/** What `who` may do at this world's door: "embody" (come in with a body), "watch" (no body), or "none", with the reason
- *  in words for a refusal. `who`: {actor?, anon? (no account), bypass? (an owner, a holder of a moderation power, an
- *  operator: they always get in), trustedRenderer? (the renderers' credential: may watch any world, never embody)}.
- *  Bans, kicks, account age and capacity are the server's (they need its moderator log, its clock and who is here). */
+/** "embody" (with a body), "watch" (no body) or "none", with the reason in words. `who`: {actor?, anon? (no account),
+ *  bypass? (an owner, a moderation-power holder, an operator: always in), trustedRenderer? (may watch any world, never
+ *  embody)}. Bans, kicks, account age and capacity are the server's (its moderator log, clock and who is here). */
 export function entryOf(wc, who = {}, worldName = "this world", now = null) {
   if (who.bypass) return { may: "embody" };
   const a = accessOf(wc);
@@ -66,8 +59,7 @@ export function entryOf(wc, who = {}, worldName = "this world", now = null) {
   return { may: "none", why };
 }
 
-/** The writes that set a door (a request's args, one per component: set, with the components' other fields kept).
- *  `wc` is the world's @world components now. → [{component, value}] */
+/** One set per component, its other fields kept. `wc` is @world's components now. → [{component, value}] */
 export function doorWrites(door, wc = {}) {
   if (!Object.hasOwn(DOORS, door)) return null;
   const { join: _j, watch: _w, ...keep } = accessOf(wc) ?? {};
@@ -94,7 +86,7 @@ export function timedGrants(wc) {
   return out.sort((a, b) => a.until - b.until);
 }
 
-/** "12 min left" / "3 h left" / "until 2026-10-20"; "ended" once it has passed (a grant the sweep hasn't removed yet). */
+/** "12 min left" / "3 h left" / "until 2026-10-20"; "ended" once passed (the sweep may not have removed it yet). */
 export function leftWords(until, now) {
   const ms = until - now;
   if (ms <= 0) return "ended";

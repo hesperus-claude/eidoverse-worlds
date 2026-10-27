@@ -15,11 +15,11 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
+import { suite } from "./suite.ts";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");
 const CLIENT = path.join(ENGINE, "client");
-let pass = 0, fail = 0;
-const ok = (c: any, what: string, detail?: any) => { if (c) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 700)}` : ""}`); } };
+const { ok, done } = suite("modhole-check", { quiet: true, cap: 700 });
 
 const files: string[] = [];
 const walk = (d: string) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -70,5 +70,4 @@ const srv = ["server/messages.ts", "server/server.ts", "server/requestwire.ts"].
 const types = [...srv.matchAll(/type:\s*"([\w-]+)"/g)].map((m) => m[1]).filter((t) => /mod-?offer|client-?mod|^mods$|offer-?mod/i.test(t));   // ("mod" is moderation text, not a mod)
 ok(types.length === 0, "MH5 the server sends no message that carries a client mod", types);
 
-console.log(`[modhole-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

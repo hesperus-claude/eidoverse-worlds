@@ -1,47 +1,24 @@
-// Chat bridge: mirrors a world's spoken chat into one Discord text channel,
-// and carries that channel's messages back in as speech.
-//
+// Chat bridge: mirrors a world's spoken chat into one Discord text channel, and that channel's messages back in as speech.
 //   world WS (embodied "discord") ── `say` entries of the log stream ──▶ Discord channel
 //   Discord channel ── messages ──▶ a door `say` request {text: "author: …"}
-//
-// The world speaks the protocol: the join says `replica: true` (a client that
-// doesn't is refused), chat arrives as `say` entries in the `log` stream
-// (actors are opaque ids; the stream's `names` and the snapshot's cut.names say
-// who they are), and a say is a door request {type: "request", id, verb: "say",
-// args: {text}} answered by `reply` (a refusal is logged, not retried).
-//
-// The bridge joins EMBODIED, not as a spectator, because authoring (even
-// `say`, rank 0) needs a body — and that is honest UX anyway: the world
-// shows a presence named "discord" standing where the channel is listening.
-// Everything it relays is attributed inside the say text ("author: …"), so
-// provenance survives in the log verbatim.
-//
-// Loop safety (both directions, both by identity):
-//   world → Discord: entries whose actor is the bridge's own identity (the
-//     snapshot's cut.you) are skipped — that covers the echo of every line it
-//     just spoke.
-//   Discord → world: messages from bots/webhooks are skipped — that covers
-//     the bridge's own posts (and any other bot; humans only by default).
-//
+// The join says `replica: true` (others are refused); actors are opaque ids named by the stream's `names` and the
+// snapshot's cut.names; a say is {type: "request", id, verb: "say", args: {text}} answered by `reply` (a refusal is
+// logged, not retried).
+// Joins EMBODIED: authoring (even `say`, rank 0) needs a body, and the world honestly shows a presence named "discord".
+// Relayed text is attributed inside the say ("author: …"), so provenance survives in the log.
+// Loop safety, both by identity: world → Discord skips entries by the bridge's own identity (cut.you); Discord →
+// world skips bots/webhooks (humans only by default).
 // Env:
 //   WORLD_URL      ws(s)://host/ws            (default ws://127.0.0.1:8940/ws)
-//   WORLD_TOKEN    door key                    (JOIN_TOKEN accepted too — the
-//                                              one-secret-two-names footgun,
-//                                              issue #41, answered by taking both)
+//   WORLD_TOKEN    door key                    (JOIN_TOKEN accepted too, issue #41)
 //   WORLD_NAME     world to mirror             (default commons)
 //   BRIDGE_ID      in-world identity           (default "discord")
 //   DISCORD_TOKEN  bot token                   (omit with DRY_RUN=1)
 //   CHANNEL_ID     the mirrored text channel
 //   ALLOW_BOTS=1   relay other bots' Discord messages too (default: humans only)
-//   DRY_RUN=1      no Discord: world lines print to stdout, stdin lines of the
-//                  form "Name: text" play the part of Discord messages — lets
-//                  the world half be rehearsed before bot credentials exist
-//
-// The Discord application needs the MESSAGE CONTENT privileged intent enabled
-// (dev portal → Bot → Message Content Intent), or every message arrives empty.
-//
-// Queue policy, both directions: bounded, oldest dropped with a log line — a
-// mirror that runs minutes behind is worse than one with a hole it admits to.
+//   DRY_RUN=1      no Discord: world lines print to stdout, stdin "Name: text" lines play Discord messages
+// The Discord application needs the MESSAGE CONTENT privileged intent (dev portal → Bot), or every message arrives empty.
+// Queues, both directions: bounded, oldest dropped with a log line (a mirror minutes behind is worse than an admitted hole).
 
 const WORLD_URL = process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
 const WORLD_TOKEN = process.env.WORLD_TOKEN ?? process.env.JOIN_TOKEN ?? "";
@@ -54,7 +31,7 @@ const DRY_RUN = process.env.DRY_RUN === "1";
 const MAX_BACKLOG = 50;        // per direction; beyond this the oldest drop
 const MAX_LINE_CHARS = 1500;   // Discord → world cap (with honest ellipsis)
 const DISCORD_CHUNK = 1900;    // world → Discord split point (limit is 2000)
-const SEND_GAP_MS = 550;       // world say pacing: under the door's 20 says per 10 s per actor (authority/gate.js RATE), with room
+const SEND_GAP_MS = 550;  // under the door's 20 says per 10 s per actor (authority/gate.js RATE), with room
 const RATE_BACKOFF_MS = 2000;  // a say refused `rate` anyway goes back to the front of the queue and waits this long
 
 const log = (m: string) => console.log(`[chatbridge ${new Date().toISOString().slice(11, 19)}] ${m}`);
@@ -67,35 +44,26 @@ let postChannel: { send: (o: unknown) => Promise<unknown> } | null = null;
 let postHook: { send: (o: unknown) => Promise<unknown> } | null = null;
 let posting = false;
 
-// Webhook usernames may not contain "discord" or "clyde" (API rule), and cap
-// at 80 chars. World actor names are already control-char-clean.
+// webhook usernames may not contain "discord" or "clyde" (API rule) and cap at 80 chars
 const hookName = (actor: string) =>
   (actor.replace(/discord/gi, "disc0rd").replace(/clyde/gi, "clyd3").trim() || "someone").slice(0, 80);
 
-// Discord rejects content that RENDERS empty (API 50006) even when JS trim()
-// keeps it — zero-width and other invisible code points survive .trim().
-// 2026-08-15 incident: one such say tripped the webhook error path, which
-// (being meant for deleted webhooks) stuck the mirror in plain-post mode
-// for 12 hours. Filter these before they ever reach the API.
+// Discord rejects content that RENDERS empty (API 50006) even when trim() keeps it: filter invisible code points first,
+// or the webhook-error path sticks the mirror in plain-post mode
 const INVISIBLE =
   /[\s\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0]/gu;
 const sendable = (s: string) => s.replace(INVISIBLE, "").length > 0;
 
 async function postOnce(actor: string, chunk: string) {
-  // never ping: a world line containing @everyone must stay ink, not a bell
+  // never ping: @everyone in a world line stays ink, not a bell
   const quiet = { allowedMentions: { parse: [] } };
   if (postHook) {
     try {
-      // webhook = per-speaker username, so the channel reads as a conversation
+      // a per-speaker webhook username, so the channel reads as a conversation
       await postHook.send({ content: chunk, username: hookName(actor), ...quiet });
       return;
     } catch (e) {
-      // Only a webhook that is actually GONE justifies the (sticky) fallback:
-      // 10015 Unknown Webhook / 10003 Unknown Channel. Anything else — content
-      // errors (50006 empty, 50035 invalid form body), rate limits, hiccups —
-      // is about THIS send; the retry in pumpDiscord gets one more shot at it,
-      // and per-speaker names stay on. (2026-08-15: a content error here cost
-      // the mirror 12 hours of nameless posts.)
+      // only a GONE webhook (10015 / 10003) justifies the sticky fallback; any other error gets pumpDiscord's retry
       const code = (e as any)?.code;
       if (code !== 10015 && code !== 10003) throw e;
       log(`webhook gone (${(e as Error).message}) — falling back to plain posts`);
@@ -115,7 +83,6 @@ async function pumpDiscord() {
       log(`⏭ discord backlog — dropped "${d.actor}: ${d.text.slice(0, 40)}…"`);
     }
     const line = toDiscord.shift()!;
-    // with a webhook the name rides the message header; without, it's inline ink
     const body = postHook || DRY_RUN ? line.text : `**${line.actor}** — ${line.text}`;
     for (let i = 0; i < body.length; i += DISCORD_CHUNK) {
       const chunk = body.slice(i, i + DISCORD_CHUNK);
@@ -147,7 +114,7 @@ let speaking = false;
 let reqN = 0;
 const inFlight = new Map<string, In>();   // request id → the line it carries, until the world replies
 let holdUntil = 0;                        // a rate refusal's backoff
-let requeued = 0;                         // lines put back during the current backoff (replies come in send order, so they go back in order)
+let requeued = 0;  // put back during this backoff (replies come in send order, so they go back in order)
 
 async function pumpWorld() {
   if (speaking) return;
@@ -172,9 +139,9 @@ async function pumpWorld() {
 
 // ---------------------------------------------------------------- world socket
 
-let lastSeq = -Infinity; // dedupe guard across reconnects (a log re-delivery overlaps live)
+let lastSeq = -Infinity;  // dedupe across reconnects (a log re-delivery overlaps live)
 let myId: string | null = null; // the bridge's own identity (opaque), from the snapshot
-const names: Record<string, string> = {}; // identity → display name (the door's directory, as the world sends it)
+const names: Record<string, string> = {};  // identity → display name, as the world sends it
 
 function connectWorld() {
   const ws = new WebSocket(WORLD_URL);
@@ -193,7 +160,7 @@ function connectWorld() {
     if (msg.type === "reply") {
       const line = inFlight.get(msg.id); inFlight.delete(msg.id);
       const refused = msg.reply?.refused;
-      if (line && refused?.code === "rate") {   // too fast after all: resend it, in its place, after a pause
+      if (line && refused?.code === "rate") {  // too fast after all: resend it in its place after a pause
         if (Date.now() >= holdUntil) requeued = 0;
         toWorld.splice(requeued++, 0, line); holdUntil = Date.now() + RATE_BACKOFF_MS;
         log(`world asked to slow down — "${line.author}: ${line.text.slice(0, 40)}" waits ${RATE_BACKOFF_MS / 1000} s`);
@@ -205,10 +172,7 @@ function connectWorld() {
       joined = true;
       myId = msg.cut?.you ?? null;
       Object.assign(names, msg.cut?.names ?? {});
-      // live lines only: the channel is a window, not an archive. Everything at
-      // or before the snapshot's head is history (a reconnect replays none of
-      // it); the head, not a remembered high-water mark, so a reset world (a
-      // fresh, shorter log) isn't muted until it outgrows the old one
+      // live lines only: at or before the snapshot's head is history (the head, not a remembered mark, so a reset world isn't muted)
       lastSeq = Number.isInteger(msg.cut?.head) ? msg.cut.head : lastSeq;
       log(`joined "${msg.world}" as ${msg.you} (${msg.state?.recentChat?.length ?? 0} recent lines skipped — live lines only)`);
       pumpWorld().catch((e) => log(`world pump error: ${e.message}`));
@@ -261,9 +225,7 @@ async function connectDiscord() {
   if (!ch || !("send" in ch)) throw new Error(`channel ${CHANNEL_ID} is not a sendable text channel`);
   postChannel = ch as unknown as { send: (o: unknown) => Promise<unknown> };
   log(`discord: mirroring #${(ch as any).name ?? CHANNEL_ID} as ${client.user?.tag}`);
-  // Per-speaker names ride a webhook (execute takes a username per message).
-  // Reuse ours if a restart left one behind, else create; needs the Manage
-  // Webhooks permission — without it the mirror still works, names inline.
+  // per-speaker names ride a webhook: reuse one a restart left, else create; without Manage Webhooks, names go inline
   try {
     const hooks = await (ch as any).fetchWebhooks();
     postHook = hooks.find((h: any) => h.token && h.owner?.id === client.user?.id)

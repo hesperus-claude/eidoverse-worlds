@@ -1,12 +1,7 @@
-/**
- * supportclass unit test — #84: the one classifier both runtimes consume.
- * Pure math, no servers, no geometry files.
- *
- * Run: bun run tools/supportclass-test.ts
- */
+/** supportclass (#84): the one classifier both runtimes consume. Pure math, no servers, no geometry files.
+ *  Run: bun run tools/supportclass-test.ts */
 
-// namespace import so a pre-revision head FAILS the certification checks by
-// name instead of crashing the file on a missing export — controls stay controls
+// namespace import, so a head without the export FAILS the checks by name instead of crashing the file: controls stay controls
 import * as SC from "../client/lib/supportclass.js";
 const { gridAccumulator, decideSupportClass, validTopGrid, UNEVEN_MIN_LIE,
   LIE_GRID, SPARSE_MIN_CELLS, TOPGRID_VERSION, TOPGRID_MAX_JSON } = SC;
@@ -21,8 +16,7 @@ const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
 console.log("\n━━ grid accumulation and the lie ━━");
 {
-  // a dense 10×10m sheet at y=0, one 0.3m cushion over a corner patch,
-  // box top at the cushion: lie = 0.3 − median(mostly 0) = 0.3
+  // a dense 10×10m sheet at y=0, a 0.3m cushion over a corner patch, box top at the cushion: lie = 0.3 − median(≈0) = 0.3
   const acc = gridAccumulator(0, 0, 10, 10)!;
   for (let x = 0.1; x < 10; x += 0.2) for (let z = 0.1; z < 10; z += 0.2) acc.add(x, 0, z);
   for (let x = 0.1; x < 1.5; x += 0.2) for (let z = 0.1; z < 1.5; z += 0.2) acc.add(x, 0.3, z);
@@ -73,17 +67,12 @@ console.log("\n━━ validTopGrid: versioned, finite, bounded, or refused ━�
   check("null and undefined refused outright", !validTopGrid(null) && !validTopGrid(undefined) && !validTopGrid("grid"));
 }
 
-// ---- #94 review B2: the two adapters agree AT the strict gate --------------
-// The browser computes lie in full precision; a served lie must reach the
-// decision in full precision too, or a true 0.1004 flips verdicts across
-// runtimes. Calibrated fixture: a dense sheet at y=0 with a small bump of
-// EXACTLY the gate-straddling height — lie = bump height by construction —
-// pushed through BOTH adapters: colliders.js topLie (a duck-typed mesh over
-// real three) and the raw accumulator (the server's path).
+// ---- #94: the two adapters agree AT the strict gate --------------
+// a served lie must reach the decision in full precision, or 0.1004 flips across runtimes: a gate-straddling bump through
+// colliders.js topLie and the raw accumulator (the server's path)
 console.log("\n━━ B2: browser and server verdicts agree at the 0.10 gate ━━");
 {
-  // colliders.js imports the browser's core.js — route it to the headless
-  // stub the way mcpl/physics.ts does, BEFORE the dynamic import
+  // colliders.js imports the browser's core.js: route it to the headless stub as mcpl/physics.ts does, BEFORE the dynamic import
   const { plugin } = await import("bun");
   const { fileURLToPath } = await import("node:url");
   const STUB = fileURLToPath(new URL("./core-stub.mjs", import.meta.url));
@@ -108,8 +97,7 @@ console.log("\n━━ B2: browser and server verdicts agree at the 0.10 gate ━
     const acc = gridAccumulator(0, 0, 3, 3)!;
     for (let i = 0; i < pts.length; i += 3) acc.add(pts[i], pts[i + 1], pts[i + 2]);
     const serverLie = acc.finish(bump).lie;
-    // browser adapter: topLie over a duck-typed mesh (traverse/isMesh/
-    // geometry/matrixWorld are all it reads)
+    // browser adapter: topLie over a duck-typed mesh (traverse/isMesh/geometry/matrixWorld are all it reads)
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pts), 3));
     const obj: any = { isMesh: true, geometry: geo, matrixWorld: new THREE.Matrix4(),

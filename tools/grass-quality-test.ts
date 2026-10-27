@@ -1,35 +1,16 @@
-// The resident's local grass cap (#60), run headless.
-//
-//   bun tools/grass-quality-test.ts
-//
-// The contract under test: the resident's chosen level (full/medium/low/off,
-// persisted per browser) and the frame governor's session shed are separate
-// dials, and the field draws their MIN — the governor may thin below the cap
-// but can never silently raise above it, `off` genuinely draws zero without
-// touching the shared field object, and the cap survives field replacement
-// (re-grow) and arrives before the first field loads. None of it is ever a
-// world verb.
-//
-// Negative control: this suite FAILS on the branch base. Most failures are
-// necessarily novelty because main has no applied-truth report; the behavioral
-// anchor is the source-extracted shipped dial below, which demonstrates the
-// silent no-op live (request 0.35 while an incompatible stroke draws 800/800)
-// before main proves it has no surface capable of naming that mismatch.
-//
-// The APPLIED-TRUTH sections (#74) extend the contract: the dial can
-// silently no-op (wireDensityDial leaves a stroke without setDensity when
-// its instanced attributes are absent; the composed dial optional-chains),
-// so every inspection surface must distinguish chosen / governor shed /
-// effective REQUESTED / effective APPLIED, read from live instance counts.
-// Their negative control also runs on both trees: flora.js's shipped
-// wireDensityDial (source-extracted) demonstrates the silent no-op LIVE, and
-// main then fails the "can this tree name it?" checks with the false success
-// it actually reports (policy 0.35, stroke drawing its full built count).
+// The resident's local grass cap (#60), headless (`bun tools/grass-quality-test.ts`).
+// The resident's level (full/medium/low/off, per browser) and the governor's session shed are separate dials; the field
+// draws their MIN (the governor may thin below the cap, never raise above it), `off` draws zero without touching the
+// shared field, and the cap survives re-grow and arrives before the first field loads. Never a world verb.
+// APPLIED TRUTH (#74): the dial can silently no-op (wireDensityDial leaves a stroke without setDensity when its
+// instanced attributes are absent), so every inspection surface distinguishes chosen / governor shed / effective
+// REQUESTED / effective APPLIED, from live instance counts.
+// Negative control on both trees: flora.js's shipped wireDensityDial, source-extracted, shows the silent no-op live
+// (0.35 requested while an incompatible stroke draws 800/800); a tree without the report can't name it.
 
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
-// URL.pathname yields "/D:/…" on Windows, which nothing can open —
-// fileURLToPath is the portable spelling
+// URL.pathname is "/D:/…" on Windows: fileURLToPath is the portable spelling
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "grass-stubs",
@@ -38,8 +19,7 @@ plugin({
   },
 });
 
-// terrain reads localStorage at module init — install the fake FIRST, with a
-// value already present: the "setting exists before any field loads" case.
+// terrain reads localStorage at module init: install the fake FIRST, with a value present (the setting exists before any field)
 const store = new Map<string, string>();
 (globalThis as any).localStorage = {
   getItem: (k: string) => store.get(k) ?? null,
@@ -55,11 +35,8 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
-// ---- behavioral delta — runs on BOTH trees -------------------------------
-// Evaluate the dial exactly as flora.js ships it, extracted from the tree's
-// own source (not retyped), so this one assertion is a live A/B: main's
-// inline expression floors at >=1 instance per stroke and keeps 50 of 1000
-// at factor 0; the branch delegates to densityCount and keeps 0.
+// ---- behavioral delta -----------------------------------------------------
+// the dial as flora.js ships it, extracted from source (not retyped): at factor 0 it keeps 0 instances, not 1 per stroke
 const gqMod = await import("../client/lib/grass_quality.js").then((m) => m, () => null);
 console.log("\nflora's shipped density dial (source-extracted, both trees)");
 {
@@ -83,7 +60,7 @@ if (!gqMod) {
 const { makeGrassQuality, densityCount, GRASS_QUALITY, QUALITY_DENSITY } = gqMod;
 const terrain = await import("../client/lib/terrain.js");
 
-// A field shaped to terrain's setGrass contract, recording what it was told.
+// a field shaped to terrain's setGrass contract, recording what it was told
 const mkField = () => {
   const f: any = {
     mesh: { visible: true },
@@ -180,16 +157,14 @@ console.log("\nterrain lifecycle (the real setGrass/setGrassDensity path)");
 }
 
 // ---- applied truth (#74) --------------------------------------------------
-// flora.js's SHIPPED wireDensityDial, source-extracted so the silent-no-op
-// mechanism is demonstrated on both trees, not retyped into the test.
+// flora.js's SHIPPED wireDensityDial, source-extracted so the silent no-op is shown on both trees
 const floraSrc = await Bun.file(here("../client/lib/flora.js")).text();
 const wdMatch = floraSrc.match(/function wireDensityDial\(field\) \{[\s\S]*?\n\}/);
 const wireDial = wdMatch
   ? new Function("densityCount", `${wdMatch[0]}; return wireDensityDial;`)(densityCount)
   : null;
 
-/** A stroke shaped to createFlora's contract: instance total, live mesh
- *  count, and (when compatible) the instanced attributes the dial expects. */
+/** A stroke shaped to createFlora's contract: instance total, live mesh count, and (when compatible) the instanced attributes. */
 const mkStroke = (n: number, { attrs = true, label = "", stem = false } = {}) => {
   const mk = (itemSize: number) => ({
     itemSize,
@@ -287,7 +262,7 @@ console.log("\nthe applied report through terrain (getGrassApplied)");
   check("restore from off re-evaluates: UNAVAILABLE again, not remembered success",
     rep?.status === "unavailable", JSON.stringify(rep));
 
-  // full asks for every instance — an undialed stroke drawing all of them is truth
+  // full asks for every instance: an undialed stroke drawing all of them is truth
   terrain.setGrassQuality("full");
   rep = gApplied?.();
   check("full on an incompatible field is honestly applied (it IS drawing full)",

@@ -20,6 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { ENGINE, scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const S = scratch("eidomodel"); const OPT = path.join(S, "opt"), LIB = path.join(S, "lib");
 fs.mkdirSync(path.join(OPT, "store"), { recursive: true }); fs.mkdirSync(path.join(LIB, "eidoverse/assets/models"), { recursive: true });
@@ -33,9 +34,8 @@ fs.writeFileSync(path.join(LIB, LIBREL), orig); fs.mkdirSync(path.join(OPT, "eid
 fs.writeFileSync(path.join(OPT, LIBREL), Buffer.concat([glb, Buffer.from([0, 0, 0, 0])]));
 const HL = sha(orig);
 
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); } else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 500)}` : ""}`); } };
+const SU = suite("eidomodel", { cap: 500 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (SU.runs(id)) SU.ok(cond, `${id} ${what}`, detail); };
 const C = async (id: string, what: string, fn: () => any) => { try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); } catch (e) { ok(id, false, what, `threw: ${e?.stack ?? e}`); } };
 const imp = (p: string) => import(path.join(ENGINE, p));
 
@@ -99,5 +99,4 @@ await C("U9", "a create through the door with the engine's catalogue stores the 
   fs.rmSync(path.join(OPT, "eido-index.json"), { force: true });
   return [r.ok && c.model === LIBREL && c["model-hash"] === `sha256:${HL}` && L.resolveLibFile(c.model) === path.join(OPT, LIBREL), { r: r.refused, c, file: L.resolveLibFile(c.model) }]; });
 
-console.log(`\neidomodel: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SU.done();

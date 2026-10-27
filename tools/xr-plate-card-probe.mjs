@@ -14,17 +14,11 @@
 //   a panel in front of the plate claims the laser and opens nothing — and with that panel hidden, the same aim opens
 //     the card (so the red is about the panel, not a missed aim);
 //   leaving VR drops the quad and puts the desktop card back as it was.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
 
 const { check, done } = checker();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WORLD = 'plates';
-// IWER, with its device loop on a NATIVE rAF (memory: reference_iwer_headless_probe.md §2; same patch as xr-panel-drag-probe)
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(LOOP).length !== 2) throw new Error('IWER loop pattern did not match exactly once: the patch would silently not apply');
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ env: { SKIP_OPT_SWEEP: '1' } });
 let browser = null;
@@ -49,9 +43,7 @@ try {
   const L = await launchBrowser(); browser = L.browser;
   const pg = await L.page();
   await pg.addInitScript(() => { if (window.__probeInit) return; window.__probeInit = true; try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {} });   // THE SKY GUARD
-  await pg.addInitScript(IWER);
-  await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-    window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } });
+  await iwerInit(pg);
   pg.on('pageerror', (e) => errs.push(String(e)));
   pg.on('console', (m) => { if (m.type() === 'error') conErrs.push(m.text().slice(0, 200)); });
   pg.on('dialog', (d) => d.dismiss().catch(() => {}));
@@ -280,10 +272,9 @@ try {
     JSON.stringify(after));
 
   check('no page errors', errs.length === 0, errs.slice(0, 3).join(' | '));
-  const known = (t) => /Invalid value used as weak map key/.test(t);   // IWER's null XRWebGLLayer.framebuffer (memory §4): an emulator artifact
-  const other = conErrs.filter((t) => !known(t) && !/401|whoami/.test(t));
-  console.log(`  · console.error: ${conErrs.length} (${conErrs.filter(known).length} the IWER null-framebuffer artifact)${other.length ? ` other: ${other.slice(0, 3).join(' | ')}` : ''}`);
-  check('no console errors beyond the disclosed emulator artifact', other.length === 0, other.slice(0, 3).join(' | '));
+  // IWER's null eye framebuffer is client/lib/xr_nullfb.js's: its WeakMap error is a regression here, not an artifact
+  const other = conErrs.filter((t) => !/401|whoami/.test(t));
+  check('no console errors', other.length === 0, other.slice(0, 3).join(' | '));
 } catch (e) { check('probe ran', false, e?.stack?.split('\n').slice(0, 3).join(' ') ?? String(e)); }
 finally {
   for (const p of peers) { clearInterval(p.timer); try { p.ws.close(); } catch {} }

@@ -17,6 +17,7 @@ import {
   canonicalBone, suggestBone, validatePose, validateTracks, tracksSpan, poseReport, poseChannels, mergePose,
 } from "../shared/humanoid.js";
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { rigFromGltf } from "./rigbones.ts";
 
 let failures = 0;
@@ -175,7 +176,7 @@ console.log("\ntrack validation");
 console.log("\nwalking and the held pose");
 {
   const POSE = { leftUpperArm: [0, 0, -0.9, 0.44] };
-  const mk = () => new WorldAgent({ name: "t", world: "w" });
+  const mk = () => new WorldAgent({ name: "t", world: "w", url: noWorldUrl() });
 
   const a = mk();
   a.setPose({ ...POSE });

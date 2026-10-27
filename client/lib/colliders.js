@@ -1,15 +1,7 @@
-// colliders — the physical reading of placed geometry.
-//
-// Every spawned object gets a box fit from its own geometry: an OBB (local
-// AABB + the entity's yaw). Boxy things (desks, crates, barrels) block movement
-// and their tops are walkable ground. Tall SMALL-footprint things (streetlights,
-// signs) would wall you off with their canopy extents, so they collide as a slim
-// centre pillar instead — you can't walk through the post, but you can walk
-// under whatever it carries. Anything room-sized collides against its real
-// triangles, so you can walk into it.
-//
-// This is also where Layer-0 affordances come from: a surface that is walkable
-// is, by the same data, sittable and placeable-on. Nobody authors that.
+// colliders — the physical reading of placed geometry: each object gets an OBB (local AABB + yaw) fit from its own geometry.
+// Boxy things block and their tops are walkable; tall small-footprint things (streetlights) collide as a slim centre
+// pillar, so you walk under what they carry; room-sized things collide against their real triangles, so you can walk in.
+// Layer-0 affordances come from the same data: a walkable surface is sittable and placeable-on, unauthored.
 
 import { THREE } from './core.js';
 import { MOVER } from '../../shared/mover.js';
@@ -22,19 +14,12 @@ const UP = new THREE.Vector3(0, 1, 0);
 export const colliders = new Map(); // entity id -> { obj, box, pillar, exact?, interior, cell }
 
 // ---- exact (trimesh) colliders ----------------------------------------------
-// Boxes read the OUTSIDE of things. Generated interiors are the opposite: the
-// avatar is INSIDE the concave shape — one box seals the room shut, and the
-// floor must be real geometry (stairs, thresholds, uneven ground). Room-scale
-// spawns therefore collide against their actual triangles via a BVH:
-//   floor = downward raycast (step-up capped), walls = closest-point at hip
-//   height. Auto-applied when footprint ≥ 16 m² AND height ≥ 2.2 m; the spawn
-//   verb can force either way with collide: "exact" | "box".
-// The body's size — radius, height and the step it walks onto without a mantle — is the MOVER's (shared/mover.js:
-// MOVER.body), the one set the agent and the authority read too; only the wall-probe height is this file's.
+// Room-scale things (supportclass.js ROOM_MIN_*) collide against their triangles via a BVH, since a box seals the
+// room: floor = downward raycast, walls = closest-point at HIP. `collide: "exact" | "box"` forces either way.
+// Body size is the MOVER's (shared/mover.js MOVER.body); only the wall-probe height is this file's.
 const HIP = 0.95;    // wall-probe height: floors stay > r away, walls don't
 
-// A model whose every mesh opts out of collision (glTF extras collision:false) is NOT solid — distinct from
-// "no exact collider available", which falls back to a box/pillar.
+// every mesh opted out (glTF extras collision:false) = NOT solid; distinct from "no exact collider", which falls back to a box/pillar
 const NON_SOLID = Object.freeze({ nonSolid: true });
 function buildExact(obj) {
   obj.updateMatrixWorld(true);
@@ -64,31 +49,11 @@ function buildExact(obj) {
 }
 
 // ---- per-lib shared derivations (§16.2.C) ------------------------------------
-// buildExact and topLie already work in the entity's ROOT-LOCAL frame: every
-// mesh is transformed by inv(root.matrixWorld) · mesh.matrixWorld, which folds
-// the root's position/yaw/scale OUT of the product, and every query path
-// (raySegment, resolveColliders, surfaceUnder, hasFloor) transforms INTO that
-// frame per entity (subtract position, un-rotate yaw, divide by live scale).
-// So the merged geometry, the BVH, the lie scalar and the hasFloor verdict are
-// IDENTICAL for every clone of a lib at ANY uniform scale — 20 blankets used
-// to pay 20 per-vertex topLie walks and 20 BVH builds for one answer. The key
-// is the lib path alone; scale needs no place in it because the product is
-// scale-free (per-entity decisions apply `s` at use, as they always did).
-//
-// Sharing is only SOUND for a pristine clone. models.js passes `lib` exactly
-// when the subtree is the untouched lib clone (promote time, before mounts
-// execute, no part motion having bent a named node); every other path — the
-// dismount/step-out re-fits, refit flips on already-lived objects, conjured
-// meshes with no lib — keeps the per-entity build. Cache WRITES happen only
-// from those pristine fits; refit-time cache READS are safe (the product is
-// rest-pose lib geometry, which is what promote-time fits always baked).
-//
-// Everything here is CPU heap (geometry arrays + BVH nodes, nothing ever
-// uploaded) — refcounted by the collider entries wearing it, dropped for GC
-// at zero refs (demote/delete releases). Sizes: colliderCacheStats (8e).
+// Fits are root-local and scale-free, so pristine clones of a lib share geometry, BVH and lie (keyed by lib path).
+// Only pristine fits (models.js passes `lib`) WRITE it; refit-time reads are safe. CPU heap only, refcounted by its wearers.
 const libCache = new Map(); // lib -> { refs, lie?, exact?: {bvh, interior} }
 
-/** CPU bytes and refcounts per cached lib — the 8e observability hook. */
+/** CPU bytes and refcounts per cached lib. */
 export const colliderCacheStats = () => {
   const libs = [];
   let bytes = 0;
@@ -104,11 +69,8 @@ export const colliderCacheStats = () => {
 const _lbInv = new THREE.Matrix4();
 const _lbRel = new THREE.Matrix4();
 const _lbBox = new THREE.Box3();
-/** The entity-root-local bounding box — setFromObject's answer at identity,
- *  computable at ANY current transform (inv(root) folds the pose back out).
- *  The promote tail fits colliders AFTER the spawn transform lands, and every
- *  consumer treats `box` as root-local (subtract position, un-rotate, divide
- *  by scale per query), so the box must not inherit the world pose. */
+/** The root-local bounding box at ANY current transform (inv(root) folds the pose out): every consumer treats
+ *  `box` as root-local, and the promote tail fits after the spawn transform lands. */
 function localBox(obj) {
   obj.updateMatrixWorld(true);
   _lbInv.copy(obj.matrixWorld).invert();
@@ -130,9 +92,7 @@ function localBox(obj) {
 }
 
 // ---- spatial hash -----------------------------------------------------------
-// resolveColliders used to walk EVERY entity every frame, allocating as it
-// went. Free at 20 objects; the frame budget at 500. Objects are bucketed by
-// world-space cell and only the 3×3 neighbourhood around the query is tested.
+// Bucketed by world-space cell; a query tests only the 3×3 neighbourhood around it.
 const CELL = 8; // metres
 const buckets = new Map();
 const cellKey = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
@@ -165,28 +125,20 @@ function bucketRemove(id, entry) {
 }
 
 const _fray = new THREE.Ray();
-// Does this thing contain its OWN floor — a surface you could stand on inside
-// it? Rays down from mid-height: a pavilion, a house, a tower all hit their own
-// deck; a tree hits nothing but air between its trunk and its canopy.
-//
-// This is NOT a walkability test (size decides that, see decide). It exists for
-// the grass clearing mask, whose question is narrower and answerable: "is there
-// a floor here that the meadow should not grow through?"
+// does it contain its OWN floor (rays down from mid-height)? Feeds only the grass clearing mask, never walkability
 function hasFloor(bvh, box, s) {
   const midY = (box.min.y + box.max.y) / 2;
   const w = box.max.x - box.min.x, d = box.max.z - box.min.z;
   let hits = 0, n = 0;
   for (let i = 0; i < 4; i++) {
     for (let j = 0; j < 4; j++) {
-      // inset to 20%..80% of the footprint: samples hugging the walls would
-      // count the walls themselves, and every hollow box would read as floored
+      // inset to 20%..80%: wall-hugging samples would hit the walls, and every hollow box would read as floored
       _fray.origin.set(box.min.x + w * (0.2 + 0.2 * i), midY, box.min.z + d * (0.2 + 0.2 * j));
       _fray.direction.set(0, -1, 0);
       n++;
       const hit = bvh.raycastFirst(_fray, THREE.DoubleSide);
       if (!hit) continue;
-      // horizontal-ish surfaces only — a wall passing under the ray is not a
-      // floor (sign ignored: back-faces of a deck point down)
+      // horizontal-ish only: a wall under the ray is no floor (sign ignored: a deck's back-faces point down)
       const ny = hit.face?.normal?.y;
       if (ny == null || Math.abs(ny) > 0.5) hits++;
     }
@@ -195,29 +147,9 @@ function hasFloor(bvh, box, s) {
 }
 
 // ---- the uneven-top probe ---------------------------------------------------
-// A box collider's top face is the only ground it can ever report, so a box is
-// exactly as honest as the top of the thing is flat. For most props that is
-// honest enough — a crate lies by 5cm. For a blanket with cushions on it the
-// bbox top sits at the tallest cushion, and the whole footprint reads as
-// ground at that height: a body walking the bare cloth stands 27cm up in the
-// air. Issue #11's three observables — the shove at the rim, the phantom
-// mantle offer, the invisible full-footprint ceiling — are all this one lie.
-//
-// The probe: bucket every vertex into a 24×24 grid over the footprint, keep
-// the highest y per cell, and call the LIE the gap between the bbox top and
-// the median cell top. One linear pass, no BVH — the BVH is the thing
-// decide() is pricing, so the probe must not need one to answer. Surveyed
-// against a raycast ground truth across the 58-model library plus 8 conjured
-// store meshes (tools/collider-survey.ts): inside the floor-shaped population
-// the gate below admits, the vertex version tracks raycast to 1.8cm worst
-// case and never disagrees about the threshold. (Library-wide it drifts up to
-// 2.5m on tall structured things — a watchtower, a perimeter wall — which is
-// exactly why the shape gate runs before the probe is consulted.)
-// The grid/median math and its constants live in supportclass.js now (#84):
-// the headless support pipeline classifies with the SAME module, so the two
-// runtimes cannot drift about which box tops lie. This adapter's own job is
-// only what a renderer can do — walking loaded THREE meshes for vertices.
-export function topLie(obj, box) {   // exported for the classifier-parity fixture (#94 B2)
+// Top lie = bbox top minus the median cell top of a vertex grid (#11); the math is supportclass.js's, shared with headless.
+// No BVH on purpose: the BVH is what decide() is pricing. Survey: tools/collider-survey.ts.
+export function topLie(obj, box) {   // exported for the classifier-parity fixture (#94)
   const w = box.max.x - box.min.x, d = box.max.z - box.min.z;
   const acc = gridAccumulator(box.min.x, box.min.z, w, d);
   if (!acc) return 0;
@@ -237,44 +169,17 @@ export function topLie(obj, box) {   // exported for the classifier-parity fixtu
   return acc.finish(box.max.y).lie;
 }
 
-/** `fresh` marks a pristine-clone fit (see the lib-cache header): only those
- *  may WRITE the shared derivations; refits and step-out re-fits read only. */
+/** `fresh`: a pristine-clone fit, the only kind that may WRITE the shared derivations. */
 function decide(entry, s, fresh = false) {
   const { box, pref } = entry;
-  // SIZE decides walkability — with one exception below.
-  //
-  // This used to also require the thing be "hollow" — nothing within 0.9m of
-  // its bounding-box centre — to keep a tree's canopy from becoming a walkable
-  // room. But that probe cannot tell a trunk from anything else standing in the
-  // middle of an open structure, so it failed every bell tower, pavilion,
-  // gazebo and colonnade we have: bell2 is a 214m² pavilion with its bell
-  // hanging 0.20m from the centre, and it read as solid rock. A rule that
-  // excludes real buildings to exclude trees is the wrong rule; trees are
-  // handled where they actually cause harm (the grass mask below), and a
-  // per-object `collide` override still wins over any of it.
+  // SIZE decides walkability (one exception below); no "hollow" probe: it can't tell a trunk from a pavilion's bell.
+  // A per-object `collide` still wins.
   const w = (box.max.x - box.min.x) * s, d = (box.max.z - box.min.z) * s;
   const h = (box.max.y - box.min.y) * s;
-  // shape gates come from the shared classifier (supportclass.js) — the
-  // numbers below in the comments are ITS constants, kept in one place
+  // shape gates come from supportclass.js; the numbers in the comments below are ITS constants
   const { roomScale } = decideSupportClass({ w, d, h });
-  // The exception: FLOOR-SHAPED things whose box top is a lie. Wide enough to
-  // stand on, low enough that standing on it is the only thing a body would
-  // ever do with it — a blanket, a rug, a pillow pile — and with a real gap
-  // between the box top and where the surface actually is. Those collide
-  // exact, because the box's one flat top is the bug (issue #11).
-  //
-  // The numbers come from the survey, not taste. Footprint ≥ 2m²: smaller and
-  // nobody walks on it. Lie > 0.10m: below that the box is honest enough (a
-  // crate reads 0.05). Height ≤ 1.0m: every gate from 0.6 to 1.0 reclassifies
-  // exactly ONE object across 66 surveyed (the blanket); 1.2 pulls in nine
-  // more — both rubble piles (which float you 0.73m and 0.44m, worse than the
-  // blanket), five hovercars, a shark. If those should firm up too, this is
-  // the one line to move.
-  // shape gates from the shared classifier (upstream supportclass.js — the
-  // same thresholds the headless side mirrors); the lie probe keeps the
-  // fork's per-LIB sharing: it is local-space and scale-free (the gate
-  // applies `s` below), so one per-vertex walk per LIB answers for every
-  // clone, and nothing pays for the probe unless the shape gate consults it
+  // The exception: floor-shaped things whose box top lies (blankets, rugs) collide exact (#11); thresholds
+  // in supportclass.js. The lie probe is per lib and scale-free, and runs only when the shape gate asks.
   const { floorShaped } = decideSupportClass({ w, d, h });
   const shared = entry.cacheKey ? libCache.get(entry.cacheKey) : null;
   if (floorShaped && entry.lie == null) {
@@ -293,9 +198,7 @@ function decide(entry, s, fresh = false) {
       const built = buildExact(entry.obj);
       if (built === NON_SOLID) { if (shared && fresh) shared.exact = built; }
       else if (built) {
-        // hasFloor reads only the local bvh + local box (its `s` is unused):
-        // the verdict rides the shared product instead of re-raycasting 16
-        // times per clone — same inputs, same boolean, computed once
+        // hasFloor reads only the local bvh + box, so the verdict rides the shared product: computed once, not 16 rays per clone
         built.interior = hasFloor(built.bvh, box, s);
         if (shared && fresh) shared.exact = built;
       }
@@ -305,24 +208,17 @@ function decide(entry, s, fresh = false) {
   entry.nonSolid = exact && entry.exact === NON_SOLID;   // every mesh opted out: nothing to stand on or bump
   if (!exact || entry.nonSolid) entry.exact = null;         // small/solid: use pillar/box, no trimesh
   entry.pillar = !entry.exact && (box.max.y - box.min.y) * s > 2.4;
-  // Clearing is a SEPARATE question from collision: a palm is now exact (you
-  // walk under the fronds and bump the trunk, which is right), but stamping its
-  // canopy footprint into the grass mask would leave a bald ring under every
-  // tree. Only things with a real floor suppress the meadow.
+  // Clearing is separate from collision: only things with a real floor suppress the meadow (no bald ring under a palm).
   entry.interior = entry.exact ? entry.exact.interior : false;
 }
 
-/** `lib` opts in to the per-lib shared derivations — pass it ONLY for a
- *  pristine clone (see the lib-cache header; models.js's promote tail is the
- *  one caller). `localFrame` computes the box in the root-local frame at any
- *  current transform — required when fitting after the spawn transform landed
- *  (the promote tail); legacy callers fit at identity and keep setFromObject. */
+/** `lib`: share per-lib derivations; ONLY for a pristine clone (models.js's promote tail). `localFrame`: box in the
+ *  root-local frame at any transform, required when fitting after the spawn transform landed. */
 export function fitCollider(id, obj, { collide, scale = 1, lib = null, localFrame = false } = {}) {
   const box = localFrame ? localBox(obj) : new THREE.Box3().setFromObject(obj);
   if (box.isEmpty()) return;
   removeCollider(id);   // a re-fit REPLACES: drop the old entry's bucket cells + lib ref
-  // camGhost hoisted from userData so the camera query never touches the
-  // object graph (the flag lives on roots: gizmos, placeholders)
+  // camGhost hoisted from userData (the flag lives on roots) so the camera query never touches the object graph
   const entry = { obj, box, pref: collide, pillar: false, exact: null, cells: [],
     camGhost: !!obj.userData?.noCamCollide, cacheKey: lib };   // the libCache key (the model's path), not a record field
   if (lib) {
@@ -339,18 +235,9 @@ export function fitCollider(id, obj, { collide, scale = 1, lib = null, localFram
   bucketAdd(id, entry);
 }
 
-/** Register a support collider from DATA rather than a loaded mesh — the
- *  headless door (issue #17), for a model an agent process could not decode
- *  (when it can, it fits the real triangles through fitCollider like any
- *  browser — mcpl/physics.ts registerMeshSupport). The server's /geom summary
- *  gives it bboxes and floor decks; this turns one of
- *  those into the same entry shape resolveColliders already walks, minus
- *  everything that needs triangles. Deliberately NOT decide(): the exact and
- *  uneven-top probes raycast real meshes. A data box is always pref 'box' —
- *  honest boxes only. Walls of room-scale interiors stay a browser-side
- *  concern; headless registers their floor decks as thin slabs instead, so a
- *  settling body finds support without the pavilion sealing into a block.
- *  `min`/`max` are the entity's LOCAL frame, like fitCollider's box. */
+/** Support from DATA (/geom bboxes and floor decks) for a model headless couldn't decode (#17). Not decide()
+ *  (its probes need triangles): always a box; room-scale floors come as thin slabs, never a sealing block.
+ *  `min`/`max` are entity-LOCAL, like fitCollider's box. */
 export function fitSupportBox(id, min, max, { position, yaw = 0, scale = 1 } = {}) {
   const box = new THREE.Box3(
     new THREE.Vector3(min[0], min[1], min[2]),
@@ -363,22 +250,15 @@ export function fitSupportBox(id, min, max, { position, yaw = 0, scale = 1 } = {
     scale: new THREE.Vector3(scale, scale, scale),
   };
   const entry = { obj, box, pref: 'box', exact: null, interior: false, cells: [] };
-  // same rule decide() applies to non-exact entries: tall small-footprint
-  // things collide as a slim centre pillar, not their canopy extents
+  // as decide(): tall small-footprint things collide as a slim centre pillar, not their canopy extents
   entry.pillar = (box.max.y - box.min.y) * scale > 2.4;
   colliders.set(id, entry);
   bucketAdd(id, entry);
 }
 
-/** Register HEIGHTFIELD support from a served topGrid — the headless door
- *  for floor-shaped assets whose box top is a known lie (#84; the data-tier
- *  sibling of fitSupportBox, #17's door). The grid is the same 24×24
- *  max-y-per-cell probe decide() trusts to DETECT the lie, surveyed to
- *  1.8cm against raycast inside this population — so here it IS the floor.
- *  Cells are model-local; the entry composes with the entity transform like
- *  every other collider. Support only: a blanket has no walls.
- *  Returns false (registering nothing) for any payload validTopGrid
- *  refuses — the caller's duty on refusal is to abstain, never box-top. */
+/** Heightfield support from a served topGrid (#84), for floor-shaped assets whose box top lies: the same grid
+ *  decide() uses to detect the lie IS the floor here. Support only, model-local. Returns false for anything
+ *  validTopGrid refuses; the caller then abstains, never falls back to the box top. */
 export function fitSupportGrid(id, topGrid, { position, yaw = 0, scale = 1 } = {}) {
   if (!validTopGrid(topGrid)) return false;
   if (![position].every((v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))
@@ -403,32 +283,12 @@ export function fitSupportGrid(id, topGrid, { position, yaw = 0, scale = 1 } = {
 }
 
 // ---- declared structure boxes -----------------------------------------------
-// A griddled building (client/lib/structure_field.js) is the one case where the
-// collider does not have to be INFERRED: the generator knows exactly what it
-// built, so it declares its boxes and decide() never runs. That matters more
-// than it saves. decide()'s comment above records that its earlier "hollow"
-// probe "failed every bell tower, pavilion, gazebo and colonnade we have" —
-// architecture is precisely the population where guessing a shape back out of a
-// bounding box has already lost once. Declaring sidesteps the whole question,
-// and takes the sync BVH build out of the spawn path with it.
-//
-// Two things are deliberately NOT inherited from fitSupportBox:
-//  - the pillar rule (`h > 2.4` → a 0.5m centre post so you can walk under a
-//    canopy). A 2.8m wall is exactly that tall and is emphatically not a post;
-//    applied here it would make every building walk-through-able.
-//  - `interior`. That flag is overloaded: flora reads it to clear grass, while
-//    physobj and both ragdoll engines read it to SKIP the entry (its box being
-//    a known lie for room-scale meshes). A declared slab's box is not a lie, so
-//    wearing `interior` would make bodies fall through the floor. The grass
-//    mask instead gets its own footprint-shaped entry carrying `mask`, which
-//    every query path skips and only flora consumes.
+// Buildings declare their boxes (shared/structure.js plans, realize/structure.js calls this), so decide() never runs.
+// Deliberately no pillar rule (a 2.8m wall is no post) and no `interior` (physobj and ragdolls SKIP interior
+// entries, so bodies would fall through); the grass mask gets its own `mask` entry.
 const structureIds = new Map(); // owner entity id -> synthetic collider ids
 
-/** Register a building's boxes. `boxes` are grid-LOCAL metres (the entity's own
- *  frame, like every other collider's box); the entity transform composes at
- *  query time exactly as it does for a fitted mesh. Each box becomes its own
- *  entry so the spatial hash keeps doing real work — a query at one corner of a
- *  house tests the few boxes in its 3×3 neighbourhood, not all of them. */
+/** Register a building's boxes (grid-LOCAL metres), one entry each so the spatial hash still prunes. */
 export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1 } = {}) {
   removeStructureBoxes(ownerId);
   if (!Array.isArray(boxes) || !boxes.length) return 0;
@@ -449,8 +309,7 @@ export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1
     );
     if (box.isEmpty()) continue;
     const id = `${ownerId}#s${ids.length}`;
-    // `structOwner` keeps the entity recoverable from a synthetic id — anything
-    // that needs to know WHOSE wall it hit can ask, without parsing the key.
+    // `structOwner`: whose wall it hit, without parsing the synthetic key
     const kind = b.kind ?? 'wall';
     const entry = { obj, box, pref: 'box', exact: null, interior: false, pillar: false,
       // floors hold you up; they never push you sideways (see resolveColliders)
@@ -461,10 +320,7 @@ export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1
     lo = lo ? lo.min(box.min) : box.min.clone();
     hi = hi ? hi.max(box.max) : box.max.clone();
   }
-  // The grass mask: one footprint-shaped, non-colliding entry. Rectangular
-  // (flora paints a rect from the bbox), so an L-shaped building clears a
-  // little more meadow than it covers — visible only as tidiness, and cheaper
-  // than teaching the mask about cells.
+  // The grass mask: one non-colliding rect entry (flora paints a rect), so an L-shaped building over-clears a little.
   if (lo && hi) {
     const id = `${ownerId}#mask`;
     const entry = { obj, box: new THREE.Box3(lo, hi), pref: 'box', exact: null,
@@ -477,8 +333,7 @@ export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1
   return ids.length;
 }
 
-/** Drop every box a building registered. Idempotent — the realizer calls it on
- *  retire and again at the head of every re-fit. */
+/** Idempotent: the realizer calls it on retire and again at the head of every re-fit. */
 export function removeStructureBoxes(ownerId) {
   const ids = structureIds.get(ownerId);
   if (!ids) return;
@@ -486,13 +341,10 @@ export function removeStructureBoxes(ownerId) {
   structureIds.delete(ownerId);
 }
 
-/** The synthetic ids a building currently owns — the realizer's ownership
- *  check, and the debug overlay's way to colour a building's boxes together. */
+/** For the realizer's ownership check and the debug overlay's per-building colour. */
 export const structureBoxIds = (ownerId) => structureIds.get(ownerId) ?? [];
 
-/** Call after an in-world rescale: re-decides exact-vs-box against the NEW
- *  size (a dollhouse import scaled to a building becomes walkable-inside)
- *  and re-buckets with the scaled footprint. */
+/** After an in-world rescale: re-decides exact-vs-box at the NEW size (a scaled-up dollhouse becomes walkable-inside), re-buckets. */
 export function refitCollider(id) {
   const e = colliders.get(id);
   if (!e) return;
@@ -509,8 +361,7 @@ export function removeCollider(id) {
     bucketRemove(id, e);
     if (e.cacheKey) {
       const c = libCache.get(e.cacheKey);
-      // zero refs: no resident entity wears this lib's derivations — drop
-      // the CPU-side geometry + BVH for GC (demote/delete land here)
+      // zero refs: nothing resident wears this lib's derivations; drop CPU geometry + BVH for GC (demote/delete land here)
       if (c && --c.refs <= 0) libCache.delete(e.cacheKey);
     }
   }
@@ -526,7 +377,6 @@ export function suspendCollider(id, on) {
   bucketAdd(id, e);
 }
 export const isSuspended = (id) => suspended.has(id);
-/** Call after moving an entity so its bucket registration follows it. */
 export function reindexCollider(id) {
   const e = colliders.get(id);
   if (!e || suspended.has(id)) return;
@@ -534,13 +384,8 @@ export function reindexCollider(id) {
   bucketAdd(id, e);
 }
 
-/** Where a thing VISIBLY is: the collider box's world-space center. An
- *  entity's origin is wherever its GLB author left it — the barrels group
- *  ships its cluster 1.95m off origin (§24t-4), so anything that measures
- *  "where the thing is" by obj.position aims at empty air two metres from
- *  the mesh. Same composition as the walking/camera queries and the debug
- *  overlay: local box center × per-axis scale, rotated by yaw, + position.
- *  Returns null when the id has no collider. */
+/** Where a thing VISIBLY is: its collider box's world centre, since a GLB's origin can sit metres off the mesh
+ *  (§24t-4). Null when the id has no collider. */
 const _ecV = new THREE.Vector3();
 export function entityWorldCenter(id, out = new THREE.Vector3()) {
   const c = colliders.get(id);
@@ -555,11 +400,8 @@ export function entityWorldCenter(id, out = new THREE.Vector3()) {
 }
 
 // ---- scope: whose world a query is about -----------------------------------
-// A browser holds one world's colliders. An agent process can hold several —
-// agents in different worlds share one module — so its entries carry the
-// world they belong to (`entry.scope`, set by mcpl/physics.ts), and while a
-// scope is active every neighbourhood query sees only that world's entries
-// and unscoped ones. A browser never sets one: nothing changes there.
+// An agent process holds several worlds' colliders (`entry.scope`, set by mcpl/physics.ts); while a scope is
+// active, queries see only that world's entries and unscoped ones. A browser never sets one.
 let activeScope = null;
 export function setColliderScope(s) { activeScope = s ?? null; }
 export const colliderScope = () => activeScope;
@@ -579,12 +421,8 @@ function* near(x, z) {
   }
 }
 
-/** Variable-radius neighbourhood, [id, entry] pairs — the promoted service
- *  query (§14.2 6a). The 3×3 `near` above caps at ~8m; seat search reaches
- *  30 and physics wants its own radius. Dedupes ids that straddle cells.
- *  ⚠️ NOT REENTRANT: the dedupe Set is shared (zero-alloc per query), so a
- *  loop body iterating this generator must never start a second
- *  nearColliders iteration — take a different scratch or collect first. */
+/** Variable-radius neighbourhood, [id, entry] pairs (§14.2 6a), deduped across cells.
+ *  ⚠️ NOT REENTRANT: the dedupe Set is shared, so never start a second iteration inside one; collect first. */
 const _seen = new Set();
 export function* nearColliders(x, z, r = CELL) {
   const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
@@ -605,15 +443,8 @@ export function* nearColliders(x, z, r = CELL) {
 }
 
 // ---- camera segment query (§14.2 6a — hot-path offender #1) -----------------
-// The follow camera used to raycast recursively into EVERY MESH of EVERY
-// entity, three allocations per frame, to learn one number: how far back it
-// may sit. This answers the same question from the grid: candidate ids from
-// the cells the ≤6m segment overlaps, then per entry a slab test against the
-// OBB (world→local is sub(pos), rotY(−yaw), ÷scale — the same transform
-// surfaceUnder uses) — except exact entries, which raycast their BVH so the
-// camera still slides through a doorway instead of bumping the pavilion's
-// bounding box, and pillars, which test the walking post so a tree's canopy
-// box doesn't yank the camera the way its sparse meshes never did.
+// How far back the camera may sit, from the grid: a slab test per entry's OBB in the cells the ≤6m segment
+// overlaps; exact entries raycast their BVH (doorways) and pillars test the post (canopies don't yank it).
 
 const _rsO = new THREE.Vector3();
 const _rsD = new THREE.Vector3();
@@ -703,31 +534,17 @@ const _exits = [
   { d: 0, x: 0, z: 1 }, { d: 0, x: 0, z: -1 },
 ];
 
-/** Push `pos` out of anything solid and return the ground height under it.
- *  Mutates pos.x/pos.z — never pos.y; placing the body vertically is the
- *  caller's job, and `r` is a HORIZONTAL radius (a vertical cylinder, not a
- *  sphere). `terrainAt` supplies the base ground. `tall` is how far the body
- *  extends ABOVE pos.y: 1.9 for an avatar standing on its feet, a couple of
- *  centimetres for a single ragdoll joint. It decides what you can pass
- *  underneath, and it scales the step-up and wall-probe heights, which were
- *  constants tuned for a standing human and wildly wrong for a wrist. */
+/** Push `pos` out of anything solid and return the ground height under it. Mutates pos.x/z, never pos.y; `r` is
+ *  a HORIZONTAL radius. `tall` (height above pos.y) decides what fits underneath and scales step-up and wall probe. */
 const _ray = new THREE.Ray();
 const _hip = new THREE.Vector3();
 const _cp = {};
 
-// `climbs`: may this body mantle what blocks it (sets lastBlockedTop)? Defaults to "a full-height body", which is what
-// the old `tall >= TALL` test meant; the walking avatar passes true explicitly, so a SMALLER chosen size (bodyscale.js
-// colliderFor: tall = the mover's height × size) keeps its mantle while a ragdoll joint still never climbs.
+// `climbs`: may this body mantle (sets lastBlockedTop)? The walking avatar passes true, so a smaller chosen size
+// (bodyscale.js colliderFor) keeps its mantle; a ragdoll joint never climbs.
 // ---- a thing's frame for the yaw-only readers below ----------------------------
-// Every reader here works in "root-local, yaw only": subtract position, un-rotate
-// by a yaw, divide by scale, and test the root-local box. That is exact while a
-// thing stands (rotation.x and .z are 0). A tumbling engine lays things on their
-// sides (review of b398d7e3 #1), and a quaternion yawed past 90° reads back from
-// three's XYZ Euler as x = z = π with rotation.y = π − θ, so neither can be read
-// through rotation.y. For those, the frame is the true yaw of the thing's
-// horizontal axes plus its box turned into that frame: exact when it lies on a
-// face, the bounding box when it balances on an edge. A tumbled thing loses its
-// exact (trimesh) collision and collides as that box.
+// Readers are root-local, yaw only: exact while upright. A tumbled thing's rotation.y is unreadable (XYZ Euler flips
+// past 90°), so it gets its true horizontal yaw and its box in that frame, and loses exact collision.
 const UPRIGHT = Math.cos(10 * Math.PI / 180);
 const _fm = new THREE.Matrix4(), _fy = new THREE.Matrix4();
 export function frameOf(e) {
@@ -750,12 +567,7 @@ export function frameOf(e) {
 export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = MOVER.body.height, climbs = tall >= MOVER.body.height) {
   blockedTop = null; touched.clear();
   let ground = terrainAt(pos.x, pos.z);
-  // Everything below is written for a body of SOME height standing at `pos`.
-  // The avatar is a 1.9m capsule on its feet; a ragdoll joint is a 3cm bead.
-  // Sharing one routine between them means the vertical numbers cannot be
-  // constants — the mover's step-up allowance applied to a hand teleports it onto
-  // the nearest crate, and a hip-height wall probe applied to a wrist lying on
-  // the floor measures the wall a metre above the wrist.
+  // Shared by the avatar and 3cm ragdoll joints, so vertical numbers scale with `tall` and are never constants.
   // a climbing body's step is the mover's, in proportion to its size; a ragdoll joint does not climb stairs
   const step = climbs ? MOVER.body.step * (tall / MOVER.body.height) : Math.min(MOVER.body.step, tall * 0.3);
   const probeY = Math.min(HIP, tall * 0.5);  // mid-body, not "hip"
@@ -764,17 +576,8 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
     const { obj, mask, support } = e0; const { yaw, box, exact, pillar, grid } = frameOf(e0);
     if (mask) continue;   // a grass-mask footprint is not a solid (see fitStructureBoxes)
     if (support) {
-      // A DECLARED FLOOR IS SUPPORT, NEVER AN OBSTACLE — the same contract the
-      // heightfield branch below keeps, for the same reason.
-      //
-      // The generic box path treats a box as floor only within 8cm of its top
-      // (`pos.y >= topY - 0.08`), because for an INFERRED collider that
-      // tolerance is the only thing separating a doorstep from a crate. A
-      // 10cm foundation slab misses it by 2cm and becomes a wall: the body
-      // standing on it gets ejected horizontally out of its own building.
-      // Shrinking the slab under the tolerance would "work" while making the
-      // floor's thickness hostage to a constant in another file. A declared
-      // floor doesn't need the heuristic — it knows what it is.
+      // A declared floor is support, never an obstacle: the generic path's 8cm top tolerance would turn a 10cm
+      // foundation slab into a wall and eject the body from its own building.
       const ss = obj.scale?.x || 1;
       _local.set(pos.x - obj.position.x, 0, pos.z - obj.position.z)
         .applyAxisAngle(UP, -yaw).divideScalar(ss);
@@ -786,11 +589,8 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
       continue;
     }
     if (grid) {
-      // Heightfield support (#84): the CONTAINING cell's max-y is the ground
-      // — nearest occupied cell, piecewise-constant, no interpolation. An
-      // empty cell offers NOTHING: bilinear smoothing would bridge air and
-      // manufacture floors, so stepping off the cloth's edge finds terrain,
-      // exactly as the browser's exact triangles would have it.
+      // Heightfield support (#84): the containing cell's max-y, piecewise-constant; an empty cell offers NOTHING
+      // (interpolating would bridge air into floors).
       const gs = obj.scale?.x || 1;
       _local.set(pos.x - obj.position.x, 0, pos.z - obj.position.z)
         .applyAxisAngle(UP, -yaw).divideScalar(gs);
@@ -845,12 +645,7 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
     }
     if (_local.x < minX - br || _local.x > maxX + br || _local.z < minZ - br || _local.z > maxZ + br) continue;
     const topY = obj.position.y + box.max.y * bs;
-    // Are we UNDER it? Nothing here ever read box.min.y, so every box was an
-    // infinite column reaching down to the world floor: a mezzanine slab
-    // modelled at y 2.4-2.7 shoved a walking avatar 2.3m sideways at ground
-    // level, and a tabletop ejected anything that tried to lie beneath it.
-    // The `pillar` heuristic was the only way anything was ever passable
-    // underneath, which is why trees worked and archways did not.
+    // Are we UNDER it? Without box.min.y every box is an infinite column down to the floor.
     const bottomY = obj.position.y + box.min.y * bs;
     if (pos.y + tall <= bottomY) continue;
     if (pos.y >= topY - 0.08) {
@@ -860,38 +655,20 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
       }
       continue;
     }
-    // inside the (radius-expanded) footprint below the top: push out the
-    // nearest face
+    // inside the radius-expanded footprint, below the top: push out the nearest face
     _exits[0].d = (maxX + br) - _local.x;
     _exits[1].d = _local.x - (minX - br);
     _exits[2].d = (maxZ + br) - _local.z;
     _exits[3].d = _local.z - (minZ - br);
     let best = _exits[0];
     for (let i = 1; i < 4; i++) if (_exits[i].d < best.d) best = _exits[i];
-    // Grazing the UNDERSIDE of an overhang is not walking into its side, and
-    // exiting through the nearest vertical face regardless is how a head
-    // brushing a mezzanine by 1.3cm got flung 1.6m sideways, clear of a 3m
-    // slab's whole footprint — on a room-sized one it is tens of metres.
-    //
-    // Two things must hold before we decline the push. There must BE a down:
-    // a crate sitting on the floor has its underside at ground level, so no
-    // amount of "you could go under it" is true and it must still push you
-    // sideways. And the overlap must be a GRAZE rather than "I do not fit" —
-    // a waist-high counter overlaps a standing body by most of a metre, and
-    // waving that through would let the avatar phase through it at chest
-    // height. Note that "the shortest way out is down" is NOT the test: for
-    // any large slab the sideways exit is metres away, so down always wins and
-    // everything becomes passable.
+    // Grazing an overhang's underside declines the sideways push, only if there IS a down (a crate on the floor still
+    // pushes) and the overlap is a graze, not "I don't fit". Not "shortest exit is down": for big slabs it always is.
     if (bottomY > ground + 0.05
         && (pos.y + tall) - bottomY <= Math.max(0.05, tall * 0.08)) continue;
     _push.set(best.x, 0, best.z).applyAxisAngle(UP, yaw).multiplyScalar(best.d * bs);
     pos.x += _push.x; pos.z += _push.z; touched.add(e0);
-    // pillars aren't mantleable — and neither is anything, to a body that
-    // cannot climb. The ragdoll runs this routine once per JOINT per frame;
-    // without the height test it would leave the controller's mantle probe
-    // holding whichever wrist last brushed a crate. That is harmless only
-    // because updateMe does not run while you are down, which is not a
-    // guarantee worth resting on.
+    // pillars aren't mantleable, nor is anything to a non-climber (a ragdoll wrist must not set the mantle probe)
     if (!pillar && climbs) blockedTop = topY;
   }
   return ground;
@@ -899,14 +676,11 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
 
 // ---- Layer-0 affordances ----------------------------------------------------
 
-/** Nearest sittable surface to a point: a horizontal top at chair-ish height
- *  within `range`. This is DESIGN.md's `seatOn` — no authoring, no metadata,
- *  the geometry IS the affordance. Returns {y, x, z, yaw, id} or null. */
+/** Nearest sittable surface: a horizontal top at chair-ish height within `range` (DESIGN.md's `seatOn`: the geometry IS
+  *  the affordance, nothing authored). Returns {y, x, z, yaw, id} or null. */
 export function findSeat(pos, range = 1.2, skip = null) {   // skip(entry): a surface the caller won't offer
   let best = null;
-  // grid-bounded (§14.2 6a): a chair within `range` has its footprint cells
-  // inside the query disc — the old full-map scan ran on every X press and
-  // the 0.45s seat-hint beat
+  // grid-bounded (§14.2 6a): a chair within `range` has its cells inside the query disc; this runs on every X press
   for (const [id, e0] of nearColliders(pos.x, pos.z, range)) {
     const { obj, mask } = e0; const { yaw, box, exact, pillar, grid } = frameOf(e0);
     if (mask || skip?.(e0)) continue;
@@ -927,14 +701,11 @@ export function findSeat(pos, range = 1.2, skip = null) {   // skip(entry): a su
   return best;
 }
 
-/** Highest surface directly under a point — what a dropped object lands on.
- *  This is what makes "put the mug ON the table" work instead of the mug
- *  sinking to y=0 beside it. */
+/** Highest surface directly under a point: what a dropped object lands on (ON the table, not at y=0 beside it). */
 export function surfaceUnder(x, z, terrainAt, maxY = Infinity, skipId = null) {
   let y = terrainAt(x, z);
   let onto = null;
-  // a surface UNDER the point must have its footprint over the point — the
-  // point's own cell holds every such entry (grid-bounded, §14.2 6a)
+  // a surface UNDER the point has its footprint over it, so the point's own cell holds every candidate (§14.2 6a)
   for (const [id, e0] of nearColliders(x, z, 0.5)) {
     const { obj, mask } = e0; const { yaw, box, exact, pillar } = frameOf(e0);
     if (pillar || mask || id === skipId) continue;

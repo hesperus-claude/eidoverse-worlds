@@ -1,26 +1,29 @@
-// tools/protocol/identity-check.ts — who a joiner is, against a real sequencer (security review 2026-10-06). Scratch port,
+// tools/protocol/identity-check.ts — who a joiner is, against a real sequencer. Scratch port,
 // scratch WORLDS_DIR, its own tokens.json and a test aid1 issuer; never 8968/8970. usage: bun tools/protocol/identity-check.ts
 //   C1  a credential proven on one join never carries to a second join on the same socket
 //   C2  an aid1 credential is an agent only if its kind says agent; an enrolment's listed aid1 subject is that agent;
-//       C2f (10-18 L11) a reserved name is matched folded ("Wre n", "wren." are Wren) and refused without the enrolment's proof
+//       C2f a reserved name is matched folded ("Wre n", "wren." are Wren) and refused without the enrolment's proof
 //   C3  WORLD_ADMIN naming a bare display name refuses to boot
 //   H1  typing someone's name doesn't kick them, take over their session, or show as them; a guest is named a guest
 //   H3  a world name nobody founded is refused, and nothing appears on disk
 //   H4  a guest is never given the world's default role; a door ban removes the person now; a guest's ban names the
 //       connection, so reconnecting as a fresh guest is refused
 //   H5  an owner can't demote the founder; default-role can't be owner; an owner can't be banned
-//   ID  one account is the same identity in every world on the authority (per-world ids, review M6, withdrawn: R 10-06)
-//   HB  presence is keyed by identity, never a display name (pass 2 H-B): a second account asking to be "Marigold" is shown
-//       with a disambiguator (pass 3 H2), and doesn't get the first one's remembered pose; the real one does
+//   H2  rights are read by identity: a visitor can't set the world; a role granted to an id is that socket's, never a name's
+//   RK  owner seniority by grant: (founder, senior, junior) × (demote, re-affirm, ban), the junior refused every time
+//   M2  joins at once each get their own id, and the directory file keeps every one
+//   ID  one account is the same identity in every world on the authority (no per-world ids)
+//   HB  presence is keyed by identity, never a display name: a second account asking to be "Marigold" is shown
+//       with a disambiguator, and doesn't get the first one's remembered pose; the real one does
 //   MA  a pose past the size cap isn't relayed or remembered; one websocket message past the cap closes the socket
-//   LC  on a box with a JOIN_TOKEN, /worlds, /snap and /geom?world need a key a join would take
-//   RS  roles and moderation at the server (research roles S4): your-rights from the authority, voice-moderate as the authority's
+//   LC  on a box with a JOIN_TOKEN, /worlds, /snap, /geom?world and /relay-diag need a key a join would take
+//   RS  roles and moderation at the server: your-rights from the authority, voice-moderate as the authority's
 //       identity-keyed logged mute (surviving a reconnect), a kick's cooldown at join, ghost hidden server-side, warn and
 //       mute notices, access (listed / max with the moderator bypass); RS7 reset is the most senior owner's, fork is rate-limited;
-//       RS8 whisper is removed (R 10-18: refused `removed`, delivered to nobody); RS9 ghost history/presence, the ban list,
+//       RS8 whisper is removed (refused `removed`, delivered to nobody); RS9 ghost history/presence, the ban list,
 //       a guest's kick by address; RS10 speech is arrival-only: no say before you arrived reaches a non-admin by either
 //       history route or the join, a moderator included; an owner who joins later reads the master log
-//   GG  a guest's mute and ghost carry by hashed address to the next guest from it (R 10-07: reconnecting sheds nothing);
+//   GG  a guest's mute and ghost carry by hashed address to the next guest from it (reconnecting sheds nothing);
 //       lifting them lifts the address record; a signed-in person is untouched
 //   AG  @world.access.minAccountDays: a Discord account's age from its snowflake (pure), and the join gate (young human
 //       refused with when they qualify, a guest refused, an enrolled agent exempt, a moderator's bypass, the range)
@@ -31,11 +34,11 @@ import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { ENGINE, scratch } from "./common.ts";
 import { idAliases } from "./idalias.ts";
 import { tryUntil } from "./wait.ts";
-const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids
+import { suite } from "./suite.ts";
+const IDS = idAliases();   // the suite's names ride as placeholders and minted ids
 
 const root = scratch("identity");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("identity-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // a test home-node issuer
@@ -102,7 +105,7 @@ ok(!srv.dead, "(setup) the server is up", srv.dead ? fs.readFileSync(srv.log + "
   const b = await s.join("garden", "Wren");   // same socket, no token, another enrolled agent's name
   ok(!b.snapshot, "C1 a second join on the same socket can't wear another agent's name", b.errors);
   s.close(); }
-{ const s = await sock(srv.port);   // the review's exploit: an UNenrolled aid1 agent's proof reused to become another name
+{ const s = await sock(srv.port);   // an UNenrolled aid1 agent's proof reused to become another name
   const a = await s.join("garden", "x", { agentToken: mint({ kind: "agent", name: "Moth", sub: "agent:moth@home.test" }) });
   const b = await s.join("garden", "Lark");
   ok(!!a.snapshot && !b.snapshot, "C1 a proven aid1 agent can't rejoin on its socket as another (unenrolled) name and keep the proof", [a.snapshot?.you, b.snapshot?.you, b.errors]);
@@ -122,7 +125,7 @@ ok(!srv.dead, "(setup) the server is up", srv.dead ? fs.readFileSync(srv.log + "
   const imp = await sock(srv.port); const j3 = await imp.join("garden", "x", { agentToken: mint({ kind: "agent", name: "Wren", sub: "agent:wren@elsewhere.test" }) });
   ok(!j3.snapshot || (j3.snapshot.you !== "Wren" && you(j3) !== you(j1)), "C2 another aid1 agent whose NAME slugs to an enrolled agent's isn't them (reserved, or its own identity)", [j3.snapshot?.you, j3.errors]);
   a1.close(); t1.close(); imp.close(); }
-// C2f (security review 10-18 L11): a reserved name is matched FOLDED, as display collisions are: "Wre n" and "wren." are Wren
+// C2f: a reserved name is matched FOLDED, as display collisions are: "Wre n" and "wren." are Wren
 { const out = [];
   for (const typed of ["Wre n", "wren.", "WREN", "W r e n"]) { const s = await sock(srv.port); const j = await s.join("orchard", typed, {}); out.push([typed, j.errors, s.closed, !!j.snapshot]); s.close(); }
   ok(out.every(([, errs, closed, got]) => !got && closed === 4004 && errs.some((e) => /reserved agent name/.test(e))), "C2f a reserved agent name folded (spaces, punctuation, case) is refused to anyone without that enrolment's proof", out); }
@@ -132,7 +135,7 @@ ok(!srv.dead, "(setup) the server is up", srv.dead ? fs.readFileSync(srv.log + "
   const fake = await sock(srv.port); const jf = await fake.join("garden", "Ann​");   // zero-width trick
   await sleep(200);
   // on a private TRUST_NAMES server a typed name IS the account (local:ann): the zero-width trick folds away, so this is Ann's
-  // own session again, replacing her stale one (a reconnect) — same account, same identity
+  // own session again, replacing her stale one (a reconnect): same account, same identity
   ok(jf.snapshot?.you === "Ann" && you(jf) === you(ja) && ann.closed === 4002, "H1 'Ann\\u200B' folds to Ann: on a TRUST_NAMES server that's her own account, so it's her reconnect (takeover)", [jf.snapshot?.you, ann.closed]);
   ann.close(); fake.close(); }
 
@@ -141,7 +144,9 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   const g = await sock(S2.port); const jg = await g.join("garden", "Annbot");
   await sleep(200);
   ok(ann.closed == null && jg.snapshot && /\(guest\)/.test(jg.snapshot.you) && you(jg) !== you(ja), "H1 a guest typing a present agent's name is a separate guest, shown as one; nobody is kicked", [jg.snapshot?.you, ann.closed]);
-  ann.close(); g.close(); }
+  const g2 = await sock(S2.port); const jg2 = await g2.join("garden", "Annbot");
+  ok(!!jg2.snapshot && you(jg2) !== you(jg) && you(jg2) !== you(ja) && g.closed == null, "H1 two guests typing the same name are two identities; neither is kicked", [you(jg), you(jg2), g.closed]);
+  ann.close(); g.close(); g2.close(); }
 
 // ---- H4 / H5 on the public door ----
 { // the founder (local:ann) can't reach the public door; make a world whose owner is an agent account we can prove
@@ -153,10 +158,12 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok((await own.req("set", { id: "@world", component: "default-role", value: { role: "builder" } })).ok, "(H setup) meadow's default role: builder");
   const g = await sock(S3.port); const jg = await g.join("meadow", "drifter");
   ok(jg.snapshot?.yourRights?.role === "inhabitant" && (await g.req("create", { id: "box1", model: "crate" })).refused?.code === "rights", "H4 a guest is never given the default role: an inhabitant, and refused a build", jg.snapshot?.yourRights);
+  { const sky = await g.req("set", { id: "@world", component: "sky", value: { hours: 18 } });
+    ok(sky.refused?.code === "rights", "H2 a visitor can't set a world property (rights read by identity)", sky); }
   const wren = await sock(S3.port); const jw = await wren.join("meadow", "Wren", { agentToken: "tok-wren" });
   ok(jw.snapshot?.yourRights?.role === "builder", "H4 …while a proven account does get it (builder)", jw.snapshot?.yourRights);
-  // …unless the world's owner opts guests in (R 10-06: whether strangers without an account may build is the world's
-  // choice; the Commons does). Explicit, default off, and never above the world's default role.
+  // …unless the world's owner opts guests in (whether strangers without an account may build is the world's choice).
+  // Explicit, default off, and never above the world's default role.
   ok((await own.req("set", { id: "@world", component: "default-role", value: { role: "inhabitant", guests: "builder" } })).refused?.code === "shape", "H4g guests can't be given more than everyone else (guests ≤ the default role)");
   ok((await own.req("set", { id: "@world", component: "default-role", value: { role: "builder", guests: "builder" } })).ok, "(H4g setup) meadow lets guests build");
   { const g2 = await sock(S3.port); const jg2 = await g2.join("meadow", "drifter2"); await sleep(100);
@@ -176,14 +183,14 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok((await own.req("set", { id: "@world", component: `roles:${you(jw)}`, value: { role: "builder" } })).ok, "H5 …but the senior owner can demote the junior one");
   // H4: a door ban removes the guest now, and the guest's reconnect is refused
   const ban = await own.req("ban", { who: you(jg), reason: "test" }); await sleep(300);
-  ok(ban.ok && g.closed != null, "H4 a door ban removes the banned guest at once", [ban, g.closed]);
+  ok(ban.ok && g.closed != null && g.msgs.some((m) => m.type === "error" && /banned/.test(m.error ?? "")), "H4 a door ban removes the banned guest at once, telling it on its open socket", [ban, g.closed, g.msgs.filter((m) => m.type === "error")]);
   const again = await sock(S3.port); const ja2 = await again.join("meadow", "someone-new");
   ok(!ja2.snapshot && /banned/.test(ja2.errors.join(" ")), "H4 the banned guest reconnecting as a fresh guest is refused (their connection is named)", ja2.errors);
-  // world-bans reads the authority's moderation record (it read v1 state.bans: a world always said "nobody is banned")
+  // world-bans reads the authority's moderation record (never v1 state.bans, which always said "nobody is banned")
   { const k = own.msgs.length; own.raw({ type: "world-bans" }); await sleep(300);
     const t = own.msgs.slice(k).find((m) => m.type === "mod")?.text ?? "";
     ok(/banned from "meadow" \(1\)/.test(t) && /test/.test(t), "world-bans lists the authority's bans (who, and why)", t); }
-  // a live drag is presence gated on the AUTHORITY's role for the person's directory identity (it looked up their name).
+  // a live drag is presence gated on the AUTHORITY's role for the person's directory identity (never their name).
   // Proven accounts only here: this world now bans every guest from this address (H4 above)
   { const moss = await sock(S3.port); const jm = await moss.join("meadow", "Moss", { agentToken: "tok-moss" });
     await own.req("set", { id: "@world", component: `roles:${you(jm)}`, value: { role: "inhabitant" } }); await sleep(100);
@@ -192,9 +199,9 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const drags = own.msgs.slice(k).filter((m) => m.type === "drag").map((m) => m.pos[0]);
     ok(!!jm.snapshot && JSON.stringify(drags) === "[2]", "a visitor's live drag isn't relayed; a builder's is (the authority's role for their identity)", [drags, jm.errors]);
     moss.close(); }
-  // muting someone for EVERYONE is the owner's (it read v1 rights by typed name, and a role the v1 table didn't know,
-  // `none`, compared undefined < 2 → false: it passed). A listed inhabitant and an unlisted stranger (meadow's newcomer role,
-  // builder) both try; the owner's own mute is the control that the gate is reachable at all.
+  // muting someone for EVERYONE is the owner's, by the authority's role (not v1 rights by typed name, where an unknown
+  // role compared undefined < 2 and passed). An inhabitant and an unlisted stranger (meadow's newcomer role, builder) both
+  // try; the owner's own mute is the control that the gate is reachable at all.
   { const fern = await sock(S3.port); const jf = await fern.join("meadow", "Fern", { agentToken: "tok-fern" });
     const vis = await sock(S3.port); const jv = await vis.join("meadow", "Moss", { agentToken: "tok-moss" });
     const k = own.msgs.length;
@@ -210,7 +217,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok(!!je.snapshot, "H4 …in that world only", je.errors);
   for (const s of [own, wren, again, elsewhere]) s.close(); S3.proc.kill(); }
 
-// ---- RS: roles and moderation at the server (research roles S4; PLAN ghost) ----
+// ---- RS: roles and moderation at the server ----
 { ok(tool(["found", "heath", "--owner", "agent:token:rowan"]).code === 0, "(RS setup) found heath owned by the Rowan enrolment");
   const S4 = await start({ TRUST_NAMES: "", VOICE_TRANSPORT: "sfu" });
   const own = await sock(S4.port); const jo = await own.join("heath", "Rowan", { agentToken: "tok-rowan" });
@@ -239,12 +246,12 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
       [none, note, log.records?.[0], diag.moderatorMuted]);
     // …and it survives a reconnect (re-applied on join, keyed on the identity)
     moss.close(); await sleep(2500); const diag1 = await (await fetch(`http://127.0.0.1:${S4.port}/relay-diag?world=heath`)).json();
-    const m2 = await sock(S4.port); const jm2 = await m2.join("heath", "Moss", { agentToken: "tok-moss" });   // join() returns at the snapshot: no sweep tick in between
+    const m2 = await sock(S4.port); const jm2 = await m2.join("heath", "Moss", { agentToken: "tok-moss" });   // join, the relay-credential mint and the 2 s sweep each re-apply it
     const diag2 = await (await fetch(`http://127.0.0.1:${S4.port}/relay-diag?world=heath`)).json();
     ok(jm2.snapshot?.yourRights?.muted?.channels?.includes("voice") && !(diag1.moderatorMuted ?? []).includes("Moss") && (diag2.moderatorMuted ?? []).includes("Moss"),
       "RS2 a voice mute survives a reconnect: released from the display id while they're gone, re-applied the moment they join, and the person is told", [jm2.snapshot?.yourRights, diag1.moderatorMuted, diag2.moderatorMuted]);
-    // …and asking for a fresh relay leg keeps it (review of #260): the mint resets the id's mute at the SFU, and the
-    // sweep applies the sanctions in force to the new leg
+    // …and asking for a fresh relay leg keeps it: the mint resets the id's mute at the SFU, and the sweep applies the
+    // sanctions in force to the new leg
     m2.raw({ type: "relay-cred" }); await sleep(2600);   // past a sweep tick (2 s): the sweep alone must not be what's missing
     const gotCred = m2.msgs.some((m) => m.type === "relay-cred");
     const diag3 = await (await fetch(`http://127.0.0.1:${S4.port}/relay-diag?world=heath`)).json();
@@ -259,16 +266,15 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const kk = await fern.req("kick", { who: you(jm2), minutes: 0.03, reason: "cool off" }); await sleep(300);
     const said = m2.msgs.find((m) => m.type === "error" && m.until);
     const m3 = await sock(S4.port); const jm3 = await m3.join("heath", "Moss", { agentToken: "tok-moss" });
-    // past the cooldown the SERVER stated, read on the same wall clock it judges by (never a fixed sleep on the monotonic
-    // timer: a WSL host's wall clock steps back ~1.4 s every ~30 s, and the server's clock then holds still, so a fixed
-    // 2.2 s after a 1.8 s cooldown arrived early under load: gate 10-22, and twice before)
+    // past the cooldown the SERVER stated, read on the wall clock it judges by: never a fixed sleep on the monotonic timer,
+    // since a WSL host's wall clock steps back ~1.4 s every ~30 s and the server's clock then holds still
     for (let i = 0; i < 100 && !(said?.until && Date.now() > said.until + 300); i++) await sleep(100);
     const m4 = await sock(S4.port); const jm4 = await m4.join("heath", "Moss", { agentToken: "tok-moss" });
     // join() waits 3 s for the snapshot; a loaded host can take longer (the snapshot then arrives late, not never)
     for (let i = 0; i < 100 && !jm4.snapshot && !jm4.errors.length && m4.closed == null; i++) { await sleep(100); jm4.snapshot = m4.msgs.find((m) => m.type === "snapshot"); }
     ok(kk.ok && m2.closed === 4006 && !!said && !jm3.snapshot && /may come back/.test(jm3.errors.join(" ")) && !!jm4.snapshot, "RS3 a kick: removed now (4006, with until), refused while the cooldown runs, admitted after it", [kk, m2.closed, said, jm3.errors, !!jm4.snapshot, jm4.errors]);
     m3.close();
-    // RS4 RETIRED (R 10-20: ghost removed). Its setup stays: RS10 reads back the line said here, RS5 uses the rejoin
+    // RS4 RETIRED (ghost removed). Its setup stays: RS10 reads back the line said here, RS5 uses the rejoin
     await own.req("say", { text: "the secret word is heron" }); await sleep(400);
     const rejoin = await sock(S4.port); const jr = await rejoin.join("heath", "Moss", { agentToken: "tok-moss" }); await sleep(300);
     // RS5: warn reaches its person as a notice; a mute is told to its person and the muted badge set goes to everyone
@@ -276,6 +282,16 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const mt = await fern.req("mute", { who: you(jw), minutes: 10, channels: ["chat"] }); await sleep(2500);
     ok(wn.ok && rejoin.msgs.some((m) => m.type === "warned" && m.reason === "keep it kind") && mt.ok && wren.msgs.some((m) => m.type === "moderated" && m.verb === "mute" && m.you)
       && own.msgs.some((m) => m.type === "mod-state" && m.muted?.[you(jw)]), "RS5 a warning reaches its person; a mute is told to its person and to everyone's badges (mod-state)", [wn.ok, mt.ok]);
+    // RS5c: a muted person's speech bubble (caption: presence, never logged) reaches nobody; an unmuted one's does (the control)
+    { const k = own.msgs.length; wren.raw({ type: "caption", text: "muted words", utt: 1 }); fern.raw({ type: "caption", text: "free words", utt: 1 });
+      fern.raw({ type: "caption", text: "free words, again", utt: 2 });   // two control round-trips after the muted one: it would have landed by then
+      await tryUntil("the control captions reach Rowan", () => own.msgs.slice(k).some((m) => m.type === "caption" && m.text === "free words, again"), { ms: 3000 });
+      const caps = own.msgs.slice(k).filter((m) => m.type === "caption").map((m) => m.text);
+      ok(caps.includes("free words") && !caps.includes("muted words"), "RS5c a muted person's caption reaches nobody; the moderator's own still does", caps); }
+    // RS5b: the warning's moderator is told it went (as a mute or kick tells them), and no bystander is
+    const toldWarn = (x: { msgs: any[] }) => x.msgs.filter((m) => m.type === "moderated" && m.verb === "warn");
+    ok(wn.ok && toldWarn(fern).length === 1 && /warned Moss/.test(toldWarn(fern)[0].text ?? "") && toldWarn(own).length === 0 && toldWarn(rejoin).length === 0,
+      "RS5b the moderator's /warn is confirmed to the moderator alone", [toldWarn(fern), toldWarn(own).length, toldWarn(rejoin).length]);
     // RS6: access: 'listed' admits only people with a role here; a moderator gets in past max
     await own.req("set", { id: "@world", component: "access", value: { join: "listed" } });
     const st = await sock(S4.port); const js = await st.join("heath", "Stranger", { agentToken: mint({ kind: "agent", name: "Stranger", sub: "agent:stranger@home.test" }) });
@@ -287,7 +303,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     ok(!js.snapshot && /isn't open to you/.test(js.errors.join(" ")) && !!jfz.snapshot && !jfull.snapshot && /full/.test(jfull.errors.join(" ")),
       "RS6 access: 'listed' refuses someone with no role here; past max a moderator still gets in, a stranger doesn't", [js.errors, !!jfz.snapshot, jfull.errors]);
     for (const x of [st, fz, full, rejoin]) x.close(); }
-  // RS7 (review 10-06): erasing is the most senior owner's; a fork can't run in a loop
+  // RS7: erasing is the most senior owner's; a fork can't run in a loop
   { await own.req("set", { id: "@world", component: `roles:${you(jw)}`, value: { role: "owner" } }); await sleep(200);
     const k = wren.msgs.length; wren.raw({ type: "world-reset", name: "heath" }); await sleep(500);
     const junior = wren.msgs.slice(k).find((m) => m.type === "error" || m.type === "world-reset");
@@ -295,8 +311,8 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const forks = own.msgs.slice(k2).filter((m) => m.type === "world-forked" || m.type === "error").map((m) => m.type === "error" ? m.error : `forked ${m.to}`);
     ok(junior?.type === "error" && /most senior/.test(junior.error) && forks[0] === "forked heath-copy" && /copied .* ago/.test(forks[1] ?? ""),
       "RS7 a junior owner can't erase the world (the most senior owner's act); a second copy within a minute is refused", [junior, forks]); }
-  // RS8: whisper was removed (R 10-18): the ws message is refused in the registry's words (`removed`) and reaches nobody,
-  // held for nobody; the authority's request of that name is refused `removed` too, never as an unknown verb
+  // RS8: whisper was removed: the ws message is refused in the registry's words (`removed`) and reaches nobody, held for
+  // nobody; the authority's request of that name is refused `removed` too, never as an unknown verb
   { const vy = await sock(S4.port); const jv = await vy.join("heath", "Vole", { agentToken: mint({ kind: "agent", name: "Vole", sub: "agent:vole@home.test" }) });
     const mo = await sock(S4.port); await mo.join("heath", "Fern", { agentToken: "tok-fern" });   // Fern: still a moderator
     const k = vy.msgs.length; vy.raw({ type: "whisper", to: "Fern", text: "why was I muted?" }); await sleep(400);
@@ -305,17 +321,17 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const fernGot = mo.msgs.some((m) => m.type === "whisper" || JSON.stringify(m).includes("why was I muted") || JSON.stringify(m).includes("psst"));
     ok(vyRef?.refused?.code === "removed" && /removed/.test(vyRef?.error ?? "") && rq.ok === false && rq.refused?.code === "removed" && !fernGot,
       "RS8 whisper is removed: the message is refused as `removed` in words, the request of that name likewise, and nothing reaches the person named", [vyRef, rq.refused, fernGot]);
-    // RS9 (review 10-07): a visitor can't read the ban list; a guest's kick holds against a fresh guest connection (its ghost half retired 10-20)
+    // RS9: a visitor can't read the ban list; a guest's kick holds against a fresh guest connection (its ghost half retired)
     const gv = await sock(S4.port); const jg = await gv.join("heath", "visitor-x");   // a guest (no account on this server)
     const kb = gv.msgs.length; gv.raw({ type: "world-bans" }); await sleep(300);
-    const visBans = gv.msgs.slice(kb).find((m) => m.type === "error")?.error ?? "";   // a refusal, not a mod result (review of #260, server I33)
+    const visBans = gv.msgs.slice(kb).find((m) => m.type === "error")?.error ?? "";   // a refusal, not a mod result
     const kk = await own.req("kick", { who: you(jg), minutes: 0.5 }); await sleep(300);
     const g2 = await sock(S4.port); const jg2 = await g2.join("heath", "visitor-y");
     ok(/moderation power/.test(visBans) && kk.ok && !jg2.snapshot,
       "RS9 the ban list is for moderators; a guest's kick holds against a fresh guest from the same address", [visBans.slice(0, 60), kk.ok, jg2.errors]);
-    // RS10 (R 10-18): speech is arrival-only. "the secret word is heron" was said (RS4) before Fern's new leg (mo) and Newt
-    // arrived: neither a moderator nor a stranger reads it back, by the history message, the authority's history or the
-    // join's window; an owner (Wren, an owner since RS7) joining later reads the master log, and its join counts it
+    // RS10: speech is arrival-only. "the secret word is heron" was said (RS4) before Fern's new leg (mo) and Newt arrived:
+    // neither a moderator nor a stranger reads it back, by the history message, the authority's history or the join's
+    // window; an owner (Wren, an owner since RS7) joining later reads the master log, and its join counts it
     const hist2 = (c) => new Promise((res) => { const id = `h${Math.random()}`; const k5 = c.msgs.length; c.raw({ type: "history", reqId: id, limit: 300 });
       setTimeout(() => res(c.msgs.slice(k5).find((m) => m.type === "history" && m.reqId === id) ?? null), 500); });
     const nt = await sock(S4.port); const jn = await nt.join("heath", "Newt", { agentToken: mint({ kind: "agent", name: "Newt", sub: "agent:newt@home.test" }) });
@@ -326,8 +342,8 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
       ownerWs: heron(await hist2(w2)), ownerReq: heron(await w2.req("history", { verbs: ["say"], limit: 200 })), ownerTotal: jw2.snapshot?.state?.chatTotal, ownerWindow: jw2.snapshot?.state?.recentChat?.length };
     ok(!!jn.snapshot && !!jw2.snapshot && !seen10.newtWs && !seen10.newtReq && !seen10.newtJoin && !seen10.fernWs && !seen10.fernReq && seen10.ownerWs && seen10.ownerReq && seen10.ownerTotal > 0 && seen10.ownerWindow === 0,
       "RS10 speech is arrival-only: a stranger and a moderator who arrived after a say read none of it back (history, the authority's history, the join); an owner arriving later reads the master log", seen10);
-    // RS10b (the house's view, #260 10-20): reading speech back is a permission a role holds (readChat), not a role named in
-    // the protocol: Newt, granted readChat alone, reads the master log on a fresh arrival; still nothing for Newt before it
+    // RS10b: reading speech back is a permission a role holds (readChat), not a role named in the protocol: Newt, granted
+    // readChat alone, reads the master log on a fresh arrival; still nothing for Newt before it
     const gr = await w2.req("set", { id: "@world", component: `roles:${you(jn)}`, value: { role: "inhabitant", can: { readChat: true } } });
     const nt2 = await sock(S4.port); const jn2 = await nt2.join("heath", "Newt", { agentToken: mint({ kind: "agent", name: "Newt", sub: "agent:newt@home.test" }) });
     const seen10b = { granted: gr.ok ?? gr, ws: heron(await hist2(nt2)), req: heron(await nt2.req("history", { verbs: ["say"], limit: 200 })), total: jn2.snapshot?.state?.chatTotal };
@@ -375,7 +391,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const um = await own.req("unmute", { who: you(j2) }); g2.close(); await sleep(300);
     const [g3, j3] = await guest("drifter3");
     ok(um.ok && !!j3.snapshot && !rights(j3).muted, "GG2 an unmute lifts the address record too: the next guest from it isn't muted", [um, rights(j3)]);
-    // GG3, GG4 RETIRED (R 10-20: ghost removed)
+    // GG3, GG4 RETIRED (ghost removed)
     g3.close(); await sleep(300);
     const [g5, j5] = await guest("drifter5");
     // GG5: the voice control's mute (voice-moderate) is a mute like any other: it carries, and its unmute lifts it
@@ -413,23 +429,54 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     for (const x of [o, gq, ag, b1, y2]) x.close(); }
   own.close(); S5.proc.kill(); }
 
-// ---- one person, one identity on this server (R 10-06: friends, messages, invites need it; per-world ids withdrawn) ----
+// ---- one person, one identity on this server (friends, messages, invites need it; per-world ids withdrawn) ----
 { const a = await sock(S2.port); const ja = await a.join("garden", "x", { agentToken: "tok-rowan" });
   const b = await sock(S2.port); const jb = await b.join("orchard", "x", { agentToken: "tok-rowan" });
   ok(you(ja) && you(ja) === you(jb), "ID one account is the same identity in every world on the authority", [you(ja), you(jb)]);
   a.close(); b.close(); }
 
-// ---- HB: presence by identity (pass 2 H-B). Marigold (an aid1 human) leaves; a different account (TRUST_NAMES: a typed
-// name is local:<name>) joins wearing her name: no remembered pose (a held whisper was checked here too, until whisper
-// was removed, R 10-18) ----
+// ---- M2: joins at once each get their own id, and the directory file keeps every one ----
+{ const names = ["Guest0", "Guest1", "Guest2", "Guest3", "Guest4"];
+  const socks = await Promise.all(names.map(() => sock(srv.port)));
+  const ids = (await Promise.all(socks.map((s, i) => s.join("garden", names[i])))).map(you);
+  const { directoryFileIn } = await import("../../server/keyfiles.ts");
+  const dir = JSON.parse(fs.readFileSync(directoryFileIn(W), "utf8"));
+  ok(ids.every(Boolean) && new Set(ids).size === ids.length && ids.every((id) => dir.ids?.[id]?.subs?.length), "M2 five joins at once each get their own id, and the directory file holds every one", [ids, ids.map((id) => !!dir.ids?.[id])]);
+  for (const s of socks) s.close(); }
+
+// ---- RK: owner seniority over (founder, senior, junior) × (demote, re-affirm, ban); owners granted in DESCENDING id order,
+// so a rank read off the id string instead of the grant disagrees on every pair ----
+{ ok(tool(["found", "fen", "--owner", "agent:token:rowan"]).code === 0, "(RK setup) found fen owned by the Rowan enrolment");
+  const S6 = await start({ TRUST_NAMES: "" });
+  const at = async (n, t) => { const s = await sock(S6.port); const j = await s.join("fen", n, { agentToken: t }); return { s, id: you(j), n }; };
+  const F = await at("Rowan", "tok-rowan"), x = await at("Wren", "tok-wren"), y = await at("Fern", "tok-fern"), m = await at("x", mint({ kind: "agent", name: "Bracken", sub: "agent:bracken@home.test" }));
+  const [A, B] = [x, y].sort((p, q) => (p.id < q.id ? 1 : -1));   // A (larger id) granted first: senior
+  const role = (by, who, r) => by.s.req("set", { id: "@world", component: `roles:${who.id}`, value: { role: r } });
+  ok((await role(F, A, "owner")).ok && (await role(F, B, "owner")).ok && A.id > B.id, "(RK setup) the founder makes A, then B, owners; A's id sorts after B's", [A.id, B.id]);
+  const pairs = [["founder", F, "senior", A], ["founder", F, "junior", B], ["senior", A, "junior", B]];
+  for (const [sn, S, jn, J] of pairs) {
+    for (const [op, run] of [["demote", () => role(J, S, "inhabitant")], ["re-affirm", () => role(J, S, "owner")], ["ban", () => J.s.req("ban", { who: S.id })]]) {
+      const r = await run();
+      ok(r.refused?.code === "rights" && (op === "ban" || /longer than you/.test(r.refused.reason ?? "")), `RK the ${jn} owner can't ${op} the ${sn} owner`, r.refused ?? r); } }
+  ok((await role(A, B, "owner")).ok, "RK a senior owner may re-affirm a junior one");
+  ok((await role(A, B, "builder")).ok && (await role(F, A, "builder")).ok, "RK …and demote them: the senior owner demotes the junior, the founder the senior");
+  // H2: a role granted under the opaque id is what that socket's rights read; a guest typing the name gets none of it
+  ok((await F.s.req("set", { id: "@world", component: "default-role", value: { role: "inhabitant" } })).ok && (await m.s.req("create", { id: "rk-box0", model: "crate_large_red.glb" })).refused?.code === "rights", "(H2 setup) newcomers are inhabitants: Bracken can't build yet");
+  ok((await role(F, m, "builder")).ok && (await m.s.req("create", { id: "rk-box", model: "crate_large_red.glb" })).ok, "H2 a role granted to an identity is what its socket's rights read (Bracken builds now)");
+  { const g = await sock(S6.port); const jg = await g.join("fen", "Bracken");
+    ok(!!jg.snapshot && you(jg) !== m.id && (await g.req("create", { id: "rk-box2", model: "crate_large_red.glb" })).refused?.code === "rights", "H2 …and a guest typing that name is someone else, with no build", [you(jg), m.id]); g.close(); }
+  for (const p of [F, x, y, m]) p.s.close(); S6.proc.kill(); }
+
+// ---- HB: presence by identity. Marigold (an aid1 human) leaves; a different account (TRUST_NAMES: a typed name is
+// local:<name>) joins wearing her name: no remembered pose ----
 { const tokR = () => mint({ kind: "agent", name: "Marigold", sub: "agent:marigold@home.test" });   // an aid1 account (an agent: a person signs in by cookie)
   const r1 = await sock(srv.port); const j1 = await r1.join("garden", "x", { agentToken: tokR() });
   const name = j1.snapshot?.you ?? "marigold";
   r1.raw({ type: "pose", pose: { p: [7, 0, -3], yaw: 0.5, speed: 0, clip: "idle" } }); await sleep(250); r1.close(); await sleep(300);
   const other = await sock(srv.port); const jo = await other.join("garden", name);   // TRUST_NAMES: local:<name>, another account
   await sleep(250);
-  // since pass 3 (H2) the second account isn't even SHOWN as her: a name another account claimed gets a disambiguator
-  // (presence-check PN); what it may never get is hers either way — her remembered pose
+  // the second account isn't even SHOWN as her: a name another account claimed gets a disambiguator (presence-check PN);
+  // what it may never get is hers either way: her remembered pose
   ok(!!j1.snapshot && !!jo.snapshot && you(jo) !== you(j1) && jo.snapshot.you !== name && jo.snapshot.you.startsWith(name), "HB (setup) two accounts asking for one display name: the second is shown with a disambiguator", [you(j1), you(jo), jo.snapshot?.you, name, j1.errors, jo.errors]);
   ok(!jo.snapshot?.restore, "HB a different account wearing an absent person's name doesn't inherit her remembered pose", jo.snapshot?.restore);
   other.close(); await sleep(300);
@@ -452,10 +499,8 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok(huge.closed != null, "MA one websocket message past 2 MiB closes the socket (Bun's default took 16 MB)", huge.closed);
   a.close(); b.close(); }
 
-// ---- NM: a name with markup in it is refused at the door (security pass 3, H1's belt-and-braces) ----
-// The client shows names as text now (client/lib/markup.js); a name that IS markup is still refused, so no other reader
-// of the presence plane (an agent's page, a bot, a future sink) ever has to be careful with one. < > and " — the three
-// that open a tag or close an attribute; & and ' stay (Tom & Jerry, O'Brien are names, and escape cleanly).
+// ---- NM: a name with markup in it is refused at the door, so no reader of the presence plane must be careful ----
+// < > and " open a tag or close an attribute; & and ' stay (Tom & Jerry, O'Brien are names, and escape cleanly)
 { for (const bad of [`<img src=x onerror="alert(1)">`, "Ann<b>", "x>y", `Ro"wan`]) {
     const g = await sock(srv.port); const j = await g.join("garden", bad);
     ok(!j.snapshot && j.errors.some((e) => /name/i.test(e) && /</.test(e)) && !/[{}]/.test(j.errors.join(" ")), `NM a name with markup characters is refused, in words (${JSON.stringify(bad)})`, j.errors);
@@ -468,7 +513,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   ok(nameAtDoor("Ann<b>", { typed: true }).refused && nameAtDoor("Ann<b>", { typed: false }).name === "Ann\u2039b\u203A", "NM a name the identity service gave (not typed here) gets look-alikes (\u2039 \u203A) instead of its owner being turned away — never deleted, which could empty it or make a reserved name (upstream #224 review)",
     [nameAtDoor("Ann<b>", { typed: true }), nameAtDoor("Ann<b>", { typed: false })]); }
 
-// ---- M3: the perf beacon keeps no raw address (security pass 3) ----
+// ---- M3: the perf beacon keeps no raw address ----
 { const r = await fetch(`http://127.0.0.1:${srv.port}/perflog`, { method: "POST", headers: { "x-real-ip": "203.0.113.77" }, body: JSON.stringify({ kind: "load", ms: 1234 }) });
   await sleep(100);
   const f = path.join(W, ".perflogs.jsonl"); const txt = fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "";
@@ -479,11 +524,10 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
 // ---- LC: the world's live state is behind the same door as a join ----
 { const S4 = await start({ JOIN_TOKEN: "door-key" });
   const get = (p, key) => fetch(`http://127.0.0.1:${S4.port}${p}`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(3000) }).then((r) => r.status).catch(() => -1);
-  const noKey = [await get("/worlds"), await get("/geom?world=garden"), await get("/snap?world=garden&follow=x")];
-  const withKey = [await get("/worlds", "door-key"), await get("/geom?world=garden", "tok-rowan")];
-  ok(noKey.every((c) => c === 401) && withKey.every((c) => c === 200), "LC /worlds, /geom?world and /snap answer 401 without a key a join would take, 200 with the authority key or an agent token", [noKey, withKey]);
+  const noKey = [await get("/worlds"), await get("/geom?world=garden"), await get("/snap?world=garden&follow=x"), await get("/relay-diag?world=garden")];
+  const withKey = [await get("/worlds", "door-key"), await get("/geom?world=garden", "tok-rowan"), await get("/relay-diag?world=garden", "door-key")];
+  ok(noKey.every((c) => c === 401) && withKey.every((c) => c === 200), "LC /worlds, /geom?world, /snap and /relay-diag answer 401 without a key a join would take, 200 with the authority key or an agent token", [noKey, withKey]);
   S4.proc.kill(); }
 
 S2.proc.kill(); srv.proc.kill();
-console.log(`[identity-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

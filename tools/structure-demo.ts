@@ -1,19 +1,14 @@
-// Author a demo griddled house into a world, over real websockets.
-//
+// Author a demo griddled house into a world over real websockets: one door `create` of an anchor thing carrying a
+// `structure` component is the whole wire cost (the realizer hides the anchor's placeholder model). The world must exist
+// (bun tools/protocol/world.ts found) and ID must be a builder there; the door's answer is printed.
 //   WORLD_URL=ws://localhost:8961/ws JOIN_TOKEN=test-door bun run tools/structure-demo.ts [world]
-//
-// One door request builds a whole building: a `create` of the anchor thing carrying a `structure` component with
-// the grid. That is the entire wire cost of a three-room house — which is the argument for the component lane in one
-// line. (The anchor's model is the placeholder this slice rides; the realizer hides it.) The world must exist (an
-// operator founds it: bun tools/protocol/world.ts found) and ID must be a builder there; the door's answer is printed.
 
 const URL_ = process.env.WORLD_URL ?? 'ws://localhost:8961/ws';
 const TOKEN = process.env.JOIN_TOKEN ?? 'test-door';
 const WORLD = process.argv[2] ?? 'structdemo';
 const ID = process.env.DEMO_ID ?? 'builder';
 
-// A 6×4 house: kitchen and bedroom down the west side, a hall running the
-// full depth on the east, a front door to the south and three windows.
+// a 6×4 house: kitchen and bedroom down the west side, a hall the full depth on the east, a south front door, three windows
 //
 //        x=0    1    2    3    4    5    6
 //   z=0   ═════════════════╤═════════════       ═ exterior   ║ interior
@@ -29,8 +24,7 @@ const STRUCTURE = {
   labels: { '0,0': 'kitchen', '0,2': 'bedroom', '3,0': 'hall' },
   levels: [{
     y: 0,
-    // the corner cell is floored on its INNER half only — the diagonal is the
-    // corner of the building, so the floor must stop at it
+    // the corner cell is floored on its INNER half only: the diagonal is the building's corner, the floor must stop at it
     tiles: Array.from({ length: 6 }, (_, x) => Array.from({ length: 4 }, (_, z) =>
       (x === 5 && z === 0 ? [x, z, 'floor', 'B'] : [x, z]))).flat(),
     walls: [

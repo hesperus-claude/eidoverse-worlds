@@ -5,7 +5,6 @@
 // /w (whisper), /emote (now /anim) and /ghost, /unghost (removed) keep unlisted rows with a `retired` line, which chat.js
 // says instead of "unknown command" (and instead of the silence a row with no handler gave /w). The registry is a pure
 // table; chat.js's runCommand reads `retired` before dispatching.
-import { readFileSync } from "node:fs";
 const { COMMANDS, resolveCommand } = await import("../client/lib/commands/registry.js");
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -16,7 +15,6 @@ for (const [w, re] of [["w", /whisper/], ["emote", /\/anim/], ["ghost", /ghost w
   check(`/${w} resolves to a retired row that says why`, !!row && row.listed === false && re.test(row.retired ?? ""), JSON.stringify(row));
 }
 check("no retired row is listed in autocomplete", COMMANDS.every((c: any) => !c.retired || c.listed === false));
-const chat = readFileSync(new URL("../client/lib/chat.js", import.meta.url), "utf8");
-check("chat.js says a retired row's line before dispatching it", /row\?\.retired\)\s*\{\s*logChat\('\*',\s*row\.retired\)/.test(chat));
+// chat.js says a retired row's line before dispatching it: tools/one-binding-test.ts
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

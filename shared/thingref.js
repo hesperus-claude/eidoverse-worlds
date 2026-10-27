@@ -1,17 +1,13 @@
-// shared/thingref.js — how a reader names a thing without its id (R 10-17 00:46, STAGING-TODO "ID HARDENING" (5)).
-// An id is opaque (26 base32: shared/protocol/ids.js) and never changes; what a thing is CALLED is its label, which anyone
-// may change and which two things may share (duplicate labels stay allowed: ambiguity is surfaced, never forbidden). So:
-//   handleOf   a short handle for reading: the shortest prefix of the id (at least 4 characters) no other id here starts
-//              with, derived fresh from what is here now (git's abbreviated hash). An id of 12 characters or fewer (an
-//              older readable id: "tower", "lamp-light") is its own handle.
-//   resolveThing  what someone typed → one thing: its exact id; else its label (case and outer spaces ignored); else a
-//              unique id prefix of 4 or more characters. Several things matching is refused with the candidates, never
-//              resolved by picking one. Pure: the agent's tools (mcpl) and the editor's Hierarchy read the same rules.
+// shared/thingref.js — how a reader names a thing without its id. An id is opaque and never changes; a label anyone may
+// change and two things may share (ambiguity is surfaced, never forbidden). Pure: mcpl and the Hierarchy read the same rules.
+//   handleOf   the shortest id prefix (≥ 4 chars) no other id here starts with, derived fresh; an id of ≤ 12 chars is its own handle.
+//   resolveThing  typed text → exact id; else label (case and outer spaces ignored); else a unique id prefix of ≥ 4.
+//              Several matches are refused with the candidates, never resolved by picking one.
 // Scripts never look things up by label: they reference by id (docs/SCRIPTS.md).
 export const HANDLE_MIN = 4;
 export const WHOLE_UP_TO = 12;
 
-/** The shortest unique prefix (≥ HANDLE_MIN) of `id` among `ids` (an iterable of every id here), or the id itself. */
+/** ≥ HANDLE_MIN; `ids` is every id here. */
 export function handleOf(id, ids) {
   id = String(id);
   if (id.length <= WHOLE_UP_TO) return id;
@@ -41,7 +37,7 @@ export function resolveThing(raw, things) {
   return { none: true };
 }
 
-/** Which of `things` share a label with another of them: id → true (the Hierarchy marks only these twins). */
+/** id → true for things sharing a label with another (the Hierarchy marks only these). */
 export function labelTwins(things) {
   const seen = new Map(); for (const t of things) { const l = typeof t.label === "string" ? t.label.trim().toLowerCase() : ""; if (!l) continue; seen.set(l, (seen.get(l) ?? 0) + 1); }
   const out = new Set(); for (const t of things) { const l = typeof t.label === "string" ? t.label.trim().toLowerCase() : ""; if (l && seen.get(l) > 1) out.add(t.id); }

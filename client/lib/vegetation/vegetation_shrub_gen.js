@@ -1,25 +1,6 @@
-// VENDORED from eidoverse-video eidoverse/vegetation_shrub_gen.js @ 62365e9 (2026-08-27, §24j:
-// the upstream-patched retirement — engine code is ours now; video is an
-// asset library). Upstream changes to this file are cherry-picked by hand
-// if wanted, never auto-merged.
-// shrub_gen — SeedThree's dichotomous plant math, vendored for makeVegetation.
-//
-// Skeleton + welded tube network: SeedThree src/core/dichotomous.js — the
-// stochastic L-system (F → F[+F][-F]) growing short segments that fork low and
-// diverge in a V from a multi-stem root crown, meshed as ONE merged tube
-// network where the parent tube feeds its children through each fork (no split
-// pieces, no holes), tips closed with rounded domes. Cactus/saguaro-only paths
-// (ribs, asymmetric arms, LOD ring decimation) removed; growth constants kept.
-//
-// Spray cards: SeedThree src/core/leaf-cards.js buildFoliage 'clusters' mode —
-// base-anchored quads placed on the terminal stems' rotation-minimising frames
-// with phyllotaxy, down-angle and gravity droop — here BAKED into one merged
-// geometry per plant so grass2's field instancing (aPosRot/aScaleVar/aPhase,
-// the 7-vertex-buffer budget) applies unchanged. Card bases keep the measured
-// art alignment (shrub_anchors.json: u-centre + roll) and sink their painted
-// margin into the wood — the approved junction law.
-//
-// Rng: SeedThree src/core/rng.js verbatim (xmur3 + splitmix32).
+// Vendored from eidoverse-video vegetation_shrub_gen.js @ 62365e9; cherry-pick upstream by hand, never auto-merge.
+// shrub_gen — SeedThree's dichotomous plant math (dichotomous.js tubes, leaf-cards.js clusters, rng.js verbatim),
+// baked into one geometry per plant for field instancing; card bases keep shrub_anchors.json's alignment.
 
 const T3 = globalThis.THREE;
 
@@ -65,7 +46,7 @@ const DEFAULTS = {
     firstForkHeight: 1.6,   // trunk length to the first fork (m)
     armLength: 0.9,         // segment length per generation (m)
     armFalloff: 0.86,       // each generation's segment a bit shorter
-    forkGenerations: 6,     // L-system depth
+    forkGenerations: 6,
     branchiness: 0.62,      // P(a junction forks) — NOT every junction
     forkSpread: 32,         // divergence half-angle at a fork (deg)
     forkTriChance: 0.15,    // chance a fork is a trident instead of a Y
@@ -76,7 +57,7 @@ const DEFAULTS = {
     forkRadiusKeep: 0.86,   // arms stay nearly as thick as the trunk per fork
     forkBaseScale: 1.0,     // arm base-ring radius as a fraction of the parent
     trunkRadius: 0.16,
-    trunkFlare: 1.7,        // ground-contact base swell
+    trunkFlare: 1.7,        // base swell
     trunkSegRes: 9,         // extra rings on the trunk for organic flare
     branchRepel: 0.7,       // arms steer AWAY from existing branches
     tipClearance: 0,        // crown-ball radius for crown-vs-crown repel
@@ -105,8 +86,7 @@ function perp(dir) {
     return new T3.Vector3().crossVectors(dir, a).normalize();
 }
 
-// One bent segment as a curved polyline: armBend elbow + gnarliness jitter +
-// tropism, so the segment bends WITHOUT introducing extra L-system forks.
+// armBend elbow + gnarliness jitter + tropism: bends WITHOUT adding L-system forks
 function growSegment(origin, dir0, length, radius0, radius1, p, rng, resOverride) {
     const res = Math.max(1, resOverride ?? p.segCurveRes);
     const points = [origin.clone()];
@@ -114,7 +94,7 @@ function growSegment(origin, dir0, length, radius0, radius1, p, rng, resOverride
     const dir = dir0.clone().normalize();
     const pos = origin.clone();
     const bendPer = ((p.armBend + rng.vary(0, p.gnarliness)) * Math.PI) / 180 / res;
-    const bendAxis = perp(dir); // curve the elbow within one plane per segment
+    const bendAxis = perp(dir); // one plane per segment
     for (let i = 1; i <= res; i++) {
         dir.applyAxisAngle(bendAxis, bendPer);
         if (p.gnarliness > 0) {
@@ -128,8 +108,7 @@ function growSegment(origin, dir0, length, radius0, radius1, p, rng, resOverride
     return { points, radii, endDir: dir.clone().normalize() };
 }
 
-// Rotation-minimizing frame → per-point orientation quaternions (local +Y =
-// tangent), for placing spray cards and for tube rings.
+// rotation-minimizing frame → per-point quaternions (local +Y = tangent)
 function framesFor(points) {
     const orients = [];
     const tangents = [];
@@ -148,8 +127,7 @@ function framesFor(points) {
 
 function makeStem(seg, level, windBase, flexGain) {
     const { orients } = framesFor(seg.points);
-    // Clamp to 1 so the parent tip weight == the child base weight and forks
-    // stay welded under wind (SeedThree's fork-continuous wind field).
+    // clamp to 1: parent tip weight == child base weight, so forks stay welded under wind
     const winds = seg.points.map((_, i) => {
         const f = seg.points.length > 1 ? i / (seg.points.length - 1) : 0;
         return Math.min(1, windBase + flexGain * Math.pow(f, 1.15));
@@ -165,8 +143,7 @@ export function generateShrubSkeleton(userParams, rng) {
     const stems = [];
     const terminalStems = [];
 
-    // Anti-intersection: steer a new arm's initial direction AWAY from existing
-    // branch points near where it's headed; crown-vs-crown keeps spray balls clear.
+    // steer a new arm AWAY from nearby branch points; crown-vs-crown keeps spray balls clear
     const allPts = [];
     const tips = [];
     const _rep = new T3.Vector3(), _probe = new T3.Vector3(), _d = new T3.Vector3();
@@ -197,15 +174,14 @@ export function generateShrubSkeleton(userParams, rng) {
         const flexGain = [0.3, 0.4, 0.5, 0.55][Math.min(level, 3)];
         const r1 = Math.max(p.minRadius, radius * 0.96); // arms barely taper along a segment
         const seg = growSegment(origin, dir, length, radius, r1, p, rng, level === 0 ? (p.trunkSegRes ?? 9) : undefined);
-        // Blend the base ring toward flareBase over the first 40% of the segment
-        // (a continuation widens to weld the seam; a fork arm can neck IN).
+        // blend toward flareBase over the first 40% (a continuation widens to weld; a fork arm can neck IN)
         if (flareBase) {
             for (let i = 0; i < seg.radii.length; i++) {
                 const z = i / (seg.radii.length - 1);
                 if (z < 0.4) seg.radii[i] = flareBase * (1 - z / 0.4) + seg.radii[i] * (z / 0.4);
             }
         }
-        // Only the ground-contact segment flares — organic undulating root swell.
+        // only the ground-contact segment flares
         if (level === 0 && isGroundBase && (p.trunkFlare ?? 0) > 0) {
             for (let i = 0; i < seg.radii.length; i++) {
                 const z = i / (seg.radii.length - 1);
@@ -243,8 +219,7 @@ export function generateShrubSkeleton(userParams, rng) {
                 stem.children.push(grow(endPos, cdir, childR, childLen, depth - 1, level + 1, windTip, endRadius * (p.forkBaseScale ?? 1), nc >= 2));
             }
         } else {
-            // single continuation — a dead node redirects growth into a stem
-            // that VEERS off at an angle (continuationKink), not a smooth curve
+            // single continuation: the stem VEERS off (continuationKink), not a smooth curve
             let cdir = endDir.clone();
             cdir.applyAxisAngle(perp(cdir), (rng.vary(0, p.continuationKink ?? 8) * Math.PI) / 180).normalize();
             cdir = repelDir(endPos, tropism(cdir, p.curlUp * 0.4), length);
@@ -267,18 +242,11 @@ export function generateShrubSkeleton(userParams, rng) {
 }
 
 // ── merged tube mesh (SeedThree buildMergedMesh, smooth tubes) ───────────────
-// One connected surface: each stem is a tube of rings; a stem's LAST ring is
-// stitched to EACH child's FIRST ring so the parent feeds its children through
-// the fork. Rotation-minimizing frames avoid twist; terminal tips close with a
-// rounded dome (no holes, no double-siding). Wind weights land in aH (grass2's
-// height factor) — no aWind/aStemCenter attributes, keeping the instanced mesh
-// inside the 7-vertex-buffer budget.
+// a stem's last ring stitches to each child's first; wind rides aH, keeping inside the 7-vertex-buffer budget
 
 const _rmfAxis = new T3.Vector3();
 function ringVertices(center, tangent, refDir, radius, seg, uvY, uScale, out, prevTangent = null) {
-    // Parallel-transport the carried frame by the rotation that turns the
-    // previous tangent into this one (re-projecting a fixed refDir collapses on
-    // strong bends and shears the UVs).
+    // parallel transport, never a fixed refDir (it collapses on strong bends and shears the UVs)
     const n = new T3.Vector3().copy(refDir);
     if (prevTangent) {
         const dot = Math.max(-1, Math.min(1, prevTangent.dot(tangent)));
@@ -296,15 +264,12 @@ function ringVertices(center, tangent, refDir, radius, seg, uvY, uScale, out, pr
         const dir = new T3.Vector3().copy(n).multiplyScalar(Math.cos(a)).addScaledVector(b, Math.sin(a));
         out.pos.push(center.x + dir.x * radius, center.y + dir.y * radius, center.z + dir.z * radius);
         out.nrm.push(dir.x, dir.y, dir.z);
-        // Bark grain must run ALONG the branch — sampled the other way, a thin
-        // tube cuts a strip ACROSS the painted grain and its shadow gaps wrap
-        // into dark rings around every branch. Tiles differ in authored grain
-        // direction, so out.grainU says which image axis is the grain.
+        // bark grain must run along the branch (across it, shadow gaps wrap into rings); out.grainU names the grain axis
         if (out.grainU) out.uv.push(uvY, (j / seg) * uScale);
         else out.uv.push((j / seg) * uScale, uvY);
         out.wind.push(0);
     }
-    return n; // carry for the next ring (parallel transport)
+    return n;
 }
 
 export function buildWoodMesh(stems, params) {
@@ -318,8 +283,7 @@ export function buildWoodMesh(stems, params) {
     const stitch = (a, b) => {
         for (let j = 0; j < seg; j++) {
             const a0 = a + j, a1 = a + j + 1, b0 = b + j, b1 = b + j + 1;
-            // split each quad along its SHORTER diagonal — twisted fork quads
-            // stay well-shaped instead of creasing into a bowtie
+            // the SHORTER diagonal: twisted fork quads crease into a bowtie otherwise
             if (dsq(a1, b0) <= dsq(a0, b1)) out.idx.push(a0, b0, a1, a1, b0, b1);
             else out.idx.push(a0, b0, b1, a0, b1, a1);
         }
@@ -327,14 +291,12 @@ export function buildWoodMesh(stems, params) {
 
     function emitStem(stem, refDir0, vY0, tan0 = null) {
         const { tangents } = framesFor(stem.points);
-        // A CONTINUATION child shares the parent's END tangent for its first
-        // ring so the rings are bit-identical and weld without a shading crease.
+        // a CONTINUATION child's first ring uses the parent's END tangent: bit-identical rings, no shading crease
         if (tan0) tangents[0] = tan0.clone();
         let ref = refDir0.clone();
         let vY = vY0;
         const rings = [];
-        // U wrap from a radius ABOVE the base flare; square texels (V advances
-        // by the same world tile as U) so bark furrows keep constant aspect.
+        // U wrap from a radius ABOVE the flare; square texels, so bark furrows keep constant aspect
         const refIdx = Math.min(stem.radii.length - 1, Math.floor(stem.radii.length * 0.5));
         const circRef = 2 * Math.PI * stem.radii[refIdx];
         const wraps = circRef / p.tileWorldSize;
@@ -355,10 +317,7 @@ export function buildWoodMesh(stems, params) {
             const childFirst = emitStem(child, ref, vY, isContinuation ? lastTan : null);
             stitch(lastBase, childFirst.first);
         }
-        // Cone cap: ONE degenerate apex ring (every vertex at the tip point,
-        // each keeping its own U — standard pole UV handling) closes the tube
-        // with radialSegs triangles. A shrub twig ends in a point inside its
-        // card assembly; dome rings on hundreds of terminals were pure waste.
+        // cone cap: one degenerate apex ring (each vertex keeps its own U) — twig tips end inside the card assembly
         if (stem.children.length === 0) {
             const capR = stem.radii[stem.radii.length - 1];
             const capC = stem.points[stem.points.length - 1];
@@ -390,16 +349,13 @@ export function buildWoodMesh(stems, params) {
     g.setAttribute('position', new T3.BufferAttribute(new Float32Array(out.pos), 3));
     g.setAttribute('normal', new T3.BufferAttribute(new Float32Array(out.nrm), 3));
     g.setAttribute('uv', new T3.BufferAttribute(new Float32Array(out.uv), 2));
-    // fork-continuous wind weight → grass2's aH height factor; ×0.3 keeps wood
-    // stiffer than foliage (matches the retired taperedTube convention) and
-    // card bases pick up the same value at their anchors for weld-tight motion
+    // wind weight → aH; ×0.3 keeps wood stiffer than foliage; card bases pick it up at their anchors
     const aH = new Float32Array(out.wind.length);
     for (let i = 0; i < out.wind.length; i++) aH[i] = out.wind[i] * 0.3;
     g.setAttribute('aH', new T3.BufferAttribute(aH, 1));
     g.setIndex(out.idx);
     g.computeVertexNormals();
-    // Weld SHADING normals across coincident positions (fork joints, U-wrap
-    // seam) so computeVertexNormals' hard edges don't read as seams.
+    // weld SHADING normals across coincident positions (fork joints, U-wrap seam)
     {
         const pos = g.attributes.position.array, nrm = g.attributes.normal.array;
         const buckets = new Map();
@@ -437,9 +393,7 @@ const CARD_DEFAULTS = {
     clusterQuads: 2,       // crossed base-anchored planes per spray
 };
 
-// Base-anchored unit quad pair with the measured art alignment BAKED IN:
-// u-centre the painted stem, roll to lie along the branch (shrub_anchors.json).
-// Returns flat arrays; quads rotated about the length (Y) axis for volume.
+// base-anchored quad pair with the art alignment (shrub_anchors.json) BAKED IN; returns flat arrays
 function cardTemplate(quads, anchor) {
     const base = [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]];
     const uvB = [[0, 0], [1, 0], [1, 1], [0, 1]];
@@ -455,7 +409,7 @@ function cardTemplate(quads, anchor) {
             let [x, y] = base[i];
             x += du;                                 // art u-centring
             const xr = x * cr - y * sr, yr = x * sr + y * cr;   // art roll (Z)
-            pos.push(xr * ca, yr, xr * sa);          // spin quad about length axis
+            pos.push(xr * ca, yr, xr * sa);          // spin about the length axis
             nrm.push(-sa, 0, ca);
             uv.push(uvB[i][0], uvB[i][1]);
         }
@@ -467,8 +421,7 @@ function cardTemplate(quads, anchor) {
 
 export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
     const cIn = { ...CARD_DEFAULTS, ...cfgIn };
-    // Cluster sprays ride the same placement grammar as single leaves — same
-    // branch-frame anchoring, down-angle, phyllotaxy, droop — fewer, bigger cards.
+    // the single-leaf placement grammar, with fewer, bigger cards
     const c = {
         ...cIn,
         perBranch: cIn.clustersPerBranch,
@@ -490,9 +443,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
         vtx = new T3.Vector3(), nv = new T3.Vector3(), cardY = new T3.Vector3();
     let minY = Infinity, maxY = -Infinity;
 
-    // Terminals carry the full spray density; sub-terminal parents (shrubs are
-    // leafy through the middle, not pom-poms on sticks) take a fraction of it,
-    // slightly smaller — same grammar, same anchoring.
+    // sub-terminal parents take a fraction of the density, so shrubs are leafy through the middle, not pom-poms
     const jobs = [{ list: terminalStems, per: c.perBranch, sizeMul: 1 }];
     const parentPer = Math.round(c.perBranch * (cIn.parentSprays ?? 0));
     if (parentStems?.length && parentPer > 0) {
@@ -520,7 +471,6 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
             q1.setFromAxisAngle(X, down);
             q.copy(qFrame).multiply(q2).multiply(q1);
 
-            // gravity droop: sag the spray toward the ground
             if (c.droop > 0) {
                 n.set(0, 1, 0).applyQuaternion(q);
                 droopAxis.crossVectors(n, DOWN);
@@ -532,9 +482,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
             }
 
             const s = c.size * job.sizeMul * (1 - c.taper * frac) * (1 + rng.vary(0, c.sizeVar));
-            // the sink consumes the sheet's transparent margin below the art
-            // (plus a hair) along the card's own growth axis — visible art
-            // STARTS inside the wood, never hovering off the branch
+            // sink the transparent margin (plus a hair) into the wood, so art never hovers off the branch
             cardY.set(0, 1, 0).applyQuaternion(q);
             const org = pA.clone().addScaledVector(cardY, -(vmin * s + 0.015));
 
@@ -546,7 +494,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
                 pos.push(vtx.x, vtx.y, vtx.z);
                 nrm.push(nv.x, nv.y, nv.z);
                 uv.push(tpl.uv[v * 2], tpl.uv[v * 2 + 1]);
-                // base = the wood's aH at the anchor (weld-tight motion), tip flutters more
+                // base = the wood's aH at the anchor; tip flutters more
                 const tLocal = Math.max(0, Math.min(1, tpl.pos[v * 3 + 1]));
                 aH.push(wAnchor * 0.3 + tLocal * 0.45);
                 minY = Math.min(minY, vtx.y); maxY = Math.max(maxY, vtx.y);
@@ -557,9 +505,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
     }
     if (!pos.length) return null;
 
-    // Bent vertex normals: every foliage-card normal points outward from the
-    // canopy centre (pure spherical) so the whole crown shades as one soft
-    // volume — no per-card lighting disagreement, no crosshatch.
+    // card normals point out from the canopy centre, so the crown shades as one volume (no crosshatch)
     const cy = minY + (maxY - minY) * 0.45;
     const bent = new T3.Vector3();
     for (let v = 0; v < pos.length / 3; v++) {
@@ -578,12 +524,9 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
     return g;
 }
 
-// ── species presets (tuned in the SeedThree shrub dive, 2026-07-29) ──────────
+// ── species presets ──────────────────────────────────────────────────────────
 export const SHRUB_GEN = {
-    // The wood is a LOWPOLY armature that stops where the card takes over —
-    // each card is a WHOLE painted branch assembly (twig + leaves + blooms),
-    // so the skeleton grows one generation less and the art carries the
-    // terminal branching. Big cards, few of them.
+    // each card is a whole painted branch assembly, so the skeleton grows one generation less
     creosote: {
         // open wiry vase: multi-stem root crown, low V-forks, no leader
         params: {
@@ -597,9 +540,7 @@ export const SHRUB_GEN = {
             barkGrainU: true,   // twig-pile tile: grain along image X
         },
         foliage: {
-            // reference (Furnace Creek): foliage SLEEVES the outer third of
-            // each wand — dense sprigs along the terminal runs, real sky gaps
-            // between branch systems. Not a uniform fuzz ball.
+            // foliage SLEEVES the outer third of each wand, with sky gaps between branch systems
             clustersPerBranch: 8, clusterSize: 0.58, clusterSizeVar: 0.35,
             clusterQuads: 2, downAngle: 24, downAngleV: 12, droop: 14,
             startFrac: 0.22, parentSprays: 0.5,
@@ -643,14 +584,14 @@ export const SHRUB_GEN = {
     },
 };
 
-// One plant → { leaf, stem } merged geometries ready for grass2's instancing.
+// one plant → { leaf, stem } merged geometries
 export function buildShrubGeometry(name, seed, anchor) {
     const preset = SHRUB_GEN[name];
     if (!preset) throw new Error(`[shrub_gen] unknown shrub '${name}' — have: ${Object.keys(SHRUB_GEN).join(', ')}`);
     const rng = new Rng(`${name}:${seed}`);
     const params = {
         ...preset.params,
-        // crown-ball radius for crown-vs-crown repel — sprays get room
+        // crown-ball radius for crown-vs-crown repel
         tipClearance: (preset.foliage.clusterSize ?? 0.5) * 0.9,
     };
     const { stems, terminalStems } = generateShrubSkeleton(params, rng);

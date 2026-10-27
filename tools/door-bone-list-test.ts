@@ -9,8 +9,10 @@
 // flight act was refused for a skeleton the body has, and fold_wings said it
 // had no wings.
 
+import { noWorldUrl } from './no-world.ts';
 import { WorldAgent } from '../mcpl/agent.ts';
 import { devFlightProvider } from '../shared/flightcap.js';
+import { rigBonesFor, bodyHeightFor } from '../mcpl/rigbones.ts';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -36,7 +38,7 @@ let fetches = 0;
 (globalThis as any).fetch = async () => { fetches++; return serve(); };
 const DOWN = async () => new Response('down', { status: 503 });
 
-const ag: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 ag.avatar = 'mythos-wings.vrm';
 ag.myRights = { role: 'builder', fly: true };
 const realWarn = console.warn; const warned: string[] = [];
@@ -63,7 +65,7 @@ await ag.loadBodyBones();
 check('a successful read is kept: the next act reads no model', fetches === before, `${fetches - before} more`);
 
 console.log('\nA BODY THAT REALLY HAS NO BONES');
-const bare: any = new WorldAgent({ name: 'statue', world: 'bone-bench' });
+const bare: any = new WorldAgent({ url: noWorldUrl(), name: 'statue', world: 'bone-bench' });
 bare.avatar = 'statue.vrm';
 bare.myRights = { role: 'builder', fly: true };
 serve = async () => new Response(glb([]));
@@ -74,7 +76,7 @@ r = await bare.foldWings(true);
 check('fold_wings on a body read as empty says it has no wings', text(r) === 'this body has no animatable wings to fold', text(r));
 
 console.log('\nA FOLDED BODY CAN ALWAYS UNFOLD');
-const vigil: any = new WorldAgent({ name: 'vigil', world: 'bone-bench' });
+const vigil: any = new WorldAgent({ url: noWorldUrl(), name: 'vigil', world: 'bone-bench' });
 vigil.avatar = 'vigil.vrm';
 vigil.wingsFolded = true;   // folded before its model became unreadable
 serve = DOWN;
@@ -83,7 +85,7 @@ check('unfold_wings releases a folded posture while the bones are unknown',
   vigil.wingsFolded === false && /^folded-wing posture released — this body's bones aren't known/.test(text(r)), text(r));
 
 console.log('\nA BENCH RIG ISN\'T THE WORN BODY');
-const bench: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const bench: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 bench.avatar = 'unread.vrm';
 bench.flightCap = devFlightProvider({ allow: ['mythos'], bones: WINGED });
 r = await bench.takeOff();
@@ -91,7 +93,7 @@ check("a bench provider doesn't fly an unread body on its constructor's rig",
   !/took off/.test(text(r)) && /bones aren't known/.test(text(r)), text(r));
 
 console.log('\nAN AVATAR CHANGE');
-const worn: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const worn: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 worn.avatar = 'mythos-wings.vrm';
 worn.myRights = { role: 'builder', fly: true };
 serve = async () => new Response(glb(WINGED));
@@ -112,7 +114,7 @@ await late;
 check("a read that finishes after a swap isn't kept as the new body's bones", worn.bodyBoneNames === null);
 
 console.log('\nTWO READS AT ONCE');
-const two: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const two: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 two.avatar = 'mythos-wings.vrm';
 let failLate: () => void = () => {};
 serve = () => new Promise<Response>((done) => { failLate = () => done(new Response('down', { status: 503 })); });
@@ -123,6 +125,40 @@ failLate();
 await slow;
 check("a failed read doesn't clear the list another read just stored",
   Array.isArray(two.bodyBoneNames) && two.bodyBoneNames.length === WINGED.length);
+
+console.log('\nEVERY READER OF A BODY FILE: a failed read is never remembered, a good one is');
+{
+  // one humanoid body all three read: loadBodyBones its node names, rigBonesFor its bones, bodyHeightFor its stature
+  const humanoid = (magic = 0x46546c67) => {
+    const json = new TextEncoder().encode(JSON.stringify({ asset: { version: '2.0' }, scenes: [{ nodes: [0] }],
+      nodes: [{ name: 'Hips', translation: [0, 0.9, 0], children: [1] }, { name: 'Head', translation: [0, 0.47, 0] }],
+      extensionsUsed: ['VRMC_vrm'], extensions: { VRMC_vrm: { specVersion: '1.0', humanoid: { humanBones: { hips: { node: 0 }, head: { node: 1 } } } } } }));
+    const out = new Uint8Array(20 + json.length), dv = new DataView(out.buffer);
+    dv.setUint32(0, magic, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+    dv.setUint32(12, json.length, true); dv.setUint32(16, 0x4e4f534a, true); out.set(json, 20);
+    return out.buffer;
+  };
+  let n = 0; const bodies = new Map<string, any>();
+  const READERS: Record<string, (path: string) => Promise<unknown>> = {
+    loadBodyBones: (path) => { let a: any = bodies.get(path); if (!a) bodies.set(path, a = new WorldAgent({ url: noWorldUrl(), name: 'reader', world: 'bone-bench' })); a.avatar = path; return a.loadBodyBones(); },
+    rigBonesFor: (path) => rigBonesFor('http://lib', path),
+    bodyHeightFor: (path) => bodyHeightFor('http://lib', path),
+  };
+  const good = async () => new Response(humanoid());
+  for (const [reader, read] of Object.entries(READERS)) {
+    const path = () => `reader-${reader}-${++n}.vrm`;
+    let p = path(); serve = DOWN;
+    const failed = await read(p); serve = good;
+    const then = await read(p);
+    check(`${reader}: a failed read gives none, and the next read of the same file reads it`, failed == null && then != null, JSON.stringify({ failed, then }));
+    p = path(); serve = good; const first = await read(p); serve = DOWN; const before = fetches;
+    const again = await read(p);
+    check(`${reader}: a good read is remembered: the next asks nothing of the server`, first != null && JSON.stringify(again) === JSON.stringify(first) && fetches === before, `${fetches - before} fetches`);
+    // loadBodyBones never checks the glTF magic (agent.ts): a bad-magic row for it would be red today
+    if (reader !== 'loadBodyBones') { p = path(); serve = async () => new Response(humanoid(0x12345678));
+      check(`${reader}: a file whose header isn't glTF's gives none`, (await read(p)) == null); }
+  }
+}
 
 console.warn = realWarn;
 console.log(`\n${pass} passed, ${fail} failed`);

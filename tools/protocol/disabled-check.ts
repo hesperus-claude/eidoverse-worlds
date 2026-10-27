@@ -4,17 +4,13 @@
 // grabbed, punted or used, nor what hangs under it; it has no body in the engine; nothing stands on it; switched back on,
 // all of that returns. Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/disabled-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) { pass++; console.log("  ✓", name); } else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
-const root = scratch("disabled"); const clock = labClock();
-const call = (w, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, w), a, v, args); };
+import { simFold } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
+import { suite } from "./suite.ts";
+const { ok, done } = suite("disabled-check", { cap: Infinity });
+const { root, clock, call } = labWorld("disabled");
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
 const st = (W) => fold(openWorld(root, W).entries);
 const bodies = (W) => { const w = openWorld(root, W); const sf = simFold(w.entries, w.now()); return Object.keys({ ...(sf?.sim?.bodies ?? {}), ...(sf?.sim?.statics ?? {}) }); };
@@ -71,5 +67,4 @@ const holds = (W) => Object.keys(openWorld(root, W).presence.holds);
   const d = call(W, "vic", "drop", { id: "top" });
   ok(g.ok && s.ok && !holds(W).includes("top") && (s.notes ?? []).some((n) => n.id === "top" && n.tookFromHand) && code(d) === "not-holding",
     "D6 switching off a parent lets go of the held child (the note says so; nothing left to drop)", { g: code(g), s: code(s), notes: s.notes, held: holds(W), d: code(d) }); }
-console.log(`[disabled-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

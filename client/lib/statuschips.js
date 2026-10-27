@@ -21,6 +21,7 @@
 //
 // No imports beyond icons: the governor and capnotice post here, and this must not pull the engine in with it.
 import { rsvg } from './icons.js';
+import { bus } from './base.js';
 
 let strip = null, pop = null;
 let openId = null;
@@ -36,7 +37,7 @@ function ensure() {
   pop.setAttribute('role', 'dialog');
   document.body.append(strip, pop);
   addEventListener('resize', place);
-  addEventListener('dockmoved', place);
+  bus.on('dock-moved', place);
   // Esc folds an open popover and goes no further (preventDefault: nothing after it acts on this Esc)
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && openId) { e.preventDefault(); collapse(); } });
   // a click anywhere but the popover or its chip folds it
@@ -146,7 +147,7 @@ function place() {
     let lo = hud.left, hi = hud.right;
     for (const g of glyphs) if (g.top <= cy && g.bottom >= cy) { lo = Math.min(lo, g.left); hi = Math.max(hi, g.right); }
     // builder mode: the ∃'s row is also the editor's menu bar (editlayout.js .edit-top). The chips continue past its last
-    // menu and viewport button, never over them (review 10-07 B1: "WebGL 2" sat on Edit ▾, "reduced detail" on View ▾)
+    // menu and viewport button, never over them
     for (const b of document.querySelectorAll('.edit-top:not([hidden]) > :not(.edit-mode-label)')) {
       const r = visible(b); if (r && r.top <= cy && r.bottom >= cy) hi = Math.max(hi, r.right);
     }

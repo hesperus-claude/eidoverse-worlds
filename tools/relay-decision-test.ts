@@ -1,8 +1,8 @@
-// The seven refusal proofs (#104 amendment 1) + incarnation and consent rules
-// (amendments 2, 3), pinned headless. bun tools/relay-decision-test.ts
-import { admitParticipant, relayIdentity, parseRelayIdentity, nextIncarnation,
+// Incarnation and consent rules (#104 amendments 2, 3), pinned headless; the eight refusal branches (amendment 1) are one
+// table in tools/sfu-adapter-test.ts. bun tools/relay-decision-test.ts
+import { relayIdentity, parseRelayIdentity, nextIncarnation,
   subscriptionActive, applyConsentUpdate,
-  type RelayClaims, type LiveLegState } from "../server/relaydecision.ts";
+} from "../server/relaydecision.ts";
 
 let pass = 0, fail = 0;
 const t = (name: string, got: unknown, want: unknown) => {
@@ -11,37 +11,7 @@ const t = (name: string, got: unknown, want: unknown) => {
   console.log(`  ${okv ? "✅" : "❌"} ${name}${okv ? "" : ` — got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`);
 };
 
-const claims = (over: Partial<RelayClaims> = {}): RelayClaims => ({
-  world: "staging", id: "hesperus", primaryGen: 412, mediaGen: 413,
-  incarnation: "i7-abc", nonce: "n1", ...over });
-const live = (over: Partial<LiveLegState> = {}): LiveLegState => ({
-  world: "staging", incarnation: "i7-abc", primaryGen: 412, mediaGen: 413,
-  usedNonces: new Set(), ...over });
-
-// ── the seven refusals ──────────────────────────────────────────────────────
-t("valid credential admits", admitParticipant(claims(), live()), { admit: true });
-t("1 wrong world refused", admitParticipant(claims({ world: "other" }), live()),
-  { admit: false, reason: "wrong world" });
-t("2 wrong identity (no leg issued for id) refused",
-  admitParticipant(claims(), live({ mediaGen: undefined })),
-  { admit: false, reason: "no relay leg issued" });
-t("3 retired primary generation refused",
-  admitParticipant(claims({ primaryGen: 411 }), live()),
-  { admit: false, reason: "retired primary generation" });
-t("3b primary gone entirely refused",
-  admitParticipant(claims(), live({ primaryGen: undefined })),
-  { admit: false, reason: "no living primary" });
-t("4 retired media generation refused",
-  admitParticipant(claims({ mediaGen: 409 }), live()),
-  { admit: false, reason: "retired media generation" });
-t("5 prior relay incarnation refused",
-  admitParticipant(claims({ incarnation: "i6-zzz" }), live()),
-  { admit: false, reason: "prior relay incarnation" });
-t("6 removed-participant replay refused (nonce single-use)",
-  admitParticipant(claims(), live({ usedNonces: new Set(["n1"]) })),
-  { admit: false, reason: "credential replay" });
-// 7 expired: enforced at TokenVerifier(tolerance=0) upstream — the decision
-// layer never sees an expired credential; pinned by the killq-a receipt.
+// the eight refusal branches: one table through admitParticipant AND admitSfuLeg in tools/sfu-adapter-test.ts
 
 // ── identity carries the generation ─────────────────────────────────────────
 t("relayIdentity embeds gen", relayIdentity("hesperus", 413), "hesperus#g413");

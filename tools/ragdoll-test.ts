@@ -1,22 +1,8 @@
-// ragdoll sim test — the physics, run headless, no browser and no renderer.
-//
+// ragdoll sim test: the physics, headless (no browser, no renderer). core.js builds a WebGPURenderer at import, so a
+// loader plugin swaps in a stub exporting what ragdoll's cone uses (THREE, terrain's scene/ground/grid). Runs the SHIPPED
+// VRM RIGS as well as a synthetic humanoid: the synthetic cases isolate the solver, but the rigs are what the sim is most
+// sensitive to (a synthetic-only suite can pass while every real rig is broken).
 //   bun tools/ragdoll-test.ts
-//
-// core.js builds a WebGPURenderer at import time, so it cannot load under Bun;
-// a loader plugin swaps it for a stub exporting just what ragdoll's dependency
-// cone actually uses (THREE, and terrain's scene/ground/grid).
-//
-// This suite runs against the SHIPPED VRM RIGS, not only against an idealised
-// skeleton. That is the whole point of it. The previous version tested one
-// synthetic T-pose humanoid on the reasoning that "the invariants under test
-// live in the particle sim, not in any particular VRM" — and it passed 18/18
-// while every real rig in the fleet was broken, because the rigs are the
-// variable the sim is most sensitive to. Measured on the shipped avatars at
-// that point: 100% bone-shaft interpenetration on all 14, up to 47% bone
-// stretch, elbows and knees with no hyperextension limit at all, and a fall
-// that landed 10 metres apart depending on the framerate.
-//
-// So: keep the synthetic cases (they isolate the solver), and add the fleet.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -86,20 +72,14 @@ check('every shipped rig loads with a humanoid and hips',
   for (const rig of FLEET) {
     const { rd, steps } = run(makeAvatar(rig.P), toppleLean());
 
-    // The deadline is the designed safety net for a body that finds a
-    // marginally stable rest — it must never stream presence forever. What
-    // actually matters is that the pose it CAPTURES is a resting pose, not a
-    // mid-flail one. meebit uses it: a blocky rig with very wide hips whose
-    // legs splay when it lies down, and this model has no hip-rotation DOF, so
-    // the splay lands on the knee's sideways stop and the two trade about a
-    // millimetre a step forever. Visually motionless; numerically not zero.
+    // the deadline is the safety net for a marginally stable rest (never stream presence forever): what matters is that
+    // the pose it CAPTURES is a resting one (a wide-hipped rig can trade a millimetre a step at the knee stop forever)
     if (steps >= DEADLINE - 2) {
       deadlined.push(`${rig.name}(v=${rd.maxV.toFixed(3)})`);
       if (rd.maxV > 0.1) bad.settle.push(`${rig.name}(FLAILING at capture, v=${rd.maxV.toFixed(3)})`);
     }
 
-    // bone SHAFTS must not pass through each other — the failure that made a
-    // limb vanish into the torso on every rig when only joints collided
+    // bone SHAFTS must not pass through each other, or a limb vanishes into the torso when only joints collide
     const ov = worstOverlap(rd);
     if (ov.frac > 0.35) bad.overlap.push(`${rig.name}(${(ov.frac * 100).toFixed(0)}% ${ov.name})`);
 
@@ -108,9 +88,8 @@ check('every shipped rig loads with a humanoid and hips',
 
     if (Object.keys(rd.p).some((j: string) => rd.p[j].y < -0.01)) bad.under.push(rig.name);
 
-    // knees and elbows must not fold the wrong way. The old unsigned bend
-    // table could not express this at all: with a rest angle near 0 its
-    // "no hyperextension" bound resolved to 0° on all 14 rigs.
+    // knees and elbows must not fold the wrong way (an unsigned bend table can't express this: with a rest angle near 0
+    // its "no hyperextension" bound is 0°)
     for (const H of rd.hinge) {
       const u = rd.p[H.b].clone().sub(rd.p[H.a]).normalize();
       const v = rd.p[H.c].clone().sub(rd.p[H.b]).normalize();
@@ -152,9 +131,8 @@ check('every shipped rig loads with a humanoid and hips',
       if (d > worst) { worst = d; who = rig.name; }
     }
   }
-  // Before the fixed timestep this was metres, not centimetres: the Verlet
-  // inertia term is a position delta, so raw frame time made gravity and
-  // damping per-second both functions of the display rate.
+  // the fixed timestep is why: the Verlet inertia term is a position delta, so raw frame time makes gravity and damping
+  // functions of the display rate (metres, not centimetres)
   check('framerate does not change where a body lands (≤5cm)', worst <= 0.05,
     `worst ${(worst * 100).toFixed(1)}cm on ${who}`);
 }
@@ -165,10 +143,8 @@ check('every shipped rig loads with a humanoid and hips',
   for (const rig of FLEET) {
     const still = run(makeAvatar(rig.P)).rd;
     const mid = run(makeAvatar(rig.P, { stride: 1 })).rd;
-    // the LIMITS are what must match: they are measured off the neutral pose,
-    // so a body that fell mid-walk must resolve the same ranges as one that
-    // fell standing. (Where it lands may legitimately differ — it started in a
-    // different shape.)
+    // the LIMITS must match (measured off the neutral pose): a body that fell mid-walk resolves the same ranges as one
+    // that fell standing, though where it lands may differ
     for (let i = 0; i < still.flex.length; i++) {
       const d = Math.abs(still.flex[i].max - mid.flex[i].max);
       if (d > worst) { worst = d; who = `${rig.name}:${still.flex[i].b}`; }
@@ -184,15 +160,9 @@ check('every shipped rig loads with a humanoid and hips',
 
 // ---- handing a body between machines must be lossless
 {
-  // A streamed POSE is where the bones point. It is not where the particles
-  // are, and it says nothing about what they were doing — so a receiver
-  // rebuilding a sim from a pose invents the velocity, and invents zero. Every
-  // seam in the drag protocol did this: grab, release, nail. snapshot() is the
-  // sim itself, and a body handed over with it CONTINUES.
-  // ON EVERY RIG: the one-rig version of this check sat on whichever rig
-  // sorted first, and that rig barely moved its arms — so a handover that
-  // rebuilt the hinge axes from rest (12–22cm of hand drift after ONE step on
-  // 41 of 44 prod rigs, §24t-8) passed for weeks.
+  // a streamed POSE has no velocity, so a sim rebuilt from one invents zero; snapshot() is the sim itself, and a body
+  // handed over with it CONTINUES. On EVERY rig: one rig may barely move its arms and hide a handover that rebuilds
+  // the hinge axes from rest
   const far = (a: any, b: any) => Math.max(...Object.keys(a.p).map(
     (j: string) => a.p[j].distanceTo(b.p[j])));
   let worstState = 0, worstWho = '', fromBonesMin = Infinity;
@@ -225,14 +195,8 @@ check('every shipped rig loads with a humanoid and hips',
 
 // ---- the rest snapshot has to be taken where the root IS
 {
-  // Everything read out of `rest` is a difference — bone lengths, cone axes —
-  // except hipsOffset, which is the pelvis's height above the ROOT. So a
-  // snapshot captured at one root height and used at another is wrong by
-  // exactly that difference, and the rendered body sits that far from where
-  // the sim has it. The headless agent path did this: it cached the snapshot
-  // once with the root at y=0 and reused it for drag releases, which begin
-  // wherever the hand let go. A plain knock-over starts at zero and never
-  // noticed; a body dropped from a metre up was a metre out.
+  // everything in `rest` is a difference except hipsOffset (the pelvis above the ROOT), so a snapshot taken at one
+  // root height and used at another is off by exactly that: a body dropped from a metre up must not land a metre out
   const rig = FLEET[0];
   const lifted = (stale: boolean) => {
     const av = makeAvatar(rig.P, { realParent: rig.realParent });
@@ -252,10 +216,8 @@ check('every shipped rig loads with a humanoid and hips',
 
 // ---- a sim built mid-motion must inherit that motion
 {
-  // Verlet keeps velocity in p - prev, and a fresh sim sets prev = p — a body
-  // at a dead stop. Everything that RE-CREATES a sim (letting go of a dragged
-  // body, pulling a nail) therefore threw the momentum away: a body swung at
-  // 3 m/s was dropped where it stood and settled on the spot.
+  // Verlet keeps velocity in p - prev and a fresh sim sets prev = p, so whatever RE-CREATES a sim (a drag release, a
+  // pulled nail) must carry the momentum over
   const rig = FLEET[0];
   const fly = new THREE.Vector3(3, 1, 0);
   const seed = new Map<string, any>();
@@ -277,27 +239,16 @@ check('every shipped rig loads with a humanoid and hips',
   const thrown = runWith(seed);
   check('a body handed 3 m/s actually carries it', thrown.travelled > dead.travelled + 0.5,
     `travelled ${thrown.travelled.toFixed(2)}m vs ${dead.travelled.toFixed(2)}m at rest`);
-  // not "takes longer to settle" — a body thrown sideways can land and stop
-  // sooner than one dropped in place. The thing that matters is that it MOVED.
+  // not "takes longer to settle" (a body thrown sideways can stop sooner than one dropped in place): what matters is that it MOVED
   check('...and carries it as real travel, not a dead drop',
     thrown.travelled > 1.0, `only ${thrown.travelled.toFixed(2)}m`);
 }
 
 // ---- limbs must not TWIST
 {
-  // The particle sim gives directions, never roll, so roll comes from however
-  // the drive derives a frame. Deriving it against the WORLD drifts — parallel
-  // transport has holonomy, so a limb swung around a loop returns rotated by
-  // the solid angle it enclosed — and a tumbling arm encloses a lot of sphere.
-  // Deriving it against the PARENT cannot drift: it is a function of current
-  // state, not of the path. Measured at settle, mean limb twist went 97° -> 0°.
-  //
-  // The measurement has to be the bone's LOCAL rotation — its rotation inside
-  // its parent's frame, which is exactly what the streamed pose stores —
-  // decomposed about the bone's own rest axis. Measuring against the bone's
-  // rest WORLD orientation instead charges the body's whole tumble as twist,
-  // which reads as 180° on a body that has merely lain down, and sent me
-  // chasing a number that was mostly the floor.
+  // roll comes from how the drive derives a frame: against the WORLD it drifts (parallel transport has holonomy),
+  // against the PARENT it can't. Twist is measured on the bone's LOCAL rotation about its rest axis, since a world-frame
+  // measure charges the whole tumble as twist
   const twistOf = (q: any, axis: any) => {
     const along = new THREE.Vector3(q.x, q.y, q.z).dot(axis);
     const t = new THREE.Quaternion(axis.x * along, axis.y * along, axis.z * along, q.w);
@@ -314,11 +265,8 @@ check('every shipped rig loads with a humanoid and hips',
     let steps = 0, pose: any = null;
     while (!rd.done && steps < 900) { const q = rd.step(1 / 60); if (q) pose = q; steps++; }
     for (const d of rd.drive) {
-      // the pelvis is excluded on purpose: it has no parent BONE, so its local
-      // rotation is the body's own orientation and "twist" there is the tumble.
-      // Keyed on the NAME, not on a field the new drive happens to add — keyed
-      // on the field, this test skipped every bone under the old drive and
-      // passed vacuously, which is exactly the failure it exists to catch.
+      // the pelvis is excluded (no parent BONE: its "twist" is the tumble), keyed on the NAME, never on a field a drive
+      // may not add, or the test could skip every bone and pass vacuously
       if (d.bone === 'hips') continue;
       const q = pose?.[d.bone]; if (!q) continue;
       const axis = rd.nodes[d.child].position.clone();
@@ -335,13 +283,8 @@ check('every shipped rig loads with a humanoid and hips',
 
 // ---- the legs must not kick out from under the body
 {
-  // A body that drops straight down has nowhere to put its leg length: both
-  // ends of a 0.8m leg reach the floor, the knee folds until it jams on its
-  // stop under the torso's whole weight, and then unwinds. Measured before the
-  // fix, on the production path: 12.9 m/s of foot AFTER the body had already
-  // landed. Two things hold it down now — joint limits stop inelastically
-  // instead of storing the energy, and goLimp topples the body rather than
-  // pancaking it.
+  // a body dropped straight down jams its knee on the stop under the torso's weight and unwinds: joint limits stop
+  // inelastically and goLimp topples rather than pancakes, so no foot may move fast after landing
   const bad: string[] = [];
   let worst = 0, who = '';
   for (const rig of FLEET) {
@@ -361,10 +304,8 @@ check('every shipped rig loads with a humanoid and hips',
   const small = FLEET.filter((r: any) => !r.P.upperChest);
   check('the fleet really does contain both rig families',
     big.length > 0 && small.length > 0, `${big.length} with upperChest, ${small.length} without`);
-  // A rig with upperChest+shoulder has TWO undriven bones between chest and
-  // upperArm. goLimp parks them (avatar.setLimp) so the span is rigid, which
-  // is what the sim's chest->upperArm distance constraint assumes. If that
-  // ever regresses, the arm span stops matching its rest length.
+  // upperChest+shoulder are TWO undriven bones between chest and upperArm: goLimp parks them (avatar.setLimp), as the
+  // sim's chest->upperArm distance constraint assumes, so the span keeps its rest length
   let worst = 0, who = '';
   for (const rig of big) {
     const { rd } = run(makeAvatar(rig.P));
@@ -457,7 +398,7 @@ console.log('\nthe solver:');
 }
 
 // ---------------------------------------------------------------------------
-// the ragdoll against actual props — the seam where this went wrong
+// the ragdoll against actual props
 // ---------------------------------------------------------------------------
 console.log('\nbodies and furniture:');
 {
@@ -487,10 +428,8 @@ console.log('\nbodies and furniture:');
     check('...and the body still settles', rd.done);
   }
 
-  // An overhang a standing body fits under — a mezzanine, a bridge, a bunk.
-  // Before resolveColliders read box.min.y this was impossible: the slab was
-  // an infinite column down to the world floor, so every joint of a body
-  // collapsing beneath it was ejected sideways out of the footprint.
+  // an overhang a standing body fits under (a mezzanine, a bunk): resolveColliders reads box.min.y, so the slab is not
+  // a column down to the floor
   COL.clearColliders();
   prop('overhang', 3, 0.2, 3, 1.6, 0);
   {
@@ -507,15 +446,13 @@ console.log('\nbodies and furniture:');
 }
 
 // ---------------------------------------------------------------------------
-// impulse: shoves that land on a body already in flight, or already down.
-// This is the wire path — puppet {lean} and the force verb both end here.
+// impulse: shoves that land on a body already in flight, or already down; the wire path (puppet {lean} and the force
+// verb both end here)
 // ---------------------------------------------------------------------------
 console.log('\nimpulse (the wire-borne shove):');
 {
-  // Mid-tumble: a sideways shove half a second into every rig's fall. The
-  // invariants must hold THROUGH the interruption — everything still comes to
-  // rest, keeps its bone lengths, stays above ground, captures finite — and
-  // the shove must actually MOVE the body the way it points.
+  // a sideways shove half a second into every rig's fall: the invariants hold THROUGH it (rest, bone lengths, above
+  // ground, finite) and the shove MOVES the body the way it points
   const bad: Record<string, string[]> = { rest: [], stretch: [], under: [], finite: [], moved: [], creep: [] };
   for (const rig of FLEET) {
     const av = makeAvatar(rig.P);
@@ -534,10 +471,7 @@ console.log('\nimpulse (the wire-borne shove):');
     if (Object.keys(rd.p).some((j: string) => rd.p[j].y < -0.01)) bad.under.push(rig.name);
     const q = Object.values(rd.finalPose ?? {});
     if (!q.length || !q.every((a: any) => a.length === 4 && a.every(Number.isFinite))) bad.finite.push(rig.name);
-    // the SHOVE is judged a second after it lands — that is what "goes the way
-    // it was shoved" means; where the body creeps to afterwards is the next
-    // check's business, and folding the two into one number hid the creep
-    // behind a shove that had in fact landed (+37cm) — mythos-2, §24t-8
+    // the SHOVE is judged a second after it lands; the creep afterwards is the next check's (one number would hide it)
     const dx = (Number.isFinite(x60) ? x60 : rd.p.hips.x) - x0;
     if (dx < 0.05) bad.moved.push(`${rig.name}(Δx=${dx.toFixed(2)})`);
     // a body that is down should stay put: hips travel from 3s to capture
@@ -553,13 +487,11 @@ console.log('\nimpulse (the wire-borne shove):');
   check('...and the body goes the way it was shoved (≥5cm a second after)', none('moved'), bad.moved.join(' '));
   check('...and a body that is down does not creep (≤5cm from 3s to capture)', none('creep'), bad.creep.join(' '));
 
-  // The deadline restarts with the motion: a shove at 7.9s of an 8s window
-  // must not capture a body still in the air. impulse() grants the new motion
-  // the same full window the original fall had.
+  // the deadline restarts with the motion: a shove at 7.9s of an 8s window must not capture a body still in the air
+  // (impulse() grants the new motion the original fall's full window)
   {
     const rd: any = new Ragdoll(synth(), toppleLean(), null);
-    // shove while the tumble is still LIVE — a captured sim ignores impulses
-    // by design (main.js starts a fresh one instead: the corpse-kick below)
+    // shove while the tumble is still LIVE: a captured sim ignores impulses by design (main.js starts a fresh one: the corpse-kick below)
     for (let i = 0; i < 45 && !rd.done; i++) rd.step(1 / 60);
     const before = rd.elapsed;
     rd.impulse(new THREE.Vector3(1, 0, 0));
@@ -568,8 +500,7 @@ console.log('\nimpulse (the wire-borne shove):');
       `done=${rd.done} elapsed ${before.toFixed(2)} -> ${rd.elapsed}`);
   }
 
-  // The sim caps what it will accept: a hostile magnitude must not shatter
-  // the body, whatever the trust boundary upstream let through.
+  // the sim caps what it accepts: a hostile magnitude must not shatter the body, whatever the trust boundary let through
   {
     const av = synth();
     const rd: any = new Ragdoll(av, null, av.restBonePositions());
@@ -582,9 +513,8 @@ console.log('\nimpulse (the wire-borne shove):');
       `done=${rd.done} stretch=${(stretchOf(rd) * 100).toFixed(0)}%`);
   }
 
-  // Kicking the corpse: a settled body shoved again starts a FRESH sim from
-  // its lying pose (main.js re-limp path — downed, ragdoll already handed
-  // off). It must tumble again, move, and come back to rest.
+  // kicking the corpse: a settled body shoved again starts a FRESH sim from its lying pose (main.js re-limp path); it must
+  // tumble again, move, and come back to rest
   {
     const av = synth();
     const first = run(av, toppleLean());
@@ -605,9 +535,8 @@ console.log('\nimpulse (the wire-borne shove):');
 // ---------------------------------------------------------------------------
 console.log('\npin (the grabbed joint):');
 {
-  // hang: pin a hand above standing height — the body must dangle from it,
-  // the pinned joint must BE at the target, and the sim must neither settle
-  // nor deadline while held (a pin is ongoing input).
+  // hang: pin a hand above standing height: the body dangles, the pinned joint IS at the target, and the sim neither
+  // settles nor deadlines while held (a pin is ongoing input)
   const av = synth();
   const rd: any = new Ragdoll(av, null, av.restBonePositions());
   const hold = new THREE.Vector3(0.3, 3.0, 0.2);   // well above standing: the lift must RAISE the root
@@ -619,16 +548,14 @@ console.log('\npin (the grabbed joint):');
     rd.p.hips.y < rd.p.leftHand.y, `hips ${rd.p.hips.y.toFixed(2)} vs hand ${rd.p.leftHand.y.toFixed(2)}`);
   check('a held body never captures — no settle, no deadline',
     !rd.done && rd.elapsed < 1, `done=${rd.done} elapsed=${rd.elapsed.toFixed(1)}`);
-  // The RENDERED body must rise with the sim: the root's falling-only ceiling
-  // (Math.min against rootStartY) has to lift while pinned, or the particles
-  // go up and the mesh stays floor-bound — "it lifts a little, then something
-  // keeps them constrained to the ground" (antra, live, 2026-08-02).
+  // the RENDERED body must rise with the sim: the root's falling-only ceiling (Math.min against rootStartY) lifts while
+  // pinned, or the mesh stays floor-bound
   check('...and the rendered root rises with the carried body',
     av.root.position.y > 0.35, `root.y=${av.root.position.y.toFixed(2)}`);
   check('...and its bone lengths survive the hang (≤10%)',
     stretchOf(rd) < 0.10, `${(stretchOf(rd) * 100).toFixed(0)}%`);
 
-  // drag: walk the pin sideways 2m — the body must come along
+  // drag: walk the pin sideways 2m; the body must come along
   const x0 = rd.p.hips.x;
   for (let i = 0; i < 300; i++) {
     hold.x = 0.3 + (i / 300) * 2;
@@ -638,7 +565,7 @@ console.log('\npin (the grabbed joint):');
   check('dragging the pin drags the body', rd.p.hips.x - x0 > 1.2,
     `Δx=${(rd.p.hips.x - x0).toFixed(2)}`);
 
-  // release: let go mid-air — the body falls and comes to rest on its own
+  // release: let go mid-air; the body falls and comes to rest on its own
   rd.setPin(null);
   let steps = 0;
   while (!rd.done && steps < 1400) { rd.step(1 / 60); steps++; }

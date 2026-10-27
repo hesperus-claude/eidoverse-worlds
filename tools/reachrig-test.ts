@@ -1,24 +1,7 @@
-/**
- * Reach-on-real-rigs test — the solver wired to the SHIPPED VRMs, headless.
- *
- *   EIDOVERSE_DIR=~/connectome-local/eidoverse-video bun tools/reachrig-test.ts
- *
- * EIDOVERSE_DIR is not optional in a worktree: without it the library rigs
- * resolve to <worktree>/../eidoverse-video and silently do not load, and the
- * suite quietly drops to the 14 optimized ones. Check the rig count it prints.
- *
- * tools/ragdoll-test.ts learned this lesson the expensive way: a synthetic
- * T-pose humanoid passed 18/18 while every real rig in the fleet was broken,
- * because the rigs are the variable the maths is most sensitive to. So the
- * geometry suite (tools/reach-test.ts) isolates the solver, and THIS one runs
- * it on all 14 bodies people actually wear.
- *
- * The check that matters is INDEPENDENT: the solver returns directions, the
- * conversion turns them into bone quaternions, and then forward kinematics
- * rebuilds the hand position FROM THOSE QUATERNIONS. If the rebuilt hand and
- * the requested target disagree, the conversion is wrong — and no amount of
- * the solver agreeing with itself would have told us.
- */
+/** Reach on the SHIPPED VRMs, headless (tools/reach-test.ts isolates the solver). The check is INDEPENDENT: forward
+ *  kinematics rebuilds the hand FROM the output quaternions and must meet the target.
+ *  EIDOVERSE_DIR is required in a worktree, or the library rigs silently don't load: check the printed rig count.
+ *    EIDOVERSE_DIR=<library checkout> bun tools/reachrig-test.ts */
 
 import { rigs, libraryRigs } from "./rig-load.mjs";
 import { solveTwoBone, chainLocalQuats, qMulq, qRot } from "../shared/reach.js";
@@ -37,7 +20,7 @@ const len = (a: number[]) => Math.hypot(a[0], a[1], a[2]);
 const nrm = (a: number[]) => mul(a, 1 / len(a));
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-/** Rebuild the hand FROM the bone quaternions — the independent witness. */
+/** Rebuild the hand FROM the bone quaternions: the independent witness. */
 function forwardK(root: number[], dRestU: number[], dRestL: number[], L1: number, L2: number,
                   q: { upper: number[]; lower: number[] }) {
   const elbow = add(root, mul(qRot(q.upper, dRestU), L1));
@@ -69,8 +52,7 @@ for (const rig of good) {
     const lim = limitsFor(U);
     const coneAxisW = nrm(fromBody(coneAxisBody(toBody(dRestU, F), lim.coneTilt ?? 0), F));
 
-    // A ring of targets around the shoulder at 70% of full extension — all
-    // comfortably reachable, so any miss is the conversion's fault.
+    // a ring of targets at 70% of full extension, all comfortably reachable: any miss is the conversion's fault
     for (let i = 0; i < 24; i++) {
       const a = (i / 24) * Math.PI * 2;
       const dir = nrm(add(add(mul(coneAxisW, 0.6), mul(F.u, Math.sin(a) * 0.5)), mul(F.f, Math.cos(a) * 0.5)));
@@ -119,10 +101,7 @@ console.log("\njoint limits actually bind on real rigs");
     const lim = limitsFor(U);
     const dRestU = nrm(sub(P[M], P[U]));
     const coneAxisW = nrm(fromBody(coneAxisBody(toBody(dRestU, F), lim.coneTilt ?? 0), F));
-    // 95% of full extension: at 80% the elbow bends and the upper bone stays
-    // legitimately inside the stop (you CAN reach behind your back), so that
-    // would be testing nothing. Near full extension the arm straightens and
-    // the shoulder must take the whole angle.
+    // 95% of full extension: nearer, the elbow bends and the upper bone stays legitimately inside the stop
     const target = add(P[U], mul(nrm(mul(F.f, -1)), (L1 + L2) * 0.95));
     const r: any = solveTwoBone({
       root: P[U], target, L1, L2, pole: sub(P[M], P[U]), fwd: F.f, coneAxis: coneAxisW,
@@ -133,8 +112,7 @@ console.log("\njoint limits actually bind on real rigs");
   check(`reaching straight out the back is limited on every rig (${bound}/${total})`, bound === total && total > 0);
 }
 {
-  // and the frontal-plane stop is REAL: no solved hand may sit further behind
-  // the body than 65°, on any rig, for any target
+  // the frontal-plane stop is REAL: no solved hand may sit further behind the body than 65°, on any rig, for any target
   let worstFwd = 1, worstCone = 1;
   for (const rig of good) {
     const P: Record<string, number[]> = {};
@@ -167,10 +145,7 @@ console.log("\njoint limits actually bind on real rigs");
 
 console.log("\nwith the torso turned (the walking case)");
 {
-  // The chest is rotated by the clip every frame. A conversion that assumes
-  // the arm's parent is at rest is correct in T-pose and wrong the moment the
-  // body turns — so drive the parent with real rotations and demand the hand
-  // still lands on target, rebuilt by FK through parent ∘ local.
+  // the clip rotates the chest every frame: drive the parent with real rotations; the hand rebuilt through parent ∘ local must land
   let worstGap2 = 0, worstLen2 = 0, worstFrame = 0, n = 0;
   let seed = 7;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
@@ -191,8 +166,7 @@ console.log("\nwith the torso turned (the walking case)");
 
     for (let i = 0; i < 40; i++) {
       const qParent = randQuat();
-      // everything the shoulder's limits are stated against is carried by the
-      // parent too — the cone turns with the torso
+      // the shoulder's limits are stated against the parent too: the cone turns with the torso
       const dRestU_live = qRot(qParent, dRestU);
       const fwdLive = qRot(qParent, F.f);
       const lim = limitsFor(U);
@@ -205,11 +179,7 @@ console.log("\nwith the torso turned (the walking case)");
         limits: { coneHalf: lim.coneHalf, behind: lim.behind, maxFlex: lim.maxFlex },
       });
       if (!r.ok) continue;
-      // makeAvatar builds its bones with identity rotations, so rest IS
-      // identity here and only the parent has moved. On a real rig the rest
-      // orientations are whatever the VRM says — orion's normalized hierarchy
-      // sits 180° from the root — which is why this argument became a record
-      // rather than a bare quaternion.
+      // makeAvatar's rest is identity, so only the parent moved; a real rig's rest is the VRM's (a VRM0 hierarchy sits 180° from the root)
       const q: any = chainLocalQuats(dRestU, dRestL, r.upper, r.lower,
         { qP: [0, 0, 0, 1], qU: [0, 0, 0, 1], qL: [0, 0, 0, 1], qPnow: qParent });
 

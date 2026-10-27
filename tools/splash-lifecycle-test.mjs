@@ -1,11 +1,8 @@
-// The splash rays worker (client/lib/boot.js) is one resource with three parts — the Worker, its window
-// resize listener, the harness handle globalThis.__raysWorker — and one owner. Review 2026-09-10 #3:
-// stopRays posted 'stop' and nulled the local only; the listener and the public handle outlived the splash,
-// and a stopRays that abandoned the worker without 'stop' passed every committed test. This drives the real
-// module under happy-dom with a recording Worker: normal finish, repeated finish, nogl, failed creation, ?rays=0.
+// The splash rays worker (client/lib/boot.js) is one resource with one owner: the Worker, its resize listener, and
+// globalThis.__raysWorker all go together, and stop must post 'stop'. Real module under happy-dom with a recording
+// Worker: normal finish, repeated finish, nogl, failed creation, ?rays=0.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-// ?rays=0 is read from location.search at module scope, so that case runs in a CHILD process registered at
-// that URL (SPLASH_RAYS0=1); happy-dom's replaceState does not rewrite location.search.
+// ?rays=0 is read at module scope and happy-dom's replaceState doesn't rewrite location.search: that case runs in a CHILD (SPLASH_RAYS0=1)
 const RAYS0 = process.env.SPLASH_RAYS0 === '1';
 GlobalRegistrator.register({ url: RAYS0 ? 'http://localhost/?rays=0' : 'http://localhost/' });
 import { plugin } from 'bun';
@@ -93,10 +90,8 @@ console.log('SPLASH — startRays twice');
   stopRays();
   check('one stop each, nothing left', stops(a) === 1 && stops(b) === 1 && resizeListeners.size === 0 && !globalThis.__raysWorker); }
 
-// antra-tess #185 B4 (exact-head rereview): the boot receipt used to be main-thread-only —
-// __raysStarted is set on the line after new Worker(), and constructing a Worker whose module
-// fails to parse does NOT throw synchronously, so a dead worker read as healthy. The worker now
-// posts {type:'ready'} after its first real drawArrays, and the three outcomes must stay APART.
+// a Worker whose module fails to parse doesn't throw synchronously: the receipt is {type:'ready'} after its first real
+// drawArrays (#185), and the three outcomes must stay APART
 const rays = () => ({ ack: globalThis.__raysAck === true, nogl: globalThis.__raysNoGl === true });
 const clearRays = () => { globalThis.__raysAck = false; globalThis.__raysNoGl = false; };
 

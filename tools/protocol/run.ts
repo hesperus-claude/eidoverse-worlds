@@ -1,4 +1,4 @@
-// tools/protocol/run.ts — the protocol gate: every protocol suite, one command, three required lanes.
+// tools/protocol/run.ts: the protocol gate: every protocol suite, one command, three required lanes.
 //   bun tools/protocol/run.ts                 the declared gate (= bun run test:protocol): core, then main, then browser
 //   bun tools/protocol/run.ts hostile phys    only the named suites (a PARTIAL run: it says so, and it is not the gate)
 //   bun tools/protocol/run.ts --lane core     only one lane (core | main | browser), also PARTIAL
@@ -17,7 +17,7 @@
 // skipped (with reasons) / optional-not-run, and exits nonzero on any failure or any skip.
 // Suites mark: a failed check `FAIL …` or `✗ …`; a skipped check `SKIP <name>: <why>` (fails the gate: every lane is
 // required); exit code 77 = the whole suite skipped (fails the gate); `OPTIONAL <name>: <why>` = an optional extension
-// that did not run (host data, the lab's control arm) — counted and listed, never a failure.
+// that did not run (host data, the lab's control arm): counted and listed, never a failure.
 //   PROTOCOL_LAB=<protocol lab checkout>   also run the control arms (common.ts)
 //   PROTOCOL_WORLDS=<dir>[:<dir>…] (`;` on Windows)         also sweep / oracle a host's own world logs (the repo's fixtures always)
 //   CHROME=<chromium binary>                the browser lane's Chromium (else chrome.ts findChrome: playwright's, else the OS's Chrome/Edge)
@@ -38,28 +38,27 @@ import { failLines, type Lane, SUITES, CORE, BROWSER, browserLauncher, laneOf, l
 // what a suite needs beyond bun and this checkout (a scratch dir, loopback ports: every suite may use those)
 const NEEDS: Record<string, string> = { conformance: "python3 + cryptography" };
 for (const n of BROWSER) NEEDS[n] = "Chromium";
-// seconds each suite took on the reference host (WSL2, 16 threads, 7 GB; 2026-10-18, one suite at a time, inside this gate's
-// hermetic env; the browser lane from the house gate's run the same day). The timeout
-// is 5x that, at least 180 s: a slow host gets room, a hung suite is still killed.
+// seconds each suite took on the reference host (WSL2, 16 threads, 7 GB, one suite at a time, in this gate's hermetic
+// env); the timeout is 5x that, at least 180 s: a slow host gets room, a hung suite is still killed
 const EXPECT: Record<string, number> = {
   "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
-  "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "colliders": 0.2, "lying-support": 16, "replay": 0.4,
+  "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "colliders": 0.2, "lying-support": 1.5, "replay": 0.4,
   "conformance": 2.9, "sweep": 0.3, "oracle": 0.4, "importer": 1.2, "eidosim-v1": 0.2, "inplace": 15, "migrate-identities": 1.7, "oldworlds": 1.2, "browser": 1.5, "descriptors": 0.1,
-  "light-readers": 0.4, "ghost-mesh-size": 0.5, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "grant-until": 1, "lite-graph": 1, "say-live": 1, "presence-actor": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3, "lookat-forward": 0.5,
+  "one-binding": 0.3, "snapshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3, "light-readers": 0.4, "ghost-mesh-size": 0.5, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3, "net-send-shape": 1,
   "role-grammar": 0.3, "rot": 0.1, "onepose": 0.3, "msgrate": 0.1, "dismount-height": 0.2, "build-gate": 0.3,
   "capsule-recovery": 10, "debug-tabs": 0.3, "governor-xr": 0.2, "unknown-comp": 1.1, "reach-order": 1.5,
   "editcommit": 0.8, "hierarchy-commit": 0.6, "verbclasses": 0.0, "authority-layers": 0.0, "authority": 9.0,
   "ids": 1.4, "scars": 1.0, "r8": 0.9, "r9": 1.5, "r10": 1.7, "r11": 0.6, "names": 2.1, "parity": 5.4,
   "directory": 13, "keyhints": 0.0, "client": 60, "refusedjoin": 126, "server": 40, "identity": 42,
-  "fork-reset": 6.0, "reset-race": 0.4, "txn": 0.8, "txn-mutants": 11, "blockers-mutants": 420, "scripts": 48, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
+  "fork-reset": 6.0, "txn": 0.8, "txn-mutants": 11, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "scripts": 48, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
   "agentshove": 165, "hands": 1.2, "reset": 1.7, "settle": 5.4, "disabled": 1.2, "histdiff": 0.3, "reachgate": 22,
   "consent": 0.0, "history-rows": 0.6, "scale": 125, "roles": 3.1, "access": 8.3, "batch2": 1.9,
   "describe-particles": 1.1, "client-b2": 19, "build": 1.5, "counter": 2.2, "build-client": 8.1, "shiplist": 1.7,
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
   "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "alias": 0.4, "navgrid": 64,
-  "navgrid-edge": 0.6, "places": 130, "places-scale": 6.3, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "wing-fold-presence": 0.3, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1
+ "navgrid-rows": 6.3, "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
+  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
@@ -96,15 +95,12 @@ const argv = process.argv.slice(2);
 const VALUED = ["--lane", "--receipt", "--scratch-out", "--library"];
 const valueOf = (flag: string) => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] ?? null : null;
 const headOf = (dir: string) => { const r = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }); return r.status === 0 ? r.stdout.trim() : null; };
-// The browser pages load the asset library (Skye's toolkit modules, sky, avatars): a separate public repo, pinned here.
-// Declared like Chrome: required for the browser lane, fetched only by --library, never read from a guessed path.
+// the browser pages load the asset library (Skye's toolkit modules, sky, avatars), a separate public repo pinned here;
+// required for the browser lane like Chrome, fetched only by --library, never read from a guessed path
 const LIBRARY_REPO = "https://github.com/SkyeShark/eidoverse-video.git";
-const LIBRARY_PIN = "9acc1528b2febac11338107645ef500a95985ca5";   // the library's PUBLIC head (10-19: e9f80d02 was a local snapshot, unfetchable by CI)
-// mcpl's package.json takes two sibling repos by path (file:../../<dir>, i.e. beside this checkout). The gate owns that
-// closure (Mica, #260 r3): ONE place pins them; --siblings fetches them there; the preflight refuses a missing or
-// wrong-commit sibling rather than testing whatever happens to sit next to the repo.
-// build: whether the gate's suites import it (its package main is dist/, which only `tsc` makes). agent-framework is only
-// resolved by bun install, never imported by a gate suite, so it isn't built.
+const LIBRARY_PIN = "9acc1528b2febac11338107645ef500a95985ca5";   // the library's PUBLIC head (a local snapshot is unfetchable by CI)
+// mcpl's sibling repos (file:../../<dir>), pinned in ONE place: --siblings fetches them, the preflight refuses a missing or
+// wrong-commit one. build: whether a gate suite imports it (its main is dist/, which only `tsc` makes)
 const SIBLINGS: [dir: string, url: string, commit: string, build: boolean][] = [
   ["agent-framework", "https://github.com/anima-research/agent-framework.git", "2f05c28e1923b7d07c6c6322b871303bd0d2d8d5", false],
   ["mcpl-core-ts", "https://github.com/anima-research/mcpl-core-ts.git", "e17f773a9247c41d5c872d760aac7f243748d134", true],
@@ -162,8 +158,8 @@ for (const [name, file] of SUITES) {
   if (laneOf(name) !== "browser") { const d = browserLauncher(f); if (d) problems.push(`${name} launches a Chromium (${path.relative(ENGINE, d).split(path.sep).join("/")}) but is not in the BROWSER lane`); }
 }
 if (!partial) { const d = manifestDrift(); if (d) problems.push(d); }
-// the siblings are mcpl's: refuse their absence only when a selected suite reaches mcpl/ (C13: conformance, the kernel and the
-// pins must run from this checkout alone, with nothing beside it)
+// the siblings are mcpl's: refuse their absence only when a selected suite reaches mcpl/ (conformance, the kernel and the
+// pins must run from this checkout alone)
 const reachesMcpl = (file: string) => { const f = suitePath(file); if (/[\\/]mcpl[\\/]/.test(f)) return true;
   return [...localImports(f)].some((x) => /(?:from|import\(|import)\s*["'`][^"'`]*\bmcpl\//.test(fs.readFileSync(x, "utf8"))); };
 const needSiblings = SUITES.some(([n, file]) => selected(n) && reachesMcpl(file));
@@ -213,8 +209,8 @@ if (SUITES.some(([n]) => selected(n) && laneOf(n) === "browser")) {
   if (CHROME && !v) problems.push(`${CHROME} --version printed nothing: is it a Chromium?`);
 }
 let LIBRARY: string | null = null, LIBRARY_HEAD: string | null = null;
-// suites outside the browser lane that read the asset library, read-only: knockdown's ragdoll needs a real rig (with none
-// it falls back to the canned slump, which is what its rows reject)
+// suites outside the browser lane that read the asset library, read-only: knockdown's ragdoll needs a real rig (without
+// one it falls back to the canned slump, which its rows reject)
 const READS_LIBRARY = new Set(["knockdown"]);
 if (SUITES.some(([n]) => selected(n) && (laneOf(n) === "browser" || READS_LIBRARY.has(n)))) {
   const want = process.env.EIDOVERSE_DIR;
@@ -234,18 +230,18 @@ if (problems.length) {
 
 // ---- running a suite: its own process group, timeout, HOME/TMPDIR/scratch; the group killed when it ends ----
 const GATE_TMP = fs.mkdtempSync(path.join(os.tmpdir(), "eido-gate-"));
-// the gate names its own scratch, so CI uploads a failure's logs from where they are on every OS, instead of forcing a temp
-// root to know the path (it can't on Windows). Long form: Windows' TEMP is an 8.3 path (C:\Users\RUNNER~1\…)
+// the gate names its own scratch, so CI uploads a failure's logs from where they are on every OS (a temp root can't
+// know the path on Windows). Long form: Windows' TEMP is an 8.3 path (C:\Users\RUNNER~1\…)
 const SCRATCH_ROOT = (() => { try { return fs.realpathSync.native(GATE_TMP); } catch { return GATE_TMP; } })();
 console.log(`  scratch   ${SCRATCH_ROOT}${process.env.PROTOCOL_KEEP ? " (kept: PROTOCOL_KEEP)" : " (removed at exit)"}`);
 const scratchOut = valueOf("--scratch-out");
 if (scratchOut) fs.appendFileSync(scratchOut, `scratch=${SCRATCH_ROOT.split(path.sep).join("/")}\n`);
 let current: { pid: number; exitCode: number | null; signalCode: string | null } | null = null;
-// Linux, macOS and Windows alike (tools/protocol/procgroup.ts): a POSIX process group, or the process tree on Windows
-// the kill path never blocks (CI 10-21: a synchronous WMI query froze the gate for two hours on Windows, past every timer)
+// Linux, macOS and Windows alike (tools/protocol/procgroup.ts): a POSIX process group, or the process tree on Windows;
+// the kill path never blocks (a synchronous WMI query can freeze the gate past every timer)
 const killGroup = (pid: number, sig: NodeJS.Signals, o?: { exited?: boolean }) => killSuiteAsync(pid, sig, process.platform, o);
 const groupMembers = async (pgid: number) => (await suiteMembersAsync(pgid)).length;
-// a suite that dies mid-test can leave a read-only dir behind (clientlog-test's unwritable case did): give every dir its write bit back, then remove
+// a suite that dies mid-test can leave a read-only dir behind: give every dir its write bit back, then remove
 const unlock = (d: string) => { try { fs.chmodSync(d, 0o700); for (const e of fs.readdirSync(d, { withFileTypes: true })) if (e.isDirectory()) unlock(path.join(d, e.name)); } catch { /* gone */ } };
 const cleanup = () => { if (current && current.exitCode == null && current.signalCode == null) killSuiteAtExit(current.pid); if (process.env.PROTOCOL_KEEP) return;
   try { fs.rmSync(GATE_TMP, { recursive: true, force: true }); } catch { unlock(GATE_TMP); try { fs.rmSync(GATE_TMP, { recursive: true, force: true }); } catch (e) { console.error(`[gate] couldn't remove ${GATE_TMP}: ${(e as Error).message}`); } } };
@@ -254,13 +250,13 @@ for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () =
 
 const OPT_TRACKED = (spawnSync("git", ["-C", ENGINE, "ls-files", "-z", "assets/opt"], { encoding: "utf8" }).stdout ?? "").split("\0").filter(Boolean).map((f) => f.slice("assets/opt/".length));
 const PATH = `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? process.env.Path ?? "/usr/bin:/bin"}`;   // a nested `bun` is this bun
-// files a suite leaves in the checkout fail it (a killed child skips its own cleanup on Windows: #260 review)
+// files a suite leaves in the checkout fail it (a killed child skips its own cleanup on Windows)
 const untracked = () => new Set((spawnSync("git", ["-C", ENGINE, "ls-files", "--others", "--exclude-standard", "-z"], { encoding: "utf8" }).stdout ?? "").split("\0").filter(Boolean));
 async function run(name: string, file: string): Promise<{ code: number | null; signal: string | null; out: string; timedOut: boolean; leftovers: number; stuck?: boolean }> {
   const dir = fs.mkdtempSync(path.join(GATE_TMP, `${name}-`));
   for (const d of ["home", "library", "opt", "worlds", "patched"]) fs.mkdirSync(path.join(dir, d));
-  // the asset cache starts empty EXCEPT for what the repo itself commits there (props/ball.glb, a fixture since 08-03):
-  // hermetic means no host cache, not hiding this checkout's own files
+  // the asset cache starts empty EXCEPT for what the repo itself commits there (props/ball.glb): hermetic means no host
+  // cache, not hiding this checkout's own files
   for (const rel of OPT_TRACKED) { const to = path.join(dir, "opt", rel); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(ENGINE, "assets/opt", rel), to); }
   // hermetic: nothing the suite reads by default lies outside this checkout and this dir (no ~, no ../eidoverse-video)
   const env: Record<string, string> = { ...process.env as Record<string, string>, PATH, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
@@ -300,7 +296,7 @@ for (const name of order) {
   const [, file, tail] = SUITES.find(([n]) => n === name)!; const lane = laneOf(name);
   if (stopped) { results.push({ name, lane, status: "skip", why: stopped, ms: 0, rowSkips: [], optional: [], leftovers: 0 }); continue; }
   const t = performance.now();
-  if (process.env.CI) console.log(`-- start ${name} (${new Date().toISOString()})`);   // a hang between suites names itself (Windows CI 10-19 went silent for 80 min)
+  if (process.env.CI) console.log(`-- start ${name} (${new Date().toISOString()})`);   // a hang between suites names itself
   const before = untracked();
   const r = await run(name, file);
   const residue = [...untracked()].filter((f) => !before.has(f));
@@ -317,9 +313,9 @@ for (const name of order) {
   if (residue.length) { status = "fail"; why = `${why ? why + "; " : ""}left ${residue.length} file(s) in the checkout (removed): ${residue.slice(0, 5).join(", ")}`; }
   results.push({ name, lane, status, why, ms, rowSkips, optional, leftovers: r.leftovers, outSha256: createHash("sha256").update(r.out).digest("hex") });
   console.log(`\n== ${name} [${lane}] (${file}) ${status.toUpperCase()}${why ? ` (${why})` : ""} ${(ms / 1000).toFixed(1)} s${r.leftovers ? (r.stuck ? ` · ${r.leftovers} process(es) may still be running (the kill didn't land)` : ` · killed ${r.leftovers} leftover process(es)`) : ""}`);
-  const evidence = failLines(lines); for (const l of evidence.slice(0, 60)) console.log(l);   // each FAIL with what it saw (10-23)
+  const evidence = failLines(lines); for (const l of evidence.slice(0, 60)) console.log(l);   // each FAIL with what it saw
   for (const l of rowSkips.slice(0, 20)) console.log(l);
-  // a suite that failed without one FAIL line crashed: its last line is the runtime's banner, so show enough to read the error (CI 10-21: six Windows reds read 'Bun v1.3.14' and nothing else)
+  // a suite that failed without one FAIL line crashed: its last line is the runtime's banner, so show enough to read the error
   const crashed = status === "fail" && !fails.length && !r.timedOut;
   for (const l of lines.slice(-(crashed ? Math.max(tail, 30) : tail))) if (!evidence.includes(l) && !rowSkips.includes(l)) console.log(l);
   if (lane === "core" && status !== "pass") stopped = `not run: the core lane failed at ${name}`;
@@ -339,8 +335,8 @@ const left = results.reduce((a, r) => a + r.leftovers, 0); if (left) console.log
 const bad = count(null, "fail") + count(null, "skip");
 const notRun = SUITES.filter(([n]) => !selected(n)).length;
 console.log(`protocol gate: ${bad ? "FAILED" : partial ? `PARTIAL PASS (${notRun} suite(s) not selected: this is not the gate)` : "PASS"}`);
-// --receipt <file>: a machine-readable record of THIS run at THIS head (review #260 rereview: "a durable exact-head gate
-// receipt: environment/runtime identities, source head, pinned library head, tally, and log/artifact hash")
+// --receipt <file>: a durable exact-head record of THIS run: environment/runtime identities, source head, pinned library
+// head, tally, and log/artifact hash
 const receiptAt = valueOf("--receipt");
 if (receiptAt) {
   const git = (a: string[]) => spawnSync("git", ["-C", ENGINE, ...a], { encoding: "utf8" }).stdout?.trim() ?? "";

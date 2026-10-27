@@ -1,10 +1,7 @@
 // bun run tools/attention-probe.ts
-// Real browser chat + shared AudioContext + owned scratch sequencer. Counts
-// actual oscillator starts, not a mock "play" callback; no audio device needed.
-// The browser is harness.ts's CHROME. On macOS, point CHROME at the Chromium
-// Playwright installs (`bunx playwright install chromium`, under
-// ~/Library/Caches/ms-playwright): with system Chrome headless, the wheel never
-// reaches the options popup and the wheel-scroll check times out.
+// Real browser chat + shared AudioContext + owned scratch sequencer: counts actual oscillator starts, no audio device
+// needed. The browser is harness.ts's CHROME; on macOS point CHROME at Playwright's Chromium (`bunx playwright install
+// chromium`): with system Chrome headless the wheel never reaches the options popup.
 import { chromium } from 'playwright';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -51,8 +48,7 @@ try {
   sender = await joinSpeaker();
   const send = (msg: any) => sender!.send(JSON.stringify(msg));
   const say = (text: string, extra = {}) => send({ type: 'verb', verb: 'say', args: { text, ...extra } });
-  // Said BEFORE the receiver arrives: speech is arrival-only (R 10-18), so it must never reach the page (and whisper,
-  // the other backlog this probe once held, was removed).
+  // said BEFORE the receiver arrives: speech is arrival-only, so it must never reach the page
   say('@listener from before arrival');
   await sleep(300);
   await page.goto(h.BASE + '/?world=attention&name=listener&key=test-door&lite=1');
@@ -64,11 +60,7 @@ try {
     && !(await page.evaluate(() => document.getElementById('chatlog')?.textContent?.includes('from before arrival'))));
   const beforeControls = packets.filter(m => m.type === 'log').length;
   await page.locator('.chat-gear').click();
-  // Every control must remain hittable within a minimal chat frame. Lite's chat
-  // fills the viewport below its top bar (index.html, html.lite
-  // .frame.chat-frame), so the viewport sets the frame's size: a 360 px phone
-  // whose height leaves the chat about 100 px under the bar. The bar's own
-  // height can still move (a card under it), so only a short frame is required.
+  // every control stays hittable in a minimal chat frame: a 360 px phone (lite's chat fills the viewport below its top bar)
   const oldViewport = page.viewportSize()!;
   await page.setViewportSize({ width: 360, height: oldViewport.height });
   const chatTop = await page.evaluate(() => (document.querySelector('.chat-frame') as HTMLElement).getBoundingClientRect().top);
@@ -77,8 +69,7 @@ try {
     const r = (document.querySelector('.chat-frame') as HTMLElement).getBoundingClientRect();
     return r.height > 40 && r.height <= 120;
   });
-  // The resize event (which places the open options again) fires in the
-  // rendering steps before the next animation frame: wait past two frames.
+  // the resize event (which re-places the open options) fires in the rendering steps before the next frame: wait two frames
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   check('minimum popup is bounded and user-scrollable', await page.locator('.chat-gearpop').evaluate(e => {
     const r = e.getBoundingClientRect(), f = e.closest('.frame').getBoundingClientRect();
@@ -137,20 +128,18 @@ try {
   await seen('spoken continuation');
   check('later flush of same utterance stays silent', await tones() === 3);
 
-  // Keep an unlocked context across reconnect. A reload alone could pass
-  // accidentally because autoplay was locked, even if history tried to chime.
+  // keep an unlocked context across reconnect: a reload alone could pass because autoplay was locked
   await sleep(3100);
   await page.evaluate(async () => { (await import('/lib/net.js')).net.ws.close(); });
   await until(() => packets.some(m => m.type === 'leave' && m.id === 'listener'));
   say('@listener missed during reconnect');
-  // back in the room: what was said while the page was away is not replayed (arrival-only), and nothing chimes
+  // back in the room: what was said while away isn't replayed (arrival-only), and nothing chimes
   const snaps0 = await page.evaluate(() => (globalThis as any).__received.filter((m: any) => m.type === 'snapshot').length);
   await page.waitForFunction(n => (globalThis as any).__received.filter((m: any) => m.type === 'snapshot').length > n, snaps0, { timeout: 25000 }).catch(() => {});
   await sleep(1500);
   check('a reconnect replays nothing said while away, and stays silent', await tones() === 3
     && !(await page.evaluate(() => document.getElementById('chatlog')?.textContent?.includes('missed during reconnect'))));
-  // The page sends its own session id with every join, the same one after a
-  // reconnect, and the server relays it to the others as its presence session.
+  // the page sends its own session id with every join (the same after a reconnect); the server relays it as its presence session
   const joinSessions = await page.evaluate(() => (globalThis as any).__sent
     .map((s: string) => { try { return JSON.parse(s); } catch { return null; } })
     .filter((m: any) => m?.type === 'join').map((m: any) => m.session));
@@ -165,7 +154,7 @@ try {
   say('@listener fresh after reconnect', { spoken: true, utt: 9002 });
   await seen('fresh after reconnect');
   check('fresh speech after reconnect still chimes', await tones() === 4);
-  // A fresh sender page starts its counter again; the listener keeps running.
+  // a fresh sender page starts its counter again; the listener keeps running
   await sleep(3100);
   const oldSession = await page.evaluate(() => (globalThis as any).__received
     .filter((m: any) => m.type === 'snapshot').at(-1).present.find((p: any) => p.id === 'speaker').session);
@@ -181,8 +170,7 @@ try {
   say('@listener new-session continuation', { spoken: true, utt: 9001 });
   await seen('new-session continuation');
   check('same-session repeated flush still stays silent', await tones() === 5);
-  // If the listener missed the sender's arrival, the snapshot still carries
-  // the new lifetime rather than inheriting this actor's old utterance cache.
+  // if the listener missed the sender's arrival, the snapshot still carries the new lifetime, not the old utterance cache
   const packetCut = packets.length;
   const snapshotCount = await page.evaluate(() => (globalThis as any).__received.filter((m: any) => m.type === 'snapshot').length);
   await page.evaluate(async () => { (await import('/lib/net.js')).net.ws.close(); });
@@ -193,9 +181,8 @@ try {
   say('@listener sender restarted while you were away', { spoken: true, utt: 9001 });
   await seen('sender restarted while you were away');
   check('snapshot observes sender rejoin missed during listener absence', await tones() === 6);
-  // A speaker page that reconnects (a leave, then an arrive with the same page
-  // id) keeps its utterance memory in the listener: through the page's real
-  // bus, not the gate alone. A new page id restarts the counter.
+  // a reconnecting speaker page (same page id) keeps its utterance memory in the listener, through the real bus; a new
+  // page id restarts the counter
   const leaves = () => page.evaluate(() => (globalThis as any).__received
     .filter((m: any) => m.type === 'leave' && m.id === 'speaker').length);
   const rejoin = async (session: string) => {
@@ -255,9 +242,8 @@ async function until(test: () => boolean, timeout = 8000) {
   }
 }
 
-// Headless Chromium's autoplay setting is not a policy oracle. Use real Web
-// Audio nodes behind a simulated gate, and read with CDP userGesture:false:
-// Playwright evaluate would itself grant the activation this case measures.
+// headless Chromium's autoplay setting is no policy oracle: real Web Audio nodes behind a simulated gate, read with CDP
+// userGesture:false (Playwright evaluate would itself grant the activation measured)
 async function autoplayPolicyProbe(browser, origin, say, check) {
   for (const enabled of [false, true]) {
     const context = await browser.newContext();
@@ -276,8 +262,7 @@ async function autoplayPolicyProbe(browser, origin, say, check) {
             super();
             g.__policy.contexts++;
             g.__policyContext = this;
-            // Native headless output is often running from construction. Hold
-            // it too, while the state getter enforces the simulated policy.
+            // native headless output often runs from construction: hold it too, while the state getter enforces the simulated policy
             super.suspend();
           }
           get state() { return this.unlocked ? super.state : 'suspended'; }
@@ -331,7 +316,7 @@ async function autoplayPolicyProbe(browser, origin, say, check) {
         const locked = await wait(r => r.text.includes('locked utterance'), 'locked live delivery');
         check('saved setting: live notice actually meets a suspended context', locked.state === 'suspended' && locked.attempts.length > 0 && locked.attempts.every(a => a === false));
         check('saved setting: blocked notice schedules zero oscillators', locked.tones === 0);
-        // This is the one intended gesture; no programmatic audio resume.
+        // the one intended gesture; no programmatic audio resume
         await page.locator('.chat-gear').click();
         const unlocked = await wait(r => r.state === 'running', 'gesture unlock');
         check('saved setting: gesture unlock never performs the missed notice', unlocked.tones === 0 && unlocked.attempts.includes(true));
@@ -347,8 +332,7 @@ async function autoplayPolicyProbe(browser, origin, say, check) {
         const afterEnable = await read();
         check('first use: Enable itself constructs and resumes under activation',
           afterEnable.contexts === 1 && afterEnable.attempts.includes(true));
-        // Wait out transient activation: a later live event must not gain an
-        // accidental unlock just because it followed the test's click quickly.
+        // wait out transient activation: a later live event must not gain an accidental unlock from following the click quickly
         await wait(r => !r.active, 'enable activation expiry');
         const idle = await read();
         check('first use: context remains running without any further gesture', idle.state === 'running' && idle.tones === 0);

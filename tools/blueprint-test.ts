@@ -1,20 +1,14 @@
-// blueprint-test — design §3 "Blueprints", §7 step 6a: the record, its hash,
-// the copy link as pure functions, and blueprints through the authority.
-//
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/blueprint-test.ts
-//
+// blueprint-test: design §3 "Blueprints", §7 step 6a: the record, its hash, the copy link as pure functions, and
+// blueprints through the authority. `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/blueprint-test.ts`
 // 1. the hash      key order and prose (note) never move it; meaning does
 // 2. the shape     blueprintRefusal's rules, each refused by name
 // 3. the link      expand / overridesOf / rebase, a conflict included
 // 6. the door's publish (@world library:<hash>) and create {from: <hash>, at} on a scratch world
 //    (tools/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
 // 7. the agent's blueprints / blueprint_place / look() over the library, its door the scratch door
-//
-// Sections 1–3 are pure functions of shared/blueprint.js and stay as they were (NOTE: expand/overridesOf/rebase have
-// no runtime caller today). The v1 sections went with the v1 runtime (protocol v1 removed, 2026-10-07): 4 (the v1
-// fold's state.blueprints store and its stateToEntries snapshot), 5 (server/verbs.ts's blueprint verb) and 8
-// (shared/pace.js against a model of the v1 door's 12-per-4-s verb window; pace.js has no runtime caller now).
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+// 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet); 4, 5, 8 went with v1.
+import { noWorldUrl } from './no-world.ts';
+import "./protocol/fixture-ids.ts";  // fixtures seed the ids they read (writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +25,7 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
 };
 const J = JSON.stringify;
-// a copy's parts are minted (R 10-17: opaque ids, never <copy>-<key>): the part with record key `key` under copy `copy`
+// a copy's parts are minted (opaque ids, never <copy>-<key>): the part with record key `key` under copy `copy`
 const partOf = (E: any, copy: string, key: string) => Object.keys(E).find((x) => { if (E[x]?.['copy-of']?.key !== key) return false; for (let p: any = x, n = 0; p && n < 64; p = E[p]?.parent?.to, n++) if (p === copy) return true; return false; }) ?? `${copy}-${key}`;
 
 const { blueprintHash, blueprintRefusal, hashRefusal, expand, overridesOf, rebase, linkOf, lineageOf, BLUEPRINT_LIMITS } = await import('../shared/blueprint.js');
@@ -120,8 +114,7 @@ console.log('\n2. the shape (blueprintRefusal)');
 
 // ---- 3. the link -------------------------------------------------------------------
 console.log('\n3. the copy link (expand, overridesOf, rebase)');
-// a copy as the world holds it: the root entity's components (placement + link
-// included) and the bulb as a child entity (a Parent the world added)
+// a copy as the world holds it: the root's components (placement + link) and the bulb as a child entity
 const copyOf = (rec: any, at: number[]) => {
   const x = expand(rec);
   const root = componentsOf({ ...x.entity, pos: at, yaw: 0.5, ...(recordComponents(x.entity)), blueprint: linkOf(rec) }).components;
@@ -208,11 +201,8 @@ const lampWorld = () => {
   const W = scratchWorld('blueprint');
   W.call('set', { id: '@world', component: 'roles:bld', value: { role: 'builder' } });
   W.call('set', { id: '@world', component: 'roles:vis', value: { role: 'inhabitant' } });
-  // a lamp: a model with a label, and a bulb child (an Empty with its own light) 1.2 m up. One place per thing
-  // (authority.js:1213, R 10-11): a model and a light never share an entity, so the LIGHT lives on the bulb —
-  // which is the shape the rule prescribes, and what the door will accept. The record FORMAT can still express
-  // model+light (old blueprints must keep expanding), which is why lampV1 above is left alone and the pure
-  // expand() tests still assert the root's light.
+  // a lamp: a model plus a bulb child carrying the light (a model and a light never share an entity); the record format
+  // can still express model+light, so lampV1 and the pure expand() tests stay
   W.seed({
     lamp: { model: LAMP, pos: [7, 0, 7], yaw: 1, label: 'a lamp' },
     bulb: { pos: [0, 0, 0], parent: { to: 'lamp', offset: [0, 1.2, 0], yaw: 0 }, light: { color: 0xffffff, intensity: 4, range: 3 } },
@@ -272,7 +262,7 @@ let HV = '';   // the record's hash, "sha256:<hex>"
 }
 {
   // a deeper design: a scaled base with a box collider, a tilted half-scale arm, a locked shade with a spin, and a glow
-  // (an Empty with a light that burns at noon). No rotation order rides any part: it is the viewer's (PROTOCOL §9.1)
+  // (an Empty whose light burns at noon). No rotation order rides any part: it's the viewer's (PROTOCOL §9.1)
   const W = scratchWorld('blueprint');
   const tilt = [0.3826834323650898, 0, 0, 0.9238795325112867];
   W.seed({
@@ -295,13 +285,12 @@ let HV = '';   // the record's hash, "sha256:<hex>"
   const shade = E[id('shade')!], glow = E[id('glow')!];
   check('the shade is locked (lock is a bool again: recut C11), spins, and carries no rotation order (the order is the viewer\'s)',
     shade?.lock === true && shade?.motion?.type === 'spin' && !Object.keys(shade ?? {}).some((k) => /rot-?order|726f744f72646572/i.test(k)), J(shade));
-  // the viewer's order stays on the viewer: the editor reads the copy in whatever order this viewer chose, and placing
-  // the copy wrote none (PROTOCOL §9.1; client/lib/viewprefs.js keeps it)
+  // the editor reads the copy in this viewer's order, and placing wrote none (PROTOCOL §9.1; client/lib/viewprefs.js)
   check('…and a viewer reading the copy in ZXY reads it in ZXY, from its own settings', fieldAt(inspectSchema(shade, id('shade')!, { rotOrder: 'ZXY' }), 'rot.order')?.value === 'ZXY'
     && fieldAt(inspectSchema(shade, id('shade')!), 'rot.order')?.value === 'XYZ');
   check('the glow is an Empty whose light burns at noon; the base collides as a box', glow.model === undefined && glow?.light?.daytime === 'full' && glow.light.color === 0xff8800 && E.desk2?.collider?.shape === 'box', J([glow, E.desk2.comp]));
-  // a lock binds removal (§5), and undoing a create removes: the door refuses the bare undo `locked` (v1's inverses
-  // unlocked first). The person is asked "Move anyway?" (editwrites: undo offers through, not unlock); throughLock takes it.
+  // a lock binds removal (§5) and undoing a create removes: the door refuses the bare undo `locked`; the person is asked
+  // "Move anyway?" (editwrites: undo offers through, not unlock) and throughLock takes it
   const u0 = W.call('undo', {});
   check('a bare undo of the copy is refused `locked` (its shade is locked), and nothing is removed', u0.ok === false && u0.refused?.code === 'locked' && ['desk', 'arm', 'shade', 'glow'].every((k) => !!W.view().entities[partOf(W.view().entities, 'desk2', k)]), J(u0));
   const u = W.call('undo', { throughLock: true });
@@ -317,10 +306,10 @@ console.log('\n7. the text tier — blueprints, blueprint_place, look() (mcpl), 
   const pub = W.call('publish', { from: 'lamp', name: 'Lamp' });
   const H = pub.notes.find((n: any) => n.record).record as string, hex = H.slice(7);
   W.call('create', { id: 'lampa', from: H, at: { pos: [2, 0, 2] } });
-  const ag: any = new WorldAgent({ name: 'eye' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const sync = () => { ag.st = W.view(); ag.replica = { st: W.state(), active: true }; ag.reconcileFromFold(); };
   sync();
-  // every handler reaches the authority through request() (10-14: there is no door()); here that is the in-process world
+  // every handler reaches the authority through request() (there is no door()); here the in-process world
   ag.request = async (verb: string, args: any) => { const r = W.call(verb, args); sync(); return r; };
   ag.pos = { x: 0, y: 0, z: 0 }; ag.yaw = 0; ag.heightAt = () => 0;
   const txt = (r: any) => r.content.map((c: any) => c.text).join('\n');
@@ -331,7 +320,7 @@ console.log('\n7. the text tier — blueprints, blueprint_place, look() (mcpl), 
   check('blueprints {hash: a prefix}: that one record', one.startsWith(`[${hex.slice(0, 12)}] "Lamp"`) && one.split('\n').length === 2, one);
   check('…an unknown prefix says so', /none here starts "zz"/.test(txt(await HANDLERS.blueprints(ag, { hash: 'zz' }))));
   const before = Object.keys(W.view().entities).length;
-  // blueprint_place folded into create {from: "sha256:<hash>"} (10-14): a unique prefix of the hash will do
+  // blueprint_place folded into create {from: "sha256:<hash>"}: a unique prefix of the hash will do
   const dry = await HANDLERS.create(ag, { from: `sha256:${hex.slice(0, 10)}`, id: 'lampb', dry: true }, {} as any, 'create');
   check('create {from: a blueprint prefix} (dry): the door answers it would create, and nothing is written', !(dry as any).isError && /would create/.test(txt(dry)) && Object.keys(W.view().entities).length === before, txt(dry));
   const live = await HANDLERS.create(ag, { from: `sha256:${hex.slice(0, 10)}`, at: [5, 5] }, {} as any, 'create');
@@ -341,7 +330,7 @@ console.log('\n7. the text tier — blueprints, blueprint_place, look() (mcpl), 
   const look = ag.look();
   const line = (id: string) => look.split('\n').find((l: string) => l.includes(`[${id}]`)) ?? '';
   check('look(): a placed copy says which blueprint it is', /a copy of "Lamp"/.test(line('lampa')) && !/components: .*blueprint/.test(line('lampa')), line('lampa'));
-  const bh = ag.handle(partOf(W.view().entities, 'lampa', 'bulb'));   // look reads a part by its handle (R 10-17)
+  const bh = ag.handle(partOf(W.view().entities, 'lampa', 'bulb'));  // look reads a part by its handle
   check('look(): a part says whose part it is', /part "bulb" of lampa/.test(line(bh)), line(bh));
 }
 

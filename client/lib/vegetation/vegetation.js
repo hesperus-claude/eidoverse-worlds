@@ -1,21 +1,7 @@
-// grass2 — asset-driven ground flora: grass tuft cards, shrub clusters, rosettes.
-//
-// Look:   generated map sets (SeedThree convention) — <species>_{albedo,normal,
-//         roughness,translucency}.png under eidoverse/assets/grass/. Albedo alpha
-//         is the cutout. Translucency drives the backlit term.
-// Motion: derived from CK42BB/procedural-grass-threejs (MIT) — 3-layer wind
-//         (global sway / gust fronts with a noise envelope / per-instance
-//         flutter) and quadratic-falloff pushers, all ×height², constants kept.
-// Bodies: our own card models — curved, cupped strips; tufts of 3 crossed cards;
-//         shrub clusters of outward-fanned cards with bent (sphere-blended)
-//         normals so the bush shades as a volume; rosettes as crossed fans.
-//
-// const { createFlora, FLORA_SPECIES } = await import(...grass2.js);
-// const field = await createFlora({ species: 'creosote', width: 30, depth: 30,
-//     heightFn: terrain.heightAt, sunDir: [-0.5, 0.8, 0.3] });
-// scene.add(field.mesh);
-// field.setPushers([{ x, y, z, r: 1.4 }]);     // characters part the flora
-// // wind self-updates via the engine loop; nothing to call per frame.
+// vegetation — asset-driven ground flora (tuft cards, shrub clusters, rosettes), instanced with wind and pushers;
+// maps: assets/grass/<species>_{albedo,normal,roughness,translucency}.png (albedo alpha is the cutout).
+// Wind and pushers derived from CK42BB/procedural-grass-threejs (MIT): keep this credit.
+// Copyright (c) 2026 Kingsley, MIT licence; full notice in THIRD-PARTY.md.
 
 const T3 = globalThis.THREE;
 const {
@@ -28,19 +14,7 @@ const {
 
 const ASSET_DIR = 'eidoverse/assets/grass/';
 
-// grass colours — the seasonal palette, one word each. Multipliers over the
-// green blade atlas, hand-balanced so luminance stays in range.
-//   spring/summer: lime, emerald, blue (switchgrass/blue-grama powder),
-//                  blue-green, gray-green (dry-climate)
-//   fall/winter:   burgundy, rust, copper, orange (little bluestem),
-//                  straw, brown
-// `color:` accepts a name below or a custom [r,g,b] multiplier.
-// Values are LUMINANCE-PRESERVING vs the atlas mean — a hue swap, not a
-// darkening (naive multipliers crushed every fall colour to muck).
-// §24 defs: the palette table lives in defs/flora/_colors.json now —
-// hydrated with the species (see hydrateFloraDefs), same object-identity
-// rule as FLORA_SPECIES. FLORA_PRESETS (defs/flora/_presets.json) rides
-// the same registry — consumed by the client's presetStrokes composer.
+// luminance-preserving multipliers (a hue swap, not a darkening); hydrated from defs/flora/_colors.json and _presets.json
 export const GRASS_COLORS = {};
 export const FLORA_PRESETS = {};
 
@@ -55,21 +29,11 @@ import { buildSunflowerGeometry } from './vegetation_sunflower_gen.js';
 // rosette: crossed vertical fans + a low horizontal card (radial sheet)
 export const FLORA_SPECIES = {};
 
-// §24 defs (overhaul charter §3): the species table that lived here became
-// DATA — defs/flora/<name>.json, validated by shared/floradefs.js, served
-// at GET /defs. FLORA_SPECIES starts empty and hydrates ONCE before the
-// first build (createFlora awaits it; client/lib/flora.js's loadFloraModule
-// does too). Adding a species to every world this instance serves is now
-// adding a file — no engine edit. The object identity is load-bearing:
-// hydration MUTATES this export (assignment into it, never replacement),
-// because the loader shim publishes the reference on globalThis.
+// species are data (defs/flora/<name>.json, shared/floradefs.js), hydrated once before the first build
+// object identity is load-bearing: hydration mutates this export, never replaces it (the loader shim publishes it)
 let defsLoading = null;
 
-/** Fold a def registry into GRASS_COLORS + FLORA_SPECIES. Exported so
- *  tests and non-sequencer contexts hydrate by hand instead of fetching.
- *  Accepts the whole /defs registry ({flora, floraColors}) or a bare
- *  species map. Colors land FIRST — `leafRecolor` may name a palette
- *  entry, resolved here so the defs stay declarative. */
+/** Takes {flora, floraColors} or a bare species map; colours land first, so `leafRecolor` can name a palette entry. */
 export function hydrateFloraDefs(reg) {
     const flora = reg?.flora ?? reg;
     for (const [name, c] of Object.entries(reg?.floraColors ?? {})) GRASS_COLORS[name] = c;
@@ -88,9 +52,8 @@ export function hydrateFloraDefs(reg) {
     return FLORA_SPECIES;
 }
 
-/** Hydrate from the sequencer (GET /defs), once. Memoized and safe to
- *  race; a FAILED fetch clears the memo so the next build may retry. A
- *  registry someone already hand-hydrated is respected untouched. */
+/** GET /defs, once and race-safe; a FAILED fetch clears the memo so the next build retries.
+*  A hand-hydrated registry is left untouched. */
 export async function ensureFloraDefs() {
     if (Object.keys(FLORA_SPECIES).length) return FLORA_SPECIES;
     if (!defsLoading) {
@@ -106,10 +69,7 @@ export async function ensureFloraDefs() {
     return defsLoading;
 }
 
-/** Re-fetch /defs and RE-hydrate, replacing: an edited def lands, a
- *  removed one leaves. The caller (the client's defs-updated handler)
- *  decides what to regrow. Object identities are preserved — consumers
- *  holding FLORA_SPECIES / GRASS_COLORS see the new tables in place. */
+/** In place (identities kept); the caller decides what to regrow. */
 export async function refreshFloraDefs() {
     const r = await fetch('/defs');
     if (!r.ok) throw new Error(`[grass2] GET /defs -> ${r.status} — refresh refused`);
@@ -133,23 +93,13 @@ async function loadMap(name, { srgb = false } = {}) {
     } catch { return null; }
 }
 
-// ── opaque-blade palette (eidoverse-worlds §22m) ─────────────────────────────
-// The Tsushima-lineage trade: real tapered blade geometry, ZERO alpha test —
-// with Sol's art still the source of truth. The atlas columns are sampled at
-// build time into per-column root→tip color ladders (alpha-weighted, sRGB →
-// linear); bunchGeometry bakes them into vertex colors and the fitted
-// envelope (_fit.json) keeps each column's silhouette. At draw time there is
-// no fetch and no discard, so the opaque pass depth-rejects occluded meadow
-// fragments for free — the overdraw that alpha test forced the TBDR to shade.
+// ── opaque-blade palette (§22m) ───────────────────────────────────────────────
+// atlas columns sampled at build into root→tip vertex-colour ladders: no alpha test, so the opaque pass depth-rejects
 async function sampleBladePalette(name, cols, loops) {
     try {
         let bytes = await Deno.readFile(ASSET_DIR + name);
         if (!(bytes[0] === 0x89 && bytes[1] === 0x50) && typeof fetch === 'function') {
-            // the eidoverse-worlds host primes NEGOTIATED bytes under the PNG
-            // name (§20d KTX2 file-layer negotiation) — GPU-native, but not
-            // decodable art. The palette needs the raw PNG; ask the wire
-            // directly. On a real-file host the primed bytes ARE the PNG and
-            // this branch never runs.
+            // a host may prime KTX2 bytes under the PNG name (§20d); the palette needs the raw PNG
             bytes = new Uint8Array(await (await fetch('/library/' + ASSET_DIR + name)).arrayBuffer());
         }
         if (!(bytes[0] === 0x89 && bytes[1] === 0x50)) return null;   // PNG bytes only
@@ -165,8 +115,7 @@ async function sampleBladePalette(name, cols, loops) {
             const ladder = [];
             for (let lp = 0; lp <= loops; lp++) {
                 const t = lp / loops;
-                // geometry t=0 is the blade ROOT; three flips PNGs (uv v=0 =
-                // image bottom), so the root ladder rung reads the bottom rows
+                // t=0 is the ROOT and three flips PNGs, so the root rung reads the bottom rows
                 const rowC = Math.round((1 - t) * (bmp.height - 1));
                 let r = 0, g = 0, b = 0, w = 0;
                 for (let dy = -6; dy <= 6; dy++) {
@@ -177,11 +126,8 @@ async function sampleBladePalette(name, cols, loops) {
                         r += lin(data[i]) * a; g += lin(data[i + 1]) * a; b += lin(data[i + 2]) * a; w += a;
                     }
                 }
-                // an empty band (past the art's tip) inherits the rung below.
-                // The small linear gains are CALIBRATED against Sol's card
-                // render: same meadow band, screenshot means, one iteration —
-                // flat vertex color loses the atlas's dark micro-structure,
-                // and this puts the aggregate back on Sol's numbers.
+                // an empty band (past the tip) inherits the rung below
+                // the gains are calibrated against the card render: flat vertex colour loses the atlas's dark detail
                 ladder.push(w ? [(r / w) * 0.91, (g / w) * 0.86, (b / w) * 1.28]
                     : (ladder[lp - 1] ?? [0.05, 0.12, 0.03]));
             }
@@ -202,7 +148,7 @@ async function loadSpeciesMaps(base) {
     return { albedo, normal, rough, transl };
 }
 
-// bark map set for shrub wood — the tube UVs wrap, so these tile
+// shrub bark: the tube UVs wrap, so these tile
 async function loadStemMaps(base) {
     const [albedo, rough] = await Promise.all([
         loadMap(`${base}_albedo.png`, { srgb: true }),
@@ -221,7 +167,7 @@ function cardGeometry({ w, h, curve = 0.2, cup = 0.08, segH = 3, segW = 2 }) {
     for (let i = 0; i < pos.count; i++) {
         const t = pos.getY(i) / h;                  // 0 root → 1 tip
         const s = pos.getX(i) / (w / 2);            // -1 … 1 across
-        // quadratic-bezier lean (p1 = curve at mid-height), like a blade
+        // quadratic-bezier lean (p1 = curve at mid-height)
         pos.setZ(i, pos.getZ(i) + 2 * (1 - t) * t * curve * h + cup * s * s * w);
         aH[i] = t;
         uv.setY(i, t);                              // v runs root→tip
@@ -240,7 +186,7 @@ function mergeInto(acc, geo, mat4) {
 function mergeAll(list) {
     const { mergeGeometries } = T3.BufferGeometryUtils || globalThis.BufferGeometryUtils || {};
     if (mergeGeometries) return mergeGeometries(list, false);
-    // tiny fallback merge (position/normal/uv/aH, indexed)
+    // fallback merge (position/normal/uv/aH, indexed)
     let vtx = 0, idx = 0;
     for (const g of list) { vtx += g.attributes.position.count; idx += g.index.count; }
     const pos = new Float32Array(vtx * 3), nor = new Float32Array(vtx * 3),
@@ -267,9 +213,7 @@ function mergeAll(list) {
 
 const _m4 = new T3.Matrix4(), _q = new T3.Quaternion(), _v = new T3.Vector3(), _e = new T3.Euler();
 
-// grass cards light like a ground carpet when their normals lean world-up —
-// per-card normals leave half the yaw-rotated instances facing away from the
-// sun and the field goes near-black in the mid-distance
+// normals lean world-up: per-card normals leave half the yawed instances facing away, near-black mid-distance
 function blendNormalsUp(g, k = 0.65) {
     const nor = g.attributes.normal;
     for (let i = 0; i < nor.count; i++) {
@@ -280,7 +224,7 @@ function blendNormalsUp(g, k = 0.65) {
     return g;
 }
 
-// tuft: N cards sharing a root, yaw-fanned with slight tilt scatter
+// yaw-fanned with slight tilt scatter
 function tuftGeometry(spec, rng) {
     const parts = [];
     const card = cardGeometry(spec.card);
@@ -291,25 +235,19 @@ function tuftGeometry(spec, rng) {
         _m4.makeRotationFromEuler(_e);
         mergeInto(parts, card, _m4);
     }
-    return blendNormalsUp(mergeAll(parts), 1.0);   // grass cards: normals straight up — light like the ground plane
+    return blendNormalsUp(mergeAll(parts), 1.0);   // normals straight up: light like the ground plane
 }
 
-// (Shrub bodies now grow in shrub_gen.js — the vendored SeedThree dichotomous
-// skeleton + spray-card cluster grammar. The old basal-stem cluster builder
-// lives in git history.)
+// shrub bodies grow in vegetation_shrub_gen.js
 
-// blade cards, the Halo hybrid (Skye's own production technique): each blade
-// is a segmented plane whose silhouette lives in the ALPHA of an individual-
-// blade atlas column — and the card's loop widths/centres are FITTED to the
-// measured envelope of that column's art (close, not exact: no tip modeling)
-// so the empty-alpha margin, and with it the overdraw, mostly disappears.
+// loops are fitted to each atlas column's measured alpha envelope, so the empty margin (and its overdraw) mostly goes
 function bunchGeometry(spec, rng, fit, palette) {
     const { perBunch, bunchR, h, w, lean } = spec.blades;
     const COLS = 8;
-    const cardW = w * 2;                  // full card width the atlas column maps to
+    const cardW = w * 2;                  // the atlas column's full width
     const pos = [], aH = [], uv = [], idx = [], col = [];
     let vb = 0;
-    const LOOPS = 4;                      // horizontal segments carry the bend (4: smoother arcs AND tighter UV tracking of curved atlas blades — instanced, so the cost is per-blade-geometry only)
+    const LOOPS = 4;                      // segments carrying the bend; instanced, so the cost is per blade geometry only
     for (let b = 0; b < perBunch; b++) {
         const ang = rng() * Math.PI * 2, rad = Math.sqrt(rng()) * bunchR;
         const bx = Math.cos(ang) * rad, bz = Math.sin(ang) * rad;
@@ -319,9 +257,7 @@ function bunchGeometry(spec, rng, fit, palette) {
         const cr = Math.cos(roll), sr = Math.sin(roll);
         const c = Math.floor(rng() * COLS);
         const bands = fit ? fit[c] : null;
-        // §22m opaque mode: this blade's color ladder + per-blade jitter —
-        // independent per channel, so tufts drift slightly in hue the way
-        // the atlas's own blades do, not just in brightness
+        // §22m: jitter per channel, so tufts drift in hue like the atlas's blades, not just brightness
         const lad = palette ? palette[c] : null;
         const jr = 0.9 + rng() * 0.2, jg = 0.9 + rng() * 0.2, jb = 0.9 + rng() * 0.2;
         const s0 = vb;
@@ -329,16 +265,13 @@ function bunchGeometry(spec, rng, fit, palette) {
             const t = lp / LOOPS;
             const [fcx, fhw] = bands ? bands[lp] : [0, 0.5];
             const bend = leanAmt * t * t;                 // pose lean (quadratic)
-            const artC = fcx * bw;                        // follow the art's curve
+            const artC = fcx * bw;
             const px = bx + cr * (bend + artC), pz = bz + sr * (bend + artC);
             const py = t * bh;
-            // opaque mode: the strip IS the silhouette — the fitted envelope
-            // already tapers to a near-point tip (the art's), so the only
-            // guard is a tiny floor at the top loop against a zero-area sliver
+            // opaque: the strip IS the silhouette; a tiny floor at the top loop guards a zero-area sliver
             const hwW = (palette ? Math.max(fhw, lp === LOOPS ? 0.012 : fhw) : fhw) * bw;
             pos.push(px - sr * hwW, py, pz + cr * hwW);
             pos.push(px + sr * hwW, py, pz - cr * hwW);
-            // UVs sample exactly the strip of art the fitted card covers
             uv.push((c + 0.5 + fcx - fhw) / COLS, t, (c + 0.5 + fcx + fhw) / COLS, t);
             aH.push(t, t);
             if (lad) {
@@ -359,20 +292,11 @@ function bunchGeometry(spec, rng, fit, palette) {
     if (col.length) g.setAttribute('color', new T3.Float32BufferAttribute(col, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    // (§22m note: a 0.55 partial-normal experiment turned the meadow
-    // charcoal — side-facing normals see neither sun nor sky. Sol's
-    // up-normal "light like the ground plane" trick is the meadow's
-    // brightness; the specular veil is handled at the material instead.)
-    return blendNormalsUp(g, 1.0);   // blades: normals straight up — light like the ground plane
+    // fully up: partial normals turned the meadow charcoal (side-facing normals see neither sun nor sky)
+    return blendNormalsUp(g, 1.0);
 }
 
-// Mojave yucca (Yucca schidigera) — built to reference (Red Rock NV habit
-// photos): a DENSE golden-spiral crown of straight stiff bayonets — near-
-// vertical at the centre grading to sub-horizontal at the rim, each base on
-// its own point of a small dome so there is no shared convergence point to
-// see — over a thatch-skinned trunk whose upper half wears a thick skirt of
-// downswept dried leaves. Density is what hides the bases: you can't see
-// into a real schidigera crown.
+// Mojave yucca: a golden-spiral crown of bayonets on a small dome, over a thatched trunk with a dry-leaf skirt
 function yuccaGeometry(spec, rng) {
     const { r, spikes } = spec.rosette;
     const pos = [], uv = [], aH = [], idx = [];
@@ -380,18 +304,14 @@ function yuccaGeometry(spec, rng) {
     const S = new T3.Vector3(), A = new T3.Vector3(), UPL = new T3.Vector3(), RAD = new T3.Vector3();
     const YUP = new T3.Vector3(0, 1, 0);
     const GA = 2.399963;   // golden angle
-    // atlas thirds (the approved composition sheet): live fronds | dry fronds
-    // | trunk thatch — each spike maps its column window; the art's alpha
-    // carves the silhouettes
+    // atlas thirds: live fronds | dry fronds | trunk thatch; the art's alpha carves the silhouettes
     const LIVE = [0.012, 0.32], DRY = [0.345, 0.655], BARK = [0.67, 0.996];
     const liveCol = () => LIVE;
     const dryCol = () => DRY;
     // a real column, not a ground collar; heroes scale this up per instance
     const trunkH = 0.22 + rng() * 0.28;
     const trunkR = 0.06 + rng() * 0.02;
-    // decades of lean baked into the column: a smooth arc — some plants nearly
-    // straight, some properly bendy — and the crown rides the arc's END
-    // tangent, so the whole head tips off-vertical like the old veterans
+    // the column is an arc and the crown rides its END tangent, so the head tips off-vertical
     const bendA = rng() * Math.PI * 2;
     const bendAmt = (0.1 + rng() * 0.55) * trunkH;
     const bcx = Math.cos(bendA) * bendAmt, bcz = Math.sin(bendA) * bendAmt;
@@ -401,10 +321,9 @@ function yuccaGeometry(spec, rng) {
         return new T3.Quaternion().setFromUnitVectors(YUP, A);
     };
 
-    // one straight V-folded bayonet from an explicit base point; qRot tips its
-    // whole frame (axis, side, fold) with the column so leaves follow the lean
+    // a V-folded bayonet; qRot tips its whole frame with the column so leaves follow the lean
     function spike(yaw, pitch, len, u0, u1, bx, by, bz, droopK, qRot) {
-        const w0 = len * 0.145 * (0.9 + rng() * 0.3);    // fuller blades, mild jitter
+        const w0 = len * 0.145 * (0.9 + rng() * 0.3);
         A.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch));
         S.set(-Math.sin(yaw), 0, Math.cos(yaw));
         UPL.set(0, 1, 0);
@@ -427,7 +346,7 @@ function yuccaGeometry(spec, rng) {
         }
     }
 
-    // trunk: rings along the arc, base sunk below grade, real thatch skin
+    // trunk: rings along the arc, base sunk below grade
     {
         const n = 10, rings = 4, s0 = vb;
         for (let g = 0; g <= rings; g++) {
@@ -454,8 +373,7 @@ function yuccaGeometry(spec, rng) {
         for (let i = 0; i < n; i++) idx.push(lastRing + i, cTop, lastRing + i + 1);
     }
 
-    // dried skirt: dense, in a tight band just under the crown, downswept and
-    // hugging the column — bases and directions follow the arc's local frame
+    // dried skirt: a tight downswept band under the crown, in the arc's local frame
     const nSkirt = Math.round(spikes * 0.8);
     for (let i = 0; i < nSkirt; i++) {
         const tS = i / nSkirt;
@@ -470,9 +388,7 @@ function yuccaGeometry(spec, rng) {
         spike(yaw, pitch, len, col[0], col[1], cx + RAD.x, cy + RAD.y, cz + RAD.z, -0.28, qR);
     }
 
-    // live crown: golden-spiral spherical burst riding the arc's end tangent.
-    // t=0 centre → near-vertical bayonets, t=1 rim plunging into the skirt;
-    // each base on its own dome point. Mid-dome leaves run longest.
+    // live crown: t=0 centre → near-vertical, t=1 rim plunging into the skirt
     const qTop = qAt(1);
     const [tpx, tpy, tpz] = trunkPoint(1);
     for (let i = 0; i < spikes; i++) {
@@ -496,7 +412,6 @@ function yuccaGeometry(spec, rng) {
     return blendNormalsUp(g, 0.35);
 }
 
-// rosette: crossed vertical fans + optional low horizontal card
 function rosetteGeometry(spec, rng) {
     const { r, cards, topCard } = spec.rosette;
     const parts = [];
@@ -519,10 +434,7 @@ function rosetteGeometry(spec, rng) {
 import { resetFloraOccupancy, valueNoise2D, placeInstances, placeRows, placeExplicit } from '../../../shared/flora-placement.js';
 export { resetFloraOccupancy } from '../../../shared/flora-placement.js';
 
-// `surface` support: any mesh(es) become a height field by raycasting straight
-// down — height from the hit point, slope from the hit normal. This is what
-// frees the brush from the terrain system: rocks, rooftops, sculpted ground,
-// any geometry at all. Returns null where the ray misses (no placement).
+// `surface`: any mesh(es) become a height field by raycasting straight down; null where the ray misses
 function surfaceSampler(surface) {
     const meshes = Array.isArray(surface) ? surface : [surface];
     for (const m of meshes) m.updateWorldMatrix(true, false);
@@ -542,7 +454,7 @@ function surfaceSampler(surface) {
 }
 
 
-// ── the shared gust-envelope noise texture (proven on-stack pattern) ────────
+// ── the shared gust-envelope noise texture ───────────────────────────────────
 let _gustTex = null;
 function gustTex() {
     if (_gustTex) return _gustTex;
@@ -564,7 +476,7 @@ function gustTex() {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 export async function createFlora(opts = {}) {
-    await ensureFloraDefs();   // §24 defs: species are data — see the registry block
+    await ensureFloraDefs();   // §24: species are data
     let spec = FLORA_SPECIES[opts.species === 'meadow_blades' ? 'grass' : opts.species];
     if (!spec) throw new Error(`[grass2] unknown species '${opts.species}' — have: ${Object.keys(FLORA_SPECIES).join(', ')}`);
     const o = {
@@ -572,30 +484,17 @@ export async function createFlora(opts = {}) {
         maxSlope: 0.9, sunDir: [-0.5, 0.8, 0.3], windDir: [1, 0.3],
         ...opts,
     };
-    // `size` = stand diameter (stands are circular by default); width/depth
-    // remain available for elliptical stands
+    // `size` = stand diameter; width/depth make an elliptical stand
     if (opts.size) {
         if (!opts.width) o.width = opts.size;
         if (!opts.depth) o.depth = opts.size;
     }
-    // `surface` = mesh or mesh array to grow on (raycast placement) — frees
-    // the brush from terrain: any geometry works. heightFn still wins if both
-    // are given; explicit `placements` keep their own y handling below.
+    // `surface` = mesh(es) to grow on by raycast; heightFn wins if both are given; `placements` keep their own y
     if (opts.surface && !opts.heightFn) o._surfaceAt = surfaceSampler(opts.surface);
-    // `align` = how much plants tilt with the surface normal (0 world-up …
-    // 1 full normal). Grass hugs its ground; woody plants grow toward the sky.
+    // `align` = tilt with the surface normal (0 world-up … 1 full normal)
     o._align = opts.align ?? (spec.blades ? 0.75 : 0.15);
-    // `height` = grass height in metres for blade fields (lawn 0.1, meadow
-    // 0.35-0.5, tallgrass 0.8+). Overrides the species' authored blade length
-    // AND scales the wind response with it — short turf is stiff (a lawn
-    // barely stirs), long blades are compliant levers (tallgrass sways hard,
-    // flutters more). windK ~ (h/authored)^1.4, clamped 0.25..2.2; the h²
-    // height factor in the shader then compounds it naturally per vertex.
-    // Silently irrelevant to shrub/yucca fields (their size is the plant's).
-    // `color` = seasonal grass colour: a GRASS_COLORS name ('emerald',
-    // 'copper', 'straw'...) or a custom [r,g,b] multiplier over the atlas.
-    // BLADE GRASSES ONLY — shrub/yucca foliage always renders its authored
-    // sheet colours (no API path tints them; asset changes are art changes)
+    // `height` (m) overrides blade length and scales wind: windK ~ (h/authored)^1.4, clamped 0.25..2.2
+    // `height` and `color` (GRASS_COLORS name or [r,g,b]) apply to blade grasses only
     if (opts.color) {
         if (!spec.blades) throw new Error(`[grass2] 'color' applies to blade grasses only — '${opts.species}' keeps its authored sheet colours`);
         const entry = Array.isArray(opts.color) ? opts.color : GRASS_COLORS[opts.color];
@@ -616,11 +515,8 @@ export async function createFlora(opts = {}) {
             },
         };
     }
-    // §22m: opaque blades sample the atlas into a palette INSTEAD of loading
-    // GPU textures — with maps null, every existing no-maps branch below
-    // (alphaTest 0, attribute('color'), no opacity/relief/rough nodes, the
-    // cheap backlit term) IS the opaque material. A failed sample falls back
-    // to the atlas-card path untouched. COLS/LOOPS match bunchGeometry's.
+    // §22m: with maps null the no-maps branches are the opaque material; a failed sample falls back to atlas cards
+    // COLS/LOOPS must match bunchGeometry's
     const wantOpaque = !!o.opaqueBlades && spec.archetype === 'blades' && !!spec.maps;
     const palette = wantOpaque ? await sampleBladePalette(spec.maps + '_albedo.png', 8, 4) : null;
     if (wantOpaque && !palette) console.warn('[grass2] opaque-blade palette sample failed — atlas cards fallback');
@@ -631,7 +527,7 @@ export async function createFlora(opts = {}) {
         catch { /* no fit data — unfitted rectangles still render */ }
     }
 
-    // base geometry: one tuft / cluster / rosette (seeded, so fields differ by seed)
+    // seeded, so fields differ by seed
     const gRng = (() => { let s = (o.seed + 13) * 48271 % 2147483647;
         return () => { s = (s * 48271) % 2147483647; return s / 2147483647; }; })();
     let shrubAnchor = null;
@@ -652,15 +548,13 @@ export async function createFlora(opts = {}) {
         console.log(`[grass2] corn plant: ${cornBuild.stats.verts} verts, ${cornBuild.stats.tris} tris`);
     }
     if (spec.archetype === 'sunflower') {
-        // fitted card envelopes measured from the delivered art (overdraw
-        // pull-in); the gen has a stand-in fallback if the json is absent
+        // fitted envelopes measured from the art; the gen has a fallback if the json is absent
         let sunFit = null;
         try { sunFit = JSON.parse(await Deno.readTextFile(ASSET_DIR + 'sunflower_fit.json')); }
         catch { /* fallback envelopes in the gen */ }
         cornBuild = buildSunflowerGeometry('sunflower', `sunflower:${o.seed}:${o.variant ?? 0}`,
             { fit: sunFit, ...spec.sunflower, ...(opts.sunflower ?? {}) });
-        // the gen owns its normals (bent head volume + up-blended blades) —
-        // a generic re-blend here would undo that treatment
+        // the gen owns its normals: never re-blend here
         console.log(`[grass2] sunflower plant: ${cornBuild.stats.verts} verts, ${cornBuild.stats.tris} tris`);
     }
     const baseGeo = shrubGeos ? shrubGeos.leaf
@@ -691,18 +585,9 @@ export async function createFlora(opts = {}) {
 
     // ── material ────────────────────────────────────────────────────────────
     const isBlades = spec.archetype === 'blades';
-    // opts.fastShade (eidoverse-worlds §22l): the blades fragment diet. A
-    // 4cm blade at meadow density cannot show normal-map relief or per-pixel
-    // roughness, and per-light SSS on it reads the same as the cheap backlit
-    // term below — but at 2× retina the meadow's fragments pay all four
-    // fetches (albedo/normal/rough/transl) plus the SSS lobe per light.
-    // fastShade collapses that to ONE albedo sample on MeshStandardNodeMaterial.
-    // Off (the default), everything below is byte-identical to upstream.
+    // opts.fastShade (§22l): one albedo sample (a 4 cm blade can't show relief, roughness or SSS); off by default
     const fast = !!o.fastShade;
-    // fastShade also drops albedo anisotropy 4 → 1: the multi-tap grazing-angle
-    // filter runs exactly where blades are subpixel; the softening reads as
-    // depth haze. (Sampler state on the shared texture — acceptable because
-    // the atlas is species-specific and the kill-switch boots a fresh page.)
+    // fastShade drops albedo anisotropy 4 → 1 (the sampler is shared, but the atlas is per species)
     if (fast && maps && maps.albedo) maps.albedo.anisotropy = 1;
     const hasTransl = !!(maps && maps.transl) && !fast;
     const MatClass = hasTransl ? T3.MeshSSSNodeMaterial : T3.MeshStandardNodeMaterial;
@@ -710,12 +595,9 @@ export async function createFlora(opts = {}) {
         side: T3.DoubleSide, metalness: 0, roughness: spec.rough,
         alphaTest: maps ? 0.35 : 0, transparent: false,
     });
-    // §22m: palette blades also mute the specular veil directly — high
-    // roughness plus reduced intensity; what remains reads as blade glints
-    // via the varied normals baked in bunchGeometry
+    // §22m: palette blades mute the specular veil (high roughness, reduced intensity)
     if (palette) { mat.roughness = Math.min(1, (spec.rough ?? 0.7) * 1.35); mat.specularIntensity = 0.35; }
-    // (vertex colour is read in colorNode below — setting material.vertexColors
-    // too would apply it twice and square the colour toward black)
+    // never set vertexColors: colorNode reads them, so it would square the colour toward black
 
     const uT = uniform(0);
     const uWindDir = uniform(new T3.Vector2(o.windDir[0], o.windDir[1]).normalize());
@@ -729,44 +611,20 @@ export async function createFlora(opts = {}) {
     const aPR = attribute('aPosRot'), aSV = attribute('aScaleVar'),
         aPh = attribute('aPhase'), aHgt = attribute('aH');
 
-    // full instance transform in the vertex stage (the CK42BB layout):
-    // scale → tilt(X) → yaw(Y) → translate → wind → push
+    // instance transform in the vertex stage: scale → tilt(X) → yaw(Y) → translate → wind → push
     mat.positionNode = Fn(() => {
-        // density LOD (opts.lodGrow, eidoverse-worlds §22e/f): a host that
-        // thins distant INSTANCES asks the survivors to cover for them —
-        // grow scales tufts up to `cap` with camera distance (area ∝
-        // scale², so ~1.7 compensates a ~3× thinning). With `exp` set, the
-        // falloff SHAPE moves in here too: each instance keeps itself iff
-        // its draw-order rank (the host writes rank into the flutter-phase
-        // lane post-shuffle — still uniform per location, flutter looks
-        // identical) is under keep(d) = ((far−d)/(far−near))^exp. That is
-        // exactly the host's count-prefix refined per instance: density
-        // ramps CONTINUOUSLY — no tile seams, because no instance knows
-        // its tile. Killed instances collapse to zero scale (no raster).
-        // Without the opt, grow ≡ 1: byte-identical behavior everywhere.
+        // density LOD (opts.lodGrow, §22e/f): distant survivors grow up to `cap` (area ∝ scale²)
+        // with `exp`, keep iff phase rank < ((far−d)/(far−near))^exp: no tile seams; the killed collapse to zero scale
         const lg = o.lodGrow;
         let grow = float(1);
-        let growW = null;       // §22q: width-only extra grow (never height —
-                                // a taller meadow near the camera would READ;
-                                // wider blades at constant coverage do not)
-        let aliveCond = null;   // bool node when the dither is active — gates
-                                // the expensive dynamics below (§22h: a
-                                // zero-scaled instance skips no raster work
-                                // but WAS paying the full vertex program)
+        let growW = null;       // §22q: width only, never height (a taller meadow near the camera would READ)
+        let aliveCond = null;   // §22h: gates the dynamics; a zero-scaled instance still pays the vertex program
         if (lg) {
             const dCam = aPR.xz.sub(cameraPosition.xz).length();
             const t01 = smoothstep(float(lg.near ?? 15), float(lg.far ?? 90), dCam);
             grow = mix(float(1), float(lg.cap ?? 1.7), t01);
-            // §22q (eidoverse-worlds): shaped resident density. baseKeep < 1
-            // thins instances at EVERY distance through the same rank dither
-            // (keep ×= baseKeep), and the survivors widen by 1/√baseKeep so
-            // screen-space coverage stays constant (area ∝ width × count).
-            // A guard ring (guardNear..guardFar) ramps the thinning in: the
-            // blades at the camera's feet — the only place a missing tuft is
-            // individually legible — stay at full density, and both the keep
-            // cut and the width comp ride ONE ramp so density × coverage is
-            // continuous everywhere. Requires the dither (lg.exp); without
-            // baseKeep the emission is byte-identical to §22h.
+            // §22q: baseKeep < 1 thins everywhere and widens survivors by 1/√baseKeep, except a guard ring at the feet
+            // requires lg.exp
             const bk = lg.exp != null && lg.baseKeep < 1 ? lg.baseKeep : null;
             let baseT = null;
             if (bk != null) {
@@ -782,11 +640,7 @@ export async function createFlora(opts = {}) {
                 aliveCond = rank.lessThanEqual(keep);
                 grow = grow.mul(step(rank, keep));
                 if (lg.vertsPerBlade) {
-                    // §22h: BLADE-level dither — the retired per-tile geometry
-                    // swap, continuous: each blade (a contiguous run of
-                    // vertsPerBlade vertices) fades by the same distance law,
-                    // hashed per instance so different tufts lose different
-                    // blades. Recovers the swap's measured win with no pop.
+                    // §22h: per-blade dither, hashed per instance, so tufts lose different blades with no pop
                     const bladeId = float(vertexIndex).div(float(lg.vertsPerBlade)).floor();
                     const bKeep = mix(float(1), float(lg.bladeKeepFar ?? 0.4), t01);
                     const bRank = fract(bladeId.mul(0.6180339887).add(rank.mul(7.13)));
@@ -795,16 +649,13 @@ export async function createFlora(opts = {}) {
                 }
             }
         }
-        // §22q: the width comp multiplies x/z only; a dither-killed instance
-        // still collapses to zero on every axis (grow carries the step)
+        // §22q: width multiplies x/z only; grow carries the step, so a killed instance collapses on every axis
         let p = growW == null
             ? positionLocal.mul(vec3(aSV.x, aSV.y, aSV.x).mul(grow)).toVar()
             : positionLocal.mul(vec3(aSV.x.mul(growW), aSV.y, aSV.x.mul(growW)).mul(grow)).toVar();
         const cR = cos(aPR.w), sR = sin(aPR.w);
         p = vec3(p.x.mul(cR).sub(p.z.mul(sR)), p.y, p.x.mul(sR).add(p.z.mul(cR))).toVar();
-        // world tilt (aPhase.yz): random lean + the stroke's surface-normal
-        // share, applied post-yaw about world X then Z — plants follow the
-        // geometry they grow from
+        // world tilt (aPhase.yz): random lean + surface-normal share, post-yaw about world X then Z
         const cX = cos(aPh.y), sX = sin(aPh.y);
         p = vec3(p.x, p.y.mul(cX).sub(p.z.mul(sX)), p.y.mul(sX).add(p.z.mul(cX))).toVar();
         const cZ = cos(aPh.z), sZ = sin(aPh.z);
@@ -812,11 +663,7 @@ export async function createFlora(opts = {}) {
         const world = p.add(aPR.xyz).toVar();
 
         const hF = aHgt, h2 = hF.mul(hF);
-        // §22h: the dynamics (three wind layers + gust fetch + the pusher
-        // loop) are the vertex program's expensive tail — a dither-killed
-        // vertex must not pay them. Everything below writes into `disp`;
-        // with the dither active it runs inside If(alive), else unguarded
-        // (byte-identical emission for hosts without lodGrow.exp).
+        // §22h: a dither-killed vertex must not pay the wind/pusher tail
         const disp = vec2(0, 0).toVar();
         const buildDynamics = () => {
         // layer 1 — global sway
@@ -833,38 +680,25 @@ export async function createFlora(opts = {}) {
 
         const windXZ = gSway.add(gustSway).add(turb).mul(h2).toVar();
 
-        // pushers — quadratic falloff ×h² (CK42BB layout), evaluated PER
-        // INSTANCE from the plant's root so the whole plant leans coherently
-        // away (per-vertex directions made clusters pinwheel), with a species
-        // stiffness and a SOFT lean ceiling
+        // pushers: quadratic falloff ×h², from the root so the plant leans as one; species stiffness, soft ceiling
         const pushK = spec.pushScale ?? 1.0;
         const push = vec2(0, 0).toVar();
         for (let i = 0; i < 4; i++) {
             const P = pushArr.element(i);
             const delta = aPR.xz.sub(P.xz);                 // root → pusher, stable per plant
             const dTrue = delta.length();
-            // direction floor: delta/0.3 fades the response smoothly to zero
-            // at the pusher centre instead of whipping 180° as the character
-            // steps over a root — the field stays continuous through the
-            // origin, so plants ease around a passing body
+            // direction floor 0.3: fades to zero at the pusher centre instead of whipping 180° over a root
             const d = tmax(dTrue, 0.3);
             const live = step(0.001, P.w);                  // 0 when this pusher slot is off
-            // strength falls off from the CLOSER of root and vertex — root-only
-            // falloff let a metre-long corn leaf reach a walker whose radius
-            // never saw its far-away root, and the blade clipped through the
-            // body untouched. Direction stays root-based (per-vertex direction
-            // is the old pinwheel bug).
+            // strength from the closer of root and vertex (a long leaf feels a walker); direction root-based (per-vertex pinwheels)
             const vDist = world.xz.sub(P.xz).length();
             const s = float(1).sub(smoothstep(0.0, tmax(P.w, 0.001), tmin(dTrue, vDist))).toVar();
             push.addAssign(delta.div(d).mul(s.mul(s)).mul(1.35 * pushK).mul(live));
         }
-        // soft saturation: tanh approaches the 0.6 lean ceiling asymptotically.
-        // The old hard min() parked every close plant AT the cap, so walking
-        // by snapped them between capped and easing states
+        // tanh, never a hard min(): a cap snaps close plants between capped and easing as a walker passes
         const pLen = tmax(push.length(), 1e-4);
         const pushCapped = push.mul(float(0.6).mul(tanh(pLen.div(0.6))).div(pLen));
-        // push yields the WHOLE plant (roots 30%, tips 100%) — pure h² left
-        // low branches pinned through a character's legs mid-crossing
+        // push yields the WHOLE plant (roots 30%, tips 100%): pure h² pins low branches through legs
         const pushH = hF.mul(0.7).add(0.3);
         disp.assign(windXZ.add(pushCapped.mul(pushH)));
         };   // end buildDynamics (§22h)
@@ -872,9 +706,7 @@ export async function createFlora(opts = {}) {
         return world.add(vec3(disp.x, float(0), disp.y));
     })();
 
-    // per-instance yaw-rotated normals — the geometry turns in positionNode,
-    // so the authored (bent) normals must turn with it or every plant is lit
-    // as if the sun sat somewhere else (and the SSS lobe points wrong)
+    // normals must turn with positionNode's yaw, or every plant is lit (and its SSS lobe aimed) wrong
     const rotNormal = Fn(() => {
         const cR = cos(aPR.w), sR = sin(aPR.w);
         return transformNormalToView(vec3(
@@ -882,34 +714,25 @@ export async function createFlora(opts = {}) {
             normalLocal.y,
             normalLocal.x.mul(sR).add(normalLocal.z.mul(cR))));
     })();
-    // base = instance-rotated vertex normal (up for grass, bent for shrub
-    // sprays — a LIGHT-GATHER direction); detail = the tangent map's deviation
-    // from the interpolated surface normal, decoded in the true geometric
-    // frame. base + delta keeps the volume shading AND the surface relief.
+    // base (a light-gather direction) + the tangent map's deviation in the true geometric frame: volume AND relief
     if (maps && maps.normal && !fast) {
         const relief = T3.normalMap(texNode(maps.normal)).sub(T3.normalView);
         mat.normalNode = normalize(rotNormal.add(relief.mul(0.85)));
     } else {
-        // fastShade: the blended-up gather normal alone — relief on a blade
-        // this thin was never visible, only paid for
+        // fastShade: the gather normal alone (relief this thin is invisible)
         mat.normalNode = rotNormal;
     }
 
-    // colour: sheet albedo (or baked blade vertex colour) × per-instance shade
+    // sheet albedo (or baked vertex colour) × per-instance shade
     const shade = float(1.0).add(aSV.w.sub(0.5).mul(0.15));
-    // fastShade shares ONE albedo sample between color and opacity — the
-    // two independent texNode() calls below may or may not CSE in codegen;
-    // sharing the node makes the single fetch a certainty
+    // fastShade shares ONE albedo node between colour and opacity: two texNode() calls may not CSE
     const albSample = (fast && maps) ? texNode(maps.albedo) : null;
     let albRGB = albSample ? albSample.rgb
         : maps ? texNode(maps.albedo).rgb : attribute('color');
     if (spec.leafTint) albRGB = albRGB.mul(vec3(...spec.leafTint));
-    // recolor mode: hue from the target, detail from the atlas luminance —
-    // the atlas's own hue is fully discarded (multiply can't unmake green)
+    // recolor: hue from the target, detail from atlas luminance (multiply can't unmake green)
     if (spec.leafRecolor) albRGB = luminance(albRGB).mul(vec3(...spec.leafRecolor));
-    // regionTint: the stemTint idea scoped to one UV window of a trim sheet —
-    // lets one part of a single-material plant shift hue (corn's plume region
-    // toward tan) with no extra vertex buffer spent on a part id
+    // regionTint: a hue shift in one UV window (corn's plume toward tan), with no part-id vertex buffer
     if (spec.regionTint) {
         const rt = spec.regionTint;
         const u = uvNode();
@@ -921,14 +744,13 @@ export async function createFlora(opts = {}) {
     if (maps) {
         mat.opacityNode = albSample ? albSample.a : texNode(maps.albedo).a;
         if (maps.rough && !fast) mat.roughnessNode = texNode(maps.rough).r.mul(spec.rough);
-        // fastShade: constant material.roughness (spec.rough) already set above
+        // fastShade: constant spec.rough, set above
     }
 
-    // backlit translucency: light coming from behind glows through the sheet
+    // backlit translucency
     const sssAmt = (o.sss ?? 1) * spec.sss;
     if (hasTransl) {
-        // real per-light translucency (Barre-Brisebois via MeshSSSNodeMaterial)
-        // — SeedThree's tuned foliage values, verbatim
+        // per-light translucency (MeshSSSNodeMaterial), SeedThree's foliage values
         mat.thicknessColorNode = texNode(maps.transl).r.mul(float(sssAmt * 2.2));
         mat.thicknessDistortionNode = float(0.3);
         mat.thicknessAmbientNode = float(0.0);
@@ -937,18 +759,15 @@ export async function createFlora(opts = {}) {
         mat.thicknessScaleNode = float(3.0);
         mat.emissiveNode = albRGB.mul(0.08);     // faint fill so backfaces never go dead
     } else {
-        // no translucency map — keep the cheap backlit approximation
+        // no translucency map: the cheap backlit approximation
         const V = normalize(cameraPosition.sub(positionWorld));
         const backlit = pow(saturate(dot(V.negate(), uSunDir)), 3.0);
         const sssTerm = albRGB.mul(0.5).mul(backlit).mul(sssAmt).mul(aHgt.mul(0.5).add(0.5));
-        // §22m: palette-baked blades take the atlas path's 0.08 fill, not the
-        // no-asset 0.2 — the bigger lift washed the sampled greens milky
+        // §22m: palette blades take 0.08, not 0.2: the bigger lift washes the greens milky
         mat.emissiveNode = albRGB.mul(palette ? 0.08 : isBlades ? 0.2 : 0.1).add(sssTerm);
     }
 
-    // shrub wood: second instanced mesh, same placement, real bark maps riding
-    // the tube network's wrapped UVs (flat colour on visible branches is a
-    // defect; stemColor is only the no-asset fallback)
+    // shrub wood: a second instanced mesh, bark on the tubes' wrapped UVs; stemColor is only the no-asset fallback
     let stemMesh = null, stemMapsRef = null;
     if (shrubGeos && shrubGeos.stem) {
         {
@@ -1010,15 +829,14 @@ export async function createFlora(opts = {}) {
         }
     };
 
-    if (stemMesh) mesh.add(stemMesh);                    // rides along into the scene
+    if (stemMesh) mesh.add(stemMesh);
     console.log(`[grass2] ${opts.species}: ${count} instances × ${geo.attributes.position.count} verts (${spec.archetype}${stemMesh ? '+stems' : ''})`);
     return { mesh, stemMesh, material: mat, update, setPushers, dispose,
         uniforms: { time: uT, windDir: uWindDir, base: uBase, gust: uGust, sunDir: uSunDir },
         count };
 }
 
-// helper-injection registration (HELPER_MODULES imports this file as an ES
-// module; scenes call the globals like every other eidoverse helper)
+// helper-injection registration: HELPER_MODULES imports this module; scenes call the globals
 globalThis.createFlora = createFlora;
 globalThis.FLORA_SPECIES = FLORA_SPECIES;
 globalThis.GRASS_COLORS = GRASS_COLORS;

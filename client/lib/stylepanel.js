@@ -46,10 +46,11 @@ export const panelAlpha = () => parseFloat(getComputedStyle(document.documentEle
 export function setPanelAlpha(v) {
   rootStyle().setProperty('--panel-a', String(v));
   const o = load(); o['--panel-a'] = String(v); save(o);
+  bus.emit('style', { key: '--panel-a', value: String(v) });   // as every style setter: the dials and token-baked sprites follow
 }
 
-// --xr-panel-a: the VR quads' panel alpha (domquad.js reads it; 1 = opaque, today's VR). Separate from --panel-a on
-// purpose: the desktop's glass tints a live viewport, a quad has none, so the desktop dial never reached VR (owner, 09-30).
+// --xr-panel-a: the VR quads' panel alpha (domquad.js reads it; 1 = opaque). Separate from --panel-a on purpose: the
+// desktop's glass tints a live viewport, a quad has none, so the desktop dial never reached VR.
 export const XR_PANEL_A_RANGE = [0.6, 1];
 export const xrPanelAlphaToken = () => {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--xr-panel-a'));
@@ -63,10 +64,10 @@ export function setXrPanelAlpha(v) {
   bus.emit('style', { key: '--xr-panel-a', value: String(n) });   // the VR quads re-raster and pick their pass on this
 }
 
-// the opacity dials follow the token whoever sets it (a command, a reset, code): a dial that kept showing 1.00 while
-// the VR panels sat at 0.6 is a control that lies (probe shot 148, 09-30). One listener, the newest panel's repaint.
+// the opacity dials follow the token whoever sets it (a command, a reset, code): a dial showing 1.00 while the VR
+// panels sit at 0.6 is a control that lies. One listener, the newest panel's repaint.
 let repaintDials = null;
-bus.on('style', (e) => { if (e?.key === '--xr-panel-a' || e?.key === '*') repaintDials?.(); });
+bus.on('style', (e) => { if (e?.key === '--xr-panel-a' || e?.key === '--panel-a' || e?.key === '*') repaintDials?.(); });
 
 function currentHex(f) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(f.key).trim();
@@ -97,9 +98,8 @@ export function initStylePanel() {
       row.append(sw, name);
       body.appendChild(row);
     }
-    // panel visibility — two dials, because a desktop panel and a VR panel are different glass. The desktop one is
-    // --panel-a (the visionOS "Tinted" lesson already lived behind /panels; asked for here, 09-01 23:31); it tints a
-    // live viewport and never reached the headset, which the label now says (owner, 09-30). The VR one is --xr-panel-a.
+    // panel visibility — two dials, because a desktop panel and a VR panel are different glass: --panel-a tints the
+    // desktop's live viewport and never reaches the headset (the label says so); --xr-panel-a is the VR quads'.
     const dial = (label, title, min, max, get, set) => {
       const row = document.createElement('label');
       row.className = 'row'; row.title = title;
@@ -121,9 +121,8 @@ export function initStylePanel() {
       ...XR_PANEL_A_RANGE, xrPanelAlphaToken, setXrPanelAlpha);
     repaintDials = () => { vis.repaint(); xrVis.repaint(); };
 
-    // ALWAYS SHOW NAMES (owner, 10-02): every name in range, through walls — what holding B/Y did in VR before the face
-    // buttons took VRChat's convention (namereveal.js). A view preference, so it lives with the look of things; it works
-    // on the desktop too, and the N hold still does it for a glance. Off by default.
+    // ALWAYS SHOW NAMES: every name in range, through walls, what the N hold does for a glance (namereveal.js). A view
+    // preference, so it lives with the look of things. Off by default.
     const names = checkRow('always show names', () => alwaysNames(), (on) => setAlwaysNames(!!on));
     names.id = 'style-always-names';
     names.title = 'every name within range shows, through walls, all the time — what holding N does for a moment';

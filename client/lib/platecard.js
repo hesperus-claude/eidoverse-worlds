@@ -1,61 +1,34 @@
-// platecard — two quiet things beside a person's nameplate (owner, 09-30, about a mockup that put mic/ear marks ON the
-// plate: "it looks messy. Maybe anyone muted near you can pop up a grayed out ear *next* to their name plate? Oh, or
-// maybe hovering your cursor on their nameplate can pop that info beside their nameplate? … a little like an in-world
-// tooltip").
-//
-// VOICE STATE IS HOVER-ONLY (owner, 10-02: "I'd go for hover only"). An earlier pass put grey crossed headphones
-// beside the plate of anyone nearby with hearing off. The headphone toggle gates VOICE only (mic and TTS; world sound
-// is a separate slider), so that mark only mattered to someone speaking aloud and was noise to everyone typing; it
-// is gone. Mic and hearing live in the card below, in words. A client too old to say leaves them undefined and the
-// card reads "not shared" — unknown is not "headphones off".
-//
-// THE CARD: rest the pointer on a nameplate (or the head under it) for HOVER_MS (dwell.js: one dwell for every
-// "rest on it for a beat" in the client) and a small card opens beside the
-// plate — name, presence, mic and hearing in words, distance / VR / a declared word, and the one per-person action the people
-// column already offers (mention → `@name ` in the chat box, chat.js mentionPerson). It is DOM, projected to the plate each frame:
-// crisp text at any distance, the house tokens and buttons for free, focusable, and it follows the plate while open.
-// (A sprite would need its own text rendering, its own hit-testing for the button and a repaint per state change.)
-// On a touch screen a TAP on a plate opens the same card; a tap elsewhere closes it. Esc closes it and goes no
-// further (windows.js's panel toggle yields to the claim). Leaving plate and card closes a hover-opened card.
-// VR (owner, 10-02: "VR has no hover — … you can still laser-point at someone's label"): a hand's laser RESTING on a
-// plate (or the head under it) is the hover. xr.js asks platePick once no panel has claimed the laser and reports what it
-// found with aimPlate; the same timer opens the same card. The card is the SAME DOM, moved offscreen and rasterised onto
-// a quad by the vendored HTMLMesh, the way domquad.js puts the real frames in the headset (one set of panels to
-// maintain), with the panels' colour handling (prepareQuadMaterial). It floats beside the plate at the plate's own
-// depth, upright, facing you, sized to a constant angle — at any distance it reads as a panel does at arm's length.
-// The "mention" button is left out in VR: it types into the desktop chat box (index.html #platecard[data-xr]).
-// The trigger on a plate does nothing new; on the card it clicks where it points (platePress).
+// platecard — a card beside a person's nameplate, opened by dwelling on the plate (or the head under it), a tap, or a
+// VR laser. Name, presence, mic and hearing in words (unknown reads "not shared", never "off"), distance, mention.
+// Desktop: DOM projected to the plate each frame. VR: the same DOM on an HTMLMesh quad at the plate's depth and a
+// constant angle, no mention button; xr.js calls platePick / aimPlate / platePress.
 import * as THREE from 'three';
 import { claimEscape } from './windows.js';
 import { svg, fsvg } from './icons.js';
 import { HTMLMesh } from './vendor/htmlmesh.js';
 import { prepareQuadMaterial } from './domquad.js';
-import { PLATE_GETON_RAD } from './xrpointer.js';   // the laser's get-on slack around a plate (see below)
+import { PLATE_GETON_RAD } from './xrpointer.js';
 import { makeDwell, DWELL_MS } from './dwell.js';
+import { escapeHtml as esc } from './markup.js';
 
-export const HOVER_MS = DWELL_MS;  // rest this long on a plate before the card opens: the shared dwell (300 ms)
+export const HOVER_MS = DWELL_MS;  // the shared dwell (300 ms)
 const LEAVE_MS = 250;              // grace to travel from plate to card
 const HEAD_R = 0.14;               // metres: the head under the plate counts as the plate
-// VR: a CSS px of the card subtends this many radians, whatever the plate's distance — the narrowest VR panel's (342 px
-// across 0.58 m at arm's length, 0.85 m: domquad.js); wider panels draw their px up to ~1.6× smaller, and the card's text
-// is 12 px. Rasterised at XR_RASTER device px per CSS px.
+// VR: radians per CSS px at any distance (the narrowest VR panel's, domquad.js); XR_RASTER device px per CSS px
 const XR_RAD_PER_PX = 0.002, XR_RASTER = 2.5, XR_GAP_PX = 10;
-// VR: the laser's slack around the pill for getting ON a plate (the desktop gives the cursor 3–4 px): a hand trembles.
-// An ANGLE about the hand, from the pointer's one table (xrpointer.js): it was a flat 3 cm, generous up close and
-// stingy far away, where tremor is angular — 0.01 rad is that same 3 cm at 3 m. Staying ON a plate once there is the
-// pointer's stickiness, measured from the last point the laser had on it (this slack included), not stacked on top.
+// the laser's get-on slack is an ANGLE (tremor is angular); staying on is the pointer's own stickiness, not stacked
 
 let d = null;                      // injected: { camera, canvas, scene, remotes, myPos, presenting, mentionPerson, colorFor }
 let card = null, cardFor = null, openedBy = null, sig = '';
-let ptr = null;                    // { x, y } in client px while a mouse is over the canvas, else null
+let ptr = null;                    // client px while a mouse is over the canvas
 let hoverId = null, hoverSince = 0, leftAt = 0;
-let dismissed = null, dismissOff = 0;              // a card closed by hand (Esc, tap-out, its action) stays closed until the pointer leaves that plate
+let dismissed = null, dismissOff = 0;              // closed by hand: stays closed until the pointer leaves that plate
 const _v = new THREE.Vector3(), _h = new THREE.Vector3();
 let vr = false;                                    // presenting: the laser is the pointer, the card is a quad
-let xrMesh = null, xrBuilt = null;                 // the card's quad and the CSS size it was built at (HTMLMesh fixes its geometry)
-const xrAim = { left: null, right: null };         // per hand, as xr.js last reported it: { id, since } — the plate its laser rests on, and since when (that hand's dwell)
-const mouseDwell = makeDwell(HOVER_MS);            // the desktop pointer's dwell (VR's are xr.js's, one per hand)
-let openedAt = 0;                                  // for probes: when the open card opened
+let xrMesh = null, xrBuilt = null;                 // the quad and its built CSS size (HTMLMesh fixes its geometry)
+const xrAim = { left: null, right: null };         // per hand: { id, since }, that hand's dwell
+const mouseDwell = makeDwell(HOVER_MS);            // desktop only; VR's dwells are xr.js's
+let openedAt = 0;                                  // for probes
 
 export function initPlates(deps) {
   d = deps;
@@ -67,8 +40,7 @@ export function initPlates(deps) {
     const b = e.target.closest?.('button[data-act]');
     if (!b || !cardFor) return;
     if (b.dataset.act === 'mention') { const who = cardFor; close(); d.mentionPerson?.(who); }
-    // ⋯ (research roles S6): the person menu. Desktop: the house context menu under the button; a phone: the bottom
-    // sheet; VR: its rows open INSIDE the card (no popups in a headset), the strip people.js draws
+    // ⋯ the person menu (research roles S6); in VR its rows open INSIDE the card (no popups in a headset)
     if (b.dataset.act === 'more') { const who = cardFor; e.stopPropagation();
       if (vr) { let s = card.querySelector('.pm-strip'); if (s) { s.remove(); sig = ''; return; } s = document.createElement('div'); card.append(s); d.personStrip?.(who, s); sig = 'strip'; return; }
       const r = b.getBoundingClientRect(); d.personMenu?.(who, r.left, r.bottom + 4); }
@@ -83,8 +55,8 @@ export function initPlates(deps) {
   let down = null;
   addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse') return;
-    down = { x: e.clientX, y: e.clientY, t: e.timeStamp, onCanvas: e.target === d.canvas };   // event time: a slow frame between down and up is not a long press
-    // outside the card: close — unless it lands on a plate, whose tap (pointerup) re-aims the card instead
+    down = { x: e.clientX, y: e.clientY, t: e.timeStamp, onCanvas: e.target === d.canvas };   // event time: a slow frame is not a long press
+    // outside the card closes, unless on a plate (its tap re-aims the card)
     if (!card.hidden && !card.contains(e.target) && !(down.onCanvas && hitAt(e.clientX, e.clientY))) close();
   }, { passive: true, capture: true });
   addEventListener('pointerup', (e) => {
@@ -101,7 +73,7 @@ export function initPlates(deps) {
   claimEscape(() => (card.hidden ? null : 'platecard'));
 }
 
-/** Per frame (main.js registers it after gaze): the hover timer, the open card's place. */
+/** Per frame, after gaze. */
 export function updatePlates(now = performance.now()) {
   if (!d) return;
   if (d.presenting()) { updatePlatesXR(now); return; }
@@ -113,18 +85,14 @@ export function updatePlates(now = performance.now()) {
 }
 const onDomCard = () => card.matches(':hover'), onNoCard = () => false;
 
-// hover: the same plate for HOVER_MS opens it; leaving plate AND card closes a hover-opened card. `over` is the plate
-// under the pointer (desktop) or under a laser (VR), `since` when the pointer came to rest on it (its dwell's clock —
-// the mouse's here, the hand's in VR, where the laser's stickiness keeps it counting through a small drift); onCard()
-// says whether the pointer is on the card itself.
+// leaving plate AND card closes a hover-opened card; `since` is when the pointer came to rest on `over`
 function hoverStep(over, since, onCard, now) {
   hoverId = over; hoverSince = over != null ? since : now;
-  // a dismissal ends only once the pointer has been OFF that plate for a moment: a plate is a thin target, and a
-  // one-frame miss (the camera breathing a few px) must not re-arm the card under a resting pointer
+  // a dismissal ends only after LEAVE_MS off the plate: a one-frame miss on a thin target must not re-arm the card
   if (dismissed && over === dismissed) dismissOff = 0;
   else if (dismissed && !dismissOff) dismissOff = now;
   else if (dismissed && now - dismissOff >= LEAVE_MS) { dismissed = null; dismissOff = 0; }
-  if (over && over !== cardFor && over !== dismissed && now - hoverSince >= HOVER_MS && openedBy !== 'tap') open(over, 'hover');   // the dwell is ripe
+  if (over && over !== cardFor && over !== dismissed && now - hoverSince >= HOVER_MS && openedBy !== 'tap') open(over, 'hover');
   if (!card.hidden && openedBy === 'hover') {
     if (over === cardFor || onCard()) leftAt = 0;
     else if (!leftAt) leftAt = now;
@@ -135,19 +103,19 @@ function hoverStep(over, since, onCard, now) {
 // ---- VR: the laser is the pointer ------------------------------------------------------------------------------
 function updatePlatesXR(now) {
   if (!vr) enterXR();
-  // either hand: one already on the open card's person keeps it; otherwise the right hand leads
+  // a hand already on the open card's person keeps it; otherwise the right hand leads
   const L = xrAim.left, R = xrAim.right;
-  xrAim.left = xrAim.right = null;   // xr.js re-reports every frame its pointer loop runs; a frame it doesn't, nothing is aimed at
+  xrAim.left = xrAim.right = null;   // a frame xr.js doesn't report, nothing is aimed at
   const over = cardFor && (L?.id === cardFor || R?.id === cardFor) ? cardFor : (R?.id ?? L?.id ?? null);
-  // the hand(s) on it: the one that has rested there longest owns the clock
+  // the hand rested there longest owns the clock
   const since = Math.min(...[L, R].filter((a) => a && a.id === over).map((a) => a.since), now);
-  hoverStep(over, since, onNoCard, now);    // the card's own quad is part of platePick's answer (it returns cardFor)
+  hoverStep(over, since, onNoCard, now);    // the card's quad is in platePick's answer (cardFor)
   if (!card.hidden) followXR();
 }
 function enterXR() {
   close(); vr = true; hoverId = null; dismissed = null; dismissOff = 0;
   card.dataset.xr = '';                                         // VR styling: opaque, no blur or fade-in, no mention button
-  card.style.left = '-100000px'; card.style.top = '0px';        // laid out but off the desktop mirror (HTMLMesh measures, never hit-tests)
+  card.style.left = '-100000px'; card.style.top = '0px';        // laid out but off the desktop mirror
 }
 function leaveXR() {
   close(); vr = false; hoverId = null; dismissed = null; dismissOff = 0; xrAim.left = xrAim.right = null;
@@ -158,14 +126,14 @@ function dropXRMesh() { if (!xrMesh) return; xrMesh.removeFromParent(); xrMesh.d
 function buildXRMesh(w, h) {
   dropXRMesh();
   const m = new HTMLMesh(card, { scale: XR_RASTER });
-  m.material.transparent = false; m.material.alphaTest = 0.5;   // the panels' recipe: opaque pass, rounded corners cut out
-  prepareQuadMaterial(m);                                       // the authored colour after the ACES output pass (quadcolour.js)
+  m.material.transparent = false; m.material.alphaTest = 0.5;   // opaque pass, rounded corners cut out
+  prepareQuadMaterial(m);                                       // the authored colour after the ACES output pass
   m.name = 'platecard'; m.userData.noCamCollide = true;
   d.scene.add(m);
   xrMesh = m; xrBuilt = [w, h];
 }
 const _e = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3(), _s = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
-// beside the plate, at its depth (so the two sit together in stereo), right of the pill, upright, facing the eye
+// at the plate's depth (they sit together in stereo), right of the pill, upright, facing the eye
 function followXR() {
   const r = d.remotes.get(cardFor), lab = r?.avatar?.label;
   if (!lab?.visible || lab.material.opacity < 0.1) { close(); return; }
@@ -178,7 +146,7 @@ function followXR() {
   _f.subVectors(_v, _e);
   const dist = _f.length();
   _r.crossVectors(_f, UP);
-  if (_r.lengthSq() < 1e-8 || dist < 1e-3) return;   // straight above or below the eye: keep last frame's place
+  if (_r.lengthSq() < 1e-8 || dist < 1e-3) return;   // straight above/below: keep last frame's place
   _r.normalize();
   const s = XR_RAD_PER_PX * dist;                    // metres per CSS px
   lab.getWorldScale(_s);
@@ -188,8 +156,8 @@ function followXR() {
   xrMesh.lookAt(_e);
 }
 
-/** VR (xr.js, per hand, once no panel claimed the laser): what the laser rests on — a plate's pill, the head under it,
- *  or the open card — as { id, dist, obj }, or null. `cam` is the XR camera: plates are sprites, and a sprite faces a camera. */
+/** VR, per hand, once no panel claimed the laser: a pill, the head under it, or the open card, as { id, dist, obj }.
+ *  `cam` is the XR camera: a sprite faces a camera. */
 const _rc = new THREE.Raycaster(), _rm = new THREE.Matrix4(), _hits = [];
 export function platePick(handRay, cam, far = 40) {
   if (!d || !vr) return null;
@@ -204,7 +172,7 @@ export function platePick(handRay, cam, far = 40) {
   }
   for (const r of d.remotes.values()) {
     const av = r.avatar, lab = av?.label;
-    // what the desktop hit test skips, this skips: a plate not drawn, faded out, or behind a wall (its occlusion query)
+    // what the desktop hit test skips: not drawn, faded, or behind a wall
     if (!lab?.visible || lab.material.opacity < 0.1 || lab.userData.occluded) continue;
     _hits.length = 0; lab.raycast(_rc, _hits);
     const h = _hits[0];
@@ -222,11 +190,9 @@ export function platePick(handRay, cam, far = 40) {
       if (t > 0 && t < far && t < bestD && _rc.ray.distanceSqToPoint(_v) <= HEAD_R * HEAD_R) { best = r.id; bestD = t; bestLab = lab; }
     }
   }
-  return best ? { id: best, dist: bestD, obj: bestLab } : null;   // obj: what it was found on (the plate, or the card's quad) — the pointer's stickiness keeps its point there
+  return best ? { id: best, dist: bestD, obj: bestLab } : null;   // obj: the plate or the card's quad, where stickiness holds the point
 }
-/** VR, a trigger press (xr.js, after no panel took it): on the open card's quad, the press becomes mousedown → mouseup →
- *  click at the hit's uv on the card's real DOM (the vendored HTMLMesh forwards them, as domquad.js does for the panels),
- *  so the card's buttons (⋯ and its strip's rows) answer the trigger as they answer the mouse. The distance, or null. */
+/** VR, a trigger no panel took: mousedown → mouseup → click at the hit's uv on the card's real DOM. The distance, or null. */
 export function platePress(handRay, far = 40) {
   if (!d || !vr || !cardFor || !xrMesh?.visible) return null;
   _rm.extractRotation(handRay.matrixWorld);
@@ -240,13 +206,11 @@ export function platePress(handRay, far = 40) {
   for (const type of ['mousedown', 'mouseup', 'click']) xrMesh.dispatchEvent({ type, data });
   return h.distance;
 }
-/** VR: xr.js reports, per hand per frame, the plate its laser rests on (null: none) and since when — that hand's dwell
- *  clock (dwell.js), keyed on what the laser holds, so stickiness carries through. */
+/** VR, per hand per frame: the plate the laser rests on (null: none) and since when, keyed on what it holds (stickiness). */
 export function aimPlate(side, id, since = performance.now()) { if (side === 'left' || side === 'right') xrAim[side] = id == null ? null : { id, since }; }
 
 // ---- where a plate is on screen ------------------------------------------------------------------------------
-// The plate is a camera-facing sprite: its screen rect is its world anchor projected, sized by pixels-per-metre at
-// its view depth. Returns null when it is not drawn (faded out, hidden, behind the camera).
+// a camera-facing sprite: its anchor projected, sized by px-per-metre at its depth; null when not drawn
 function plateRect(av, box) {
   const lab = av?.label;
   if (!lab?.visible || lab.material.opacity < 0.1) return null;
@@ -270,15 +234,14 @@ function plateRect(av, box) {
   o.l = cx - hw; o.r = cx + hw; o.t = cy - hh; o.b = cy + hh; o.cx = cx; o.cy = cy; o.depth = depth; o.head = head;
   return o;
 }
-// plateRect's answer, reused: it runs per remote on every pointer move and every frame the card follows, and every
-// caller reads it before the next call
+// plateRect's answer, reused (per remote per pointer move): every caller reads it before the next call
 const _rect = { l: 0, r: 0, t: 0, b: 0, cx: 0, cy: 0, depth: 0, head: null }, _rectHead = { x: 0, y: 0, r: 0 };
 
 function hitAt(x, y) {
   let best = null, bestDepth = Infinity;
   const box = d.canvas.getBoundingClientRect();
   for (const r of d.remotes.values()) {
-    // a plate a wall hides (its last draw failed the depth test, avatar.js noteOccluded) opens nothing, nor does the head under it
+    // a plate a wall hides opens nothing, nor does the head under it
     const p = r.avatar?.label?.userData.occluded ? null : plateRect(r.avatar, box);
     if (!p) continue;
     const onPlate = x >= p.l - 3 && x <= p.r + 3 && y >= p.t - 4 && y <= p.b + 4;   // a little slack: the plate is thin
@@ -305,7 +268,6 @@ export function close() {
   if (xrMesh?.visible) { xrMesh.visible = false; xrMesh.material.map.pause?.(); }
 }
 
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function paint() {
   const r = d.remotes.get(cardFor);
@@ -326,10 +288,9 @@ function paint() {
   } else {
     rows.push(`<div class="pc-row" data-k="voice"><span>voice state not shared</span></div>`);
   }
-  // the visor (owner, 10-02: "we should probably include the VR visor icon") — the HUD's own VR glyph
+  // the HUD's own VR glyph
   rows.push(`<div class="pc-row" data-k="xr" data-on="${!!r.xrOn}">${fsvg('virtual-reality', 14)}<span>${r.xrOn ? 'in VR' : 'not in VR'}</span></div>`);
-  // the header's right end: the word they declared for themselves (§6a; any word, shown as said, nothing when they declared
-  // none) and how far — 'present' is the default and says nothing, so only away / busy are named, in their presence colour
+  // their declared word (§6a, shown as said) and how far; 'present' is the default, so only away / busy are named
   const where = [typeof r.declares === 'string' && r.declares ? r.declares : null,
     dist == null ? null : `${dist < 10 ? dist.toFixed(1) : Math.round(dist)} m`].filter(Boolean).join(' · ');
   card.innerHTML = `<div class="pc-head"><span class="pc-dot" style="background:${esc(d.colorFor?.(r.id) ?? 'var(--brand)')}"></span>`
@@ -361,7 +322,7 @@ function follow() {
   card.dataset.side = side;
 }
 
-/** For probes: where the card is and for whom, without reaching into module state. */
+/** For probes. */
 export const plateCardState = () => ({ open: !!card && !card.hidden, for: cardFor, by: openedBy, vr, hoverId, hoverSince, openedAt,
   aim: { ...xrAim }, mesh: xrMesh && { visible: xrMesh.visible, inScene: !!xrMesh.parent, built: xrBuilt } });
 /** For probes: the card's quad (VR), or null. */

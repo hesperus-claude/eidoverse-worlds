@@ -1,29 +1,19 @@
-// locomotion-clip-test — the clip-selection policy the controller ships (#196 review B2).
-//
-// Drives the REAL client/lib/locomotion_clip.js (no stub, no copy: the module under test is the module
-// controller.js imports) plus a wiring check that controller.js actually calls it.
-//
+// locomotion-clip-test: the clip-selection policy the controller ships (#196). Drives the REAL
+// client/lib/locomotion_clip.js (the module controller.js imports; tools/wiring-check.ts checks that it calls it).
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/locomotion-clip-test.mjs
-//
-// Each of these mutations of the PRODUCT must turn a named check red:
+// Each mutation of the PRODUCT must turn a named check red:
 //   selectClip: drop `wantMove &&`              → intent selection (walk→idle on release)
 //   selectClip: FADE_PRESS/FADE_WALKOFF swapped → the press/walk-off distinction
 //   selectClip: `jumped ? … : …` → one branch   → ditto, via opts
 //   selectClip: AIRBORNE_GRACE 0.04 → 0         → the stair-step guard
 //   selectClip: RUN_SPEED 2.6 → 99              → walk/run split
-//   controller.js: stop calling selectClip      → the wiring check (an extracted policy nobody calls
-//                                                 is the regression extraction invites — antra's #180
-//                                                 pattern: removing the real wiring must go red)
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+//   controller.js: stop calling selectClip      → tools/wiring-check.ts (#180: removing the real wiring must go red)
 import { selectClip, AIRBORNE_GRACE, RUN_SPEED, FADE_PRESS, FADE_WALKOFF } from '../client/lib/locomotion_clip.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
 let fail = 0, n = 0;
 const check = (name, cond) => { n++; if (cond) { console.log(`✓ ${name}`); } else { fail++; console.log(`✗ ${name}`); } };
 
-// ---- intent, not coasting speed: the fix this PR advertises
+// ---- intent, not coasting speed
 check('key down at walking speed → walk',
   selectClip({ wantMove: true, speed: 1.2 }).clip === 'walk');
 check('key RELEASED while speed still coasts → idle, not walk',
@@ -33,17 +23,15 @@ check('key released at a dead stop → idle',
 check('key down but below the move epsilon → idle',
   selectClip({ wantMove: true, speed: 0.01 }).clip === 'idle');
 
-// ---- the SEQUENCE, not just the states: press → hold → release → coast → stop.
-// The single-state checks above prove the mapping; this proves the TIMING, which is what the change
-// is actually about — the clip must leave for idle on the frame the key goes up, while the speed is
-// still coasting down over ~0.3 s, and it must not come back while it coasts.
+// ---- the SEQUENCE: press → hold → release → coast → stop. The clip leaves for idle on the frame the key goes up,
+// while speed still coasts (~0.3 s), and doesn't come back
 {
   const frames = [];
   const step = (wantMove, speed) => { const s = selectClip({ wantMove, speed }); frames.push(s.clip); return s; };
   step(true, 0);        // key down, not moving yet
   step(true, 0.8);      // accelerating
   step(true, 1.6);      // at speed
-  const atRelease = step(false, 1.6);   // THE FRAME THE KEY GOES UP — speed unchanged
+  const atRelease = step(false, 1.6);  // THE FRAME THE KEY GOES UP: speed unchanged
   step(false, 1.1);     // coasting
   step(false, 0.5);     // still coasting
   step(false, 0.05);    // nearly stopped
@@ -66,7 +54,7 @@ check('key down but below the move epsilon → idle',
 
 // ---- walk / run split
 check('a brisk 3.1 m/s is a run',
-  selectClip({ wantMove: true, speed: 3.1 }).clip === 'run');   // literal: asserting against RUN_SPEED moves with the mutation
+  selectClip({ wantMove: true, speed: 3.1 }).clip === 'run');  // literal: asserting against RUN_SPEED moves with the mutation
 check('a walking 2.5 m/s is a walk',
   selectClip({ wantMove: true, speed: 2.5 }).clip === 'walk');
 check('the walk/run split sits at a human walking speed',
@@ -76,7 +64,7 @@ check('the walk/run split sits at a human walking speed',
 const press = selectClip({ jumped: true, airborneFor: 0 });
 check('a deliberate press selects jump on its first airborne frame', press.clip === 'jump');
 check('a press blends with the SNAPPY fade and does not ease',
-  press.opts?.fade === 0.1 && !press.opts?.ease);   // literal: asserting === FADE_PRESS moves with the mutation
+  press.opts?.fade === 0.1 && !press.opts?.ease);  // literal: asserting === FADE_PRESS moves with the mutation
 
 const walkOff = selectClip({ jumped: false, airborneFor: 0.05, wantMove: true, speed: 1.5 });   // literal: > the 0.04 grace
 check('walking off an edge past the grace window selects jump', walkOff.clip === 'jump');
@@ -108,8 +96,8 @@ check('lie posture',
   selectClip({ posture: 'lie' }).clip === 'lie');
 check('nothing claims the body → idle', selectClip({}).clip === 'idle');
 
-// ---- a sized body (review 09-30 S1): the controller scales the stride (scaledSpeed: walk 1.55·u, run 4.0·u), so the
-//      walk/run split is a speed in BODY lengths — a 200% body walking is not running, a 50% body running is
+// ---- a sized body: the controller scales the stride (scaledSpeed: walk 1.55·u, run 4.0·u), so the walk/run split is in
+//      BODY lengths: a 200% body walking isn't running, a 50% body running is
 check('a 200% body walking (3.1 m/s) → walk, not run',
   selectClip({ wantMove: true, speed: 3.1, scale: 2 }).clip === 'walk');
 check('a 200% body running (8 m/s) → run',
@@ -120,29 +108,12 @@ check('a 50% body walking (0.78 m/s) → walk',
   selectClip({ wantMove: true, speed: 0.78, scale: 0.5 }).clip === 'walk');
 check('no scale (an older caller) reads as 100%', selectClip({ wantMove: true, speed: 3.1 }).clip === 'run'
   && selectClip({ wantMove: true, speed: 3.1, scale: NaN }).clip === 'run');
-const ctlSrc = readFileSync(join(here, '../client/lib/controller.js'), 'utf8');
-check('controller.js hands selectClip the body\'s size', /selectClip\(\{[^}]*\bscale:\s*me\.userScale/.test(ctlSrc));
 
 // ---- only jump carries options
 check('non-jump clips carry no options (setClip defaults)',
   selectClip({ wantMove: true, speed: 1.2 }).opts === undefined && selectClip({}).opts === undefined);
 
-// ---- the wiring: an extracted policy nobody calls is the regression extraction invites
-const ctl = readFileSync(join(here, '../client/lib/controller.js'), 'utf8');
-check('controller.js imports the real policy module',
-  /import\s*\{[^}]*\bselectClip\b[^}]*\}\s*from\s*'\.\/locomotion_clip\.js'/.test(ctl));
-check('controller.js CALLS selectClip in its tick',
-  /\bselectClip\s*\(/.test(ctl));
-check('controller.js passes the selected opts to setClip (not a re-derived literal)',
-  /setClip\([^)]*\.opts\s*\)/.test(ctl));
-// Scoped to the setClip call, not the whole file: a file-wide grep for `fade: 0.5` would go red on
-// an unrelated future fade elsewhere in controller.js — an assertion that fails on innocent code is
-// as bad as one that passes on broken code.
-// The LOCOMOTION call specifically: controller.js also has the flight path's `me.setClip(clip, speed)`
-// at :625, which takes no options at all — matching the first `me.setClip(` would assert the wrong line.
-const setClipCall = ctl.split('\n').find((l) => /me\.setClip\([^)]*,[^)]*,/.test(l)) ?? '';
-check('the tick hands setClip the SELECTED opts, with no fade re-derived at the call site',
-  /\.opts\s*\)/.test(setClipCall) && !/fade:/.test(setClipCall), `call site: ${setClipCall.slice(0, 80)}`);
+// the wiring (controller.js imports, calls and feeds selectClip): tools/wiring-check.ts
 
 console.log(`\n${n - fail}/${n} passed`);
 process.exit(fail ? 1 : 0);

@@ -64,7 +64,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["a document's amount is bounded", "shared/particle_effects.js", "S.amount >= 1 && S.amount <= L.amount)", "S.amount >= 1)", ["X6"]],
   ["a document's total is bounded", "shared/particle_effects.js", "if (total > L.totalAmount) return", "if (false) return", ["X6"]],
   ["the authority checks particles at all", "shared/protocol/authority/gate.js", "if (!CTX.forking) for (const op of norm) if (op.verb === \"set\") particlesCheck(w, op);", "", ["X3", "X4"]],   /* X2 and X8 have a second gate (checks.js) since the shape audit */
-  ["the translator modernizes particles", "tools/protocol/import-v1/translate-v1.js", ": k === \"particles\" ? newParticles(v) : v;", ": v;", ["X10"]],
+  ["the translator modernizes particles", "tools/protocol/import-v1/translate-v1.js", "k === \"particles\" ? newParticles(v) : k === \"captions\"", "k === \"particles\" ? v : k === \"captions\"", ["X10"]],
   ["a named emitter becomes a child thing", "tools/protocol/import-v1/translate-v1.js", "if (k.startsWith(\"particles:\") && EMITTER_NAME.test(k.slice(10)))", "if (false)", ["X13"]],
   ["a scaled emitter says its scale", "shared/particles.js", "inst.scale !== 1) bits.push(", "inst.scale !== 1 && false) bits.push(", ["X14"]],
   ["openable's state is generated", "shared/a11y.js", "if (isObj(c.openable)) out.state.push(", "if (false) out.state.push(", ["D2", "D3"]],

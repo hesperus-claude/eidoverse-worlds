@@ -1,34 +1,13 @@
-// icons — one Lucide registry, three renderers, no font dependency anywhere.
-//
-// WHY THIS EXISTS (R, 00:19: "replace all the icons if you can"): canvas
-// `fillText` of an emoji silently paints NOTHING when the platform lacks that
-// glyph. No error, no fallback, no warning — just a UI element that means
-// something and shows nothing. It happened live on a Windows 11 desktop with
-// two different codepoints, BOTH of which rasterized correctly in headless
-// Chromium, so the fault was invisible to the tests as well as to me. Any
-// emoji that carries meaning in this UI is a silent-failure risk.
-//
-// Path data is verbatim from lucide-icons/lucide (ISC licence), 24x24 viewBox.
-// Same technique as porch-old's PORCH_ICONS: store the `d` strings, build
-// Path2D lazily, and let each surface render them its own way.
-//
-//   stroke(ctx, name, size)  → canvas / 3D sprite (Path2D, cached)
-//   svg(name, size)          → inline <svg> markup for DOM chrome
-//   has(name)                → registry probe
-//
-// Adding an icon: curl the SVG from
-// raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg and
-// paste its path `d` strings here. Do NOT hand-draw replacements — that was
-// tried first and read as blobs at 26px.
+// icons — one Lucide registry (ISC, verbatim `d` strings, 24x24), three renderers, no font dependency.
+// No emoji glyphs: canvas fillText of a missing glyph paints nothing, silently.
+// add an icon by copying its path `d` from lucide's repo; never hand-draw (it reads as blobs at 26px)
 
 const P = {
-  // the world, for the Hierarchy's World row (R, 10-10: the filled planet was a blot at 13 px): a circle, its equator, one meridian
+  // the Hierarchy's World row: line-drawn, since a filled planet is a blot at 13 px
   globe: ['M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18', 'M3 12h18', 'M12 3c3.2 3 3.2 15 0 18c-3.2-3-3.2-15 0-18'],
   ear: ['M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0',
         'M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4'],
-  // lucide `brain` (R, 08-05, third pass: bubble-with-dots read as silence,
-  // pencil read as "edit"). Denser than the other glyphs at pill size — if it
-  // reads as mush in-world, the next stop is bare `ellipsis`.
+  // lucide `brain` (bubble-with-dots read as silence, a pencil as "edit"); if it reads as mush, bare `ellipsis` is next
   think: ['M12 18V5',
           'M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4',
           'M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5',
@@ -45,9 +24,7 @@ const P = {
   pin: ["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"],
   tent: ["M3.5 21 14 3", "M20.5 21 10 3", "M15.5 21 12 15l-3.5 6", "M2 21h20"],
   mic: ['M12 19v3', 'M19 10v2a7 7 0 0 1-14 0v-2'],
-  // THE HEADPHONES — the HUD's hear toggle (mictoggle.js draws these very strings) and the hover
-  // card, one glyph so "can't hear you" looks the same everywhere. Ours, not lucide: band + two cups, and the HUD's
-  // own slash (its 32-grid line 7,4→25,28, here on the 24 grid) for off.
+  // THE HEADPHONES (ours, not lucide): mictoggle.js draws these very strings, so "can't hear you" looks the same everywhere
   headphones: ['M4.5 14.25v-2.25a7.5 7.5 0 0 1 15 0v2.25',
                'M3 15.75a2.25 2.25 0 0 1 4.5 0V18a2.25 2.25 0 0 1-4.5 0Z',
                'M16.5 15.75a2.25 2.25 0 0 1 4.5 0V18a2.25 2.25 0 0 1-4.5 0Z'],
@@ -55,7 +32,7 @@ const P = {
                   'M3 15.75a2.25 2.25 0 0 1 4.5 0V18a2.25 2.25 0 0 1-4.5 0Z',
                   'M16.5 15.75a2.25 2.25 0 0 1 4.5 0V18a2.25 2.25 0 0 1-4.5 0Z',
                   'M5.25 3 18.75 21'],
-  // lucide `mic-off`: a peer with no live mic (hover card)
+  // lucide `mic-off`
   micOff: ['M12 19v3', 'M15 9.34V5a3 3 0 0 0-5.68-1.33', 'M16.95 16.95A7 7 0 0 1 5 12v-2', 'M18.89 13.23A7 7 0 0 0 19 12v-2',
            'm2 2 20 20', 'M9 9v3a3 3 0 0 0 5.12 2.12'],
   messageSquare: ['M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'],
@@ -65,8 +42,7 @@ const P = {
   users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
           'M16 3.128a4 4 0 0 1 0 7.744', 'M22 21v-2a4 4 0 0 0-3-3.87',
           'M10 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0'],
-  // the VR pointer's contextual icon (pointer.js, owner 10-02): what a press would do where the laser rests. Lucide,
-  // verbatim from lucide-icons/lucide main/icons/<name>.svg (2026-10-02); 'hand' (below) is the grab.
+  // the VR pointer's contextual icon (pointer.js): what a press would do where the laser rests; 'hand' is the grab
   'mouse-pointer-click': ['M14 4.1 12 6', 'm5.1 8-2.9-.8', 'm6 12-1.9 2', 'M7.2 2.2 8 5.1',
     'M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z'],
   'text-cursor': ['M17 22h-1a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h1', 'M7 22h1a4 4 0 0 0 4-4', 'M7 2h1a4 4 0 0 1 4 4'],
@@ -81,9 +57,7 @@ const P = {
   bug: ['M12 20v-9', 'M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z',
         'M14.12 3.88 16 2', 'M21 21a4 4 0 0 0-3.81-4', 'M21 5a4 4 0 0 1-3.55 3.97',
         'M22 13h-4', 'M3 21a4 4 0 0 1 3.81-4', 'M3 5a4 4 0 0 0 3.55 3.97', 'M6 13H2'],
-  // ---- edit mode's glyph set (2026-09-30 look pass): tool rail, build bar, tree toggles, the
-  // pictographs edit chrome used to carry. Verbatim Lucide (ISC); rect/circle/line elements written
-  // as the equivalent path data so the one Path2D renderer draws them.
+  // ---- edit mode's glyph set: verbatim Lucide, rect/circle/line written as path data for the one Path2D renderer
   mousePointer2: ['M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z'],
   move: ['M12 2v20', 'm15 19-3 3-3-3', 'm19 9 3 3-3 3', 'M2 12h20', 'm5 9-3 3 3 3', 'm9 5 3-3 3 3'],
   rotateCw: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
@@ -101,7 +75,7 @@ const P = {
   chevronDown: ['m6 9 6 6 6-6'],
   chevronRight: ['m9 18 6-6-6-6'],
   check: ['M20 6 9 17l-5-5'],
-  // the eye in my view (myview.js), drawn as a line so a canvas painter strokes it like the padlock beside it
+  // myview.js's eye, a line so it strokes like the padlock beside it
   eye: ['M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0', 'M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0'],
   eyeOff: ['M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49', 'M14.084 14.158a3 3 0 0 1-4.242-4.242', 'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143', 'm2 2 20 20'],
   x: ['M18 6 6 18', 'm6 6 12 12'],
@@ -115,7 +89,7 @@ const P = {
   lightbulb: ['M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5', 'M9 18h6', 'M10 22h4'],   // the Create panel's "add light"
 };
 
-// rounded-rect ops that some icons need beyond their paths: [x,y,w,h,rx]
+// rounded rects beyond the paths: [x,y,w,h,rx]
 const RECT = { mic: [9, 2, 6, 13, 3] };
 
 const _cache = new Map();
@@ -130,11 +104,11 @@ function paths(name) {
 }
 
 export const has = (name) => !!P[name];
-/** The raw 24-grid path strings, for a surface that draws its own <svg> (mictoggle's HUD toggle). */
+/** The raw 24-grid path strings, for a surface that draws its own <svg>. */
 export const pathData = (name) => P[name] ?? [];
 
 /** Stroke a Lucide icon centred on the current origin, sized to `size` px. */
-export function stroke(ctx, name, size = 26, lw = 2) {   // lw: the stroke in CANVAS px (2 = the old fixed width)
+export function stroke(ctx, name, size = 26, lw = 2) {   // lw: CANVAS px
   if (!P[name]) return false;
   const k = size / 24;
   ctx.save();
@@ -148,7 +122,7 @@ export function stroke(ctx, name, size = 26, lw = 2) {   // lw: the stroke in CA
   return true;
 }
 
-/** Inline SVG markup for DOM chrome — same registry, different surface. */
+/** Inline SVG markup for DOM chrome. */
 export function svg(name, size = 18) {
   const d = P[name];
   if (!d) return '';
@@ -160,14 +134,11 @@ export function svg(name, size = 18) {
 }
 
 // ---- Phosphor FILL set (MIT, phosphoricons.com) ---------------------------
-// R's call 2026-08-29: stroke glyphs go visually weak at small sizes; menu
-// and hotbar chrome uses Phosphor's fill weight instead. 256 viewBox, filled
-// paths, rendered via fsvg(). Same registry discipline as P above — path
-// data verbatim from @phosphor-icons/core assets/fill.
+// stroke glyphs go weak small, so menu and hotbar chrome use the fill weight: 256 viewBox, fsvg(), path data
+// verbatim from @phosphor-icons/core assets/fill.
 const PF = {
-  'backpack': ['M168,40.58V32A24,24,0,0,0,144,8H112A24,24,0,0,0,88,32v8.58A56.09,56.09,0,0,0,40,96V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V96A56.09,56.09,0,0,0,168,40.58ZM104,32a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8v8H104Zm8,40h32a8,8,0,0,1,0,16H112a8,8,0,0,1,0-16Zm64,144H80V176h56v8a8,8,0,0,0,16,0v-8h24Zm0-56H80v-8a16,16,0,0,1,16-16h64a16,16,0,0,1,16,16Z'],   // R asked for the satchel to wear a backpack (2026-09-11); verbatim from @phosphor-icons/core assets/fill
-  // the ∃ menu (the waterfall, owner 10-01): save / load / the Panels submenu's caret / help / keys / log in · out /
-  // HUD layout mode — verbatim from @phosphor-icons/core 2.1.1 assets/fill
+  'backpack': ['M168,40.58V32A24,24,0,0,0,144,8H112A24,24,0,0,0,88,32v8.58A56.09,56.09,0,0,0,40,96V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V96A56.09,56.09,0,0,0,168,40.58ZM104,32a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8v8H104Zm8,40h32a8,8,0,0,1,0,16H112a8,8,0,0,1,0-16Zm64,144H80V176h56v8a8,8,0,0,0,16,0v-8h24Zm0-56H80v-8a16,16,0,0,1,16-16h64a16,16,0,0,1,16,16Z'],   // the satchel
+  // the ∃ menu — @phosphor-icons/core 2.1.1 assets/fill
   'floppy-disk': ['M219.31,72,184,36.69A15.86,15.86,0,0,0,172.69,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V83.31A15.86,15.86,0,0,0,219.31,72ZM208,208H184V152a16,16,0,0,0-16-16H88a16,16,0,0,0-16,16v56H48V48H172.69L208,83.31ZM160,72a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h56A8,8,0,0,1,160,72Z'],
   'folder-open': ['M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Z'],
   'caret-right': ['M181.66,133.66l-80,80A8,8,0,0,1,88,208V48a8,8,0,0,1,13.66-5.66l80,80A8,8,0,0,1,181.66,133.66Z'],
@@ -178,12 +149,10 @@ const PF = {
   'layout': ['M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H216V96H40ZM216,200H112V112H216v88Z'],
   'arrows-out-cardinal': ['M96,136H64v24a8,8,0,0,1-13.66,5.66l-32-32a8,8,0,0,1,0-11.32l32-32A8,8,0,0,1,64,96v24H96a8,8,0,0,1,0,16Zm0-72h24V96a8,8,0,0,0,16,0V64h24a8,8,0,0,0,5.66-13.66l-32-32a8,8,0,0,0-11.32,0l-32,32A8,8,0,0,0,96,64Zm141.66,58.34-32-32A8,8,0,0,0,192,96v24H160a8,8,0,0,0,0,16h32v24a8,8,0,0,0,13.66,5.66l32-32A8,8,0,0,0,237.66,122.34ZM160,192H136V160a8,8,0,0,0-16,0v32H96a8,8,0,0,0-5.66,13.66l32,32a8,8,0,0,0,11.32,0l32-32A8,8,0,0,0,160,192Z'],   // HUD layout mode
   'info': ['M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-4,48a12,12,0,1,1-12,12A12,12,0,0,1,124,72Zm12,112a16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40a8,8,0,0,1,0,16Z'],   // About
-  // the lantern (R, 10-08: the HUD lantern wears a lantern, not the stand-in lighthouse). Phosphor has no lantern, so this
-  // one is hand-traced in Phosphor's fill style (256 grid, 16-wide strokes, holes as opposite-wound subpaths) from R's
-  // reference; source + preview: Hesperus notes/eidoverse/icons/lantern.py.
-  // redrawn 10-10 to R's notes (it smudged at 16 px): a wider bell, no side bars, a low cap for the knob, a bigger flame; evenodd cuts the flame
+  // the lantern: Phosphor has none, so it's hand-traced in its fill style (256 grid, 16-wide strokes, holes as
+  // opposite-wound subpaths); evenodd cuts the flame
   'lantern': ['M72,84V74a56,56,0,0,1,112,0V84a10,10,0,0,1-20,0V74a36,36,0,0,0-72,0V84a10,10,0,0,1-20,0Z', 'M108,100a20,12,0,0,1,40,0Z', 'M72,104H184a8,8,0,0,1,0,16H72a8,8,0,0,1,0-16Z', 'M88,124H168L204,184a14,14,0,0,1-12,22H64a14,14,0,0,1-12-22ZM128,132c-11,13-24,25-24,40a24,22,0,0,0,48,0c0-15-13-27-24-40Z', 'M56,212H200a10,10,0,0,1,0,20H56a10,10,0,0,1,0-20Z'],
-  // the Moderation and World Settings dock panels (research roles 10-06) — verbatim from @phosphor-icons/core 2.1.1 assets/fill
+  // the Moderation and World Settings dock panels — @phosphor-icons/core 2.1.1 assets/fill
   'shield': ['M224,56v56c0,52.72-25.52,84.67-46.93,102.19-23.06,18.86-46,25.27-47,25.53a8,8,0,0,1-4.2,0c-1-.26-23.91-6.67-47-25.53C57.52,196.67,32,164.72,32,112V56A16,16,0,0,1,48,40H208A16,16,0,0,1,224,56Z'],
   'flag': ['M232,56V176a8,8,0,0,1-2.76,6c-15.28,13.23-29.89,18-43.82,18-18.91,0-36.57-8.74-53-16.85C105.87,170,82.79,158.61,56,179.77V224a8,8,0,0,1-16,0V56a8,8,0,0,1,2.77-6h0c36-31.18,68.31-15.21,96.79-1.12C167,62.46,190.79,74.2,218.76,50A8,8,0,0,1,232,56Z'],
   'magnifying-glass': ['M168,112a56,56,0,1,1-56-56A56,56,0,0,1,168,112Zm61.66,117.66a8,8,0,0,1-11.32,0l-50.06-50.07a88,88,0,1,1,11.31-11.31l50.07,50.06A8,8,0,0,1,229.66,229.66ZM112,184a72,72,0,1,0-72-72A72.08,72.08,0,0,0,112,184Z'],
@@ -210,14 +179,14 @@ const PF = {
   'eye-slash': ['M96.68,57.87a4,4,0,0,1,2.08-6.6A130.13,130.13,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41a8,8,0,0,1,0,6.5c-.35.79-8.82,19.57-27.65,38.4q-4.28,4.26-8.79,8.07a4,4,0,0,1-5.55-.36ZM213.92,210.62a8,8,0,1,1-11.84,10.76L180,197.13A127.21,127.21,0,0,1,128,208c-34.88,0-66.57-13.26-91.66-38.34C17.51,150.83,9,132.05,8.69,131.26a8,8,0,0,1,0-6.5C9,124,17.51,105.18,36.34,86.35a135,135,0,0,1,25-19.78L42.08,45.38A8,8,0,1,1,53.92,34.62Zm-65.49-48.25-52.69-58a40,40,0,0,0,52.69,58Z'],
   'lock': ['M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm-80,84a12,12,0,1,1,12-12A12,12,0,0,1,128,164Zm32-84H96V56a32,32,0,0,1,64,0Z'],
   'lock-open': ['M208,80H96V56a32,32,0,0,1,32-32c15.37,0,29.2,11,32.16,25.59a8,8,0,0,0,15.68-3.18C171.32,24.15,151.2,8,128,8A48.05,48.05,0,0,0,80,56V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80Zm-80,84a12,12,0,1,1,12-12A12,12,0,0,1,128,164Z'],
-  // section header for the video/graphics settings (R, 09-03: a real glyph, not an emoji)
-  'virtual-reality': ['M183.05,56H72A72,72,0,0,0,.08,131.4c1.69,36.69,31.76,66.79,68.45,68.52,15.84.72,32-5.9,49.38-20.3a15.87,15.87,0,0,1,20.24,0C148.72,188.39,165,200,184,200a72,72,0,0,0,72-72.95C255.49,87.87,222.76,56,183.05,56ZM176,104H80a8,8,0,0,1,0-16h96a8,8,0,0,1,0,16Z'],   // Phosphor visor-FILL (U+EE2A, v2.1) — R's screenshot 09-05 21:52; the 714-char entry before was the REGULAR visor (an outline drawn as a fill = 'line' to the eye)   // Phosphor goggles-FILL — the visor R means (virtual-reality-fill is a pill reading 'VR'; R 09-05 21:50)   // Phosphor FILL visor (R 09-05 21:36: solid icons are the section convention; the regular outline had been filed here)   // the visor — same path mictoggle's HUD glyph draws, so the ∃ row, the rail and the Settings › VR head share one shape (R, 09-05: Phosphor, no emoji outside chat/gestures)
+  // the video/graphics settings header
+  'virtual-reality': ['M183.05,56H72A72,72,0,0,0,.08,131.4c1.69,36.69,31.76,66.79,68.45,68.52,15.84.72,32-5.9,49.38-20.3a15.87,15.87,0,0,1,20.24,0C148.72,188.39,165,200,184,200a72,72,0,0,0,72-72.95C255.49,87.87,222.76,56,183.05,56ZM176,104H80a8,8,0,0,1,0-16h96a8,8,0,0,1,0,16Z'],   // Phosphor visor-FILL (U+EE2A): the same path as mictoggle's HUD glyph, so every VR head shares one shape; never the REGULAR outline
   'monitor': ['M232,64V176a24,24,0,0,1-24,24H48a24,24,0,0,1-24-24V64A24,24,0,0,1,48,40H208A24,24,0,0,1,232,64ZM160,216H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Z'],
   'palette': ['M200.77,53.89A103.27,103.27,0,0,0,128,24h-1.07A104,104,0,0,0,24,128c0,43,26.58,79.06,69.36,94.17A32,32,0,0,0,136,192a16,16,0,0,1,16-16h46.21a31.81,31.81,0,0,0,31.2-24.88,104.43,104.43,0,0,0,2.59-24A103.28,103.28,0,0,0,200.77,53.89ZM84,168a12,12,0,1,1,12-12A12,12,0,0,1,84,168Zm0-56a12,12,0,1,1,12-12A12,12,0,0,1,84,112Zm44-24a12,12,0,1,1,12-12A12,12,0,0,1,128,88Zm44,24a12,12,0,1,1,12-12A12,12,0,0,1,172,112Z'],
   'users': ['M164.47,195.63a8,8,0,0,1-6.7,12.37H10.23a8,8,0,0,1-6.7-12.37,95.83,95.83,0,0,1,47.22-37.71,60,60,0,1,1,66.5,0A95.83,95.83,0,0,1,164.47,195.63Zm87.91-.15a95.87,95.87,0,0,0-47.13-37.56A60,60,0,0,0,144.7,54.59a4,4,0,0,0-1.33,6A75.83,75.83,0,0,1,147,150.53a4,4,0,0,0,1.07,5.53,112.32,112.32,0,0,1,29.85,30.83,23.92,23.92,0,0,1,3.65,16.47,4,4,0,0,0,3.95,4.64h60.3a8,8,0,0,0,7.73-5.93A8.22,8.22,0,0,0,252.38,195.48Z'],
-  // the switch-off button (R 10-11: a 'disabled' option): a power glyph, Phosphor-like weight
+  // the switch-off button: Phosphor-like weight, hand-drawn
   'power': ['M120,48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Z', 'M72.4,71.6a8,8,0,0,1,11.3,11.3,64,64,0,1,0,88.6,0,8,8,0,1,1,11.3-11.3,80,80,0,1,1-111.2,0Z'],
-  // drawn for the Hierarchy's Terrain row (R 10-11), not Phosphor's: an outline (the inner path wound the other way)
+  // the Hierarchy's Terrain row, ours not Phosphor's: an outline (the inner path wound the other way)
   'mountains': ['M16,208L96,60L140,140L168,100L240,208ZM42,192L214,192L168,128L140,172L96,94Z'],
   goggles: 'M184,64H72A72.08,72.08,0,0,0,0,136a24.06,24.06,0,0,0,17,23c6.06,20.37,37.63,33,55,33a40.07,40.07,0,0,0,39.2-32h33.6A40.07,40.07,0,0,0,184,192c17.33,0,48.9-12.66,55-33a24.06,24.06,0,0,0,17-23A72.08,72.08,0,0,0,184,64ZM89,169a8,8,0,0,1-11.31,0L53.14,144.45a8,8,0,0,1,11.31-11.31L89,157.65A8,8,0,0,1,89,169Zm119.52-.49a8,8,0,0,1-11.31,0l-25.41-25.4a8,8,0,0,1,11.32-11.32l25.4,25.41A8,8,0,0,1,208.48,168.48Zm29.2-26.86C229.34,123.25,200.34,112,184,112a40.07,40.07,0,0,0-39.2,32H111.2A40.07,40.07,0,0,0,72,112c-16.34,0-45.34,11.25-53.68,29.62A8,8,0,0,1,16,136,56.06,56.06,0,0,1,72,80H184a56.06,56.06,0,0,1,56,56A8,8,0,0,1,237.68,141.62Z',
 };
@@ -231,10 +200,8 @@ export function fsvg(name, size = 18) {
 }
 export const hasFill = (name) => !!PF[name];
 
-// ---- Phosphor REGULAR set (MIT) — the LINE weight of the fill glyphs above.
-// The dock wears regular at rest and fill when a window is open (R, 09-04:
-// inactive should feel darker without being darker by color). Path data
-// verbatim from @phosphor-icons/core assets/regular; same 256 viewBox.
+// ---- Phosphor REGULAR set (MIT): the line weight of the fill glyphs above (assets/regular, 256 viewBox).
+// the dock wears regular at rest, fill when its window is open
 const PR = {
   'shield': 'M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.27,47,25.53a8,8,0,0,0,4.2,0c1-.26,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0Z',
   'flag': 'M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z',
@@ -247,7 +214,7 @@ const PR = {
   'user-circle': 'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z',
   'users': 'M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z',
   'wrench': 'M226.76,69a8,8,0,0,0-12.84-2.88l-40.3,37.19-17.23-3.7-3.7-17.23,37.19-40.3A8,8,0,0,0,187,29.24,72,72,0,0,0,88,96,72.34,72.34,0,0,0,94,124.94L33.79,177c-.15.12-.29.26-.43.39a32,32,0,0,0,45.26,45.26c.13-.13.27-.28.39-.42L131.06,162A72,72,0,0,0,232,96,71.56,71.56,0,0,0,226.76,69ZM160,152a56.14,56.14,0,0,1-27.07-7,8,8,0,0,0-9.92,1.77L67.11,211.51a16,16,0,0,1-22.62-22.62L109.18,133a8,8,0,0,0,1.77-9.93,56,56,0,0,1,58.36-82.31l-31.2,33.81a8,8,0,0,0-1.94,7.1L141.83,108a8,8,0,0,0,6.14,6.14l26.35,5.66a8,8,0,0,0,7.1-1.94l33.81-31.2A56.06,56.06,0,0,1,160,152Z',
-  // the rail's search entry (the lantern prompt) and the status chips' ⓘ — @phosphor-icons/core regular, verbatim
+  // the rail's search entry and the status chips' ⓘ
   'magnifying-glass': 'M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z',
   'info': 'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z',
   goggles: 'M256,136a72.08,72.08,0,0,0-72-72H72A72.08,72.08,0,0,0,0,136a24.06,24.06,0,0,0,17,23c6.06,20.37,37.63,33,55,33a40.07,40.07,0,0,0,39.2-32h33.6A40.07,40.07,0,0,0,184,192c17.33,0,48.9-12.66,55-33A24.06,24.06,0,0,0,256,136ZM45.45,167.74C37,162.76,32,156.88,32,152s4.91-10.61,13.13-15.55l37.21,37.2A23.74,23.74,0,0,1,72,176C64.47,176,53.8,172.68,45.45,167.74Zm48.2-5.4L61,129.7A42.66,42.66,0,0,1,72,128a24,24,0,0,1,24,24A23.74,23.74,0,0,1,93.65,162.34ZM160,152a23.88,23.88,0,0,1,5.46-15.22L201,172.32c-6,2.3-12.15,3.68-17,3.68A24,24,0,0,1,160,152Zm55.63,12.31-35.92-35.92A24.19,24.19,0,0,1,184,128c7.53,0,18.2,3.32,26.55,8.26S224,147.12,224,152C224,155.79,221,160.2,215.63,164.31Zm22.05-22.69C229.34,123.25,200.34,112,184,112a40.07,40.07,0,0,0-39.2,32H111.2A40.07,40.07,0,0,0,72,112c-16.34,0-45.34,11.25-53.68,29.62A8,8,0,0,1,16,136,56.06,56.06,0,0,1,72,80H184a56.06,56.06,0,0,1,56,56A8,8,0,0,1,237.68,141.62Z',
@@ -259,9 +226,7 @@ export function rsvg(name, size = 18) {
 }
 export const hasLine = (name) => !!PR[name];
 
-/** Fill a Phosphor glyph on a canvas, centred on the origin, `size` px tall.
- *  `weight` 'line' draws the regular set (the dock at rest), 'fill' the fill
- *  set (the dock when that window is open). Falls back across the two. */
+/** Fill a Phosphor glyph on a canvas, centred, `size` px tall; `weight` 'line' | 'fill', falling back across the two. */
 export function fillPath(ctx, name, size = 26, weight = 'fill') {
   const pick = weight === 'line' ? (PR[name] ?? PF[name]) : (PF[name] ?? PR[name]);
   if (!pick) return false;

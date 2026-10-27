@@ -1,36 +1,42 @@
-// bun tools/config-env-test.ts — env numbers are validated (config.ts envNumber): a nonsense or negative
-// OPT_MEM_BUDGET_MB falls back to the default with a warning; 0 stays 0 (no cap); a cost factor must be > 0;
-// SNAP_TIMEOUT_SEC is taken up to its cap of 225, and above it falls back to 12 with a warning; the snapshot sweep's
-// start grace (SNAP_SWEEP_GRACE_SEC, 0..600, default 30) and timer (SNAP_SWEEP_EVERY_SEC, 1..3600, default 15: never 0,
-// which would busy-loop the timer) fall back the same way.
+// bun tools/config-env-test.ts — env numbers are validated (server/limits.ts envNumber, config.ts and limits.ts read it): unset → the fallback, silently;
+// not a number or outside the variable's range → the fallback with a `NAME="v" is not valid` warning; in range → taken.
+// One generated table: each variable × [unset, "abc", "-1", its floor (and just under it), its cap and cap+1, a middle].
 import { spawnSync } from "node:child_process";
-const ok = (v: unknown, why: string) => { if (!v) { console.error("FAIL", why); process.exit(1); } };
+
+// [name, key, fallback (null: machine-derived), scale, floor, floor taken?, cap?, middle]; the _SEC vars are ×1000
+const VARS: [string, string, number | null, number, number, boolean, number | undefined, number][] = [
+  ["OPT_MEM_BUDGET_MB", "b", null, 1, 0, true, undefined, 512],          // 0 = no cap, documented
+  ["OPT_COST_FACTOR", "f", 48, 1, 0, false, undefined, 12],
+  ["SNAP_TIMEOUT_SEC", "s", 12, 1000, 0, false, 225, 60],
+  ["SNAP_SWEEP_GRACE_SEC", "g", 30, 1000, 0, true, 600, 120],
+  ["SNAP_SWEEP_EVERY_SEC", "e", 15, 1000, 1, true, 3600, 30],            // never 0: a busy-looping timer
+  ["PORT", "p", 8940, 1, 0, false, 65535, 8950],
+  ["UPLOAD_CAP_MB", "u", 20, 1_000_000, 0, false, undefined, 50],
+  ["IMAGE_CAP_MB", "i", 8, 1_000_000, 0, false, undefined, 4],
+  ["MSG_RATE", "m", 60, 1, 0, false, undefined, 120],                   // NaN refused every message
+  ["EW_ID_LEN", "l", 64, 1, 0, true, undefined, 32],                     // limits.ts's table: "" read as 0
+];
+// [raw, taken?] per variable; "" is unset
+const cases = VARS.map(([, , , , min, minOk, max, mid]): [string, boolean][] => [["", false], ["abc", false], ["-1", false], [String(min), minOk],
+  ...(minOk && min > 0 ? [[String(min - 1), false]] : []), ...(max !== undefined ? [[String(max), true], [String(max + 1), false]] : []), [String(mid), true]] as [string, boolean][]);
 const read = (env: Record<string, string>) => {
-  const r = spawnSync(process.execPath, ["-e", 'import { OPT_MEM_BUDGET_MB, OPT_COST_FACTOR, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS } from "./server/config.ts"; console.log(JSON.stringify({ b: OPT_MEM_BUDGET_MB, f: OPT_COST_FACTOR, s: SNAP_TIMEOUT_MS, g: SNAP_SWEEP_GRACE_MS, e: SNAP_SWEEP_EVERY_MS }))'],
+  const r = spawnSync(process.execPath, ["-e", 'import { OPT_MEM_BUDGET_MB, OPT_COST_FACTOR, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS, PORT, UPLOAD_CAP, IMAGE_CAP, MSG_RATE } from "./server/config.ts"; import { LIMITS } from "./server/limits.ts"; console.log(JSON.stringify({ b: OPT_MEM_BUDGET_MB, f: OPT_COST_FACTOR, s: SNAP_TIMEOUT_MS, g: SNAP_SWEEP_GRACE_MS, e: SNAP_SWEEP_EVERY_MS, p: PORT, u: UPLOAD_CAP, i: IMAGE_CAP, m: MSG_RATE, l: LIMITS.ID_LEN }))'],
     { env: { ...process.env, WORLDS_DIR: process.env.WORLDS_DIR ?? "/tmp/config-env-test-worlds", ...env }, encoding: "utf8", cwd: import.meta.dir + "/.." });
-  const line = r.stdout.trim().split("\n").pop() ?? "";
-  return { v: JSON.parse(line), warn: r.stderr + r.stdout };
+  return { v: JSON.parse(r.stdout.trim().split("\n").pop() ?? "") as Record<string, number>, warn: r.stderr + r.stdout };
 };
-const base = read({});
-ok(Number.isFinite(base.v.b) && base.v.b >= 0 && base.v.f === 48, "defaults: finite budget, factor 48");
-const banana = read({ OPT_MEM_BUDGET_MB: "banana" });
-ok(banana.v.b === base.v.b && /not valid/.test(banana.warn), "'banana' → default, with a warning");
-const neg = read({ OPT_MEM_BUDGET_MB: "-1" });
-ok(neg.v.b === base.v.b && /not valid/.test(neg.warn), "-1 → default, with a warning");
-ok(read({ OPT_MEM_BUDGET_MB: "0" }).v.b === 0, "0 → 0 (no cap, documented)");
-ok(read({ OPT_MEM_BUDGET_MB: "512" }).v.b === 512, "512 → 512");
-ok(read({ OPT_COST_FACTOR: "0" }).v.f === 48 && read({ OPT_COST_FACTOR: "abc" }).v.f === 48, "cost factor 0 / 'abc' → 48");
-ok(read({ OPT_COST_FACTOR: "12" }).v.f === 12, "cost factor 12 → 12");
-ok(read({ SNAP_TIMEOUT_SEC: "" }).v.s === 12_000, "SNAP_TIMEOUT_SEC unset → a 12 s window");
-const cap = read({ SNAP_TIMEOUT_SEC: "225" });
-ok(cap.v.s === 225_000 && !/SNAP_TIMEOUT_SEC/.test(cap.warn), "SNAP_TIMEOUT_SEC 225 (the cap) → 225 s, no warning");
-const past = read({ SNAP_TIMEOUT_SEC: "226" });
-ok(past.v.s === 12_000 && /SNAP_TIMEOUT_SEC="226" is not valid/.test(past.warn), "SNAP_TIMEOUT_SEC 226 → 12 s, with a warning");
-ok(base.v.g === 30_000 && base.v.e === 15_000, "the sweep's defaults: a 30 s grace after a start, every 15 s");
-ok(read({ SNAP_SWEEP_GRACE_SEC: "0" }).v.g === 0, "SNAP_SWEEP_GRACE_SEC 0 → no grace (tests)");
-const longGrace = read({ SNAP_SWEEP_GRACE_SEC: "601" });
-ok(longGrace.v.g === 30_000 && /SNAP_SWEEP_GRACE_SEC="601" is not valid/.test(longGrace.warn), "SNAP_SWEEP_GRACE_SEC 601 → 30 s, with a warning");
-const busyLoop = read({ SNAP_SWEEP_EVERY_SEC: "0" });
-ok(busyLoop.v.e === 15_000 && /SNAP_SWEEP_EVERY_SEC="0" is not valid/.test(busyLoop.warn), "SNAP_SWEEP_EVERY_SEC 0 → 15 s, with a warning (never a busy-looping timer)");
-ok(read({ SNAP_SWEEP_EVERY_SEC: "3600" }).v.e === 3_600_000 && read({ SNAP_SWEEP_EVERY_SEC: "abc" }).v.e === 15_000, "SNAP_SWEEP_EVERY_SEC 3600 → an hour; 'abc' → 15 s");
-console.log("config-env: 15 ok");
+let fail = 0, rows = 0, budgetDefault = NaN;
+// one child per scenario sets every variable at once: the i-th case of each (a variable with fewer cases is unset)
+for (let i = 0; i < Math.max(...cases.map((c) => c.length)); i++) {
+  const got = read(Object.fromEntries(VARS.map(([name], j) => [name, cases[j][i]?.[0] ?? ""])));
+  if (i === 0) budgetDefault = got.v.b;
+  VARS.forEach(([name, key, fallback, scale], j) => {
+    const [raw, taken] = cases[j][i] ?? ["", false]; rows++;
+    const want = taken ? Number(raw) * scale : (fallback ?? budgetDefault) * scale, wantWarn = raw !== "" && !taken;
+    const warned = got.warn.includes(`${name}=${JSON.stringify(raw)} is not valid`), named = got.warn.includes(`${name}=`);
+    if (got.v[key] !== want || (wantWarn ? !warned : named)) { fail++; console.error(`FAIL ${name}=${JSON.stringify(raw)}: got ${got.v[key]}, want ${want}; warning ${named ? "given" : "none"}, want ${wantWarn ? "one" : "none"}`); }
+  });
+}
+// the budget's own default is machine-derived (half the usable memory): finite, never negative
+if (!(Number.isFinite(budgetDefault) && budgetDefault >= 0)) { fail++; console.error(`FAIL OPT_MEM_BUDGET_MB default ${budgetDefault}`); }
+if (fail) process.exit(1);
+console.log(`config-env: ${rows} rows ok`);

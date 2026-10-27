@@ -1,23 +1,14 @@
-// worldentity — the world entity `@world` (design §3), as an ALIAS both ways.
-//
-// A world's sky, ground and grass are the world entity's components (the view shows them as state.sky,
-// state.terrain, state.grass; weather is part of the sky). This file reads them as ONE entity whose components are
-// Sky, Weather, Terrain and Grass (records in shared/components.js), and writes every edit as requests: the
-// door's `sky` and `weather` tools (they stamp the clock), and set/delete of @world's `terrain` and `grass`:
-//
+// worldentity — the world entity `@world` (design §3), as an ALIAS both ways. Sky, ground and grass are @world's components
+// (the view shows state.sky, state.terrain, state.grass; weather is part of the sky). This reads them as ONE entity with Sky,
+// Weather, Terrain and Grass (records in shared/components.js), and writes every edit as requests: the door's `sky` and
+// `weather` (they stamp the clock), and set/delete of @world's `terrain` and `grass`:
 //   worldComponents(st)       → { id: '@world', components, stamps }
-//   worldOf(view)             → { sky, terrain, grass }   (the inverse, exact:
-//                               tools/components-corpus-test.ts holds it on every world log)
-//   worldSchema(st, live)     → the inspector's schema (shared/editschema.js shape),
-//                               so the desktop cards, the VR quad and an agent's
-//                               `inspect @world` read one declaration
-//   worldEditOps(st, edits)   → { ops, errors } — `edit @world`, as requests
+//   worldOf(view)             → { sky, terrain, grass }   (the exact inverse: tools/components-corpus-test.ts holds it)
+//   worldSchema(st, live)     → the inspector's schema (shared/editschema.js shape): desktop, VR quad and agent read one declaration
+//   worldEditOps(st, edits)   → { ops, errors }: `edit @world`, as requests
 //   worldPick(st, kind, v)    → the Build tab's World tiles: a preset pick as one request
-//
-// "One sky per world" is not a rule here: Sky is one-per-entity, and there is
-// one world entity. Picking a sky preset REPLACES the Sky component's params
-// (pickSky); the Weather component is a different component and is carried
-// across the sky verb's wholesale fold. Pure: no DOM, no I/O, `now` passed in.
+// Sky is one-per-entity; picking a preset replaces Sky's params (pickSky), and Weather is carried across the sky fold.
+// Pure: no DOM, no I/O, `now` passed in.
 
 import * as OP from './protocol/requests.js';
 import { RECORDS } from './components.js';
@@ -30,9 +21,8 @@ import { COMPONENTS as SPEC } from './protocol/componentspec.js';
 export const WORLD_ID = '@world';
 export const isWorldId = (id) => id === WORLD_ID;
 
-// state.sky's keys that are the Weather component's (written by the weather
-// verb, or the sky verb's forecast policy and the fold's override stamp), and
-// the ones the fold stamps on the bag. Everything else in state.sky is the Sky.
+// state.sky's keys that are the Weather component's (weather verb, the sky's forecast policy, the fold's override stamp),
+// and the ones the fold stamps on the bag. Everything else in state.sky is the Sky.
 const WEATHER_KEYS = ['weather', 'weatherK', 'transition', 'weatherSeconds', 'forecast', 'override'];
 const SKY_STAMPS = ['ts', 'seq', 'by'];
 const DEFAULT_TZ = 'America/Los_Angeles';
@@ -43,17 +33,15 @@ const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !
 const round = (v, dp = 3) => +(+v).toFixed(dp);
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 
-/** The world's part of the fold, absent = null (the fold's own empty value). */
+/** Absent = null (the fold's own empty value). */
 export function worldState(st) {
   return { sky: st?.sky ?? null, terrain: st?.terrain ?? null, grass: st?.grass ?? null };
 }
 
 // ---------------------------------------------------------------- the alias
 
-/** Read the fold's world as an entity: { id, components: [{type, key, params}], stamps }.
- *  `key` names the fold slot a component lives in (sky / terrain / grass). Sky and
- *  Weather share state.sky and partition its keys; a slot holding something that is
- *  not an object (no verb writes one, but a log is a log) rides `raw`, verbatim. */
+/** { id, components: [{type, key, params}], stamps }. `key` is the fold slot; Sky and Weather partition state.sky's keys; a
+ *  non-object slot goes in `raw`, verbatim. */
 export function worldComponents(st) {
   const { sky, terrain, grass } = worldState(st);
   const components = [];
@@ -70,8 +58,7 @@ export function worldComponents(st) {
   return { id: WORLD_ID, components, stamps };
 }
 
-/** Write the world entity back in the fold's spelling: the exact inverse of
- *  worldComponents (canon-equal to worldState(st) for every state). */
+/** The exact inverse of worldComponents (canon-equal to worldState(st) for every state). */
 export function worldOf({ components = [], stamps = {} } = {}) {
   const out = { sky: null, terrain: null, grass: null };
   for (const c of components) {
@@ -89,13 +76,9 @@ export function worldOf({ components = [], stamps = {} } = {}) {
 
 // ---------------------------------------------------------------- re-issuing the existing verbs
 
-/** sky-verb args that re-author `sky` with `patch` applied (undefined in the
- *  patch deletes a key). The sky verb folds WHOLESALE, so everything standing
- *  rides along — the Weather component included — minus what the fold stamps
- *  itself (ts/seq/by, the override, a forecast's epoch/seq/by). A rated clock is
- *  re-anchored at `now` (unless the patch sets hours) so the day doesn't snap
- *  back to the hour it was last authored at — the weather fold's own rule. */
-// a tz present is the wall clock (shape audit 10-16); an older value said so with clock: 'real'
+/** `patch` applied (undefined deletes a key). The verb folds WHOLESALE, so all standing keys go along (Weather included)
+ *  minus the fold's stamps; a rated clock re-anchors at `now` (unless the patch sets hours) so the day doesn't snap back. */
+// a tz present is the wall clock; an older value said so with clock: 'real'
 const realClock = (sky) => isBag(sky) && (typeof sky.tz === 'string' || sky.clock === 'real');
 const DEG = 180 / Math.PI;
 export function skyReissue(sky, patch = {}, now = 0) {
@@ -107,31 +90,29 @@ export function skyReissue(sky, patch = {}, now = 0) {
   return base;
 }
 
-/** The sky preset a world's Sky currently IS, by name, or null: every preset
- *  key matches and the Sky holds nothing the preset doesn't say. */
+/** By name, or null: every preset key matches and the Sky holds nothing the preset doesn't say. */
 export function skyPresetOf(sky, presets) {
   if (!isBag(sky) || !isBag(presets)) return null;
   const own = omit(sky, [...WEATHER_KEYS, ...SKY_STAMPS, 'dormantRated']);
   for (const [name, p] of Object.entries(presets)) {
     if (name === 'doc' || !isBag(p)) continue;
     const keys = Object.keys(p).filter((k) => !WEATHER_KEYS.includes(k));
-    // a key the preset doesn't name may still stand at the registry's default (the door writes every default: shape audit 10-16)
+    // a key the preset doesn't name may stand at the registry's default (the door writes every default)
     if (keys.every((k) => own[k] === p[k]) && Object.keys(own).every((k) => keys.includes(k) || own[k] === SPEC.sky.defaults?.[k])) return name;
   }
   return null;
 }
 
-/** Picking a sky REPLACES the Sky (design §3): the new Sky's params are the
- *  preset's and nothing else. The Weather component is carried (the sky verb
- *  would otherwise wipe it); a preset that names weather itself wins. */
+/** Picking a sky REPLACES the Sky (design §3) with the preset's params. Weather is carried (the sky verb would wipe it);
+ *  a preset naming weather itself wins. */
 export function pickSky(sky, preset) {
   const weather = isBag(sky) ? pick(sky, ['weather', 'weatherK', 'transition', 'weatherSeconds', 'forecast']) : {};
   if (isBag(weather.forecast)) weather.forecast = omit(weather.forecast, ['epoch', 'seq', 'by']);
   return { ...clone(weather), ...omit(clone(preset) ?? {}, ['doc']) };
 }
 
-/** One world change as its request: the sky and weather are the authority's `sky`/`weather` tools (they stamp the
- *  clock: PROTOCOL sky tools), the ground and grass are @world's `terrain`/`grass` components; mow removes grass. */
+/** Sky and weather are the authority's `sky`/`weather` tools (they stamp the clock); ground and grass are @world's
+ *  `terrain`/`grass` components; mow removes grass. */
 const skyOp = (args) => ({ verb: 'sky', args });
 const weatherOp = (weather) => ({ verb: 'weather', args: { weather } });
 const terrainOp = (args) => OP.set(WORLD_ID, 'terrain', args);
@@ -141,21 +122,21 @@ const grassOp = (args) => (args == null ? OP.unset(WORLD_ID, 'grass') : OP.set(W
 
 const SKY_NUMS = [   // the sky panel's sliders (client/lib/skypanel.js SLIDERS): key, label, min, softMax, step, default, unit
   ['hours', 'time of day', 0, 24, 0.1, 12, 'h'], ['rate', 'rate', 0, 48, 0.5, 0, '×'],
-  // azimuth is stored in radians (shape audit 10-16) and shown in degrees; sun and fill were cut (knobs on the renderer's own rig)
+  // azimuth is stored in radians and shown in degrees
   ['azimuth', 'sun azimuth', 0, 360, 5, 180, '°'], ['ambient', 'ambient', 0, 2.5, 0.05, 1],
   ['exposure', 'exposure', 0.3, 1.8, 0.05, 1], ['fog', 'fog', 0, 3, 0.05, 1],
 ];
 const hex = (n) => `#${(n >>> 0 & 0xffffff).toString(16).padStart(6, '0')}`;
 const colorInt = (s) => (typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s) ? parseInt(s.slice(1), 16) : null);
 
-/** A one-line reading of the world, for the Hierarchy's pinned row and the text tier. */
+/** For the Hierarchy's pinned row and the text tier. */
 export function describeWorld(st, now = 0, { presets = null, clock = true } = {}) {
   const { sky, terrain, grass } = worldState(st);
   const parts = [];
   if (isBag(sky)) {
     const h = hoursAt(sky, now);
     const name = skyPresetOf(sky, presets);
-    // clock:false leaves the time out — a panel row whose text is its shape would rebuild every minute
+    // clock:false leaves the time out: a panel row whose text is its shape would rebuild every minute
     const hm = clock ? ` ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}` : '';
     parts.push(`sky${name ? ` ${name}` : ''}${hm}${sky.clouds ? ` ${sky.clouds}` : ''}`.replace(/^sky$/, 'sky authored'));
     const e = effectiveSky(sky, now);
@@ -166,13 +147,8 @@ export function describeWorld(st, now = 0, { presets = null, clock = true } = {}
   return parts.join(' · ');
 }
 
-/** The world entity's inspector schema — the same shape inspectSchema returns
- *  ({ id, groups, sections }), so editpanels' cards, the VR quad, describeSchema
- *  and fieldAt all read it unchanged. Addresses: sky.* weather.state terrain.*
- *  grass.* (grass.mow mows).
- *  @param live { now?: number, mayShape?: boolean } — mayShape false = this viewer
- *  is known not to hold owner rank (sky/terrain/grass/weather are owner verbs);
- *  undefined = unknown: nothing is disabled on its account and the authority decides. */
+/** In inspectSchema's shape ({ id, groups, sections }). Addresses: sky.* weather.state terrain.* grass.* (grass.mow mows).
+ *  live { now?, mayShape? }: mayShape false = known not owner; undefined = unknown, nothing disabled (the authority decides). */
 export function worldSchema(st, live = {}) {
   const { sky, terrain, grass } = worldState(st);
   const now = live.now ?? 0;
@@ -183,8 +159,7 @@ export function worldSchema(st, live = {}) {
   const real = realClock(sky);
   const s = isBag(sky) ? sky : {};
   const skyFields = [
-    // the sky's own field (R 10-17: the editor's old `clock` enum is gone, as the wire's is): a timezone means the hour IS
-    // its wall hour; empty is the authored clock (the hour and rate below)
+    // a timezone means the hour IS its wall hour; empty is the authored clock (the hour and rate below)
     { t: 'text', k: 'tz', label: 'timezone', value: real ? (s.tz ?? DEFAULT_TZ) : '', ...ro,
       hint: ro.hint ?? `a timezone (e.g. ${DEFAULT_TZ}): the hour IS its wall hour; empty: the hour and rate below` },
   ];
@@ -199,8 +174,8 @@ export function worldSchema(st, live = {}) {
   if (sky != null) skyFields.push({ t: 'btn', k: 'remove', label: 'remove the sky', danger: true, hint: 'back to a plain clear sky (weather goes with it)', ...ro });
   groups.push({ group: 'sky', label: 'Sky', fields: skyFields });
 
-  // Weather — state.sky's weather half; under a forecast a pick is a manual
-  // override that holds until the segment boundary (AGENTS.md "Weather")
+  // Weather: state.sky's weather half; under a forecast a pick is a manual override holding until the segment boundary
+  // (AGENTS.md "Weather")
   const eff = isBag(sky) ? effectiveSky(sky, now) : null;
   const f = isBag(sky?.forecast) ? sky.forecast : null;
   const wxFields = [
@@ -214,8 +189,8 @@ export function worldSchema(st, live = {}) {
 
   // Terrain
   const t = isBag(terrain) ? terrain : null;
-  const lc = Array.isArray(t?.layers) ? t.layers[0]?.color : null; const layerColor = Number.isInteger(lc) ? lc : colorInt(lc);   // an int (shape audit 10-16), or an older hex string
-  // hard limits and units are the registry's (componentspec terrain / grass, through limitsOf); the slider's soft ends are this card's
+  const lc = Array.isArray(t?.layers) ? t.layers[0]?.color : null; const layerColor = Number.isInteger(lc) ? lc : colorInt(lc);   // an int, or an older hex string
+  // hard limits and units are the registry's (limitsOf); the slider's soft ends are this card's
   const T = (k) => limitsOf('terrain', k), G = (k) => limitsOf('grass', k), TD = SPEC.terrain.defaults;
   const terrainFields = t ? [
     // an absent number is the sim's (componentspec terrain defaults = shared/terrainmath.js), never this card's own
@@ -241,15 +216,15 @@ export function worldSchema(st, live = {}) {
   ] : [{ t: 'info', label: '', value: 'nothing growing. Pick a planting in Build ▸ World' }];
   groups.push({ group: 'grass', label: 'Grass', fields: grassFields });
 
-  // Trusted components (docs/COMPONENT-LADDER.md, the second rung; R 10-12): the drafts this world's owner trusts here,
-  // @world.trusted-components — live.trusted is the list as the client read it (mayTrust: this viewer is the owner)
+  // Trusted components (docs/COMPONENT-LADDER.md, the second rung): the drafts this owner trusts, @world.trusted-components;
+  // live.trusted is the list as the client read it (mayTrust: this viewer is the owner)
   const trusted = Array.isArray(live.trusted) ? live.trusted : [];
   const trustedFields = trusted.length ? trusted.flatMap((n) => [{ t: 'info', label: 'trusted', value: n, hint: 'a draft used and trusted in this world: a blue chip, offered in the main Add Component list. The engine still doesn\'t read it' },
     ...(live.mayTrust === true ? [{ t: 'btn', k: `remove|${n}`, label: `stop trusting ${n}`, danger: true, hint: 'back to a plain draft (amber, under "drafts"). Nothing stored changes' }] : [])])
     : [{ t: 'info', label: '', value: 'none: every draft here is unproven. An owner trusts one from its card on a thing' }];
   groups.push({ group: TRUSTED, label: 'Trusted components', fields: trustedFields });
 
-  // the cards (design §5): one per component, in the inspector's order
+  // one card per component, in the inspector's order (design §5)
   const have = new Set(worldComponents(st).components.map((c) => c.type));
   const list = groups.map(({ group, fields }) => {
     const type = { sky: 'Sky', weather: 'Weather', terrain: 'Terrain', grass: 'Grass' }[group];
@@ -265,10 +240,8 @@ export function worldSchema(st, live = {}) {
 
 // ---------------------------------------------------------------- edits → requests
 
-/** Turn `edit @world` edits into the fewest requests: every sky.* edit is
- *  ONE re-authored sky, weather.state ONE weather, terrain.* ONE terrain set, grass.*
- *  ONE grass set (grass.mow: delete @world grass). Relative math works on numbers, as
- *  on any entity. Pure: never sends, never mutates `st`. */
+/** The fewest requests: ONE sky, ONE weather, ONE terrain set, ONE grass set (grass.mow deletes it). Pure: never sends,
+ *  never mutates `st`. */
 export function worldEditOps(st, edits, live = {}) {
   const { sky, terrain, grass } = worldState(st);
   const now = live.now ?? 0;
@@ -299,8 +272,7 @@ export function worldEditOps(st, edits, live = {}) {
         if (k === 'tz') {
           if (v) skyPatch.tz = v;
           else {
-            // back to the authored clock (an empty timezone): an older fold parked the rated clock under
-            // dormantRated (#65); hand it back, as the sky panel does
+            // back to the authored clock: an older fold parked the rated clock under dormantRated (#65); hand it back, as the sky panel does
             Object.assign(skyPatch, { tz: undefined });
             const d = sky?.dormantRated;
             if (isBag(d)) { if (d.rate != null) skyPatch.rate = d.rate; if (d.hours != null) skyPatch.hours = round(d.rate ? hoursAt({ hours: d.hours, rate: d.rate, ts: d.ts }, now) : d.hours, 4); }
@@ -313,7 +285,7 @@ export function worldEditOps(st, edits, live = {}) {
       case 'terrain':
         if (k === 'remove') { noGround = true; break; }
         ground ??= {};
-        if (k === 'color') ground.layers = (Array.isArray(terrain?.layers) ? terrain.layers : [{ repeat: 16 }]).map((l, i) => (i ? l : { ...l, color: v }));   // an int (shape audit 10-16)
+        if (k === 'color') ground.layers = (Array.isArray(terrain?.layers) ? terrain.layers : [{ repeat: 16 }]).map((l, i) => (i ? l : { ...l, color: v }));   // an int
         else ground[k] = v;
         break;
       case 'grass': if (k === 'mow') mow = true; else (grassPatch ??= {})[k] = v; break;
@@ -321,9 +293,8 @@ export function worldEditOps(st, edits, live = {}) {
     }
   }
   const ops = [];
-  // R 10-11: "no way to get rid of the weather, sky, or terrain once created": remove is a plain component delete
-  // removing the weather (house review I95): a clear pick under a forecast is an override its next segment undoes, so the
-  // forecast goes too; that is the sky's to say, in the same re-authored sky as any sky edit in this gesture
+  // remove is a plain component delete. Removing the weather: a clear pick under a forecast is an override its next
+  // segment undoes, so the forecast goes too, in the same re-authored sky as any sky edit in this gesture
   const dropForecast = noWeather && !noSky && isBag(sky?.forecast);
   if (noWeather) weather = dropForecast || noSky ? null : 'clear';
   if (noSky) { if (sky != null) ops.push(OP.unset(WORLD_ID, 'sky')); }
@@ -339,13 +310,12 @@ export function worldEditOps(st, edits, live = {}) {
 
 // ---------------------------------------------------------------- the Build tab's World tiles
 
-/** A preset pick from Build ▸ World, as one request: picking replaces the current
- *  choice of that kind.
+/** Picking replaces the current choice of that kind.
  *    kind 'sky'     v = a sky preset name (ctx.presets, defs/sky/_presets.json) → sky (pickSky)
  *    kind 'weather' v = one of WEATHERS                                          → weather
  *    kind 'shape' | 'tint'  v = a ground-palette name (ctx.pal)                  → terrain (only that dial changes)
  *    kind 'plant'   v = a planting name                                           → grass (height/density/tint kept)
- *    kind 'mow'                                                                   → grass {clear:true}
+ *    kind 'mow'                                                                   → delete grass
  *  ctx: { pal, presets, now, mayShape } */
 export function worldPick(st, kind, v, ctx = {}) {
   const { sky, terrain, grass } = worldState(st);
@@ -381,7 +351,7 @@ export function worldPick(st, kind, v, ctx = {}) {
   return { ops: [op], errors: [] };
 }
 
-/** Which World tile reads as armed, per row: the current choice by name. */
+/** Per row: the current choice by name. */
 export function worldChoice(st, { pal, presets, now = 0 } = {}) {
   const { sky, terrain, grass } = worldState(st);
   const c = groundChoice(pal, terrain, grass);

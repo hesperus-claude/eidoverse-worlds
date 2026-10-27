@@ -1,27 +1,14 @@
-// Support surfaces through the SHIPPED DOOR (#17, review of #53).
-//
-//   bun tools/support-lifecycle-test.ts        # spawns its own scratch server
-//   URL=ws://host:8940/ws bun tools/...        # or against a running one
-//
-// tools/support-test.ts drives the physics and collider modules directly: it
-// proves the solver rests a body on a box. It cannot prove that a real
-// WorldAgent, joining a real world, turns the log it replays into those boxes
-// — which is the half that actually shipped. This suite is that half, end to
-// end, over a socket:
-//
+// Support surfaces through the SHIPPED DOOR (#17): tools/support-test.ts proves the solver rests a body on a box; this
+// proves a real WorldAgent turns the log it replays into those boxes, end to end, over a socket:
 //   replay a world containing a platform
 //     -> GET /geom
 //       -> support registration
 //         -> place / rescale / remove / motion
 //           -> explicit drag release AND the 1.2s dragger-silence timeout
-//
-// Every assertion is a HEIGHT, because height is the thing #17 is about: a
-// body released over a platform rests on the platform (root ≈ deck − hips
-// offset), or it does not and lands on the terrain below (root ≈ −hips).
-// The two are ~2m apart, so nothing here is a near-miss.
-//
-// On unmodified main every placed-floor case fails: the headless settle sim
-// has no colliders at all, so every release resolves to terrain.
+// Every assertion is a HEIGHT: a body released over a platform rests on it (root ≈ deck − hips offset), or lands on the
+// terrain below (root ≈ −hips); the two are ~2m apart, so nothing is a near-miss.
+//   bun tools/support-lifecycle-test.ts        # spawns its own scratch server
+//   URL=ws://host:8940/ws bun tools/...        # or against a running one
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, existsSync } from "node:fs";
@@ -32,14 +19,8 @@ import { qFromYaw } from "../shared/rot.js";
 import { idAliases } from "./protocol/idalias.ts";
 const IDS = idAliases();
 
-// Bun 1.3.x caches transpiled module graphs globally by content. A failed
-// plugin-resolved path can therefore survive into a later checkout and bypass
-// onResolve entirely. Tests need deterministic resolver behavior; production
-// runtime keeps Bun's normal cache. Re-exec once because this setting is read
-// at process startup. (Same guard as the rest of the suite — see #13. This
-// one reaches the plugin indirectly, through WorldAgent -> physics.ts, which
-// is exactly how it went missing: a run from a since-deleted worktree left
-// that worktree's stub path baked in, and every later run inherited it.)
+// Bun's global transpiler cache can keep a stale plugin-resolved path and bypass onResolve: re-exec once with it off
+// (read at startup; #13). This file reaches the plugin through WorldAgent -> physics.ts
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -62,9 +43,8 @@ const URL_ = EXTERNAL ?? `ws://127.0.0.1:${PORT}/ws`;
 const TOKEN = process.env.TOKEN ?? "";
 const worldsDir = mkdtempSync(join(tmpdir(), "ew-support-"));
 
-// A crate: small enough to stay a plain box, tall enough that resting on it
-// is unmistakable. Deck top sits at local y 2.003, and the world puts its
-// origin on flat terrain at y 0.
+// a crate: small enough to stay a plain box, tall enough that resting on it is unmistakable; deck top at local y 2.003,
+// origin on flat terrain at y 0
 const LIB = "eidoverse/assets/models/crate_large_red.glb";
 const DECK_Y = 2.003;
 
@@ -80,11 +60,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let server: ReturnType<typeof spawn> | null = null;
 async function startServer() {
   if (EXTERNAL) return;
-  // process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd
-  // shim whose pid is not the real process — kill() takes the shim and
-  // orphans the sequencer, which then squats the port and poisons the NEXT
-  // run (found live: this line's server outlived its kill on :8994, and a
-  // later run silently drove the stale zombie instead of its own server)
+  // process.execPath, not "bun": on Windows PATH "bun" is a .cmd shim, so kill() would orphan the sequencer and it would
+  // answer the NEXT run
   server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
     // TRUST_NAMES: a typed name is its own local account, so the stagehand who founds a world joins it as its owner
     env: { ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, JOIN_TOKEN: "", TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1",
@@ -100,10 +77,8 @@ async function startServer() {
 
 const HTTP = URL_.replace(/^ws/, "http").replace(/\/ws$/, "");
 
-/** The server's own reading of a model's shape. Tests derive drop points from
- *  this rather than assuming a model is centred on its origin — the crate is,
- *  the watchtower emphatically is not (its deck sits 5m off in x and 32m off
- *  in z), and a hardcoded drop point silently tests empty air. */
+/** The server's own reading of a model's shape: drop points come from it, since a model need not be centred on its
+ *  origin and a hardcoded drop point would test empty air. */
 async function geom(model: string) {
   const r = await fetch(`${HTTP}/geom?lib=${encodeURIComponent(model)}`);
   if (!r.ok) throw new Error(`/geom ${model}: ${r.status}`);
@@ -112,9 +87,8 @@ async function geom(model: string) {
 const bandCentre = (t: any) => [(t.x[0] + t.x[1]) / 2, (t.z[0] + t.z[1]) / 2];
 const fillOf = (t: any) => t.area / ((t.x[1] - t.x[0]) * (t.z[1] - t.z[0]));
 
-/** The scene's old authoring words, as authority requests (the world speaks the protocol: every write is a door request). A
- *  a "moving platform" is any motion component; there is no `path` motion, so a path becomes a bob, which moves it all
- *  the same. Requests go out in order on one socket and the door answers them in order. */
+/** The scene's old authoring words, as door requests. A "moving platform" is any motion component (a path becomes an
+ *  oscillation, which moves it all the same). Requests go out in order on one socket and are answered in order. */
 const requestsOf = (v: string, a: any): { verb: string; args: any }[] => {
   const tf = (x: any) => ({ ...(x.pos ? { pos: x.pos } : {}), ...(typeof x.yaw === "number" ? { q: qFromYaw(x.yaw) } : {}) });
   switch (v) {
@@ -134,9 +108,8 @@ function hand(world: string, name: string) {
   return new Promise<any>((res) => {
     const ws = new WebSocket(`${URL_}?name=${name}`);
     let n = 0;
-    // R 10-17: the scene's names ride as placeholders and minted ids (tools/protocol/idalias.ts). Each request waits for the
-    // one before it to be answered (its reply carries the ids a later request names); a verb's promise may be ignored, the
-    // order holds
+    // the scene's names ride as placeholders and minted ids (tools/protocol/idalias.ts): each request waits for the one
+    // before it (its reply carries the ids a later request names); a verb's promise may be ignored, the order holds
     const waiting = new Map<string, (r: any) => void>(); let chain: Promise<any> = Promise.resolve();
     const ask = (r: { verb: string; args: any }) => new Promise<any>((done) => { const id = `${name}-${++n}`; waiting.set(id, done);
       ws.send(JSON.stringify({ type: "request", id, verb: r.verb, args: IDS.out(r.verb, r.args) })); setTimeout(() => { if (waiting.delete(id)) done(null); }, 8000); });
@@ -154,9 +127,8 @@ function hand(world: string, name: string) {
   });
 }
 
-/** Knock a body down, then drag it and let go over `overY`, either by an
- *  explicit release or by going silent for the 1.2s timeout. Returns where
- *  the agent's OWN settle sim put its root. */
+/** Knock a body down, drag it and let go over `overY`, by explicit release or by going silent for the 1.2s timeout.
+ *  Returns where the agent's OWN settle sim put its root. */
 async function dropOver(h: any, ag: any, name: string, at: number[], overY: number,
                         how: "release" | "silence", triggerAt?: { t: number }) {
   h.send({ type: "puppet", target: name, ragdoll: { lean: [1, 0, 0] } });
@@ -171,7 +143,7 @@ async function dropOver(h: any, ag: any, name: string, at: number[], overY: numb
              p: [at[0], overY + 1.2, at[1]], yaw: 0 });
     if (triggerAt) triggerAt.t = Date.now();          // the settle starts here
   } else {
-    // the dragger's last word, then nothing — the body reclaims itself at 1.2s
+    // the dragger's last word, then nothing: the body reclaims itself at 1.2s
     h.send({ type: "bodydrag", target: name, pose: { hips: [0, 0, 0, 1] },
              p: [at[0], overY + 1.2, at[1]], yaw: 0 });
     if (triggerAt) triggerAt.t = Date.now() + 1200;   // ...and here, one timeout later
@@ -180,10 +152,7 @@ async function dropOver(h: any, ag: any, name: string, at: number[], overY: numb
   return ag.pos.y as number;
 }
 
-// The hips offset of a lying rig: a settled body's ROOT sits this far below
-// the surface it rests on. Measured live rather than assumed, because it is
-// rig-dependent — and because reading it as "sunk into the ground" is the
-// misreading that sent issue #17 chasing a phantom.
+// a lying rig's hips offset: a settled body's ROOT sits this far below its surface (rig-dependent, measured live)
 let hipsOffset = 0.68;
 const restsOn = (rootY: number, surfaceY: number) => Math.abs(rootY - (surfaceY - hipsOffset)) < 0.35;
 const onDeck = (rootY: number) => restsOn(rootY, DECK_Y);
@@ -196,9 +165,7 @@ try {
   console.log(`\nsupport lifecycle (the shipped door): ${URL_}\n`);
 
   // ---- 1. REPLAY: the platform is in the log BEFORE the body ever joins ----
-  // This is the ordering that matters. The agent does not witness the spawn;
-  // it folds it out of history at join, which is the path a reconnecting or
-  // late-arriving resident always takes.
+  // the agent folds the spawn out of history at join, as a reconnecting or late resident always does
   {
     const W = `sup-replay-${Date.now().toString(36)}`;
     const h = await hand(W, "stagehand");
@@ -281,10 +248,8 @@ try {
   }
 
   // ---- 5. a MOVING thing is not a floor (ghost-floor fence) ---------------
-  // The browser evaluates the motion and its collider rides along; a headless
-  // support box registered at the authored transform would not. Rather than
-  // invent a floor where the object no longer is, the agent abstains — and
-  // resumes supporting when the motion is taken off again.
+  // a headless support box at the authored transform wouldn't follow a motion, so the agent abstains rather than invent a
+  // floor, and resumes when the motion is taken off
   {
     const W = `sup-motion-${Date.now().toString(36)}`;
     const h = await hand(W, "stagehand");
@@ -310,15 +275,12 @@ try {
     h.close(); ag.close?.();
   }
 
-  // ---- 6. (v1: an id removed and respawned as a different lib mid-/geom-fetch kept its OWN geometry. A door
-  // never reuses an id — "'swap' existed before in this world; an id is never reused" — so the race has no subject;
-  // syncSupport's lib re-check stays as defence, pinned headless by tools/support-swap-test.ts.)
+  // ---- 6. (an id is never reused, so an id removed and respawned mid-/geom-fetch has no subject; syncSupport's lib
+  // re-check stays as defence, pinned headless by tools/support-swap-test.ts)
 
   // ---- 7. a departing agent takes its world's floors with it -------------
-  // The collider map is PROCESS state (physics.ts's declared seam), so one
-  // process serving a second world must not inherit the first world's
-  // platforms. Found by this suite's own cross-talk: six worlds in one
-  // process, and world 1's crate was still holding bodies up in world 3.
+  // the collider map is PROCESS state (physics.ts's declared seam): a second world in one process must not inherit the
+  // first world's platforms
   {
     const W1 = `sup-leak-a-${Date.now().toString(36)}`;
     const h1 = await hand(W1, "stagehand");
@@ -344,14 +306,8 @@ try {
   }
 
   // ---- 8. an in-flight support generation, made real ---------------------
-  // Every case above lets /geom land before anything is dropped, so the
-  // barrier is never actually under load. Here the fetch is slowed from the
-  // test process — no production seam — and the release is fired while the
-  // geometry is still on the wire. With the barrier removed this is the
-  // straightforward #17 failure: the settle starts against a world whose
-  // floors have not arrived. The second case runs the same race into the
-  // 1.2s silence path, whose timer is longer and so needs a longer delay to
-  // still be in flight when the body reclaims itself.
+  // /geom is slowed from the test process (no production seam) and the release fires while it's on the wire; the second
+  // case races the 1.2 s silence path, so it needs a longer delay
   {
     const realFetch = globalThis.fetch;
     let delayMs = 0;
@@ -364,12 +320,7 @@ try {
       return r;
     }) as typeof fetch;
     try {
-      // Delays are chosen against two clocks. They must exceed the time from
-      // join to the settle trigger, or no race happens and the case proves
-      // nothing (the earlier draft used 1500/2600 and the release case was
-      // decided before /geom was even late). They must ALSO leave the
-      // remaining wait inside supportReady's 3s bound, or the barrier gives
-      // up by design and the body honestly falls to terrain.
+      // delays must exceed join-to-settle-trigger (or no race happens) and leave the rest inside supportReady's 3 s bound
       for (const [how, delay] of [["release", 4000], ["silence", 6000]] as const) {
         const W = `sup-barrier-${how}-${Date.now().toString(36)}`;
         const h = await hand(W, "stagehand");
@@ -398,8 +349,7 @@ try {
   }
 
   // ---- 9. mounted cargo stops being a floor (B1) --------------------------
-  // world.js drops a mounted entity's collider outright: it rides its parent
-  // now, and its own transform is a lie the moment the parent moves.
+  // world.js drops a mounted entity's collider: it follows its parent, and its own transform is a lie once the parent moves
   {
     const W = `sup-mount-${Date.now().toString(36)}`;
     const h = await hand(W, "stagehand");
@@ -426,8 +376,7 @@ try {
   }
 
   // ---- 10. a co-resident's departure leaves the floor standing (B3) -------
-  // Support ids are world/entity scoped so two agents in one world share one
-  // registration. The leaver must release only its own claim.
+  // support ids are world/entity scoped, so two agents in one world share one registration: the leaver releases only its own claim
   {
     const W = `sup-cores-${Date.now().toString(36)}`;
     const h = await hand(W, "stagehand");
@@ -448,16 +397,8 @@ try {
   }
 
   // ---- 11. room-scale: real decks kept, sparse bands abstained (B2) -------
-  // The watchtower is the whole argument in one model. /geom reports five
-  // up-facing bands: its actual deck at 9.53 fills 0.855 of the rectangle
-  // that bounds it, its small landing at 2.76 fills 0.759 — and the bands at
-  // 7.03 and 7.57, which are railing and strut tops spread across the
-  // footprint, fill 0.116 and 0.058. The first two are floors. The last two
-  // are rectangles of mostly air, and registering them would rest a body in
-  // the middle of the structure on nothing at all.
-  //
-  // It is also the building issue #66 names as the reason this matters: a
-  // watchtower whose deck no agent can rest on is human-only.
+  // the watchtower: its deck (9.53, fill 0.855) and landing (2.76, 0.759) are floors; the railing/strut bands at 7.03 and
+  // 7.57 (0.116, 0.058) are mostly air and must not be registered (#66)
   {
     const TOWER = "eidoverse/assets/models/scifi_perimeter_watchtower_standalone_or_with_wall_middle_four_way.glb";
     const g = await geom(TOWER);
@@ -495,15 +436,8 @@ try {
   }
 
   // ---- 12. the palm: canopy is not an invented floor (B2) -----------------
-  // Every one of the palm's bands fills between 0.094 and 0.143 — fronds
-  // bounding a wide rectangle around almost nothing. Before the fill gate a
-  // body released over it rested on a summary DECK spanning that rectangle:
-  // a floor the model does not have. Now the agent fits the palm's own
-  // triangles (registerMeshSupport), so no deck is registered at all, and a
-  // falling body is caught by fronds exactly where a browser's would be —
-  // there ARE fronds over the band's centre (colliders.surfaceUnder finds
-  // 4.43m there, 5.45m a metre and a half out). What must still hold: support
-  // comes from the triangles, and nothing holds the body above the model.
+  // the palm's bands fill 0.094–0.143 (fronds round air): the agent fits the palm's own triangles (registerMeshSupport),
+  // registering no deck; support comes from the triangles and nothing holds the body above the model
   {
     const PALM = "eidoverse/assets/models/palm_date_tree_tropical_deseert_oasis_plant.glb";
     const g = await geom(PALM);

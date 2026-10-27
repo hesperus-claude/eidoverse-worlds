@@ -1,10 +1,7 @@
-// aux-binding-test.ts — B1 (#57 review): an aux leg binds to the primary's
-// identity authority, or it does not attach. Same-display existence is
-// presence, not authority. Real ws door, owned spawned server, scratch worlds.
-//
-// The impostor scenario this pins: anyone joining surface:"voice" under an
-// unreserved human's name made every listener mark that person voiceCapable
-// (hold latency on each of their says) and could send RTC stamped as them.
+// aux-binding-test.ts (#57): an aux leg binds to the primary's identity authority, or doesn't attach; same-display
+// existence is presence, not authority. Real ws door, owned spawned server, scratch worlds.
+// The impostor: joining surface:"voice" under an unreserved human's name marked that person voiceCapable for every
+// listener (latency held on each say) and could send RTC stamped as them.
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,14 +9,10 @@ import { foundWorlds } from "./harness.ts";
 
 const PORT = 8600 + (process.pid % 150);
 const worldsDir = mkdtempSync(join(tmpdir(), "eido-auxbind-"));
-foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
+foundWorlds(worldsDir, ["commons"]);  // joining never founds a world
 
-// The test OWNS its credential fixture: a scratch tokens.json reserving the
-// agent names this test asserts on (hesp2, hesp3) and minting hesp2's bearer.
-// The server reads it via AGENT_TOKENS_PATH, so the proof does not depend on —
-// and cannot be contaminated by — whatever tokens.json sits in the checkout.
-// (Antra B1: a founding harness cannot classify its private setup as an
-// environment footnote; here it creates and owns exactly what it relies on.)
+// the test owns its credential fixture: a scratch tokens.json (AGENT_TOKENS_PATH) reserving hesp2/hesp3 and minting
+// hesp2's bearer, so the checkout's tokens.json can't contaminate it
 const tokensPath = join(worldsDir, "tokens.json");
 writeFileSync(tokensPath, JSON.stringify({
   "surf-lab-hesp2": { id: "hesp2" },
@@ -48,19 +41,19 @@ const dial = (joinMsg: Record<string, unknown>): Promise<Sock> => new Promise((r
   ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); seen.push(m);
     if (m.type === "snapshot" || m.type === "error") { clearTimeout(t); res({ ws, seen, closed }); } };
   ws.onclose = (ev) => { clearTimeout(t); closeRes({ code: ev.code });
-    res({ ws, seen, closed }); };  // refused sockets may close before/without error frame
+    res({ ws, seen, closed }); };  // refused sockets may close before or without an error frame
   ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: "commons", replica: true, ...joinMsg }));
 });
 
 try {
   await sleep(2500);
 
-  // A self-asserted human primary — the everyday case B1 protects.
+  // a self-asserted human primary: the everyday case this protects
   const rennet = await dial({ id: "rennet" });
   check("setup: self-asserted human primary joins embodied", rennet.seen.some((m) => m.type === "snapshot"),
     JSON.stringify(rennet.seen[0])?.slice(0, 80));
 
-  // 1. IMPOSTOR: same display name, surface "voice", no credential of any kind.
+  // 1. IMPOSTOR: same display name, surface "voice", no credential of any kind
   rennet.seen.length = 0;
   const impostor = await dial({ id: "rennet", surface: "voice" });
   await sleep(500);
@@ -77,8 +70,7 @@ try {
     !rennet.seen.some((m) => m.type === "rtc" || m.surface === "voice"),
     rennet.seen.map((m) => m.type).join(","));
 
-  // 2. RESERVED AGENT, correctly bound: primary with the agent's own bearer,
-  //    then an aux leg presenting the SAME bearer — accepted, transition seen.
+  // 2. RESERVED AGENT, correctly bound: a primary with the agent's bearer, then an aux leg with the SAME bearer: accepted
   const agentPrimary = await dial({ id: "hesp2", agentToken: "surf-lab-hesp2" });
   check("setup: reserved agent primary joins with its bearer",
     agentPrimary.seen.some((m) => m.type === "snapshot"), JSON.stringify(agentPrimary.seen[0])?.slice(0, 80));
@@ -91,15 +83,14 @@ try {
     rennet.seen.some((m) => m.type === "surface-transition" && m.id === "hesp2" && m.surface === "voice"),
     rennet.seen.map((m) => m.type).join(","));
 
-  // 3. Binding is PER LEG: a verified primary does not bless a bare aux.
+  // 3. binding is PER LEG: a verified primary doesn't bless a bare aux
   const bareAux = await dial({ id: "hesp2", surface: "voice" });
   await sleep(300);
   check("aux without its own credential is refused even though a VERIFIED primary exists",
     bareAux.seen.some((m) => m.type === "error") || (await Promise.race([bareAux.closed, sleep(2000).then(() => ({ code: -1 }))])).code === 4009,
     JSON.stringify(bareAux.seen[0])?.slice(0, 80));
 
-  // 4. Reserved-name protection still holds one level up (regression guard):
-  //    an impostor cannot even land a PRIMARY under a reserved agent name.
+  // 4. reserved-name protection one level up: an impostor can't land a PRIMARY under a reserved agent name
   const namejack = await dial({ id: "hesp3" });
   check("reserved agent name still refuses an uncredentialed primary",
     namejack.seen.some((m) => m.type === "error" && /reserved/i.test(m.error ?? "")),

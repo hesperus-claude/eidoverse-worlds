@@ -1,7 +1,4 @@
-// Edit mode's rights gate (rung 3). build.js had NO test surface in this repo —
-// `grep -l build.js tools/` matched comment text, not imports — so the gate the
-// dock wrench advertises was, until this suite, enforced by reading only.
-//
+// Edit mode's rights gate (rung 3): the gate the dock wrench advertises, enforced by test, not by reading.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/build-gate-test.ts
 import * as R from '../shared/protocol/roles.js';
 import { fileURLToPath } from "node:url";
@@ -25,15 +22,13 @@ const check = (name: string, ok: boolean, detail?: string) => {
   if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
-// a server says permissions with the role (recut B1 dropped the role-only fallback): fake what it really sends
+// a server says permissions with the role (there is no role-only fallback): fake what it really sends
 const asRole = (role: any) => { (stub.net as any).myRights = role === undefined ? undefined : { role, permissions: Object.entries(R.roleDef({}, role)?.can ?? {}).filter(([, v]) => v).map(([k]) => k) }; };
 
 console.log('BUILD GATE — who may enter edit mode');
 
-// PERMISSIVE WHEN UNKNOWN. net.myRights has no declaration in net.js's object
-// literal; it lands at the snapshot or a live grant, so it is undefined for the
-// whole pre-snapshot window. Denying there would make a build click vanish on a
-// slow join. generate.js:144 (`net.myRights?.gen !== false`) is the same idiom.
+// permissive when unknown: net.myRights is undefined until the snapshot or a grant, and denying there would make a
+// build click vanish on a slow join (as generate.js's `net.myRights?.gen !== false`)
 asRole(undefined);
 check('rights not yet known: permitted (pre-snapshot, matches generate.js)', build.mayEdit() === true);
 asRole('builder');
@@ -47,8 +42,7 @@ check('any other known role: refused', build.mayEdit() === false);
 
 console.log('\nBUILD GATE — the gate is applied at the chokepoint, not the keybind');
 
-// Every entry point funnels through setEditMode: toggleEditMode, the dock
-// action, KeyB, and the two quiet callers (holdGhost, armSocketPlacement).
+// every entry point funnels through setEditMode: toggleEditMode, the dock action, KeyB, holdGhost, armSocketPlacement
 asRole('inhabitant');
 build.setEditMode(false);                       // settle
 const h0 = stub.hints.length;
@@ -56,7 +50,7 @@ build.setEditMode(true);
 check('a visitor cannot ENTER edit mode', build.isEditing() === false, `isEditing=${build.isEditing()}`);
 check('...and is told why, out loud', stub.hints.slice(h0).some((t: string) => /build rights/.test(t)), JSON.stringify(stub.hints.slice(h0)));
 
-// the quiet callers are gated too — "I picked a thing to place" is build intent
+// the quiet callers are gated too: "I picked a thing to place" is build intent
 const h1 = stub.hints.length;
 build.setEditMode(true, { quiet: true });
 check('a quiet caller (holdGhost/armSocketPlacement) is gated too', build.isEditing() === false);
@@ -68,7 +62,7 @@ check('KeyB/toggleEditMode is gated by the same chokepoint', build.isEditing() =
 
 console.log('\nBUILD GATE — leaving is never gated');
 
-// A client demoted MID-SESSION must not be trapped in edit mode.
+// a client demoted MID-SESSION must not be trapped in edit mode
 asRole('builder');
 build.setEditMode(true);
 check('a builder enters', build.isEditing() === true);

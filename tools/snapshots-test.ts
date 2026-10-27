@@ -68,6 +68,15 @@ test("bounded inflight work, cooldown, timeout cleanup", async () => {
   const result = broker.request(world, "agent"); broker.retire(donor.c); expect(await result).toMatchObject({ status: 503 });
   const blocked = setup({ maxPending: 0, queueMs: 0 }); expect(await blocked.broker.request(blocked.world, "agent")).toMatchObject({ status: 429 });
 });
+test("the cooldown runs on a monotonic clock: a wall-clock step back doesn't turn a free renderer busy", async () => {
+  const wall = Date.now; let t = wall(); Date.now = () => t;   // the system clock, as the broker would see it if it read it
+  try {
+    const { broker, world } = setup({ cooldownMs: 30, timeoutMs: 5, queueMs: 0 });   // the broker's own default clock
+    expect(await broker.request(world, "agent")).toMatchObject({ status: 504 });
+    await new Promise((r) => setTimeout(r, 60)); t -= 3_600_000;   // NTP steps the clock back an hour
+    expect(await broker.request(world, "agent")).toMatchObject({ status: 504 });   // asked again (and timed out), not 429
+  } finally { Date.now = wall; }
+});
 test("opt-out, target disconnect, renderer retirement release pending work", async () => {
   for (const who of ["donor", "target", "opt-out"] as const) {
     const { broker, world, donor, target } = setup(); const result = broker.request(world, "agent");

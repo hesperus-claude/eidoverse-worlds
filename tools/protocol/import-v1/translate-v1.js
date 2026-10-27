@@ -1,39 +1,28 @@
-// v1/v2 → v4 translator (lab). Runs the REAL v1 fold (anima/main shared/fold.js, extracted to legacy/) one entry at a
-// time, projects its state into v4 entity/component form, and emits, per old entry:
+// v1/v2 → v4 translator. Runs the REAL v1 fold (../fold.js) one entry at a time, projects its state into v4
+// entity/component form, and emits, per old entry:
 //   - the old entry as sent: an `act` (verb "imported", body {verb, args, from: old seq}, ts: old ts), or a `say`, and
 //   - at most one change entry with the plain results that bring v4 to the same place (cause = that act).
-// The output is in the PROTOCOL-v4 §2.4 wire format, and every name and id follows §2.3: an old id or name the
-// grammar refuses is mapped by `enc`, here names.js's encRaw (deterministic and injective: a name in the hashed form is
-// escaped like any other, and a log holding a lone surrogate, the one pair it maps alike, isn't imported at all). After
-// every entry it folds the v4 entry with the v4 fold and checks the projections agree. The original log is never written (R9); the output is a regenerable cache.
-// Ported from the v4 lab (code/v4-lab/translate-v1.js @ 11db981). Engine changes: the v1 fold is the engine's own
-// ../fold.js (the lab carried an older anima/main copy in legacy/), hashing and hex come from ./hash.js (no node:
-// imports; the browser may import this file), and the lab's CLI is tools/protocol/sweep.ts.
+// The output is in the PROTOCOL-v4 §2.4 wire format, and every name and id follows §2.3: an old id or name the grammar
+// refuses is mapped by `enc`, names.js's encRaw (deterministic and injective: a name in the hashed form is escaped like
+// any other, and a log holding a lone surrogate, the one pair it maps alike, isn't imported at all). After every entry
+// it folds the v4 entry with the v4 fold and checks the projections agree. The original log is never written (R9); the
+// output is a regenerable cache. Hashing and hex come from ./hash.js (no node: imports: the browser may import this file);
+// the CLI is tools/protocol/sweep.ts.
 import { emptyState as v1Empty, foldEntry } from "./fold.js";
 import { emptyState as v4Empty, applyInPlace, opsOf, worldIdOf, DIALECT, VERSION } from "../../../shared/protocol/fold.js";
 import { unNegZero } from "../../../shared/protocol/round.js";
-// an old log's names are never ids, so a name in the hashed form is escaped too (encRaw; house 6340433633, @19)
+// an old log's names are never ids, so a name in the hashed form is escaped too (encRaw, @19)
 import { encRaw as enc, encNameRaw as encName, dec, partSlot, motionType } from "../../../shared/protocol/names.js";
 import { qNorm } from "../../../shared/rot.js";
 import { sha256 } from "../../../shared/protocol/hash.js";
 import { COMPONENTS, registered } from "../../../shared/protocol/componentspec.js";
 import { modernize as newParticles, hashSeed } from "../../../shared/particle_effects.js";
 import { repairComps, repairWorld, SHAPES_VERSION } from "../../../shared/protocol/shaperepair.js";
-import * as eidosim from "./eidosim-v1.js";   // HER engine (the first eidosim, dialect 3): what a v1 punt did. Importer-only.
+import * as eidosim from "./eidosim-v1.js";   // the first eidosim (dialect 3): what a v1 punt did. Importer-only.
 import { ENGINES, DEFAULT_ENGINE } from "../../../shared/protocol/simlayer.js";
 
-// The engine's translator has its own name (research 35, slice-2 #1): it projects the ENGINE's v1 fold, which differs
-// from the lab's older copy on two of 35 logs (tilt-demo's q, 06-components' newer verbs), so the lab's name
-// "translate-v1@0.3" would claim output this code didn't make. @1 also differs from the lab in names.js's escape
-// (a component name the grammar refuses is always x--, never n-prefixed). The exact v1 fold build is stamped beside
-// it when the caller knows it (translate(…, {foldBuild}); build.ts beside this file computes it from the files).
-// @2 (slice 3a): a mounted thing comes out in the authority's shape (transform LOCAL to its parent, parent {to, order, slot?}; socket? since @7),
-// and v1 `guard` merges into `lock` (PROTOCOL-v4 §5). Output differs from @1 on any log with a mount or a guard.
-// v1's only kindless handler, {impulse: x}, added x straight to a pendulum's turn rate (rad/s): that's an angular
-// impulse, v4's {kind: "impulse", angular: x} exactly.
-// v1 took any key in any component; v4's catalogue components are closed (the authority refuses an unknown key, L7). A
-// v1 key the v4 component doesn't define (a lamp's `flicker`) goes to imported:<component> {key: value} beside it: carried,
-// never dropped (R10), and the component itself is one the v4 door and every editor take as it is.
+// the translator has its own name (it projects the engine's v1 fold); the fold build is stamped beside it.
+// v1 {impulse: x} is v4's {kind: "impulse", angular: x}; a v1 key the closed v4 component lacks rides in imported:<component>
 // v1 took a CSS hex colour where three.js does ("#fff"); v4's colours are 0xRRGGBB integers. Lossless.
 export const hexColor = (x) => { if (typeof x !== "string") return x; const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(x.trim());
   if (!m) return x; const h = m[1].length === 3 ? [...m[1]].map((d) => d + d).join("") : m[1]; return parseInt(h, 16); };
@@ -82,9 +71,9 @@ function newStory(v) {
   if (typeof v.markedEntity === "string" && v.markedEntity) out.marks = [enc(v.markedEntity)];
   return out; // practice, markedEntity and anything else story doesn't define move to imported:story (splitUnknown)
 }
-// v1's spin took rpm or degPerSec; v4's is degPerSec (rpm × 6, lossless: the renderer read rpm × 6). degPerSec wins
+// v1's spin took rpm or degPerSec; v4's is degPerSec (rpm × 6, lossless: the renderer read rpm × 6); degPerSec wins
 // when both were written, as the renderer had it.
-// @14 (R 10-17 21:40): v1's back-and-forth along an axis is written under today's name, oscillate (motionType: its one reading).
+// @14: v1's back-and-forth along an axis is written under today's name, oscillate (motionType: its one reading).
 function newMotion(m0) {
   if (!m0 || typeof m0 !== "object" || Array.isArray(m0)) return m0;
   const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };
@@ -96,13 +85,10 @@ function newMotion(m0) {
   const rate = (rpm ?? 6) * 6;
   return Number.isFinite(rate) ? { ...rest, degPerSec: rate } : m;
 }
-// @12, wave 2 (the shape audit's physics-motion family): what the server's load repairs in a stored v4 world
-// (shared/protocol/shaperepair.js), the translation writes already: a bare motion naming a part is motion:<part>,
-// amplitude is amp, a letter axis its vector, a pendulum's unwritten period and damp the 3.5 s and 0 the renderer read, a
-// whole pendulum with no pivot component swings about the [0, 2, 0] the renderer used (now its pivot component), a
-// whole motion's pivot field is the thing's pivot, collider exact is mesh. A parent no longer carries order.
+// what the shape repair (shared/protocol/shaperepair.js) fixes in a stored v4 world, the translation writes already:
+// motion:<part>, amp, axis vectors, a pendulum's 3.5 s / 0 defaults and [0, 2, 0] pivot, collider exact as mesh; no parent order
 function shapeRepaired(c) {
-  return repairComps(c).c;   // a node's motion is motion:<partSlot(name)> {node: name}: its key is already in the §2.3 grammar (review r7 F1)
+  return repairComps(c).c;   // a node's motion is motion:<partSlot(name)> {node: name}: its key is already in the §2.3 grammar
 }
 function newReactions(rx) {
   if (!rx || typeof rx !== "object") return rx;
@@ -119,120 +105,18 @@ function newReactions(rx) {
 
 export const TRANSLATOR = "eidoverse/translate-v1@20";
 /** The version number in a translator name ("eidoverse/translate-v1@20" → 20), or NaN. Compare numbers, never a regex
- *  of version digits: `@(1[4-9])` quietly stopped matching at @20 and broke four suites (10-22). */
+ *  of version digits. */
 export const translatorVersion = (name) => { const m = /@(\d+)$/.exec(String(name ?? "")); return m ? Number(m[1]) : NaN; };
-// @19 (house 6340433633): an old name already in the hashed form h--<61 hex> is escaped like any other name, never kept as
-// that id (old logs never held one): a long name and a raw name equal to its hashed form were one thing id (people were
-// already two: the directory keys them by name). Also since @18: a motion whose amplitude was null is carried as amp 0, as
-// the old reader read it (shaperepair, 5ba2320f), where @18 dropped it. Output differs from @18 only on those two.
-// @20 (the house's PR #10 into #260, on top of @19): its own output changed again, so it is a version of its own (two
-// translators never share a name):
-// a name is joined to an account only where v1's server wrote the pair itself (server/verbs.ts at 306a00b0: a grant's or
-// a ban's sub beside its id, a spawn's or a light's placer {id, sub}, a behaviour's bySub, the act's own actor's). Elsewhere
-// in an old request's args, inside data a v1 `comp` folded blindly, a name beside an account is data like any other: the
-// account becomes its own person's id, and the name beside it is joined to nothing, so no value in the log moves anyone's
-// later acts or role to another person. A binding's author is its bySub's person; the v1 fold's author is `by` where the
-// request sent one, a name the request chose.
-// The translated act's copy of the old genesis carries no account either: a genesis role's sub becomes its person's id, as an
-// old request's does (the identities were found from it before: world.ts).
-// A component whose name has an account's (`ownerSub`) and whose whole value is an account is one too: it is left out of the
-// state, an old comp request's data becomes the person's id, and the writer's check reads both shapes.
-// An account is any of the shapes a join wears (server/directory.ts): human:, agent:, aid1:, and a private server's local:.
-// A role or ban keyed by an account is that account's person, and an entry keyed by one in a copied value is keyed by their
-// id; the pairs main's server wrote (a placer, a behaviour's bySub) join a name to its account before any act is read
-// (world.ts), as a grant's do, so a person's acts before them are that one identity too.
-// @18 (the house's review of #260, importer items): an approved translation's translation-approved act is written by translate
-// itself, so every later change's cause is the act it answers (I1); v1's captions bag (a window of lines) is today's current
-// line, the old fold reading its own frozen modules (frozen/, 6dab22f5) (I3); a caption deed is a place in its screen's captioners (I13); a spin's rpm and a
-// seat's yaw are read as the renderer coerced them, and what can't be read is carried (I36, I37); an earlier epoch's rest tick
-// never dates a later epoch's rest (I14). Output differs from @17 on any log with captions, a caption deed, a non-numeric rpm
-// or seat yaw, a physics epoch replaced after a rest, and on every approved translation. Both names.
-// @17 (R 10-21): the base rung is inhabitant (v1's visitor is written inhabitant), and there's no rung below it: a person's v1
-// spectator or none grant is CARRIED as imported-roles:<id> (never dropped, R10), with no roles:<id>, so they hold the
-// world's newcomer role (absent default-role: inhabitant). The door's own words (`*` none/spectator) still become access.
-// @16 (review of #260): no account subject is written wherever it sits. A property named `sub` or ending in
-// `Sub` whose string has an account's shape is one, at any depth (withoutAccounts, below): in an imported act's args it
-// becomes the person's id when a mapper is given and is dropped when none is; in a value it is always dropped. Any other
-// string under such a name is ordinary data and stays as it was (a v1 `comp` folded its data blindly). A binding's author is
-// found through its account, as the author's grant is, so the two are one identity on every server. Both names.
-// @15 (2026-10-18, merging upstream #256, particles v2): v1 gained more than one emitter per thing, `particles:<name>` beside
-// `particles` (name: 1–32 of A–Z a–z 0–9 _ -), each lit, retuned and put out on its own. v4 keeps one `particles` per thing
-// (several emitters that burn together are one effect document's emitters); an emitter lit and put out on its own is its
-// own thing. So a v1 `particles:<name>` on X becomes a child thing of X (parent {to: X}, label <name>, at X's origin) whose
-// `particles` is the emitter in today's spelling, its id derived (emitterChildId: the same from every translation), its
-// seed the one v1 drew it with (hashSeed(`<X>:particles:<name>:<preset>`), unless it wrote one). Putting it out removes
-// the child. A malformed `particles:…` key was never an emitter in v1 either: it is carried as any invented component.
-// v2's look and motion knobs (wobble, up, spread, gravity, grow, swirl, twinkle, converge, rotate, color, blending) are
-// the old builder's table, which an effect document's modules say in full: they ride in imported:particles (carried,
-// not drawn), and v2's `scale` is the instance's scale. Output differs from @14 on any log with a named emitter.
-// @14 (R 10-17 21:40): a motion's type is written in today's spelling: v1's back-and-forth along an axis is oscillate (the load
-// renames a stored one the same way: shaperepair.js renameFields). Output differs from @13 on any log with that motion. Both names.
-// @13 (review r9 claims O3, 2026-10-17): every translation writes the system's repair-shapes act right after `translated`
-// (the shape repair's once-per-world marker, review r8 M3), one entry @12 didn't. Its projection is @12's; its log is one
-// entry longer. Both names move to @13 (the name says which output you got).
-// @12 (2026-10-16, the shape audit's wave 1): no account subject (`sub`) is ever written, mapper or not (PROTOCOL §9.2: no
-// person data in values): roles:<id> and imported-bans:<id> lose it, and an imported act's raw v1 args lose it too when no
-// identity mapper is given (with one, it becomes the person's id, as before). A dialect-3 epoch her sim refused is carried
-// as imported:epoch (was the imported-epoch component). Both names (with and without her sim) move to @12.
-// @12, wave 2 (the shape audit's physics-motion family): a stored value's old spelling is written in today's (shapeRepaired,
-// below; shared/protocol/shaperepair.js, the same rules the server's first load applies to a stored v4 world), and a
-// parent carries no order. Output differs on any log with a motion, a collider or a mount.
-// @12, wave 2 (the shape audit's render-media-env family): the same repair's render rules: a light carries decay 1.7 (the
-// rig's old falloff) and daytime (was day), no shadows; @world's sky, terrain
-// (+ the water component) and grass in today's spelling. Output differs on any log with a light, particles, sky, terrain
-// or grass.
-// @12 (R 10-17): a model stays its library path, with model-hash sha256:<64 hex> beside it when the caller's resolver knows the
-// bytes (was @8's eido:sha256/<64 hex> in its place); a particle Essential keeps its name and a grass preset its name (the
-// wave-2 render notes above wrote the address and the strokes). Output differs on any log with a model, particles or grass.
-// @12, wave 2 (the shape audit's attach-interact family): a lock is written in its one spelling, {rank: 'builder'} (a v1
-// lock: true, and a guard merged into it, were true). Sockets stay the v1 map with each seat's body block: the server's
-// lift (authority/sockets.js) makes them socket children with a station at first load, as for any older v4 log.
-// @10 (2026-10-08): a dialect-3 log (one with a physics `epoch`, PROTOCOL_v2 §3) is translated with her sim run beside the
-// v1 fold (what translate-d3 did on its own, now on this one path with its identities, model hashes, founder key and
-// namespace): a punt is a logged launch with its exact stamped state, every rest a logged result the authority's sim layer
-// re-checks (design 20, P5/L3), the epoch is @world physics-engine and each collider's stamped box its physics.shape.
-// Before this, @9 kept a punt only as an imported act and left the thing where it was punted FROM. A log with no epoch
-// that her sim enters translates byte-for-byte as @9 did, so it keeps @9's name: the name says which output you got.
-// @11 (2026-10-09, R 04:18: "stomp the existing eidosim engine"): the runtime no longer carries her engine, so her
-// flights are no longer replayed by readers. Her sim still runs here, beside the v1 fold, and still says where each punt
-// came to rest; but a punt stays its imported act (no v4 launch), each rest is a plain change by `sim` caused by that act
-// (no digest), the world's engine is today's eidosim from the epoch on, and (R 2026-10-08) a thing v1 ever punted is a
-// `dynamic` collider, every other one `static`. Nothing in the new log asks a reader to fly her engine.
+// the name says which output you got: bump BOTH names (TRANSLATOR, TRANSLATOR_SIM) on any change to the output; two
+// translators never share a name. Live rules sit beside the code that applies them (withoutAccounts, isAccount, noAcct);
+// what each version changed: README.md#translator-versions
 export const TRANSLATOR_SIM = "eidoverse/translate-v1@20";
-// @9 (2026-10-07, R's particles ruling): a v1 `particles` bag is today's instance: its preset is the effect, its origin is
-// `at`, its seed stays, and its count, size, opacity, speed, lifetime, area, texture and quality are the params of the
-// same names every Essential declares (shared/particle_effects.js modernize; instanceOf reads it back exactly). A key
-// neither spelling knows rides in imported:particles as before. Output differs from @8 on any log with particles.
-// @7 (2026-10-07, the conventional-names pass, R's approved table): the output speaks the renamed protocol. A result entry
-// is kind `change` (was `state`); the translating door's own entries are actor `system` (was `door`), and so is a v1 entry
-// whose actor was v1's "door". Everything carried only from translation is one `imported` family: the act verb `imported`
-// (was `legacy`), imported:<k> (was legacy:<k>), imported-behavior:<k> (was behavior:<k>), imported-bans:<id> (was
-// bans:<id>), imported-epoch (was @world epoch). A v1 `gen` grant is can.generate (roles:<id> and default-role alike; the
-// door no longer reads `gen`). A light's `keep` is `important`; a palette entry is assets:<k> (was palette:<k>); a dialect-3 epoch's engine is @world physics-engine (was sim). A mount's parent names its socket as `socket` (v1's `slot`). Output differs from @6 on every log.
-// @6 (2026-10-07): the two @5s merged (batch 2 and ship-list group A each bumped @4 → @5 in parallel branches).
-// @5 (2026-10-07, batch 2): `story` is a component now ({title, text, marks?}). A v1 story's `practice` (Mica's marker
-// tree: "One tree, renewing, not accumulating…") becomes a paragraph of its text, and `markedEntity` its marks: the
-// words people read stay on the label. Both are also carried in legacy:story beside it (with plantedBy, assetAuthor:
-// who planted it is the log's create; who made the model is the library's credits), so nothing is lost (R10).
-// @5 (2026-10-07, ship list): a v1 `door` component is v4's `openable` (R 10-07: the behaviour's name, not the asset's), and
-// a reaction naming component 'door' names 'openable'; a spin's `rpm` is degPerSec (rpm × 6), the rate the authority takes. Orbit
-// center/face/period and path points/speed/duration/loop are the authority's own motion fields now, so they stay in the
-// motion (they were parked in legacy:motion, which nothing reads). Output differs from @4 on any log with these.
-// @4 (2026-10-06, roles S5): a v1 `fly: true` grant becomes roles:<id>.can.fly (it fell into legacy:roles:<id> before).
-// @3 (2026-10-05, review F1): genesis on §2.4 + §3d, as the lab's translator writes it. A v1 world has no keys: the
-// translating door's key is the sequencer and the only governance key, in tier 1 (the custodial default: tier 0
-// empty, the operator the real owner). The nonce is the first 16 bytes of sha256 of the source log's lines, so
-// translation stays a pure function. translatedFrom can't ride in genesis (a known minor's fields are exact): it is
-// the `translated` act right after it. v1's owners are @world roles (from its grants), as before.
 export const LAB_DOOR_KEY = "ed25519:rRoIPhqlc8rDxC1GZlfHOe1IBJYWQ8MDNg9QuZzMsic"; // the conformance suite's fixed sequencer key
 const b64url = (bytes) => { let s = ""; for (const x of bytes) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
-// A real authority passes its own keys and a random nonce (round-2 review R4): the operator's governance key in tier 1,
-// never the sequencer's, and a nonce that makes two translations of one log two worlds. Without them (the pure tests)
-// the nonce is derived from the source and one fixed key stands in for both.
-// Tier 0 of a translated world is EMPTY (#260 rereview, blocker 1): v1 logs record accounts, never keys, so nothing can yet
-// bind a key to the old world's owner, and a translation names no founder. The operator (custody) is tier 1. The reserved
-// governance draft (§13) must allow ONE attested fill of a translated world's empty tier 0 later, once something (a home-node
-// attestation) can vouch that a key is the v1 owner's. A world FOUNDED new (create-world ownerKey) is a different path.
+// a real authority passes the operator's governance key (tier 1, never the sequencer's) and a random nonce; pure tests get a
+// source-derived nonce and one fixed key. Tier 0 stays EMPTY: v1 logs record accounts, never keys, so a translation names no
+// founder (README.md, "The Commons and governance keys"). The governance draft (§13) must allow one attested fill of it
+// later.
 export function translatedGenesis(oldEntries, { key = LAB_DOOR_KEY, operator = key, nonce } = {}) {
   if (!nonce) { const h = sha256(oldEntries.map((e) => JSON.stringify(e)).join("\n")); nonce = b64url(Uint8Array.from(h.slice(0, 32).match(/../g), (x) => parseInt(x, 16))); }
   return { dialect: DIALECT, v: VERSION, minor: 0, nonce, owners: [[], [operator]], sequencer: key };
@@ -267,12 +151,8 @@ export const DROPPED = {
   "motion.part": "a bare motion naming a part becomes motion:<slot> {node: <the part's name>} (@12; the slot is shared/protocol/names.js partSlot of the name: the name itself when it is a §2.3 tag, else a sanitized form with 8 hex of its sha256): when the thing already has a motion on that node, that one wins and the bare one is dropped (the renderer drew both on one node, the keyed one last). A keyed motion carries node (its key's tag, the old reading)",
   "a mounted thing's own pos/yaw/q": "v1 keeps a riding thing's pre-mount pose, unused until a dismount; v4's transform IS the pose it rides at (local to its parent: v1's offset, or its socket's pos, and q/yaw). The parent's offset/yaw/q are that transform, not a second copy (L2)",
 };
-// DEFERRED (review of PR #260, Mica, item 7): features main's merges gave v1 worlds that THIS protocol does not carry yet.
-// Each is a component the old renderer read (tools/water/README.md: the water/air/vehicle/traversal/collision table,
-// server/render-scene.ts PASS_THROUGH). The translator never carries one of these quietly: a log that uses one is REFUSED
-// at `translate`, naming the feature and where it was used (deferredFeatures below), and the dry-run report lists them, so
-// the owner decides with the loss in front of them. `water` is registered in v4 as the WORLD's water level (componentspec:
-// water on @world {level,…}); a `water` on anything else, or one shaped as a volume, is the deferred water volume.
+// v1 features v4 doesn't carry yet (tools/water/README.md): a log using one is REFUSED at `translate`, naming each use
+// (deferredFeatures). `water` on @world is v4's world water level; elsewhere, or shaped as a volume, it's deferred
 export const DEFERRED = {
   water:     { feature: "water volume", since: "main #248 (Unreal native client) / #254", shape: "water {center, size, absorption?, scatter?, speed?, waves?} on an entity" },
   air:       { feature: "air box (dry interior)", since: "main #248", shape: "air {boxes: [{center, size, q?}]}" },
@@ -283,8 +163,7 @@ export const DEFERRED = {
 const VOLUME_FIELDS = ["center", "size", "absorption", "scatter", "waves"];
 /** Every use in a v1 log of a feature v4 doesn't carry yet that still stands at its end: [{component, feature, id, seq,
  *  actor, ts}], in log order. A `comp` that removes one (data null), or a `remove` of its thing, ends the uses before it,
- *  so removing it on the old server (the refusal's remedy) clears the refusal. Empty for every old world on Burrow and every
- *  fixture (checked 2026-10-18). */
+ *  so removing it on the old server (the refusal's remedy) clears the refusal. */
 export function deferredFeatures(oldEntries) {
   const standing = new Map();   // `${id}\0${type}` → the uses since it was last removed
   oldEntries.forEach((e, k) => {
@@ -309,10 +188,9 @@ export function deferredRefusal(uses, world = "this world") {
     + `\nThese came from main's merges (${[...new Set(uses.map((u) => DEFERRED[u.component].since))].join("; ")}) and are deferred in this protocol. Either wait for the protocol to carry them, or remove them from the old world first (the old server's \`comp\` with data null) and translate again.`;
 }
 
-// v1's mount, read the way the renderer realizes it (shared/hierarchy.js localOf, written independently here): a
-// riding thing sits at parent.offset, else its socket's pos, else the carrier's origin; turned by parent.q, else
-// parent.yaw, else the socket's yaw. Only while its carrier exists: a thing whose carrier is gone stays where its own
-// pose puts it (as v1 draws it), and the authority reads a parent that names nothing the same way (worldT).
+// v1's mount as the renderer realizes it (shared/hierarchy.js localOf, written independently): at parent.offset, else the
+// socket's pos, else the carrier's origin; turned by parent.q, else parent.yaw, else the socket's yaw. With the carrier
+// gone it stays where its own pose puts it (as worldT reads a parent that names nothing)
 const fin = (n) => { n = Number(n); return Number.isFinite(n) ? n : 0; };
 function rideOf(st, e) {
   const rel = e.parent; if (!rel || typeof rel !== "object" || typeof rel.to !== "string" || !Object.hasOwn(st.entities ?? {}, rel.to)) return null;
@@ -323,17 +201,12 @@ function rideOf(st, e) {
   return { pos, q };
 }
 const PARENT_POSE = new Set(["offset", "yaw", "q"]);
-// who(name, {sub}) → the v4 identity for a v1 person (round-2 review R1): the server passes the authority directory's
-// mapping, so actors and role/ban keys become opaque ids and the account (`sub`) leaves the log for the directory.
-// Without one (the pure tests, the sweep), names are escaped as before; `sub` never stays in a value (@12).
-// v1's own system actors (v1 vocabulary: the v1 server wrote "door"); in v4 the authority's own acts are actor `system`
+// who(name, {sub}) → a v1 person's v4 identity (the directory's mapping); without one, names are escaped. `sub` never stays in a value
+// v1's own system actors (the v1 server wrote "door"); in v4 the authority's own acts are actor `system`
 const SYSTEM = new Set(["door", "world", "sim"]);
-// @16: an account subject is a property named `sub` or ending in `Sub` whose string has an account's shape (isAccount, which
-// world.ts's identity mapper reads too). Main's server stamped three into its log (server/verbs.ts at 306a00b0): a grant's or
-// ban's sub, a creation's placer {id, sub}, a binding's bySub (the v1 fold's authorSub). The shape, not the name alone: v1's
-// `comp` folded any data, so `sub` can be a sign's subtitle, and shared/particle_effects.js reserves `sub` as an effect's
-// emitter field. Whose account it is: the account's own (@19); the name beside it is joined to it only where main's server
-// wrote the pair (translate's noAcct), never from a value.
+// an account subject: a property named `sub` or ending in `Sub` whose string has an account's shape. The shape, not the name
+// alone: v1's `comp` folded any data, so `sub` can be a sign's subtitle. A name joins an account only where v1's server wrote
+// the pair (a grant's or ban's sub, a placer {id, sub}, a binding's bySub: noAcct), never from a value
 export const isAccount = (s) => typeof s === "string" && /^(human|agent|aid1|local):/.test(s);
 /** A NAME that is an account (a role or a ban keyed by it, an actor that is one): every shape but local:, which a private
  *  server gives a bare name in a sub position only, so a person may well be called `local:ann` and isn't an account. */
@@ -358,11 +231,9 @@ export function withoutAccounts(v, map = () => undefined) {
   }
   return out ?? v;
 }
-/** The first account subject a log still carries, as {seq, path}, or null: the writer's check before anything is written
- *  (world.ts translateV1World). It reads what the scrub reads: a property named as above holding an account-shaped string;
- *  a key that is one; an id naming a person that is one (an old grant's, ban's or unban's, or a spawn's or light's
- *  placer's), and an imported ban's `by` that is one; and a component so named whose value is one (a change's op {comp, value}, an old comp request's {type,
- *  data}). Elsewhere an `id`, like any key not named as above, holds data. */
+/** The first account subject a log still carries, as {seq, path}, or null: the writer's check (world.ts
+ *  translateV1World). It reads what the scrub reads (properties, keys, a person's id, an imported ban's `by`, a component
+ *  so named); elsewhere an `id`, like any other key, holds data. */
 export function accountIn(entries) {
   const named = (v) => [["comp", "value"], ["component", "value"], ["type", "data"]].find(([n, x]) => accountNamed(v[n]) && isAccount(v[x]));
   // an id is an account where it names a person, as the scrub (noAcct) maps one; and an imported ban's `by` (project's unby)
@@ -384,10 +255,8 @@ export function accountIn(entries) {
 export const actorOf = (a) => (a === "door" ? "system" : enc(a));
 const asSub = (k) => (isAccountName(k) ? k : undefined);   // a role or ban keyed by its account (@19)
 const PERSON_REQUESTS = new Set(["grant", "ban", "unban"]);   // the old requests whose id names a person
-// @8 (2026-10-07, review H1 + R's ruling): bare names are the registry's, and the authority refuses an unregistered one. A
-// v1 world's own inventions (a `heart` comp nobody registered) come across under a namespace, `<namespace>/heart` (the
-// translated world's name; "imported" when the caller gives none), so the registry can promote the word later without
-// rereading this world's values in a new meaning. Registered names, and the imported family, stay as they were.
+// bare names are the registry's: a v1 world's own inventions come across as `<namespace>/heart` (the world's name, else
+// "imported"), so the registry can promote a word later without rereading this world's values in a new meaning
 export const NAMESPACE = "imported";
 /** A world's name as a §3.1 namespace (lowercase letters, digits, '-', '.'), or the default. */
 export const namespaceOf = (name) => { const s = String(name ?? "").toLowerCase().replace(/[^a-z0-9.-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").replace(/\.{2,}/g, "."); return /^[a-z0-9]/.test(s) ? s.slice(0, 63).replace(/[-.]+$/, "") : NAMESPACE; };
@@ -397,10 +266,8 @@ function namespaceUnknown(c, ns) {
     const to = `${ns}/${k}`; if (to in c) continue;   // never overwrite (a world that already used both spellings keeps the bare one)
     c[to] = c[k]; delete c[k]; }
 }
-// @12 (R 10-17, binding: "definitely serve path again alongside hash"; this replaces @8's address): a model is its LIBRARY
-// PATH, as v1 wrote it (the portable reference: the world loads anywhere the library exists). When the caller can say what
-// the bytes are (`content(path)` → sha256:<64 hex>, or null) the hash rides beside it as model-hash; a path it can't hash
-// carries none (and is listed). The imported act keeps the path as it was written either way.
+// a model is its LIBRARY PATH as v1 wrote it (it loads anywhere the library exists); model-hash sha256:<64 hex> rides beside
+// it when the caller's content(path) knows the bytes, and a path it can't hash is listed
 const hashOf = (a) => { if (typeof a !== "string") return null; const m = /^(?:sha256:|eido:sha256\/)([0-9a-f]{64})$/.exec(a); return m ? `sha256:${m[1]}` : null; };
 // upstream #256's emitter name, and the id of the child thing a named emitter becomes (@15): readable (its name first), the
 // same from every translation of the same world, never a person's id
@@ -422,7 +289,7 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
     for (const [k, v] of Object.entries(e.comp ?? {})) if (k !== "guard") {
       if (accountNamed(k) && isAccount(v)) continue;   // a component whose name has an account's, holding one (@19)
       if (k.startsWith("particles:") && EMITTER_NAME.test(k.slice(10))) { if (v != null) emitters.push([k.slice(10), v]); continue; }
-      // a node's motion (v1 motion:<node name>): the name is data, motion:<partSlot(name)> {node: name} (@12, review r7 F1)
+      // a node's motion (v1 motion:<node name>): the name is data, motion:<partSlot(name)> {node: name} (@12)
       if (k.startsWith("motion:") && v && typeof v === "object" && !Array.isArray(v)) { const node = k.slice(7); c[`motion:${partSlot(node)}`] = { ...newMotion(v), node: typeof v.node === "string" && v.node ? v.node : node }; continue; }
       c[encName(k === "door" && !e.comp.openable ? "openable" : k)] = k === "reactions" ? newReactions(v) : k === "sockets" ? newSockets(v, c) : k === "motion" ? newMotion(v) : k === "particles" ? newParticles(v) : k === "captions" ? newCaptions(v) : v; }
     if (e.comp?.guard && !e.comp.lock) { c.lock = true; seen?.guards.add(id); } // §5: guard merges into lock
@@ -444,21 +311,19 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
   const w = {};
   for (const k of ["sky", "terrain", "grass"]) if (st[k] != null) w[k] = st[k];
   // v1 dialect 3's physics epoch is carried like any field the mapping doesn't know: imported:epoch (@12; was imported-epoch)
-  // round-2 R8: v1 echoed into the sky value who set it (`by`, a display name) and at which seq: derived, and a person's
-  // name inside a value. Dropped; the log says who set the sky (History, inspect's touched).
+  // v1 echoed into the sky value who set it (`by`, a display name) and at which seq: derived, and a person's name inside
+  // a value. Dropped; the log says who set the sky (History, inspect's touched).
   if (w.sky && typeof w.sky === "object") { const { seq, by, ...sky } = w.sky;
     if (sky.forecast && typeof sky.forecast === "object") { const { seq: _s, by: _b, ...fc } = sky.forecast; sky.forecast = fc; }
     w.sky = sky; }
   for (const a of st.assets ?? []) w[keyed("assets", typeof a === "string" ? a : a.path ?? JSON.stringify(a))] = typeof a === "string" ? {} : a;
-  // research roles §translation: v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate
-  // (@7: gen had stayed as written, read by the authority as generate); a `caption` deed is a place in its screen's captioners (below)
+  // v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate (@7); a `caption` deed is a place
+  // in its screen's captioners (below)
   const toCan = (v) => { if (!v || typeof v !== "object" || !("fly" in v || "gen" in v)) return v; const { fly, gen, ...rest } = v;
     const can = { ...(rest.can ?? {}), ...(fly === true ? { fly: true } : {}), ...(gen === true ? { generate: true } : {}) };
     return Object.keys(can).length ? { ...rest, can } : rest; };
-  // upstream #258's world access rode the same map: `*` none = members only, `*` spectator = watch only. Here entry is
-  // @world.access (shared/protocol/access.js); a person's own none / spectator is a record that lists no one (role none:
-  // in, they watch only where the world lets everyone watch). A timed grant keeps its `until` (the load's sweep ends one
-  // already past).
+  // `*` none = members only, `*` spectator = watch only: entry is @world.access (shared/protocol/access.js); a person's own
+  // none / spectator lists no one. A timed grant keeps its `until` (the load's sweep ends one already past)
   const DOOR_OF = { none: { join: "listed" }, spectator: { join: "listed", watch: "anyone" } };
   for (const [k, v] of Object.entries(st.roles ?? {})) {
     if (k === "*") { if (DOOR_OF[v?.role]) { w.access = { ...DOOR_OF[v.role] }; const { role: _r, until: _u, ...rest } = toCan(v); if (Object.keys(rest).length) w["default-role"] = { role: "inhabitant", ...rest }; } else { const { until: _u, ...dr } = toCan(v) ?? {}; w["default-role"] = dr.role === "visitor" ? { ...dr, role: "inhabitant" } : dr; } }
@@ -478,11 +343,8 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
   const unby = (v) => (!v || typeof v !== "object" || Array.isArray(v) || !isAccountName(v.by) ? v
     : who ? { ...v, by: who(v.by, {}) } : (({ by: _b, ...rest }) => rest)(v));
   for (const [k, v] of Object.entries(st.bans ?? {})) w[`imported-bans:${person(k, v, true)}`] = unby(unsub(v));
-  // a binding's author is a person: their identity, not their name (R1), when a who() mapper is given
-  // …and through the account the v1 server stamped on the binding (authorSub, @16), as the author's grant is found, so the
-  // two are one identity on every server; the account itself is dropped with every other one below
-  // …the account's own person (@19): v1's author is `by` where a request sent one, which a request could name anyone in, so
-  // the name is joined to the account only through the act itself, a behaviour's actor and its bySub (noAcct, below)
+  // a binding's author is their identity, found through the account v1 stamped on it (authorSub), never through `by`,
+  // which a request could set to anyone; the account itself is dropped below
   for (const [k, v] of Object.entries(st.behaviors ?? {})) { const sub = isAccount(v?.authorSub) ? v.authorSub : undefined;
     w[keyed("imported-behavior", k)] = who && v && sub ? { ...v, author: who(sub, { sub }) }   // the stamp first: `by` can't make it the system's
       : who && v && typeof v.author === "string" && !SYSTEM.has(v.author) ? { ...v, author: who(v.author, {}) } : v; }
@@ -498,19 +360,16 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
   return clone(out); // a copy: the old fold mutates some records in place (bstate), and aliasing would hide the change
 }
 
-// Dialect 3 (@10): what the old world MEANS while her sim runs is her instant fold COMPOSED with her sim (PROTOCOL_v2,
-// conformance order: foldEntry, then simEntry). On top of project(): the epoch is @world physics-engine (not the
-// imported:epoch record); a body whose rest is logged stands at that logged pose until her law releases it (v4 holds the
-// last LOGGED rest, P5: resting or flying again, it's the log's word); and a thing whose v1 lib has a stamped box carries
-// it as physics.shape (Covenant III: geometry enters the sim only through the log). Keyed by the v1 lib, not the model
-// value, which may be a content address by now. With no epoch ever entered this returns project()'s value untouched.
+// dialect 3: the instant fold COMPOSED with the first eidosim (foldEntry, then simEntry): the epoch is @world physics-engine,
+// a logged rest holds until the law releases it (P5), and a v1 lib's stamped box is physics.shape (Covenant III), keyed by
+// the v1 lib. With no epoch ever entered this returns project()'s value untouched
 function physical(st, sim, recorded, out, dynamic = () => false) {
   if (!st.epoch && !recorded.size && !sim.boxes) return out;
   const w = out["@world"];
-  // what her sim made of the epoch (review of b398d7e3 #3): her own law (carried) → today's eidosim runs from here on;
-  // an engine she didn't carry (foreign: nothing flew) → that name, with no build, so nothing flies here either; an
-  // epoch her sim refused (a bad tickMs: it never started) → no physics, only the imported record
-  if (sim.epoch && !sim.epoch.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: DEFAULT_ENGINE, build: ENGINES[DEFAULT_ENGINE].build, tickMs: sim.epoch.tickMs }; }   // HER tick (a later epoch she refused doesn't replace it; review r4 #3)
+  // what the old sim made of the epoch: its own law (carried) → today's eidosim runs from here on; an engine it didn't
+  // carry (foreign: nothing flew) → that name, with no build, so nothing flies here either; an epoch it refused (a bad
+  // tickMs: it never started) → no physics, only the imported record
+  if (sim.epoch && !sim.epoch.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: DEFAULT_ENGINE, build: ENGINES[DEFAULT_ENGINE].build, tickMs: sim.epoch.tickMs }; }   // the old sim's tick (a later epoch it refused doesn't replace it)
   else if (sim.epoch?.foreign) { delete w[keyed("imported", "epoch")]; w["physics-engine"] = { engine: sim.epoch.sim, build: null, tickMs: sim.epoch.tickMs }; }
   for (const [id, p] of recorded) { const c = out[enc(id)]; if (sim.bodies[id] && c) c.transform = { ...c.transform, pos: p.slice() }; }
   if (sim.boxes) for (const [id, e] of Object.entries(st.entities ?? {})) { const c = out[enc(id)]; if (c && typeof e?.lib === "string" && sim.boxes[e.lib]) c.physics = { kind: dynamic(id) ? "dynamic" : "static", shape: clone(sim.boxes[e.lib]) }; }
@@ -518,7 +377,7 @@ function physical(st, sim, recorded, out, dynamic = () => false) {
 }
 /** Which thing an id names, as the v1 fold tells them apart (fold.js bornOf): a spawn it accepts (an id, and a lib that's
  *  absent or real) is a NEW thing when the id was free (never spawned, or removed) or held a different lib or a light; a
- *  same-lib re-spawn is the same thing. `of(id)` is the id's life count. R 2026-10-08's "punted → dynamic" is per thing. */
+ *  same-lib re-spawn is the same thing. `of(id)` is the id's life count; "punted → dynamic" is per thing. */
 export function lifeTracker() {
   // an id is a property key to the v1 fold (st.entities[a.id]): 7 and "7" name one thing
   const lib = new Map(), n = new Map();
@@ -530,7 +389,7 @@ export function lifeTracker() {
     else if (e.verb === "spawn" && id && !(e.args.lib != null && !e.args.lib)) { const l = e.args.lib ?? null;
       if (!lib.has(id) || lib.get(id) !== l) n.set(id, (n.get(id) ?? 0) + 1); lib.set(id, l); } } };
 }
-/** The things (`id#life`) a v1 log ever punts: R 2026-10-08, these come across `dynamic`, every other collider `static`. */
+/** The things (`id#life`) a v1 log ever punts: these come across `dynamic`, every other collider `static`. */
 export function puntedLives(entries) {
   const t = lifeTracker(), out = new Set();
   for (const e of entries) { t.step(e); const id = e?.args?.id; if (e?.verb === "punt" && id != null) out.add(`${String(id)}#${t.of(id)}`); }
@@ -582,15 +441,12 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
   // the old genesis as it was, but never an account (@19): a genesis role's sub becomes its person's id, as in an old request
   push({ kind: "act", actor: "system", verb: "translated", ts: t0.ts ?? 0, body: { from: unNegZero(withoutAccounts({ ...genesis, translator: physics ? TRANSLATOR_SIM : TRANSLATOR, ...(foldBuild ? { fold: foldBuild } : {}) }, mapAcct)) } });
   // the translation writes the repaired spelling, so its log carries the load's once-per-world marker from the start: the
-  // system's repair-shapes act, read by verb and actor only (review r8 M3: the translated act's body is purgeable)
+  // system's repair-shapes act, read by verb and actor only (the translated act's body is purgeable)
   push({ kind: "act", actor: "system", verb: "repair-shapes", ts: t0.ts ?? 0, body: { v: SHAPES_VERSION, ids: [], translated: true } });
   // the operator's approval of this translation (import-v1/world.ts), written here, before any cause is taken
   if (approved) push({ kind: "act", actor: "system", verb: "translation-approved", ts: t0.ts ?? 0, body: approved });
-  // an old request as sent keeps its words, but never an account: a grant's or a ban's top-level sub, whatever its shape, as
-  // @12 had it (main's server wrote it, always an account); another request's top-level sub, and below the top level any
-  // sub or *Sub, when it is account-shaped (@16: a placer's, a binding's bySub). With a mapper it becomes the person's id
-  // (R1); without one it is dropped, so the imported act never re-leaks what the values no longer hold. A sub that isn't
-  // account-shaped, on any request but a grant or a ban, is ordinary data and stays
+  // an old request keeps its words but never an account: a grant's or ban's top-level sub always, any other sub or *Sub
+  // when account-shaped; it becomes the person's id with a mapper, else is dropped. A non-account sub elsewhere is data
   const noAcct = (e, a) => { let x = a;
     if (x && typeof x === "object" && !Array.isArray(x)) {
       // a top-level sub: a grant's or a ban's is the server's own stamp, beside the id it names, read as the person's account
@@ -620,16 +476,16 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
         x = { ...x, bySub: who(typeof e.actor === "string" && !SYSTEM.has(e.actor) && !/^bhv:/i.test(e.actor) ? e.actor : x.bySub, { sub: x.bySub }) }; }
     return withoutAccounts(x, mapAcct); };
   const actorFor = (a) => (who && !SYSTEM.has(a ?? "door") ? who(String(a), {}) : actorOf(a ?? "door"));
-  // ---- dialect 3 (@10): her sim beside the v1 fold. Inert until an epoch: simEntry ignores everything before one, and
+  // ---- dialect 3 (@10): the old sim beside the v1 fold. Inert until an epoch: simEntry ignores everything before one, and
   // physical() returns project() as it is, so a log without one translates exactly as @9 did.
   const sim = eidosim.emptySim();
-  const recorded = new Map();     // v1 id → its last LOGGED rest pose (held until her law releases the body)
+  const recorded = new Map();     // v1 id → its last LOGGED rest pose (held until the old law releases the body)
   const launchSeq = {};           // v1 id → the seq of the launch its current flight came from
   const restLogged = new Set();   // bodies whose CURRENT flight's rest is logged
   const restTicks = {};           // v1 id → the tick it came to rest
-  // R 2026-10-08: a thing the v1 log ever punts is a dynamic collider, every other one static. Known up front, so the
-  // kind is right from the moment its collider appears (no static → dynamic flip at the punt, which an undo of the
-  // punt's act would then take back), and per incarnation: an id spawned again is a new thing (review of b398d7e3 #2, #4)
+  // a thing the v1 log ever punts is a dynamic collider, every other one static: known up front, so the kind is right from
+  // the moment its collider appears (no static → dynamic flip at the punt, which an undo of the punt's act would take
+  // back), and per incarnation: an id spawned again is a new thing
   const lives = puntedLives(oldEntries); const lifeNow = lifeTracker(); const dynamic = (id) => lives.has(`${id}#${lifeNow.of(id)}`);
   if (physics) Object.assign(stats, { launches: 0, rests: 0, worldDivergences: 0 });
   const diverged = (kind, e, extra) => { stats.divergences++; if (physics) stats[kind]++;
@@ -649,7 +505,7 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
     const fresh = Object.keys(sim.bodies).filter((id) => sim.bodies[id].resting && launchSeq[id] !== undefined && !restLogged.has(id))
       .sort((a, b) => restTicks[a] - restTicks[b]);
     for (const id of fresh) {
-      // her sim's rest: a plain change by `sim`, caused by the punt's imported act (@11: no launch, no digest)
+      // the old sim's rest: a plain change by `sim`, caused by the punt's imported act (@11: no launch, no digest)
       recorded.set(id, sim.bodies[id].p.slice()); restLogged.add(id);
       const now = view(); const ops = diff(prev, now); prev = now;
       push({ kind: "change", actor: "sim", ts, cause: launchSeq[id], ...changeBody(unNegZero(ops)) }); stats.change++; stats.ops += ops.length;
@@ -667,18 +523,18 @@ export function translate(oldEntries, { onDivergence, foldBuild, key, operator, 
     const tl = push({ ...(e.verb === "say" ? { kind: "say", actor, verb: "say", body: unNegZero(((b) => (who && typeof b.to === "string" && !SYSTEM.has(b.to) ? { ...b, to: who(b.to, {}) } : b))(clone(e.args) ?? {})) }
       : { kind: "act", actor, verb: "imported", body: unNegZero({ verb: e.verb, args: noAcct(e, clone(e.args) ?? null), from: e.seq ?? null }) }), ...(ts !== undefined ? { ts } : {}) });
     const b = sim.bodies[e.args?.id];
-    if (e.verb === "punt" && b && b.seq === e.seq) { // her punt started (or kicked) a body: its rest will be caused by this act
+    if (e.verb === "punt" && b && b.seq === e.seq) { // a punt started (or kicked) a body: its rest will be caused by this act
       launchSeq[e.args.id] = tl;
       restLogged.delete(e.args.id); stats.launches++;
     }
-    for (const id of [...recorded.keys(), ...Object.keys(launchSeq), ...Object.keys(restTicks)]) if (!sim.bodies[id]) { recorded.delete(id); restLogged.delete(id); delete launchSeq[id]; delete restTicks[id]; } // released by her law (or a new epoch)
+    for (const id of [...recorded.keys(), ...Object.keys(launchSeq), ...Object.keys(restTicks)]) if (!sim.bodies[id]) { recorded.delete(id); restLogged.delete(id); delete launchSeq[id]; delete restTicks[id]; } // released by the old law (or a new epoch)
     const now = view();
     const ops = diff(prev, now);
     if (ops.length) { push({ kind: "change", actor, cause: tl, ...changeBody(unNegZero(ops)), ...(ts !== undefined ? { ts } : {}) }); stats.change++; stats.ops += ops.length; }
     if (canon(v4project(v4)) !== canon(now)) { diverged("worldDivergences", e); if (stats.divergences === 1) onDivergence?.(e, now, v4project(v4)); }
     prev = now;
   }
-  // settle, as her replaybench does: far past the last entry, then log what came to rest
+  // settle, as the replaybench does: far past the last entry, then log what came to rest
   if (sim.epoch && !sim.epoch.foreign) {
     stepTo(sim.tick + 100000);
     const tsAt = (tick) => sim.epoch.ts + tick * sim.epoch.tickMs;

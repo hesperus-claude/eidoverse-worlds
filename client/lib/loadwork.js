@@ -1,61 +1,36 @@
-// loadwork — where load-time CPU goes, measured and spread.
+// loadwork — labels heavy materializations (long tasks are attributed to them) and spreads/serializes their
+// main-thread work on a per-frame budget.
 //
-// "The client freezes for seconds when things load into the world." Two causes,
-// two jobs here:
-//
-//   MEASURE — every heavy materialization (a body, a spawned model) runs as a
-//   labelled work record with phases. The browser's own long-task entries are
-//   attributed to whatever work was active when they happened, so a freeze
-//   names its culprit in the console instead of being a vibe.
-//
-//   SPREAD + SERIALIZE — heavy main-thread work yields to the frame loop on a
-//   per-frame budget, and at most ONE materialization finalizes at a time.
-//   Three bodies arriving together used to stack their parse/compile bursts
-//   into the same frames; now they queue, and the queue wait is visible as its
-//   own phase rather than masquerading as parse time.
-//
-// ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one
-// compile). Never call serialize() from inside a serialized function and never
-// wrap a caller that itself awaits a serialized callee — that is a deadlock,
-// the chain waits on itself.
+// ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one compile). Never call it from inside a
+// serialized function or around a caller that awaits a serialized callee: the chain deadlocks on itself.
 
 import { bus } from './base.js';
 import { nextFrame as budgetFrame, ask, spent, reportPending } from './framebudget.js';
 
 // ---- yields -----------------------------------------------------------------
 
-/** Wait for the next frame (framebudget: window rAF, which xr_frame_clock routes to the session clock in XR; a
- *  macrotask when the tab is hidden, where an avatar load must still finish; never longer than its watchdog). */
+/** The next frame: rAF (the session's clock in XR), a macrotask in a hidden tab (a load must still finish), never
+ *  past its watchdog. */
 export const nextFrame = budgetFrame;
 
-/** Wait for browser idle time (bounded — loading must finish even on a busy
- *  frame loop), for background work like clip hydration. */
+/** Browser idle time, bounded: loading must finish even on a busy frame loop. */
 export const idleYield = () => new Promise((res) => {
   if (typeof requestIdleCallback === 'function' && !document.hidden) {
     requestIdleCallback(() => res(), { timeout: 400 });
   } else setTimeout(res, 32);
 });
 
-// The slice size is framebudget's: one budget per frame shared with the warm conductor and the sky (bigger bites
-// under the splash, a governor-set share of the frame once someone is walking around).
 
 // ---- work records -----------------------------------------------------------
 
 const active = new Set(); // in-flight records, for long-task attribution
 const LOG_THRESHOLD_MS = 120;
-// Mirrors of the console lines, reachable from automation (Safari's console
-// can't be read over WebDriver) and from a quick `__loadJank` in any console.
+// console mirrors for automation (Safari's console can't be read over WebDriver)
 const loadLog = (globalThis.__loadLog = []);
 const jankLog = (globalThis.__loadJank = []);
 
-/** Start a labelled piece of load work. Returns a record:
- *    phase(name)  — enter a named phase (closes the previous one)
- *    tick()       — await this inside loops; yields a frame when the current
- *                   slice is over budget, otherwise resolves immediately
- *    yield()      — unconditional yield to the next frame
- *    end()        — close and log one summary line if the work was heavy
- *  Wall time includes awaited downloads and queue waits — give them their own
- *  phases so the summary tells the truth about where time went. */
+/** phase(name), tick() (yields only when over budget), yield(), end(). Wall time includes awaited downloads: give
+ *  them their own phases so the summary tells the truth. */
 export function beginWork(label) {
   const t0 = performance.now();
   const phases = [];
@@ -64,7 +39,7 @@ export function beginWork(label) {
   let sliceStart = t0;
   let frames = 0;
   let ended = false;
-  let grant = null;   // this record's current framebudget grant (its hold is released when the slice reports)
+  let grant = null;   // its hold is released when the slice reports
 
   const closePhase = () => {
     if (phaseName !== null) phases.push([phaseName, performance.now() - phaseStart]);
@@ -88,7 +63,7 @@ export function beginWork(label) {
       sliceStart = performance.now();
     },
     async yield() {
-      // a whole frame, then the same grant as tick(): the work after a yield is budgeted like any other slice
+      // a whole frame, then a grant: the work after a yield is budgeted like any other slice
       spent('load', performance.now() - sliceStart, sliceStart, grant);
       grant = null;
       let waited = 0;
@@ -98,7 +73,7 @@ export function beginWork(label) {
     end() {
       if (ended) return;
       ended = true;
-      spent('load', performance.now() - sliceStart, sliceStart, grant);   // the last slice, and its hold released
+      spent('load', performance.now() - sliceStart, sliceStart, grant);
       grant = null;
       closePhase();
       active.delete(rec);
@@ -110,17 +85,14 @@ export function beginWork(label) {
         .join(' · ');
       const line = `${label}: ${parts} — ${Math.round(total)}ms over ${frames + 1} frame(s)`;
       console.log(`[load] ${line}`);
-      if (loadLog.length < 300) loadLog.push(line); // reachable without a console (webdriver, evals)
+      if (loadLog.length < 300) loadLog.push(line);
     },
   };
   active.add(rec);
   return rec;
 }
 
-/** Record a one-line load fact outside any work record. beginWork only logs
- *  work over 120ms — the right filter for stalls, the wrong one for wins: a
- *  VRM pool hit (§19b) finishes in ~0ms and is exactly the line that proves
- *  the cache worked. Same console tag, same automation mirror, same cap. */
+/** A load fact outside any record: beginWork logs only >120 ms, which hides the wins (a ~0 ms pool hit, §19b). */
 export function loadNote(line) {
   console.log(`[load] ${line}`);
   if (loadLog.length < 300) loadLog.push(line);
@@ -128,26 +100,9 @@ export function loadNote(line) {
 
 // ---- serialization ----------------------------------------------------------
 
-/** Queue heavy leaf work. LEAF OPERATIONS ONLY — see the invariant at the top
- *  of this file. Errors reach the caller; the lanes themselves never break.
- *
- *  Two lanes, because two different resources are being protected:
- *    cpu — parses and skeleton passes: genuinely synchronous main-thread work.
- *          Strictly one at a time; two of these in the same frames is the
- *          stall this module exists to prevent.
- *    gpu — pipeline compiles: internally frame-yielding codegen followed by
- *          seconds of WAITING on driver-side pipeline creation. Serializing
- *          that wall time was a mistake this trace paid for: a body queued
- *          19s behind crates whose "work" was mostly idle await. Two in
- *          flight overlaps the waits; the codegen slices still interleave
- *          through the frame loop.
- *
- *  Priority: 2 = your own body, 1 = anyone's body, 0 = objects. People
- *  materialize before furniture, always. Reorders WAITING work only. */
-// cpu at 2: a parse's WALL time is dominated by draco workers and image
-// decode — awaits, not main-thread work (one conjured model held the serial
-// lane 18s on Safari while its webp decoded). Two in flight overlap the
-// waits; the genuinely-synchronous chunks still interleave through frames.
+/** Queue heavy LEAF work (the invariant up top); errors reach the caller, the lanes never break. Two in flight per
+ *  lane: wall time is mostly awaits (draco workers, image decode). Priority 2 own body > 1 bodies > 0 objects;
+ *  reorders waiting work only. */
 const lanes = {
   cpu: { jobs: [], running: 0, max: 2 },
   gpu: { jobs: [], running: 0, max: 2 },
@@ -162,10 +117,6 @@ export function enqueue(fn, { lane = 'cpu', priority = 0 } = {}) {
     reportLanes();
   });
 }
-// (holdObjectCompiles lived here — object compiles paused while a sky was
-// building, because the sky's wraps rewrote every graph after the fact. The
-// material factory ended that: materials are born with their final shape,
-// so there is no wrong moment to compile one. TEL0S_NOTES §12.7.)
 function pumpLane(l) {
   while (l.running < l.max && l.jobs.length) {
     const job = l.jobs.shift();
@@ -177,44 +128,31 @@ function pumpLane(l) {
     })();
   }
 }
-/** Whether any lane holds running or queued work — the same truth checkIdle()
- *  gates on, exposed as a predicate for the governor's loading grace
- *  (§16.2.D): storm fps under live lane work is loading, not a performance
- *  regime. */
+/** Any lane running or queued, for the governor's loading grace (§16.2.D). */
 export const laneBusy = () => Boolean(
   lanes.cpu.running || lanes.gpu.running
   || lanes.cpu.jobs.length || lanes.gpu.jobs.length);
 const reportLanes = () => reportPending('lanes',
   lanes.cpu.running + lanes.gpu.running + lanes.cpu.jobs.length + lanes.gpu.jobs.length);
-/** Queue depths per lane — the 8e debug shape (EW.lanes). */
+/** Queue depths per lane (EW.lanes). */
 export const laneStats = () => ({
   cpu: { running: lanes.cpu.running, queued: lanes.cpu.jobs.length, max: lanes.cpu.max },
   gpu: { running: lanes.gpu.running, queued: lanes.gpu.jobs.length, max: lanes.gpu.max },
 });
-// 'lanes-idle' fires when every queued load has finished. (Its one historic
-// consumer — the deferred shadow drain — is gone; the event stays as the
-// generic "all loadwork settled" signal.)
+// 'lanes-idle': all loadwork settled
 function checkIdle() {
   if (!lanes.cpu.jobs.length && !lanes.gpu.jobs.length
     && !lanes.cpu.running && !lanes.gpu.running) {
     bus.emit('lanes-idle');
   }
 }
-/** Back-compat shape used by early call sites. */
+/** Back-compat shape. */
 export function serialize(fn, { urgent = false, lane = 'cpu', priority } = {}) {
   return enqueue(fn, { lane, priority: priority ?? (urgent ? 2 : 0) });
 }
 
-// (holdFrames lived here — presentation paused for one bounded beat while a
-// whole-scene recompile settled behind it. Nothing invalidates the whole
-// scene anymore — the factory fixes graph shapes at birth, the light rig
-// freezes topology at boot, the env texture is persistent — so there is
-// nothing left to hold for. TEL0S_NOTES §12.7.)
-
 // ---- long-task attribution --------------------------------------------------
-// The browser already measures every main-thread stall over 50ms; all that was
-// missing is knowing WHOSE stall it was. Anything unattributed logs as such —
-// an honest "the freeze came from somewhere we are not measuring yet".
+// names whose each main-thread stall was
 
 const activeLabels = () => [...active]
   .map((w) => w.phaseName ? `${w.label}[${w.phaseName}]` : w.label)
@@ -229,19 +167,9 @@ try {
   }).observe({ type: 'longtask', buffered: true });
 } catch { /* not supported — the frame-gap watchdog below still measures */ }
 
-// Frame-gap watchdog — Safari has no longtask observer, so frame gaps are the
-// portable truth about felt freezes. Anything that holds a frame >150ms logs
-// with the same attribution.
-// ---- perf beacon ------------------------------------------------------------
-// Safari's console can't be read over WebDriver and most visitors never open
-// one — so the profile phones home instead: one small POST per session at
-// 40s (the load window) and one at 120s (the Safari compile tail), to the
-// sequencer's /perflog. That is how WebKit performance gets diagnosed from
-// real visits instead of asked-for console screenshots.
-// Steady-state smoothness never shows in the jank lines — a constant 25fps
-// has no >150ms gaps (exactly how Safari's grass cost stayed invisible). The
-// watchdog's own rAF ticks double as an fps estimator; the beacon carries a
-// recent-median so per-browser render cost is visible from real visits.
+// Frame-gap watchdog (Safari has no longtask observer): any frame held >150ms logs with the same attribution.
+// ---- perf beacon: /perflog at 40s (load window) and 120s (Safari compile tail), with an fps median (a steady low
+// fps never shows as gaps)
 const fpsWindow = [];
 let fpsTick = 0;
 setInterval(() => {

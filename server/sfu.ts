@@ -1,159 +1,79 @@
 /**
- * An in-process SFU — voice as an organ of the world server, not a service
- * beside it.
- *
- * #104 §8.1 leaves the relay implementation to the spike — off-the-shelf SFUs
- * were the other hypotheses, judged against one acceptance table. This is the
- * one that won: forward encoded Opus ourselves, in this process, so an
- * operator runs ONE thing and voice costs them nothing. (Why the others lost
- * is recorded in the PR that introduced this file, not here.)
- *
- * WHY THIS IS SMALL, stated once because it is the whole argument:
- * we terminate WebRTC server-side, so the BROWSER keeps getUserMedia →
- * addTrack and therefore keeps its own jitter buffer, packet-loss concealment,
- * FEC and congestion control. We forward ENCODED Opus and never decode it.
- * Basis hand-built ~750 lines of jitter buffer + PLC + FEC + loss estimation
- * because Unity has no usable WebRTC stack; we are browser-first and do not
- * inherit that cost. (Basis read 2026-08-14; MIT, © 2024 Luke Doolan.)
- *
- * THE BIGGEST SFU TRAP, SIDESTEPPED: mixing two sources into one track forces
- * SSRC/sequence/timestamp rewriting. We give every (listener, speaker) pair its
- * own track, so no two sources ever share a stream — no rewriting exists to get
- * wrong. It also keeps one-stream-per-speaker, which #104's acceptance table
- * requires for client spatialization, and avoids server-side mixing, which
- * #104 rejects outright as the MCU mistake.
- *
- * AUTHORITY: none. This file moves bytes. Who may speak, who may hear, and
- * which generation owns a leg are decided in relaydecision.ts and enforced by
- * the caller. The SFU's only enforcement is mechanical: a pair with no consent
- * is never fed, so a modified client cannot hear what the server didn't send.
+ * An in-process SFU (#104 §8.1). Forwards ENCODED Opus, never decoding, so the browser keeps its jitter buffer, PLC,
+ * FEC and congestion control; one track per (listener, speaker) pair, no mixing, for client spatialization.
+ * AUTHORITY: none (relaydecision.ts's, enforced by the caller). The only enforcement here: a pair with no consent is
+ * never fed.
  */
 import { RTCPeerConnection, MediaStreamTrack, MediaStream, RTCRtpCodecParameters } from "werift";
 import type { RtpPacket } from "werift";
 import { transportErrorsSwallowed } from "./sfuguard.ts";
 
-/** Opus, 48k stereo — the browser's default publish codec. Pinned so the
- *  answer never negotiates something we'd have to transcode. */
+/** The browser's default publish codec, pinned so the answer never negotiates something we'd transcode. */
 const AUDIO_CODEC = new RTCRtpCodecParameters({
   mimeType: "audio/opus", clockRate: 48000, channels: 2, payloadType: 111,
 });
 
 export interface SfuLeg {
-  /** (id, surface, gen) — the #103 binding. A leg belongs to ONE generation;
-   *  a takeover retires it rather than mutating it. */
+  /** The #103 binding: a leg belongs to ONE generation; a takeover retires it rather than mutating it. */
   id: string;
   gen: number;
   pc: RTCPeerConnection;
-  /** this leg's inbound mic, once the browser publishes it */
+  /** inbound mic, once published */
   ingress: MediaStreamTrack | null;
-  /** Serializes renegotiation. Two people joining at once means two offers on
-   *  THIS pc, and concurrent createOffer/setLocalDescription is SDP glare —
-   *  the failure class that grew the mesh's voice.js to 1388 lines of courtship
-   *  and rank arbitration. Measured before this existed: `Promise.allSettled`
-   *  on two concurrent offers returned "rejected, fulfilled". It happened to
-   *  work only because the surviving offer carried both tracks; had the loser
-   *  carried a track the winner lacked, that route would be live in our map and
-   *  invisible to the browser — silent, like every other bug this file has had.
-   *  A queue is ~6 lines and removes the class. */
+  /** Serializes renegotiation: concurrent offers on one pc are SDP glare, and a lost offer's route is invisible to
+   *  the browser. */
   negotiating: Promise<void>;
-  /** speakerId → the route THIS leg hears that speaker on. `negotiated` is
-   *  separate from existence: a track can be created and added to the PC while
-   *  its offer has not yet succeeded, and until it does the browser has no
-   *  receiver for it. Conflating the two produced a permanently silent route
-   *  that `diag` reported as healthy (adversarial review B2). */
+  /** `negotiated` is separate from existence: until its offer succeeds the browser has no receiver. */
   outbound: Map<string, { track: MediaStreamTrack; negotiated: boolean }>;
-  /** packets received from this leg's mic (diagnostics + the fail-closed proof) */
+  /** diagnostics + the fail-closed proof */
   rxPackets: number;
   closed: boolean;
 }
 
 export class Sfu {
   private legs = new Map<string, SfuLeg>();
-  /** listener → speaker → allowed. ABSENT MEANS DENIED at BOTH levels — an
-   *  allowlist, so a consent we never heard about cannot leak audio.
-   *
-   *  🔴 NESTED, not a joined key. `listener + NUL + speaker` is NOT injective
-   *  when an id may itself contain NUL: ("a","b\0c") and ("a\0b","c") both
-   *  produce `a\0b\0c`, so one pair's revoke silently revokes — or GRANTS —
-   *  another's. `parseRelayIdentity` accepts `.{1,64}`, which does not exclude
-   *  NUL, so nothing upstream prevented it (review item 7). Nesting also
-   *  removes a string allocation per (packet × listener) — ~6600/s in a
-   *  12-person room (item 9). */
+  /** ABSENT MEANS DENIED at both levels. NESTED, never a joined key: ids may contain NUL (`.{1,64}`), so a joined
+   *  key isn't injective and one pair's revoke could revoke or GRANT another's. */
   private consent = new Map<string, Map<string, boolean>>();
-  /** speakers a moderator has silenced: enforced at INGRESS, so a muted
-   *  speaker is inaudible to everyone at once and cannot be routed around. */
+  /** enforced at INGRESS: inaudible to everyone at once, never routed around */
   private muted = new Set<string>();
-  /** listeners the server has made deaf: overrides their own consent, which they could turn back on */
+  /** server-deafened: overrides their own consent, which they could turn back on */
   private deafened = new Set<string>();
   private forwarded = 0;
 
-  /** Legs with tracks added but not yet offered. COALESCED on purpose: adding
-   *  three routes to one leg needs ONE exchange carrying all three, not three
-   *  exchanges — and werift adds a transceiver per exchange, so the wasteful
-   *  version also inflates the SDP and double-delivers (measured: 3 transceivers
-   *  for 2 tracks, listener hearing 60 packets for 30 forwarded). The caller
-   *  should not have to know that; the SFU asks once and means once. */
+  /** COALESCED: werift adds a transceiver per exchange (more SDP, double delivery). */
   private dirty = new Set<string>();
 
-  // werift leaves its UDP socket's 'error' unbound, which crashes the process
-  // when a peer dies mid-fanout — see sfuguard.ts. The guard that swallows it is
-  // installed ONCE by server.ts at boot, not here: a constructor must not change
-  // process-wide crash semantics for a whole world server.
+  // sfuguard.ts is installed by server.ts at boot: a constructor must not change process-wide crash semantics
   constructor(private opts: { onNegotiationNeeded?: (legId: string) => void } = {}) {}
 
-  /** Last known world position per leg, and when we heard it. */
   private pos = new Map<string, { x: number; y: number; z: number; at: number }>();
-  /** Packets suppressed because nobody could have heard them. Diagnostic only. */
+  /** Diagnostic only. */
   gated = 0;
-  /** Packets suppressed by the per-listener speaker cap. Diagnostic only. */
+  /** Diagnostic only. */
   capped = 0;
-  /** listener → speakerIds currently holding an audible slot. */
   private slots = new Map<string, Set<string>>();
 
-  /** Client rolloff is FULL_M=3 → SILENT_M=20 (client/lib/voicesfubridge.js:145;
-   *  the historical client this number came from is deleted), so
-   *  beyond SILENT_M the listener multiplies the stream by exactly zero.
-   *
-   *  🔴 HYSTERESIS, not a fixed margin. My first version added MARGIN_M=10 with a
-   *  plausible story about sprint speed; reading BasisDistanceJob.cs:74-84 showed
-   *  the real mechanism — an EXIT threshold 10% further than the ENTER threshold,
-   *  keyed on previous state (`prevVoice ? d2 < voiceExit : d2 < voiceEnter`).
-   *  A margin does not stop flapping: someone standing at exactly the cutoff
-   *  toggles on every position update, and each toggle is an audible cut. Two
-   *  thresholds with memory cannot flap, which is why every VR stack does it this
-   *  way. Cost: one bool per pair. */
-  private static readonly ENTER_M = 20;      // start forwarding within this
-  private static readonly HYSTERESIS = 1.10; // …stop only beyond 10% further (Basis's value)
+  /** Client rolloff is silent beyond 20 m (client/lib/voiceconsent.js). HYSTERESIS keyed on previous state, or someone
+   *  at exactly the cutoff toggles audibly on every update. */
+  private static readonly ENTER_M = 20;
+  private static readonly HYSTERESIS = 1.10; // stop only 10% further out
   private static readonly POS_STALE_MS = 5000;
 
-  /** Hard cap on simultaneous speakers per listener, mirroring Basis's
-   *  BasisAudioCapJob. Distance alone is NOT enough: forty people in one plaza
-   *  are all within 20m of each other, so the gate passes every pair and we are
-   *  back to N². A cap bounds the worst case at N×MAX_AUDIBLE instead.
-   *
-   *  0 disables the cap (the default — an operator opts in, because silently
-   *  dropping a speaker is a policy choice, not a default we should impose). */
+  /** Per listener, bounding the worst case at N×MAX_AUDIBLE. 0 = no cap (default: dropping a speaker is opt-in). */
   maxAudiblePerListener = 0;
-  /** Someone already audible gets their squared distance multiplied by this when
-   *  competing for a slot, so a newcomer must be MEANINGFULLY closer to displace
-   *  them. Without it, two people at nearly equal distance swap the last slot
-   *  every tick and both stutter. Basis calls it StickinessBonus. */
+  /** A newcomer must be MEANINGFULLY closer, or two near-equal speakers swap the last slot every tick. */
   private static readonly STICKINESS = 0.8;
-  /** Was this pair audible last time? The memory that makes hysteresis work.
-   *  🔴 NESTED for the same reason consent is: `listener + NUL + speaker` is not
-   *  injective when ids may contain NUL. I re-introduced the joined key here
-   *  three commits after fixing it in consent — the shape is seductive. */
+  /** hysteresis memory; NESTED for the same reason as consent (a fourth pair key should extract a PairMap<T>: NUL-joined
+   *  keys collided here twice) */
   private inRange = new Map<string, Map<string, boolean>>();
 
-  /** Tell the SFU where a participant is. Positions are OPTIONAL — a world that
-   *  never calls this simply never gates, which is why this cannot break an
-   *  existing deployment. */
+  /** OPTIONAL: a world that never calls this never gates. */
   setPosition(legId: string, x: number, y: number, z: number, now = Date.now()) {
     this.pos.set(legId, { x, y, z, at: now });
   }
 
-  /** Could `listener` possibly hear `speaker`? Unknown or stale → YES.
-   *  Hysteresis: a pair already in range stays in range until 10% further out. */
+  /** Unknown or stale → YES. */
   private inEarshot(listenerId: string, speakerId: string, now = Date.now()): boolean {
     const a = this.pos.get(listenerId), b = this.pos.get(speakerId);
     if (!a || !b) return true;                                   // unknown → forward
@@ -172,13 +92,7 @@ export class Sfu {
     return nowIn;
   }
 
-  /** Does `speaker` hold one of `listener`'s audible slots?
-   *
-   *  🔴 Recomputed lazily on the PACKET path rather than on a timer, because a
-   *  timer would need to know when anyone moved. The set only changes when a
-   *  speaker who is NOT currently in it wants in — which is exactly when we can
-   *  afford the O(k) comparison, since that speaker is by definition producing a
-   *  packet we were about to forward anyway. */
+  /** Lazily on the packet path, never a timer: the set only changes when an outside speaker sends a packet. */
   private withinCap(listenerId: string, speakerId: string): boolean {
     const cap = this.maxAudiblePerListener;
     if (cap <= 0) return true;                                   // disabled → everyone
@@ -187,8 +101,7 @@ export class Sfu {
     if (held.has(speakerId)) return true;                        // already audible → keep
     if (held.size < cap) { held.add(speakerId); return true; }    // room to spare
 
-    // Full. Displace the furthest holder, but only if this speaker is closer
-    // than that holder's STICKINESS-discounted distance.
+    // full: displace the furthest holder only if closer than its STICKINESS-discounted distance
     const me = this.d2(listenerId, speakerId);
     if (me === null) return true;                                // no positions → cannot rank, admit
     let worstId: string | null = null, worstD2 = -1;
@@ -200,23 +113,14 @@ export class Sfu {
     }
     if (worstId !== null && me < worstD2) {
       held.delete(worstId); held.add(speakerId);
-      // The displaced speaker also loses its hysteresis memory, so it must
-      // re-enter range cleanly rather than inheriting a stale "was in" bit.
+      // its hysteresis memory goes too: no stale "was in" bit
       this.inRange.get(listenerId)?.delete(worstId);
       return true;
     }
     return false;
   }
 
-  /** Squared distance between two legs, or null if either position is unknown
-   *  OR STALE. 🔴 Stale counts as unknown here (#130 review, item 6): inEarshot
-   *  forwards on stale positions ("fail-open — silence is the failure users
-   *  notice"), and withinCap ranks through THIS function — so if d2 happily
-   *  ranked a 10s-old coordinate, the cap suppressed the very packet the gate
-   *  had just promised to forward, and the two stages silently disagreed
-   *  (reviewer's exact-head probe: forwarded=1, capped=1 on the same stale
-   *  pair). One staleness rule, owned by the one distance function: a position
-   *  we would not gate on is a position we may not rank on either. */
+  /** null if unknown OR STALE: one staleness rule for gate and cap, or the cap drops what the gate promised. */
   private d2(a: string, b: string, now = Date.now()): number | null {
     const p = this.pos.get(a), q = this.pos.get(b);
     if (!p || !q) return null;
@@ -230,18 +134,10 @@ export class Sfu {
     return this.consent.get(listener)?.get(speaker) === true;   // absent = denied, both levels
   }
 
-  /** Create a leg for an already-authenticated participant. There is no
-   *  credential to mint and no webhook to admit: the websocket proved identity
-   *  before we got here, so the leg IS the authorization. (An external relay
-   *  needs a bearer credential plus asynchronous webhook admission for A1 —
-   *  measured at a 4.7s webhook-bound revocation window; in-process, revoking
-   *  is a local pc.close().) */
+  /** The websocket proved identity, so the leg IS the authorization; revoking is a local pc.close(). */
   createLeg(id: string, gen: number): SfuLeg {
     this.closeLeg(id);                       // one body per identity (#57 takeover)
-    // Measured (werift survey, N=12): default createOffer with 12 m-lines took
-    // 2021ms and gathered 96 candidates; max-bundle alone → 176ms; dropping
-    // IPv6 → 61ms. At this m-line count these are not tuning, they are the
-    // difference between a usable join and a two-second stall.
+    // max-bundle and no IPv6: with 12 m-lines the default offer took ~2 s (96 candidates), these ~61 ms
     const pc = new RTCPeerConnection({
       codecs: { audio: [AUDIO_CODEC] },
       bundlePolicy: "max-bundle",
@@ -252,11 +148,8 @@ export class Sfu {
 
 
     pc.ontrack = (e) => {
-      // 🔴 SUBSCRIBE ONCE. ontrack fires per transceiver AND again after each
-      // renegotiation, so re-subscribing here stacks handlers and every packet
-      // is forwarded N times — silently, since each copy is individually
-      // correct. Caught by the load test reading exactly 200% delivery at both
-      // N=3 and N=12 (one renegotiation = one extra subscription).
+      // SUBSCRIBE ONCE: ontrack fires per transceiver and again after each renegotiation, so re-subscribing would
+      // forward every packet N times
       if (leg.ingress) return;
       leg.ingress = e.track;
       e.track.onReceiveRtp.subscribe((rtp) => this.fanout(leg, rtp));
@@ -265,158 +158,60 @@ export class Sfu {
     return leg;
   }
 
-  /** The hot path. One packet in, zero-or-more out — with the policy checks
-   *  in the order that fails cheapest first. */
-  // ═══════════════════════════════════════════════════════════════════════
-  // 🔮 FUTURE: P2P OFFLOAD — where it plugs in, and why it plugs in HERE.
-  //
-  // The settled architecture (#104) is relay-floor with P2P as deferred phase 2:
-  // the SFU always works, and a pair that manages a direct connection stops
-  // paying for the relay hop. Basis has shipped exactly this; the pieces to
-  // steal, with file:line, are in notes/SFU-HANDOFF.md. The short version:
-  //
-  //   • THE HOOK IS THIS LOOP. Basis checks `IsP2POffloaded(sender, client)` in
-  //     its fanout (BasisServerHandleEvents.cs:995) and skips the send. Ours
-  //     would be one more `continue` right beside the proximity gate — the gate
-  //     and the offload check are the same SHAPE (both answer "does this packet
-  //     need to traverse the relay?"), which is why they belong adjacent.
-  //
-  //   • FAST-PATH THE COMMON CASE. `HasOffloadedPairs` is a volatile int compare
-  //     that short-circuits before any map lookup, because zero-offload is
-  //     overwhelmingly common (BasisServerP2PBroker.cs:44-58). At 12 people it
-  //     hardly matters; at their 1000 it removes a million hash lookups a tick.
-  //     Our proximity gate should learn the same trick if `pos` is ever empty.
-  //
-  //   • PAIRS ARE UNORDERED. They pack (lo,hi) into a long so a pair has ONE
-  //     identity regardless of direction. Ours must too — and note this is the
-  //     third place in this file wanting a pair key, after consent and inRange.
-  //     If a fourth appears, extract a PairMap<T> rather than joining strings;
-  //     the NUL-join collision has already been found here twice.
-  //
-  //   • THE HARD PART IS NOT THE PLUMBING, IT IS THE WATCHDOG. A direct link
-  //     that dies silently is WORSE than no direct link, because both ends think
-  //     they are connected and neither hears anything. Basis extracted that
-  //     decision logic into BasisP2PLinkHealth.cs specifically so it could be
-  //     unit-tested headless (their client is Unity-only) — the same move we
-  //     made with relaydecision.ts, arrived at independently. Their verdicts:
-  //       DemoteStale        — no inbound past staleMs → path is dead/one-way
-  //       DemoteUnconfirmed  — reached Connected but the server never confirmed
-  //       ClearFlapCounter   — healthy long enough to forget past flapping
-  //     …with a post-connect GRACE window where demotion is never allowed, and
-  //     staleness checked BEFORE unconfirmed so the reported reason is specific.
-  //     Copy that structure into relaydecision.ts (transport-agnostic, already
-  //     the regression anchor) rather than inventing new thresholds.
-  //
-  //   • DEMOTION MUST BE INVISIBLE. Falling back to the relay is the recovery
-  //     path, so the relay route must still EXIST while offloaded — keep the
-  //     transceiver negotiated and starve it, exactly as consent already does
-  //     (see ensureRoute's doc). That is why consent and routes are separate
-  //     concepts in this file, and it is what makes demotion a memory write
-  //     instead of an SDP round trip.
-  //
-  // 🔮 ANIMATION OFFLOAD is the same broker with different traffic and a much
-  //     lower stake: a dropped pose interpolates, a dropped voice packet is an
-  //     audible hole. If both are built, voice should be the LAST thing moved to
-  //     a new direct link and the FIRST thing moved back — earn trust with pose
-  //     traffic, spend it on audio. Basis routes both over one link; we do not
-  //     have to, and the asymmetry in failure cost argues we should not.
-  // ═══════════════════════════════════════════════════════════════════════
+  /** The hot path: checks in the order that fails cheapest first; P2P offload (#104 phase 2) hooks in beside the
+   *  proximity gate (both answer "does this packet need the relay?") — see docs/research/sfu-p2p-offload.md. */
   private fanout(from: SfuLeg, rtp: RtpPacket) {
-    // 🔴 D2: the closed check comes FIRST. werift's onReceiveRtp subscription
-    // outlives the leg (we cannot unsubscribe what we did not keep), so
-    // in-flight packets still arrive after closeLeg — and counting them made a
-    // corpse look like it was still publishing.
+    // the closed check comes FIRST: werift's onReceiveRtp outlives the leg, and counting late packets makes a corpse look live
     if (from.closed || this.muted.has(from.id)) return;   // moderator mute: at the source
     from.rxPackets++;
     for (const [listenerId, listener] of this.legs) {
       if (listenerId === from.id || listener.closed) continue;
       if (!this.allows(listenerId, from.id)) continue;         // absent = denied
-      // Proximity gate. Deliberately AFTER consent so it can only ever SUBTRACT:
-      // it is an efficiency hint, never a second authorization. If positions are
-      // unknown or stale we forward (fail-OPEN here is correct — the cost of a
-      // wrong gate is silence, and silence is the failure users actually notice;
-      // the cost of forwarding is bandwidth the client already discards).
+      // AFTER consent so it can only SUBTRACT; fail-open: a wrong gate costs silence, forwarding only bandwidth
       if (!this.inEarshot(listenerId, from.id)) { this.gated++; continue; }
       if (!this.withinCap(listenerId, from.id)) { this.capped++; continue; }
       const route = listener.outbound.get(from.id);
       if (!route) continue;                  // no route = not heard
-      route.track.writeRtp(rtp);             // encoded Opus, straight through
+      route.track.writeRtp(rtp);
       this.forwarded++;
     }
   }
 
-  /** Speaker ids this leg has routes for, in insertion order — which is the
-   *  order werift added the transceivers, hence the order the browser's
-   *  ontrack will fire. The client pairs tracks to speakers by that order (see
-   *  client/lib/voicesfu.js); a Map preserves it, which is the only reason this
-   *  is safe to rely on. */
+  /** Insertion order = transceiver order = the browser's ontrack order (client/lib/voicesfu.js's msid fallback). */
   routesFor(legId: string): string[] {
     return [...(this.legs.get(legId)?.outbound.keys() ?? [])];
   }
 
-  /** Trickle ICE from the browser. Unknown leg or malformed candidate is
-   *  dropped rather than thrown — a late candidate for a closed leg is normal
-   *  churn, not an error worth crashing a voice session over. */
+  /** Unknown leg or malformed candidate is dropped, not thrown: a late candidate is normal churn. */
   addIceCandidate(legId: string, candidate: unknown) {
     const leg = this.legs.get(legId);
     if (!leg || leg.closed || !candidate) return;
     try { void leg.pc.addIceCandidate(candidate as RTCIceCandidate); } catch {}
   }
 
-  /** Give `listener` a track to hear `speaker` on. Separate from consent on
-   *  purpose: the track can exist (negotiated, stable SDP) while starved of
-   *  packets, so flipping consent costs no renegotiation — which is what makes
-   *  consent latency a memory write instead of an SDP round trip. */
+  /** Separate from consent: a negotiated track can be starved, so flipping consent is a memory write, not SDP. */
   ensureRoute(listenerId: string, speakerId: string): boolean {
     const listener = this.legs.get(listenerId);
     if (!listener || listener.closed || listenerId === speakerId) return false;
     const existing = listener.outbound.get(speakerId);
     if (existing) {
-      // 🔴 B2: a route that exists but never NEGOTIATED must be re-asked. The
-      // old `has() → return false` meant one failed exchange (socket blip,
-      // backgrounded tab, a throwing caller) silenced that pair FOREVER: the
-      // track survived, no further ask was ever scheduled, and diag reported
-      // the listener as hearing the speaker. Measured: forwarded=15, heard=0,
-      // diag green. Same silent shape as every other bug in this file.
+      // a route that exists but never NEGOTIATED is re-asked, or one failed exchange silences that pair forever
       if (!existing.negotiated) this.askToNegotiate(listenerId);
       return false;
     }
     const track = new MediaStreamTrack({ kind: "audio" });
-    // 🔴 IDENTITY RIDES WITH THE TRACK (Basis validation, 2026-08-15).
-    // Basis puts the speaker in the PACKET — ServerAudioSegmentMessage is
-    // {playerIdMessage, audioSegmentData} — and stamps it from the
-    // authenticated sender, discarding whatever the client claimed
-    // (BasisServerHandleEvents.cs:973-976). Audio is self-identifying; nothing
-    // is inferred.
-    //
-    // Ours inferred identity from ARRIVAL ORDER: a sideband `sfu-route` queue
-    // shifted on each ontrack. That is a positional coupling between two
-    // processes, and it has ALREADY desynced once (a leaked listener attached
-    // tracks to the WRONG speaker — voicesfu.js:66-71). The failure mode is the
-    // worst available: right voice, wrong avatar, everything looks healthy.
-    //
-    // WebRTC has a first-class channel for this and we were not using it. msid
-    // travels in the SDP and surfaces as e.streams[0].id in the browser.
-    // VERIFIED against real Chromium (tools/msid-probe.ts): werift derives msid
-    // from the SENDER's streamIds, which come from `streams` here — NOT from
-    // fields on MediaStreamTrack. Setting streamId/id on the track produces NO
-    // msid at all (measured: browser saw streamIds:["default"]).
+    // IDENTITY RIDES WITH THE TRACK, never arrival order: msid surfaces as e.streams[0].id in the browser, and werift
+    // derives it from the sender's `streams` here, not from MediaStreamTrack fields (those produce no msid at all)
     const stream = new MediaStream({ id: speakerId, tracks: [track] });
     listener.outbound.set(speakerId, { track, negotiated: false });
     listener.pc.addTransceiver(track, { direction: "sendonly", streams: [stream] } as any);
-    // 🔴 THE SERVER MUST OFFER, NOT ANSWER. A browser publishing its mic offers
-    // `sendonly`, and an answer cannot add a receive direction the offer never
-    // proposed — so answering a browser re-offer silently produces a route that
-    // forwards packets into a track nobody is receiving. (Cost me the one red
-    // test: diag.forwarded=20 while the listener heard 0.) Hence this hook means
-    // "SFU: create an offer for this leg", never "ask the browser to re-offer".
+    // THE SERVER MUST OFFER, NOT ANSWER: a browser's mic offer is `sendonly`, and an answer can't add a receive
+    // direction, so this hook means "SFU: create an offer for this leg", never "ask the browser to re-offer"
     this.askToNegotiate(listenerId);
     return true;
   }
 
-  /** Coalesced "this leg needs an offer". One ask per leg per microtask however
-   *  many routes were added — werift adds a transceiver per exchange, so N asks
-   *  inflate the SDP and double-deliver. */
+  /** One ask per leg per microtask, however many routes were added. */
   private askToNegotiate(legId: string) {
     if (this.dirty.has(legId)) return;
     const leg = this.legs.get(legId);
@@ -424,40 +219,24 @@ export class Sfu {
     this.dirty.add(legId);
     queueMicrotask(() => {
       if (!this.dirty.delete(legId)) return;
-      // 🔴 B1: check leg IDENTITY, not just the id. A takeover between the add
-      // and the microtask replaces the leg, and the old code fired the ask
-      // against the SUCCESSOR — which has no routes, so it was a wasted
-      // exchange today and a wrong-generation offer once gen is enforced.
+      // check leg IDENTITY, not just the id: a takeover in between replaces the leg, and its successor must not get the ask
       if (this.legs.get(legId) !== leg || leg.closed) return;
       try {
         this.opts.onNegotiationNeeded?.(legId);
       } catch (e) {
-        // 🔴 B4: the hook is the CALLER's code. A throw here used to escape a
-        // bare queueMicrotask, become an uncaughtException, and kill the world
-        // server. A caller bug must not be fatal to everyone else's audio.
+        // the hook is the CALLER's code: a throw from a bare queueMicrotask would kill the world server
         console.error(`[sfu:${legId}] onNegotiationNeeded threw`, e);
       }
     });
   }
 
-  /** Run an SDP exchange for this leg, SERIALIZED against every other one for
-   *  the same leg. The caller supplies the actual signaling (it owns the `rtc`
-   *  verb and the socket); we own only the ordering. Chaining onto the previous
-   *  promise — rather than a lock with a queue — means an exchange that throws
-   *  does not wedge the next one, since we swallow into the chain and let the
-   *  caller see its own rejection. */
+  /** SERIALIZED per leg: the caller owns the signaling, we own the ordering; a throwing exchange never wedges the next. */
   negotiate(legId: string, exchange: (pc: RTCPeerConnection) => Promise<void>): Promise<void> {
     const leg = this.legs.get(legId);
     if (!leg || leg.closed) return Promise.reject(new Error(`no leg ${legId}`));
     const run = leg.negotiating.then(async () => {
       if (leg.closed) return;
-      // 🔴 SNAPSHOT BEFORE, MARK ONLY THOSE. Marking every route after the
-      // exchange resurrected B2 one level deeper: a route added AFTER the offer
-      // was created cannot be in that SDP, but got marked negotiated anyway —
-      // silent forever, with diag reporting it as heard. Measured: hears
-      // ["s1","s2"], pendingRoutes [], listener heard 0 of 12.
-      // Snapshotting means a route that arrived mid-exchange stays pending and
-      // gets its own ask, which is exactly what the un-negotiated path is for.
+      // snapshot BEFORE: a route added mid-exchange isn't in that SDP, so it stays pending
       const covered = [...leg.outbound.keys()];
       await exchange(leg.pc);
       let stillPending = false;
@@ -465,15 +244,13 @@ export class Sfu {
         if (covered.includes(speakerId)) r.negotiated = true;
         else stillPending = true;
       }
-      if (stillPending) this.askToNegotiate(legId);   // the latecomer gets its own round
+      if (stillPending) this.askToNegotiate(legId);
     });
     leg.negotiating = run.catch(() => {});      // a failure must not wedge the queue
     return run;
   }
 
-  /** Listener-consent, server-enforced (#104 A3). Deliberately NOT Basis's
-   *  sender-declared recipient list: there the speaker picks who hears them,
-   *  which is the weaker guarantee. */
+  /** Listener-consent, server-enforced (#104 A3); never a sender-declared recipient list, the weaker guarantee. */
   setConsent(listenerId: string, speakerId: string, allowed: boolean) {
     let row = this.consent.get(listenerId);
     if (!row) { row = new Map(); this.consent.set(listenerId, row); }
@@ -489,26 +266,13 @@ export class Sfu {
     if (deaf) this.deafened.add(listenerId); else this.deafened.delete(listenerId);
   }
 
-  /** Revocation. Local and immediate — no webhook, no credential TTL, no
-   *  replay window: the packets stop because the socket is gone. */
+  /** Local and immediate: no TTL, no replay window; the packets stop because the socket is gone. */
   closeLeg(id: string) {
     const leg = this.legs.get(id);
     if (!leg) return;
     leg.closed = true;
-    // 🔴 ROUTES SURVIVE THE SPEAKER (#130 review, item 3). This used to delete
-    // every listener's outbound entry for the retiring speaker — but the entry
-    // held the ONLY reference to a transceiver werift keeps forever, so each
-    // same-id reconnect allocated a fresh one and the pc grew an m-line per
-    // generation (reviewer measured 20 transceivers, 0 routes, after twenty
-    // reconnect cycles against one listener). Routes are keyed AND msid'd by
-    // speaker id, so a successor with the same id maps onto the same track:
-    // retaining the route makes reconnect a zero-SDP event and bounds
-    // transceivers by DISTINCT speakers, not by reconnect count.
-    //
-    // Retention leaks no audio: consent for the retired id is wiped below, and
-    // fanout checks consent before the route — an unconsented route is starved,
-    // exactly the mechanism consent-revocation has always relied on. No stale
-    // packets either: the corpse's own fanout stops at `from.closed`.
+    // ROUTES SURVIVE THE SPEAKER (werift keeps transceivers forever): a same-id reconnect is zero-SDP. No leak: the
+    // retired id's consent is wiped below and fanout checks consent first.
     try { leg.pc.close(); } catch { /* already dead */ }
     this.legs.delete(id);
     this.pos.delete(id);
@@ -522,26 +286,19 @@ export class Sfu {
 
   getLeg(id: string) { return this.legs.get(id); }
 
-  /** /relay-diag keeps working, and the numbers are the ones that matter for
-   *  the acceptance table: is anything arriving, is anything leaving. */
+  /** /relay-diag: is anything arriving, is anything leaving. */
   diag() {
     return {
       legs: [...this.legs.values()].map((l) => ({
         id: l.id, gen: l.gen, rxPackets: l.rxPackets,
         hears: [...l.outbound.entries()].filter(([, r]) => r.negotiated).map(([id]) => id),
-        // A pending route is NOT "hears" — reporting it as such is what made
-        // the B2 bug invisible. Surfaced separately so a stuck one is visible.
+        // a pending route is NOT "hears": surfaced separately so a stuck one is visible
         pendingRoutes: [...l.outbound.entries()].filter(([, r]) => !r.negotiated).map(([id]) => id),
         publishing: !!l.ingress,
         state: l.pc.connectionState,
       })),
       forwarded: this.forwarded,
-      // 🔴 SUPPRESSION BELONGS IN THE SAME REPORT AS DELIVERY. These were public
-      // fields that only sfuadapter reached into, so anything calling sfu.diag()
-      // directly — tools/sfu-load.ts does — saw forwarded with no idea how many
-      // packets were deliberately dropped. Basis's lesson, recorded in
-      // SFU-HANDOFF: "a cheaper server that drops more is not healthier", and a
-      // load harness that cannot see drops will report exactly that.
+      // reported beside forwarded: a load harness (tools/sfu-load.ts) that can't see drops reads a server that drops more as healthier
       suppressed: { gated: this.gated, capped: this.capped },
       muted: [...this.muted],
       deafened: [...this.deafened],

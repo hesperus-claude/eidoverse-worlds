@@ -1,12 +1,11 @@
-// gripedit — the grip editor (R, 10-10: "position and pose how things are grabbed"; research
-// notes/eidoverse/RESEARCH-grips-and-reset-2026-10-10.md, recommendation 1).
+// gripedit — the grip editor: position and pose how things are grabbed.
 //
 // Grips stay data inside grabbable.grips (one validated write). The editor draws a GHOST HAND at the selected grip and
 // binds its own move / turn handles to it: a local-only proxy, never an entity (Godot's preview hand is the same idea).
 // On release it writes the whole grabbable once. Mirror writes the other hand's grip; Try it puts the thing in my hand.
 //
-// The palm frame is shared/grab.js's (+Z out of the palm, +Y little→index). Its X differs by side, MEASURED on R's
-// avatar (tools/protocol/palm-frame.lab.ts, 10-10): the right palm's +X points to the wrist, the left's along the
+// The palm frame is shared/grab.js's (+Z out of the palm, +Y little→index). Its X differs by side, MEASURED on a
+// real avatar (tools/protocol/palm-frame.lab.ts): the right palm's +X points to the wrist, the left's along the
 // fingers. So the ghost's points below are the right hand's, and the left's are the same with x negated; and a grip
 // mirrored across the thing's X plane is M·R·diag(-1, 1, 1) (M the reflection), which keeps the palm out and the index up.
 
@@ -17,11 +16,12 @@ import { registerSystem } from './frameloop.js';
 import { isEditing, setPointerVeto, setEscapeHook } from './build.js';
 import * as Edits from './editwrites.js';
 import { sendRequest } from './net.js';
+import { plain } from './plainwords.js';
 import { flashHint } from './ui.js';
 import { checkGrabbable, HANDS, ROLES, GRASPS } from '../../shared/grab.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-// the right hand's joints in its palm frame (metres), from R's avatar; ring is between middle and little
+// the right hand's joints in its palm frame (metres), measured on a real avatar; ring is between middle and little
 const R_PTS = {
   wrist: [0.122, -0.004, -0.041],
   thumb: [[0.082, 0.069, -0.016], [0.035, 0.096, -0.021], [-0.022, 0.115, -0.025]],
@@ -160,7 +160,7 @@ export { mirrorQ as _mirrorQ };
 async function tryGrip() {
   const g = gripsOf(st.id)[st.name]; if (!g) return;
   const r = await sendRequest('grab', { id: st.id, grip: st.name, ...(g.hand === 'left' ? { hand: 'left' } : {}) });
-  if (!r?.ok) flashHint(r?.refused?.reason ?? 'couldn\'t pick it up', 4200, 'attn');
+  if (!r?.ok) flashHint(r?.refused ? plain('pick it up', r) : 'couldn\'t pick it up', 4200, 'attn');
   return r;
 }
 

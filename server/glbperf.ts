@@ -1,16 +1,7 @@
-// glbperf — a model's loupe rank read from its GLB, without rendering it (library cards; owner, 09-24).
-//
-// Mirrors what the client does: three's GLTFLoader turns every triangle primitive of every mesh-bearing node in the
-// default scene into ONE Mesh (EXT_mesh_gpu_instancing → an InstancedMesh of `count`), and perfscope's accumulate()
-// bills per Mesh: tris = index (or position) count / 3 × instances, one draw, its material into a unique set, one
-// alpha tick per BLEND material occurrence; textures once per unique texture, w×h×4 bytes (×4/3 with mips); bones =
-// the largest skin a skinned mesh in the ranked scene uses. The rule and thresholds are shared/perfrank.js — the loupe's own. tools/glbperf-parity-probe
-// loads real library models through the client's loader and checks these numbers against perfscope.statsOf().
-//
-// Known approximations, disclosed on the card: KTX2/basis images are billed at 1 byte/texel — the desktop worst case
-// (ETC1S transcodes to BC7 where BPTC exists; the GPU format depends on the viewer's hardware); an image this cannot size (not PNG/JPEG/WebP/KTX2) is billed as 0 and counted in
-// `unsizedImages`. The catalog ranks the file a viewer is SERVED (routes.ts perfPair: the KTX2 variant when one exists)
-// and the original upload beside it.
+// A model's loupe rank read from its GLB without rendering, mirroring GLTFLoader + perfscope's accumulate() per Mesh
+// (thresholds: shared/perfrank.js); tools/glbperf-parity-probe checks it against perfscope.statsOf().
+// Disclosed approximations: KTX2 billed at 1 B/texel (the desktop worst case); an unsizable image is 0, counted in
+// `unsizedImages`. The catalog ranks the SERVED file (routes.ts perfPair) beside the original.
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { parseGlb, rasterDims, GLB_MAGIC, CHUNK_JSON, CHUNK_BIN } from "./glbparse.ts";
 import { rankOf, TIER_NAMES } from "../shared/perfrank.js";
@@ -30,12 +21,8 @@ function webpDims(b: Uint8Array): [number, number] | null {
   if (kind === "VP8 ") return [dv.getUint16(26, true) & 0x3fff, dv.getUint16(28, true) & 0x3fff];
   return null;
 }
-/** KTX2 size + the bytes/texel the GPU holds after transcode. three's KTX2Loader (priorityETC1S) takes ETC2 first,
- *  then BC7: a desktop with BPTC and no ETC2 (most Windows/Linux GPUs) holds ETC1S as BC7, so the CARD bills the worst
- *  case: 1 B/texel for
- *  everything. `bptc:false` is the regime of a device without it (ETC1S → BC1 0.5, or BC3 1 with an alpha sample) —
- *  the parity probe passes the regime its headless loader actually got. UASTC → BC7 (1) either way. An uncompressed
- *  fallback would be 4 — the card says "estimated". Samples are counted from the DFD's basic descriptor block. */
+/** B/texel after transcode: ETC1S → BC7 (1) with BPTC, else BC1 0.5 / BC3 1 with alpha; UASTC → BC7 (1) either way.
+ *  Samples are counted from the DFD's basic descriptor block. */
 function ktx2Info(b: Uint8Array, bptc = true): { dims: [number, number]; bpp: number } | null {
   if (b.length < 80 || b[0] !== 0xab || b[1] !== 0x4b) return null;
   const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
@@ -47,12 +34,11 @@ function ktx2Info(b: Uint8Array, bptc = true): { dims: [number, number]; bpp: nu
   return { dims, bpp: supercompression === 1 && !bptc ? (samples > 1 ? 1 : 0.5) : 1 };
 }
 
-/** The first `max` bytes of a bufferView (null = out of range). The ranker only needs image HEADERS, so the file path
- *  reads those by offset instead of the whole GLB (the catalog route runs on the sequencer thread). */
+/** null = out of range. Only image HEADERS are read, by offset: the catalog route runs on the sequencer thread. */
 type ViewReader = (bv: any, max: number) => Uint8Array | null;
 const IMAGE_HEAD = 65536;   // PNG/WebP/KTX2 headers are < 1 KB; only a JPEG's SOF can sit past this (it retries, bounded)
-// the JPEG retry's ceiling: a SOF behind big EXIF/ICC blocks is found, but a pathological (or hostile) upload can't make
-// a catalog request read a whole multi-MB image on the sequencer thread (Greptile #207). Past it: billed unsized.
+// JPEG retry ceiling: a hostile upload can't make a catalog request read a multi-MB image on the sequencer thread;
+// past it, billed unsized
 const JPEG_RETRY_MAX = 1 << 20;
 
 export function glbPerf(bytes: Uint8Array, opts: { bptc?: boolean } = {}): GlbPerf {
@@ -77,8 +63,7 @@ function perfOf(json: any, view: ViewReader, { bptc = true }: { bptc?: boolean }
       for (const p of meshes[n.mesh]?.primitives ?? []) {
         const mode = p.mode ?? MODE_TRIANGLES;
         if (mode !== MODE_TRIANGLES && mode !== MODE_STRIP && mode !== MODE_FAN) continue;   // lines/points: not a Mesh
-        // a skin counts only where GLTFLoader builds a SkinnedMesh from it: a triangle primitive on a node of the ranked
-        // scene that references the skin (the loupe's max over loaded skinned meshes). Unused skins cost nothing (Greptile #207).
+        // a skin counts only where GLTFLoader builds a SkinnedMesh from it; unused skins cost nothing
         if (n.skin != null) bones = Math.max(bones, json.skins?.[n.skin]?.joints?.length ?? 0);
         const n0 = p.indices != null ? accessors[p.indices]?.count ?? 0 : accessors[p.attributes?.POSITION]?.count ?? 0;
         const idx = mode === MODE_TRIANGLES ? n0 : Math.max(0, n0 - 2) * 3;   // GLTFLoader re-indexes strips/fans
@@ -95,8 +80,7 @@ function perfOf(json: any, view: ViewReader, { bptc = true }: { bptc?: boolean }
   for (const r of scene?.nodes ?? []) visit(r, seen);
   // textures: every texture index the USED materials reference (GLTFLoader loads textures per material)
   const texIdx = new Set<number>();
-  // glTF's textureInfo objects are exactly the values of keys ending in "Texture" (baseColorTexture, normalTexture,
-  // occlusionTexture, … and every KHR_materials_* extension's *Texture) — walk the material for those
+  // glTF's textureInfo objects are exactly the values of keys ending in "Texture", extensions included
   const walk = (v: any) => {
     if (!v || typeof v !== "object") return;
     for (const [k, x] of Object.entries(v)) {
@@ -106,8 +90,8 @@ function perfOf(json: any, view: ViewReader, { bptc = true }: { bptc?: boolean }
   };
   for (const mi of mats) if (mi >= 0) walk(json.materials?.[mi]);
   let texBytes = 0, unsizedImages = 0;
-  const loaded = new Set<string>();   // GLTFLoader caches Textures by source:sampler — two glTF textures on one image
-  for (const ti of texIdx) {          // and sampler are ONE Texture (and one upload); the loupe counts objects
+  const loaded = new Set<string>();   // GLTFLoader caches Textures by source:sampler: one image+sampler is ONE Texture
+  for (const ti of texIdx) {
     const t = json.textures?.[ti]; if (!t) continue;
     const src = t.extensions?.KHR_texture_basisu?.source ?? t.extensions?.EXT_texture_webp?.source ?? t.source;
     const cacheKey = `${src}:${t.sampler ?? -1}`;
@@ -134,12 +118,11 @@ function perfOf(json: any, view: ViewReader, { bptc = true }: { bptc?: boolean }
 }
 
 const cache = new Map<string, { key: string; perf: GlbPerf | null }>();
-/** glbPerf for a file on disk, cached on (size, mtime) — the catalog route runs per keystroke. null = unreadable. */
+/** Cached: the catalog route runs per keystroke. null = unreadable. */
 export function glbPerfOfFile(path: string): GlbPerf | null {
   try {
     const st = statSync(path);
-    // ino + ctime too: size + mtime survive a same-size replacement with a restored mtime (see store-variants.ts
-    // diskIdentity); ctime can't be restored and a rename-replace changes the inode.
+    // ino + ctime too: size + mtime survive a same-size replacement with a restored mtime (store-variants.ts diskIdentity)
     const key = `${st.size}:${st.mtimeMs}:${st.ino}:${st.ctimeMs}`;
     const hit = cache.get(path);
     if (hit?.key === key) return hit.perf;
@@ -148,7 +131,7 @@ export function glbPerfOfFile(path: string): GlbPerf | null {
     return perf;
   } catch { return null; }
 }
-/** Bytes the last glbPerfOfFile read (a harness checks it stays a header's worth, not the file's). */
+/** A harness checks it stays a header's worth, not the file's. */
 export const glbPerfIo = { bytes: 0 };
 function glbPerfByOffsets(path: string, size: number): GlbPerf {
   const fd = openSync(path, "r");

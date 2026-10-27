@@ -1,25 +1,13 @@
-/**
- * Uneven-support agent test — #84 end to end, through the REAL spawn path:
- * a scratch sequencer serves /geom (with the new lie/topGrid), a WorldAgent
- * folds the spawns and registers support, and the shared collider state is
- * queried exactly where the physics would ask. Covers, per the review:
- *
- *   - the blanket at NONZERO YAW and NON-UNIT SCALE: ground at an occupied
- *     cell equals the composed cell top (world→model-local round trip);
- *   - stepping from an occupied cell into an adjacent EMPTY one: terrain,
- *     not interpolated air;
- *   - a rubble pile brought INTO the class by an in-world scale;
- *   - a crate keeps its honest box (no regression);
- *   - fail-on-main: on a pre-#84 checkout the blanket registers its box and
- *     the ground floats by the documented lie.
- *
- * The blanket is the commons' actual store/9a9d0239eca609b3.glb, copied to
- * the LOCAL store dir — no production networking (review amendment 4).
- *
- * Run:
- *   BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/eidoverse-video \
- *     bun run tools/uneven-support-test.ts
- */
+/** Uneven support (#84) end to end through the REAL spawn path: a scratch sequencer serves /geom (lie/topGrid), a
+ *  WorldAgent folds the spawns and registers support, and the shared collider state is queried where physics asks:
+ *    - the blanket at NONZERO YAW and NON-UNIT SCALE: ground at an occupied cell equals the composed cell top;
+ *    - stepping from an occupied cell into an adjacent EMPTY one: terrain, not interpolated air;
+ *    - a rubble pile brought INTO the class by an in-world scale;
+ *    - a crate keeps its honest box (no regression).
+ *  The blanket is the commons' store/9a9d0239eca609b3.glb, copied to the LOCAL store dir (no production networking).
+ *  Run:
+ *    BLANKET_GLB=/path/to/blanket-9a9d0239.glb EIDOVERSE_DIR=/path/to/library \
+ *      bun run tools/uneven-support-test.ts */
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, copyFileSync, existsSync } from "node:fs";
@@ -59,16 +47,12 @@ mkdirSync(storeDir, { recursive: true });
 const blanketDst = join(storeDir, "9a9d0239eca609b3.glb");
 if (!existsSync(blanketDst)) copyFileSync(process.env.BLANKET_GLB, blanketDst);
 
-// summaries read directly (same code the server serves) — they drive the
-// expected values, so expectations come from served data, not from the
-// modules under test
+// summaries read directly (the code the server serves) drive the expected values, not the modules under test
 const blanketSum = (await summarizeGlb(blanketDst))!;
 const rubbleSum = (await summarizeGlb(join(process.env.EIDOVERSE_DIR, RUBBLE_LIB)))!;
 
 // ---- scratch sequencer ------------------------------------------------------
-// process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
-// whose pid dies immediately, orphaning the real sequencer on this port where
-// it poisons the next run.
+// process.execPath, not "bun": on Windows PATH "bun" is a .cmd shim whose pid dies at once, orphaning the sequencer
 const server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: mkdtempSync(join(tmpdir(), "ew-uneven-")), JOIN_TOKEN: "" },
   stdio: "ignore",
@@ -88,8 +72,7 @@ await sleep(400);
 const agent = new WorldAgent({ url: URL_, name: "prober", world: WORLD });
 await agent.connect();
 
-// the blanket: nonzero yaw, non-unit scale, and raised so its below-origin
-// cloth clears the flat terrain (else terrain-at-0 legitimately covers it)
+// the blanket: nonzero yaw, non-unit scale, raised so its below-origin cloth clears the flat terrain
 const B = { pos: [4, 0.5, 4], yaw: 0.9, scale: 1.25 };
 verb("spawn", { id: "blank1", model: BLANKET_LIB, pos: B.pos, yaw: B.yaw, scale: B.scale });
 // the rubble pile, scaled INTO the floor-shaped class (h·s ≤ 1.0)
@@ -116,8 +99,7 @@ const cellWorld = (g: any, ix: number, iz: number, T: { pos: number[]; yaw: numb
   // THREE applyAxisAngle(+Y, yaw): x' = x·cos + z·sin, z' = −x·sin + z·cos
   return { x: T.pos[0] + (lx * c + lz * s) * T.scale, z: T.pos[2] + (-lx * s + lz * c) * T.scale };
 };
-/** the TALLEST occupied cell — a cushion top, safely above terrain, so the
- *  grid (not the terrain floor) is what answers the query */
+/** the TALLEST occupied cell (a cushion top, above terrain), so the grid, not the terrain floor, answers */
 const tallestCell = (g: any) => {
   let best: { ix: number; iz: number; top: number } | null = null;
   for (let iz = 0; iz < g.n; iz++) {
@@ -141,8 +123,7 @@ console.log("\n━━ blanket: yaw 0.9, scale 1.25 ━━");
     const ground = groundAt(p.x, p.z);
     check("ground = the composed cell top (yaw+scale round trip)", Math.abs(ground - expected) < 0.02,
       `ground ${ground.toFixed(3)} vs expected ${expected.toFixed(3)}`);
-    // the bare cloth: a cell at ~median height, where the box top's lie is
-    // the full 0.25m·s — the pre-#84 float this asset was filed over
+    // the bare cloth: a cell at ~median height, where the box top's lie is the full 0.25m·s, the pre-#84 float
     const tops = (g.cells.filter((c: number | null) => c !== null) as number[]).sort((a, b) => a - b);
     const medTop = tops[tops.length >> 1];
     let medCell: { ix: number; iz: number; top: number } | null = null;
@@ -157,9 +138,8 @@ console.log("\n━━ blanket: yaw 0.9, scale 1.25 ━━");
       check("bare cloth rests at cloth height — NOT the box top", Math.abs(mg - (B.pos[1] + medCell.top * B.scale)) < 0.02 && boxTop - mg > 0.1,
         `ground ${mg.toFixed(3)}, box top ${boxTop.toFixed(3)} (lie ${(blanketSum.lie! * B.scale).toFixed(3)}m)`);
     }
-    // step OFF the cloth's edge: half a metre past the footprint along the
-    // entity's local +x, composed through the same yaw/scale — outside the
-    // grid there is no support, and the honest answer is terrain
+    // step OFF the cloth's edge, half a metre past the footprint along local +x through the same yaw/scale: no support
+    // outside the grid, and the honest answer is terrain
     const beyond = cellWorld({ ...g, minXZ: [g.minXZ[0] + g.sizeXZ[0] + 0.5 / B.scale, g.minXZ[1]], sizeXZ: [0, g.sizeXZ[1]] } as any, 0, Math.floor(g.n / 2), B);
     const offEdge = groundAt(beyond.x, beyond.z);
     check("one step off the cloth's edge: terrain, not stretched cloth", Math.abs(offEdge - 0) < 1e-6, `ground ${offEdge.toFixed(3)}`);
@@ -182,10 +162,8 @@ console.log("\n━━ rubble: scaled into the class (yaw 0.7, scale 0.88) ━━
 
 console.log("\n━━ interior hole: an empty cell inside the footprint is AIR ━━");
 {
-  // Real cloth covers its footprint, so the interior-empty-cell semantics are
-  // pinned at the colliders tier with a synthetic grid (the pipeline cases
-  // above all ride the real spawn path; this one pins fitSupportGrid's own
-  // contract: occupied neighbors must not bleed across a hole).
+  // real cloth covers its footprint, so fitSupportGrid's own contract (occupied neighbours must not bleed across a
+  // hole) is pinned with a synthetic grid
   const n = 24, cells: (number | null)[] = new Array(n * n).fill(0.4);
   cells[12 * n + 12] = null;                            // one hole, dead centre
   const ok = typeof colliders.fitSupportGrid === "function" && colliders.fitSupportGrid("synthetic-hole", {
@@ -201,11 +179,8 @@ console.log("\n━━ interior hole: an empty cell inside the footprint is AIR �
 
 console.log("\n━━ the old worst cell: max-y's 21cm float is behaviorally gone ━━");
 {
-  // Rebuild what the max-y implementation WOULD have offered (the vertex
-  // grid) and ray truth per cell, independently; find the cell where the
-  // old float was worst; assert the agent's ground there is truth-or-
-  // terrain — never the old vertex top. On the max-y head this fails by
-  // ~0.21m (#94 review B1's behavioral requirement).
+  // rebuild the max-y vertex grid and ray truth per cell independently; where the vertex top floats worst, the agent's
+  // ground must be truth or terrain, never that top (#94)
   const { gridAccumulator } = await import("../client/lib/supportclass.js");
   const { MeshBVH }: any = await import("../client/node_modules/three-mesh-bvh/src/index.js");
   const io = await (async () => {
@@ -273,8 +248,7 @@ console.log("\n━━ the old worst cell: max-y's 21cm float is behaviorally gon
 
 console.log("\n━━ a scale that stretches certification: declared abstention ━━");
 {
-  // certSpread 0.03 × scale 2 = 0.06 > the 0.05 world bound — the grid must
-  // be refused, the seam declared, and the body finds terrain (no box!)
+  // certSpread 0.03 × scale 2 = 0.06 > the 0.05 world bound: the grid is refused, the seam declared, the body finds terrain
   verb("spawn", { id: "blank2", model: BLANKET_LIB, pos: [80, 0.5, 80], yaw: 0, scale: 2 });
   await sleep(1500);
   await (agent as any).supportReady(8000);
@@ -286,7 +260,7 @@ console.log("\n━━ a scale that stretches certification: declared abstention 
 console.log("\n━━ crate: the honest box is untouched ━━");
 {
   const crateSum = (await summarizeGlb(join(process.env.EIDOVERSE_DIR!, CRATE_LIB)))!;
-  const expected = crateSum.bbox.max[1];   // scale 1, pos.y 0 — the box top IS truthful here
+  const expected = crateSum.bbox.max[1];   // scale 1, pos.y 0: the box top IS truthful here
   const ground = groundAt(40, 40);
   check("crate ground = box top exactly (no regression)", Math.abs(ground - expected) < 1e-6,
     `ground ${ground.toFixed(3)} vs box top ${expected.toFixed(3)}`);

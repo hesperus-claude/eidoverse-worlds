@@ -7,13 +7,11 @@
 // So every client writer of `until` goes through serverUntil(ms), which rounds.
 //   1. the door, on a scratch world: until with a fraction is refused, the same time rounded is accepted
 //   2. serverUntil returns a safe integer while performance.now() is fractional
-//   3. no client file writes `until: serverNow() + …` (the timed /grant and the Roles panel's end picker did)
+//   3. no client file writes `until: serverNow() + …` (the timed /grant and the Roles panel's end picker did): tools/wiring-check.ts
 // @ts-nocheck
-import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { pinned } from "./protocol/clock.ts";
 
 process.env.WORLDS_DIR = join(mkdtempSync(join(tmpdir(), "ew-grant-until-")), "worlds");
@@ -43,12 +41,7 @@ check("serverUntil(ms) is a safe integer", Number.isSafeInteger(u), String(u));
 check("…about ms from now", Number.isSafeInteger(u) && Math.abs(u - (clock.serverNow() + 7_200_000)) < 50, String(u));
 performance.now = realNow;
 
-// 3. no client writer computes until from the raw clock
-const files = [];
-const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith(".js")) files.push(p); } };
-walk(fileURLToPath(new URL("../client/lib", import.meta.url)));
-const hits = files.filter((f) => /until:\s*serverNow\(\)\s*\+/.test(readFileSync(f, "utf8")));
-check("no client file writes until: serverNow() + …", hits.length === 0, hits.join(", "));
+// 3. no client writer computes until from the raw clock: tools/wiring-check.ts
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

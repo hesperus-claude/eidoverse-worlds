@@ -3,18 +3,14 @@
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/reset-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
-const root = scratch("reset"); const clock = labClock();
+import { simFold } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
+import { suite } from "./suite.ts";
+const { ok, done } = suite("reset-check", { quiet: true, cap: Infinity });
+const { root, clock, call } = labWorld("reset");
 const tick = (ms = 1500) => { clock.advance(ms); };
-const call = (w, a, v, args = {}) => { tick(); return request(openWorld(root, w), a, v, args); };
 const st = (W) => fold(openWorld(root, W).entries);
 const pos = (W, id) => st(W).entities[id]?.c.transform.pos;
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
@@ -71,5 +67,4 @@ const button = (W, targets, extra = {}) => call(W, "rowan", "set", { id: "btn", 
   lines[k] = JSON.stringify(e); fs.writeFileSync(file, lines.join("\n"));
   const r = call(W, "vic", "use", { id: "btn", action: "reset" }); const why = String(r.refused?.reason);
   ok(code(r) === "nothing-to-reset" && why === "btn's 'reset' names no targets, so there is nothing to send home" && r.refused?.fix === "someone who may edit it can give it targets (set its reactions); pressing again won't change that", "RS11 a reset naming no targets says so, not that everything is home, and that pressing again won't change it", { r: code(r), why, fix: r.refused?.fix }); }
-console.log(`[reset-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

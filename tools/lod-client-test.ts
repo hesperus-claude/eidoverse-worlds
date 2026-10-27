@@ -1,40 +1,16 @@
-// lod-client-test — the product door of #170, headless and owned.
-//
-//   bun tools/lod-client-test.ts
-//
-// What the pure chooser (tools/lod-policy-test.ts) cannot say: that the
-// resident's dial, the residency sweep, the loader's wire, the sequencer's
-// answer, the in-place replacement and the collider all AGREE. Review of
-// #170, point 4 — "the committed receipt stops at the pure chooser".
-//
-// Three parts. The REALIZER part runs the real client/lib/realize/models.js
-// and the real governor.js (with the real policy, fold, scheduler and bus)
-// over a stub of their dependency cone — tools/lod-client-stub.mjs: no
-// renderer; a loader whose tier is the WIRE truth (askFor), whose
-// "sequencer" answers a stamped variant for libs it baked and the original
-// otherwise, and which the test can hold open and release by hand, so a
-// tier swap is caught mid-flight; colliders recorded, never built; every
-// governor lever below 'lod' answering "nothing to shed". The WIRE part
-// spawns a sequencer child PROCESS-OWNED (WORLD_INSTANCE_NONCE, as
-// object-lod-test does) over a fixture library and pushes the exact URLs the
-// loader would send through it — capable, incapable, wrong generation, an
-// authored `recipe` extra — reading the served tier with the same tierOf the
-// loader uses. The PRODUCTION-LOADER part (round three of the review) then
-// runs the real, unmodified client/lib/assets.js against that same child
-// (tools/lod-loader-probe.ts: only a renderer that never draws and the frame
-// conductors injected below it, its relative fetches resolved to the child),
-// once per /version shape — the real one, one with no recipe, one with no
-// key — and asserts the URL it fetched, the cache key it chose and the
-// tierAsked / tierServed it stamped. A mutation at that seam (`tier =
-// req.tier`, the url, the stamps) fails here; a stubbed loader could not
-// say so, and the review caught exactly that.
-//
-// Negative controls, each named in its check: the churn of the first field
-// run (an "already light" answer re-asked every cooldown), a held tier swap
-// landing over an occupant / cargo / a part motion / an edit hold, a lod ask a
-// non-KTX2 browser reports without ever sending, an authored `recipe`
-// extra read as a served lod, a governor lever overriding the resident's
-// "full detail". Dies at import on main (no lod_policy.js).
+// lod-client-test: the product door of #170, headless and owned (`bun tools/lod-client-test.ts`).
+// What the pure chooser (tools/lod-policy-test.ts) can't say: the dial, residency sweep, loader wire, sequencer answer,
+// in-place replacement and collider all AGREE. Three parts:
+//   REALIZER: the real client/lib/realize/models.js and governor.js over tools/lod-client-stub.mjs (no renderer; a
+//     loader whose tier is the WIRE truth, holdable by hand to catch a swap mid-flight; colliders recorded, never built)
+//   WIRE: a process-owned sequencer child over a fixture library, fed the exact URLs the loader would send (capable,
+//     incapable, wrong generation, an authored `recipe` extra), read with the loader's own tierOf
+//   PRODUCTION-LOADER: the unmodified client/lib/assets.js against that child (tools/lod-loader-probe.ts), once per
+//     /version shape, asserting the fetched URL, cache key and tierAsked/tierServed (a stubbed loader can't catch a
+//     mutation there)
+// Negative controls, each named in its check: "already light" re-asked every cooldown; a held swap landing over an
+// occupant / cargo / part motion / edit hold; a lod ask a non-KTX2 browser reports without sending; an authored
+// `recipe` extra read as served lod; a governor lever overriding the resident's "full detail".
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -46,9 +22,8 @@ const STUB = fileURLToPath(new URL('./lod-client-stub.mjs', import.meta.url));
 plugin({
   name: 'lod-client-stub',
   setup(b) {
-    // the realizer's cone (imported from realize/ as ../x.js) and the
-    // governor's cone (imported from lib/ as ./x.js) — state, scheduler,
-    // policy, fold and the bus stay REAL, and so do models.js and governor.js
+    // the realizer's cone (../x.js) and the governor's (./x.js) are stubbed; state, scheduler, policy, fold, bus, models.js
+    // and governor.js stay REAL
     for (const f of ['^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$',
       '^\\.\\./lightrig\\.js$', '^\\.\\./lights\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$',
       '^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$',
@@ -57,7 +32,7 @@ plugin({
     }
   },
 });
-// the dial persists through localStorage — a Map-backed one, inspectable
+// the dial persists through localStorage: a Map-backed one, inspectable
 const store = new Map<string, string>();
 (globalThis as any).localStorage = {
   getItem: (k: string) => store.get(k) ?? null,
@@ -100,8 +75,7 @@ const GEOM = { bbox: { size: [1, 1, 1], center: [0, 0.5, 0] } };   // diag 1.73 
 // the world: a scratch authority; the realizer is fed the views a client's own fold reaches after each write
 const W = scratchWorld('lodclient');
 const door = (tool: string, args: any) => { const r = W.call(tool, args); if (!r.ok) throw new Error(`${tool} ${JSON.stringify(args)} refused: ${JSON.stringify(r.refused)}`); S.applyView(structuredClone(W.view())); return r; };
-/** Place an entity on the z axis, `z` metres from the camera at the origin.
- *  Each id has its own lib, so loads and variants attribute per placement. */
+/** Place an entity `z` metres from the camera at the origin; each id its own lib, so loads attribute per placement. */
 const spawnAt = (id: string, z: number, variant = true) => {
   if (variant) stub.server.variants.add(lib(id));
   bus.emit('lib-geom', { [lib(id)]: GEOM });   // the geom side-channel, landed
@@ -112,7 +86,7 @@ const loadsOf = (id: string) => stub.loads.filter((l: any) => l.model === lib(id
 const drain = () => { for (let i = 0; i < 50 && M.promoteTailPending() > 0; i++) M.drainPromoteTail(); };
 const res = () => M.residencyDebug();
 
-M.initModelsRealizer();          // geom side-channel + fold wiring (+ a 2Hz beat we ignore: we beat by hand)
+M.initModelsRealizer();  // geom side-channel + fold wiring (its 2Hz beat ignored: we beat by hand)
 S.hydrate(emptyView());
 stub.camera.position.set(0, 0, 0);
 
@@ -120,7 +94,7 @@ stub.camera.position.set(0, 0, 0);
 {
   spawnAt('near', 5);
   spawnAt('far', 70);
-  spawnAt('light', 70, false);   // far, but the sequencer has no variant — its "already light" refusal answers the original
+  spawnAt('light', 70, false);  // far, but no variant: the "already light" refusal answers the original
   await settle();
   check('three placements realized', res().real === 3, JSON.stringify(res()));
   check('near (5m) asked FULL — a plain ktx2 fetch', loadsOf('near')[0]?.tier === 'full' && loadsOf('near')[0]?.url === `${lib('near')}?ktx2=4`, loadsOf('near')[0]?.url);
@@ -131,7 +105,7 @@ stub.camera.position.set(0, 0, 0);
   drain();
   check('the promote tail fits colliders for the full tiers only — the reduced mesh owns NO collider',
     stub.colliders.has('near') && stub.colliders.has('light') && !stub.colliders.has('far'), JSON.stringify(stub.colliderLog));
-  // the churn control (the first field run: 21 re-tiers in 100s)
+  // the churn control
   const nLoads = stub.loads.length;
   for (let i = 0; i < 4; i++) { M.residencySweep(); await settle(); }
   check('four beats later nothing re-asked: an "already light" answer is NOT re-fetched every cooldown (hysteresis keys on the ASK)',
@@ -150,9 +124,8 @@ stub.camera.position.set(0, 0, 0);
   check('"full detail" re-tiers far in place: a FULL load, the old lod proto released, the new object worn',
     last?.tier === 'full' && obj('far') !== farBefore && obj('far')?.userData.tierAsked === 'full'
     && stub.released.includes(`${lib('far')}#lod`), JSON.stringify({ last, retiers: res().retiers }));
-  // light wore the original already, but its ASK was lod — under "full detail" the ask must be full,
-  // so it re-asks once (a plain ktx2 fetch), and that is also how a provisional answer picks up a
-  // later bake: the ask flips, the wire asks again. Two re-tiers: far and light.
+  // light wore the original but ASKED lod: under "full detail" it re-asks once (plain ktx2), which is also how a
+  // provisional answer picks up a later bake. Two re-tiers: far and light.
   check('light (asked lod, wearing the original) re-asks FULL once — the ask is what the dial commands, and that is the path a later bake rides',
     res().retiers === 2 && loadsOf('light').at(-1)?.tier === 'full' && obj('light')?.userData.tierAsked === 'full', JSON.stringify(res()));
   drain();
@@ -170,7 +143,7 @@ stub.camera.position.set(0, 0, 0);
   M.modelQuality.setQuality('auto');
 }
 
-// ---- 3. a browser that cannot ask: the wire decides, and reports honestly (review point 2)
+// ---- 3. a browser that cannot ask: the wire decides, and reports honestly
 {
   const askedBefore = res().lodAsked;
   stub.server.capable = false;             // no KTX2 transcoder in this browser
@@ -192,10 +165,9 @@ stub.camera.position.set(0, 0, 0);
   stub.server.recipe = REC;
 }
 
-// ---- 4. a tier swap is re-authorized at APPLICATION, not only when scheduled (review point 3)
+// ---- 4. a tier swap is re-authorized at APPLICATION, not only when scheduled
 console.log('\n  held swaps — a dependency arrives while the bytes fly\n');
-/** Join reduced at 70m, walk it to 10m (a `place`), catch the FULL load in
- *  flight, let `dep` land, then release the load. Returns what stood before. */
+/** Join reduced at 70m, walk to 10m, catch the FULL load in flight, let `dep` land, release. Returns what stood before. */
 async function heldSwap(id: string, dep: null | ((id: string) => void)) {
   spawnAt(id, 70); await settle();
   const before = obj(id);
@@ -206,8 +178,7 @@ async function heldSwap(id: string, dep: null | ((id: string) => void)) {
   door('set', { id, component: 'transform', value: { pos: [0, 0, 10] }, merge: true });   // walked toward: 10m < the inner edge (29m) → the sweep wants full
   M.residencySweep(); await settle();
   const h = stub.held.find((x: any) => x.model === lib(id));
-  // per-placement: other placements may legitimately re-tier in the same beat (a browser that
-  // regained KTX2 re-asks its far ones), so count THIS lib's loads, not the global counter
+  // count THIS lib's loads: other placements may legitimately re-tier in the same beat
   check(`${id}: the FULL load is in flight, held`, !!h && h.tier === 'full' && loadsOf(id).length === 2 && res().retiers > retiersBefore,
     JSON.stringify({ held: !!h, loads: loadsOf(id).length }));
   dep?.(id);                                 // …and now the world moves
@@ -244,7 +215,7 @@ for (const [what, dep] of deps) {
 check('no realizer error was reported through the whole realizer half', stub.reports.length === 0,
   stub.reports.map((r: any) => `${r.where}: ${r.e?.message ?? r.e}`).join(' | '));
 
-// ---- 5. the other entry points (round three): the REAL governor's lever crosses into the sweep; the dial's callback is gated
+// ---- 5. the other entry points: the REAL governor's lever crosses into the sweep; the dial's callback is gated
 console.log('\n  entry points — the governor lever and the dial callback\n');
 {
   const G: any = await import('../client/lib/governor.js');   // real, over the same stub cone: every lever below "lod" answers "nothing to shed"
@@ -276,7 +247,7 @@ console.log('\n  entry points — the governor lever and the dial callback\n');
     M.modelQuality.shed === false && !hist().slice(histLen).some((h) => h.startsWith('− lod')), JSON.stringify(hist().slice(histLen)));
   M.modelQuality.setQuality('auto');
 
-  // the dial's callback — skypanel.js binds it to the models⚙ row and shows what it returns
+  // the dial's callback: skypanel.js binds it to the models⚙ row and shows what it returns
   const hintEco = M.dialModelQuality('eco');
   check('the row\'s callback sets and persists the dial and says it is yours only',
     M.modelQuality.quality === 'eco' && store.get('ew-model-quality') === 'eco' && hintEco === 'models: eco (yours only)', hintEco);
@@ -307,10 +278,7 @@ const cleanup = () => {
 };
 process.on('exit', cleanup);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { cleanup(); process.exit(1); });
-// a run killed mid-way may have left last time's variants in OPT_DIR: a STALE
-// variant (older than the fixture written below) is exactly what the server
-// refuses to serve (#156 freshness), so clear before writing, and wait for a
-// variant NEWER than its source, never for a file that merely exists
+// a killed run may leave stale variants (refused, #156 freshness): clear first, and wait for a variant NEWER than its source
 for (const rel of mine) try { rmSync(join(OPT, rel), { force: true }); } catch { /* best effort */ }
 
 async function gridGlb(tag: string, cells: number, extras: object | null): Promise<Uint8Array> {
@@ -344,8 +312,7 @@ async function freePort(): Promise<number> {
   }
   throw new Error('no free port in 20 tries');
 }
-/** Process-owned, as object-lod-test spawns it: the per-run nonce goes INTO
- *  the child and must come back on /version before anything counts as up. */
+/** Process-owned: the per-run nonce goes INTO the child and must come back on /version before anything counts as up. */
 async function startServer() {
   const PORT = await freePort();
   const nonce = crypto.randomUUID();
@@ -363,7 +330,7 @@ async function startServer() {
     try {
       version = await fetch(`http://127.0.0.1:${PORT}/version`).then((r) => r.json());
       if (version && typeof version === 'object' && version.instance === nonce) up = true;
-      else break;   // someone else answers here — refuse, never test into their world
+      else break;  // someone else answers: refuse, never test into their world
     } catch { await sleep(250); }
   }
   if (!up) console.log(`      child did not come up OWNED — log tail:\n      ${log.split('\n').slice(-6).join('\n      ')}`);
@@ -410,9 +377,8 @@ try {
       refused && d.status === 200 && d.json.asset?.extras?.recipe === recipe && !d.json.asset?.extras?.lodOf && d.tier === 'full',
       JSON.stringify({ refused, extras: d.json.asset?.extras, cc: d.cc }));
 
-    // ---- the PRODUCTION loader (round three): real client/lib/assets.js, only a renderer and
-    // the frame conductors injected below it, its /version and /library fetches going to the
-    // owned child. A mutation at the decision seam (tier / url / glbKey / the stamps) fails here.
+    // ---- the PRODUCTION loader: real client/lib/assets.js, only a renderer and frame conductors injected, fetches to the
+    // owned child; a mutation at the decision seam (tier / url / glbKey / the stamps) fails here
     console.log('\n  the production loader — real assets.js against the owned child\n');
     const probe = async (strip: string) => {
       const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-probe.ts')], {

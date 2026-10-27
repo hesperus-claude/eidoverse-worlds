@@ -1,9 +1,5 @@
-// bodies — choose what you wear, declared ONCE as fields and rendered twice:
-// a section of the profile frame (renderDOM) and part of the profile quad, both dispatching
-// into the same switchAvatar the palette's cards call. live: "the
-// exact same panels in Desktop mode — hopefully we only need to maintain
-// ONE set of menus"; and 22:57: a body is never optional — this is the
-// in-headset way to pick one when the default is not what you want.
+// bodies — choose what you wear, declared ONCE as fields and rendered twice (profile frame, profile quad in VR),
+// both into the palette's switchAvatar. A body is never optional: this is the in-headset way to pick one.
 import { bus, wornNameOf } from './base.js';
 import { net } from './net.js';
 import { renderDOM } from './panels.js';
@@ -11,10 +7,7 @@ import { switchAvatar } from './catalog.js';
 import { getMyAvatarName, getMe, myBodyPrefs, setMyBodyPref } from './mybody.js';
 import { BODY_SCALE_MIN, BODY_SCALE_MAX, PLATE_Y_MIN, PLATE_Y_MAX } from './bodyscale.js';
 
-// MY avatars = the bodies you have actually worn (live, 09-05: the world offers a
-// wardrobe to try on — World›avatar — and only what you've worn is yours).
-// Kept per browser (ew-worn) until the server grows a per-person field; the
-// roster is consulted only to resolve a name to its path.
+// MY avatars = the bodies you have actually worn, kept per browser (ew-worn); the roster only resolves name -> path.
 const WORN_LS = 'ew-worn';
 let worn = [];
 try { worn = JSON.parse(localStorage.getItem(WORN_LS) || '[]'); } catch { worn = []; }
@@ -32,27 +25,20 @@ function fields() {
   const roster = net.avatars ?? [];
   const mine = worn.filter((n) => roster.some((a) => a.name === n) || n === cur);
   return [
-    // None, not '—', and only when a body is actually in the scene: `cur` is
-    // the name we INTEND to wear and survives a failed load, which is how this
-    // row and the list below it came to contradict each other. (R, 2026-09-11)
+    // only when a body is in the scene: `cur` is intent and survives a failed load, so this row could contradict the list
     { t: 'info', label: 'wearing', value: getMe()?.isCapsule ? 'the capsule (no body would load)' : getMe() ? (cur ?? 'None') : 'None' },
     ...thisBodyFields(),   // the worn body's own size and nameplate, right under its name
     { t: 'list', label: 'my avatars', empty: 'nothing worn yet — try one from World › avatar',
       rows: mine.map((n) => {
         const a = roster.find((x) => x.name === n);
-        // `cur` is INTENT and survives a failed load, so gating the wear action
-        // on it left the body that just failed marked active with no way to
-        // retry — the one body a first-time user owns (#196 review B1). When
-        // the capsule is worn nothing is active and everything is wearable.
+        // gate on the live body, not `cur`, or a failed load can't be retried
         const onMe = n === cur && !!getMe() && !getMe()?.isCapsule;
         return { id: n, label: n, sub: a?.height ? `${a.height.toFixed(2)} m` : undefined, active: onMe,
           actions: onMe ? [] : [{ k: 'wear', label: 'wear' }] };
       }) },
   ];
 }
-// THIS BODY (R, 2026-09-30): the worn body's own settings, first two of them — its SIZE and where its NAMEPLATE hangs.
-// Fields, so the profile quad in VR gets the same controls (sliders on both renderers). Saved per body, per browser
-// (bodyscale.js), and sent on the pose so everyone else sees the size and the plate where you put them.
+// THIS BODY: the worn body's SIZE and NAMEPLATE height, saved per body per browser (bodyscale.js), sent on the pose.
 const pct = (x) => Math.round(x * 100);
 function thisBodyFields() {
   const me = getMe();
@@ -71,10 +57,8 @@ function thisBodyFields() {
     ...(cm !== 0 ? [{ t: 'btn', k: 'plate-y-reset', label: 'nameplate: back to auto' }] : []),
   ];
 }
-// A drag fires `input` per pixel. The body follows every tick; the store (a JSON rewrite of every body's prefs) is
-// written once the value has rested SAVE_MS, or at once on release (mountBodies' `change`). The VR quad has no release
-// event of its own, so the rest timer is what saves there. The pending value carries the body it was dragged on: a
-// switch inside the window must not file it under the next body.
+// The body follows every `input`; the store is written after SAVE_MS of rest (the VR quad has no release) or on
+// `change`. The pending value carries its body, so a switch mid-window can't file it under the next one.
 const SAVE_MS = 250;
 let pending = null, saveTimer = 0;
 function flushBodyPrefs() {
@@ -106,9 +90,7 @@ function dispatch(k, id) {
   if (a) switchAvatar(a.path, a.name);
 }
 
-// The bodies list lives INSIDE the profile (live, 09-05: reachable from
-// profile, not its own menu). profile.js mounts it under the avatars tile
-// and folds its fields into the profile quad.
+// lives INSIDE the profile, not its own menu: profile.js mounts it and folds its fields into the profile quad
 const repaints = new Set();
 const repaintAll = () => { for (const r of repaints) r(); };
 export const bodiesFields = fields;
@@ -123,8 +105,7 @@ export function mountBodies(host) {
   repaints.add(repaint);
   bus.on('avatars', repaint);
   bus.on('avatar-worn', repaint);
-  // a slider fires `input` all the way through a drag (applied live, no repaint — a rebuild would drop the thumb under
-  // the pointer); `change` is the release, and that is when the height and plate readouts catch up
+  // `input` mid-drag applies with no repaint (a rebuild drops the thumb); readouts catch up on `change`
   host.addEventListener('change', (e) => { if (e.target?.classList?.contains('sp-range')) { flushBodyPrefs(); repaint(); } });
   return repaint;
 }

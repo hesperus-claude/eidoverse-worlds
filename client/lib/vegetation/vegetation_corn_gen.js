@@ -1,15 +1,8 @@
-// VENDORED from eidoverse-video eidoverse/vegetation_corn_gen.js @ 62365e9 (2026-08-27, §24j:
-// the upstream-patched retirement — engine code is ours now; video is an
-// asset library). Upstream changes to this file are cherry-picked by hand
-// if wanted, never auto-merged.
-// corn_gen — the corn plant (Zea mays) for makeVegetation: cane stalk, ranked
-// arching leaves, a husked ear (peel option stands the baked cob up bare),
-// silk, tassel — every part UV'd onto the ONE corn_ trim sheet, so a whole
-// plant (cob included) is a single geometry + single material, field-
-// instanced by grass2 exactly like the shrubs.
+// VENDORED from eidoverse-video vegetation_corn_gen.js @ 62365e9; cherry-pick upstream by hand, never auto-merge.
+// corn_gen — the corn plant for makeVegetation (stalk, leaves, husked ear, silk, tassel), all on the ONE corn_ trim sheet.
 //
-// corn_ sheet regions (UV, v up — measured off the delivered 1024² sheet):
-//   COB    u 0–.5, v .701–1   — her highpoly's bake: shell island u .015–.46
+// corn_ sheet regions (UV, v up, 1024²):
+//   COB    u 0–.5, v .701–1   — shell island u .015–.46
 //          (length ALONG u), circumference along v .706–.994; flat cap discs
 //          at (.478,.93) r.017 (butt) and (.478,.97) r.010 (tip)
 //   PLUME  u .5–1, v .701–1   — alpha'd tassel/silk strand art
@@ -18,18 +11,15 @@
 //          midrib (the fold line) at v .3496; alpha carves the silhouette
 //   STALK  v .005–.195        — cane, fibre runs along v
 //
-// Mirror-mapping note: the sheet loads ClampToEdge (no tiling), so every
-// wrapped surface ping-pongs its UVs (triangle wave) instead of repeating —
-// fibre stays continuous across each mirror and there is no wrap seam.
+// the sheet is ClampToEdge, so wrapped surfaces ping-pong their UVs (triangle wave): no wrap seam
 
 const T3 = globalThis.THREE;
 import { Rng } from './vegetation_shrub_gen.js';
 
 const TAU = Math.PI * 2;
 
-// the cob's measured radial profile (t along ear, r at unit length) — the
-// SAME table the Blender LP bakes from, so this JS rebuild lands on the bake's
-// texels exactly; stations 13-15 are the tip-break recess at the colour change
+// radial profile (t along ear, r at unit length): the SAME table the Blender LP bakes from, so it lands on the bake's
+// texels exactly; stations 13-15 are the tip-break recess
 const COB_PROF = [
     [0.000, 0.051], [0.025, 0.0856], [0.050, 0.1069], [0.100, 0.1241],
     [0.150, 0.1317], [0.225, 0.1345], [0.300, 0.1337], [0.400, 0.1304],
@@ -37,9 +27,9 @@ const COB_PROF = [
     [0.875, 0.0857], [0.9440, 0.0452], [0.9470, 0.0375], [0.965, 0.032],
     [0.985, 0.0240],
 ];
-const COB_STA = [0, 1, 2, 3, 5, 7, 9, 11, 12, 13, 14, 16];   // lean in-plant subset
+const COB_STA = [0, 1, 2, 3, 5, 7, 9, 11, 12, 13, 14, 16];   // in-plant subset
 
-// triangle wave 0→1→0…, for seam-free mirrored UVs under ClampToEdge
+// triangle wave 0→1→0…
 const tri = (s) => { const m = s % 2; return m <= 1 ? m : 2 - m; };
 
 export const CORN_GEN = {
@@ -91,7 +81,7 @@ export function buildCornGeometry(name, seed, over = {}) {
     const LEAF = { v0: 0.2139, vm: 0.3496, v1: 0.4922, u0: 0.004, u1: 0.998 };
     const nL = Math.round(cfg.leaves * rng.range(0.9, 1.1));
     const rank = cfg.rank ?? R() * TAU;      // rank/earF/earYaw: lookdev overrides
-    const B = (p0, p1, p2, t) => {                                // quadratic bezier
+    const B = (p0, p1, p2, t) => {
         const s = 1 - t;
         return [s * s * p0[0] + 2 * s * t * p1[0] + t * t * p2[0],
                 s * s * p0[1] + 2 * s * t * p1[1] + t * t * p2[1],
@@ -137,13 +127,10 @@ export function buildCornGeometry(name, seed, over = {}) {
             quad(a, a + 1, b + 1, b); quad(a + 1, a + 2, b + 2, b + 1);
         }
     }
-    // ears are FULLY drawn first — geometry params included — so leaves get
-    // exact collision capsules to steer around
+    // ears are FULLY drawn first, so leaves get exact collision capsules to steer around
     const earSpecs = [];
     {
-        // variety: 1-3 ears, each independently peeled — mixed open and
-        // closed cobs on one stalk (cfg.peel pins the FIRST ear open for
-        // lookdev; peelChance rolls the rest)
+        // 1-3 ears; cfg.peel pins the FIRST open, peelChance rolls the rest
         const maxE = cfg.ears ?? 1;
         const nE = 1 + (maxE >= 2 && R() < 0.4 ? 1 : 0) + (maxE >= 3 && R() < 0.22 ? 1 : 0);
         const pc = cfg.peelChance ?? (cfg.peel ? 0.5 : 0);
@@ -153,10 +140,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                 lean: rng.range(0.4, 0.58), len: rng.range(0.24, 0.29) * (1 - k * 0.12),
                 peel: (cfg.peel && k === 0) || R() < pc });
     }
-    // world-space keep-out: a capsule down the ear body (+ husk margin) and,
-    // on peeled ears, a sphere over the curl zone. REAL geometry tests —
-    // base-azimuth heuristics let broad mid-blades sweep straight through
-    // the cob, and husk-curl tips punch through blades
+    // keep-out capsule down the ear (+ a sphere over a peeled curl): azimuth heuristics let blades sweep through the cob
     const earCaps = earSpecs.map((e) => {
         const [sx, sy, sz] = P(e.f);
         const dirX = Math.cos(e.yaw), dirZ = Math.sin(e.yaw);
@@ -180,10 +164,7 @@ export function buildCornGeometry(name, seed, over = {}) {
         let L0 = cfg.leafLen * (0.62 + 0.55 * Math.sin(Math.PI * Math.min(1, f * 1.4))) * rng.range(0.85, 1.15);
         // top leaves shorten and stand up along the peduncle
         if (f > 0.7) L0 *= 1 - (f - 0.7) * 1.6;
-        // candidate blades are COLLISION-TESTED as swept centrelines against
-        // the ear capsules and every placed blade, then rebuilt with the
-        // accepted arc. Failed rounds redraw yaw AND droop; the last resort
-        // is a shorter, higher blade (short upright leaves always clear).
+        // blades tested as swept centrelines; failures redraw yaw and droop; last resort a shorter, higher blade (always clears)
         let best = null;
         for (let tries = 0; tries < 8 && !best; tries++) {
             const yaw = rank + i * Math.PI + i * 0.55 + rng.vary(0, 0.85);
@@ -228,7 +209,6 @@ export function buildCornGeometry(name, seed, over = {}) {
     // ── ear(s): husked spindle at a mid node; peel stands the cob up bare ────
     const HUSK = { v0: 0.505, v1: 0.693, u0: 0.03, u1: 0.97 };
     function basisFrom(ax, ay, az) {
-        // orthonormal frame around an axis
         let s1x = -az, s1y = 0, s1z = ax;
         const l = Math.hypot(s1x, s1y, s1z) || 1; s1x /= l; s1z /= l;
         const s2x = ay * s1z - az * s1y, s2y = az * s1x - ax * s1z, s2z = ax * s1y - ay * s1x;
@@ -270,10 +250,10 @@ export function buildCornGeometry(name, seed, over = {}) {
         const { f, yaw, peel } = e;
         const [sx, sy, sz] = P(f);
         const dirX = Math.cos(yaw), dirZ = Math.sin(yaw);
-        const lean = e.lean;                                      // drawn at spec time (collision capsules)
+        const lean = e.lean;                                      // drawn at spec time, for the capsules
         const ax = dirX * Math.sin(lean), ay = Math.cos(lean), az = dirZ * Math.sin(lean);
         const r = stalkR(f);
-        // base SUNK into the cane — the junction law: buried reads attached
+        // base SUNK into the cane: buried reads attached
         const bx = sx + dirX * r * 0.35, by = sy - 0.02, bz = sz + dirZ * r * 0.35;
         const len = e.len;
         const [s1x, s1y, s1z, s2x, s2y, s2z] = basisFrom(ax, ay, az);
@@ -292,17 +272,9 @@ export function buildCornGeometry(name, seed, over = {}) {
         const radial = (th) => [s1x * Math.cos(th) + s2x * Math.sin(th),
                                 s1y * Math.cos(th) + s2y * Math.sin(th),
                                 s1z * Math.cos(th) + s2z * Math.sin(th)];
-        // ── the husk IS leaves: overlapping curved strips WRAPPED around the
-        // cob's own profile, like the real thing. Closed: they converge past
-        // the tip in staggered points. Peeled: each wraps the lower half then
-        // CURLS outward and down, the bare cob standing above.
-        // closed: five strips ring the ear. Peeled: a FEW leaves at uneven
-        // azimuths (a symmetric ring of many read as a machine part)
+        // ── the husk: strips around the cob's profile; closed, five converge past the tip; peeled, a few curl out and down
         const nH = peel ? 3 : 5;
-        // leaf azimuths drawn first, then each arc width computed from the
-        // ACTUAL gaps to its neighbours (+15% overlap) — coverage of the
-        // circumference is guaranteed by construction. Independent random
-        // widths left wedge gaps that bared the cob at the ear's base.
+        // arc widths from the ACTUAL gaps to neighbours (+15% overlap): the circumference is covered by construction
         const th0s = [];
         if (peel) { let acc = R() * TAU; for (let k2 = 0; k2 < nH; k2++) { th0s.push(acc); acc += rng.range(1.6, 2.6); } }
         else for (let k2 = 0; k2 < nH; k2++) th0s.push((k2 / nH) * TAU + R() * 0.5);
@@ -316,7 +288,7 @@ export function buildCornGeometry(name, seed, over = {}) {
         };
         for (let k = 0; k < nH; k++) {
             const th0 = th0s[k];
-            const twist = rng.vary(0.35, 0.1);                    // slight spiral (tame: drift eats the seam margin)
+            const twist = rng.vary(0.35, 0.1);                    // keep it tame: drift eats the seam margin
             const halfArc = arcFor(th0);
             const wrapTop = peel ? rng.range(0.4, 0.5) : rng.range(0.98, 1.04);
             const lift = 0.004 + k * 0.0016;                      // layered shells, no z-fight
@@ -335,10 +307,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                 }
                 rows2++;
             };
-            // rows dense enough that straight spans clear the cob's CONVEX
-            // butt flare, plus per-segment sagitta padding — 4 rows left the
-            // cone chord cutting inside the flare and kernels showed at the
-            // base (the column-chord bug's twin, along the length axis)
+            // rows dense enough that straight spans clear the cob's convex butt flare, plus per-segment sagitta padding
             const wrapSegs = 5;
             const rowTs = [];
             for (let sg = 0; sg <= wrapSegs; sg++) rowTs.push(-0.03 + (wrapTop + 0.03) * (sg / wrapSegs));
@@ -364,10 +333,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                 const px = bx + ax * wrapTop * cobLen + ox * rimR,
                       py = by + ay * wrapTop * cobLen + oy * rimR,
                       pz = bz + az * wrapTop * cobLen + oz * rimR;
-                // CUBIC bend, tangent-continuous with the wrap: it keeps going
-                // UP off the rim, then turns out and over in one smooth arc —
-                // the quadratic version snapped direction at the rim (a 90°
-                // crink at one loop, not a bend)
+                // CUBIC: a quadratic bend kinks at the rim
                 const cL = len * rng.range(0.38, 0.55);
                 const c1 = [px + ax * cL * 0.38 + ox * cL * 0.06,
                             py + ay * cL * 0.38 + oy * cL * 0.06,
@@ -388,10 +354,9 @@ export function buildCornGeometry(name, seed, over = {}) {
                         s0b * s0b * s0b * px + 3 * s0b * s0b * t2 * c1[0] + 3 * s0b * t2 * t2 * c2[0] + t2 * t2 * t2 * ce[0],
                         s0b * s0b * s0b * py + 3 * s0b * s0b * t2 * c1[1] + 3 * s0b * t2 * t2 * c2[1] + t2 * t2 * t2 * ce[1],
                         s0b * s0b * s0b * pz + 3 * s0b * s0b * t2 * c1[2] + 3 * s0b * t2 * t2 * c2[2] + t2 * t2 * t2 * ce[2]];
-                    // gentle taper: 0.85 left thin straight straps that read
-                    // as bent paper ribbons; a husk leaf keeps its width
-                    const w = w0 * (1 - t2 * 0.55) * (1 + 0.1 * Math.sin(t2 * 7.0 + k * 2.1)) * (1 - Math.pow(t2, 5) * 0.85);   // pinch to a point — the band has no alpha to carve tips
-                    const cup = w * 0.55 * (0.3 + t2 * 0.7);      // curved sheet along the whole curl
+                    // gentle taper (a steep one reads as paper ribbons); pinch to a point: the band has no alpha to carve tips
+                    const w = w0 * (1 - t2 * 0.55) * (1 + 0.1 * Math.sin(t2 * 7.0 + k * 2.1)) * (1 - Math.pow(t2, 5) * 0.85);
+                    const cup = w * 0.55 * (0.3 + t2 * 0.7);
                     const u = HUSK.u0 + (0.55 + 0.42 * t2) * (HUSK.u1 - HUSK.u0);
                     for (const [kk, dv] of COLS) {
                         const bend = (1 - kk * kk) * cup;         // parabolic cross-curve
@@ -418,8 +383,7 @@ export function buildCornGeometry(name, seed, over = {}) {
             }
         }
         if (peel) cob(bx, by, bz, ax, ay, az, cobLen, aE);
-        // silk: thin strand slivers hanging by the tip's side (never draped
-        // across the kernel face). Closed: bursting OUT past the husk points.
+        // silk by the tip's side, never across the kernel face; closed, it bursts OUT past the husk points
         const st = peel ? 1.02 : 1.16;                    // ABOVE the tip cap / past the husk apex
         const stx = bx + ax * st * cobLen, sty = by + ay * st * cobLen, stz = bz + az * st * cobLen;
         for (let k = 0; k < 4; k++) {
@@ -428,7 +392,7 @@ export function buildCornGeometry(name, seed, over = {}) {
             const bX = Math.cos(a0), bZ = Math.sin(a0);   // bend-over direction
             const sL = rng.range(0.05, 0.085);
             const vMid = 0.875 + R() * 0.1;
-            // X-cross pair — a single flat strip vanishes edge-on
+            // X-cross pair: a single flat strip vanishes edge-on
             for (const [wx, wy, wz] of [[-Math.sin(a0) * hw2, 0, Math.cos(a0) * hw2],
                                         [Math.cos(a0) * hw2 * 0.5, hw2 * 0.85, Math.sin(a0) * hw2 * 0.5]]) {
                 const sA = vb;
@@ -439,7 +403,7 @@ export function buildCornGeometry(name, seed, over = {}) {
                     const drop = sL * 0.7 * t * t * t;     // ...and over
                     const cx2 = stx + ax * rise + bX * out, cy2 = sty + ay * rise - drop, cz2 = stz + az * rise + bZ * out;
                     const u = 0.72 + t * 0.275;    // sparse tip corner: card edges cross mostly-empty alpha
-                    const aS = aE;                    // silk anchors WITH the ear — one rigid assembly
+                    const aS = aE;                    // silk anchors WITH the ear: one rigid assembly
                     V(cx2 - wx, cy2 - wy, cz2 - wz, u, vMid - 0.025, aS);
                     V(cx2 + wx, cy2 + wy, cz2 + wz, u, vMid + 0.025, aS);
                 }
@@ -466,11 +430,7 @@ export function buildCornGeometry(name, seed, over = {}) {
         }
         for (let g = 0; g < 2; g++) for (let j = 0; j < RADS; j++)
             quad(s0 + g * (RADS + 1) + j, s0 + g * (RADS + 1) + j + 1, s0 + (g + 1) * (RADS + 1) + j + 1, s0 + (g + 1) * (RADS + 1) + j);
-        // sparse crown per the reference diagram: thin arcing branch strands
-        // around a central spike, mostly AIR — each branch is a narrow strip
-        // sampling a thin v-slice of the plume art (the silk trick: strands
-        // run along u, so a sliver reads as one seed-strand branch). Full-art
-        // cards made a dense plume mass no real tassel has.
+        // each branch samples a thin v-slice of the plume art (strands run along u, so a sliver reads as one strand)
         const nB = 6;
         for (let k = 0; k < nB; k++) {
             const t01 = k / (nB - 1);
@@ -482,10 +442,9 @@ export function buildCornGeometry(name, seed, over = {}) {
             const px2 = -Math.sin(yaw), pz2 = Math.cos(yaw);
             const hF = rng.range(0.35, 0.95);
             const by2 = ty + spikeH * hF;
-            const aB = 0.82 + hF * 0.1;    // the spike's own weight here — attachments inherit it
+            const aB = 0.82 + hF * 0.1;    // attachments inherit the spike's weight here
             const vMid = 0.725 + R() * 0.22;
-            // X-cross pair, art-edge-to-art-edge u — flat strips vanished
-            // edge-on and mid-art windows cut painted strands with hard edges
+            // X-cross pair, art-edge-to-art-edge u: mid-art windows cut painted strands with hard edges
             for (const [wxx, wyy, wzz] of [[px2 * hw, 0, pz2 * hw],
                                            [dx * 0, hw * 0.9, dz * 0]]) {
                 const sA = vb;

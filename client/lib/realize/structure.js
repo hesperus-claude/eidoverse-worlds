@@ -1,34 +1,6 @@
-// structure — the griddled-building realizer (TEL0S_NOTES §11.4).
-//
-// Projects every entity carrying a `structure` component into the scene: merged
-// geometry through the material factory, declared boxes into the collider hash,
-// and nothing else. The thinking half is shared/structure.js, which is
-// pure and headless-tested; this file is the hosted half that executes its plan.
-//
-// WHOLESALE REBUILD, ON PURPOSE. A building's geometry is rebuilt from scratch
-// whenever its component changes — no incremental patching of walls. Buildings
-// are edited rarely and rendered constantly, a rebuild is a few hundred boxes,
-// and a full rebuild cannot drift from the folded state the way an incremental
-// patch can. That is the same trade `reconcile ∘ reconcile = reconcile` asks for
-// one level up, taken one level down.
-//
-// MERGED, NOT INSTANCED — for now. One merged BufferGeometry per palette
-// material gives one draw call per material per building, which is the win that
-// matters at this scale, and it is markedly simpler than InstancedMesh (whose
-// per-instance transforms buy nothing for geometry that never moves relative to
-// its building). Instancing becomes worth it when a world holds dozens of
-// buildings sharing one kit; client/lib/flora.js is the in-tree precedent for
-// that day. Nothing outside this file addresses a wall as an Object3D, which is
-// exactly what keeps that swap a private matter.
-//
-// TOPOLOGY IS BORN AT INIT. The palette below is created once, at module load,
-// and every building indexes into it. This is the lightrig.js/materials.js
-// doctrine restated: r184 keys its pipeline cache on material graph identity,
-// upstream's rewrap-after-the-fact measured 44 rewraps at 2–6s each on one
-// Safari join, and a runtime light-topology flip measured 388–1523ms frames. A
-// building that minted a fresh node graph per style would hitch the whole scene
-// every time somebody painted a wall. Style is an INDEX and a uniform, never a
-// new graph.
+// structure — the griddled-building realizer (TEL0S_NOTES §11.4), the hosted half of shared/structure.js: merged
+// geometry per palette material plus collider boxes, rebuilt wholesale on any change so it can't drift from the fold.
+// Nothing outside this file addresses a wall. Style is an index and a uniform, never a new node graph (that recompiles).
 
 import { THREE, TSL, scene } from '../core.js';
 import { bus, report } from '../base.js';
@@ -40,30 +12,19 @@ import { entities } from '../world.js';
 import { planStructure, makeShader } from '../../../shared/structure.js';
 import { defsRegistry } from '../defs.js';
 
-// PROCEDURAL, NOT TEXTURED. Surface detail is computed in the shader from
-// grid-local position, which buys three things this stack specifically needs:
-// zero texture bytes (there is no KTX2 encoder on either box, and texture
-// memory is the profiled frame-budget eater at 1.19GB), tiling that never
-// visibly repeats at any scale, and a style that costs a few uniforms in an
-// 8KB component instead of megabytes in the store.
-//
-// Every graph below is built ONCE, here, at module load. Style must never mint
-// a new graph at runtime — that is the same hazard class as a light-topology
-// flip, and it is why the palette is a fixed set of slots.
+// procedural from grid-local position (no texture bytes, no visible repeat); every graph is built ONCE at load
 const {
   positionLocal, attribute, vec3, float, floor: tslFloor, fract, abs: tslAbs,
   smoothstep, mx_noise_float, mx_fractal_noise_float,
 } = TSL;
 
-/** The baked AO/daylight term. Setting colorNode REPLACES the default colour
- *  path, vertex colours included, so it has to be multiplied back in by hand —
- *  forgetting this silently throws away every bit of the shading bake. */
+/** The baked AO/daylight term: colorNode REPLACES the default path, vertex colours included, so multiply it back in
+ *  by hand or the shading bake is silently lost. */
 const baked = () => attribute('color', 'vec3');
 
 const fbm = (p, oct = 3) => mx_fractal_noise_float(p, oct, 2.0, 0.5).mul(0.5).add(0.5);
 
-/** Plaster: broad patchiness plus a fine tooth. Nothing dramatic — the job is
- *  to stop a 4m wall being one flat value, not to look like a photograph. */
+/** Plaster: broad patchiness plus a fine tooth, just enough that a 4 m wall isn't one flat value. */
 function plaster(base) {
   const p = positionLocal;
   return base
@@ -71,7 +32,7 @@ function plaster(base) {
     .mul(baked());
 }
 
-/** Boards: planks along X, each with its own tone, darkening into the seams. */
+/** Planks along X, each its own tone, darkening into the seams. */
 function boards(base) {
   const p = positionLocal;
   const u = p.x.div(0.185);
@@ -84,15 +45,13 @@ function boards(base) {
     .mul(baked());
 }
 
-/** Painted woodwork: almost flat, a whisper of unevenness so it isn't plastic. */
+/** Almost flat, a whisper of unevenness so it isn't plastic. */
 function painted(base) {
   return base.mul(float(0.96).add(fbm(positionLocal.mul(3.0), 2).mul(0.06))).mul(baked());
 }
 
-/** ⚠️ `vec3(0xe4ded1)` is NOT a colour — it is a vec3 of the integer 14999249,
- *  and every surface in the building renders blown-out white. The hex has to be
- *  decoded through THREE.Color first, which also lands it in the renderer's
- *  working colour space rather than raw sRGB bytes. */
+/** ⚠️ `vec3(0xe4ded1)` is a vec3 of the integer 14999249 (blown-out white), not a colour: decode the hex through
+ *  THREE.Color first, which also lands it in the renderer's working colour space. */
 const lit = (hex, roughness, node) => {
   const c = new THREE.Color(hex);
   const m = new THREE.MeshStandardNodeMaterial({ color: hex, roughness, metalness: 0 });
@@ -100,16 +59,13 @@ const lit = (hex, roughness, node) => {
   return m;
 };
 
-// §24 defs: the palette VALUES are style, and style is data — the def at
-// defs/structure/_palette.json overlays these built-in defaults (the
-// "style catalog seam" slotFor's comment anticipated). Slots and finish
-// nodes stay engine; applyPaletteStyle mutates the LIVE shared materials,
-// so a def edit restyles standing buildings on the defs-updated push.
+// §24 defs: palette VALUES overlay from defs/structure/_palette.json onto the live shared materials, so a def edit
+// restyles standing buildings
 const FINISHES = { plaster, boards, painted };
 const PALETTE = {
-  wall: lit(0xe4ded1, 0.94, plaster),    // warm plaster
-  floor: lit(0xa8814f, 0.80, boards),    // boards
-  trim: lit(0xf2efe8, 0.62, painted),    // painted woodwork, lighter than the wall
+  wall: lit(0xe4ded1, 0.94, plaster),
+  floor: lit(0xa8814f, 0.80, boards),
+  trim: lit(0xf2efe8, 0.62, painted),    // lighter than the wall
   roof: lit(0x6d6257, 0.90, plaster),
   glass: new THREE.MeshPhysicalNodeMaterial({
     color: 0xcfe2e8, roughness: 0.06, metalness: 0,
@@ -125,8 +81,7 @@ function applyPaletteStyle(style) {
     if (s.roughness != null) m.roughness = s.roughness;
     if (s.opacity != null && m.transparent) m.opacity = s.opacity;
     if (slot !== 'glass') {
-      // the visible colour rides colorNode (it REPLACES the default path —
-      // see baked()); rebuild it through the chosen finish and recompile
+      // the colour rides colorNode (see baked()): rebuild it through the chosen finish and recompile
       const c = new THREE.Color(s.color ?? m.color);
       const finish = FINISHES[s.finish]
         ?? (slot === 'floor' ? boards : slot === 'trim' ? painted : plaster);
@@ -136,10 +91,8 @@ function applyPaletteStyle(style) {
   }
 }
 
-/** Which palette slot a part wears. The plan names a structural `kind` and an
- *  author `mat`; author intent wins where it names a real slot, role decides
- *  otherwise — which is the seam a style catalog plugs into without adding
- *  palette members, since adding members is the part that costs a recompile. */
+/** Author `mat` wins where it names a real slot, else the structural `kind` decides.
+ *  A style catalog plugs in here, never by adding palette members (that costs a recompile). */
 function slotFor(part) {
   if (PALETTE[part.mat]) return part.mat;
   if (part.kind === 'floor') return 'floor';
@@ -151,13 +104,8 @@ function slotFor(part) {
   return 'wall';
 }
 
-/** Bake the analytic AO/daylight term into a merged geometry's vertex colours.
- *
- *  Pure function of position and normal, so adjacent boxes that meet at a face
- *  agree exactly and the shading is continuous across them without any welding
- *  or shared vertices. BoxGeometry keeps four vertices per face with true
- *  per-face normals, which is precisely what lets one wall's inside read dark
- *  while its outside reads sunlit. */
+/** AO/daylight into vertex colours, a pure function of position and normal: boxes meeting at a face shade
+ *  continuously with no welding. */
 function paintGeometry(geo, shade) {
   const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal');
   const col = new Float32Array(pos.count * 3);
@@ -172,8 +120,7 @@ function paintGeometry(geo, shade) {
 const tracked = new Map(); // entity id -> { group, sig, geoms: BufferGeometry[] }
 let cutaway = false;
 
-/** Hide every roof while building. Idempotent, and applied to buildings that
- *  appear DURING the mode as well as those already standing. */
+/** Idempotent; also applies to buildings that appear DURING the mode. */
 export function setCutaway(on) {
   cutaway = !!on;
   for (const t of tracked.values()) {
@@ -183,7 +130,6 @@ export function setCutaway(on) {
 }
 export const isCutaway = () => cutaway;
 
-/** The structure component, or null for entities that aren't buildings. */
 const structOf = (ent) => (ent && typeof ent === 'object' ? ent.structure ?? null : null);
 
 const transformOf = (ent) => ({
@@ -191,8 +137,7 @@ const transformOf = (ent) => ({
     ? ent.pos : [0, 0, 0],
   yaw: Number.isFinite(ent?.yaw) ? ent.yaw : 0,
   scale: Number.isFinite(ent?.scale) && ent.scale > 0 ? ent.scale : 1,
-  // the drawn group takes the whole rotation and per-axis scale (view.js gives q and scale3); the collider boxes stay
-  // yaw and one scale (fitStructureBoxes' frame)
+  // the drawn group takes full q and scale3; the collider boxes stay yaw and one scale (fitStructureBoxes' frame)
   q: Array.isArray(ent?.q) && ent.q.length === 4 && ent.q.every(Number.isFinite) ? ent.q : null,
   scale3: Array.isArray(ent?.scale3) && ent.scale3.length === 3 && ent.scale3.every((x) => Number.isFinite(x) && x > 0) ? ent.scale3 : null,
 });
@@ -202,17 +147,12 @@ function poseGroup(group, tf) {
   if (tf.scale3) group.scale.set(...tf.scale3); else group.scale.setScalar(tf.scale);
 }
 
-/** Build the scene object for one plan. Geometry only — no scene insertion, no
- *  collider registration, so a throw anywhere in here leaks nothing. */
+/** Geometry only (no scene insertion, no colliders), so a throw in here leaks nothing. */
 function buildGroup(plan) {
   const bySlot = new Map();
   for (const lv of plan.levels) {
     const shade = makeShader(lv.level, plan.grid, lv.y);
-    // Swept walls: geometry built from the wall's own direction, mitred at
-    // every turn. Made NON-INDEXED before normals so each profile facet gets a
-    // flat normal — shared ring vertices would average the chamfer into a soft
-    // roll, and a chamfer that does not catch a hard highlight line is a
-    // chamfer nobody can see.
+    // NON-INDEXED before normals, so each chamfer facet gets a flat normal (a hard highlight)
     for (const sw of lv.sweeps ?? []) {
       if (!sw.positions.length) continue;
       const geo = new THREE.BufferGeometry();
@@ -230,12 +170,10 @@ function buildGroup(plan) {
       if (!(w > 0 && h > 0 && d > 0)) continue;
       const boxed = new THREE.BoxGeometry(w, h, d);
       boxed.translate((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
-      // non-indexed like the sweeps: mergeGeometries refuses a mix, and flat
-      // normals are what we want on every one of these anyway
+      // non-indexed like the sweeps: mergeGeometries refuses a mix
       const g = boxed.toNonIndexed();
       boxed.dispose();
-      // nothing here samples a texture — the materials are procedural from
-      // position — and mergeGeometries refuses a mix of attribute sets
+      // nothing samples a texture, and mergeGeometries refuses a mix of attribute sets
       g.deleteAttribute('uv');
       const slot = slotFor(b);
       if (!bySlot.has(slot)) bySlot.set(slot, []);
@@ -247,11 +185,8 @@ function buildGroup(plan) {
   for (const [slot, entries] of bySlot) {
     // paint BEFORE the merge, so every part is shaded by its own level's field
     if (slot !== 'glass') for (const { g, shade } of entries) paintGeometry(g, shade);
-    // mergeGeometries refuses ANY disagreement — a stray index, one extra
-    // attribute — and it fails the whole slot rather than the offending piece,
-    // so a single mismatch silently drops a building's worth of geometry. It
-    // reports only "index 6", which names nothing you can act on. Normalise to
-    // one shape, and say plainly if something arrived wearing another.
+    // mergeGeometries fails the whole slot on ANY attribute/index mismatch (saying only "index 6"): normalise, and
+    // name what arrived different
     const want = slot === 'glass' ? ['position', 'normal'] : ['position', 'normal', 'color'];
     for (const e of entries) {
       let g2 = e.g;
@@ -272,49 +207,30 @@ function buildGroup(plan) {
     for (const { g } of usable) g.dispose();    // the merge copied them
     if (!merged) continue;
     const mesh = new THREE.Mesh(merged, PALETTE[slot] ?? PALETTE.wall);
-    mesh.castShadow = false;   // still one pipeline at a time — the baked term
-    mesh.receiveShadow = true; // is doing the work real shadows would
-    // THE CUTAWAY. You cannot lay a floor you cannot see, and a roof is opaque
-    // from every angle a builder wants. Sims solves this with walls-down; the
-    // cheap and honest version here is to take the lid off while building.
+    mesh.castShadow = false;   // the baked term does the work real shadows would
+    mesh.receiveShadow = true;
+    // THE CUTAWAY: the roof comes off while building, or no floor under it can be laid
     if (slot === 'roof') { mesh.userData.structRoof = true; mesh.visible = !cutaway; }
     group.add(mesh);
     geoms.push(merged);
   }
-  // Through the factory BEFORE the first compile — the whole point of
-  // materials.js is that nothing gets wrapped after it has been seen.
+  // through the factory BEFORE the first compile: nothing is wrapped after it has been seen (materials.js)
   prepareObject(group, { kind: 'model' });
   return { group, geoms };
 }
 
-/** Hide the anchor object.
- *
- *  Until a `structure` entity can be spawned without a `lib` (PROTOCOL.md §10 —
- *  the amendment this slice defers on purpose), a building rides an ordinary
- *  spawn, so the models realizer independently makes whatever that lib loads
- *  into. The building's geometry is ours; two objects for one entity is a lie
- *  the inspector would faithfully report.
- *
- *  This must be RE-APPLIED rather than done once. The models realizer creates
- *  its object asynchronously (fetch + parse + compile), so a structure that
- *  realizes first finds no anchor to hide — and the crate then pops into
- *  existence seconds later, inside the house. Found live, not reasoned out. */
+/** Hide the anchor: the models realizer also builds a `structure`'s `lib` (spec/PROTOCOL.md §10). Re-applied, as the
+ *  models object can arrive after the structure realized. */
 function hideAnchor(id) {
   const anchor = entities.get(id);
   if (!anchor) return;
   anchor.visible = false;
-  // AND TAKE ITS COLLIDER. Hiding the mesh only stops you SEEING the crate —
-  // the models realizer fitted a box for it at spawn, so it stayed solid: an
-  // invisible obstacle the size of a large crate, sitting at the origin of
-  // every building. The building declares its own boxes (fitStructureBoxes,
-  // keyed <id>#sN); this one is keyed by the bare entity id, so dropping it
-  // touches nothing of ours.
+  // and its collider (an invisible crate, keyed by the bare id; ours are <id>#sN)
   removeCollider(id);
 }
 
 function retire(id) {
-  // give the anchor back — mesh AND collider — before we stop owning the id,
-  // so removing just the `structure` comp leaves an ordinary solid crate
+  // give the anchor back, mesh AND collider, so removing only `structure` leaves an ordinary solid crate
   const anchor = entities.get(id);
   if (anchor) {
     anchor.visible = true;
@@ -330,7 +246,7 @@ function retire(id) {
   bus.emit('entity', { id, kind: 'collider' });   // the grass mask loses a clearing
 }
 
-/** Create or rebuild one building. Idempotent: same state in, same scene out. */
+/** Idempotent: same state in, same scene out. */
 function realize(id, ent) {
   const data = structOf(ent);
   if (!data) { retire(id); return; }
@@ -339,9 +255,7 @@ function realize(id, ent) {
   const prev = tracked.get(id);
 
   if (prev && prev.sig === sig) {
-    // Geometry is still right; only the pose can have moved. Colliders must be
-    // re-declared even so — their boxes are entity-local but their bucket
-    // registration is world-space.
+    // only the pose moved, yet colliders are re-declared: their bucket registration is world-space
     poseGroup(prev.group, tf);
     fitStructureBoxes(id, prev.plan.boxes, tf);
     bus.emit('entity', { id, kind: 'collider' });
@@ -361,8 +275,7 @@ function realize(id, ent) {
   bus.emit('entity', { id, kind: 'collider' });
 }
 
-/** The plan a building is currently realized from — the describer's door, and
- *  the reason look() can answer "which room" without touching the scene. */
+/** The plan a building is realized from: lets look() answer "which room" without touching the scene. */
 export const structurePlan = (id) => tracked.get(id)?.plan ?? null;
 export const structureIds = () => [...tracked.keys()];
 
@@ -381,9 +294,8 @@ export function reconcileStructures() {
 function onChange({ id, what, comp }) {
   try {
     switch (what) {
-      // a `structure` comp arriving on a thing we don't track yet is exactly how a building is born
       case 'comp': if (comp === 'structure') realize(id, state.st.entities[id]); break;
-      // re-derive from state rather than assume (a re-born thing may have dropped its structure)
+      // re-derive from state: a re-born thing may have dropped its structure
       case 'born': realize(id, state.st.entities[id]); break;
       case 'pose': if (tracked.has(id)) realize(id, state.st.entities[id]); break;
       case 'gone': retire(id); break;
@@ -393,22 +305,15 @@ function onChange({ id, what, comp }) {
 
 
 
-/** Wire the realizer to state. Called once from main.js, beside the others. */
+/** Called once from main.js. */
 export function initStructureRealizer() {
-  // The style overlay (§24 defs): applied whenever the registry lands or a
-  // defs-updated push invalidates it. The materials are shared by reference
-  // with every standing building, so a restyle reaches them live. A failed
-  // fetch keeps the built-in style — the overlay is style, never a gate.
+  // the §24 style overlay, on registry load or defs-updated; a failed fetch keeps the built-in style
   const restyle = () => defsRegistry()
     .then((reg) => applyPaletteStyle(reg.structurePalette))
     .catch((e) => report('structure palette', e));
   restyle();
   bus.on('defs-updated', restyle);
-  // The anchor can arrive at any time after we realize — the models realizer
-  // announces every object it creates or moves on this bus, which is the only
-  // moment we can be sure there is something to hide.
-  // 'collider' included: models announces a late collider fit under that kind,
-  // and hideAnchor emits nothing, so there is no loop to guard against
+  // models announces every object it creates or moves (and late collider fits); hideAnchor emits nothing, so no loop
   bus.on('entity', (ev) => { if (ev?.id && tracked.has(ev.id)) hideAnchor(ev.id); });
   onWorldChange((ev) => {
     if (ev.type === 'hydrated') reconcileStructures();
@@ -418,7 +323,7 @@ export function initStructureRealizer() {
   return true;
 }
 
-/** Test/teardown door. */
+/** For tests and teardown. */
 export function disposeStructures() {
   for (const id of [...tracked.keys()]) retire(id);
 }

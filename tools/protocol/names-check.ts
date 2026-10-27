@@ -41,6 +41,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { translatorVersion } from "./import-v1/translate-v1.js";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const BASE = "a6d05a6b";
 const EM = "em" + "ote";   // the old word, built so this file never spells it (row E3 scans every file, this one too)
@@ -60,14 +61,10 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the registry says trusted", "shared/protocol/componentspec.js", "  \"trusted-components\": { on: \"world\",", "  trusted: { on: \"world\",", ["T1"]],
   ["no rename at load", "shared/protocol/shaperepair.js", "export const RENAMED_COMPONENTS = Object.freeze({ \"@world\": Object.freeze({ trusted: \"trusted-components\" }) });", "export const RENAMED_COMPONENTS = Object.freeze({});", ["T2"]],
   ["drafts reads only the new key", "shared/drafts.js", "(worldC?.[TRUSTED] ?? worldC?.[OLD_TRUSTED])?.components", "worldC?.[TRUSTED]?.components", ["T3"]],
-  ["the old tier is the tier", "shared/protocol/consent.js", "export const TIERS = [\"everyone\", \"friends\"];", "export const TIERS = [\"strangers\", \"friends\"];", ["C1", "C2"]],
-  ["no old words on the wire", "shared/protocol/consent.js", "const tierOf = (t) => (Object.hasOwn(LEGACY_TIER, t) ? LEGACY_TIER[t] : t);", "const tierOf = (t) => t;", ["C2"]],
+  ["the old tier is the tier", "shared/protocol/consent.js", "export const TIERS = [\"everyone\", \"friends\"];", "export const TIERS = [\"strangers\", \"friends\"];", ["C1"]],
   ["drag is move again", "shared/protocol/consent.js", "drag: \"displace\", occupy: \"displace\", carry: \"displace\"", "drag: \"move\", occupy: \"displace\", carry: \"displace\"", ["C1"]],
-  // "a friend may close the table" mutant RETIRED with C3 (recut A2)
-  ["the old list isn't the delegates", "shared/protocol/consent.js", "if (Array.isArray(t.friends) && !Array.isArray(t.delegates)) t.delegates = t.friends.slice(); }", "}", ["C4"]],
+  // the rows for C2, C3, C4, C6, C7 RETIRED with the cases (recut A2: tiers on the wire, delegates, the client table are gone)
   ["no presence migration at load", "shared/protocol/authority/storage.js", "if (migratePresence(w.presence)) w.presenceDirty = true;", "", ["C5"]],
-  ["the reply says strangers", "shared/protocol/authority/bodyconsent.js", "table: { preset: t.preset, everyone: t.everyone,", "table: { preset: t.preset, strangers: t.everyone,", ["C6"]],
-  ["the browser keeps the old words", "client/lib/consent.js", "if (old) lsSet(KEY, JSON.stringify(t));", "", ["C7"]],
   ["/worlds sorts by kind", "server/routes.ts", "people: present.map((c) => ({ id: c.id, ...(c.declares ? { declares: c.declares } : {}) })),", "people: present.filter((c) => c.declares !== \"agent\").map((c) => c.id), agents: present.filter((c) => c.declares === \"agent\").map((c) => c.id),", ["W1"]],
   ["the tool says (agent)", "mcpl/tools.ts", "p.declares ? `${p.id} (${p.declares})` : p.id", "p.declares === \"agent\" ? `${p.id} (agent)` : p.id", ["W2"]],
   ["the plate says agent", "client/lib/platecard.js", "const where = [typeof r.declares === 'string' && r.declares ? r.declares : null,", "const where = [r.agent ? 'agent' : null,", ["W3"]],
@@ -78,7 +75,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["light.noon again", "shared/protocol/descriptors.js", "daytime: { k: 'daytime', param: 'burnsAtNoon'", "daytime: { k: 'noon', param: 'burnsAtNoon'", ["S1"]],
   ["sky.clock again", "shared/worldentity.js", "    { t: 'text', k: 'tz', label: 'timezone', value: real ? (s.tz ?? DEFAULT_TZ) : '', ...ro,", "    { t: 'enum', k: 'clock', label: 'clock', value: real ? 'real' : 'authored', def: 'authored', options: [{ v: 'authored', label: 'authored' }, { v: 'real', label: 'real time' }] },\n    { t: 'text', k: 'tz', label: 'timezone', value: real ? (s.tz ?? DEFAULT_TZ) : '', ...ro,", ["S2"]],
   ["measure teaches set sockets", "mcpl/tools.ts", "a socket is a child entity, made with create {components: {parent: {to: id}", "act {verb: 'set', args: {id, component: 'sockets', value: {seat: {pos: [cx, y, cz], body: {pose: 'sitchair'}}}}} — or create {components: {parent: {to: id}", ["S3"]],
-  ["the history forgets", "spec/PROTOCOL.md", "the refusal codes `hold-limit`, `beneath`, `not-pushable`", "the refusal codes", ["X1"]],
+  ["the history forgets", "spec/history/PRE-RELEASE-RENAMES.md", "the refusal codes `hold-limit`, `beneath`, `not-pushable`", "the refusal codes", ["X1"]],
   ["the registry keeps pose", "shared/protocol/componentspec.js", "hold: \"string\", anim: \"string\", grips:", "hold: \"string\", pose: \"string\", grips:", ["A1"]],
   ["no door translation", "shared/protocol/authority/writes.js", "if (comp === \"grabbable\" || comp === \"station\") { const r = renameFields(comp, value);", "if (false) { const r = renameFields(comp, value);", ["A2"]],
   ["two-hand is a name", "shared/protocol/shaperepair.js", "if (comp === \"grabbable\" && p === \"two-hand\") {", "if (false) {", ["A2"]],
@@ -105,7 +102,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["once replaces what is held", "mcpl/tools.ts", "    if (mode === \"once\") { ag.playOnce(n);", "    if (mode === \"once\") { ag.animEnded(\"replaced\"); ag.playOnce(n);", ["L1"]],
   ["the result hides where it came from", "mcpl/tools.ts", "...(from ? { from } : {})", "", ["L2"]],
   ["name and joints guessed", "mcpl/tools.ts", "  if (a.name != null && (a.joints != null || a.tracks != null)) return", "  if (false) return", ["L3"]],
-  ["no body-mode on the wire", "mcpl/agent.ts", "clip: this.clip, bodyMode: this.bodyModeNow(), clipTime: this.animHold ?? this.clipPhase(), clipTimeSlot: this.bodyClip(), clipRate: this.animHold != null ? 0 : 1,\n        ...wingFoldPresence(this.wingsFolded),\n        // a physics bag", "clip: this.clip, clipTime: this.animHold ?? this.clipPhase(), clipTimeSlot: this.bodyClip(), clipRate: this.animHold != null ? 0 : 1,\n        ...wingFoldPresence(this.wingsFolded),\n        // a physics bag", ["B1"]],
+  ["no body-mode on the wire", "mcpl/agent.ts", "clip: this.clip, bodyMode: this.bodyModeNow(), clipTime: this.animHold ?? this.clipPhase(), clipTimeSlot: this.bodyClip(), clipRate: this.animHold != null ? 0 : 1,\n        ...wingFoldPresence(this.wingsFolded),", "clip: this.clip, clipTime: this.animHold ?? this.clipPhase(), clipTimeSlot: this.bodyClip(), clipRate: this.animHold != null ? 0 : 1,\n        ...wingFoldPresence(this.wingsFolded),", ["B1"]],
   ["an anim's end keeps its body-mode", "mcpl/agent.ts", "if (a.bodyMode && why !== \"stopped\") this.bodyMode = \"stand\";", "", ["B1"]],
   ["declaring stand leaves the body sitting", "mcpl/tools.ts", "{ const rest = ag.restClip(ag.bodyModeNow()); if (rest) ag.clip = rest; }", "{ }", ["B1"]],
   ["stop drops the body-mode", "mcpl/agent.ts", "if (a.bodyMode && why !== \"stopped\") this.bodyMode = \"stand\";", "if (a.bodyMode) this.bodyMode = \"stand\";", ["K1", "B1"]],
@@ -120,7 +117,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["an object may hold live", "shared/grab.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["a station may play live", "shared/sockbody.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["the tool forgets the rest", "mcpl/tools.ts", "and rests in your body-mode's own anim (stand: idle, sit: the sit loop, lie: lie, swim: tread, fly: soar) — never the bind pose; the body-mode is unchanged", "", ["K5"]],
-  ["the spec has no rest rule", "spec/PROTOCOL.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
+  ["the spec has no rest rule", "docs/pose-wire.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
   ["sit asks for no body-mode", "mcpl/tools.ts", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = { sit: \"sit\", sitchair: \"sit\", lie: \"lie\", stand: \"stand\" };", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = {};", ["B1"]],
   ["an old sample's clip isn't read", "shared/bodymode.js", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : (typeof sample.clip === 'string' ? modeFromClip(sample.clip) : null);", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : null;", ["B2"]],
   ["the fence takes any body-mode", "server/posecheck.ts", "if (\"bodyMode\" in p && !isBodyMode(p.bodyMode)) delete p.bodyMode;", "", ["B2"]],
@@ -133,7 +130,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["a remote reads only today's key", "client/lib/remotes.js", "  const once = onceAnimOf(s);\n  if (once && once !== r.lastAnim) {", "  const once = s.anim;\n  if (once && once !== r.lastAnim) {", ["E1"]],
   ["the registry keeps the old key", "server/defs.ts", "    actionbar: loadSidecar(", `    ${EM}s: loadSidecar(`, ["E2", "E3"]],
   ["the slash command keeps the old name", "client/lib/commands/registry.js", "{ name: 'anim', help: '/anim <name>", `{ name: '${EM}', help: '/${EM} <name>`, ["E2", "E3"]],
-  ["a comment says the old word", "client/lib/avatar.js", "  /** Play a gesture over locomotion.", `  /** Play an ${EM} over locomotion.`, ["E3"]],
+  ["a comment says the old word", "client/lib/avatar.js", "async playOnce(name) {", `async playOnce(name) {   // an ${EM}`, ["E3"]],
   ["the spec says the old word", "spec/PROTOCOL.md", "poses, gestures (`pose.anim`), reach descriptors", `poses, ${EM}s, reach descriptors`, ["E3"]],
   ["the old gesture tool's alias forgets once (a dance would loop forever)", "mcpl/tools.ts", `  ${EM}: (a) => ({ name: a.name, mode: "once" }),`, `  ${EM}: (a) => ({ name: a.name }),`, ["M5"]],
   ["the registry says bob", "shared/protocol/componentspec.js", "enums: { type: [\"pendulum\", \"spin\", \"orbit\", \"oscillate\", \"path\"]", "enums: { type: [\"pendulum\", \"spin\", \"orbit\", \"bob\", \"path\"]", ["OS1"]],
@@ -149,8 +146,8 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["Add Component writes bob", "shared/editschema.js", "Oscillate: { type: 'oscillate', amp: 0.3, period: 4 }", "Oscillate: { type: 'bob', amp: 0.3, period: 4 }", ["OS5"]],
   ["the translator keeps bob", "tools/protocol/import-v1/translate-v1.js", "  const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };", "  const m = m0;", ["OS6"]],
   ["AGENTS.md says bob", "AGENTS.md", "`{type: pendulum\\|spin\\|orbit\\|oscillate\\|path, …}`", "`{type: pendulum\\|spin\\|orbit\\|bob\\|path, …}`", ["OS7"]],
-  ["the history forgets oscillate", "spec/PROTOCOL.md", "; and a motion's back-and-forth along an axis is `oscillate` (R 10-17 21:40; was `bob`:", "; and a motion's back-and-forth along an axis is the new word (R 10-17 21:40; was the old:", ["OS7"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "// Ported from the protocol lab (2026-10-05);", "//  Ported from the protocol lab (2026-10-05);", []],
+  ["the history forgets oscillate", "spec/history/PRE-RELEASE-RENAMES.md", "was `bob`: the door takes the old spelling", "was the old word: the door takes the old spelling", ["OS7"]],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "export const MODES = [\"allow\", \"ask\", \"deny\"];", "export const MODES = [\"allow\", \"ask\",  \"deny\"];", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/names-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -694,13 +691,11 @@ const cases: Case[] = [
     good: (o) => o.vh && o.body },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("names-check", { cap: 900 });
 for (const c of cases) {
   if (!want(c.id)) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[names-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

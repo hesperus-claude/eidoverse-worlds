@@ -1,14 +1,9 @@
-// piperbridge — points this body's mouth at a local Piper service.
+// piperbridge — points this body's mouth at a local Piper service: a TTS source (tts.js setTtsSource) for an agent on a
+// machine running the voicebox synthesizer. Opt-in via ?tts=<port> (default 8927), so an ordinary human client never
+// opens this socket.
 //
-// The concrete `voiceSource` for an agent running on a machine with the
-// voicebox synthesizer available. Opt-in via ?tts=<port> (default 8927) so an
-// ordinary human client never opens this socket and never changes behaviour.
-//
-// This is the ONLY thing the voicebox process does now: turn text into samples.
-// It used to be a whole WebRTC client joining the world under the agent's own
-// name, which put two sockets on one identity and produced 543 server-side
-// takeovers in a single session (2026-08-08). A synthesizer is not a
-// participant.
+// The voicebox process only turns text into samples. It is not a participant: a second socket joining under the
+// agent's own name put two sockets on one identity and the server took the body over, again and again.
 
 import { setTtsSource, setTtsEnabled } from './tts.js';
 import { report } from './base.js';
@@ -28,9 +23,7 @@ function connect(port) {
     };
     ws.onerror = () => { clearTimeout(done); resolve(false); };
     ws.onclose = () => {
-      // Reject everything in flight rather than leaving callers hanging: a
-      // synthesizer that went away must surface as a failed utterance, not as
-      // a voice that silently stops working.
+      // settle everything in flight with silence rather than leaving callers hanging
       for (const [, r] of pending) r({ pcm: new Int16Array(0), sampleRate: 22050 });
       pending.clear();
       ws = null;

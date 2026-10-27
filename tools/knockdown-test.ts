@@ -1,19 +1,11 @@
-// Headless bodies are pushable: the WorldAgent's knockdown semantics, against
-// a real scratch sequencer. A body with no physics in-process cannot tumble,
-// but it must (1) CONSENT, (2) land displaced the way the shove was taking
-// it, (3) slump visibly (clip ragdoll + DOWNED_POSE), (4) perceive the event,
-// and (5) stand up clean when it decides to move.
-//
+// Headless bodies are pushable: the WorldAgent's knockdown semantics against a real scratch sequencer. With no
+// in-process physics a body can't tumble, but it must (1) CONSENT, (2) land displaced along the shove, (3) slump
+// visibly (clip ragdoll + DOWNED_POSE), (4) perceive the event, (5) stand up clean when it moves.
 //   bun tools/knockdown-test.ts        (boots its own scratch sequencer, the world founded)
 // or against a door you run, whose world W already exists:
 //   WORLD_URL=ws://localhost:8996/ws WORLD_TOKEN=test-door JOIN_TOKEN=test-door bun run tools/knockdown-test.ts
-
-// Bun 1.3.x caches transpiled module graphs globally by content, so a stale
-// plugin-resolved path can bypass onResolve entirely and leave the headless
-// sim "unavailable" — this suite then measures the canned-slump fallback and
-// reports three false failures. #13 added this guard across the suite; this
-// file was missed because it reaches the plugin INDIRECTLY, through
-// WorldAgent -> physics.ts, rather than registering one itself.
+// Bun 1.3.x caches transpiled graphs by content, so a stale plugin-resolved path can bypass onResolve and leave the
+// headless sim "unavailable" (#13): this reaches the plugin INDIRECTLY (WorldAgent -> physics.ts), so it needs the guard too.
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -45,9 +37,9 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// a "human" — a bare socket that joins, watches, and throws its weight around. The relay forwards a shove or a drag only
-// between bodies whose last frames it has, within reach (server/messages.ts bodyRefusal), so `near` publishes a pose
-// beside the target first; `errors` collects the relay's refusals (a refused shove is answered, never silently dropped)
+// a "human": a bare socket that joins, watches and shoves. The relay forwards a shove or drag only between bodies whose
+// last frames it has, within reach (server/messages.ts bodyRefusal), so `near` publishes a pose beside the target first;
+// `errors` collects refusals (a refused shove is answered, never silently dropped)
 type Human = { ws: WebSocket; send: (m: any) => void; close: () => void; errors: string[]; near: (who: { pos: { x: number; y: number; z: number } }) => Promise<void> };
 function human(name: string): Promise<Human> {
   return new Promise((res) => {
@@ -73,15 +65,15 @@ console.log("knockdown (headless bodies are pushable):\n");
 
 const events: string[] = [];
 const ag = new WorldAgent({ url: URL, name: "kd-bot", world: W });
-(ag as any).onEvent = (e: any) => { if (e?.text) events.push(String(e.text)); };
+// as the host reads it: an act is `* who text` (mcpl/net-server.ts), so the shover's name is its who
+(ag as any).onEvent = (e: any) => { if (e?.text) events.push(e.kind === "act" ? `* ${e.who} ${e.text}` : String(e.text)); };
 await ag.connect();
 await sleep(400);
 const h = await human("shover");
 await sleep(400);
 
-// 1. a shove along +x: the REAL tumble — sim pose, displaced along the lean, lying
-// (v1's radial blast, the `force` verb, went with protocol v1: a push is a puppet ragdoll lean, or the door's body
-//  shove under the target's consent)
+// 1. a shove along +x: the REAL tumble: sim pose, displaced along the lean, lying (a push is a puppet ragdoll lean, or
+// the door's body shove under the target's consent)
 await h.near(ag);
 const before = { x: ag.pos.x, z: ag.pos.z };
 h.send({ type: "puppet", target: "kd-bot", ragdoll: { lean: [3, 0, 0] } });
@@ -94,7 +86,7 @@ check("...displaced along the lean", ag.pos.x > before.x + 0.2, `Δx=${(ag.pos.x
 check("...lying, not standing (root followed the hips down)", ag.pos.y < -0.2, `y=${ag.pos.y.toFixed(2)}`);
 check("...and the agent PERCEIVED it", events.some((t) => t.includes("knocks you over")), events.join(" | "));
 
-// 2. walking stands it up clean — no zombie-walk slump
+// 2. walking stands it up clean: no zombie-walk slump
 await ag.walkTo(ag.pos.x + 1, ag.pos.z, false, 10_000);
 check("walking sheds the slump", ag.clip !== "ragdoll" && ag.heldPose == null, `clip=${ag.clip}`);
 
@@ -122,13 +114,11 @@ check("switch refuse: unmoved and standing",
   ag.clip !== "ragdoll" && Math.hypot(ag.pos.x - b3.x, ag.pos.z - b3.z) < 0.01,
   `clip=${ag.clip}`);
 
-// 5. (v1: "replay never re-detonates" — a late joiner folding the force history stayed standing. A push is
-//     presence, never in the log, so there is nothing to replay.)
+// 5. (nothing to replay: a push is presence, never in the log)
 ag.close?.();
 await sleep(200);
 
-// 6. drag release with a nail: the agent's OWN sim hangs the body for real —
-// not a held pose pretending, a live Verlet with the pin enforced
+// 6. drag release with a nail: the agent's OWN sim hangs the body (a live Verlet with the pin enforced, not a held pose)
 const ag3 = new WorldAgent({ url: URL, name: "kd-bot3", world: W });
 await ag3.connect();
 await sleep(400);
@@ -145,15 +135,12 @@ check("released with a nail: the agent's sim HANGS the body",
   ag3.pins.size === 1 && ag3.pos.y > -0.3, `pins=${ag3.pins.size} y=${ag3.pos.y.toFixed(2)}`);
 h.send({ type: "bodydrag", target: "kd-bot3", unpin: { joint: "head" } });
 await tryUntil("the unpinned body comes down off the nail", () => ag3.pins.size === 0 && ag3.pos.y < 0.7, { ms: 2500 });
-// A body released dead-still from a vertical head-hang drops feet-first and
-// can LAND STANDING — the solver has no reason to invent a stumble. So the
-// assertion is "came down off the nail", not "ended lying": no longer
-// suspended anywhere near the pin height.
+// a body released still from a head-hang drops feet-first and can land standing: assert "came down off the nail", not "lying"
 check("nail pulled: it comes down off the nail",
   ag3.pins.size === 0 && ag3.pos.y < 0.7, `y=${ag3.pos.y.toFixed(2)}`);
 ag3.close?.();
 
-// 6b. an unpin can ride an end (house 6340433633 Q3): both apply, the nail and the release
+// 6b. an unpin can ride an end: both apply, the nail and the release
 const ag5 = new WorldAgent({ url: URL, name: "kd-bot5", world: W });
 await ag5.connect();
 await sleep(400);
@@ -173,10 +160,8 @@ check("an unpin sent with an end: the nail comes out AND the drag ends",
   draggedMid != null && ag5.pins.size === 0 && (ag5 as any).draggedBy == null, `draggedMid=${draggedMid} pins=${ag5.pins.size} draggedBy=${(ag5 as any).draggedBy}`);
 ag5.close?.();
 
-// 7. explicit release carries a FINAL root sample. The dragger streams at
-// ~15Hz, so the hand can move between the last ordinary sample and release.
-// Browser targets apply end.p before rebuilding their sim; agents must not
-// combine a stale root with the release's fresh pose/sim state.
+// 7. explicit release carries a FINAL root sample: the dragger streams at ~15Hz, so agents must not combine a stale
+// root with the release's fresh pose/sim state
 const ag4 = new WorldAgent({ url: URL, name: "kd-bot4", world: W });
 await ag4.connect();
 await sleep(400);
@@ -191,8 +176,7 @@ h.send({ type: "bodydrag", target: "kd-bot4", pose: held, p: first, yaw: 0 });
 await sleep(150);
 let releaseStart: number[] | null = null;
 (ag4 as any).settleFromDrag = async () => { releaseStart = [ag4.pos.x, ag4.pos.y, ag4.pos.z]; };
-// A downed avatar root is legitimately below terrain by its hips offset; the
-// release must preserve that world-space root rather than clamp or reinterpret it.
+// a downed root is legitimately below terrain by its hips offset: the release preserves it, never clamps or reinterprets
 const final = [first[0] + 3.0, -0.48, first[2] - 2.0];
 h.send({ type: "bodydrag", target: "kd-bot4", end: true, pose: {}, p: final, yaw: 0.7 });
 await sleep(150);

@@ -1,39 +1,16 @@
-/** The phonemizer, running where its loader is fast.
+/** The phonemizer in a Worker: piper's loader uses synchronous XHR, legal and fast only in a Worker (~480x slower
+ *  on the main thread; the 17 MB data isn't the cause).
  *
- *  🔴 WHY THIS FILE EXISTS — measured 2026-08-09, same bytes, same code:
- *
- *      module build in Bun (native fs):       57 ms
- *      module build on the browser main thread:   27,551 ms      ← 480x
- *
- *  So the 17 MB espeak-ng data package is NOT the problem, and trimming it (the
- *  advice every search result gives) would not have helped. The gap is in HOW
- *  the browser path loads: piper-o91UDS6e.js contains two
- *
- *      xhr.open("GET", url, false)
- *
- *  — synchronous XHR — and its own comment concedes that browsers deprecated
- *  "synchronous binary XHRs outside webworkers in modern browsers". Those calls
- *  are guarded by ENVIRONMENT_IS_WORKER: inside a Worker the synchronous path is
- *  legal and fast, on the main thread it is the slow deprecated one.
- *
- *  Running here is therefore not a nicety about avoiding UI jank. It is what
- *  makes the load fast at all.
- *
- *  PROTOCOL — deliberately tiny, because the seam already existed in
- *  piperphon.js (phonemize / warmPhonemizer / phonReady):
+ *  PROTOCOL (the seam is piperphon.js's phonemize / warmPhonemizer / phonReady):
  *      → { id, op: 'warm',      wasmPaths }         ← { id, ok }
  *      → { id, op: 'phonemize', text, voice, wasmPaths } ← { id, ok, ids }
  *      any failure                                   ← { id, ok: false, error }
- *  Every reply carries the id it answers, so a slow call cannot resolve a fast
- *  one's promise.
+ *  Every reply carries the id it answers, so a slow call cannot resolve a fast one's promise.
  */
 
 let _mod = null;
 let _building = null;
-// Where the CURRENT call wants stdout to go. Emscripten captures Module.print
-// ONCE at construction (piper-o91UDS6e.js:292 — `var out = Module["print"] ||
-// console.log`), so the handler must be permanent and the sink swappable.
-// Reassigning print per call silently sent every result to console.log.
+// Emscripten captures Module.print once at construction: the handler is permanent, the sink swappable.
 let _sink = null, _errSink = null;
 
 async function build(wasmPaths) {
@@ -56,10 +33,7 @@ async function build(wasmPaths) {
 function run(mod, text, voice) {
   let ids = null;
   _sink = (data) => { try { ids = JSON.parse(data).phoneme_ids; } catch { /* not our line */ } };
-  // stderr is CHATTER until proven otherwise (r5 self-review): Emscripten's
-  // printErr carries espeak warnings and info lines, and throwing on any of
-  // them failed the whole phonemize call on output that wasn't an error.
-  // Collect; it becomes the diagnostic only if the run produces no ids.
+  // stderr is espeak chatter, not failure: it becomes the diagnostic only if no ids come back
   const errLines = [];
   _errSink = (msg) => { errLines.push(String(msg)); };
   try {
@@ -68,8 +42,7 @@ function run(mod, text, voice) {
   } catch (e) {
     // callMain throws its exit code even on success; a real failure is an Error.
     if (typeof e !== 'number' && e?.status === undefined) throw e;
-    // exit-code throws are normal; real failures fall through to the ids
-    // check below, where collected stderr becomes the message.
+    // a failing exit code falls through to the ids check, where stderr becomes the message
   } finally {
     _sink = null; _errSink = null;
   }

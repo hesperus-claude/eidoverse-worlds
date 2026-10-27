@@ -1,18 +1,6 @@
-// slim-vrm — resize a VRM/GLB's embedded textures down to web-sane dimensions.
-//
-// Tripo exports ship 8192×8192 JPEGs: ~67 megapixels PER AVATAR that every
-// client must decode (100% CPU for many seconds on a laptop) and upload to
-// the GPU with a full mipmap chain. 2048² is the VRM norm and visually
-// indistinguishable at avatar-viewing distances: 16× less decode work.
-//
-// Pure container surgery — images are swapped in the BIN chunk and bufferViews
-// repacked; meshes, skins, and every extension (VRMC_vrm included) pass
-// through untouched. Resizing uses sharp (a root dep already, for
-// optimize.ts) — the first cut used macOS `sips`, which made the tool
-// crash on every Linux box Orrery calls it from (Digi's finding).
-//
-// Usage: bun tools/slim-vrm.ts file.vrm [--max 2048] [--quality 82] [--out path]
-//        (default: rewrites the file in place)
+// slim-vrm: resize a VRM/GLB's embedded textures to web-sane dimensions (2048², the VRM norm) with sharp. Container
+// surgery only: images swapped in the BIN chunk, bufferViews repacked; meshes, skins, extensions untouched.
+// Usage: bun tools/slim-vrm.ts file.vrm [--max 2048] [--quality 82] [--out path]   (default: rewrites in place)
 
 import { basename } from "node:path";
 
@@ -37,10 +25,7 @@ while (off < src.length) {
 }
 if (!bin) throw new Error("no BIN chunk");
 
-// resize each image via sharp, remember replacement bytes per bufferView index
-// (JPEG output regardless of source format — same policy the sips version
-// had; VRM textures don't rely on alpha, and MToon transparency travels in
-// material properties, not the base color image)
+// JPEG out regardless of source: MToon transparency lives in material properties, not the base colour image
 const sharp = (await import("sharp")).default;
 const replaced = new Map<number, Uint8Array>();
 for (const [i, img] of (json.images ?? []).entries()) {
@@ -48,9 +33,7 @@ for (const [i, img] of (json.images ?? []).entries()) {
   const bytes = bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength);
   const meta = await sharp(bytes).metadata();
   const w = meta.width ?? 0, h = meta.height ?? 0;
-  // Dimensions are only half the story: a 2048² PNG can be 5-10MB where the
-  // JPEG is well under 1MB. Skip only when the image is BOTH within MAX and
-  // already JPEG; otherwise re-encode (resizing when over MAX).
+  // a 2048² PNG can be 5-10MB where the JPEG is under 1MB: skip only when BOTH within MAX and already JPEG
   if (Math.max(w, h) <= MAX && meta.format === "jpeg") {
     console.log(`  image ${i}: ${w}×${h} jpeg already ≤ ${MAX}, kept`);
     continue;
@@ -66,8 +49,7 @@ for (const [i, img] of (json.images ?? []).entries()) {
 }
 if (replaced.size === 0) {
   console.log("nothing to slim");
-  // Honor --out even as a no-op: callers (Orrery's slim_vrm_if_needed) treat
-  // "exit 0 but no output file" as failure — the bug behind the 502s.
+  // honor --out even as a no-op: callers treat "exit 0 but no output file" as failure
   if (out !== input) await Bun.write(out, src);
   process.exit(0);
 }

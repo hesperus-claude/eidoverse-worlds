@@ -17,6 +17,7 @@
  * drawn, so it answers that top or, if the stretch was lost, something lower.
  */
 import { WorldAgent } from "./agent.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { tryUntil } from "../tools/protocol/wait.ts";
 import { registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, inWorld } from "./physics.ts";
 import { boxMesh } from "../tools/two-storey-fixture.ts";
@@ -123,7 +124,7 @@ console.log("lying down");
   // A 2 × 0.5 × 1 box, stretched ×4 in depth (4 m along its own z), tipped forward a quarter turn about x: its own z
   // stands up, so it is drawn 4 m tall, from y −2 to 2. Stretched after the turn instead, the ×4 would land on what
   // is now its 0.5 m thickness.
-  const ag: any = new WorldAgent({ name: "lier", world: "w" });
+  const ag: any = new WorldAgent({ name: "lier", world: "w", url: noWorldUrl() });
   const s = Math.SQRT1_2;
   ag.entities.set("log", { id: "log", model: "zz/log.glb", kind: "thing", pos: [0, 0, 0], yaw: 0, actor: "x", scale: 1, scale3: [1, 1, 4], q: [s, 0, 0, s] });
   ag.geomFor = async () => ({ bbox: { min: [-1, 0, -0.5], max: [1, 0.5, 0.5], size: [2, 0.5, 1] } });
@@ -151,7 +152,7 @@ console.log("a summary's floors");
 {
   // A 6 × 3 × 6 m building whose summary has one deck at 1.5 m, mirrored in x. A mirrored axis is its size, so the
   // building is room-scale and its deck holds a body; read signed, it was a 3 m pillar where its floor is.
-  const ag: any = new WorldAgent({ name: "visitor", world: "w" });
+  const ag: any = new WorldAgent({ name: "visitor", world: "w", url: noWorldUrl() });
   ag.entities.set("hall", { id: "hall", model: "zz/hall.glb", kind: "thing", pos: [30, 0, 0], yaw: 0, actor: "x", scale: 1, scale3: [-1, 1, 1] });
   ag.geomFor = async () => ({ bbox: { min: [-3, 0, -3], max: [3, 3, 3], size: [6, 3, 6] }, topSurfaces: [{ x: [-3, 3], z: [-3, 3], y: 1.5, area: 36 }] });
   ag.meshFor = async () => null;
@@ -171,7 +172,7 @@ console.log("a summary's floors");
 {
   // A rubble pile (2 × 0.4 × 2 m, its box top 0.4 m above cells at 0.15 m, lie 0.2 m) mirrored in height. Its lie is its
   // size, so it is uneven and gets its heightfield, never its box top, which floats a body over the rubble.
-  const ag: any = new WorldAgent({ name: "visitor", world: "w" });
+  const ag: any = new WorldAgent({ name: "visitor", world: "w", url: noWorldUrl() });
   const pile = (certSpread: number) => ({
     bbox: { min: [-1, 0, -1], max: [1, 0.4, 1], size: [2, 0.4, 2] }, lie: 0.2,
     topGrid: { ...gridOf(() => 0.15), certSpread },

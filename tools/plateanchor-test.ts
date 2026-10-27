@@ -1,20 +1,18 @@
-// plateanchor — where a nameplate hangs (client/lib/plateanchor.js, the functions avatar.js calls; this drives those very
-// functions, then avatar.js's own _measurePlateRest/_placePlate/_measureOwnClear against a real THREE rig).
-//
+// plateanchor: where a nameplate hangs. Drives client/lib/plateanchor.js (the functions avatar.js calls), then avatar.js's
+// own _measurePlateRest/_placePlate/_measureOwnClear against a real THREE rig.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/plateanchor-test.ts
-//
-// What must hold (FEATURE-WISHLIST "Nameplate height", steps 1–4; Basis's constants):
-//   the crown — eye + 1.35·(eye − head); no eyes → head + 0.45·(head − hips); the mesh top counts, capped at
+// What must hold (Basis's constants):
+//   the crown: eye + 1.35·(eye − head); no eyes → head + 0.45·(head − hips); the mesh top counts, capped at
 //     head + 1.8·(that span); no head/hips → nothing;
-//   the gap — 5% of height, 3–15 cm;
-//   standing / sitting — over the live hips at the rest hips→crown height; sitting lowers it with the hips; a head
+//   the gap: 5% of height, 3–15 cm;
+//   standing / sitting: over the live hips at the rest hips→crown height; sitting lowers it with the hips; a head
 //     raised above where the hips say wins; ground-sitting is not lying;
-//   lying — under 50% of rest head height it blends over the head (head + head span + gap), fully by 30%, continuously;
-//   smoothing — Y chases at 1 − exp(−dt/τ) with a 2 cm dead zone, frame-rate independent, never overshoots;
-//   standing is rigid — idle/walk/run/jump (setClip's slot) hang it at the rest crown over the root whatever the hips
+//   lying: under 50% of rest head height it blends over the head (head + head span + gap), fully by 30%, continuously;
+//   smoothing: Y chases at 1 − exp(−dt/τ) with a 2 cm dead zone, frame-rate independent, never overshoots;
+//   standing is rigid: idle/walk/run/jump (setClip's slot) hang it at the rest crown over the root whatever the hips
 //     do; only a posture change eases; a gesture, held pose or ragdoll keeps the live anchor;
-//   the real Avatar methods — the rest crown measured in model units, scaled live, written in the ROOT's frame (turned,
-//     moved, scaled), the old 1.95 with nothing to measure, and the own-body clearance measured from the new anchor.
+//   the real Avatar methods: rest crown in model units, scaled live, written in the ROOT's frame (turned, moved,
+//     scaled), the old 1.95 with nothing to measure, and own-body clearance from the new anchor.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -78,7 +76,7 @@ console.log('standing / sitting:');
   check('a nod (head down/forward, hips still) does not move it', near(bob.p[1], a.p[1]) && near(bob.p[0], 0) && near(bob.p[2], 0), J(bob));
   // ground-sitting (sitting_on_ground): hips ~0.2, head ~0.8 above the floor; feet on the floor
   const sit = plateAnchor({ hips: [0, 0.2, 0.05], head: [0, 0.78, 0.1], feetY: 0.06, rest, s: 1, gap });
-  // the legs fold, so the hips drop 0.75 but the head only 0.72: here the head term (head + span) is the higher by 3 cm
+  // the legs fold: hips drop 0.75 but the head only 0.72, so the head term (head + span) is higher by 3 cm
   check('sitting on the ground: comes down with the body (max(hips + hips→crown, head + span) + gap)',
     near(sit.p[1], Math.max(0.2 + rest.hipsToCrown, 0.78 + rest.headSpan) + gap) && sit.p[1] < 1.1, J(sit));
   check('...and ground-sitting is NOT lying (head ~51% of rest height)', sit.lie === 0, J(sit));
@@ -105,15 +103,15 @@ console.log('lying:');
   check('...which is well under the Basis answer (hips + hips→crown)', lie.p[1] < 0.15 + rest.hipsToCrown + gap - 0.3, J(lie));
   check('lieAmount: 0 at ≥50%, 1 at ≤30%, between in between', lieAmount(0.5, 1) === 0 && lieAmount(0.3, 1) === 1
     && lieAmount(0.4, 1) > 0.4 && lieAmount(0.4, 1) < 0.6 && lieAmount(0.9, 1) === 0 && lieAmount(0, 1) === 1);
-  // MEASURED on sitting_on_ground (plateanchor-shot-probe, 09-30): the head sits at ~40% of its rest height above the
-  // feet — inside the head-height band — but the torso is upright (head over hips ~0.9 of rest)
+  // measured on sitting_on_ground (plateanchor-shot-probe): the head at ~40% of rest height (inside the head-height band)
+  // but the torso upright (head over hips ~0.9 of rest)
   const gsit = plateAnchor({ hips: [0, 0.1, 0.05], head: [0, 0.58, 0.1], feetY: 0.06, rest, s: 1, gap });
   check('sitting on the ground with the head at 37% of rest is NOT lying (the torso is upright)', gsit.lie === 0 && near(gsit.p[0], 0) && near(gsit.p[2], 0.05), J(gsit));
   const bow = plateAnchor({ hips: [0, 0.95, 0], head: [0.5, 1.0, 0], feetY: 0.08, rest, s: 1, gap });
   check('a deep bow (torso over, head still high) is not lying', bow.lie === 0, J(bow));
   check('lieAmount with the torso gate: low head + fallen torso = 1; low head + upright torso = 0',
     lieAmount(0.2, 1, 0.1, 0.55) === 1 && lieAmount(0.2, 1, 0.5, 0.55) === 0);
-  // lying down as a continuous motion: head drops and slides out to x=0.7 while hips drop — the anchor must glide
+  // lying down as a continuous motion: the head drops and slides out while the hips drop; the anchor must glide
   let prev: number[] | null = null, worst = 0, mono = true, lastLie = 0;
   for (let i = 0; i <= 400; i++) {
     const t = i / 400;
@@ -123,7 +121,7 @@ console.log('lying:');
     if (a.lie < lastLie - 1e-12) mono = false;
     prev = a.p; lastLie = a.lie;
   }
-  // a hard switch at 50% would jump by the whole stand→lie difference at that frame (~0.3–0.4 m)
+  // a hard switch at 50% would jump by the whole stand→lie difference (~0.3–0.4 m)
   const at50 = (lieState: number) => { const t = (1.5 - 0.08 - 0.5 * 1.42) / 1.32;
     const hips = [0, 0.95 - 0.8 * t, 0], head = [0.7 * t, 1.5 - 1.32 * t, 0];
     const st = Math.max(hips[1] + rest.hipsToCrown, head[1] + rest.headSpan) + gap, ly = head[1] + rest.headSpan + gap;
@@ -151,8 +149,8 @@ console.log('smoothing:');
 
 console.log('seen from above (owner, 10-01: "offsets away from the avatar when seen from above"):');
 {
-  // A pinhole camera at `eye` looking at the plate, no roll. Screen y of a point = (X − eye)·up / (X − eye)·fwd —
-  // the same projection the renderer makes, written out here so the test does not borrow the function's own algebra.
+  // a pinhole camera at `eye`, no roll: screen y = (X − eye)·up / (X − eye)·fwd, written out so the test doesn't borrow
+  // the function's own algebra
   const sub = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const norm = (a: number[]) => { const l = Math.hypot(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -167,8 +165,8 @@ console.log('seen from above (owner, 10-01: "offsets away from the avatar when s
     return { eye, up, fwd };
   };
   const lift = (v: any, o: any = {}) => PA.plateViewLift?.({ ...v, plate, drop, headR, halfH, ...o });
-  // the clearance it promises, measured independently: the lifted plate's bottom edge vs the head's top on screen, less
-  // the stand-off it has at eye level (drop − halfH: positive for a near plate, an overlap for one grown for range)
+  // the promised clearance, measured independently: the lifted plate's bottom edge vs the head's top on screen, less
+  // the eye-level stand-off (drop − halfH: positive near, an overlap for one grown for range)
   const margin = (v: any, d: number, hh = halfH) => {
     const P = [plate[0] + v.up[0] * d, plate[1] + v.up[1] * d, plate[2] + v.up[2] * d];
     const H = [plate[0], plate[1] - drop - headR, plate[2]];   // the head, a ball under the crown
@@ -208,8 +206,7 @@ console.log('avatar.js:');
 {
   const { THREE } = await import('./core-stub.mjs');
   const { Avatar } = await import('../client/lib/avatar.js');
-  // a missing method is a no-op, so against the parent (a plate fixed at 1.95, set once) every check below reports
-  // its own red instead of the section dying on the first call
+  // a missing method is a no-op, so against a plate fixed at 1.95 every check reports its own red instead of the section dying
   const call = (o: any, m: string, ...a: any[]) => (typeof o[m] === 'function' ? o[m](...a) : undefined);
   const sprite = () => { const l = new THREE.Sprite(); l.position.y = 1.95; return l; };
   const rig = ({ eyes = true, hair = 1.8, hipsHead = true } = {}) => {
@@ -238,7 +235,7 @@ console.log('avatar.js:');
   call(self, '_placePlate', 1 / 60);
   const g = plateGap(1.8 - 0.08);
   check('standing: the plate hangs at crown + gap, over the hips', near(self.label.position.y, 1.8 + g, 1e-6) && near(self.label.position.x, 0, 1e-9), J(self.label.position));
-  // walk the root away, turn it, scale it ×1.5: the plate stays in the root frame at the same local spot
+  // walk the root away, turn it, scale ×1.5: the plate stays at the same spot in the root frame
   root.position.set(5, 2, -3); root.rotation.y = 1.1; root.scale.setScalar(1.5);
   self._plateOff = null; call(self, '_placePlate', 1 / 60);
   const gw = plateGap((1.8 - 0.08) * 1.5);
@@ -263,13 +260,13 @@ console.log('avatar.js:');
   const headW = new THREE.Vector3(); self.vrm.humanoid.getRawBoneNode('head').getWorldPosition(headW);
   check('lying: over the head, at head + head span + gap', near(self.label.position.x, headW.x, 1e-6)
     && Math.abs(self.label.position.y - (headW.y + (1.8 - 1.5) + g)) <= DEAD + 1e-4 && headW.x > 0.5, `${J(self.label.position)} head ${J(headW)}`);
-  // the own-body clearance is measured from where the plate hangs — its column, not the root's
+  // the own-body clearance is measured from the plate's column, not the root's
   const clearRoot = (() => { self.label.position.set(0, 1.8 + g, 0); return self._measureOwnClear(); })();
   const clearOff = (() => { self.label.position.set(0.6, 1.8 + g, 0); return self._measureOwnClear(); })();
   check('own-body clearance is measured from the plate\'s own x/z (moved 0.6 m → the hair is farther)', clearOff > clearRoot + 0.2, `${clearRoot} → ${clearOff}`);
 
-  // SEEN FROM ABOVE, on the real rig: _liftPlateForView slides the placed plate along THIS camera's up, in world, and
-  // writes it back in the root's frame (turned and scaled here, so a local-vs-world slip shows)
+  // SEEN FROM ABOVE: _liftPlateForView slides the plate along THIS camera's up, in world, and writes it back in the root's
+  // frame (turned and scaled here, so a local-vs-world slip shows)
   {
     const A = rig(); const a = A.self, rt = A.root;
     rt.position.set(2, 0, -1); rt.rotation.y = 0.7; rt.scale.setScalar(1.2);
@@ -289,7 +286,7 @@ console.log('avatar.js:');
     const moved = plateW().sub(before), camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
     check('from 80° above: moved along the camera\'s up, in WORLD (root turned and ×1.2)', moved.length() > 0.1 && moved.clone().normalize().dot(camUp) > 1 - 1e-9,
       `${J(moved)} · up ${J(camUp)}`);
-    // the screen check the probe makes: the pill's bottom edge projects above the head bone
+    // the probe's screen check: the pill's bottom edge projects above the head bone
     const s = rt.getWorldScale(new THREE.Vector3()).y, hh = 0.9 * s * (64 / 512) / 2;
     const bottom = plateW().addScaledVector(camUp, -hh).project(cam);
     const headP = A.head.getWorldPosition(new THREE.Vector3()).project(cam);
@@ -299,8 +296,8 @@ console.log('avatar.js:');
     rt.position.set(0, 0, 0); rt.rotation.y = 0; rt.scale.setScalar(1);
   }
 
-  // FIRST PERSON (owner, 10-01: "make it invisible in first-person mode"): your own plate is for other eyes — hidden
-  // in a headset (hideLabel, xr.js) and in desktop first person (firstPersonView, controller.js)
+  // FIRST PERSON: your own plate is for other eyes: hidden in a headset (hideLabel, xr.js) and desktop first person
+  // (firstPersonView, controller.js)
   {
     const a = rig().self;
     check('third person: the own plate shows', a.ownPlateHidden === false, String(a.ownPlateHidden));
@@ -321,11 +318,8 @@ console.log('avatar.js:');
   const noeye = rig({ eyes: false, hair: 1.0 });
   check('no eye bones, mesh under the head: head + 0.45·(head − hips)', near(noeye.self._plateRest?.crown, 1.5 + 0.45 * 0.55, 1e-6), J(noeye.self._plateRest));
 
-  // THE JUMP (owner, 10-01: "big noticeable lag on the nameplate on jumping"). Standing — idle, walking, running,
-  // jumping, falling — the plate rides the REST crown over the root, rigidly: the jump clip's crouch, tuck and landing
-  // move the hips under it and it does not move. Only a posture change (stand ↔ sit ↔ lie) eases. Driven through the
-  // real setClip (the controller and remotes.js both call it with the wire's clip), so the slot it records is the one
-  // the plate reads.
+  // THE JUMP: standing, the plate rides the REST crown over the root rigidly, so a crouch doesn't move it; only a posture
+  // change eases. Through the real setClip, so the recorded slot is the one read.
   {
     const J2 = rig(); const a = J2.self, hp = J2.hips, rt = J2.root;
     a.actions = {};
@@ -357,14 +351,14 @@ console.log('avatar.js:');
     for (let i = 0; i < 120; i++) call(a, '_placePlate', 1 / 90);
     const sitY = 0.35 + (1.8 - 0.95) + g2;
     check('...and settles over the sitting hips (within the dead zone)', Math.abs(a.label.position.y - sitY) <= DEAD + 1e-4, J(a.label.position));
-    // sit → stand: eases back up, and lands ON the rest height (no dead-zone residual while standing)
+    // sit → stand: eases back up and lands ON the rest height (no dead-zone residual while standing)
     call(a, 'setClip', 'idle'); hp.position.set(0, 0.95, 0);
     call(a, '_placePlate', 1 / 90);
     const up1 = a.label.position.y;
     check('sit → stand: y eases back up (not a snap)', up1 > sitY && up1 < restY - 0.05, `${up1}`);
     for (let i = 0; i < 200; i++) call(a, '_placePlate', 1 / 90);
     check('...and lands on the rest crown + gap exactly (no 2 cm short)', near(a.label.position.y, restY, 1e-4), J(a.label.position));
-    // a gesture, a held pose or a fall owns the body: those keep the live anchor (a bow, a crouch, a tumble)
+    // a gesture, held pose or fall owns the body: those keep the live anchor
     a.onceAnim = { action: null, until: Infinity }; hp.position.y = 0.95 - 0.4;
     for (let i = 0; i < 200; i++) call(a, '_placePlate', 1 / 90);
     check('a gesture playing: the plate follows the live hips (it came down)', a.label.position.y < restY - 0.3, J(a.label.position));

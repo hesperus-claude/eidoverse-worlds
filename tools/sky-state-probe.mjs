@@ -1,17 +1,14 @@
-// bun tools/sky-state-probe.mjs — World › sky says what the LOG has ("world: …") and, only while this client shows
-// something else, what and why ("you: previewing / loading… / no clouds (your clouds⚙ is off)"). Cloud quality is set
-// to off BEFORE load: a software-rendered cloud bake can exhaust a machine. Run one headless browser at a time.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+// bun tools/sky-state-probe.mjs — World › sky over the REAL sky and log: a log reaches "world: …", a preview adds "you:",
+// unrelated log entries and a rated sky write nothing. Every you: cause and control row is tools/skypanel-state-test.ts.
+// Cloud quality is set to off BEFORE load: a software-rendered cloud bake can exhaust a machine.
+import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'skystate', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser();
 try {
   const pg = await page();
   const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
-  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
-  await pg.goto(`${world.origin}/?world=staging&name=skystate&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => globalThis.__ewEngineUp && document.querySelector('#sec-sky-tab'), null, { timeout: 90000 });
+  await skyBoot(pg, world, 'skystate', { query: '', ready: () => globalThis.__ewEngineUp && document.querySelector('#sec-sky-tab') });
   await pg.evaluate(() => document.querySelector('#sec-sky-tab').click());
   await pg.waitForFunction(() => document.querySelector('#sec-sky .sky-state'), null, { timeout: 20000 });
   const read = () => pg.evaluate(() => {
@@ -57,35 +54,6 @@ try {
     mo.disconnect(); return n;
   });
   check('unrelated log entries leave the readout untouched (0 mutations)', quiet === 0, quiet);
-  // a real clock: time and rate are hidden (they can't act); back to the authored clock, they come back
-  const clockUi = async (clock) => { await log({ hours: 12, rate: 0, clouds: 'clear', weather: 'clear', ...clock }); return pg.evaluate(() => {
-    const row = (k) => { const i = [...document.querySelectorAll('#sec-sky input[type=range]')][k === 'hours' ? 0 : 1]; return { dis: i.disabled, shown: getComputedStyle(i.parentNode).display !== 'none' }; };
-    return { hours: row('hours'), rate: row('rate') }; }); };
-  const realUi = await clockUi({ clock: 'real', tz: 'America/Los_Angeles' });
-  const backUi = await clockUi({ clock: undefined, tz: undefined });
-  console.log('   ', JSON.stringify({ realUi, backUi }));
-  check('a real clock hides time and rate', realUi.hours.dis && realUi.rate.dis && !realUi.hours.shown && !realUi.rate.shown, JSON.stringify(realUi));
-  check('…and the authored clock brings them back', !backUi.hours.dis && !backUi.rate.dis && backUi.hours.shown && backUi.rate.shown, JSON.stringify(backUi));
-  // review 8 M2: YOUR committed real clock must not outlive a remote return to the authored clock
-  const mine = await pg.evaluate(async () => {
-    const sel = [...document.querySelectorAll('#sec-sky select')].find((x) => [...x.options].some((o) => o.value === 'America/Los_Angeles'));
-    const btn = [...document.querySelectorAll('#sec-sky button')].find((b) => /log to world/.test(b.textContent));
-    if (!sel || !btn) return { found: false };
-    sel.value = 'America/Los_Angeles'; sel.dispatchEvent(new Event('change')); btn.click();
-    return { found: true };
-  });
-  await pg.waitForTimeout(1500);
-  const afterMine = await clockUi({ clock: undefined, tz: undefined });
-  check('(setup) the panel committed a real clock by its own select and ✓', mine.found, JSON.stringify(mine));
-  check('after YOU commit a real clock, a remote return to authored brings time and rate back', afterMine.hours.shown && afterMine.rate.shown && !afterMine.hours.dis, JSON.stringify(afterMine));
-  // azimuth and fill only act on the basic sky: on the detailed sky they're hidden
-  const basic = await pg.evaluate(async () => {
-    const impl = (await import('./lib/sky.js')).skyImpl?.();
-    const rows = [...document.querySelectorAll('#sec-sky input[type=range]')].map((i) => i.parentNode).filter((r) => /azim|fill/i.test(r.textContent));
-    return { impl, n: rows.length, shown: rows.filter((r) => getComputedStyle(r).display !== 'none').length };
-  });
-  console.log('    basic-only rows:', JSON.stringify(basic));
-  check('on the detailed sky, azimuth and fill are hidden', basic.impl === 'eidoverse' && basic.n === 2 && basic.shown === 0, JSON.stringify(basic));
   // M3: a rated sky re-renders every second; the you: line must not flash 'loading…' at 1 Hz (a VR panel re-raster each)
   await log({ hours: 12, rate: 60, clouds: 'clear', weather: 'clear' });
   await pg.waitForTimeout(1500);
@@ -95,22 +63,6 @@ try {
     await new Promise((r) => setTimeout(r, 5000)); mo.disconnect(); return n; });
   console.log('    rated-sky you: mutations in 5 s:', flashes);
   check('a rated sky does not flash loading… every second (0 you: writes in 5 s)', flashes === 0, flashes);
-  await log({ hours: 12, rate: 0, clouds: 'clear', weather: 'clear' });
-  // M1: with the panel left open, switching to the basic sky brings them back (and back again hides them)
-  const rowsNow = () => pg.evaluate(async () => { const impl = (await import('./lib/sky.js')).skyImpl?.();
-    const rows = [...document.querySelectorAll('#sec-sky input[type=range]')].map((i) => i.parentNode).filter((r) => /azim|fill/i.test(r.textContent));
-    return { impl, shown: rows.filter((r) => getComputedStyle(r).display !== 'none').length }; });
-  await log({ hours: 12, rate: 0, clouds: 'clear', weather: 'clear', system: 'skymesh' });
-  for (let i = 0; i < 40 && (await rowsNow()).impl !== 'skymesh'; i++) await pg.waitForTimeout(500);
-  await pg.waitForTimeout(500);
-  const onBasic = await rowsNow();
-  await log({ hours: 12, rate: 0, clouds: 'clear', weather: 'clear', system: undefined });
-  for (let i = 0; i < 60 && (await rowsNow()).impl !== 'eidoverse'; i++) await pg.waitForTimeout(500);
-  await pg.waitForTimeout(500);
-  const backDetailed = await rowsNow();
-  console.log('    basic-only follow:', JSON.stringify({ onBasic, backDetailed }));
-  check('panel left open: on the basic sky azimuth and fill come back', onBasic.impl === 'skymesh' && onBasic.shown === 2, JSON.stringify(onBasic));
-  check('…and back on the detailed sky they hide again', backDetailed.impl === 'eidoverse' && backDetailed.shown === 0, JSON.stringify(backDetailed));
   check('no page errors', errs.length === 0, errs.slice(0, 2).join(' | ') || 'none');
 } catch (e) { check('probe ran', false, String(e).slice(0, 300)); }
 finally { await browser.close(); await world.close(); }

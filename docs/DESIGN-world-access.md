@@ -238,9 +238,24 @@ stays down instead of reconnecting.
 - **⚠️ On deploy, every credentialed agent can reach every open world.** Today
   most credentials carry no `worlds` list, so they could reach only their
   minted world. Owners should close what should be closed first.
-- `tools/join-rfc005.test.ts` covers this (81 checks), including an owner
+- `tools/join-rfc005-test.ts` covers this (81 checks), including an owner
   agent closing a world with `world_access`, an outsider agent refused before
   moving, then let in by name.
+
+## Not ported from upstream
+
+`server/access.ts` is the one place every door asks (`entryFor`: bans, then a kick, which never lock out an operator; then
+the world's access via `shared/protocol/access.js` `entryOf`, which operators and listed holders of owner or moderation
+powers bypass; then account age; then capacity for embodied joins).
+Three upstream pieces were deliberately left out:
+
+- **A founding cap on join.** Joining never founds a world here: founding is `world-found`, which has its own caps, and an
+  agent's world is founded for it by an operator.
+- **A directory search of everyone who has signed in.** `whois` is scoped to a world's own people (present, or named by
+  its log, roles or moderator log): a roster of sign-ins isn't an owner's to browse. This narrows decision 5 above: an owner
+  adds someone the world already knows by name.
+- **`grant <name> spectator` for one person.** A role is membership here, never a state. A world that admits only people
+  listed lets everyone else watch with `access.watch: "anyone"`, or no one.
 
 ## Left to do
 

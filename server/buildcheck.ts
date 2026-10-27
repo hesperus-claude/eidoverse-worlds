@@ -1,24 +1,6 @@
-// buildcheck — what a model will be like to walk into, measured before anyone
-// spawns it. Advisory: nothing here refuses an upload.
-//
-// The model is fitted exactly as a spawn of it would be (client/lib/colliders.js)
-// and explored with the walking body's own rules (mcpl/navgrid.ts: where a
-// capsule — the mover's body, shared/mover.js MOVER.body — can stand, and every move it can make), on a lattice
-// over its footprint and a margin of ground around it. From that:
-//
-//   - whether it is walk-in at all (a small model is one solid box);
-//   - its floors, and how much of each can be reached from the ground outside;
-//   - for every covered area that can't be, the likely reason: a passage
-//     narrower than a body (it IS reachable for a slimmer one), a rise higher
-//     than a step, a climb something at hip height stops (an overhanging
-//     landing), or simply no way in;
-//   - suggested rooms (covered floor, split where it narrows), doors (where
-//     rooms meet the outside or each other) and stairs (what joins floors),
-//     ready to name as places;
-//   - the draw-call / triangle budget.
-//
-// Runs in its own process (server/buildcheck-run.ts): it loads the collider
-// module, and a check can take seconds — neither belongs in the sequencer.
+// What a model will be like to walk into, measured before anyone spawns it. Advisory: never refuses an upload.
+// Fitted as a spawn would be (client/lib/colliders.js), explored with the mover's rules (mcpl/navgrid.ts, MOVER.body).
+// Runs in its own process (server/buildcheck-run.ts): it loads the collider module and can take seconds.
 
 import { collisionTriangles } from "./geometry.ts";
 import { glbPerfOfFile } from "./glbperf.ts";
@@ -41,45 +23,38 @@ export type CheckReport = {
     places: Record<string, unknown>;
   };
   warnings: Warning[];
-  /** the scale it was checked at (1: the file's own size) */
+  /** 1: the file's own size */
   scale: number;
   ms: number;
 };
 
-/** The walking body is the mover's (shared/mover.js MOVER.body: the one the feet, the authority and the planner use —
- *  the protocol merge; the stack measured a 0.32 m × 1.9 m capsule); a slimmer one (THIN_R) tells "too narrow for a
- *  body" from "no way in". */
+/** The mover's body (shared/mover.js MOVER.body); a slimmer one (THIN_R) tells "too narrow" from "no way in". */
 const BODY_R = MOVER.body.radius, THIN_R = MOVER.body.radius * 0.6, TALL = MOVER.body.height, MARGIN = 1.6;
-/** Smallest unreachable floor area reported — smaller is a pocket behind furniture. */
+/** Smaller is a pocket behind furniture. */
 const MIN_AREA = 2.5;
 const NUDGE = 0.05;   // navgrid NAV_NUDGE
-/** How far (cells) a room grows past its eroded core — the erosion's own depth. */
+/** cells; the erosion's own depth */
 const GROW = 3;
 const AREA = NAV_CELL * NAV_CELL;
-/** The most lattice columns (footprint plus margin) a check walks: ~100m square. */
+/** ~100m square, footprint plus margin */
 const MAX_COLUMNS = 250_000, MAX_SIDE = Math.sqrt(MAX_COLUMNS) * NAV_CELL, MAX_HEIGHT = 120;
-/** A surface a body can't step onto with a floor this close beneath it is
- *  furniture (a table, a counter, a bunk), not a floor of the building. */
+/** A surface with a floor this close beneath it is furniture, not a floor of the building. */
 const FURNITURE_MAX = 1.2;
-/** ...and at least this far above it (a seat's height): the mover's step (0.8 m, shared/mover.js) climbs onto a table,
- *  so "can't be stepped onto" no longer tells a tabletop from a floor (protocol merge; it was NAV_STEP at 0.55 m). Open air
- *  beneath still does — a solid plinth is a floor at any height. */
+/** ...and at least this far above it: the mover's 0.8 m step climbs onto a table, so stepping can't tell a tabletop
+ *  from a floor. Open air beneath still does: a solid plinth is a floor at any height. */
 const FURNITURE_MIN = 0.45;
-/** How far under an eave a roof's shadow on the open ground reaches before it is a room's floor (protocol merge: with the
- *  mover's 0.2 m radius a body stands under a 0.2 m roof overhang, and the overhang's ground read as a third floor). */
+/** A 0.2 m-radius body stands under a roof overhang, whose ground would otherwise read as another floor. */
 const EAVE_M = 1.0;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/** Check the GLB at `file`. `C` is client/lib/colliders.js, `THREE` its three
- *  (the caller loads them behind the core.js stub — see buildcheck-run.ts). */
+/** `C` is client/lib/colliders.js, `THREE` its three, loaded behind the core.js stub (buildcheck-run.ts). */
 export async function checkModel(file: string, C: any, THREE: any, { scale = 1 } = {}): Promise<CheckReport> {
   const t0 = performance.now();
   const warnings: Warning[] = [];
   const mesh = await collisionTriangles(new Uint8Array(await Bun.file(file).arrayBuffer()));
   if (!mesh) throw new Error("not a readable GLB with triangles");
-  // at a placed thing's scale: the model is scaled, the body is not — every
-  // measure below (doors, rises, floors, rooms) is in world metres. Suggested
-  // places go back to the model's own frame, where a places component lives.
+  // the model is scaled, the body is not: every measure below is in world metres; suggested places return to the
+  // model's own frame, where a places component lives
   if (scale !== 1) for (let k = 0; k < mesh.positions.length; k++) mesh.positions[k] *= scale;
 
   // ---- size: is it walk-in, as the world will fit it?
@@ -135,10 +110,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   const key = (i: number, j: number, y: number) => `${i},${j},${Math.round(y * 100)}`;
   const xyz = (n: { i: number; j: number; y: number }) => [r2(body.at(n.i)), r2(n.y), r2(body.at(n.j))];
 
-  // ---- every place a body can stand, and whether something is overhead
-  // covered: something overhead (a roof, a ceiling, an upper floor);
-  // roomy: at least a body's height of it — under the eaves, in an attic or
-  // a crawlspace a body can't stand, so it is no floor of a room
+  // ---- every place a body can stand: covered = something overhead; roomy = at least a body's height of it
   type N = { i: number; j: number; y: number; covered: boolean; roomy: boolean };
   const nodes = new Map<string, N>();
   const o = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), dirV = new THREE.Vector3();
@@ -151,7 +123,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
 
   // ---- reachable from the ground outside (the lattice's own rim)
   const bfs = (grid: typeof body, seeds: N[], allow: (n: { i: number; j: number; y: number }) => boolean) => {
-    const seen = new Map<string, string | null>();       // key -> parent key
+    const seen = new Map<string, string | null>();       // -> parent key
     const q: { i: number; j: number; y: number }[] = [];
     for (const s of seeds) { const k = key(s.i, s.j, s.y); if (!seen.has(k)) { seen.set(k, null); q.push(s); } }
     for (let h = 0; h < q.length; h++) {
@@ -167,11 +139,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   const rim = [...nodes.values()].filter((n) => (n.i === lo.i || n.i === hi.i || n.j === lo.j || n.j === hi.j) && Math.abs(n.y) < 0.05);
   const reach = bfs(body, rim, () => true);
 
-  // ---- floors: the covered heights with room to stand
-  // a tabletop has open air and then a floor a metre or so beneath it; a body
-  // can't step onto it, and it is no floor to reach. Looked for with front
-  // faces only: from inside a solid plinth the first face down is its own
-  // underside, seen from behind, and doesn't count.
+  // ---- floors: covered heights with room to stand. Front faces only: from inside a solid plinth the first face
+  // down is its own underside.
   const bvh = [...C.nearColliders((mn[0] + mx[0]) / 2, (mn[2] + mx[2]) / 2, Math.max(w, d))].find(([id]: any) => id === "model")?.[1]?.exact?.bvh;
   const down = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)), up_ = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
   const furniture = (n: N) => {
@@ -181,15 +150,12 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     if (!hit) return false;
     const drop = n.y - hit.point.y;
     if (!(drop > FURNITURE_MIN && drop <= FURNITURE_MAX)) return false;
-    // ...and open air between: looking up from that floor, the first face is
-    // the top's underside. A solid block (a stair's tread built down to the
-    // floor) shows none — from inside it, its faces are all seen from behind.
+    // ...and open air between: the first face up is the top's underside; a solid block shows none (all seen from behind)
     up_.origin.set(body.at(n.i), hit.point.y + 0.05, body.at(n.j));
     const under = bvh.raycastFirst(up_, THREE.FrontSide);
     return !!under && under.point.y < n.y + 0.01;
   };
-  // the ground under an eave: covered nodes at the ground's height reached from the open ground (walking, so never
-  // through a wall) within EAVE_M — the roof's shadow outside, not a floor inside
+  // the ground under an eave: covered nodes at ground height walked to (never through a wall) within EAVE_M
   const eaves = new Set<string>();
   {
     const ground = (n: { y: number }) => Math.abs(n.y) < 0.05;
@@ -208,10 +174,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
       }
     }
   }
-  // furniture is a whole surface: a top over open air ALL of whose standing room is so (a tabletop). A floor that
-  // overhangs something (an upper floor's edge over the top treads, a gallery over a hall) is still the floor it is
-  // part of (protocol merge: with the mover's 0.8 m step it takes a four-tread overhang to cut a floor off, and its overhang
-  // read as a table, so the cut-off floor's edge was nowhere near the stair it overhangs)
+  // furniture: ALL its standing room over open air; a floor's overhang (a gallery's edge) stays part of its floor
   const roomyCovered = [...nodes.values()].filter((n) => n.covered && n.roomy && !eaves.has(key(n.i, n.j, n.y)));
   const notFurniture = new Set<string>();
   for (const comp of components(roomyCovered, body, key, inside, true)) {
@@ -219,12 +182,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     for (const n of comp) notFurniture.add(key(n.i, n.j, n.y));
   }
   const covered = roomyCovered.filter((n) => notFurniture.has(key(n.i, n.j, n.y)));
-  // A floor is a height a lot of standing room shares; a stair's treads
-  // each hold a little. So heights are binned (5cm), the bins holding a
-  // square metre or more are floors (with neighbouring dense bins — a
-  // floor that isn't quite level), and the sparse heights near a floor (a
-  // threshold sill) join it. Chaining height to nearest height instead runs
-  // a shallow stair's treads from one floor into the next.
+  // 5cm bins: ≥1 m² is a floor, nearby sparse heights join it; never chain nearest heights (a shallow stair would
+  // run one floor into the next)
   const BIN = 0.05, binOf = (y: number) => Math.round(y / BIN);
   const bins = new Map<number, N[]>();
   for (const n of covered) (bins.get(binOf(n.y)) ?? bins.set(binOf(n.y), []).get(binOf(n.y))!).push(n);
@@ -246,8 +205,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
 
   // ---- what can't be reached, and why
   const stuck = covered.filter((n) => !reach.has(key(n.i, n.j, n.y)));
-  // a pocket behind furniture is no room: only floor areas of a few square
-  // metres are diagnosed
+  // only floor areas of a few square metres are diagnosed
   const comps = components(stuck, body, key, inside).filter((cmp) => cmp.length * AREA >= MIN_AREA);
   const thinReach = comps.length ? bfs(thin, rim.filter((n) => thin.layers(n.i, n.j).some((y) => Math.abs(y - n.y) < 0.05)), () => true) : new Map();
   for (const comp of comps) {
@@ -260,13 +218,12 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     const where = floorsText.length
       ? `${floorsText.join(" and ")} of floor, around (${c[0]}, ${c[2]}),`
       : `${area.toFixed(1)}m² of floor at ${c[1]}m around (${c[0]}, ${c[2]})`;
-    // a slimmer body gets in: a passage narrower than a body
+    // a slimmer body gets in: too narrow
     const thinHit = comp.find((n) => thinReach.has(key(n.i, n.j, n.y)));
     if (thinHit) {
       const path: string[] = [];
       for (let k: string | null | undefined = key(thinHit.i, thinHit.j, thinHit.y); k; k = thinReach.get(k)) path.push(k);
-      // the narrow spot: walking the slim body's way in from outside, the
-      // stretch a full body can't stand on just before it gets in
+      // the narrow spot: on the slim body's way in, the stretch a full body can't stand on just before inside
       const ps = path.map(parseKey).reverse();
       let narrow: typeof ps = [];
       for (const p of ps) {
@@ -280,10 +237,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
         + `a body needs more than ${r2(2 * BODY_R)}m clear (its ${BODY_R}m radius each side); 1m is comfortable` });
       continue;
     }
-    // next to reachable floor: a climb that fails, or a rise too high
-    // a failed climb is between neighbours; a rise too high may sit a few
-    // cells from the nearest reachable ground (a body can't stand right
-    // against the face of a ledge)
+    // a rise too high may sit a few cells away: a body can't stand right against a ledge's face
     let blocked: N | null = null, rise: { n: N; dy: number } | null = null;
     for (const n of comp) {
       for (let di = -3; di <= 3 && !blocked; di++) for (let dj = -3; dj <= 3; dj++) {
@@ -291,8 +245,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
         const adjacent = Math.abs(di) <= 1 && Math.abs(dj) <= 1;
         for (const y of body.layers(n.i + di, n.j + dj)) {
           if (!reach.has(key(n.i + di, n.j + dj, y))) continue;
-          // not through a wall: with the mover's 0.2 m radius, reachable ground outside a 0.2 m wall is three cells from
-          // the floor inside it (protocol merge) — beside it means nothing solid between, at the higher one's knees
+          // never through a wall: outside a 0.2 m wall is three cells from the floor inside; "beside" means nothing
+          // solid between, at the higher one's knees
           if (!adjacent) {
             const hy = Math.max(y, n.y) + 0.3, ax = body.at(n.i), az = body.at(n.j), bx = body.at(n.i + di), bz = body.at(n.j + dj), dl = Math.hypot(bx - ax, bz - az);
             if (C.raySegment(o.set(ax, hy, az), dirV.set((bx - ax) / dl, 0, (bz - az) / dl), dl) != null) continue;
@@ -316,29 +270,20 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     }
   }
 
-  // ---- suggested rooms: the space walls enclose on each floor
-  // Furniture splits a floor's standing room (a table across the middle of a
-  // room narrows it like a doorway) but not its walls, so rooms are read from
-  // ROOM SPACE: columns under cover, with floor at this level (a stairwell
-  // is a hole in it), and no WALL — something solid at 1.4–2.0m above the
-  // floor, within a body's radius: above chair backs, tables and benches,
-  // below hanging lamps and ceiling beams; walls, tall shelves and a door
-  // standing open all cross it. (The probe: the collider code's own wall
-  // band, for a 0.4m-tall body whose feet are 1.5m up.)
+  // ---- suggested rooms, from ROOM SPACE (covered, floored here, no WALL): furniture splits standing room, not walls.
+  // WALL = solid 1.4–2.0m above the floor within a body's radius: above chair backs, below lamps and beams.
   const rooms: CheckReport["suggested"]["rooms"] = [];
   let roomSeq = 0;                                        // ids never reused, though rooms are dropped
-  const roomOf = new Map<string, string>();               // standing node -> room
+  const roomOf = new Map<string, string>();
   const wallBand = probeAt(BODY_R, 0.4);
   floors.forEach((f, li) => {
     const space = new Map<string, { i: number; j: number }>();
     for (let i = lo.i; i <= hi.i; i++) for (let j = lo.j; j <= hi.j; j++) {
       const x = body.at(i), z = body.at(j);
-      // a roof or ceiling over a standing body's head — looked for from the
-      // head up, so the table or bench a column holds doesn't count as one
+      // a ceiling, looked for from the head up so the column's table doesn't count
       if (C.raySegment(o.set(x, f.y + TALL, z), up, 40) == null) continue;   // open sky
       if (Math.abs(C.surfaceUnder(x, z, flat, f.y + 0.15).y - f.y) > 0.15) continue;   // no floor at this level here
-      // ...nor another floor within head height over it: a raised floor laid
-      // on a plinth is that floor's room, not the ground's
+      // ...nor another floor within head height: a raised floor on a plinth is that floor's room
       if (floors.some((g) => g.y > f.y + 0.15 && g.y < f.y + TALL && Math.abs(C.surfaceUnder(x, z, flat, g.y + 0.15).y - g.y) <= 0.15)) continue;
       if (wallBand.stand(x, f.y + 1.5, z).push > NUDGE) continue;           // a wall
       space.set(`${i},${j}`, { i, j });
@@ -354,7 +299,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
         if (m && !dist.has(k)) { dist.set(k, dc + 1); q.push(m); }
       }
     }
-    // cores: two cells in from every edge — a doorway erodes away
+    // cores: two cells in from every edge, so a doorway erodes away
     const flatComps = (cells: { i: number; j: number }[]) => components(cells.map((c) => ({ ...c, y: f.y })), body, key, inside, true);
     const label = new Map<string, string>(), front: { i: number; j: number }[] = [], grown = new Map<string, number>();
     const mine: string[] = [];
@@ -364,7 +309,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
       for (const c of cmp) { label.set(`${c.i},${c.j}`, id); grown.set(`${c.i},${c.j}`, 0); front.push(c); }
       rooms.push({ id, min: [], max: [], area: 0, level: li });
     }
-    // grown back out by the margin the erosion took — not through a doorway
+    // grown back by the erosion's margin, never through a doorway
     for (let h = 0; h < front.length; h++) {
       const c = front[h], id = label.get(`${c.i},${c.j}`)!, g = grown.get(`${c.i},${c.j}`)!;
       if (g >= GROW) continue;
@@ -373,16 +318,14 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
         if (m && !label.has(k)) { label.set(k, id); grown.set(k, g + 1); front.push(m); }
       }
     }
-    // space no core reached — a porch under deep eaves: too narrow to have
-    // a middle, still a place of its own. A sliver along a wall is not.
+    // no core reached: a porch under deep eaves is still a place; a sliver along a wall is not
     for (const cmp of flatComps([...space.values()].filter((c) => !label.has(`${c.i},${c.j}`)))) {
       if (cmp.length * AREA < 1.5 || cmp.filter((c) => (dist.get(`${c.i},${c.j}`) ?? 0) >= 1).length * AREA < 1) continue;
       const id = `room_${++roomSeq}`; mine.push(id);
       for (const c of cmp) label.set(`${c.i},${c.j}`, id);
       rooms.push({ id, min: [], max: [], area: 0, level: li });
     }
-    // a room reaches in from the open sky: a porch a metre deep does, the
-    // strip under the eaves along an outside wall does not
+    // a porch a metre deep reaches in from open sky; the strip under the eaves does not
     const sky = new Map<string, number>(), sq: { i: number; j: number }[] = [];
     for (const c of space.values()) {
       if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => C.raySegment(o.set(body.at(c.i + a), f.y + TALL, body.at(c.j + b)), up, 40) == null)) { sky.set(`${c.i},${c.j}`, 1); sq.push(c); }
@@ -403,9 +346,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     }
     const top = floors[li + 1]?.y ?? r2(mx[1]);
     for (const n of f.nodes) { const id = label.get(`${n.i},${n.j}`); if (id) roomOf.set(key(n.i, n.j, n.y), id); }
-    // standing room on this floor between labelled columns (beside furniture,
-    // under a table's edge) belongs to the room it opens into
-    // — a few cells at most, so it doesn't run out through the front door
+    // unlabelled standing room joins the room it opens into, a few cells at most (not out the front door)
     const spread = f.nodes.filter((n) => roomOf.has(key(n.i, n.j, n.y)));
     const onFloor = new Set(f.nodes.map((n) => key(n.i, n.j, n.y)));
     const steps = new Map(spread.map((n) => [key(n.i, n.j, n.y), 0]));
@@ -431,11 +372,9 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
 
   // ---- suggested doors and stairs: where rooms meet the outside, each other, or other floors
   const doors: CheckReport["suggested"]["doors"] = [], stairs: CheckReport["suggested"]["stairs"] = [];
-  // a stair: covered standing room BETWEEN floors — not the ground under the
-  // eaves, which lies below the lowest of them
+  // a stair: covered standing room BETWEEN floors (the ground under the eaves lies below them all)
   const isStair = (n: N) => n.covered && levelOf(n) < 0 && n.y > (floors[0]?.y ?? 0) + 0.15;
-  // outside: open sky, and unroomed ground connected to it (the strip under
-  // the eaves, the step under a balcony) — not a pocket beside a chair
+  // outside: open sky and unroomed ground connected to it, never a pocket beside a chair
   const outside = new Set<string>(), oq: N[] = [];
   for (const [k, n] of nodes) if (!n.covered && reach.has(k)) { outside.add(k); oq.push(n); }
   for (let h = 0; h < oq.length; h++) {
@@ -466,7 +405,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   }
   const between = covered.filter((n) => reach.has(key(n.i, n.j, n.y)) && isStair(n));
   for (const cmp of components(between, body, key, inside)) {
-    const ends = new Map<number, string>();               // floor -> the room (or floor) reached there
+    const ends = new Map<number, string>();               // floor -> room (or floor) reached there
     for (const n of cmp) for (const m of body.moves(n.i, n.j, n.y)) {
       const lv = levelOf(m);
       if (lv < 0) continue;
@@ -513,8 +452,7 @@ function centroid(ns: { i: number; j: number; y: number }[], g: { at: (i: number
   return s.map((v) => r2(v / ns.length));
 }
 
-/** Connected groups among `ns`: by the body's own moves, or (flat) by
- *  adjacency on one level, within `gap` cells. */
+/** By the body's own moves, or (flat) adjacency on one level within `gap` cells. */
 function components<T extends { i: number; j: number; y: number }>(ns: T[], g: any, key: (i: number, j: number, y: number) => string,
   inside: (i: number, j: number) => boolean, flat = false, gap = 1): T[][] {
   const pool = new Map(ns.map((n) => [key(n.i, n.j, n.y), n]));

@@ -1,25 +1,25 @@
-// tools/protocol/txn-check.ts — the transaction service and the request capability (reviewer items 1 and 2, 10-18;
-// docs/DESIGN-txn-capability.md). Real World, real WorldLog, real authority, real files; the wire handler is the
-// real REQUEST_MESSAGES. Storage faults are injected at node:fs (the calls server/durable.ts makes), and a slow warm() is a
-// gate held in front of the real WorldLog.request (the same stub reset-race-check uses).
+// tools/protocol/txn-check.ts: the transaction service and the request capability (docs/DESIGN-txn-capability.md).
+// Real World, WorldLog, authority, files and REQUEST_MESSAGES; storage faults are injected at node:fs (the calls
+// server/durable.ts makes), and a slow warm() is a gate held in front of the real WorldLog.request.
 //   T1  a durable write throws on the 2nd line of a commit → ambiguous, `from` = that line; the 1st line is published
 //   T2  fsync throws after the bytes were written → ambiguous, wedged, no ok to anyone; reopen finds the line; later writes rolled back
 //   T3  a refusal is rolled back and publishes nothing; every published line was on disk when it was published
-//   T4  banned (the door) or re-roled while the request waited → refused, nothing written by the asker
-//   T5  the door closes (members only) while the request waits, the asker unlisted → refused
-//   T6  the connection becomes someone else while the request waits → refused; nothing under either identity
+//   T4–T6, SR, RR2  one table (WAITED): banned, kicked, re-roled, the door closed, someone else, a re-join in flight,
+//       superseded, closed, reset while the request waited → refused with its code and the request's id, nothing written;
+//       RR1/RR3/RR5 the reset's files; SR3 the control writes
+//   RR6, PR  a reset that fails partway: what the owner is told, the registry, a world that takes no writes until put back
 //   T7  static: no await in the authority; none between worldlog's recheck and the synchronous commit
 //   T8  a short write is looped to the end, and a write that takes nothing throws
 //   T8c a log's or blob's first write into directories just made: each new directory's name is synced in its parent too,
 //       a founded world's own directory included (and nothing is synced on win32, where the server can't sync a directory)
 //   T8d the keys file a mint writes is synced before it's renamed into place
-//   T8f a person's founding, a fork (its copied blobs too) and a reset sync each directory a new name lands in (house 6344940039)
+//   T8f a person's founding, a fork (its copied blobs too) and a reset sync each directory a new name lands in
 //   T8e …and the directory that holds its name is synced after, as are directories made for it (none on win32, where the
 //       server can't sync a directory)
 //   T9  operator-repair: operator status revoked while queued → refused
 //   T9f operator-repair from an account that isn't an operator: refused, pointed to whoever runs the server, not the world's owners
 //   T10 no false refusals: 100 serial requests from an unchanged guest connection all committed
-//   T11 (r14 M1) server.ts writes only through requestwire (voice-moderate via requestAs); no direct w.log.request caller
+//   T11 server.ts writes only through requestwire (voice-moderate via requestAs); no direct w.log.request caller
 // usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/txn-check.ts
 //        … --mutants   each row's mutation, applied to a scratch copy of the tree: every one must turn its rows red
 // @ts-nocheck
@@ -27,23 +27,25 @@ import fs from "node:fs";
 import path from "node:path";
 import { scratch, copyTree } from "./common.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 // [name, file, find, replace, rows it must turn red]: the mutation each row exists to catch
 const MUTANTS: [string, string, string, string, string[]][] = [
   ["unpublished lines: publish only when the authority returned (no finally)", "server/worldlog.ts", "    finally { this.publish(from, held); }\n    const o = txnOutcome(live, from, { threw: threw !== null, error: threw, refused: !!r && typeof r === \"object\" && r.ok === false, wedgedBefore });\n    if (threw !== null) {\n      console.error(", "    if (threw === null) this.publish(from, held);\n    const o = txnOutcome(live, from, { threw: threw !== null, error: threw, refused: !!r && typeof r === \"object\" && r.ok === false, wedgedBefore });\n    if (threw !== null) {\n      console.error(", ["T1"]],
   ["unknown called failure: a throw from a durable write reported rolled-back", "shared/protocol/authority/storage.js", "  if (newLog || newMod) return { outcome: \"ambiguous\"", "  if (false) return { outcome: \"ambiguous\"", ["T2"]],
-  ["persist before publish: entries before the disk", "shared/protocol/authority/storage.js", "    durably(\"log\", () => io.writeLine(line));   // on disk first; only then the live chain and fold see it\n    entries.push(posAt(parsed, seq));", "    entries.push(posAt(parsed, seq)); durably(\"log\", () => io.writeLine(line));", ["T3c", "T3d"]],
+  ["persist before publish: entries before the disk", "shared/protocol/authority/storage.js", "durably(\"log\", () => io.writeLine(line));", "entries.push(posAt(parsed, seq)); durably(\"log\", () => io.writeLine(line)); entries.pop();", ["T3c", "T3d"]],
   ["the door decided at join only: recheck without it", "server/reqcap.ts", "  if (door) return", "  if (false) return", ["T4", "T5"]],
+  ["the door's kick not rechecked: a kick mid-request still writes", "server/access.ts", "    const k = actorId ? kickedHere(actorId) : null;", "    const k = null as any;", ["T4k"]],
   ["recheck without the role", "server/reqcap.ts", "  if (role && w.log.roleOf(cap.actorId) !== cap.role) return", "  if (false) return", ["T4b"]],
   ["identity read after the await: recheck without it", "server/reqcap.ts", "  if (c.actorId !== cap.actorId ||", "  if (false &&", ["T6", "T6b"]],
-  ["an await in the authority's commit", "shared/protocol/authority/writes.js", "// A write: build ops against the folded state", "async function __m() { await 0; }\n// A write: build ops against the folded state", ["T7"]],
+  ["an await in the authority's commit", "shared/protocol/authority/writes.js", "function commit(w, actor, verb, args, build) {", "async function __m() { await 0; }\nfunction commit(w, actor, verb, args, build) {", ["T7"]],
   ["new directories' names not synced: mkdir alone", "server/durable.ts", "  if (first === undefined) return;", "  return;", ["T8c"]],
-  ["a founded world's directory made by plain mkdir", "server/worldlog.ts", "  mkdirDurable(dir);   // the world's", "  fs.mkdirSync(dir, { recursive: true });   // the world's", ["T8c"]],
+  ["a founded world's directory made by plain mkdir", "server/worldlog.ts", "  mkdirDurable(dir);", "  fs.mkdirSync(dir, { recursive: true });", ["T8c"]],
   ["a replaced file renamed in unsynced", "server/durable.ts", "writeAll(fd, Buffer.from(data, \"utf8\")); fs.fsyncSync(fd); }", "writeAll(fd, Buffer.from(data, \"utf8\")); }", ["T8d"]],
-  ["the keys file's directory made by plain mkdir", "server/custody.ts", "    mkdirDurable(path.dirname(file));   // the keys file's", "    fs.mkdirSync(path.dirname(file), { recursive: true });   // the keys file's", ["T8e"]],
-  ["a replaced file's new name left unsynced", "server/durable.ts", "  syncDir(path.dirname(file));   // the new name, in its directory", "", ["T8e"]],
+  ["the keys file's directory made by plain mkdir", "server/custody.ts", "    mkdirDurable(path.dirname(file));", "    fs.mkdirSync(path.dirname(file), { recursive: true });", ["T8e"]],
+  ["a replaced file's new name left unsynced", "server/durable.ts", "writeAll(fd, Buffer.from(data, \"utf8\")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }\n  fs.renameSync(tmp, file);\n  syncDir(path.dirname(file));", "writeAll(fd, Buffer.from(data, \"utf8\")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }\n  fs.renameSync(tmp, file);", ["T8e"]],
   ["short writes: writeSync's count ignored", "server/durable.ts", "    const n = fs.writeSync(fd, buf, off, buf.length - off);", "    fs.writeSync(fd, buf, off, buf.length - off); const n = buf.length - off;", ["T8", "T8b"]],
   ["operator status checked before the queue only: operator-repair rechecks liveness only", "server/requestwire.ts", "      const gone = recheck(cap, Date.now(), { role: false });", "      const gone = c.world === w && !c.superseded && w.clients.has(c) ? null : \"gone\";", ["T9"]],
-  ["a non-operator sent to the world's owners", "server/requestwire.ts", 'fix: "ask whoever runs this server" } }); return; }   // an owner', 'fix: "repair through the world\'s own roles: ask an owner" } }); return; }   // an owner', ["T9f"]],
+  ["a non-operator sent to the world's owners", "server/requestwire.ts", 'reason: "operator-repair needs a server operator\'s account (WORLD_ADMIN)", fix: "ask whoever runs this server" } }); return; }', 'reason: "operator-repair needs a server operator\'s account (WORLD_ADMIN)", fix: "repair through the world\'s own roles: ask an owner" } }); return; }', ["T9f"]],
   ["a false refusal: operator-repair compares the world role", "server/requestwire.ts", "recheck(cap, Date.now(), { role: false })", "recheck(cap, Date.now())", ["T9c"]],
   ["a false refusal: the account compared un-normalised (undefined vs null)", "server/reqcap.ts", "(c.account ?? null) !== cap.account", "c.account !== cap.account", ["T10"]],
   ["a person's founding as it was: no sync after the rename, the ledger by atomicWrite", "server/worldlog.ts", "    fs.renameSync(tmp, dest); syncDir(WORLDS_DIR);\n    const L = foundersLedger(); L[name] = { account, actor, ts: now }; replaceDurable(foundersPath(), JSON.stringify(L, null, 1));", "    fs.renameSync(tmp, dest);\n    const L = foundersLedger(); L[name] = { account, actor, ts: now }; atomicWrite(foundersPath(), JSON.stringify(L, null, 1));", ["T8f"]],
@@ -51,8 +53,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["a reset's fresh log renamed in unsynced", "server/worldlog.ts", "path.join(dir, \"world.jsonl\")); syncDir(dir);", "path.join(dir, \"world.jsonl\"));", ["T8f"]],
   ["CONTROL (no-op: must stay green)", "server/reqcap.ts", "// the door: the same decision", "// the door:  the same decision", []],
 ];
-// T8c and T8e check directory syncs, which the server doesn't make on win32 (durable.ts syncDir): there the rows that only
-// they would turn red have nothing to catch, so their mutants are skipped
+// T8c/T8e/T8f check directory syncs, which the server doesn't make on win32 (durable.ts syncDir): there their mutants are skipped
 const DIR_SYNC_ROWS = new Set(["T8c", "T8e", "T8f"]);
 if (process.argv.includes("--mutants")) {
   const ENGINE = path.resolve(import.meta.dir, "../.."); let bad = 0, ran = 0;
@@ -62,7 +63,7 @@ if (process.argv.includes("--mutants")) {
     const d = scratch("txnmut");
     for (const dir of ["server", "shared", "client", "mcpl"]) copyTree(path.join(ENGINE, dir), path.join(d, dir));
     fs.mkdirSync(path.join(d, "tools/protocol"), { recursive: true });
-    for (const f of ["common.ts", "txn-check.ts", "wait.ts"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
+    for (const f of ["common.ts", "suite.ts", "txn-check.ts", "wait.ts"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
     fs.copyFileSync(path.join(ENGINE, "package.json"), path.join(d, "package.json")); fs.symlinkSync(path.join(ENGINE, "node_modules"), path.join(d, "node_modules"), "junction");
     const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
     if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the fix moved?)`); continue; }
@@ -88,8 +89,7 @@ const { openLive } = await import("../../server/livehost.ts");
 const { appendDurable } = await import("../../server/durable.ts");
 const { OPERATORS } = await import("../../server/operators.ts");
 const nodefs = (await import("node:fs")).default;
-let pass = 0, fail = 0;
-const ok = (c, what, d?) => { if (c) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${d !== undefined ? " — " + JSON.stringify(d).slice(0, 400) : ""}`); } };
+const { ok, done } = suite("txn-check");
 const W = process.env.WORLDS_DIR;
 const logFile = (name) => path.join(W, name, "world.jsonl");
 const lines = (name) => fs.readFileSync(logFile(name), "utf8").split("\n").filter(Boolean);
@@ -168,7 +168,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   const r2 = t.replies[1];
   ok(r2?.ok === false && r2?.txn === "rolled-back" && r2?.reply?.refused?.code === "server-error" && lines("t2").length === n0 + 1,
     "T2c the wedged log refuses the next write before any byte: rolled back, server-error, the file unchanged", r2);
-  // what each reply tells its reader to do: only whoever runs the server can reopen the world, and asking again changes nothing
+  // what each reply tells its reader: only whoever runs the server can reopen the world, and asking again changes nothing
   // until then; neither points at a log the reader can't open, nor says to send it again
   const fx = (m) => `${m?.reply?.refused?.reason ?? ""} | ${m?.reply?.refused?.fix ?? ""}`;
   ok([r, r2].every((m) => /whoever runs (the|this) server/.test(fx(m)) && /won't change|until (then|it is reopened)/.test(fx(m)) && !/send it again|server's log/.test(fx(m))) && /refuses writes/.test(fx(r2)),
@@ -188,45 +188,116 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(t.replies[2]?.txn === "ambiguous" && X.w.log.live.entries.length === n1 && !said(X, "lost") && t.logs.length === 1,
     "T3c a line whose write threw never reaches memory or anyone (persist before publish)", { r: t.replies[2], logs: t.logs.length }); }
 
-// ---------------- T4 ----------------
-{ const X = world("t4"); const vic = idOf("local:vic", "vic"); const t = tab(X, vic, { account: "local:vic" }); const n0 = X.w.log.live.entries.length;
-  X.g.hold(); let e0 = X.g.entered; send(t, "say", { text: "from-the-banned" }); await tryUntil('"from-the-banned" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "ban", { who: vic, reason: "test" })?.ok === true, "(T4 setup) the owner bans the asker while its request waits");
-  X.g.release(); await tryUntil('the reply to "from-the-banned"', () => t.replies.length, { ms: 3000, step: 10 });
-  const r = t.replies[0];
-  ok(r?.reply?.refused?.code === "superseded" && /door/.test(r?.reply?.refused?.reason ?? "") && r?.txn === "rolled-back" && !said(X, "from-the-banned"),
-    "T4 banned while the request waited: refused at the seam by the door (superseded), nothing written", r);
-  // re-roled while waiting: an inhabitant made a builder mid-request is refused (admitted under the old role), never silently promoted
-  const bea = idOf("local:bea", "bea");
-  // she starts an inhabitant (a new world's newcomers are builders, R 10-21: promoting a builder to builder changes nothing)
-  ok(ownerDo(X, "set", { id: "@world", component: `roles:${bea}`, value: { role: "inhabitant" } })?.ok === true, "(T4b setup) the asker starts an inhabitant");
-  const b = tab(X, bea, { account: "local:bea" });
-  X.g.hold(); e0 = X.g.entered; send(b, "create", { components: { description: "under-the-old-role" } }); await tryUntil('"under-the-old-role" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "set", { id: "@world", component: `roles:${bea}`, value: { role: "builder" } })?.ok === true, "(T4b setup) the owner makes the asker a builder while its request waits");
-  X.g.release(); await tryUntil('the reply to "under-the-old-role"', () => b.replies.length, { ms: 3000, step: 10 });
-  ok(b.replies[0]?.reply?.refused?.code === "superseded" && /role/.test(b.replies[0]?.reply?.refused?.reason ?? "") && !described(X, "under-the-old-role"),
-    "T4b the role changed while the request waited: refused (superseded), nothing written", b.replies[0]); }
+// ---------------- T4–T6, SR, RR: what changed while the request waited ----------------
+// One held-gate fixture per row: the request is inside the await, `while` changes the world or the connection, the gate
+// opens. Each row is refused with its code and words, and nothing is written under any identity; the control writes.
+const WAITED = [
+  { id: "T4", what: "banned (the door)", code: "superseded", reason: /door/, while: (X, t) => ok(ownerDo(X, "ban", { who: t.c.actorId, reason: "test" })?.ok === true, "(T4 setup) the owner bans the asker while its request waits") },
+  { id: "T4k", what: "kicked (the door)", code: "superseded", reason: /door.*kicked|kicked/, while: (X, t) => ok(ownerDo(X, "kick", { who: t.c.actorId, minutes: 5 })?.ok === true, "(T4k setup) the owner kicks the asker while its request waits") },
+  { id: "T4b", what: "re-roled (an inhabitant made a builder: admitted under the old role, never silently promoted)", asker: "bea", verb: "create", code: "superseded", reason: /role/,
+    setup: (X, who) => ok(ownerDo(X, "set", { id: "@world", component: `roles:${who}`, value: { role: "inhabitant" } })?.ok === true, "(T4b setup) the asker starts an inhabitant"),
+    while: (X, t) => ok(ownerDo(X, "set", { id: "@world", component: `roles:${t.c.actorId}`, value: { role: "builder" } })?.ok === true, "(T4b setup) the owner makes the asker a builder while its request waits") },
+  { id: "T5", what: "the door closed (members only, the asker unlisted: the same decision as join)", code: "superseded", reason: /no-access/,
+    while: (X) => ok(ownerDo(X, "set", { id: "@world", component: "access", value: { join: "listed" } })?.ok === true, "(T5 setup) the door becomes members-only while the request waits") },
+  { id: "T6", what: "the connection became someone else (a re-join resolved another identity)", code: "superseded", reason: /someone else/, while: (X, t) => { t.c.actorId = idOf("local:bea", "bea"); } },
+  { id: "T6b", what: "a re-join in flight (actorId reset before the new one resolves): refused with the request's id, not an id-less server error", code: "superseded", reason: /./, while: (X, t) => { t.c.actorId = undefined; } },
+  { id: "SR1", what: "superseded by the same account's new tab", code: "superseded", reason: /taken over/, while: (X, t) => { t.c.superseded = true; X.w.clients.delete(t.c); tab(X, t.c.actorId, { account: t.c.account }); } },
+  { id: "SR2", what: "closed (out of the world's clients, c.world still set)", code: "superseded", reason: /closed/, while: (X, t) => { X.w.clients.delete(t.c); } },
+  { id: "RR2", what: "the world was reset (the old log retired, a fresh one founded)", code: "reset", reason: /reset/, while: (X) => { X.old = X.w.log; X.n0 = X.w.log.live.entries.length; X.arch = X.w.resetWorld(); X.before = lines(X.name).length; } },
+];
+for (const row of WAITED) {
+  const X = world(`w-${row.id.toLowerCase()}`); const who = idOf(`local:${row.asker ?? "vic"}`, row.asker ?? "vic"); row.setup?.(X, who);
+  const t = tab(X, who, { account: `local:${row.asker ?? "vic"}` }); const n0 = X.w.log.live.entries.length;
+  const label = `while-${row.id}`, rid = `q-${row.id}`, args = row.verb === "create" ? { components: { description: label } } : { text: label };
+  X.g.hold(); const e0 = X.g.entered;
+  REQUEST_MESSAGES.request({ c: t.c, ws: t.c.ws, now: Date.now(), expel: () => {}, sweep: () => {} }, { id: rid, verb: row.verb ?? "say", args });
+  await tryUntil(`${row.id}'s request is held at the await`, () => X.g.entered > e0, { ms: 3000, step: 10 });
+  row.while(X, t);
+  X.g.release(); await tryUntil(`the reply to ${row.id}'s request`, () => t.replies.length, { ms: 3000, step: 10 });
+  const r = t.replies[0], log = X.w.log.live, wrote = said(X, label) || described(X, label) || (X.old && (X.old.live.entries.some((e) => e?.body?.text === label)));
+  const by = log.entries.slice(row.id === "RR2" ? 0 : n0).map((e) => e.actor);
+  ok(r?.id === rid && r?.ok === false && r?.txn === "rolled-back" && r?.reply?.refused?.code === row.code && row.reason.test(r?.reply?.refused?.reason ?? "") && !wrote
+    && (row.id === "RR2" || (!by.includes(who) && !by.includes(idOf("local:bea", "bea")))),
+    `${row.id} ${row.what} while the request waited: refused (${row.code}), with the request's id, nothing written under any identity`, { r, wrote, by });
+  if (row.id === "RR2") {   // the reset's own files: the old log archived, the fresh one untouched by the straggler, the old one retired for good
+    ok(log !== X.old.live && fs.existsSync(path.join(X.arch, "world.jsonl")), "RR1 reset swapped the log and archived the old file", { arch: X.arch });
+    ok(lines(X.name).length === X.before && !log.state().entities[label] && log.entries.length === X.before, "RR3 the new world's file (and its fresh log) gained no line from the old one", { before: X.before, after: lines(X.name).length });
+    ok(X.old.requestSync(X.owner, "say", { text: "late" })?.refused?.code === "reset", "RR5 the old log stays retired for every later request"); }
+}
+{ const X = world("w-control"); const t = tab(X, X.owner, { account: "local:olive" });
+  X.g.hold(); send(t, "create", { components: { description: "from-a-live-tab" } }); X.g.release();
+  await tryUntil("the live tab's request is answered", () => t.replies.length, { ms: 3000, step: 10 });
+  ok(t.replies[0]?.ok === true && described(X, "from-a-live-tab"), "SR3 (control) a connection that is still in the world writes", t.replies[0]); }
 
-// ---------------- T5 ----------------
-{ const X = world("t5"); const vic = idOf("local:vic", "vic"); const t = tab(X, vic, { account: "local:vic" });
-  X.g.hold(); const e0 = X.g.entered; send(t, "say", { text: "through-a-closed-door" }); await tryUntil('"through-a-closed-door" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  ok(ownerDo(X, "set", { id: "@world", component: "access", value: { join: "listed" } })?.ok === true, "(T5 setup) the door becomes members-only while the request waits");
-  X.g.release(); await tryUntil('the reply to "through-a-closed-door"', () => t.replies.length, { ms: 3000, step: 10 });
-  ok(t.replies[0]?.reply?.refused?.code === "superseded" && /no-access/.test(t.replies[0]?.reply?.refused?.reason ?? "") && !said(X, "through-a-closed-door"),
-    "T5 members-only while it waited, the asker unlisted: refused by the door (the same decision as join), nothing written", t.replies[0]); }
+// ---------------- RR6, PR: a reset that fails partway (moved from reset-race-check) ----------------
+// RR6: a failure after the fresh log is in place has erased the world; the owner is told it was, not that nothing changed
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const { owner } = foundWorld(path.join(W, "reopen"), "reopen", "olive");
+  const rw = new World("reopen"); rw.openLog = () => { throw new Error("injected: the fresh log won't open"); };
+  (await import("../../server/world.ts")).worlds.set("reopen", rw);   // registered, as getWorld leaves a loaded world
+  const erasedId = rw.log.live.worldId;
+  const casts = []; rw.broadcast = (m) => casts.push(m);   // what everyone present is sent
+  const sent = []; const c = { id: "olive", world: rw, actorId: owner, spectator: false, ws: { send: (d) => sent.push(JSON.parse(d)) } };
+  REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws }, { name: "reopen" });
+  const e = sent.find((m) => m.type === "error")?.error ?? "";
+  const archived = fs.readdirSync(path.join(W, "reopen")).some((n) => n.startsWith("reset-"));
+  // (review of the house's PR #9: "stays closed" wasn't true: the World stayed registered and a reload was served the erased
+  // world's state from memory) it leaves the registry, everyone present reloads, and the next join opens the fresh world from disk
+  const { worlds, getWorld } = await import("../../server/world.ts");
+  const gone = !worlds.has("reopen"); const next = gone ? getWorld("reopen") : null;
+  const fresh = !!next && next !== rw && !next.log.retired && !!next.log.live.worldId && next.log.live.worldId !== erasedId;   // the fresh world, not the erased one
+  ok(/was erased/.test(e) && /next join/.test(e) && /whoever runs this server/.test(e) && /Resetting again erases nothing more/.test(e) && !/nothing changed/.test(e) && !/stays closed/.test(e)
+    && archived && casts.some((m) => m.type === "world-reset") && gone && fresh,
+    "RR6 the fresh log doesn't open after the reset swapped it: the owner is told the world was erased and opens at the next join (who to ask if not), resetting again erases nothing more; everyone present reloads, and the next join opens the fresh world from disk, never the erased one from memory", { e, archived, gone, fresh, casts: casts.map((m) => m.type) }); }
+// RR6b: once the fresh log is open the reset stands: a failure starting the fresh world's scripts (it has none) is the
+// server log's, and everyone present is told of the reset as usual
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts"); const { WorldScripts } = await import("../../server/scripts.ts");
+  const { owner } = foundWorld(path.join(W, "scripted"), "scripted", "olive");
+  const sw = new World("scripted"); const sync = WorldScripts.prototype.sync;
+  const sent = []; const c = { id: "olive", world: sw, actorId: owner, spectator: false, ws: { send: (d) => sent.push(JSON.parse(d)) } }; sw.clients.add(c);
+  WorldScripts.prototype.sync = () => { throw new Error("injected: the scripts won't start"); };
+  try { REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws }, { name: "scripted" }); } finally { WorldScripts.prototype.sync = sync; }
+  const fresh = sw.log.live.entries.length, err = sent.find((m) => m.type === "error")?.error;
+  ok(!err && sent.some((m) => m.type === "world-reset") && sw.log.requestSync(owner, "create", { components: { description: "after" } })?.ok === true,
+    "RR6b the fresh log opened but the scripts didn't start: the reset stands, everyone present is told, and the fresh world takes requests", { err, sent: sent.map((m) => m.type), fresh }); }
 
-// ---------------- T6 ----------------
-{ const X = world("t6"); const vic = idOf("local:vic", "vic"), bea = idOf("local:bea", "bea"); const t = tab(X, vic, { account: "local:vic" }); const n0 = X.w.log.live.entries.length;
-  X.g.hold(); let e0 = X.g.entered; send(t, "say", { text: "whose-line" }); await tryUntil('"whose-line" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  t.c.actorId = bea;   // a re-join over the same socket resolved another identity (server.ts admitJoin), its leg not yet re-issued
-  X.g.release(); await tryUntil('the reply to "whose-line"', () => t.replies.length, { ms: 3000, step: 10 });
-  const by = X.w.log.live.entries.slice(n0).map((e) => e.actor);
-  ok(t.replies[0]?.reply?.refused?.code === "superseded" && /someone else/.test(t.replies[0]?.reply?.refused?.reason ?? "") && !said(X, "whose-line") && !by.includes(vic) && !by.includes(bea),
-    "T6 the connection became someone else while the request waited: refused; nothing under either identity", { r: t.replies[0], by });
-  t.c.actorId = vic; X.g.hold(); e0 = X.g.entered; send(t, "say", { text: "mid-rejoin" }); await tryUntil('"mid-rejoin" is held at the await', () => X.g.entered > e0, { ms: 3000, step: 10 });
-  t.c.actorId = undefined;   // a re-join in flight (server.ts resets actorId before resolving the new one)
-  X.g.release(); await tryUntil('the reply to "mid-rejoin"', () => t.replies.length > 1, { ms: 3000, step: 10 });
-  ok(t.replies[1]?.reply?.refused?.code === "superseded" && !said(X, "mid-rejoin"), "T6b a re-join in flight: refused with the request's id (was an id-less server error)", t.replies[1]); }
+// ---- PR (house 6340433633): a reset that fails after the old log was moved aside. The old log stayed live in memory and kept
+// taking writes, which appendDurable (it opens by path) put in a NEW world.jsonl holding only the tail: a broken chain on disk.
+// The failure is injected at the last rename (the fresh world's log into place); the rest is the real wire handler and reset.
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const dir = path.join(W, "half"); const { owner } = foundWorld(dir, "half", "olive");
+  const hw = new World("half"); const n0 = hw.log.live.entries.length;
+  const errs = []; const c = { id: "olive", world: hw, actorId: owner, gen: 0, legGen: 0, ws: { send: (d) => { const m = JSON.parse(d); if (m.type === "error") errs.push(m.error); } } };
+  const rename = fs.renameSync;
+  fs.renameSync = function (a, b) { if (String(a).includes(".refound-")) throw new Error("EIO: injected (the fresh log into place)"); return rename.call(fs, a, b); };
+  try { REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half" }); } finally { fs.renameSync = rename; }
+  const said = errs[0] ?? "";
+  const w1 = hw.log.requestSync(owner, "say", { text: "after the failed reset" });
+  const file = fs.existsSync(path.join(dir, "world.jsonl"));
+  ok(!w1?.ok && !file, "PR1 after a reset that failed partway a write is refused and no world.jsonl appears", { w1: w1?.ok ?? w1?.refused, file, lines: file ? lines("half").length : 0, n0 });
+  ok(/takes no writes until the server's operator puts it back/.test(said) && /resetting again is safe/i.test(said) && /takes no writes/.test(w1?.refused?.reason ?? ""),
+    "PR2 the answer and the refusal say the world takes no writes until the operator puts its log back, and whether resetting again is safe", { said, refused: w1?.refused });
+  // resetting again finishes the erase; the old log stays in the first attempt's archive
+  REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half" });
+  const archives = fs.readdirSync(dir).filter((f) => f.startsWith("reset-")); const kept = archives.filter((a) => fs.existsSync(path.join(dir, a, "world.jsonl")));
+  const w2 = hw.log.requestSync(owner, "say", { text: "in the fresh world" });
+  ok(errs.length === 1 && fs.existsSync(path.join(dir, "world.jsonl")) && kept.length === 1 && w2?.ok === true,
+    "PR3 resetting again finishes the erase (a fresh world that takes writes); the old log stays in the first archive", { errs, archives, kept, w2: w2?.ok ?? w2?.refused }); }
+// PR4 (review of the house fixes): a failure at the SECOND rename (poses.json), twice. The second attempt finds no world.jsonl to
+// move, so "did this attempt move the log" is no; the world is still retired, and the answer must say so, not "goes on as before"
+{ const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
+  const dir = path.join(W, "half2"); const { owner } = foundWorld(dir, "half2", "olive");
+  fs.writeFileSync(path.join(dir, "poses.json"), "{}");
+  const hw = new World("half2");
+  const errs = []; const c = { id: "olive", world: hw, actorId: owner, gen: 0, legGen: 0, ws: { send: (d) => { const m = JSON.parse(d); if (m.type === "error") errs.push(m.error); } } };
+  const rename = fs.renameSync; const reset = () => REQUEST_MESSAGES["world-reset"]({ c, ws: c.ws, now: Date.now(), expel: () => {} }, { name: "half2" });
+  fs.renameSync = function (a, b) { if (String(a).endsWith("poses.json")) throw new Error("EIO: injected (poses.json)"); return rename.call(fs, a, b); };
+  try { reset(); reset(); } finally { fs.renameSync = rename; }
+  const w1 = hw.log.requestSync(owner, "say", { text: "after two failed resets" });
+  ok(errs.length === 2 && errs.every((e) => /takes no writes/.test(e)) && !/goes on as before/.test(errs[1]) && !w1?.ok,
+    "PR4 a second failed attempt, with the log already moved by the first, still says the world takes no writes (and it doesn't)", { errs, w1: w1?.ok ?? w1?.refused });
+  reset(); const w2 = hw.log.requestSync(owner, "say", { text: "fresh" });
+  ok(errs.length === 2 && w2?.ok === true, "PR4 …and a third attempt that succeeds leaves a fresh world that takes writes", { errs, w2: w2?.ok ?? w2?.refused }); }
 
 // ---------------- T7 ----------------
 { const strip = (s) => s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -251,10 +322,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
 // every one of those entries is synced, the topmost new directory's parent included
 { const { putBlobFile } = await import("../../server/durable.ts");
   const base = path.join(root, "t8c"); fs.mkdirSync(base, { recursive: true });
-  // a world founded in a worlds directory that already exists: its own directory is the only new name, in that directory.
-  // The directory's keys exist already, as for any founding after its first, so the first founding is made before the
-  // syncs are watched: it mints the keys, and saving the keys file syncs this directory too, which would hide whether
-  // founding synced the world's own name
+  // founding in an existing worlds directory: its own directory is the only new name. A first founding runs before the
+  // syncs are watched, since minting the keys file syncs this directory too and would hide whether founding synced it
   const worlds = path.join(base, "worlds"); fs.mkdirSync(worlds); foundWorld(path.join(worlds, "t8c-first"), "t8c-first", "olive");
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync }; const dirFds = new Map(); const synced = [];
   nodefs.openSync = function (p, flags, ...r) { const fd = o.openSync.call(nodefs, p, flags, ...r); if (flags === "r") dirFds.set(fd, path.resolve(String(p))); return fd; };
@@ -267,10 +336,9 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(!missing.length && (process.platform !== "win32" || !synced.length) && fs.readFileSync(path.join(base, "a", "b", "c", "world.jsonl"), "utf8") === '{"n":1}\n',
     "T8c a first write into directories just made syncs each new directory's name in its parent, up to the parent of the first one made, a founded world's directory too (none on win32)", { missing: missing.map((d) => path.relative(root, d)), synced: synced.map((d) => path.relative(root, d)) }); }
 
-// ---------------- T8f (house 6344940039) ----------------
-// a person's founding, a fork and a reset each move new names into place: each is answered only once those names are durable
-// (the directory they land in synced AFTER the rename; a fork's copied blobs synced before its directory moves). None on
-// win32, where the server can't sync a directory
+// ---------------- T8f ----------------
+// a person's founding, a fork and a reset are answered only once their new names are durable (the landing directory
+// synced AFTER the rename; a fork's copied blobs before its directory moves); none on win32
 { const WL = await import("../../server/worldlog.ts"); const { putBlobFile } = await import("../../server/durable.ts");
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync, renameSync: nodefs.renameSync }; let fdPath = new Map(), ev = [];
   const watch = () => { fdPath = new Map(); ev = [];
@@ -298,8 +366,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
     { foundOk, forkOk, blobSynced, resetOk, tmp }); }
 
 // ---------------- T8d, T8e ----------------
-// a key a mint hands out must survive a crash, or the genesis it signed (synced) names a key no one holds: the keys file is
-// written to a temp file and synced, renamed into place, and the directory holding its name synced after the rename
+// a key a mint hands out must survive a crash, or the genesis it signed names a key no one holds: the keys file is
+// written to a temp file and synced, renamed into place, and the directory holding its name synced after
 { const { custodyAt } = await import("../../server/custody.ts");
   const file = path.join(root, "t8d", "keys", "custody.json"), dir = path.dirname(file);
   const o = { openSync: nodefs.openSync, fsyncSync: nodefs.fsyncSync, renameSync: nodefs.renameSync }; const fdPath = new Map(), events = [];
@@ -336,8 +404,8 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   X.g.release(); await tryUntil('the operator-repair reply (operator-repair builder)', () => t.replies.filter((m) => m.operator).length >= k0 + 2, { ms: 3000, step: 10 });
   const two = t.replies.filter((m) => m.operator).slice(k0);
   ok(two.length === 2 && two.every((m) => m.ok === true && m.txn === "committed"), "T9c an operator's repairs queued behind one that changed their own role both commit (no role compare for repairs)", two);
-  // house 6340433633: the refusal says which way the status went, and its fix follows: revoked, sending again won't
-  // change it; granted (an ordinary request queued while the account became an operator), sending again is decided anew
+  // the refusal says which way the status went, and its fix follows: revoked, sending again won't change it; granted (an
+  // ordinary request queued while the account became an operator), sending again is decided anew
   ok(/stopped being a server operator/.test(rep?.reply?.refused?.reason ?? "") && /won't change this/.test(rep?.reply?.refused?.fix ?? ""), "T9d revoked: said so, and that sending it again won't change it", rep?.reply?.refused);
   const gus = idOf("local:gus", "gus"); const tg = tab(X, gus, { account: "local:gus" });
   X.g.hold(); const e2 = X.g.entered; send(t, "say", { text: "ahead-a-third-time" }); await tryUntil('"ahead-a-third-time" is held at the await', () => X.g.entered > e2, { ms: 3000, step: 10 });
@@ -362,11 +430,11 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   ok(t.replies.length === 100 && !bad.length && said(X, "n97") && t.replies.filter((m) => m.verb === "say").length === 14, "T10 100 serial requests from an unchanged guest connection: all committed, no false refusal", { n: t.replies.length, bad: bad.slice(0, 2) }); }
 
 ok(!publishedNotOnDisk.length, "T3d every line any client was sent was on disk when it was sent", publishedNotOnDisk);
-// ---------------- T11 (review r14 M1, 10-18) ----------------
-// every write a socket sends goes through requestwire (one capability, the queue, the meters, both recheck seams): server.ts
-// itself calls w.log.request nowhere; voice-moderate goes through requestAs. A static row: the wire has no other door to a write.
+// ---------------- T11 ----------------
+// every write a socket sends goes through requestwire (one capability, the queue, the meters, both recheck seams):
+// server.ts calls w.log.request nowhere; voice-moderate goes through requestAs; the wire has no other door to a write
 { const srv = fs.readFileSync(path.join(ENGINE, "server/server.ts"), "utf8"); const rw = fs.readFileSync(path.join(ENGINE, "server/requestwire.ts"), "utf8");
   const direct = srv.split("\n").map((l, i) => [i + 1, l] as const).filter(([, l]) => /\.log\.request\(/.test(l) && !/^\s*\/\//.test(l)).map(([n, l]) => `${n}: ${l.trim().slice(0, 100)}`);
   ok(!direct.length && /requestAs\(c, ws, w,/.test(srv) && /export function requestAs\(/.test(rw) && /recheck\(cap\)/.test(rw.slice(rw.indexOf("export function requestAs"))),
     "T11 server.ts has no direct w.log.request caller (voice-moderate goes through requestwire.requestAs: capture, the connection's queue, the busy meter, recheck at both seams)", direct); }
-console.log(`[txn-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

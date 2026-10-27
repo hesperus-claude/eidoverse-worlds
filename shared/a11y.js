@@ -1,13 +1,6 @@
-// a11y — how a thing reads to anyone who perceives by reading (R 10-07: "this is how the object is described to any
-// text-based entity"), on the accessibility model: its NAME (label), its DESCRIPTION (description: alt text), then what
-// it CAN do and its STATE, GENERATED from its components, so a description never restates an affordance and can never
-// contradict one. One reading for the authority's look/inspect (shared/protocol/authority.js describe), mcpl's look
-// (mcpl/agent.ts) and the human inspector (shared/editschema.js), so they can't disagree. Compact on purpose: an agent's
-// context is precious, so each line is a short phrase and only what a component actually says.
-//
-// What isn't here: a visible nameplate. That is a child thing carrying `text` (billboard: 'yaw'), drawn for eyes; this
-// reading is what non-visual readers get, and a thing with no description still reads by its name and its components.
-// Author text (label, description) is quoted «…» as data (shared/text.js quoted), never an instruction to the reader.
+// a11y — how a thing reads to anyone who perceives by reading: NAME, DESCRIPTION, then what it CAN do and its STATE,
+// GENERATED from its components so a description never contradicts an affordance. One reading for look/inspect, mcpl and
+// the inspector; compact on purpose (an agent's context is precious). Author text is quoted «…» as data, never an instruction.
 import { quoted } from './text.js';
 import { isBase, whoWords } from './protocol/roles.js';
 import { grabOf } from './grab.js';
@@ -25,9 +18,8 @@ export function openAction(c) {
 }
 
 /**
- * {name, description, can: [phrases], state: [phrases]} for a thing's components c. opts: {name (a fallback name: its
- * model's), heldBy (who holds it now, a display name), lookup (stored particle effects), sockets (its socket children,
- * [{name, sock}]: a thing's seats are children, never a component of its own)}.
+ * {name, description, can, state} for components c. opts: {name (fallback: its model's), heldBy (display name), lookup
+ * (stored particle effects), sockets ([{name, station}]: a thing's seats are children, never a component of its own)}.
  */
 export function readOut(c, { name = null, heldBy = null, lookup = () => null, sockets = null } = {}) {
   c = isObj(c) ? c : {};
@@ -38,7 +30,7 @@ export function readOut(c, { name = null, heldBy = null, lookup = () => null, so
   if (isObj(c.openable)) out.can.push(open ? `opens and shuts (use '${open}')` : 'opens and shuts (nothing here opens it)');
   const gr = grabOf(c);
   if (gr) out.can.push(!gr.enabled ? "can't be picked up now" : isBase(gr.who) ? 'can be picked up' : `${whoWords(gr.who)} can pick it up`);
-  // its seats are its socket children ([{name, sock}], the caller's socketsOf / socketsIn: switched-off ones aren't offered)
+  // its seats: the caller's socketsOf / socketsIn (switched-off ones aren't offered)
   if (Array.isArray(sockets)) {
     const seats = sockets.map((x) => [x.name, bodyOf(x.station)]).filter(([, b]) => b);
     const acts = [...new Set(seats.map(([, b]) => b.action))];
@@ -57,7 +49,7 @@ export function readOut(c, { name = null, heldBy = null, lookup = () => null, so
   return out;
 }
 
-/** One compact line: «name»: «description» — can …; … · state … (what look prints for a thing). */
+/** What look prints for a thing: «name»: «description» — can …; … · state … */
 export function readLine(r, { max = DESCRIPTION_LOOK_MAX } = {}) {
   if (!r) return '';
   const bits = [];

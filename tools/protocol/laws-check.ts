@@ -12,6 +12,7 @@ import { MAX_FEATURES } from "../../shared/terrainshape.js";
 import { normalizePolicy, segmentAt } from "../../shared/forecast.js";
 import * as PH from "./pinhistory.ts";
 import { fileURLToPath } from "node:url";
+import { suite } from "./suite.ts";
 export const LAWS = { ground: { version: "ground@1", data: "terrain" }, sky: { version: "forecast@1", data: "sky" } } as const;
 const FILE = new URL("../../spec/conformance/laws.json", import.meta.url);
 const bits = (x: number) => { const b = new DataView(new ArrayBuffer(8)); b.setFloat64(0, x); return b.getBigUint64(0).toString(16).padStart(16, "0"); };
@@ -34,8 +35,7 @@ if (process.argv.includes("--write")) {
   const moved = Object.entries(LAWS).filter(([k, L]) => had?.laws?.[k] === L.version && JSON.stringify(had[L.data]) !== JSON.stringify((now as any)[L.data])).map(([, L]) => `${L.data} under ${L.version}`);
   if (moved.length) { console.log(`refusing to write: ${moved.join(", ")} would change (a change meant to alter results is a new version: bump it in LAWS, laws-check.ts)`); process.exit(1); }
   fs.writeFileSync(FILE, JSON.stringify({ laws: { ground: LAWS.ground.version, sky: LAWS.sky.version }, columns: COLUMNS, contract: CONTRACT, note: "heights and intensities are IEEE-754 float64 bits, big-endian hex; times are epoch ms", ...now }, null, 1) + "\n"); console.log(`laws.json written (${LAWS.ground.version}, ${LAWS.sky.version})`); process.exit(0); }
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`); if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 400)); } };
+const { check, done } = suite("laws-check");
 const want = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : null;
 check("LW0 the law vectors exist", !!want);
 if (want) {
@@ -51,4 +51,4 @@ check(`LWV each law names its version (ground ${LAWS.ground.version}, sky ${LAWS
   const ROOT = fileURLToPath(new URL("../../", import.meta.url)); const F = "spec/conformance/laws.json";
   const r = PH.sameVersionChanged(ROOT, F, (f) => (fs.existsSync(ROOT + f) ? fs.readFileSync(ROOT + f, "utf8") : null), Object.entries(LAWS).map(([k, L]) => ({ law: k, versionOf: (x: any) => x?.laws?.[k], data: [L.data] })));
   if (r.out.length) console.log("     ", JSON.stringify(r).slice(0, 400)); return want?.laws?.ground === LAWS.ground.version && want?.laws?.sky === LAWS.sky.version && !r.out.length; })(), want?.laws);
-console.log(`[laws-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

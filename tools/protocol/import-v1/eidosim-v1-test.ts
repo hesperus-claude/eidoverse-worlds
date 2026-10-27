@@ -1,19 +1,14 @@
-// The deterministic sim fold, held to PROTOCOL_v2's covenants in a vacuum:
+// The deterministic sim fold, held to PROTOCOL_v2's covenants in a vacuum: SELF-AGREEMENT (two folds of the same entries
+// are bit-identical); SCHEDULE-INDEPENDENCE (one jump equals tick by tick; snapshots may cut anywhere); QUANTIZATION
+// (the Covenant-IV ceil rule); TOTALITY (malformed intents shape nothing); RELEASE (the authored word wins); REFUSAL (a
+// foreign epoch is recorded, never recomputed).
 //   bun tools/protocol/import-v1/eidosim-v1-test.ts   (suite eidosim-v1 in tools/protocol/run.ts)
-//
-// SELF-AGREEMENT — two independent folds of the same entries are
-// bit-identical; SCHEDULE-INDEPENDENCE — advancing in one jump equals
-// advancing tick by tick (snapshots may cut anywhere); QUANTIZATION — the
-// Covenant-IV ceil rule; TOTALITY — malformed intents shape nothing;
-// RELEASE — the authored word wins; REFUSAL — a foreign epoch is recorded,
-// never recomputed.
 
 import { emptySim, simEntry, advanceSim, tickOf, simPose, simSnapshot, SIM_ID } from "./eidosim-v1.js";
+import { suite } from "../suite.ts";
 
-// The engine reads an "instant fold" beside its entries: st.entities[id].{lib, pos, yaw, scale} and st.terrain (the
-// shape shared/protocol/simlayer.js's v1View hands it). This is that view, for exactly the dialect-3 verbs these scripts
-// use: spawn makes a thing, place moves it, remove/light end it as a modelled thing (a light reusing the id has no
-// lib), terrain is the world's ground. It is not a fold of any log format; it is the engine's input, kept by hand.
+// the engine's input view (st.entities[id].{lib, pos, yaw, scale}, st.terrain; simlayer.js v1View), kept by hand for the
+// dialect-3 verbs these scripts use; not a fold of any log format
 type LogEntry = { seq: number; ts: number; actor: string; verb: string; args: Record<string, any> };
 const emptyState = () => ({ entities: {} as Record<string, any>, terrain: null as any });
 function foldEntry(st: ReturnType<typeof emptyState>, e: LogEntry) {
@@ -25,11 +20,7 @@ function foldEntry(st: ReturnType<typeof emptyState>, e: LogEntry) {
   else if (e.verb === "terrain") st.terrain = a;
 }
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const { check, done } = suite("eidosim-v1-test", { cap: Infinity });
 const digest = (sim: any) => JSON.stringify(simSnapshot(sim));
 
 const T0 = 1_700_000_000_000;
@@ -108,8 +99,8 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     f.sim.epoch!.foreign === true && Object.keys(f.sim.bodies).length === 0);
 }
 
-{ // eidosim@0.2.0: terrain-aware ground (§24t-3 — the epoch bump the 0.1
-  // header scheduled, unblocked by shared/terrainmath.js)
+{ // eidosim@0.2.0: terrain-aware ground (§24t-3, the epoch bump
+  // unblocked by shared/terrainmath.js)
   const { makeHeightField, terrainParams } = await import("../../../shared/terrainmath.js");
   const TARGS = { seed: 7, size: 160, segments: 8, amplitude: 2.6, flatRadius: 16 };
   const HILLS: LogEntry[] = [
@@ -142,7 +133,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
 }
 
 { // THE 0.1.0 LAW IS CARRIED, PINNED: an old log's epoch replays flat-floor
-  // — same bits it always produced — even though this build MINTS 0.2.0.
+  // with the same bits it always produced, though this build MINTS 0.2.0.
   const OLD: LogEntry[] = [
     mk(0, 0, "genesis", { v: 3, dialect: "eidoverse-log" }),
     mk(1, 5, "terrain", { seed: 7, size: 160, amplitude: 2.6 }),
@@ -159,7 +150,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     pose.resting === true && pose.p[1] === 1.2, String(pose.p[1]));
 }
 
-{ // eidosim@0.3.0: the world's things are colliders (§24t-8 — boxes the
+{ // eidosim@0.3.0: the world's things are colliders (§24t-8: boxes the
   // sequencer stamps into history; Covenant III)
   const CRATE = [[-0.5, 0, -0.5], [0.5, 1, 0.5]];
   const WALLBOX = [[-0.25, 0, -2], [0.25, 2, 2]];
@@ -186,8 +177,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   const b2 = fold(WALL);
   advanceSim(b2.sim, 123); advanceSim(b2.sim, 600);
   check("schedule-independence (collision law)", digest(b2.sim) === digest(sim));
-  // a collider change mid-flight takes effect at ITS tick, whatever the
-  // advance schedule: live (advance, fold, advance) ≡ replay (fold all, advance)
+  // a collider change mid-flight takes effect at ITS tick, whatever the schedule: live (advance, fold, advance) ≡ replay
   const MOVE = [...WALL, mk(6, 560, "place", { id: "wall", pos: [2.2, 0, 0] })];
   const live = fold(WALL);
   advanceSim(live.sim, tickOf(live.sim, T0 + 540));
@@ -211,7 +201,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   check("a flight landing on a deck RESTS ON IT (its top is ground) and names its support",
     onDeck.resting === true && onDeck.p[1] === 1 && onDeck.on === "deck" && onDeck.p[0] > 2 && onDeck.p[0] < 8,
     `y ${onDeck.p[1]} on ${onDeck.on} x ${onDeck.p[0]}`);
-  // a spawn under the epoch carries the sequencer's stamp → a static
+  // a spawn under the epoch carries the sequencer's stamp: a static
   const s3 = fold([...WALL, mk(6, 700, "spawn", { id: "new", lib: "new.glb", pos: [9, 0, 9], box: CRATE })]);
   check("a spawn's stamped box makes the new thing a static", "new" in s3.sim.statics! && !!s3.sim.boxes!["new.glb"]);
   check("the sim snapshot carries boxes and statics", !!(simSnapshot(s3.sim) as any).boxes && !!(simSnapshot(s3.sim) as any).statics);
@@ -225,7 +215,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     o2.sim.bodies.crate.resting === true && o2.sim.bodies.crate.p[0] > 4.5, String(o2.sim.bodies.crate.p[0]));
 }
 
-{ // LEAVING an epoch (ruling 2026-09-01): an explicit `sim: null`, never a toggle
+{ // LEAVING an epoch: an explicit `sim: null`, never a toggle
   const EXIT: LogEntry[] = [...SCRIPT,
     mk(4, 700, "place", { id: "crate", pos: [3, 0.5, 3], via: "epoch-release" }),   // the sequencer's release
     mk(5, 701, "epoch", { sim: null })];
@@ -248,7 +238,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     && Object.keys(missing.sim.bodies).length === 1);
 }
 
-{ // PR #160 review — B2: a terrain change rebuilds the statics from the fold
+{ // #160 B2: a terrain change rebuilds the statics from the fold
   const CRATE = [[-0.5, 0, -0.5], [0.5, 1, 0.5]];
   const S: LogEntry[] = [
     mk(0, 0, "genesis", { v: 3, dialect: "eidoverse-log" }),
@@ -273,7 +263,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     !l.sim.bodies.crate && !l.sim.statics!.crate);
 }
 
-{ // PR #160 review — the resting fast-path: a long gap is a jump, and bit-identical to stepping
+{ // #160: the resting fast-path: a long gap is a jump, and bit-identical to stepping
   const CRATE = [[-0.5, 0, -0.5], [0.5, 1, 0.5]];
   const S: LogEntry[] = [mk(0, 0, "genesis", { v: 3, dialect: "eidoverse-log" }),
     mk(1, 10, "epoch", { sim: SIM_ID, tickMs: 66, boxes: { "c.glb": CRATE } })];
@@ -292,15 +282,13 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
     JSON.stringify(a.sim.bodies) === JSON.stringify(b.sim.bodies) && a.sim.tick > b.sim.tick);
 }
 
-{ // PR #160 review — B4: eidosim@0.4.0 sweeps; eidosim@0.3.0 is carried, tunnelling and all
+{ // #160 B4: eidosim@0.4.0 sweeps; eidosim@0.3.0 is carried, tunnelling and all
   const THIN = [[-0.1, 0, -0.1], [0.1, 0.2, 0.1]];
   const WALL = [[-0.05, 0, -2], [0.05, 2, 2]];
   const story = (sim: string, tickMs: number, body = THIN, wall = WALL): LogEntry[] => [
     mk(0, 0, "genesis", { v: 3, dialect: "eidoverse-log" }),
     mk(1, 10, "epoch", { sim, tickMs, boxes: { "b.glb": body, "w.glb": wall } }),
-    // the wall stands BETWEEN two of 0.3's endpoints (1.31m apart at this
-    // speed and tick): 3.94 → 5.25 straddles 4.55…4.65 with no overlap at
-    // either end — the reviewer's discriminator, not a lucky straddle
+    // the wall stands BETWEEN two of 0.3's endpoints (1.31m apart): 3.94 → 5.25 straddles 4.55…4.65 with no overlap at either end
     mk(2, 20, "spawn", { id: "wall", lib: "w.glb", pos: [4.6, 0, 0] }),
     mk(3, 30, "spawn", { id: "b", lib: "b.glb", pos: [0, 0, 0] }),
     mk(4, 500, "punt", { id: "b", dir: [1, 0.1, 0], power: 20 }),
@@ -335,7 +323,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   check("0.4 schedule-independence (swept law)", digest(l1.sim) === digest(l2.sim));
 }
 
-// Continuing contacts must move tangentially and still sweep later obstacles.
+// continuing contacts must move tangentially and still sweep later obstacles
 {
   const body = { p: [0, 1, 0], v: [6, 0, 0], yaw: 0, ground: 0, seq: 1,
     born: 0, resting: false, ext: { cx: 0, cz: 0, hx: 0.1, hz: 0.1, y0: 0, y1: 0.2 } };
@@ -359,7 +347,7 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   advanceSim(once, 500);
   check("0.5: multi-contact motion is schedule-independent", JSON.stringify(many) === JSON.stringify(once));
 
-  // A restart snapshot can cut one tick BEFORE rest, as well as after it.
+  // a restart snapshot can cut one tick BEFORE rest, as well as after it
   const resume: any = setup(); resume.statics = {};
   for (let i = 0; i < 69; i++) resume.bodies['r' + i] = { ...structuredClone(body), resting: true };
   resume.bodies.b.p = [0, 0, 0]; resume.bodies.b.v = [0, 0, 0];
@@ -371,5 +359,4 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   check("active-to-rest catch-up preserves the complete snapshot", JSON.stringify(staged) === JSON.stringify(resume));
 }
 
-console.log(`\n${fail ? "\x1b[31mRED\x1b[0m" : "\x1b[32mGREEN\x1b[0m"} — ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

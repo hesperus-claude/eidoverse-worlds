@@ -13,7 +13,7 @@
 // position, the fly permission at take-off).
 
 export const BODY_MODES = Object.freeze(['stand', 'sit', 'lie', 'swim', 'fly', 'fall']);
-export const SETTABLE_MODES = BODY_MODES;   // R 15:45: all six are declarable
+export const SETTABLE_MODES = BODY_MODES;
 export const isBodyMode = (m) => typeof m === 'string' && BODY_MODES.includes(m);
 
 /** The mode the mover's own states say (flying, then swimming, then falling: in the air past a step's grace), else what

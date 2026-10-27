@@ -1,30 +1,17 @@
-// actions — the one list of things a person can DO here: every panel, section,
-// gesture, key and slash command registers once, where it is defined, and every
-// surface that offers actions (the lantern prompt today; the help sheet, the ∃
-// menu and VR's wrist later) reads this list instead of keeping its own copy.
-//
-// PURE, and it must stay that way: no imports, no DOM. Definition sites all over
-// the client import this file, so a dependency here would close cycles through
-// ui.js / chat.js / controller.js. It is unit-tested headless
-// (tools/actions-test.mjs) for exactly that reason.
+// actions — the one list of things a person can DO here, registered where each is defined, read by every surface.
+// PURE, always: no imports, no DOM, or cycles close through ui.js / chat.js / controller.js (tools/actions-test.mjs).
 //
 //   register({ id, title, keywords?, group?, key?, run, when?, fill? }) → unregister()
-//     id       stable, unique. Registering an EXISTING id MERGES (defined fields
-//              win), so a key table can add `key: 'F3'` to the dock's 'panel:debug'
-//              without either site knowing the other's wording.
+//     id       stable, unique; an EXISTING id MERGES (defined fields win): a key table can add `key: 'F3'` to 'panel:debug'
 //     title    what the row says
 //     keywords extra words that find it ("mute", "voice" for the mic)
 //     group    the heading it lists under ("gestures", "panels", "world", …)
-//     key      the keyboard key that does the same thing, shown right-aligned —
-//              the keys teach themselves
+//     key      the keyboard key that does the same thing, shown right-aligned
 //     run      () => void. Required (unless merging into an entry that has one).
 //     when     () => bool — hidden while false (a builder-only wrench)
-//     fill     text a prompt should put in its line instead of running (a command
-//              that needs an argument: '/w ')
-//     icon     optional: an icons.js glyph name, or an emoji literal (a gesture
-//              tile's own face) — how a row looks, never how it matches
-//     detail   optional: a dim second phrase ("open the sky section"; a command's
-//              help line) — display only, never matched
+//     fill     text a prompt puts in its line instead of running (a command needing an argument)
+//     icon     optional: an icons.js glyph name or an emoji; display only, never matched
+//     detail   optional: a dim second phrase (a command's help line); display only, never matched
 //   list(query, { limit }) → [{ action, score }] best first; '' lists everything
 //   score(query, action)   → number, 0 = no match. Exported for the tests.
 
@@ -51,16 +38,11 @@ export function clear() { actions.clear(); }   // tests
 const visible = (a) => { try { return a.when ? !!a.when() : true; } catch { return false; } };
 
 // ---------------------------------------------------------------- ranking
-// Tiers, highest first — the ranking contract the tests pin:
+// Tiers, highest first (the tests pin them):
 //   exact (1000) > prefix (900) > key (850) > word-start (700) > all-words (650)
 //   > substring (400) > subsequence (100..199, tighter spans higher).
-// A KEYWORD match (word-start or better) counts a tier lower (-100) than the same match on the title,
-// so "mute" finds the mic through its keyword but a title that says "mute" wins,
-// and a keyword merely STARTING with what you typed ("hi" → "hide") is never STRONG.
-//
-// STRONG (>= 850): a title exact/prefix, an exact keyword, or the key itself — a
-// confident match. (The lantern once used it to guess command-or-speech; it no
-// longer guesses: Enter says, Tab does. Kept for surfaces that want confidence.)
+// A KEYWORD match counts -100 against the same match on the title; a keyword merely STARTING the query is never STRONG.
+// STRONG (>= 850): a title exact/prefix, an exact keyword, or the key itself, for surfaces that want confidence.
 const WORD_SPLIT = /[\s\-_/·:▸.,()'"]+/;
 
 function tier(q, text) {
@@ -111,8 +93,7 @@ export function list(query = '', { limit = 50 } = {}) {
   return out.slice(0, limit).map(({ action, score: s }) => ({ action, score: s }));
 }
 
-/** Group ranked results for display, keeping the best row FIRST: a group sits
- *  where its best row ranks, and rows keep their rank inside it. */
+/** A group sits where its best row ranks; rows keep their rank inside it. */
 export function grouped(results) {
   const groups = new Map();
   for (const r of results) {

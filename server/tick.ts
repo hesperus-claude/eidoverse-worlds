@@ -1,22 +1,7 @@
-// eidoverse-worlds sequencer — the heartbeat (overhaul charter §4, phase 1
-// slice 3). ONE scheduler for everything that runs on a cadence, in the
-// spirit of the client rebuild's organizing principle (TEL0S_NOTES §3: one
-// scheduler, no timeout escapes).
-//
-// Before this module the server kept four naked setIntervals (stage frames,
-// behavior tick, lease sweep, seat-store poll), each with its own guard
-// idiom and none observable. Now a cadence is a REGISTERED SYSTEM: named,
-// error-isolated (house rule 3 — one system's throw costs that system one
-// beat, never its neighbors, never the process), and measured (runs, worst
-// ms, last error) at GET /tick.
-//
-// This is the SEAM, not yet the simulation: systems today are sweeps and
-// fanouts, so the base interval keeps setInterval's honest wall-clock drift
-// and cadences are "at least everyMs apart", exactly the guarantee the four
-// intervals gave. When the sim core proper arrives (fixed timestep,
-// determinism policy — charter §6 phase 1, tel0s's redo), it lands as a
-// system here with an accumulator loop inside; nothing outside this file
-// has to learn anything.
+// eidoverse-worlds sequencer — the heartbeat (overhaul charter §4, phase 1 slice 3): one scheduler for the server's
+// cadenced systems (TEL0S_NOTES §3). A cadence is a REGISTERED SYSTEM: named, error-isolated (one system's throw costs
+// that system one beat, never its neighbors, never the process), and measured (runs, worst ms, last error) at GET /tick.
+// The base interval keeps setInterval's wall-clock drift; cadences are "at least everyMs apart", no fixed timestep.
 
 export type TickSystem = {
   name: string;

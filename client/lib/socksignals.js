@@ -10,12 +10,8 @@
 //   aimYaw, aimPitch         rad    where the occupant looks, relative to the socket's forward (riding presence)
 //   param.<name>             the thing's `params` component (scripts write it)
 //
-// Every value here is a closed form of data every client already has — the motion component, the server clock, the
-// occupant's presence — so two clients looking at one swing put the occupant's clip at the same frame. (A thing moved by
-// physics, not by a motion component, reads speed/turn 0 here: physics is a later port.)
-//
-// Pure: imports only the motion closed forms (motioneval.js, itself pure and shared with the agent) and the node and type readers (names.js motionNode, motionType). It lives beside
-// them in client/lib because the browser is served client/ at its root: shared/ code can't reach back into it.
+// Each is a closed form of data every client has (motion, server clock, presence), so clients agree to the frame;
+// physics-moved things read speed/turn 0. Pure; lives in client/lib because shared/ can't import client/.
 
 import { evalWholeMotion, since, ampOf, rateOf } from './motioneval.js';
 import { motionNode, motionType } from '../../shared/protocol/names.js';
@@ -24,13 +20,12 @@ const TAU = 2 * Math.PI;
 const frac = (x) => x - Math.floor(x);
 const fin = Number.isFinite;
 
-/** The motion that carries a socket: its part's (a `motion:<slot>` whose node it is, or an old `motion` naming that part) when it rides one,
- *  else the thing's whole motion. Null when nothing moves it. */
+/** Its part's motion (a `motion:<slot>` on that node, or an old `motion` naming it) when it rides one, else the whole motion; null if none. */
 export function carrierMotion(comp, sock) {
   if (!comp) return null;
   const part = typeof sock?.part === 'string' ? sock.part : null;
   if (part) {
-    // the motion on that node: a keyed motion whose node it is (motioneval.js motionNode: the value's `node`, never the key)
+    // motionNode reads the value's `node`, never the key
     const k = Object.keys(comp).find((x) => x.startsWith('motion:') && comp[x]?.type && motionNode(x, comp[x]) === part);
     const m = (k ? comp[k] : null) ?? (comp.motion?.part === part ? comp.motion : null);
     if (m?.type) return { m, part: true };
@@ -39,14 +34,11 @@ export function carrierMotion(comp, sock) {
   return w?.type && typeof w.part !== 'string' ? { m: w, part: false } : null;
 }
 
-/** A pendulum or oscillate whose swing is below this (rad, or m for an oscillate) is still: its phase stops advancing, so a seat
- *  locked to it doesn't pump a body on a swing that isn't swinging (amp 0, or damped out). */
+/** rad (m for an oscillate): below this a swing is still and its phase stops, so a locked seat doesn't pump a body at rest. */
 export const STILL = 0.01;
 
-/** phase (0..1) and swing (-1..1) of one motion at nowMs. One meaning for every cyclic motion: phase 0 is the cycle's
- *  positive extreme and swing = cos(2π·phase) — scaled, for a damped pendulum, by how much of its swing is left. A
- *  pendulum (θ = amp·cos) and an oscillate (offset = amp·sin) are therefore both at phase 0 at their positive end. A still
- *  oscillator (amplitude below STILL) reads the phase it came to rest at, and swing 0. */
+/** For every cyclic motion phase 0 is the positive extreme and swing = cos(2π·phase), scaled by a damped pendulum's remaining swing.
+ *  A still oscillator (amplitude < STILL) reads the phase it came to rest at, and swing 0. */
 export function cycleOf(m, nowMs) {
   if (!m?.type) return { phase: 0, swing: 0 };
   const t = since(m, nowMs);
@@ -54,7 +46,7 @@ export function cycleOf(m, nowMs) {
     case 'pendulum': {
       const w0 = TAU / (m.period ?? 3.5), damp = m.damp ?? 0, amp = Math.abs(ampOf(m));
       if (amp < STILL) return { phase: frac((m.phase ?? 0) / TAU), swing: 0 };
-      // damped out: the phase stops where the swing fell below STILL (the same instant on every client)
+      // damped out: the phase stops where the swing fell below STILL, the same instant on every client
       const tStill = damp > 0 ? Math.log(amp / STILL) / damp : Infinity;
       if (t >= tStill) return { phase: frac((w0 * tStill + (m.phase ?? 0)) / TAU), swing: 0 };
       const a = w0 * t + (m.phase ?? 0);
@@ -88,7 +80,7 @@ export function cycleOf(m, nowMs) {
 }
 
 const DT = 50;   // ms: the finite difference speed and turn are read over (every client uses the same)
-/** speed (m/s) and turn (rad/s) of a thing's whole motion at nowMs, from the closed form at nowMs and nowMs - DT. */
+/** speed (m/s) and turn (rad/s) of a thing's whole motion, differenced over DT. */
 export function travelOf(base, m, nowMs) {
   if (!m?.type || typeof m.part === 'string' || !base?.pos) return { speed: 0, turn: 0 };
   const a = evalWholeMotion(base, m, nowMs - DT), b = evalWholeMotion(base, m, nowMs);
@@ -98,8 +90,7 @@ export function travelOf(base, m, nowMs) {
   return { speed: d / (DT / 1000), turn: dy / (DT / 1000) };
 }
 
-/** Every signal for one occupant of one socket. comp: the thing's component bag; base: its rest pose {pos, yaw|q}
- *  (what motion composes on); input: the occupant's {throttle, steer, aimYaw, aimPitch} (absent = 0). */
+/** One occupant of one socket. base: the rest pose {pos, yaw|q} motion composes on; input: {throttle, steer, aimYaw, aimPitch}, absent = 0. */
 export function socketSignals({ comp, sock, base, nowMs, input }) {
   const out = { speed: 0, turn: 0, phase: 0, swing: 0, throttle: 0, steer: 0, aimYaw: 0, aimPitch: 0 };
   const c = carrierMotion(comp, sock);

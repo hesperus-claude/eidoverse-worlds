@@ -1,16 +1,9 @@
-// snapframe-test — optional /snap framing (dist / height / pitch), end to end.
-//
+// snapframe-test: optional /snap framing (dist / height / pitch), end to end, in three layers that can each break alone:
+//   1. shared/snapframe.js: what survives normalisation (omitted, zero, junk, range limits, HTTP strings vs model args).
+//   2. client/lib/fp_view.js: composeFirstPerson's pitch (+ up, − down, omitted keeps the old gaze exactly).
+//   3. the wire: a scratch sequencer, a plain-door agent, an HTTP /snap, ten fake renderer legs recording each `snap`;
+//      absent fields put no `frame` on the wire.
 //   bun tools/snapframe-test.ts
-//
-// Three layers, each of which could break without the others noticing:
-//   1. shared/snapframe.js — what survives normalisation (omitted, zero,
-//      junk, range limits, HTTP strings vs model arguments).
-//   2. client/lib/fp_view.js — composeFirstPerson's pitch: + looks up,
-//      − looks down, omitted keeps the old gaze exactly.
-//   3. the wire — a scratch sequencer, a plain-door agent calling the
-//      snapshot tool, an HTTP /snap, and ten fake renderer legs recording
-//      the view and framing of each `snap` they're asked for. Absent fields
-//      must put no `frame` on the wire.
 
 import { normalizeSnapFrame, SNAP_DIST, SNAP_HEIGHT, SNAP_PITCH } from "../shared/snapframe.js";
 import * as fp from "../client/lib/fp_view.js";
@@ -63,9 +56,7 @@ check("pitch keeps the heading (yaw 0 → +z, no x drift)", near(up.dx, 0) && ne
 // ---- 3. the wire ------------------------------------------------------------
 console.log("wire (scratch sequencer + fake renderer + plain-door agent)");
 const PORT = 8000 + Math.floor(Math.random() * 900), WORLD = "framing", TOKEN = "snapframe-test";
-// (ported 10-17: the world is founded first — joining never founds one — joins fold the log (replica: true), the broker
-// speaks capture / capture-result, the agent's tool is screenshot, and a box with a door key keeps /worlds and /snap
-// behind it)
+// the world is founded first (joining never founds one); a box with a door key keeps /worlds and /snap behind it
 const WORLDS = mkdtempSync(join(tmpdir(), "snapframe-"));
 const { foundWorlds } = await import("./harness.ts");
 foundWorlds(WORLDS, [WORLD]);
@@ -80,14 +71,8 @@ let up2 = false;
 for (let i = 0; i < 60 && !up2; i++) { try { await fetch(`http://127.0.0.1:${PORT}/worlds`, KEY); up2 = true; } catch { await Bun.sleep(200); } }
 if (!up2) { console.error("FATAL: scratch sequencer never came up (bun install in the repo root?)"); process.exit(2); }
 
-// fake renderer legs: each answers every snap with a 1×1 PNG. They record each
-// snap's view and frame, and any framing value also copied to the message's top
-// level, where it could be read as framing or collide with a field such as an
-// image size. Other fields aren't compared, so a sender can add its own.
-// There are ten, more than the snapshots this test takes, because the broker
-// rests each renderer for 2 s from the request it sends it, and answers 429 at
-// once when no renderer it could use is free. Each joins before the next, and
-// the test goes on once the sequencer has answered all ten joins.
+// fake legs answer every snap with a 1×1 PNG; ten, more than the snapshots taken, because the broker rests a renderer
+// 2 s per request and answers 429 when none is free
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const asked: Record<string, unknown>[] = [];
 const renderers: WebSocket[] = [];
@@ -109,8 +94,7 @@ for (let i = 1; i <= 10; i++) {
     }
   };
 }
-// A 429 means no fake renderer was free, so say why rather than fail on a
-// missing picture alone.
+// a 429 means no fake renderer was free: say why rather than fail on a missing picture alone
 const BUSY = "the broker answered 429: no fake renderer was free for this snapshot, though the test joins ten so that each finds one that isn't resting or busy";
 
 // plain-door agent over MCP stdio
@@ -166,7 +150,7 @@ const h = await fetch(`http://127.0.0.1:${PORT}/snap?world=${WORLD}&follow=frame
 if (h.status === 429) check(BUSY, false, await h.text());
 check("HTTP /snap query → normalised before the wire", h.status === 200 && asked.length > before && same(asked.at(-1), { view: "third", frame: { height: 0, pitch: 10 } }), JSON.stringify(asked.at(-1)));
 
-// the door key guards both reads this suite makes (#260 house I575): without it, refused, and no capture dispatched
+// the door key guards both reads this suite makes: without it, refused, and no capture dispatched
 const nAsked = asked.length;
 const bare = await fetch(`http://127.0.0.1:${PORT}/worlds`);
 check("an unkeyed /worlds is refused", bare.status === 401 || bare.status === 403, String(bare.status));

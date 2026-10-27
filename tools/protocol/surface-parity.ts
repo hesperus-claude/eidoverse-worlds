@@ -1,57 +1,17 @@
-// tools/protocol/surface-parity.ts — does the SURFACE look the same? A visual-regression check between two trees of this
-// repo: the same worlds, served by each tree, photographed from the same fixed cameras in a headless Chromium, and
-// pixel-diffed old against new. By default the old tree is `main` and the new tree is this checkout, so it answers
-// "does my branch change what anyone sees?"
+// tools/protocol/surface-parity.ts: does the SURFACE look the same? A visual-regression check between two trees of this
+// repo: the same worlds served by each, photographed from the same fixed cameras in a headless Chromium, pixel-diffed old
+// against new. By default old is `main` and new is this checkout: "does my branch change what anyone sees?"
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/surface-parity.ts [--check] --commons <dir> --gym <dir> [flags]
 //
-//   --check              assert every prerequisite and stop before the first frame (what to run first on a new box)
-//   --old-ref <ref>      the git ref the OLD tree is checked out from (default main; env SURFACE_OLD_REF)
-//   --old <tree>         the OLD checkout to serve (default: a detached worktree of --old-ref, made if missing at
-//                        $SURFACE_OLD_TREE or <tmpdir>/eido-surface-old-<commit>)
-//   --new <tree>         the NEW checkout (default: this file's repo)
-//   --commons <dir>      the Commons world to render: a directory holding world.jsonl (required unless --only excludes it)
-//   --gym <dir>          the gym world to render (required unless --only excludes it)
-//   --world <name>=<dir> another world to render beside them; repeatable (name: letters, digits, _)
-//   --out <dir>          where frames and diffs go (default notes/surface-parity/<timestamp>/ in the new tree; never /tmp)
-//   --threshold <pct>    changed-pixel percentage that fails a camera (default 0.5)
-//   --tolerance <0-255>  per-channel difference under which a pixel counts as unchanged (default 16: SwiftShader dither)
-//   --camera <w>:<name>=<x>,<y>,<z>/<lx>,<ly>,<lz>   add a camera to world <w>; repeatable
-//   --keep-ui            leave the DOM chrome (panels, chat, HUD) in frame — by default only the canvas is compared
-//   --pin-clock <ms>     the epoch ms the page's Date.now() is pinned to (default: the old tree's commit time)
-//   --no-pin-clock       let the page's Date.now() run real; by default it is pinned (see "probe hooks")
-//   --no-control         skip the second boot of the old tree that measures the noise floor
-//   --timeout <s>        how long a client may take to settle and draw (default 150; SwiftShader is slow)
-//   --only <world>       just one world
-//   --headed             a window you can watch
+//   flags: tools/protocol/SURFACE-PARITY.md (Flags)
 //
-// PREPARE, DON'T PRETEND. Headless Chromium is easy to get half-working, so this script asserts every prerequisite BY
-// NAME before it takes a frame, and a run that cannot take frames exits 2 saying which step failed — never a green. The
-// named steps, in order: browser binary · old tree · world copies · memory · old server · new server · world opens
-// (both trees, every world, as the spectator the browser will be) · browser page target · client ready (frames drawn) ·
-// camera honoured. A red (exit 1) is a pixel verdict; exit 2 is "could not look"; exit 3 is "looked, but the noise
-// floor is too high to call it".
-//
-// WHAT IS COMPARED, AND WHAT IS NOT. The browser joins as a SPECTATOR (`?spectate`: client/lib/base.js:42 → net.js:266
-// `spectate: true`; localbody.js:335 spawns no local body for a spectator) in a scratch COPY of each world that nobody
-// else is in. So there are no bodies, name tags or chat bubbles in frame — presence-only regions are absent rather than
-// masked, and the harness asserts that from the server's own snapshot (people[] empty) before each frame. By default the
-// DOM chrome over the canvas is hidden too (particles-shots.ts:185 does the same): panels carry names and clocks, and a
-// panel regression is a UI diff, not a surface one. --keep-ui puts it back.
-//
-// PROBE HOOKS (not features): the camera is placed by Runtime.evaluate on client/lib/core.js's exported `camera`
-// (particles-shots.ts:189 does the same). There is no URL parameter for a fixed camera; a spectator's camera is only
-// moved by controller.js updateSpectator (:1035) when it follows a remote with an avatar, and with nobody present it
-// stays where we put it — which the harness verifies by reading it back after a few frames. And Date.now() is pinned
-// to the old tree's commit time inside the page (sky.js:385/:416 derive the sun and the forecast's weather from
-// Date.now(), so two runs minutes apart would otherwise light the world differently; serverclock.js reads
-// performance.timeOrigin, so motion phases and clock sync are untouched). --no-pin-clock turns it off.
-//
-// Browser hygiene it leans on: teardown in finally and on signals; every gate prints
-// its stage on green and red; waits are on conditions (frames drawn, loads idle) not clocks; evaluate is raced against
-// a clock (harness.ts cdpOn: 60 s); frames are PROVED (a renderer.render call counter advances) not assumed; the sky guard
-// (ew-cloud-quality=off) and the GPU-loss guard (sessionStorage ew-gpu-lost) from tools/harness.ts:220-226 are applied
-// to every page. Run one headless browser at a time: the script checks memory but takes no lock.
+// Every prerequisite is asserted BY NAME before the first frame. Exit 1 = a pixel verdict, 2 = could not look (names the
+// step), 3 = the noise floor is too high to call it.
+// The browser joins as a SPECTATOR in a scratch COPY of each world nobody else is in (asserted: people[] empty), so no
+// presence is in frame; DOM chrome is hidden unless --keep-ui. Probe hooks: the camera is set on core.js's exported
+// `camera` and read back; Date.now() is pinned to the old tree's commit time (the sky derives from it). One headless
+// browser at a time: the script checks memory but takes no lock.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, cpSync, copyFileSync, mkdtempSync, rmSync, symlinkSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, basename } from "node:path";
@@ -73,8 +33,8 @@ const THRESHOLD = Number(opt("threshold", "0.5")), TOLERANCE = Number(opt("toler
 const ONLY = opt("only");   // one world for a quicker run
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 const OUT = resolve(opt("out", join(NEW, "notes", "surface-parity", STAMP)));
-// The worlds: commons and gym always (each required unless --only picks another), plus any --world name=<dir>. No default
-// paths: a world copy is the contributor's to name. A world with no directory is named by the "world copy" step (exit 2).
+// the worlds: commons and gym always (each required unless --only picks another), plus any --world name=<dir>. No
+// default paths: a world copy is the contributor's to name; one with no directory is named by the "world copy" step (exit 2)
 const WORLDS: Record<string, string | undefined> = { commons: opt("commons"), gym: opt("gym") };
 for (const spec of all("world")) {
   const m = spec.match(/^(\w+)=(.+)$/);
@@ -84,9 +44,8 @@ for (const spec of all("world")) {
 for (const w of Object.keys(WORLDS)) if (WORLDS[w] !== undefined) WORLDS[w] = resolve(WORLDS[w]!);
 const SELECTED = ONLY ? [ONLY] : Object.keys(WORLDS);
 type Cam = { name: string; pos: [number, number, number]; look: [number, number, number] };
-// Two fixed cameras per world: a wide one from above the origin and a standing eye on the ground. Both gym and Commons
-// are built around the origin (the stage floor), so these frame the bulk of each; a --world gets the same pair. Add more
-// with --camera.
+// two fixed cameras per world, a wide one above the origin and a standing eye: both worlds are built around the origin,
+// so these frame the bulk of each; a --world gets the same pair; add more with --camera
 const DEFAULT_CAMS = (): Cam[] => [{ name: "wide", pos: [0, 7, 14], look: [0, 1, 0] }, { name: "eye", pos: [6, 1.6, 6], look: [0, 1.2, -2] }];
 const CAMERAS: Record<string, Cam[]> = Object.fromEntries(Object.keys(WORLDS).map((w) => [w, DEFAULT_CAMS()]));
 for (const spec of all("camera")) {
@@ -140,8 +99,8 @@ const treeOk = (t: string) => ["server/server.ts", "client/lib/core.js", "client
 if (!treeOk(NEW)) await missing("new tree", `${NEW} is not a checkout of this repo (server/server.ts, client/lib/core.js …)`);
 const headOf = (t: string) => Bun.spawnSync(["git", "-C", t, "rev-parse", "--short", "HEAD"]).stdout.toString().trim();
 const describe = (t: string) => Bun.spawnSync(["git", "-C", t, "log", "-1", "--format=%h %s"]).stdout.toString().trim().slice(0, 100);
-// --old names a checkout outright; otherwise the old tree is a detached worktree of --old-ref, at a path named by the
-// ref's commit (so a worktree left by a run against another commit is never mistaken for this one).
+// --old names a checkout outright; else the old tree is a detached worktree of --old-ref at a path named by the ref's
+// commit, so a worktree left by a run against another commit is never mistaken for this one
 let OLD = OLD_GIVEN ? resolve(OLD_GIVEN) : "";
 if (!OLD || !treeOk(OLD)) {
   const refOk = Bun.spawnSync(["git", "-C", NEW, "rev-parse", "--verify", `${OLD_REF}^{commit}`]);
@@ -156,8 +115,8 @@ if (!OLD || !treeOk(OLD)) {
   }
 }
 // the server needs the repo's node_modules (pngjs here, sharp/quickjs there) and the BROWSER needs client/node_modules
-// (three, three-vrm: the server warns "browsers will hang at the splash" without it). A worktree has neither of its own.
-// A link from another checkout is honest only while that checkout's manifest is byte-identical — asserted, not assumed.
+// (three, three-vrm); a worktree has neither. A link from another checkout is honest only while that checkout's
+// manifest is byte-identical: asserted, not assumed.
 const depsSources = [NEW, ...Bun.spawnSync(["git", "-C", NEW, "worktree", "list", "--porcelain"]).stdout.toString().split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.slice(9))];
 function linkDeps(tree: string, sub: string) {
   const want = join(tree, sub, "node_modules"); if (existsSync(want)) return;
@@ -176,9 +135,8 @@ const PIN_MS = Number(opt("pin-clock", String(Number(Bun.spawnSync(["git", "-C",
 if (PIN && !(PIN_MS > 0)) await missing("clock pin", `could not read the old tree's commit time for the clock pin (git log -1 --format=%ct in ${OLD})`, `pass --pin-clock <epoch ms> or --no-pin-clock`);
 
 // ---- 3. the world copies -------------------------------------------------------------------------------------------
-// A world this server serves is a directory holding world.jsonl whose line 0 is a genesis {dialect:"eidoverse-log", v}
-// with the current protocol's v (server/livehost.ts:141). Anything else — an older log under another name, a v1
-// `log.jsonl` — is refused at the door (server.ts:351) on BOTH trees, so it is named here, before any server starts.
+// a served world is world.jsonl whose line 0 is a genesis {dialect:"eidoverse-log", v} at the current v (server/livehost.ts);
+// anything else is refused at the door on BOTH trees, so it is named here, before any server starts
 const genesisOf = (file: string) => { try { return JSON.parse(readFileSync(file, "utf8").split("\n", 1)[0]); } catch { return null; } };
 const entriesOf = (file: string) => { try { return readFileSync(file, "utf8").split("\n").filter(Boolean).length; } catch { return 0; } };
 for (const w of SELECTED) {
@@ -199,8 +157,8 @@ for (const w of SELECTED) {
 }
 
 // ---- 4. memory ------------------------------------------------------------------------------------------------------
-// Two sequencers and one headless Chromium under SwiftShader: the sky alone can exhaust a small VM, and an OOM can take
-// the whole machine with it. Refuse below a floor rather than find out.
+// two sequencers and one headless Chromium under SwiftShader: the sky alone can exhaust a small VM and an OOM can take the
+// machine with it, so refuse below a floor
 const availMB = (() => { try { const m = readFileSync("/proc/meminfo", "utf8").match(/MemAvailable:\s+(\d+)/); return m ? Math.round(+m[1] / 1024) : null; } catch { return null; } })();
 const MEM_FLOOR = Number(process.env.SURFACE_MEM_FLOOR_MB ?? 1200);
 if (availMB !== null && availMB < MEM_FLOOR) await missing("memory", `MemAvailable is ${availMB} MB; the floor is ${MEM_FLOOR} MB (SURFACE_MEM_FLOOR_MB)`, `close another headless Chrome first (ss -ltnp | grep chrome), or wait for the other probe to finish`);
@@ -213,8 +171,8 @@ if (!existsSync(join(EIDOVERSE_DIR, "eidoverse", "assets"))) await missing("asse
 type Server = { tree: string; label: string; port: number; base: string; nonce: string; log: string; worldsDir: string };
 async function spawnServer(tree: string, label: string): Promise<Server> {
   const worldsDir = join(scratch, label, "worlds"); mkdirSync(worldsDir, { recursive: true });
-  // the world copies — and the custody/directory files beside the source (the sequencer's keys, the identity directory),
-  // as gym-env.lab.ts:220 copies them; a copy with no custody is served read-only-ish, which is all a spectator needs
+  // the world copies, and the custody/directory files beside the source (the sequencer's keys, the identity directory), as
+  // gym-env.lab.ts copies them; a copy with no custody is served read-only-ish, all a spectator needs
   for (const w of SELECTED) { const dir = WORLDS[w]!;
     cpSync(dir, join(worldsDir, w), { recursive: true });
     for (const f of [".custody.json", ".directory.json"]) { const src = join(dir, "..", f); if (existsSync(src) && !existsSync(join(worldsDir, f))) copyFileSync(src, join(worldsDir, f)); }
@@ -241,19 +199,18 @@ const tail = (f: string, n = 12) => { try { return readFileSync(f, "utf8").trim(
 const oldS = await spawnServer(OLD, "old"); ok("old server", `:${oldS.port} (${OLD_HEAD})`);
 const newS = await spawnServer(NEW, "new"); ok("new server", `:${newS.port} (${NEW_HEAD})`);
 
-// ---- 7. both world copies open on both trees — as the spectator the browser will be ---------------------------------
-// A join that gets a snapshot is the server saying "this is a world I serve"; its people[] is the presence roster, which
-// must be EMPTY for a parity frame (bodies/tags/bubbles are presence-only and would differ run to run). The entity count
-// is the non-vacuity receipt: a green over an empty world is two blank frames agreeing.
+// ---- 7. both world copies open on both trees, as the spectator the browser will be ---------------------------------
+// a snapshot means "a world I serve"; its people[] must be EMPTY for a parity frame (presence differs run to run), and the
+// entity count is the non-vacuity receipt: a green over an empty world is two blank frames agreeing
 async function spectate(s: Server, world: string): Promise<{ entities: number; people: number }> {
   return new Promise((res, rej) => {
     const ws = new WebSocket(`ws://127.0.0.1:${s.port}/ws`);
     const t = setTimeout(() => { ws.close(); rej(new Error("no snapshot in 15 s")); }, 15_000);
-    ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id: "parity-eye", name: "parity-eye", avatar: "", spectate: true, replica: true }));   // replica: a client that folds the log (server.ts:930 refuses one that does not)
+    ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id: "parity-eye", name: "parity-eye", avatar: "", spectate: true, replica: true }));   // replica: a client that folds the log (server.ts refuses one that does not)
     ws.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.type === "error") { clearTimeout(t); ws.close(); rej(new Error(String(m.error))); }
-      if (m.type === "snapshot") { clearTimeout(t); const ents = m.cut?.state ?? {}; /* clientCutOf (shared/protocol/replica.js:150): state = wireState = {id: {born, c}}, the entity map itself */ const people = (m.present ?? m.people ?? []).length; ws.close(); res({ entities: Object.keys(ents).length, people }); }
+      if (m.type === "snapshot") { clearTimeout(t); const ents = m.cut?.state ?? {}; /* clientCutOf (shared/protocol/replica.js): state = wireState = {id: {born, c}}, the entity map itself */ const people = (m.present ?? m.people ?? []).length; ws.close(); res({ entities: Object.keys(ents).length, people }); }
     };
     ws.onerror = () => { clearTimeout(t); rej(new Error("socket error")); };
   });
@@ -289,10 +246,10 @@ const pageErrors: string[] = [];
 cws.addEventListener("message", (ev) => { const m = JSON.parse(String(ev.data)); if (m.method === "Runtime.exceptionThrown") pageErrors.push(String(m.params?.exceptionDetails?.exception?.description ?? m.params?.exceptionDetails?.text ?? "").slice(0, 200)); });
 await Promise.all([cdp.send("Runtime.enable"), cdp.send("Page.enable"), cdp.send("Log.enable")]);
 await cdp.send("Emulation.setDeviceMetricsOverride", { ...VIEW, deviceScaleFactor: 1, mobile: false });
-// the sky guard and the GPU-loss guard every bench applies (tools/harness.ts:220-226)
+// the sky guard and the GPU-loss guard every bench applies (tools/harness.ts)
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {}" });
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
-// the clock pin (probe hook): the sun and the forecast read Date.now() (sky.js:385, :416)
+// the clock pin (probe hook): the sun and the forecast read Date.now() (sky.js)
 if (PIN) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `(() => { const p0 = performance.now(); Date.now = () => ${PIN_MS} + (performance.now() - p0); })();` });
 const version = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`).then((r) => r.json()).catch(() => ({})) as any;
 ok("browser page target", `${version.Browser ?? "browser"} on :${DEBUG_PORT}${PIN ? `, Date.now pinned to ${new Date(PIN_MS).toISOString()}` : ""}`);
@@ -316,10 +273,8 @@ async function boot(s: Server, world: string): Promise<string> {
   /* a timer-driven counter beside the rAF one: if timers advance while frames stand still, rAF is paused (a hidden/occluded
      headless page), not the page; if both stand still the main thread is pinned */
   await page(`if (globalThis.__spTicks === undefined) { globalThis.__spTicks = 0; setInterval(() => { globalThis.__spTicks++; }, 100); } return true;`);
-  // the frame counter (probe hook): render.js's renderCensus only ticks in XR (xr.js:1174) and frameloop.js keeps its
-  // frameNo private, so the probe counts renderer.render calls itself — batches.render → renderer.render once per drawn
-  // frame on both trees and both backends. Installed once per page; a lost GPU draws nothing (render.js:112) and the
-  // count then stands still, which is the honest reading.
+  // the frame counter: renderCensus only ticks in XR and frameloop.js keeps frameNo private, so the probe counts
+  // renderer.render calls (once per drawn frame on both trees and backends); a lost GPU leaves it standing still
   await page(`globalThis.__spFrames = async () => { const { renderer } = await import('/lib/core.js');
     if (renderer.__spCount === undefined) { renderer.__spCount = 0; const o = renderer.render.bind(renderer); renderer.render = function (...a) { renderer.__spCount++; return o(...a); }; }
     return renderer.__spCount; }; return true;`);
@@ -336,8 +291,8 @@ async function boot(s: Server, world: string): Promise<string> {
       if (f !== framesAt) { framesAt = f; stillSince = Date.now(); } }
     await sleep(400);
   }
-  /* name the stall: every upstream condition held and the renderer.render count stood still — an on-demand render loop with
-     nothing dirty, or a lost GPU (render.js:112) — so the reader is not left guessing which link of the ladder failed */
+  /* name the stall: every upstream condition held and the renderer.render count stood still (an on-demand loop with
+  nothing dirty, or a lost GPU, render.js), so the reader knows which link of the ladder failed */
   const stalled = last.startsWith("frames:") && stillSince ? ` — the frame count stood at ${framesAt} for ${((Date.now() - stillSince) / 1000).toFixed(0)} s after loads/builds/sky settled: nothing redrew (on-demand loop with nothing dirty, or GPU lost)` : "";
   return missing(`client ready: ${world} on ${s.label}`, `the client did not reach a settled, frame-drawing state in ${READY_S} s (--timeout); last stage: ${last}${stalled}; stages seen: ${seen.slice(-6).join(" → ")}; trail: ${readyLog}`,
     pageErrors.length ? `page exceptions:` : `no page exceptions`, ...pageErrors.slice(0, 6), `sequencer log tail:`, ...tail(s.log, 8));
@@ -399,8 +354,8 @@ try {
     for (const c of cams) newPNG.set(c.name, await frame(newS, world, c, join(dir, `${c.name}.new.png`)));
     ok(`frames: ${world} on new`, `${cams.length} camera(s)`);
     // the control: the OLD tree booted a second time and shot from the first camera. Two boots of the same code differ by
-    // whatever is nondeterministic here (asset arrival order, SwiftShader dither, anything still animating); that number is
-    // the floor under which an old-vs-new difference means nothing.
+    // whatever is nondeterministic (asset arrival order, SwiftShader dither, anything animating): below that floor an
+    // old-vs-new difference means nothing
     let noise: Diff | null = null;
     if (CONTROL && cams.length) {
       st = await boot(oldS, world); ok(`client ready: ${world} on old (control)`, st);

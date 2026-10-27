@@ -1,13 +1,5 @@
-// rows — the house row builders, one copy.
-//
-// Every tuning panel in this client is the same three-element row: a name span,
-// a control, a readout. Before this file the slider variant alone was spelled
-// SEVEN times (six inside debug.js — dials, joints, blink, limp, hair, wings —
-// plus the sky panel's), each a private loop with its own accidental widths and
-// its own repaint bug surface (survey §B5). The builders here are DUMB on
-// purpose: they own layout and wiring, never state — state lives in the table
-// the caller hands in (TUNING, HAIR_TUNING, a def bag), which is what keeps
-// "reset" a one-line write-then-repaint everywhere.
+// rows — the house row builders (name, control, readout), one copy. DUMB on purpose: layout and wiring, never state;
+// state lives in the caller's table, which keeps "reset" a one-line write-then-repaint everywhere.
 
 const mk = (tag, className, cssText) => {
   const n = document.createElement(tag);
@@ -16,22 +8,20 @@ const mk = (tag, className, cssText) => {
   return n;
 };
 
-/** The house <select> skin — build's panels spelled this cssText five times. */
+/** The house <select> skin. */
 export const SELECT_CSS = 'font:11px var(--font); background:rgba(4,14,20,.9); '
   + 'color:var(--fg); border:1px solid var(--edge); border-radius:5px; padding:5px;';
 
 /** A column of labelled sliders over a mutable table.
  *
- *  fields: [key, lo, hi, step][] — a field whose current value reads undefined
- *  is skipped (the joint panel's specs differ per joint).
+ *  fields: [key, lo, hi, step][]; a field reading undefined is skipped.
  *  opts:
  *    get/set   — indirection for nested tables (default: obj[key])
  *    fmt(k, v) — readout text (default String(v))
  *    label(k)  — row name (default the key itself)
  *    onSet(k)  — called after every write (live retune hooks)
  *    nmW / vW  — the two fixed column widths
- *  Returns { el, repaint } — repaint re-reads the table into fresh rows, which
- *  is the whole reset story: write the defaults, call repaint. */
+ *  Returns { el, repaint }: reset = write the defaults, call repaint. */
 export function sliderTable(fields, obj, {
   get = (k) => obj[k], set = (k, v) => { obj[k] = v; },
   fmt = (k, v) => String(v), label = (k) => k, onSet = null,
@@ -52,7 +42,7 @@ export function sliderTable(fields, obj, {
       const show = () => { val.textContent = fmt(f, get(f)); };
       sl.oninput = () => { set(f, Number(sl.value)); show(); onSet?.(f); };
       show();
-      const ctl = mk('span', 'ctl'); val.style.width = vW; ctl.append(sl, val);
+      const ctl = mk('span', 'ctl'); ctl.append(sl, val);
       wrap.append(nm, ctl);
       el.appendChild(wrap);
     }
@@ -61,10 +51,9 @@ export function sliderTable(fields, obj, {
   return { el, repaint };
 }
 
-/** A labelled checkbox row. get/set keep the state in the caller's table. */
+/** A labelled checkbox row. */
 export function checkRow(labelText, get, set, { className = 'row' } = {}) {
-  // label first, the box in the control column (R 10-11: "the label text right-justified and the interactables
-  // left-justified against the same invisible line"); still a <label>, so a click on the words toggles it
+  // label first, the box in the control column (THE ROW RULE); a <label>, so a click on the words toggles it
   const wrap = mk('label', className === 'row' ? 'row wide' : className);
   const cb = mk('input');
   cb.type = 'checkbox';
@@ -77,8 +66,7 @@ export function checkRow(labelText, get, set, { className = 'row' } = {}) {
   return wrap;
 }
 
-/** A labelled <select> row in the house skin. `options` is a key list or
- *  [value, text] pairs. Returns { row, select }. */
+/** `options`: a key list or [value, text] pairs. */
 export function selectRow(labelText, options, value, onChange) {
   const row = mk('div', 'row wide');
   const nm = mk('span', 'nm');
@@ -95,7 +83,6 @@ export function selectRow(labelText, options, value, onChange) {
   return { row, select: sel };
 }
 
-/** A button. */
 export function btn(labelText, fn, cssText = '') {
   const b = mk('button', null, cssText);
   b.textContent = labelText;

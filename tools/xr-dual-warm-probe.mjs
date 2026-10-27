@@ -1,9 +1,7 @@
-// Content that loads in ONE mode must not compile when you switch to the OTHER (client/lib/xrwarm.js; the pattern
-// is BasisVR's warm-at-load — see that file's header). REAL three r186, WebGL backend, MSAA on like the client.
-//
-// Presenting is simulated the way three sees it: the output render target is set (XRManager does that), the XR
-// ArrayCamera holds two eyes, xr.enabled and xr.isPresenting are true and cameraAutoUpdate is off (xr.js turns it off too). So a
-// content warm with the main camera goes through three's own XR-camera swap, exactly as in a session.
+// Content that loads in ONE mode must not compile when you switch to the OTHER (client/lib/xrwarm.js, BasisVR's
+// warm-at-load). REAL three r186, WebGL backend, MSAA on like the client. Presenting is simulated as three sees it: the
+// output target set, a two-eye XR ArrayCamera, xr.enabled/isPresenting true, cameraAutoUpdate off (as xr.js does), so a
+// content warm with the main camera goes through three's own XR-camera swap.
 //
 //   boot      scene A, desktop frames; the stand-in pre-warm builds A's XR variants (the fixed warmXRPipelines)
 //   load B    on the desktop: a content warm (as assets.js does), then desktop frames
@@ -11,19 +9,13 @@
 //   load C    in VR: a content warm, then XR frames
 //   exit      desktop frames → 'plain' compiles C's desktop variants here; 'dual' warmed them at load
 //
-// Render-object births are counted per pass / camera / render context, which is what exposed three's post-frame
-// target leak (xrwarm.js: an in-VR compileAsync built into a context the headset's frames never use).
+// Render-object births are counted per pass / camera / render context, which exposes three's post-frame target leak.
 //
 // Run: node tools/xr-dual-warm-probe.mjs   (~40 s; run it under a memory guard)
-import { fileURLToPath } from "node:url";
-import { chromium } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
 
-const ROOT = fileURLToPath(new URL('../client/', import.meta.url));
 const N = 30, M = 20;
-const TYPES = { '.js': 'text/javascript', '.html': 'text/html' };
-const PAGE = `<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>
+const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">
 import * as THREE from 'three';
 import { vec3 } from 'three/tsl';
@@ -93,22 +85,11 @@ window.__probe = (async () => ({ plain: await run('plain'), dual: await run('dua
   .catch((e) => ({ error: String(e && e.stack || e) }));
 </script></body></html>`;
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const R = await raw3Page(PAGE);
 let code = 1;
 try {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  await page.route('http://probe.local/**', (route) => {
-    const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (path === '/') return route.fulfill({ body: PAGE, contentType: 'text/html' });
-    const f = join(ROOT, path);
-    if (!f.startsWith(ROOT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
-    return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] ?? 'application/octet-stream' });
-  });
-  await page.goto('http://probe.local/');
-  const res = await Promise.race([page.evaluate(() => window.__probe), new Promise((r) => setTimeout(() => r({ error: 'probe timed out (150 s)' }), 150000))]);
+  const { errors } = R;
+  const res = await R.result(150000);
   if (errors.length) console.log('page errors:', errors.slice(0, 5));
   let pass = 0, fail = 0;
   const check = (n, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}${note ? `  -- ${note}` : ''}`); } };
@@ -134,5 +115,5 @@ try {
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   code = fail ? 1 : 0;
-} finally { await browser.close(); }
+} finally { await R.close(); }
 process.exit(code);

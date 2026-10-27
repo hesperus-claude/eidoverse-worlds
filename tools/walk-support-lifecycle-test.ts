@@ -1,22 +1,18 @@
 // bun tools/walk-support-lifecycle-test.ts — a walk's support, from planning
 // through its last tick, and how a walk ends: arrival, stop, replacement,
 // refusal, timeout and close.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
+import { drive as finish, valid } from "./structure-oracle.ts";
 let checks=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);checks++;console.log("✓ "+label);};
 const agents:WorldAgent[]=[];
 const make=(heightAt:(x:number,z:number)=>number=()=>0)=>{
- const a=new WorldAgent({name:"walker",world:"support",avatar:""});
+ const a=new WorldAgent({ url: noWorldUrl(), name:"walker",world:"support",avatar:""});
  agents.push(a);a.joined=true;(a as any).terrain={heightAt};return a;
 };
 const ent=(id:string,structure:any)=>({id,model:"",pos:[0,0,0],yaw:0,scale:1,structure} as any);
-async function finish(a:WorldAgent,p:Promise<boolean>,each?:(i:number)=>void){
- const points=[{...a.pos}];
- for(let i=0;i<1000&&(a as any).target;i++){each?.(i);(a as any).tick();points.push({...a.pos});}
- if((a as any).target){a.stop();throw new Error("bounded tick limit");}
- return {arrived:await p,points};
-}
 // The walks below are given a minute to time out, so a verdict that comes
 // within this bound came from its own branch (stop, replacement, refusal,
 // close), not from the walk's timer.
@@ -46,16 +42,12 @@ try{
    check((cliff as any).target===null&&(cliff as any).walkHeightAt===null&&cliff.clip==="idle","…and the walk's basis is released, the body idle"); }
  // A wall the start's height would pass under, and the crossing's height meets.
  const b=make((x)=>x);b.pos={x:0,y:0,z:.5};
- b.entities.set("raised",ent("raised",{levels:[{y:.6,tiles:[],walls:[[1,1,0]],apertures:[]}]}));
+ const raised={levels:[{y:.6,tiles:[],walls:[[1,1,0]],apertures:[]}]};
+ b.entities.set("raised",ent("raised",raised));
  const rising=b.walkTo(2,.5,true,LONG,0);
  check((b as any).legs.length>0,"a wall the band meets at the crossing's terrain height is routed around, not under");
  const around=await finish(b,rising);
- // Whether the step p→q meets the wall at x = 1, z in [0, 1].
- const crossesWall=(p:any,q:any)=>{
-  if((p.x-1)*(q.x-1)>0||p.x===q.x) return false;
-  const z=p.z+(1-p.x)/(q.x-p.x)*(q.z-p.z);return z>=0&&z<=1;
- };
- check(around.arrived&&!around.points.some((p,i)=>i>0&&crossesWall(around.points[i-1],p)),"and the walk keeps clear of that wall");
+ check(around.arrived&&valid(raised,around.samples),"and the walk keeps clear of that wall");
 
  // A floor walk keeps the floor that admitted its route through its last
  // tick. This body is given its floor support by position, so the walk's

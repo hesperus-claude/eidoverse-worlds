@@ -1,24 +1,7 @@
-// seatlab — #101's measuring instrument, now a tools harness (Phase B
-// evidence hygiene: a laboratory bench must not ship as client runtime, so
-// it lives here and the client never imports it).
-//
-// Browser-loaded: import specifiers are ABSOLUTE (/lib/...), so the module
-// works served from anywhere — in practice POST /upload?as=script and
-// `await import('/library/eidoverse/assets/opt/store/scripts/<hash>.js')`,
-// the same receipts pipeline Phase A used. Pure math lives in
-// /lib/seatcore.js where bun tests pin it; this file only observes scenes
-// and lab instances.
-//
-// The _v lesson (design-round evidence amendment, conceded): the passive
-// instrument used to compute the seat claim through shared scratch
-// registers, and the forward-vector reuse clobbered the socket position
-// before its Y was read — invisible at y≈0, corrupt everywhere else. The
-// seat claim is now seatcore.seatClaim (pure arguments cannot alias), the
-// registers below are single-purpose, and the nonzero-Y regression in
-// tools/seatcore-test.ts pins the function the instrument leans on.
-//
-// All quantities in WORLD metres. Signed gaps are (landmark − seat surface):
-// positive = the landmark floats above the authored seat.
+// seatlab: #101's measuring bench, in tools/ because a bench must not ship as client runtime. Browser-loaded with ABSOLUTE
+// specifiers (/lib/...), so it works served from anywhere (POST /upload?as=script). Pure math is /lib/seatcore.js
+// (seatClaim, pinned in tools/seatcore-test.ts); the registers below are single-purpose, so scratch can't alias a read.
+// All quantities in WORLD metres. Signed gaps are (landmark − seat surface): positive = floats above the authored seat.
 
 import { THREE, scene } from '/lib/core.js';
 import { remotes } from '/lib/remotes.js';
@@ -27,14 +10,13 @@ import { makeAvatar } from '/lib/avatar.js';
 import { seatClaim, SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y, nameFromAvatarPath, SEAT_CLIP_FILE } from '/lib/seatcore.js';
 import { vrmaShaLoaded } from '/lib/assets.js';
 
-const _sock = new THREE.Vector3();   // socket world position — nothing else
+const _sock = new THREE.Vector3();   // socket world position, nothing else
 const _work = new THREE.Vector3();   // per-read scratch, never held across reads
 const _q = new THREE.Quaternion();
 const _box = new THREE.Box3();
 
-/** Measure one mounted occupant. `localAvatar` supplies the browser-local
- *  body's avatar wrapper when measuring yourself (remotes only hold the
- *  others). Returns a plain JSON-able record, or {error}. */
+/** Measure one mounted occupant (`localAvatar`: your own avatar wrapper, since remotes hold only the others). Returns a
+ *  plain JSON-able record, or {error}. */
 export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const m = avatarMounts.get(occupantId);
   if (!m) return { error: `${occupantId} is not mounted` };
@@ -48,8 +30,7 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const seatPos = socketWorldPos(m.to, _sock);
   if (!seatPos) return { error: `socket ${m.to} unresolvable` };
   parent.getWorldQuaternion(_q);
-  // pure math on captured values — the register-aliasing class of error is
-  // structurally impossible here (and pinned at nonzero Y by the bun test)
+  // pure math on captured values: register aliasing is structurally impossible here (pinned at nonzero Y by the bun test)
   const claim = seatClaim([seatPos.x, seatPos.y, seatPos.z], [_q.x, _q.y, _q.z, _q.w]);
   const seat = { world: seatPos.toArray().map((n) => +n.toFixed(4)) };
   seat.parentYaw = +claim.parentYaw.toFixed(4);
@@ -71,8 +52,7 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   root.updateWorldMatrix(true, true);
   const rootY = root.getWorldPosition(_work).y;
 
-  // every landmark CANDIDATE, none blessed (the Phase A amendment): a hips
-  // origin can be rig metadata; bounds are geometry; the truth is for the table
+  // every landmark CANDIDATE, none blessed: a hips origin can be rig metadata, bounds are geometry; the truth is for the table
   const candidates = { root: +(rootY - seatY).toFixed(4) };
   let hipsRawY = null, hipsNormY = null;
   if (humanoid) {
@@ -86,9 +66,8 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const bounds = { height: +(_box.max.y - _box.min.y).toFixed(4),
     width: +(_box.max.x - _box.min.x).toFixed(4), depth: +(_box.max.z - _box.min.z).toFixed(4) };
 
-  // the composition's own word for this seat (#101): what mountTransform
-  // declared — profiled or approximate-with-reason — measured alongside the
-  // geometry so the acceptance table can assert both at once
+  // the composition's own word for this seat (#101): what mountTransform declared, measured beside the geometry so the
+  // acceptance table can assert both
   const sw = mountTransform(occupantId, _work, { path: rec?.avatarPath ?? null, av: avatar });
 
   return {
@@ -105,36 +84,23 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   };
 }
 
-/** Every mounted occupant at once — the table row generator. */
+/** Every mounted occupant at once: the table row generator. */
 export function measureAllSeats(opts = {}) {
   return [...avatarMounts.keys()].map((id) => measureSeat(id, opts));
 }
 
-// ---- the detached lab (Phase A rev 2, carried whole) ------------------------
-// Measurements happen on instances the lab OWNS — constructed, pulled
-// off-scene, measured, disposed. No live resident is ever posed, re-clipped
-// or moved: the passive measureSeat above only reads, and everything below
-// touches only lab-created bodies (Phase A review B1).
+// ---- the detached lab ------------------------
+// measures only instances the lab OWNS (constructed off-scene, disposed): no live resident is ever posed, re-clipped
+// or moved; measureSeat above only reads
 
-/** Measure one avatar instance's sit-pose geometry, with full animation
- *  receipts (Phase A review B2) and a MEASURED contact candidate (review
- *  B3): the lowest skinned vertex among those weighted ≥ minWeight to the
- *  pelvis bone set, under the settled pose — an actual support surface, not
- *  a joint origin. Root is neutralized to the origin, so every Y is
- *  root-local = the signed gap above an authored seat once mounted.
- *
- *  Phase B evidence amendment: the winner is RECORDED (mesh, vertex index,
- *  coordinate) alongside its support patch — the pelvis-set vertices within
- *  radiusXZ of it and within the contact band above it. A healthy underside
- *  is a cluster; a skirt hem or loose accessory is an isolated winner, and
- *  the patch statistics are how validation (seatcore.validateProfile) and a
- *  human reviewer both see the difference. No minimum is auto-promoted. */
+/** Measure one avatar instance's sit-pose geometry: animation receipts and a MEASURED contact (the lowest skinned
+ *  vertex weighted ≥ minWeight to the pelvis set, root at the origin, so Y = the gap above a seat), recorded with its
+ *  support patch so validation (seatcore.validateProfile) can tell a cluster from a stray hem. Nothing auto-promoted. */
 export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, radiusXZ = 0.1 } = {}) {
   if (!av?.root) return { error: 'no avatar' };
   const vrm = av.vrm ?? null;
   if (!vrm?.humanoid) {
-    // the legible refusal: no humanoid mapping means no seat landmark exists
-    // to derive — say so, never guess
+    // the legible refusal: no humanoid mapping means no seat landmark exists; say so, never guess
     return { rig: 'unsupported', refusal: 'no humanoid mapping — no seat landmark derivable' };
   }
   av.root.position.set(0, 0, 0); av.root.rotation.set(0, 0, 0); av.root.scale.set(1, 1, 1);
@@ -157,7 +123,7 @@ export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, 
     actionWeight: action ? +action.getEffectiveWeight().toFixed(4) : null,
   };
 
-  // ---- landmarks (bone origins — context, not contact) --------------------
+  // ---- landmarks (bone origins: context, not contact) --------------------
   const yOf = (n) => { const b = vrm.humanoid.getRawBoneNode?.(n); if (!b) return null; b.updateWorldMatrix(true, false); return +b.getWorldPosition(_work).y.toFixed(4); };
   const landmarks = { root: 0, hips: yOf('hips'), spine: yOf('spine'),
     leftUpperLeg: yOf('leftUpperLeg'), leftFoot: yOf('leftFoot'), head: yOf('head') };
@@ -166,7 +132,7 @@ export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, 
   const pelvis = ['hips', 'leftUpperLeg', 'rightUpperLeg']
     .map((n) => vrm.humanoid.getRawBoneNode?.(n)).filter(Boolean);
   const minWeight = 0.5;
-  const verts = [];                              // {mesh, i, x, y, z} — pelvis-weighted only
+  const verts = [];                              // {mesh, i, x, y, z}, pelvis-weighted only
   let meshes = 0;
   vrm.scene.traverse((o) => {
     if (!o.isSkinnedMesh) return;
@@ -194,15 +160,14 @@ export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, 
       winner: { mesh: win.mesh, vertexIndex: win.i, rootLocal: [+win.x.toFixed(4), +win.y.toFixed(4), +win.z.toFixed(4)] },
       supportPatch: { count: patch.length, spreadY: +spreadY.toFixed(4), radiusXZ },
       plausible: win.y >= _box.min.y - 0.1 && win.y <= _box.max.y
-        && patch.length >= MIN_PATCH_VERTS,      // an isolated winner is a hem/accessory shape — flagged, not proposed
+        && patch.length >= MIN_PATCH_VERTS,      // an isolated winner is a hem/accessory shape: flagged, not proposed
     };
   } else contact = { error: 'no pelvis-weighted vertices found' };
 
   return { rig: 'vrm-humanoid', anim, landmarks, contact, bounds };
 }
 
-/** Construct a DETACHED instance of an avatar, measure it `runs` times for
- *  determinism, dispose it. Never touches the scene or any resident. */
+/** Construct a DETACHED instance of an avatar, measure it `runs` times for determinism, dispose it; never touches the scene. */
 export async function labRig(avatarPath, { pose = 'sitchair', runs = 3 } = {}) {
   const av = await makeAvatar(`seatlab-${Math.random().toString(36).slice(2, 8)}`, avatarPath, { urgent: true });
   try {
@@ -224,10 +189,8 @@ async function sha256hex(buf) {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Run the lab on an avatar and assemble the full seat-profile record the
- *  server's door accepts — content-bound to the exact bytes this page holds,
- *  review.status "proposed" (the only status the door will take; the tool
- *  proposes, a human countersigns). Returns {profile} or {error, scan}. */
+/** Run the lab on an avatar and assemble the seat-profile record the door accepts: bound to the bytes this page holds,
+ *  review.status "proposed" (the tool proposes, a human countersigns). Returns {profile} or {error, scan}. */
 export async function deriveSeatProfile(avatarPath, { pose = 'sitchair', runs = 3 } = {}) {
   const scan = await labRig(avatarPath, { pose, runs });
   const name = nameFromAvatarPath(avatarPath);

@@ -1,13 +1,12 @@
 /**
- * Denoise gate test — no servers needed. Exercises the four noise classes
- * from Fable's 2026-08-02 field report:
+ * Denoise gate test, no servers needed. The four noise classes:
  *   1. arrive/leave flaps collapse to nothing (both directions)
  *   2. posture/gesture cycles: refractory + short-stint "gets up" swallow
  *   3. self-echo: own say never fans out as an event
  *   4. approach: hysteresis re-arm + long refractory
  *
  * Run: cd mcpl && bun run denoise-test.ts
- * (env windows are shrunk below BEFORE the modules load — order matters)
+ * (env windows are shrunk below BEFORE the modules load: order matters)
  */
 
 process.env.EW_ARRIVE_HOLD_SEC = "0.05";
@@ -22,6 +21,7 @@ process.env.EW_ACTIVITY_REFRESH_SEC = "0.35";
 
 const { NoiseGate } = await import("./denoise.ts");
 const { WorldAgent } = await import("./agent.ts");
+const { noWorldUrl } = await import("../tools/no-world.ts");
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
@@ -87,7 +87,7 @@ console.log("\n━━ acts: a burst speaks once per window ━━");
 // ---- agent-level: jump stint, self-echo, approach --------------------------
 console.log("\n━━ agent: jump = one thing not two; long sits still narrate ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const acts: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "act") acts.push(ev.text!); };
   const np = (id: string, clip: string, x = 5, z = 5) =>
@@ -109,7 +109,7 @@ console.log("\n━━ agent: jump = one thing not two; long sits still narrate �
 
 console.log("\n━━ agent: own say is not an event ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const heard: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "say") heard.push(`${ev.who}:${ev.text}`); };
   (agent as any).hearSay({ verb: "say", args: { text: "me talking" }, actor: "claude", ts: Date.now(), seq: 1 }, true);
@@ -122,26 +122,20 @@ console.log("\n━━ agent: own say is not an event ━━");
 
 console.log("\n━━ agent: approach = knock once, not a metronome ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // agent at origin
-  // VIRTUAL CLOCK. An approach is now confirmed by DWELL, so every assertion
-  // here is a claim about time; driving it off real sleeps would make the
-  // block both slow and racy (the refractory is 300ms and the old version had
-  // no sleeps at all inside it, so added sleeps eat that margin). notePose
-  // takes `now` for exactly this reason.
-  // Offset from a real epoch, not from 0: `cooled` measures against a
-  // last-approach time that defaults to 0, so a clock starting near zero reads
-  // as "approached a moment ago" and refuses the very first knock.
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // agent at origin
+  // virtual clock (notePose takes `now`): real sleeps would race the 300ms refractory. Offset from a real epoch:
+  // `cooled` compares to a last-approach time defaulting to 0
   const T0 = Date.now();
   const np = (id: string, x: number, z: number, t: number) =>
     (agent as any).notePose(id, { p: [x, 0, z], yaw: 0, speed: 0, clip: "walk" }, T0 + t);
   const approaches = () => agent.pings.filter((p) => p.kind === "approach").length;
 
-  np("digi", 10, 0, 0);    // baseline, far → armed
-  np("digi", 2, 0, 10);    // crosses 2.5m — opens a pending approach
+  np("digi", 10, 0, 0);    // baseline, far -> armed
+  np("digi", 2, 0, 10);    // crosses 2.5m: opens a pending approach
   np("digi", 2, 0, 100);   // still there 90ms later (dwell is 50ms here)
   check("first approach pings", approaches() === 1);
 
-  np("digi", 3, 0, 110);   // steps out — but NOT past the re-arm radius
+  np("digi", 3, 0, 110);   // steps out, but NOT past the re-arm radius
   np("digi", 2, 0, 120);   // crosses again
   np("digi", 2, 0, 170);
   np("digi", 4, 0, 180);
@@ -150,7 +144,7 @@ console.log("\n━━ agent: approach = knock once, not a metronome ━━");
   check("pacing at the boundary does not re-ping (not re-armed)",
     approaches() === 1, String(agent.pings.length));
 
-  np("digi", 8, 0, 250);   // genuinely goes away — re-arms
+  np("digi", 8, 0, 250);   // genuinely goes away: re-arms
   np("digi", 2, 0, 260);   // comes right back, but refractory (300ms) still holds
   np("digi", 2, 0, 320);
   check("re-armed but inside the refractory: still silent",
@@ -162,9 +156,8 @@ console.log("\n━━ agent: approach = knock once, not a metronome ━━");
   check("gone away + refractory over → the knock counts again",
     approaches() === 2, String(agent.pings.length));
 
-  // The departure earned by the first walk-away, at t=250. Exactly one: the
-  // second trip past the re-arm radius (t=500) had no delivered approach
-  // outstanding, because the visit at t=260 was refused by the refractory.
+  // exactly one departure (t=250): the trip at t=500 had no delivered approach outstanding, since the refractory
+  // refused the visit at t=260
   check("going away past the re-arm radius pings depart — once, for the visit that counted",
     agent.pings.filter((p) => p.kind === "depart").length === 1,
     JSON.stringify(agent.pings.map((p) => p.kind)));
@@ -173,13 +166,13 @@ console.log("\n━━ agent: approach = knock once, not a metronome ━━");
 
 console.log("\n━━ agent: activity pulse — regular wakes only while life is near ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // at origin
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // at origin
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
-  // digi 10m away: walking and talking — inside the 30m radius
+  // digi 10m away, walking and talking: inside the 30m radius
   (agent as any).notePose("digi", { p: [10, 0, 0], yaw: 0, speed: 1.5, clip: "walk" });
   (agent as any).hearSay({ verb: "say", args: { text: "движуха" }, actor: "digi", ts: Date.now(), seq: 10 }, true);
-  // ghost 100m away: also walking and talking — must not count
+  // ghost 100m away, also walking and talking: must not count
   (agent as any).notePose("ghost", { p: [100, 0, 0], yaw: 0, speed: 1.5, clip: "walk" });
   (agent as any).hearSay({ verb: "say", args: { text: "far away" }, actor: "ghost", ts: Date.now(), seq: 11 }, true);
   await sleep(200);
@@ -197,7 +190,7 @@ console.log("\n━━ agent: activity pulse — regular wakes only while life is
 
 console.log("\n━━ agent: recurrence is not novelty — ambient scenery dedupes ━━");
 {
-  const agent = new WorldAgent({ name: "claude" }); // at origin
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() }); // at origin
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   const np = (x: number) => (agent as any).notePose("digi", { p: [x, 0, 0], yaw: 0, speed: 1.5, clip: "walk" });
@@ -206,12 +199,11 @@ console.log("\n━━ agent: recurrence is not novelty — ambient scenery dedup
   await sleep(200);
   check("travel makes an ambient pulse", pulses.length === 1 && pulses[0].includes("digi moving about"),
     JSON.stringify(pulses));
-  // same scenery next window: digi still pacing — NOT news
+  // same scenery next window: digi still pacing is NOT news
   np(10);
   await sleep(130);
   check("same movers again → suppressed (scenery, not news)", pulses.length === 1, String(pulses.length));
-  // keep pacing past the refresh horizon — the heartbeat re-confirms (once
-  // per refresh window, however long the pacing goes on), compacted
+  // keep pacing past the refresh horizon: the heartbeat re-confirms once per refresh window, compacted
   for (let i = 0; i < 5; i++) { np(i % 2 ? 11.5 : 10); await sleep(130); }
   const afterPacing = pulses.length;
   check("after the refresh the heartbeat re-confirms — at refresh rate, not window rate",
@@ -230,7 +222,7 @@ console.log("\n━━ agent: recurrence is not novelty — ambient scenery dedup
 
 console.log("\n━━ agent: idle jitter is not movement ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   // fidgeting: many pose packets, centimetres of travel
@@ -243,12 +235,12 @@ console.log("\n━━ agent: idle jitter is not movement ━━");
 
 console.log("\n━━ agent: activity dial — the sense is the agent's own to tune ━━");
 {
-  const agent = new WorldAgent({ name: "claude" });
+  const agent = new WorldAgent({ name: "claude", url: noWorldUrl() });
   const pulses: string[] = [];
   agent.onEvent = (ev) => { if (ev.kind === "activity") pulses.push(ev.text!); };
   let cur = agent.setActivity({ radiusM: 5 });
   check("radius setter returns the applied value", cur.radiusM === 5, JSON.stringify(cur));
-  // digi walks and talks at 10m — outside the shrunk 5m sense
+  // digi walks and talks at 10m: outside the shrunk 5m sense
   (agent as any).notePose("digi", { p: [10, 0, 0], yaw: 0, speed: 1.5, clip: "walk" });
   (agent as any).hearSay({ verb: "say", args: { text: "outside" }, actor: "digi", ts: Date.now(), seq: 20 }, true);
   await sleep(200);

@@ -1,14 +1,6 @@
-// tts-test — the synthesizer, executed (#91 B2).
-//
+// tts-test: the synthesizer, executed (#91 B2). Deterministic, dependency-free (fake generator/writer/engine/OPFS/worker);
+// the negative control at the bottom proves the feature can't be disconnected while every suite stays green.
 //   bun tools/tts-test.ts
-//
-// Deterministic, dependency-free: fake generator/writer/engine/OPFS/worker.
-// Exists because review caught that every green suite quoted by #91 exercised
-// #90's plumbing — "the entire new feature could be disconnected and every
-// quoted suite would still pass." The negative control at the bottom makes
-// that structurally false. First catch, before a single check ran: a dangling
-// `onRebuild` in ensureGenerator's rebuild path — ReferenceError at runtime,
-// invisible to the bundler, in exactly the recovery this suite pins.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
@@ -21,23 +13,23 @@ const check = (name: string, ok: boolean, detail = "") => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- fakes ----------------------------------------------------------------
-// AudioData frames written to the generator: the harness's "wire".
-// The pacer writes CONTINUOUSLY (a mouth is always open) — silence frames
-// between utterances are by design. The wire distinguishes speech from
-// silence by amplitude, so checks assert on speech, not on writes.
-const written: { frames: number; ts: number; loud: boolean }[] = [];
+// AudioData frames written to the generator, the harness's "wire": the pacer writes CONTINUOUSLY (silence between
+// utterances), so checks assert on speech (by amplitude), not on writes
+const written: { frames: number; ts: number; loud: boolean; sum: number }[] = [];
 const speechFrames = () => written.filter((w) => w.loud).reduce((a, w) => a + w.frames, 0);
+const speechSum = () => written.reduce((a, w) => a + w.sum, 0);
 class FakeAudioData {
-  numberOfFrames: number; timestamp: number; loud: boolean;
+  numberOfFrames: number; timestamp: number; loud: boolean; sum: number;
   constructor(init: { numberOfFrames: number; timestamp: number; data?: Float32Array }) {
     this.numberOfFrames = init.numberOfFrames; this.timestamp = init.timestamp;
     this.loud = !!init.data && init.data.some((v) => Math.abs(v) > 1e-6);
+    this.sum = init.data ? init.data.reduce((a, v) => a + v, 0) : 0;
   }
   close() {}
 }
 class FakeWriter {
   closed = false;
-  write(d: FakeAudioData) { written.push({ frames: d.numberOfFrames, ts: d.timestamp, loud: d.loud }); return Promise.resolve(); }
+  write(d: FakeAudioData) { written.push({ frames: d.numberOfFrames, ts: d.timestamp, loud: d.loud, sum: d.sum }); return Promise.resolve(); }
   close() { this.closed = true; return Promise.resolve(); }
 }
 let generatorCount = 0;
@@ -67,8 +59,15 @@ class FakeAudioCtx {
   createGain() { return { gain: { value: 0, setTargetAtTime() {} }, connect() {}, disconnect() {} }; }
   createMediaStreamDestination() { return { stream: new FakeStream(), disconnect() {} }; }
   createAnalyser() { return { fftSize: 0, connect() {}, disconnect() {}, getFloatTimeDomainData(b: Float32Array) { b.fill(0); } }; }
-  createBufferSource() { return { connect() {}, start() {}, stop() {} }; }
+  // the sidetone: each scheduled chunk records the gain it plays through
+  currentTime = 0; destination = {};
+  createBuffer(_c: number, n: number, sr: number) { const d = new Float32Array(n); return { duration: n / sr, getChannelData: () => d }; }
+  createBufferSource() {
+    let to: { gain?: { value: number } } = {};
+    return { connect(g: typeof to) { to = g; }, start() { monitored.push(to.gain?.value ?? NaN); }, stop() {} };
+  }
 }
+const monitored: number[] = [];
 (globalThis as Record<string, unknown>).AudioContext = FakeAudioCtx;
 class FakePC {
   senders: { track: { kind: string; id: string } | null; replaceTrack(t: unknown): Promise<void> }[] = [];
@@ -85,8 +84,7 @@ class FakePC {
 }
 (globalThis as Record<string, unknown>).RTCPeerConnection = FakePC;
 
-// engine: a deterministic "synthesizer" — 1000 samples of known pcm per call,
-// with controllable latency and failure.
+// engine: a deterministic "synthesizer": 1000 samples of known pcm per call, with controllable latency and failure
 let synthCalls: string[] = [];
 let synthDelay = 5;
 let synthFail = false;
@@ -97,8 +95,7 @@ const engine = async (text: string) => {
   return { pcm: new Int16Array(1000).fill(7), sampleRate: 22050 };
 };
 
-// ---- module substitution (voice-lifecycle doctrine): core.js constructs a
-// WebGPU renderer at import; swap the non-audio siblings for the stubs.
+// ---- module substitution: core.js constructs a WebGPU renderer at import; swap the non-audio siblings for the stubs
 const stubs = await import("./voice-stubs.mjs");
 const { mock } = await import("bun:test");
 for (const m of ["core", "net", "ui", "controller", "remotes"])
@@ -144,19 +141,15 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   await sleep(60);
   check("own say queues exactly one performance", synthCalls.length === 1, `${synthCalls.length}`);
 
-  // mic beats TTS: with the mic live, typed says are DISCARDED (declared policy).
-  // Post-cutover the transport is the SFU bridge; the policy code asks
-  // window.__sfuMicOn() first (tts.js:659), so the stub installs the same pair
-  // the real bridge does (voicesfubridge.js:222/235) — a boolean the hook flips
-  // and reports honestly. micstate.toggleMic routes through the hook.
+  // mic beats TTS: with the mic live, typed says are DISCARDED. The policy asks window.__sfuMicOn(), so the stub installs
+  // the same pair voicesfubridge.js does; micstate.toggleMic routes through the hook
   const voice = await import("../client/lib/micstate.js");
   let stubMicOn = false;
   (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMicOn = () => stubMicOn;
   (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMic = async () => {
     stubMicOn = !stubMicOn;
-    // The real transport routes the device through micstate's gate and reports
-    // liveness (voicesfu.js:447-449) — the lane is what makes micOn() true and
-    // what registers the mic producer that outranks the synth. Mirror both.
+    // the real transport routes the device through micstate's gate and reports liveness (voicesfu.js): that lane makes
+    // micOn() true and registers the mic producer that outranks the synth. Mirror both.
     if (stubMicOn) { voice.gateFor(new (globalThis as Record<string, any>).MediaStream()); voice.setMicLive(true); }
     else { voice.gateRelease(); voice.setMicLive(false); }
     return stubMicOn;
@@ -172,15 +165,8 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   await sleep(30);
 }
 
-// (The "sender identity across producer transitions" block lived here. Its
-// subject — the mesh's per-peer RTCPeerConnection senders, courted via
-// peerFor/roster and inspected through voice.js senderTrackInfo — is deleted
-// by the #132 cutover. The seam it pinned (exactly one producer on the wire
-// across mic/TTS handoffs and renegotiations) is now proven where it lives:
-// tools/voicesource-real-test.mjs (real tracks through voicesource),
-// tools/mic-resume-after-synth-test.mjs (device re-acquired after synth swap),
-// tools/tts-publishes-mic-off-test.mjs (mic OFF yields the synth), and the
-// SFU engine's route/sender vectors in tools/sfu-test.ts.)
+// one producer on the wire across mic/TTS handoffs: also tools/voicesource-real-test.mjs, sfu-mic-intent-race-test.mjs
+// and tools/sfu-test.ts
 
 console.log("\n— mic priority: both orderings, repeated cycles, no dual producer —");
 {
@@ -191,13 +177,8 @@ console.log("\n— mic priority: both orderings, repeated cycles, no dual produc
   const gen = tts.ensureGenerator();
   vsrc.notifySynthTrackChanged(gen);      // what enabling does via the hook
   await sleep(20);
-  // ordering B: mic ON — the mic wins. (The pacer-stop on a LIVE mic takeover
-  // is the TRANSPORT's move — voicesfu's source swap calls the provider's
-  // stop() — so asserting it here against the stub hook would test the stub.
-  // The in-browser suites own that half: voicesource-real-test and
-  // tts-publishes-mic-off-test. What THIS suite can honestly pin is tts.js's
-  // own enable-path gate: enabling TTS while the mic is live must NOT start
-  // the pacer — mic beats TTS at the enable door, tts.js:110's !micLive.)
+  // ordering B: mic ON wins. The pacer-stop on a live takeover is the transport's (voicesource-real-test); here, enabling
+  // TTS while the mic is live must NOT start the pacer (tts.js's !micLive gate)
   await voice.toggleMic();
   await sleep(50);
   check("mic ON while TTS enabled: mic wins (micOn true)", voice.micOn() === true);
@@ -222,10 +203,7 @@ console.log("\n— disable / replace: stale async can never become current —")
   tts.setTtsEnabled(false);               // user disables mid-synthesis
   await p; await sleep(150);
   check("synthesis completing after disable writes NO SPEECH", speechFrames() === 0, `${speechFrames()} frames`);
-  // THE STALE-BECOMES-CURRENT HOLE (review B2, named explicitly): the disable
-  // cleared the queue, but the in-flight synthesis completed AFTER the clear
-  // and re-enqueued into the empty queue — so re-enabling would play text the
-  // user disabled minutes ago. The queue must be empty NOW:
+  // stale must not become current: a synthesis completing AFTER the disable cleared the queue must not re-enqueue
   check("late completion cannot re-enter the queue (stale ≠ current)",
     tts.mouthInfo().queued === 0, `queued=${tts.mouthInfo().queued}`);
   synthDelay = 5;
@@ -234,10 +212,8 @@ console.log("\n— disable / replace: stale async can never become current —")
   written.length = 0;
   await sleep(120);
   check("re-enable after stale-drop plays nothing old (silence only)", speechFrames() === 0, `${speechFrames()}`);
-  // r5 self-review: the RESAMPLE seam. speak()'s epoch check runs before
-  // enqueue, but the resample callback is one more async hop — a disable
-  // landing inside it re-pushed the dead audio until the push itself became
-  // epoch-guarded. Fire without awaiting so the disable races the pipeline.
+  // the RESAMPLE seam is one more async hop after speak()'s epoch check, so the push itself is epoch-guarded: fire
+  // without awaiting so the disable races the pipeline
   written.length = 0;
   void tts.speak("assassinated mid-pipeline");
   tts.setTtsEnabled(false);              // same tick: epoch bumps under the resample
@@ -298,24 +274,40 @@ console.log("\n— voicestore: identity is digests; remember/forget round-trip �
   const onnxB = new File([new Uint8Array(1024).fill(2)], "voice.onnx");   // SAME NAME, different bytes
   const idB = await store.voiceIdentity(onnxB, cfg);
   check("same filename, different bytes → DIFFERENT voice identity", idB.id !== idA.id, `${idA.id} vs ${idB.id}`);
-  // r3 B1 converse: SAME model, DIFFERENT config. The config names the
-  // phoneme map / language / inference params — a different config is a
-  // different voice, and an id derived from the model digest alone collides
-  // them (the exact hole the revision-2 review named).
+  // SAME model, DIFFERENT config: the config is part of the voice (phoneme map, language, inference), so the id must
+  // not derive from the model digest alone
   const cfgB = new File([JSON.stringify({ audio: { sample_rate: 16000 }, inference: { noise_scale: 0.2 } })], "voice.onnx.json");
   const idC = await store.voiceIdentity(onnx, cfgB);
   check("same model, different config → DIFFERENT voice identity", idC.id !== idA.id, `${idA.id} vs ${idC.id}`);
   check("joint id carries both digests", idA.id.includes("+") && idA.id.split("+").length === 2, idA.id);
-  // both variants can be remembered side by side — distinct ids can't clobber
+  // both variants can be remembered side by side: distinct ids can't clobber
   check("model+cfgA and model+cfgB coexist as distinct rows",
     idA.id !== idC.id && idA.modelSha256 === idC.modelSha256 && idA.configSha256 !== idC.configSha256);
 }
 
+console.log("\n— sidetone: the tts slider moves only what you hear of yourself, never the wire —");
+{
+  const vc = await import("../client/lib/voiceconsent.js");
+  tts.sidetone(true);
+  const run = async (v: number) => {
+    vc.setVolume("tts", v); await sleep(30); written.length = 0; monitored.length = 0;
+    await tts.speak("sidetone row"); await sleep(150);
+    return { wire: speechSum(), heard: [...monitored] };
+  };
+  const full = await run(1), half = await run(0.5), none = await run(0);
+  const all = (h: number[], g: number) => h.length > 0 && h.every((x) => Math.abs(x - g) < 1e-9);
+  check("slider 1: you hear yourself at the 0.8 default", all(full.heard, 0.8), JSON.stringify(full.heard));
+  check("slider 0.5 halves only your monitor", all(half.heard, 0.4), JSON.stringify(half.heard));
+  check("slider 0 is silence for you only", all(none.heard, 0), JSON.stringify(none.heard));
+  check("what others receive is identical at every slider setting",
+    full.wire > 0 && Math.abs(half.wire - full.wire) < 1e-9 && Math.abs(none.wire - full.wire) < 1e-9,
+    `${full.wire} / ${half.wire} / ${none.wire}`);
+  vc.setVolume("tts", 1);
+}
+
 console.log("\n— negative control: a disconnected feature must FAIL this suite —");
 {
-  // If tts.js stopped registering its provider, or speak() stopped writing to
-  // the generator, the checks above go red. Prove the harness sees the wire:
-  // break it on purpose and confirm detection.
+  // negative control: break the wire on purpose and confirm the harness detects it
   written.length = 0;
   const before = written.length;
   await tts.speak("control");

@@ -1,18 +1,10 @@
-// render-watchdog — keep the /snap renderer alive AND current.
-//
-// The old run-mac-renderer.sh relaunched Chrome only when it EXITED. But the
-// renderer's real failure mode is not a crash — it is a HANG: after a day or
-// two the client leaks (measured 6.8 GB RSS), the main thread pegs, and Chrome
-// keeps its websocket open (so the server still thinks it has a renderer) while
-// answering no snap requests. A crash-only loop never notices, so the box sat
-// with a dead renderer indefinitely.
-//
-// This watchdog OWNS the renderer's lifecycle and restarts it on any of:
+// Keeps the /snap renderer alive AND current (a leaking client keeps its websocket open while answering nothing).
+// Restarts it on any of:
 //   - crash        — Chrome process gone
 //   - hang         — main thread unresponsive to a trivial CDP eval
 //   - frozen       — booted but not joined, no frames, or no frame it can capture, for several checks
 //   - memory       — RSS over a cap, before it reaches the hang zone
-//   - stale code   — the served client changed (a deploy) — reload for new code
+//   - stale code   — the served client changed (a deploy)
 //   - old age      — a max uptime, as a backstop against slow leaks
 //
 // Env: SHOW_URL WORLD KEY (as run-mac-renderer.sh), plus PORT (devtools),
@@ -35,32 +27,21 @@ const STRIKES = Number(process.env.STRIKES ?? 3);           // consecutive bad c
 const BOOT_GRACE_SEC = Number(process.env.BOOT_GRACE_SEC ?? 45);
 const VERSION_URL = `${SHOW_URL}/client-version`;
 
-// ROAM=1: a roaming renderer — it starts in WORLD and the server sends it to any world a snapshot is asked of
-// where no renderer is serving (server/snapshots.ts). Its name says so: mac-gpu-roam-<WORLD>.
+// ROAM=1: starts in WORLD; the server sends it to any snapshot with no renderer serving (server/snapshots.ts)
 const ROAM = /^(1|true|yes)$/i.test(process.env.ROAM ?? "");
-// lite=0: the client's boot tripwire (index.html, `ew-boot-attempt:<world>`)
-// demotes a device to the engine-less LITE client when its last full boots were
-// killed before the dwell, and this watchdog kills renderers for a living, in
-// a profile that persists. A couple of early kills and every relaunch came up
-// lite: no EW, "not joined", kill, lite again, forever. A lite roamer was worse
-// than none: it still joined as a renderer, the server sent it to a world, and
-// every snapshot there answered "this client has no renderer". The client now
-// never makes a ?renderer page lite (index.html rule 0); asking for the full
-// client here as well keeps a renderer whole against a sequencer still serving
-// a client from before that, since the URL outranks the tripwire.
+// lite=0: early kills would trip the boot tripwire (index.html) into a lite client with no renderer; the URL outranks it
 const URL = `${SHOW_URL}/?world=${WORLD}&renderer&lite=0&name=mac-gpu-${ROAM ? "roam-" : ""}${WORLD}` + (ROAM ? "&roam" : "") + (KEY ? `&key=${KEY}` : "");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const log = (m: string) => console.log(`[watchdog ${new Date().toISOString().slice(11, 19)}] ${m}`);
 const sh = async (cmd: string) => (await new Response(Bun.spawn(["bash", "-c", cmd]).stdout).text()).trim();
 
-/** Sum RSS (GB) of every Chrome process in this renderer's profile tree. */
+/** GB, every Chrome process in this profile's tree */
 async function rssGB(): Promise<number> {
   const out = await sh(`ps aux | grep 'user-data-dir=${PROFILE}' | grep -v grep | awk '{s+=$6} END{print s+0}'`);
   return (Number(out) || 0) / 1048576;
 }
 
-/** Fetch the served client's version marker (a deploy changes it). Absent/old
- *  server → null, which the caller treats as "can't tell, don't restart". */
+/** null (absent/old server) means "can't tell, don't restart". */
 async function clientVersion(): Promise<string | null> {
   try {
     const r = await fetch(VERSION_URL, { signal: AbortSignal.timeout(5000) });
@@ -75,14 +56,14 @@ async function killTree() {
 }
 
 async function launch() {
-  await killTree();                       // never leave a stray tree behind
+  await killTree();
   log(`launching renderer → ${WORLD}`);
   Bun.spawn([CHROME, "--headless=new", `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${PROFILE}`, "--no-first-run", "--disable-extensions", URL],
     { stdout: "ignore", stderr: "ignore" });
 }
 
-// graceful shutdown: don't leave an orphan renderer when the watchdog is killed
+// never leave an orphan renderer when the watchdog is killed
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, async () => { log("shutting down — killing renderer"); await killTree(); process.exit(0); });
 }
@@ -92,14 +73,8 @@ for (;;) {
   await launch();
   const started = Date.now();
   await sleep(BOOT_GRACE_SEC * 1000);
-  // The version marker may be unreadable at boot — the sequencer could be
-  // mid-restart, or (as happened here) running a build that predates the
-  // /client-version route and answers 500. That used to pin bornVersion at
-  // null for the renderer's whole life, and the deploy check below requires
-  // it, so a renderer launched during that window NEVER picked up a deploy
-  // again: exactly the "prod is serving stale client" failure this watchdog
-  // exists to prevent, reintroduced by its own baseline. So the baseline
-  // binds LATE — the first reading we can actually get becomes it.
+  // the baseline binds LATE (first readable version): it can be unreadable at boot, and a null baseline
+  // would never pick up a deploy again
   let bornVersion = await clientVersion();
   let strikes = 0, reason = "";
 
@@ -116,8 +91,7 @@ for (;;) {
 
     const nowVersion = await clientVersion();
     if (bornVersion === null && nowVersion !== null) {
-      // Late baseline (see above). A deploy we could not observe is not a
-      // deploy we can act on — adopt what we can now read and watch from here.
+      // late baseline: a deploy we could not observe can't be acted on; adopt what we read now
       bornVersion = nowVersion;
       log(`client version readable again — baseline adopted`);
     } else if (bornVersion && nowVersion && nowVersion !== bornVersion) {

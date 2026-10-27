@@ -1,6 +1,5 @@
-// Read-only projection of the canonical fold for non-JavaScript renderers.
-// No new log verbs and no duplicate fold. Structures, terrain and motion use
-// the same pure evaluators as the browser / headless perception.
+// Read-only projection of the canonical fold for non-JavaScript renderers: no new verbs, no duplicate fold, the
+// browser's own pure evaluators.
 import { createHash } from "node:crypto";
 import { planStructure } from "../shared/structure.js";
 import { terrainParams, makeHeightField } from "../shared/terrainmath.js";
@@ -16,6 +15,7 @@ import { waterParams, vector, MAX_AIR } from "../shared/water.js";
 import { resolveParticles } from "../shared/particle_effects.js";
 import { normalizePicture } from "../shared/picture.js";
 import { normalizeSound } from "../shared/sound.js";
+import { r3 } from "../shared/protocol/round.js";
 import type { Client, World } from "./world.ts";
 
 export const RENDER_VERSION = 1;
@@ -26,16 +26,14 @@ const clients = new WeakMap<Client, Cache>();
 const worlds = new WeakMap<World, { seq: number; entities: any[]; environment: any; signature: string; envSource: string }>();
 const failures = new WeakMap<World, { seq: number; detail: string }>();
 
-// The world's one water level (shared/terrainshape.js) and what it fills, analysed on the terrain's own
-// vertex grid (shared/waterkind.js): only wet vertices travel, as [index, kind 0 still|1 river|2 ocean,
-// flowX, flowZ, waveSpeed, toShoreX, toShoreZ, shore metres]. Depth is the level minus the heights sent.
+// Only wet vertices travel (shared/waterkind.js), as [index, kind 0 still|1 river|2 ocean, flowX, flowZ, waveSpeed,
+// toShoreX, toShoreZ, shore metres]. Depth is the level minus the heights sent.
 function projectWater(terrain: any, height: (x: number, z: number) => number, size: number, n: number) {
   const w = levelParams(terrain);
   if (!w) return null;
   const raw = terrain?.water ?? {};
   const a = analyzeWater(height, size, { level: w.level, kind: raw.kind, flow: raw.flow }, n);
   const K: Record<string, number> = { still: 0, river: 1, ocean: 2 };
-  const r3 = (v: number) => Math.round(v * 1000) / 1000;
   const cells: number[] = [];
   for (let k = 0; k < a.depth.length; k++) {
     if (!(a.depth[k] > 0) || a.comp[k] < 0) continue;
@@ -50,9 +48,7 @@ function projectWater(terrain: any, height: (x: number, z: number) => number, si
 export function projectEnvironment(state: any) {
   const p = terrainParams(state.terrain ?? { size: 200, amplitude: 0 });
   if (!(p.size > 0 && p.size <= 10000)) throw Error("terrain size unsupported");
-  // The shaped ground (placed features, heightmaps) over the base law — what the browser and agents stand on.
-  // makeHeightField already applies terrainParams' shape: shaping it again doubled every feature (a −4 m pit
-  // projected at −8 m), so native clients got different ground and water than browsers.
+  // never shape again: makeHeightField already applies terrainParams' shape (twice doubled every feature)
   const n = Math.min(128,Math.max(64,Math.round(Number(state.terrain?.segments)||64))), height = makeHeightField(p), heights: number[] = [];
   for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++)
     heights.push(height((x / n - .5) * p.size, (z / n - .5) * p.size));
@@ -66,18 +62,15 @@ export function projectEnvironment(state: any) {
     sky: state.sky ?? null, grass: state.grass ?? null, flora: projectFlora(state.grass,height) };
 }
 
-// Renderer-facing component parameters (tools/water/README.md). Water is
-// normalized by the same law the browser uses; the rest pass through bounded.
+// Renderer-facing component parameters (tools/water/README.md): water normalized as the browser does, the rest bounded.
 const PASS_THROUGH = ["environment", "vehicle", "traversal", "collision"] as const;
 export function projectComponentData(comp: any, entityId = "") {
   const data: Record<string, unknown> = {};
-  // Presentation components, normalized by the same shared laws the browser uses
-  // (a bag that does not normalize renders nothing there either).
+  // a bag that does not normalize renders nothing in the browser either
   if (comp?.particles) { const { ok, ...r } = resolveParticles(comp.particles, { entityId }) as any; if (ok) data.particles = r; }
   if (comp?.picture) { const r = normalizePicture(comp.picture); if (r.ok) data.picture = r.picture; }
   if (comp?.sound) { const r = normalizeSound(comp.sound); if (r.ok) data.sound = r.sound; }
-  // Named-part motions (motion.js): every motion:<part> key, plus motion with a part.
-  // t0 is left as authored; partMotionsFor() resolves a missing t0 per request.
+  // every motion:<part> key, plus motion with a part; t0 as authored (partMotionsFor() resolves a missing one)
   const parts: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(comp ?? {})) {
     if (!v || typeof v !== "object") continue;
@@ -113,15 +106,12 @@ export function projectEntity(id: string, e: any) {
     ...(e.kind === "light" ? { keep: !!e.keep, day: e.day !== false } : {}),
     interact: {actions:Object.keys(e.comp?.reactions??{}).slice(0,32),sockets:e.comp?.sockets??null,
       locked:!!e.comp?.lock, mounted:!!e.parent, moving:!!e.comp?.motion,
-      // attribution for the inspector and the guard check (placer.js / build.js mayAuthor)
+      // attribution for a renderer's inspector: who placed it, who last acted on it
       guarded:!!e.comp?.guard, placer:e.placer?.id ?? null, placerSub:e.placer?.sub ?? null, lastActor:e.actor ?? null} };
   return { ...out, revision: hash(out) };
 }
 
-// Parameters for client-side evaluation, so native renderers animate at frame
-// rate from the same closed forms instead of polling sampled transforms.
-// A missing t0 is resolved to this process's anchor: every native client then
-// agrees with the server's own sampled transform.
+// closed-form, so native renderers animate at frame rate; a missing t0 is this process's anchor, so every client agrees
 export function localMotion(raw: any, nowMs: number, simBody: boolean) {
   const m = raw?.comp?.motion;
   if (raw?.parent || simBody || !m || typeof m.type !== "string" || typeof m.part === "string") return null;
@@ -131,7 +121,6 @@ export function localMotion(raw: any, nowMs: number, simBody: boolean) {
 /** child world = carrier world ∘ (offset scaled by the carrier, then the mount's yaw); scale multiplies. */
 export function composeMount(pt: { pos: number[]; quat: number[]; scale: number }, mount: { offset: number[]; yaw: number }, ownScale = 1) {
   const [qx, qy, qz, qw] = pt.quat, o = mount.offset.map((v: number) => v * (pt.scale ?? 1));
-  // rotate o by the carrier's quaternion
   const ix = qw * o[0] + qy * o[2] - qz * o[1], iy = qw * o[1] + qz * o[0] - qx * o[2], iz = qw * o[2] + qx * o[1] - qy * o[0], iw = -qx * o[0] - qy * o[1] - qz * o[2];
   const pos = [pt.pos[0] + ix * qw + iw * -qx + iy * -qz - iz * -qy, pt.pos[1] + iy * qw + iw * -qy + iz * -qx - ix * -qz, pt.pos[2] + iz * qw + iw * -qz + ix * -qy - iy * -qx];
   const h = (mount.yaw ?? 0) / 2, yq = [0, Math.sin(h), 0, Math.cos(h)];
@@ -146,7 +135,7 @@ export function localMount(raw: any, parent: any) {
   const part = sock && typeof sock.part === "string" ? { part: sock.part.slice(0, 64) } : {};
   return { to: m.to, offset: m.offset ?? sock?.pos ?? [0, 0, 0], yaw: m.yaw ?? sock?.yaw ?? 0, scale: raw.scale ?? 1, ...(m.slot ? { slot: m.slot } : {}), ...part };
 }
-// Resolve each part motion's t0 the way localMotion does, so every native client agrees.
+// t0 resolved as localMotion does, so every native client agrees
 export function partMotionsFor(raw: any, nowMs: number) {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw?.comp ?? {})) {
@@ -171,10 +160,8 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
   // Rate-limit errors too. Commit delivered revisions only after size checks.
   old.at = now; clients.set(c, old);
   if (msg.version !== RENDER_VERSION) return { type: "render-scene", version: 1, world: w.name, error: "unsupported_version" };
-  // A saved heightmap whose grid has not loaded yet would project the noise fallback as the ground, and
-  // cache it as success (terrain, water and plant positions all wrong until some unrelated edit). Refuse
-  // until it is ready, caching nothing; `moving` keeps native clients polling at their usual interval.
-  // (the NORMALIZED shape: a malformed grid ref the height law ignores must not hold the scene forever)
+  // an unloaded heightmap would cache the noise fallback as ground: refuse until ready, caching nothing (`moving` keeps
+  // clients polling). Judged on the NORMALIZED shape, so a malformed grid ref can't hold it forever
   if (!shapeReady(shapeParams(w.state.terrain ?? {})))
     return { type: "render-scene", version: 1, world: w.name, error: "terrain_pending", moving: true, updateIntervalMs: 300,
       detail: `heightmap grid ${String(w.state.terrain?.heightmap?.grid ?? "").slice(0, 120)} is not available yet` };
@@ -203,22 +190,18 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
       });
       cached = { seq, entities, environment, signature: hash(environment), envSource }; worlds.set(w, cached);
     }
-    // Evaluate the SAME versioned physics law as the browser, at this render
-    // time. Never advance the authoritative sim as a side effect of a read.
-    // Snapshot fields alias the sim, so clone before advancing. Foreign epochs
-    // retain their barrier poses without pretending to know their physics.
+    // on a clone (snapshot fields alias the sim): a read never advances the authoritative sim
+    // foreign epochs keep their barrier poses
     const sim = w.sim?.epoch ? structuredClone(simSnapshot(w.sim)) : null;
     if (sim && !sim.epoch?.foreign) advanceSim(sim, tickOf(sim, now));
     const activeBodies = sim && !sim.epoch?.foreign ? Object.values(sim.bodies).filter(b => !b.resting).length : 0;
-    // The pose each entity is at NOW: a live lease (a piloted vessel) beats the sim beats the fold — resolved
-    // through the whole mount chain, so cargo and occupants ride where the leased carrier actually is.
+    // lease beats sim beats fold, through the whole mount chain, so occupants ride where the leased carrier is
     const view = { entity: (id: string) => {
       const e = w.state.entities[id], s = w.leases?.get(id)?.lastState, b = sim?.bodies[id];
       if (e && s && Array.isArray(s.p)) return { ...e, pos: s.p, yaw: s.yaw ?? 0, livePose: { q: s.q }, comp: { ...e.comp, motion: null } };
       return e && b ? { ...e, pos: b.p, yaw: b.yaw, comp: { ...e.comp, motion: null } } : e;
     }, mount: (id: string) => w.state.entities[id]?.parent };
-    // Each entity's pose now: the effective transform where it resolves, else (a part socket somewhere up
-    // its chain) its carrier's pose composed with the mount — recursively, cycle- and depth-guarded.
+    // past a part socket up the chain: the carrier's pose composed with the mount, cycle- and depth-guarded
     const poses = new Map<string, any>();
     const poseOf = (id: string, depth = 8): any => {
       if (poses.has(id)) return poses.get(id);
@@ -257,9 +240,7 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
         moving ||= !!t.moving || !!partMotions;
       }
       else if (raw?.parent) {
-        // Mounted on a part socket — directly, or further down a chain that rides one (a bag on a seat on a
-        // swing): no server-side part pose, so send the rest-pose composition and the mount relation;
-        // native clients ride the live part and everything mounted below it.
+        // no server-side part pose: send the rest-pose composition and the mount; clients ride the live part
         const pt = poseOf(raw.parent.to), mount = localMount(raw, w.state.entities[raw.parent.to]);
         if (pt && mount) {
           const c = composeMount(pt, mount, raw.scale ?? 1);

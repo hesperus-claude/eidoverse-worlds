@@ -1,14 +1,5 @@
-// eidoverse-worlds sequencer — filesystem idioms (R2, survey §4.1).
-//
-// The tmp-write + rename pair was hand-rolled TEN times across the server
-// (auth, moderation, routes, upload, world ×2, seats ×2, optimize, and the
-// MCPL door), with accidental differences: two sites passed mode 0600,
-// one had orphan-tmp cleanup, exactly one (seats) routed through an
-// injectable fs surface so its failure atomicity is TESTABLE. One helper
-// now, carrying the best of each: atomicity by rename, explicit mode,
-// injectable fs (the seats fault-injection precedent — every caller
-// inherits testability), and stale-tmp tolerance (a crash between write
-// and rename leaves <path>.tmp; the next write simply overwrites it).
+// Filesystem idioms: the one tmp-write + rename helper every atomic write in the server goes through (explicit mode,
+// injectable fs for fault injection; a crash between write and rename leaves <path>.tmp, which the next write overwrites).
 
 import { writeFileSync, renameSync } from "node:fs";
 

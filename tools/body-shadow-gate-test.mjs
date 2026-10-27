@@ -1,18 +1,7 @@
-// Only a body with a LAMP in it casts and receives (client/lib/materials.js,
-// client/lib/avatar.js).
-//
-// Bodies briefly got real shadows for every avatar in the world. That is a
-// global rendering default flipped on shared client code, and the costs were
-// unmeasured: a body's depth pipelines never reach warmqueue's warmDepth (only
-// registered MODELS do), so they compile in-frame on the first shadow render,
-// and bodies bypass the distance-ranked caster budget that exists to prevent
-// exactly that. In a crowded room that is N bodies compiling.
-//
-// Janus scoped it down: "set the change for now to only shadowed body by
-// default if you have the lamp like mythos... we can test the performance of
-// having more on the shared server later." So the gate is the lamp, and this
-// pins all three paths -- including that an unlamped body is EXACTLY as it was
-// before any of this work.
+// Only a body with a LAMP in it casts and receives shadows (client/lib/materials.js, client/lib/avatar.js).
+// A body's depth pipelines never reach warmqueue's warmDepth (only registered MODELS do), so they compile in-frame on
+// the first shadow render, outside the distance-ranked caster budget: N bodies compiling in a crowded room. So the
+// gate is the lamp, and an unlamped body is EXACTLY as it was.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
@@ -29,7 +18,7 @@ const mats = await import('../client/lib/materials.js');
 let pass = 0, fail = 0;
 const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
 
-// the real node names off Mythos's VRM (nodes, not meshes -- o.name is the node)
+// the real node names off the lamped winged VRM (nodes, not meshes: o.name is the node)
 const NAMES = ['body_main', 'wings', 'eyelids', 'eyeballs', 'GOLD', 'lamp'];
 const makeBody = () => {
   const g = new THREE.Group();
@@ -62,11 +51,8 @@ check('the body casts', meshes(lamped).filter((m) => !NO_CAST.includes(m.name)).
 // the kintsugi seams self-shadow into scratches at any map size
 check('GOLD does NOT cast', byName(lamped, 'GOLD').castShadow === false);
 check('...but GOLD still receives', byName(lamped, 'GOLD').receiveShadow === true);
-// THE WINGS, at Janus's ask. castShadow is per OBJECT and both wings are one
-// mesh, so dropping `wings` from the caster set is what "no wing-on-wing
-// shadowing" actually means -- there is no per-pair exclusion in three. They
-// keep receiving, so the chest lamp still lights them and the body still
-// shadows them.
+// the wings: castShadow is per object and both wings are one mesh, so no wing-on-wing shadowing means dropping them
+// from the caster set; they still receive
 check('the wings do NOT cast', byName(lamped, 'wings').castShadow === false);
 check('...but the wings still receive', byName(lamped, 'wings').receiveShadow === true);
 // the silhouette that reads as a person is still thrown
@@ -104,7 +90,7 @@ console.log("'MY BODY CASTS A REAL SHADOW' — the Video pref, own body only (ma
   check('…GOLD and the wings still do not cast', !byName(on.vrm.scene, 'GOLD').castShadow && !byName(on.vrm.scene, 'wings').castShadow);
   check('…the depth pipelines were warmed BEFORE the flip, for the casting meshes only', warmed[0] === 'depth me' && flippedBeforeWarm[0] === false
     && JSON.stringify(warmed[1]) === JSON.stringify(NAMES.filter((n) => !NO_CAST.includes(n))), JSON.stringify(warmed));
-  const remote = fakeAv();                        // a remote body: prepareObject only — setMe never runs for it
+  const remote = fakeAv();  // a remote body: prepareObject only, setMe never runs for it
   check('…a remote body with the same pref value in this browser does NOT cast', body(remote).every((m) => !m.castShadow && !m.receiveShadow));
   mats.setMyShadowPref(false);
   await mats.applyOwnBodyShadow(on);
@@ -129,7 +115,7 @@ console.log("ROUND 2 — the LIT warm (receiveShadow IS in the cache key) and th
   check('the lit warm runs first, with receiveShadow still false on every mesh, for the casting meshes only; the depth warm follows; the flip is last',
     r === true && order.join(' ') === `lit me receive:000000 lit:${NAMES.filter((n) => !NO_CAST.includes(n)).join(',')} depth me` && body(av).every((m) => m.receiveShadow), order.join(' '));
 
-  // S2-1: ON → (warm pending) → OFF → the warm lands: the body must END with the pref off
+  // ON → (warm pending) → OFF → the warm lands: the body must END with the pref off
   const race = fakeAv();
   let release; const gate = new Promise((res) => { release = res; });
   const on = mats.applyOwnBodyShadow(race, { pref: () => mats.myShadowPref(), lit: async (_l, get) => { get(); await gate; } });
@@ -141,7 +127,7 @@ console.log("ROUND 2 — the LIT warm (receiveShadow IS in the cache key) and th
   check('pref ON then OFF while the warm was pending: the body does NOT cast afterwards', off === false && first === false && body(race).every((m) => !m.castShadow && !m.receiveShadow),
     `first=${first} off=${off} casting=${body(race).filter((m) => m.castShadow).map((m) => m.name).join(',')}`);
 
-  // the pref re-read AFTER the warm: ON at call time, OFF when the warm lands — no newer call in between
+  // the pref re-read AFTER the warm: ON at call time, OFF when the warm lands, no newer call between
   const late = fakeAv();
   mats.setMyShadowPref(true);
   const r3 = await mats.applyOwnBodyShadow(late, { pref: () => mats.myShadowPref(), lit: async (_l, get) => { get(); mats.setMyShadowPref(false); } });

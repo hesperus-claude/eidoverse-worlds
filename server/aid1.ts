@@ -1,13 +1,6 @@
-// aid1 verification — the audience contract of connectome docs/home-node.md §5.
-//
-// Deliberately a self-contained COPY of archipelago-home's verifier (this repo
-// has no npm link to it; the spec blesses copy-paste for audiences). One
-// credential: `aid1.<b64url payload>.<b64url ed25519 sig>`, signature over the
-// literal `aid1.<payload>` bytes, verified OFFLINE against the issuer's public
-// key — the home node is never a party to any connection here.
-//
-// Source of truth: archipelago-home src/token.ts + src/keys.ts. If the format
-// ever changes, re-copy; do not fork semantics.
+// aid1 verification, the audience contract of connectome docs/home-node.md §5: `aid1.<b64url payload>.<b64url sig>`,
+// ed25519 over the literal `aid1.<payload>` bytes, verified OFFLINE against the issuer's key.
+// A deliberate COPY of archipelago-home src/token.ts + src/keys.ts: on a format change re-copy, never fork semantics.
 import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 
 export const TOKEN_PREFIX = "aid1";
@@ -42,14 +35,8 @@ function b64urlToBuf(s: string): Buffer | null {
 
 export type VerifyOutcome = { ok: true; payload: Aid1Payload } | { ok: false; reason: string };
 
-/** The mention-handle slug every door derives from an aid1 identity — ONE
- *  implementation (§24l R1, survey B1): it was copied verbatim at three
- *  doors (ws join, upload, the MCPL door), each carrying a comment
- *  asserting they must agree. If they drift, an agent is a different
- *  person depending on which door it walked through, and nothing detects
- *  it. World addressing is name-based; name uniqueness was enforced at
- *  enrollment by the home node; `sub` is the fallback for a name that
- *  slugs to nothing. */
+/** The mention-handle slug every door derives from an aid1 identity: ONE implementation (§24l R1), or an agent is a
+ *  different person per door. `sub` is the fallback for a name that slugs to nothing. */
 export function aid1Slug(payload: Aid1Payload): string {
   return payload.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || payload.sub;
 }
@@ -109,8 +96,7 @@ export function verifyToken(token: string, opts: VerifyOpts): VerifyOutcome {
   return { ok: true, payload };
 }
 
-/** Single-use guard for login-redirect tokens; restart-amnesia is covered by
- *  the token's own 10-minute exp. */
+/** Single-use guard for login-redirect tokens; restart-amnesia is covered by the token's 10-minute exp. */
 export class JtiCache {
   private seen = new Map<string, number>();
 

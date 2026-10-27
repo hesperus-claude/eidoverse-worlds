@@ -1,27 +1,11 @@
-// A REAL test for voiceSource(): it IMPORTS client/lib/voicesource.js and
-// exercises the shipped function. Replaces the eye-verified transcription in
-// tts-publishes-mic-off-test.mjs, which imports nothing and cannot fail when
-// the module breaks (audit, 2026-08-16).
-//
-// Only the BROWSER SURFACE is stubbed — navigator.mediaDevices and the minimum
-// WebAudio the synth path touches. The decision logic under test is the real
-// one, so reverting the micWanted fix in voicesource.js makes this go red.
-// voicesource.js imports core.js, which builds a canvas at module scope — so a
-// real import needs a real DOM. happy-dom is already the repo's pattern for
-// this (tools/tts-fault-test.ts, tools/chat-log-test.ts).
+// voiceSource(), IMPORTED from client/lib/voicesource.js and exercised: only the BROWSER SURFACE (navigator.mediaDevices,
+// the minimum WebAudio the synth path touches) is stubbed, so reverting the micWanted fix goes red. happy-dom gives the
+// real DOM core.js's import needs (as tools/tts-fault-test.ts).
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
 GlobalRegistrator.register({ url: "http://localhost/?world=test&name=probe" });
 
-// voicesource.js needs exactly ONE thing from core.js — `report` — but core.js
-// constructs a THREE.WebGPURenderer at module scope, which cannot initialise
-// headlessly. That single edge is the real reason the earlier version of this
-// test re-typed the logic instead of importing it.
-//
-// Mocking the MODULE (not the logic) keeps the thing under test real: the
-// decision code executing below is the shipped code, byte for byte. Revert the
-// micWanted fix in voicesource.js and this goes red — which is the whole
-// property the transcription version could never have.
+// voicesource.js needs only `report` from core.js, which builds a WebGPURenderer at import: mock the MODULE, not the logic
 mock.module('../client/lib/core.js', () => ({
   report: (...a) => console.error('[report]', ...a),
   bus: { on() {}, emit() {} },
@@ -34,11 +18,7 @@ Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true
   return { kind: 'microphone', getTracks: () => [{ kind: 'audio', stop() {} }] };
 }}});
 class FakeNode { connect() { return this; } disconnect() {} }
-// 🔴 THE STUB MUST BE AS STRICT AS THE BROWSER. A permissive stub hides real
-// bugs: `new MediaStream([null])` throws TypeError in Chrome, but a stub that
-// stores the array happily let mutation M4 (provider.start() returning null)
-// pass 8/8. A test double looser than the thing it doubles is a source of false
-// green — the same defect as a test that imports nothing, wearing a disguise.
+// 🔴 THE STUB MUST BE AS STRICT AS THE BROWSER: `new MediaStream([null])` throws TypeError in Chrome
 globalThis.MediaStream = class {
   constructor(t) {
     const tracks = t || [];
@@ -59,74 +39,71 @@ globalThis.AudioContext = class {
 };
 
 const mod = await import('../client/lib/voicesource.js');
-const { voiceSource, setSynthProvider } = mod;
+const { voiceSource, setSynthProvider, setGeneratorRebuildHook, notifySynthTrackChanged } = mod;
 if (typeof setSynthProvider !== "function") { console.log("FAIL — setSynthProvider not exported; test would pass vacuously"); process.exit(1); }
 
 let pass = 0, fail = 0;
 const check = (name, cond) => { cond ? (pass++, console.log(`ok   ${name}`))
                                      : (fail++, console.log(`FAIL ${name}`)); };
 
-// 1. No provider, mic works → the microphone.
+// 1. no provider, mic works → the microphone
 gumCalls = 0; gumBehaviour = 'ok';
 let s = await voiceSource();
 check('mic available and wanted → microphone', s.kind === 'microphone' && gumCalls === 1);
 
-// 2. THE FIX: mic switched off + provider available → synth, WITHOUT opening a device.
-// The REAL provider contract (voicesource.js:104): start() returns a TRACK,
-// which synthStream() wraps in a MediaStream and marks .synthetic. The
-// transcription version had this as stream() → an object, and was green anyway
-// — it was asserting against its own invented interface.
+// 2. mic switched off + provider available → synth, WITHOUT opening a device.
+// the real provider contract: start() returns a TRACK, which synthStream() wraps in a MediaStream marked .synthetic
 setSynthProvider({ available: () => true, start: () => ({ kind: 'audio', stop() {} }) });
 gumCalls = 0;
 s = await voiceSource({ micWanted: false });
-// 🔴 ASSERT THE POSITIVE. This read `s.kind !== 'microphone'` — a NEGATIVE, so
-// a stream that is neither a mic nor marked synthetic sailed through. An
-// adversarial mutation (strip `.synthetic = true` from synthStream()) left this
-// file 6/6 GREEN. That flag drives five live branches — voicesfu.js:290,294,300
-// (the mic-resume-after-synth guard) and voice.js:614 (whether the WebAudio
-// gate wraps the stream at all) — so a source that loses it is silently treated
-// as a microphone by every consumer.
-//
-// This is the same class of error the transcription version made, one level
-// down: I fixed the invented INTERFACE and kept asserting the absence of the
-// wrong thing instead of the presence of the right one.
+// 🔴 ASSERT THE POSITIVE (.synthetic === true), not "not a microphone": voicesfu.js's re-acquire-after-synth guard
+// branches on the flag
 check('mic OFF + provider → synthetic source', !!s && s.synthetic === true);
 check('mic OFF source is NOT a microphone', s.kind !== 'microphone');
 check('mic OFF does not call getUserMedia', gumCalls === 0);
 
-// 3. Default stays mic — every existing call site unchanged.
+// 3. default stays mic: every existing call site unchanged
 gumCalls = 0;
 s = await voiceSource();
 check('default (micWanted omitted) still takes the mic', s.kind === 'microphone' && gumCalls === 1);
 
-// 3b. The provider contract itself: start() must yield a usable track.
-//     (Mutation M4: start() returning null left the old version green, because
-//     `new MediaStream([null])` is tolerated by the stub while a real browser
-//     throws. Assert the track exists rather than trusting the wrapper.)
+// 3b. the provider contract: start() must yield a usable track; assert the track rather than trusting the wrapper
 const tracks = typeof s.getTracks === 'function' ? s.getTracks() : [];
 check('synthetic stream carries a real track', tracks.length === 1 && tracks[0] != null);
 
-// A provider whose start() yields nothing must FAIL LOUDLY, not publish silence.
-// (Mutation M4. The strict MediaStream stub above makes this throw the way a
-// browser does; catching it here turns a crash into a reported assertion.)
+// a provider whose start() yields nothing must FAIL LOUDLY, not publish silence (the strict stub throws as a browser does)
 setSynthProvider({ available: () => true, start: () => null });
 let m4threw = false;
 try { await voiceSource({ micWanted: false }); } catch { m4threw = true; }
 check('provider.start() returning null throws, not silent publish', m4threw);
 setSynthProvider({ available: () => true, start: () => ({ kind: 'audio', stop() {} }) });
 
-// 4. Original fallback intact: gUM throws + provider → synth.
+// 4. original fallback intact: gUM throws + provider → synth
 gumBehaviour = 'throw'; gumCalls = 0;
 s = await voiceSource();
 check('gUM throws + provider → synthetic (original path)', !!s && s.synthetic === true);
 
-// 5. Negative control: no provider + gUM throws → must THROW, never silently mute.
-//    (setSynthProvider(null) may be rejected by a guard; clear via a provider
-//    that reports unavailable, which is the same state from the caller's view.)
+// 5. negative control: no provider + gUM throws → must THROW, never silently mute. A provider reporting unavailable is
+// the same state as none from the caller's view (setSynthProvider(null) may be guarded)
 setSynthProvider({ available: () => false, start: () => { throw new Error('must not be called'); } });
 let threw = false;
 try { await voiceSource(); } catch { threw = true; }
 check('no provider + no mic → throws (does not fake a source)', threw);
+
+// 6. mic OFF + no provider publishes nothing and never opens the device
+gumBehaviour = 'ok'; gumCalls = 0;
+let offThrew = false;
+try { await voiceSource({ micWanted: false }); } catch { offThrew = true; }
+check('mic OFF + no provider → throws, getUserMedia untouched', offThrew && gumCalls === 0);
+
+// 7. two transports register the rebuild hook: both fire, a thrower does not silence the rest, and unsubscribe works
+const fired = [];
+const offs = [() => fired.push('mesh'), () => { throw new Error('sfu blew up'); }, () => fired.push('sfu-later')].map(setGeneratorRebuildHook);
+notifySynthTrackChanged({ kind: 'audio' });
+check('every rebuild hook fires; a throwing one does not silence the rest', fired.join() === 'mesh,sfu-later');
+offs.forEach((off) => off());
+notifySynthTrackChanged({ kind: 'audio' });
+check('…and an unsubscribed hook no longer fires', fired.length === 2);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,43 +1,12 @@
-// terrainmath — the terrain height law as owned numerics (Covenant I).
-//
-// A faithful port of the eidoverse toolkit's makeTerrain height function
-// (eidoverse-video/eidoverse/terrain.js: mulberry32 → 64×64 value-noise grid
-// → fBm → amplitude + flat-radius blend), re-expressed inside the blessed
-// exact-op set so the deterministic sim (eidosim) may ground bodies on
-// it. The toolkit's law was ALREADY almost covenant-clean — integer-hash
-// PRNG, lerp/smoothstep, floor; no transcendental anywhere — with exactly
-// two unblessed calls, substituted here:
-//
-//   - Math.pow(0.5, octaves) → the same value accumulated by halving (for
-//     the integer octaves in use the results are bit-identical);
-//   - Math.hypot(x, z) → Math.sqrt(x*x + z*z) (hypot is implementation-
-//     approximated and historically differs across engines; sqrt is the
-//     blessed op; at world scale the overflow guard hypot exists for is
-//     irrelevant, and the ~1-ulp difference in the flat-radius blend is
-//     nanometres of ground).
-//
-// One consequence stated honestly: the CLIENT's rendered mesh and walking
-// heightAt still come from the toolkit's own function (vendored, eval-
-// loaded); this module is the SIM's ground truth. The two agree to ~1 ulp
-// everywhere (measured in tools/sim-test.ts), which is nanometres — but the
-// covenant identity that matters (server sim ≡ client shadow sim ≡ any
-// replay, bit for bit) holds because ALL sim consumers use THIS law.
-//
-// THE CONSTANTS AND THE EVALUATION ORDER ARE THE VERSION (Covenant II):
-// this law is held by eidosim's conformance digests (engine-check: the onto-hills scenario): editing anything here that
-// moves a digest is a new engine version, never a patch.
-//
-// SHAPING (features, heightmap — shared/terrainshape.js) rides on top and is
-// carried ONLY when the args use it: for every world that does not, the
-// params object and every height are exactly what they were, so no existing
-// epoch's ground moves. A shaped world's sim grounds bodies on the same
-// shaped law the mesh and the agents use — through the same function.
+// terrainmath — the terrain height law as owned numerics (Covenant I): the toolkit's makeTerrain (mulberry32 → 64² value
+// noise → fBm → flat-radius blend) with Math.pow → repeated halving and Math.hypot → sqrt. Every SIM consumer uses this;
+// the client mesh uses the toolkit's (agrees to ~1 ulp). THE CONSTANTS AND EVALUATION ORDER ARE THE VERSION (Covenant II):
+// moving a conformance digest (tools/protocol/engine-check.ts) is a new engine version, never a patch.
 
 import { shapeParams, shapeHeight } from './terrainshape.js';
 
-/** Normalize terrain-verb args to the canonical parameter set, with the
- *  TOOLKIT's own defaults — the sim must assume exactly what the mesh
- *  builder assumes. @param {Record<string, unknown>} a */
+/** Canonical parameters with the TOOLKIT's own defaults: the sim must assume exactly what the mesh builder assumes.
+ *  @param {Record<string, unknown>} a */
 export function terrainParams(a) {
   const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
   const shape = shapeParams(a);
@@ -53,12 +22,11 @@ export function terrainParams(a) {
   };
 }
 
-/** Build the height function for one terrain. Pure of everything but its
- *  params; the grid build is integer-hash exact.
+/** Pure of everything but its params; the grid build is integer-hash exact.
  *  @param {ReturnType<typeof terrainParams>} P
  *  @returns {(x: number, z: number) => number} */
 export function makeHeightField(P) {
-  // mulberry32 — integer ops only, bit-exact on every engine
+  // integer ops only, bit-exact on every engine
   let s = (P.seed | 0) || 1;
   const rand = () => {
     s |= 0; s = (s + 0x6D2B79F5) | 0;
@@ -67,8 +35,7 @@ export function makeHeightField(P) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   const GS = 64;
-  // Float32Array stores round exactly per IEEE — deterministic; and it is
-  // what the toolkit does, so the grids are bit-identical
+  // Float32Array rounds exactly per IEEE, as the toolkit's does: the grids are bit-identical
   const grid = new Float32Array(GS * GS);
   for (let i = 0; i < grid.length; i++) grid[i] = rand();
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -93,7 +60,7 @@ export function makeHeightField(P) {
     const u = (x / size + 0.5) * frequency, v = (z / size + 0.5) * frequency;
     let h = (fbm(u, v) - 0.5) * 2 * amplitude;
     if (flatRadius > 0) {
-      const d = Math.sqrt(x * x + z * z);          // sqrt, not hypot — see header
+      const d = Math.sqrt(x * x + z * z);          // not hypot: see header
       const k = sm((d - flatRadius) / Math.max(0.001, flatRadius * 0.6));
       h = lerp(flatHeight, h, k);
     }

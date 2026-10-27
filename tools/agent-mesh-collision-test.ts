@@ -1,22 +1,10 @@
-// bun tools/agent-mesh-collision-test.ts — an agent's body collides against
-// the same fitted colliders a browser's does.
-//
-// Agents used to stand on terrain and walk straight lines through everything
-// placed: a raised floor buried them to the shins, a table stood in them, a
-// wall was no obstacle and an upstairs did not exist. Now the agent fits
-// client/lib/colliders.js from each model's own triangles
-// (server/geometry.ts collisionTriangles, decoded from the bytes /library
-// serves) and steps its feet the way client/lib/controller.js steps a
-// person's. This checks:
-//   1. collisionTriangles: node transforms applied, orphans excluded, and a
-//      draco-compressed copy (what /library usually serves) decodes to the
-//      same triangles;
-//   2. against an isolated sequencer, a real WorldAgent in a two-storey
-//      building — standing on a raised floor, climbing a stair to the upper
-//      floor and back down, staying downstairs under the upper floor,
-//      standing up and rejoining upstairs, and stopping (saying so) at
-//      something solid that appears in its way. Routing round things is
-//      navgrid-test's subject.
+// bun tools/agent-mesh-collision-test.ts: an agent's body collides against the same fitted colliders a browser's does.
+// The agent fits client/lib/colliders.js from each model's triangles (server/geometry.ts collisionTriangles, decoded from
+// /library's bytes) and steps its feet as client/lib/controller.js steps a person's. Checks:
+//   1. collisionTriangles: node transforms applied, orphans excluded, a draco copy decodes to the same triangles;
+//   2. a real WorldAgent in a two-storey building on an isolated sequencer: standing on a raised floor, the stair up and
+//      down, staying downstairs under the upper floor, standing up and rejoining upstairs, stopping (saying so) at
+//      something solid that appears in its way. Routing round things is navgrid-test's.
 process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
 const { collisionTriangles } = await import("../server/geometry.ts");
@@ -24,7 +12,7 @@ const { FLOOR, UPPER, boxes, buildGlb, boxMesh } = await import("./two-storey-fi
 const { Document, NodeIO } = await import("@gltf-transform/core");
 const { ALL_EXTENSIONS } = await import("@gltf-transform/extensions");
 type Box = [number, number, number, number, number, number];
-const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("./harness.ts");
+const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId, trackTicks } = await import("./harness.ts");
 const { tryUntil, pause } = await import("./protocol/wait.ts");
 const { check, tally } = mkCheck();
 
@@ -96,11 +84,11 @@ console.log("\nan agent in a two-storey building (isolated sequencer):");
 const h = await scratchSequencer("agent-mesh-collision", { serverEnv: { SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" }, worlds: ["meshcollide", "meshcollide-empty"], owner: "walker", portFrom: 9420 });
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const URL_ = h.BASE.replace("http", "ws") + "/ws";
-let a: any = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+let a: any = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
 const near = (v: number, want: number, tol = 0.03) => Math.abs(v - want) <= tol;
 try {
   await a.connect();
-  // the protocol: a founded world has bounds (±20 m); the test ground is at x 19–21
+  // a founded world has bounds (±20 m); the test ground is at x 19–21
   const widened = await a.request("set", { id: "@world", component: "bounds", value: { min: [-100, -20, -100], max: [100, 60, 100] } });
   if (!widened?.ok) throw new Error(`setup: widening @world's bounds was refused: ${JSON.stringify(widened?.refused ?? widened)}`);
   const up = await fetch(`${h.BASE}/upload?name=two-storey`, { method: "POST", body: await buildGlb(boxes) });
@@ -108,9 +96,9 @@ try {
   // the building sits on the ground under its own origin, wherever that is
   const gy = a.heightAt(0, 0);
   await legacyVerb(a, "spawn", { id: "tower", lib: path, pos: [0, gy, 0], yaw: 0 });
-  await tryUntil("the tower's support is registered", () => a.supportIds?.get("tower"), { ms: 5000, step: 50 });
+  await tryUntil("the tower's support is registered", () => a.supportIds?.get(sceneId(a, "tower")), { ms: 5000, step: 50 });
   await a.supportReady();
-  await sleep(300);                                     // the fit itself is a detached registration
+  await sleep(300);  // the fit is a detached registration
   // y: which floor at the destination, where it has more than one (navgrid)
   const walk = async (x: number, z: number, y?: number) => a.walkTo(x, z, false, 30_000, 0.01, y);
 
@@ -133,28 +121,25 @@ try {
   check("sits on an upstairs seat", !!a.myOccupancy);
   check("stands up from it upstairs, not on the ground floor beneath",
     await walk(-0.2, -2.4) && near(a.pos.y, gy + UPPER), `y ${a.pos.y.toFixed(3)}`);
-  // leave upstairs, come back: the body wakes where it was, at that height,
-  // and holds it until the building's collider is fitted again — not on the
-  // terrain under the building, which is all a fresh process knows at first
-  await sleep(1500);                                    // the server's settled memory catches the pose
+  // leave upstairs and come back: the body wakes at that height and holds it until the building's collider is fitted
+  // again, not on the terrain under it (all a fresh process knows at first)
+  await sleep(1500);  // the server's settled memory catches the pose
   a.close();
   await sleep(500);
-  a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+  a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
   await a.connect();
   await a.supportReady();
   await sleep(500);
   check("rejoins upstairs, standing on the upper floor it left from",
     near(a.pos.y, gy + UPPER) && Math.hypot(a.pos.x + 0.2, a.pos.z + 2.4) < 0.1, `at (${a.pos.x.toFixed(2)}, ${a.pos.y.toFixed(3)}, ${a.pos.z.toFixed(2)})`);
   {
-    // lying upstairs after a fall, the ragdoll's root is ~0.68m BELOW the
-    // floor holding it up; getting up must find that floor, not the one under it
+    // lying upstairs after a fall, the ragdoll root is ~0.68m BELOW the floor: getting up must find that floor, not the one under it
     a.clip = "ragdoll"; a.pos.y = gy + UPPER - 0.68;
     a.setPose(null);
     check("getting up from a ragdoll lying upstairs stands upstairs", near(a.pos.y, gy + UPPER), `y ${a.pos.y.toFixed(3)}`);
   }
   {
-    // another world in the same process, nothing built in it: the tower's
-    // walls and floors must not exist there
+    // another world in the same process, nothing built: the tower's walls and floors must not exist there
     const other: any = new WorldAgent({ name: "elsewhere", world: "meshcollide-empty", url: URL_ });
     await other.connect();
     await other.walkTo(0, 5, true);
@@ -163,11 +148,7 @@ try {
       through && Math.abs(other.pos.z + 2) < 0.05 && near(other.pos.y, other.heightAt(0, -2)), `at (${other.pos.x.toFixed(2)}, ${other.pos.y.toFixed(3)}, ${other.pos.z.toFixed(2)})`);
     other.close();
   }
-  // Something solid that arrives AFTER the walk was planned: a barrier
-  // spawned across the upper floor while the body is on its way. The feet
-  // meet it (its collider is fitted like any other), and the walk ends
-  // promptly, saying where — the route planner is not the only thing
-  // standing between a body and a wall.
+  // a barrier spawned across the upper floor mid-walk: the feet meet its fitted collider and the walk ends, saying where
   const bar = await (await fetch(`${h.BASE}/upload?name=barrier`, { method: "POST",
     body: await buildGlb([[-1.4, 0, -0.1, 1.4, 1.4, 0.1]]) })).json() as { path: string };
   const crossing = walk(0, 1.8);
@@ -186,15 +167,13 @@ try {
   console.log("\nwalking while a placed thing's shape is still loading:");
   {
     const { forgetMeshCache } = await import("../mcpl/agent.ts");
-    // a closed pen 2m across, its model download held up 2.5s: there is no
-    // way into it, so a walk planned against it is refused — and one planned
-    // before it exists here walks straight in
+    // a closed pen 2m across, its download held 2.5s: a walk planned against it is refused; one planned before it exists walks in
     const penGlb = await buildGlb([
       [-1.1, 0, -1.1, 1.1, 3, -0.9], [-1.1, 0, 0.9, 1.1, 3, 1.1], [-1.1, 0, -1.1, -0.9, 3, 1.1], [0.9, 0, -1.1, 1.1, 3, 1.1]]);
     const wallUp = await fetch(`${h.BASE}/upload?name=pen`, { method: "POST", body: penGlb });
     const wallLib = ((await wallUp.json()) as { path: string }).path;
-    // the door stores the model as its content address (shape audit 10-16): the agent fetches /library/<that>, so the
-    // held-up download is matched by either spelling — the path the upload answered or the address of its bytes
+    // the door stores the model as its content address: the held-up download matches either spelling (the upload's path
+    // or the address of its bytes)
     const wallHex = new Bun.CryptoHasher("sha256").update(penGlb as any).digest("hex");
     const isWallFetch = (u: string) => u.includes(`/library/${wallLib}`) || (u.includes("/library/") && u.includes(wallHex));
     const realFetch = globalThis.fetch;
@@ -212,18 +191,17 @@ try {
       await tryUntil("the agent holds the wall", () => a.entities.get(sceneId(a, "wall")), { ms: 1000, step: 25 });
       const crossed = await walk(21, 10);
       check("a pen spawned just now, its shape still downloading: a walk into it waits for it, then is refused — never passes through its wall",
-        // (the protocol merge: the authority walks this body too, and its own solids stop a walk at the pen's wall either
-        // way — so the walk must be refused by its PLAN, before a step, from the pen's fitted shape: the barrier's work)
+        // the authority walks this body too and its solids stop a walk at the wall either way, so the walk must be refused by
+        // its PLAN, before a step, from the pen's fitted shape
         !crossed && a.pos.x > 19 - 0.15 && a.pos.x < 19.9 && delayed > 0 && /no walkable way|nowhere to stand|still loading/.test(a.walkRefusal ?? "") && !a.lastWalkRefusal,
         `ended at x ${a.pos.x.toFixed(2)}, ${delayed} delayed fetch(es), plan: ${a.walkRefusal}, authority: ${JSON.stringify(a.lastWalkRefusal)}`);
 
-      // a cold join: a body that left beside the wall comes back, and its
-      // first walk is through the wall while the wall's shape is downloading
-      await sleep(1500);                                // the server's settled memory catches the pose
+      // a cold join: a body that left beside the wall comes back and its first walk goes through while the shape downloads
+      await sleep(1500);  // the server's settled memory catches the pose
       a.close(); await sleep(500);
       forgetMeshCache();
       delayed = 0;
-      a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+      a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
       await a.connect();
       const pending = a.supportPending.size, from = a.pos.x;
       const back = await walk(21, 10);

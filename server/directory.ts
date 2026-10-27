@@ -29,8 +29,7 @@ const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 export const mintId = () => "u-" + Array.from(crypto.randomBytes(20), (b) => B32[b & 31]).join("");
 export const isMinted = (s: string) => /^u-[a-z2-7]{20}$/.test(s);
 
-/** `existingWorlds`: the world ids already in this server, read only on the one-time v1 → v2 upgrade (they keep their
- *  server-wide ids). */
+/** `existingWorlds` is accepted and never read: the one-time v1 → v2 upgrade keeps every id server-wide. */
 export function directoryAt(file: string, now: () => number = Date.now, existingWorlds: () => string[] = () => []) {
   const read = (): File => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { v: 2, ids: {} });
   const d: File = read();
@@ -68,9 +67,9 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
    *  account wears in this directory, present or not — the presence plane is read by people, who read names) */
   const claimedByOther = (name: string, sub: string): boolean => { const k = foldName(name); for (const e of Object.values(d.ids)) if (e.subs.length && !e.subs.includes(sub) && foldName(e.name) === k) return true; return false; };
   return {
-    /** The id for a connection in a world: its account's id there (minted on first sight; the display name kept
-     *  current), or, with no account, a fresh anonymous id held in memory only. `world` is the world's id (its
-     *  genesis hash); without it the id is server-wide (tools, tests, legacy worlds). */
+    /** The id for a connection: its account's id (minted on first sight; the display name kept current), or, with no
+     *  account, a fresh anonymous id held in memory only. `world` is ignored: an id is server-wide, the same in every
+     *  world. */
     resolve({ sub, name, world = null }: { sub?: string | null; name: string; world?: string | null }): string {
       if (sub) { let id = byKey.get(keyOf(sub, world)); if (!id) { refresh(); id = byKey.get(keyOf(sub, world)); }
         if (id) { if (d.ids[id].name !== name) { d.ids[id].name = name; save(); } return id; }
@@ -86,7 +85,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
       const k = e.world ? `${sub}|${e.world}` : sub;
       const prev = byKey.get(k); if (prev && prev !== id) throw new Error(`${sub} already wears ${prev}${e.world ? " in that world" : ""}`);
       if (!e.subs.includes(sub)) e.subs.push(sub); if (e.kind === "imported") e.kind = "account"; byKey.set(k, id); save(); },
-    /** the id an account already wears in a world, if any (read-only: the translator plans before it writes) */
+    /** the id an account already wears, if any; `world` is ignored (read-only: the translator plans before it writes) */
     idOfSub: (sub: string, world: string | null = null): string | null => byKey.get(keyOf(sub, world)) ?? null,
     /** add identities planned elsewhere (the translator's, once its log is written); never overwrites one */
     put(entries: Record<string, Entry>) { for (const [id, e] of Object.entries(entries)) { if (d.ids[id]) throw new Error(`identity ${id} exists`);

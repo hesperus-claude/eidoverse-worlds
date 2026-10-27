@@ -22,6 +22,7 @@ import { tryUntil } from "./wait.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -32,9 +33,9 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the enrolment declares a person", "server/server.ts", "c.tokenVerified = true; }", "c.tokenVerified = true; c.declares = c.declares ?? \"person\"; }", ["D1", "D2"]],
   ["any value is a declaration", "server/server.ts", "return typeof v === \"string\" && /^[a-z][a-z0-9-]{0,31}$/.test(v) ? v : null;", "return v == null ? null : String(v);", ["D3"]],
   ["the old agent key declares", "server/server.ts", "c.declares = declarationOf(msg.declares) ?? undefined;", "c.declares = declarationOf(msg.declares) ?? (msg.agent ? \"agent\" : undefined);", ["D5"]],
-  ["arrive drops the declaration", "server/server.ts", "w.broadcast({ type: \"arrive\", id: c.id, avatar: c.avatar, ...(c.declares ? { declares: c.declares } : {}), ...(c.actorId", "w.broadcast({ type: \"arrive\", id: c.id, avatar: c.avatar, ...(c.actorId", ["D3", "D4"]],
+  ["arrive drops the declaration", "server/server.ts", "...(c.declares ? { declares: c.declares } : {}), session: presenceSession(c),", "session: presenceSession(c),", ["D3", "D4"]],
   ["present drops the declaration", "server/server.ts", "pose: settledPose(o.lastPose), ...(o.declares ? { declares: o.declares } : {}),", "pose: settledPose(o.lastPose),", ["D3", "D4"]],
-  ["no reserved names", "server/server.ts", "if (at.names.has(c.id.toLowerCase()) && account !== `agent:token:${c.id.toLowerCase()}`) {", "if (false) {", ["D6"]],
+  ["no reserved names", "server/server.ts", "if (reservedAs && account !== `agent:token:${reservedAs}`) {", "if (false) {", ["D6"]],
   ["the agent declares nothing", "mcpl/agent.ts", "process.env.AGENT_DECLARES ?? \"agent\";", "process.env.AGENT_DECLARES ?? \"\";", ["D8"]],
   ["the agent reads the old key", "mcpl/agent.ts", "this.rememberBody(msg.id, msg.avatar, null, msg.declares);", "this.rememberBody(msg.id, msg.avatar, null, !!msg.agent);", ["D8"]],
   ["the browser reads the old key", "client/lib/net.js", "ensureRemote(msg.id, msg.avatar, { declares: msg.declares ?? null, authority: true });", "ensureRemote(msg.id, msg.avatar, { declares: msg.agent ? 'agent' : null, authority: true });", ["D9"]],
@@ -43,9 +44,9 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the browser sends client", "client/lib/thingphysics.js", "sendRequest('move', { to: to.map(r3) });", "sendRequest('move', { to: to.map(r3), client: 'human' });", ["M2"]],
   ["a say's trio by kind (doc)", "shared/protocol/verbspec.js", "spoken: { type: \"any\", doc: \"true: the words were voice-performed", "spoken: { type: \"any\", doc: \"true: a voice leg performs it (an agent)", ["V1"]],
   ["§6a gone", "spec/PROTOCOL.md", "## 6a. One kind of participant", "## 6a. Participants", ["X1"]],
-  ["§8 agent-shaped again", "spec/PROTOCOL.md", "one minted-shaped (`u-` and 20 lowercase) and one of another valid shape", "one person-shaped (`u-` and 20 lowercase) and one agent-shaped", ["X2"]],
+  ["§8 agent-shaped again", "docs/SCRIPTS.md", "one minted-shaped (`u-` and 20 lowercase) and one of another valid shape", "one person-shaped (`u-` and 20 lowercase) and one agent-shaped", ["X2"]],
   ["verbspec: arrival on the record", "shared/protocol/verbspec.js", "Arriving is presence (nothing is logged); teleport: true is an act on the record, and can't carry things", "Your first move (arriving) and teleport: true are acts on the record, and can't carry things", ["X3"]],
-  ["the stale consent comment", "client/lib/consent.js", "// staging a scene is welcome; a stranger yanking your limbs is not): the", "// staging a scene is welcome; agents accept by default): the", ["X4"]],
+  ["the stale consent comment", "client/lib/consent.js", "const KEY = 'ew-body-switch';", "const KEY = 'ew-body-switch';   // agents accept by default", ["X4"]],
   ["WIRE: the agent flag", "docs/WIRE.md", "`{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?", "`{world, id?, token?, avatar?, surface?, spectate?, agent?, renderer?", ["X5"]],
   ["whois infers a kind", "server/requestwire.ts", "...(said.has(id) ? { declares: said.get(id) } : {}),", "kind: dir.entry(id)?.subs?.some((x) => /^(agent|aid1):/.test(x)) ? \"agent\" : \"person\",", ["W1"]],
   ["whois drops the declaration", "server/requestwire.ts", "...(said.has(id) ? { declares: said.get(id) } : {}),", "", ["W1"]],
@@ -58,7 +59,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["no read-both for an old presence file", "shared/protocol/authority/storage.js", "if (w.presence.seats && !w.presence.occupants) w.presence.occupants = w.presence.seats;", "", ["O2"]],
   ["body kind seat again", "shared/protocol/authority/bodyconsent.js", "\"drag\", \"occupy\", \"carry\"]", "\"drag\", \"seat\", \"carry\"]", ["O3"]],
   ["sockbody reads seat", "shared/sockbody.js", "typeof u.socket === 'string' && u.socket === mount.to", "typeof u.seat === 'string' && u.seat === mount.to", ["O4"]],
-  ["CONTROL (no-op: must stay green)", "server/server.ts", "/** A join's declared status (PROTOCOL §6a)", "/**  A join's declared status (PROTOCOL §6a)", []],
+  ["CONTROL (no-op: must stay green)", "server/server.ts", "import { requestHandler, actorOf as actorIdOf,", "import { requestHandler,  actorOf as actorIdOf,", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/parity-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -80,8 +81,8 @@ if (argv.includes("--mutants")) {
   let bad = 0, ran = 0;
   for (const [name, file, find, repl, cases] of MUTANTS) {
     ran++; const d = mutantTree("paritymut"); const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length < 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found in ${file} (the fix moved?)`); continue; }
-    fs.writeFileSync(f, src.split(find).join(repl));
+    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the fix moved?)`); continue; }
+    fs.writeFileSync(f, src.replace(find, () => repl));
     const r = await runSelf(d, cases.length ? cases : null);
     const redIds = [...r.out.matchAll(/^\s*FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => redIds.includes(c)) : r.code === 0;
@@ -323,13 +324,11 @@ const cases: Case[] = [
     good: (o) => o.say && o.wire },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("parity-check", { cap: 900 });
 for (const c of cases) {
   if (!want([c.id])) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[parity-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

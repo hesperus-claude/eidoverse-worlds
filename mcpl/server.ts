@@ -1,23 +1,7 @@
-// eidoverse-worlds agent MCPL — MCP stdio server giving an agent embodied
-// presence: a body (WorldAgent), verbs, text-tier perception, and a retina
-// (first-person snapshots via a spectator browser session on a GPU host).
-//
-// Env: WORLD_URL (ws://127.0.0.1:8940/ws), AGENT_NAME (claude),
-//      WORLD_NAME (commons), AGENT_AVATAR (vrm library path).
-//
-// UNIFIED ONTO THE SHARED TABLE (survey §C, ruled §24r). This file used to
-// carry its own hand-copied 16-tool subset of net-server's table — drifted
-// descriptions, and a stale searchLibrary keeping the hardcoded-Mac-path bug
-// R0 had fixed on only one side. Now it is a TRANSPORT: the tool list is
-// tools.ts's TOOLS (so this door gains pose/reach/animate/measure/
-// world_history/world_debug/the library sheets and every future tool for
-// free), dispatch is tools.ts's handleTool, and the only local vocabulary is
-// pending_pings — the polling analog of the ping notification below, which a
-// channel host doesn't need (its pings arrive as channel messages) but a
-// plain-MCP host must be able to ask for.
-//
-// travel is NOT listed: it is session machinery (channel epochs, join
-// gates) that only the WS door carries — this door fronts one WORLD_URL.
+// eidoverse-worlds agent MCPL: MCP stdio server giving an agent a body (WorldAgent), verbs, text-tier perception,
+// and a retina (first-person snapshots via a spectator browser on a GPU host).
+// Env: WORLD_URL (ws://127.0.0.1:8940/ws), AGENT_NAME (claude), WORLD_NAME (commons), AGENT_AVATAR (vrm path).
+// A transport only: tools are tools.ts's; the one local tool is pending_pings, for plain-MCP hosts. No travel.
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -29,9 +13,7 @@ import { toolList, handleTool, type ToolCtx } from "./tools.ts";
 const agent = new WorldAgent();
 await agent.connect();
 
-// One agent per process: identity persistence is the process env, so the
-// remember* hooks are deliberate no-ops; there is no push channel, so
-// activity digests are HELD and pending_pings is the wake surface.
+// one agent per process: identity lives in the env, so remember* are no-ops; no push channel, so digests are HELD
 const ctx: ToolCtx = {
   agent,
   canPush: () => false,
@@ -43,7 +25,7 @@ const PENDING_PINGS_TOOL = {
   name: "pending_pings",
   description: "Mentions of your name in chat, hands reaching for you, and people who walked up to you or walked away since last checked. Returns and clears the queue — the embodied analog of unread pings.",
   inputSchema: { type: "object", properties: {} },
-  // not read-only: it clears the queue it returns (see mcpl/tools.ts ANNOTATIONS for what each hint means here)
+  // not read-only: it clears the queue it returns (hints: mcpl/tools.ts ANNOTATIONS)
   title: "Pending pings",
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 };
@@ -63,17 +45,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (name === "pending_pings") {
     const pings = agent.takePings();
     if (!pings.length) return { content: [{ type: "text", text: "no pending pings" }] };
-    // Every kind renders as ITSELF — see ping-wire.ts, where the wording is
-    // testable alongside the channel mapping the MCPL door uses.
+    // wording lives in ping-wire.ts, testable beside the MCPL channel mapping
     return { content: [{ type: "text", text: pings.map(pingLine).join("\n") }] };
   }
   return await handleTool(ctx, name, args) as { content: { type: string; text?: string }[] };
 });
 
-// Pushes: every ping (mention / approach) also goes out as an MCP notification
-// so runtimes that route notifications into agent wakes (connectome
-// network-mcpl, same pattern as discord-mcpl pings) get real-time embodiment;
-// plain MCP clients poll pending_pings instead.
+// also an MCP notification for runtimes that wake on them; plain clients poll pending_pings
 agent.onPing = (p) => {
   server.notification({
     method: "notifications/eidoverse/ping",

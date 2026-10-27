@@ -1,19 +1,5 @@
-// structure_ui — the griddled-building editor's hosted half.
-//
-// Thin on purpose. Every edit is a pure function in shared/structure_edit.js,
-// so this file only has to answer three questions: which building, where on its
-// grid, and which tool. The edit itself, the preview, and the undo entry are
-// all the same call — a preview cannot disagree with what commits, because it
-// IS what commits, drawn instead of sent.
-//
-// One component carries a whole building, so an edit re-sends it wholesale, as
-// ONE request with `expect` on the building as this viewer saw it: if
-// someone else changed it since, the authority refuses (`changed`) rather than one
-// edit silently eating the other. Undo is the editor's one undo (Ctrl+Z: the
-// door's undo of MY act, editwrites.js), so it always lands on the building that
-// act changed, and keeps theirs where someone changed it since. (Review 10-07:
-// this file used to keep its own stack and write the popped plan into whatever
-// building was current, with expect: false.)
+// structure_ui: hosted half of the building editor. Edits are pure (shared/structure_edit.js), so preview IS commit.
+// Each edit is one request with expect (a concurrent change is refused); undo is the editor's one undo (editwrites.js).
 
 import * as OP from '../../shared/protocol/requests.js';
 import { sendOps } from './editwrites.js';
@@ -28,7 +14,7 @@ import {
   drawRoom, eraseRoom, setTile, pickWalledEdge,
 } from '../../shared/structure_edit.js';
 
-const TOOLS = [   // [key, label, hint, icon] — icons.js glyphs (no emoji: the old 🚪 🪟 were the only colour in the bar)
+const TOOLS = [   // [key, label, hint, icon]: icons.js glyphs, never emoji
   ['room', 'room', 'drag a rectangle: floor and walls right round it', 'square'],
   ['wall', 'wall', 'click an edge — or the middle of a cell for a diagonal', 'brickWall'],
   ['door', 'door', 'click a wall', 'doorOpen'],
@@ -44,13 +30,11 @@ let dragOn = null;           // the building a room/erase drag started on: the s
 let selectedId = null;       // the editor's primary thing (edit/selection.js)
 let ghost = null;
 
-/** Every structure entity in the world. */
 const buildings = () => Object.entries(state.st.entities ?? {})
   .filter(([, e]) => e?.structure)
   .map(([id, e]) => ({ id, ent: e, data: e.structure }));
 
-/** The floor plane's height in the building's frame (planStructure's levels[0].y, without planning it: this runs per
- *  building per mousemove). */
+/** Floor height in the building's frame: planStructure's levels[0].y without planning (runs per building per mousemove). */
 const floorOf = (g) => (Number.isFinite(g?.levels?.[0]?.y) ? g.levels[0].y : 0) + (Number.isFinite(g?.slabT) ? g.slabT : GRID_DEFAULTS.slabT);
 
 /** World ray → the grid-local point on a building's floor plane. */
@@ -60,9 +44,7 @@ function hitGrid(ev, b) {
     ((ev.clientX - r.left) / r.width) * 2 - 1,
     -((ev.clientY - r.top) / r.height) * 2 + 1);
   const ray = new THREE.Raycaster();
-  // the raycaster reads camera.matrixWorld, which is only refreshed during
-  // render — a pick taken in the same tick as a camera move uses the OLD
-  // matrix and lands somewhere else entirely
+  // matrixWorld refreshes only in render: a pick in the same tick as a camera move would use the OLD matrix
   camera.updateMatrixWorld();
   ray.setFromCamera(ndc, camera);
   const y = (b.ent.pos?.[1] ?? 0) + floorOf(b.data);
@@ -81,9 +63,8 @@ function onFootprint(b, at) {
   for (const [tx, tz] of b.data?.levels?.[0]?.tiles ?? []) { x0 = Math.min(x0, tx); x1 = Math.max(x1, tx + 1); z0 = Math.min(z0, tz); z1 = Math.max(z1, tz + 1); }
   return at.lx >= (x0 - PAD) * t && at.lx <= (x1 + PAD) * t && at.lz >= (z0 - PAD) * t && at.lz <= (z1 + PAD) * t;
 }
-/** The building to edit, never a guess among many (review 10-07: it used to be the first building in the world):
- *  the selected building; else the one under the pointer (its footprint, PAD cells out; the nearest anchor if two
- *  overlap); else the one last edited here; else the world's only one. Null otherwise: the tool says to select one. */
+/** Never a guess among many: the selected building; else the one under the pointer (footprint PAD out, nearest anchor
+ *  on overlap); else the last edited here; else the world's only one. Null otherwise: the tool says to select one. */
 function target(ev = null) {
   const all = buildings();
   const sel = all.find((b) => b.id === selectedId); if (sel) return sel;
@@ -162,15 +143,14 @@ function clearGhost() {
   ghost = null;
 }
 
-/** The point a new building starts under: the event's, when it is ON the world (a click in the
- *  viewport), else the lower middle of the visible viewport — a button in a docked panel is not a place
- *  in the world (the edit workspace's columns publish the viewport's edges as CSS vars). */
+/** A docked-panel button is not a place in the world: off-canvas events aim at the lower middle of the visible viewport
+ *  (the edit workspace publishes its edges as CSS vars). */
 function aimPoint(ev) {
   if (ev && typeof document !== 'undefined' && document.elementFromPoint?.(ev.clientX, ev.clientY) === canvas) return ev;
   const cs = getComputedStyle(document.body);
   const left = parseFloat(cs.getPropertyValue('--edit-left-edge')) || 0;
   const right = document.body.classList.contains('edit-workspace') ? (parseFloat(cs.getPropertyValue('--edit-right-w')) || 0) : 0;
-  // lower middle: the ground is below the horizon (the old floating bar sat low in the view too)
+  // lower middle: the ground is below the horizon
   return { clientX: left + (innerWidth - left - right) / 2, clientY: 40 + (innerHeight - 40) * 0.7 };
 }
 
@@ -186,16 +166,15 @@ export function newBuilding(ev) {
   ray.setFromCamera(ndc, camera);
   const hit = new THREE.Vector3();
   if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
-  // the authority mints its id (R 10-17: writers never choose ids); the reply's ids map says what it became
+  // writers never choose ids: the authority mints it, and the reply's ids map says what it became
   sendOps([OP.create('$house', { model: 'eidoverse/assets/models/crate_large_red.glb', transform: { pos: [Math.round(hit.x), 0, Math.round(hit.z)] },
     components: { structure: emptyStructure() } })], { what: 'a new building', expect: false }).then((r) => {
-    const id = r?.ids?.$house; if (id) { editing = id; selectedId = id; }   // the new building is the one the tools edit now (until something else is selected)
+    const id = r?.ids?.$house; if (id) { editing = id; selectedId = id; }   // the tools edit it until something else is selected
     setTimeout(refreshGrid, 120); });
 }
 
 // ---- pointer ----------------------------------------------------------------
-// mousedown, not pointerdown: build.js reads canvas picking off mouse events and
-// synthetic PointerEvents never reach it (a lesson already paid for once).
+// mousedown, not pointerdown: build.js picks off mouse events, which synthetic PointerEvents never reach
 
 function onDown(ev) {
   if (!active || !tool || ev.button !== 0) return;
@@ -229,7 +208,6 @@ function onUp(ev) {
   clearGhost();
 }
 
-/** Which tool is live, for tests and for anything that wants to drive it. */
 export const currentTool = () => tool;
 /** The tools as data — the Create panel's tiles and the viewport strip read these (no second list). */
 export const structureTools = () => TOOLS.map(([k, label, hint, icon]) => ({ k, label, hint, icon }));
@@ -241,9 +219,7 @@ export function setTool(t) {
 }
 
 // ---- the grid overlay -------------------------------------------------------
-// You cannot snap to something you cannot see. The overlay draws the lattice a
-// click will actually land on, in the building's own frame — which is also the
-// only honest way to show a grid that may be rotated or diagonal to the world.
+// draws the lattice a click will land on, in the building's own frame (it may be rotated or diagonal to the world)
 
 let gridHelp = null;
 
@@ -276,9 +252,7 @@ function refreshGrid() {
 
 let active = false;
 
-/** Build mode owns the structure tools: they arrive with it and leave with it,
- *  rather than floating over a world nobody is editing. Their buttons live in
- *  the edit workspace's Create panel (the viewport stays clean). */
+/** Build mode owns the structure tools: they arrive and leave with it. */
 export function setStructureMode(on) {
   if (active === on) return active;
   active = !!on;
@@ -303,8 +277,7 @@ export function initStructureUI() {
   // a building appearing or changing under us moves the lattice with it
   bus.on('entity', (ev) => { if (active && ev?.kind !== 'collider') refreshGrid(); });
 
-  // The tools' DOM is the Create panel (editpanels.js, docked beside the Hierarchy) and the viewport's
-  // armed-tool strip (editlayout.js): both read structureTools(), arm with setTool, undo with undo().
+  // the tools' DOM is the Create panel (editpanels.js) and the armed-tool strip (editlayout.js), both via structureTools()
   return true;
 }
 

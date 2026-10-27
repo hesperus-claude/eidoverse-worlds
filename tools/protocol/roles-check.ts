@@ -1,5 +1,5 @@
-// tools/protocol/roles-check.ts — roles, permissions and moderation through the real authority (RESEARCH-roles-moderation-2026-10-06;
-// PLAN decisions 10-06: the Sanctioned Society — ranked membership only, banned and ghost as states outside it).
+// tools/protocol/roles-check.ts: roles, permissions and moderation through the real authority: ranked membership only,
+// banned and ghost as states outside it.
 //   bun tools/protocol/roles-check.ts                 every case
 //   bun tools/protocol/roles-check.ts --only R1,S2    just those
 //   bun tools/protocol/roles-check.ts --tree <dir>    against another checkout's shared/ (a mutant, a base)
@@ -16,21 +16,22 @@
 //   T   S5 translation: v1 gen/fly → can
 //   P   S6 the person menu (personActions, pure)
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "6c4eb3c8";
 
-// [name, file (under shared/), find, replace, cases that must turn red]. Applied as an exact text replacement; a mutation
-// whose text isn't found exactly once is itself a failure (the gate moved: update the list).
-const MUTANTS: [string, string, string, string, string[]][] = [
+// [name, file (under shared/), find, replace, cases that must turn red], an exact text replacement; a mutation whose text
+// isn't found exactly once is itself a failure (the gate moved: update the list)
+const MUTANTS: [string, string, string | [string, string][], string, string[]][] = [
   // S1
   ["role-defs: unknown permission", "protocol/roles.js", "if (!Object.hasOwn(PERMISSIONS, k)) { const dym = guessSwitch(k); return bad(\"schema\"", "if (false) { const dym = guessSwitch(k); return bad(\"schema\"", ["R1"]],
   ["role-defs: dependencies", "protocol/roles.js", "const br = brokenNeed(full); if (br) return bad(", "const br = null; if (br) return bad(", ["R2"]],
@@ -40,11 +41,11 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["role-defs: custom ranks 1–254", "protocol/roles.js", "if (!Number.isInteger(d.rank) || d.rank < 1 || d.rank > 254) return bad(\"rank\"", "if (!Number.isInteger(d.rank) || d.rank < 1) return bad(\"rank\"", ["R4"]],
   ["role-defs: built-in ranks are fixed", "protocol/roles.js", "if (d.rank !== undefined && d.rank !== BUILTIN[id].rank) return bad(\"rank\"", "if (false) return bad(\"rank\"", ["R4"]],
   ["custom roles resolve to their rank", "protocol/roles.js", "if (!d || !CUSTOM_ID.test(id) || !Number.isInteger(d.rank) || d.rank < 1 || d.rank > 254) return null;", "return null;", ["R5", "R6", "S2", "S4"]],
-  ["default-role: never owner", "protocol/authority/checks.js", "if (id === \"@world\" && comp === \"default-role\" && (v?.role === \"owner\" ||", "if (id === \"@world\" && comp === \"default-role\" && (false ||", ["R6", "K2"]],
+  ["default-role: never owner", "protocol/authority/checks.js", "comp === \"default-role\" && (R.isOwner(v) ||", "comp === \"default-role\" && (false ||", ["R6", "K2"]],
   ["guests: at most the default role (write)", "protocol/authority/checks.js", "(R.GUESTS_AT_MOST_DEFAULT && R.rankOfRole(wcS, v.guests) > R.rankOfRole(wcS, v.role))", "false", ["R6"]],
   ["per-person can applies", "protocol/roles.js", "if (isObj(entry?.can)) Object.assign(can, pickPermissions(entry.can));", "", ["R7", "S1", "S3"]],
-  ["per-person can: names checked", "protocol/authority/checks.js", "const bad = R.checkCan(v.can, at); if (bad) refuse(", "const bad = null; if (bad) refuse(", ["R7"]],
-  ["per-person can: dependencies at write", "protocol/authority/checks.js", "if (br) refuse(\"needs\", `${at}: ${br[0]} needs ${br[1]}, which would be off`", "if (false) refuse(\"needs\", `${at}: ${br[0]} needs ${br[1]}, which would be off`", ["R7"]],
+  ["per-person can: names checked", "protocol/authority/checks.js", "if (v.can !== undefined) { const bad = R.checkCan(v.can, at); if (bad) refuse(", "if (v.can !== undefined) { const bad = null; if (bad) refuse(", ["R7"]],
+  ["per-person can: dependencies at write", "protocol/authority/checks.js", "if (!R.isOwner(v)) { const br = R.brokenNeed(", "if (!R.isOwner(v)) { const br = null && R.brokenNeed(", ["R7"]],
   ["a held custom role can't vanish", "protocol/authority/gate.js", "  rolesCheck(st, s, norm);", "", ["R1", "R2", "R3", "R4", "R8"]],
   ["held roles: counted", "protocol/roles.js", "const n = held(id);\n    if (n > 0) return bad(\"held\"", "const n = 0;\n    if (n > 0) return bad(\"held\"", ["R8"]],
   ["role-defs edits built-ins", "protocol/roles.js", "const b = BUILTIN[id]; const can = { ...b.can, ...(isObj(d?.can) ? pickPermissions(d.can) : {}) };", "const b = BUILTIN[id]; const can = { ...b.can };", ["R9"]],
@@ -54,38 +55,39 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["editWorld covers the world's look", "protocol/authority/gate.js", "if (R.EDIT_WORLD_PERMISSION && (WORLD_LOOK.has(base) ||", "if (false && (WORLD_LOOK.has(base) ||", ["S2"]],
   ["scripts permission gates install", "protocol/authority/scripts.js", "if (!may(st, installer, \"scripts\")) refuse(\"rights\"", "if (false) refuse(\"rights\"", ["S3"]],
   ["scripts permission gates upload", "protocol/authority/scriptrun.js", "if (!may(w.state(), actor, \"scripts\")) refuse(\"rights\", `uploading", "if (false) refuse(\"rights\", `uploading", ["S3"]],
-  ["who reads custom ranks", "protocol/authority.js", "const whoRank = (st, name) => R.roleDef(wcOf(st), name)?.rank ?? RANK.owner;", "const whoRank = (st, name) => ({ visitor: 0, builder: 100, moderator: 200, owner: 255 })[name] ?? 0;", ["S4"]],
+  ["who reads custom ranks", "protocol/authority/rights.js", "const whoRank = (st, name) => R.roleDef(wcOf(st), name)?.rank ?? RANK.owner;", "const whoRank = (st, name) => ({ visitor: 0, builder: 100, moderator: 200, owner: 255 })[name] ?? 0;", ["S4"]],
   ["a who names a role here", "protocol/authority/checks.js", "if (comp === \"grabbable\" && obj) whoOk(v.who, at);", "", ["S4"]],
   ["undo along rank", "protocol/authority/undo.js", "if (!eo || me < them) refuse(\"rank\"", "if (!eo) refuse(\"rank\"", ["S5"]],
   ["generate gates the world's assets", "protocol/authority/gate.js", "  if (base === \"assets\") return \"generate\";", "  if (base === \"assets\") return \"build\";", ["S6"]],
   ["default-role can opens generate to strangers", "protocol/roles.js", "if (!entry && !opts.anon && isObj(dr?.can)) Object.assign(can, pickPermissions(dr.can));", "", ["S6"]],
-  ["a lock is lifted only by who may edit it", "protocol/authority.js", "const mayUnlock = !who.cap && !lacks(w, st, who.actor, { verb: \"delete\", id: k, comp: \"lock\" });", "const mayUnlock = !who.cap;", ["S7"]],
+  ["a lock is lifted only by who may edit it", "protocol/authority/gate.js", "const mayUnlock = !who.cap && !lacks(w, st, who.actor, { verb: \"delete\", id: k, comp: \"lock\" }) && !below;", "const mayUnlock = !who.cap && !below;", ["S7"]],
   // S3
   ["person acts need their permission", "protocol/authority/moderation.js", "if (!powers.some((k) => me.can[k])) refuse(\"rights\"", "if (false) refuse(\"rights\"", ["M1", "M4", "M5", "M9"]],
   ["person acts only below you", "protocol/authority/moderation.js", "if (tr >= me.rank) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M1"]],
   ["owners can't be banned or kicked", "protocol/authority/moderation.js", "if (noOwner && them === \"owner\") refuse(", "if (false) refuse(", ["M1"]],
   ["a ban with no end is an owner's", "protocol/authority/moderation.js", "if (a.days === undefined && !owner) refuse(", "if (false) refuse(", ["M1"]],
   ["the moderator ban cap", "protocol/authority/moderation.js", "if (a.days !== undefined && a.days > R.MOD_BAN_MAX_DAYS && !owner) refuse(", "if (false) refuse(", ["M1"]],
-  ["bans end by the clock", "protocol/authority.js", "const inForce = (w, m) => !!m && (m.until === undefined || m.until > w.now());", "const inForce = (w, m) => !!m;", ["M2", "M3", "G2"]],
-  // the independent review (10-07)
-  ["the strongest sanction in force wins", "protocol/authority.js", "const strongest = (a) => a.reduce(", "const strongest = (a) => a.slice(-1)[0] ?? null; const _s = (a) => a.reduce(", ["V1"]],
-  ["a mute's channels are the union", "protocol/authority.js", "const channels = [...new Set(a.flatMap((m) => m.channels ?? [\"voice\", \"chat\"]))];", "const channels = strongest(a).channels ?? [\"voice\", \"chat\"];", ["V1b"]],
-  ["a lift needs rights over every record", "protocol/authority/moderation.js", "for (const rec of (Array.isArray(recs) ? recs : recs ? [recs] : [])) {", "for (const rec of (Array.isArray(recs) ? recs.slice(-1) : recs ? [recs] : [])) {", ["V2"]],
+  ["bans end by the clock", "protocol/authority/rights.js", "const inForce = (w, m) => !!m && (m.until === undefined || m.until > w.now());", "const inForce = (w, m) => !!m;", ["M2", "M3"]],
+  // the independent review
+  ["the strongest sanction in force wins", "protocol/authority/rights.js", "const strongest = (a) => a.reduce(", "const strongest = (a) => a.slice(-1)[0] ?? null; const _s = (a) => a.reduce(", ["V1"]],
+  ["a mute's channels are the union", "protocol/authority/rights.js", "const channels = [...new Set(all.flatMap((m) => m.channels ?? [\"voice\", \"chat\"]))];", "const channels = strongest(all).channels ?? [\"voice\", \"chat\"];", ["V1b"]],
+  ["a lift needs rights over every record", "protocol/authority/moderation.js", "for (const rec of inForce) {", "for (const rec of inForce.slice(-1)) {", ["V2"]],
   ["nobody lifts their own", "protocol/authority/moderation.js", "if (a.who === actor) refuse(\"rank\", `you can't lift a ${verb} on yourself`", "if (false) refuse(\"rank\", `you can't lift a ${verb} on yourself`", ["V5"]],
-  ["leave passes the kick gate", "protocol/authority.js", "if (w.exists && tool !== \"help\" && tool !== \"leave\" && kickOf(w, actor))", "if (w.exists && tool !== \"help\" && kickOf(w, actor))", ["K5"]],
-  ["a muted refusal isn't logged", "protocol/authority.js", "\"kicked\", \"muted\"]);", "\"kicked\"]);", ["V7"]],
+  ["leave passes the kick gate", "protocol/authority.js", "if (w.exists && verb !== \"help\" && verb !== \"leave\" && CTX.operator !== actor && kickOf(w, actor))", "if (w.exists && verb !== \"help\" && CTX.operator !== actor && kickOf(w, actor))", ["K5"]],
+  // a refused act's record never carries its values either (scars L1), so V7 sees the text only with both removed
+  ["a muted refusal isn't logged", "protocol/authority.js", [["\"kicked\", \"muted\"]);", "\"kicked\"]);"], ["const body = { args: names.known, refused: { code } };", "const body = { args: names.known, request: args, refused: { code } };"]], "", ["V7"]],
   ["custom ranks are range-checked on read", "protocol/roles.js", "|| d.rank < 1 || d.rank > 254) return null;", ") return null;", ["V9"]],
-  ["seniority binds a capability's holder", "protocol/authority.js", "const cap = who.cap; if (cap && cap.kind !== \"reaction\" && cap.kind !== \"script\") return;", "const cap = who.cap; if (cap) return;", ["V10"]],
-  ["a banned person is refused", "protocol/authority.js", "if (w.exists && tool !== \"help\" && tool !== \"leave\" && isBanned(w, actor)) refuse(\"banned\"", "if (false) refuse(\"banned\"", ["M2"]],
+  ["seniority binds a capability's holder", "protocol/authority/gate.js", "const cap = who.cap; if (cap && cap.kind !== \"reaction\" && cap.kind !== \"script\") return;", "const cap = who.cap; if (cap) return;", ["V10"]],
+  ["a banned person is refused", "protocol/authority.js", "if (w.exists && verb !== \"help\" && verb !== \"leave\" && CTX.operator !== actor && isBanned(w, actor)) refuse(\"banned\"", "if (false) refuse(\"banned\"", ["M2"]],
   ["chat mute refuses say", "protocol/authority/verbs.js", "{ const m = muteOf(w, actor, \"chat\"); if (m)", "{ const m = null; if (m)", ["M3", "V3"]],
-  ["mute channels", "protocol/authority.js", "  if (channel && !channels.includes(channel)) return null;", "", ["M3"]],
+  ["mute channels", "protocol/authority/rights.js", "const a = channel ? all.filter((m) => (m.channels ?? [\"voice\", \"chat\"]).includes(channel)) : all;", "const a = all;", ["M3"]],
   ["mute cap", "protocol/authority/moderation.js", "if (minutes > cap && (ownerCap ||", "if (false && (ownerCap ||", ["M4", "M5"]],
-  ["a kick's cooldown", "protocol/authority.js", "if (w.exists && tool !== \"help\" && tool !== \"leave\" && kickOf(w, actor)) refuse(\"kicked\"", "if (false) refuse(\"kicked\"", ["M5"]],
-  ["lifting goes by the record's author", "protocol/authority/moderation.js", "if (strict ? mine <= theirs : mine < theirs) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M6", "G2"]],
+  ["a kick's cooldown", "protocol/authority.js", "if (w.exists && verb !== \"help\" && verb !== \"leave\" && CTX.operator !== actor && kickOf(w, actor)) refuse(\"kicked\"", "if (false) refuse(\"kicked\"", ["M5"]],
+  ["lifting goes by the record's author", "protocol/authority/moderation.js", "if (strict ? mine <= theirs : mine < theirs) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M6"]],
   ["lifting needs the permission", "protocol/authority/moderation.js", "if (!may(st, actor, power) && roleOf(st, actor) !== \"owner\") refuse(\"rights\", `lifting a", "if (false) refuse(\"rights\", `lifting a", ["M6"]],
   ["grant: grantRoles", "protocol/authority/gate.js", "if (n === \"grant\") return eff.can.grantRoles ? null : \"grantRoles\";", "if (n === \"grant\") return null;", ["M7"]],
   ["grant: the target ranks below you", "protocol/authority/gate.js", "if (rankOf(st, target, anon) >= me.rank) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M7"]],
-  ["grant: the role you give ranks below you", "protocol/authority/gate.js", "if ((def?.rank ?? RANK.none) >= me.rank) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M7"]],
+  ["grant: the role you give ranks below you", "protocol/authority/gate.js", "if ((def?.rank ?? R.BELOW) >= me.rank) refuse(\"rank\"", "if (false) refuse(\"rank\"", ["M7"]],
   ["grant: only permissions you hold", "protocol/authority/gate.js", "if (missing) refuse(\"rights\", `giving ${missing}", "if (false) refuse(\"rights\", `giving ${missing}", ["M7"]],
   ["grant: never your own role", "protocol/authority/gate.js", "if (target === actor) refuse(\"rights\", \"you can't change your own role\"", "if (false) refuse(\"rights\", \"you can't change your own role\"", ["M7"]],
   ["pauseScripts reaches sponsors below you", "protocol/authority/gate.js", "if (sp && rankOf(st, sp.sponsor) < rankOf(st, holder)) return;", "if (sp) return;", ["M11"]],
@@ -103,9 +105,9 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the menu: unmute when muted", "protocol/roles.js", "out.push(state.muted ? { id: \"unmute\", label: \"Unmute\" } : { id: \"mute\", label: \"Mute…\" });", "out.push({ id: \"mute\", label: \"Mute…\" });", ["P2"]],
   ["badges: guests are guests", "protocol/roles.js", "if (p.anon) return { text: \"guest\", tone: \"guest\" };", "", ["P4"]],
   // the review's findings
-  ["seniority: the start of the unbroken run", "protocol/authority/gate.js", "if (o.verb === \"set\" && o.comp === comp && o.value?.role === \"owner\") since = i; else return since; } }", "if (o.verb === \"set\" && o.comp === comp && o.value?.role === \"owner\") return i; else return since; } }", ["F5"]],
+  ["seniority: the start of the unbroken run", "protocol/authority/gate.js", "if (o.verb === \"set\" && o.comp === comp && R.isOwner(o.value)) since = i; else return since; } }", "if (o.verb === \"set\" && o.comp === comp && R.isOwner(o.value)) return i; else return since; } }", ["F5"]],
   ["seniority: no re-affirm of a senior owner", "protocol/authority/gate.js", "  if (ownerSince(w, st, target) <= ownerSince(w, st, holder))", "  if (op.value?.role === \"owner\") return;\n  if (ownerSince(w, st, target) <= ownerSince(w, st, holder))", ["F1"]],
-  ["none holds no voice and no hands", "protocol/authority.js", "&& w.state().entities?.[\"@world\"] && roleOf(w.state(), actor) === \"none\")", "&& false)", ["F3"]],
+  // "none holds no voice and no hands" RETIRED with F3: the none role is gone
   ["CONTROL (no-op: must stay green)", "protocol/roles.js", "// ---------------- the other caps (research §5) ----------------", "// ---------------- the other caps (research §5)  ----------------", []],
 ];
 
@@ -117,6 +119,8 @@ async function runSelf(tree: string, only: string[] | null, extra: string[] = []
 function mutantTree(tag: string) {
   const d = scratch(tag);
   for (const sub of ["shared", "server", "tools", "defs"]) if (fs.existsSync(path.join(ENGINE, sub))) copyTree(path.join(ENGINE, sub), path.join(d, sub));
+  for (const sub of ["client", "mcpl"]) if (fs.existsSync(path.join(ENGINE, sub)))   // B1 reads their code as text: dirs and .js/.ts only
+    fs.cpSync(path.join(ENGINE, sub), path.join(d, sub), { recursive: true, filter: (p) => !p.split(/[\\/]/).includes("node_modules") && (fs.statSync(p).isDirectory() || /\.(js|ts)$/.test(p)) });
   for (const f of ["package.json", "tsconfig.json", "bunfig.toml"]) if (fs.existsSync(path.join(ENGINE, f))) fs.copyFileSync(path.join(ENGINE, f), path.join(d, f));
   fs.symlinkSync(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
   return d;
@@ -126,9 +130,11 @@ if (argv.includes("--mutants")) {
   let bad = 0, ran = 0; const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cs] of MUTANTS) {
     if (only && !cs.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cs.length)) continue;
-    ran++; const d = mutantTree("rmut"); const f = path.join(d, "shared", file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    ran++; const d = mutantTree("rmut"); const f = path.join(d, "shared", file); let src = fs.readFileSync(f, "utf8");
+    const pairs: [string, string][] = Array.isArray(find) ? find : [[find, repl]];   // a gate in two places is reverted in both
+    if (pairs.some(([a]) => src.split(a).length !== 2)) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
+    for (const [a, b] of pairs) src = src.replace(a, () => b);
+    fs.writeFileSync(f, src);
     const r = await runSelf(d, cs.length ? cs : null);
     const redIds = [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cs.length ? r.code !== 0 && cs.every((c) => redIds.includes(c)) : r.code === 0;
@@ -159,7 +165,7 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);
 const F = await import(TREE + "shared/protocol/fold.js");
 const RL = await import(TREE + "shared/protocol/roles.js").catch(() => ({}));   // absent at the base commit (--control)
-const TV1 = await import(TREE + "tools/protocol/import-v1/translate-v1.js").catch(() => import(TREE + "shared/protocol/translate-v1.js")).catch(() => ({}));   // moved to tools/protocol/import-v1 on staging (the no-v1 pass)
+const TV1 = await import(TREE + "tools/protocol/import-v1/translate-v1.js").catch(() => import(TREE + "shared/protocol/translate-v1.js")).catch(() => ({}));   // moved to tools/protocol/import-v1 (the no-v1 pass)
 const ONLY = opt("only")?.split(",") ?? null;
 const root = scratch("roles");
 
@@ -197,8 +203,8 @@ function cast(s: any, { crew = false } = {}) {
 
 type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => boolean };
 const cases: Case[] = [
-  // B1 (recut B, house: "new code would check permissions rather than role names, with owner-only powers going through one
-  // function"): no source outside roles.js compares a role to a built-in name; owner goes through R.isOwner.
+  // B1: permissions decide, never role names: no source outside roles.js compares a role to a built-in name; owner goes
+  // through R.isOwner
   { id: "B1", what: "(recut B1) no role-name comparison outside shared/protocol/roles.js: permissions decide, owner goes through isOwner", run() {
       const hits: string[] = []; const RX = /\brole\s*[!=]==?\s*["'](owner|builder|moderator|inhabitant|visitor|none)["']|["'](owner|builder|moderator|inhabitant|visitor)["']\s*[!=]==?\s*[\w.?]*role\b|\[[^\]]*["'](builder|owner)["'][^\]]*\]\.includes\([\w.?]*role\)/;
       const walk = (d: string) => { for (const e of fs.readdirSync(TREE + d, { withFileTypes: true })) { const rel = d + "/" + e.name;
@@ -308,7 +314,7 @@ const cases: Case[] = [
       return { a: show(a), b: code(b), parent: s.w().state().entities.cup?.c.parent?.to }; },
     good: (o) => o.parent === "table" && o.a === "ok" && o.b === "locked" },
 
-  // ---------------- B2 (recut B, R 10-20; house 21:59Z): a lock is true, its strength its setter's rank NOW ----------------
+  // ---------------- B2: a lock is true, its strength its setter's rank NOW ----------------
   { id: "LK1", what: "(recut B2) an equal rank acts through a builder's lock (throughLock) and may lift it; without the flag it's refused 'locked'", run(s) { cast(s);
       s.call("bea", "create", { id: "t", model: "table", place: { at: [0, 0] } }); const lk = set(s, "bea", "lock", true, "t"); const stored = s.w().state().entities.t?.c.lock;
       const plain = code(s.call("bob", "place", { id: "t", at: [1, 0] }));
@@ -338,8 +344,8 @@ const cases: Case[] = [
       return { code: code(r), why: r?.refused?.reason ?? "", before, rank: ins?.lock?.rank }; },
     good: (o) => o.code === "shape" && /no level/.test(o.why) && o.before === undefined && o.rank === 200 },
 
-  // ---------------- B3 (recut B; house 22:03Z "starter config, switched on"): world settings that reach the authority ----------------
-  { id: "WS1", what: "(recut B3) an owner sets @world.body-default through the real set verb and it is stored (the decision reading it: switch-check W8)", run(s) { cast(s);
+  // ---------------- B3: world settings that reach the authority ----------------
+  { id: "WS1", what: "(recut B3) an owner sets @world.body-default through the real set verb and it is stored (the decision reading it: consent-table-check T2b)", run(s) { cast(s);
       const r = set(s, "olive", "body-default", "refuse");
       return { set: show(r), stored: s.w().state().entities["@world"].c["body-default"] }; },
     good: (o) => o.set === "ok" && o.stored === "refuse" },
@@ -446,10 +452,8 @@ const cases: Case[] = [
       return { v: w["@world"][key], bo: w["@world"][bo], imported: Object.keys(w["@world"]).filter((k) => k.startsWith("imported:roles")), sw: RL.effectiveOf?.(w["@world"], id)?.permissions, tag: TV1.TRANSLATOR }; },
     good: (o) => o.v?.role === "builder" && o.v.can?.fly === true && o.v.can?.generate === true && !("gen" in o.v) && !("fly" in o.v) && !("fly" in (o.bo ?? {})) && o.imported.length === 0 && o.sw?.includes("fly") && o.sw?.includes("generate") && o.tag?.startsWith("eidoverse/translate-v1@") && +o.tag.split("@")[1] >= 7 },   // @4 brought fly → can.fly, @7 gen → can.generate
   { id: "T2", what: "the Commons (its v1 governance lines, the repo fixture or V1_COMMONS=<a v1 Commons log>, translated here): a stranger is still a builder and now builds and generates by its default-role can.generate; a guest is an inhabitant", run() {
-      // PROTOCOL_COMMONS: an already-translated world log; else the v1 Commons translated in process (R 10-07: the Commons is
-      // re-translated from its latest v1 log at merge time, so a saved translation would only test an older importer)
-      // With neither, the repo's own fixture: the Commons' governance lines alone (its founder's grant, a builder's, and
-      // the `*` gen grant), so the row always runs; the real log is an optional, louder test (V1_COMMONS=<its log.jsonl>).
+      // PROTOCOL_COMMONS: an already-translated log; V1_COMMONS: a v1 log translated in process (a saved translation would
+      // test an older importer); with neither, the repo's fixture of the Commons' governance lines, so the row always runs
       const commonsLog = process.env.PROTOCOL_COMMONS, v1f = process.env.V1_COMMONS ?? path.resolve(ENGINE, "tools/protocol/fixtures/v1-commons-shape.jsonl");
       if (!commonsLog && !fs.existsSync(v1f)) throw new Error(`T2: no Commons log at ${v1f} (V1_COMMONS)`);
       const st = commonsLog ? F.fold(F.readLog(fs.readFileSync(commonsLog)))
@@ -462,7 +466,7 @@ const cases: Case[] = [
   { id: "P1", what: "personActions: a visitor sees only Mention (a public @name; Message opened a DM tab until whisper was removed, R 10-18), for anyone", run() { const A = RL.personActions;
       const vis = { id: "v", rank: 0, permissions: [] }; return { a: A?.(vis, { id: "b", rank: 100, role: "builder" }).map((x: any) => x.id), b: A?.(vis, { id: "n", rank: -1, role: "none" }).map((x: any) => x.id) }; },
     good: (o) => JSON.stringify(o.a) === '["mention"]' && JSON.stringify(o.b) === '["mention"]' },
-  // G1–G3 and the two visitor rows V-four and V-eight RETIRED (R 10-20): ghost removed entirely (WISHLIST "Spectator role").
+  // G1–G3 and the visitor rows V-four and V-eight RETIRED: ghost removed entirely
   { id: "P2", what: "personActions: a moderator acting on a builder gets warn, mute, kick, ban, role and history — no Ghost (removed 10-20)", run() {
       const mo = { id: "m", rank: 200, permissions: RL.BUILTIN?.moderator ? RL.PERMISSION_NAMES.filter((k: string) => RL.BUILTIN.moderator.can[k]) : [] };
       return { ids: RL.personActions?.(mo, { id: "b", rank: 100, role: "builder" }).map((x: any) => x.id), muted: RL.personActions?.(mo, { id: "b", rank: 100 }, { muted: true }).map((x: any) => x.id) }; },
@@ -475,7 +479,7 @@ const cases: Case[] = [
       return { v: B?.({ role: "inhabitant" }), g: B?.({ role: "builder", anon: true }), o: B?.({ role: "owner", name: "Owner" }), c: B?.({ role: "crew", name: "Crew" }) }; },
     good: (o) => o.v === null && o.g?.text === "guest" && o.o?.text === "owner" && o.o.tone === "owner" && o.c?.text === "crew" && o.c.tone === "role" },
 
-  // ---------------- F: the top-down review's findings (10-06), each red before its fix ----------------
+  // ---------------- F: the top-down review's findings, each red before its fix ----------------
   { id: "F1", what: "a junior owner can't re-affirm the founder to reset their seniority, then demote and ban them (review S0-1)", run(s) { cast(s);
       role(s, "jun", { role: "owner" });
       const reaff = set(s, "jun", "roles:olive", { role: "owner" }), demote = set(s, "jun", "roles:olive", { role: "inhabitant" }), ban = s.call("jun", "ban", { who: "olive" });
@@ -495,7 +499,7 @@ const cases: Case[] = [
       return { note: show(note), demote: code(set(s, "jun", "roles:olive", { role: "inhabitant" })), olive: eff(s, "olive")?.role }; },
     good: (o) => o.note === "ok" && o.demote === "rights" && o.olive === "owner" },
 
-  // ---------------- V: the independent review's findings (10-07), each red before its fix ----------------
+  // ---------------- V: the independent review's findings, each red before its fix ----------------
   { id: "V1", what: "a weaker sanction never cancels a stronger one: a moderator's 0.0001-day ban, 1-minute voice mute or kick under an owner's leaves the owner's in force", run(s) { cast(s);
       role(s, "ann2", { role: "inhabitant" }); role(s, "kk", { role: "inhabitant" });
       s.call("olive", "ban", { who: "vic" }); const b = s.call("mo", "ban", { who: "vic", days: 0.0001 });
@@ -546,7 +550,7 @@ const cases: Case[] = [
       const v = s.w().state().entities["@world"].c["roles:bob"]; return { r: show(r), can: v?.can, note: v?.note, sw: eff(s, "bob")?.permissions }; },
     good: (o) => o.r === "ok" && JSON.stringify(o.can) === '{"generate":true}' && o.note === "keep me" && !o.sw?.includes("fly") && o.sw?.includes("generate") }
 ,
-  // review of #260: the guests' ceiling holds for the fallback too, and a role entry's delete counts the default role's own `can`
+  // the guests' ceiling holds for the fallback too, and a role entry's delete counts the default role's own `can`
   { id: "V12", what: "a guest with no guests field is an inhabitant: plain, under a newcomer role of builder, and under a stored default of the removed none (an old log)", run() {
       return { plain: RL.guestRoleOf?.({}), build: RL.guestRoleOf?.({ "default-role": { role: "builder" } }), old: RL.guestRoleOf?.({ "default-role": { role: "none" } }) }; },
     good: (o) => o.plain === "inhabitant" && o.build === "inhabitant" && o.old === "inhabitant" },
@@ -574,7 +578,7 @@ const cases: Case[] = [
       s.call("mo", "mute", { who: "vic", minutes: 5 }); s.advance(6 * MIN);
       return { ...r, ended: lift("unmute"), before, after: n() }; },
     good: (o) => o.unban === "unchanged" && o.unmute === "unchanged" && o.ended === "unchanged" && typeof o.before === "number" && o.after === o.before + 1 },
-  // ---- PL: the inhabitant rung (R 10-21): visitor → inhabitant, none gone, newcomers build in NEW worlds, guests start as inhabitants ----
+  // ---- PL: the inhabitant rung: visitor → inhabitant, none gone, newcomers build in NEW worlds, guests start as inhabitants ----
   { id: "PL1", what: "the ladder's words: inhabitant 0 · builder · moderator · owner; no visitor, no none (released, R 10-21: nothing reserves them now, so a world may name a custom role either); reserved ids are owner and banned", run(s) {
       s.call("olive", "create-world", { title: s.name });
       return { rank: RL.RANK, builtin: RL.BUILTIN_IDS, reserved: [...(RL.RESERVED_IDS ?? [])].sort(), freeV: RL.isRoleId?.("visitor"), freeN: RL.isRoleId?.("none"),
@@ -608,8 +612,8 @@ const cases: Case[] = [
       const before = code(set(s, "guest-1", "label", "g", "crate")); const give = show(role(s, "guest-1", { role: "builder" }));
       return { before, give, g1: eff(s, "guest-1")?.role, after: show(set(s, "guest-1", "label", "g", "crate")), g2: eff(s, "guest-2")?.role }; },
     good: (o) => o.before === "rights" && o.give === "ok" && o.g1 === "builder" && o.after === "ok" && o.g2 === "inhabitant" },
-  // ---- W: `who` names what it admits (recut item 8; house: "who as rank is a corner"): a role id (that rank or above, as
-  // before), {permission} (anyone holding it, whatever the role is called) or {roles} (exactly those roles) ----
+  // ---- W: `who` names what it admits: a role id (that rank or above), {permission} (anyone holding it, whatever the role is
+  // called) or {roles} (exactly those roles) ----
   { id: "W1", what: "who {permission: build} on a grabbable: a crew holder with build picks it up, a moderator holds build too, an inhabitant can't", run(s) { cast(s, { crew: true });
       s.call("olive", "create", { id: "ball", model: "ball", components: { grabbable: { who: { permission: "build" } } }, place: { at: [0, 0] } });
       const g = (who: string) => { s.call(who, "move", { to: [0, 0, 0.5] }); const r = s.call(who, "grab", { id: "ball" }); if (r?.ok) s.call(who, "drop", { id: "ball" }); return show(r); };
@@ -636,13 +640,11 @@ const cases: Case[] = [
 ];
 
 // ---------------- run ----------------
-let pass = 0, fail = 0;
+const SUITE = suite("roles-check", { cap: 700 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false;
   try { o = await c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${String(JSON.stringify(o)).slice(0, 700)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[roles-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

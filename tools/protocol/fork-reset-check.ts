@@ -13,12 +13,12 @@ import { ENGINE, scratch } from "./common.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 import { idAliases } from "./idalias.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids
 
 const root = scratch("forkreset");
 const MODEL = "eidoverse/assets/models/crate_large_red.glb";   // a real catalogue model (the engine measures it)
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("fork-reset-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
 const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
@@ -169,5 +169,4 @@ ok((await ann.req("set", { id: "@world", component: `roles:${bobId}`, value: { r
   guest.close(); G.proc.kill(); }
 
 ann.close(); bob.close(); S.proc.kill();
-console.log(`[fork-reset-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

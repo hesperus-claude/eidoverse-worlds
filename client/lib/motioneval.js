@@ -1,28 +1,13 @@
-// motioneval — the whole-entity motion closed forms, as pure math.
-//
-// Extracted from motion.js (#82 review): the browser render loop and the
-// agent's text-tier perception must agree on where a moving thing IS, and
-// the only way two runtimes agree forever is to evaluate the same file.
-// This module is deliberately dependency-free — no THREE, no DOM, no scene,
-// no clock (its imports are pure: names.js motionType, and shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
-// motion.js consumes it per frame; mcpl/agent.ts consumes it at read time.
-//
-// Contract: evalWholeMotion returns a FINITE transform or an explicit
-// refusal ({ok:false, why}) — never a partially-composed number. Unknown
-// motion types are a refusal here even though the renderer quietly shows
-// such things at rest: a renderer that draws stillness is visibly guessing,
-// but a printed coordinate claims to be truth (#82's whole disease).
-//
-// Part-frame motion (`motion:<slot> {node}` keys, or an old `motion` carrying `part`: shared/protocol/names.js motionNode)
-// does not displace the entity's ROOT transform at all — those stay in
-// motion.js, THREE-side, and this module reports the root as unmoved.
+// motioneval — whole-entity motion as pure math, shared by motion.js (render) and mcpl/agent.ts (perception) so both
+// agree where a thing is (#82). No THREE, DOM, scene or clock: callers pass {base, motion, nowMs}.
+// A finite transform or an explicit refusal, never a partial number: a printed coordinate claims to be truth.
+// Part-frame motion leaves the root unmoved; it stays in motion.js.
 import { motionType } from '../../shared/protocol/names.js';
 import { qMul, qRotate as qApply, qAxisAngle as qAxisAngleUnit } from '../../shared/rot.js';
 
-// ---- quaternions: shared/rot.js's -----------------------------------------
-// [x, y, z, w], same layout THREE uses. Right-handed, Y-up, radians.
+// ---- quaternions: [x, y, z, w] as THREE lays them out; right-handed, Y-up, radians
 
-/** The rotation of `angle` radians about `axis`, which need not be unit length. */
+/** `axis` need not be unit length. */
 export const qAxisAngle = (axis, angle) => {
   const [x, y, z] = axis;
   const n = Math.hypot(x, y, z) || 1;
@@ -30,22 +15,18 @@ export const qAxisAngle = (axis, angle) => {
 };
 export { qMul, qApply };
 
-/** Yaw of a quaternion, by the house convention: the yaw whose +Z-forward
- *  matches the quaternion's, `atan2(x, z)` of the rotated forward vector. */
+/** House convention: `atan2(x, z)` of the rotated +Z forward. */
 export const yawOfQuat = (q) => {
   const [fx, , fz] = qApply(q, [0, 0, 1]);
   return Math.atan2(fx, fz);
 };
 
 const yawQuat = (yaw) => qAxisAngle([0, 1, 0], yaw ?? 0);
-// the rest orientation motion composes on: the fold's full q when the thing
-// is tilted (PROTOCOL §9 amendment), else its yaw
+// the rest orientation: the fold's full q when tilted (PROTOCOL §9 amendment), else its yaw
 const baseQuat = (base) => (Array.isArray(base?.q) && base.q.length === 4 ? base.q : yawQuat(base?.yaw));
 
-// ---- the generous reader (verbatim from motion.js — see its history) -------
-// Text-tier authors improvise dialect: `amplitude` for amp, `axis: "x"` for
-// [1,0,0], no t0 at all. Parsing is where generosity lives; the closed form
-// stays exact.
+// ---- the generous reader -------
+// Authors improvise dialect (`amplitude`, `axis: "x"`, no t0); parsing is generous, the closed form stays exact.
 
 export const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1],
   '-x': [-1, 0, 0], '-y': [0, -1, 0], '-z': [0, 0, -1] };
@@ -62,10 +43,7 @@ export const ampOf = (m, def = 0) => {
   return Number.isFinite(v) ? v : def;
 };
 
-/** Seconds since the motion's epoch. A motion with NO t0 anchors to when
- *  this process first evaluated it — same per-client fallback motion.js has
- *  always had, held here in a WeakMap instead of a stowaway `_t0` property
- *  so evaluation never mutates a component bag it does not own. */
+/** Seconds since t0; with none, since first evaluated here (a WeakMap: never mutate a bag we don't own). */
 const t0Fallback = new WeakMap();
 export const since = (m, nowMs) => {
   let t0 = m.t0;
@@ -76,11 +54,7 @@ export const since = (m, nowMs) => {
   return Math.max(0, (nowMs - t0) / 1000);
 };
 
-/** A spin's or an orbit's rate in degrees a second: degPerSec, else a period
- *  (seconds a turn: 360 / period — review 10-07 N4: an orbit's period was
- *  ignored and it turned at the default), else an old world's rpm (× 6), else
- *  `def`. One reading for the renderer, the part path, the seat signals and
- *  the agent, so they can't disagree. */
+/** °/s: degPerSec, else 360 / period, else rpm × 6, else `def`. The one reading, so renderer, seats and agent agree. */
 export function rateOf(m, def) {
   if (Number.isFinite(m.degPerSec)) return m.degPerSec;
   if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;
@@ -88,16 +62,14 @@ export function rateOf(m, def) {
   return def;
 }
 
-/** ⚠ MIRRORS pendulumImpulse math in server/reactions.ts — keep in sync, or a
- *  joiner's swing disagrees with the one being pushed.
- *  Missing damp = 0 = swings FOREVER (friction is opt-in; see motion.js). */
+/** ⚠ Mirrors the authority's pendulum push (AGENTS.md rule 2): change both, or the pushed swing and the watched one disagree.
+ *  Missing damp = 0 = swings FOREVER (friction is opt-in). */
 export function pendulumTheta(m, t) {
   const w0 = (2 * Math.PI) / (m.period ?? 3.5);
   return ampOf(m) * Math.exp(-(m.damp ?? 0) * t) * Math.cos(w0 * t + (m.phase ?? 0));
 }
 
-/** rotateAtPivot, pure: rotate by `theta` about local `axis` at local point
- *  `pivot`, composed on the base pose. Returns {pos, quat}. */
+/** `theta` about local `axis` at local `pivot`, composed on the base pose. */
 function rotateAtPivot(base, axis, pivot, theta) {
   const q = qAxisAngle(axis ?? [0, 1, 0], theta);
   const qy = baseQuat(base);
@@ -108,9 +80,7 @@ function rotateAtPivot(base, axis, pivot, theta) {
   return { pos: [base.pos[0] + shift[0], base.pos[1] + shift[1], base.pos[2] + shift[2]], quat };
 }
 
-// Path arc-length tables, cached per component object. A re-folded comp is a
-// new object, so the cache invalidates exactly when the points can change —
-// the same lifetime the old `m._len` stowaway had, without the mutation.
+// arc-length tables per component object: a re-folded comp is a new object, so this invalidates exactly on change
 const pathLen = new WeakMap();
 
 export function evalPath(m, t, base) {
@@ -145,26 +115,12 @@ export function evalPath(m, t, base) {
   return { ok: true, pos, yaw: base.yaw ?? 0, quat: baseQuat(base), rot: false };
 }
 
-/**
- * Evaluate a WHOLE-ENTITY motion component at `nowMs`, composed on the
- * entity's logged base pose.
- *
- *   base:  {pos: [x,y,z], yaw}    — the spawn/place rest transform
- *   m:     the motion component's data ({type, ...params, t0?})
- *   nowMs: epoch ms on the sequencer's clock (caller's responsibility —
- *          motion.js passes serverNow(), the agent passes its own estimate)
- *
- * Returns {ok:true, pos, yaw, quat, rot} — `rot: false` means this motion
- * type leaves the entity's authored rotation alone (oscillate; face:false orbit
- * and path), which the renderer honors by not touching obj.rotation —
- * or {ok:false, why} for anything it will not vouch for: unknown types,
- * malformed paths, non-finite params. Part-frame motion (`m.part`) returns
- * the base pose unchanged with rot:false — parts swing, roots stand still.
- */
+/** nowMs: epoch ms on the sequencer's clock. → {ok:true, pos, yaw, quat, rot} (rot:false = leave the authored
+ *  rotation alone) or {ok:false, why}. */
 export function evalWholeMotion(base, m, nowMs) {
   if (!m || typeof m.type !== "string") return { ok: false, why: "no motion type" };
   if (typeof m.part === "string") {
-    // animates ONE NAMED NODE of the model; the root transform is untouched
+    // ONE NAMED NODE: the root is untouched
     return { ok: true, pos: [...base.pos], yaw: base.yaw ?? 0, quat: baseQuat(base), rot: false };
   }
   const t = since(m, nowMs);
@@ -172,10 +128,10 @@ export function evalWholeMotion(base, m, nowMs) {
   switch (motionType(m)) {
     case 'pendulum':
       r = { ok: true, rot: true, yaw: null,
-        ...rotateAtPivot(base, axisOf(m, [1, 0, 0]), m.pivot ?? base.pivot ?? [0, 0, 0], pendulumTheta(m, t)) };   // base.pivot: the entity's pivot component (research 52); absent, its origin (shape audit 10-16: was [0, 2, 0], which a stored world's first load writes as its pivot)
+        ...rotateAtPivot(base, axisOf(m, [1, 0, 0]), m.pivot ?? base.pivot ?? [0, 0, 0], pendulumTheta(m, t)) };   // base.pivot: the pivot component (research 52); absent, the origin (never a made-up default: a stored world's first load writes it as its pivot)
       break;
     case 'spin': {
-      const rate = rateOf(m, 36);   // degPerSec, else 360 / period, else rpm × 6
+      const rate = rateOf(m, 36);
       r = { ok: true, rot: true, yaw: null,
         ...rotateAtPivot(base, axisOf(m, [0, 1, 0]), m.pivot ?? base.pivot ?? [0, 0, 0],
           (m.phase ?? 0) + (rate * Math.PI / 180) * t) };
@@ -213,10 +169,10 @@ export function evalWholeMotion(base, m, nowMs) {
   return r;
 }
 
-// ---- openable (R 10-07): a door, a gate, a lid — the pure halves of client/lib/openable.js ----------
+// ---- openable: a door, a gate, a lid — the pure halves of client/lib/openable.js ----------
 export const OPEN_DEFAULTS = Object.freeze({ angle: Math.PI / 2, time: 1 });   // a quarter turn; Roblox TweenInfo's 1 s
 
-/** How open (0 shut … 1 open) a tween {from, to, t0, dur} is at `now` (ms). Smoothstep: it starts and stops softly. */
+/** 0 shut … 1 open, for a tween {from, to, t0, dur} at `now` (ms); smoothstep. */
 export function openFraction(tw, now) {
   if (!tw) return 0;
   if (!(tw.dur > 0)) return tw.to;
@@ -224,8 +180,7 @@ export function openFraction(tw, now) {
   return tw.from + (tw.to - tw.from) * u * u * (3 - 2 * u);
 }
 
-/** The pose at fraction f of the way open. base {pos, q?|yaw} is the rest pose (its parent's frame), o the openable,
- *  pivot its pivot (own frame, before scale), scale its own scale. A turn keeps the pivot where it is (a hinge). */
+/** base: the rest pose (parent's frame); pivot: own frame, before scale. A turn keeps the pivot fixed (a hinge). */
 export function openPose(base, o, f, pivot = [0, 0, 0], scale = [1, 1, 1]) {
   const q0 = Array.isArray(base.q) && base.q.length === 4 ? base.q : yawQuat(base.yaw);
   if (Array.isArray(o.slide)) {

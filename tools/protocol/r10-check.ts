@@ -24,6 +24,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { TRANSLATOR } from "./import-v1/translate-v1.js";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -36,9 +37,9 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the first step keeps the seat", "shared/protocol/authority/bodyverbs.js", "if (w.presence.occupants?.[actor]) clearOccupant(w, actor); }", "}", ["S3"]],
   ["lastTouch: a restore doesn't step over its delete", "shared/protocol/authority/followups.js", "if (o.verb === \"delete\" && restored) { restored = false; continue; } return null; }", "return null; }", ["H1"]],
   ["creatorOf: a restore doesn't step over its delete", "shared/protocol/authority/rights.js", "if (o.verb === \"delete\" && fu.has(k) && restored && comp !== undefined", "if (false && comp !== undefined", ["H2"]],
-  ["lastSetterOf: a restore doesn't step over its delete", "shared/protocol/authority/rights.js", "if (restored) { restored = false; continue; } }   // r9 H1, r10 M2", "}", ["H2"]],
-  ["creatorAt: a restore doesn't step over its delete", "shared/protocol/scriptaudit.js", "if (o.verb === \"delete\" && fu.has(k) && restored && (o.comp === comp || o.comp === undefined)) { restored = false; continue; }   // reversed", "if (false) { continue; }   // reversed", ["H2"]],
-  ["sponsorAt: a restore doesn't step over its delete", "shared/protocol/scriptaudit.js", "{ restored = false; continue; }   // r10 M2", "{ restored = false; }   // r10 M2", ["H2"]],
+  ["lastSetterOf: a restore doesn't step over its delete", "shared/protocol/authority/rights.js", "if (restored) { restored = false; continue; } }", "}", ["H2"]],
+  ["creatorAt: a restore doesn't step over its delete", "shared/protocol/scriptaudit.js", "\n  for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== \"change\") continue; const ops = quiet(e); const fu = followUpsOf(e);", "\n  for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== \"change\") continue; const ops = quiet(e); const fu0 = followUpsOf(e), fu = { has: (k) => fu0.has(k) && ops[k].verb !== \"delete\" };", ["H2"]],
+  ["sponsorAt: a restore doesn't step over its delete", "shared/protocol/scriptaudit.js", "scan: for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== \"change\") continue; const ops = quiet(e); const fu = followUpsOf(e);", "scan: for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== \"change\") continue; const ops = quiet(e); const fu0 = followUpsOf(e), fu = { has: (k) => fu0.has(k) && ops[k].verb !== \"delete\" };", ["H2"]],
   ["the stand tile held does nothing", "client/lib/localbody.js", "if ((keys.has('KeyX') || escapeTile) && !mayLeave(body, 'menu'))", "if (keys.has('KeyX') && !mayLeave(body, 'menu'))", ["E1"]],
   ["creatorOf merges a new life", "shared/protocol/authority/rights.js", "if (o.verb === \"set\" && o.comp === comp) restored = false;", "", ["H3"]],
   ["the second stand-in is minted-shaped", "shared/protocol/scriptaudit.js", "export const ARRIVAL_STAND_IN_2 = \"zq-stand-in\";", "export const ARRIVAL_STAND_IN_2 = \"u-\" + \"b\".repeat(20);", ["A1", "A2"]],
@@ -358,13 +359,11 @@ cases.push(
     good: (o) => o.alias && o.at7 === 3 },
 );
 
-let pass = 0, fail = 0;
+const SUITE = suite("r10-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[r10-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

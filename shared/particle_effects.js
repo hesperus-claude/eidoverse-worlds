@@ -1,12 +1,11 @@
 // shared/particle_effects.js — what a particle EFFECT is: the document a `particles` component names, its limits, the
-// Essentials (the built-in effects, by name), its params, and how an older value reads. Pure: the authority, every
-// client, mcpl and the translator import it, so they can't disagree about what an effect says or whether it's allowed.
+// Essentials (built-in effects, by name), its params, and how an older value reads. Pure: authority, clients, mcpl and the
+// translator import it, so they can't disagree about what an effect says or whether it's allowed.
 //
-// The instance is tiny (R 10-07, the Niagara / Godot / bevy_hanabi convergence): `particles {effect, part?, at?, seed?,
-// playing?, scale?, params?}`. `effect` names a document: an Essentials name ("fire") or a content address of one stored
-// in the world ("sha256:<64 hex>", or the same bytes as "eido:sha256/<64 hex>": spec/EIDO-URIS.md; a document is stored
-// as its JCS bytes, so the two spellings name the same document). The document describes emitters as modules, in Godot's
-// ParticleProcessMaterial vocabulary (shared/particlesim.js runs it):
+// The instance is tiny (the Niagara / Godot / bevy_hanabi convergence): `particles {effect, part?, at?, seed?, playing?,
+// scale?, params?}`. `effect` names a document: an Essentials name ("fire") or a content address of one stored in the world
+// ("sha256:<64 hex>", or the same bytes as "eido:sha256/<64 hex>": spec/EIDO-URIS.md; stored as its JCS bytes, so both
+// spellings name one document). Emitters are modules in Godot's ParticleProcessMaterial vocabulary (shared/particlesim.js):
 //
 //   {kind: "particle-effect", v: 1, name?, reads?, emitters: [Emitter, …] (1–4), params?: {<name>: Param, …} (≤ 16)}
 //   Emitter = {
@@ -30,7 +29,7 @@
 //
 // FRAMES (PROTOCOL §9.2: every vector names its frame). The emitter's frame is its thing's own (moved to `at`, hung on
 // `part`), scaled by the thing's scale × the instance's `scale`:
-//   forces.gravity     the WORLD frame (Unity's convention, lead 10-17): down stays down on a tipped or spinning thing, so a
+//   forces.gravity     the WORLD frame (Unity's convention): down stays down on a tipped or spinning thing, so a
 //                      knocked-over brazier's smoke still rises; the renderer turns it into the emitter's frame every step
 //                      (particlesim localGravity), and a scaled thing's gravity scales with it as every length does
 //   velocity.direction the emitter's frame
@@ -41,22 +40,22 @@
 //   forces.radial      from the emitter's origin, in the emitter's frame
 //   forces.tangential  about the document's gravity axis as written, read in the emitter's frame (it does not turn with
 //                      the world: a spiral stays a spiral about the thing's own up)
-// UNITS: metres, seconds, and RADIANS for every angle (PROTOCOL §9.2, lead 10-17): velocity.spread (0..π), shape.cone
+// UNITS: metres, seconds, and RADIANS for every angle (PROTOCOL §9.2): velocity.spread (0..π), shape.cone
 // (0..π/2), rotation.angle, rotation.velocity (rad/s); drift/swirl/flicker rates are rad/s. color.hue is in turns of the
 // colour wheel (a hue rotation, not a direction).
 //
-// UNKNOWN FIELDS (lead 10-17): a reader (every renderer, the inspector) SKIPS an optional field, module, param field or
-// binding it doesn't know and draws what it understands (readableEffect); the authority's validator (effectProblem) stays
-// strict at upload, so what a world stores is always what its authority knew. An unknown value of a known field (a new
-// shape type) is not skipped: that document isn't readable here.
+// UNKNOWN FIELDS: a reader (every renderer, the inspector) SKIPS an optional field, module, param field or binding it doesn't
+// know and draws what it understands (readableEffect); the authority's validator (effectProblem) stays strict at upload, so
+// what a world stores is always what its authority knew. An unknown value of a known field (a new shape type) is not
+// skipped: that document isn't readable here.
 // RESERVED (not built yet; refused at upload "reserved: not built yet", so the names can't come to mean anything else):
 // emitter `space` (local | world), `collision`, `sub` (sub-emitters); `render.mode`, `render.trail`; `spawn.rate`,
 // `spawn.bursts`; and the instance's `t0` (a synced start, as sound.t0).
-// TRIAL: the effect document format is trial and expected to grow. Additions are designed to be additive (an optional
-// field whose absence means today's behaviour), and a breaking change would ship with a translator.
+// TRIAL: the effect document format is trial and expected to grow, additively (an optional field whose absence means today's
+// behaviour); a breaking change would ship with a translator.
 //
-// Every number is bounded (EFFECT_LIMITS): a document is authored by anyone who may build, and it runs on every visitor's
-// machine, so "how much may one effect cost" is part of what it means, checked at the door, not left to one client.
+// Every number is bounded (EFFECT_LIMITS): anyone who may build authors a document that runs on every visitor's machine, so
+// "how much may one effect cost" is part of what it means, checked at the door, not left to one client.
 import { sha256 } from './protocol/hash.js';
 
 export const EFFECT_KIND = 'particle-effect';
@@ -96,9 +95,9 @@ const FLIPBOOK_FIELDS = ['h', 'v', 'speed', 'offset', 'loop'];
 const PARAM_FIELDS = ['type', 'default', 'min', 'max', 'values', 'help', 'to'];
 const BINDING_FIELDS = ['path', 'op', 'times', 'map', 'round'];
 const BINDING_PATH = /^emitters\.(\*|[0-3])\.[a-z]+\.[a-zA-Z]+$/;
-// RESERVED (lead 10-17, REVIEW-particles-shape §5): names held for what the effect document is expected to grow, so nobody
-// spends them on something else. Refused at upload ("reserved: not built yet"); a reader skips them as it skips any field
-// it doesn't know. The instance's t0 is held in the registry (componentspec particles.reservedFields).
+// RESERVED (REVIEW-particles-shape §5): names held for what the document is expected to grow, so nobody spends them on
+// something else. Refused at upload ("reserved: not built yet"); a reader skips them as any unknown field. The instance's t0
+// is held in the registry (componentspec particles.reservedFields).
 export const RESERVED_EMITTER = Object.freeze({
   space: 'local | world: a world-space emitter, whose particles stay where they were born (smoke trailing a carried torch)',
   collision: 'particles that hit the world and bounce or die',
@@ -110,11 +109,10 @@ export const RESERVED_FIELDS = Object.freeze({
 });
 const reservedWhy = (where, what) => `${where} is reserved: not built yet (${what}); the name is held so it can't come to mean anything else`;
 export const PARAM_TYPES = ['number', 'area', 'vec3', 'color', 'texture', 'enum', 'bool'];
-/** The document's angle fields (radians, PROTOCOL §9.2): an editor shows them in degrees and stores radians. */
+/** Radians (PROTOCOL §9.2): an editor shows them in degrees and stores radians. */
 export const ANGLE_FIELDS = Object.freeze(['velocity.spread', 'shape.cone', 'rotation.angle', 'rotation.velocity']);
-/** Is this a number param whose value IS an angle (every binding lands it, unscaled, on an angle field)? Then its value is
- *  radians, and an editor shows it in degrees (the transform rows' convention). A scaled or mapped binding is the
- *  author's own unit, and isn't. */
+/** A number param whose value IS an angle (every binding lands it, unscaled, on an angle field): radians, shown in degrees.
+ *  A scaled or mapped binding is the author's own unit, and isn't. */
 export const angleParam = (p) => p?.type === 'number' && Array.isArray(p.to) && p.to.length > 0
   && p.to.every((b) => b.times === undefined && b.map === undefined && ANGLE_FIELDS.includes(String(b.path).split('.').slice(2).join('.')));
 
@@ -222,8 +220,8 @@ export function paramValueProblem(p, v) {
   return 'an unknown type';
 }
 
-/** Why a document isn't a particle effect this protocol runs, or null. Bounded in size, shape and cost. STRICT: this is the
- *  authority's door (upload), where an unknown field or module is refused; a reader uses readableEffect. */
+/** Or null. Bounded in size, shape and cost. STRICT: the authority's door (upload), where an unknown field or module is
+ *  refused; a reader uses readableEffect. */
 export function effectProblem(doc) {
   if (!isObj(doc)) return 'a particle effect is an object {kind: "particle-effect", v: 1, emitters: [...]}';
   let bytes = 0; try { bytes = JSON.stringify(doc).length; } catch { return 'a particle effect is plain JSON'; }
@@ -247,12 +245,9 @@ export function effectProblem(doc) {
 // ---- the reader: skip what this build doesn't know ---------------------------------------------------------------------
 const pick = (o, keys, at, skipped) => { const out = {}; for (const [k, x] of Object.entries(o)) { if (keys.includes(k)) out[k] = x; else skipped.push(`${at}${k}`); } return out; };
 /**
- * UNKNOWN-FIELD POLICY (lead 10-17): a renderer draws what it understands. The document with every field, module, param
- * field and binding this build doesn't know left out (their paths pushed onto `skipped`), if what remains is an effect this
- * protocol runs; else null. A document a newer authority stored, using an addition this client predates (a trail, a noise
- * module), still draws its known parts here, instead of nothing. The authority's validator (effectProblem, at upload)
- * stays strict, so nothing it stores is a field it doesn't know. An unknown VALUE of a known field (a new shape type, a
- * new blend) isn't skipped: the document isn't readable, and draws nothing.
+ * UNKNOWN-FIELD POLICY: the document minus every field, module, param field and binding this build doesn't know (paths pushed
+ * onto `skipped`), if what remains runs; else null. effectProblem stays strict; an unknown VALUE of a known field isn't
+ * skipped (the document isn't readable).
  */
 export function readableEffect(doc, skipped = []) {
   if (!isObj(doc)) return null;
@@ -275,7 +270,7 @@ export function readableEffect(doc, skipped = []) {
 
 // ---- params: an instance's knobs written into a copy of the document ------------------------------------------------
 const clone = (x) => JSON.parse(JSON.stringify(x));
-/** The document with these params applied (values already checked against their declarations), or {why}. */
+/** Values already checked against their declarations; or {why}. */
 export function applyParams(doc, params = {}) {
   const out = clone(doc); const decl = doc.params ?? {};
   for (const [name, p] of Object.entries(decl)) {
@@ -297,8 +292,8 @@ export function applyParams(doc, params = {}) {
   return out;
 }
 
-/** What a param stands at when an instance doesn't set it: its default, else what the document itself says at its first
- *  binding (an Essential's count is its emitter's amount), read back through times; an enum's first value. For editors. */
+/** Its default, else what the document says at its first binding (an Essential's count is its emitter's amount), read back
+ *  through times; an enum's first value. For editors. */
 export function paramShown(doc, name) {
   const p = doc?.params?.[name]; if (!p) return undefined;
   if (p.default !== undefined) return p.default;
@@ -314,7 +309,7 @@ export function paramShown(doc, name) {
 }
 
 // ---- resolved: every module present, every default written (what particlesim.js runs) -------------------------------
-/** Godot's defaults where Godot has one (gravity −9.8 m/s², spread π/4 (Godot's 45°), lifetime 1 s), ours where the meaning is ours. */
+/** Godot's defaults where Godot has one (gravity −9.8 m/s², spread π/4, lifetime 1 s), ours where the meaning is ours. */
 export function resolveEmitter(e) {
   const S = e.spawn ?? {}, sh = e.shape ?? {}, v = e.velocity ?? {}, f = e.forces ?? {}, r = e.rotation ?? {}, z = e.size ?? {}, c = e.color ?? {}, rd = e.render ?? {}, fb = rd.flipbook ?? {};
   const type = sh.type ?? (sh.extents || sh.radius !== undefined ? 'sphere' : 'point');
@@ -339,11 +334,8 @@ export function resolveEmitter(e) {
 }
 
 // ---- the Essentials --------------------------------------------------------------------------------------------------
-// The nine effects the toolkit's builder (eidoverse/particles.js) shipped, as documents, so every world that named one keeps
-// its look: the builder's table, read module by module. Its launch was a box (±spread across, up ± 0.2·spread), its area an
-// ellipsoid squashed to 0.6 in y, its life a fade in over the first 12% and out over the last 35%, its size grow×life
-// linear, its fire a white-hot → red ramp with a taper and a quick-in size; drift, swirl and flicker are its wobble, swirl
-// and twinkle. Every one runs preprocessed by a full life (the builder's particles were all in flight on the first frame).
+// the nine effects the toolkit's builder (eidoverse/particles.js) shipped, as documents, so every world that named one keeps
+// its look (box launch, squashed ellipsoid area, fade in/out, drift/swirl/flicker its wobble); each preprocessed by a full life
 const BUILDER = {
   sparks: { count: 220, size: 0.06, lifetime: 0.9,  gravity: [0, -4.0, 0], area: 0.15, up: 2.2, spread: 1.6, color: 0xffd27f, blend: 'add',   grow: -0.8, wobble: 0,    opacity: 1,    twinkle: 0, reads: 'sparks' },
   embers: { count: 140, size: 0.05, lifetime: 2.6,  gravity: [0, 0.5, 0],  area: 0.4,  up: 0.7, spread: 0.5, color: 0xff7a30, blend: 'add',   grow: -0.5, wobble: 0.25, opacity: 1,    twinkle: 0.4, reads: 'embers' },
@@ -382,13 +374,13 @@ function builderEffect(name, P) {
     ...(P.swirl ? { swirl: { radius: r4(P.swirl * 0.15), rate: P.swirl } } : {}),
     ...(P.converge ? { converge: { amount: P.converge } } : {}),
     ...(P.twinkle ? { flicker: { amount: P.twinkle, rate: 7 } } : {}),
-    ...(P.rotate ? { rotation: { angle: [0, TAU4], velocity: [-P.rotate, P.rotate] } } : {}),   // radians (PROTOCOL §9.2; lead 10-17): the builder's own rad/s
+    ...(P.rotate ? { rotation: { angle: [0, TAU4], velocity: [-P.rotate, P.rotate] } } : {}),   // radians (PROTOCOL §9.2): the builder's own rad/s
     render: { blend: P.blend },
   };
   return { kind: EFFECT_KIND, v: 1, name, reads: P.reads, emitters: [e], params: LEGACY_PARAMS(P) };
 }
-// the knobs the first protocol's particles bag had, as params every Essential declares: an older value's count, size,
-// opacity, speed, lifetime, area, texture and quality read as these, with the builder's bounds
+// the first protocol's bag knobs as params every Essential declares: an older value's count, size, opacity, speed, lifetime,
+// area, texture and quality read as these, with the builder's bounds
 function LEGACY_PARAMS() {
   return {
     count: { type: 'number', min: 1, max: 600, help: 'how many particles', to: [{ path: 'emitters.*.spawn.amount', round: true }] },
@@ -403,13 +395,10 @@ function LEGACY_PARAMS() {
 }
 export const ESSENTIALS = Object.freeze(Object.fromEntries(Object.entries(BUILDER).map(([k, P]) => [k, Object.freeze(builderEffect(k, P))])));
 export const ESSENTIAL_NAMES = Object.freeze(Object.keys(ESSENTIALS));
-/** An Essential's content address: the same document stored in a world has this name. */
+/** The same document stored in a world has this name. */
 export const effectAddress = (doc) => `sha256:${sha256(jcs(doc))}`;
-// The address each Essential is STORED as (shape audit 10-16, render-media-env §4): the door takes a name and writes this, so
-// a stored fire names one frozen document, never whatever ESSENTIALS.fire says in a later build (Resonite's PhotonDust
-// lesson: meaning held in code migrates every world when the code changes). Pinned here as literals, and
-// tools/shape-render-test PT2 holds each to its document's hash: a retuned Essential turns that row red. To change one,
-// keep the old document (and this address) readable beside the new, and give the new its own address.
+// each Essential's stored address pins one frozen document (meaning held in code would migrate every world).
+// tools/shape-render-test PT2 holds each; to change one, keep the old readable and give the new its own address.
 export const ESSENTIAL_ADDRESSES = Object.freeze({
   sparks: 'eido:sha256/2263d1577683b9ed64f47b56a0e0e6ba12881bef0012f61ce25fae0099d7fab0',
   embers: 'eido:sha256/090b6f0f78e100c34db71a35168772297daa518960b36ef0bc6726ab1ca065ec',
@@ -419,18 +408,17 @@ export const ESSENTIAL_ADDRESSES = Object.freeze({
   magic: 'eido:sha256/0e413aa3b23d404a07d1d4736c9f23987e22cda1ab1b438df394712179dc384f',
   stars: 'eido:sha256/29d12840afa1437819259ba3026da37c083e10530e18c2d6b33708322386658f',
   muzzle: 'eido:sha256/aa2a6de4ec06157679bb1dd85219680f05bf661101297efbdf2f0a9ac5f90b84',
-  fire: 'eido:sha256/f7c0ed62fd9e23b4c179dbbf3e75103d26601bce2b47277a1bd0bee0ac5b8a94',   // its angles became radians (lead 10-17)
+  fire: 'eido:sha256/f7c0ed62fd9e23b4c179dbbf3e75103d26601bce2b47277a1bd0bee0ac5b8a94',   // its angles became radians
 });
-// An Essential's address from before a retune, still read as that Essential (a stored reference is read forever, PROTOCOL
-// §4). fire's degree-scale document (rotation.angle [0, 360], velocity ±20.05 °/s) was stored by this branch's door for a
-// day (10-16 → 10-17) before R's ruling stored Essentials by name; its look is unchanged by the move to radians.
+// an Essential's address from before a retune, still read as that Essential (a stored reference is read forever, PROTOCOL
+// §4): fire's degree-scale document (rotation.angle [0, 360], velocity ±20.05 °/s); its look is unchanged by radians
 export const ESSENTIAL_FORMER_ADDRESSES = Object.freeze({
   fire: 'eido:sha256/1ca045801dca39db0ff6da4b5d7270836fecbd8578a25692a3d180829013132c',
 });
 const ESSENTIAL_BY_HEX = new Map([...Object.entries(ESSENTIAL_FORMER_ADDRESSES), ...Object.entries(ESSENTIAL_ADDRESSES)].map(([k, a]) => [a.slice('eido:sha256/'.length), k]));
 /** The address an Essential is stored as, or null for a name that isn't one. */
 export const essentialAddress = (name) => (typeof name === 'string' && Object.hasOwn(ESSENTIAL_ADDRESSES, name) ? ESSENTIAL_ADDRESSES[name] : null);
-/** The Essential a stored effect names (its name, or its address in either spelling), or null. */
+/** Its name, or its address in either spelling; or null. */
 export const essentialNameOf = (s) => { if (typeof s !== 'string') return null; if (Object.hasOwn(ESSENTIALS, s)) return s; const m = EFFECT_ADDRESS.exec(s); return m ? ESSENTIAL_BY_HEX.get(m[1]) ?? null : null; };
 export const isEssential = (s) => essentialNameOf(s) !== null;
 function jcs(v) {   // RFC 8785 for the plain JSON a document is (keys sorted, no whitespace)
@@ -440,16 +428,14 @@ function jcs(v) {   // RFC 8785 for the plain JSON a document is (keys sorted, n
 }
 
 // ---- the instance ---------------------------------------------------------------------------------------------------
-// The first protocol's bag, {preset, seed?, origin?, count?, size?, opacity?, speed?, lifetime?, area?, texture?, quality?},
-// is still READ (a stored value is read forever: PROTOCOL §4): its preset is the effect, origin is at, and every other
-// knob is the param of the same name. It is never written any more (the authority refuses it; the translator writes the
-// new shape).
+// the first protocol's bag is still READ (PROTOCOL §4): preset is the effect, origin is at, every other knob the param of the
+// same name. Never written (the authority refuses it).
 export const LEGACY_FIELDS = Object.freeze(['preset', 'origin', 'count', 'size', 'opacity', 'speed', 'lifetime', 'area', 'texture', 'quality']);
 const LEGACY_PARAM_KEYS = ['count', 'size', 'opacity', 'speed', 'lifetime', 'area', 'texture', 'quality'];
 export const INSTANCE_FIELDS = Object.freeze(['effect', 'part', 'at', 'seed', 'playing', 'scale', 'params']);
 export const isLegacy = (v) => isObj(v) && v.effect === undefined && v.preset !== undefined;
-/** Any stored particles value (or grabbable.fx.particles) → the instance it means: {effect, part, at, seed, playing,
- *  scale, params}. An older value's knobs become params; nothing it said is dropped. */
+/** Any stored particles value (or grabbable.fx.particles) → {effect, part, at, seed, playing, scale, params}. An older
+ *  value's knobs become params; nothing it said is dropped. */
 export function instanceOf(v) {
   if (!isObj(v)) return null;
   if (v.effect === undefined && v.preset !== undefined) {
@@ -460,21 +446,20 @@ export function instanceOf(v) {
   const out = {}; for (const k of INSTANCE_FIELDS) if (v[k] !== undefined) out[k] = v[k];
   return out;
 }
-/** The translator's (and anyone's) rewrite of an older value in today's spelling; null/other values pass through. Keys
- *  neither spelling knows stay at the top for the caller to carry (imported:particles). */
+/** An older value in today's spelling (the translator's and anyone's); null/other pass through. Keys neither spelling knows
+ *  stay at the top for the caller to carry (imported:particles). */
 export function modernize(v) {
   if (!isLegacy(v)) return v;
   const rest = {}; for (const [k, x] of Object.entries(v)) if (!LEGACY_FIELDS.includes(k) && k !== 'seed') rest[k] = x;
   return { ...instanceOf(v), ...rest };
 }
-/** The effect document a name means here: an Essential, or a stored one through lookup(blobName) (null: unknown or not
- *  loaded yet). */
+/** An Essential, or a stored one through lookup(blobName) (null: unknown or not loaded yet). */
 export function effectFor(name, lookup = () => null) {
   if (typeof name !== 'string') return null;
   const ess = essentialNameOf(name); if (ess) return ESSENTIALS[ess];
   const b = effectBlobName(name); return b ? lookup(b) : null;
 }
-/** Why an instance value isn't one the authority takes (the doc already found, or null when it isn't), or null. */
+/** Or null (doc: already found, or null when it isn't). */
 export function instanceProblem(v, doc) {
   if (!isObj(v)) return 'particles is {effect, part?, at?, seed?, playing?, scale?, params?}';
   const legacy = Object.keys(v).filter((k) => LEGACY_FIELDS.includes(k));
@@ -499,13 +484,12 @@ export function instanceProblem(v, doc) {
   return null;
 }
 
-/** QUALITY: a viewer's local budget (the governor lowers it); it composes with an effect's own ratio as a minimum. */
+/** A viewer's local budget (the governor lowers it); it composes with an effect's own ratio as a minimum. */
 export const QUALITY_TIERS = Object.freeze({ auto: 1, high: 1, med: 0.5, low: 0.25 });
 
 /**
- * Everything a renderer needs from a stored value: {ok, effect (the resolved document's emitters), seed, at, part,
- * playing, scale, reads, notes} or {ok: false, why, pending?}. A param that doesn't fit is left out (and named in notes):
- * a viewer draws what it can, the authority is where a value is refused.
+ * {ok, effect (the resolved document's emitters), seed, at, part, playing, scale, reads, notes} or {ok: false, why, pending?}.
+ * A param that doesn't fit is left out (and named in notes): a viewer draws what it can; the authority is where a value is refused.
  */
 export function resolveParticles(v, { entityId = '', lookup = () => null } = {}) {
   const inst = instanceOf(v);
@@ -515,8 +499,8 @@ export function resolveParticles(v, { entityId = '', lookup = () => null } = {})
     const stored = effectBlobName(inst.effect);
     return { ok: false, pending: !!stored, why: stored ? `effect ${inst.effect} isn't loaded (yet)` : `effect ${JSON.stringify(inst.effect ?? null)} isn't one this client knows (${ESSENTIAL_NAMES.join('/')}): it reads as an emitter but shows nothing` };
   }
-  // a stored document is read under the unknown-field policy (readableEffect): its known parts draw, the rest is noted.
-  // An Essential is this build's own document, read as it is
+  // a stored document is read under the unknown-field policy (its known parts draw, the rest is noted); an Essential is this
+  // build's own document, read as it is
   const readable = !isEssential(inst.effect); const skipped = [];
   const doc = readable ? readableEffect(raw, skipped) : raw;
   if (!doc) return { ok: false, why: `the effect: ${effectProblem(raw)}` };
@@ -541,7 +525,7 @@ export function resolveParticles(v, { entityId = '', lookup = () => null } = {})
   return { ok: true, effect: inst.effect, emitters: applied.emitters.map(resolveEmitter), seed, at, part: typeof inst.part === 'string' ? inst.part : null,
     playing: inst.playing !== false, scale: isNum(inst.scale) && inst.scale > 0 ? inst.scale : 1, reads: doc.reads ?? doc.name ?? null, notes };
 }
-/** FNV-1a over a string → a 32-bit seed (the derived seed when none is written, as before). */
+/** FNV-1a over a string → a 32-bit seed (the derived seed when none is written). */
 export function hashSeed(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < String(str).length; i++) { h ^= String(str).charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }

@@ -1,4 +1,4 @@
-// tools/protocol/world.ts — found a world, or translate an old (v1) world once, in place or into a new name.
+// tools/protocol/world.ts: found a world, or translate an old (v1) world once, in place or into a new name.
 //
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts found <name> --owner <your id> [--title "…"]
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts translate <v1 world> [<new name>] --dry-run --no-founder-key
@@ -11,21 +11,9 @@
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts repair <name> [--dry-run] [--by <who asked>]     maintenance: lift-sockets, rename-components, repair-shapes (PROTOCOL §4), each recorded
 //   WORLDS_DIR=<dir> bun tools/protocol/world.ts repair <name> --rollback [--force]               the pre-repair log put back, byte-identical
 //
-// The server never makes a world by itself (it serves only worlds in this protocol, and refuses a directory holding only an old log). A directory is a world because it holds world.jsonl
-// whose line 0 is a genesis saying {dialect, v: 4}, and only this tool writes one (shell access to the host, like every other operator
-// act on world files). `found` runs the authority's own `new` request, so genesis names the owner and the founding act
-// writes @world (about, bounds, roles:<owner>) through admit. --owner is the name you join with; it is stamped through
-// names.js exactly as the live authority stamps you, so you are the owner when you arrive.
-// `translate` reads <v1 world>/log.jsonl, never writes it (R9: the original is kept), runs the importer
-// (tools/protocol/import-v1/: 0 divergences required), re-reads the output with the strict reader, and only then writes
-// <new name>/world.jsonl. The old directory stays on disk as it was; the server doesn't serve it.
-// `translate <v1 world>` alone (R 10-17: "links keep working") translates IN PLACE: into a temporary sibling first, then
-// verified (the importer's checks, the result opened as the server opens it, and, where the old server left a
-// snapshot.json, the snapshot oracle's agreement with the old engine), and only then swapped in under the original name,
-// with the old log kept beside it as log.original.jsonl (snapshot.json → snapshot.original.json): renamed, never
-// rewritten. On any failure the original is left as it was, the temporary directory is removed, and it says why. If the
-// process itself dies mid-swap (no rollback runs), the next `translate <world>` sees the half-swapped directory and finishes
-// the swap (renames and moves only), saying so.
+// Only this tool and a person's world-found request write a genesis; the server never founds a world unasked. `found`
+// runs the authority's own create-world request. `translate` never writes the v1 log; in place, it builds in a sibling,
+// verifies, swaps (old log kept as log.original.jsonl) and finishes a half-done swap. Procedure: docs/TRANSLATING-OLD-WORLDS.md.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -50,33 +38,27 @@ const die = (m: string) => { console.error(m); process.exit(1); };
 
 /** An in-place translation keeps the old world's files beside the new one under these names (never written, never deleted). */
 const ORIGINAL = { log: "log.original.jsonl", snapshot: "snapshot.original.json", poses: "poses.original.json" } as const;
-// the old log's size and sha256 as the translation read it, kept in the temporary sibling (never moved into the world): the
-// swap, and the recovery of an interrupted swap, refuse when the old log no longer holds exactly those bytes (review of
-// PR #260, world.ts:99: an old server still writing during the conversion would have had its later edits dropped)
+// the old log's size and sha256 as the translation read it, kept in the temporary sibling (never moved into the world):
+// the swap and its recovery refuse when the old log no longer holds exactly those bytes, or an old server still writing
+// would have its later edits dropped
 const SOURCE = ".source.json";
 // …and the identities the translation minted, written to the shared directory only once the swap has succeeded (a failed
-// attempt leaves none behind: review of PR #260, import-v1/world.ts:86), or by the recovery that finishes an interrupted one
+// attempt leaves none behind), or by the recovery that finishes an interrupted one
 const IDENTITIES = ".identities.json";
 const putIdentities = (planned: Record<string, any>) => { const dir = directoryFor(WORLDS_DIR);
   const fresh = Object.fromEntries(Object.entries(planned).filter(([id]) => !dir.entry(id)));   // a recovery after they landed adds nothing twice
   if (Object.keys(fresh).length) dir.put(fresh); return Object.keys(fresh).length; };
 const TEMP_ONLY = new Set([SOURCE, IDENTITIES]);
-// what the in-place swap did, kept in the world's directory for `rollback` (review of PR #260, Mica, item 6: "keeping
-// log.original.jsonl is preservation, not a tested rollback"): every file it renamed, every file it made (with the bytes it
-// made them with), the identities it minted, the report hash and approval it was bound to. Written into the temporary
-// sibling before the swap, so the swap (and the recovery of an interrupted one) moves it in like any translated file.
+// what the in-place swap did, for `rollback`: files renamed, files made (with their bytes), identities minted, the report
+// hash and approval. Written into the temporary sibling, so the swap moves it in like any translated file
 const MANIFEST = "translation.json";
 const APPROVAL_TEXT = "approval";
 const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `sha256:${h}` : null; };
 /** The dry-run report of an old world as it stands now, hashed (import-v1/world.ts reportV1World). */
 const reportNow = (D: string, name: string) => reportV1World(D, { name, content: hostContent });
-/** The approval of THIS translation, or a refusal (PROTOCOL §14; review of PR #260, Mica, item 6; rereview blocker 1).
- *  Bound to the dry-run report's hash: the report is recomputed from the old log as it stands and must hash to what was approved
- *  (else it changed since it was read: refused, both hashes named). No owner can sign (NO_FOUNDER: nothing can yet bind a key to
- *  the v1 owner), so the approval is the OPERATOR's countersignature alone (this host's custody operator key, signed here:
- *  whoever runs this tool on the host IS the operator), and only when --operator-only-no-owner says so, knowingly; the
- *  translation-approved act and translation.json record that no owner was attested. A report that refuses (deferred features)
- *  can't be approved at all. */
+/** The approval of THIS translation, or a refusal (PROTOCOL §14): the report is recomputed from the old log and must hash
+ *  to what was approved; no owner can sign (NO_FOUNDER), so it's this host's operator countersignature, only with
+ *  --operator-only-no-owner. A refusing report (deferred features) can't be approved. */
 function approvalFor(D: string, name: string): { approval: Approval; source: { size: number; sha256: string } } {
   const approved = flag("approved"), noOwner = rest.includes("--operator-only-no-owner");
   if (!approved) die(`translating "${name}" needs the operator's approval of its dry-run report first:
@@ -99,8 +81,8 @@ Nothing was changed.`);
   const bad = approvalProblem(name, approval); if (bad) die(`the approval is refused: ${bad}. Nothing was changed.`);
   return { approval, source: report.source };
 }
-/** The importer reads log.jsonl again after the approval was checked: what it translated must be the bytes the approved report
- *  hashed, or the world would be stamped approved over bytes nobody read (a write in between: an old server still running). */
+/** The importer re-reads log.jsonl after the approval was checked: what it translated must be the bytes the approved
+ *  report hashed, or the world would be stamped approved over bytes nobody read (an old server still running). */
 const unapproved = (got: { size: number; sha256: string }, approved: { size: number; sha256: string }) => got.size === approved.size && got.sha256 === approved.sha256 ? null
   : `the old log the translation read is not the bytes the approved report hashed (approved ${approved.size} bytes, sha256 ${approved.sha256.slice(0, 16)}…; read ${got.size} bytes, sha256 ${got.sha256.slice(0, 16)}…): something wrote to it after the approval was checked. If an old server is running, stop it, then run --dry-run again and approve the new report.`;
 /** How a translation says who approved: the operator alone, no owner attested (said plainly). */
@@ -126,17 +108,15 @@ function report(src: string, dest: string, r: ReturnType<typeof translateV1World
   if (r.renamedBlobs?.length) console.log(`NOTE: ${r.renamedBlobs.length} store blob(s) no longer hash to their names (rewritten after upload); their addresses are of the bytes this host has: ${r.renamedBlobs.join(", ")}`);
   if (r.stats.modelsHashed !== undefined) console.log(`models: kept as library paths; ${r.stats.modelsHashed} with model-hash (sha256:…) beside them${r.stats.modelsUnhashed.length ? `; ${r.stats.modelsUnhashed.length} without (no bytes on this host): ${r.stats.modelsUnhashed.join(", ")}` : ""}`);
   if (r.sim) console.log(`physics: ${r.sim.engine?.engine ?? "the epoch was left"} — ${r.sim.launches} punt(s) became launches, ${r.sim.rests} rest(s) logged where her sim rests them; the authority's sim layer re-checked ${r.sim.agree}/${r.sim.rests}`);
-  // PROTOCOL §5: v1 `guard` merges into `lock`, which drops its authorship protection by design. Say so, so the
-  // world's owners can be told what changed (and which entities to look at).
+  // PROTOCOL §5: v1 `guard` merges into `lock`, which drops its authorship protection by design: tell the world's owners
+  // what changed (and which entities to look at)
   if (r.stats.guards) console.log(`NOTE for the owners: ${r.stats.guards} guarded entities in the v1 world became locked (${r.stats.guardsLive} still guarded at the end). `
     + `Now a lock binds everyone, the placer too, and any builder may lift it; the guard's "only the placer or an owner may change it" is gone (§5).`);
 }
 
-/** `translate <world>`: the world keeps its name (links to it keep working). Translated into a temporary sibling, verified,
- *  and only then swapped in: world.jsonl lands in the world's directory in one rename (from then on it is a world), and the
- *  old files are renamed beside it (log.jsonl → log.original.jsonl, snapshot.json → snapshot.original.json, poses.json →
- *  poses.original.json): the same files, never rewritten. Any failure before or during the swap puts back whatever moved,
- *  removes the temporary directory and says why. */
+/** `translate <world>`, keeping its name: into a temporary sibling, verified, then swapped in (world.jsonl in one rename,
+ *  old files renamed beside it as *.original.*, never rewritten). A failure puts back whatever moved and says why
+ *  (docs/TRANSLATING-OLD-WORLDS.md). */
 function translateInPlace(name: string, approval: Approval, approvedSource: { size: number; sha256: string }) {
   const D = path.join(WORLDS_DIR, name), log = path.join(D, "log.jsonl");
   if (!fs.existsSync(log)) die(`"${name}" holds no old log (${log}): there's nothing to translate here. Nothing was changed.`);
@@ -180,8 +160,8 @@ function translateInPlace(name: string, approval: Approval, approvedSource: { si
   // the manifest for `rollback`, written into T first so it moves in with the rest (and with a recovery): what moved, what was
   // made (the bytes as made: a rollback refuses to delete a file the server has written to since, unless told to), who was minted
   const made = fs.readdirSync(T).filter((f) => !TEMP_ONLY.has(f));
-  // what the old world's directory held before the swap (r14 M3, 10-18): anything else found there at rollback time — a
-  // world.mod.jsonl the server made at its first ban, a repair-backups/ — is the server's, made since: history with nowhere to go
+  // what the old world's directory held before the swap: anything else found there at rollback time (a world.mod.jsonl
+  // from its first ban, a repair-backups/) is the server's, made since: history with nowhere to go
   const present = fs.readdirSync(D);
   fs.writeFileSync(path.join(T, MANIFEST), JSON.stringify({ v: 2, world: name, at: Date.now(), translator: TRANSLATOR, report: approval.report, approval, present,
     source: r!.source, renamed: steps.slice(1).map(([a, b]) => [path.basename(a), path.basename(b)]), made: Object.fromEntries([...made, MANIFEST].map((f) => [f, f === MANIFEST ? null : sha(path.join(T, f))])),
@@ -218,11 +198,9 @@ function translateInPlace(name: string, approval: Approval, approvedSource: { si
     + `${MANIFEST} records what the swap did; \`rollback ${name}\` undoes it.`);
 }
 
-/** `rollback <world>`: undo an in-place translation from its manifest. The kept originals go back under their names
- *  (renames: the same files), everything the translation made is removed, the identities it minted are forgotten (those still
- *  exactly as it wrote them), and the manifest itself goes last. A made file the server has written to since (world.jsonl grew,
- *  bans were filed) is refused unless --discard-changes: that history has nowhere to go. Stop the server first: one still
- *  serving the world holds it in memory and would write the translated files back. */
+/** `rollback <world>`: undo an in-place translation from its manifest (originals renamed back, what it made removed, its
+ *  untouched identities forgotten, the manifest last). A made file the server wrote to since is refused unless
+ *  --discard-changes. Stop the server first, or it writes the translated files back. */
 function rollback(name: string) {
   const D = path.join(WORLDS_DIR, name), mf = path.join(D, MANIFEST);
   if (!fs.existsSync(mf)) die(`"${name}" holds no ${MANIFEST}: it wasn't translated in place by this tool (or the manifest is gone), so there is nothing here to roll back. Nothing was changed.`
@@ -238,8 +216,8 @@ function rollback(name: string) {
   const origNow = sourceChanged(path.join(D, ORIGINAL.log), m.source);
   if (origNow) die(`can't roll back "${name}": ${ORIGINAL.log} no longer holds the bytes that were translated (${m.source.size} bytes then, ${origNow.size} now): it was written to, and the original is lost. Nothing was changed.`);
   const changed = Object.entries<string | null>(m.made).filter(([f, h]) => h && fs.existsSync(path.join(D, f)) && sha(path.join(D, f)) !== h).map(([f]) => f);
-  // files the server made since the translation (r14 M3): not made by it, not renamed by it, not there before it. The moderator
-  // log (bans, mutes, kicks: PROTOCOL §2.1) is the usual one; a repair's backups another. They are history too.
+  // files the server made since the translation: not made by it, not renamed by it, not there before it. The moderator
+  // log (bans, mutes, kicks: PROTOCOL §2.1) is the usual one, a repair's backups another: history too.
   const known = new Set([...Object.keys(m.made), ...m.renamed.flat(), ...(m.present ?? []), MANIFEST]);
   const since = fs.readdirSync(D).filter((f) => !known.has(f));
   if ((changed.length || since.length) && !discard) die(`can't roll back "${name}" without losing history: ${[...changed.map((f) => `${f} changed since the translation made it`), ...since.map((f) => `${f} was made since the translation${f === "world.mod.jsonl" ? " (the moderator log: bans, mutes, kicks were filed)" : ""}`)].join("; ")} `
@@ -269,10 +247,8 @@ function namedElsewhere(name: string, ids: string[]): Set<string> {
       for (const id of ids) if (!found.has(id) && b.includes(id)) found.add(id); } }
   return found;
 }
-/** An in-place swap the process didn't live to finish (review r11 L4): world.jsonl landed (the directory is a world) but
- *  the old files weren't all renamed beside it, or the translated files weren't all moved in. Seen by what's left: the
- *  old log.jsonl still beside world.jsonl, or the temporary sibling (`.translating-<name>-*`) whose world.jsonl has gone.
- *  Null when the directory is a whole translated world (or never was a swap). */
+/** An in-place swap the process didn't live to finish, seen by what's left (log.jsonl beside world.jsonl, or a
+ *  `.translating-<name>-*` sibling whose world.jsonl has gone); null for a whole translated world or no swap. */
 function interruptedSwap(name: string): { D: string; temps: string[]; oldLog: boolean } | null {
   const D = path.join(WORLDS_DIR, name);
   if (!fs.existsSync(path.join(D, "world.jsonl"))) return null;
@@ -281,10 +257,8 @@ function interruptedSwap(name: string): { D: string; temps: string[]; oldLog: bo
   const oldLog = fs.existsSync(path.join(D, "log.jsonl")) && !fs.existsSync(path.join(D, ORIGINAL.log));
   return temps.length || oldLog ? { D, temps, oldLog } : null;
 }
-/** Finish an interrupted swap, in the swap's own order: the old files renamed beside the world (log.jsonl →
- *  log.original.jsonl, snapshot.json → snapshot.original.json, poses.json → poses.original.json: renames, never writes),
- *  then the rest of the translated files moved in from the temporary sibling, which is then removed. Nothing is deleted
- *  or overwritten: a name already taken on both sides is left where it is and said. */
+/** Finish an interrupted swap in the swap's own order (old files renamed beside the world, then the translated files
+ *  moved in, the sibling removed); nothing is deleted or overwritten, and a name taken on both sides is left and said. */
 function finishSwap(name: string, at: { D: string; temps: string[]; oldLog: boolean }) {
   const { D, temps } = at;
   if (temps.length > 1) die(`the in-place translation of "${name}" was interrupted, and more than one temporary directory is left (${temps.join(", ")}): `
@@ -333,7 +307,7 @@ if (cmd === "found") {
   if (!good) die(`the signature doesn't verify for ${key} over "${msg}": nothing is wrong with the world, but this key can't be used until it does`);
   console.log(`ok: ${key} signed "${msg}". Use it to found a new world: create-world {ownerKey: "${key}"} puts it in tier 0. (A translation takes no founder key: ${NO_FOUNDER}.)`);
 } else if (cmd === "translate") {
-  // #260 rereview, blocker 1: refused before anything else runs (even the recovery of an interrupted swap) or is written
+  // refused before anything else runs (even the recovery of an interrupted swap) or is written
   if (rest.includes("--founder-key") || rest.includes("--approve-sig")) die(`translate takes no founder key and no owner's signature: ${NO_FOUNDER}. `
     + `Translate with --no-founder-key --operator-only-no-owner: the new world's tier 0 stays empty, and the record says no owner was attested. `
     + `(Founding a brand-new world is different: create-world takes its founder's own key.) Nothing was changed.`);
@@ -360,9 +334,8 @@ if (cmd === "found") {
   else {
     const before = fs.statSync(path.join(WORLDS_DIR, src, "log.jsonl"));
     const destDir = path.join(WORLDS_DIR, dest), had = fs.existsSync(destDir) ? new Set(fs.readdirSync(destDir)) : null;
-    // identities join the shared directory only once the bytes are known to be the approved ones
-    // the importer refuses a log whose report isn't the approved one, and puts back what it wrote (house importer I25, I35):
-    // say so in this tool's own words, never as a stack trace
+    // identities join the shared directory only once the bytes are known to be the approved ones; the importer refuses a log
+    // whose report isn't the approved one and puts back what it wrote: say so in this tool's own words, never a stack trace
     let r: ReturnType<typeof translateV1World>;
     try { r = translateV1World(srcDir, destDir, { approval, deferIdentities: true }); }
     catch (x) { if (!had && fs.existsSync(destDir) && !fs.readdirSync(destDir).length) fs.rmSync(destDir, { recursive: true, force: true });
@@ -388,10 +361,9 @@ if (cmd === "found") {
     entities: Object.keys(st.entities).length - 1, entitiesNote: "not counting @world, the world's own entity",
     roles: Object.fromEntries(Object.entries(st.entities["@world"].c).filter(([k]) => k.startsWith("roles:"))), digest: digest(st) }, null, 1));
 } else if (cmd === "repair") {
-  // reviewer item 9 + lead's ruling (10-18): a load never writes; the three stored-value rewrites are ONE maintenance command. Stop the server that serves the world
-  // first (two writers of one log). Recorded: the system's repair-shapes act carries command and --by (PROTOCOL §4); its
-  // rollback is the file's: the pre-repair log is kept under <world>/repair-backups/<stamp>/ and --rollback puts it back
-  // byte-identical (server/repairfiles.ts), refusing when the log has grown since (unless --force).
+  // a load never writes: the stored-value rewrites are ONE maintenance command (stop the server first: two writers of one
+  // log). The pre-repair log is kept under <world>/repair-backups/<stamp>/; --rollback restores it byte-identical
+  // (server/repairfiles.ts), refusing if the log grew since (unless --force)
   const name = rest[0]; if (!name || !NAME.test(name)) die("usage: repair <name> [--dry-run] [--by <id>] | repair <name> --rollback [--force]");
   if (!isWorldSaved(name)) die(`${name} is not a world (no world.jsonl with a genesis)`);
   const dir = path.join(WORLDS_DIR, name);
@@ -412,8 +384,8 @@ if (cmd === "found") {
     const backup = backupBeforeRepair(dir, { by });
     const n0 = w.entries.length; let r: any;
     try { r = maintain(w, { by }); }
-    catch (e) {   // r14 H1 (10-18): a throw from a durable write is AMBIGUOUS (the line's disk state is unknown), never "repaired" and never silently dropped
-      sealBackup(backup);   // whatever the count says, the line's disk state is unknown: the backup stays (review of #260, server I24)
+    catch (e) {   // a throw from a durable write is AMBIGUOUS (the line's disk state is unknown), never "repaired" and never silently dropped
+      sealBackup(backup);   // whatever the count says, the line's disk state is unknown: the backup stays
       die(`repair of ${name} ended AMBIGUOUS: ${(e as Error).message}\n${w.wedged?.log ? `storage failed while writing line ${w.wedgedAt ?? w.entries.length}: whether it is on disk is unknown; the world refuses writes until it is reopened from disk. ` : ""}`
         + `${w.entries.length > n0 ? `${w.entries.length - n0} line(s) of the repair reached the log before it; the pre-repair log is kept at ${backup} (repair ${name} --rollback puts it back)` : `no line of the repair is known to have reached the log, but the one being written may have; the pre-repair log is kept at ${backup} (repair ${name} --rollback puts it back)`}`); }
     if (r.refused) { dropBackup(backup); die(`repair refused: ${r.refused.code}: ${r.refused.reason}`); }

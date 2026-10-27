@@ -1,28 +1,5 @@
-// landmarks — where a named contact point actually IS on a particular body.
-//
-// shared/contact.js says "the top of the head" and which way that is. This
-// finds the millimetre, per avatar, by asking the mesh.
-//
-// It casts a ray from outside the body toward the bone and takes the first
-// surface it meets. That is deliberately NOT the obvious method. The obvious
-// method is a statistic over the skinned vertices that belong to a bone —
-// lowest, outermost, mean — and that is exactly the reader that got the
-// seated pelvis wrong (#seat): it locked onto a vertex hanging below the
-// visible mass and reported a confident number 0.2m from the truth, and
-// because the number was then VERIFIED with the same reader, derivation and
-// verification agreed perfectly while both were wrong.
-//
-// A cast has a property no vertex statistic has: it returns the surface a
-// hand would actually meet, because that is the same question. A stray vertex
-// inside the body is not on the ray; a stray vertex outside it gets hit, which
-// is visible rather than silent. And it yields a NORMAL, which a contact point
-// needs as much as a position — a palm on a shoulder has to lie along the
-// surface, and without one hands go through people.
-//
-// Two rules this file obeys, both learned expensively:
-//   - measure in the REST pose, never the live one;
-//   - store the answer in the BONE's local space, so it follows the body for
-//     free and is never re-derived from a moving skeleton.
+// landmarks — where a named contact point (shared/contact.js) actually IS on a particular body: the first surface hit
+// casting in toward the bone, never a vertex statistic (a stray vertex is confidently wrong). REST pose; bone-local.
 
 import { THREE } from './core.js';
 import { CONTACT_POINTS, contactSeed } from '../../shared/contact.js';
@@ -33,15 +10,13 @@ const _q = new THREE.Quaternion();
 const _m = new THREE.Matrix3();
 const _ray = new THREE.Raycaster();
 
-/** Every drawable with geometry under a scene. */
 function meshesOf(scene) {
   const out = [];
   scene.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && o.geometry) out.push(o); });
   return out;
 }
 
-// Raycast bounds are pose-dependent too. Updating the skeleton alone leaves
-// cached bounds from the last frame, which can reject valid rest-pose hits.
+// bounds are pose-dependent: the skeleton alone leaves last frame's cached bounds, which reject valid rest-pose hits
 function refreshBounds(scene, saved) {
   for (const mesh of meshesOf(scene)) {
     if (!mesh.isSkinnedMesh) continue;
@@ -59,9 +34,8 @@ function restoreBounds(saved) {
   }
 }
 
-/** A short fan of rays near the intended anatomical site. Never accept the
- * far side of the body when a ray misses a thin hand or forearm. Prefer the
- * central ray; nearby rays rescue gaps without averaging points into air. */
+/** A short fan of rays, central first: never accept the body's far side when a ray misses a thin hand or forearm;
+ *  nearby rays rescue gaps without averaging points into air. */
 function localSurface(meshes, at, dir, radius) {
   const tangent = new THREE.Vector3(0, 1, 0);
   if (Math.abs(tangent.dot(dir)) > 0.9) tangent.set(1, 0, 0);
@@ -74,7 +48,7 @@ function localSurface(meshes, at, dir, radius) {
     _ray.near = 0;
     _ray.far = radius * 1.15;
     _ray.firstHitOnly = false;
-    // meshesOf already flattened the hierarchy: recursion visits children twice.
+    // already flattened: recursion would visit children twice
     const hit = _ray.intersectObjects(meshes, false).find((h) =>
       h.distance > 1e-4 && h.point.distanceTo(at) <= radius);
     if (hit) return hit;
@@ -82,8 +56,7 @@ function localSurface(meshes, at, dir, radius) {
   return null;
 }
 
-/** The source contact is the palm surface, not the wrist pivot. If a rig
- * cannot supply a surface, leave the correction unavailable. */
+/** The palm surface, not the wrist pivot; null when the rig supplies no surface. */
 export function derivePalmAnchor(avatar, side) {
   const marks = deriveLandmarks(avatar, { palm: {
     bone: side + 'Hand', toward: side + 'MiddleProximal', along: 0.55,
@@ -95,7 +68,7 @@ export function derivePalmAnchor(avatar, side) {
 }
 
 /**
- * Derive every contact point for one avatar. Call once per body.
+ * Call once per body.
  * @returns {Map<string, {bone: string, node: object, offset: THREE.Vector3,
  *          normal: THREE.Vector3, tier: string, how: 'surface'|'fallback'}>}
  */
@@ -104,18 +77,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
   const scene = avatar?.vrm?.scene;
   if (!h || !scene) return new Map();
 
-  // ---- rest pose, and put it back afterwards whatever happens.
-  //
-  // humanoid.update() is NOT optional here, and leaving it out is a trap that
-  // looks like it works: identity-ing the NORMALIZED bones and calling
-  // updateMatrixWorld refreshes the normalized hierarchy only. The mesh is
-  // skinned to the RAW rig, which three-vrm writes from the normalized one
-  // inside humanoid.update() — so without it the bones are in a T-pose while
-  // the geometry is still wherever the idle clip left it, and rays are cast at
-  // a skeleton the mesh is not wearing. Measured on the claude rig: the left
-  // hand bone stood 0.12m beyond ANY geometry, every hand cast missed, and the
-  // ray sailed on to hit the far side of the torso. The fallback flag is what
-  // made that visible instead of a plausible wrong number.
+  // ---- rest pose, restored whatever happens. humanoid.update() is required: the mesh is skinned to the RAW rig,
+  // written from the normalized bones only there, or rays hit a skeleton the mesh isn't wearing
   const saved = [];
   for (const name of Object.keys(h.humanBones ?? {})) {
     const n = h.getNormalizedBoneNode(name);
@@ -127,21 +90,8 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
     h.update();
     avatar.root.updateMatrixWorld(true);
     refreshBounds(scene, bounds);
-    // ⚠ AND the skinning has to be recomputed, or the rays are cast at one
-    // pose and hit another.
-    //
-    // three only refreshes Skeleton.boneMatrices at DRAW time. Posing the rig
-    // and calling updateMatrixWorld moves the bones but leaves those matrices
-    // describing the last RENDERED pose — so a cast aimed at a rest-pose bone
-    // meets a mesh still skinned to the idle pose. Deriving from the console
-    // (after a render) hides it; deriving inside a frame, which is what the
-    // first contactAt() in a reach does, does not.
-    //
-    // On claude the idle and rest poses are close enough that the answers
-    // agreed and this looked fine for a day. On orion they are not: hip_l came
-    // out ABOVE the shoulder, the reach dutifully raised the arm to it, and
-    // the landmark table dumped afterwards from the console read perfectly
-    // correct — the two derivations disagreeing was the whole bug.
+    // ⚠ recompute skinning too: three refreshes boneMatrices only at draw time, so a rest-posed rig is still skinned
+    // to the last rendered pose
     for (const o of meshesOf(scene)) o.skeleton?.update?.();
     const P = {};
     for (const name of Object.keys(h.humanBones ?? {})) {
@@ -154,9 +104,7 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
     const meshes = meshesOf(scene);
     if (!meshes.length) return out;
 
-    // A body's own size sets both how far to stand back and how far a
-    // fallback point sits off the bone — hardcoding metres is the seat bug in
-    // another costume.
+    // the body's own size sets the stand-back and the fallback offset: never hardcoded metres
     const hips = P.hips ? new THREE.Vector3(...P.hips) : null;
     const head = P.head ? new THREE.Vector3(...P.head) : null;
     const scale = (hips && head) ? Math.max(0.2, head.distanceTo(hips)) : 0.6;
@@ -181,26 +129,11 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
         normal = hit.face
           ? hit.face.normal.clone().applyMatrix3(_m.getNormalMatrix(hit.object.matrixWorld)).normalize()
           : dir.clone();
-        // ⚠ SIGN. The ray travels along -dir (from outside, inward), so a
-        // surface facing OUT of the body has its normal along +dir — back the
-        // way the ray came. This test used to negate exactly those, which
-        // inverted every landmark normal in the table.
-        //
-        // It went unnoticed because nothing consumed the normal until the palm
-        // did, and then it was wrong in the one way that is hard to see: the
-        // hand still arrived at the right PLACE, just turned inside out. antra
-        // caught it on head_top, where a palm facing the sky is unmistakable —
-        // on a shoulder or a hip the same error reads as merely an awkward
-        // wrist.
-        //
-        // A normal pointing along -dir means the ray began inside the mesh (an
-        // accessory wrapping the cast origin); THOSE are the ones to flip.
+        // ⚠ SIGN: the ray travels -dir, so outward normals are +dir; a -dir one began inside the mesh (an accessory)
         if (normal.dot(dir) < 0) normal.negate();
         how = seed.estimated ? 'fallback' : 'surface';
       } else {
-        // No surface on that line: a concave region, or a body with nothing
-        // there. Sit proportionally off the bone and SAY it was a fallback,
-        // so a caller can tell a measured point from a guessed one.
+        // no surface on that line: sit proportionally off the bone and SAY it's a fallback, never a measurement
         point = at.clone().addScaledVector(dir, Math.min(scale * 0.18, radius * 0.5));
         normal = dir.clone();
         how = 'fallback';
@@ -222,10 +155,7 @@ export function deriveLandmarks(avatar, specs = CONTACT_POINTS) {
   return out;
 }
 
-/** Where a landmark is NOW, in world space, with the surface normal it sits
- *  on. `standoff` lifts the point off the skin so a hand rests on it instead
- *  of inside it — in metres, and the caller's choice because a fingertip and
- *  a palm are different distances. */
+/** A landmark now, world space, with its normal. `standoff` (m) lifts it off the skin (a fingertip and a palm differ). */
 export function landmarkWorld(entry, standoff = 0, outPos = new THREE.Vector3(), outNormal = new THREE.Vector3()) {
   if (!entry?.node) return null;
   outPos.copy(entry.offset);
@@ -235,12 +165,7 @@ export function landmarkWorld(entry, standoff = 0, outPos = new THREE.Vector3(),
   return { pos: outPos, normal: outNormal };
 }
 
-/** Draw every landmark as a pip with a normal whisker, so a person can LOOK
- *  at them. This exists because the derivation cannot check itself: the seat
- *  bug passed every arithmetic test it had, and what finally caught it was
- *  antra's eye. Colour is by tier (social green, familiar amber, intimate
- *  red) and a FALLBACK point is drawn white — an unmeasured guess should not
- *  look like a measurement. */
+/** Pips with normal whiskers: the derivation can't check itself, so a person must look. A fallback is white. */
 export function debugMarkers(avatar, marks, scene, on = true) {
   const key = '__landmarkDebug';
   let group = avatar.root.getObjectByName(key);
@@ -273,20 +198,8 @@ export function debugMarkers(avatar, marks, scene, on = true) {
   return group;
 }
 
-/**
- * How deep the torso actually is, measured — half-depth front-to-back at chest
- * height, in metres.
- *
- * The collision model inherits torsoRadius from the ragdoll, which is 0.42x
- * the wider of shoulder or hip span: a half-WIDTH. A capsule is isotropic, so
- * that number silently becomes the half-depth too, and a forearm crossing in
- * FRONT of the belly — exactly what reaching your opposite hip requires — reads
- * as inside the body. Bodies are not round. This asks the mesh how deep this
- * one is, the same way the contact points ask it where its shoulder is.
- *
- * Returns null if it cannot be measured, so a caller can fall back rather than
- * silently use a guess.
- */
+/** Torso half-depth (m, front-to-back at chest height), or null: torsoRadius is a half-WIDTH, so a forearm across
+ *  the belly would read as inside the body. */
 export function torsoHalfDepth(avatar) {
   const h = avatar?.vrm?.humanoid;
   const scene = avatar?.vrm?.scene;
@@ -325,8 +238,7 @@ export function torsoHalfDepth(avatar) {
     };
     const front = hitAt(fwd), back = hitAt(fwd.clone().negate());
     if (front == null && back == null) return null;
-    // the spine does not sit centred front-to-back, so take the mean of the
-    // two surfaces rather than either one
+    // the spine isn't centred front-to-back: the mean of the two surfaces
     const d = (front != null && back != null) ? (front + back) / 2 : (front ?? back);
     return d > 1e-3 ? d : null;
   } finally {

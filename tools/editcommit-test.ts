@@ -1,19 +1,9 @@
-// editcommit — inspect.js commitEdit, headless, against the real authority.
-//
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/editcommit-test.ts
-//
-// The client's half of the shared schema: a live call previews through the
-// group's handler and never sends; the final call sends ONE door request whose
-// `expect` names what it changes AS IT STOOD WHEN THE GESTURE BEGAN — the
-// form of the "a scrub's before leaked into the next selection" bug the first
-// review round found (v1 computed an undo inverse from it; now it is sent as
-// expect, and the door refuses `changed` if someone wrote it since).
-// tools/protocol/inspectharness.ts stubs the page (the realized world, the wire to the
-// scratch door, the dialogs); inspect.js, editwrites.js, the schema and the door are real.
-//
-// the protocol port (2026-10-06): the client-side undo stack of inverses and the light coalescer are gone (undo is the door's,
-// by act; a lamp is a light COMPONENT edited with set). Each old inverse check became either the expect the request
-// carries (what it started from) or the door's undo of the act, read back.
+// editcommit: inspect.js commitEdit, headless, against the real authority. `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/editcommit-test.ts`
+// A live call previews through the group's handler and never sends; the final call sends ONE door request whose
+// `expect` names what it changes AS IT STOOD WHEN THE GESTURE BEGAN (a scrub's before must not leak into the next
+// selection), and the door refuses `changed` if someone wrote it since. Undo is the door's, by act.
+// tools/protocol/inspectharness.ts stubs the page (realized world, wire to the scratch door, dialogs); inspect.js,
+// editwrites.js, the schema and the door are real.
 import { inspectHarness } from "./protocol/inspectharness.ts";
 import { qFromEuler, sameRotation } from "../shared/euler.js";
 import { qFromYaw } from "../shared/rot.js";
@@ -29,11 +19,11 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const previews: any[] = [];
 registerHandler("light", (id: string, _obj: any, k: string, v: any, opts: any) => { if (!opts?.live) return false; previews.push({ id, k, v }); return true; });
-registerHandler("sockets", (_id: string, _obj: any, k: string) => k === "add");   // a viewport gesture: handled, never sent
+registerHandler("sockets", (_id: string, _obj: any, k: string) => k === "add");  // a viewport gesture: handled, never sent
 const { Object3D } = await import("../client/node_modules/three/build/three.module.js");
-const realized = () => new Object3D();   // a pos edit is a live drag for everyone else: inspect.js reads the object's world pose
+const realized = () => new Object3D();  // a pos edit is a live drag for everyone else: inspect.js reads the object's world pose
 const c = (id: string) => H.W.state().entities[id]?.c;
-// a thing's sockets are its socket children (PLAN-sockets-entities), read as the card's map
+// a thing's sockets are its socket children, read as the card's map
 const socks = (id: string) => socketMapIn(H.W.state().entities, id) ?? {};
 const last = () => H.sent.at(-1);
 const expectOf = (req: any, comp: string) => req?.args?.expect?.find((x: any) => x.component === comp);
@@ -51,7 +41,7 @@ console.log("\nlive → preview only; final → one request whose expect is the 
   commitEdit("lamp", "light.intensity", 24, { live: true });
   await H.flush();
   check("two live calls previewed and sent nothing", previews.length === 2 && H.sent.length === 0);
-  H.other("set", { id: "lamp", component: "light", value: { ...c("lamp").light, intensity: 22 } });   // someone else writes mid-drag
+  H.other("set", { id: "lamp", component: "light", value: { ...c("lamp").light, intensity: 22 } });  // someone else writes mid-drag
   const r = commitEdit("lamp", "light.intensity", 24);
   await H.flush();
   const req = last();
@@ -63,8 +53,8 @@ console.log("\nlive → preview only; final → one request whose expect is the 
 console.log("\na gesture belongs to one id:");
 {
   H.sent.length = 0;
-  commitEdit("lamp", "light.range", 9, { live: true });       // a drag begins on the lamp
-  commitEdit("c1", "sockets.seat|rot|1", 1);                   // …and c1 is edited before it ends (heading 1 rad)
+  commitEdit("lamp", "light.range", 9, { live: true });  // a drag begins on the lamp
+  commitEdit("c1", "sockets.seat|rot|1", 1);  // …and c1 is edited before it ends (heading 1 rad)
   await H.flush();
   const req = last();
   check("c1's expect is computed from c1's own record (it stores no sockets map: its seats are children)", req?.args.id === "c1" && !!expectOf(req, "sockets") && !("value" in expectOf(req, "sockets")) && req.args.expect.every((x: any) => x.id === "c1"), JSON.stringify(req));
@@ -93,7 +83,7 @@ console.log("\nrefusals, gestures, and the door's undo of the other edits:");
   commitEdit("c1", "comp.example.org/recipe", '{"wood":2}');
   await H.flush();
   check("a new comp: one set recipe whose expect says it was ABSENT (no value)", last().args.component === "example.org/recipe" && expectOf(last(), "example.org/recipe") && !("value" in expectOf(last(), "example.org/recipe")) && c("c1")["example.org/recipe"]?.wood === 2, JSON.stringify(last()));
-  commitEdit("c1", "comp.example.org/recipe", null);   // what the 'remove recipe' button sends
+  commitEdit("c1", "comp.example.org/recipe", null);  // what the 'remove recipe' button sends
   await H.flush();
   check("removing it: delete recipe", last().verb === "delete" && last().args.component === "example.org/recipe" && c("c1")["example.org/recipe"] === undefined, JSON.stringify(last()));
   const u = await Edits.undo();
@@ -104,7 +94,7 @@ console.log("\nrefusals, gestures, and the door's undo of the other edits:");
   const u2 = await Edits.undo();
   check("resting a motion is delete motion; its undo re-issues the whole motion with its t0", H.sent.some((x: any) => x.verb === "delete" && x.args.component === "motion") && u2.ok && c("c1").motion?.t0 === 5 && c("c1").motion.degPerSec === 30, JSON.stringify([u2.refused, c("c1").motion]));
   H.W.call("set", { id: "c1", component: "sockets", value: { seat: { pos: [0, 0.5, 0], body: {} } } }); H.sync();
-  commitEdit("c1", "sockets.seat|rot|1", Math.PI / 2);   // the panel commits RADIANS (heading)
+  commitEdit("c1", "sockets.seat|rot|1", Math.PI / 2);  // the panel commits RADIANS (heading)
   await H.flush();
   check("a numeric deg value from the panel is radians: π/2 lands as π/2, not π/2/57", Math.abs(socks("c1").seat?.q?.[1] - Math.SQRT1_2) < 1e-3, JSON.stringify(socks("c1").seat));
   const rc = commitEdit("c1", "comp.example.org/recipe", "");
@@ -117,14 +107,14 @@ console.log("\nthe channel box (step 3): rotations undo by q, and the editor rea
   H.W.seed({ t1: { model: "crate.glb", pos: [0, 0, 0], yaw: 0.5 } }); H.sync();
   H.entities.set("t1", realized());
   const was = JSON.stringify(c("t1").transform);
-  const r = commitEdit("t1", "rot.x", 30 * Math.PI / 180);   // the panel speaks radians for a deg field
+  const r = commitEdit("t1", "rot.x", 30 * Math.PI / 180);  // the panel speaks radians for a deg field
   await H.flush();
   check("tilting a yaw-only thing sends ONE set transform with a tilted q", r.ok && last().verb === "set" && last().args.component === "transform" && Math.abs(last().args.value.q[0]) > 1e-3, JSON.stringify(last()));
   check("…its expect is the old transform (the q of its old yaw), and the door took it", JSON.stringify(expectOf(last(), "transform")?.value) === was && sameRotation(c("t1").transform.q, qFromEuler([30 * Math.PI / 180, 0.5, 0], "XYZ"), 1e-9), JSON.stringify([last().args.expect, c("t1").transform]));
   const u = await Edits.undo();
   check("…and its undo restores exactly the old q of its yaw (a bare yaw would keep the tilt)", u.ok && JSON.stringify(c("t1").transform) === was && sameRotation(c("t1").transform.q, qFromYaw(0.5), 1e-9), JSON.stringify([u.refused, c("t1").transform]));
   commitEdit("t1", "rot.x", 30 * Math.PI / 180); await H.flush();
-  // drive it into gimbal lock through the panel: Y to 90°
+  // into gimbal lock through the panel: Y to 90°
   const r2 = commitEdit("t1", "rot.y", Math.PI / 2);
   await H.flush();
   const val = (k: string) => schemaFor("t1").groups.find((g: any) => g.group === "rot").fields.find((f: any) => f.k === k).value;
@@ -134,8 +124,7 @@ console.log("\nthe channel box (step 3): rotations undo by q, and the editor rea
   // someone else turns it: the hint is void, the fresh (canonical) reading returns
   H.other("set", { id: "t1", component: "transform", value: { ...c("t1").transform, q: qFromEuler([0, Math.PI / 2, 0.7], "XYZ") } });
   check("…and is void once someone else's turn lands (inner channel back to 0)", val("x") === 0, String(val("x")));
-  // a compound edit (remove-both: two ops) is ONE request, so ONE act and one Ctrl+Z. (Was a pendulum under its push
-  // reaction; the push was the impulse handler, reserved since the shape audit 10-16: a collider under its model now.)
+  // a compound edit (remove-both: two ops) is ONE request, so ONE act and one Ctrl+Z (a collider under its model)
   H.W.seed({ r1: { model: "swing.glb", pos: [0, 0, 0], yaw: 0, collider: { shape: "box" } } }); H.sync();
   H.entities.set("r1", realized());
   const before = Edits.stacks().undo.length;
@@ -146,11 +135,8 @@ console.log("\nthe channel box (step 3): rotations undo by q, and the editor rea
   check("…and one Ctrl+Z brings both back", ub.ok && c("r1").model === "swing.glb" && c("r1").collider?.shape === "box", JSON.stringify([ub.refused, c("r1")]));
 }
 
-// house review of #260, client/lib I23: a scrubbed RUN of channels (panels.js commitRun → editpanels.js __run) went to
-// commitMany for the primary thing only, and a World run was dropped. commitMany takes the multi-select (each thing from
-// its own record) and the world (worldEditOps over every field at once: two sky fields are ONE sky, where two planEdits
-// would each re-author the whole sky and the second undo the first) — one request, one Ctrl+Z, either way.
-// Mutation (must go red): make commitMany take only a single id again.
+// a scrubbed RUN of channels edits the whole multi-select and the world in one request and one Ctrl+Z; world fields go
+// through worldEditOps at once (two sky fields are ONE sky). Mutation: commitMany takes a single id again.
 console.log("\nI23. a scrubbed run edits the whole selection, and the world:");
 {
   const { commitMany } = await import("../client/lib/inspect.js");
@@ -174,7 +160,7 @@ console.log("\nan edit landing while an undo is in flight (house I162, #260):");
   H.W.seed({ u1: { model: "chair.glb", pos: [0, 0, 5], yaw: 0 } }); H.sync();
   await Edits.send({ verb: "set", args: { id: "u1", component: "example.org/note", value: { n: 1 } } }, { what: "note 1" });
   const target = Edits.stacks().undo.at(-1);
-  // the edit goes out after the undo is sent and before its reply: its act lands on the stack above the one being undone
+  // the edit goes out after the undo is sent and before its reply: its act lands above the one being undone
   const call = H.W.call; let racer: any = null;
   H.W.call = (verb: string, args: any, actor: string) => { if (verb === "undo" && !racer) racer = Edits.send({ verb: "set", args: { id: "u1", component: "example.org/note", value: { n: 2 } } }, { what: "note 2" }); return call(verb, args, actor); };
   const u = await Edits.undo(); await racer; H.W.call = call;

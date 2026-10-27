@@ -1,19 +1,10 @@
-// simmath-test — the deterministic numerics kernel, proven (Covenant I).
-//
+// simmath-test: the deterministic numerics kernel, proven (Covenant I). Three load-bearing claims for PROTOCOL_v2:
+//   1. ACCURACY: sinT/cosT/atan2T/expT track the host libm within a few ulp over the sim's working domain;
+//   2. IDENTITY ACROSS ENGINES: a fixed 48k-point sweep digests to the same sha256 under Bun, node and deno (the kernel
+//      is IEEE-exact ops only);
+//   3. IDENTITY ACROSS TIME: the digest equals the committed GOLDEN. The coefficients ARE the version (Covenant II): a
+//      moved bit means an epoch bump, never a quiet re-record.
 //   bun tools/simmath-test.ts
-//
-// Three claims, each load-bearing for PROTOCOL_v2:
-//   1. ACCURACY — sinT/cosT/atan2T/expT track the host libm within a few
-//      ulp over the sim's working domain (the kernel must be a real math
-//      library, not a deterministic wrong answer);
-//   2. IDENTITY ACROSS ENGINES — a fixed 48k-point sweep digests to the
-//      same sha256 under Bun (JSC), node (V8) and deno (V8, different
-//      embedding). This is the whole covenant: the kernel is built from
-//      IEEE-exact ops only, so engines cannot disagree;
-//   3. IDENTITY ACROSS TIME — the sweep digest equals the committed GOLDEN
-//      constant. The coefficients ARE the version (Covenant II): any edit
-//      that moves a bit anywhere in the kernel trips this first, and the
-//      correct response is an epoch bump, never a quiet re-record.
 
 import { join } from "node:path";
 import { existsSync, writeFileSync, mkdtempSync } from "node:fs";
@@ -24,8 +15,7 @@ import { sinT, cosT, atan2T, expT, PI, SIMMATH_ID } from "../shared/simmath.js";
 const { check, tally } = mkCheck();
 console.log(`\n${bold("simmath-test")} — ${SIMMATH_ID}`);
 
-// The committed truth. Re-record ONLY as part of a deliberate version bump
-// of SIMMATH_ID — see claim 3 above.
+// re-record ONLY as part of a deliberate SIMMATH_ID version bump (claim 3)
 const GOLDEN = "7f604515c4858e4c3dce5f0c8fe9fef2e27ee661d3373288a93ea7037fb62bb8";
 
 // ---- 1. accuracy ------------------------------------------------------------
@@ -80,10 +70,7 @@ console.log("\nedges and identities:");
 }
 
 // ---- 3. the cross-engine sweep ---------------------------------------------
-// One deterministic sweep (an LCG over the full working domain), outputs
-// packed as raw float64 bytes, digested. The SAME module file runs under
-// each engine on this machine; a differing digest is a nonconforming engine
-// (or a broken kernel) and fails loudly.
+// one LCG sweep, raw float64 bytes digested; each engine must give the same digest
 console.log("\ncross-engine identity (the covenant itself):");
 
 const SWEEP = `

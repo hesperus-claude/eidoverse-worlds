@@ -1,10 +1,6 @@
-// The ONE resolver from a library path (a model's lib) to a file on disk. It answers exactly what /library would serve
-// (routes.ts): the same ladder, in the same order — a patch, then the optimized copy, then the source library — and the
-// first rung holding the NAME decides, so a directory there shadows a file below it, as the route's 404 does. Refuses
-// anything that isn't a .glb/.vrm or that walks out of the library. (Upstream #213's contract, ported 2026-10-14; the
-// authority refuses a model this can't name, so this is where "does /library have it" is decided once.) The name is
-// read as the route reads it (upstream #220, ported 2026-10-19): the lib as a client's URL carries it, each run of
-// escapes decoded back to the disk name by libraryRel(), which the /library route calls too.
+// The ONE resolver from a model's lib to a file on disk, answering exactly what /library serves (routes.ts): patch,
+// optimized copy, source library; the first rung holding the NAME decides (a directory there shadows lower rungs).
+// Refuses non-.glb/.vrm and anything walking out of the library (#213); names decode as the route's do (#220, libraryRel()).
 import { statSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { LADDER } from "./config.ts";
@@ -15,16 +11,10 @@ function entryAt(p: string): boolean {
   try { statSync(p); return true; } catch { return false; }
 }
 
-/** The disk path, relative to each rung, that /library/<encoded> serves, or null when the request must be refused.
- *  `encoded` is the still-encoded remainder of URL.pathname: the /library route passes its own, and libraryFile()
- *  passes the one a client's URL would carry, so the route and every resolver read a name the same way. A file whose
- *  name has a space ("Frosted Glass Window Seat.glb" → %20) or an accent lives on disk under its decoded name, so each
- *  run of escapes is decoded on its own, with three guards:
- *  - a raw path that already names an entry on ANY rung wins (a model literally called "box%41.glb" stays itself);
- *  - a run that's malformed, or decodes to a NUL, keeps its own characters, and a bare "%" (which a URL leaves as it
- *    is) stays, so the rest of the name still decodes: "50% off.glb" arrives as "50%%20off.glb" and loads;
- *  - a ".." segment after decoding is refused outright. A normalize()+startsWith(base) check is a string prefix, so
- *    "..%2flibrary-backup%2fx" would pass it and reach a SIBLING directory whose name starts with the base's. */
+/** Path relative to each rung, or null to refuse. `encoded` is still encoded; each run of escapes decodes on its own:
+ *  - a raw path naming an entry on ANY rung wins (a model literally called "box%41.glb" stays itself);
+ *  - a malformed run, one decoding to NUL, or a bare "%" keeps its characters ("50%%20off.glb" loads);
+ *  - a ".." segment after decoding is refused: normalize()+startsWith(base) would let "..%2flibrary-backup%2fx" reach a sibling. */
 export function libraryRel(encoded: string): string | null {
   let rel = encoded;
   if (rel.includes("%") && !LADDER.some(base => entryAt(join(base, rel)))) {
@@ -35,9 +25,8 @@ export function libraryRel(encoded: string): string | null {
   return rel.split(/[\/\\]/).includes("..") ? null : rel;
 }
 
-/** The file /library would serve for a lib with this extension, or null. The lib is read as the client's
- *  /library/<lib> URL carries it (spaces and Unicode percent-encoded; a version or fragment removed) and then decoded
- *  by libraryRel(), exactly as the route does. `..` is traversal only as a whole segment; "robot..v2.glb" is a name. */
+/** The lib is read as the client's URL carries it (percent-encoded, query/fragment dropped), then libraryRel().
+ *  `..` is traversal only as a whole segment; "robot..v2.glb" is a name. */
 export function libraryFile(lib: unknown, extension: RegExp): string | null {
   if (typeof lib !== "string" || lib.split(/[?#]/, 1)[0].includes("\0")) return null;
   let pathname: string;
@@ -61,7 +50,7 @@ export function libraryFile(lib: unknown, extension: RegExp): string | null {
 
 export function resolveLibFile(lib: string): string | null {
   if (typeof lib !== "string") return null;
-  // a content address (eido:sha256/<hex>; review 10-07 H3): the original bytes it names, wherever this host keeps them
+  // a content address (eido:sha256/<hex>): its original bytes, wherever this host keeps them
   const hex = eidoHex(lib); if (hex) return eidoFile(hex);
   return libraryFile(lib, /\.(glb|vrm)$/i);
 }

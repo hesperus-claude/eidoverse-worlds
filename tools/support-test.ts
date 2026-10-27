@@ -1,27 +1,12 @@
-// support surfaces (#17) — a settling body rests on what actually holds it up.
-//
+// support surfaces (#17): a settling body rests on what actually holds it up. The headless settle sim clamps against the LIVE
+// height field (setTerrain with heightAt, under the headless stub) and support boxes registered from data
+// (colliders.fitSupportBox, no mesh), in-process with the modules physics.ts drives; live-server plumbing is knockdown-test.
 //   bun tools/support-test.ts
-//
-// The headless settle sim used to run on flat ground at zero, offset by ONE
-// terrain sample taken at the fall site: every placed floor was invisible to
-// it, and a body released above an elevated deck settled through the deck to
-// the dirt underneath (Mythos, under the bell — issue #17). The repair has
-// two parts, and this suite pins both: the sim clamps against the LIVE height
-// field (setTerrain with a heightAt-bearing object, under the headless stub),
-// and against support boxes registered from data (colliders.fitSupportBox —
-// the /geom-fed door agents use, no loaded mesh required).
-//
-// Everything here is in-process against the same modules the agent's
-// physics.ts drives; the live-server agent plumbing rides knockdown-test.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 
-// Bun 1.3.x caches transpiled module graphs globally by content. A failed
-// plugin-resolved path can therefore survive into a later checkout and bypass
-// onResolve entirely. Tests need deterministic resolver behavior; production
-// runtime keeps Bun's normal cache. Re-exec once because this setting is read
-// at process startup. (Same guard as the rest of the suite — see #13.)
+// Bun's global transpiler cache can keep a stale plugin-resolved path and bypass onResolve: re-exec once with it off (read at startup; #13)
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
   const child = Bun.spawnSync({
     cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
@@ -56,8 +41,7 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
 
-// the known body ragdoll-test uses — the invariants here are about GROUND,
-// not any particular rig
+// the known body ragdoll-test uses: the invariants here are about GROUND, not any particular rig
 const WORLD: Record<string, [number, number, number]> = {
   hips: [0, 0.95, 0], spine: [0, 1.05, 0], chest: [0, 1.2, 0],
   neck: [0, 1.4, 0], head: [0, 1.5, 0],
@@ -95,8 +79,7 @@ setTerrain(null);
 check('...and null restores the bare stage', heightAt(3, -7) === 0);
 
 // ---- 1. an elevated deck holds a body dropped onto it (the bell floor) ----
-// A thin slab, the exact shape syncSupport registers for a room-scale
-// entity's floor deck: 6×6m, top at y=2, floating (nothing below it).
+// a thin slab, the shape syncSupport registers for a room-scale floor deck: 6×6m, top at y=2, floating
 setTerrain({ mesh: null, heightAt: () => 0 });
 fitSupportBox('deck', [-3, 1.85, -3], [3, 2, 3], { position: [0, 0, 0] });
 {
@@ -109,8 +92,8 @@ fitSupportBox('deck', [-3, 1.85, -3], [3, 2, 3], { position: [0, 0, 0] });
     `elapsed=${rd.elapsed?.toFixed(1)}s`);
 }
 
-// ---- 2. a drag released in MID-AIR above the deck lands on it, not through
-// it — the Mythos signature: rootY high, pose from a dragger's hand, no seed
+// ---- 2. a drag released in MID-AIR above the deck lands on it, not through it
+// rootY high, pose from a dragger's hand, no seed
 {
   const av = synth([0.5, 3.2, 0.5]);     // let go of half a metre over the deck
   const rd = run(av);                     // no lean: falls free
@@ -120,8 +103,7 @@ fitSupportBox('deck', [-3, 1.85, -3], [3, 2, 3], { position: [0, 0, 0] });
 }
 
 // ---- 3. a world-frame handover seed keeps its height meaning --------------
-// The old sim ran ground-at-zero and shifted seeds by -groundY; a seed now
-// arrives in world y and must land exactly where the other machine had it.
+// a seed arrives in world y and must land exactly where the other machine had it
 {
   const av = synth([0, 2.6, 0]);
   const names = JOINTS.filter((j: string) => WORLD[j]);
@@ -138,8 +120,7 @@ fitSupportBox('deck', [-3, 1.85, -3], [3, 2, 3], { position: [0, 0, 0] });
 }
 
 // ---- 4. off the edge is still a real fall ---------------------------------
-// Support is a surface, not a force field: released BESIDE the deck, the body
-// falls past its rim to the terrain.
+// support is a surface, not a force field: released BESIDE the deck, the body falls past its rim to the terrain
 {
   const av = synth([5.5, 3.2, 0]);        // outside the 3m half-extent
   const rd = run(av);
@@ -159,9 +140,7 @@ removeCollider('deck');
 }
 
 // ---- 6. live terrain, not one sample: a blast across a slope --------------
-// heightAt rises 1m per 4m of x. A body toppled downhill from the high side
-// must rest ON the local slope at its landing site — the single-groundY
-// convention embedded it in the hill (or floated it) by the height difference.
+// heightAt rises 1 m per 4 m of x: a body toppled downhill must rest ON the slope at its landing site, not at one groundY
 setTerrain({ mesh: null, heightAt: (x: number) => Math.max(0, x / 4) });
 {
   const av = synth([8, 2 + 0.95 - 0.95, 0]);  // standing at x=8 → ground 2.0

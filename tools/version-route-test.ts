@@ -1,178 +1,137 @@
-// version-route-test — /version, actually fetched (#51 review ask 1).
-//
-//   bun tools/version-route-test.ts
-//
-// Three spawns of the real server, each proving one leg of the contract:
+// version-route-test: /version, actually fetched, from spawns of the real server (harness.scratchSequencer: a scratch
+// WORLDS_DIR, and the child proven ours by its nonce before any assertion counts):
 //   A. env-driven: BUILD_SHA/BUILD_TIME/BUILD_DIRTY → exact body echo
 //   B. git-driven: no env, repo present → sha/commitTime from git, dirty bool
 //   C. neither: no env, git unreachable → honest "unknown"s, never fake-clean
-// Plus: cache-control:no-store, and startedAt stable across repeated requests
-// (fresh process ≠ fresh code — the field distinction this PR exists for).
-// Port discipline per the stale-listener incident: verified-free random port
-// + a nonce file served from THIS tree before any assertion counts.
+// Plus startedAt stable across requests (fresh process ≠ fresh code), and the GET-route contract over /worlds, /version
+// and /geom: JSON, no-store where the route promises it, and asking never founds a world.
+//   bun tools/version-route-test.ts
 
-import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { pause } from "./protocol/wait.ts";
+import { mkCheck, scratchSequencer, ROOT as REPO } from "./harness.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-
-const REPO = join(import.meta.dir, "..");
-const children: ChildProcess[] = [];
-const nonces: string[] = [];
-process.on("exit", () => {
-  for (const c of children) { try { c.kill(); } catch { /* gone */ } }
-  for (const n of nonces) { try { rmSync(n); } catch { /* ok */ } }
-});
-// a runner's time limit (tools/run-client.ts) ends it with SIGTERM: leave by the exit path, so the nonces go too
-process.on("SIGTERM", () => process.exit(143));
-// a run killed outright (Windows) skips both handlers: sweep what an earlier run left
+const { check, tally } = mkCheck();
+// the env-less rows mean no BUILD_* at all, whatever the caller's shell carries
+for (const k of ["BUILD_SHA", "BUILD_TIME", "BUILD_DIRTY"]) delete process.env[k];
+const serve = (name: string, env: Record<string, string> = {}, worlds: string[] = []) =>
+  scratchSequencer(`vr-${name}`, { serverEnv: { SKIP_OPT_SWEEP: "1", ...env }, worlds });
+// a run killed outright (Windows) skips the exit handler: sweep what an earlier run planted
 for (const f of readdirSync(join(REPO, "client"))) if (/^vr-nonce-[0-9a-f]{8}\.txt$/.test(f)) rmSync(join(REPO, "client", f), { force: true });
-async function teardown() {
-  for (const c of children) { c.kill(); await new Promise((r) => (c.exitCode !== null || c.signalCode !== null ? r(null) : (c.once("exit", r), setTimeout(r, 5000)))); }
-  for (const n of nonces) rmSync(n, { force: true });
-  children.length = 0; nonces.length = 0;
-}
+const version = async (s: { BASE: string }) => (await fetch(`${s.BASE}/version`)).json();
 
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); }
-    catch { return cand; }
+console.log("\n— the GET-route contract —");
+{
+  const s = await serve("contract", {}, ["yard"]);
+  const worldsDir = join(s.SCRATCH, "worlds"), before = readdirSync(worldsDir).sort();
+  // [route, promises no-store]
+  const ROUTES: [string, boolean][] = [["/worlds", true], ["/version", true], ["/geom?world=yard", true], ["/geom?world=yard&id=nothing", true], ["/geom?lib=nothing", true]];
+  for (const [route, noStore] of ROUTES) {
+    const r = await fetch(`${s.BASE}${route}`); const ct = r.headers.get("content-type") ?? "";
+    const body = await r.text(); let json = true; try { JSON.parse(body); } catch { json = false; }
+    check(`${route}: answers JSON (content-type and body)`, ct.includes("json") && json, `${r.status} ${ct} ${body.slice(0, 80)}`);
+    if (noStore) check(`${route}: cache-control is no-store`, r.headers.get("cache-control") === "no-store", String(r.headers.get("cache-control")));
+    const asked = route.replace(/world=yard/, "world=never-made") + (route.includes("?") ? "" : "?world=never-made");
+    await fetch(`${s.BASE}${asked}`);
+    check(`${asked}: founds nothing on disk`, JSON.stringify(readdirSync(worldsDir).sort()) === JSON.stringify(before), readdirSync(worldsDir).join(","));
   }
-  throw new Error("no free port");
+  const listed = ((await (await fetch(`${s.BASE}/worlds`)).json()) as { worlds: { name: string }[] }).worlds.map((w) => w.name);
+  check("…and no phantom world is listed", !listed.includes("never-made") && listed.includes("yard"), listed.join(","));
+  await s.cleanup();
 }
-
-async function spawnServer(env: Record<string, string | undefined>): Promise<{ port: number }> {
-  const port = await freePort();
-  const nonce = `vr-nonce-${crypto.randomUUID().slice(0, 8)}`;
-  const noncePath = join(REPO, "client", `${nonce}.txt`);
-  writeFileSync(noncePath, nonce); nonces.push(noncePath);
-  // process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on
-  // Windows whose pid dies immediately, orphaning the real sequencer on this
-  // port where it poisons the next run.
-  const child = spawn(process.execPath, [join(REPO, "server", "server.ts")], {
-    env: { PORT: String(port), WORLDS_DIR: mkdtempSync(join(tmpdir(), "vr-")), ...env },
-    stdio: "ignore",
-  });
-  children.push(child);
-  await tryUntil(`the server on :${port} answers`, () => fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false), { ms: 10_000, step: 250 });
-  const own = await fetch(`http://127.0.0.1:${port}/${nonce}.txt`).then((r) => r.ok && r.text()).catch(() => false);
-  if (own !== nonce) throw new Error(`listener on :${port} is not our child — refusing to test it`);
-  return { port };
-  // (freePort's probe can false-positive "free" on a slow listener; the nonce
-  // check above is the backstop that turns that race into a loud abort
-  // rather than a wrong-server receipt — abort over false testimony.)
-}
-
-const HOME = process.env.HOME; const BUNPATH = process.env.PATH;
 
 console.log("\n— A. env-driven build identity (deploy-image case) —");
 {
-  const { port } = await spawnServer({
-    HOME, PATH: BUNPATH,
-    BUILD_SHA: "cafe123", BUILD_TIME: "2026-08-11T00:00:00Z", BUILD_DIRTY: "false",
-  });
-  const res = await fetch(`http://127.0.0.1:${port}/version`);
-  const body = await res.json();
+  const s = await serve("a", { BUILD_SHA: "cafe123", BUILD_TIME: "2026-08-11T00:00:00Z", BUILD_DIRTY: "false" });
+  const body = await version(s);
   check("env sha echoed exactly", body.sha === "cafe123", JSON.stringify(body));
   check("env commitTime echoed exactly", body.commitTime === "2026-08-11T00:00:00Z");
   check("env dirty=false is boolean false", body.dirty === false, String(body.dirty));
-  check("cache-control is no-store", res.headers.get("cache-control") === "no-store",
-    String(res.headers.get("cache-control")));
   check("startedAt is a valid timestamp", !Number.isNaN(Date.parse(body.startedAt)));
   await pause("let a second pass so a request-time startedAt would differ", 1100);
-  const again = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
+  const again = await version(s);
   check("startedAt STABLE across requests (process identity, not request time)",
     again.startedAt === body.startedAt, `${body.startedAt} vs ${again.startedAt}`);
+  await s.cleanup();
 }
 
 console.log("\n— A2. env-driven dirty=true (a modified deploy must say so) —");
 {
-  const { port } = await spawnServer({
-    HOME, PATH: BUNPATH,
-    BUILD_SHA: "cafe123", BUILD_TIME: "2026-08-11T00:00:00Z", BUILD_DIRTY: "true",
-  });
-  const body = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
+  const s = await serve("a2", { BUILD_SHA: "cafe123", BUILD_TIME: "2026-08-11T00:00:00Z", BUILD_DIRTY: "true" });
+  const body = await version(s);
   check("env dirty=true is boolean true (visible, not laundered)", body.dirty === true, String(body.dirty));
+  await s.cleanup();
 }
 
 console.log("\n— B. git-driven identity (dev checkout case) —");
 {
-  const { port } = await spawnServer({ HOME, PATH: BUNPATH });
-  const body = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
+  // an UNTRACKED file planted in the checkout for the server's lifetime: the tree is dirty while it runs
+  const plant = join(REPO, "client", `vr-nonce-${crypto.randomUUID().slice(0, 8)}.txt`);
+  writeFileSync(plant, "untracked"); process.on("exit", () => rmSync(plant, { force: true }));
+  const s = await serve("b");
+  const body = await version(s);
   check("sha resolved from git (not unknown)", body.sha !== "unknown" && body.sha.length >= 7, body.sha);
   check("commitTime resolved from git", body.commitTime !== "unknown" && !Number.isNaN(Date.parse(body.commitTime)));
-  // The nonce file this harness plants in client/ is UNTRACKED, so during
-  // any spawned-server's lifetime the checkout is guaranteed dirty — which
-  // makes this the executable proof of the git-derived TRUE path (a
-  // hardcoded `dirty: false` fails here; review caught that the boolean
-  // check alone could not tell them apart).
+  // the planted nonce file is UNTRACKED, so the checkout is dirty while the server runs: a hardcoded `dirty: false` fails here
   check("git-derived dirty is TRUE while the tree holds the nonce (real detection, not a hardcode)",
     body.dirty === true, String(body.dirty));
+  await s.cleanup(); rmSync(plant, { force: true });
 }
 
 console.log("\n— B2. mixed provenance refused: sha/time are ONE pair (r3, review vectors) —");
 {
-  // BUILD_SHA without BUILD_TIME, git PRESENT: the tempting-but-wrong move is
-  // filling time from local HEAD — that pairs the image's sha with another
-  // identity's timestamp, the exact composite the dirty fix rejects.
-  const a = await spawnServer({ HOME, PATH: BUNPATH, BUILD_SHA: "cafe123" });
-  const bodyA = await (await fetch(`http://127.0.0.1:${a.port}/version`)).json();
+  // BUILD_SHA without BUILD_TIME, git PRESENT: filling time from local HEAD would pair the image's sha with another
+  // identity's timestamp, the composite the dirty fix rejects
+  const a = await serve("b2a", { BUILD_SHA: "cafe123" });
+  const bodyA = await version(a); await a.cleanup();
   check("BUILD_SHA alone, git present: commitTime is unknown, never local HEAD's",
     bodyA.sha === "cafe123" && bodyA.commitTime === "unknown", `${bodyA.sha} @ ${bodyA.commitTime}`);
   check("BUILD_SHA alone: dirty stays unknown too (no partner from another tree)",
     bodyA.dirty === "unknown", String(bodyA.dirty));
-  // The mirror: BUILD_TIME without BUILD_SHA, git present.
-  const b = await spawnServer({ HOME, PATH: BUNPATH, BUILD_TIME: "2026-08-12T00:00:00Z" });
-  const bodyB = await (await fetch(`http://127.0.0.1:${b.port}/version`)).json();
+  // the mirror: BUILD_TIME without BUILD_SHA, git present
+  const b = await serve("b2b", { BUILD_TIME: "2026-08-12T00:00:00Z" });
+  const bodyB = await version(b); await b.cleanup();
   check("BUILD_TIME alone, git present: sha is unknown, never local HEAD",
     bodyB.commitTime === "2026-08-12T00:00:00Z" && bodyB.sha === "unknown", `${bodyB.sha} @ ${bodyB.commitTime}`);
-  // The THIRD direction (adversarial review): BUILD_DIRTY alone, git PRESENT.
-  // The image's dirty flag must NOT pair with a local git sha+time — the same
-  // composite class, the remaining member. sha and commitTime go unknown.
-  const c = await spawnServer({ HOME, PATH: BUNPATH, BUILD_DIRTY: "true" });
-  const bodyC = await (await fetch(`http://127.0.0.1:${c.port}/version`)).json();
+  // the third direction: BUILD_DIRTY alone, git PRESENT, must NOT pair with a local git sha+time; sha and commitTime go unknown
+  const c = await serve("b2c", { BUILD_DIRTY: "true" });
+  const bodyC = await version(c); await c.cleanup();
   check("BUILD_DIRTY alone, git present: sha AND commitTime are unknown (no local partner for an env dirty)",
     bodyC.sha === "unknown" && bodyC.commitTime === "unknown", `${bodyC.sha} @ ${bodyC.commitTime} dirty=${bodyC.dirty}`);
   check("BUILD_DIRTY alone: the env dirty value itself is still honored",
     bodyC.dirty === true, String(bodyC.dirty));
-  // Garbage / empty BUILD_DIRTY clamps to "unknown", never a leaked raw string.
-  const d = await spawnServer({ HOME, PATH: BUNPATH, BUILD_DIRTY: "" });
-  const bodyD = await (await fetch(`http://127.0.0.1:${d.port}/version`)).json();
+  // garbage / empty BUILD_DIRTY clamps to "unknown", never a leaked raw string
+  const d = await serve("b2d", { BUILD_DIRTY: "" });
+  const bodyD = await version(d); await d.cleanup();
   check("BUILD_DIRTY='' clamps dirty to unknown (no leaked empty string) and still marks env-identity",
     bodyD.dirty === "unknown" && bodyD.sha === "unknown" && bodyD.commitTime === "unknown",
     `dirty=${JSON.stringify(bodyD.dirty)} sha=${bodyD.sha}`);
-  const e = await spawnServer({ HOME, PATH: BUNPATH, BUILD_DIRTY: "garbage" });
-  const bodyE = await (await fetch(`http://127.0.0.1:${e.port}/version`)).json();
+  const e = await serve("b2e", { BUILD_DIRTY: "garbage" });
+  const bodyE = await version(e); await e.cleanup();
   check("BUILD_DIRTY='garbage' clamps dirty to unknown (only true/false pass)",
     bodyE.dirty === "unknown", JSON.stringify(bodyE.dirty));
 }
 
 console.log("\n— C. no env, no git: honest unknowns, never fake-clean —");
 {
-  // PATH without git: gitLine's spawn fails → catch → "" → "unknown"s.
+  // PATH without git: gitLine's spawn fails → catch → "" → "unknown"s
   const bare = mkdtempSync(join(tmpdir(), "no-git-bin-"));
   const bunReal = Bun.which("bun") ?? "/usr/local/bin/bun";
   const { linkSync, copyFileSync } = await import("node:fs");
   const exe = join(bare, process.platform === "win32" ? "bun.exe" : "bun");
   try { linkSync(bunReal, exe); } catch { copyFileSync(bunReal, exe); }   // a symlink needs Developer Mode on Windows
-  const { port } = await spawnServer({ HOME, PATH: bare });
-  const body = await (await fetch(`http://127.0.0.1:${port}/version`)).json();
+  const s = await serve("c", { PATH: bare });
+  const body = await version(s);
   check("sha falls back to 'unknown'", body.sha === "unknown", body.sha);
   check("commitTime falls back to 'unknown'", body.commitTime === "unknown", body.commitTime);
   check("dirty is 'unknown' — NOT false — when nothing can answer",
     body.dirty === "unknown", String(body.dirty));
   check("startedAt still present (process identity independent of code identity)",
     !Number.isNaN(Date.parse(body.startedAt)));
+  await s.cleanup(); rmSync(bare, { recursive: true, force: true });
 }
 
-await teardown();
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+console.log(`\n${tally.passed} passed, ${tally.failed} failed\n`);
+process.exit(tally.failed ? 1 : 0);

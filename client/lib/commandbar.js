@@ -1,19 +1,10 @@
-// lantern — one line for everything: type to talk, `/` for commands, or a word
-// ("sky", "wave", "mute") for the matching ACTIONS, with their keys shown so the
-// keys teach themselves. Direction C of the HUD redesign mockups (the "lantern" direction).
-//
-// Additive: Ctrl/Cmd+K or the resting line bottom-centre opens it; Enter-to-chat is
-// untouched. It owns no knowledge of what can be done — that is lib/actions.js,
-// filled at each definition site — and no send path: plain text and /commands go
-// through the chat compose box's own submit (chat.submit), so there is one path.
-//
-// THE KEYS (R, 09-29): Enter SAYS what you typed — always; the say row is first.
-// Tab DOES the highlighted action (default: the best match, wearing a Tab badge).
-// So "sit"+Enter says "sit", "sit"+Tab sits. Two exceptions to Enter-says: text
-// starting with "/" (the command path), and a highlight the person MOVED themselves
-// (↑/↓ or the mouse onto a row) — then Enter runs that row.
+// lantern — one line for everything: talk, `/` commands, or a word for matching ACTIONS (lib/actions.js), keys shown.
+// No send path of its own: text and /commands go through chat.submit, so there is one path.
+// Enter SAYS what you typed; Tab DOES the highlighted action. Enter runs a row only for "/" text or a highlight the person moved.
 import { list, grouped } from './actions.js';
 import { svg, has, rsvg, hasLine, fsvg, hasFill } from './icons.js';
+import { escapeHtml as esc } from './markup.js';
+import { bus } from './base.js';
 
 const SEEN_LS = 'ew-lantern-seen';
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
@@ -27,7 +18,6 @@ let moved = false;    // the person moved the highlight themselves: Enter runs i
 let prevFocus = null; // what had focus when it opened: closing hands it back
 let deps = { submit: () => {} };
 
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export const isLanternOpen = () => !!root && !root.hidden;
 
@@ -44,7 +34,7 @@ export function openLantern(text = '') {
   input.focus();
   try { localStorage.setItem(SEEN_LS, '1'); } catch { /* private mode */ }
   if (pill?.classList.contains('fresh')) { pill.classList.remove('fresh'); paintPill(); }
-  dispatchEvent(new CustomEvent('lantern'));   // the rail's search entry lights with it (ui.js)
+  bus.emit('lantern');   // the rail's search entry lights with it (ui.js)
 }
 
 export function closeLantern() {
@@ -52,21 +42,18 @@ export function closeLantern() {
   root.hidden = true;
   pill?.classList.remove('open');
   document.body.classList.remove('lantern-open');
-  // only while the line still holds focus (a click that moved it elsewhere keeps it there), and only to
-  // a field someone was typing in (the chat line): a focused button — the pill, the rail's search entry —
-  // would take the next Enter or Space as its own click instead of letting it reach the world's keys
+  // only while the line holds focus, and only to a typing field: a focused button would eat the next Enter/Space
   if (document.activeElement === input) {
     if (prevFocus?.isConnected && prevFocus !== input && prevFocus.matches?.('input, textarea, [contenteditable=""], [contenteditable="true"]')) prevFocus.focus();
     else input.blur();
   }
   prevFocus = null;
-  dispatchEvent(new CustomEvent('lantern'));
+  bus.emit('lantern');
 }
 
 // ---------------------------------------------------------------- rows
 
-// icon: an icons.js name (line weight first — the mockup's rows are line glyphs), an
-// emoji literal (gestures, as their tiles wear them), or a neutral dot
+// icon: an icons.js name, an emoji literal (gestures), or a neutral dot
 function iconHtml(icon) {
   if (icon && hasLine(icon)) return rsvg(icon, 16);
   if (icon && has(icon)) return svg(icon, 16);
@@ -75,8 +62,7 @@ function iconHtml(icon) {
   return '<span class="ln-dot"></span>';
 }
 
-// a command's help line "/anim <name> — play one of the action bar's anims once" reads as
-// title "play one of …", detail "<name>", badge "/anim"
+// "/anim <name> — play …" → title "play …", detail "<name>", badge "/anim"
 function commandRow(a) {
   const help = String(a.detail ?? '');
   const m = help.match(/^\/\S+\s*(.*?)\s+—\s+(.*)$/);
@@ -186,13 +172,7 @@ function onEnter() {
 }
 
 // ---------------------------------------------------------------- placement
-// One horizontal axis for the resting line, the hint bar that borrows its spot,
-// and the open panel: the viewport's centre, unless that would sit on the chat
-// frame's compose box — then the centre of the free span beside the frame.
-// A pill MOVED in HUD layout mode (owner, 10-01) sits where it was put instead: --ln-x
-// and --ln-b carry its centre and bottom to the hint bar too, and the open panel
-// takes its own clamped centre (--ln-px) and hangs DOWN from a pill in the top half.
-// Phones keep the corner glyph (index.html's ≤600px rules); the spot is a desktop one.
+// One axis for line, hint bar and panel: the viewport centre or the free span beside the compose box; a moved pill stays put.
 const POS_LS = 'ew-lantern-pos';   // {x: centre as a fraction of the width, b: px from the bottom}
 let spot = null;
 try { spot = JSON.parse(localStorage.getItem(POS_LS) || 'null'); } catch { /* private mode */ }
@@ -244,8 +224,7 @@ export function resetPillPlace() {
   place();
 }
 
-// Dragging the pill: only in HUD layout mode (body.arranging), never while the layout is locked (body.ui-locked),
-// never on a phone. A press that does not travel is still a click; one that does moves the pill and eats its click.
+// Drag only in HUD layout mode (body.arranging), never locked or on a phone; a press that travels eats its click.
 let dragged = false;
 function initPillDrag() {
   pill.addEventListener('pointerdown', (e) => {
@@ -279,12 +258,7 @@ function initPillDrag() {
 
 // ---------------------------------------------------------------- boot
 
-// THE RESTING LINE'S TWO PERMISSIONS (owner, 10-01: "add it as a pin feature for the reverse-E menu … and have it obey
-// the 'esc to hide' feature"). PINNED (the default, so nobody who leaves it alone sees a change) = the pill rests
-// bottom-centre; unpinned = no resting pill, but Ctrl/Cmd+K and the rail's search entry still open the lantern —
-// unpinning puts away its resting place, not the command line. QUIET = Tab put the panels away (windows.js
-// panelsToggle, relayed by ui.js; Esc was the key until R 10-15 moved it): the pill goes with them and comes back with them. Either hides it, as a class
-// (index.html: display:none — the pill's own display:flex would beat [hidden]); the hint bar keeps the spot either way.
+// PINNED rests the pill; unpinned or QUIET hides it (Ctrl/Cmd+K still opens). By class: the pill's display:flex beats [hidden].
 const PIN_LS = 'ew-lantern-pinned';
 let pinned = true;
 try { pinned = localStorage.getItem(PIN_LS) !== '0'; } catch { /* private mode */ }
@@ -302,8 +276,7 @@ function paintRest() {
   pill?.classList.toggle('quiet', quiet);
 }
 
-// the bar wears the same lantern its Panels row does, so the two read as one thing (owner, 10-01: "make sure the
-// icon actually makes it down to the bar"); the ∃ stays the menu's
+// the bar wears the same lantern its Panels row does, so the two read as one thing; the ∃ stays the menu's
 const EMARK = () => fsvg('lantern', 20) || '∃';
 
 function paintPill() {
@@ -351,8 +324,7 @@ export function initLantern({ submit } = {}) {
     else if (e.key === 'Tab') { e.preventDefault(); if (!e.shiftKey && rows[sel]?.kind !== 'say') runRow(rows[sel]); }   // Tab never says
     else if (e.key === 'Escape') { e.preventDefault(); closeLantern(); }
   });
-  // nothing in the panel takes focus from the line — rows, the gaps between them, the footer — or the
-  // blur would close it 120 ms later (below). The line itself keeps its own caret placement.
+  // nothing in the panel takes focus from the line, or the blur would close it 120 ms later
   for (const t of ['pointerdown', 'mousedown']) root.addEventListener(t, (e) => { if (e.target !== input) e.preventDefault(); });
   listEl.addEventListener('pointermove', (e) => {
     const r = e.target.closest('.ln-row');
@@ -364,15 +336,12 @@ export function initLantern({ submit } = {}) {
     const r = e.target.closest('.ln-row');
     if (r) runRow(rows[Number(r.dataset.i)]);
   });
-  // a click anywhere else closes it — except on a TOGGLE (the pill, the rail's search, the ∃ menu's rows: anything
-  // marked data-lantern-toggle), whose own click closes it. Closing here too raced the click: mousedown focuses the
-  // button, this fires 120 ms later, and a click released after that found the lantern closed and opened it again.
+  // a click elsewhere closes it, except a [data-lantern-toggle], whose own click does: closing here too reopens it
   input.addEventListener('blur', () => setTimeout(() => {
     if (isLanternOpen() && !root.contains(document.activeElement) && !document.activeElement?.closest?.('[data-lantern-toggle]')) closeLantern();
   }, 120));
 
-  // Ctrl/Cmd+K from anywhere — even from inside the chat box — captured before the
-  // world's key handlers so K never also reaches them
+  // Ctrl/Cmd+K from anywhere, captured so K never also reaches the world's key handlers
   addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyK' || e.altKey || e.shiftKey) return;
     if (document.querySelector('.scrim.open')) return;   // a modal (help, the door) owns the keyboard

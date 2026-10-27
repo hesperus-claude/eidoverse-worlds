@@ -1,6 +1,5 @@
-// Rows for the editor's History (and, later, its Credits facet): pure, so they can be tested without a browser.
-// A refused write is on the record as an act whose body carries refused {code} (authority.js logRefusal, R7): it reads as
-// an attempt, never as a deed (Commons parity audit, 10-06: "refused acts print as done").
+// Rows for the editor's History and Credits: pure, testable without a browser.
+// A refused write is an act whose body carries refused {code} (authority.js logRefusal, R7): an attempt, never a deed.
 import { phraseOf } from '../../shared/credits.js';
 export function worldHistoryRows(entries, nameOf) {
   return entries.filter((e) => e.kind === 'act').reverse().map((e) => {
@@ -13,12 +12,8 @@ export function worldHistoryRows(entries, nameOf) {
   });
 }
 
-// Credits, inside History (R 10-07: "Credits = filter modes inside History (by person / biggest contributors / list-by
-// rules), not a third tab"). The same rows, seen four ways; a refused attempt is shown (as an attempt) but is never a deed.
-//   time    every row, newest first (the default)
-//   person  one person's rows (opts.who: their identity)
-//   top     the biggest contributors: people ranked by deeds (acts that changed something), with their rows
-//   kind    rows grouped by what was changed (a component, or the verb when it names none)
+// Credits are History's filter modes over the same rows.
+// top = people ranked by deeds (acts that changed something); kind = grouped by component, or the verb if it names none
 export const HISTORY_MODES = [['time', 'by time'], ['person', 'by person'], ['top', 'biggest contributors'], ['kind', 'by what changed']];
 const asRows = (list, nameOf) => (list.length && list[0]?.kind !== undefined ? worldHistoryRows(list, nameOf) : list);
 export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
@@ -41,15 +36,9 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** A thing's history page merged into what the panel shows (editpanels' History; client-check HT4-HT6, 10-17), against the
- *  authority's reply: `history {id, limit, before?}` → {entries: [{seq (the change entry's seq), diff (computed by the
- *  authority against the whole log, never against the page), …}], next: the last row's seq, or null at the beginning}; a
- *  `before` page holds the rows with seq < before. R 10-04: recent by default, deeper on request.
- *  - an Older… read (`more`) appends, by seq, and takes its cursor; it marks the panel `paged`;
- *  - a refresh (the thing changed) shows the newest page and its cursor — unless the person has paged: then the pages
- *    they read stay where they meet the new page, with the deeper cursor (a refresh landing after an Older… read never
- *    undoes it); one that doesn't meet starts over.
- *  {entries, next, paged} */
+/** Merge a `history {id, limit, before?}` reply (next = last row's seq or null); client-check HT4-HT6. An Older… read
+ *  (`more`) appends and marks `paged`; a refresh of a paged list keeps the read pages where they meet it, else starts over.
+ *  Returns {entries, next, paged}. */
 export function mergeHistory({ entries, next, paged = false }, rows, rNext, more) {
   const sorted = (xs) => { const m = new Map(); for (const e of xs) m.set(e.seq, e); return [...m.values()].sort((a, b) => b.seq - a.seq); };
   if (more) return { entries: sorted([...entries, ...rows]), next: rNext, paged: true };

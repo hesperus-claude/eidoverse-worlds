@@ -1,6 +1,5 @@
 // litechoice — choosing the lite client or the full 3D world, as a person's own choice on this device. One place,
-// because three presses make it (lite's ∃, the ∃ menu's Lite client, the desktop retry pill) and each got it a
-// little differently wrong before (review of #212, 2026-10-02).
+// because three presses make it (lite's ∃, the ∃ menu's Lite client, the desktop retry pill).
 //
 // The choice is SAVED (index.html decideLite rule 3), so the next plain visit honours it, and the URL is left
 // CLEAN: a ?lite=0 kept in the address outranks the crash tripwire (rule 1 beats rule 2), so a phone the full

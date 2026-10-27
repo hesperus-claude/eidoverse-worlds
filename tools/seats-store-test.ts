@@ -1,18 +1,10 @@
-/**
- * seats-store fixture — #105 review B2/B3: the rights-bearing store's
- * integrity boundaries, driven with injected faults.
- *
- * B2: dangerous keys never index the maps (schema refusal + null-prototype
- * maps + roster membership), and a refused write mutates NOTHING — no store,
- * no log, no Object.prototype.
- * B3: every write is provenance-first. An append failure changes nothing; a
- * snapshot failure leaves the log AHEAD and a fresh load folds it forward
- * (durable-with-receipt or not at all); a snapshot AHEAD of its log is
- * quarantined and served as missing; a countersign against a moved revision
- * refuses.
- *
- * Run: bun run tools/seats-store-test.ts   (scratch dirs only)
- */
+/** seats-store (#105): the rights-bearing store's integrity boundaries, driven with injected faults.
+ *  Keys: dangerous keys never index the maps (schema refusal + null-prototype maps + roster membership), and a refused
+ *  write mutates NOTHING: no store, no log, no Object.prototype.
+ *  Writes: provenance-first. An append failure changes nothing; a snapshot failure leaves the log AHEAD and a fresh load
+ *  folds it forward; a snapshot AHEAD of its log is quarantined and served as missing; a countersign against a moved
+ *  revision refuses.
+ *  Run: bun run tools/seats-store-test.ts   (scratch dirs only) */
 
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, appendFileSync as appendFileSyncReal } from "node:fs";
 import { tmpdir } from "node:os";
@@ -126,11 +118,7 @@ try {
 
   console.log("#105 round 2 — two real writers, genuinely overlapped");
   {
-    // B is a second store instance (a second process, as far as the lock can
-    // tell) with a short bounded wait; its propose() is injected INSIDE A's
-    // provenance append — the exact interleaving the reviewer forced on the
-    // prior head, where both writers built rev N+1 from rev N and the log
-    // took two contradictory records at one revision.
+    // B, a second store with a short bounded wait, proposes INSIDE A's provenance append: both must not build rev N+1 from rev N
     const B = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 250 });
     let overlapResult: any = null, fired = false;
     const A = new SeatStore(OPT, LIB, {
@@ -154,8 +142,7 @@ try {
     check("vector 2: both writes survive, reconstructible",
       new SeatStore(OPT, LIB).list().records.some((x) => x.name === "seatdummy" && x.slot === "proposed"));
 
-    // vector 3: a proposal lands between the operator's review and the
-    // countersign — the reviewed revision has moved, the acceptance refuses
+    // vector 3: a proposal lands between the operator's review and the countersign: the revision moved, the acceptance refuses
     const op = new SeatStore(OPT, LIB);
     const reviewedRev = op.rev;
     const interloper = new SeatStore(OPT, LIB);
@@ -175,10 +162,7 @@ try {
       JSON.stringify(timeout));
     rmSync(join(seatsDir, ".write-lock"), { force: true });
 
-    // #105 round 3 — a LIVE holder is never broken, however old its stamp.
-    // The lock names THIS test process's pid (alive by construction) with a
-    // stamp from an hour ago: age says stale, liveness says wait. B must
-    // time out with nothing written — exclusion outranks patience.
+    // a LIVE holder is never broken, however old its stamp (this pid, an hour ago): B must time out with nothing written
     writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: process.pid, nonce: "live-but-slow-writer", ts: Date.now() - 3_600_000 }));
     const lb = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 250 });
     const logLive = logOf(), snapLive = snapshotOf(), lbRevBefore = lb.rev;
@@ -190,18 +174,14 @@ try {
       JSON.parse(readFileSync(join(seatsDir, ".write-lock"), "utf8")).nonce === "live-but-slow-writer");
     rmSync(join(seatsDir, ".write-lock"), { force: true });
 
-    // …while a DEAD holder's lock is broken by verified pid-death, not age:
-    // a fresh stamp on a nonexistent pid breaks immediately
+    // …while a DEAD holder's lock is broken by verified pid-death, not age: a fresh stamp on a nonexistent pid breaks at once
     writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "corpse", ts: Date.now() }));
     const breaker = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 500 });
     const broke = breaker.propose(profile("seatdummy"), "after-crash") as any;
     check("a dead writer's lock is broken (pid-verified, fresh stamp and all) and the write proceeds", broke.ok === true, JSON.stringify(broke));
 
-    // #105 round 3 — release-safety + commit gate: the lock is swapped to a
-    // successor's mid-transaction (inside A's provenance append, after the
-    // first gate). A must ABORT at the second gate — snapshot withheld, its
-    // own release must NOT touch the successor's lock, and the orphaned log
-    // line folds forward as a receipted write on the next load.
+    // release safety: the lock swapped to a successor's mid-transaction, A must ABORT at the second gate without touching
+    // the successor's lock, and the orphaned log line folds forward as a receipted write on the next load
     let swapped = false;
     const gated = new SeatStore(OPT, LIB, {
       appendFileSync: (path: any, data: any) => {
@@ -220,7 +200,7 @@ try {
     const afterGate = new SeatStore(OPT, LIB);
     check("…while the receipted orphan folds forward on the next load", afterGate.rev === revG + 1, `rev=${afterGate.rev}`);
 
-    // vector 5: duplicate-revision provenance is a forked history — quarantined
+    // vector 5: duplicate-revision provenance is a forked history: quarantined
     const lastLine = logOf()!.trim().split("\n").at(-1)!;
     appendFileSyncReal(join(seatsDir, "profiles.log.jsonl"), lastLine + "\n");
     const forked = new SeatStore(OPT, LIB);

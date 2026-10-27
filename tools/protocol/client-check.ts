@@ -1,12 +1,12 @@
-// tools/protocol/client-check.ts — slice 3b in a real browser: edit mode in a world sends requests, folds the log and
-// waits for the authority. One headless Chromium against a scratch sequencer (tools/harness.ts scratchBench: scratch port,
-// scratch WORLDS_DIR, its own profile; never 8968/8970). Run it under the house guards:
+// tools/protocol/client-check.ts: in a real browser, edit mode in a world sends requests, folds the log and waits for the
+// authority. One headless Chromium against a scratch sequencer (tools/harness.ts scratchBench: scratch port, scratch
+// WORLDS_DIR, its own profile; never 8968/8970). Run it under the house guards:
 //   code/scripts/eido-probe.sh -C <worktree> -t 400 tools/protocol/client-check.ts      (test:protocol's `client` suite does this)
 //
 //   B   boot: the page knows it's in a world; its own fold of the log stream = the log on disk (digest)
 //   P   place from the Build tab's ghost: one `create` act, the page waited for the authority
 //   G   a gizmo drag is presence until release: ONE act, `set transform` with expect on where it started
-//   KU  U opens People Here; Ctrl+U (the browser's view-source) does not (review r3 F9)
+//   KU  U opens People Here; Ctrl+U (the browser's view-source) does not
 //   U   Ctrl+Z is the authority's undo {act} of MY act; Ctrl+Shift+Z redoes (undo of my undo)
 //   C   undo refused when someone changed it since: nothing written, the refusal shown in the agents' words
 //   X   Esc mid-drag: the thing goes back, and nothing is written (0 acts)
@@ -31,7 +31,7 @@ const CRATE = "eidoverse/assets/models/crate_large_blue.glb", RED = "eidoverse/a
 let worldsDir = "";
 import { idAliases, inPage } from "./idalias.ts";
 import { pause, tryUntil, pageWaiter, WAIT_SCALE } from "./wait.ts";
-// R 10-17: the scene's names ride as placeholders and minted ids — bob's through IDS (node), the page's own through the page
+// the scene's names ride as placeholders and minted ids: bob's through IDS (node), the page's own through the page
 // helper (pageIds); every expression sent to the page reads the quoted names as ids (inPage)
 const IDS = idAliases();
 const NAMES = ["cup", "tbl", "plinth", "pebble", "pv", "pt", "ststool", "ststool-seat", "bell", "msa", "msb", "msc", "msd", "mse"];
@@ -47,10 +47,10 @@ const { check: check0, tally } = mkCheck();
 const check = (name: string, ok: any, detail?: any) => check0(name, !!ok, detail === undefined ? "" : typeof detail === "string" ? detail.slice(0, 600) : (JSON.stringify(detail) ?? "").slice(0, 600));
 const LOG = () => path.join(worldsDir, WORLD, "world.jsonl");
 const entries = () => readLog(fs.readFileSync(LOG()));
-// my identity is the founder's opaque id (round-2 R1): the actor of the world's founding act
+// my identity is the founder's opaque id: the actor of the world's founding act
 const MY = () => entries().find((e: any) => e?.kind === "act" && e.verb === "create-world")?.actor;
-// my acts that CHANGED something: a refused request is recorded too (an act carrying {refused}, round-2 R7), and is
-// counted apart (myRefused), so "nothing was written" below means no change, with the attempt on the record
+// my acts that CHANGED something: a refused request is recorded too (an act carrying {refused}) and counted apart
+// (myRefused), so "nothing was written" below means no change, with the attempt on the record
 const myActs = () => entries().map((e, seq) => ({ e, seq })).filter(({ e }) => e?.kind === "act" && e.actor === MY() && !e.body?.refused);
 const myRefused = () => entries().filter((e) => e?.kind === "act" && e.actor === MY() && e.body?.refused).length;
 const disk = () => fold(entries());
@@ -71,7 +71,7 @@ const posX = (id: string) => `import('/lib/world.js').then((m) => m.entities.get
 try {
   // ---- a second builder over a plain socket (an agent's view: it still reads the projection) ----
   const bob = new WebSocket(BASE.replace("http", "ws") + "/ws"); const replies = new Map(); let rn = 0;
-  let BOB = "";   // bob's identity: the opaque id his snapshot tells him (round-2 R1); a role is granted to it, never to "bob"
+  let BOB = "";   // bob's identity: the opaque id his snapshot tells him; a role is granted to it, never to "bob"
   bob.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "reply") replies.get(m.id)?.(m.reply); if (m.type === "snapshot" && m.cut?.you) BOB = m.cut.you; };
   await new Promise((r, j) => { bob.onopen = r; bob.onerror = j; });
   const bobReq = (verb: string, args: any) => new Promise<any>((res) => { const id = `b${++rn}`; replies.set(id, (r: any) => res(IDS.back(r))); bob.send(JSON.stringify({ type: "request", id, verb, args: IDS.out(verb, args) })); setTimeout(() => res({ ok: false, refused: { code: "timeout" } }), 6000); });
@@ -91,7 +91,7 @@ try {
   if (secs < 4) await die(1, "the page never booted");
   await evalJson(`(() => { const s = document.querySelector('#splash'); if (s) s.style.pointerEvents = 'none'; return true; })()`);
   check("B1 the page knows it's in a world (it adopted the cut)", await waitFor(`import('/lib/net.js').then((m) => m.replicaActive())`));
-  // ---- K: U opens People Here; Ctrl+U is the browser's (view-source), never this (review r3 F9) ----
+  // ---- K: U opens People Here; Ctrl+U is the browser's (view-source), never this ----
   {
     const people = `import('/lib/windows.js').then((m) => { const f = m.getFrame('chat'); const c = f?.sidePane?.('cols'); return { vis: !!f?.visible, open: !!c && !c.classList.contains('side-closed') }; })`;
     await page(`const m = await import('/lib/windows.js'); const f = m.getFrame('chat'); const c = f?.sidePane?.('cols');
@@ -103,7 +103,7 @@ try {
     const plain = await evalJson(people);
     check("KU1 Ctrl+U leaves People Here alone; U alone opens it", !before.open && !ctrl.open && !ctrl.vis && plain.vis && plain.open, { before, ctrl, plain });
   }
-  bob.send(JSON.stringify({ type: "join", world: WORLD, id: "bob", avatar: "", replica: true })); await sleep(500);   // replica: a world speaks only to clients that fold its log (3c)
+  bob.send(JSON.stringify({ type: "join", world: WORLD, id: "bob", avatar: "", replica: true })); await sleep(500);   // replica: a world speaks only to clients that fold its log
   check("(setup) the owner makes bob a builder", (await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'roles:${BOB}', value: { role: 'builder' } })).ok;`)) === true && /^u-/.test(BOB));
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`);
   check("B2 edit mode opens (the owner may build)", await waitFor(`document.body.classList.contains('edit-mode')`));
@@ -128,8 +128,8 @@ try {
   check("G0 the gizmo attaches to it", await waitFor(`globalThis.__gizmo?.().attached === '${crate}'`));
   const start = disk().entities[crate].c.transform;
   // the drag adds 1 m to where the PAGE has the thing; a slow host may still be easing it in from where it was drawn, and
-  // then the record lands off by that gap (Windows, fork run 40067199839: x 1.308, 0.4 short of the 1 m). Wait until the
-  // page agrees with the record; a page that never converges to its own record is a client bug, so that is a row too.
+  // the record then lands off by that gap: wait until the page agrees with the record (a page that never converges to its
+  // own record is a client bug, so that is a row too)
   const pageX = () => evalJson(`import('/lib/world.js').then((m) => m.entities.get('${crate}')?.position.x ?? null)`);
   const settled = await waitFor(`import('/lib/world.js').then((m) => Math.abs((m.entities.get('${crate}')?.position.x ?? 1e9) - ${start.pos[0]}) < 1e-3)`);
   check("G (setup) the page has the crate where the record does before the drag", settled, { pageX: await pageX(), recordX: start.pos[0] });
@@ -163,14 +163,14 @@ try {
   await key("KeyZ", { ctrlKey: true, shiftKey: true });
   check("U6 …and redo again", await waitDisk(() => myActs().at(-1).e.body.request.act === undo2 && Math.abs(disk().entities[crate].c.transform.pos[0] - (start.pos[0] + 1)) < 1e-3), myActs().at(-1)?.e.body);
   await waitFor(`import('/lib/net.js').then((m) => Math.abs(m.replica.st.entities['${crate}'].c.transform.pos[0] - ${start.pos[0] + 1}) < 1e-3)`);
-  // U7 (review 10-14 K1): two quick Ctrl+Z's undo TWO acts (Y then X) — the second press must not read the same top act,
-  // be refused "already undone", and drop the act below it unseen
+  // U7: two quick Ctrl+Z's undo TWO acts (Y then X): the second press must not read the same top act, be refused
+  // "already undone", and drop the act below it unseen
   { const p0 = disk().entities[crate].c.transform.pos[0]; const k = myActs().length;
     await drag(1); await waitDisk(() => myActs().length === k + 1); const x = myActs().at(-1).seq;
     await waitFor(`globalThis.__editWrites().undo.at(-1) === ${x}`);
     await drag(1); await waitDisk(() => myActs().length === k + 2); const y = myActs().at(-1).seq;
     await waitFor(`globalThis.__editWrites().undo.at(-1) === ${y}`);
-    // both presses in ONE tick (key-repeat): awaiting between them let the local authority reply in between, which hid the bug
+    // both presses in ONE tick (key-repeat): awaiting between them lets the local authority reply in between, hiding the bug
     await evalJson(`(() => { for (let i = 0; i < 2; i++) { dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', ctrlKey: true, bubbles: true })); dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', ctrlKey: true, bubbles: true })); } return true; })()`);
     const both = await waitDisk(() => myActs().length >= k + 4 && myActs().slice(k + 2).filter((a) => a.e.verb === "undo" && a.e.body?.refused === undefined).length === 2);
     const reqs = myActs().slice(k + 2).map((a) => a.e.body?.request?.act);
@@ -191,13 +191,13 @@ try {
   // ---- C: undo refused when someone changed it since ----
   const moved = disk().entities[crate].c.transform;
   check("(setup) bob moves the crate after me", (await bobReq("set", { id: crate, component: "transform", value: { ...moved, pos: [moved.pos[0], moved.pos[1], moved.pos[2] + 2] } })).ok);
-  await waitFor(`import('/lib/net.js').then((m) => m.replica.st.entities['${crate}'].c.transform.pos[2] === ${moved.pos[2] + 2})`);
+  await waitFor(`import('/lib/net.js').then((m) => Math.abs(m.replica.st.entities['${crate}'].c.transform.pos[2] - ${moved.pos[2] + 2}) < 1e-3)`);
   n0 = myActs().length; const r0 = await evalJson(`__refused.length`);
   await key("KeyZ", { ctrlKey: true });
   check("C1 Ctrl+Z on something bob changed since is refused", await waitFor(`__refused.length > ${r0} && __refused.at(-1).refused.code === 'conflict'`), await evalJson(`__refused.at(-1)`));
   const shown = await evalJson(`__refused.at(-1)`);
-  check("C2 …nothing written, bob's move stands", myActs().length === n0 && disk().entities[crate].c.transform.pos[2] === moved.pos[2] + 2);
-  // ship list 10-07: a person reads plain words (no code, no tool syntax: plainRefusal); the agents' words ride along as agentText
+  check("C2 …nothing written, bob's move stands", myActs().length === n0 && Math.abs(disk().entities[crate].c.transform.pos[2] - (moved.pos[2] + 2)) < 1e-3, disk().entities[crate].c.transform.pos);
+  // a person reads plain words (no code, no tool syntax: plainRefusal); the agents' words ride along as agentText
   check("C3 …and the person reads it in plain words (the agents' words kept beside them), naming who", /^Couldn't undo/.test(shown?.text ?? "") && !/\(conflict\)/.test(shown?.text ?? "") && shown?.agentText === refusalText("undo", { refused: shown?.refused }) && /bob changed it since/.test(JSON.stringify(shown?.refused?.skipped)), shown);
 
   // ---- X: Esc mid-drag writes nothing ----
@@ -219,7 +219,7 @@ try {
   await page(`(await import('/lib/inspect.js')).commitEdit('cup', 'pos.x', 0.4); return true;`);
   check("L1 moving the cup on bob's locked table asks first: 'This is locked. Move anyway?'", await waitFor(`${dlgTitle} === 'This is locked. Move anyway?'`), await evalJson(dlgTitle));
   const body = await evalJson(`document.querySelector('#confirm-center #cc-body')?.textContent ?? ''`);
-  check("L2 …saying in one line which thing is locked and by whom, no agent teaching (R, 10-04)", body === "It rides “tbl”, which is locked by bob."   /* the table by its label, never its id (R 10-17) */, body);
+  check("L2 …saying in one line which thing is locked and by whom, no agent teaching (R, 10-04)", body === "It rides “tbl”, which is locked by bob."   /* the table by its label, never its id */, body);
   check("L3 …and the refused try changed nothing; the attempt itself is on the record (round-2 R7)", myActs().length === n0 && myRefused() >= 1, myRefused());
   await dlgClick("Move anyway");
   check("L4 Move anyway: ONE act, the same request with throughLock: true", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.body.request.throughLock === true && myActs().at(-1).e.body.request.id === IDS.of("cup")), myActs().slice(n0).map((a) => a.e.body.request));
@@ -235,8 +235,8 @@ try {
   const st1 = disk(); const dup = Object.keys(st1.entities).find((k) => k !== crate && k !== IDS.of("cup") && st1.entities[k].c.model === st1.entities[crate].c.model);   // the stored model: the door keeps CRATE as its content address
   check("D2 …a copy 0.5 m along x, drawn in the page", !!dup && Math.abs(st1.entities[dup].c.transform.pos[0] - st1.entities[crate].c.transform.pos[0] - 0.5) < 1e-6 && await waitFor(`import('/lib/world.js').then((m) => m.entities.has('${dup}'))`), dup);
 
-  // ---- D3: a late reply doesn't undo a newer pick. The copy is selected 400 ms after its reply; a person who has picked
-  // something else by then keeps it (CI 10-22: on a slow page the copy's select replaced a two-thing selection) ----
+  // ---- D3: a late reply doesn't undo a newer pick: the copy is selected 400 ms after its reply, and a person who has
+  // picked something else by then keeps it ----
   { await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); return true;`);
     const nd = myActs().length; await key("KeyD", { altKey: true });
     await page(`(await import('/lib/scenegraph.js')).sceneSelect('${IDS.of("cup")}'); return true;`);
@@ -254,7 +254,7 @@ try {
   await key("Delete");
   check("M1 Delete on both = ONE act, a batch of two deletes", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "batch" && myActs().at(-1).e.body.request.ops.length === 2), myActs().slice(n0).map((a) => a.e.body.request));
   // the act and its change are two appends (writes.js changeEntry): M1 waits for the act, so the change may not be on disk
-  // yet — wait for it too (anima 40115466089 ubuntu read the log between the two)
+  // yet: wait for it too
   check("M2 …both are gone, on disk and in the page", await waitDisk(() => !disk().entities[crate] && !disk().entities[dup]) && await waitFor(`import('/lib/world.js').then((m) => !m.entities.has('${crate}') && !m.entities.has('${dup}'))`),
     { onDisk: [crate, dup].filter((id) => disk().entities[id]), inPage: await evalJson(`import('/lib/world.js').then((m) => ['${crate}', '${dup}'].filter((id) => m.entities.has(id)))`) });
   n0 = myActs().length;
@@ -268,7 +268,7 @@ try {
   check("S0 Build › Blueprints offers 'save as blueprint' for the selection", await waitFor(`[...${bf}.querySelectorAll('.sp-btn')].some((b) => /save as blueprint/.test(b.textContent) && !b.disabled)`));
   n0 = myActs().length;
   await evalJson(`[...${bf}.querySelectorAll('.sp-btn')].find((b) => /save as blueprint/.test(b.textContent)).click(), true`);
-  // it asks for a name (review 10-07 S5); the person types one and saves
+  // it asks for a name; the person types one and saves
   check("S1a it asks for a name first", await waitFor(`!!document.querySelector('#confirm-center input')`, 3000));
   await evalJson(`(() => { const i = document.querySelector('#confirm-center input'); if (!i) return false; i.value = 'tbl'; document.querySelector('#confirm-center .cc-ok').click(); return true; })()`);
   check("S1 it is the authority's publish: ONE act", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "publish"), myActs().slice(n0).map((a) => a.e.verb));
@@ -279,9 +279,10 @@ try {
   check("S3 …and its tile shows in 'saved here'", await waitFor(`[...${bf}.querySelectorAll('.sp-tile')].some((t) => t.textContent.trim() === 'tbl')`));
   n0 = myActs().length;
   await evalJson(`[...${bf}.querySelectorAll('.sp-tile')].find((t) => t.textContent.trim() === 'tbl').click(), true`);
-  check("S4 the tile places a copy: create {from: <hash>}, ONE act", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "create" && /^sha256:/.test(myActs().at(-1).e.body.request.from)), myActs().slice(n0).map((a) => a.e.body.request));
+  check("S4 the tile places a copy: create {from: <hash>}, ONE act", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "create" && /^sha256:/.test(myActs().at(-1).e.body.request.from)), { acts: myActs().slice(n0).map((a) => a.e.body.request), refused: await evalJson(`__refused.slice(-2).map((r) => r.text)`), errs: await evalJson(`__errs`),
+    tiles: await evalJson(`[...${bf}.querySelectorAll('.sp-tile')].map((t) => [t.textContent.trim(), t.disabled])`) });   // a red S4 once said only [] (#260, Windows)
 
-  // ==== research 44: polish for R's first test ====
+  // ==== research 44: polish ====
 
   // ---- H: the lock icon on each Hierarchy row (builders and owners toggle it; it shows others' locks live) ----
   await evalJson(`document.querySelector('.edit-tab[data-tab="hierarchy"]')?.click(), true`);
@@ -348,10 +349,8 @@ try {
     check("V3 an owner's are clickable again", await waitFor(`${lockBtn(crate)}?.disabled === false`)); }
 
   // ---- F: the mesh drag of a mounted child moves it in the world's frame (the old frame bug) ----
-  // A low plinth (below eye level, so its top is what the pointer meets), turned 90° and scaled 0.6×, with a pebble
-  // riding it. The drag keeps its grab offset in WORLD space, so the pebble's world displacement equals the pointer's
-  // on the plinth's top. The old code added a world point to a local offset and set it as the local position (so the
-  // pebble moved by R·0.6·that, the wrong way), and its ray could hit the pebble itself (it is drawn inside the plinth).
+  // A low plinth turned 90° and scaled 0.6×, a pebble riding it: the grab offset is kept in WORLD space, so the pebble
+  // moves exactly as the pointer does on the plinth's top (and the ray must not hit the pebble drawn inside it)
   { const roots = Object.keys(disk().entities).filter((k) => k !== "@world" && !disk().entities[k].c.parent);
     check("(setup) the owner clears the field (everything placed so far, through its locks: some are the owner's, owners-only since recut B2), so only the plinth is under the pointer", await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('batch', { ops: ${JSON.stringify(roots)}.map((id) => ({ verb: 'delete', args: { id } })), throughLock: true })).ok;`), roots);
     // the view must hold still while the test aims (the body may still be settling, and the camera chases it)
@@ -431,32 +430,31 @@ try {
     check("F7 ✕ Cancel puts it back, and nothing is written", await waitFor(`import('/lib/world.js').then((m) => { const p = m.entities.get('pebble').getWorldPosition(new (m.entities.get('pebble').position.constructor)()); return Math.hypot(p.x - ${pAfter[0]}, p.y - ${pAfter[1]}, p.z - ${pAfter[2]}) < 0.02; })`) && (await sleep(600), myActs().length === n0), myActs().slice(n0).map((a) => a.e.body.request)); } }
   await evalJson(`document.querySelector('#confirm-center .cc-no')?.click(), true`);   // a dialog a failed check left open would hold the keys
 
-  // ---- I: the Inspector, as R asked on 10-04 (name first, id dim, no lib/filter/parent rows, one Add Component pop-out) ----
+  // ---- I: the Inspector: name first, id dim, no lib/filter/parent rows, one Add Component pop-out ----
   const insp = `document.querySelector('[data-frame="inspector"]')`;
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); return true;`);
   await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === 'pebble')`);
   await sleep(600);
   const labels = await evalJson(`[...${insp}.querySelectorAll('.sp-row .sp-label')].map((l) => l.textContent)`);
-  // R 10-10 23:48: the name is the first line's title (no label; the eye and padlock beside it), then the id; R 10-12: the
-  // ENABLED box leads that line
+  // the ENABLED box leads the first line, then the name as its title (no label; the eye and padlock beside it), then the id
   const firstIsTitle = await evalJson(`(() => { const r = [...${insp}.querySelectorAll('.sp-row')]; return r[0]?.classList.contains('sp-enabled') && r[1]?.classList.contains('sp-title'); })()`);
-  // R 10-17 ID HARDENING: no id row (it can't be renamed; the label is the name)
+  // no id row: it can't be renamed; the label is the name
   check("I1 the Inspector leads with the ENABLED box and the name (its title line); no id row", firstIsTitle && labels?.[0] === "" && labels?.[1] === "" && !labels?.includes("id"), { firstIsTitle, labels: labels?.slice(0, 3) });
-  // R 10-17 20:30: the 'show id' button is gone; the name line carries the short #handle, dim, right after the name: the same
-  // one the Hierarchy shows twins by and agents use (shared/thingref.js handleOf over every id but the world's)
+  // the name line carries the short #handle, dim, right after the name: the one the Hierarchy shows twins by and agents
+  // use (shared/thingref.js handleOf over every id but the world's)
   { const want = await evalJson(`Promise.all([import('/lib/state.js'), import('/shared/thingref.js')]).then(([s, t]) => '#' + t.handleOf('pebble', Object.keys(s.state.st.entities).filter((k) => k !== '@world')))`);
     const got = await evalJson(`(() => { const r = [...${insp}.querySelectorAll('.sp-row')]; const i = r.findIndex((x) => x.classList.contains('sp-title')); const h = r[i + 1]; return { cls: h?.className ?? null, text: h?.textContent?.trim() ?? null, title: h?.title ?? '', opacity: h ? getComputedStyle(h.querySelector('.sp-btn')).opacity : null }; })()`);
     const btns = await evalJson(`[...${insp}.querySelectorAll('.sp-btn')].map((b) => b.textContent.trim())`);
     check("I1b the name line shows the same #handle the Hierarchy and agents use, dim, right after the name; its tooltip says agents and the log use it and it can't be renamed; no 'show id' button", !!want && got?.text === want && /sp-handle/.test(got?.cls ?? "") && Number(got?.opacity) < 1 && /agents/.test(got?.title) && /log/.test(got?.title) && /renamed/.test(got?.title) && /copy/i.test(got?.title) && !btns?.some((t) => /^(show|hide|copy) id$/.test(t)), { want, got, btns }); }
-  // R 10-10: parent moved to the Attributes tab ("I don't think we should show 'parent' here at all - this seems like a Hierarchy thing")
+  // parent lives in the Attributes tab (a Hierarchy matter), not here
   check("I2 …no lib line (the Model card has it), no filter box; no Parent card (it lives in Attributes now)", !labels?.includes("lib") && !(await evalJson(`!!${insp}.querySelector('input[placeholder^="filter"]')`)) && !labels?.includes("parent") && !labels?.includes("children") && !labels?.includes("on"), labels);
   check("I3 …placed by names who made it (the authority's inspect, as an agent asks it)", await waitFor(`[...${insp}.querySelectorAll('.sp-row')].some((r) => r.querySelector('.sp-label')?.textContent === 'placed by' && r.textContent.includes('bob'))`), await evalJson(`[...${insp}.querySelectorAll('.sp-row')].map((r) => r.textContent).slice(0, 5)`));
-  // R 10-17 20:34: no 'world' row; the distance rides the Transform card's title line, dim ("Transform · 12 m away"), and follows you
+  // no 'world' row; the distance rides the Transform card's title line, dim ("Transform · 12 m away"), and follows you
   { const tf = `[...${insp}.querySelectorAll('.sp-group')].find((b) => b.querySelector('.sp-group-name')?.textContent.startsWith('Transform'))`;
     const want = await evalJson(`Promise.all([import('/lib/world.js'), import('/lib/controller.js')]).then(([w, c]) => { const o = w.entities.get('pebble'); return Math.round(o.getWorldPosition(new o.position.constructor()).distanceTo(c.myState.pos)); })`);
     const head = await evalJson(`(() => { const b = ${tf}; const s = b?.querySelector('.sp-group-sub'); return b ? { sub: s?.textContent ?? null, op: s ? getComputedStyle(s).opacity : null, tip: s?.title ?? '' } : null; })()`);
     check("I3b no 'world' row; the Transform card's title line carries the distance, dim ('Transform · N m away'), its world coordinates on hover", !labels?.includes("world") && head?.sub === ` · ${want} m away` && Number(head?.op) < 1 && /world at \(/.test(head?.tip), { want, head, labels }); }
-  // R 10-17 20:36: "clicks go through" left the Inspector's header for Attributes, beside the selection layer
+  // "clicks go through" lives in Attributes, beside the selection layer, not the Inspector's header
   { const attrLabels = await evalJson(`[...document.querySelector('[data-frame="attributes"]').querySelectorAll('.sp-row .sp-label')].map((l) => l.textContent)`);
     const at = attrLabels?.indexOf("clicks go through") ?? -1;
     check("I3c 'clicks go through' is not in the Inspector; Attributes has it, right after the selection layer", !labels?.includes("clicks go through") && at > 0 && attrLabels[at - 1] === "layer", { labels: labels?.slice(0, 6), attrLabels }); }
@@ -469,29 +467,29 @@ try {
   check("I7 …'swi' finds the swinging one (by its description)", swi?.length > 0 && swi.some((t) => /pendulum/i.test(t)), swi);
   await evalJson(`document.querySelector('.sp-pop-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), true`);
   check("I8 …Esc closes it", await waitFor(`!document.querySelector('.sp-pop')`));
-  // G on a thing that rides another: the handles come up (R: "g/e/r doesn't always bring up the controls")
+  // G on a thing parented to another: the handles come up
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); (await import('/lib/build.js')).setTool('select'); return true;`);
   await key("KeyG"); await sleep(400);
   check("I9 G on the pebble (it rides another thing) brings up the move handles", await evalJson(`__gizmo().attached === 'pebble' && __gizmo().mode === 'translate'`), await evalJson(`({ a: __gizmo().attached, m: __gizmo().mode })`));
   await key("KeyE"); await sleep(400);
   check("I10 …and E the rotate handles", await evalJson(`__gizmo().attached === 'pebble' && __gizmo().mode === 'rotate'`), await evalJson(`({ a: __gizmo().attached, m: __gizmo().mode })`));
   await page(`(await import('/lib/build.js')).setTool('select'); return true;`);
-  // the Transform card's padlock follows the lock (R: "a padlock next to Transform regardless of its lock status")
+  // the Transform card's padlock follows the lock
   const tfLock = `[...${insp}.querySelectorAll('.sp-group')].find((g) => /Transform/.test(g.textContent))?.querySelector('.sp-ico') != null`;
   await page(`await (await import('/lib/editwrites.js')).lock('pebble', true); return true;`);
   check("I11 a locked thing's Transform card shows the padlock", await waitFor(tfLock), await evalJson(`[...${insp}.querySelectorAll('.sp-group')].map((g) => g.innerHTML.slice(0, 80))`));
   await page(`await (await import('/lib/editwrites.js')).lock('pebble', false); return true;`);
   check("I12 …and unlocking takes it away", await waitFor(`!(${tfLock})`), await evalJson(`[...${insp}.querySelectorAll('.sp-group')].map((g) => g.innerHTML.slice(0, 80))`));
 
-  // three-axis scale (R 10-04): the wire always had [x,y,z]; the page now edits, draws and keeps it
+  // three-axis scale: the wire always had [x,y,z]; the page edits, draws and keeps it
   const sLabels = await evalJson(`[...${insp}.querySelectorAll('.sp-row .sp-label')].map((l) => l.textContent).filter((t) => /scale/.test(t))`);
   check("I13 the Transform shows scale x / y / z", JSON.stringify(sLabels) === JSON.stringify(["scale x", "scale y", "scale z"]), sLabels);
   await page(`(await import('/lib/inspect.js')).commitEdit('pebble', 'pos.sx', 2); return true;`);
   check("I14 …editing scale x writes [2, y, z] to the log (one act)", await waitDisk(() => { const sc = disk().entities[IDS.of("pebble")]?.c.transform.scale; return sc && sc[0] === 2 && sc[1] !== 2; }), disk().entities[IDS.of("pebble")]?.c.transform);
   check("I15 …and the page draws it stretched, not uniform", await waitFor(`import('/lib/world.js').then((m) => { const s = m.entities.get('pebble').scale; return Math.abs(s.x - 2) < 1e-6 && Math.abs(s.y - 0.4) < 1e-6 && s.y === s.z; })`), await evalJson(`import('/lib/world.js').then((m) => m.entities.get('pebble').scale.toArray())`));
 
-  // R 10-04: a reload made in edit mode came back with the edit frames floating, squashed, outside edit mode. An edit
-  // frame whose saved state says "shown" (saved while docked) must still start hidden; edit mode alone opens it.
+  // an edit frame whose saved state says "shown" (saved while docked) must still start hidden after a reload; edit mode
+  // alone opens it (or it comes back floating, squashed, outside edit mode)
   const reborn = await page(`localStorage.setItem('ew-frame-zz-edit', JSON.stringify({ x: 60, y: 60, w: 300, h: 12, hidden: false }));
     localStorage.setItem('ew-frame-zz-plain', JSON.stringify({ x: 60, y: 60, w: 300, h: 200, hidden: false }));
     const F = await import('/lib/windows.js');
@@ -499,12 +497,12 @@ try {
     const r = { edit: e.visible, plain: p.visible }; e.el.remove(); p.el.remove(); return JSON.stringify(r);`);
   check("R1 an edit frame saved 'shown' starts hidden after a reload (a plain frame keeps its saved state)", reborn === JSON.stringify({ edit: false, plain: true }), reborn);
 
-  // the World row: its name big (the protocol keeps it on @world.about), @world small (R 10-04: "World and (@world)?")
+  // the World row: its name big (the protocol keeps it on @world.about), @world small
   const wrow = await evalJson(`document.querySelector('[data-frame="hierarchy"] .sp-item')?.textContent ?? null`);
   check("W1 the Hierarchy's World row reads WORLD then its name (one line, 38b82c6a), not '(@world)'", /^World\s*client check/.test(wrow ?? "") && !wrow.includes("@world"), wrow);
 
 
-  // transform space (R 10-04: "gimbal/object/world rotations... a way to switch between them")
+  // transform space: gimbal/object/world, switchable
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); const B = await import('/lib/build.js'); B.setSpace('rotate', 'world'); B.setTool('select'); return true;`);
   await key("KeyE"); await sleep(300);
   const sp0 = await evalJson(`({ s: __gizmo().controls?.space, a: __gizmo().attached })`);
@@ -552,7 +550,7 @@ try {
   check("PT3 …and the crate itself did not move", JSON.stringify(disk().entities[IDS.of("pt")].c.transform) === ptBefore, [ptBefore, disk().entities[IDS.of("pt")].c.transform]);
   await page(`(await import('/lib/build.js')).setTool('select'); return true;`);
 
-  // ---- MS: the multi-selection Inspector and the Hierarchy's Ctrl / Shift clicks (R, gym 10-17 20:39-20:44) ----
+  // ---- MS: the multi-selection Inspector and the Hierarchy's Ctrl / Shift clicks ----
   {
     const rowEl = (id: string) => `[...${hier}.querySelectorAll('.sp-tree-row')].find((r) => r.dataset.id === ${JSON.stringify(id)})`;
     const clickRow = (id: string, mods: any = {}) => evalJson(`(() => { const m = ${rowEl(id)}?.querySelector('.sp-item-main'); if (!m) return false; m.dispatchEvent(new MouseEvent('click', { bubbles: true, ${Object.entries(mods).map(([k, v]) => `${k}: ${v}`).join(", ")} })); return true; })()`);
@@ -560,7 +558,7 @@ try {
     const activeNow = () => evalJson(`import('/lib/edit/selection.js').then((m) => m.active())`);
     const rowsNow = () => evalJson(`(async () => { const W = await import('/lib/world.js'); return __editPanels().rows.filter((id) => !!W.entities.get(id)); })()`);
     const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
-    // four labelled crates at the root, and a fifth riding the second (a branch to fold)
+    // four labelled crates at the root, and a fifth parented to the second (a branch to fold)
     let made = true; const ms = ["msa", "msb", "msc", "msd"];
     for (const [i, n] of ms.entries()) made = (await bobReq("create", { id: n, model: CRATE, components: { transform: { pos: [20 + i * 2.5, 0, -6 + i * 0.5] }, label: `ms ${n.slice(2)}` } })).ok && made;
     made = (await bobReq("create", { id: "mse", model: CRATE, components: { transform: { pos: [0, 1, 0], scale: [0.3, 0.3, 0.3] }, parent: { to: "msb", order: "a0" }, label: "ms e" } })).ok && made;
@@ -624,7 +622,7 @@ try {
     await page(`const s = await import('/lib/scenegraph.js'); ${selBefore ? `s.sceneSelect(${JSON.stringify(selBefore)})` : "s.sceneDeselect()"}; return true;`); await sleep(400);
   }
 
-  // ---- MIC: the ∃ line's mic and ear glyphs in edit mode read the brand when live and the attention gold when hot (R, gym 10-17 20:44) ----
+  // ---- MIC: the ∃ line's mic and ear glyphs in edit mode read the brand when live and the attention gold when hot ----
   const micInks = `(async () => { const M = await import('/lib/mictoggle.js'); const b = document.getElementById('micbtn'); const root = getComputedStyle(document.documentElement);
       const st = (svg) => (/stroke="([^"]+)"/.exec(svg ?? '') ?? [])[1] ?? null;
       return { brand: root.getPropertyValue('--brand').trim(), attn: root.getPropertyValue('--attn').trim(), btn: !!b, edit: document.body.classList.contains('edit-workspace'),
@@ -633,7 +631,7 @@ try {
     check("MIC1 in edit mode the live mic and ear glyphs are the brand teal (var(--brand)), not the bar's grey", inks?.edit && inks?.btn && inks?.on === inks?.brand && inks?.ear === inks?.brand && inks?.off !== inks?.brand && inks?.earOff !== inks?.brand, inks);
     check("MIC2 …and the mic picking up sound is the attention gold (var(--attn)), glowing, its capsule filled in the same gold", inks?.hot === inks?.attn && inks.hotSvg.includes(`drop-shadow(0 0 5px ${inks?.attn})`) && inks.hotSvg.includes(`fill="${inks?.attn}"`) && !/rgba\(/.test(inks.hotSvg), inks);
   }
-  // 👁 Hidden in MY view (R 10-04: "Hidden" is the local one; research 51): never logged, and you can't lose track of it
+  // 👁 Hidden in MY view ("Hidden" is the local one; research 51): never logged, and you can't lose track of it
   const eyeOf = (id: string) => `[...${hier}.querySelectorAll('.sp-tree-row')].find((r) => r.dataset.id === ${JSON.stringify(id)})?.querySelector('.sp-eye')`;
   const nEye = entries().length;
   await evalJson(`(${eyeOf("pt")}?.click(), true)`);
@@ -644,7 +642,7 @@ try {
   await evalJson(`[...${hier}.querySelectorAll('.sp-btn')].find((b) => /hidden in your view/.test(b.textContent))?.click(), true`);
   check("E4 …and 'show all' brings it back", await waitFor(`import('/lib/world.js').then((m) => m.entities.get('pt')?.visible === true)`));
 
-  // scrub feel (R 10-04: Maya's Channel Box speed + hyperbolic icons) and findable modifiers ("SOOOO much hidden knowledge")
+  // scrub feel (Maya's Channel Box speed + hyperbolic icons) and findable modifiers (no hidden knowledge)
   const feel0 = await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] .sp-scrubfeel')].map((b) => b.textContent)`);
   check("SF1 the Inspector header has the scrub-feel dials: speed and accelerating (default medium, accelerating)", JSON.stringify(feel0) === JSON.stringify(["med", "accel"]), feel0);
   await evalJson(`(document.querySelector('[data-frame="inspector"] .sp-scrub-speed').click(), true)`);
@@ -655,7 +653,7 @@ try {
   const travel = await page(`const P = await import('/lib/panels.js'); const a = P.scrubTravel(300); P.setScrubFeel({ accel: false }); const l = P.scrubTravel(300); P.setScrubFeel({ accel: true }); return JSON.stringify([a, l]);`);
   check("SF4 accelerating travels further than linear on a long drag (300 px)", JSON.parse(travel)[0] > JSON.parse(travel)[1] * 2, travel);
 
-  // keyhints (R 10-04): before = tooltip, during = the status line at the bottom
+  // keyhints: before = tooltip, during = the status line at the bottom
   const moveTip = await evalJson(`document.querySelector('.edit-tool[data-tool="move"]')?.title ?? ''`);
   check("KH1 the move tool's tooltip says the gizmo's hidden key (hold Ctrl to snap) and the tool letters", /hold Ctrl to snap/.test(moveTip) && /P pivot/.test(moveTip), moveTip);
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); return true;`); await sleep(500);
@@ -668,12 +666,12 @@ try {
   await evalJson(`(() => { const n = [...document.querySelectorAll('[data-frame="inspector"] .sp-f-num .sp-num')].find((x) => !x.disabled); n.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 })); return true; })()`);
   await sleep(300);
   check("KH3 …and gives the bar back when the drag ends", await evalJson(`!/Shift finer/.test(document.getElementById('hintbar')?.textContent ?? '') || document.getElementById('hintbar').classList.contains('gone')`), await evalJson(`document.getElementById('hintbar')?.textContent`));
-  // the scrub's release commits a set; on a slow host it reached the record after CD1 had counted the log, and CD1 saw it as
-  // its own extra act (anima 40104935973, macOS: a transform set on pebble, x -0.007 -> 0.597). Wait for it here.
+  // the scrub's release commits a set; on a slow host it reached the record after CD1 counted the log, and CD1 saw it as
+  // its own extra act: wait for it here
   check("KH (setup) the scrub's release is on the record before the next case counts", await waitDisk(() => myActs().slice(nK).some((a) => a.e.verb === "set" && a.e.body?.request?.id === IDS.of("pebble"))),
     myActs().slice(nK).map((a) => [a.e.verb, a.e.body?.request?.id]));
 
-  // Ctrl+D duplicates (R 10-04: "isn't it usually ctrl+d?"), the held D never strafes, and copy #2 nudges toward blueprints
+  // Ctrl+D duplicates, the held D never strafes, and copy #2 nudges toward blueprints
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); return true;`); await sleep(300);
   const nD = myActs().length;
   const me0 = await evalJson(`import('/lib/controller.js').then((m) => [m.myState.pos.x, m.myState.pos.y, m.myState.pos.z])`);
@@ -690,13 +688,13 @@ try {
   await key("KeyD", { ctrlKey: true });
   check("CD3 the second copy of the same unlinked thing says copies are independent, and points at Save as blueprint", await waitFor(`/independent/.test(document.getElementById('hintbar')?.textContent ?? '') && /Save as blueprint/.test(document.getElementById('hintbar').textContent)`, 4000), await evalJson(`document.getElementById('hintbar')?.textContent`));
 
-  // where a value came from (R 10-04): each card's tooltip says who last set it and when, and the cards end in "last change"
+  // where a value came from: each card's tooltip says who last set it and when, and the cards end in "last change"
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); return true;`);
   const provOK = await waitFor(`(() => { const g = [...document.querySelectorAll('[data-frame="inspector"] .sp-group')].find((b) => /Transform/.test(b.textContent)); const row = g?.closest('[title]'); return !!row && /(set by|as made by) .+ · (just now|\\d+ min ago)/.test(row.title); })()`, 6000);
   check("PR1 the Transform card's tooltip says who last set it, and when", provOK, await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] .sp-group')].find((b) => /Transform/.test(b.textContent))?.closest('[title]')?.title`));
   check("PR2 the cards end in one 'last change' line (the doorway to History)", await waitFor(`[...document.querySelectorAll('[data-frame="inspector"] .sp-row, [data-frame="inspector"] [class*="sp-f"]')].some((r) => /last change/.test(r.textContent) && /(just now|min ago)/.test(r.textContent))`, 4000), await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] *')].map((r) => r.textContent).find((t) => /last change/.test(t))`));
 
-  // drivers are ordinary cards; a driven field's ~ leads to its driver (R 10-04: follow Blender/Unity/Godot/Roblox/Resonite)
+  // drivers are ordinary cards; a driven field's ~ leads to its driver (as Blender/Unity/Godot/Roblox/Resonite)
   const mset = await page(`const r = await (await import('/lib/net.js')).sendRequest('set', { id: 'pt', component: 'motion', value: { type: 'pendulum', axis: [0, 0, 1], amp: 0.1, period: 3 } }); return JSON.stringify(r?.ok);`);
   await sleep(600);   // a duplicate earlier in the run reselects its copy after 400 ms (editpanels duplicate); let that land first
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); return true;`);
@@ -712,7 +710,7 @@ try {
   check("DR2 …clicking it opens the Pendulum card (it was folded)", await waitFor(`[...document.querySelectorAll('[data-frame="inspector"] .sp-group')].some((b) => /▾\\s*Pendulum/.test(b.textContent))`, 3000), await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] .sp-group')].map((b) => b.textContent)`));
   await page(`await (await import('/lib/net.js')).sendRequest('delete', { id: 'pt', component: 'motion' }); return true;`);
 
-  // History (R 10-04, research 56): a tab beside the Inspector; the 'last change' line opens it; one thing's acts, Older… pages
+  // History (research 56): a tab beside the Inspector; the 'last change' line opens it; one thing's acts, Older… pages
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); return true;`);
   await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === 'pt')`, 3000);
   check("HT1 the right column has Inspector | Attributes | History tabs (Attributes: R 10-10)", await evalJson(`JSON.stringify([...document.querySelectorAll('.edit-rtabs .edit-tab')].map((b) => b.textContent)) === '["Inspector","Attributes","History"]'`));
@@ -722,19 +720,15 @@ try {
   const hrows = async () => evalJson(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].map((x) => x.textContent)`);
   check("HT3 it lists this thing's acts, newest first, with who and what (pt's motion set and deleted above)", await waitFor(`(() => { const t = [...document.querySelectorAll('[data-frame="history"] .sp-info')].map((x) => x.textContent); const i = t.findIndex((x) => /delete.*motion/.test(x)), j = t.findIndex((x) => /set.*motion/.test(x)); return i >= 0 && j > i; })()`, 5000), await hrows());
   // enough acts to page: 25 label sets on pt, then Older… must reach back to the motion set
-  // each set must land: the authority's rate (60 entries per actor per 10 s; a set is an act and a change) refuses a burst
-  // with code 'rate' and no trace, which left a hole in the history ('"pt 22" → "pt 24"'); a refused set waits out the window
-  // and is sent again, as the refusal says (slow down)
+  // each set must land: the rate (60 entries per actor per 10 s) refuses a burst with code 'rate', so a refused set waits
+  // out the window and is sent again
   const landed = await page(`const n = await import('/lib/net.js'); let ok = 0, waited = 0;
     for (let k = 0; k < 25; k++) for (let t = 0; t < 15; t++) { const r = await n.sendRequest('set', { id: 'pt', component: 'label', value: 'pt ' + k });
       if (r?.ok) { ok++; break; } if (r?.refused?.code !== 'rate') return { ok, k, refused: r?.refused ?? null }; waited++; await new Promise((z) => setTimeout(z, 1000)); }
     return { ok, waited };`);
   check("(setup) all 25 label sets land (a rate refusal waits out the window and is sent again)", landed?.ok === 25, landed);
-  // the panel re-reads its newest page when the thing changes: HT4/HT5 read it once it has caught up with the last set
-  // (a real condition, not a fixed wait: an 800 ms sleep read a page taken mid-stream, motion still on it)
-  // the ROW for the last set ('→ "pt 24"'), not just the words: the panel's own title says "pt 24" as soon as the label
-  // lands, so /pt 24/ was true while the page on screen was still one taken mid-stream (HT5 failed 3 of 5, 10-23, its
-  // first row "pt 22 → pt 23")
+  // HT4/HT5 wait for the ROW of the last set ('→ "pt 24"'), not a fixed sleep or the words: the panel's title says
+  // "pt 24" as soon as the label lands, while the page on screen may still be one taken mid-stream
   const caught = await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].some((x) => /→ "pt 24"/.test(x.textContent))`, 8000);
   if (!caught) throw new Error(`HT4 setup: the panel never showed the last set's row: ${JSON.stringify((await hrows() as string[]).slice(0, 3))}`);
   check("HT4 a long history shows a page and an Older… button", await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-btn')].some((b) => /Older/.test(b.textContent))`, 5000), await hrows());
@@ -744,10 +738,8 @@ try {
   await waitFor(`(() => { const b = [...document.querySelectorAll('[data-frame="history"] .sp-btn')].find((x) => /Older/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`, 5000);
   if (process.env.SHOT_DIR) { const r = await cdp.send('Page.captureScreenshot', { format: 'png' }); (await import('node:fs')).writeFileSync(`${process.env.SHOT_DIR}/history-tab.png`, Buffer.from(r.data, 'base64')); }
   check("HT6 …Older… reads further back and finds it", await waitFor(`[...document.querySelectorAll('[data-frame="history"] .sp-info')].some((x) => /set.*motion/.test(x.textContent))`, 5000), (await hrows() as string[]).length);
-  // HT7: a history read the authority refuses (or that times out) said "reading the log…" forever, and nothing asked again
-  // (client-b2 HIS1, 10-22). The page answers this thing's first history read with a refusal itself; the panel must say so,
-  // and the next change must read again.
-  // its setup failing fails HT7, not the whole run (a throw here used to abort every check after it)
+  // HT7: a refused (or timed-out) history read must be said, and the next change must read again (client-b2 HIS1);
+  // its setup failing fails HT7, not the whole run
   try { const made: any = await page(`return (await import('/lib/net.js')).sendRequest('create', { components: { transform: { pos: [3, 0, 3] }, label: 'ht7 stone' } });`);
     const hid = made?.refs?.[0]?.id; if (!hid) throw new Error(`HT7 setup: the stone wasn't created: ${JSON.stringify(made)}`);
     await waitFor(`import('/lib/world.js').then((m) => m.entities.has(${JSON.stringify(hid)}))`);
@@ -763,11 +755,8 @@ try {
     check("HT7b …and once the authority answers again, the panel reads it by itself (no change needed)", await waitFor(`/created/.test(document.querySelector('[data-frame="history"]')?.textContent ?? '')`, 6000),
       await evalJson(`(document.querySelector('[data-frame="history"]')?.textContent ?? '').slice(0, 200)`));
   } catch (e) { check("HT7 (setup)", false, String((e as Error)?.message ?? e)); }
-  // HT8: a re-read still queued for the thing you just left stole the panel from the one you selected (client-b2 HIS1,
-  // 10-23, measured: the world's deferred re-read ran after the selection moved to a thing, took a newer generation, and
-  // both replies were dropped as stale: "reading the log…" until the next change). The page holds back stone A's history
-  // reads (1.5 s × the wait scale) and B's longer (3 s ×), so A's re-read (A changed while its read was out) runs after B's read went out and before
-  // B's answer came back — the order HIS1 recorded; B's history must still arrive.
+  // HT8: a re-read queued for the thing you just left must not steal the panel (client-b2 HIS1). A's reads are held
+  // 1.5 s and B's 3 s (× the wait scale), so A's re-read lands between B's ask and B's answer; B's history must still arrive
   const holdA = Math.round(1500 * WAIT_SCALE), holdB = Math.round(3000 * WAIT_SCALE);   // in-page holds stretch with the waits
   try { const mk = async (label: string, at: number[]) => { const made: any = await page(`return (await import('/lib/net.js')).sendRequest('create', { components: { transform: { pos: ${JSON.stringify(at)} }, label: ${JSON.stringify(label)} } });`);
       const id = made?.refs?.[0]?.id; if (!id) throw new Error(`HT8 setup: ${label} wasn't created: ${JSON.stringify(made)}`);
@@ -798,8 +787,8 @@ try {
   await page(`(await import('/lib/scenegraph.js')).sceneSelect(null); return true;`).catch(() => null);
   await evalJson(`(document.querySelector('.edit-rtabs .edit-tab[data-tab="inspector"]').click(), true)`);
 
-  // ---- GR: the ground panel writes in a world (R 10-06: ground & grass panels broken). It sent v1 'terrain'/'grass'
-  // verbs, which fromv1 had no spelling for, so the page refused them itself and nothing reached the authority. ----
+  // ---- GR: the ground panel writes in a world: v1 'terrain'/'grass' verbs have no spelling here, so the page would
+  // refuse them itself and nothing would reach the authority ----
   { const st4 = () => fold(entries());
     const gpanel = `const d = document.createElement('div'); document.body.appendChild(d); (await import('/lib/groundpanel.js')).paintGround(d); window.__gp = d;
       window.__gbtn = (re) => [...window.__gp.querySelectorAll('button, .sp-btn')].find((b) => re.test(b.textContent)); return true;`;
@@ -815,8 +804,8 @@ try {
     check("GR3 mow clears it: one act, and @world has no grass", await waitDisk(() => myActs().length === n0 + 1 && !st4().entities["@world"]?.c?.grass), { acts: myActs().slice(n0).map((a) => a.e.verb), refused: await evalJson(`__refused.map((r) => r.text)`) });
     await evalJson(`(window.__gp.remove(), true)`); }
 
-  // ---- ST: a seat on a socket that's switched off is no seat on the client either (review 10-12 S3-3) ----
-  // The authority clears its record when a socket is disabled; the occupant's own client must let go too (not stay mounted,
+  // ---- ST: a seat on a socket that's switched off is no seat on the client either ----
+  // the authority clears its record when a socket is disabled; the occupant's own client must let go too (not stay mounted,
   // sending seat {to} frames), so a second body can't come to render on the same socket after a re-enable.
   { const made = await page(`const n = await import('/lib/net.js');
       const a = await n.sendRequest('create', { id: 'ststool', model: '${CRATE}', place: { at: [7, 7] } });
@@ -840,13 +829,13 @@ try {
   await evalJson(`(() => { const t = document.getElementById('chatline'); t.focus(); t.value = 'hello from the page (3c)'; t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })); return true; })()`);
   check("B5a the chat box's line (a UI verb) reaches the log, as the person's say", await waitDisk(() => entries().some((e) => e?.kind === "say" && e.actor === MY() && e.body?.text === "hello from the page (3c)")), entries().filter((e) => e?.kind === "say").slice(-2));
   check("B5 the page sent no v1 verb to the world, all run long: every UI verb was spelled as a request at the page (3c)", await evalJson(`window.__v1sent.length === 0`), await evalJson(`window.__v1sent.slice(0, 10)`));
-  // ---- CP: the Commons parity audit (old world → new) (10-06): what a person who isn't in the editor sees ----
+  // ---- CP: the Commons parity audit (old world → new): what a person who isn't in the editor sees ----
   { const lines = () => evalJson(`[...document.querySelectorAll('#chatlog .line')].map((l) => l.textContent)`);
     const type = (text: string) => evalJson(`(() => { const t = document.getElementById('chatline'); t.focus(); t.value = ${JSON.stringify(text)}; t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true })); return true; })()`);
     const lineLike = (re: string, ms = 5000) => waitFor(`[...document.querySelectorAll('#chatlog .line')].some((l) => ${re}.test(l.textContent))`, ms);
     // CP1 role narration names people (the setup above made bob a builder: "editbot made u-… builder")
     check("CP1 the role narration names the person, not their u-… id", await lineLike(`/made bob builder/`, 3000) && !(await lines() as string[]).some((l) => /made u-[a-z2-7]{20}/.test(l)), (await lines() as string[]).filter((l) => /made /.test(l)));
-    // CP2 /role <name> is the authority's role (it read v1's role map by name: "bob holds no role here (visitor)")
+    // CP2 /role <name> is the authority's role (never v1's role map by name: "bob holds no role here (visitor)")
     await type("/role bob");
     check("CP2 /role bob says builder (the authority's role)", await lineLike(`/bob: builder/`), (await lines() as string[]).slice(-3));
     await type("/role");
@@ -886,11 +875,11 @@ try {
       const listed = await evalJson(`import('/lib/commands/registry.js').then((m) => m.COMMANDS.filter((c) => c.listed !== false).map((c) => c.name + ' ' + c.help).join('\\n'))`);
       check("CP8 the command bar lists nothing that sends nothing here (/boom), and no +gen/+fly grant", !/^boom /m.test(listed) && !/\+gen|\+fly/.test(listed), listed); }
     // CP9 /grant * builder keeps the world's guest opt-in (a whole-value set wiped it)
-    { await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'default-role', value: { role: 'inhabitant', guests: 'inhabitant' } })).ok;`);   // R 10-21: a new world starts at builder, so /grant * builder must change something
+    { await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'default-role', value: { role: 'inhabitant', guests: 'inhabitant' } })).ok;`);   // a new world starts at builder, so /grant * builder must change something
       await sleep(1200);   // CP7's flood is the say budget; this is an act
       await type("/grant * builder");
       check("CP9 /grant * builder sets the default role and keeps guests: 'inhabitant'", await waitDisk(() => { const d = disk().entities["@world"]?.c["default-role"]; return d?.role === "builder" && d?.guests === "inhabitant" && myActs().at(-1)?.e.body?.request?.merge === true; }), disk().entities["@world"]?.c["default-role"]); }
-    // CA1 World Settings › Access: the account-age field writes access.minAccountDays, and emptying it removes the key (R 10-07)
+    // CA1 World Settings › Access: the account-age field writes access.minAccountDays, and emptying it removes the key
     { await page(`const m = await import('/lib/rolespanels.js'); const b = document.createElement('div'); b.id = '__acc'; document.body.append(b); m._test.paintAccess(b); return true;`);
       const field = `document.querySelector('#__acc [data-k=minAccountDays]')`;
       const shown = await evalJson(`!!${field} && ${field}.min === '0' && ${field}.max === '365'`);
@@ -901,8 +890,8 @@ try {
       const cleared = await waitDisk(() => { const a = disk().entities["@world"]?.c.access; return !!a && !("minAccountDays" in a); });
       await evalJson(`(document.getElementById('__acc')?.remove(), true)`);
       check("CA1 World Settings › Access: 'Accounts at least N days old' (0–365) sets access.minAccountDays; emptying it removes it", shown && set && cleared, { shown, set, cleared, access: disk().entities["@world"]?.c.access, refused: await evalJson(`__refused.map((x) => x.text).slice(-2)`) }); }
-    // CW World Settings › World (R 10-14 14:13): capacity and physics — owner-gated, and opening it
-    // WRITES NOTHING (defaults written on open would put numbers in the log the owner never chose)
+    // CW World Settings › World: capacity and physics, owner-gated, and opening it WRITES NOTHING (defaults written on open
+    // would put numbers in the log the owner never chose)
     { const W = `document.querySelector('#__w')`;
       const paint = () => page(`const m = await import('/lib/rolespanels.js'); document.getElementById('__w')?.remove(); const b = document.createElement('div'); b.id = '__w'; document.body.append(b); m._test.paintWorld(b); return true;`);
       // the world has written no capacity: what the panel shows is this server's defaults (schema's, asked once)
@@ -930,7 +919,7 @@ try {
       await sleep(800);
       const noteTxt = await evalJson(`${W}.querySelector('.rp-cap-note')?.hidden === false ? ${W}.querySelector('.rp-cap-note').textContent : null`);
       check("CW3b World › entities = 99999 sends nothing and the panel shows the refusal (≤ 50000)", myActs().length === n1 && myRefused() === r1 && /≤ 50000/.test(noteTxt ?? "") && await evalJson(`${W}.querySelector('[data-cap=entities]').value === '12'`), { noteTxt, acts: myActs().slice(n1).map((a) => a.e.body?.request) });
-      // CW4 training consent is gone (R 10-16 14:16: a server's terms, not a component): the panel has no Training block
+      // CW4 training consent is gone (a server's terms, not a component): the panel has no Training block
       const tcGone = await evalJson(`!${W}.querySelector('[data-tc]') && ![...${W}.querySelectorAll('h4')].some((h) => /training/i.test(h.textContent))`);
       check("CW4 World › no Training block (training-consent isn't a component)", tcGone === true, { tcGone });
       // CW5 physics: on writes {engine} as the gym does (the authority stamps build and tick); off deletes it
@@ -941,24 +930,22 @@ try {
       const peOff = await waitDisk(() => !disk().entities["@world"]?.c["physics-engine"]);
       check("CW5 World › physics on sets @world.physics-engine {engine}; off deletes it", peOn && peOff, { pe: disk().entities["@world"]?.c["physics-engine"] ?? null, refused: await evalJson(`__refused.map((x) => x.text).slice(-2)`) });
       await evalJson(`(document.getElementById('__w')?.remove(), true)`); }
-    // WS4 World Settings is four sections (R 10-20): People & roles holds Roles AND Who may come in; World holds the world
-    // rows, and the old-world part only when a translation left something (a fresh world carries nothing).
+    // WS4 World Settings is four sections: People & roles holds Roles AND Who may come in; World holds the world rows, and
+    // the old-world part only when a translation left something (a fresh world carries nothing).
     { const r = await page(`const m = await import('/lib/rolespanels.js'); const P = document.createElement('div'), W = document.createElement('div'); document.body.append(P, W); m._test.paintPeople(P); m._test.paintWorldAll(W);
         const hs = (b) => [...b.querySelectorAll(':scope > .rp-part')].filter((d) => !d.hidden).map((d) => d.querySelector('.rp-h')?.textContent ?? '(untitled)');
         const out = { people: hs(P), worldParts: [...W.querySelectorAll(':scope > .rp-part')].filter((d) => !d.hidden).length, worldTotal: W.querySelectorAll(':scope > .rp-part').length, peopleFilled: [...P.querySelectorAll('.rp-box')].every((b) => b.childElementCount > 0) }; P.remove(); W.remove(); return out;`);
       check("WS4 World Settings: People & roles shows Roles + Who may come in, both filled; World hides 'Carried over' on a fresh world", JSON.stringify(r?.people) === '["Roles","Who may come in"]' && r?.peopleFilled && r?.worldParts === 1 && r?.worldTotal === 2, r); }
-    // A1 (recut A, #260 21:51Z): the authority decides an act on a body for every kind of body, so what arrives APPLIES — a
-    // browser body doesn't decide again. Today the client refused a shove the authority had allowed (it read only the
-    // everyone row, so a friend's allowed shove never landed). With my pushable switch off locally, an arriving shove
-    // still knocks me over; then I get up.
+    // A1: the authority decides an act on a body, so what arrives APPLIES and a browser body doesn't decide again: with my
+    // pushable switch off locally, an arriving shove still knocks me over; then I get up
     { const r = await page(`const C = await import('/lib/consent.js'), L = await import('/lib/localbody.js'), { bus } = await import('/lib/base.js');
         const was = C.pushable(); C.setPushable(false);
         bus.emit('puppet', { by: 'pal', ragdoll: { lean: [2, 0, 0] } });
         await new Promise((ok) => setTimeout(ok, 600)); const down = L.isDowned();
         L.getUp(); C.setPushable(was); await new Promise((ok) => setTimeout(ok, 400)); return { down, upAfter: !L.isDowned() };`);
       check("A1 an act the authority delivered applies to my browser body: a shove lands though my local switch is off (one decider)", r?.down === true, r); }
-    // CB1 World Settings › Places: empty Bounds fields write NO bounds (they read as 0 and saved a zero box that refused every move, audit 10-09)
-    // RK1 (review 10-14 K3): picking a role from the Roles panel keeps the person's exceptions — the set merges when the entry exists
+    // CB1 World Settings › Places: empty Bounds fields write NO bounds (a zero box would refuse every move)
+    // RK1: picking a role from the Roles panel keeps the person's exceptions: the set merges when the entry exists
     { const grant = await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'roles:${BOB}', value: { role: 'builder', can: { pauseScripts: true } } })).ok;`);
       await waitDisk(() => disk().entities["@world"]?.c[`roles:${BOB}`]?.can?.pauseScripts === true);
       await page(`const m = await import('/lib/rolespanels.js'); document.getElementById('__rk')?.remove(); const b = document.createElement('div'); b.id = '__rk'; document.body.append(b); m._test.paintRoles(b); return true;`);
@@ -976,9 +963,8 @@ try {
       const after = JSON.stringify(disk().entities["@world"]?.c.bounds ?? null);
       await evalJson(`(document.getElementById('__pl')?.remove(), true)`);
       check("CB1 Places › Save with the Bounds fields cleared saves the spawn and removes the bounds, as the panel says empty means (house I25), never a zero box", spawned && before !== "null" && after === "null", { spawned, before, after, toasts: await evalJson(`[...document.querySelectorAll('.toast')].map((t) => t.textContent.slice(0, 100)).slice(-3)`) }); }
-    // EK (R 10-15 23:09: "esc doesn't take you back out of fullscreen mode (f11). Right now it toggles your menus"): Esc never
-    // hides or restores the panel set (Tab does); F11 is the PAGE's full screen, so the browser's own Esc leaves it; Esc still
-    // closes the transient things. Out of edit mode (build.js claims Esc there), with two panels open.
+    // EK: Esc never hides or restores the panel set (Tab does); F11 is the PAGE's full screen, so the browser's own Esc leaves
+    // it; Esc still closes the transient things. Out of edit mode (build.js claims Esc there), with two panels open.
     { await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
       { await waitFor(`!document.body.classList.contains('edit-workspace')`); const inks = await evalJson(micInks);
         check("MIC3 outside edit mode the same: live = the brand, hot = the attention gold", !inks?.edit && inks?.on === inks?.brand && inks?.ear === inks?.brand && inks?.hot === inks?.attn && inks?.off !== inks?.brand, inks); }
@@ -998,7 +984,7 @@ try {
       const t2 = await press("Tab"); await sleep(150);
       const back = await evalJson(openIds);
       check("EK2 Tab hides every open panel ('closed' on the bus), and Tab again restores exactly that set ('restored')", t1.prevented && hid === "" && t2.prevented && back === before && await evalJson(`__quiet.join() === 'closed,restored'`), { t1, hid, t2, back, quiet: await evalJson(`__quiet`) });
-      // EK3 F11 is taken (not the browser's chrome-hiding F11, which Esc can't leave) and asks the PAGE for full screen —
+      // EK3 F11 is taken (not the browser's chrome-hiding F11, which Esc can't leave) and asks the PAGE for full screen;
       // headless can't truly go full screen, so the request is spied
       await page(`globalThis.__fs = 0; globalThis.__fsWas = Element.prototype.requestFullscreen; Element.prototype.requestFullscreen = function () { if (this === document.documentElement) __fs++; return Promise.resolve(); }; return true;`);
       const f11 = await press("F11"); await sleep(100);

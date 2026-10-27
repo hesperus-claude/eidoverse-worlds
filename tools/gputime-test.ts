@@ -5,7 +5,7 @@ const STUB = fileURLToPath(new URL('./gputime-core-stub.mjs', import.meta.url));
 const RIG = fileURLToPath(new URL('./gputime-lightrig-stub.mjs', import.meta.url));
 plugin({ name: 'gputime-stubs', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); b.onResolve({ filter: /^\.\/lightrig\.js$/ }, () => ({ path: RIG })); } });
 const { pref } = await import(RIG);
-const { lights } = await import(STUB);
+const { lights, em } = await import(STUB);
 const G = await import('../client/lib/gputime.js');
 let pass = 0, fail = 0;
 const ok = (n: string, c: boolean, d = '') => { if (c) pass++; else { fail++; console.log(`  FAIL ${n} ${d}`); } };
@@ -48,4 +48,18 @@ ok('a new measurement can start after', G.gpuTimerState().measuring === false);
   G.setGpuTimer(false);
   ok('shadows turned off mid-A/B stay off after it ends (the preference wins over the saved value)', sun.shadow.autoUpdate === false, String(sun.shadow.autoUpdate));
   pref.on = true; void q; }
+// the readback, over the stub's timer extension: plumbing only, never GPU truth (the headset's number is the truth)
+{ G.setGpuTimer(false); await new Promise((r) => setTimeout(r, 650));
+  const frames = (n: number) => { for (let i = 0; i < n; i++) { G.gpuBegin(); G.gpuEnd(); } };
+  em.answer = true; em.ns = 3e6; em.disjoint = false;
+  G.setGpuTimer(true); frames(13);
+  const on = G.gpuTimerState();
+  ok('timer on: frames accumulate with the elapsed time as their average', on.on && on.frames >= 12 && on.avgMs === 3, JSON.stringify(on));
+  em.disjoint = true; const n0 = on.frames, b0 = em.begins; frames(10);
+  ok('a DISJOINT frame is discarded: queries still run, samples do not grow', em.begins - b0 >= 8 && G.gpuTimerState().frames === n0, JSON.stringify({ begins: em.begins - b0, frames: G.gpuTimerState().frames }));
+  em.disjoint = false; em.answer = false; frames(20);
+  ok('results that lag past the ring skip frames rather than grow it', em.begins - b0 - 10 <= 8, String(em.begins - b0 - 10));
+  G.setGpuTimer(false); const b1 = em.begins; frames(5);
+  ok('timer off: no queries issued', em.begins === b1, `${em.begins - b1} begins`);
+  ok('…and the line says it is off', G.gpuLine() === 'gpu: timer off', G.gpuLine()); }
 console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

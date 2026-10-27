@@ -1,26 +1,22 @@
 // shared/protocol/authority/bodyconsent.js — body consent: every act on another body is gated here, before delivery, and
-// the BODY_VERBS (consent, body, reach, inbox) answer for it (refactor split, 2026-10-17; moved from authority.js's "body
-// consent" section unchanged). Presence only: nothing here is ever appended. The body's own track (body, dist, gripPoint)
-// lives in the physics section above it, reached through UP.
+// the BODY_VERBS (consent, body, reach, inbox) answer for it. Presence only: nothing here is ever appended.
 import * as C from "../consent.js";
 import { REACH, BODY_REACH } from "../physconst.js";
 import { r3 } from "../round.js";
 import { UP } from "./ctx.js";
 import { refuse } from "./refuse.js";
 import { isScriptActor } from "./rights.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// layers above this one (a leaf may not import them), through UP (ctx.js)
 const body = (...a) => UP.body(...a);
 const dist = (...a) => UP.dist(...a);
 const gripPoint = (...a) => UP.gripPoint(...a);
 
-// ---------- body consent (L6 as revised 21:45; research 42). Presence only: none of this is ever appended. ----------
+// ---------- body consent (L6; research 42). Presence only: none of this is ever appended. ----------
 // The authority keeps every body's table (consent.js) beside `bodies` and `holds`, refuses BEFORE delivery, and keeps an
 // unlogged attempt ring. Delivery in the lab is the target's `inbox` (a stand-in for the relay to its client).
 const ringPush = (P, r) => { (P.ring ??= []).push(r); if (P.ring.length > 200) P.ring.shift(); };
-// bounded like ring (review 10-14 C2: browsers never drain it). Each message carries `n`, its person's own count, which
-// survives both the cap's trimming and `inbox` draining it: the server forwards by `n`, never by the array's length (holes
-// review 10-15 H1: a full queue stayed at 200, and its person heard nothing more)
+// bounded like ring (browsers never drain it). Each message carries `n`, its person's own count, surviving the cap and
+// draining: the server forwards by `n`, never by the array's length (a full queue stays at 200 and its person hears nothing)
 const inboxPush = (P, who, m) => { const n = ((P.inboxN ??= {})[who] ?? 0) + 1; P.inboxN[who] = n; const q = (P.inbox ??= {})[who] ??= []; q.push({ ...m, n }); if (q.length > 200) q.shift(); };
 const bodyRef = (x) => (typeof x === "string" ? x.replace(/^body:/, "") : x);
 function expireAsks(w) { const P = w.presence, now = w.now();
@@ -47,7 +43,7 @@ function bodyGate(w, from, to, kind, extra = {}) { syncDefault(w);
     if (isScriptActor(from)) return result("refused", { ok: false, code: "consent", class: cls, reason: `${to}'s ${cls} is 'ask'; a behaviour can't wait for an answer`, fix: `${to} may allow ${from} by name` });
     const key = `${from}>${to}:${cls}`; if (P.cool?.[key]?.until > now) return result("refused", { ok: false, code: "cool-down", class: cls, reason: `${to} said no (or didn't answer); you may ask again in ${Math.ceil((P.cool[key].until - now) / 60000)} min`, fix: "the wait doubles each time" });
     if (Object.values(P.asks ?? {}).some((k) => k.from === from && k.to === to)) return result("refused", { ok: false, code: "pending", class: cls, reason: `you already have an ask waiting with ${to}`, fix: "one at a time" });
-    for (const [k, t] of Object.entries(P.asked ?? {})) if (now - t.ts >= 60000) delete P.asked[k];   // only ever grew (review 10-14 C2)
+    for (const [k, t] of Object.entries(P.asked ?? {})) if (now - t.ts >= 60000) delete P.asked[k];   // else it only ever grew
     if (Object.values(P.asked ?? {}).filter((t) => t.from === from && now - t.ts < 60000).length >= 2) return result("refused", { ok: false, code: "rate", class: cls, reason: "at most 2 asks a minute", fix: "" });
     // a counter that only grows: the live count shrinks as asks are answered or lapse, so it could name a live ask again
     const id = `ask-${now}-${P.askSeq = (P.askSeq ?? 0) + 1}`; (P.asks ??= {})[id] = { id, from, to, kind, cls, spec: extra.spec ?? null, why: extra.why ?? null, expires: now + C.ASK_MS };
@@ -56,19 +52,15 @@ function bodyGate(w, from, to, kind, extra = {}) { syncDefault(w);
     return result("asked", { ok: true, asked: true, ask: id }); }
   return { ok: true, consent: d.standing === "allow" ? "allowed" : "standing", deliver: () => { ringPush(P, { ts: now, from, to, cls, verdict: "allowed" }); deliver(w, from, to, kind, cls, extra, "standing"); } };
 }
-// The relay's question about a reach DESCRIPTOR (shared/reachwire.js: a hand streamed in a pose toward another body, design
-// review 10-15 item 1): may `from`'s hand rest on `to` as `cls` (touch | intimate) right now? Asked per presence packet, so it
-// is presence only: nothing is appended, no ask is made (the relay can't wait; the `reach` verb asks), and the refusal
-// counter that leads to a moderator-log cool-down is NOT fed (a stream of frames is one attempt, not fifty). Admitted when
-// `to`'s table says allow (a standing allow included), or when the `reach` verb already admitted this touch (an ask
-// answered yes: P.reaches, which revokeAfter clears when the table closes). A refusal is said to the reacher in the body
-// inbox, and to the target's attempt ring, once per (from, to, cls) per C.REACH_NOTE_MS; `noted` says whether it was now.
+// the relay's per-packet question about a reach DESCRIPTOR (shared/reachwire.js): may `from`'s hand rest on `to` as `cls`?
+// No append, no ask, no refusal counter (a stream is one attempt). Admitted on allow or an asked yes (P.reaches); a refusal
+// is said once per (from, to, cls) per C.REACH_NOTE_MS.
 export function reachAdmits(w, from, to, cls, { point = null, limb = null, quiet = false } = {}) { syncDefault(w);
   const P = w.presence, now = w.now();
   if (from === to) return { ok: true, consent: "self" };
   if (!C.ENFORCED.includes(cls) || (cls !== "touch" && cls !== "intimate")) return { ok: false, code: "shape", class: cls, reason: `a reach is touch or intimate, not '${cls}'` };
   const granted = P.reaches?.[from];
-  if (granted?.to && !(granted.until > now)) delete P.reaches[from];   // F3 (d): a yes lapses after C.REACH_GRANT_MS, held or not
+  if (granted?.to && !(granted.until > now)) delete P.reaches[from];   // a yes lapses after C.REACH_GRANT_MS, held or not
   else if (granted?.asked && granted.to === to && (granted.cls === cls || (granted.cls === "intimate" && cls === "touch"))) { granted.seen = true; return { ok: true, consent: "asked" }; }
   let r;
   if (P.throttle?.[`${from}:${cls}`] > now) r = { code: "cool-down", reason: `${from} is on a cool-down for ${cls} after repeated refusals (moderator log)`, fix: "ask people first; this lifts by itself" };
@@ -87,41 +79,38 @@ export function reachAdmits(w, from, to, cls, { point = null, limb = null, quiet
     inboxPush(P, from, { type: "reach-refused", to, class: cls, ...(point ? { point } : {}), ...(typeof limb === "string" ? { limb } : {}), why: r.reason, fix: r.fix, code: r.code }); w.presenceDirty = true; }
   return { ok: false, class: cls, ...r, noted };
 }
-// F3 (a): the relay, after gating one packet of `from`'s: `aimed` is the set of bodies a limb that RELAYED in it rests on.
-// A grant (an ask answered yes) whose hand has landed (`seen`) and that no relayed limb rests on now was let go: it ends.
-// A grant not yet landed waits (the reacher streams idle frames between the yes and the hand); the TTL bounds that wait.
+// the relay, after gating a packet of `from`'s: `aimed` is the bodies a RELAYED limb rests on. A landed grant (`seen`) no limb
+// rests on now was let go: it ends. One not yet landed waits (idle frames between the yes and the hand); the TTL bounds that.
 export function reachLetGo(w, from, aimed) {
   const P = w.presence, g = P.reaches?.[from];
   if (!g?.to || !g.seen || aimed.has(g.to)) return false;
   delete P.reaches[from]; w.presenceDirty = true; return true;
 }
 const forgetReaches = (P, who) => { for (const [k, r] of Object.entries(P.reaches ?? {})) if (k === who || r?.to === who) delete P.reaches[k]; };
-/** what `to`'s table says to `from` for `cls`: a behaviour with no entry of its own in force (none, or one that has run out) is
- *  answered by its sponsor's scripts-by: entry, when the table has one. Admission and revocation both ask here, so they agree on what stands. */
+/** A behaviour with no entry of its own in force is answered by its sponsor's scripts-by: entry, if any. Admission and
+ *  revocation both ask here, so they agree on what stands. */
 function decideAs(P, from, sponsor, to, cls, now) {
   const o = C.tableOf(P, to).overrides; const own = o[from]?.[cls];
   return isScriptActor(from) && sponsor && !(own && (own.until === undefined || own.until > now)) && o[`scripts-by:${sponsor}`]?.[cls] ? C.decide(P, `scripts-by:${sponsor}`, to, cls, now) : C.decide(P, from, to, cls, now);
 }
-/** each grant resting on `to`: what `to`'s table says to its class now (revokeAfter compares before and after a change) */
+/** each grant resting on `to` and what `to`'s table says to its class now (revokeAfter compares before and after) */
 const reachModes = (P, to, now) => Object.fromEntries(Object.entries(P.reaches ?? {}).filter(([, r]) => r?.to === to).map(([k, r]) => [k, decideAs(P, k, r.sponsor, to, r.cls, now).mode]));
 function deliver(w, from, to, kind, cls, extra, consent) {
   const P = w.presence, b = P.bodies[to];
   const sponsor = extra.sponsor ? { sponsor: extra.sponsor } : {};
-  // who posed you, never the pose: the pose travels on the presence plane from the poser's client; a copy here was never read (recut A4)
+  // who posed you, never the pose: the pose travels on the presence plane from the poser's client
   if (cls === "pose") { b.poseBy = from; if (extra.sponsor) b.poseSponsor = extra.sponsor; else delete b.poseSponsor; }
   if (cls === "displace") { b.draggedBy = from; if (extra.sponsor) b.dragSponsor = extra.sponsor; else delete b.dragSponsor; }
   if (cls === "shove") b.tumble = { by: from, ts: w.now() };
-  // a touch under way is recorded (touchedBy, revokeAfter); only an ask's yes is a GRANT the relay answers from: anything
-  // else the table admitted is decided again at every packet, so an allowance's end ends it (review of #260, house Q1)
+  // a touch under way is recorded; only an ask's yes is a GRANT the relay answers from. Anything else the table admitted
+  // is decided again at every packet, so an allowance's end ends it
   if (cls === "touch" || cls === "intimate") (P.reaches ??= {})[from] = { to, cls, point: extra.spec?.point ?? null, until: w.now() + C.REACH_GRANT_MS, ...(consent === "asked" ? { asked: true } : {}), ...sponsor };
   inboxPush(P, to, { type: "body", from, kind, cls, consent, ...(extra.spec ? { spec: extra.spec } : {}) }); w.presenceDirty = true;
 }
-// After any change to `to`'s table: whatever someone is doing to them that the table now says nobody to ends NOW, and the
-// actor hears body-revoked once (42 §4.6). A pose or drag granted by an ask outlives a later 'ask' cell; only 'deny' ends
-// it. A touch is held to more (r2 holes F3 (c)): its cell moving to anything but allow is a change of mind, and ends it
-// (`before`: reachModes before the change, so a change to some other class leaves a yes standing).
-// The world's body-default (accept | ask | refuse), read where a decision is made: absent or unknown = accept.
+// the world's body-default (accept | ask | refuse), read where a decision is made: absent or unknown = accept.
 function syncDefault(w) { const v = w.state?.()?.entities?.["@world"]?.c?.["body-default"]; if (C.SWITCHES.includes(v)) w.presence.bodyDefault = v; else delete w.presence.bodyDefault; }
+// after any change to `to`'s table, what it now forbids ends NOW, told once (42 §4.6): an asked pose or drag ends only on
+// 'deny', a touch on anything but allow (`before` keeps other classes' yeses).
 function revokeAfter(w, to, before = {}) { syncDefault(w); const P = w.presence, b = P.bodies[to], now = w.now(); if (!b) return [];
   const ended = []; const end = (actor, sponsor, cls, clear) => { if (decideAs(P, actor, sponsor, to, cls, now).mode !== "deny") return; clear(); ended.push({ actor, class: cls }); inboxPush(P, actor, { type: "body-revoked", by: to, class: cls }); };
   if (b.poseBy) end(b.poseBy, b.poseSponsor, "pose", () => { delete b.poseBy; delete b.poseSponsor; });
@@ -129,9 +118,9 @@ function revokeAfter(w, to, before = {}) { syncDefault(w); const P = w.presence,
   for (const [actor, r] of Object.entries(P.reaches ?? {})) if (r?.to === to) { const m = decideAs(P, actor, r.sponsor, to, r.cls, now).mode;
     if (m === "deny" || (m !== "allow" && m !== before[actor])) { delete P.reaches[actor]; ended.push({ actor, class: r.cls }); inboxPush(P, actor, { type: "body-revoked", by: to, class: r.cls }); } }
   w.presenceDirty = true; return ended; }
-const shieldOf = (P, who) => { const t = C.tableOf(P, who); return { switch: t.switch ?? null }; };   // recut A2: what my own snapshot says I chose
+const shieldOf = (P, who) => { const t = C.tableOf(P, who); return { switch: t.switch ?? null }; };   // what my own snapshot says I chose
 const BODY_VERBS = {
-  // L6 (recut A2): my body's switch and my per-person answers; only I change them.
+  // L6: my body's switch and my per-person answers; only I change them.
   consent(w, actor, a) { const P = w.presence, now = w.now(); expireAsks(w);
     if (a.answer !== undefined) { const k = P.asks?.[a.answer]; if (!k || k.to !== actor) refuse("not-found", `no ask '${a.answer}' waiting for you`, "consent {} lists them");
       delete P.asks[a.answer];
@@ -148,7 +137,7 @@ const BODY_VERBS = {
   // one shape for every act on a body (42 §4.4): pose, anim, shove, drag. Waits for nothing in the lab; says what happened.
   body(w, actor, a) { const me = body(w, actor); const to = bodyRef(a.to); expireAsks(w);
     if (!["pose", "anim", "shove", "drag", "occupy", "carry"].includes(a.kind)) refuse("shape", `no body kind '${a.kind}'`, "body {to, kind: pose|anim|shove|drag|occupy|carry}");
-    const t = w.presence.bodies[to]; if (t && ["shove", "drag", "carry"].includes(a.kind) && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "walk closer");
+    const t = w.presence.bodies[to]; if (t && ["shove", "drag", "carry"].includes(a.kind) && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer");
     const g = bodyGate(w, actor, to, a.kind, { spec: a.spec, why: a.why });
     if (!g.ok) refuse(g.code, g.reason, g.fix, { class: g.class });
     if (g.asked) return { ok: true, outcome: "asked", ask: g.ask, delivered: false, note: `${to} was asked; no answer in 20 s is no` };
@@ -157,12 +146,12 @@ const BODY_VERBS = {
   reach(w, actor, a) { const me = body(w, actor); const P = w.presence; let to, cls, point = a.point ?? null; expireAsks(w);
     if (Array.isArray(a.at)) { if (a.at.length !== 3 || a.at.some((n) => !Number.isFinite(n))) refuse("shape", "at: [x, y, z]", "");
       for (const [k, b] of Object.entries(P.bodies)) { if (k === actor) continue; const c = C.pointClass(b.at, a.at); if (c) { to = k; cls = c; break; } }
-      if (dist(gripPoint(me), a.at) > REACH) refuse("out-of-reach", `that point is ${r3(dist(gripPoint(me), a.at))} m from your hand`, "walk closer");
+      if (dist(gripPoint(me), a.at) > REACH) refuse("out-of-reach", `that point is ${r3(dist(gripPoint(me), a.at))} m from your hand`, "get closer");
       if (!to) { (P.reaches ??= {})[actor] = { at: a.at.slice() }; w.presenceDirty = true; return { ok: true, touching: null, recorded: false }; } }
     else { to = bodyRef(a.who); if (!to || !point) refuse("shape", "reach {who, point} or {at: [x, y, z]}", "points: " + C.REACH_POINTS.join(", "));
-      const np = C.namedPointClass(point); if (!np) refuse("shape", `no point '${point}'`, C.REACH_POINTS.join(", "));   // the relay's own classifier (F5)
+      const np = C.namedPointClass(point); if (!np) refuse("shape", `no point '${point}'`, C.REACH_POINTS.join(", "));   // the relay's own classifier
       point = np.point; cls = np.cls;
-      const t = P.bodies[to]; if (t && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "walk closer"); }
+      const t = P.bodies[to]; if (t && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer"); }
     delete P.reaches?.[actor];
     const g = bodyGate(w, actor, to, "touch", { cls, spec: { point, ...(a.at ? { at: a.at } : {}) }, why: a.why });
     if (!g.ok) { w.presenceDirty = true; refuse(g.code, g.reason, g.fix, { class: g.class, stripped: true }); }

@@ -1,14 +1,6 @@
-// edittheme — the ONE source of edit mode's look (DESIGN-SPEC 2026-09-30, "Edit mode: the look").
-//
-// Edit mode is a dark-grey utilitarian editor (Blender / Godot / Resonite / Maya family): the chrome
-// is grey and the WORLD is the only colour. Colour in the chrome means exactly one of: selection /
-// focus (accent), an axis (x/y/z), danger, a driven value, or "only you" (mine). Nothing is coloured for decoration.
-//
-// Two surfaces read these values and must never drift:
-//   - the desktop CSS (client/index.html, the `--e-*` block scoped to body.edit-workspace / .frame.edit)
-//     carries them as literals — tools/edittheme-test.ts parses that block and fails on any difference;
-//   - the VR canvas painter (panels.js renderCanvas, theme 'edit') imports them directly.
-// Change a value HERE and in the CSS block together; the test tells you if you forgot one.
+// edittheme — the ONE source of edit mode's look: grey chrome, the world is the only colour.
+// Chrome colour means only: accent (selection/focus), an axis, danger, driven, or mine. Never decoration.
+// Change a value here AND in client/index.html's `--e-*` block (tools/edittheme-test.ts diffs them); panels.js imports these.
 
 export const EDIT = Object.freeze({
   bg0: '#161618',        // rails, top bar, the outermost chrome
@@ -27,13 +19,13 @@ export const EDIT = Object.freeze({
   danger: '#e07a72',     // destructive actions (quiet style)
   driven: '#c9a24a',     // a value a motion comp drives (the rest pose is shown): the ~ marker
   drivenEdge: 'rgba(201,162,74,.45)',   // …and the driven FIELD's edge — toned, so three driven axes don't out-shout their x/y/z labels
-  mine: '#b08ad8',       // "only you": a view switch nobody else sees (the eye), never a shared state (research 10-12 R7)
+  mine: '#b08ad8',       // "only you": a view switch nobody else sees (the eye), never a shared state
 });
 
-/** The CSS custom property a token is written to: accentBg → --e-accent-bg. */
+/** accentBg → --e-accent-bg */
 export const cssVar = (k) => `--e-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`;
 
-/** The VR painter's floor (DESIGN-SPEC "VR affordances"): canvas px at 900 px/m. */
+/** The VR painter's minimums: canvas px at 900 px/m. */
 export const EDIT_VR = Object.freeze({
   rowH: 46,       // a painted row; every hit target inside it is >= minHit
   minHit: 34,     // ≈ 3.8 cm — a laser you can land
@@ -43,10 +35,7 @@ export const EDIT_VR = Object.freeze({
   labelFrac: 0.38, labelMin: 72, labelMax: 170, gutter: 8,
 });
 
-/** Pictographs that edit chrome strings still carry (badges, a guard line from shared/editschema)
- *  → the icons.js glyph drawn in their place. The canvas emoji trap (a missing glyph paints
- *  NOTHING, silently, on the viewer's machine) makes this mandatory on the painter, and the DOM
- *  wears the same glyphs so the two surfaces agree. */
+/** Pictographs → icons.js glyphs: a missing emoji paints NOTHING on canvas; the DOM uses them too, so both agree. */
 export const PICTO_ICON = Object.freeze({
   '🔒': 'lock', '🔓': 'lockOpen', '🛡': 'shield', '📜': 'scrollText', '🧍': 'personStanding',
   '🚪': 'doorOpen', '🪟': 'appWindow',

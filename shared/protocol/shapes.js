@@ -1,6 +1,6 @@
 // shared/protocol/shapes.js — the grammar of a collision shape (spec/PHYSICS.md §3.1). physics.shape is stamped by the
 // authority into the log, so its grammar is frozen the moment the first engine writes one: it's fixed here, before any
-// non-box shape exists (research physics-seeds 10-07, seed 3).
+// non-box shape exists.
 //
 //   [[minX, minY, minZ], [maxX, maxY, maxZ]]   a box: the authority's measured box, in the thing's own frame. Every
 //                                             shape stamped so far is one, so a bare 2-array is a box FOREVER.
@@ -21,7 +21,7 @@
 export const SHAPE_TYPES = ["box", "sphere", "capsule", "cylinder", "convex", "mesh", "compound"];
 const KEYS = { box: ["half"], sphere: ["radius"], capsule: ["radius", "halfHeight"], cylinder: ["radius", "halfHeight"], convex: ["blob"], mesh: ["blob"], compound: ["blob"] };
 export const BLOB_ADDRESS = /^sha256:[0-9a-f]{64}$/;
-const MAX = 1e4;   // metres: the same bound a transform's pos takes is generous for a collider's size
+const MAX = 1e4;   // metres: the bound a pivot's pos takes (componentspec), generous for a collider's size
 const fin = (x) => typeof x === "number" && Number.isFinite(x);
 const vec3 = (a) => Array.isArray(a) && a.length === 3 && a.every(fin) && a.every((x) => Math.abs(x) <= MAX);
 const size = (x) => fin(x) && x > 0 && x <= MAX;

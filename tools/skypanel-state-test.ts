@@ -2,10 +2,8 @@
 //
 //   bun tools/skypanel-state-test.ts
 //
-// What tools/sky-state-probe.mjs checks in a browser, minus the browser: the lines say what the log has and, only
-// while this client shows something else, what and why. Here the sky is tools/skypanel-stub.mjs, so the cases the
-// probe can't reach cheaply are cheap: a log with no clouds on the detailed sky, a real clock with no tz or a tz that
-// doesn't resolve, and a new log landing on top of your unsaved preview.
+// The lines say what the log has and, only while this client shows something else, what and why; which controls show
+// by sky, clock and headset. The sky is tools/skypanel-stub.mjs; sky-state-probe.mjs keeps the real-wiring smoke.
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
@@ -28,7 +26,7 @@ const check = (name: string, ok: boolean, detail = "") => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
 };
 
-const { S, logSky } = await import("./skypanel-stub.mjs");
+const { S, logSky, previewSky, bus } = await import("./skypanel-stub.mjs");
 const { paintSky } = await import("../client/lib/skypanel.js");
 
 const body = document.createElement("div");
@@ -78,6 +76,79 @@ logSky({ ...S.sent.at(-1)[1] });   // your own commit comes back as the log
 check("after ✓ your log is the sky: nothing to say", you() === "", you());
 logSky({ hours: 20, rate: 0, weather: "clear", clouds: "clear" });
 check("with nothing unsaved a new log is simply followed", you() === "" && slider.value === "20", `${you()} slider=${slider.value}`);
+
+console.log("SKY PANEL — each you: cause, on each sky, says itself only while it applies");
+const fresh = () => { const b = document.createElement("div"); document.body.append(b); paintSky(b); return b; };
+const youOf = (b: HTMLElement) => { const y = b.querySelector(".state-you") as HTMLElement | null; return y && !y.hidden ? y.textContent ?? "" : ""; };
+const CAUSES: [string, (b: HTMLElement) => Promise<void> | void, (basic: boolean, clouds: string) => RegExp | null][] = [
+  ["nothing", () => {}, () => null],
+  ["loading", () => { S.rendering = true; bus.emit("sky-state"); }, () => /loading…/],
+  ["previewing", () => previewSky({ ...S.args, hours: 7 }), () => /previewing \(not logged\)/],
+  ["unsaved edits under a new log", (b) => { const r = b.querySelector('input[type="range"]') as HTMLInputElement; r.value = "7";
+    r.dispatchEvent(new Event("input")); logSky({ ...S.args, hours: 15 }); }, () => /unsaved edits aren't shown/],
+  ["clouds⚙ off", () => { S.cloudQuality = "off"; bus.emit("sky-state"); }, (basic, clouds) => !basic && clouds !== "clear" ? /no clouds \(your clouds⚙ is off\)/ : null],
+  ["degraded GPU", () => { S.degraded = true; bus.emit("sky-degraded"); }, (basic) => basic ? null : /the basic sky \(this GPU can't run the full one\)/],
+];
+for (const basic of [false, true]) for (const clouds of ["cumulus", "clear"]) for (const [cause, apply, want] of CAUSES) {
+  Object.assign(S, { rendering: false, degraded: false, cloudQuality: "medium", impl: basic ? "skymesh" : "eidoverse" });
+  logSky({ hours: 12, rate: 0, weather: "clear", clouds, ...(basic ? { system: "skymesh" } : {}) });
+  const b = fresh(); await apply(b);
+  const w = want(basic, clouds), got = youOf(b);
+  check(`${basic ? "basic" : "detailed"} sky, clouds ${clouds}, ${cause}: ${w ? `says ${w.source}` : "says nothing"}`, w ? w.test(got) : got === "", got);
+  b.remove();
+}
+Object.assign(S, { rendering: false, degraded: false, cloudQuality: "medium", impl: "eidoverse" });
+
+console.log("SKY PANEL — which controls show: azimuth by the sky, time and rate by the clock");
+const ranges = (b: HTMLElement) => [...b.querySelectorAll('input[type="range"]')] as HTMLInputElement[];
+const shown = (i: HTMLInputElement) => (i.parentNode as HTMLElement).style.display !== "none" && !i.disabled;
+const controls = (b: HTMLElement) => { const [hours, rate, azimuth] = ranges(b); return { hours: shown(hours), rate: shown(rate), azimuth: shown(azimuth) }; };
+for (const impl of ["eidoverse", "skymesh"]) for (const real of [false, true]) {
+  S.impl = impl;
+  logSky({ hours: 12, rate: 0, weather: "clear", clouds: "clear", ...(impl === "skymesh" ? { system: "skymesh" } : {}), ...(real ? { clock: "real", tz: "America/Los_Angeles" } : {}) });
+  const b = fresh(), c = controls(b);
+  check(`${impl}, ${real ? "real" : "authored"} clock: azimuth ${impl === "skymesh" ? "shown" : "hidden"}, time and rate ${real ? "hidden" : "shown"}`,
+    c.azimuth === (impl === "skymesh") && c.hours === !real && c.rate === !real, JSON.stringify(c));
+  b.remove();
+}
+{
+  S.impl = "eidoverse"; logSky({ hours: 12, rate: 0, weather: "clear", clouds: "clear" });
+  const b = fresh();
+  S.impl = "skymesh"; bus.emit("sky-state"); const onBasic = controls(b).azimuth;
+  S.impl = "eidoverse"; bus.emit("sky-state"); const back = controls(b).azimuth;
+  check("panel left open: the sky switching to basic shows azimuth, and back hides it", onBasic && !back, JSON.stringify({ onBasic, back }));
+  // your own committed real clock must not outlive a remote return to the authored clock
+  await Bun.sleep(0);   // fillClocks resolves on a microtask
+  const sel = [...b.querySelectorAll("select")].find((x) => [...(x as HTMLSelectElement).options].some((o) => o.value === "America/Los_Angeles")) as HTMLSelectElement;
+  sel.value = "America/Los_Angeles"; sel.dispatchEvent(new Event("change"));
+  (b.querySelector("button.dirty") as HTMLButtonElement).click();
+  logSky({ ...S.sent.at(-1)[1] });
+  const mine = controls(b);
+  logSky({ hours: 12, rate: 0, weather: "clear", clouds: "clear" });
+  const remote = controls(b);
+  check("after you commit a real clock time and rate hide; a remote return to authored brings them back",
+    !mine.hours && !mine.rate && remote.hours && remote.rate, JSON.stringify({ mine, remote }));
+  // refreshes that change nothing (the 30 s tick, a degrade notice with no degrade) write nothing: a VR panel re-rasters on each
+  const el = b.querySelector(".sky-state")!; let n = 0;
+  const mo = new MutationObserver((l) => { n += l.length; }); mo.observe(el, { childList: true, characterData: true, subtree: true, attributes: true });
+  for (let i = 0; i < 3; i++) { bus.emit("sky-degraded", { msg: "no-op" }); bus.emit("sky-state"); }
+  await Bun.sleep(0); mo.disconnect();
+  check("no-op refreshes leave the readout untouched (0 mutations)", n === 0, String(n));
+  b.remove();
+}
+
+console.log("SKY PANEL — clouds⚙ in a headset: high greyed, a note only while high is your capped choice");
+for (const inXR of [false, true]) for (const capped of [false, true]) {
+  const b = fresh();
+  S.inXR = inXR; bus.emit("xr:state", inXR); S.cap = capped ? { from: "high" } : null; bus.emit("cloud-cap");
+  const high = [...b.querySelectorAll("option")].find((o) => o.value === "high") as HTMLOptionElement;
+  const note = b.querySelector(".cloud-cap-note") as HTMLElement;
+  const noted = !note.hidden && /medium \(baked\)/.test(note.textContent ?? "");
+  check(`${inXR ? "in VR" : "out of VR"}, ${capped ? "high chosen (capped)" : "not capped"}: high ${inXR ? "greyed" : "available"}, ${inXR && capped ? "a note" : "no note"}`,
+    high.disabled === inXR && noted === (inXR && capped), JSON.stringify({ disabled: high.disabled, note: note.hidden ? null : note.textContent }));
+  b.remove();
+}
+S.inXR = false; S.cap = null; bus.emit("xr:state", false);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

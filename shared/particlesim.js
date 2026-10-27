@@ -1,35 +1,11 @@
-// shared/particlesim.js — the particle simulation every client runs for a `particles` effect: one emitter's particles,
-// stepped on the CPU. Pure (no THREE, no DOM): the renderer (client/lib/particlefx.js) reads its arrays each frame, and
-// tools/particlesim-test.ts steps it in bun.
+// shared/particlesim.js — the particle simulation every client runs for a `particles` effect: one emitter's particles on
+// the CPU. Pure (no THREE, no DOM): client/lib/particlefx.js reads its arrays each frame; describe-particles-check.ts steps it in bun.
 //
 // Ported from Godot Engine 4.7.2-stable, scene/3d/cpu_particles_3d.cpp (CPUParticles3D::_particles_process and
 // _update_internal) — tag 4.7.2-stable, commit ed1daf0bf001b61586d9930840f2f1394092c079 (see THIRD-PARTY.md). The
-// module vocabulary (emission shapes, direction/spread/flatness, initial velocity, gravity, linear/radial/tangential
-// acceleration, damping, angle and angular velocity, scale and its curve, colour and its ramp, hue variation, animation
-// speed/offset for a flipbook, lifetime randomness, explosiveness, randomness, one-shot, preprocess, speed scale) is
-// Godot's ParticleProcessMaterial's. What is ours, and why:
-//   - local coordinates only: a particles component hangs off its thing and rides it (the first protocol's contract), so
-//     the emission transform is the identity and every radial/tangential force is about the emitter's own origin;
-//   - gravity alone is WORLD-down (Unity's convention, lead 10-17): the document's gravity is a world-space vector, and
-//     the renderer turns it into the emitter's frame every frame (setGravity(localGravity(…)): the inverse of the
-//     emitter's world rotation, its world scale undone), so a tipped brazier's smoke still rises. Godot's local_coords
-//     turns gravity with the node; here only velocity, linear/radial/tangential and the shape stay in the emitter's
-//     frame, and tangential's axis is the document's gravity as written, read in that frame;
-//   - no 2D (DISABLE_Z), no emission points, no attractors, no turbulence, no orbit velocity (Godot's is 2D-only here);
-//   - `sphere` is uniform by VOLUME (the cube root of the draw) and has per-axis extents (an ellipsoid). Godot lerps a
-//     surface point toward the centre by a plain uniform draw, which crowds the centre; the toolkit's builder, whose
-//     look the Essentials keep, was uniform by volume;
-//   - `velocity` may also be a uniform ranged vector {min, max} per axis (Niagara's Add Velocity), beside Godot's cone,
-//     because the Essentials' launch was a box, not a cone;
-//   - a particle's own randoms come from mulberry32 seeded per particle and cycle (Godot uses PCG32 there); Godot's
-//     rand_from_seed (Park–Miller) and idhash are kept as they are, where Godot uses them;
-//   - hue variation applies without a curve (Godot 4.7's CPU path multiplies it by 0 unless a curve is set; its GPU path
-//     doesn't), and the anim-offset curve isn't the angle curve (a slip in the same file);
-//   - every angle is radians (spread, a ring's cone, angle, angular velocity: PROTOCOL §9.2), where Godot's material
-//     speaks degrees; the arithmetic is Godot's with its deg_to_rad dropped;
-//   - four positional modules the Essentials need and Godot has no word for, applied at output (they never feed back
-//     into the integration): drift (a slow sinusoidal sway, the builder's wobble), swirl (a small circle with age),
-//     converge (the horizontal offset from the axis narrows over life: a flame's taper), flicker (alpha twinkles).
+// module vocabulary is Godot's ParticleProcessMaterial's. Divergences (local coords, world-down gravity, volume-uniform
+// sphere, ranged velocity, mulberry32 randoms, hue without a curve, radians, drift/swirl/converge/flicker):
+// docs/research/particlesim-godot-port.md.
 //
 // Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md).
 // Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.
@@ -52,9 +28,9 @@
 import { qRotate } from './rot.js';
 
 const TAU = Math.PI * 2;
-const DEG = Math.PI / 180;   // Godot's material speaks degrees; an effect document speaks radians (PROTOCOL §9.2), so the sim never converts (kept for the tools' mutants)
+const DEG = Math.PI / 180;   // an effect document speaks radians (PROTOCOL §9.2), so the sim never converts (kept for the tools' mutants)
 const CMP_EPSILON = 0.00001;
-export const MIN_SIZE = 0.005;   // the builder's floor on a quad's side (m): a shrinking spark never inverts
+export const MIN_SIZE = 0.005;   // the floor on a quad's side (m): a shrinking spark never inverts
 
 // Godot's idhash and rand_from_seed, as they are (cpu_particles_3d.cpp)
 export function idhash(x) {
@@ -62,7 +38,7 @@ export function idhash(x) {
   x = Math.imul(((x >>> 16) ^ x) >>> 0, 0x45d9f3b) >>> 0;
   return ((x >>> 16) ^ x) >>> 0;
 }
-/** Park–Miller minimal standard, as Godot's rand_from_seed: returns [value 0..1, next seed]. */
+/** As Godot's rand_from_seed: [value 0..1, next seed]. */
 export function randFromSeed(seed) {
   let s = seed | 0; if (s === 0) s = 305420679;
   const k = Math.trunc(s / 127773);
@@ -71,7 +47,7 @@ export function randFromSeed(seed) {
   const next = s >>> 0;
   return [(next % 65536) / 65535.0, next];
 }
-/** mulberry32: a particle's own stream (Godot: RandomNumberGenerator, PCG32). */
+/** A particle's own stream (Godot: RandomNumberGenerator, PCG32). */
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function rnd() {
@@ -84,14 +60,14 @@ export function mulberry32(seed) {
 }
 const lerp = (a, b, t) => a + (b - a) * t;
 
-/** A piecewise-linear curve [[t, v], …] (t ascending in 0..1) sampled at x; null → 1 (Godot: no curve = 1). */
+/** [[t, v], …] (t ascending in 0..1) at x; null → 1 (Godot: no curve = 1). */
 export function sampleCurve(c, x) {
   if (!c || !c.length) return 1;
   if (x <= c[0][0]) return c[0][1];
   for (let i = 1; i < c.length; i++) if (x <= c[i][0]) { const [ta, va] = c[i - 1], [tb, vb] = c[i]; return tb > ta ? lerp(va, vb, (x - ta) / (tb - ta)) : vb; }
   return c[c.length - 1][1];
 }
-/** A gradient [[t, 0xRRGGBB, alpha], …] at x → [r, g, b, a] (linear in sRGB components, as Godot's Gradient). */
+/** [[t, 0xRRGGBB, alpha], …] at x → [r, g, b, a] (linear in sRGB components, as Godot's Gradient). */
 export function sampleRamp(g, x, out = [1, 1, 1, 1]) {
   if (!g || !g.length) { out[0] = out[1] = out[2] = out[3] = 1; return out; }
   const rgba = (p) => [((p[1] >> 16) & 255) / 255, ((p[1] >> 8) & 255) / 255, (p[1] & 255) / 255, p[2] ?? 1];
@@ -105,11 +81,8 @@ export function sampleRamp(g, x, out = [1, 1, 1, 1]) {
 
 export { qRotate };
 /**
- * The document's gravity (a WORLD vector, m/s², lead 10-17) in an emitter's own frame, given the emitter's world rotation
- * q [x, y, z, w] and world scale s [x, y, z] (three's matrixWorld.decompose). The emitter's frame is scaled with its thing
- * (`scale`: every length in the effect, accelerations too, × the thing's scale), so the gravity that lands in the world is
- * the document's × the thing's mean scale (∛|sx·sy·sz|), pointing exactly where the document says: v = S⁻¹ · R⁻¹ · (k·g).
- * At identity it is g as written.
+ * The document's gravity (a WORLD vector, m/s²) in an emitter's frame, from world rotation q [x, y, z, w] and scale s [x, y, z]:
+ * v = S⁻¹ · R⁻¹ · (k·g), k the mean scale (∛|sx·sy·sz|), so it points where the document says and scales with the thing.
  */
 const _QI = [0, 0, 0, 1], _R = [0, 0, 0];   // scratch: the renderer calls this every frame per emitter
 export function localGravity(g, q = [0, 0, 0, 1], s = [1, 1, 1], out = [0, 0, 0]) {
@@ -132,7 +105,7 @@ function hueRotate(rgb, ang) {
   return [m[0][0] * rgb[0] + m[1][0] * rgb[1] + m[2][0] * rgb[2], m[0][1] * rgb[0] + m[1][1] * rgb[1] + m[2][1] * rgb[2], m[0][2] * rgb[0] + m[1][2] * rgb[1] + m[2][2] * rgb[2]];
 }
 
-/** A ramp decoded once: {t, r, g, b, a} as Float64Arrays (sampling allocates nothing). */
+/** Decoded once: {t, r, g, b, a} as Float64Arrays (sampling allocates nothing). */
 function decodeRamp(g) {
   if (!g || !g.length) return null;
   const n = g.length, R = { n, t: new Float64Array(n), r: new Float64Array(n), g: new Float64Array(n), b: new Float64Array(n), a: new Float64Array(n) };
@@ -148,11 +121,9 @@ function rampAt(R, x, out) {
 }
 
 /**
- * One emitter's simulation. `em` is a RESOLVED emitter (shared/particle_effects.js resolveEmitter: every module present,
- * every default written). `seed`: this instance's seed. Returns the sim: step(dt) advances it, and these arrays hold
- * what to draw (index i < amount): alive[i], pos[3i..], size[i], angle[i] (rad), color[4i..] (rgba, rgb may exceed 1
- * for additive), frame[i] (flipbook frame, a float). setEmitting(on) stops or restarts the spawning (Godot's emitting).
- * Structure of arrays, and nothing allocated per particle per frame: a viewer may run thousands of these.
+ * `em` is a RESOLVED emitter (particle_effects.js resolveEmitter); `seed` this instance's. step(dt) advances it; alive[i],
+ * pos[3i..], size[i], angle[i] (rad), color[4i..] (rgba, rgb may exceed 1 for additive), frame[i] (flipbook, float) hold what
+ * to draw; setEmitting(on). Structure of arrays, nothing allocated per frame.
  */
 export function makeSim(em, { seed = 0 } = {}) {
   const n = em.spawn.amount | 0;
@@ -171,8 +142,8 @@ export function makeSim(em, { seed = 0 } = {}) {
   const d0 = V.direction ?? [0, 1, 0]; const dl0 = Math.hypot(d0[0], d0[1], d0[2]); const dirN = dl0 > 0 ? [d0[0] / dl0, d0[1] / dl0, d0[2] / dl0] : [0, 0, 1];
   let bin = cross([0, 1, 0], dirN); if (bin[0] * bin[0] + bin[1] * bin[1] + bin[2] * bin[2] < 1e-8) bin = [0, 0, 1];
   bin = norm3(bin); const nrm = cross(bin, dirN);
-  const gN = norm3(F.gravity);   // tangential's axis: the document's gravity, in the emitter's frame (it doesn't turn with the world)
-  let gx = F.gravity[0], gy = F.gravity[1], gz = F.gravity[2];   // gravity in the emitter's frame: as written until the renderer says how the emitter stands (setGravity)
+  const gN = norm3(F.gravity);   // tangential's axis: the document's gravity in the emitter's frame (it doesn't turn with the world)
+  let gx = F.gravity[0], gy = F.gravity[1], gz = F.gravity[2];   // in the emitter's frame: as written until the renderer says how it stands (setGravity)
   const hueOn = C.hue[0] !== 0 || C.hue[1] !== 0;
   const base = (seed >>> 0);
   let alt = 0;
@@ -307,7 +278,7 @@ export function makeSim(em, { seed = 0 } = {}) {
     }
   }
 
-  /** Advance by dt seconds of the viewer's clock (clamped: a backgrounded tab resumes, it doesn't replay). */
+  /** dt seconds of the viewer's clock (clamped: a backgrounded tab resumes, it doesn't replay). */
   sim.step = (dt) => {
     dt = Math.max(0, Math.min(0.1, +dt || 0));
     if (!sim.started) {   // Godot's first update: preprocess in 1/30 s steps
@@ -320,10 +291,10 @@ export function makeSim(em, { seed = 0 } = {}) {
     output();
     return sim;
   };
-  /** Gravity in the emitter's own frame (localGravity: the document's world-down gravity turned into it), read from the
-   *  next step on. Without a call the document's gravity is used as written: an emitter standing upright, at scale 1. */
+  /** The document's world-down gravity in the emitter's frame (localGravity), from the next step on. Without a call it is
+   *  used as written: an emitter upright, at scale 1. */
   sim.setGravity = (v) => { gx = +v[0]; gy = +v[1]; gz = +v[2]; return sim; };
-  /** Godot's emitting: off lets the living finish; on again starts emitting where the cycle stands. */
+  /** Godot's emitting: off lets the living finish; on again resumes where the cycle stands. */
   sim.setEmitting = (on) => { on = !!on; if (on === sim.emitting) return; sim.emitting = on; if (on) { sim.active = true; sim.finished = false; } };
   sim.liveCount = () => { let c = 0; for (let i = 0; i < n; i++) c += sim.alive[i]; return c; };
   return sim;

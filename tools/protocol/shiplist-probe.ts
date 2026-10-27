@@ -1,4 +1,4 @@
-// tools/protocol/shiplist-probe.ts — the ship list's group A in a real browser (one headless Chromium against a scratch
+// tools/protocol/shiplist-probe.ts: the ship list's group A in a real browser (one headless Chromium against a scratch
 // sequencer, tools/harness.ts scratchBench; test:protocol runs it under the house guards, like client-check):
 //   D   a desktop visitor's door: the hint bar offers "E open “Gate”" within reach; E opens it through the authority (one
 //       use act); every client draws it swinging (it turns about its hinge over its time, then rests open); E again
@@ -22,7 +22,7 @@ const CRATE = "eidoverse/assets/models/crate_large_blue.glb";
 let worldsDir = "";
 import { pagedEval } from "./idalias.ts";
 import { pageWaiter, tryUntil } from "./wait.ts";
-// R 10-17: the page names what it makes with placeholders (tools/protocol/idalias.ts pageIds); every page answer brings the
+// the page names what it makes with placeholders (tools/protocol/idalias.ts pageIds); every page answer brings the
 // minted ids back (NODE), and N(name) reads a scene name as its id for the node-side checks
 const NAMES = ["mta", "mtb", "prbox0", "prbox1", "prbox2", "acbox", "anchor", "atbox", "box1", "clbox", "cloud", "ctbox", "cuball", "gate", "getool", "hdsign", "hpball", "htcrate", "hysign", "nhball", "nlbox", "pobase", "potop", "rbbtn", "rbtgt", "slcrate", "slfloor", "sthigh", "stlow", "syb", "syorb", "wbcrate", "wgcrate", "sba", "sbb", "crate-2", "crate-3"];
 const NODE = new Map<string, string>(); const N = (n: string) => NODE.get(n) ?? n;
@@ -40,8 +40,8 @@ const check = (name: string, ok: any, detail?: any) => check0(name, !!ok, detail
 const entries = () => readLog(fs.readFileSync(path.join(worldsDir, WORLD, "world.jsonl")));
 const disk = () => fold(entries());
 const waitFor = pageWaiter(evalJson);
-// a model's entity slot is null until its GLB lands; on a software renderer that can take far longer than 8 s, and a stage
-// that read on past a timed-out wait died later as "Cannot read properties of null" (Nissa, #260). Wait long, then fail BY NAME.
+// a model's entity slot is null until its GLB lands, which on a software renderer can take far longer than 8 s: wait
+// long, then fail BY NAME (never read on into "Cannot read properties of null")
 const needModel = async (expr: string, what: string) => { if (!(await waitFor(expr, 45000))) throw new Error(`setup: ${what} never loaded in 45 s (its GLB never landed: a slow renderer?)`); };
 const waitDisk = async (pred: () => boolean, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (pred()) return true; await sleep(100); } return false; };
 const key = (code: string) => evalJson(`dispatchEvent(new KeyboardEvent('keydown', { code: '${code}', key: '${code}', bubbles: true })), dispatchEvent(new KeyboardEvent('keyup', { code: '${code}', key: '${code}', bubbles: true })), true`);
@@ -72,15 +72,9 @@ try {
   check("D1 the hint bar offers it: E open “Gate”", await waitFor(`/E\\s*open\\s*“Gate”/.test(${hint})`, 6000), await evalJson(hint));
   const q0 = await evalJson(`import('/lib/world.js').then((m) => m.entities.get('gate').quaternion.toArray())`);
   const uses0 = entries().filter((e: any) => e.kind === "act" && e.verb === "use").length;
-  // an in-page sampler (CDP round trips are too slow to time a 1.2 s swing): how open the tween says, and the angle the
-  // gate is DRAWN at, once per animation frame for 4 s from just before E. Per frame, not per 40 ms: the gate is only drawn
-  // on frames (tickOpenables), and a starved CI runner once drew none for ~3 s while a timer kept sampling the shut gate
-  // (anima 40067204678, ubuntu) — that is "no frames", not "drawn wrong", and D3 now says which. A page that draws no frame at
-  // all still ends at 4.5 s (the timer races each frame), so D3 fails with a reason ("the tween never started" when no frame came at all, "starved" when too few did) rather than the stage timing out.
-  // A runner that draws no frames for the whole swing is INCONCLUSIVE, not a failure ("starved", below): the swing is closed
-  // and tried again, up to 3 times, each retry printed. Any other reason fails at once, so a gate drawn wrong (frames, but
-  // never part-way) or never moved still goes red the first time. Diagnosis of the one CI failure: anima 40067204678 — timers
-  // sampled 100× on time while the frame-only angle stayed frozen 1.2 s (no frames), Fable 5.1 review 10-24.
+  // an in-page sampler, once per animation frame for 4 s (the gate is only drawn on frames, tickOpenables), ending at 4.5 s
+  // even with no frames. No frames through the swing is "starved", INCONCLUSIVE: retried up to 3 times; any other reason
+  // (drawn wrong, never moved) fails at once
   let samp: any[] = [], moving: any[] = [], first: any, last: any, rest: any, drawnMid = 0, framesInSwing: number | null = null, why = "", tries = 0;
   for (;;) {
     tries++;
@@ -115,15 +109,15 @@ try {
   check("D6 …and it's drawn shut again where it stood", Math.abs(Math.abs(q0[0] * q2[0] + q0[1] * q2[1] + q0[2] * q2[2] + q0[3] * q2[3]) - 1) < 1e-4, { q0, q2 });
 
   });
-  // ---- WB: the world's edge (R, 10-10 23:00: walked 44 m out of a ±20 m world; the authority's track of her stayed at
-  // the edge, and every put and throw after was "25 m from you") ----
+  // ---- WB: the world's edge: walking far out of a ±20 m world must not leave the authority's track at the edge, so
+  // every put and throw after reads "25 m from you" ----
   await stage("WB", async () => {
   const me0 = await page(`const c = await import('/lib/controller.js'); return [c.myState.pos.x, c.myState.pos.z, c.myState.yaw];`);
-  const edge = +(me0[0] - 1.2).toFixed(2);   // to my -x: stage D leaves a thing 1.2 m to my +x   // close, so nothing an earlier stage left can stand between me and it
+  const edge = +(me0[0] - 1.2).toFixed(2);   // to my -x: stage D leaves a thing 1.2 m to my +x; close, so nothing an earlier stage left can stand between me and it
   const b = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('set', { id: '@world', component: 'bounds', value: { min: [${edge}, 0, -60], max: [60, 30, 60] } });`);
   check("(setup) this world's edge 1.2 m to my -x", b?.ok, b);
   await sleep(800);
-  await evalJson(`import('/lib/edge.js').then((e) => (e.setWorldEdgeShown(true), true))`);   // off by default (R 10-11 23:04); Viewport ▾ 'world edge' turns it on
+  await evalJson(`import('/lib/edge.js').then((e) => (e.setWorldEdgeShown(true), true))`);   // off by default; Viewport ▾ 'world edge' turns it on
   const fenceAll = await evalJson(`import('/lib/edge.js').then((e) => e.worldEdgeShown())`); const fence = fenceAll?.box;
   check("WB0 the edge is drawn: a fence at exactly this world's bounds", Array.isArray(fence) && fence[0]?.[0] === edge && fence[1]?.[0] === 60, fenceAll);
   const r = await page(`const c = await import('/lib/controller.js'), n = await import('/lib/net.js'), t = await import('/lib/thingphysics.js');
@@ -172,8 +166,8 @@ try {
   check("V3 OK answers it", await evalJson(`import('/lib/xrask.js').then((m) => m.xrAskState() === null)`));
   });
 
-  // ---- VP: a physics act refused in a headset (audit 10-09 blocker 5: thingphysics-refused had no listener, so a refused
-  // grab or throw in VR showed nothing at all: you can't tell a bug from a rule) ----
+  // ---- VP: a physics act refused in a headset must show (a refused grab or throw in VR showing nothing can't tell a bug
+  // from a rule) ----
   await stage("VP", async () => {
   const made = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'anchor', model: '${CRATE}', components: { label: 'Anchor', grabbable: { enabled: false }, transform: { pos: [${at[0]}, 0, ${at[1]} + 1.5] } } });`);
   check("(setup) a crate that can't be picked up, beside me", made?.ok, made);
@@ -193,7 +187,7 @@ try {
   await sleep(5200);   // past the repeat window: the desk grab below is a fresh refusal
   const g2 = await page(grab);
   check("VP4 on the desk, a refusal raises no headset card (the chat line says it there)", g2 && !g2.ok && (await evalJson(`import('/lib/xrask.js').then((m) => m.xrAskState() === null)`)));
-  // VP5 (review round 3): two things whose names differ only by a digit are two refusals, both said
+  // VP5: two things whose names differ only by a digit are two refusals, both said
   for (const n of ["Crate 2", "Crate 3"]) await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: '${n.replace(" ", "-").toLowerCase()}', model: '${CRATE}', components: { label: '${n}', grabbable: { enabled: false }, transform: { pos: [${at[0]} - 2, 0, ${at[1]} + ${n.endsWith("2") ? 3 : 5}] } } });`);
   await needModel(`import('/lib/world.js').then((m) => !!m.entities.get('crate-2') && !!m.entities.get('crate-3'))`, 'crate-2 and crate-3');
   const n5 = await evalJson(`__phys.length`);
@@ -208,8 +202,7 @@ try {
   await waitFor(`document.body.classList.contains('edit-mode')`);
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('gate'); return true;`);
   await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === 'gate')`);
-  // a card is its header row (div.sp-f-group holding the .sp-group button) and the rows after it, up to the next header
-  // row (panels.js)
+  // a card is its header row (div.sp-f-group holding the .sp-group button) and the rows after it, up to the next header row (panels.js)
   const card = `(() => { const h = [...${insp}.querySelectorAll('.sp-group')].find((g) => /Openable/.test(g.textContent)); if (!h) return null; const box = document.createElement('div');
     for (let n = h.parentElement.nextElementSibling; n && !n.classList.contains('sp-f-group'); n = n.nextElementSibling) box.append(n.cloneNode(true)); box.__live = h; return box; })()`;
   const cardBtn = (re: string) => `(() => { const h = [...${insp}.querySelectorAll('.sp-group')].find((g) => /Openable/.test(g.textContent));
@@ -231,7 +224,7 @@ try {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
   });
   // ---- VA: the body's arrival refused (a takeover reconnect: the server still has my body where it was, and the client
-  // re-arrives with a plain move from far away). Review of 5a978cc0: the arrival retried at 5 Hz, forever ----
+  // re-arrives with a plain move from far away) must not retry at 5 Hz forever ----
   await stage("VA", async () => {
   const on = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('set', { id: '@world', component: 'physics-engine', value: { engine: 'eidosim@1.0.0' } });`);
   check("(setup) physics on (the body is tracked only in a physics world)", on?.ok, on);
@@ -241,16 +234,16 @@ try {
   await sleep(3000);
   const b = await evalJson(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body())`), said = (await evalJson(`__phys.length`)) - n0;
   check("VA1 re-arriving 8 m from where the server last had me: the body arrives again (a teleport re-arrival), said at most once", b?.arrived && said <= 1, { said, body: b, events: await evalJson(`__phys.slice(${n0}, ${n0} + 3)`) });
-  // VA3 (review round 3): a fresh re-arrival (refused too-fast, then a teleport), and a walk straight after: the refusal's
-  // back-off (2 s) must not outlive the arrival, so my body follows within 1.2 s
+  // VA3: a fresh re-arrival (refused too-fast, then a teleport), and a walk straight after: the refusal's back-off (2 s)
+  // must not outlive the arrival, so my body follows within 1.2 s
   await page(`const c = await import('/lib/controller.js'); c.myState.pos.z += 8; const b = await import('/lib/base.js'); b.bus.emit('cut-adopted'); return true;`);
-  const re = await waitFor(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body().arrived)`, 5000);   // the re-arrival itself may be slow on a busy host (red five times on 10-10, each time under load); what VA3 times is the walk AFTER it
+  const re = await waitFor(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body().arrived)`, 5000);   // the re-arrival itself may be slow on a busy host; what VA3 times is the walk AFTER it
   const t0 = (await evalJson(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body())`))?.trackedAt;
   await page(`const c = await import('/lib/controller.js'); c.myState.pos.x += 3; return true;`);
   const followed = await waitFor(`import('/lib/thingphysics.js').then((m) => { const t = m.physicsApi.body().trackedAt; return !!t && Math.abs(t[0] - ${t0?.[0] ?? 0} - 3) < 0.3; })`, 1200);
   check("VA3 …re-arrived, then walking 3 m at once: the body follows within 1.2 s (no leftover back-off)", re && t0 && followed, { re, t0, now: await evalJson(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body())`) });
-  // VA2 (review round 2): an arrival that keeps being refused while the person WALKS (inside a crate: the step and the
-  // teleport are both "solid", and the reason names coordinates, so no two texts match): said a couple of times, not 5 a second
+  // VA2: an arrival that keeps being refused while the person WALKS (inside a crate: the step and the teleport are both
+  // "solid", and the reason names coordinates, so no two texts match): said a couple of times, not 5 a second
   const crate = await evalJson(`import('/lib/world.js').then((m) => { const o = m.entities.get('anchor'); return o ? o.position.toArray() : null; })`);
   const n1 = await evalJson(`__phys.length`);
   await page(`const c = await import('/lib/controller.js'); c.myState.pos.set(${crate?.[0] ?? 0}, 0, ${crate?.[2] ?? 0}); const b = await import('/lib/base.js'); b.bus.emit('cut-adopted'); return true;`);
@@ -258,8 +251,8 @@ try {
   const said2 = (await evalJson(`__phys.length`)) - n1, b2 = await evalJson(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body())`);
   check("VA2 an arrival refused again and again while I walk (inside a crate) is said at most twice in 3 s, not 5 a second", crate && !b2?.arrived && said2 <= 2, { crate, said2, lastMove: b2?.lastMove, events: await evalJson(`__phys.slice(${n1}, ${n1} + 4)`) });
   });
-  // ---- CU: the mouse on things (R, 10-10: "'grab one' ... left-clicking on them doesn't do anything"). Left-click is a
-  // thing's primary use; right-click is the menu of everything it offers; a drag stays the camera's ----
+  // ---- CU: the mouse on things: left-click is a thing's primary use; right-click the menu of everything it offers; a drag
+  // stays the camera's ----
   await stage("CU", async () => {
   // VA2 left me standing inside a crate with my body refused: step well clear and let it arrive
   await page(`const c = await import('/lib/controller.js'); c.myState.pos.x += 6; c.myState.pos.z += 6; const b = await import('/lib/base.js'); b.bus.emit('cut-adopted'); return true;`);
@@ -295,7 +288,7 @@ try {
   await sleep(1200);
   await click(0);
   check("CU4 left-click on it is its primary use: I hold it", await waitFor(`import('/lib/thingphysics.js').then((m) => m.physicsApi.mine().includes('cuball'))`, 4000), await holds());
-  // letting go (R, holding the wrecking ball: "left-click doesn't drop it and there's no help option to assist me")
+  // letting go: left-click drops what is held
   await sleep(800);
   const hint = await waitFor(`/holding/.test(document.getElementById('hintbar').textContent) && /set it down/.test(document.getElementById('hintbar').textContent)`, 3000);
   check("CU5 while I hold it the hint bar says so, and how to let go", hint, await evalJson(`document.getElementById('hintbar').textContent`));
@@ -314,8 +307,8 @@ try {
   await click(0);
   check("CU7 …and so does a left-click on the thing itself", await waitFor(`import('/lib/thingphysics.js').then((m) => !m.physicsApi.mine().includes('cuball'))`, 4000), await holds());
   });
-  // ---- FL: flights are drawn on the page's OWN frames (R, 10-10: "object location updates every few seconds", a domino
-  // "stuck in this tilted position"). Every other check hands the applier a wall clock; this one doesn't, on purpose. ----
+  // ---- FL: flights are drawn on the page's OWN frames (or things update every few seconds and stick tilted). Every
+  // other check hands the applier a wall clock; this one doesn't, on purpose. ----
   await stage("FL", async () => {
   await page(`const t = await import('/lib/thingphysics.js'); if (t.physicsApi.mine().length) await t.physicsApi.put(); return true;`); await sleep(1200);
   // look every 50 ms for a second, in the page (a round trip per look is slower than the flight)
@@ -327,8 +320,8 @@ try {
   check("FL1 a punted thing moves on every frame: the displayed sim's clock runs (about 30 ticks a second) and it is seen in many places on the way", seen?.ok && ticks >= 20 && places >= 6, { ok: seen?.ok, code: seen?.code, ticks, places, path: seen?.out?.map((x: any) => x.p).filter((p: string, i: number, a: string[]) => p !== a[i - 1]).slice(0, 8) });
   await sleep(2500);
   });
-  // ---- HP: holding and putting down something big whose origin is its centre (R's gym, 10-10: the wrecking ball
-  // was held around her body, sat half in the floor when put down, and putting it down shoved her and the camera) ----
+  // ---- HP: holding and putting down something big whose origin is its centre: never held around the body, half in the
+  // floor when put down, or shoving the body and camera on the put ----
   await stage("HP", async () => {
   const here = await page(`const c = await import('/lib/controller.js'); return [c.myState.pos.x, c.myState.pos.z, c.myState.yaw];`);
   const made = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'hpball', model: 'props/ball.glb', components: { label: 'Big ball', grabbable: {}, physics: { kind: 'dynamic' }, collider: { shape: 'sphere' }, transform: { pos: [${here[0]} + Math.sin(${here[2]}) * 1.0, 0.35, ${here[1]} + Math.cos(${here[2]}) * 1.0] } } });`);
@@ -343,7 +336,7 @@ try {
   check("HP2 put down, it rests ON the floor (its centre one radius up), in front of me and clear of my body", r?.put && Math.abs(r.down.y - 0.35) < 0.03 && r.down.flat >= 0.35 + 0.32, r);
   check("HP3 …and putting it down does not shove me (the camera rides my body)", r?.put && r.shoved < 0.15, { shoved: r?.shoved });
   });
-  // ---- HT: a held thing turns with me (R, 10-10 evening: "they don't rotate with the avatar, they're always oriented the same direction") ----
+  // ---- HT: a held thing turns with me ----
   await stage("HT", async () => {
   const here = await page(`const c = await import('/lib/controller.js'), k = await import('/lib/core.js'); const d = k.camera.getWorldDirection(new k.THREE.Vector3()); const h = Math.hypot(d.x, d.z) || 1; return [c.myState.pos.x + d.x / h * 0.7, c.myState.pos.z + d.z / h * 0.7];`);
   const htMade = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'htcrate', model: '${CRATE}', components: { label: 'Turn crate', grabbable: { enabled: true }, physics: { kind: 'dynamic', who: 'inhabitant' }, transform: { pos: [${here[0]}, 0, ${here[1]}], scale: 0.25 } } });`);
@@ -358,8 +351,7 @@ try {
     return { grab: !!g?.ok, why: g?.refused ?? g?.why ?? null, body: b0 == null ? null : +wrap(b1 - b0).toFixed(3), crate: +wrap(c1 - c0).toFixed(3) };`);
   check("HT1 holding a crate, I turn a quarter: it turns the same quarter with me (within 0.1 rad)", r?.grab && r.body != null && Math.abs(r.body) > 1.2 && Math.abs(wrap(r.crate - r.body)) < 0.1, r);
   });
-  // ---- HD: 'hidden for all' from the Attributes tab (R, 10-10 23:48: "VERY slow at updating ... the sign visible but the
-  // checkbox still registering 'hidden'") ----
+  // ---- HD: 'hidden for all' from the Attributes tab updates promptly, the sign and the checkbox agreeing ----
   await stage("HD", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'hdsign', components: { label: 'Hide sign', transform: { pos: [${me[0]} + 2, 1.2, ${me[1]} + 2] }, text: { text: 'HIDE ME', size: 0.2, width: 2 } } });`);
@@ -380,8 +372,7 @@ try {
   check("HD2 …and in a busy world (a repaint every frame before the authority answers) the box keeps showing what I clicked", r?.early?.length === 6 && r.early.every(Boolean), r?.early);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('delete', { id: 'hdsign' });`).catch(() => null);
   });
-  // ---- SB: Shift in the viewport (R, 10-11 00:18: "Can shift-select allow me to select multiple objects in the viewport,
-  // and shift-select-drag draw a bounding box around objects to select them?") ----
+  // ---- SB: Shift in the viewport: shift-select adds to the selection, shift-drag draws a selection box ----
   await stage("SB", async () => {
   const at = await page(`const c = await import('/lib/core.js'), co = await import('/lib/controller.js'); const d = c.camera.getWorldDirection(new c.THREE.Vector3()); const h = Math.hypot(d.x, d.z) || 1;
     const f = [d.x / h, d.z / h], r = [-d.z / h, d.x / h], p = co.myState.pos; return { a: [p.x + f[0] * 4 - r[0] * 0.8, p.z + f[1] * 4 - r[1] * 0.8], b: [p.x + f[0] * 4 + r[0] * 0.8, p.z + f[1] * 4 + r[1] * 0.8] };`);
@@ -408,7 +399,7 @@ try {
   check("SB2 Shift-drag on bare space draws a box, and both things inside it are selected", JSON.stringify([...(s2 ?? [])].sort()) === JSON.stringify([N("sba"), N("sbb")].sort()), { box: [sx, sy, ex, ey], start, s2 });
   await page(`(await import('/lib/build.js')).setEditMode(false); const m = await import('/lib/net.js'); await m.sendRequest('delete', { id: 'sba' }); await m.sendRequest('delete', { id: 'sbb' }); return true;`).catch(() => null);
   });
-  // ---- SL: selection layers (R, 10-11: "selection layers so people don't select the ground plane all the time") ----
+  // ---- SL: selection layers, so people don't select the ground plane all the time ----
   await stage("SL", async () => {
   await page(`(await import('/lib/build.js')).setEditMode(true); return true;`); await sleep(4000);   // the edit camera first (it eases in): placed and projected from it
   const at = await page(`const c = await import('/lib/core.js'), co = await import('/lib/controller.js'); const d = c.camera.getWorldDirection(new c.THREE.Vector3()); const h = Math.hypot(d.x, d.z) || 1;
@@ -439,8 +430,8 @@ try {
   check("SL1 a floor slab on 'environment' is off for clicks at first: clicking it selects nothing; the crate on it still selects", a !== N("slfloor") && b === N("slcrate"), { a, b, floorPx, cratePx });
   check("SL2 Select ▸ environment on: the floor is clickable again", c2 === N("slfloor"), { c2 });
   });
-  // ---- SY: one selection (R, 10-11 01:13 "agree with each other in the hierarchy and the viewport"; 00:57 "after undoing a
-  // few times ... can't unselect them by clicking away"; 00:41 "the bounding box on moving objects update as they translate") ----
+  // ---- SY: one selection: hierarchy and viewport agree; after a few undos, clicking away still unselects; a moving
+  // thing's bounding box follows it ----
   await stage("SY", async () => {
   const at = await page(`const c = await import('/lib/core.js'), co = await import('/lib/controller.js'); const d = c.camera.getWorldDirection(new c.THREE.Vector3()); const h = Math.hypot(d.x, d.z) || 1; const p = co.myState.pos; return [p.x + d.x / h * 4, p.z + d.z / h * 4];`);
   await page(`const m = await import('/lib/net.js'); await m.sendRequest('create', { id: 'syorb', model: '${CRATE}', components: { label: 'Orbiter', transform: { pos: [${at[0]}, 0, ${at[1]}], scale: 0.2 } } });
@@ -460,7 +451,7 @@ try {
     await b.undo(); await wait(600);
     return { v1, syb: [cb.x, cb.z], sy1: v1.id === 'syb' && v1.visible && inBox(v1, cb), follow, afterUndo: { scene: sg.sceneSelected(), view: b.selectionView().id } };`);
   // a real click on empty sky for SY2
-  const bare = await page(`const c = await import('/lib/core.js'), w = await import('/lib/world.js'), T = c.THREE; const r = c.canvas.getBoundingClientRect(), rc = new T.Raycaster(), objs = [...w.entities.values()].filter(Boolean); for (let y = r.top + 60; y < r.bottom - 60; y += 20) for (let x = r.left + 360; x < r.right - 360; x += 30) { if (document.elementFromPoint(x, y) !== c.canvas) continue; rc.setFromCamera(new T.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), c.camera); if (!rc.intersectObjects(objs, true).length) return [x, y]; } return null;`);   // nothing at all under it (as the viewport's own pick sees things), on the canvas itself   // the canvas itself, not a panel over it
+  const bare = await page(`const c = await import('/lib/core.js'), w = await import('/lib/world.js'), T = c.THREE; const r = c.canvas.getBoundingClientRect(), rc = new T.Raycaster(), objs = [...w.entities.values()].filter(Boolean); for (let y = r.top + 60; y < r.bottom - 60; y += 20) for (let x = r.left + 360; x < r.right - 360; x += 30) { if (document.elementFromPoint(x, y) !== c.canvas) continue; rc.setFromCamera(new T.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), c.camera); if (!rc.intersectObjects(objs, true).length) return [x, y]; } return null;`);   // nothing at all under it (as the viewport's own pick sees things), on the canvas itself, not a panel over it
   await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: Math.round(bare[0]), y: Math.round(bare[1]), button: "left", buttons: 1, clickCount: 1 });
   await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: Math.round(bare[0]), y: Math.round(bare[1]), button: "left", buttons: 0, clickCount: 1 }); await sleep(500);
   const after = await page(`const b = await import('/lib/build.js'), sg = await import('/lib/scenegraph.js'); const o = { scene: sg.sceneSelected(), view: b.selectionView() }; b.setEditMode(false); const n = await import('/lib/net.js'); await n.sendRequest('delete', { id: 'syorb' }); await n.sendRequest('delete', { id: 'syb' }); return o;`);
@@ -468,8 +459,7 @@ try {
   check("SY2 after an edit and an undo, a click on empty space deselects it in the Hierarchy AND the viewport", r?.afterUndo?.scene === N("syb") && after.scene == null && !after.view.visible, { afterUndo: r?.afterUndo, after });
   check("SY3 the selection box follows a moving (orbiting) thing", r?.follow?.length === 6 && r.follow.every(Boolean), r?.follow);
   });
-  // ---- ST: X sits only where I could climb (R, 10-11 00:47: "trying to sit with 'x' near the crates results in me levitating
-  // 5m in the air": a seat she had put on a sign 3 m up counted as near) ----
+  // ---- ST: X sits only where I could climb: a seat on a sign 3 m up must not count as near ----
   await stage("ST", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js');
@@ -484,8 +474,7 @@ try {
   await page(`const m = await import('/lib/net.js'); await m.sendRequest('delete', { id: 'sthigh' }); await m.sendRequest('delete', { id: 'stlow' }); return true;`).catch(() => null);
   check("ST1 X with a seat 3 m up beside me and one at the ground 2.2 m away: I sit on the one I could climb onto", r?.on === N("stlow"), r);
   });
-  // ---- NL: the Inspector's name line (R, 10-10 23:48: "make the 'name' attribute be like Maya ... The eye and lock and
-  // disable icons can be on this line to the right") ----
+  // ---- NL: the Inspector's name line (as Maya's): the eye, lock and disable icons on this line to the right ----
   await stage("NL", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'nlbox', model: '${CRATE}', components: { label: 'Name box', transform: { pos: [${me[0]} + 2.5, 0, ${me[1]} - 2], scale: 0.3 } } });`);
@@ -503,7 +492,7 @@ try {
   await page(`(await import('/lib/build.js')).setEditMode(false); const n = await import('/lib/net.js'); await n.sendRequest('delete', { id: 'nlbox' }); return true;`).catch(() => null);
   check("NL1 the Inspector's first line is the name as a title, with the eye and the padlock on it; the padlock locks it, and its icon changes", before.title === "Name box" && before.sameLine && locked && !!svg1 && svg1 !== before.svg, { before: { ...before, svg: !!before.svg }, locked, iconChanged: !!svg1 && svg1 !== before.svg });
   });
-  // ---- HY: History says what changed (R, 10-10 23:55: "Is there a reason the history isn't more explicit here?") ----
+  // ---- HY: History says what changed ----
   await stage("HY", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); await m.sendRequest('create', { id: 'hysign', components: { label: 'History sign', transform: { pos: [${me[0]} + 2, 1.2, ${me[1]} + 2] }, text: { text: 'HI', size: 0.2, width: 5.076 } } });
@@ -514,8 +503,7 @@ try {
     base.bus.emit('edit-righttab', 'inspector'); b.setEditMode(false); const n = await import('/lib/net.js'); await n.sendRequest('delete', { id: 'hysign' }); return lines.slice(0, 4);`);
   check("HY1 History says what an edit changed: 'text: width 5.076 → 3.912'", r?.some((l: string) => /text: width 5\.076 → 3\.912/.test(l)), r);
   });
-  // ---- WG: out of reach (R, 10-10: "it's not giving me much clear feedback about why I can't grab it. The error line
-  // appears in chat, but not every time ... an 'attention' color in the status bar ... or your avatar could walk over") ----
+  // ---- WG: out of reach: a grab refused for distance gives clear feedback every time ----
   await stage("WG", async () => {
   const bar = () => evalJson(`(() => { const h = document.getElementById('hintbar'); return { attn: h.classList.contains('attn'), gone: h.classList.contains('gone'), text: h.textContent }; })()`);
   const lines0 = await evalJson(`document.querySelectorAll('.chat-log .line').length`);
@@ -538,7 +526,7 @@ try {
   check("WG2 a click on it out of reach walks me over and picks it up", cl?.found && cl.walking && got && Math.hypot(end.me[0] - far.me[0], end.me[1] - far.me[1]) > 2.5 && !end.walking, { cl, got, walked: Math.hypot(end.me[0] - far.me[0], end.me[1] - far.me[1]) });
   await page(`const t = await import('/lib/thingphysics.js'); await t.physicsApi.put('wgcrate'); return true;`); await sleep(600);
   });
-  // ---- CT: clicks go through (R 10-11 01:17 queue E8: a per-thing switch; componentspec clickthrough) ----
+  // ---- CT: clicks go through (a per-thing switch; componentspec clickthrough) ----
   await stage("CT", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z, c.myState.yaw])`);
   // 1.2 m ahead and 0.7 m to the side: the full run leaves WG's crate straight ahead of me, and a click found that instead
@@ -588,8 +576,7 @@ try {
   await key("KeyE"); await sleep(300);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('delete', { id: 'clbox' });`).catch(() => null); await sleep(300);
   });
-  // ---- AC: aim at the cursor (R, 10-10: a throw "just aims away from your camera view, not at the spot you're aiming with
-  // your cursor", and "my character would try to drop it where the cursor is, not right at their feet") ----
+  // ---- AC: aim at the cursor: a throw aims at the spot under the cursor, and a drop lands there, not at the feet ----
   await stage("AC", async () => {
   await page(`const c = await import('/lib/controller.js'), b = await import('/lib/base.js'); c.myState.pos.x -= 12; c.myState.pos.z += 14; b.bus.emit('cut-adopted'); return true;`);
   await waitFor(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body().arrived)`, 8000); await sleep(1500);
@@ -629,7 +616,7 @@ try {
   await evalJson(`(document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), true)`);
   check("AC3 the menu names the thing bare (no quotes), in its own accent span", mi?.name === "Aimed" && !/[“”"]/.test(mi.text), mi);
   });
-  // ---- PR: my own throw, predicted (DESIGN-physics-responsiveness §3; R 10-10: "balls teleport right out of my hands").
+  // ---- PR: my own throw, predicted (DESIGN-physics-responsiveness §3): a thrown ball must not teleport out of the hand.
   // The lab knob physicsApi.lag(300) delays the request, as a slow round trip would; the control arm turns prediction off
   // and shows the old shape (the thing waits in the hand for the whole lag), the real arm shows it leave at once. ----
   await stage("PR", async () => {
@@ -658,12 +645,8 @@ try {
   check("PR1 with prediction the crate leaves the hand at least 150 ms sooner than without, under the same lag", real?.ok && real.left !== null && control?.left !== null && real.left < control.left - 150, { real: real?.left, control: control?.left });
   check("PR2 …and when the real entry lands no single frame moves it more than 35 cm (the guess and the truth agree, or the difference decays)", real?.ok && real.jump < 0.35, real);
   check("PR3 …and nothing is left pending once the entry is in", real?.ok && Object.keys(real.pending ?? {}).length === 0, real?.pending);
-  // PR4: the page's clock STEPS (10-18: this box's wall clock jumps +1.6 s every ~32 s against the page's monotonic one, and
-  // the shiplist went red — PR0 "left": null — whenever a jump fell between clock asks: the estimate kept the old offset,
-  // the replica folded the launch at the authority's tick, and the screen drew it ~50 ticks early, i.e. not at all). Here
-  // the step is made on purpose: performance.timeOrigin (read only by serverclock.js) moves back 1.6 s, so the page's
-  // "now" is 1.6 s behind the authority's, as after a real jump. No prediction, no lag: the throw must still leave the hand
-  // within half a second (the launch's own stamp floors the clock and the client re-measures at once)
+  // PR4: the page's clock STEPS: performance.timeOrigin (read only by serverclock.js) moves back 1.6 s; the throw must still
+  // leave the hand within half a second (the launch's own stamp floors the clock and the client re-measures at once)
   const stepped = await (async () => { await mk('prbox2'); return page(`const t = await import('/lib/thingphysics.js'), w = await import('/lib/world.js'), T = (await import('/lib/core.js')).THREE;
     const r = await t.physicsApi.grab('prbox2'); if (!r?.ok) return { grab: r }; await new Promise((res) => setTimeout(res, 900));
     const o0 = performance.timeOrigin; Object.defineProperty(performance, 'timeOrigin', { value: o0 - 1600, configurable: true });
@@ -679,7 +662,7 @@ try {
   await page(`const c = await import('/lib/controller.js'), b = await import('/lib/base.js'); c.myState.pos.x -= 9; c.myState.pos.z += 9; b.bus.emit('cut-adopted'); return true;`);
   await waitFor(`import('/lib/thingphysics.js').then((m) => m.physicsApi.body().arrived)`, 8000); await sleep(800);
   });
-  // ---- RB: a reset button made from the Edit menu's helpers, used by its left-click offer (R, 10-10) ----
+  // ---- RB: a reset button made from the Edit menu's helpers, used by its left-click offer ----
   await stage("RB", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   const mk = await page(`const m = await import('/lib/net.js'); const a = await m.sendRequest('create', { id: 'rbtgt', model: '${CRATE}', components: { label: 'Reset target', transform: { pos: [${me[0]} + 2, 0, ${me[1]} - 2], scale: 0.3 } } });
@@ -694,7 +677,7 @@ try {
   const at = await page(`const st = (await import('/lib/state.js')).state.st; return st.entities['rbtgt']?.pos;`);
   check("RZ1 Edit's 'make reset button' + the button's first offer (its left-click): the moved thing is back where it stood when the button was made", mk.every(Boolean) && made?.ok && moved?.ok && /^reset/.test(offer.first ?? "") && offer.ok && Math.hypot(at[0] - me[0] - 2, at[2] - me[1] + 2) < 0.01, { mk, made: made?.ok ?? made, moved: moved?.ok, offer, at });
   });
-  // ---- GE: the grip editor (R, 10-10): add a grip, drag it, mirror it, try it; the palm lands on the grip ----
+  // ---- GE: the grip editor: add a grip, drag it, mirror it, try it; the palm lands on the grip ----
   await stage("GE", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'getool', model: '${CRATE}', components: { label: 'Grip tool', grabbable: {}, transform: { pos: [${me[0]} + 0.9, 0, ${me[1]}], scale: 0.25 } } });`);
@@ -719,7 +702,7 @@ try {
   check("GE4 try it: it is picked up by that grip, and the palm sits on the grip point (within 1 cm)", tried.ok && tried.gap !== null && tried.gap < 0.01, tried);
   await page(`(await import('/lib/gripedit.js')).closeGripEditor(); (await import('/lib/thingphysics.js')).physicsApi?.put?.('getool'); (await import('/lib/build.js')).setEditMode(false);`);
   });
-  // ---- NH: the authority has no body for me while I think I'm here (R, 10-10 after a rename): a grab re-arrives ----
+  // ---- NH: the authority has no body for me while I think I'm here (after a rename): a grab re-arrives ----
   await stage("NH", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: 'nhball', model: '${CRATE}', components: { grabbable: {}, transform: { pos: [${me[0]} + 0.7, 0, ${me[1]}], scale: 0.2 } } });`);
@@ -729,7 +712,7 @@ try {
     const back = await t.physicsApi.put('nhball'); return { first: o[0]?.label, left: gone?.ok ?? gone?.refused?.code, grab: g?.ok ?? g?.refused?.code, put: back?.ok ?? back?.refused?.code };`);
   check("NH1 my body gone at the authority (leave), a CLICK grab (the left-click offer) still works: the 'not-here' refusal re-arrives and sends it again", r.left === true && r.grab === true, r);
   });
-  // ---- PO: holding one thing, right-click another: 'put X on Y' sets it down on top, where the click was (R, 10-10) ----
+  // ---- PO: holding one thing, right-click another: 'put X on Y' sets it down on top, where the click was ----
   await stage("PO", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); await m.sendRequest('create', { id: 'pobase', model: '${CRATE}', components: { label: 'Base', grabbable: {}, transform: { pos: [${me[0]} + 0.9, 0, ${me[1]}], scale: 0.4 } } });
@@ -743,7 +726,7 @@ try {
     return { grab: g?.ok ?? null, label: put?.label ?? null, ok: res?.ok ?? res?.refused?.code ?? null, topBottom: +tb.min.y.toFixed(3), baseTop: +b.max.y.toFixed(3), held: t.physicsApi.mine() };`);
   check("PO1 holding one thing, the menu on another offers 'put Small on Base'; a click on its side sets it down ON it", r.grab && /^put Small on Base$/.test(r.label ?? "") && r.ok === true && Math.abs(r.topBottom - r.baseTop) < 0.03 && !r.held.length, r);
   });
-  // ---- EP: each mode keeps its own open HUD panels (R, 10-10; Blender's workspaces) ----
+  // ---- EP: each mode keeps its own open HUD panels (Blender's workspaces) ----
   await stage("EP", async () => {
   const r = await page(`const W = await import('/lib/windows.js'), B = await import('/lib/build.js'); const wait = (ms) => new Promise((z) => setTimeout(z, ms));
     const ids = W.allFrames().map((f) => f.id); const a = ['actions', 'profile', 'keyboard', 'debug'].find((x) => ids.includes(x)), b = ['profile', 'keyboard', 'actions', 'debug'].find((x) => ids.includes(x) && x !== a);
@@ -755,12 +738,12 @@ try {
     return { a, b, inEdit1, inPlay, inEdit2 };`);
   check("EP1 entering edit mode puts play's panels away; what I open in edit mode comes back next time; play's come back on leaving", JSON.stringify(r.inEdit1) === "[false,false]" && JSON.stringify(r.inPlay) === "[true,false]" && JSON.stringify(r.inEdit2) === "[false,true]", r);
   });
-  // ---- CH: the chat's "scroll up for earlier" note appears once, however many times I rejoin (R, 10-10) ----
+  // ---- CH: the chat's "scroll up for earlier" note appears once, however many times I rejoin ----
   await stage("CH", async () => {
   const n = await page(`const c = await import('/lib/chat.js'); for (let i = 0; i < 3; i++) c.noteHistoryContext({ total: null, shown: 40 }); return document.querySelectorAll('.hist-note').length;`);
   check("CH1 three rejoins leave ONE history note in the chat, not three", n === 1, { notes: n });
   });
-  // ---- AT: the Attributes tab, the Inspector's eye, a card's ✕ (R, 10-10 18:55) ----
+  // ---- AT: the Attributes tab, the Inspector's eye, a card's ✕ ----
   await stage("AT", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   await page(`const m = await import('/lib/net.js'); await m.sendRequest('create', { id: 'atbox', model: '${CRATE}', components: { label: 'Attr box', transform: { pos: [${me[0]} + 3, 0, ${me[1]} + 3], scale: 0.3 } } });
@@ -781,10 +764,10 @@ try {
   check("AT1b rotation order and the quaternion are in Attributes ('Rotation, as stored'), not an Inspector 'Advanced' group (R 10-10 23:38)", r?.ag?.includes("Rotation, as stored") && !r?.ig?.includes("Advanced"), { ag: r?.ag, ig: r?.ig });
   check("AT2 a removable card's title line carries a ✕ that removes it (Spin)", r.spinX && r.removed === true, r);
   });
-  // ---- MT: the draft hesperus/material, drawn (docs/COMPONENT-LADDER.md rung 1; R 10-10) ----
+  // ---- MT: the draft hesperus/material, drawn (docs/COMPONENT-LADDER.md rung 1) ----
   await stage("MT", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
-  // ids are the authority's (10-17): a create's id is a placeholder the reply maps to the minted one
+  // ids are the authority's: a create's id is a placeholder the reply maps to the minted one
   const made = await page(`const m = await import('/lib/net.js'); const out = []; for (const dx of [2, 3.2]) out.push((await m.sendRequest('create', { model: '${CRATE}', components: { transform: { pos: [${me[0]} + dx, 0, ${me[1]} - 3], scale: 0.3 } } })).refs?.[0]?.id ?? null); return out;`);
   const [MTA, MTB] = made ?? []; if (!MTA || !MTB) throw new Error(`setup: the two crates weren't created: ${JSON.stringify(made)}`);
   await needModel(`import('/lib/world.js').then((m) => !!(m.entities.get('${MTA}') && m.entities.get('${MTB}')))`, 'the two crates'); await sleep(1500);
@@ -800,8 +783,7 @@ try {
   check("MT2 a one-slot override (hesperus/material:<its slot>) recolours that slot; a slot the model doesn't have changes nothing", r.slot && r.slotA === "0044ff" && r.slotB === r.before[0], r);
   check("MT1 a hesperus/material override recolours that one thing (a clone; the same model elsewhere is untouched), and deleting it brings the model's own material back", r.set === true && r.a[0] === "ff2200" && Math.abs(r.a[1] - 0.15) < 1e-6 && r.b[0] === r.before[0] && !r.sharedWithB && r.backIsOwn && r.del === true, r);
   });
-  // ---- EC: the camera in edit mode (R, 10-10: "we need camera moving controls in edit mode ... Blender or Maya ... or
-  // left-click hold and move wherever there's a bare space (not even this last one works)") ----
+  // ---- EC: the camera in edit mode (Blender/Maya controls; left-click-hold on bare space moves it) ----
   await stage("EC", async () => {
   // the earlier stages punted the crate away, walked me off and left things at my feet: step to clear ground and put
   // the crate in the camera's view (ahead of my body along the way the camera looks, once the camera has followed)
@@ -853,8 +835,8 @@ try {
   const c5 = await cam();
   check("EC6 leaving edit mode gives the camera back to the body: no pan, no further than play allows", Math.hypot(...c5.pan) === 0 && c5.dist <= 16, c5);
   });
-  // ---- HQ: a quieter hierarchy (R, 10-10: names only, the id on hover, a View menu for ids / kinds / components; and
-  // the World row says which world it is) ----
+  // ---- HQ: a quieter hierarchy: names only, the id on hover, a View menu for ids / kinds / components; the World row
+  // says which world it is ----
   await stage("HQ", async () => {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`);
   await evalJson(`(localStorage.removeItem('ew.hierarchy.view'), true)`);
@@ -871,12 +853,12 @@ try {
   const r1 = await row();
   const face = await evalJson(`(() => { const b = ${H}.querySelector('.sp-pop-btn'), r = b.closest('.sp-row'); b.click(); const pop = document.querySelector('.sp-pop'); const o = { btn: b.textContent, rowText: r.textContent, items: [...document.querySelectorAll('.sp-pop-item')].map((x) => x.textContent.trim()), search: (() => { const i = pop?.querySelector('.sp-pop-search'); return i ? i.getBoundingClientRect().height : 0; })() }; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return o; })()`);
   check("HQ2b the switches live under ONE 'Options' button (said once), a plain list: each switch once, then expand all / collapse all, no search box", face?.btn === "Options ▾" && face.rowText === "Options ▾"
-    // read off the menu, not counted (the row filters joined it 10-12): each line once, the three view switches among them
+    // read off the menu, not counted (the row filters joined it): each line once, the three view switches among them
     && new Set(face.items).size === face.items.length && ["show ids", "show kinds", "list components"].every((w) => face.items.some((t) => t.endsWith(w)))
     && face.items.filter((t) => /expand all|collapse all/.test(t)).length === 2 && face.search < 2, face);
   check("HQ3 Options ▸ show ids: the row carries its id again", new RegExp(`Clicker\\s+\\(${N("cuball")}\\)`).test(r1?.label ?? ""), r1);
   await pick("list components");
-  // R 10-11 00:03: with components listed, things start FOLDED; opening one shows its components
+  // with components listed, things start FOLDED; opening one shows its components
   const compRows = () => evalJson(`[...${H}.querySelectorAll('.sp-tree-row')].filter((x) => (x.dataset.id ?? '').startsWith('comp:' + 'cuball' + ':')).map((x) => x.querySelector('.sp-item-label').textContent)`);
   const shut = await compRows();
   await evalJson(`(${H}.querySelector('.sp-tree-row[data-id="cuball"] .sp-disc')?.click(), true)`); await sleep(400);
@@ -886,7 +868,7 @@ try {
   await evalJson(`(localStorage.removeItem('ew.hierarchy.view'), true)`);
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
   });
-  // ---- DK: the dock folds in edit mode (R, 10-10: a "..." that expands to the full dock and shrinks to just the ∃ and the wrench) ----
+  // ---- DK: the dock folds in edit mode (a "..." expands to the full dock and shrinks to just the ∃ and the wrench) ----
   await stage("DK", async () => {
   await evalJson(`(localStorage.removeItem('ew.edit.dock'), true)`);
   const shown = () => evalJson(`(() => { const d = document.getElementById('dock'); const vis = (b) => getComputedStyle(b).display !== 'none' && !b.hidden;
@@ -905,7 +887,7 @@ try {
   check("DK4 leaving edit mode gives the dock back whole, with no ⋯", back.panels === play.panels && !back.more, { play, back });
   await evalJson(`(localStorage.removeItem('ew.edit.dock'), true)`);
   });
-  // ---- CB: the channel box, after Maya's (R, 10-10): plain numbers, scale coloured, the name a handle, reset in the menu ----
+  // ---- CB: the channel box, after Maya's: plain numbers, scale coloured, the name a handle, reset in the menu ----
   await stage("CB", async () => {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`);
   await page(`const n = await import('/lib/net.js'); await n.sendRequest('set', { id: 'cuball', component: 'transform', value: { pos: [7.5, 0.25, 6], scale: [0.5, 0.5, 0.5] } }); (await import('/lib/scenegraph.js')).sceneSelect('cuball'); return true;`);
@@ -928,7 +910,7 @@ try {
   await onLabel("translate x", "click"); await onLabel("translate z", "click", "ctrlKey: true"); await sleep(200);
   const r2 = await rows();
   check("CB4 a click on a name selects the channel; Ctrl-click adds another", v("translate x", r2)?.sel && v("translate z", r2)?.sel && !v("translate y", r2)?.sel, r2?.filter((r: any) => r.sel).map((r: any) => r.label));
-  // R 10-10 23:36: "enable click-drag and shift-selecting multiple channels" (Maya's channel box)
+  // click-drag and shift-selecting multiple channels (Maya's channel box)
   await onLabel("rotate x", "click"); await onLabel("scale y", "click", "shiftKey: true"); await sleep(200);
   const r2b = await rows(); const selOf = (rs: any) => rs?.filter((r: any) => r.sel).map((r: any) => r.label);
   check("CB4b Shift-click selects the run from the last channel clicked (rotate x … scale y)", JSON.stringify(selOf(r2b)) === JSON.stringify(["rotate x", "rotate y", "rotate z", "scale x", "scale y"]), selOf(r2b));
@@ -962,7 +944,7 @@ try {
   check("CB9 Ctrl+G resets all three at once", await waitDisk(() => { const t = tr(), s = t.scale, q = t.q; return t.pos.every((v: number) => v === 0) && (!q || Math.abs(q[1]) < 1e-9) && (s === undefined || s === 1 || (Array.isArray(s) && s.every((v: number) => v === 1))); }), tr());
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
   });
-  // ---- VM: the Viewport menu (R, 10-10: isolate selected, wireframe, flat shaded) ----
+  // ---- VM: the Viewport menu: isolate selected, wireframe, flat shaded ----
   await stage("VM", async () => {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`);
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('cuball'); return true;`); await sleep(300);
@@ -987,8 +969,8 @@ try {
   const out = await evalJson(`Promise.all([import('/lib/core.js'), import('/lib/world.js')]).then(([c, w]) => ({ over: !!c.scene.overrideMaterial, anchor: w.entities.get('anchor')?.visible }))`);
   check("VM4 leaving edit mode puts the view back: no override, nothing isolated away", out && !out.over && out.anchor, out);
   });
-  // ---- FC: the free camera (R, 10-10: Body | Free on the top line; WASD flies it; the body holds an "I'm working" pose;
-  // B steps back into the body and keeps the spot; Body resets) ----
+  // ---- FC: the free camera: Body | Free on the top line; WASD flies it; the body holds an "I'm working" pose; B steps
+  // back into the body and keeps the spot; Body resets ----
   await stage("FC", async () => {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`); await sleep(300);
   const st = () => evalJson(`Promise.all([import('/lib/controller.js'), import('/lib/core.js')]).then(([c, k]) => ({ free: c.isFreeCam(), focus: c.freeCamState().focus, body: c.myState.pos.toArray(), pose: !!c.myState.pose, cam: k.camera.position.toArray(), sw: [...document.querySelectorAll('.edit-camsw .edit-cam.on')].map((b) => b.dataset.cam) }))`);
@@ -1004,10 +986,10 @@ try {
     const rel = (b) => { const p = at(b).sub(hips); return { fwd: +p.dot(f).toFixed(2), up: +p.y.toFixed(2), side: +p.dot(new T.Vector3(f.z, 0, -f.x)).toFixed(2) }; };
     const palm = (b, sgn) => { const n = h.getNormalizedBoneNode(b); n.updateWorldMatrix(true, false); const d = new T.Vector3(0, -1, 0).transformDirection(n.matrixWorld); return +d.dot(f).toFixed(2); };
     return { leftHand: rel('leftHand'), rightHand: rel('rightHand'), leftShoulder: rel('leftUpperArm'), head: rel('head'), palmOut: [palm('leftHand'), palm('rightHand')] };`);
-  const posed = (limbs: any) => !!(posed(limbs));
+  const posed = (limbs: any) => !!(limbs && limbs.leftHand.fwd > 0.35 && limbs.rightHand.fwd > 0.35 && limbs.palmOut[0] > 0.6 && limbs.palmOut[1] > 0.6 && limbs.leftHand.up > 0.05 && limbs.leftHand.up < limbs.leftShoulder.up && limbs.rightHand.up < limbs.leftShoulder.up && limbs.leftHand.side * limbs.rightHand.side < 0);
   // the pose eases in over frames: wait for it (a slow runner draws few frames a second), then read it
   const limbs = (await tryUntil("my body has eased into the working pose", async () => { const l = await measure(); return posed(l) ? l : null; }, { ms: 8000, step: 200 })) ?? await measure();
-  check("FC1b the working pose (a mage casting): both hands well out in front, below the shoulders, on their own sides, palms facing out", limbs && limbs.leftHand.fwd > 0.35 && limbs.rightHand.fwd > 0.35 && limbs.palmOut[0] > 0.6 && limbs.palmOut[1] > 0.6 && limbs.leftHand.up > 0.05 && limbs.leftHand.up < limbs.leftShoulder.up && limbs.rightHand.up < limbs.leftShoulder.up && limbs.leftHand.side * limbs.rightHand.side < 0, limbs);
+  check("FC1b the working pose (a mage casting): both hands well out in front, below the shoulders, on their own sides, palms facing out", posed(limbs), limbs);
   check("FC1 the Free switch: the camera is its own, the switch shows it, and my body holds a pose", s0.sw.join() === "body" && s1.free && s1.sw.join() === "free" && s1.pose && !s0.pose, { s0, s1 });
   // hold W until the camera's centre has flown > 1 m (it moves per frame: a fixed hold measured the frame rate, not the flight)
   await evalJson(`(window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true })), true)`);
@@ -1026,8 +1008,8 @@ try {
   check("FC5 the Body switch is the reset: the camera is my body's again, the pose ends", !s5.free && !s5.pose && s5.sw.join() === "body", s5);
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
   });
-  // ---- RB: a row's menu as a button, for where there is no right-click (R, 10-10: "buttons in VR to the right of
-  // anywhere that would get a right-click menu, hidden on desktop") ----
+  // ---- RB: a row's menu as a button where there is no right-click (in VR: to the right of anything with a right-click
+  // menu, hidden on desktop) ----
   await stage("RB", async () => {
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(true), true))`);
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('cuball'); return true;`); await sleep(500);
@@ -1047,8 +1029,8 @@ try {
   check("RB2 the button opens the row's own menu: a field's (copy value…), a thing's (rename, duplicate…)", fm?.some((t: string) => /copy value/.test(t)) && tm?.some((t: string) => /^rename/.test(t)) && tm?.some((t: string) => /^duplicate/.test(t)), { fm, tm });
   await evalJson(`import('/lib/build.js').then((m) => (m.setEditMode(false), true))`);
   });
-  // ---- NP: a request in flight when the connection drops (review 10-10: pending requests were settled only by their
-  // 15 s timer, so a move in flight at a reconnect held the body track for up to 15 s, then spoke a stale timeout) ----
+  // ---- NP: a request in flight when the connection drops is settled at the reconnect, not by its 15 s timer (which held
+  // the body track up to 15 s, then spoke a stale timeout) ----
   await stage("NP", async () => {
   const r = await page(`const n = await import('/lib/net.js'); const ws = n.net.ws, send = ws.send.bind(ws);
     ws.send = (m) => { if (!/"verb":"look"/.test(m)) send(m); };   // this one request never reaches the authority

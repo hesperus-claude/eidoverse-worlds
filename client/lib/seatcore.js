@@ -1,31 +1,12 @@
-// seatcore — the seat-profile contract as pure functions (#101).
-//
-// A socket owns the WORLD ANCHOR of a seat; an avatar's seat profile owns
-// where that body's posed contact sits relative to its own root. This module
-// is the single place both halves of that sentence become arithmetic: schema
-// validation for profiles, the serve-time status verdict, the runtime gate
-// that decides whether a profile may move a body, and the one subtraction
-// that finally puts a pelvis on a cushion.
-//
-// Shared verbatim by three runtimes (the forecast.js/motioneval.js pattern):
-// the browser's mountTransform, the sequencer's /avatars judgment, and the
-// mcpl agent's effective-transform seat branch all import THIS file — the
-// only way three consumers agree forever is to evaluate the same code.
-// Deliberately dependency-free beyond motioneval's quaternion lines: no
-// THREE, no DOM, no clock, no fetch. Callers pass state in.
-//
-// Contract highlights, each one a review scar from the #101 design round:
-//  - a profile applies ONLY behind the full gate (authored surface socket ∧
-//    countersigned profile ∧ the action that ACTUALLY ran ∧ exact clip
-//    bytes) — everything else is a DECLARED approximation, never silence;
-//  - the correction subtracts along the body's actual up (world +Y this
-//    slice): mounted bodies render upright, and subtracting along a tilted
-//    parent normal smears them sideways (B2 — conceded and pinned by test);
-//  - no minimum vertex is promoted to truth without its support patch: a
-//    skirt hem or loose accessory is an isolated winner, and isolation is
-//    detectable (B-evidence);
-//  - a stale hash can never be read as fresh, and an old fetch can never
-//    overwrite a newer generation (B3 — the #95 lesson, generalized).
+// seatcore — the seat-profile contract (#101) as pure functions: validation, the serve-time verdict, the runtime
+// gate, and the subtraction that puts a pelvis on a cushion. One copy for browser, sequencer and mcpl agent; no
+// THREE, DOM, clock or fetch.
+// Invariants:
+//  - a profile applies ONLY behind the full gate (surface socket ∧ countersigned profile ∧ the action that actually
+//    ran ∧ exact clip bytes); otherwise a DECLARED approximation, never silence;
+//  - the correction subtracts along world +Y (a tilted parent normal smears bodies sideways);
+//  - no minimum vertex is promoted to truth without its support patch (an isolated hem is detectable);
+//  - a stale hash never reads as fresh, and an old fetch never overwrites a newer generation.
 
 import { qApply } from "./motioneval.js";
 
@@ -47,24 +28,14 @@ const fin3 = (v) => Array.isArray(v) && v.length === 3 && v.every(fin);
 
 // ---- profile schema ---------------------------------------------------------
 
-/** Validate a seat-profile record (the shape POST /seat-profile accepts and
- *  profiles.json stores). Returns {ok:true, kind:"contact"|"unsupported"} or
- *  {ok:false, why} — the why is a 4xx body, so it names the field.
- *
- *  Two legitimate shapes: a measured contact profile, and an "unsupported"
- *  record carrying the derivation's refusal (a rig with no humanoid mapping
- *  is a FINDING worth storing — it converts "missing" into a named reason). */
+/** Validate a seat-profile record (POST /seat-profile, profiles.json). Returns {ok:true, kind:"contact"|"unsupported"}
+ *  or {ok:false, why}, the why a 4xx body naming the field. "unsupported" stores a derivation's refusal as a named reason. */
 export function validateProfile(p) {
   if (!p || typeof p !== "object") return { ok: false, why: "profile must be an object" };
-  // The store indexes maps with these two strings and a profile moves every
-  // wearer of an avatar (#105 review B2): the name is roster syntax exactly
-  // (the same character class /avatars sanitizes to — "__proto__" and
-  // friends cannot pass), and this slice supports ONE pose.
+  // the store indexes maps by this name and a profile moves every wearer: exact roster syntax only
   if (typeof p.avatar !== "string" || !SAFE_NAME.test(p.avatar))
     return { ok: false, why: "avatar must be a roster name ([a-zA-Z0-9_-], ≤48 chars)" };
-  // legal SYNTAX but reserved by the language: these index inherited slots on
-  // any plain object, so they are refused at the schema — and the store's
-  // null-prototype maps refuse them a second time (defense in depth)
+  // legal syntax that indexes inherited slots: refused here, and again by the store's null-prototype maps
   if (p.avatar === "__proto__" || p.avatar === "constructor" || p.avatar === "prototype")
     return { ok: false, why: `"${p.avatar}" is not an avatar` };
   if (typeof p.avatarSha256 !== "string" || !HEX64.test(p.avatarSha256))
@@ -89,14 +60,12 @@ export function validateProfile(p) {
   const w = d.winner;
   if (!w || typeof w.mesh !== "string" || !w.mesh || !Number.isInteger(w.vertexIndex) || w.vertexIndex < 0 || !fin3(w.rootLocal))
     return { ok: false, why: "derivation.winner must name mesh, vertexIndex, rootLocal" };
-  // The winner's own coordinate and the promoted value must be the same fact.
   if (Math.abs(w.rootLocal[1] - p.seatContactY) > 1e-6)
     return { ok: false, why: "winner.rootLocal[1] disagrees with seatContactY" };
   const sp = d.supportPatch;
   if (!sp || !Number.isInteger(sp.count) || !fin(sp.spreadY) || !fin(sp.radiusXZ) || sp.radiusXZ <= 0)
     return { ok: false, why: "derivation.supportPatch must carry count, spreadY, radiusXZ" };
-  // Placeholder-shaped evidence is invalid evidence (review amendment): a
-  // measured patch is never empty and never zero-spread-with-one-vertex.
+  // placeholder-shaped evidence is invalid: a measured patch is never empty or one zero-spread vertex
   if (sp.count < MIN_PATCH_VERTS)
     return { ok: false, why: `support patch too sparse (${sp.count} < ${MIN_PATCH_VERTS}) — winner may be a hem, accessory, or outlier` };
   if (sp.spreadY > MAX_PATCH_SPREAD_Y)
@@ -114,9 +83,8 @@ export function validateProfile(p) {
 
 // ---- serve-time status verdict ----------------------------------------------
 
-/** The server's judgment, computed against the CURRENT bytes on disk. One
- *  judge, three readers: consumers receive this verdict and never rehash.
- *  `missing` is the caller's word for "no record at all". */
+/** Judged against the CURRENT bytes on disk; consumers receive this verdict and never rehash.
+ *  `missing` = no record at all. */
 export function profileStatus(profile, currentAvatarSha256, currentClipSha256) {
   if (!profile) return { status: "missing" };
   if (profile.unsupported)
@@ -131,27 +99,16 @@ export function profileStatus(profile, currentAvatarSha256, currentClipSha256) {
 
 // ---- the socket's word (B1) -------------------------------------------------
 
-/** Legacy sockets were authored under root-at-socket and may encode either a
- *  physical plane or an empirically-placed root target — nothing infers which.
- *  Only a body block that says so — `body.anchor: 'surface'` (D14: one enum,
- *  shared/sockbody.js ANCHORS, so a socket can't say "surface" and "hips" at
- *  once) — consumes a profile; everything else (absent, another anchor, typos,
- *  numbers) is legacy by construction. `sock` is the socket component
- *  ({name, body, …}: PLAN-sockets-entities). */
+/** Legacy sockets (root-at-socket) may encode a physical plane or an empirical root target; nothing infers which. Only
+ *  `body.anchor: 'surface'` (shared/sockbody.js ANCHORS) consumes a profile; anything else is legacy. */
 export function socketAnchor(sock) {
-  // the seat's station (shape audit 10-16: what a body does at a socket is the station component; its anchor is top-level),
-  // or the older spelling a fixture or a lifted log may still hand in: a socket value with a body block
+  // the station component (anchor top-level), or the older socket-with-a-body-block a fixture or lifted log may hand in
   return (sock?.anchor ?? sock?.body?.anchor) === "surface" ? "surface" : "legacy-root";
 }
 
 // ---- occupant scale (B5) ----------------------------------------------------
 
-/** The named shared definition of occupantEffectiveScale: the occupant avatar
- *  root's world scalar scale at compose time, times its chosen body size —
- *  which shipped (bodyscale.js) and plugs in at this seam: occupants.js passes
- *  root scale × avatar.bodyScale(), and the text tier passes the occupant's
- *  presence `scale` (mcpl/effective.ts occupantScale). Nonuniform scale is an
- *  abstention, never an average. */
+/** Root world scale × body size (occupants.js; text tier: mcpl/effective.ts). Nonuniform scale abstains, never averages. */
 export function occupantScalar(scaleVec3) {
   if (scaleVec3 == null) return { ok: true, s: 1 };
   const [sx, sy, sz] = scaleVec3;
@@ -163,17 +120,12 @@ export function occupantScalar(scaleVec3) {
 
 // ---- the gate (B1 ∧ served verdict ∧ B3) -----------------------------------
 
-/** The contract half of the gate — authored surface socket, countersigned
- *  fresh verdict, pose identity. This is everything a consumer WITHOUT a
- *  mixer can honestly check: the headless reader has no action playing, so
- *  its runtime truth IS the contract (the browser adds its own runtime half
- *  in seatGate below; each consumer gates on the truths it actually has,
- *  and steady-state parity between them is pinned by test). */
+/** The contract half of the gate (surface socket, fresh verdict, pose identity): all a consumer without a mixer can
+ *  check. The browser adds its runtime half in seatGate; parity between them is pinned by test. */
 export function seatGateCore({ sock, verdict, pose = "sitchair" }) {
   if (socketAnchor(sock) !== "surface") return { apply: false, reason: "legacy socket" };
   if (!verdict || verdict.status === "missing") return { apply: false, reason: "no profile" };
-  // an update event has landed and the fresh verdict hasn't — the held value
-  // is no longer trusted and stops moving bodies NOW (#105 review B1)
+  // an update landed before its fresh verdict: the held value stops moving bodies NOW
   if (verdict.status === "pending") return { apply: false, reason: "profile update pending" };
   if (verdict.status === "unsupported") return { apply: false, reason: `unsupported rig: ${verdict.refusal}` };
   if (verdict.status === "stale") return { apply: false, reason: `profile stale (${verdict.which} bytes changed)` };
@@ -183,13 +135,9 @@ export function seatGateCore({ sock, verdict, pose = "sitchair" }) {
   return { apply: true, contactY: verdict.contactY };
 }
 
-/** The renderer's full gate: the contract half plus the runtime truths only
- *  a mixer-owning consumer has. `currentSlot` is the slot ACTUALLY playing
- *  (setClip's fallback walk lands on "sit"/"idle" — those never consume a
- *  chair profile), and `loadedClipSha256` is the digest of the bytes the
- *  action was built from, hashed once at fetch (null until hydration
- *  delivers the clip). Returns {apply:true, contactY} or {apply:false,
- *  reason} — the reason is the string all three consumers declare. */
+/** The renderer's full gate: the contract half plus mixer truths. `currentSlot` is the slot actually playing ("sit"/
+ *  "idle" fallbacks never consume a chair profile); `loadedClipSha256` the action's bytes' digest (null until hydrated).
+ *  Returns {apply:true, contactY} or {apply:false, reason}, the reason all three consumers declare. */
 export function seatGate({ sock, verdict, pose = "sitchair", currentSlot, loadedClipSha256, currentClipSha256 }) {
   const core = seatGateCore({ sock, verdict, pose });
   if (!core.apply) return core;
@@ -199,59 +147,35 @@ export function seatGate({ sock, verdict, pose = "sitchair", currentSlot, loaded
   return core;
 }
 
-/** The roster name an avatar path implies — the key /avatars verdicts use.
- *  Pure string surgery, shared by every consumer that must map a wearer to
- *  a profile. */
+/** The roster name an avatar path implies: the key /avatars verdicts use. */
 export function nameFromAvatarPath(path) {
   const m = /([^/\\]+)\.vrm/i.exec(String(path ?? ""));
   return m ? m[1] : null;
 }
 
-// ---- the correction (B2: world-up, this slice) ------------------------------
+// ---- the correction (B2: world-up) -----------------------------------------
 
-/** Place the profile's contact plane on the socket plane. The subtraction is
- *  along the mounted body's ACTUAL up — global +Y, because mounted avatars
- *  render upright (mountTransform yields yaw only). Subtracting along a
- *  tilted parent's normal instead would displace the root laterally while
- *  the body's contact geometry stays world-vertical: contactY·sin(tilt) of
- *  pure error, the named discriminator in the pitch/roll fixture. Body
- *  orientation-to-plane is a separate future mechanic, not this one. */
+/** Place the profile's contact plane on the socket plane, subtracting along global +Y: mounted avatars render upright
+ *  (mountTransform is yaw-only), so a tilted normal would displace the root by contactY·sin(tilt). */
 export function applySeatCorrection(socketPoint, contactY, occupantScale = 1) {
   if (!fin3(socketPoint) || !fin(contactY) || !fin(occupantScale)) return null;
   return [socketPoint[0], socketPoint[1] - contactY * occupantScale, socketPoint[2]];
 }
 
-// ---- the passive instrument's seat claim (the _v lesson) --------------------
+// ---- the passive instrument's seat claim -----------------------------------
 
-/** The seat's own claim, as pure math: world position of the socket and the
- *  parent's yaw, from values the caller already resolved. Exists because the
- *  browser instrument computed these with shared scratch registers and the
- *  forward-vector reuse clobbered the socket position before its Y was read
- *  — invisible at y≈0, corrupt everywhere else. Pure arguments cannot alias;
- *  the nonzero-Y regression pins this function instead of a register habit. */
+/** Pure math from resolved values: pure arguments can't alias scratch registers (which once clobbered the socket's Y). */
 export function seatClaim(socketWorld, parentQuat) {
   if (!fin3(socketWorld)) return null;
   const f = qApply(parentQuat, [0, 0, 1]);
   return { seatY: socketWorld[1], parentYaw: Math.atan2(f[0], f[2]) };
 }
 
-// ---- fetch generations (B3/B4: the #95 lesson, generalized) -----------------
+// ---- fetch generations (B3/B4: #95, generalized) ---------------------------
 
-/** Whole-request epoch guard for async profile fetches (#105 review B1).
- *
- *  The per-name-stamp version had a hole: an initial fetch stamps nothing
- *  (the cache is empty), so an update landing mid-flight was read at its
- *  POST-bump generation at response time and the stale response won. The
- *  epoch closes it: every bump advances one global epoch and records it
- *  against the name, a request stamps the epoch it DEPARTED under, and a
- *  resolution is refused for any name bumped after that departure — known
- *  to the cache or not.
- *
- *  Event revs are incorporated (review B1, "incorporate the event's rev"):
- *  `avatar-profile-updated` announces the store revision that now exists,
- *  so any response carrying an older revision is pre-event by definition
- *  and is refused whole. heldRev stays monotonic — a slow response from
- *  before an acceptance can never roll the acceptance back. */
+/** Whole-request epoch guard for async profile fetches: every bump advances a global epoch recorded per name; a request
+ *  stamps its departure epoch and is refused for any name bumped since (even on an empty cache), or if it carries a rev
+ *  older than the latest announced event. heldRev is monotonic. */
 export function makeGenerationGuard() {
   let epoch = 0;
   const lastBump = new Map();  // name → epoch of its most recent bump
@@ -273,8 +197,7 @@ export function makeGenerationGuard() {
         heldRev = Math.max(heldRev, rev);
         return true;
       }
-      // a response that cannot state its revision is refused once any event
-      // has announced one — it might predate the announcement
+      // a response without a revision is refused once any event has announced one: it might predate it
       return floorRev < 0;
     },
     rev() { return heldRev; },
@@ -283,21 +206,12 @@ export function makeGenerationGuard() {
 
 // ---- the verdict cache: ONE implementation for every consumer ---------------
 
-/** The seat-verdict cache the browser and the headless agent both run
- *  (#105 review B1 — the logic existed twice and each copy had the same
- *  holes; mirrored math stays mirrored, so now it exists once, here, where
- *  bun pins it). `fetchRoster` is the consumer's transport: an async
- *  () => ({ rev, entries: [{name, seat}] }) that throws on failure.
- *
- *  The contract, per the review's four vectors:
- *   1. an update landing while ANY fetch is in flight — including the very
- *      first, empty-cache fetch — discards that name's slice of the response;
- *   2. an update immediately demotes the HELD verdict to `pending` (the gate
- *      declares "profile update pending"): if the refetch is slow or fails,
- *      the old accepted value stops moving bodies the moment the event lands;
+/** Shared by browser and headless agent (one copy, bun-pinned). `fetchRoster`: async
+ *  () => ({ rev, entries: [{name, seat}] }), throws on failure. Contract:
+ *   1. an update landing while ANY fetch is in flight (even the first) discards that name's slice of the response;
+ *   2. an update demotes the held verdict to `pending` at once ("profile update pending");
  *   3. a fresh response under the new generation restores service;
- *   4. names are independent — one avatar's update never invalidates another's
- *      verdict. */
+ *   4. names are independent. */
 export function makeVerdictCache(fetchRoster) {
   const verdicts = new Map();  // name → served verdict (or {status:"pending"})
   const guard = makeGenerationGuard();

@@ -1,9 +1,8 @@
-// PROTOCOL §6 proofs 2 and 3: every 25d H1 / H2 / H4 attack, run as the SAME requests through the baseline door
-// (lab commit 4f62913, the control arm: only with PROTOCOL_LAB, see common.ts) and through today's door. Each must succeed
-// on the baseline and be refused (or harmless) now. Ported from the protocol lab's attack-check.js @ 11db981; only paths
-// and the optional control changed. usage: bun tools/protocol/attack-check.ts
+// PROTOCOL §6 proofs 2 and 3: every H1 / H2 / H4 attack as the SAME requests through the baseline door (lab commit
+// 4f62913, the control arm: only with PROTOCOL_LAB, see common.ts) and today's. Each must succeed on the baseline and be
+// refused (or harmless) now. usage: bun tools/protocol/attack-check.ts
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import { scratch, labAt, controlNote } from "./common.ts";
 import * as doorNow from "../../shared/protocol/authority.js";
@@ -29,8 +28,7 @@ function cast(s) {
   s.call("olive", "create-world", { title: s.name });
   s.call("olive", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
   s.call("olive", "set", { id: "@world", component: "roles:vic", value: { role: "inhabitant" } });
-  // these attacks are set in a world whose strangers can't build: since R 10-21 a NEW world's newcomers build (starter
-  // config), so the cast gates newcomers to inhabitant, as an owner would
+  // set in a world whose strangers can't build: a NEW world's newcomers build, so the cast gates newcomers to inhabitant
   s.call("olive", "set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });
 }
 const look = (s, id) => s.call("olive", "inspect", { id });
@@ -45,10 +43,7 @@ const attacks = [
       s.call("bob", "create", { id: "statue", model: "crate", place: { at: [2, 2] } }); s.call("olive", "set", { id: "statue", component: "lock", value: true });
       return { attack: s.call("bob", "delete", { id: "statue", component: "model" }) }; },
     baseBad: (o) => ok(o.attack), nowGood: (o) => o.attack.refused?.code === "locked" },
-  // H1c was "pin bypass: set motion {type:'spin'} on a pinned thing", refused by the lab's pin. PROTOCOL §5 gave
-  // `lock` v1's exact meaning, and v1's matrix (tools/locktest.ts) keeps motion open on a locked thing: a motion
-  // animates it in place (today's are pendulum/spin/bob), it doesn't relocate it. So this is a guard now: it must work.
-  // R 10-11 16:21: a lock now covers EVERYTHING on the thing (review C-S1-1): H1c is an attack again, refused.
+  // H1c: a lock covers every component on the thing, so a motion on a locked thing is refused
   { id: "H1c", what: "motion {type:'spin'} on a locked thing (a lock covers every component, 10-11)", run(s) { cast(s);
       s.call("bob", "create", { id: "statue", model: "crate", place: { at: [2, 2] } }); s.call("olive", "set", { id: "statue", component: "lock", value: true });
       return { open: s.call("bob", "set", { id: "statue", component: "motion", value: { type: "spin" } }), move: s.call("bob", "set", { id: "statue", component: "transform", value: { pos: [0, 0, 0] } }) }; },
@@ -67,8 +62,7 @@ const attacks = [
       const attack = s.call("vic", "use", { id: "jam", action: "jam" });
       return { attack, lookAfter: s.call("zed", "look", {}), createAfter: s.call("bob", "create", { model: "crate", place: { at: [5, 5] } }) }; },
     baseBad: (o) => crashed(o.attack) && crashed(o.lookAfter) && crashed(o.createAfter),
-    // the handler itself is refused when written now (shiplist R2: a handler's effect is checked at write), so the use
-    // finds no 'jam' to do; either way nothing is written and every later read stands
+    // the handler itself is refused at write, so the use finds no 'jam' to do; either way nothing is written and later reads stand
     nowGood: (o) => ["shape", "no-action"].includes(o.attack.refused?.code) && ok(o.lookAfter) && ok(o.createAfter) },
   { id: "H1f", what: "a handler outlives its author's rights (bob demoted, vic still uses bob's handler on a thing bob can't touch now)", run(s) { cast(s);
       s.call("bob", "create", { id: "lever", model: "crate", place: { at: [4, 0] } });
@@ -133,8 +127,8 @@ const attacks = [
       const down = s.call("olive", "delete", { id: "@world", component: "roles:olive" });
       return { add, down, bobOwns: s.call("bob", "set", { id: "@world", component: "about", value: { name: "bob's now" } }) }; },
     baseBad: () => true, nowGood: (o) => ok(o.add) && ok(o.down) && ok(o.bobOwns), guard: true },
-  // §7a: a use spends the rights of whoever set the handler. A handler that writes its own thing's reactions installs bob's
-  // handler, not the invoker's, so a later use of the installed one still spends bob's rights.
+  // §7a: a use spends the rights of whoever set the handler: a handler writing its own thing's reactions installs bob's
+  // handler, so a later use of it still spends bob's rights
   { id: "L7a", what: "a reaction written by a reaction keeps its author: the owner's use doesn't make the owner its author", run(s) { cast(s);
       s.call("bob", "create", { id: "box", model: "crate", place: { at: [3, 3] } });
       const setUp = s.call("bob", "set", { id: "box", component: "reactions", value: { evolve: { kind: "set", component: "reactions", value: { tag: { kind: "set", component: "label", value: "tagged" } } } } });
@@ -153,11 +147,11 @@ const attacks = [
     baseBad: () => true, nowGood: (o) => ok(o.use) && ok(o.raise) && refused(o.attack) },
 ];
 
-// A world whose log names no owner (an import, a hand-edited log): nobody is above visitor, whatever roles say.
+// a world whose log names no owner (an import, a hand-edited log): nobody is above visitor, whatever roles say
 function ownerless(d) {
   const name = "atk-ownerless"; for (const f of [`${name}.jsonl`, `${name}.presence.json`]) fs.rmSync(`${d.root}worlds/${f}`, { force: true });
   const s = session(d, name); s.call("olive", "create-world", { title: name }); s.call("olive", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
-  // rewrite the log so that olive's owner role was never there (same entries otherwise)
+  // rewrite the log so olive's owner role was never there (same entries otherwise)
   const p = `${d.root}worlds/${name}.jsonl`; const lines = fs.readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   for (const e of lines) { for (const o of [e.args, ...(e.args?.ops ?? []).map((x) => x.args), e.body, ...(e.body?.ops ?? [])]) if (o) { if (o.components) delete o.components["roles:olive"]; if ((o.component ?? o.comp) === "roles:olive") { o.value = { role: "inhabitant" }; } } }
   fs.writeFileSync(p, lines.map((e) => JSON.stringify(e)).join("\n") + "\n");
@@ -199,24 +193,21 @@ const forgeries = {
       P4: JSON.stringify(doors.now.sim.restsOf(P4)[0].at) !== JSON.stringify(doors.now.sim.simFold(P4, w.now()).st.entities.ball.c.transform.pos) }; },
 };
 
-// H5 (review 10-13): a refusal must not be a read oracle. expect (§3a) is checked before the handler, so before
-// admit/rights/lacks/lockCheck, and a dry request is never logged — so whatever its refusal carries is readable by
-// anyone, about anything, without a trace. The value itself must not be in it.
+// H5: a refusal must not be a read oracle. expect (§3a) is checked before the handler and a dry request is never logged,
+// so whatever its refusal carries is readable by anyone, without a trace: the value must not be in it
 const oracles = [
   { id: "H5a", what: "read oracle: a stranger reads a locked sign's text from a dry expect refusal", run(s) { cast(s);
       const made = s.call("olive", "create", { id: "diary", model: "crate", place: { at: [3, 3] }, components: { text: { text: "Janus's Kept Kittycat" } } });
       const locked = s.call("olive", "set", { id: "diary", component: "lock", value: true });
-      // zed holds no role at all. A wrong guess must say "changed", never what it actually is.
+      // zed holds no role at all; a wrong guess must say "changed", never what it is
       const probe = s.call("zed", "set", { id: "diary", component: "text", value: { text: "guess" }, dry: true, expect: [{ id: "diary", component: "text", value: { text: "guess" } }] });
       return { made, locked, probe, leaked: JSON.stringify(probe?.refused ?? {}).includes("Kittycat") }; },
     // the setup is asserted: a probe of a thing that was never made leaks nothing and proves nothing
     baseBad: (o) => o.leaked === true, nowGood: (o) => ok(o.made) && ok(o.locked) && refused(o.probe) && o.leaked === false },
   { id: "H5c", what: "read oracle: the same, through set's `base` (a direct read, not even a guess)", run(s) { cast(s);
       const made = s.call("olive", "create", { id: "diary", model: "crate", place: { at: [3, 3] }, components: { text: { text: "Janus's Kept Kittycat" } } });
-      // The base a stale refusal needs is free: inspect returns `versions` for every component, and history is
-      // READ_ONLY + GHOST_OK. It must be genuinely OLD (the check is lt.seq > base), so read a version, change the
-      // text, and ask with the version from before: zed never needs rights to learn the new value. The lock goes on
-      // LAST — a locked thing refuses even its owner's edit, so locking first would make the setup, not the door, fail.
+      // a stale base is free to read (inspect returns `versions`) and must be genuinely OLD (lt.seq > base). The lock goes on
+      // LAST: a locked thing refuses its owner's edit too, so locking first would fail the setup, not the door
       const v = s.call("zed", "inspect", { id: "diary" });
       const base = v?.versions?.text;
       const changed = s.call("olive", "set", { id: "diary", component: "text", value: { text: "Janus's Kept Kittycat (v2)" } });
@@ -226,8 +217,8 @@ const oracles = [
     // asserted: a probe with a CURRENT base never reaches the stale branch and proves nothing
     baseBad: (o) => o.leaked === true, nowGood: (o) => ok(o.made) && ok(o.locked) && ok(o.changed) && o.stale && refused(o.probe) && o.leaked === false },
   { id: "H5d", what: "a 32-deep parent chain refuses as a LIMIT, not as a loop (a guard: the message must tell the truth)", guard: true, run(s) { cast(s);
-      // one batch: 40 creates, then 39 parentings. The engine's own walk (`ancestors`) stops at 32, so the 33rd
-      // link is refused — it is a depth limit and nothing is a cycle, which "loop" used to claim.
+      // one batch: 40 creates, 39 parentings; the engine's `ancestors` walk stops at 32, so the 33rd link is refused as a depth
+      // limit, not a cycle
       const made = s.call("olive", "batch", { ops: Array.from({ length: 40 }, (_, i) => ({ verb: "create", args: { id: "n" + i, model: "crate", components: { transform: { pos: [i * 3, 0, 0] } } } })) });
       const par = s.call("olive", "batch", { ops: Array.from({ length: 39 }, (_, i) => ({ verb: "set", args: { id: "n" + (i + 1), component: "parent", value: { to: "n" + i } } })) });
       // and a REAL cycle still says loop

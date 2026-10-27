@@ -1,4 +1,4 @@
-// waterkind — reading still water, rivers and the sea from the shape of what a water level fills.
+// waterkind: still water, rivers and the sea, read from the shape of what a water level fills.
 //   bun tools/waterkind-test.ts
 import { analyzeWater, compass } from "../shared/waterkind.js";
 import { RIVER_SPEED_STEP } from "../shared/waves.js";
@@ -23,7 +23,7 @@ console.log("\na pond in a bowl");
 
 console.log("\na river across the world");
 {
-  // a winding channel edge to edge, its bed deepening toward +x — the only thing that can say downstream
+  // a winding channel edge to edge; its bed deepening toward +x is the only thing that can say downstream
   const ground = (x: number, z: number) => {
     const c = 10 * Math.sin(x / 20), bed = 2 + (x + 80) / 160 * 1.5;
     return 1 - (1 + bed) * bell(Math.abs(z - c), 5);
@@ -45,7 +45,7 @@ console.log("\na river across the world");
   const zero = analyzeWater(ground, SIZE, { level: -0.5, flow: [0, 0] }, SEG);
   const zr = zero.bodies.find((b) => b.kind === "river")!;
   check("a zero water.flow is ignored (the channel's own guess stands)", zr.source !== zr.mouth && zero.sample(0, 0)!.flow![0] > 0.8, JSON.stringify(zero.sample(0, 0)?.flow));
-  // floating across grid cells: depth and current change smoothly, as the drawn sheet does
+  // across grid cells depth and current change smoothly, as the drawn sheet does
   let jump = 0, turn = 0;
   for (let x = -20; x < 20; x += 0.05) {
     const a = A.sample(x, 10 * Math.sin(x / 20))!, b = A.sample(x + 0.05, 10 * Math.sin((x + 0.05) / 20))!;
@@ -58,7 +58,7 @@ console.log("\na river across the world");
 
 console.log("\na river that narrows");
 {
-  // its wetted width ~16 m to the west, ~5 m to the east
+  // wetted width ~16 m to the west, ~5 m to the east
   const half = (x: number) => 14 - 10 * Math.min(1, Math.max(0, (x + 20) / 40));
   const ground = (x: number, z: number) => 1 - 3.5 * bell(Math.abs(z), half(x)) + (x + 80) / 160 * -0.3;
   const A = analyzeWater(ground, SIZE, { level: -0.5 }, SEG);
@@ -69,10 +69,7 @@ console.log("\na river that narrows");
 
 console.log("\nthe biggest grid, forced to the costliest kind");
 {
-  // A world-filling flat sea authored `kind: "river"` — lawful (the override is documented), and the worst
-  // case for the river passes: every cell is river, and no shore is near. The budget (shared/waterkind.js
-  // header): the 513² maximum grid analyses in about a third of a second on a laptop; this test allows 1.2 s.
-  // A per-cell neighbourhood scan of the old kind (≈1100 cells looked at per cell) is several times that.
+  // worst case: a world-filling flat sea authored `kind: "river"` at the 513² max grid must analyse within 1.2 s
   analyzeWater(() => -1, 64, { level: 0, kind: "river" }, 64);   // warm the JIT
   const t0 = performance.now();
   const A = analyzeWater(() => -1, 512, { level: 0, kind: "river" }, 512);

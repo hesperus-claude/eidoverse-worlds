@@ -1,33 +1,14 @@
-/**
- * seat-lifecycle-test — #101's load-bearing integration matrix: a REAL
- * scratch sequencer and a REAL WorldAgent, no injected math anywhere.
- *
- * What must be true end-to-end (design round, B4/B5 + #105 review): the
- * server judges profiles against current bytes and serves one verdict;
- * proposals need a NAMED actor and a rostered subject, and dangerous keys
- * bounce whole; countersign is an operator write against a reviewed
- * revision; and the headless client receives the same profile revision
- * through its actual delivery path — httpBase fetch at join plus the two
- * update events, invalidation landing the moment an event does — until its
- * own look() says the corrected seat (or the declared approximation) out
- * loud.
- *
- * Door ownership (#105 review, the #83/#91 stale-port family): the port is
- * preflighted free, the child's stdout/stderr are preserved and printed on
- * failure, and before any check counts, the responding server must have
- * written OUR scratch WORLDS_DIR — a listener that answers without leaving
- * tracks in this run's tmpdir is somebody else's door, and the test dies
- * rather than inspect it.
- *
- * Fail-on-main control (run this file on main): /seat-profile is 404, the
- * roster has no seat field, and the seated look() shows neither the declared
- * approximation nor the corrected height — every section below fails by name.
- *
- * Run: bun run tools/seat-lifecycle-test.ts
- * (owns its scratch WORLDS_DIR; backs up and restores assets/opt/seats and
- *  mcpl/tokens.json; removes the seatprobe overlay avatar it uploads —
- *  nothing durable is touched)
- */
+/** seat-lifecycle-test: #101's integration matrix, a REAL scratch sequencer and a REAL WorldAgent, no injected math.
+ *  End to end: the server judges profiles against current bytes and serves one verdict; proposals need a NAMED actor and
+ *  a rostered subject, and dangerous keys bounce whole; countersign is an operator write against a reviewed revision;
+ *  the headless client gets the same revision through its real delivery path (httpBase fetch at join plus the two update
+ *  events, invalidating the moment an event lands) until its own look() says the corrected seat (or the declared
+ *  approximation) out loud.
+ *  Door ownership: the port is preflighted free, the child's output kept and printed on failure, and the responding
+ *  server must have written OUR scratch WORLDS_DIR before any check counts, or the test dies rather than inspect it.
+ *  Run: bun run tools/seat-lifecycle-test.ts
+ *  (owns its scratch WORLDS_DIR; backs up and restores assets/opt/seats and mcpl/tokens.json; removes the seatprobe
+ *   overlay avatar it uploads: nothing durable is touched) */
 
 import { mkdtempSync, existsSync, renameSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -85,19 +66,18 @@ if (!existsSync(TOKENS)) {
 } else console.log("  (mcpl/tokens.json exists — HTTP named-actor leg will be skipped, operator-import covers propose)");
 
 const WORLDS = mkdtempSync(join(tmpdir(), "seatlife-"));
-// the world exists before anyone joins (joining never founds one), founded by seatbot: its enrolment when this run
-// minted one, else (TRUST_NAMES) the local account its typed name is — so seatbot builds the crate as the owner
+// the world exists before anyone joins (joining never founds one), founded by seatbot (its minted enrolment, else the
+// TRUST_NAMES local account), so seatbot builds the crate as the owner
 foundWorlds(WORLDS, ["seatlab"], namedToken ? "agent:token:seatbot" : "seatbot");
 const CHILD_LOG = join(WORLDS, "server-output.txt");
-// process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
-// whose pid dies immediately, orphaning the real sequencer on this port where
-// it poisons the next run.
+// process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd shim whose pid dies at once, orphaning the real
+// sequencer on this port, where it poisons the next run
 const server = Bun.spawn([process.execPath, "run", "server/server.ts"], {
   cwd: ROOT,
   env: { ...process.env, WORLDS_DIR: WORLDS, JOIN_TOKEN: DOOR, PORT: String(PORT), EIDOVERSE_DIR: LIB, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" },
   stdout: "pipe", stderr: "pipe",
 });
-// preserve the child's own words — a startup crash must be readable, not mute
+// preserve the child's own words: a startup crash must be readable, not mute
 for (const [stream, tag] of [[server.stdout, "out"], [server.stderr, "err"]] as const) {
   (async () => { for await (const chunk of stream) appendFileSync(CHILD_LOG, `[${tag}] ` + Buffer.from(chunk).toString()); })().catch(() => {});
 }
@@ -130,9 +110,8 @@ try {
     check("x-profiles-rev header rides the roster, rev 0", rev === "0", `rev=${rev}`);
   }
 
-  // a watcher client hears the broadcasts every consumer relies on — and its
-  // join is also the door-ownership proof: the responding server must write
-  // OUR scratch WORLDS_DIR or nothing below is inspecting our child
+  // a watcher hears the broadcasts every consumer relies on, and its join is the door-ownership proof: the responding
+  // server must write OUR scratch WORLDS_DIR
   watcher = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   await new Promise<void>((res, rej) => {
     watcher!.onopen = () => { watcher!.send(JSON.stringify({ type: "join", world: "seatlab", id: "watcher", token: DOOR, replica: true })); res(); };
@@ -145,11 +124,8 @@ try {
 
   console.log("write authority (B4) + dangerous keys (#105 B2)");
   const claudeSha = await sha(join(LIB, "eidoverse/assets/vrms/claude.vrm"));
-  // The clip sha must be taken from the SAME ladder the store judges against
-  // (patched fork first — seats.ts's clipBases, the order /library serves).
-  // Hashing the library's copy directly was measured wrong the day this repo
-  // grew a patched sitting clip: every verdict read "stale (clip bytes
-  // changed)" against bytes no client animates from.
+  // the clip sha comes from the SAME ladder the store judges against (seats.ts clipBases: patched fork first, as /library
+  // serves); the library's own copy may not be the bytes clients animate from
   const clipRel = "eidoverse/assets/animations/sitting_normal_chair.vrma";
   const clipFile = [join(ROOT, "patched"), join(ROOT, "assets", "opt"), LIB]
     .map((d) => join(d, clipRel)).find((p) => existsSync(p))!;
@@ -214,7 +190,7 @@ try {
   ag = new WorldAgent({ url: `ws://127.0.0.1:${PORT}/ws`, name: "seatbot", world: "seatlab",
     avatar: "eidoverse/assets/vrms/claude.vrm", agentToken: namedToken ?? "" });
   await ag.connect();
-  // R 10-17: the suite's names ride as placeholders (and the crate is labelled crate1: the tools take a label as an id)
+  // the suite's names ride as placeholders (the crate is labelled crate1: the tools take a label as an id)
   const { idAliases } = await import("./protocol/idalias.ts"); const IDS = idAliases();
   const areq = async (verb: string, args: any) => IDS.back(await ag!.request(verb, IDS.out(verb, args)));
   // building is door requests (the agent waits for each answer); sitting is presence (the sit tool, nothing logged)
@@ -224,10 +200,8 @@ try {
   const seatL = { pos: [0, 1, 0], body: { action: "sit", pose: "sitchair" } };
   const legacy = await areq("set", { id: "crate1", component: "sockets", value: { seatL } });
   check("…and gives it a (legacy) seat", legacy?.ok === true, JSON.stringify(legacy?.refused ?? legacy));
-  // the seat-profile correction keys on a socket that authors its support plane: its body anchors at the surface
-  // (D14, R 10-12: body.anchor 'surface', one enum; client seatcore.js socketAnchor, world.js). Until the anchor carried it
-  // (2026-10-07: a sibling seatAnchor the door never took) this seat couldn't be authored on a world at all.
-  // (two of them: one body per socket since 10-12, R's ruling 7, and seatbot is still on seatS when probebot sits below)
+  // the correction keys on a socket that authors its support plane (body.anchor 'surface', seatcore.js socketAnchor);
+  // two of them: one body per socket, and seatbot is still on seatS when probebot sits below
   const seatS = { pos: [0, 1, 0], body: { action: "sit", pose: "sitchair", anchor: "surface" } };
   const surface = await areq("set", { id: "crate1", component: "sockets", value: { seatL, seatS, seatS2: seatS } });
   check("…and a seat that authors its support plane (body.anchor: surface)", surface?.ok === true, JSON.stringify(surface?.refused ?? surface));
@@ -272,8 +246,7 @@ try {
 
   console.log("live invalidation through the real door (#105 B1)");
   {
-    // a disposable avatar whose BYTES this test owns: upload it, profile it,
-    // seat a real agent on it, then change the bytes out from under it
+    // a disposable avatar whose BYTES this test owns: upload, profile, seat a real agent, then change the bytes under it
     const claudeBytes = new Uint8Array(await Bun.file(join(LIB, "eidoverse/assets/vrms/claude.vrm")).arrayBuffer());
     const up = await fetch(`${BASE}/upload?as=avatar&name=seatprobe&token=${DOOR}`, { method: "POST", body: claudeBytes });
     check("seatprobe avatar uploaded to the scratch overlay", up.status === 200, `${up.status}`);
@@ -307,9 +280,8 @@ try {
   console.log("stale and unsupported are verdicts, not silence");
   {
     const store2 = new SeatStore(join(ROOT, "assets", "opt"), LIB);
-    // aletheia's profile deliberately carries CLAUDE's avatar hash: judged
-    // against aletheia's actual bytes it must serve stale — an accepted
-    // record can never outlive its bytes.
+    // aletheia's profile carries CLAUDE's avatar hash: judged against aletheia's bytes it must serve stale (an accepted
+    // record never outlives its bytes)
     const p1 = store2.importProposal(mkProfile("aletheia", claudeSha), "lifecycle-test");
     const a1 = p1.ok ? store2.accept("aletheia", "sitchair", "receipt", "lifecycle-test", store2.rev) : p1;
     const p2 = store2.importProposal({ avatar: "aporia", avatarSha256: await sha(join(LIB, "eidoverse/assets/vrms/aporia.vrm")),
@@ -329,8 +301,7 @@ try {
   console.log("dismount stamping unchanged (#18/#98 neighborhood)");
   {
     await HANDLERS.detach(ag as any, {}, {} as any, "detach");
-    // the check reads the HEADER line only: probebot is still seated nearby,
-    // legitimately declaring its stale seat in the People section
+    // the check reads the HEADER line only: probebot, still seated nearby, legitimately declares its stale seat under People
     const header = await until(() => { const h = ag!.look().split("\n")[0]; return !/seated on/.test(h) ? h : null; });
     check("dismount clears the seat and the controller's own truth returns, exactly as on main",
       !!header && /at \(0\.0, 0\.0\), ground height 0\.00m/.test(header ?? "") && !/seat approximate/.test(header ?? ""), header ?? "");

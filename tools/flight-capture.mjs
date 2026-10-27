@@ -1,30 +1,18 @@
-// flight-capture — deterministic evidence, one screenshot per fixed step.
-//
+// flight-capture: deterministic evidence, one screenshot per fixed step.
 //   bun tools/flight-capture.mjs                 # both takes
 //   bun tools/flight-capture.mjs --take A        # just the leaf
 //   bun tools/flight-capture.mjs --fps 30 --out /tmp/clips
-//
-// mica's path, and the reasoning is theirs: do NOT reuse render-watchdog (it
-// owns production renderer liveness, not evidence), and do NOT record with
-// rAF/MediaRecorder, because a dropped frame is then indistinguishable from a
-// slow one and the clip stops being measurable. Instead:
-//
-//   1. the bench page exposes window.__flightBench.step(dt) and does NOTHING
-//      on its own -- no rAF loop exists to drop a frame from;
+// Never reuse render-watchdog (it owns production renderer liveness, not evidence), and never record with
+// rAF/MediaRecorder (a dropped frame is then indistinguishable from a slow one). Instead:
+//   1. the bench page exposes window.__flightBench.step(dt) and does NOTHING on its own (no rAF loop to drop frames);
 //   2. this advances exactly 1/fps per frame and screenshots after each;
 //   3. ffmpeg encodes the PNG sequence at a CONSTANT rate;
-//   4. the overlay is burned into the page before the screenshot, so the
-//      numbers on screen are the numbers that state actually held.
-//
-// Two matched takes from IDENTICAL initial state and config:
-//   A -- >=15m falling leaf through honest ground contact. No flare, no
-//        autoland, no last-metre mercy hover.
-//   B -- the same drop with RECOVER injected mid-descent: finish the beat,
-//        reload the wings, resume glide. Non-instant, <= one 3.4s cycle.
-//
-// OWNERSHIP: this owns its server, its browser and its frame directory, and
-// tears all three down on success AND on failure. A capture that leaves a
-// chromium behind has failed even if the file is fine.
+//   4. the overlay is burned in before each screenshot, so the numbers on screen are the state's.
+// Two takes from IDENTICAL state and config:
+//   A: a >=15m falling leaf through honest ground contact; no flare, autoland or last-metre mercy hover.
+//   B: the same drop with RECOVER mid-descent: finish the beat, reload the wings, resume glide, within one 3.4s cycle.
+// OWNERSHIP: it owns its server, browser and frame directory and tears all three down on success AND failure; a
+// capture that leaves a chromium behind has failed even if the file is fine.
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFileSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -39,17 +27,13 @@ const ONLY = arg('--take', null);
 const ROOT = resolve('.');
 const DT = 1 / FPS;
 
-// The rig the bench flies. Derived from the shipped asset by
-// tools/flight-fixture.ts -- a hand-typed list could not go stale against the
-// file, so it would prove nothing about the file.
+// the rig the bench flies, derived from the shipped asset by tools/flight-fixture.ts (a hand-typed list proves nothing about the file)
 const FIX = JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8'));
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
                '.css': 'text/css', '.mjs': 'text/javascript' };
 
-/** A scratch static server over the repo. Its own port, torn down by the
- *  caller -- never an ambient one, so a capture cannot silently record
- *  whatever else happens to be listening. */
+/** A scratch static server over the repo on its own port, torn down by the caller (never an ambient one). */
 function serve() {
   const srv = createServer((req, res) => {
     const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -76,13 +60,8 @@ async function take(page, { name, seconds, injectRecoverAt }) {
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames, { recursive: true });
 
-  // IDENTICAL initial state and config for both takes -- that is what makes
-  // them matched, and matched is what lets Mythos attribute the difference to
-  // the recovery rather than to the drop.
-  // 30 m, so BOTH takes are legible: A has room for several full oscillations
-  // before contact, and B's recovery finishes with real air underneath rather
-  // than skimming the dirt -- a recovery that completes at 0.2 m is correct and
-  // unmeasurable, which is not what the take is for.
+  // identical state and config, so the difference is the recovery; 30 m so A oscillates before contact and B's recovery
+  // finishes with real air under it
   const START_Y = 30;
   const r = await page.evaluate(({ bones, startY }) => {
     window.__flightBench.setTop(startY);
@@ -93,7 +72,7 @@ async function take(page, { name, seconds, injectRecoverAt }) {
   }, { bones: FIX.bones, startY: START_Y });
   if (!r?.enabled) throw new Error(`bench refused to enable: ${r?.reason}`);
 
-  // Cut immediately: the take is about the leaf, not the glide before it.
+  // cut immediately: the take is about the leaf, not the glide before it
   await page.evaluate(() => {
     window.__flightBench.setKeys([]);
     window.__flightBench.down('take-cut');
@@ -120,7 +99,7 @@ async function take(page, { name, seconds, injectRecoverAt }) {
 
   const mp4 = join(OUT, `take-${name}.mp4`);
   await encode(frames, mp4, FPS);
-  rmSync(frames, { recursive: true, force: true });     // frames are scaffolding
+  rmSync(frames, { recursive: true, force: true });  // frames are scaffolding
 
   const events = await page.evaluate(() => window.__flightBench.events());
   const config = await page.evaluate(() => window.__flightBench.config());
@@ -142,7 +121,7 @@ try {
   if (ONLY !== 'B') takes.push(await take(page, { name: 'A', seconds: 15 }));
   if (ONLY !== 'A') takes.push(await take(page, { name: 'B', seconds: 15, injectRecoverAt: 2.4 }));
 
-  // The RECEIPT. A clip without one is a video; with one it is evidence.
+  // the RECEIPT: without one a clip is a video, with one it's evidence
   const receipt = {
     generatedFor: 'flight-spec-v0 Stage 1, takes A/B',
     fps: FPS,
@@ -173,8 +152,7 @@ try {
   console.error('CAPTURE FAILED:', e?.message ?? e);
   code = 1;
 } finally {
-  // Own the teardown on BOTH paths. A capture that leaves a chromium running
-  // has failed even when the file is fine.
+  // own the teardown on BOTH paths
   try { await browser?.close(); } catch {}
   try { srv?.close(); } catch {}
 }

@@ -1,19 +1,9 @@
-// base — the renderer-free substrate (RENDERER-SEAM move 2, split from
-// core.js): the event bus, config, error routing, the participant colours,
-// and two small helpers. Nothing here touches three.js, the DOM tree, or
-// the GPU — which is the point: the ~35 modules that only ever wanted
-// `bus`/`CONFIG`/`report` no longer import the module that constructs the
-// renderer, and headless tests get the REAL bus and report instead of a
-// stub's (this file guards its browser touches, so it imports clean under
-// bun).
-//
-// Import rule (inherited from core): base imports NOTHING from the rest of
-// the client. core.js imports base; everything else may import either.
+// base — the renderer-free substrate (docs/RENDERER-SEAM.md): bus, config, error routing, participant colours.
+// Never touches three.js, the DOM tree or the GPU, and guards browser touches, so headless tests import the REAL thing.
+// Imports NOTHING from the rest of the client; core.js imports base.
 
 // ------------------------------------------------------------ event bus
-// Cross-cutting notifications (a verb landed, the connection changed, a toast)
-// travel on this instead of through imports, which is what keeps net.js from
-// having to know about the palette and vice versa.
+// cross-cutting notifications travel on this instead of through imports
 
 const listeners = new Map();
 export const bus = {
@@ -30,26 +20,13 @@ export const bus = {
 };
 
 // ------------------------------------------------------------ config
-// One place that reads the URL and localStorage, so no module has to re-derive
-// "who am I" from query params. Both are guarded: headless hosts have neither,
-// and get the defaults.
+// One place reads the URL and localStorage; both guarded (headless hosts have neither and get defaults).
 
-// Which world: the link's ?world= if it names one; otherwise the world THIS
-// TAB was last in (sessionStorage, so a reload keeps the tab where it was
-// whatever other tabs have joined since); otherwise the world this browser
-// was last IN as a person (localStorage), so a bare link (a bookmark, the
-// login's return to '/') goes back where you were; the commons only for a
-// browser that has been nowhere. Both are written by net.js rememberWorld.
-// Spectators, renderers and the thumbnail minter ignore the memory: a link
-// points them, and a renderer must never inherit a person's last stop.
-// index.html's early-socket script makes this same choice before any module
-// loads and publishes it as __ewWorld, which CONFIG takes when present, so
-// the page has one answer (tools/last-world-test.ts holds the two copies
-// in agreement).
+// which world (#281): ?world=, else this tab's last, else this browser's, else the commons; only a person remembers.
+// index.html's early-socket script makes the same choice as __ewWorld (tools/last-world-test.ts holds them equal)
 export const LAST_WORLD_KEY = 'ew-world';      // localStorage: the browser's last world
 export const TAB_WORLD_KEY = 'ew-world-tab';   // sessionStorage: this tab's
-/** A name a world can have — the client's copy of server.ts admitJoin's rule
- *  (index.html's early-socket script carries its own: it runs before modules). */
+/** A name a world can have: server.ts admitJoin's rule (index.html's early-socket script carries its own copy). */
 export const isWorldName = (w) => typeof w === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(w);
 export function pickWorld(params, last, tab = null) {
   const asked = params.get('world');
@@ -64,10 +41,7 @@ export function rememberedWorlds() {
   const read = (s, k) => { try { return s?.getItem(k) ?? null; } catch { return null; } };
   return [read(globalThis.localStorage, LAST_WORLD_KEY), read(globalThis.sessionStorage, TAB_WORLD_KEY)];
 }
-/** What arriving in an empty world says (main.js, on 'hydrated'), by how the page
- *  got here: the link named it (a non-empty ?world=, as pickWorld reads it); a
- *  memory chose it (the last world this person was in, found empty now and so
- *  forgotten: net.js forgetEmptyWorld); or the commons by default. */
+/** What arriving in an empty world says (main.js), by how the page got here: the link, a memory, or the default. */
 export function emptyWorldNotice({ world, params, worldRemembered }) {
   if (params.get('world')) return `"${world}" is empty — nothing has ever been built here.`;
   if (worldRemembered && world !== 'commons') {
@@ -76,8 +50,7 @@ export function emptyWorldNotice({ world, params, worldRemembered }) {
   return `you are in "${world}", which is empty. Add ?world=<name> to the link to go somewhere else.`;
 }
 
-/** Forget where this person has been (ui.js logOut): the memory is the person's,
- *  and the browser may be the next person's. */
+/** Forget where this person has been (ui.js logOut): the browser may be the next person's. */
 export function forgetRememberedWorlds() {
   try { globalThis.localStorage?.removeItem(LAST_WORLD_KEY); } catch { /* private mode */ }
   try { globalThis.sessionStorage?.removeItem(TAB_WORLD_KEY); } catch { /* private mode */ }
@@ -89,9 +62,7 @@ const picked = globalThis.__ewWorld ?? pickWorld(params, ...rememberedWorlds());
 export const CONFIG = {
   params,
   world: picked.world,
-  // true when a memory chose the world, not the link: a refusal at its door
-  // then forgets it and reloads to wherever a bare link leads next — the other
-  // memory, or the commons (net.js forgetRefusedWorld)
+  // a memory chose the world, not the link: a refusal at its door forgets it (net.js forgetRefusedWorld)
   worldRemembered: picked.remembered,
   spectate: params.has('spectate'),
   renderer: params.has('renderer'),
@@ -107,30 +78,25 @@ export const CONFIG = {
 };
 if (params.get('key')) store?.setItem('ew-key', CONFIG.token);
 store?.setItem('ew-name', CONFIG.name);
-// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (R 10-11: renaming herself
-// "Rab" made her a stranger with no role in her own world). Fixed at the first real name this browser used; ?account=
-// overrides. A server with sign-in ignores it: the session is the account there.
+// the ACCOUNT a TRUST_NAMES server knows you by, apart from the shown name (a rename must not make you a stranger).
+// Fixed at this browser's first real name; ?account= overrides; a server with sign-in ignores it.
 { let acct = params.get('account') || store?.getItem('ew-account') || '';
   if (!acct && !/^guest-/.test(CONFIG.name)) acct = CONFIG.name;
   CONFIG.account = acct || null; if (acct) store?.setItem('ew-account', acct); }
 
-/** The name a join ack says we have, minus the transport prefix sendJoin put
- *  on the wire id ("renderer-" / "retina-"). Pure, for net.js onSnapshot.
- *  A VERIFIED identity (the ack carries yourSub) is the server's own name for
- *  us — it ignored the requested id — so it is kept whole: a signed-in viewer
- *  really called "retina-helen" must not be shortened to "helen". */
+/** The join ack's name minus sendJoin's transport prefix ("renderer-" / "retina-"); pure, for net.js onSnapshot.
+ *  A VERIFIED identity (yourSub) is the server's own name and is kept whole, prefix-like or not. */
 export function nameFromJoinAck(you, { renderer = false, spectate = false, verified = false } = {}) {
   if (!you || verified) return you;
   const prefix = renderer ? 'renderer-' : spectate ? 'retina-' : '';
   return prefix && you.startsWith(prefix) ? you.slice(prefix.length) : you;
 }
 
-/** Rename in place (the front-door panel calls this before connecting). */
+/** The front-door panel calls this before connecting. */
 export function setName(name) {
   CONFIG.name = name;
   store?.setItem('ew-name', name);
-  // the first real name this browser uses is its account, as at load: a first visit loads as a guest, and the door's name
-  // is that first name (a later rename never moves the account)
+  // a first visit loads as a guest, so the door's name is the first real one; a later rename never moves the account
   if (!CONFIG.account && name && !/^guest-/.test(name)) { CONFIG.account = name; store?.setItem('ew-account', name); }
 }
 export function setToken(token) {
@@ -139,21 +105,14 @@ export function setToken(token) {
 }
 
 // ------------------------------------------------------------ error routing
-// Modules call report(); ui.js decides how to show it. Before the UI has
-// registered a sink, errors still reach the console.
+// modules call report(); ui.js decides how to show it (the console until it registers)
 let errorSink = null;
 export function setErrorSink(fn) { errorSink = fn; }
 
-// A fault inside the frame loop reports 60 times a second. Identical messages
-// are counted and re-reported on a decaying schedule instead of flooding the
-// console and the toast stack — the first one is the useful one, and the
-// hundredth actively hides everything else.
+// A frame-loop fault reports 60×/s: identical messages are counted and re-reported on a decaying schedule.
 const seenErrors = new Map(); // key -> { n, nextAt }
-// ---- console tee: what a visitor's page says, where the operator can read it.
-// Every report() plus window errors post to /clientlog (key-gated, bounded
-// server-side). Off the hot path (queued, one flush per second), never throws,
-// and never carries the key in the payload or the URL — it rides the Authorization header
-// (Bearer), below. `tee(line)` is for lines worth keeping ([xr] etc).
+// ---- console tee: report() and window errors post to /clientlog, queued (one flush/s), never throwing.
+// The key never goes in the payload or URL, only the Authorization header. `tee(line)` keeps a line ([xr] etc).
 let teeQ = [], teeTimer = 0, teeMuted = false;
 function teeFlush() {
   teeTimer = 0;
@@ -182,15 +141,12 @@ export function tee(line) {
     if (!teeTimer) teeTimer = setTimeout(teeFlush, 1000);
   } catch { /* never */ }
 }
-/** tee, sent NOW: for the line before something that may freeze the page (a GPU-process compile), so it isn't lost
- *  in the 1 s batch. */
+/** For the line before something that may freeze the page (a GPU-process compile): not lost in the 1 s batch. */
 export function teeNow(line) { tee(line); try { clearTimeout(teeTimer); teeFlush(); } catch { /* never */ } }
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => tee(`[window.error] ${e.message} @ ${(e.filename ?? '').split('/').pop()}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e) => tee(`[unhandled] ${e.reason?.message ?? e.reason}`));
-  // wake CAUSE, not just the URL (cribbed from agent-framework #141's turn
-  // provenance: who woke you ≠ whose words are in view): reload vs navigate
-  // vs back_forward separates "R reloaded" from "the tunnel reconnected"
+  // wake CAUSE, not just the URL: reload vs navigate vs back_forward separates a reload from a reconnect
   let cause = '?'; try { cause = performance.getEntriesByType('navigation')[0]?.type ?? '?'; } catch { /* old UA */ }
   tee(`[boot] cause=${cause} host=${location.host} ${location.pathname}${location.search.replace(/key=[^&]+/, 'key=…')} ua=${navigator.userAgent.slice(0, 120)}`);
 }
@@ -204,7 +160,7 @@ export function report(context, err) {
   const suppressed = now < rec.nextAt;
   if (rec.n === 1 || rec.n % 20 === 0) tee(`[report] ${context}: ${message} ×${rec.n} :: ${String(err?.stack ?? '').split('\n').slice(1, 4).join(' | ').slice(0, 600)}`);
   if (!suppressed) {
-    // 1st, then 2s, 10s, 60s… — enough to show a fault is ongoing, not enough to drown
+    // the next report waits 2 s × the count so far, capped at 60 s: enough to show a fault is ongoing, not enough to drown
     rec.nextAt = now + Math.min(60000, 2000 * rec.n);
     console.error(context, err, rec.n > 1 ? `(×${rec.n})` : '');
     errorSink?.(context, rec.n > 1 ? `${message} (×${rec.n})` : message);
@@ -217,7 +173,7 @@ globalThis.addEventListener?.('error', (e) => report('uncaught', e.error ?? e.me
 
 // ------------------------------------------------------------ misc helpers
 
-/** Shortest signed angular difference, a → b. Used everywhere yaw is lerped. */
+/** Shortest signed angular difference, a → b. */
 export function angleDelta(a, b) {
   let d = b - a;
   while (d > Math.PI) d -= 2 * Math.PI;
@@ -234,18 +190,8 @@ export async function parallelMap(items, fn, limit = 6) {
 }
 
 // ---- per-participant colour --------------------------------------------------
-// A wall of chat all in one colour makes you read every name to follow a
-// conversation. Each participant gets a stable colour instead, derived from
-// their name alone — so it is the SAME colour in every client, and "the blue
-// one" means the same person to everyone in the world. No assignment, no
-// server state, nothing to keep in sync.
-//
-// A curated palette rather than hue = hash % 360: hand-picked entries are all
-// legible on the dark panel and reliably distinct from each other, which a
-// continuous hue wheel is not (it wanders through muddy olives and near-blacks
-// at fixed lightness). Amber and mint are deliberately absent — those are the
-// UI's own words for "you were mentioned" and "link/accent", and a person
-// wearing them would be reading as punctuation.
+// Colour from the name alone, so it matches in every client with no server state. A curated palette (legible,
+// distinct) beats hue = hash; amber and mint are absent because the UI uses them for mentions and links.
 const NAME_COLORS = [
   '#7cc4ff', '#ff9fc4', '#b8e06a', '#ffab6b',
   '#c4a6ff', '#6ee0d0', '#ff9a8f', '#9fb8ff',
@@ -262,27 +208,16 @@ export function preferredColor(name) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
-// Hashing alone is not enough. With twelve colours and six people in a room
-// there is a ~78% chance two of them collide — and two speakers wearing one
-// colour is exactly the confusion this was meant to remove. (Measured, not
-// theorised: the first build put lyra and antra both on #ffab6b.)
-//
-// So the hash is a PREFERENCE, and the people actually present negotiate. Every
-// client runs the same assignment over the same roster in the same order, so
-// the answer is identical everywhere without a byte crossing the wire: sort the
-// names, let each take its preferred colour, and linear-probe when it is taken.
-// Whoever sorts first keeps their preference, so a colour only ever moves for
-// the loser of a collision. People who have left keep the colour they had —
-// their lines are still on the screen.
+// The hash is only a preference (12 colours, 6 people: ~78% collide): every client sorts the same roster and
+// linear-probes, so all agree with nothing on the wire. Assigned colours stick, even after someone leaves.
 const claimed = new Map();   // name -> colour, sticky once assigned
 
-/** The colour to draw `name` in, anywhere in the UI. */
 export function colorFor(name) {
   const k = String(name ?? '').toLowerCase();
   return claimed.get(k) ?? preferredColor(name);
 }
 
-/** Re-negotiate colours for the people present. Call on roster changes. */
+/** Call on roster changes. */
 export function assignColors(names) {
   const present = [...new Set(names.map((n) => String(n ?? '').toLowerCase()))].filter(Boolean).sort();
   const used = new Set();

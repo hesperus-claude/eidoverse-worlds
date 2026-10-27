@@ -1,26 +1,19 @@
-// Protocol smoke test — the sequencer's contract, exercised over a real socket.
+// Protocol smoke test: the sequencer's contract over a real socket. The wire, not the renderer: join and the cut, door
+// requests and their order, presence batching, the NON-logged channels (drag, typing), identity takeover, and speech's
+// rule: the log keeps every say, people receive speech only while present (no backscroll on join), and only an admin
+// (owner, operator) reads the master log back. No private channel: a whisper is refused as `removed`, reaches nobody.
 //
 //   bun tools/smoke.ts                       # against a throwaway server
 //   URL=ws://host:8940/ws WORLD=<name> bun tools/smoke.ts   # against a running one (see below)
 //
-// This covers the wire, not the renderer: join and the cut, door requests and
-// their order, presence batching, the NON-logged channels (drag, typing),
-// identity takeover, and speech's rule (R 10-18): the world's log keeps every
-// say, people receive speech only for the time they were present (no backscroll
-// on join), and only an admin (the world's owner, an operator) reads the master
-// log back. There is no private channel: whisper was removed (a whisper is
-// refused as `removed`, reaches nobody and never the log).
-//
-// The world speaks the protocol (shared/protocol/authority.js): a join says `replica: true`,
-// the snapshot carries the authority's cut (`cut`) and the chat window (`state`), every
-// write is a request {type: "request", id, verb, args} answered by `reply`,
-// and what the door wrote reaches every client as `log` entries. A world is
-// founded by its operator (bun tools/protocol/world.ts found); joining never founds one.
-// Against a running server, the worlds WORLD, WORLD-hist, WORLD-noise,
-// WORLD-ground, WORLD-light and WORLD-pose must exist, owned by the names this
-// suite joins as (alice, groundskeeper, lampsmith; on a TRUST_NAMES=1 server).
+// The world speaks the protocol (shared/protocol/authority.js): a join says `replica: true`, the snapshot carries the
+// authority's cut (`cut`) and chat window (`state`), every write is a request {type: "request", id, verb, args} answered
+// by `reply`, and what the door wrote reaches every client as `log` entries. Joining never founds a world (bun
+// tools/protocol/world.ts found). Against a running server, the worlds WORLD, WORLD-hist, WORLD-noise, WORLD-ground,
+// WORLD-light and WORLD-pose must exist, owned by the names this suite joins as (alice, groundskeeper, lampsmith; on a
+// TRUST_NAMES=1 server).
 
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,8 +23,8 @@ import { idAliases } from "./protocol/idalias.ts";
 const IDS = idAliases();
 
 const EXTERNAL = process.env.URL;
-// a FREE port, never a fixed default: 8987 is a live sequencer on this host, and a fixed port lets a suite talk to
-// whatever already answers there instead of the server it started (the 72/85 ghost, below)
+// a FREE port, never a fixed default: a fixed port lets a suite talk to whatever already answers there (a live
+// sequencer) instead of the server it started
 const PORT = process.env.PORT ? Number(process.env.PORT) : freePort(9300);
 const URL_ = EXTERNAL ?? `ws://127.0.0.1:${PORT}/ws`;
 const TOKEN = process.env.TOKEN ?? "";
@@ -79,7 +72,7 @@ class Client {
   req(verb: string, args: unknown = {}): Promise<any> {
     const id = `${this.id}-${++this.n}`;
     return new Promise((res) => {
-      this.waiters.set(id, (m: any) => { IDS.back(m?.reply); res(m); });   // R 10-17: names ride as placeholders and minted ids
+      this.waiters.set(id, (m: any) => { IDS.back(m?.reply); res(m); });   // names ride as placeholders and minted ids
       this.send({ type: "request", id, verb, args: IDS.out(verb, args) });
       setTimeout(() => { if (this.waiters.delete(id)) res({ ok: false, reply: { refused: { code: "timeout" } } }); }, 6000);
     });
@@ -103,12 +96,8 @@ async function startServer() {
   foundWorlds(worldsDir, [WORLD, `${WORLD}-hist`, `${WORLD}-noise`, `${WORLD}-pose`], "alice");
   foundWorlds(worldsDir, [`${WORLD}-ground`], "groundskeeper");
   foundWorlds(worldsDir, [`${WORLD}-light`], "lampsmith");
-  // process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd
-  // shim that exits the moment it has launched the real bun.exe, so the pid
-  // we hold is dead within milliseconds and `server?.kill()` below reaps
-  // nothing — the sequencer is orphaned and keeps this port. That survivor
-  // then answers the NEXT run's readiness poll, and the suite reports on a
-  // build it never started (this is the 72/85 ghost).
+  // process.execPath, not "bun": on Windows PATH "bun" is a .cmd shim that exits at once, so kill() would reap nothing
+  // and the orphan would answer the next run's readiness poll
   server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
     env: {
       ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, JOIN_TOKEN: "", SKIP_OPT_SWEEP: "1",
@@ -142,10 +131,7 @@ const logText = (world = WORLD) => { const p = join(worldsDir, world, "world.jso
 try {
   console.log(`\nsmoke: ${URL_}  world=${WORLD}\n`);
 
-  // Parse every client module before anything else. A syntax error in one of
-  // them takes the whole client down with a blank page, and `node --check` on
-  // the files you THINK you edited will happily miss it — which is exactly how
-  // a stray duplicate `const` shipped once.
+  // parse every client module first: one syntax error blanks the whole client, and checking only edited files misses it
   {
     const dir = join(import.meta.dir, "..", "client");
     const files = [join(dir, "main.js")];
@@ -209,7 +195,7 @@ try {
   check("frames carry a server timestamp", frames.every((f) => typeof f.t === "number"));
   check("poses are never written to the log", quiet() === n0);
 
-  // --- whisper was removed (R 10-18): refused as `removed`, delivered to nobody, held for nobody, never logged
+  // --- whisper was removed: refused as `removed`, delivered to nobody, held for nobody, never logged
   bob.send({ type: "whisper", to: "alice", text: "a private thing" });
   await sleep(300);
   check("a whisper is refused as removed, in words", bob.of("error").some((m) => m.refused?.code === "removed" && /removed/.test(String(m.error))), JSON.stringify(bob.of("error")));
@@ -233,8 +219,7 @@ try {
   check("typing relays to others", bob.of("typing").some((m) => m.id === "alice"));
   check("typing is never logged", quiet() === n0);
 
-  // --- typing STATE: a whitelisted social glyph rides presence; anything
-  // else is stripped so presence stays presence (media PR)
+  // --- typing STATE: a whitelisted social glyph rides presence; anything else is stripped so presence stays presence
   alice.send({ type: "typing", to: null, state: "mic" });
   await sleep(220);
   check("whitelisted typing state relays", bob.of("typing").some((m) => m.state === "mic"));
@@ -244,7 +229,7 @@ try {
     bob.of("typing").filter((m) => m.id === "alice").length >= 3 &&
     !bob.of("typing").some((m) => typeof m.state === "string" && m.state.includes("<")));
 
-  // --- rtc: RETIRED (#104 phase-1 cutover). The lane must be closed.
+  // --- rtc: RETIRED (#104 phase-1 cutover); the lane must be closed
   alice.send({ type: "rtc", to: "bob", payload: { sdp: "offer-ish" } });
   await sleep(220);
   check("the retired rtc lane relays NOTHING", !bob.of("rtc").length);
@@ -254,8 +239,7 @@ try {
   // --- refusals
   const bad = await alice.req("obliterate", { everything: true });
   check("an unknown verb is refused, to the asker, by name", bad.ok === false && bad.reply?.refused?.code === "unknown-verb", JSON.stringify(bad.reply));
-  // a world founded since R 10-21 makes newcomers builders; the owner sets them back to inhabitants (strangers read, builders
-  // build) so a visitor's create has something to refuse (#260 house I442)
+  // a new world makes newcomers builders; the owner sets them back to inhabitants so a visitor's create has something to refuse
   const dr = await alice.req("set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });
   check("the owner makes newcomers inhabitants", dr.ok === true, JSON.stringify(dr.reply));
   const nR = quiet();
@@ -285,7 +269,7 @@ try {
     await sleep(300);
     const late = await joined("latecomer", fw);
     const st = late.snapshot.cut?.state ?? {};
-    // ids are minted (R 10-17): the suite's names f0..f59 read as theirs through IDS
+    // ids are minted: the suite's names f0..f59 read as theirs through IDS
     const mine = new Set(Array.from({ length: 60 }, (_, i) => IDS.of(`f${i}`)));
     const things = Object.keys(st).filter((k) => mine.has(k));
     check("the cut survives removals", things.length === 30, `${things.length} things`);
@@ -305,8 +289,7 @@ try {
     for (let i = 0; i < 120; i++) await talkers[i % 6].req("say", { text: `line ${i}` });
     await sleep(300);
 
-    // speech is arrival-only (R 10-18): an arrival is handed none of it and reads none of it back; the owner (alice) reads
-    // the master log, whenever she arrives
+    // speech is arrival-only: an arrival is handed none of it and reads none back; the owner (alice) reads the master log
     const arrival = await joined("arrival", hw);
     const owner = await joined("alice", hw);
     const recent = arrival.snapshot.state?.recentChat ?? [];
@@ -356,8 +339,7 @@ try {
       okN === 20 && floods.filter((r) => !r.ok).every((r) => r.reply?.refused?.code === "rate"), `${okN} accepted; ${JSON.stringify(floods.find((r) => !r.ok)?.reply?.refused)}`);
     await sleep(300);
     const arrival = await joined("arrival2", nw);
-    // (the window's fairness — a flood can't erase the other speakers — reached a joiner until speech became arrival-only,
-    // R 10-18; a joiner is now handed no window at all)
+    // (a joiner is handed no chat window at all, so a flood can't reach one)
     check("a joiner after a flood is handed none of it", JSON.stringify(arrival.snapshot.state?.recentChat) === "[]" && arrival.snapshot.state?.chatTotal === 0, JSON.stringify(arrival.snapshot.state));
     human.close(); bot.close(); arrival.close();
   }
@@ -423,8 +405,8 @@ try {
     await sleep(300);
     check("a one-off animation relays to others", watcher.of("anim").some((m) => m.id === "poser" && m.dur === 1.5));
 
-    // a puppet is ROUTED to the target only. The relay acts on a body only when it knows where both bodies stand, within
-    // reach (server/messages.ts bodyRefusal), so the watcher publishes where it is first (#260 house I127)
+    // a puppet is ROUTED to the target only; the relay acts on a body only when it knows where both stand, within reach
+    // (server/messages.ts bodyRefusal), so the watcher publishes where it is first
     watcher.send({ type: "pose", pose: { p: [1, 0, 0], yaw: 0, speed: 0, clip: "idle" } });
     await sleep(200);
     poser.send({ type: "puppet", target: "watcher", pose: { spine: [0, 0, 0.2, 0.98] } });
@@ -464,9 +446,8 @@ try {
   const bob2 = await joined("bob", WORLD, { agent: true });
   check("the world remembers where you fell asleep", Math.abs((bob2.snapshot.restore?.p?.[0] ?? 0) - 7) < 0.01, JSON.stringify(bob2.snapshot.restore));
 
-  // --- spoken-say protocol: display metadata is validated, never trusted
-  // (`t0` reorders every client's visible history, so the door clamps it
-  // to a bounded utterance window and only inside spoken:true + utt)
+  // --- spoken-say protocol: display metadata is validated, never trusted (`t0` reorders every client's visible history,
+  // so the door clamps it to a bounded utterance window, only inside spoken:true + utt)
   const sp = await joined("speaker", WORLD, { agent: true });
   const said = () => sp.says().at(-1)?.body;
 

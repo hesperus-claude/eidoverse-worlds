@@ -2,8 +2,8 @@
 // (bottom-right, the Discord/Slack convention; R, 09-05). Automatic between
 // present and away (tab hidden, or no input for AWAY_S); busy is a choice made
 // in the profile and held until you change it. Rides every pose packet as
-// `presence` (net.js; shared/presencewire.js is the validator) — no receiver reads it at this rung;
-// applyPresenceWire has no caller yet.
+// `presence` (net.js; shared/presencewire.js is the validator); remotes.js reads it off each sample
+// (applyPresenceWire) for the Who panel.
 import { bus } from './base.js';
 
 export const STATES = ['present', 'away', 'busy'];

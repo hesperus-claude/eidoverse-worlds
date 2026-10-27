@@ -13,6 +13,7 @@
 //   2 (cont.) an unanswered Allow was remembered as 'allow', so every later press went straight in and never asked again;
 //   2b. a browser answer after the bound left the card saying "hasn't answered"
 //   5. with no navigator.permissions.query the grant watcher set its flag and never cleared it
+//   6. vrmic-policy-test's whole table, executed: what vrmic.js does is what the policy decides
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { mock } from 'bun:test';
@@ -62,7 +63,7 @@ mock.module(lib('micstate.js'), () => ({ micOn: () => mic.on, toggleMic: () => {
 mock.module(lib('voicesfu.js'), () => ({ sfuMicWanted: () => sfu.wanted, sfuMicOn: () => false, sfuMic: async (v) => { sfu.wanted = v; } }));
 
 const V = await import('../client/lib/vrmic.js');
-const { MIC_CHOICE_KEY } = await import('../client/lib/vrmic_policy.js');
+const { MIC_CHOICE_KEY, MIC_PENDING_KEY, preVrStep, inVrMicPlan, afterExitStep } = await import('../client/lib/vrmic_policy.js');
 const { check, done } = checker();
 const scrims = () => document.querySelectorAll('#vrmic').length;
 const closeCard = () => { dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); };
@@ -179,4 +180,55 @@ console.log('\n— 5. a browser with no permissions.query —');
   await advance(5000);
   if (scrims()) closeCard();
 }
+// ── 6. vrmic.js does what the policy decides: every pre-VR, in-VR and after-exit row, executed through its effects ──
+const STATES = ['granted', 'denied', 'prompt', 'unknown'];
+const asState = (s) => s === 'unknown' ? 'not-a-state' : s;   // micPermissionState maps any other answer to 'unknown'
+console.log('\n— 6. the policy table, executed —');
+{
+  const bad = []; let deniedHints = 0;
+  for (const state of STATES) for (const r of [null, 'allow', 'later']) for (const p of [false, true]) {
+    reset(); perm.state = asState(state);
+    if (r) localStorage.setItem(MIC_CHOICE_KEY, r);
+    if (p) localStorage.setItem(MIC_PENDING_KEY, '1');
+    const toasted = toasts.length; let proceeds = 0;
+    const res = V.vrMicPreflight(() => proceeds++); await advance(500);
+    const d = preVrStep({ state, remembered: r, pending: p });
+    const ok = d.step === 'straight' ? (await res) === 'straight' && proceeds === 1 && scrims() === 0
+      : (await res) === 'asked' && proceeds === 0 && scrims() === 1;
+    // the settings hint is said once a page: never on a row that isn't denied
+    const hinted = toasts.slice(toasted).some((t) => /blocked/.test(t) && /settings/.test(t)); if (hinted) deniedHints++;
+    if (!ok || (hinted && d.hint !== 'denied')) bad.push(`${state}/${r}/${p}: want ${JSON.stringify(d)}, got ${JSON.stringify({ proceeds, scrims: scrims(), hinted })}`);
+    if (scrims()) closeCard();
+  }
+  check('pre-VR: every state × remembered × pending does what preVrStep says', bad.length === 0, bad.join('; '));
+  check('…and a denied permission was hinted, once a page', deniedHints === 1, String(deniedHints));
+}
+{
+  const bad = [];
+  for (const state of STATES) {
+    reset(); perm.state = asState(state); mic.toggles = 0; mic.on = false;
+    bus.emit('xr:state', true);
+    void V.xrMicPress(); await advance(V.TRY_MS + 100);
+    const plan = inVrMicPlan({ turningOn: true, presenting: true, state });
+    const want = plan === 'blocked' ? 0 : 1;   // blocked asks for nothing; proceed toggles; try toggles once, bounded
+    if (mic.toggles !== want) bad.push(`${state}: plan ${plan}, ${mic.toggles} toggles`);
+    bus.emit('xr:state', false); await advance(5000); if (scrims()) closeCard();
+  }
+  check('in VR: a press toggles the mic exactly when inVrMicPlan lets it (denied asks nothing)', bad.length === 0, bad.join('; '));
+}
+{
+  const bad = [];
+  for (const state of STATES) for (const p of [false, true]) {
+    reset(); perm.state = asState(state); if (p) localStorage.setItem(MIC_PENDING_KEY, '1');
+    const hinted = hints.length, toasted = toasts.length;
+    await V.__askAfterExit(); await advance(10);
+    const step = afterExitStep({ pending: p, state });
+    const got = scrims() ? 'ask' : toasts.length > toasted ? 'clear-denied' : hints.length > hinted ? 'clear' : 'none';
+    const cleared = step.startsWith('clear') ? localStorage.getItem(MIC_PENDING_KEY) === null : true;
+    if (got !== step || !cleared) bad.push(`${state}/${p}: want ${step}, got ${got}${cleared ? '' : ' (flag kept)'}`);
+    if (scrims()) closeCard();
+  }
+  check('after exit: every pending × state does what afterExitStep says, and a clear clears the flag', bad.length === 0, bad.join('; '));
+}
+
 done();

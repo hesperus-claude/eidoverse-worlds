@@ -1,24 +1,19 @@
-/**
- * Two-bone IK test — geometry only, no rig, no renderer, no server.
+/** Two-bone IK, geometry only (no rig, renderer, server). Every expectation is HAND-COMPUTED from the law of cosines,
+ *  so a wrong solver cannot agree with a wrong test.
+ *  Run: bun run tools/reach-test.ts
  *
- * Run: bun run tools/reach-test.ts
+ *    Isoceles case, L1 = L2 = 1, target 1.41421356 out:
+ *      cos(interior) = (1 + 1 - 2) / (2·1·1) = 0            -> interior = 90°
+ *      flex          = 180° - 90°                           -> 90°
+ *      cos(alpha)    = (1 + 2 - 1) / (2·1·1.41421356) = 1/sqrt2 -> alpha = 45°
+ *      elbow, pole down = [cos45, -sin45, 0] = [0.70710678, -0.70710678, 0]
  *
- * Every expectation is HAND-COMPUTED from the law of cosines and written out
- * here, so a wrong solver cannot agree with a wrong test.
- *
- *   Isoceles case, L1 = L2 = 1, target 1.41421356 out:
- *     cos(interior) = (1 + 1 - 2) / (2·1·1) = 0            -> interior = 90°
- *     flex          = 180° - 90°                           -> 90°
- *     cos(alpha)    = (1 + 2 - 1) / (2·1·1.41421356) = 1/sqrt2 -> alpha = 45°
- *     elbow, pole down = [cos45, -sin45, 0] = [0.70710678, -0.70710678, 0]
- *
- *   Elbow at its stop, L1 = L2 = 1, target 0.1 out, maxFlex 145°:
- *     cos(interior) = (2 - 0.01) / 2 = 0.995               -> interior = 5.7320°
- *     flex          = 174.2680° > 145°, so the joint stops at 145°
- *     interior'     = 35°
- *     d'            = sqrt(2 - 2·cos35°) = sqrt(0.36169611) = 0.60141160
- *     gap           = 0.60141160 - 0.1 = 0.50141160
- */
+ *    Elbow at its stop, L1 = L2 = 1, target 0.1 out, maxFlex 145°:
+ *      cos(interior) = (2 - 0.01) / 2 = 0.995               -> interior = 5.7320°
+ *      flex          = 174.2680° > 145°, so the joint stops at 145°
+ *      interior'     = 35°
+ *      d'            = sqrt(2 - 2·cos35°) = sqrt(0.36169611) = 0.60141160
+ *      gap           = 0.60141160 - 0.1 = 0.50141160 */
 
 import { solveTwoBone, clampToCone, clampBehind, rotateAbout } from "../shared/reach.js";
 
@@ -49,8 +44,7 @@ console.log("\nprimitives");
   check("the clamped direction is still a unit vector", near(Math.hypot(...outside.v), 1));
 }
 {
-  // antiparallel is the degenerate case: every plane is equally valid, so the
-  // requirement is only that it is finite, unit, and on the boundary
+  // antiparallel is degenerate (every plane is valid): it need only be finite, unit, and on the boundary
   const anti = clampToCone([-1, 0, 0], [1, 0, 0], 30 * D);
   check("antiparallel input does not produce NaN",
     anti.v.every(Number.isFinite) && near(Math.hypot(...anti.v), 1) && near(dot(anti.v, [1, 0, 0]), Math.cos(30 * D)));
@@ -103,7 +97,7 @@ console.log("\nthe elbow's stop (hand-computed)");
   check("hand can get no closer than 0.60141160", near(dist([0, 0, 0], r.hand), 0.60141160, 1e-7),
     `${dist([0, 0, 0], r.hand)}`);
   check("gap = 0.50141160", near(r.gap, 0.50141160, 1e-7), `${r.gap}`);
-  // THE bug this guards: obeying the elbow limit and then reaching anyway
+  // obeying the elbow limit and then reaching anyway is the bug
   check("the forearm is NOT stretched to cheat the limit", near(dist(r.elbow, r.hand), 1, 1e-9),
     `forearm = ${dist(r.elbow, r.hand)}`);
   check("the upper arm is not stretched either", near(dist([0, 0, 0], r.elbow), 1, 1e-9));
@@ -117,10 +111,7 @@ console.log("\nthe cone and the frontal plane");
     coneAxis: [1, 0, 0], limits: { coneHalf: 85 * D },
   }) as any;
   check("cone reported as binding", r.bound.includes("cone"));
-  // The cone constrains the SHOULDER, so it is the upper bone that lands on
-  // the boundary — not the hand, which then reaches on from there as far as
-  // the elbow allows. (This assertion used to check the hand and was simply
-  // wrong about which vector the joint limit owns.)
+  // the cone constrains the SHOULDER, so the upper bone lands on the boundary, not the hand (it reaches on from there)
   check("the UPPER BONE is pulled onto the cone boundary",
     near(dot(r.upper, [1, 0, 0]), Math.cos(85 * D), 1e-6), `dot=${dot(r.upper, [1, 0, 0])}`);
   check("the upper bone stays unit length", near(Math.hypot(...r.upper), 1));
@@ -136,8 +127,7 @@ console.log("\nthe cone and the frontal plane");
 }
 
 {
-  // cone AND frontal stop together — one projection each is not enough, which
-  // is why the solver alternates them to a fixed point
+  // cone AND frontal stop together: one projection each is not enough, so the solver alternates them to a fixed point
   const r = solveTwoBone({
     root: [0, 0, 0], target: [-2, 0, -2], L1: 1, L2: 1, pole: [0, -1, 0],
     coneAxis: [1, 0, 0], fwd: [0, 0, 1],
@@ -147,15 +137,12 @@ console.log("\nthe cone and the frontal plane");
     dot(r.upper, [1, 0, 0]) >= Math.cos(85 * D) - 1e-6 && dot(r.upper, [0, 0, 1]) >= -Math.sin(65 * D) - 1e-6,
     `cone=${dot(r.upper, [1, 0, 0])} fwd=${dot(r.upper, [0, 0, 1])}`);
   check("and it did not give up as infeasible", !r.bound.includes("infeasible"));
-  // Here only the frontal stop is active at the fixed point — the cone fires
-  // during alternation and the final arm ends up well inside it (0.42 against
-  // a boundary of 0.087). `bound` must say what is true AT THE END.
+  // only the frontal stop is active at the fixed point (the cone fires mid-alternation; the arm ends well inside it):
+  // `bound` must say what is true AT THE END
   check("reports only the limit that is actually active", r.bound.includes("behind") && !r.bound.includes("cone"));
 }
 {
-  // report honesty as a property: over many targets, every limit named in
-  // `bound` is genuinely on its boundary, and every limit NOT named is
-  // genuinely satisfied with room to spare
+  // report honesty: over many targets every limit named in `bound` is on its boundary, every one not named satisfied with room
   let lies = 0, coneHits = 0, behindHits = 0;
   let seed = 4242;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };

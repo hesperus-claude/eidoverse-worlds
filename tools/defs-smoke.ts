@@ -1,16 +1,11 @@
-// defs-smoke — the def registry lane, proven end to end (charter §3, §24).
-//
+// defs-smoke: the def registry lane, end to end (charter §3, §24).
 //   bun tools/defs-smoke.ts              # headless Chrome, own scratch sequencer
 //   bun tools/defs-smoke.ts --headed
 //   bun tools/defs-smoke.ts --console
-//
-// What it proves (see the section banners): the registry contract (novel
-// def served, broken def refused loudly, round-trip exact, sidecars), the
-// avatar + animation overlays, engine hydration ENGAGEMENT, hot reload
-// under a live client, a def-only species rendering, the def-composed
-// mojave biome, and unknown-species failing loudly while the boot stands.
-//
-// Scaffolding: tools/harness.ts (R2 — the shared scratch bench).
+// Proves (see the banners): the registry contract (novel def served, broken def refused loudly, round-trip exact,
+// sidecars), avatar + animation overlays, engine hydration ENGAGEMENT, hot reload under a live client, a def-only
+// species rendering, the def-composed mojave biome, and an unknown species failing loudly while the boot stands.
+// Scaffolding: tools/harness.ts (the shared scratch bench).
 
 import { mkdtempSync, readFileSync, readdirSync, copyFileSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -34,14 +29,14 @@ for (const domain of readdirSync(join(ROOT, "defs"))) {
 
 console.log(`\n${bold("defs-smoke")} — defs in ${DEFS}`);
 const { PORT, BASE, SCRATCH, cws, cdp, evalJson, cleanup, die } =
-  await scratchBench("defsmoke", { headed: HEADED, portFrom: 8955, serverEnv: { DEFS_DIR: DEFS, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" } });   // TRUST_NAMES: the driver who founds a world owns it
+  await scratchBench("defsmoke", { headed: HEADED, portFrom: 8955, serverEnv: { DEFS_DIR: DEFS, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" } });  // TRUST_NAMES: the driver who founds a world owns it
 const { check, tally } = mkCheck();
 
 // ---- the scratch def registry ----------------------------------------------
 
 // underscore files (_colors.json) are domain sidecars, not species defs
 const REPO_COUNT = readdirSync(join(DEFS, "flora")).filter((f) => !f.startsWith("_")).length;
-// the def-only species: exists in NO .js file — if it renders, the lane works
+// the def-only species: in NO .js file, so if it renders, the lane works
 writeFileSync(join(DEFS, "flora", "smoketest_lavender.json"), JSON.stringify({
   doc: "defs-smoke's witness species — a burgundy meadow no engine file knows.",
   archetype: "blades", maps: "blades_meadow", leafRecolor: "burgundy",
@@ -51,7 +46,7 @@ writeFileSync(join(DEFS, "flora", "smoketest_lavender.json"), JSON.stringify({
   sss: 0.5, rough: 0.6, pushScale: 1.0,
 }, null, 2));
 writeFileSync(join(DEFS, "flora", "broken.json"), JSON.stringify({ doc: "no archetype — must be refused" }));
-await sleep(1300);   // past the registry TTL — the server booted before these writes
+await sleep(1300);  // past the registry TTL: the server booted before these writes
 
 // ---- server contract --------------------------------------------------------
 
@@ -89,8 +84,7 @@ check("broken def is NOT served", !names.includes("broken"));
 }
 
 // ---- animation overlay ------------------------------------------------------
-// Same contract as avatars: declared beats discovered, unresolvable paths
-// cost the roster nothing.
+// same contract as avatars: declared beats discovered, unresolvable paths cost the roster nothing
 
 console.log(`\n${bold("── animations")}`);
 {
@@ -121,10 +115,8 @@ console.log(`\n${bold("── animations")}`);
 }
 
 // ---- avatar overlay ---------------------------------------------------------
-// Defs overlay the DISCOVERED roster (declared beats discovered): an
-// override def restates a scanned avatar's height, an alias def points a
-// new name at an existing .vrm, and a def with an unresolvable path is
-// refused without costing the roster anything.
+// defs overlay the discovered roster: an override restates a height, an alias points a new name at an existing .vrm,
+// an unresolvable path is refused without costing the roster anything
 
 console.log(`\n${bold("── avatars")}`);
 {
@@ -152,8 +144,7 @@ console.log(`\n${bold("── avatars")}`);
     check("unresolvable vrm def costs the roster nothing",
       !after.find((a) => a.name === "defsmoke_broken") && after.length === before.length + 1,
       `${after.length} vs ${before.length}+1`);
-    // the broken def VALIDATES (the registry can't stat the library) — the
-    // roster is where its path fails to resolve, loudly
+    // the broken def VALIDATES (the registry can't stat the library): the roster is where its path fails, loudly
     const reg2 = await (await fetch(`${BASE}/defs`)).json();
     check("/defs serves the avatars domain", Object.keys(reg2.avatars ?? {}).length === 3,
       Object.keys(reg2.avatars ?? {}).join(", "));
@@ -188,7 +179,7 @@ function joinDriver(world: string, id: string): Promise<Driver> {
 const stamp = Math.random().toString(36).slice(2, 7);
 const WORLDS = { std: `defsmoke-std-${stamp}`, novel: `defsmoke-novel-${stamp}`,
   preset: `defsmoke-preset-${stamp}`, bogus: `defsmoke-bogus-${stamp}` };
-foundWorlds(join(SCRATCH, "worlds"), Object.values(WORLDS), "defsdriver");   // joining never founds a world
+foundWorlds(join(SCRATCH, "worlds"), Object.values(WORLDS), "defsdriver");  // joining never founds a world
 for (const [kind, name] of Object.entries(WORLDS)) {
   const d = await joinDriver(name, "defsdriver");
   await d.verb("terrain", { size: 64 });
@@ -251,9 +242,7 @@ await bootInto(WORLDS.std);
 }
 
 // ---- hot reload -------------------------------------------------------------
-// Edit a def on disk while a client stands in the meadow: the defs-watch
-// tick pushes `defs-updated`, the client re-hydrates and regrows from the
-// SAME authored args — no reboot, no log entry, new content.
+// edit a def under a live client: defs-watch pushes `defs-updated` and the client regrows from the same args; no reboot, no log entry
 console.log(`\n${bold("── hot reload")}  ${dim("editing grass.json under a live client")}`);
 {
   const before = await evalJson(`(() => { try {
@@ -261,7 +250,7 @@ console.log(`\n${bold("── hot reload")}  ${dim("editing grass.json under a l
   } catch { return null } })()`);
   const gp = join(DEFS, "flora", "grass.json");
   const gdef = JSON.parse(readFileSync(gp, "utf8"));
-  gdef.density = 5.0;   // 22 → 5: the regrown field plants far fewer
+  gdef.density = 5.0;  // 22 → 5: the regrown field plants far fewer
   writeFileSync(gp, JSON.stringify(gdef, null, 2));
   let after: number | null = null;
   for (let i = 0; i < 60 && after === null; i++) {
@@ -282,8 +271,7 @@ await bootInto(WORLDS.novel);
 {
   const g = await grassDrawn();
   check("a species no .js file knows RENDERS", !!g && g.drawn > 0, g ? `drawn ${g.drawn}, mode ${g.mode}` : "no drawn instances");
-  // the lavender's leafRecolor names "burgundy" — resolvable only if the
-  // palette sidecar (_colors.json) hydrated; a miss warns and drops it
+  // the lavender's leafRecolor "burgundy" resolves only if the palette sidecar (_colors.json) hydrated; a miss warns and drops it
   check("palette sidecar hydrated (no unknown-color warning)",
     !consoleLines.some((l) => l.includes("names unknown color")));
 }
@@ -291,9 +279,7 @@ await bootInto(WORLDS.novel);
 console.log(`\n${bold("── def-composed biome")}  ${dim(`world ${WORLDS.preset}`)}`);
 await bootInto(WORLDS.preset);
 {
-  // the mojave recipe now lives in defs/flora/_presets.json — seven strokes
-  // (galleta + 2 blackbrush + 2 creosote + sagebrush + yucca) composed from
-  // the def's template vocabulary, no recipe in any .js file
+  // the mojave recipe lives in defs/flora/_presets.json: seven strokes from the def's template vocabulary, none in any .js file
   let strokes: any[] = [];
   for (let i = 0; i < 120 && strokes.length < 7; i++) {
     await sleep(500);

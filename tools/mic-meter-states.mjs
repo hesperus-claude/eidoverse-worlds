@@ -1,16 +1,7 @@
-// mic-meter-states — the sensitivity bar must show THREE states, and latch.
-//
-// R, 2026-08-16: "when the mic sensitivity waveform is over the sensitivity
-// threshold and goes live, can you turn it bright gold (same color as the HUD
-// mic when it's live) and leave it gold until it goes off again".
-//
-// "leave it gold until it goes off again" is hysteresis, and hysteresis is the
-// half a screenshot cannot show: a bar photographed mid-syllable looks correct
-// whether or not it strobes. So this drives the level directly and samples the
-// colour at each step, including the two that only a latch gets right —
-// BELOW-after-ABOVE inside the release band (must stay gold) and below it
-// (must drop).
-//
+// mic-meter-states: the sensitivity bar shows THREE states (off, under, live gold) and the gold LATCHES until it goes off.
+// Hysteresis is what a screenshot can't show (a bar photographed mid-syllable looks right whether or not it strobes), so
+// this drives the level and samples the colour at each step, including BELOW-after-ABOVE inside the release band (must
+// stay gold) and below it (must drop).
 //   node tools/mic-meter-states.mjs [origin]
 import { launchBrowser, ownedWorld } from './probe-harness.mjs';
 
@@ -33,8 +24,7 @@ const r = await pg.evaluate(async () => {
   const thr = document.querySelector('#sec-audio [data-thr]');
   if (!lvl) return { error: 'no meter' };
 
-  // Take over the level source and the mic state. __sfuMyLevel is what
-  // micLevelNow() prefers, so installing it is the supported seam.
+  // take over the level source and mic state: __sfuMyLevel is what micLevelNow() prefers, the supported seam
   let fake = 0;
   window.__sfuMyLevel = () => fake;
   window.relayDiag = () => ({ micPublished: true, active: true });
@@ -43,11 +33,8 @@ const r = await pg.evaluate(async () => {
   const colour = () => getComputedStyle(lvl).backgroundColor;
   const at = async (v) => { fake = v; await settle(); await settle(); return colour(); };
 
-  // 🔴 ASK THE MODULE, DO NOT PARSE THE CSS. The marker's left is written as
-  // `calc(N% - 1px)`, so parseFloat returns garbage and the first run of this
-  // probe read floor=0 — which makes `floor * 3` also 0 and the OVER case
-  // unreachable. A test whose setup silently degrades to a no-op reports the
-  // code as broken while proving nothing.
+  // ask the module, don't parse the CSS: the marker's left is `calc(N% - 1px)`, which parseFloat misreads (floor=0
+  // would make the OVER case unreachable)
   const vc = await import('./lib/voiceconsent.js');
   let floor = vc.micFloor();
   if (!(floor > 0)) { vc.setMicFloor(0.02); floor = vc.micFloor(); }
@@ -56,7 +43,7 @@ const r = await pg.evaluate(async () => {
   out.floor = floor;
   out.muted = await (async () => { window.relayDiag = () => ({ micPublished: false }); fake = 0;
     document.querySelector('#sec-audio [data-lvl]'); await settle();
-    // force a repaint through the bus the same way the app would
+    // force a repaint through the bus as the app would
     const m = await import('./lib/core.js'); m.bus.emit('audio:mic', false); await settle();
     const c = colour(); window.relayDiag = () => ({ micPublished: true, active: true });
     m.bus.emit('audio:mic', true); await settle(); return c; })();

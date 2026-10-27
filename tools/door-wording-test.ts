@@ -1,15 +1,10 @@
-// The door's refusals say what didn't happen, why, and what to do instead,
-// with the agent's own value where that was the problem.
-// Run: bun tools/door-wording-test.ts
-//
-// Main's test (#270, nissa-seru), carried into the revised protocol (#260). Where this
-// protocol renamed or folded a tool (tools.ts TOOL_ALIASES, TOOL_FOLDS), the
-// check calls the tool that does it now and reads its words; where a refusal
-// moved from the door to the world's authority (place's unknown id, a raw
-// verb's shape, the closed verb list), the check is gone and the note says
-// where that is pinned instead. The body_state and reach checks are main's,
-// with this protocol's facts: o.pose.clip is a clip (anim plays it), a seat
-// is left with detach, and releasing a reach is reach {release: true}.
+// The door's refusals say what didn't happen, why, and what to do instead, with the agent's own value where that was
+// the problem. Run: bun tools/door-wording-test.ts
+// Main's test (#270), carried into the revised protocol (#260): a renamed or folded tool (tools.ts TOOL_ALIASES,
+// TOOL_FOLDS) is checked through the tool that does it now; a refusal that moved to the world's authority is gone
+// here, with a note saying where it's pinned. body_state/reach use this protocol's facts: o.pose.clip is a clip,
+// a seat is left with detach, a reach is released with reach {release: true}.
+import { noWorldUrl } from "./no-world.ts";
 import { mkCheck } from "./harness.ts";
 import { tryUntil } from "./protocol/wait.ts";
 import { handleTool, screenshotTool, snapCallBudgetMs, TOOLS } from "../mcpl/tools.ts";
@@ -25,15 +20,14 @@ import { wireState } from "../shared/protocol/replica.js";
 import { emptyState } from "../shared/protocol/fold.js";
 
 const { check, tally } = mkCheck();
-// The wording checks read ONE answer from the world server; the snapshot tool's retries have their own checks below.
+// the wording checks read ONE answer from the world server; the snapshot tool's retries have their own checks below
 const ONCE = { budgetMs: 0 };
 const snapTries = new Map<string, number>();
-let lastSnapBudget: string | null = null;   // the ?budget= the tool sent on its latest /snap
+let lastSnapBudget: string | null = null;  // the ?budget= of the latest /snap
 const PNG_1PX = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=", "base64");
 const said = (r: any) => String(r?.content?.[0]?.text ?? "");
 
-// Bodies for body_state: the fixture rig, one without a left forearm, one
-// with no humanoid skeleton at all, and one whose bones loop.
+// body_state bodies: the fixture rig, one without a left forearm, one with no humanoid skeleton, one whose bones loop
 const glb = (g: any) => {
   let json = JSON.stringify(g);
   json += " ".repeat((4 - Buffer.byteLength(json) % 4) % 4);
@@ -45,7 +39,7 @@ const glb = (g: any) => {
 const rigJson = () => JSON.parse(fixture().subarray(20).toString());
 const oneArmed = rigJson(); delete oneArmed.extensions.VRMC_vrm.humanoid.humanBones.leftLowerArm;
 const flat = rigJson(); delete flat.extensions; delete flat.extensionsUsed;
-// the root hangs under the head, so the hips' ancestors come round to them again
+// the root hangs under the head, so the hips' ancestors loop back to them
 const looped = rigJson(); looped.nodes[looped.extensions.VRMC_vrm.humanoid.humanBones.head.node].children.push(0);
 // the neck named on the head's own node, as some models have it
 const sharedNeck = rigJson(); sharedNeck.extensions.VRMC_vrm.humanoid.humanBones.neck.node = sharedNeck.extensions.VRMC_vrm.humanoid.humanBones.head.node;
@@ -53,21 +47,19 @@ const library = new Map<string, Uint8Array>([["body.vrm", fixture()], ["one-arme
   ["flat.vrm", glb(flat)], ["looped.vrm", glb(looped)], ["shared-neck.vrm", glb(sharedNeck)],
   ["broken.vrm", new TextEncoder().encode("not a model at all")], ["idle.vrma", postureFixture("idle")]]);
 
-// A stand-in world server: just the routes these tools read.
+// a stand-in world server: just the routes these tools read
 let roster: { name: string; path: string }[] = [{ name: "aria", path: "avatars/aria.vrm" }, { name: "bo", path: "avatars/bo.vrm" }];
 const world = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
   const u = new URL(req.url);
   if (u.pathname === "/avatars") return Response.json(roster);
   if (u.pathname === "/library-models") return Response.json([]);
   if (u.pathname === "/snap") {
-    // The broker's answers (server/snapshots.ts), in its order: the renderer asked for, then the
-    // body followed. The body's name also picks how the world's renderers answer; any other name
-    // finds none of the kind asked for serving.
+    // the broker's answers (server/snapshots.ts), in order: the renderer asked for, then the body followed; the body's
+    // name picks how the renderers answer (any other name finds none of the kind serving)
     const renderer = u.searchParams.get("renderer"), follow = u.searchParams.get("follow");
     lastSnapBudget = u.searchParams.get("budget");
-    if (follow === "hang") return new Promise<Response>(() => {});   // a server that never answers
-    // "<answer>-<n>": refuse n times with that answer, then serve a picture (the retry checks below). Like the real
-    // server, the passing refusals carry Retry-After; a proxy's 502 does not.
+    if (follow === "hang") return new Promise<Response>(() => {});  // never answers
+    // "<answer>-<n>": refuse n times, then serve a picture. Passing refusals carry Retry-After, as the real server's do; a proxy's 502 doesn't.
     const later = /^(loading|busy|busy60|slow|proxied)-(\d+)$/.exec(follow ?? "");
     if (later) {
       const seen = (snapTries.get(follow!) ?? 0) + 1; snapTries.set(follow!, seen);
@@ -82,13 +74,13 @@ const world = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(req) {
     }
     if (follow === "badimage") {
       snapTries.set("badimage", (snapTries.get("badimage") ?? 0) + 1);
-      return new Response("renderer could not supply a valid image", { status: 502 });   // the world server's own 502
+      return new Response("renderer could not supply a valid image", { status: 502 });  // the world server's own 502
     }
     const [said, status] = renderer !== "auto" && renderer !== "browser" && renderer !== "unreal" ? ["renderer must be auto, unreal, or browser", 400]
       : follow === "gone" ? ['"gone" is not present in "w"', 404]
       : follow === "busy" ? ["renderers busy; retry in a few seconds", 429]
       : follow === "slow" ? ["renderer timed out", 504]
-      : follow === "proxied" ? ["<html>\n  <h1>502 Bad Gateway</h1>\n</html>\n", 502]   // a proxy in front of the server
+      : follow === "proxied" ? ["<html>\n  <h1>502 Bad Gateway</h1>\n</html>\n", 502]  // a proxy in front of the server
       : follow === "blank" ? [" \n ", 502]
       : renderer === "unreal" ? ['no unreal renderer is currently serving world "w"', 503]
       : ['no renderer is currently serving world "w"', 503];
@@ -114,7 +106,7 @@ const agent: any = {
   httpBase: `http://127.0.0.1:${world.port}`, world: "w", name: "me",
   entities: new Map(), people: new Map(), pos: { x: 0, y: 0, z: 0 }, yaw: 0,
   heightAt: () => 0, verbs: [] as unknown[], verb(v: string, a: unknown) { this.verbs.push([v, a]); }, face() {},
-  // Names resolve as a body resolves them; requests go to a stand-in authority that takes them.
+  // names resolve as a body resolves them; requests go to a stand-in authority that takes them
   thingRef: WorldAgent.prototype.thingRef, requests: [] as unknown[],
   async request(v: string, a: unknown) { this.requests.push([v, a]); return { ok: true }; },
 };
@@ -126,7 +118,7 @@ try {
   const unknown = await call("fly_to_the_moon");
   check("an unknown tool is named, and nothing ran",
     unknown.isError === true && said(unknown) === `there's no tool named "fly_to_the_moon" on this server, so nothing ran; your tool list has the ones it serves`, said(unknown));
-  // A rehearsal tool is a fold here (TOOL_FOLDS): it says what does it now.
+  // a rehearsal tool is a fold here (TOOL_FOLDS): it says what does it now
   const rehearsal = await call("rehearse_down");
   check("a rehearsal tool says no tool runs it now, and nothing ran",
     rehearsal.isError === true && said(rehearsal) === "rehearse_down folded into a general tool: no tool: a bench calls the agent's flightBodyDown directly — nothing ran", said(rehearsal));
@@ -140,22 +132,22 @@ try {
   const partial = await call("say", { text: "hi", utt: -1 });
   check("a broken spoken line names each part as sent",
     partial.isError === true && /\(you sent spoken nothing, utt -1, t0 nothing\)/.test(said(partial)) && /send only text/.test(said(partial)), said(partial));
-  // ragdoll folded into anim {ragdoll} and act {verb: "shove"} (TOOL_FOLDS): it says which, and runs nothing.
+  // ragdoll folded into anim {ragdoll} and act {verb: "shove"} (TOOL_FOLDS): it says which, and runs nothing
   const ragdoll = await call("ragdoll", {});
   check("ragdoll says what knocks a body over now, and that nothing ran",
     ragdoll.isError === true && /^ragdoll folded into a general tool: anim \{ragdoll: true, target\?\} .*act \{verb: "shove", args: \{target, strength\?\}\} — nothing ran$/.test(said(ragdoll)), said(ragdoll));
   const tracks = { leftUpperArm: [{ t: 0, q: [0, 0, 0, 1] }, { t: 0.5, q: [0, 0, -0.7, 0.7] }] };
   check("anim's tracks without dur say what was sent",
     /^animate needs dur, the length in seconds and more than 0, so nothing played; you sent nothing$/.test(said(await call("anim", { tracks }))));
-  // spawn is create {model} here (TOOL_ALIAS_ARGS), and a query is library's: the alias says so, and runs nothing.
+  // spawn is create {model} (TOOL_ALIAS_ARGS), and a query is library's: the alias says so, and runs nothing
   const noLib = said(await call("spawn", {}));
   check("spawn with no lib says it's create {model} now, and nothing ran",
     noLib === "(spawn is now called create; nothing ran)\nspawn needs lib (a library path); it is create {model} now", noLib);
   const missed = said(await call("spawn", { query: "zzz" }));
   check("spawn with a query says library finds the model, then create places it",
     missed === `(spawn is now called create; nothing ran)\nspawn {query} has no one-step form now: library {query: "zzz"} finds the model, then create {model}`, missed);
-  // place's id is the world's authority's to resolve here (namedThings passes an unknown name on, for the
-  // authority's own not-found words, spec/refusal-codes.json), so main's two door-side place refusals have no door here.
+  // place's id is the authority's to resolve (namedThings passes unknown names on, for spec/refusal-codes.json's
+  // not-found words), so main's two door-side place refusals have no door here
   const noBody = said(await call("set_avatar", { avatar: "zed" }));
   check("set_avatar names the roster and what a slash means",
     /^no body named "zed" is on the roster, so you're still wearing your current body\. The roster has: aria, bo\. A path with a slash/.test(noBody), noBody);
@@ -197,7 +189,7 @@ try {
   const blank = said(await screenshotTool({ ...agent, name: "blank" }, "first", undefined, "auto", {}, ONCE));
   check("...and an answer of nothing but whitespace gives the status alone",
     blank === "screenshot: no picture was taken; the world server answered 502, so try again in a while", blank);
-  // A first call should come back with a picture: "not yet" answers are asked again within the call's budget.
+  // a first call should come back with a picture: "not yet" answers are asked again within the call's budget
   const img = (r: any) => r?.content?.some((c: any) => c.type === "image") && r.isError !== true;
   for (const [who, what] of [["loading-1", "a renderer still loading the world (503)"], ["busy-1", "busy renderers (429, after its retry-after)"],
     ["slow-1", "a frame that came too late (504)"], ["proxied-1", "a proxy cutting the wait (502)"]] as const) {
@@ -216,7 +208,7 @@ try {
       r.isError === true && /^screenshot: no picture was taken; the world server answered 503 \(the renderer is still loading this world — 1 model still loading \(0 in\); try again in a few seconds\) after 2 tries over [0-9]+ s, so try again in a while$/.test(said(r)), said(r));
   }
   {
-    // what asking again cannot change is not asked again
+    // what asking again can't change isn't asked again
     const t0 = Date.now();
     const gone = await screenshotTool({ ...agent, name: "gone" }, "first", undefined, "auto", {}, { budgetMs: 20_000 });
     const unreal = await screenshotTool(agent, "first", undefined, "unreal", {}, { budgetMs: 20_000 });
@@ -226,7 +218,7 @@ try {
       [gone, unreal, bad, noRoamer].every((r) => r.isError) && !/tries/.test(said(gone) + said(unreal) + said(bad) + said(noRoamer)) && Date.now() - t0 < 1500, `${Date.now() - t0}ms`);
   }
   {
-    // a proxy's bare 502, again and again (a server restarting behind it): tried once more, then answered
+    // a proxy's bare 502 again and again (a server restarting behind it): tried once more, then answered
     const t0 = Date.now(); const r = await screenshotTool({ ...agent, name: "proxied-9" }, "first", undefined, "auto", {}, { budgetMs: 20_000 });
     check("a proxy's 502 without Retry-After is tried once more, then answered: not held for the whole budget",
       r.isError === true && snapTries.get("proxied-9") === 2 && /after 2 tries over 2 s/.test(said(r)) && Date.now() - t0 < 4000, `${said(r)} ${Date.now() - t0}ms`);
@@ -254,15 +246,14 @@ try {
     check("…and a bad value is said once, not on every call", warns.length === 1 && /SNAP_CALL_BUDGET_MS="600001" is not a number of ms from 0 to 600000; using 57000/.test(warns[0]), JSON.stringify(warns));
   }
   {
-    // a server asking for a long pause (Retry-After: 60) is waited at most 10 s; with 17 s of budget that still leaves a
-    // try (without the cap, 60 s would not fit and the call would be answered at once, with no picture)
+    // a Retry-After: 60 is waited at most 10 s, so 17 s of budget still leaves a try (uncapped, the call answers at once, no picture)
     const t0 = Date.now(); const r = await screenshotTool({ ...agent, name: "busy60-1" }, "first", undefined, "auto", {}, { budgetMs: 17_000 });
     const ms = Date.now() - t0;
     check("a Retry-After past 10 s is waited 10 s, and a try that fits the budget still comes back with the picture",
       img(r) && snapTries.get("busy60-1") === 2 && ms >= 9_500 && ms < 12_000, `${said(r)} ${ms}ms`);
   }
   {
-    // a server that takes the request and never answers: the backstop ends the call, and says what happened
+    // a server that takes the request and never answers: the backstop ends the call, saying so
     const t0 = Date.now(); const r = await screenshotTool({ ...agent, name: "hang" }, "first", undefined, "auto", {}, { budgetMs: 1_000, noAnswerGraceMs: 500 });
     check("a server that never answers is reported as giving no answer (it may still be taking the picture), not as unreachable",
       r.isError === true && /^screenshot: the world server gave no answer in 2 s; it may still be taking the picture, so try again in a few seconds$/.test(said(r)) && Date.now() - t0 < 3000, `${said(r)} ${Date.now() - t0}ms`);
@@ -290,10 +281,8 @@ try {
     /^measure: the world server didn't answer \(.+\), so nothing was measured; try again in a moment$/.test(geomGone), geomGone);
 
   console.log("\nACT (main's WORLD_VERB)");
-  // world_verb is act here, and a verb's arguments are the world's authority's to check
-  // (shared/protocol/verbspec.js validate, its refusals pinned in spec/refusal-codes.json): main's
-  // door-side raw-shape refusals (mcpl/shape.ts rawShapeError) and its closed verb list
-  // (server/rights.ts VERB_NEEDS) left with the v1 log, so their checks have nothing here to read.
+  // world_verb is act here: a verb's arguments are the authority's to check (shared/protocol/verbspec.js validate;
+  // spec/refusal-codes.json), so the door has no raw-shape or closed-verb-list checks
   const forwarded = await call("act", { verb: "fly_away", args: {} });
   check("act passes a verb it doesn't know on to the world, whose authority answers it",
     forwarded.isError !== true && JSON.stringify(agent.requests.at(-1)) === JSON.stringify(["fly_away", {}]), said(forwarded));
@@ -311,7 +300,7 @@ try {
     Array.from(emoji).length === 60 && emoji.endsWith("😀…") && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji), emoji);
 
   console.log("\nWHISPER");
-  // whisper left with world chat's private channel here (TOOL_REMOVED), whatever EIDO_WHISPERS_ENABLED says.
+  // whisper went with world chat's private channel (TOOL_REMOVED), whatever EIDO_WHISPERS_ENABLED says
   const whisper = await call("whisper", { to: "x", text: "y" });
   check("a whisper says why there is none, what speaks instead, and that nothing ran",
     whisper.isError === true && said(whisper) === "whisper was removed: world chat has no private channel (the maintainers' speech ruling: speech is logged, whisper stays disabled); say speaks aloud to everyone here — nothing ran", said(whisper));
@@ -324,7 +313,7 @@ try {
   const scene = (...bodies: any[]) => (id: string) => bodies.find((b) => b.who === id) ?? null;
   const ask = async (who: string, detail: unknown, observe: (id: string) => any, points?: unknown, windowMs: unknown = 0, r = reader): Promise<any> =>
     r.readWindow(who, detail as string, points, windowMs, observe);
-  // a fresh observation each time it's read, so a slow run can't age it past BODY_STALE_MS
+  // a fresh observation each read, so a slow run can't age it past BODY_STALE_MS
   const probe = (id: string) => id === "probe" ? seen("probe", "body.vrm", standing()) : null;
   check("window_ms out of range shows what was sent",
     (await ask("probe", "summary", probe, undefined, "1000")).error === `window_ms must be a whole number of milliseconds from 0 to 5000, so nothing was read; you sent "1000"`);
@@ -352,7 +341,7 @@ try {
   check("...but on your own body a position isn't sent anyone's way",
     (await ask("probe", "summary", scene(seen("probe", "body.vrm", standing({ p: [NaN, 0, 0] }), { self: true })))).error
       === "your published position or facing isn't a finite number, so nothing of your body was read");
-  // the postures body_state's gate lets through, in the order the sentence gives them
+  // the postures body_state's gate lets through, in the sentence's order
   const evaluates = [...CLIP_SLOTS, "sitchair", ...SWIM_CLIPS].join(", ");
   const kneeling = await ask("probe", "contacts", scene(seen("probe", "body.vrm", standing({ clip: "kneel" }))));
   check("a posture it doesn't evaluate is named, beside the ones it does",
@@ -381,7 +370,7 @@ try {
   check("a model the world server didn't answer for says it couldn't be downloaded, and why",
     /^probe's joints and contacts weren't read: the avatar's model couldn't be downloaded \(.+\)$/.test(unanswered.error ?? ""), unanswered.error);
   const fromSkeleton = ReachBody.fromSkeleton;
-  (ReachBody as any).fromSkeleton = async () => null;   // as if this door's skeleton solver hadn't loaded
+  (ReachBody as any).fromSkeleton = async () => null;  // as if this door's skeleton solver hadn't loaded
   const noSolver = await ask("probe", "contacts", probe, undefined, 0, new BodyStateReader(worldBase))
     .finally(() => { (ReachBody as any).fromSkeleton = fromSkeleton; });
   const unparsed = await ask("probe", "contacts", scene(seen("probe", "broken.vrm", standing())));
@@ -428,7 +417,7 @@ try {
   check("a door whose skeleton solver didn't load says it can read no body, and who can help",
     noSolver.error === "probe's joints and contacts weren't read: this door couldn't load its skeleton solver, so it can evaluate no body, and calling again won't change that; if you need joints and contacts, ask whoever runs this door", noSolver.error);
   let turning = seen("turning", "body.vrm", standing());
-  // read() takes its first observation before its first await, and its skeleton loads after this line runs
+  // read() observes before its first await; its skeleton loads after this line runs
   const turned = new BodyStateReader(worldBase).read("turning", "contacts", undefined, (id: string) => id === "turning" ? turning : null);
   turning = { ...turning, pose: standing({ clip: "sit" }) };
   const turnedError = (await turned).error;
@@ -499,7 +488,7 @@ try {
   const towardSampleless = await ask("a", "all", scene(reacher("a", { rightHand: { t: { who: "b", point: "shoulder_l" } } }), { ...facing("b", "body.vrm"), pose: null }));
   check("...toward one with no sample yet says so",
     towardSampleless.reachEvaluation?.rightHand?.why === "b's body can't be read here, so this reach can't be checked: no presence sample has arrived for this body yet, so nothing of it was read; calling again in a moment can work", JSON.stringify(towardSampleless.reachEvaluation));
-  // read() takes every body's first observation before its first await, so this one's first sample arrives while the skeletons load
+  // read() observes every body before its first await, so this first sample arrives while the skeletons load
   const arriving = new Map<string, any>([["a", reacher("a", { rightHand: { t: { who: "b", point: "shoulder_l" } } })], ["b", { ...facing("b", "body.vrm"), pose: null }]]);
   const arrival = new BodyStateReader(worldBase).read("a", "all", undefined, (id: string) => arriving.get(id) ?? null);
   arriving.set("b", facing("b", "body.vrm"));
@@ -517,7 +506,7 @@ try {
     arrived2.reachEvaluation?.rightHand?.ok === true, JSON.stringify(arrived2.reachEvaluation));
   check("...but one whose first sample comes in another posture says it changed",
     arrived2.reachEvaluation?.leftHand?.why === "c's body can't be read here now (it changed while its skeleton loaded), so this reach can't be checked", JSON.stringify(arrived2.reachEvaluation));
-  // read() takes every body's first observation before its first await, so these change while the skeletons load
+  // these change while the skeletons load
   const moving = new Map<string, any>([["a", reacher("a", { rightHand: { t: { who: "b", point: "shoulder_l" } }, leftHand: { t: { who: "d", point: "shoulder_l" } },
       rightFoot: { t: { who: "i", point: "shoulder_l" } }, leftFoot: { t: { who: "n", point: "shoulder_l" } } })],
     ["b", facing("b", "body.vrm")], ["d", facing("d", "body.vrm")], ["i", facing("i", "flat.vrm")], ["n", facing("n", "body.vrm", { clip: "walk" })]]);
@@ -532,7 +521,7 @@ try {
     changing.reachEvaluation?.rightFoot?.why === "i's body can't be read here now (it left), so this reach can't be checked", JSON.stringify(changing.reachEvaluation?.rightFoot));
   check("...while one whose clip couldn't be loaded, and that stayed as it was, gives the clip's reason",
     changing.reachEvaluation?.leftFoot?.why === "n's body can't be read here, so this reach can't be checked: the walk animation couldn't be loaded (posture clip walk: HTTP 404)", JSON.stringify(changing.reachEvaluation?.leftFoot));
-  // ...and the rest of what can change then: the model, the clip, a posture body_state doesn't evaluate, and a body whose load failed
+  // ...and the rest of what can change then: model, clip, an unevaluated posture, a body whose load failed
   const shifting = new Map<string, any>([["a", reacher("a", { rightHand: { t: { who: "e", point: "shoulder_l" } }, leftHand: { t: { who: "f", point: "shoulder_l" } },
       rightFoot: { t: { who: "g", point: "shoulder_l" } }, leftFoot: { t: { who: "h", point: "shoulder_l" } } })],
     ["e", facing("e", "body.vrm")], ["f", facing("f", "body.vrm")], ["g", facing("g", "body.vrm")], ["h", facing("h", "flat.vrm")]]);
@@ -547,7 +536,7 @@ try {
     shifted.reachEvaluation?.rightFoot?.why === `g's body can't be read here now (its clip "kneel" isn't one body_state evaluates), so this reach can't be checked`, JSON.stringify(shifted.reachEvaluation?.rightFoot));
   check("...and one whose load failed, and that changed, says it changed rather than what its old model said",
     shifted.reachEvaluation?.leftFoot?.why === changedWhy("h"), JSON.stringify(shifted.reachEvaluation?.leftFoot));
-  // a failed load's cause gives way to a change in the model alone, the generation alone, or the clip alone
+  // a failed load's cause gives way to a change in the model, generation or clip alone
   const refailing = new Map<string, any>([["a", reacher("a", { rightHand: { t: { who: "j", point: "shoulder_l" } }, leftHand: { t: { who: "k", point: "shoulder_l" } },
       rightFoot: { t: { who: "l", point: "shoulder_l" } }, leftFoot: { t: { who: "m", point: "shoulder_l" } } })],
     ["j", facing("j", "flat.vrm")], ["k", facing("k", "flat.vrm")], ["l", facing("l", "body.vrm", { clip: "walk" })], ["m", facing("m", "body.vrm", { clip: "walk" })]]);
@@ -560,8 +549,8 @@ try {
   check("...or whose clip did, after its clip couldn't be loaded", refailed.reachEvaluation?.rightFoot?.why === changedWhy("l"), JSON.stringify(refailed.reachEvaluation?.rightFoot));
   check("...but one that moved to a posture body_state doesn't evaluate names that posture",
     refailed.reachEvaluation?.leftFoot?.why === `m's body can't be read here now (its clip "kneel" isn't one body_state evaluates), so this reach can't be checked`, JSON.stringify(refailed.reachEvaluation?.leftFoot));
-  // A body with no sample loads as idle, so a first idle sample leaves its failed load's cause standing; a sample that
-  // goes away during a failed load is a change, not a posture body_state doesn't evaluate.
+  // a body with no sample loads as idle, so a first idle sample leaves its failed-load cause standing; a sample that goes
+  // away during a failed load is a change, not an unevaluated posture
   const unsampled = new Map<string, any>([["a", reacher("a", { rightHand: { t: { who: "q", point: "shoulder_l" } }, leftHand: { t: { who: "r", point: "shoulder_l" } } })],
     ["q", seen("q", "flat.vrm", null)], ["r", facing("r", "flat.vrm", { clip: "walk" })]]);
   const whileUnsampled = new BodyStateReader(worldBase).read("a", "all", undefined, (id: string) => unsampled.get(id) ?? null);
@@ -597,7 +586,7 @@ try {
   const linked = await ask("l0", "contacts", scene(...chain));
   check("reaches that link more than 64 bodies say one reading follows at most 64",
     linked.error === "l0's joints and contacts weren't read: the reaches around this body link more than 64 bodies, and one reading follows at most 64", linked.error);
-  const rider: any = new WorldAgent({ name: "rider", world: "w" });
+  const rider: any = new WorldAgent({ url: noWorldUrl(), name: "rider", world: "w" });
   rider.selfObservedAt = Date.now();
   rider.mounts.set("rider", { to: "nowhere", slot: "seat" });
   const unseated = await rider.bodyState("rider");
@@ -629,7 +618,7 @@ try {
   const elbow = said(await call("reach", { point: "elbow_x" }));
   check("a contact point that isn't one is named, with the ones there are",
     /^there's no contact point called "elbow_x", so nothing was reached; the points are hand_l, /.test(elbow), elbow);
-  const hand: any = new WorldAgent({ name: "hand", world: "w" });
+  const hand: any = new WorldAgent({ url: noWorldUrl(), name: "hand", world: "w" });
   hand.reachBodies.set(hand.avatar, null);   // its own model didn't load
   check("an unknown limb is named, with the ones there are",
     (await hand.reach("tentacle", { p: [0, 1, 0] })).text === `there's no limb called "tentacle", so nothing was reached; limb takes leftHand, rightHand, leftFoot or rightFoot`);
@@ -665,11 +654,10 @@ try {
 
   console.log("\nTHE BODY");
   const bodies: any[] = [];
-  const ag: any = new WorldAgent({ name: "nj", world: "w" });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: "nj", world: "w" });
   bodies.push(ag);
   const thrown = (fn: () => unknown) => { try { fn(); return ""; } catch (e) { return (e as Error).message; } };
-  // A send that goes out over the body's own connection (main's verb(); here every world verb is
-  // request(), answered by the authority, so a body-side send such as animate stands in).
+  // a send over the body's own connection: every world verb here is request(), so a body-side send (animate) stands in
   const send = (a: any) => () => a.animate({ dur: 1, tracks: {} });
   const between = thrown(send(ag));
   check("a verb sent between connections says the body rejoins once the world answers",
@@ -681,13 +669,13 @@ try {
   const endedMod = thrown(() => ag.sendMod("world-bans"));
   check("...and so does a moderation message", /has ended for good/.test(endedMod), endedMod);
 
-  const pilot: any = new WorldAgent({ name: "pilot", world: "w" });
+  const pilot: any = new WorldAgent({ url: noWorldUrl(), name: "pilot", world: "w" });
   bodies.push(pilot);
   const wingBones = ["Hip", "Spine02", "Head", "L_Wing_Upper", "L_Wing_Upper_1", "R_Wing_Upper", "R_Wing_Upper_1", "L_Wing_Lower", "R_Wing_Lower"];
   const winged = (a: any) => { a.bodyBoneNames = wingBones; a.loadBodyBones = async () => wingBones; a.myRights = { role: "builder", fly: true }; return a; };
   winged(pilot);
   pilot.wingsFolded = true;
-  // The acts answer { ok, text }; these checks read the words.
+  // the acts answer { ok, text }; these checks read the words
   const folded = await pilot.takeOff();
   check("take-off with folded wings says how to open them",
     !folded.ok && folded.text === 'still standing — your wings are folded; open them first (anim {stop: "wings-folded"})', JSON.stringify(folded));
@@ -698,13 +686,12 @@ try {
     /^took off/.test(up) && /^wings stay as they are — \S/.test(stay) && !/wings stay (open|limp|folded) —/.test(stay), `${up} / ${stay}`);
   const status = pilot.flightStatus();
   check("flight_status gives the wings' state the fold's sentence leaves out", /\bwings OPEN\b/.test(status), status);
-  // Main's grounded withdrawal came from a grant entry in the log (applyEntry); here the world sends its
-  // rights folded (your-rights, acceptEffectiveRights) and a withdrawal only speaks while aloft, checked below.
+  // the world sends rights folded (your-rights, acceptEffectiveRights), and a withdrawal only speaks while aloft
   pilot.flight = { ...pilot.flight, phase: "GROUND", wings: "LIMP" };
   const limp = (await pilot.foldWings(true)).text;
   check("a fold refused for limp wings doesn't name the state twice",
     /^wings stay as they are — /.test(limp) && !/^wings stay limp/.test(limp), limp);
-  const aloft: any = winged(new WorldAgent({ name: "aloft", world: "w" }));
+  const aloft: any = winged(new WorldAgent({ url: noWorldUrl(), name: "aloft", world: "w" }));
   bodies.push(aloft);
   await aloft.takeOff();
   aloft.acceptEffectiveRights({ role: "builder", fly: false }, "world");
@@ -715,15 +702,16 @@ try {
 
   console.log("\nTHE CONNECTION");
 
-  // A stand-in world on a WebSocket: each body's name picks how the join is answered.
-  // A join's snapshot carries the authority's cut of the world here (replica.adopt): an empty world's.
+  // a stand-in world on a WebSocket: each body's name picks how the join is answered; the snapshot carries an empty
+  // world's authority cut (replica.adopt)
   const snapshot = (extra: Record<string, unknown> = {}) => JSON.stringify({ type: "snapshot", state: null, entries: [], present: [],
     cut: { state: wireState(emptyState()), head: 0, worldId: "w" }, ...extra });
   const joins = new Map<string, number>();
   const answers: Record<string, (ws: any, n: number) => void> = {
     kicked: (ws) => { ws.send(snapshot()); setTimeout(() => ws.close(4006, "kicked"), 200); },
     denied: (ws) => ws.close(4005, "refused"),
-    // A refusal's close says whether it is final here (agent.ts onclose: 4005 that isn't "full" is).
+    "taken-over": (ws) => { ws.send(snapshot()); setTimeout(() => ws.close(4002, "session takeover"), 200); },
+    // a refusal's close says whether it is final (agent.ts onclose: a 4005 that isn't "full" is)
     "refused-silently": (ws) => { ws.send(JSON.stringify({ type: "error" })); ws.close(4005, "refused"); },
     "refused-blank": (ws) => { ws.send(JSON.stringify({ type: "error", error: "" })); ws.close(4005, "refused"); },
     "refused-in-words": (ws) => { ws.send(JSON.stringify({ type: "error", error: "you are banned from this world." })); ws.close(4005, "refused"); },
@@ -750,7 +738,7 @@ try {
   const wsUrl = `ws://127.0.0.1:${wsWorld.port}/ws`;
   const body = (name: string) => { const a: any = new WorldAgent({ name, world: "w", url: wsUrl }); bodies.push(a); return a; };
   const outcome = (p: Promise<unknown>) => p.then(() => "joined", (e: Error) => e.message);
-  // The two slow ones start first and are checked last.
+  // the two slow ones start first and are checked last
   const late = body("late"), dropped = body("dropped");
   const lateJoin = outcome(late.connect());
   const droppedJoin = outcome(dropped.connect());
@@ -775,6 +763,13 @@ try {
   const afterDenial = thrown(send(denied));
   check("a body whose join the world refuses (4005) has ended for good too",
     denied.closed === true && /has ended for good .* calling again won't change that$/.test(afterDenial), afterDenial);
+  const taken = body("taken-over");
+  taken.redial.next = () => 50;   // a dial again, were there one, comes at once
+  const takenJoin = await outcome(taken.connect());
+  await tryUntil("the taken-over body has closed", () => taken.closed, { ms: 3000 });
+  await tryUntil("the taken-over body dials again", () => joins.get("taken-over")! > 1, { ms: 1000 });
+  check("a body a newer session of its identity takes over (4002) stays down: it doesn't dial again and take that one over",
+    takenJoin === "joined" && taken.closed === true && joins.get("taken-over") === 1, `${takenJoin}, closed ${taken.closed}, joins ${joins.get("taken-over")}`);
   const grounded = winged(body("grounded"));
   await grounded.takeOff();
   const groundedJoin = await outcome(grounded.connect());

@@ -1,29 +1,12 @@
-// last-world-test — a person goes back to the last world they were in, headless.
-//
-//   bun tools/last-world-test.ts
-//
-// A bare link (a bookmark, the login's return to '/') used to mean the commons
-// whatever world you had been in. Now base.js pickWorld chooses ?world=, else the
-// world this TAB was last in (so a reload stays put whatever other tabs joined),
-// else the world this browser was last IN as a person, else the commons; net.js
-// writes that memory at the door's yes (not for a world nobody has built in: a typo
-// founds one); and a door that refuses a remembered world forgets it, and (when the
-// memory, not the link, brought the page there and it never got in) takes the person
-// to the commons. Pinned here: the choice itself; that index.html's early-socket copy
-// of it agrees, and that its boot tripwire keys on the world chosen, both extracted
-// from the served HTML rather than copied; and the real net.js writing and
-// forgetting, a fresh process per page load with only the DOM-touching UI modules
-// stubbed. The door's yes is a snapshot carrying the authority's `cut` (replica.adopt folds it) and
-// live changes come as `log` entries through replica.ingest, as the authority sends them.
+// last-world-test: a bare link goes back to the last world a person was in (#281); base.js pickWorld, net.js rememberWorld.
+// Pins the choice, index.html's early-socket copy and boot tripwire (read from the served HTML), and the real net.js
+// writing and forgetting, a fresh process per page load. Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/last-world-test.ts
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const { mkCheck } = await import("./harness.ts");
+const { check, tally } = mkCheck();
 const ROOT = join(import.meta.dir, "..");
 
 // ---- the choice ---------------------------------------------------------------------
@@ -104,9 +87,7 @@ console.log("emptyWorldNotice");
 }
 
 // ---- index.html's copy agrees ---------------------------------------------------------
-// The early socket joins before any module loads, so it cannot import pickWorld; it
-// makes the same choice inline and publishes __ewWorld, which base.js CONFIG takes. Run
-// the real script with no name stored, so it publishes and returns before opening a socket.
+// the early socket runs before modules, so it carries its own copy; run it with no name stored (it publishes, opens nothing)
 console.log("index.html early-socket script");
 const html = readFileSync(join(ROOT, "client/index.html"), "utf8");
 const m = html.match(/<script>(?:(?!<\/script>)[\s\S])*?__ewEarlySocket[\s\S]*?<\/script>/);
@@ -439,5 +420,5 @@ console.log("log out");
   check("after logging out, a bare link opens the commons", after.world === "commons" && !after.remembered, JSON.stringify(after));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`${tally.passed} passed, ${tally.failed} failed`);
+process.exit(tally.failed ? 1 : 0);

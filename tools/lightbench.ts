@@ -1,19 +1,11 @@
-// lightbench — the step-5 behavior probe: does the factory's weather DRIVE
-// actually move the uniforms, does the rig assign slots the way §12.4
-// promises, and does the world still say what the fold says under it all.
-//
-//   bun tools/lightbench.ts                    # behavior pass, headless Edge
-//   bun tools/lightbench.ts --measure          # + slot sweep (4/8/12/16) on a
-//                                              #   grass world: compile + fps
+// lightbench: the step-5 behaviour probe: does the weather DRIVE move the uniforms, does the rig assign slots as §12.4
+// promises, and does the world still say what the fold says.
+//   bun tools/lightbench.ts                    # behaviour pass, headless Edge
+//   bun tools/lightbench.ts --measure          # + slot sweep (4/8/12/16) on a grass world: compile + fps
 //   bun tools/lightbench.ts --headed --console # watch it happen
-//
-// It proves what a fold-parity check cannot see: EW.materials() wetness rising under a rain verb, the cloud
-// field waking, slot assignment honoring keep > authored, the day cycle
-// leaving only the day:false porch light burning at noon, the weather
-// system's lightning adopted through the scene-proxy seam instead of
-// entering the light topology, and the caster budget tracking realized
-// models. Page console errors fail the pass.
-//
+// What fold parity can't see: EW.materials() wetness rising under rain, the cloud field waking, keep > authored slot
+// order, only the day:false porch light burning at noon, lightning adopted through the scene-proxy seam (not the light
+// topology), and the caster budget tracking realized models. Page console errors fail the pass.
 // Scaffolding: a scratch sequencer, CDP, a driver socket, and the Windows shim rule (spawn process.execPath).
 
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -202,12 +194,10 @@ const WORLD = `lightbench-${Math.random().toString(36).slice(2, 7)}`;
 console.log(`\n${bold("── behavior")}  ${dim(`world ${WORLD}`)}`);
 
 const driver = await joinDriver(WORLD, "lightdriver");
-// noon, so the day cycle is at full dim: dayGlow = 0 and only a day:false
-// light may burn. Weather rain drives the wetness target.
+// noon: dayGlow = 0, so only a day:false light may burn; rain drives the wetness target
 await driver.verb("terrain", { size: 64 });
 await driver.verb("sky", { hours: 12, weather: "rain" });
-// six placed lights against a default pool of 4: two keeps (must both cast),
-// one day:false porch (the only one allowed to BURN at noon), three plain
+// six placed lights against a default pool of 4: two keeps (must both cast), one day:false porch (the only one to BURN at noon), three plain
 await driver.verb("light", { id: "keep1", pos: [2, 2, 0], keep: true, intensity: 20 });
 await driver.verb("light", { id: "keep2", pos: [-2, 2, 0], keep: true, intensity: 20 });
 await driver.verb("light", { id: "porch", pos: [0, 2, 2], day: false, intensity: 20 });
@@ -219,12 +209,10 @@ await driver.verb("spawn", { id: "ball2", lib: "props/ball.glb", pos: [2, 0, 2] 
 
 await bootInto(WORLD);
 console.log(`  ${dim(bootReady)}`);
-await sleep(3000);   // realizers settle; caster pass has run several times
+await sleep(3000);  // realizers settle; the caster pass has run several times
 
 // -- the rig ------------------------------------------------------------------
-// A fresh request (the bolt adopting mid-poll) is assigned on the NEXT
-// updateRig tick, and headless rAF can lag that a second — re-read until
-// the assignment settles rather than asserting mid-window.
+// a fresh request is assigned on the NEXT updateRig tick, and headless rAF can lag a second: re-read until it settles
 let rig: any = null;
 for (let i = 0; i < 8; i++) {
   rig = await evalJson("EW.lightrig()");
@@ -239,9 +227,8 @@ check("rig: casting count = min(requests, cap)",
   castingKeys.length === Math.min((rig?.requests ?? []).length, rig?.cap ?? 0), castingKeys.join(" "));
 check("rig: both keeps hold slots", ["placed:keep1", "placed:keep2"].every((k) => castingKeys.includes(k)),
   `casting: ${castingKeys.join(", ")}`);
-// Casters WARM before they flip (8b, warmqueue.warmDepth): first-cast has
-// designed-in latency — a depth warm must drain through the conductor before
-// castShadow=true. Poll to the same end state instead of asserting mid-warm.
+// casters WARM before they flip (8b, warmqueue.warmDepth): a depth warm drains through the conductor before
+// castShadow=true, so poll to the end state rather than assert mid-warm
 let casterRig = rig;
 for (let i = 0; i < 15 && !(casterRig?.casters === 2 && casterRig?.casting === 2); i++) {
   await sleep(1000);
@@ -251,8 +238,7 @@ check("rig: caster budget tracks realized models", casterRig?.casters === 2 && c
   `casters=${casterRig?.casters} casting=${casterRig?.casting}`);
 
 // -- the day cycle ------------------------------------------------------------
-// At noon dayGlow is 0: every day-aware slot writes intensity 0, and only the
-// porch (day:false) may burn. Read the actual slot intensities from the scene.
+// at noon every day-aware slot writes intensity 0 and only the porch (day:false) may burn: read the scene's intensities
 const slotIntensities = await evalJson(
   "EW.scene.children.find(c => c.name === 'lightrig').children.map(l => +l.intensity.toFixed(2))");
 const burning = (slotIntensities ?? []).filter((v: number) => v > 0.01);
@@ -260,23 +246,15 @@ check("day cycle: at noon only the day:false porch burns", burning.length === 1 
   `slot intensities: [${(slotIntensities ?? []).join(", ")}]`);
 
 // -- the factory's weather drive ---------------------------------------------
-// Rain folded before the client joined. The TARGETS must be exact (pure
-// functions of folded state). The easing contract is per-FRAME, not
-// wall-clock: headless rAF throttles toward 1Hz — or suspends outright
-// when the OS deprioritizes the page — so the probe measures across two
-// real frames INSIDE the page, with a timeout that reports "rAF suspended"
-// honestly instead of failing on an artifact of the bench environment.
+// rain folded before join: the TARGETS must be exact (pure fold); easing is per-FRAME and headless rAF throttles, so
+// the probe measures two real frames and reports "rAF suspended" rather than failing
 const m1 = await evalJson("EW.materials()");
 check("factory: materials were prepared", (m1?.wrapped ?? 0) > 0, `wrapped=${m1?.wrapped} meshes=${m1?.meshes}`);
 check("factory: rain wet target derived from folded state", Math.abs((m1?.target?.wet ?? 0) - 0.85) < 1e-6,
   `target.wet=${m1?.target?.wet}`);
 check("factory: rain cover target derived from folded state", Math.abs((m1?.target?.cover ?? 0) - 0.9) < 1e-6,
   `target.cover=${m1?.target?.cover}`);
-// One rAF pair can sample dt=0 on a loaded headless box (two callbacks in
-// one batch → the eased value hasn't moved), which mis-reads the per-frame
-// contract as a failure. Sample up to 5 pairs and accept the first that
-// MOVED — the contract is "eases frame-over-frame", not "eases across the
-// specific pair we happened to catch".
+// one rAF pair can sample dt=0 on a loaded box: sample up to 5 pairs, accept the first that MOVED
 const ease = await evalJson(`(async () => {
   const pair = () => new Promise((res) => {
     const a = EW.materials(); let done = false;
@@ -303,9 +281,8 @@ if (ease) {
 }
 
 // -- the bolt seam ------------------------------------------------------------
-// The sky build primes ~7.5MB and may degrade on a headless box — if it built,
-// the weather system's lightning must be an ADOPTED request (mirror), never a
-// scene light. If it degraded, say so honestly rather than fake a green.
+// if the sky built (~7.5MB, may degrade headless), lightning must be an ADOPTED request (mirror), never a scene light;
+// if it degraded, say so rather than fake a green
 let impl = null;
 for (let i = 0; i < 90; i++) {
   impl = await evalJson("(() => { try { return EW.lightrig().requests.some(r => r.key.startsWith('foreign:')) ? 'adopted' : null; } catch { return null; } })()");
@@ -324,10 +301,8 @@ if (impl === "adopted") {
 }
 
 // -- residency (§13.3 R1) -----------------------------------------------------
-// The driver walks an entity across the residency boundary with `place`
-// verbs: far → the sweep demotes it to a stand-in; near again → the sweep
-// promotes it back through the ordinary load pipeline. Fold parity must
-// hold on BOTH sides — state never changed, only the projection.
+// `place` walks an entity across the residency boundary: far → stand-in, near → promoted back through the ordinary
+// load pipeline; fold parity holds on both sides
 async function residencyState(pred: (r: any) => boolean, label: string): Promise<any> {
   let r: any = null;
   for (let i = 0; i < 16; i++) {
@@ -358,11 +333,8 @@ async function residencyState(pred: (r: any) => boolean, label: string): Promise
 }
 
 // ============================================================ live edit
-// live(fold) === join(fold), per field (slice 18a): a light edited LIVE must
-// render exactly as a fresh joiner folding the same log renders it. The
-// keeps anchor the uniform reads: keep-tier requests are exempt from the
-// governor's slot cap (PROTOCOL §3.1), so they cast deterministically even
-// when a slow headless box sheds the sheddable tail.
+// live(fold) === join(fold), per field (slice 18a); keep-tier requests are exempt from the governor's slot cap, so keeps
+// cast deterministically even when a slow box sheds the sheddable tail
 console.log(`\n${bold("── live edit")}`);
 
 const lightRow = (id: string) => evalJson(`(() => {
@@ -382,8 +354,7 @@ async function settleOn<T>(fn: () => Promise<T>, pred: (v: T) => boolean, tries 
   return v;
 }
 
-// 1. per-field live re-apply, at an hour where dayGlow > 0 ---------------------
-// (at noon a day-aware slot writes intensity 0 — nothing to see move)
+// 1. per-field live re-apply, at an hour where dayGlow > 0 (at noon a day-aware slot writes 0) --------
 let dayness = 1;
 for (const hours of [22, 5, 20, 6, 19, 7]) {
   await driver.verb("sky", { hours });
@@ -450,7 +421,7 @@ const signature = () => evalJson(`(() => {
 const capOf = async () => (await evalJson("EW.lightrig()"))?.cap;
 const sigLive = await signature();
 const capLive = await capOf();
-await bootInto(WORLD);          // a fresh join folds the same log
+await bootInto(WORLD);  // a fresh join folds the same log
 console.log(`  ${dim(bootReady)}`);
 await sleep(3000);
 let sigJoin = await signature();
@@ -461,11 +432,8 @@ for (let i = 0; i < 12 && JSON.stringify(sigJoin) !== JSON.stringify(sigLive); i
 const capJoin = await capOf();
 {
   const exact = JSON.stringify(sigJoin) === JSON.stringify(sigLive);
-  // The governor's slot cap is a CLIENT lever, not fold state: a slow live
-  // session may have shed sheddable lights a fresh join hasn't. Flags must
-  // match for every light, uniforms for every light casting on both sides,
-  // and every keep must cast on both (cap-exempt) — cast-ness of a sheddable
-  // is the only difference the cap may explain.
+  // the slot cap is a CLIENT lever, not fold state: flags match for every light, uniforms for every light casting on
+  // both sides, every keep casts on both; only a sheddable's cast-ness may differ
   const byKey = (s: any[]) => Object.fromEntries((s ?? []).map((x: any) => [x.key, x]));
   const L: any = byKey(sigLive), J: any = byKey(sigJoin);
   const keys = [...new Set([...Object.keys(L), ...Object.keys(J)])];
@@ -484,8 +452,7 @@ const capJoin = await capOf();
 }
 
 // 4. foldParity across a live edit of a comped + mounted light ----------------
-// (pins the fold preserving comp/parent through light-on-light AND the
-// realizer's refreshLight not clobbering the carrier-relative transform)
+// pins the fold keeping comp/parent through light-on-light, and refreshLight not clobbering the carrier-relative transform
 await driver.verb("comp", { id: "porch", type: "aura", data: { tint: "amber" } });
 await driver.verb("mount", { id: "porch", to: "ball1", offset: [0, 1.6, 0] });
 await driver.verb("light", { id: "porch", intensity: 26 });
@@ -502,7 +469,7 @@ check("fold parity holds after a live edit of a comped + mounted light", pLit?.o
 await driver.verb("light", { id: "plain4", pos: [12, 2, -12], intensity: 18 });
 await driver.verb("light", { id: "plain5", pos: [15, 2, -15], intensity: 18 });
 await driver.verb("light", { id: "plain6", pos: [18, 2, -18], intensity: 18 });
-await driver.verb("light", { id: "keep1", intensity: 24 });   // churn the request set live
+await driver.verb("light", { id: "keep1", intensity: 24 });  // churn the request set live
 await driver.verb("light", { id: "keep2", range: 14 });
 let rigPost: any = null;
 for (let i = 0; i < 10; i++) {
@@ -537,7 +504,7 @@ if (MEASURE) {
 
   for (const n of [4, 8, 12, 16]) {
     await bootInto(MWORLD, `&slots=${n}`);
-    // let the world settle, then measure fps over 5s with the rig live
+    // settle, then measure fps over 5s with the rig live
     await sleep(6000);
     const fps = await evalJson(
       "new Promise(res => { let f = 0; const t0 = performance.now(); const tick = () => { f++; if (performance.now() - t0 < 5000) requestAnimationFrame(tick); else res(Math.round(f / 5)); }; requestAnimationFrame(tick); })");

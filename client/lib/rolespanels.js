@@ -1,48 +1,32 @@
-// rolespanels.js — the two dock panels of roles and moderation (research roles 10-06, S7 and S8; PLAN decisions 10-06).
-// Each thing lives in exactly one place (research §7):
-//   MODERATION (dock: a shield; shown only while you hold mute, kick, ban or pauseScripts — it follows your-rights)
-//     Bans     bans in force, then mutes and kicks cooling down, each with its lift where you may; ended bans
-//              collapsed. Lifting follows the authority's rule (an owner, the author, or someone who outranks the author).
-//     Log      the moderator log, newest first, with role changes merged in; a person filter and verb chips; older.
-//     Scripts  every script here: thing, name, sponsor, status, who paused it, Pause / Resume where you may.
-//   WORLD SETTINGS (dock: a flag; everyone reads, owners edit; editWorld holders edit Card and Places)
-//     Roles    the grid: permissions down, roles across (owner first, locked); dependencies grey a cell with the reason;
-//              place a role above another; holders under it; + Role; delete a held role by moving its people (one batch).
-//              Narrow (a phone, or the panel squeezed): one role at a time.
-//     Access   who can come in, what arrivals and guests are, how many at once; a warning when the default role holds
-//              moderation powers or generate.
-//     World    capacity (entities, guests' entities together, largest avatar), physics on/off (R 10-14 14:13:
-//              "not being able to edit these things would annoy people"). Opening it writes NOTHING: the effective value
-//              (what is written, else this server's default as schema reports it) is shown grey; an edit sends ONLY the
-//              field that changed (a policy number's absence is the server's default, PROTOCOL §9.2).
-//     Card     the world's name and blurb (@world.about).   Places  spawn and bounds.   Old world  what translation carried.
-// Rows here are DOM like every panel; in a headset they are the same frame as a quad (domquad.js XR_FRAMES), rows stay
-// rows, and every control is a button or a select (no hover, no long-press).
-import { bus, report } from './base.js';
+// rolespanels — the Moderation (only while you hold a moderation right) and World Settings (everyone reads, owners
+// edit) dock panels. Writes only the field that changed, never on open (absence = the server's default, PROTOCOL
+// §9.2). In a headset these are quads: every control is a button or select (no hover, no long-press).
+import { bus, report, CONFIG } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
 import * as R from '../../shared/protocol/roles.js';
+import { refusalText } from '../../shared/protocol/refusal.js';   // a label `what` ("door: invite-only"): the door's words, code and fix
 import { DOORS, doorOf, doorWrites, leftWords, listedIn } from '../../shared/protocol/access.js';
-import { serverNow, serverUntil } from './serverclock.js';   // straight from the clock: via remotes.js this closes an import cycle and the re-export is unbound at load
+import { serverNow, serverUntil } from './serverclock.js';   // not via remotes.js: an import cycle leaves the re-export unbound at load
 import { COMPONENTS, resolveVersioned, rangeWords, outOfRange } from '../../shared/protocol/componentspec.js';
 import { SIM_ID } from '../../shared/sim.js';
+import { escapeHtml as esc } from './markup.js';
 
 const wc = () => replica.st?.entities?.['@world']?.c ?? {};
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const me = () => { const r = net.myRights ?? {}; return { id: net.you, role: r.role ?? 'inhabitant', rank: r.rank ?? 0, permissions: r.permissions ?? [] }; };
 const has = (k) => R.isOwner(me()) || me().permissions.includes(k);
 const isOwner = () => R.isOwner(me());
 const nameOf = (id) => { for (const [n, v] of identities) if (v === id) return n; return net.names?.[id] ?? replica.nameOf?.(id) ?? id; };
 const rankOfId = (id) => R.effectiveOf(wc(), id).rank;
-const ago = (ts) => { const s = Math.round((Date.now() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
-const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - Date.now()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
+const ago = (ts) => { const s = Math.round((serverNow() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - serverNow()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
 const badge = (id) => { const e = R.effectiveOf(wc(), id); const b = R.badgeOf(e); return b ? ` <span class="who-badge" data-tone="${b.tone}">${esc(b.text)}</span>` : ''; };
 async function act(verb, args, what, refresh) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) toast(`${what}: done`, 'info'); else toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) toast(`${what}: done`, 'info'); else toast(r?.refused ? refusalText(what, r) : `${what}: refused`, 'warn', 8000);
   await refresh?.(); return r;
 }
-/** May I lift this record? (the authority's rule, mirrored for drawing the button; the authority decides) */
+/** The authority's rule, mirrored only to draw the button; the authority decides. */
 const mayLift = (rec, power, strict = true) => { if (!has(power)) return false; if (isOwner() || rec.actor === me().id) return true; const a = rankOfId(rec.actor); return strict ? me().rank > a : me().rank >= a; };
 
 // ---------------------------------------------------------------- Moderation
@@ -54,7 +38,7 @@ async function paintBans(body) {
   const r = await sendRequest('bans', {});
   if (!r?.ok) { body.innerHTML = `<p class="rp-note">${esc(r?.refused?.reason ?? "couldn't read the ban list")}</p>`; return; }
   const now = r.now ?? [];
-  // names from the authority's reply (its directory knows absent people; this page knows only who is here)
+  // names from the reply: its directory knows absent people, this page only who is here
   const named = new Map([...now.map((x) => [x.who, x.name]), ...(r.ended ?? []).map((m) => [m.who, m.name])]);
   const nm = (id) => named.get(id) ?? nameOf(id);
   const row = (who, rec, kind, lift) => `<div class="rp-row" data-who="${esc(who)}"><div class="rp-main"><b>${esc(nm(who))}</b>${badge(who)} <span class="rp-dim">${esc(kind)}</span></div>`
@@ -94,7 +78,7 @@ async function paintScripts(body) {
   const r = await sendRequest('scripts', {});
   if (!r?.ok) { body.innerHTML = `<p class="rp-note">${esc(r?.refused?.reason ?? "couldn't read the scripts")}</p>`; return; }
   const rows = (r.scripts ?? []).map((x) => {
-    // paused by someone or by the world itself (an auto-pause has no pausedBy): either way it is offered Resume (I71)
+    // paused by someone or by the world itself (no pausedBy): either way it is offered Resume
     const paused = x.status === 'paused'; const mine = x.sponsor === me().id;
     const may = isOwner() || mine || (has('pauseScripts') && x.sponsor && rankOfId(x.sponsor) < me().rank);
     const blocked = paused && !!x.pausedBy && x.pausedBy !== me().id && rankOfId(x.pausedBy) > me().rank;
@@ -105,12 +89,11 @@ async function paintScripts(body) {
   body.innerHTML = rows || '<p class="rp-note">no scripts here</p>';
   body.querySelectorAll('button[data-s]').forEach((b) => { b.onclick = () => act('set', { id: b.dataset.id, component: b.dataset.s, value: { paused: b.dataset.p === '1' }, merge: true }, `${b.dataset.p === '1' ? 'pause' : 'resume'} ${b.dataset.id}`, () => paintScripts(body)); });
 }
-// which Moderation tabs you see: Bans (ban), Log (any moderation power), Scripts (pauseScripts) — a tab whose power you
-// lack isn't shown, and the whole panel and its dock entry go when the last power does (research roles S7)
+// a tab whose power you lack isn't shown; the panel and its dock entry go with the last power (research roles S7)
 function syncModeration() {
   const want = { bans: has('ban'), log: R.MOD_POWERS.some(has), scripts: has('pauseScripts') };
   const any = Object.values(want).some(Boolean);
-  setDockEntry({ id: 'moderation', icon: 'shield', always: true }, any);   // there whenever you hold a power that uses it
+  setDockEntry({ id: 'moderation', icon: 'shield', always: true }, any);
   if (!any) { for (const k of Object.keys(sections)) { sections[k].remove(); delete sections[k]; } return; }
   moderationFrame();
   const make = { bans: () => makeSection('Bans', (b) => paintBans(b), { id: 'mod-bans', host: 'moderation' }),
@@ -121,7 +104,7 @@ function syncModeration() {
 
 // ---------------------------------------------------------------- World Settings
 const ro = (what = 'the owner') => `<p class="rp-ro">only ${what} changes this</p>`;
-const narrow = (body) => (body.closest('.frame')?.clientWidth ?? innerWidth) < 440;   // the grid needs ~440 px for four columns; under that, one role at a time
+const narrow = (body) => (body.closest('.frame')?.clientWidth ?? innerWidth) < 440;   // four columns need ~440 px
 let gridRole = null;
 function defsValue() { const d = wc()['role-defs']; return d && typeof d === 'object' ? JSON.parse(JSON.stringify(d)) : {}; }
 async function writeDefs(next, what) { return act('set', { id: '@world', component: 'role-defs', value: next }, what); }
@@ -139,16 +122,15 @@ function paintRoles(body) {
     + (edit && r.custom ? `<select class="rp-above" data-r="${esc(r.id)}" title="place it above…">${roles.filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}" ${R.rolesOf(wc()).find((y) => y.rank < r.rank)?.id === x.id ? 'selected' : ''}>above ${esc(x.name)}</option>`).join('')}</select><button type="button" class="rp-x" data-del="${esc(r.id)}" title="delete ${esc(r.name)}">×</button>` : '') + '</th>';
   const holders = (r) => { const ids = holdersOf(r.id); if (!ids.length) return '';
     return `<div class="rp-holders"><b>${esc(r.name)}</b>: ${ids.map((id) => `<span class="rp-holder">${esc(nameOf(id))}${grant && (isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank)) && r.id !== 'owner' ? ` <select class="rp-change" data-who="${esc(id)}"><option value="">change ▸</option>${R.grantableRoles(wc(), { ...me(), permissions: me().permissions }).filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}<option value="::remove">remove (default role)</option></select>` : ''}${timeOf(id, r, grant)}</span>`).join(' · ')}</div>`; };
-  // a timed grant (roles:<id>.until, upstream #258): how long is left, and (for whoever may change it) when it should end —
-  // picking a time restarts it from now; "no end" makes it permanent. Ownership never ends by itself.
-  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, Date.now()))})</span>` : '';
+  // a timed grant (upstream #258): picking a time restarts it from now, "no end" makes it permanent; ownership never ends
+  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, serverNow()))})</span>` : '';
     if (!may || r.id === 'owner' || !(isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank))) return left;
     return `${left} <select class="rp-until" data-who="${esc(id)}"><option value="">ends ▸</option><option value="never">no end</option><option value="3600000">in 1 hour</option><option value="86400000">in 1 day</option><option value="604800000">in 1 week</option></select>`; };
   let html;
-  if (narrow(body)) {   // one role at a time (phone, VR, a squeezed panel)
+  if (narrow(body)) {   // one role at a time
     if (!roles.some((r) => r.id === gridRole)) gridRole = roles[0]?.id;
     const r = roles.find((x) => x.id === gridRole);
-    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (house review I68)
+    // the role's own header (holders, reorder, delete) above its column, as the wide grid shows it
     html = `<label class="rp-field">role <select class="rp-pick">${roles.map((x) => `<option value="${esc(x.id)}" ${x.id === gridRole ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
       + `<table class="rp-grid rp-one"><thead><tr><th></th>${head(r)}</tr></thead><tbody>${R.PERMISSION_NAMES.map((k) => `<tr><th scope="row"><b>${k}</b><div class="rp-dim">${esc(R.PERMISSIONS[k].text)}</div></th>${cell(r, k)}</tr>`).join('')}</tbody></table>${holders(r)}`;
   } else {
@@ -186,8 +168,7 @@ function addRole(body) {
   box.querySelector('.pm-cancel').onclick = () => box.remove();
   box.querySelector('.pm-go').onclick = () => {
     const name = inp.value.trim(); if (!name) return inp.focus();
-    // an id of its own: a name that slugs like an existing role's (or two names with no Latin letters) must never land on
-    // that role's key and overwrite its permissions (review 10-07)
+    // a name that slugs like an existing role's (or has no Latin letters) must never overwrite that role's permissions
     const base = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '').slice(0, 20) || 'role';
     const defs = defsValue(); const taken = (x) => R.BUILTIN_IDS.includes(x) || !R.isRoleId(x) || Object.hasOwn(defs, x);
     let id = base; for (let n = 2; taken(id); n++) id = `${base}-${n}`;
@@ -200,14 +181,14 @@ function addRole(body) {
 function deleteRole(rid, body) {
   const ids = holdersOf(rid); const d = defsValue(); delete d[rid];
   if (!ids.length && wc()['default-role']?.role !== rid) return writeDefs(d, `delete ${rid}`).then(() => paintRoles(body));
-  // a held role: move its people to another role, and delete it, as ONE act (research S8)
+  // a held role: move its people and delete it as ONE act (research S8)
   const box = document.createElement('div'); box.className = 'pm-form';
   const others = R.rolesOf(wc()).filter((r) => r.id !== rid && r.id !== 'owner');
   box.innerHTML = `<p>${ids.length} ${ids.length === 1 ? 'person holds' : 'people hold'} ${esc(rid)}. Move them to <select>${others.map((r) => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</select> and delete it?</p><div class="pm-btns"><button type="button" class="pm-cancel">Cancel</button><button type="button" class="pm-go danger">Move and delete</button></div>`;
   body.querySelector('.rp-actions').before(box);
   box.querySelector('.pm-cancel').onclick = () => box.remove();
   box.querySelector('.pm-go').onclick = () => { const to = box.querySelector('select').value;
-    const ops = [...ids.map((id) => ({ verb: 'set', args: { id: '@world', component: `roles:${id}`, value: { role: to }, merge: true } })),   // they hold the role, so each entry exists: keep its exceptions (K3)
+    const ops = [...ids.map((id) => ({ verb: 'set', args: { id: '@world', component: `roles:${id}`, value: { role: to }, merge: true } })),   // each entry exists: merge, keeping its exceptions
       ...(wc()['default-role']?.role === rid ? [{ verb: 'set', args: { id: '@world', component: 'default-role', value: { ...wc()['default-role'], role: to } } }] : []),
       { verb: 'set', args: { id: '@world', component: 'role-defs', value: d } }];
     act('batch', { ops, label: `delete role ${rid}` }, `move ${ids.length} to ${to} and delete ${rid}`).then(() => paintRoles(body)); };
@@ -218,8 +199,7 @@ function paintAccess(body) {
   const def = R.roleDef(wc(), dr.role ?? 'inhabitant');
   const warn = def && (R.MOD_POWERS.some((k) => def.can[k]) || def.can.generate || dr.can?.generate) ? `<p class="rp-warn">Everyone who arrives is ${esc(def.name)}: they ${R.MOD_POWERS.some((k) => def.can[k]) ? 'may moderate people ranked below them (guests and visitors)' : ''}${R.MOD_POWERS.some((k) => def.can[k]) && (def.can.generate || dr.can?.generate) ? ' and ' : ''}${def.can.generate || dr.gen ? "spend the world's generation credit" : ''}.</p>` : '';
   const sel = (k, opts, v) => `<select data-k="${k}" ${edit ? '' : 'disabled'}>${opts.map(([x, l]) => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  // the four doors (upstream #258's World › access buttons; shared/protocol/access.js DOORS), the current one marked; closing
-  // while people with no role are here asks first and says how many will have to leave
+  // the four doors (upstream #258); closing while people with no role are here asks first, saying how many must leave
   const door = doorOf(wc());
   body.innerHTML = `<div class="rp-actions rp-doors">${Object.keys(DOORS).map((d) => `<button type="button" class="rp-btn${d === door ? ' rp-on' : ''}" data-door="${d}" title="${esc(DOORS[d])}" ${edit ? '' : 'disabled'}>${d === 'watch' ? 'watch only' : d}</button>`).join('')}</div>`
     + `<p class="rp-dim">${esc(door === 'signed-in' ? 'anyone signed in may come in' : DOORS[door])}</p>`
@@ -232,7 +212,7 @@ function paintAccess(body) {
     + `<p class="rp-dim">when set, guests can't come in; agents are exempt</p>`
     + `<p class="rp-dim">moderators and owners always get in${a.soft ? ` · recommended: ${a.soft}` : ''}</p>${warn}${edit ? '' : ro()}`;
   body.querySelectorAll('button[data-door]').forEach((bt) => { bt.onclick = () => { const d = bt.dataset.door; if (d === door) return;
-    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, Date.now())).length : 0;
+    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, serverNow())).length : 0;
     if (out && !confirm(`${out} ${out === 1 ? 'person' : 'people'} here ${out === 1 ? 'has' : 'have'} no role and will have to leave${d === 'watch' ? ' (they may watch)' : ''}. Close the door?`)) return;
     const ops = doorWrites(d, wc()).map((w) => ({ verb: 'set', args: { id: '@world', component: w.component, value: w.value } }));
     act(ops.length === 1 ? ops[0].verb : 'batch', ops.length === 1 ? ops[0].args : { ops }, `door: ${d}`).then(() => paintAccess(body)); }; });
@@ -245,21 +225,19 @@ function paintAccess(body) {
       else { v[k] = x.value; if (k === 'join' && x.value !== 'listed') delete v.watch; }
       act('set', { id: '@world', component: 'access', value: v }, 'access').then(() => paintAccess(body)); } }; });
 }
-// World: the owner's dials over @world components that already exist (capacity, physics-engine).
-// The ONE hard rule: write only on an explicit edit, never on open, and only the field that changed: capacity is a policy
-// number (PROTOCOL §9.2), so an absent field is this server's current default (schema reports it, and it may change) and a
-// panel that wrote the others too would freeze today's defaults into the log. Everyone reads; owners edit.
+// World: only on an explicit edit, only the changed field: an absent field is the server's current default
+// (PROTOCOL §9.2), and writing it would freeze that into the log
 const CAP = 'capacity', CAP_FIELDS = ['entities', 'guestEntities', 'avatar'];
 const CAP_WORDS = { entities: 'Entities in this world', guestEntities: "Guests' entities, together", avatar: 'Largest avatar (entities)' };
-const CAP_DOCS = COMPONENTS[CAP].docs ?? {};   // each says per what first: the whole world's, all account-less people's together, one worn avatar's
-// this server's policy numbers ({defaults, ceilings}), asked of the server once (schema): never the registry's
+const CAP_DOCS = COMPONENTS[CAP].docs ?? {};
+// this server's {defaults, ceilings}, asked once: never the registry's
 let serverPolicy = null, askingPolicy = false;
 function policy(repaint) {
   if (!serverPolicy && !askingPolicy) { askingPolicy = true;
     sendRequest('schema', { component: CAP }).then((r) => { askingPolicy = false; if (r?.server) { serverPolicy = r.server; repaint?.(); } }).catch(() => { askingPolicy = false; }); }
   return serverPolicy;
 }
-/** the numbers in force (its reader: what is written, else this server's default); the authority enforces all but `avatar` */
+/** what is written, else this server's default; the authority enforces all but `avatar` */
 function effectiveCapacity(repaint) { const { name, value } = resolveVersioned(wc(), 'capacity'); const P = policy(repaint);
   const ok = (x) => Number.isInteger(x) && x >= 0;
   return { name, written: value, eff: Object.fromEntries(CAP_FIELDS.map((k) => [k, ok(value?.[k]) ? value[k] : P?.defaults?.capacity?.[k] ?? null])),
@@ -283,11 +261,11 @@ function paintWorld(body) {
   body.querySelectorAll('input').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelectorAll('input[data-cap]').forEach((x) => { x.onchange = () => {
     const k = x.dataset.cap; const raw = x.value.trim();
-    if (raw === '') { say(''); x.value = wc()[CAP]?.[k] ?? ''; return; }   // emptied: nothing to say; the field goes back to what is written
+    if (raw === '') { say(''); x.value = wc()[CAP]?.[k] ?? ''; return; }   // emptied: back to what is written
     const n = Number(raw); const r = effectiveCapacity().range[k];
     if (!Number.isInteger(n) || outOfRange(r, n)) { say(`${CAP_WORDS[k]}: ${raw} isn't allowed; it must be a whole number ${rangeWords(r)}. Nothing was changed.`); toast(`${CAP_WORDS[k]}: must be ${rangeWords(r)}`, 'warn', 8000); x.value = wc()[CAP]?.[k] ?? ''; return; }
     say('');
-    // ONLY the field that changed, merged: the others stay what is written, or absent (this server's default as it is then)
+    // ONLY the field that changed, merged
     act('set', { id: '@world', component: CAP, value: { [k]: n }, merge: true }, `${CAP_WORDS[k]}: ${n}`).then((r) => { paintWorld(body);
       if (r && !r.ok) { const n2 = body.querySelector('.rp-cap-note'); n2.textContent = `${CAP_WORDS[k]}: ${r.refused?.reason ?? 'refused'}`; n2.hidden = false; } }); }; });
   body.querySelector('[data-phys]').onchange = () => { const on = body.querySelector('[data-phys]').checked;
@@ -297,7 +275,7 @@ function paintCard(body) {
   const ab = wc().about ?? {}; const edit = has('editWorld');
   body.innerHTML = `<label class="rp-field">Name <input data-k="name" maxlength="80" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
     + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" maxlength="2000" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
-    + `<p class="rp-dim">address: <code>${esc(new URLSearchParams(location.search).get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
+    + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
 }
@@ -308,8 +286,7 @@ function paintPlaces(body) {
     + `<h4 class="rp-h">Bounds</h4><label class="rp-field">min ${v3('min', bd?.min)}</label><label class="rp-field">max ${v3('max', bd?.max)}</label>`
     + (edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)'));
   body.querySelectorAll('input').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
-  // A section is written only when it's filled in: blank fields used to read as 0, so a world with no bounds saved a
-  // zero-size box that refused every move. A half-filled one is said, not guessed.
+  // written only when filled in: blanks read as 0 saved a zero-size box that refused every move; half-filled is said
   const raw = (k) => [0, 1, 2].map((i) => body.querySelector(`[data-k=${k}][data-i="${i}"]`).value.trim());
   const read = (k) => { const v = raw(k); if (v.every((x) => x === '')) return null; if (v.some((x) => x === '')) return 'partial'; return v.map(Number); };
   body.querySelector('[data-save]')?.addEventListener('click', () => {
@@ -319,7 +296,7 @@ function paintPlaces(body) {
     if (pos === null && radius !== '') return toast('Spawn: a radius needs a place (x, y, z)', 'warn');
     const ops = [];
     if (pos) ops.push({ verb: 'set', args: { id: '@world', component: 'spawn', value: { pos, ...(radius !== '' ? { radius: Number(radius) } : {}) } } });
-    else if (sp) ops.push({ verb: 'delete', args: { id: '@world', component: 'spawn' } });   // emptied: no spawn (house review I25)
+    else if (sp) ops.push({ verb: 'delete', args: { id: '@world', component: 'spawn' } });   // emptied: no spawn
     if (min) ops.push({ verb: 'set', args: { id: '@world', component: 'bounds', value: { min, max } } });
     else if (bd) ops.push({ verb: 'delete', args: { id: '@world', component: 'bounds' } });   // emptied: no bounds, as the toast says
     if (!ops.length) return toast('Places: nothing to save', 'info');
@@ -340,8 +317,7 @@ function paintOld(body) {
   body.querySelectorAll('[data-rm]').forEach((b) => { b.onclick = () => act('delete', { id: '@world', component: b.dataset.rm }, `remove ${b.dataset.rm}`, () => paintOld(body)); });
 }
 
-// A section made of parts, each painting into its own box (so a part's own repaint only touches itself). The Old-world
-// part shows only when a translation left something behind.
+// parts, each painting into its own box, so a part's repaint only touches itself
 function parts(...ps) { return (body) => {
   if (body.childElementCount !== ps.length || [...body.children].some((d) => !d.classList.contains('rp-part'))) {
     body.innerHTML = ''; for (let k = 0; k < ps.length; k++) { const d = document.createElement('div'); d.className = 'rp-part'; body.appendChild(d); } }
@@ -355,14 +331,13 @@ const paintWorldAll = parts([null, paintWorld], ['Carried over from the old worl
 let built = false;
 export function initRolesPanels() {
   if (built) return; built = true;
-  // World Settings: everyone's (read), the owner's (edit)
   worldSettingsFrame();
   setDockEntry({ id: 'world-settings', icon: 'flag', pinOnce: true }, true);
   const ws = [makeSection('People & roles', (b) => paintPeople(b), { id: 'ws-people', host: 'world-settings' }),
     makeSection('World', (b) => paintWorldAll(b), { id: 'ws-world', host: 'world-settings' }),
     makeSection('Card', (b) => paintCard(b), { id: 'ws-card', host: 'world-settings' }), makeSection('Places', (b) => paintPlaces(b), { id: 'ws-places', host: 'world-settings' })];
   const PAINT = { 'ws-people': paintPeople, 'ws-world': paintWorldAll, 'ws-card': paintCard, 'ws-places': paintPlaces };
-  // a role or a setting changed (anyone's write lands in the fold): repaint what's open, unless someone is typing in it
+  // repaint what's open, unless someone is typing in it
   let t = 0; const repaint = () => { clearTimeout(t); t = setTimeout(() => {
     for (const s of ws) if (s.isOpen && !s.body.contains(document.activeElement)) PAINT[s.key]?.(s.body);
     if (sections.bans?.isOpen) paintBans(sections.bans.body); }, 150); };

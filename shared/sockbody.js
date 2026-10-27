@@ -1,42 +1,8 @@
-// sockbody — what a person's body does at a socket: the `station` component on a socket entity (shape audit 10-16; it
-// was the `body` block of `socket` / `sockets.<name>`, still read here as the old spelling the door lifts), as data.
+// sockbody — what a person's body does at a socket: the `station` component on a socket entity, as data (the old `body`
+// block of `socket` / `sockets.<name>` is still read; the door lifts it). The alpha registers the core (action, anim, anchor,
+// exit, leaveBy, who); the rest is RESERVED (STATION_RESERVED) but read generously; hold is cut. Shape: docs/SEATS.md.
 //
-// The alpha registers the station's core only (shared/protocol/componentspec.js station: action, pose, anchor, exit,
-// leaveBy, who). The rest of the researched shape below is RESERVED: the door refuses it (STATION_RESERVED), its names are
-// held, and this reader still reads it generously so it comes back as an addition, not a rewrite. hold is cut.
-//
-// One shape for every way a body attaches to a thing (research: notes/eidoverse/RESEARCH-socket-body-2026-10-06.md,
-// "The shape we build"): a chair, a swing, a saddle, a car's driver seat, a rocket couch, a bunk, a lectern you stand
-// at. The cross-platform pattern it follows: one occupant per socket (VRChat Station, Roblox Seat); WHICH body point
-// lands on the socket (Resonite AvatarAnchor PositionNode); a pose that is a clip, a blend by state, or time locked to
-// the thing's motion (Unreal/Godot AnimBP/AnimationTree, without the state machine: data says what the body does in a
-// given world state, scripts change the world state); IK targets parented to moving parts (Unity Two Bone IK, Unreal
-// Control Rig); a per-limb VR policy (Resonite `Required`, VRChat per-part tracking); exit locks (VRChat Disable
-// Station Exit); input published as signals for the vehicle to consume (Roblox VehicleSeat's Throttle/Steer, without
-// its physics-on-the-seat weakness).
-//
-//   body: {
-//     action   'sit'            the verb `use` calls it AND the default posture (sit | lie | stand | ride | kneel | …)
-//     anchor   'hips'           which body point lands on the socket: hips | feet | head | root (the default: where
-//                               every seat put a body before anchors existed, so no existing seat moves) | surface (the
-//                               socket IS the seat's support plane: the body's measured seat contact lands on it)
-//     pose     'sitchair'       a clip; {clip, time?, offset?}; or a blend {by, clips, time?, offset?}
-//     poses    {lean: …}        a menu of named poses (pose is the default); the occupant picks one
-//     sync     'sofa'           sockets sharing a sync group switch same-named poses together (AVsitter SYNC)
-//     approach [x,y,z,yaw]      socket frame: where you're brought to first, then `enter` carries you onto the seat
-//     enter    'stand_to_sit'   one-shot clip while you're carried on;  leave: one-shot clip while carried off
-//     exit     [x,y,z(,yaw)]    where you're set down (the thing's frame)
-//     reach    {leftHand: {at, q?, part?, hint?, vr?}}   IK targets in the thing's frame (or a part's: they move with it)
-//     hold     {spine: [x,y,z,w]}                       sparse bone overrides over the pose (the escape hatch)
-//     look     {yaw: [min,max], pitch: [min,max], up}   head limits in degrees, socket frame; up: world | socket
-//     input    {move: none|drive|walk, look: free|aim|locked}   at most one `drive` per thing
-//     leaveBy  'jump'           jump | menu | script  (absent: moving, jumping or getting up all leave; script: only the
-//                               world, or the occupant's always-on escape — a held X, a second get-up, detach {escape})
-//     fromSeat true             you may move here from another seat without standing up
-//     who      'builder'        inhabitant | builder | owner
-//   }
-//
-// Pure: no DOM, no three, no clock. The authority validates with checkSockets; the browser, the door and the agent process read with bodyOf.
+// Pure: no DOM, no three, no clock. The authority validates with checkSockets; browser, door and agent read with bodyOf.
 
 import { REACH_CHAINS } from './joints.js';
 import { HUMANOID_BONES } from './humanoid.js';
@@ -46,7 +12,7 @@ import { BUILTIN_IDS, isWhoValue, whoWords } from './protocol/roles.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
 import { isPurged } from './protocol/fold.js';
 
-// surface (D14, R 10-12): the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
+// surface (D14): the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
 export const ANCHORS = COMPONENTS.station.enums.anchor;   // hips, feet, head, root, surface
 export const LEAVE_BY = COMPONENTS.station.enums.leaveBy;  // jump, menu, script
 export const MOVES = ['none', 'drive', 'walk'];
@@ -56,24 +22,24 @@ export const VR_POLICIES = ['snap', 'track', 'near'];
 export const TIMES = ['loop', 'phase'];
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
-const isWho = isWhoValue;   // a role id, {permission} or {roles} (recut item 8)
-/** The closed set of signals a pose may blend by. Every client computes each one the same way: speed/turn/phase/swing
- *  from the thing's motion component (closed forms, client/lib/socksignals.js), throttle/steer/aimYaw/aimPitch from the
- *  occupant's input (riding their presence), and param.<name> from the thing's `params` component (scripts write it). */
+const isWho = isWhoValue;   // a role id, {permission} or {roles}
+/** The closed set of signals a pose may blend by, computed the same on every client: speed/turn/phase/swing from the motion
+ *  component (closed forms, client/lib/socksignals.js), throttle/steer/aimYaw/aimPitch from the occupant's input (on their
+ *  presence), and param.<name> from the thing's `params` component (scripts write it). */
 export const SIGNALS = ['speed', 'turn', 'phase', 'swing', 'throttle', 'steer', 'aimYaw', 'aimPitch'];
 export const BODY_KEYS = ['action', 'anchor', 'pose', 'poses', 'sync', 'approach', 'enter', 'leave', 'exit', 'reach', 'hold', 'look', 'input', 'leaveBy', 'fromSeat', 'who'];
 // accepts/radius (shared/grab.js): a free socket takes a released thing whose grabbable.fits shares a keyword, within radius
 export const SOCKET_KEYS = ['pos', 'q', 'part', 'body', 'accepts', 'radius'];
 // a socket entity's own component: its pose is the entity's transform, so pos and q aren't here
 export const SOCKET_ENTITY_KEYS = Object.keys(COMPONENTS.socket.fields);   // name, part, accepts, radius
-/** The station's registered keys, and the researched ones the alpha holds back (refused as reserved, names kept). */
+/** Registered keys, and the researched ones the alpha holds back (refused as reserved, names kept). */
 export const STATION_KEYS = Object.keys(COMPONENTS.station.fields);
 export const STATION_RESERVED = COMPONENTS.station.reservedFields;
 export const REACH_KEYS = ['at', 'q', 'part', 'hint', 'vr'];
 export const LOOK_KEYS = ['yaw', 'pitch', 'up'];
 export const INPUT_KEYS = ['move', 'look'];
 export const POSE_KEYS = ['clip', 'time', 'offset', 'by', 'clips'];
-/** A clip is named the way the animation library names its files (sitting_normal_chair) or a presence slot (sitchair) */
+/** As the animation library names its files (sitting_normal_chair) or a presence slot (sitchair) */
 export const CLIP_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 export const ACTION_RE = /^[a-z][a-z0-9-]{0,31}$/;
 export const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
@@ -81,11 +47,8 @@ const PARAM_RE = /^param\.[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
 export const isSignal = (s) => typeof s === 'string' && (SIGNALS.includes(s) || PARAM_RE.test(s));
 const MAX_BLEND = 16, MAX_POSES = 16, LIM = 1e4;
 
-/** What an action means when the station says nothing more: the pose it holds. The registry's (componentspec.js station:
- *  its defaults and `when` rules), applied at WRITE, so a stored station always holds its pose and editing this table never
- *  re-poses a seat. The anchor defaults to the ROOT for every action — where every seat put a body before anchors existed
- *  (the Commons' twelve seats); a station names hips, feet or head to seat that body point instead. (For the house sit
- *  clips the root IS about the seat surface: the clip lifts the hips a pelvis above it.) */
+/** The registry's defaults (componentspec.js station), applied at WRITE so editing this never re-poses a seat. The anchor
+ *  defaults to the ROOT; a station names hips, feet or head instead. */
 export const ACTION_DEFAULTS = Object.fromEntries(['sit', 'ride', 'drive', 'lie', 'kneel', 'stand'].map((action) => {
   const v = materialize('station', { action }).value; return [action, { pose: v.anim, anchor: v.anchor }]; }));
 const defaultsFor = (action) => ACTION_DEFAULTS[action] ?? ACTION_DEFAULTS.sit;
@@ -97,8 +60,7 @@ const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3
 
 // ---------------------------------------------------------------- reading
 
-/** The clip a pose spec stands for when one name is wanted (a menu label, the agent's description, a fallback):
- *  a clip's own name, a blend's first clip. */
+/** For when one name is wanted (a menu label, the agent's description, a fallback): a clip's own name, a blend's first clip. */
 export function poseClip(spec) {
   if (typeof spec === 'string') return spec;
   if (isObj(spec) && typeof spec.clip === 'string') return spec.clip;
@@ -106,12 +68,9 @@ export function poseClip(spec) {
   return null;
 }
 
-/** A socket's station (or a legacy body block: the same shape), read generously with its defaults (shared by the
- *  authority, the client and the agent). Null when there is none: an attachment point for things only. `pose` is the
- *  spec as written (the station's `anim`, R 10-17: a pose or clip name, or an object; a legacy body block's or an older
- *  station's `pose`); `clip` is the one name it stands for (a name the body doesn't know plays its default). Absent leaveBy is 'any' (moving,
- *  jumping or getting up all leave: what every seat did before leaveBy existed). The reserved keys read as absent
- *  unless an older value holds them. */
+/** Read generously with its defaults; null = an attachment point only. `pose` is the spec as written (the station's `anim`,
+ *  or an older `pose`); `clip` the name it stands for. Absent leaveBy is 'any'; reserved keys read as absent unless an
+ *  older value holds them. */
 export function bodyOf(station) {
   const b = isObj(station) ? station : null;
   if (!b) return null;
@@ -135,7 +94,7 @@ export function bodyOf(station) {
     leave: typeof b.leave === 'string' && b.leave ? b.leave : null,
     exit: nums(b.exit, 3) || nums(b.exit, 4) ? b.exit : null,
     reach,
-    hold: {},   // cut (shape audit 10-16): no bone overrides over the pose; the key stays for the readers that merge it
+    hold: {},   // cut: no bone overrides over the pose; the key stays for the readers that merge it
     look: { yaw: range(lk.yaw, -180, 180), pitch: range(lk.pitch, -90, 90), up: UPS.includes(lk.up) ? lk.up : 'world', limited: nums(lk.yaw, 2, 360) || nums(lk.pitch, 2, 360) },
     input: { move: MOVES.includes(inp.move) ? inp.move : 'none', look: LOOKS.includes(inp.look) ? inp.look : 'free' },
     leaveBy: LEAVE_BY.includes(b.leaveBy) ? b.leaveBy : 'any',
@@ -144,35 +103,28 @@ export function bodyOf(station) {
   };
 }
 
-/** Which pose an occupant holds: the menu entry they chose (or, in a sync group, the latest choice any occupant of the
- *  group made that this socket also offers), else the default. `choices` are [{name, at}] — the occupant's own and
- *  their sync partners', from presence; `at` is the chooser's clock stamp, so every client picks the same one. */
+/** The menu entry the occupant chose (or, in a sync group, the latest choice any occupant made that this socket also offers),
+ *  else the default. `choices` are [{name, at}] from presence; `at` is the chooser's clock stamp, so every client picks the same. */
 export function choosePose(body, choices = []) {
   let best = null;
   for (const c of choices) if (c && typeof c.name === 'string' && body.poses[c.name] !== undefined && (!best || (c.at ?? 0) > (best.at ?? 0))) best = c;
   return best ? { name: best.name, spec: body.poses[best.name] } : { name: null, spec: body.pose };
 }
 
-/** Is a leave request of this kind allowed by the socket? kind: 'move' (a movement key), 'jump', 'menu' (the explicit
- *  get-up: X, the stand tile, /stand, the radial menu), 'script', 'escape'. A seat whose input takes the movement keys
- *  (drive, walk) never treats them as "get off".
- *  'escape' is the occupant's one exit no seat can take away (review r9 scars M1; VRChat's respawn and menu, SL's stand):
- *  holding X (or the stand tile) for ESCAPE_HOLD_S, pressing the get-up again within ESCAPE_REPEAT_S of a refusal, or an
- *  agent's detach {escape: true}. A seat may make leaving deliberate, never impossible. */
+/** kind: 'move', 'jump', 'menu' (the explicit get-up), 'script', 'escape'; a seat whose input takes the movement keys never
+ *  treats them as "get off". 'escape' is the exit no seat can take away (hold X for ESCAPE_HOLD_S, a second get-up within
+ *  ESCAPE_REPEAT_S, detach {escape}): leaving may be deliberate, never impossible. */
 export const ESCAPE_HOLD_S = 1.5, ESCAPE_REPEAT_S = 2;
-/** Does the authority's `vacated` inbox message name the socket I occupy now (`mount` = {to: <socket id>}, mine or null)? A
- *  late message (after a reconnect) never stands anyone up from a seat taken since (review r9 L4, M3: client and agent). */
+/** Does the `vacated` inbox message name the socket I occupy now (`mount` = {to: <socket id>}, mine or null)? A late message
+ *  (after a reconnect) never stands anyone up from a seat taken since (client and agent). */
 export const vacatedFromMine = (u, mount) => !!(u && mount && typeof u.socket === 'string' && u.socket === mount.to);
-/** Where the authority let me go (`vacated {at}`, its track of my body restarts there): [x, y, z] or null. The browser and the
- *  agent both stand there (claims r10 O1), so the body and the authority's track start together. */
+/** `vacated {at}` (the authority's track restarts there): [x, y, z] or null. Browser and agent both stand there, so the body
+ *  and the track start together. */
 export const vacatedAt = (u) => (Array.isArray(u?.at) && u.at.length === 3 && u.at.every((n) => typeof n === 'number' && Number.isFinite(n)) ? u.at.slice() : null);
-/** How near a body must be to sit (review r10 M1: a sit is presence, and leaving the seat restarts the authority's track at
- *  it, so a sit from afar would be an unlogged teleport). The client's plain X offers a seat within `r` m on the ground and
- *  within `up`/`down` m of the feet (localbody.js nearestSeat: R 10-11 00:47, a seat 3 m up isn't near); the authority
- *  allows `lag` more on each, because its track of a walking body trails the client by one tracked step (thingphysics.js
- *  sends at most 5 a second: 0.2 s at a 4 m/s run is 0.8 m). */
+/** A sit restarts the authority's track at the seat, so a far one would be an unlogged teleport. The client offers within
+ *  `r` m and `up`/`down` m of the feet (localbody.js nearestSeat); the authority allows `lag` more for its trailing track. */
 export const OCCUPY_REACH = Object.freeze({ r: 3.5, up: 1.6, down: 1.0, lag: 1.0 });
-/** Is a seat at `seat` within sitting reach of feet at `feet` ([x, y, z] each)? lag: the authority's allowance (0 for the client). */
+/** [x, y, z] each; lag: the authority's allowance (0 for the client). */
 export function inOccupyReach(feet, seat, lag = 0) {
   const dh = Math.hypot(seat[0] - feet[0], seat[2] - feet[2]), dy = seat[1] - feet[1];
   return dh <= OCCUPY_REACH.r + lag && dy <= OCCUPY_REACH.up + lag && -dy <= OCCUPY_REACH.down + lag;
@@ -180,7 +132,7 @@ export function inOccupyReach(feet, seat, lag = 0) {
 export function mayLeave(body, kind) {
   if (!body) return true;
   if (kind === 'script' || kind === 'escape') return true;
-  const lb = body.leaveBy;   // 'script' falls through every branch below: none of the casual exits lets go (the escape still does)
+  const lb = body.leaveBy;   // 'script' falls through every branch below: no casual exit lets go (the escape still does)
   if (kind === 'move') return lb === 'any' && body.input.move === 'none';
   if (kind === 'jump') return lb === 'any' || lb === 'jump';
   return lb !== 'script';   // menu: the explicit get-up works for any, jump and menu
@@ -188,10 +140,8 @@ export function mayLeave(body, kind) {
 
 // ---------------------------------------------------------------- evaluation
 
-/** A pose spec, evaluated against the signals: {clips: [[name, weight]], time: 'loop'|'phase', offset} with weights
- *  summing to 1. A 1-D blend interpolates linearly between its two neighbouring keys and holds the end clips outside
- *  the range (Godot BlendSpace1D); a 2-D blend weights each clip by inverse squared distance to the signal point, an
- *  exact hit taking it whole (a gradient-band-free, deterministic rule every client computes the same). */
+/** → {clips: [[name, weight]], time: 'loop'|'phase', offset}, weights summing to 1. 1-D: linear between neighbouring keys,
+ *  ends held (BlendSpace1D); 2-D: inverse squared distance, an exact hit taking it whole. */
 export function evalPose(spec, sig = {}) {
   if (typeof spec === 'string') return { clips: [[spec, 1]], time: 'loop', offset: null };
   if (!isObj(spec)) return { clips: [], time: 'loop', offset: null };
@@ -221,10 +171,8 @@ export function evalPose(spec, sig = {}) {
 // two rows naming the same clip are one clip with their weights added
 function merge(list) { const m = new Map(); for (const [c, w] of list) m.set(c, (m.get(c) ?? 0) + w); return [...m]; }
 
-/** The VR hand policy (Resonite AvatarAnchor `Required`; VRChat per-part tracking): does the socket's reach target win
- *  over a tracked hand? snap — always (hands on the wheel); track — never while the hand is tracked; near — when the
- *  tracked hand comes within `near` metres of the target (you grab the bar; let go and your hand is yours again).
- *  hand = the tracked hand's world point, or null when the hand isn't tracked (then the target always wins). */
+/** Does the socket's reach target win over a tracked hand? snap always, track never while tracked, near within `near` m.
+ *  `hand` is the tracked hand's world point, or null (then the target wins). */
 export const NEAR_M = 0.15;
 export function reachWins(policy, hand, target) {
   if (!hand) return true;
@@ -235,9 +183,8 @@ export function reachWins(policy, hand, target) {
 
 // ---------------------------------------------------------------- the authority's check
 
-/** The whole `sockets` component, checked (closed keys, ranges, enums, the one-driver rule). Null when good, else
- *  {code: 'shape'|'schema', reason, fix, didYouMean?} — the authority refuses with it verbatim, and the inspector's planner
- *  speaks the same words. */
+/** Closed keys, ranges, enums, the one-driver rule. Null when good, else {code: 'shape'|'schema', reason, fix, didYouMean?}:
+ *  the authority refuses with it verbatim, and the inspector's planner speaks the same words. */
 export function checkSockets(v, at = 'sockets') {
   if (!isObj(v)) return bad('shape', `${at} must be {<name>: {pos, q?, part?, body?}}`);
   let drivers = [];
@@ -258,8 +205,7 @@ export function checkSockets(v, at = 'sockets') {
   return null;
 }
 
-/** One socket entity's `socket` component, checked (closed keys, accepts): null when good. The rules that need its
- *  siblings (a unique name) are the door's. A body block is the station's now (the door lifts an old write of one). */
+/** Closed keys, accepts: null when good. Sibling rules (a unique name) are the door's; a body block is the station's now. */
 export function checkSocket(v, at = 'socket') {
   if (!isObj(v)) return bad('shape', `${at} must be {name, part?, accepts?, radius?}`);
   if (v.body !== undefined) return bad('schema', `${at}.body: what a person's body does at a socket is the station component on the same entity now`, 'station {action, anim?, anchor?, exit?, leaveBy?, who?} beside socket', ['station']);
@@ -270,14 +216,14 @@ export function checkSocket(v, at = 'socket') {
   return null;
 }
 
-/** A socket entity's `station`, checked: the core keys (closed), the reserved ones refused as reserved (their names are
- *  held), the body grammar for what's there. Null when good. That it hangs on a socket is the door's rule. */
+/** The core keys (closed), the reserved ones refused as reserved (names held), the body grammar for what's there. Null when
+ *  good. That it hangs on a socket is the door's rule. */
 export function checkStation(v, at = 'station') {
   if (!isObj(v)) return bad('shape', `${at} must be {action?, anim?, anchor?, exit?, leaveBy?, who?}`);
   const held = Object.keys(v).find((k) => STATION_RESERVED.includes(k));
   if (held) return bad('reserved', `${at}.${held} is reserved: the alpha holds the station's core only (${STATION_KEYS.join(', ')}); ${held} comes back later as an addition`, `leave ${held} out; reserved for later: ${STATION_RESERVED.join(', ')}`);
   let r = keys(at, v, STATION_KEYS, 'a station'); if (r) return r;
-  // anim (R 10-17: was pose): a pose or clip by name, or {clip, …} / a blend: the body grammar's own check, under its name
+  // anim (once `pose`): a pose or clip by name, or {clip, …} / a blend: the body grammar's own check, under its name
   if (v.anim !== undefined && (r = checkPose(v.anim, `${at}.anim`))) return r;
   if (isReservedAnimName(v.anim)) return bad('shape', `${at}.anim "${v.anim}" is reserved: it names ad-libbed anims, never a pose or clip`, 'name the pose or clip');
   const { anim: _a, ...rest } = v;
@@ -377,9 +323,8 @@ function near(k, allowed) {
   return allowed.filter((a) => { const y = a.toLowerCase(); return (x.length > 2 && (y.startsWith(x) || x.startsWith(y))) || lev(x, y) <= Math.max(1, Math.floor(y.length / 3)); }).slice(0, 3);
 }
 
-/** A seat named in a presence frame, as a socket id: {to: <socket id>} passes; the old frame {to: <host>, slot} (one
- *  release: clients from before sockets were entities) names the host's socket child of that name. `world` is a fold
- *  state or a view (its entities' c, or the view's flat record). Null when there is no such socket. */
+/** {to: <socket id>} passes; the old frame {to: <host>, slot} names the host's socket child of that name. `world` is a fold
+ *  state or a view. Null when there is no such socket. */
 export function resolveSeat(world, seat) {
   const E = world?.entities ?? {}; const C = (id) => E[id]?.c ?? E[id] ?? null; const sk = (c) => (isObj(c?.socket) ? c.socket : null);
   if (!isObj(seat) || typeof seat.to !== 'string') return null;
@@ -389,28 +334,24 @@ export function resolveSeat(world, seat) {
   return kid ? { to: kid } : null;
 }
 
-/** What a socket is for, read from what it has (never stored): a station if it has one, a snap point if accepts, else
- *  an attach point. `c` is the socket's record (a fold `c` or a view's `comp`). */
+/** Read from what it has (never stored): a station if it has one, a snap point if accepts, else an attach point. `c` is the
+ *  socket's record (a fold `c` or a view's `comp`). */
 export const socketRole = (c) => (isObj(c?.station) && !isPurged(c.station) ? 'station' : Array.isArray(c?.socket?.accepts) ? 'snap' : 'attach');   // the authority's own reads this one (authority/sockets.js)
-/** A host's sockets, as its socket children (PLAN-sockets-entities §1): [{id, name, sock, station}] in `kids` order. `kids(host)`
- *  lists a thing's child ids; `rec(id)` is a record's components (a fold `c`, or a view's `comp`). A socket switched off
- *  on its own is a closed seat: not listed. The one reader every client and agent surface shares (the authority's own is
- *  authority/sockets.js socketsOf, over its children index). */
+/** [{id, name, sock, station}] in `kids` order (`kids(host)` child ids, `rec(id)` a record's components); a socket switched
+ *  off is a closed seat, not listed. The authority's own is socketsOf. */
 export function socketsUnder(host, kids, rec, { all = false } = {}) {
   const out = [];
   for (const k of kids(host) ?? []) { const c = rec(k); if (isObj(c?.socket) && (all || c.disabled !== true)) out.push({ id: k, name: c.socket.name, sock: c.socket, station: isObj(c.station) ? c.station : null }); }
   return out;
 }
-/** …in a world: a fold state's or a view's `entities` ({id: {c}} or the view's flat {id: {socket?, parent?, …}}). O(things): readers that ask
- *  for many hosts build their own children index and call socketsUnder. */
+/** …in a world (a fold state's or a view's `entities`). O(things): readers asking for many hosts build their own children
+ *  index and call socketsUnder. */
 export function socketsIn(entities, host, opts) {
   const E = entities ?? {}; const recC = (k) => E[k]?.c ?? E[k] ?? null; const up = (k) => E[k]?.c?.parent?.to ?? E[k]?.parent?.to;
   return socketsUnder(host, (h) => Object.keys(E).filter((k) => up(k) === h), recC, opts);
 }
-/** A socket child as the old `sockets.<name>` entry read ({pos, q?, part?, body?, accepts?, radius?}): its pose is its own
- *  transform, local to its host, and its station is the entry's body. For the readers still written against the map (the
- *  Inspector's Sockets card and the seat gizmos, until the Parts UI: PLAN §10 12b); writing one back as a map is
- *  translated at the door (each body a station). `t` is the socket's transform ({pos, q}). */
+/** As the old `sockets.<name>` entry ({pos, q?, part?, body?, accepts?, radius?}), for readers still written against the map;
+ *  a map written back is translated at the door. `t` is {pos, q}. */
 export function slotOf(sock, t, station = null) {
   const { name, ...rest } = sock ?? {};
   const q = Array.isArray(t?.q) && t.q.length === 4 && !(t.q[0] === 0 && t.q[1] === 0 && t.q[2] === 0 && t.q[3] === 1) ? { q: t.q.slice() } : {};
@@ -418,17 +359,15 @@ export function slotOf(sock, t, station = null) {
   const body = isObj(station) ? (({ anim, ...r }) => (anim !== undefined ? { ...r, pose: anim } : r))(JSON.parse(JSON.stringify(station))) : null;
   return { pos: Array.isArray(t?.pos) ? t.pos.slice() : [0, 0, 0], ...q, ...JSON.parse(JSON.stringify(rest)), ...(body ? { body } : {}) };
 }
-/** A host's socket children as the old `sockets` map ({name: slotOf…}), switched-off ones included (a map written back
- *  must not drop them), or null when it has none. `entities` as socketsIn. */
+/** As the old `sockets` map ({name: slotOf…}), switched-off ones included (a map written back must not drop them), or null. */
 export function socketMapIn(entities, host) {
   const E = entities ?? {}; const out = {};
   for (const x of socketsIn(E, host, { all: true })) { const e = E[x.id]; out[x.name] = slotOf(x.sock, e?.c ? e.c.transform : { pos: e?.pos, q: e?.q }, x.station); }
   return Object.keys(out).length ? out : null;
 }
 
-/** One line saying what a body does at a socket, for anyone reading it as text (the agent process's look, the sit reply).
- *  door: the agents' door reads it, so the way off is the door's own (detach, or a move; detach {escape: true} past a
- *  seat that holds you), not a person's controls (it named X, get up and jump, which no agent has). */
+/** For anyone reading it as text (the agent's look, the sit reply). The way off named is the door's own (detach, or a move;
+ *  detach {escape: true} past a seat that holds you), never a person's controls, which no agent has. */
 export function describeBody(slot, b, { door = false } = {}) {
   if (!b) return `${slot}: an attach point (things only)`;
   const pose = typeof b.pose === 'string' ? `holds ${b.pose}`

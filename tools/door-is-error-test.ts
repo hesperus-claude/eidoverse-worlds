@@ -1,20 +1,12 @@
-// door-is-error-test — a door tool that didn't do what it was asked says so
-// with isError, so a host shows the call as failed rather than done.
-//
+// door-is-error-test: a door tool that didn't do what it was asked says so with isError, so a host shows it failed.
 //   bun tools/door-is-error-test.ts
-//
-// Acts are failed when the call didn't do what it asked (a refusal, a cut, a
-// climb or glide that fell short, a name the world refused), and done when it
-// did, including a no-op because what it asked for already held.
-//
-// In this protocol main's flight tools are folded into move {mode: "fly"},
-// act {verb: "land"} and anim's wings, and the rehearsal tools are no tools
-// (tools.ts TOOL_FOLDS). Those calls add steps of their own (a fly-mode move
-// takes off first and ends with where the flight stands), so the FLIGHT checks
-// call the agent's acts as main's tools did, answered as the door answers an
-// act, and FLIGHT THROUGH THE DOOR checks the door's own calls.
+// Failed = a refusal, a cut, a climb or glide that fell short, a name the world refused; done includes a no-op
+// whose ask already held. Main's flight tools fold into move {mode: "fly"}, act {verb: "land"} and anim's wings
+// (tools.ts TOOL_FOLDS), so the FLIGHT checks call the agent's acts as main's tools did, and FLIGHT THROUGH THE
+// DOOR checks the door's own calls.
 import { tryUntil } from './protocol/wait.ts';
-const { WorldAgent } = await import('../mcpl/agent.ts');
+import { noWorldUrl } from './no-world.ts';
+const { WorldAgent, GLIDE_ARRIVE_M } = await import('../mcpl/agent.ts');
 const { handleTool } = await import('../mcpl/tools.ts');
 
 let pass = 0, fail = 0;
@@ -28,16 +20,13 @@ const said = (r: any) => r?.rejected != null ? `(rejected: ${r.rejected})` : Str
 const failed = (r: any) => r?.isError === true;
 /** A call that answered and wasn't failed: a { rejected } stand-in, from settle() or midway(), is neither. */
 const ok = (r: any) => r != null && r.rejected == null && !failed(r);
-/** Run a call whose wait is the real flightAwait. Once its waiter is registered,
- *  set what the flight tick would have (`happen`) and settle it, as the tick does.
- *  The checks that need a wait to time out stand in for flightAwait instead (the
- *  climb's and the flare's timeouts, and the cut glide's flare), since a real
- *  one would take its whole budget. */
+/** Run a call against the real flightAwait: once its waiter registers, apply `happen` and settle it as the tick
+ *  does. Timeout checks stand in for flightAwait (a real one takes its whole budget). */
 const midway = async (agent: any, start: Promise<any>, happen: () => void) => {
-  // A waiter left by an earlier call could answer for this one, so none may be waiting yet.
+  // a waiter left by an earlier call could answer for this one
   if (agent.flightWaiters.length) return { rejected: 'a flight waiter from an earlier call was still registered' };
   await tryUntil('the act registers a flight waiter', () => agent.flightWaiters.length, { ms: 2000, step: 5 });
-  // An act that never waited on the flight answered from something else, so no check here may pass on it.
+  // an act that never waited on the flight answered from something else: no check may pass on it
   if (!agent.flightWaiters.length) return { rejected: 'the act registered no flight waiter' };
   happen(); agent.flightSettle();
   return start;
@@ -48,7 +37,7 @@ const WINGED = [
   'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
   'L_Wing_Lower', 'R_Wing_Lower',
 ];
-const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench' });
+const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench', url: noWorldUrl() });
 ag.bodyBoneNames = WINGED;
 ag.loadBodyBones = async () => ag.bodyBoneNames;
 /** An act's answer as the door gives it: failed when it didn't do what it asked (tools.ts act()). */
@@ -74,7 +63,7 @@ const door = (name: string, a: Record<string, unknown> = {}) => settle(handleToo
 
 console.log('\nFLIGHT');
 ag.myRights = { role: 'builder', fly: false };
-/** A fresh flight, as after a body that went down has come to rest: a limp fall can't be launched out of. */
+/** A fresh flight, as after a downed body has come to rest: a limp fall can't be launched out of. */
 const relaunch = async () => { ag.flight = null; await call('take_off'); };
 let r = await call('take_off');
 check('a denied take_off is failed', failed(r) && /cannot fly/.test(said(r)), said(r));
@@ -95,13 +84,13 @@ r = await call('glide_to', { x: 10, z: 0 });
 check('glide_to on the ground is failed', failed(r) && /move \{mode: "fly"\} first/.test(said(r)), said(r));
 r = await call('take_off');
 check('take_off is done', ok(r) && /took off/.test(said(r)), said(r));
-// Airborne, the integrator answers a second unfold: open wings are what it asks for.
+// airborne, the integrator answers a second unfold: open wings are what it asks for
 r = await call('unfold_wings');
 check('unfolding open wings in flight changes nothing, and is done', ok(r) && /already open/.test(said(r)), said(r));
-// ...and a fold in the air is refused for being airborne.
+// a fold in the air is refused for being airborne
 r = await call('fold_wings');
 check('folding in the air is failed', failed(r) && /airborne/.test(said(r)), said(r));
-// A climb whose wait times out didn't reach its altitude: it isn't reported as there.
+// a climb whose wait times out isn't reported as there
 const realAwait = ag.flightAwait;
 ag.flightAwait = async () => 'timed out aloft';
 r = await call('climb_to', { altitude: 40 });
@@ -109,11 +98,8 @@ check('a climb that times out is failed, not reported at its target',
   failed(r) && /^timed out aloft at .*short of the climb; the climbing stops there and you fly on$/.test(said(r)), said(r));
 check('...and it stops climbing, so the body is where the answer says', !!ag.flight && ag.flight.climbTo == null, String(ag.flight?.climbTo));
 ag.flightAwait = realAwait;
-// A climb, a descent and a landing's flare, flown by the agent's own flight tick, each end inside their wait. A climb
-// rises at its lift less the polar's sink once the lift has eased in, about 1.5 m/s where the lift alone is 2 m/s,
-// and a flare comes down at the polar's sink, about 0.46 m/s.
-/** Fly an act through the agent's own flight tick, 0.1 s a tick as the main tick steps, until it answers. Its waits are
- *  the real flightAwait's, with flight time standing in for the clock: each wait's length is kept, with the flight time it took. */
+// a climb nets ~1.5 m/s after sink, a flare sinks ~0.46 m/s: each ends inside its wait
+/** Fly an act through the agent's flight tick, 0.1 s a tick, until it answers; waits are flightAwait's, in flight time. */
 const flownByTicks = async (act: () => Promise<any>) => {
   const waits: { ms: number; took: number }[] = [];
   let t = 0, answered = false;
@@ -123,8 +109,7 @@ const flownByTicks = async (act: () => Promise<any>) => {
     return realAwait.call(ag, test, 3_600_000).then((v: string) => { w.took = t - from; return v; });
   };
   const answer = act().then((a) => { answered = true; return a; });
-  // Ticking starts once the act waits on the flight, so no tick flies its earlier steps. An act that neither waits nor
-  // answers within 10 s fails its check, saying so.
+  // ticking starts once the act waits, so no tick flies its earlier steps; neither waiting nor answering in 10 s fails
   await tryUntil('the act waits on the flight or answers', () => waits.length || answered, { ms: 10_000, step: 5 });
   if (!waits.length && !answered) {
     ag.flightAwait = realAwait;
@@ -137,14 +122,14 @@ const flownByTicks = async (act: () => Promise<any>) => {
     t = Math.round((t + 0.1) * 10) / 10;
   }
   ag.flightAwait = realAwait;
-  // An act still unanswered once the ticking stops fails its check now, rather than waiting out the hour-long stand-in.
+  // still unanswered once ticking stops fails now, rather than waiting out the hour-long stand-in
   const settled = answered ? answer
     : Promise.race([answer, new Promise((res) => setTimeout(() => res({ rejected: `no answer 5 s after ${t} s of flight` }), 5000))]);
   return { waits, answer: await settled };
 };
-/** The wait outlasts the flight time its leg took, even were the tick that flew it 50% late, as a loaded host's timer can run. */
+/** The wait outlasts its leg's flight time even with the tick 50% late, as a loaded host's timer can run. */
 const inside = (w: { ms: number; took: number }[], i: number) => w.length > i && w[i].took >= 0 && w[i].ms > w[i].took * 1000 * 1.5;
-/** A fresh flight at height y, with take-off's launch impulse spent, so the climb's own lift is all that lifts it. */
+/** A fresh flight at height y with the launch impulse spent, so only the climb's lift lifts it. */
 const flyingAt = async (y: number) => {
   await relaunch();
   ag.flight.stamina = 1e6; ag.flight.pos.x = 0; ag.flight.pos.z = 0; ag.flight.pos.y = y;
@@ -162,13 +147,13 @@ await flyingAt(45);
 flown = await flownByTicks(() => call('land_at', { x: 20, z: 0 }));
 check('a landing from 45 m flown by the tick comes down by its flare', ok(flown.answer) && / — landed at \(.*\), [0-9.]+m from \(20\.0, 0\.0\)$/.test(said(flown.answer)), said(flown.answer));
 check('...inside the flare\'s wait, with ticks 50% late', inside(flown.waits, 1), JSON.stringify(flown.waits));
-// A short climb leans on the 8 s beside: the lift's easing in, which the rate leaves out, is a fair share of it.
+// a short climb leans on the 8 s beside: the lift's easing in, which the rate leaves out
 await flyingAt(10);
 flown = await flownByTicks(() => call('climb_to', { altitude: 15 }));
 check('a 5 m climb flown by the tick gets there, inside its wait with ticks 50% late', ok(flown.answer) && /^at 15\.0m/.test(said(flown.answer)) && inside(flown.waits, 0),
   `${said(flown.answer)}; ${JSON.stringify(flown.waits)}`);
-// Straight after take-off, the launch still lifts the body, which its height doesn't show: a landing then flares
-// from well above where it began, and a descent first rises. Their waits are sized from the ceiling down.
+// straight after take-off the launch still lifts the body: a landing flares from above where it began and a descent
+// first rises, so their waits are sized from the ceiling down
 await relaunch();
 flown = await flownByTicks(() => call('land_at', { x: ag.flight.pos.x, z: ag.flight.pos.z }));
 check('a landing straight after take-off comes down by its flare, inside the flare\'s wait with ticks 50% late',
@@ -177,8 +162,8 @@ await relaunch();
 flown = await flownByTicks(() => call('climb_to', { altitude: 0.3 }));
 check('a descent straight after take-off gets there, inside its wait with ticks 50% late', ok(flown.answer) && /^at 0\.3m/.test(said(flown.answer)) && inside(flown.waits, 0),
   `${said(flown.answer)}; ${JSON.stringify(flown.waits)}`);
-// A climb to just above the body, asked while the launch still lifts it, is carried up out of the climb's 0.4 m and
-// comes back down to it, so its wait is never shorter than a descent from the ceiling.
+// a climb to just above the body, asked during the launch, is carried past its 0.4 m and comes back down, so its
+// wait is never shorter than a descent from the ceiling
 await relaunch();
 for (let i = 0; i < 4; i++) ag.flightTick(0.1);
 {
@@ -187,7 +172,7 @@ for (let i = 0; i < 4; i++) ag.flightTick(0.1);
   check('a climb of 0.1 m asked 0.4 s into the launch gets there, inside its wait with ticks 50% late',
     ok(flown.answer) && new RegExp(`^at ${to.toFixed(1)}m`).test(said(flown.answer)) && inside(flown.waits, 0), `${said(flown.answer)}; ${JSON.stringify(flown.waits)}`);
 }
-// Over ground far below 0, the flare comes down farther than the ceiling's height says.
+// over ground far below 0 the flare comes down farther than the ceiling's height says
 {
   const realHeight = ag.heightAt;
   ag.heightAt = () => -100;
@@ -197,7 +182,7 @@ for (let i = 0; i < 4; i++) ag.flightTick(0.1);
   check('a landing from 25 m over ground at -100 m comes down by its flare, inside the flare\'s wait with ticks 50% late',
     ok(flown.answer) && / — landed at /.test(said(flown.answer)) && inside(flown.waits, 1), `${said(flown.answer)}; ${JSON.stringify(flown.waits)}`);
 }
-// A wait whose time runs out answers "timed out aloft" and leaves no waiter behind.
+// a timed-out wait answers "timed out aloft" and leaves no waiter behind
 {
   const before = ag.flightWaiters.length;
   const answer = await Promise.race([realAwait.call(ag, () => null, 30), new Promise((res) => setTimeout(() => res('no answer 5 s after its 30 ms'), 5000))]);
@@ -205,7 +190,7 @@ for (let i = 0; i < 4; i++) ag.flightTick(0.1);
     `${answer}; waiters ${before} then ${ag.flightWaiters.length}`);
 }
 await relaunch();
-// The integrator's part of a climb, as the tick does it: it reaches the target and clears it.
+// the integrator's part of a climb, as the tick does it
 const climbs = (altitude: number) => midway(ag, call('climb_to', { altitude }), () => {
   ag.flight.pos.y = ag.flight.climbTo; ag.flight.climbTo = null;
 });
@@ -216,8 +201,7 @@ check('a climb asked above the ceiling stops there and is failed, naming the cei
   failed(r) && new RegExp(`^at ${ceiling.toFixed(1)}m, the ceiling here, short of the ${(ceiling + 50).toFixed(1)}m you asked for`).test(said(r)), said(r));
 r = await climbs(ceiling - 1);
 check('a climb that gets there is done, at the height asked', ok(r) && new RegExp(`^at ${(ceiling - 1).toFixed(1)}m.*stamina spent`).test(said(r)), said(r));
-// A wait answered before its time clears its timer, so an answered act holds nothing open. The flight waits'
-// timers are the ones of 8 s and more; the test's own polling waits are a few milliseconds.
+// an answered wait clears its timer, so an answered act holds nothing open (flight waits are 8 s+, polling a few ms)
 {
   const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
   const flightTimers = new Set<unknown>();
@@ -231,9 +215,9 @@ check('a climb that gets there is done, at the height asked', ok(r) && new RegEx
   r = await climbs(20);
   globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear;
   check('a climb answered before its wait ends clears the wait\'s timer', ok(r) && flightTimers.size === 0, `${said(r)}; ${flightTimers.size} flight timer(s) still set`);
-  ag.flight.pos.y = ceiling - 1; // where the climb above left the body, which the winded climb below starts from
+  ag.flight.pos.y = ceiling - 1;  // where the climb above left the body
 }
-// The pool pays for half a metre of the one asked for: the body climbs that far and no farther.
+// the pool pays for half a metre: the body climbs that far and no farther
 ag.flight.stamina = 0.5;
 r = await climbs(ceiling);
 check('a winded climb is failed, saying how far the pool reached', failed(r) && /^winded at .*only bought 0\.5m of the 1\.0 you asked for/.test(said(r)), said(r));
@@ -257,39 +241,37 @@ r = await midway(ag, call('climb_to', { altitude: 5 }), () => { ag.flight.phase 
 check('a descent that comes down on the ground at its target is done, and says it came down',
   ok(r) && said(r) === 'came down on the ground at 5.2m, the height you asked for — move {mode: "fly"} to fly again', said(r));
 check('...and keeps no climb', !!ag.flight && ag.flight.climbTo == null, String(ag.flight?.climbTo));
-// A climb that comes down below where it was going says so.
 await relaunch(); ag.flight.stamina = 1e6; ag.flight.pos.y = 2;
 r = await midway(ag, call('climb_to', { altitude: 10 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = 1; });
 check('a climb that comes down on the ground below its target is failed, saying so',
   failed(r) && /^came down on the ground at 1\.0m, below the 10\.0m you asked for$/.test(said(r)), said(r));
-// A winded climb's reach is short of the height asked, and a touchdown there is judged against what was asked.
+// a winded climb's reach falls short; a touchdown there is judged against what was asked
 await relaunch(); ag.flight.stamina = 0.5; ag.flight.pos.y = 2;
 r = await midway(ag, call('climb_to', { altitude: 10 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = 2.5; });
 check('a winded climb that comes down where its pool ran out is failed, as below the height asked',
   failed(r) && /^came down on the ground at 2\.5m, below the 10\.0m you asked for$/.test(said(r)), said(r));
-// Between its reach and the height asked, it's below what was asked, though above its reach.
 await relaunch(); ag.flight.stamina = 0.5; ag.flight.pos.y = 2;
 r = await midway(ag, call('climb_to', { altitude: 10 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = 5; });
 check('a winded climb that comes down between its reach and the height asked is failed, as below the height asked',
   failed(r) && /^came down on the ground at 5\.0m, below the 10\.0m you asked for$/.test(said(r)), said(r));
-// A climb asked above the ceiling that comes down at the ceiling didn't reach the height asked either.
+// a climb above the ceiling that comes down at the ceiling didn't reach the height asked
 await relaunch(); ag.flight.stamina = 1e6; ag.flight.pos.y = 2;
 r = await midway(ag, call('climb_to', { altitude: ceiling + 50 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = ceiling; });
 check('a climb asked above the ceiling that comes down at the ceiling is failed, as below the height asked',
   failed(r) && new RegExp(`^came down on the ground at ${ceiling.toFixed(1)}m, below the ${(ceiling + 50).toFixed(1)}m you asked for$`).test(said(r)), said(r));
-// The window is the tick's 0.4 m: just inside it is the height asked, just outside it isn't.
+// the window is the tick's 0.4 m
 for (const [y, done] of [[5.39, true], [5.41, false]] as const) {
   await relaunch(); ag.flight.stamina = 1e6; ag.flight.pos.y = 30;
   r = await midway(ag, call('climb_to', { altitude: 5 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = y; });
   check(`a descent that comes down ${(y - 5).toFixed(2)} m above its target is ${done ? 'done' : 'failed as above it'}`,
     done ? ok(r) && /, the height you asked for/.test(said(r)) : failed(r) && /, above the 5\.0m you asked for$/.test(said(r)), said(r));
 }
-// The tick clears a climb that reaches its height; a landing in that same tick is still read as a landing.
+// a landing in the tick that clears a reached climb is still read as a landing
 await relaunch(); ag.flight.stamina = 1e6; ag.flight.pos.y = 30;
 r = await midway(ag, call('climb_to', { altitude: 5 }), () => { ag.flight.phase = 'LANDED'; ag.flight.pos.y = 5.1; ag.flight.climbTo = null; });
 check('a descent that comes down at its height as the tick clears its climb is read as touched down, not as there',
   ok(r) && said(r) === 'came down on the ground at 5.1m, the height you asked for — move {mode: "fly"} to fly again', said(r));
-// The tick ends a climb met on the ground where the body stands, without lifting it to the climb's height.
+// a climb met on the ground ends where the body stands, without lifting it
 await relaunch();
 {
   const realHeight = ag.heightAt;
@@ -303,7 +285,7 @@ await relaunch();
 await relaunch(); ag.flight.stamina = 1e6;
 r = await midway(ag, call('climb_to', { altitude: ceiling - 5 }), () => { ag.flight.phase = 'RECOVER'; });
 check('a climb whose body sits up after a cut midway is failed as cut', failed(r) && /^cut mid-climb at /.test(said(r)), said(r));
-// A body that's down flies nowhere until it recovers (in the air) or takes off again (on the ground).
+// a downed body flies nowhere until it recovers (air) or takes off again (ground)
 for (const [phase, tool, a, words] of [
   ['LEAF', 'glide_to', { x: 10, z: 0 }, /^you're falling limp \(leaf\) — once you're down on the ground, move \{mode: "fly"\} launches you again$/],
   ['LEAF', 'take_off', {}, /^you're falling limp \(leaf\) — once you're down on the ground, move \{mode: "fly"\} launches you again$/],
@@ -314,7 +296,7 @@ for (const [phase, tool, a, words] of [
   r = await call(tool, a);
   check(`${tool} while ${phase.toLowerCase()} is failed, and leaves the body down`, failed(r) && words.test(said(r)) && ag.flight?.phase === phase, `${said(r)}; ${ag.flight?.phase}`);
 }
-// No grant to fly is refused by every flight verb, not only take_off.
+// no grant to fly is refused by every flight verb, not only take_off
 await relaunch();
 ag.myRights = { role: 'builder', fly: false };
 for (const [tool, a] of [['glide_to', { x: 10, z: 0 }], ['climb_to', { altitude: 20 }], ['land_at', { x: 5, z: 5 }]] as const) {
@@ -325,14 +307,13 @@ ag.myRights = { role: 'builder', fly: true };
 ag.flight = null;
 r = await call('climb_to', { altitude: 20 });
 check('climb_to on the ground is failed', failed(r) && said(r) === 'you are on the ground — move {mode: "fly"} first', said(r));
-// A limp fall whose recovery began in the air flies on by itself once it's done.
+// a limp fall whose recovery began in the air flies on by itself once done
 await relaunch(); ag.flight.phase = 'LEAF'; ag.flight.recoverAt = ag.flight.t ?? 0;
 r = await call('take_off');
 check('take_off while a limp fall recovers in the air is failed, saying it flies again once that\'s done',
   failed(r) && said(r) === "you're falling limp (leaf) with your recovery under way — you fly again once it's done, unless you reach the ground first", said(r));
 ag.flight = null; // down, so the next take_off starts fresh
-// A fly-mode move's altitude is a number of metres, or a string that reads as one, as Number() always took "5"; a
-// boolean, a blank, a list or an object isn't, as main's climb_to refused them.
+// a fly-mode altitude is metres as a number or numeric string (Number("5")); booleans, blanks, lists, objects aren't
 await relaunch(); ag.flight.stamina = 1e6;
 for (const altitude of [false, true, '', ' ', 'high', [], {}, Infinity, NaN] as unknown[]) {
   r = await door('move', { mode: 'fly', altitude });
@@ -342,7 +323,7 @@ for (const altitude of [false, true, '', ' ', 'high', [], {}, Infinity, NaN] as 
 ag.flight.pos.y = 2;
 r = await midway(ag, door('move', { mode: 'fly', altitude: '5' }), () => { ag.flight.pos.y = ag.flight.climbTo; ag.flight.climbTo = null; });
 check('move {mode: "fly", altitude: "5"} climbs to 5 m', ok(r) && /^at 5\.0m/.test(said(r)), said(r));
-// A touchdown within the arrival radius is an arrival; farther off, a shortfall.
+// a touchdown within the arrival radius is an arrival; farther off, a shortfall
 /** A glide from a fresh launch whose real wait settles once the body is down at (x, z), or cut (`phase`). */
 const glides = async (x: number, z: number, phase = 'LANDED') => {
   await relaunch();
@@ -356,6 +337,12 @@ for (const [x, done] of [[8.1, true], [7.9, false]] as const) {
   check(`a touchdown ${(10 - x).toFixed(1)} m from the target is ${done ? 'done' : 'failed as short'}`,
     done ? ok(r) && /at the target$/.test(said(r)) : failed(r) && /^landed short at /.test(said(r)), said(r));
 }
+// one radius for both arrivals: the touchdown rows above are at 2 m, and an arrival in the air just inside it counts
+check('the glide arrival radius is 2 m', GLIDE_ARRIVE_M === 2, String(GLIDE_ARRIVE_M));
+await relaunch();
+ag.flight.pos.x = ag.flight.pos.z = 0;
+r = await midway(ag, call('glide_to', { x: 10, z: 0 }), () => { ag.flight.pos.x = 10 - (GLIDE_ARRIVE_M - 0.1); });
+check('a glide in the air just inside the arrival radius has arrived', ok(r) && /^arrived at \(8\.1, 0\.0\)/.test(said(r)), said(r));
 r = await glides(3, 0);
 check('a glide that lands short is failed', failed(r) && /^landed short at .*7\.0m short/.test(said(r)), said(r));
 r = await glides(4, 0, 'LEAF');
@@ -364,21 +351,19 @@ r = await glides(4, 0, 'RAGDOLL');
 check('a glide cut on the ground is failed as a cut', failed(r) && /^cut mid-glide — you are on the ground at /.test(said(r)), said(r));
 r = await glides(4, 0, 'RECOVER');
 check('a glide whose body sits up after a cut midway is failed as a cut', failed(r) && /^cut mid-glide — you are on the ground at /.test(said(r)), said(r));
-// Its own success: an arrival in the air, which leaves the body holding over the point.
+// an arrival in the air leaves the body holding over the point
 await relaunch();
 ag.flight.pos.x = ag.flight.pos.z = 0;
 r = await midway(ag, call('glide_to', { x: 10, z: 0 }), () => { ag.flight.pos.x = 9.5; ag.flight.pos.z = 0.5; });
 check('a glide that arrives in the air is done, holding over the point',
   ok(r) && /^arrived at \(9\.5, 0\.5\), [0-9.]+m up — holding over it$/.test(said(r)) && ag.flight?.holdAt?.x === 10 && ag.flight?.holdAt?.z === 0,
   `${said(r)}; holdAt ${JSON.stringify(ag.flight?.holdAt)}`);
-// A cut at the target is a cut, not an arrival.
 r = await glides(10, 0, 'LEAF');
 check('a glide cut at its target is failed as a cut', failed(r) && /^cut mid-glide — you are falling at \(10\.0, 0\.0\)/.test(said(r)), said(r));
-// land_at is done only when its glide arrived and its flare came down.
+// land_at is done only when its glide arrived and its flare came down
 const realGlide = ag.glideTo.bind(ag);
 const arrived = { ok: true, text: 'arrived at (5.0, 5.0), 9.0m up — holding over it' };
-/** A landing's glide that answers at once, counting the course as the real glide does, which a landing needs to go on
- *  to its flare. */
+/** A landing's glide that answers at once, counting the course as the real glide does (the flare needs it). */
 const glidesThere = async (_x: number, _z: number, took?: { course?: number }) => { if (took) took.course = ++ag.flightCourse; return arrived; };
 /** land_at with its glide stood in for; its flare's wait is the real one, and `at` is where the flare comes down. */
 const landing = async (glide: { ok: boolean; text: string; phase?: string }, flare: 'cut' | 'leaf' | 'down', at = { x: 5, z: 5 }) => {
@@ -395,8 +380,8 @@ const landing = async (glide: { ok: boolean; text: string; phase?: string }, fla
   ag.glideTo = realGlide;
   return answer;
 };
-// A cut mid-glide is a fall: the glide's answer is the whole answer, and no flare is flown. The glide set its course
-// before the cut, as a real glide does, so the landing's down check is what answers.
+// a cut mid-glide is a fall: the glide's answer is the whole answer, no flare. The glide set its course first, so
+// the landing's down check answers.
 for (const [phase, words] of [['RAGDOLL', 'cut mid-glide — you are on the ground at (1.0, 1.0)'], ['LEAF', 'cut mid-glide — you are falling at (1.0, 1.0)']] as const) {
   await relaunch();
   let flared = false;
@@ -422,19 +407,15 @@ r = await landing(arrived, 'leaf');
 check('a landing cut in the air during its flare is failed', failed(r) && / — cut during the flare, down at /.test(said(r)), said(r));
 await relaunch();
 ag.glideTo = glidesThere;
-// The flare flies the body to (7, 3) before its wait runs out, so the answer says where it was set down, not where the
-// flare began.
+// the answer says where the flare set the body down, not where it began
 ag.flightAwait = async () => { ag.flight.pos.x = ag.pos.x = 7; ag.flight.pos.z = ag.pos.z = 3; ag.flight.pos.y = ag.pos.y = 20; return 'timed out aloft'; };
 r = await call('land_at', { x: 5, z: 5 });
 ag.glideTo = realGlide; ag.flightAwait = realAwait;
 check('a landing whose flare timed out is failed, and the body is set down from 20 m where the flare had it, saying where',
   failed(r) && said(r).endsWith(' — the flare timed out aloft, so the body was set down at (7.0, 3.0)') && ag.flight === null && ag.pos.y < 20,
   `${said(r)}; flight ${ag.flight === null ? 'ended' : ag.flight?.phase}; y ${ag.pos.y}`);
-// A later call that sets the flight's course takes it over, so a landing whose flare then ends, whether its wait hears
-// the body come down or runs out, leaves the flight to that call: on the stdio door, a host that stopped waiting for
-// the landing can send its next call while the flare still waits. A take-off's fresh flight takes it over too.
-/** Hold the next flight wait open, whichever act asks for it first, and give later ones the real wait; `end` answers
- *  it. Later calls then wait for real, so a held act that starts late still meets this hold rather than a real wait. */
+// a later course-setting call takes the flight over (a stdio host can send it mid-flare), as does a take-off's fresh flight
+/** Hold the next flight wait open (whichever act asks first; later ones wait for real); `end` answers it. */
 const holdNextWait = () => {
   const h = { held: false, end: (_v: string) => {} };
   ag.flightAwait = (test: (s: any) => string | null, ms?: number) => {
@@ -475,9 +456,8 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['down', 'glide_to'
     `${flaring ? '' : 'the landing never reached its flare; '}${said(r)}; ${ag.flight === flight ? 'same flight' : 'flight ended or replaced'}`);
   await settleLater();
 }
-// A later climb_to, or a take-off's fresh flight, takes a climb over, so an earlier climb whose wait then ends, whether
-// it runs out, hears a climb get there or comes down, leaves the climb alone and says it was taken over. A glide
-// doesn't take a climb over: the two can fly together.
+// a later climb_to or take-off takes a climb over: the earlier climb's wait, however it ends, leaves the climb alone
+// and says it was taken over. A glide doesn't: the two fly together.
 for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to'], ['landed', 'climb_to'], ['cut', 'climb_to'], ['timed out aloft', 'take_off'], ['there', 'glide_to']] as const) {
   await relaunch(); ag.flight.stamina = 1e6;
   const hold = holdNextWait();
@@ -492,7 +472,7 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     check('a climb whose wait hears it get there while a later glide_to flies is done, since a glide doesn\'t take a climb over',
       waiting && ok(r) && /^at [0-9.]+m — /.test(said(r)), said(r));
   } else if (end === 'cut') {
-    // A down cuts every climb on the flight at once, so a climb taken over that's cut answers the cut, as the later one does.
+    // a down cuts every climb at once, so a taken-over climb that's cut answers the cut
     check('a climb taken over by a later climb_to whose wait hears a cut is failed as cut, not as taken over',
       waiting && failed(r) && /^cut mid-climb at /.test(said(r)), said(r));
   } else {
@@ -502,8 +482,7 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
   }
   await settleLater();
 }
-// A landing takes over a climb still waiting: it clears the climb's height at once, so the climb lifts the body no
-// further, and the climb's answer says it was taken over.
+// a landing clears a waiting climb's height at once, so the climb lifts no further and says it was taken over
 {
   await relaunch(); ag.flight.stamina = 1e6;
   const held: ((v: string) => void)[] = [];
@@ -524,13 +503,12 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     waiting && gliding && flaring && cleared && failed(r) && /^taken over at [0-9.]+m by a later call$/.test(said(r)) && ok(landed),
     `cleared ${cleared}; ${said(r)}; landing: ${said(landed)}`);
 }
-// A climb_to that runs while a landing's glide still waits for the body's bones is taken over by that glide too, since
-// the glide takes the climb in the same step as the course, after its own wait for the bones.
+// a climb_to while a landing's glide waits for the bones is taken over too: the glide takes the climb with the course
 {
   await relaunch(); ag.flight.stamina = 1e6;
   const fastBones = ag.loadBodyBones;
   let bonesAsked = 0, releaseBones = () => {};
-  // The landing asks for the bones, then its glide does; the glide's ask is held until the climb is waiting.
+  // the landing asks for the bones, then its glide; the glide's ask is held until the climb waits
   ag.loadBodyBones = () => ++bonesAsked === 2 ? new Promise((res) => { releaseBones = () => res(ag.bodyBoneNames); }) : fastBones();
   const held: ((v: string) => void)[] = [];
   ag.flightAwait = () => new Promise<string>((res) => { held.push(res); });
@@ -552,8 +530,7 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     glideAsked && climbWaits && gliding && flaring && cleared && failed(r) && /^taken over at [0-9.]+m by a later call$/.test(said(r)) && ok(landed),
     `cleared ${cleared}; ${said(r)}; landing: ${said(landed)}`);
 }
-// A landing whose glide is refused before it sets a course, as when the flight right goes while the bones load, is
-// refused with the glide's words, and makes no flare.
+// a glide refused before setting a course (the flight right going while bones load) refuses the landing in its words, no flare
 {
   await relaunch();
   ag.glideTo = async () => ({ ok: false, text: 'you cannot fly here — flight was withdrawn' });
@@ -564,11 +541,8 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     failed(answer) && said(answer) === 'you cannot fly here — flight was withdrawn' && !hold.held, `${said(answer)}; flare ${hold.held ? 'waited' : 'none'}`);
   hold.end('timed out aloft');
 }
-// A refused take-off makes no fresh flight in the air, so it takes nothing over: the flight's course is as it was, and
-// a climb waiting on the flight still answers for itself. The state is built by hand, the flight's wings folded and
-// the posture's not: a body doesn't meet this refusal with a call waiting, since fold_wings folds both and take_off
-// refuses on the posture first, and a recovery stands the flight up with its wings open. The check pins the order, so
-// that a refusal flightTakeOff gains later still takes nothing over.
+// a refused take-off makes no fresh flight, so takes nothing over. Hand-built state (wings folded, posture not) pins
+// the order for later refusals.
 {
   await relaunch(); ag.flight.stamina = 1e6;
   const hold = holdNextWait();
@@ -585,8 +559,7 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     waiting && courseKept && failed(refusedTakeOff) && /^still standing — /.test(said(refusedTakeOff)) && failed(r) && /^came down on the ground at /.test(said(r)),
     `course ${courseKept ? 'kept' : 'moved'}; ${said(refusedTakeOff)}; ${said(r)}`);
 }
-// A later call that sets the course while a landing still glides takes the flight over too, so the landing leaves it
-// to that call and makes no flare.
+// a later course-setting call during a landing's glide takes the flight over: no flare
 {
   await relaunch(); ag.flight.stamina = 1e6;
   const hold = holdNextWait();
@@ -601,21 +574,19 @@ for (const [end, later] of [['timed out aloft', 'climb_to'], ['there', 'climb_to
     gliding && failed(answer) && said(answer).endsWith(' — a later call took over the flight during the glide') && ag.flight === flight && ag.flight?.climbTo === 30
       && ag.flightWaiters.length === 1, `${said(answer)}; climbTo ${ag.flight?.climbTo}; ${ag.flightWaiters.length} waiter(s)`);
   await settleLater();
-  // A flare the check didn't expect would still be waiting: answer it, so its timer doesn't hold the run.
+  // answer any unexpected flare, so its timer doesn't hold the run
   for (const w of ag.flightWaiters.splice(0)) w.done('timed out aloft');
   await landing;
 }
-// A glide whose flight a later landing has ended by the time its wait answers says where the body is, rather than
-// throwing on the flight that's gone.
+// a glide whose flight a later landing ended says where the body is, rather than throwing
 await relaunch();
 ag.flightAwait = async () => { ag.flight = null; ag.pos.x = 12; ag.pos.z = 34; return 'timed out aloft'; };
 r = await call('glide_to', { x: 40, z: 0 });
 ag.flightAwait = realAwait;
 check('a glide whose flight has ended by the time its wait answers is failed, saying where the body is',
   failed(r) && said(r) === 'timed out aloft at (12.0, 34.0)', said(r));
-// The flare's wait is sized from the ground under the body as it begins, and is never shorter than 60 s: a flare
-// that begins over high ground, here 55 m, and comes down on lower, 40 m, gets the 60 s. The asked point is away from
-// the body, which the stand-in glide leaves where it was, so the check sees which ground the sizing read.
+// the flare's wait is sized from the ground under the body as it begins, never under 60 s: 55 m high ground down to
+// 40 m gets the 60 s (the stand-in glide leaves the body put, so this sees which ground the sizing read)
 {
   await flyingAt(59);
   ag.glideTo = glidesThere;
@@ -629,11 +600,11 @@ check('a glide whose flight has ended by the time its wait answers is failed, sa
       && sizedAt?.[0] === 0 && sizedAt?.[1] === 0,
     `${said(flown.answer)}; ${JSON.stringify(flown.waits)}; sized at ${JSON.stringify(sizedAt)}`);
 }
-// The flare sinks on the circle held over the point, so the answer says how far off it came down.
+// the flare sinks on the circle held over the point, so the answer says how far off it came down
 r = await landing(arrived, 'down', { x: 12, z: 6 });
 check('a landing whose glide arrived and whose flare came down is done, saying how far from the point',
   ok(r) && / — landed at \(12\.0, 6\.0\), 7\.1m from \(5\.0, 5\.0\)$/.test(said(r)), said(r));
-// The rehearsal seam, switched on for this run, refuses a body that isn't flying.
+// the rehearsal seam, on for this run, refuses a body that isn't flying
 r = await call('rehearse_down', {});
 check('rehearse_down with no flight is failed', failed(r) && said(r) === 'not airborne — move {mode: "fly"} first', said(r));
 r = await call('rehearse_recover', {});
@@ -642,11 +613,10 @@ await relaunch();
 r = await call('rehearse_recover', {});
 check('rehearse_recover of a body that is flying, not down, is failed',
   failed(r) && /^nothing to recover from — the body isn't down \(/.test(said(r)), said(r));
-ag.flightRagdoll = async () => {}; // the real ragdoll needs a physics body this bench hasn't got
+ag.flightRagdoll = async () => {};  // the real ragdoll needs a physics body this bench lacks
 r = await call('rehearse_down', {});
 check('rehearse_down in flight is done', ok(r) && /^down — /.test(said(r)), said(r));
-// A down answers a climb or a glide waiting on the flight at once. From the down the ragdoll's sim runs, and the flight
-// tick, which settles waits, doesn't, so nothing else would answer the wait until the body came to rest.
+// a down answers a waiting climb or glide at once: from the down the ragdoll runs and the flight tick doesn't
 for (const [tool, a, words] of [
   ['climb_to', { altitude: 40 }, /^cut mid-climb at /],
   ['glide_to', { x: 60, z: 0 }, /^cut mid-glide — you are falling at /],
@@ -661,7 +631,7 @@ for (const [tool, a, words] of [
     waited ? said(answer) : 'the act registered no flight wait');
   ag.flightWaiters.splice(0); // a wait the down didn't answer would answer for the next call
 }
-// A world that withdraws flight mid-climb downs the body, and that answers the climb at once, as a down does.
+// a mid-climb withdrawal of flight downs the body, answering the climb at once
 await relaunch(); ag.flight.stamina = 1e6;
 {
   const waiting = call('climb_to', { altitude: 40 });
@@ -687,16 +657,15 @@ r = await call('rehearse_recover', {});
 check('rehearse_recover of a body down on the ground is done', ok(r) && said(r) === 'recovering' && ag.flight?.phase === 'RECOVER', `${said(r)}; ${ag.flight?.phase}`);
 r = await call('rehearse_recover', {});
 check('a second recovery while the body sits up is done, as already recovering', ok(r) && said(r) === 'already recovering', said(r));
-// A fold before a down: recovery opens the flight's wings and leaves the folded posture set, which take_off reads.
-// An unfold that finds the wings open is done, and clears the posture, or take_off would refuse wings unfold can't open.
+// recovery opens the wings but leaves the folded posture; an unfold finding them open is done and clears the
+// posture, or take_off would refuse wings unfold can't open
 await relaunch(); ag.flight.phase = 'GROUND'; ag.flight.wings = 'OPEN'; ag.wingsFolded = true;
 r = await call('unfold_wings');
 check('an unfold that finds the flight\'s wings open is done, and clears the folded posture, saying so',
   ok(r) && said(r) === 'wings stay as they are — already open; the folded-wing posture is released' && ag.wingsFolded === false, `${said(r)}; wingsFolded ${ag.wingsFolded}`);
 r = await call('take_off');
 check('...so take_off then flies', ok(r) && /^took off/.test(said(r)), said(r));
-// The other way round: a fold that finds the flight's wings folded is done, and sets the posture to match.
-// (The posture is cleared first, so a failure above doesn't stop this relaunch.)
+// a fold finding the wings folded is done and sets the posture (cleared first, so a failure above can't block relaunch)
 ag.wingsFolded = false;
 await relaunch(); ag.flight.phase = 'GROUND'; ag.flight.wings = 'FOLDED';
 r = await call('fold_wings');
@@ -705,7 +674,7 @@ check('a fold that finds the flight\'s wings folded, with the rig known, is done
 ag.wingsFolded = false; ag.flight = null;
 
 console.log('\nBONES NOT KNOWN');
-const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench' });
+const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench', url: noWorldUrl() });
 unread.bodyBoneNames = null;
 unread.loadBodyBones = async () => null;
 unread.myRights = { role: 'builder', fly: true };
@@ -722,7 +691,7 @@ check('releasing a folded posture while the bones are unknown is done',
 r = await callU('unfold_wings');
 check('an unfold with nothing folded while the bones are unknown changes nothing, and is done',
   ok(r) && /^nothing is folded — /.test(said(r)), said(r));
-// In the air, the flight's own wings say whether they're folded.
+// in the air, the flight's own wings say whether they're folded
 unread.flight = { wings: 'OPEN', phase: 'PILOT' };
 r = await callU('fold_wings');
 check('a fold in the air while the bones are unknown is failed', failed(r) && /^wings unchanged — /.test(said(r)), said(r));
@@ -731,7 +700,7 @@ r = await callU('fold_wings');
 check('a fold in the air of wings the flight holds folded, while the bones are unknown, is done, and the posture follows, saying so',
   ok(r) && said(r) === 'wings are already folded; the posture now shows them folded' && unread.wingsFolded === true, `${said(r)}; wingsFolded ${unread.wingsFolded}`);
 unread.flight = null; unread.wingsFolded = false;
-const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench' });
+const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench', url: noWorldUrl() });
 wingless.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
 wingless.loadBodyBones = async () => wingless.bodyBoneNames;
 r = await callOn(wingless, 'unfold_wings');
@@ -739,10 +708,10 @@ check('an unfold of a wingless body changes nothing, and is done',
   ok(r) && /^this body has no folded-wing posture to release$/.test(said(r)), said(r));
 
 console.log('\nFLIGHT THROUGH THE DOOR');
-// The door's flight calls answer each act's {ok} as isError (tools.ts act()), and a fly-mode move stops at the first
-// step that didn't do what it asked, with where the flight stands after it.
+// the door answers each act's {ok} as isError (tools.ts act()); a fly-mode move stops at the first failed step,
+// reporting where the flight stands
 {
-  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench' });
+  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench', url: noWorldUrl() });
   pilot.bodyBoneNames = WINGED;
   pilot.loadBodyBones = async () => pilot.bodyBoneNames;
   const fly = (name: string, a: Record<string, unknown> = {}) => settle(handleTool({ agent: pilot } as any, name, a));
@@ -762,7 +731,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   r = await fly('move', { mode: 'fly' });
   check('a fly-mode move on the ground takes off, and is done, ending with where the flight stands',
     ok(r) && /^took off — /.test(linesOf(r)[0]) && linesOf(r).length >= 2, said(r));
-  // A climb whose wait runs out: the move stops there, failed, before its glide, with the flight's status after it.
+  // a climb whose wait runs out stops the move, failed, before its glide
   const realAwaitP = pilot.flightAwait, glideOf = pilot.glideTo;
   let glides = 0;
   pilot.glideTo = (...a: unknown[]) => { glides++; return glideOf.apply(pilot, a); };
@@ -771,7 +740,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   pilot.flightAwait = realAwaitP; pilot.glideTo = glideOf;
   check('a fly-mode move whose climb times out is failed, stops before its glide, and ends with where the flight stands',
     failed(r) && /^timed out aloft at .*short of the climb/.test(linesOf(r)[0]) && linesOf(r).length >= 2 && glides === 0, `${said(r)}; glides ${glides}`);
-  // A glide that lands short: the move is failed with the glide's words; one that arrives is done.
+  // a glide that lands short fails the move in the glide's words; one that arrives is done
   const realGlideP = pilot.glideTo;
   pilot.glideTo = async () => ({ ok: false, text: 'landed short at (2.0, 2.0) — 4.2m short.' });
   r = await fly('move', { mode: 'fly', to: [30, 0] });
@@ -780,7 +749,6 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   r = await fly('move', { mode: 'fly', to: [30, 0] });
   check('...and one whose glide arrives is done', ok(r) && /^arrived at \(30\.0, 0\.0\)/.test(linesOf(r)[0]), said(r));
   pilot.glideTo = realGlideP;
-  // act {verb: "land"}: the landing's own answer.
   const realLand = pilot.landAt;
   pilot.landAt = async () => ({ ok: false, text: 'timed out aloft at (3.0, 3.0) — landed at (3.0, 3.0), 2.8m from (5.0, 5.0)' });
   r = await fly('act', { verb: 'land', args: { to: [5, 5] } });
@@ -789,7 +757,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   r = await fly('act', { verb: 'land', args: { to: [5, 5] } });
   check('...and one it answers as done is done', ok(r) && / — landed at /.test(said(r)), said(r));
   pilot.landAt = realLand;
-  // A body down on the ground after a cut takes off again through a fly-mode move, as the down refusals say.
+  // a body down after a cut takes off again through a fly-mode move, as the down refusals say
   for (const phase of ['RAGDOLL', 'RECOVER']) {
     pilot.flight.phase = phase;
     r = await fly('move', { mode: 'fly' });
@@ -798,8 +766,8 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   pilot.flight = null;
   r = await fly('act', { verb: 'land', args: { to: [5, 5] } });
   check('act {verb: "land"} on the ground is failed', failed(r) && said(r) === 'land: you are on the ground — move {mode: "fly"} gets you up', said(r));
-  // A wingless body's fold didn't happen, so nothing plays.
-  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench' });
+  // a wingless body's fold didn't happen, so nothing plays
+  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench', url: noWorldUrl() });
   bare.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
   bare.loadBodyBones = async () => bare.bodyBoneNames;
   r = await settle(handleTool({ agent: bare } as any, 'anim', { name: 'wings-folded' }));
@@ -848,14 +816,19 @@ r = await call('reach', { release: true });
 check('...and with nothing reaching it changes nothing, and is done', ok(r) && said(r) === "you weren't reaching for anything", said(r));
 r = await call('body_state', { who: 'nobody-here' });
 check('body_state of someone not here is failed', failed(r), said(r).slice(0, 200));
+// the rig's read fails at once: a library that answers 404, not the default door's address (unanswered here, a ~135 s wait)
+const noRig = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('no', { status: 404 }) });
+const realUrl = ag.url;
+ag.url = `ws://127.0.0.1:${noRig.port}/ws`;
 r = await call('anim', { joints: { leftUpperArm: [0, 0, 1] } });
 check('a pose with nothing usable is failed', failed(r) && /^no pose set — nothing usable/.test(said(r)), said(r));
 r = await call('anim', {});
 check('a bare anim that cannot read the rig to list its bones is failed', failed(r) && /^can't read your rig to list its bones/.test(said(r)), said(r));
+ag.url = realUrl; noRig.stop(true);
 const TRACKS = { leftUpperArm: [{ t: 0, q: [0, 0, 0, 1] }, { t: 0.5, q: [0, 0, -0.7, 0.7] }] };
 r = await call('anim', { tracks: TRACKS });
 check('an animation with no duration is failed', failed(r) && /^animate needs dur/.test(said(r)), said(r));
-// With the link down, nothing reaches the world, and the call says so in the agent's words (notJoined()).
+// with the link down nothing reaches the world, and the call says so (notJoined())
 const reconnecting = (x: any) => /^this body is reconnecting to the world, so nothing was sent; it rejoins on its own/.test(said(x));
 r = await call('anim', { dur: 1, tracks: TRACKS });
 check('your own animation with the link down is failed, saying the body is reconnecting', failed(r) && reconnecting(r), said(r));
@@ -865,7 +838,6 @@ r = await call('anim', { replace: true, dur: 1, tracks: TRACKS });
 check('a replacing animation with the link down is failed, saying the body is reconnecting, and the held pose stays',
   failed(r) && reconnecting(r) && ag.heldPose === held, `${said(r)}; held ${JSON.stringify(ag.heldPose)}`);
 ag.heldPose = null;
-// Someone the door can see, so a request to them is sent (and here meets the link down).
 ag.people.set('someone', { id: 'someone', avatar: 'a.vrm', pose: null, agent: false, observedAt: null });
 r = await call('act', { verb: 'shove', args: { target: 'someone' } });
 check('a shove with the link down is failed, saying the body is reconnecting', failed(r) && reconnecting(r), said(r));
@@ -873,7 +845,6 @@ r = await call('anim', { stop: true, target: 'someone' });
 check('releasing someone else\'s pose with the link down is failed, saying the body is reconnecting', failed(r) && reconnecting(r), said(r));
 r = await call('say', { text: 'hello' });
 check('a say with the link down is failed', failed(r), said(r));
-// Joined, with the socket closed under it, nothing can go out either.
 const realWs = ag.ws;
 ag.joined = true;
 ag.ws = { readyState: 3, send: () => { throw new Error('sent on a closed socket'); } };
@@ -881,7 +852,6 @@ for (const [tool, a] of [['anim', { dur: 1, tracks: TRACKS }], ['act', { verb: '
   r = await call(tool, a);
   check(`${tool === 'act' ? 'a shove' : 'your own animation'} while joined with the socket closed is failed, saying the body is reconnecting`, failed(r) && reconnecting(r), said(r));
 }
-// With the socket open, each goes out on it.
 const out: any[] = [];
 ag.ws = { readyState: 1, send: (s: string) => { out.push(JSON.parse(s)); } };
 r = await call('anim', { dur: 1, tracks: TRACKS });
@@ -889,7 +859,7 @@ check('with the socket open, your own animation is sent', ok(r) && out.some((f) 
 r = await call('act', { verb: 'shove', args: { target: 'someone' } });
 check('...and a shove of someone here', ok(r) && out.some((f) => f.type === 'puppet' && f.target === 'someone'), `${said(r)}; ${JSON.stringify(out)}`);
 ag.joined = false; ag.ws = realWs;
-// A handler that throws is answered in the result, where the model reads it, and the throw goes to the operator's log.
+// a handler that throws is answered in the result (where the model reads it), and the throw goes to the operator's log
 const logged: string[] = [];
 const realConsoleError = console.error;
 const realSay = ag.say;
@@ -908,7 +878,6 @@ for (const [thrown, words] of [
 }
 ag.say = realSay;
 check('...and each throw is in the operator\'s log, naming the tool', logged.filter((l) => l.startsWith('[door] say threw:')).length === 4, logged.join(' | '));
-// What the world's HTTP side answers, stood in for.
 const realFetch = globalThis.fetch;
 const serve = (handler: (url: string) => Response) => { globalThis.fetch = (async (u: any) => handler(String(u))) as any; };
 const unreachable = () => { globalThis.fetch = (async () => { throw new Error('connect ECONNREFUSED'); }) as any; };
@@ -977,7 +946,7 @@ check('a measure answered with something that isn\'t geometry is failed', failed
 serve(() => new Response('needs a key', { status: 401 }));
 r = await call('measure', { lib: 'models/stone.glb' });
 check('a measure the world\'s read key refuses is failed', failed(r) && /^measure: nothing was measured; this world shows its state only to the people it lets in, and it didn't take this body's read key \(401\)\. Calling again won't change that/.test(said(r)), said(r));
-// house 6340433633: a 403 is a key the world read and a body it doesn't let in, not a key it didn't take
+// a 403 is a key the world read and a body it doesn't let in, not a key it didn't take
 serve(() => new Response('not for you', { status: 403 }));
 r = await call('measure', { lib: 'models/stone.glb' });
 check('a measure the world\'s door refuses (403) says it read the key and doesn\'t let this body in', failed(r) && /^measure: nothing was measured; .*it read this body's key and doesn't let this body in \(403\)\. Calling again won't change that: the world's owners decide/.test(said(r)) && !/didn't take/.test(said(r)), said(r));
@@ -996,7 +965,6 @@ serve(() => new Response('busy', { status: 503 }));
 r = await call('worlds', {});
 check('a worlds list the world server answers 503 is failed', failed(r) && /^worlds: the world server answered 503/.test(said(r)), said(r));
 globalThis.fetch = realFetch;
-// What a say sends, with the world taking it.
 const says: string[] = [];
 ag.say = async (text: string) => { says.push(text); return { ok: true }; };
 r = await call('say', { text: 's'.repeat(4001) });
@@ -1004,14 +972,14 @@ check('a say over 4000 characters sends the first 4000, and says so',
   ok(r) && said(r) === 'said — only its first 4000 characters were sent; say the rest in another call' && says.at(-1)?.length === 4000, said(r));
 r = await call('say', { text: 's'.repeat(4000) });
 check('...and one of exactly 4000 is just said', ok(r) && said(r) === 'said', said(r));
-// A cut never ends in half of a character: here the 4000th unit is the first half of an emoji.
+// a cut never ends mid-character: the 4000th unit here is the first half of an emoji
 r = await call('say', { text: 's'.repeat(3999) + '😀' + 's' });
 check('a say whose cut would split a character sends what comes before it, and says how much',
   ok(r) && said(r) === 'said — only its first 3999 characters were sent; say the rest in another call' && says.at(-1) === 's'.repeat(3999), said(r));
 r = await call('say', { text: '😀'.repeat(2001) });
 check('a cut is counted in characters: 2000 emoji, not their 4000 units', ok(r) && said(r) === 'said — only its first 2000 characters were sent; say the rest in another call' && says.at(-1) === '😀'.repeat(2000), said(r));
 ag.say = realSay;
-// A request to another body is sent, and the target decides.
+// a request to another body is sent; the target decides
 const puppets: [string, unknown][] = [];
 const realPuppet = ag.puppet;
 ag.puppet = (target: string, spec: unknown) => { puppets.push([target, spec]); };
@@ -1020,7 +988,7 @@ check('releasing someone else\'s pose says it was asked, and that they decide', 
 check('...and asks them to clear it', JSON.stringify(puppets.at(-1)) === '["someone",{"pose":{}}]', JSON.stringify(puppets.at(-1)));
 ag.puppet = realPuppet;
 ag.people.delete('someone');
-// The world's answer decides a moderation verb's result.
+// the world's answer decides a moderation verb's result
 const realSendMod = ag.sendMod, realOutcome = ag.modOutcome;
 ag.sendMod = () => {};
 ag.modOutcome = async () => 'refused: only a world admin can ban everywhere';
@@ -1056,9 +1024,8 @@ check('naming a place on an unknown thing is failed', failed(r) && /no thing cal
 }
 
 console.log('\nFOLDED AND REMOVED TOOLS');
-// Main's tools that this protocol folds into general tools are refused with the call that does it now, and nothing
-// runs; world_access, folded into @world's own components, says so, and whisper says it was removed with world chat's
-// private channel (#260 r3 I3: a retired name is refused with a pointer, never "no such tool").
+// main's folded tools are refused with the call that does it now, and nothing runs; world_access points at @world's
+// components; whisper says it went with world chat's private channel (a retired name gets a pointer, never "no such tool")
 for (const name of ['take_off', 'climb_to', 'glide_to', 'land_at', 'fold_wings', 'unfold_wings', 'rehearse_down', 'rehearse_recover',
   'clear_reach', 'clear_pose', 'ragdoll', 'library_preview', 'library_sheet', 'remove', 'kick', 'list_bans']) {
   r = await door(name, {});

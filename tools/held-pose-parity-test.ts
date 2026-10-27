@@ -1,19 +1,11 @@
-// A held pose's rotation, translation and scale, read by the headless
-// stand-ins (body_state's reader, the reach solver, the ragdoll's start) and
-// drawn by the renderer, must put every joint in the same place. The renderer
-// side is client/lib/avatar.js transcribed (setPose, the hips step of its
-// update, vrm.update, _applyRawPose and _rawRest at full weight; the ragdoll's
-// start transcribes bakeHipsIntoRoot's drop), on a VRM loaded by three-vrm
-// exactly as the client loads it (assets.js records boneRest before anything
-// moves a bone). When those change, this transcription changes with them.
-// The reach solver sees only the held pose's normalized layer, as the
-// renderer's IK runs before its raw layer is laid; contacts and joints are
-// read with both.
-//
-// Rigs: the self-contained fixture, VRM1 and VRM0, scaled, and with bones
-// turned at rest the way real rigs turn them (a scale acts in the bone's own
-// rest axes, so an unturned rig can't tell the right axes from the wrong
-// ones). With EIDOVERSE_DIR set, the library's avatars too.
+// A held pose's rotation, translation and scale must put every joint in the same place whether read by the headless
+// stand-ins (body_state's reader, the reach solver, the ragdoll's start) or drawn by the renderer. The renderer side is
+// client/lib/avatar.js transcribed (setPose, the hips step of update, vrm.update, _applyRawPose and _rawRest at full
+// weight; bakeHipsIntoRoot's drop), on a VRM loaded as the client loads it: when those change, this changes with them.
+// The reach solver sees only the normalized layer (the renderer's IK runs before the raw layer); contacts and joints
+// read both.
+// Rigs: the fixture, VRM1 and VRM0, scaled, and with bones turned at rest (a scale acts in the bone's rest axes, so an
+// unturned rig can't tell right axes from wrong). With EIDOVERSE_DIR set, the library's avatars too.
 // Run: bun tools/held-pose-parity-test.ts
 process.env.AGENT_BODY_ENGINE = "verlet";
 import { readdirSync, readFileSync } from "node:fs";
@@ -29,7 +21,6 @@ import { fixture, postureFixture } from "./body-fixture.ts";
 import { mkCheck } from "./harness.ts";
 const { check, tally } = mkCheck();
 
-// A rotation of `deg` degrees about an axis, as [x, y, z, w].
 const turn = (x: number, y: number, z: number, deg: number) => {
   const s = Math.sin(deg * Math.PI / 360) / Math.hypot(x, y, z);
   return [x * s, y * s, z * s, Math.cos(deg * Math.PI / 360)];
@@ -51,8 +42,7 @@ if (library) {
   const dir = join(library, "eidoverse/assets/vrms");
   for (const n of readdirSync(dir).filter(n => n.endsWith(".vrm") && !n.endsWith(".ktx2.vrm"))) files.set("/library/" + n, readFileSync(join(dir, n)));
 }
-// A standing body plays a clip under its held pose: the fixture's idle, at
-// its first frame on both sides.
+// a standing body plays the fixture's idle under its held pose, at its first frame on both sides
 const idleBytes = postureFixture("idle");
 files.set("/library/__corpus/idle.vrma", idleBytes);
 const idle = await parsePoseAnimation(idleBytes.buffer.slice(idleBytes.byteOffset, idleBytes.byteOffset + idleBytes.byteLength));
@@ -83,11 +73,8 @@ async function loadVrm(bytes: Uint8Array) {
   return { vrm, root };
 }
 
-/** avatar.js, at full weight. A standing body: the clip's frame, the head
- *  pitch, the held pose's normalized layer, vrm.update, then its raw layer.
- *  A limp one (remotes.js sets a ragdoll limp): no clip under the sim's
- *  bones, no pitch and no raw layer. `clip: false` leaves out the clip alone,
- *  for the agent's reach body, which plays none. */
+/** avatar.js at full weight. Standing: the clip's frame, head pitch, the normalized layer, vrm.update, the raw layer.
+ *  Limp (remotes.js): no clip, no pitch, no raw layer. `clip: false` drops only the clip (the agent's reach body). */
 function drawHeld(vrm: any, bones: Record<string, unknown>, { limp = false, clip = true, pitch = 0 } = {}) {
   const h = vrm.humanoid, rest = vrm.userData.boneRest;
   if (!limp && clip) {
@@ -144,7 +131,7 @@ try {
       root.updateMatrixWorld(true);
       drawHeld(vrm, bones, { limp, pitch: 0.4 });
       root.updateMatrixWorld(true);
-      // Both publish a head pitch, which only the standing body draws.
+      // both publish a head pitch, which only the standing body draws
       const o: any = { who: path, avatar: path, generation: 1, self: true, connected: true, source: "unknown",
         pose: { p: [2, 0.5, -1], yaw: 0.6, pitch: 0.4, speed: 0, pose: bones, ...(limp ? { clip: "ragdoll" } : { clip: "idle", clipTime: 0 }) } };
       const r = await reader.read(path, "bones", undefined, () => ({ ...o, receivedAt: Date.now() }));
@@ -164,33 +151,30 @@ try {
       `${compared} joints compared, ${skipped} without a drawn bone, ${unread} pose(s) unread, worst ${(worst * 1000).toFixed(4)} mm (${where}), ${worstTurn.toExponential(1)} rad (${turnWhere})`);
   }
 
-  // Only a pose that isn't a map of bones is unusable whole.
+  // only a pose that isn't a map of bones is unusable whole
   {
-    // Both read the reader's own body, whose pose is this door's to drop.
+    // both read the reader's own body, whose pose is this door's to drop
     const NOT_A_MAP = "your published pose isn't a map of bones, so nothing of your body was read; anim {stop: true} drops it";
     const bad = await reader.read("bad", "bones", undefined, () => ({ who: "bad", avatar: "vrm1.vrm", generation: 1, self: true, connected: true,
       source: "unknown", receivedAt: Date.now(), pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: "ragdoll", pose: [[0, 0, 0, 1]] } } as any));
     check("a published pose that isn't a map of bones is refused whole, with no claim about its bones",
       !bad.ok && bad.error === NOT_A_MAP && bad.unreadableBones === null, bad.error);
-    // A word, which Object.entries would read a letter at a time.
+    // a word, which Object.entries would read a letter at a time
     const word = await reader.read("bad", "bones", undefined, () => ({ who: "bad", avatar: "vrm1.vrm", generation: 1, self: true, connected: true,
       source: "unknown", receivedAt: Date.now(), pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: "ragdoll", pose: "kneel" } } as any));
     check("...and so is one that isn't an object",
       !word.ok && word.error === NOT_A_MAP && word.unreadableBones === null, word.error);
   }
 
-  // The reach solver sees the held pose's normalized layer only: the
-  // renderer solves its IK before it lays a held translation on an arm or a
-  // scale (avatar.js update), so the solve is the same with or without them,
-  // and only the drawn hand moves.
+  // the reach solver sees only the normalized layer: the renderer solves IK before laying held translation/scale, so
+  // only the drawn hand moves
   {
     const reaching = (bones: Record<string, unknown>) => reader.read("reacher", "bones", undefined, () => ({ who: "reacher", avatar: "turned-vrm1.vrm",
       generation: 1, self: true, connected: true, source: "unknown", receivedAt: Date.now(),
-      pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: "idle", clipTime: 0, pose: bones, reach: { leftHand: { t: { p: [1.4, 1.3, 0.4] } } } } } as any));   // out of reach, so the gap is the arm's shortfall
+      pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: "idle", clipTime: 0, pose: bones, reach: { leftHand: { t: { p: [1.4, 1.3, 0.4] } } } } } as any));  // out of reach, so the gap is the arm's shortfall
     const plain = await reaching({ head: [0, 0, 0, 1] });
-    // A translation on the upper arm and a scale on the chest would move the
-    // shoulder, and a scale on the upper arm would lengthen the arm, for a
-    // solver that saw them.
+    // a translation on the upper arm or a scale on the chest would move the shoulder, and an upper-arm scale lengthen
+    // the arm, for a solver that saw them
     const held = await reaching({ head: [0, 0, 0, 1], chest: { s: [1.3, 1, 1] }, leftUpperArm: { t: [0, 0.08, 0], s: [1, 1.6, 1] }, leftLowerArm: { t: [0, 0.05, 0] } });
     const a = plain.reachEvaluation?.leftHand, b = held.reachEvaluation?.leftHand;
     check("a held arm's translation and scale don't change its reach solve, as the renderer's IK never sees them",
@@ -199,10 +183,8 @@ try {
     check("...and the hand is drawn where they put it", moved > 0.01, `${(moved * 1000).toFixed(1)} mm`);
   }
 
-  // The ragdoll's start: every joint where the browser draws the body as its
-  // own sim starts, limp, its held rotations laid and its hips drop moved
-  // onto the root (avatar.js bakeHipsIntoRoot). A VRM0 body falls in the
-  // half-turned frame three-vrm gives it, as the browser's does.
+  // the ragdoll's start: limp, held rotations laid, hips drop baked onto the root (bakeHipsIntoRoot); a VRM0 body falls
+  // in three-vrm's half-turned frame, as in the browser
   for (const path of ["vrm1.vrm", "vrm0.vrm", "turned-vrm0.vrm"]) {
     const t = [0.1, -0.3, 0.05], yaw = 0.6, rootY = 0.5;
     const held = { hips: { q: turn(1, 0, 0, 40), t }, spine: turn(0, 0, 1, 25), leftUpperArm: turn(0, 1, 1, 70), rightLowerLeg: turn(1, 0, 0, -60) };
@@ -227,9 +209,7 @@ try {
       `${compared} joints, worst ${(worst * 1000).toFixed(4)} mm (${where})`);
   }
 
-  // An agent's own reach body is kept and posed again for each solve
-  // (agent.ts reachBodySync): what one held pose scaled or moved goes when
-  // the next pose comes.
+  // the agent's reach body is reused per solve (agent.ts reachBodySync): one pose's scale or translation goes with the next pose
   const kept = await ReachBody.create(base, "turned-vrm1.vrm"), fresh = await ReachBody.create(base, "turned-vrm1.vrm");
   if (!kept || !fresh) throw new Error("no reach body");
   const hand = (b: any) => b.av.nodes.leftHand.getWorldPosition(new THREE.Vector3());
@@ -237,7 +217,7 @@ try {
   const stretched = { hips: { t: [0, -0.3, 0] }, leftUpperArm: { s: [1, 2, 1] }, leftLowerArm: { t: [0, 0.04, 0] } };
   kept.poseAt([1, 0, 2], 0.3, stretched);
   const posed = hand(kept);
-  // The agent's reach body plays no clip, so it's held to the renderer with none.
+  // the agent's reach body plays no clip, so it's compared with none
   {
     const { vrm, root } = await loadVrm(files.get("/library/turned-vrm1.vrm")!);
     root.position.set(1, 0, 2); root.rotation.y = 0.3; root.updateMatrixWorld(true);
@@ -264,8 +244,7 @@ try {
     && Math.abs((kept.armLength("leftHand") ?? NaN) - (fresh.armLength("leftHand") ?? NaN)) < 1e-12,
     `posed ${posed.distanceTo(hand(fresh)).toFixed(3)} m away, then ${hand(kept).distanceTo(hand(fresh)).toExponential(1)} m`);
 
-  // A rotation of no length normalizes to identity in the renderer, the
-  // bone's rest, replacing whatever the clip left; and so here.
+  // a zero-length rotation normalizes to identity (the bone's rest), replacing whatever the clip left, as in the renderer
   {
     const a = await ReachBody.create(base, "turned-vrm1.vrm");
     if (!a) throw new Error("no reach body");
@@ -277,9 +256,8 @@ try {
       JSON.stringify(a.av.nodes.spine.quaternion.toArray()));
   }
 
-  // A published pose names bones as its sender's body has them. One the
-  // stand-in lacks, or a name every object inherits, is skipped, and the
-  // rest is laid, on the reach path and at a fall's start.
+  // a published pose names bones as its sender has them: one the stand-in lacks, or an inherited name, is skipped and the
+  // rest laid, on the reach path and at a fall's start
   {
     const q = [0, 0, 0.3, Math.sqrt(0.91)];
     const odd = JSON.parse(JSON.stringify({ spine: q, tailTip: q, constructor: q, toString: q }));
@@ -293,13 +271,13 @@ try {
     if (!body) throw new Error("the headless sim is unavailable");
     threw = "";
     try { body.begin({ x: 0, z: 0, yaw: 0, pose: odd }); } catch (e) { threw = String(e); }
-    // the fall starts from the pose as laid: the spine's published rotation on the headless stand-in's node
+    // the fall starts from the pose as laid
     const spine = (body as any).av.nodes.spine?.quaternion;
     check("...and a fall from it starts, from the rest of the pose laid", !threw && !!body.rd && !!spine && spine.equals(new THREE.Quaternion(...q).normalize()),
       threw || JSON.stringify(spine?.toArray()));
   }
 
-  // An arm's length is the solver's: a held scale on it doesn't lengthen it.
+  // an arm's length is the solver's: a held scale doesn't lengthen it
   {
     const scaled = await ReachBody.create(base, "turned-vrm1.vrm");
     if (!scaled) throw new Error("no reach body");
@@ -309,9 +287,7 @@ try {
       `${scaled.armLength("leftHand")} vs ${fresh.armLength("leftHand")}`);
   }
 
-  // A contact's normal under a held non-uniform scale stays perpendicular to
-  // the surface it marks, as a normal on the drawn mesh does: it goes through
-  // the bone's inverse transpose, not its matrix.
+  // a contact normal under a non-uniform scale stays perpendicular to its surface: it goes through the inverse transpose
   {
     const body = await ReachBody.create(base, "turned-vrm1.vrm");
     if (!body) throw new Error("no reach body");
@@ -324,8 +300,7 @@ try {
     const m1 = new THREE.Matrix3().setFromMatrix4(node.matrixWorld), n1 = new THREE.Vector3(...body.contact("forearm_l", 0)!.normal);
     const off = Math.max(...local.map((t) => Math.abs(n1.dot(t.clone().applyMatrix3(m1).normalize()))));
     check("a contact's normal on a scaled bone stays perpendicular to its surface", off < 1e-9, `cosine to the surface ${off.toExponential(2)}`);
-    // A scale with a 0 in it collapses the surface: the contact sits where the
-    // collapse draws it, and faces as the bone would unscaled.
+    // a scale with a 0 collapses the surface: the contact sits where the collapse draws it, facing as the bone would unscaled
     body.poseAt([0, 0, 0], 0, null);
     const unscaled = body.contact("forearm_l", 0)!;
     body.poseAt([0, 0, 0], 0, { leftLowerArm: { s: [1, 0, 1] } });

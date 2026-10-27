@@ -1,8 +1,6 @@
-// Rendering-only instancing for repeated library meshes. The original scene
-// graph remains the authority for parts, mounts, editing, picking and collision.
-// During ONE synchronous render we suppress only each source mesh's layers
-// (never its children), draw its world transform in a small spatial batch, then
-// restore everything in finally. No folded state or shared asset is mutated.
+// Rendering-only instancing for repeated library meshes; the scene graph stays the authority for everything else.
+// Within ONE synchronous render: suppress each source's layers (never its children), batch, restore in finally.
+// No folded state or shared asset is mutated.
 import * as THREE from 'three';
 
 const CAPACITY = 64; // fixed UBO layout: changing population never changes WGSL
@@ -19,9 +17,7 @@ function uniformScale(matrix) {
   return Math.abs(x-y) <= 1e-6*Math.max(x,y) && Math.abs(x-z) <= 1e-6*Math.max(x,z);
 }
 
-// Coplanar overlapping copies can change their winning fragments when draws
-// are reordered. Keep intersecting bounds on the original path. A sweep along
-// X limits comparisons to the local neighbourhood; touching faces are fine.
+// intersecting bounds stay on the original path: reordered coplanar copies z-fight; touching faces are fine
 function overlappingSources(groups) {
   const materials = new Map();
   const relevant = new Set();
@@ -67,8 +63,7 @@ export function markDrawBatchSource(root) {
   root.traverse((o) => { if (o.isMesh) o.userData.drawBatchSource = true; });
 }
 
-// InstanceNode's normal transform assumes orthogonal axes. Mirrored, singular
-// and sheared transforms stay on Mesh's full inverse-transpose path.
+// InstanceNode's normal transform assumes orthogonal axes: mirrored, singular and sheared stay on Mesh's path
 export function instanceTransformSafe(matrix) {
   const e = matrix.elements;
   if (!e.every(Number.isFinite) || matrix.determinant() <= 0) return false;
@@ -176,16 +171,12 @@ export class DrawBatches {
         || !!o.isBundleGroup || (!!o.isGroup && o.renderOrder !== 0);
       if (!blocked && o.isMesh && canInstanceMesh(o)) {
         stats.eligible++;
-        // Keep per-mesh COLOR culling: grouping a tile must not submit all its
-        // high-poly members just because one enters the view. Off-camera
-        // sources remain ordinary meshes, so their shadows still render.
+        // keep per-mesh colour culling: one member in view must not submit the whole tile
         if (o.layers.test(camera.layers) && this.frustum.intersectsObject(o)) {
           const g = o.geometry;
           if (!g.boundingSphere) g.computeBoundingSphere();
           this.center.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
-          // r184 InstanceNode transforms normals but NOT tangentLocal. Keep
-          // tangent-bearing meshes' common linear transform on the batch and
-          // instance only their translations, preserving the authored TBN.
+          // r184 InstanceNode skips tangentLocal: tangent meshes share the linear part, instance only translation
           const e = o.matrixWorld.elements;
           const basis = g.hasAttribute('tangent')
             ? `/${e[0]},${e[1]},${e[2]},${e[4]},${e[5]},${e[6]},${e[8]},${e[9]},${e[10]}` : '';
@@ -195,17 +186,13 @@ export class DrawBatches {
           let list = groups.get(key);
           if (!list) {
             groups.set(key, list = []);
-            // Basis VALUES group this frame; a stable source identity keys the
-            // pool. Synchronized spinning copies must not queue a new shader
-            // warm for every successive angle.
+            // basis VALUES group; source identity keys the pool, so spinning copies don't warm a shader per angle
             list.poolKey = cellKey + (basis ? `/anchor:${o.id}` : '');
           }
           list.push(o);
         }
       }
-      // Keep a nonuniformly scaled hierarchy together on the original path.
-      // Even its individually orthogonal leaves can change shadow rounding
-      // relative to their sheared neighbours (pinned by drawbench's shear case).
+      // a nonuniformly scaled hierarchy stays whole on the original path: its leaves' shadows round differently (drawbench 'sheared')
       const childrenBlocked = blocked || (o.children.length > 0 && !uniformScale(o.matrixWorld));
       for (const child of o.children) visit(child, childrenBlocked);
     };
@@ -238,8 +225,7 @@ export class DrawBatches {
             transform = this.instance.identity().setPosition(this.center);
           }
           mesh.setMatrixAt(i, transform);
-          // Union the SAME bounds the original draws used, including authored
-          // padding. Off-camera casters must stay present for the shadow camera.
+          // the SAME bounds the originals used, padding included: off-camera casters must stay for the shadow camera
           this.sphere.copy(source.geometry.boundingSphere).applyMatrix4(transform);
           mesh.boundingSphere.union(this.sphere);
           this.hidden.push([source, source.layers.mask]);
@@ -277,12 +263,8 @@ export class DrawBatches {
     let prepared = false;
     scene.onBeforeRender = (...args) => {
       before.apply(scene, args);
-      // Renderer has updated world matrices and camera projection at this seam.
-      // ShadowNode recursively renders this SAME scene through a light camera.
-      // Prepare against the MAIN camera only — never a light camera. In WebXR the main pass arrives as
-      // three's ArrayCamera; excluding every ArrayCamera meant the first non-array caller was ShadowNode's
-      // light camera, and the batches were culled to the sun's shadow box around the origin: the eyes saw
-      // the origin grid and nothing else (R's Steam Frame, 2026-09-05 21:45 'I pop to the origin').
+      // Prepare against the MAIN camera only, never ShadowNode's light camera (it re-renders this scene).
+      // In WebXR the main pass is an ArrayCamera, so it must not be excluded.
       const cam = args[2];
       const isMain = cam === camera || (cam.isArrayCamera && renderer.xr?.isPresenting && cam === renderer.xr.getCamera());
       if (!prepared && args[1] === scene && isMain) {

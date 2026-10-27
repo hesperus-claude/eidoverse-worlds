@@ -2,19 +2,13 @@
 // Real client + IWER (emulated Quest 3). Cloud quality flipped mid-session must hold (quality unchanged, no
 // rebuild line), and apply on exit. The VR cap's own entry flip still goes through.
 //   bun tools/sky-xr-hold-probe.mjs   (spawns its own server via probe-harness)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown } from './probe-harness.mjs';
 const { check, done } = checker();
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
-await pg.addInitScript(IWER);
-await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-  window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } window.__g = 0;
-  const real = navigator.xr.requestSession.bind(navigator.xr); navigator.xr.requestSession = async (...a) => { const s = await real(...a); window.__g++; return s; };
-  localStorage.setItem('ew-cloud-quality', 'medium'); });
+await iwerInit(pg, { cloud: 'medium' });
+await pg.addInitScript(() => { window.__g = 0;
+  const real = navigator.xr.requestSession.bind(navigator.xr); navigator.xr.requestSession = async (...a) => { const s = await real(...a); window.__g++; return s; }; });
 const lines = []; const errs = [];
 pg.on('console', (m) => { const t = m.text(); if (/\[sky\]/.test(t)) lines.push(t); });
 pg.on('request', (r) => { const b = r.postData(); if (b && /\[sky\]/.test(b)) for (const x of b.match(/\[sky\][^"\\]*/g) ?? []) lines.push(x); });
@@ -23,7 +17,7 @@ const ev = (fn, a) => pg.evaluate(fn, a);
 const q = () => ev(async () => (await import('./lib/sky.js')).getCloudQuality());
 try {
   await pg.goto(`${world.origin}/?world=staging&name=skyhold&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 90000 });
+  await visorShown(pg);
   await pg.waitForTimeout(4000);
   check('boots at medium', (await q()) === 'medium', await q());
   await ev(() => document.querySelector('#xrbtn').click());

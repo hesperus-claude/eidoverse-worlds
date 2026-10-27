@@ -1,7 +1,7 @@
-// Physics checks (design 20). Every scenario is built through the authority's ordinary tools, at pinned clock times.
-// Ported from the protocol lab's phys-check.js @ 11db981; only paths changed. usage: bun tools/protocol/phys-check.ts
+// Physics checks (design 20): every scenario built through the authority's ordinary tools, at pinned clock times.
+// usage: bun tools/protocol/phys-check.ts
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { request, settle, forkCopy } from "../../shared/protocol/authority.js";
@@ -13,13 +13,14 @@ import { ENGINE, scratch } from "./common.ts";
 import { worldT, yawQ, qrot, qmul, aabb, surfacesOf } from "../../shared/protocol/authority/math.js";
 import { supportBelow } from "../../shared/protocol/authority/spatial.js";
 import { labClock, pinEnv } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("phys");
-const clock = labClock(); let fails = 0, passes = 0;
+const clock = labClock();
 const fresh = (name) => { for (const f of [`${name}.jsonl`, `${name}.presence.json`]) fs.rmSync(`${root}worlds/${f}`, { force: true }); return name; };
 const at = (ms) => { clock.advance(ms); };
 function call(world, actor, verb, args = {}, step = 100) { at(step); return request(openWorld(root, world), actor, verb, args); }
-function ok(cond, what, detail) { if (cond) passes++; else { fails++; console.log("FAIL", what, detail !== undefined ? JSON.stringify(detail).slice(0, 400) : ""); } }
+const { ok, done } = suite("phys-check", { quiet: true });
 const log = (world) => openWorld(root, world).entries;
 const view = (world) => { const w = openWorld(root, world); return simFold(w.entries, w.now()); };
 // a tampered copy of a log, re-read from text as any reader would (positions are seqs; a copy has no stored seq)
@@ -28,15 +29,14 @@ const copyOf = (L) => readLog(L.map((e) => JSON.stringify(e)).join("\n") + "\n")
 const insertAt = (L, i, e) => { const C = copyOf(L).map((x) => (typeof x.cause === "number" && x.cause >= i ? { ...x, cause: x.cause + 1 } : x)); C.splice(i, 0, e); return copyOf(C); };
 const rests = (L) => restsOf(L);
 const ENG = { engine: process.env.PHYS_ENGINE ?? "eidosim" };   // no version named: stamped by the authority (so a deploy may restamp it, R)
-// a rigid-body engine rests things inside its contact slop (eidosim: 5 mm) and a box doesn't slide far (the first eidosim
-// slid things like pucks and stood them exactly on their support; these bars were exact for it)
+// a rigid-body engine rests things inside its contact slop (eidosim: 5 mm), and a box doesn't slide far
 const RIGID = true, ON = 0.005;
 
 function playground(name) {
   fresh(name);
   call(name, "rowan", "create-world", { title: name });
   call(name, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG });
-  call(name, "rowan", "set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });   // kit and friends are inhabitants here (R 10-21: a new world's newcomers build)
+  call(name, "rowan", "set", { id: "@world", component: "default-role", value: { role: "inhabitant" } });   // kit and friends are inhabitants here (a new world's newcomers build)
   call(name, "rowan", "create", { id: "table-1", model: "table", place: { at: [0, 4] } });
   call(name, "rowan", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "inhabitant" } }, place: { at: [0, 0] } });
   call(name, "rowan", "create", { id: "crate-1", model: "crate", components: { physics: { kind: "dynamic", who: "builder" } }, place: { at: [2, 0] } });
@@ -44,7 +44,7 @@ function playground(name) {
   return name;
 }
 
-// A — a throw, its rest result, and the three readers: a carrier, a non-carrier, a second carrier run.
+// A: a throw, its rest result, and the three readers: a carrier, a non-carrier, a second carrier run.
 {
   const W = playground("pc-a");
   const g = call(W, "rowan", "grab", { id: "ball" });
@@ -74,7 +74,7 @@ function playground(name) {
 
 }
 
-// B — a tampered rest result: the carrier must notice; a non-carrier can't (and the design says so).
+// B: a tampered rest result: the carrier must notice; a non-carrier can't (and the design says so).
 {
   const W = "pc-a"; const L = log(W); const i = rests(L)[0].seq;
   const bad = copyOf(L); (bad[i].body.ops ?? [bad[i].body]).find((o) => o.comp === "transform").value.pos[2] += 0.5;
@@ -85,8 +85,8 @@ function playground(name) {
   ok(v2.checks.disagree.length >= 1, "B a tampered launch is caught too (the logged result no longer follows)", v2.checks);
 }
 
-// C — L6 (as revised; 33 F1): a launched thing is the engine's until it rests. No authored write touches it in flight,
-// not even a label (the lab used to let an authored transform win over the sim, P7: the law now says otherwise).
+// C: L6: a launched thing is the engine's until it rests. No authored write touches it in flight, not even a label
+// (an authored transform never wins over the sim, P7).
 {
   const W = playground("pc-c");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 4, 1] });
@@ -105,7 +105,7 @@ function playground(name) {
   ok(simFold(forged, openWorld(root, W).now()).checks.disagree.some((d) => /in flight/.test(d.why ?? "")), "C a carrier flags any write that touched it in flight", simFold(forged, openWorld(root, W).now()).checks);
 }
 
-// D — P6 barrier: turning physics off mid-flight waits (with an ETA), or freezes on force.
+// D: P6 barrier: turning physics off mid-flight waits (with an ETA), or freezes on force.
 {
   const W = playground("pc-d");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 6, 0] });
@@ -116,7 +116,7 @@ function playground(name) {
   const v = view(W); ok(!v.sim, "D no epoch after the cut");
   const after = call(W, "rowan", "look", {}, 3000).things.find((x) => x.id === "ball");
   ok(!after.moving && after.at[1] > 0.5, "D frozen where it was: logged as a plain result", after);
-  if (RIGID) { // review of 49d4fb0d #3: a rigid engine's origin is only where it was WITH its own turn; frozen pre-launch q floats it
+  if (RIGID) { // a rigid engine's origin is only where it was WITH its own turn: a frozen pre-launch q floats it
     const W3 = playground("pc-d3");
     call(W3, "rowan", "move", { to: [2, 0, -0.5] });
     const g3 = call(W3, "rowan", "grab", { id: "crate-1" }), t3 = call(W3, "rowan", "throw", { id: "crate-1", v: [0, 5, 0], w: [0, 0, 6] });
@@ -127,7 +127,7 @@ function playground(name) {
     const q = op?.value?.q ?? [0, 0, 0, 1];
     ok(f3.ok && Math.abs(q[3]) < 0.9999, "D3 a forced cut logs a tumbling crate as the engine had it turned, not as it was thrown", { q, ok: f3.ok });
   }
-  if (RIGID) { // review of 49d4fb0d #6: a thing with a shape and no model has no collider in a rotating engine: refused, not silent
+  if (RIGID) { // a thing with a shape and no model has no collider in a rotating engine: refused, not silent
     const W6 = playground("pc-d6");
     const c6 = call(W6, "rowan", "create", { id: "ghost", components: { transform: { pos: [0, 0, 0.3], q: [0, 0, 0, 1], scale: [1, 1, 1] }, physics: { kind: "dynamic", who: "inhabitant", shape: [[-0.2, 0, -0.2], [0.2, 0.4, 0.2]] } } });
     const p6 = c6.ok ? call(W6, "rowan", "punt", { id: "ghost", power: 2 }) : null;   // punt first: a held thing is refused as "held"
@@ -145,7 +145,7 @@ function playground(name) {
     const sph7 = call(W7, "rowan", "set", { id: "rb", component: "collider", value: { shape: "sphere" } });
     ok(box7.ok && sph7.ok && JSON.stringify(back7) === JSON.stringify([[-0.11, 0, -0.11], [0.11, 0.22, 0.11]]), "D7 …asking for a box again re-stamps the box", { back7 });
   }
-  { // Antra's review of f91840e5 (P2): a forced cut writes the engine's WORLD pose; a thrown ball still carrying its logged
+  { // a forced cut writes the engine's WORLD pose; a thrown ball still carrying its logged
     // parent (a table at x 10) must lose it there, as an ordinary rest does, or the parent's offset is applied twice (x 10 → 20)
     const W9 = playground("pc-d9");
     const c9 = call(W9, "rowan", "create", { id: "pad", model: "table", place: { at: [10, 0] } });
@@ -195,7 +195,7 @@ function playground(name) {
   ok(calm.ok && !calm.notes?.some((n) => n.frozen), "D at rest, the cut is free (nothing to freeze)", calm);
 }
 
-// E — P3 settlements are claims: lies are refused, honest ones logged with who handled it.
+// E: P3 settlements are claims: lies are refused, honest ones logged with who handled it.
 {
   const W = playground("pc-e");
   call(W, "rowan", "move", { to: [0, 0, 3.2] }); call(W, "rowan", "grab", { id: "crate-1" }, 50);
@@ -215,7 +215,7 @@ function playground(name) {
   const act = log(W).at(-2); ok(act.kind === "act" && act.verb === "put" && act.body.handled?.includes("rowan"), "E the act records who handled it", act.body);
 }
 
-// F — rights per component: an inhabitant may pick up the ball (physics.who) but not the crate.
+// F: rights per component: an inhabitant may pick up the ball (physics.who) but not the crate.
 {
   const W = playground("pc-f");
   call(W, "rowan", "set", { id: "@world", component: "roles:rowan", value: { role: "owner" } });
@@ -232,7 +232,7 @@ function playground(name) {
   ok(!set.ok && set.refused.code === "rights", "F …but an inhabitant still can't author its transform directly", set.refused);
 }
 
-// G — a catch: grabbing a flying thing goes through the log; no rest result follows.
+// G: a catch: grabbing a flying thing goes through the log; no rest result follows.
 {
   const W = playground("pc-g");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 4, 0.5] });
@@ -245,7 +245,7 @@ function playground(name) {
   ok(view(W).checks.disagree.length === 0, "G carriers still agree");
 }
 
-// H — an orphan: leaving while holding drops it into the sim, attributed to whoever left.
+// H: an orphan: leaving while holding drops it into the sim, attributed to whoever left.
 {
   const W = playground("pc-h");
   call(W, "rowan", "move", { to: [0, 0, 1.6] }, 1000); call(W, "rowan", "move", { to: [0, 0, 3.6] }, 1000); call(W, "rowan", "grab", { id: "table-1" });
@@ -257,7 +257,7 @@ function playground(name) {
   ok(r && Math.abs(r.at[1]) < ON, "H it fell to the ground and that's logged", r);
 }
 
-// I — determinism of the whole pipeline: the same requests at the same times give the same log, byte for byte.
+// I: determinism of the whole pipeline: the same requests at the same times give the same log, byte for byte.
 {
   const run = (name) => { clock.t = 1800000000000; const W = playground(name);
     call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [1.3, 2.7, 3.1] });
@@ -271,8 +271,8 @@ function playground(name) {
   const v = view("pc-i1"); ok(v.checks.agree === 2 && !v.checks.disagree.length, "I two rests, both verified", v.checks);
 }
 
-// K — a foreign engine: this server can't run it, so nothing flies; the world is still fully readable.
-{ // review of b398d7e3 #3: an epoch the engine would never start is refused, not accepted to fly nowhere
+// K: a foreign engine: this server can't run it, so nothing flies; the world is still fully readable.
+{ // an epoch the engine would never start is refused, not accepted to fly nowhere
   const W = fresh("pc-tick"); call(W, "rowan", "create-world", { title: W });
   const bad = [5, 15, 1001, 33.5].map((t) => call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@1.0.0", tickMs: t } }));
   const good = [16, 1000].map((t) => call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@1.0.0", tickMs: t } }));
@@ -280,7 +280,7 @@ function playground(name) {
 }
 {
   const W = fresh("pc-k"); call(W, "rowan", "create-world", { title: W });
-  // an owner may name a version this server doesn't carry (house, #260 10-21): accepted with a note; what only the engine computes is refused
+  // an owner may name a version this server doesn't carry: accepted with a note; what only the engine computes is refused
   const s = call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@2.0.0" } });
   ok(s.ok && s.notes?.some((n) => /isn't carried/.test(n.why)), "K a version this server doesn't carry is accepted with a note", s);
   call(W, "rowan", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic" } }, place: { at: [0, 0] } });
@@ -290,7 +290,7 @@ function playground(name) {
   const d = call(W, "rowan", "put", { id: "ball" }); ok(d.ok, "K putting it down still works (a settlement needs no engine)", d);
 }
 
-// EV — an engine is named by its version; the authority stamps one when the owner names none (house answer, #260 10-21)
+// EV: an engine is named by its version; the authority stamps one when the owner names none
 {
   const W = fresh("pc-v"); call(W, "rowan", "create-world", { title: W });
   const pe = () => fold(log(W)).entities["@world"].c["physics-engine"];
@@ -305,7 +305,7 @@ function playground(name) {
   ok(!s4.ok, "EV4 build is no longer a field: a value naming one is refused at the door", s4);
 }
 
-// L — playtest 22 fixes
+// L: playtest 22 fixes
 {
   const ghost = fresh("pc-l-none");
   const said = call(ghost, "sage", "say", { text: "hello?" });
@@ -338,9 +338,9 @@ function playground(name) {
   ok(c.ok && !(c.notes ?? []).some((n) => /isn't a component/.test(n.why ?? "")), "L physics is a known component now (no false note)", c.notes);
 }
 
-// M — Mica's hostile case: rethrow before the first rest. The first launch must never get a rest; the rest that is
-// logged must name the SECOND launch as its cause, and carriers must agree. Plus a matched receipt: two separate
-// processes fold the same log and read the terminal transform independently.
+// M: rethrow before the first rest: the first launch must never get a rest; the rest that is logged must name the SECOND
+// launch as its cause, and carriers must agree. Plus a matched receipt: two separate processes fold the same log and
+// read the terminal transform independently.
 {
   const W = playground("pc-m");
   call(W, "rowan", "grab", { id: "ball" });
@@ -372,8 +372,8 @@ function playground(name) {
   ok(r1 === r2 && JSON.stringify(j.blind) === JSON.stringify(rs[0]?.at) && j.checks.agree === 1 && !j.checks.disagree.length, "M matched receipt: two processes read the same terminal transform, equal to the logged rest, which the carrier checked against the engine", { r1, r2 });
 }
 
-// N — 25d H2: forged rests (P1a–d). L3: a change entry caused by a sim entry IS a rest, and its value must be the
-// engine's. There is no second copy (args.sim) left to edit, so every forgery is a forgery of the value itself.
+// N: H2: forged rests (P1a–d). L3: a change entry caused by a sim entry IS a rest, and its value must be the engine's;
+// there is no second copy (args.sim) left to edit, so every forgery is a forgery of the value itself.
 {
   const W = "pc-a"; const L = log(W); const w = openWorld(root, W); const r0 = rests(L)[0]; const i = r0.seq;
   const honest = simFold(L, w.now()); ok(honest.checks.disagree.length === 0 && honest.checks.agree === 2, "N the honest log: both rests verified", honest.checks);
@@ -397,10 +397,9 @@ function playground(name) {
   ok(JSON.stringify(seen) === "[9,9,9]" && JSON.stringify(folded) === "[9,9,9]", "N P4 is gone: the rest view and the fold read the same one value (so a forgery shows in both, and carriers flag it)", { seen, folded });
 }
 
-// R — a deploy changes the engine's build (REVIEW-design-2026-10-15 "Deploying switches physics off"). A world the old
-// server stamped names the old build, so the new server holds it foreign and nothing flies. The authority restamps it
-// itself, as system, once: when the engine is one it carries, the build was stamped by an authority (not named by the
-// owner), and nothing is in flight (P6: the cut is then free). A "deploy" here is ENGINES' build swapped under the world.
+// R: a deploy changes the engine's build, so a world stamped with the old one would be held foreign and nothing would fly.
+// The authority restamps it, as system, once: when it carries the engine, an authority (not the owner) stamped the build,
+// and nothing is in flight (P6). A "deploy" here is ENGINES' build swapped under the world
 {
   // a deploy is the carried set changing: the old server carried eidosim@0.9.0, this one carries eidosim@1.0.0
   const OLD = "eidosim@0.9.0", NEW = "eidosim@1.0.0", E = ENGINES[NEW];
@@ -408,7 +407,7 @@ function playground(name) {
   const restamps = (W) => log(W).filter((e) => e.kind === "act" && e.actor === "system" && e.verb === "restamp-engine");
   const specOf = (W) => fold(log(W)).entities["@world"].c["physics-engine"];
   const E2rest = (e, L) => { const c = L[e.cause]; return !!c && c.kind === "sim" && c.verb === "launch"; };
-  // R1 — stamped by the old server, nothing in flight: restamped at the first act after load, and physics runs
+  // R1: stamped by the old server, nothing in flight: restamped at the first act after load, and physics runs
   const W = deployed(() => playground("pc-r1"));
   ok(specOf(W).engine === OLD, "R1 setup: the old server stamped its own build", specOf(W));
   call(W, "rowan", "look", {});
@@ -422,12 +421,12 @@ function playground(name) {
   ok(d.ok, "R1 a drop is accepted (the world isn't foreign any more)", d); call(W, "rowan", "wait", {}, 3000);
   const r = rests(log(W)).filter((x) => x.id === "ball").at(-1);
   ok(r && Math.abs(r.at[1]) < ON && !view(W).checks.disagree.length, "R1 …and the dropped ball falls and rests on the ground, carriers agreeing", { r, checks: view(W).checks });
-  // R1c — the next checkpoint carries the new build
+  // R1c: the next checkpoint carries the new build
   at(25000); settle(openWorld(root, W));
   const ck = log(W).filter((e) => e.kind === "sim" && e.verb === "checkpoint").at(-1);
   ok(ck?.body?.engine?.engine === NEW, "R1c the next checkpoint names the restamped build", ck?.body?.engine);
-  // R2 — a body in flight when the deploy came (house answer, #260 10-21): this server can't compute that flight, so a cut
-  // that waited for its rest would never come. The cut ends it, leaving it where the fold has it: the cut's change, not a rest
+  // R2: a body in flight when the deploy came: this server can't compute that flight, so a cut that waited for its rest
+  // would never come. The cut ends it, leaving it where the fold has it: the cut's change, not a rest
   const W2 = deployed(() => { const n = playground("pc-r2"); call(n, "rowan", "grab", { id: "ball" }); call(n, "rowan", "throw", { id: "ball", v: [0, 6, 0] }); return n; });
   const before2 = JSON.stringify(fold(log(W2)).entities.ball.c.transform);
   call(W2, "rowan", "look", {});
@@ -437,62 +436,62 @@ function playground(name) {
   call(W2, "rowan", "move", { to: [2, 0, -0.5] }); call(W2, "rowan", "grab", { id: "crate-1" });
   const t2 = call(W2, "rowan", "throw", { id: "crate-1", v: [0, 1, 1] });
   ok(t2.ok, "R2 …and the world flies again under the version this server carries", t2.refused);
-  // R2e — a launch whose body was purged (readback null): its body is unknown, so the cut can't name it; it counts it, and goes ahead
+  // R2e: a launch whose body was purged (readback null): its body is unknown, so the cut can't name it; it counts it, and goes ahead
   const W2e = deployed(() => { const n = playground("pc-r2e"); call(n, "rowan", "grab", { id: "ball" }); call(n, "rowan", "throw", { id: "ball", v: [0, 6, 0] }); return n; });
   { const w = openWorld(root, W2e); const ls = w.entries.findLastIndex((e) => e.kind === "sim" && e.verb === "launch"); at(100);
     w.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: ls }] } }); }
   call(W2e, "rowan", "look", {});
   const r2e = restamps(W2e);
   ok(r2e.length === 1 && specOf(W2e).engine === NEW && r2e[0]?.body?.endedUnknown === 1 && !r2e[0]?.body?.ended, "R2e a purged launch doesn't hold the cut back: counted as ended, unnamed", r2e.map((e) => e.body));
-  // R2b — something held (lifted out of the engine, not put back): no restamp either
+  // R2b: something held (lifted out of the engine, not put back): no restamp either
   const W2b = deployed(() => { const n = playground("pc-r2b"); call(n, "rowan", "grab", { id: "ball" }); return n; });
   call(W2b, "rowan", "look", {});
   ok(!restamps(W2b).length && specOf(W2b).engine === OLD, "R2b a thing held when the deploy came: no restamp", specOf(W2b));
-  // R2c — the hold is gone from presence (a host that keeps it in memory restarted) but the log's lift was never put back:
+  // R2c: the hold is gone from presence (a host that keeps it in memory restarted) but the log's lift was never put back:
   // a lift outlives an epoch (the sim layer keeps it across the cut), so it doesn't hold the cut back
   const W2c = deployed(() => { const n = playground("pc-r2c"); call(n, "rowan", "grab", { id: "ball" }); return n; });
   const pp = `${root}worlds/${W2c}.presence.json`; const pres = JSON.parse(fs.readFileSync(pp, "utf8")); const realHold = pres.holds.ball; pres.holds = {}; fs.writeFileSync(pp, JSON.stringify(pres));
   call(W2c, "rowan", "look", {});
   ok(restamps(W2c).length === 1 && specOf(W2c).engine === NEW, "R2c a lift on the record with nothing after it doesn't block the cut (it outlives the epoch)", specOf(W2c));
-  // R2d — held in presence only (no lift on the record): no restamp while the hold lasts
+  // R2d: held in presence only (no lift on the record): no restamp while the hold lasts
   const W2d = deployed(() => playground("pc-r2d"));
   const pd = `${root}worlds/${W2d}.presence.json`; const pr2 = fs.existsSync(pd) ? JSON.parse(fs.readFileSync(pd, "utf8")) : { bodies: {}, holds: {} };
   (pr2.holds ??= {}).ball = realHold; fs.writeFileSync(pd, JSON.stringify(pr2));
   call(W2d, "rowan", "look", {});
   ok(!restamps(W2d).length && specOf(W2d).engine === OLD, "R2d a hold in presence: no restamp", specOf(W2d));
-  // R3 — an engine this server doesn't carry at all: no restamp
+  // R3: an engine this server doesn't carry at all: no restamp
   ENGINES["oldsim@0.9.0"] = { ...E };
   let W3; try { W3 = fresh("pc-r3"); call(W3, "rowan", "create-world", { title: W3 }); call(W3, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "oldsim@0.9.0" } }); }
   finally { delete ENGINES["oldsim@0.9.0"]; }
   call(W3, "rowan", "look", {});
   ok(specOf(W3).engine === "oldsim@0.9.0" && !restamps(W3).length, "R3 an engine this server doesn't carry: no restamp", specOf(W3));
-  // R4 — the version this server carries: nothing written
+  // R4: the version this server carries: nothing written
   const W4 = playground("pc-r4"); const n4 = log(W4).length; call(W4, "rowan", "look", {});
   ok(!restamps(W4).length && log(W4).length === n4, "R4 a world on the carried version: no entry written", log(W4).length - n4);
-  // R5 — a version the OWNER named (pc-k's choice, kept): never overridden by the server
+  // R5: a version the OWNER named (pc-k's choice, kept): never overridden by the server
   const W5 = fresh("pc-r5"); call(W5, "rowan", "create-world", { title: W5 });
   call(W5, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: OLD } }); call(W5, "rowan", "look", {});
   ok(!restamps(W5).length && specOf(W5).engine === OLD, "R5 an owner-named version is the owner's: no restamp", specOf(W5));
-  // R6 — a fork of a physics world (review r2 F4): the copy's fork-copy act carries the source's stamped spec, build and all.
-  // That's inherited, not chosen, so after a deploy the fork is restamped like its source (forkWorld writes exactly this act)
+  // R6: a fork of a physics world: the copy's fork-copy act carries the source's stamped spec, build and all; inherited,
+  // not chosen, so after a deploy the fork is restamped like its source (forkWorld writes exactly this act)
   const W6 = fresh("pc-r6"); call(W6, "rowan", "create-world", { title: W6 }); at(100);
   const fc = forkCopy(openWorld(root, W6), "rowan", { ops: [{ verb: "set", args: { id: "@world", component: "physics-engine", value: { engine: OLD, tickMs: 33 } } }], throughLock: true });
   ok(fc.ok && specOf(W6).engine === OLD && log(W6).some((e) => e.kind === "act" && e.verb === "fork-copy"), "R6 setup: a fork-copy carried the old server's stamped build", [fc.refused, specOf(W6)]);
   call(W6, "rowan", "look", {});
   ok(restamps(W6).length === 1 && specOf(W6).engine === NEW, "R6 a forked physics world is restamped at its first act (an inherited build isn't the owner's choice)", specOf(W6));
-  // R7 — the owner names a build, then changes only tickMs by merge (review r2 F7): the build is still the one they named
+  // R7: the owner names a build, then changes only tickMs by merge: the build is still the one they named
   const W7 = fresh("pc-r7"); call(W7, "rowan", "create-world", { title: W7 });
   call(W7, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: OLD } });
   const m7 = call(W7, "rowan", "set", { id: "@world", component: "physics-engine", value: { tickMs: 20 }, merge: true });
   call(W7, "rowan", "look", {});
   ok(m7.ok && specOf(W7).tickMs === 20 && !restamps(W7).length && specOf(W7).engine === OLD, "R7 an owner-named build survives a later merge of tickMs: no restamp", [m7.refused, specOf(W7)]);
-  // R7b — …but a stamped build stays stamped through a merge: the old server stamped it, the owner merged tickMs, a deploy restamps
+  // R7b: …but a stamped build stays stamped through a merge: the old server stamped it, the owner merged tickMs, a deploy restamps
   const W7b = deployed(() => { const n = fresh("pc-r7b"); call(n, "rowan", "create-world", { title: n });
     call(n, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "eidosim" } });
     call(n, "rowan", "set", { id: "@world", component: "physics-engine", value: { tickMs: 20 }, merge: true }); return n; });
   call(W7b, "rowan", "look", {});
   ok(restamps(W7b).length === 1 && specOf(W7b).engine === NEW && specOf(W7b).tickMs === 20, "R7b a stamped build merged over (tickMs) is still stamped: restamped, tickMs kept", specOf(W7b));
-  // R7c — an older named build doesn't outlive a later stamp: the owner named one, then re-set the engine without a build
+  // R7c: an older named build doesn't outlive a later stamp: the owner named one, then re-set the engine without a build
   // (the old server stamped its own), a deploy restamps (the walk stops at the change that brought the stamped build in)
   const W7c = deployed(() => { const n = fresh("pc-r7c"); call(n, "rowan", "create-world", { title: n });
     call(n, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: OLD } });
@@ -501,13 +500,13 @@ function playground(name) {
   ok(restamps(W7c).length === 1 && specOf(W7c).engine === NEW, "R7c a build named before a later stamped set doesn't count: restamped", specOf(W7c));
 }
 
-// review of #260: an engine name that is an inherited property of the engine table
-// (toString) is no engine this server carries, so it's refused, never written with build null
+// an engine name that is an inherited property of the engine table (toString) is no engine this server carries:
+// refused, never written with build null
 { const W = fresh("unknown-inherited-engine"); call(W, "rowan", "create-world", { title: W });
   const r = call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { engine: "toString" } });
   ok(!r.ok && r.refused?.code === "unknown-engine" && !fold(log(W)).entities["@world"].c["physics-engine"], "U1 an inherited name of the engine table is refused as an unknown engine", r.refused ?? r); }
 
-// review of #260: the hand's lift marker ends with every hold, physics on or off, and a delete re-reads what may be knocked
+// the hand's lift marker ends with every hold, physics on or off, and a delete re-reads what may be knocked
 { const W = playground("lift-off"); const g = call(W, "rowan", "grab", { id: "ball" });
   const off = call(W, "rowan", "delete", { id: "@world", component: "physics-engine" });
   const put = call(W, "rowan", "put", { id: "ball", pos: [0, 0, 0.5] });
@@ -529,7 +528,7 @@ function playground(name) {
   const after = view(W).sim?.statics?.["crate-1"]?.dyn;
   ok(par.ok && lk.ok && del.ok && !before && after === true, "U4 deleting the locked thing on a dynamic one makes that one knockable again", { par: par.ok ?? par.refused, lk: lk.ok ?? lk.refused, del: del.ok || del.refused, before, after }); }
 
-// review of #260: a thing already in a hand when physics starts stays in the hand, out of the engine's world, on replay too
+// a thing already in a hand when physics starts stays in the hand, out of the engine's world, on replay too
 { const W = fresh("held-at-start"); call(W, "rowan", "create-world", { title: W });
   call(W, "rowan", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "inhabitant" } }, place: { at: [0, 0] } });
   call(W, "rowan", "move", { to: [0, 0, -0.5] }); const g = call(W, "rowan", "grab", { id: "ball" });
@@ -592,8 +591,8 @@ function playground(name) {
   ok(g.every((x) => x.ok) && b.ok && JSON.stringify(lifts) === '["cup:sam"]' && JSON.stringify(dry.lifts) === '["cup"]' && v.lifted.has("cup") && !v.lifted.has("ball"),
     "U5g with two things in hand, a batch that starts the engine and moves one lifts the other alone, dry and live", { g: g.map((x) => x.ok ?? x.refused?.code), b: b.ok ?? b.refused, lifts, dryLifts: dry.lifts, lifted: [...v.lifted] }); }
 
-// review of #260: the purges a replay applies are exactly the fold's (a purge line the fold refuses, here for a ts that steps
-// back, purges nothing in either)
+// the purges a replay applies are exactly the fold's (a purge line the fold refuses, here for a ts that steps back,
+// purges nothing in either)
 { const W = playground("purge-bad-ts"); const t = openWorld(root, W).state().entities["crate-1"].c.transform;
   call(W, "rowan", "set", { id: "crate-1", component: "transform", value: { ...t, pos: [3, 0, 0] } });
   const L = log(W); const seq = L.findLastIndex((e: any) => e?.kind === "change" && e.verb === "set" && e.body?.id === "crate-1");
@@ -601,8 +600,7 @@ function playground(name) {
   const blind = fold(bad), v = simFold(bad, last.ts + 1000);
   ok(blind.entities["crate-1"].c.transform !== PURGED && !!v.sim?.statics?.["crate-1"], "U6 a purge line the fold refuses (its ts steps back) purges nothing on replay either", { foldPurged: blind.entities["crate-1"].c.transform === PURGED, collider: !!v.sim?.statics?.["crate-1"] }); }
 
-// review of #260: a sim body a purge took whole is unknown to a replay, never a disagreement or a crash (the authority's
-// readback reads it so too)
+// a sim body a purge took whole is unknown to a replay, never a disagreement or a crash (the authority's readback reads it so too)
 { const W = playground("purge-sim");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 2, 3] }); call(W, "rowan", "wait", {}, 6000);
   const L = log(W); const last = L[L.length - 1];
@@ -619,8 +617,8 @@ function playground(name) {
   const v = simFold(P, last.ts + 1000); const digests = P.filter((e: any) => e?.kind === "sim" && e.verb === "digest").length;
   ok(ln > 0 && digests > 0 && v.checks.disagree.length === 0, "U7b a purged launch makes the digests logged during its flight unknown, not disagreements", { ln, digests, disagree: v.checks.disagree.slice(0, 2) }); }
 
-// review of #260: a rest whose transform a purge took is unknown to a replay: the folder reads it as the strict fold does
-// (absent, purged), and it neither crashes nor is called a disagreement, and the log's other rests still read
+// a rest whose transform a purge took is unknown to a replay: the folder reads it as the strict fold does (absent,
+// purged), neither crashes nor calls it a disagreement, and the log's other rests still read
 { const W = playground("purge-rest");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 2, 3] }); call(W, "rowan", "wait", {}, 6000);
   const L = log(W); const last = L[L.length - 1];
@@ -630,8 +628,8 @@ function playground(name) {
   let v: any, rs: any, err = null; try { v = simFold(P, last.ts + 1000); rs = restsOf(P); } catch (x: any) { err = `${x?.code ?? ""} ${String(x?.message)}`.slice(0, 160); }
   ok(rest > 0 && L[rest].verb === "set" && fold(P).status === "ok" && !err && v.checks.disagree.length === 0 && digest(v.st) === digest(fold(P)) && v.st.entities.ball.c.transform === PURGED && rs?.some((r: any) => r.seq === rest),
     "U7c a purged rest (its launch kept) reads as unknown on replay: no crash, no disagreement, the replayed state the strict fold's (the rest's transform PURGED), and restsOf still lists it", { rest, verb: L[rest]?.verb, status: fold(P).status, err, disagree: v?.checks?.disagree?.slice(0, 2), same: v && digest(v.st) === digest(fold(P)), rests: rs?.length }); }
-// review of #260: a purged launch leaves the rest of its epoch unknown to a replay: the flights after it, even once its own
-// rest is logged, fly in an engine that skipped one body, so their digests and rests are applied, not judged
+// a purged launch leaves the rest of its epoch unknown to a replay: the flights after it, even once its own rest is
+// logged, fly in an engine that skipped one body, so their digests and rests are applied, not judged
 { const W = playground("purge-launch-then-more");
   const fly = (id: string) => { const p = openWorld(root, W).state().entities[id].c.transform.pos; call(W, "rowan", "move", { to: [p[0], 0, p[2] - 0.5] });
     call(W, "rowan", "grab", { id }); call(W, "rowan", "throw", { id, v: [0.3, 2, 2] }); call(W, "rowan", "wait", {}, 6000); };
@@ -645,8 +643,8 @@ function playground(name) {
   const v = simFold(P, last.ts + 1000); const after = L.filter((e: any, i: number) => i > cut && e?.kind === "change" && typeof e.cause === "number" && L[e.cause]?.kind === "sim" && L[e.cause].verb === "launch").length;
   ok(launches.length === 4 && base.checks.disagree.length === 0 && base.checks.agree > 0 && v.checks.disagree.length === 0 && after > 0 && v.checks.agree === after && digest(v.st) === digest(fold(P)),
     "U7d a purged first launch, with two more flights after its rest: the replay calls none of that epoch's digests or rests a disagreement, judges the next epoch's again, and its state is the strict fold's", { launches, base: base.checks.disagree.length, agree: v.checks.agree, after, disagree: v.checks.disagree.slice(0, 3), same: digest(v.st) === digest(fold(P)) }); }
-// review of #260: a rest whose transform a purge took leaves the rest of its epoch unknown too: the fold reads that body as
-// gone, where the engine that wrote the log kept it, so a later flight's digests aren't judged against it
+// a rest whose transform a purge took leaves the rest of its epoch unknown too: the fold reads that body as gone, where
+// the engine that wrote the log kept it, so a later flight's digests aren't judged against it
 { const W = playground("purge-rest-then-more");
   for (const id of ["ball", "crate-1"]) { const p = openWorld(root, W).state().entities[id].c.transform.pos; call(W, "rowan", "move", { to: [p[0], 0, p[2] - 0.5] });
     call(W, "rowan", "grab", { id }); call(W, "rowan", "throw", { id, v: [0.3, 2, 2] }); call(W, "rowan", "wait", {}, 6000); }
@@ -657,7 +655,7 @@ function playground(name) {
   const base = simFold(L, last.ts + 1000), v = simFold(P, last.ts + 1000);
   ok(rest > 0 && L[rest].verb === "set" && base.checks.disagree.length === 0 && v.checks.disagree.length === 0 && digest(v.st) === digest(fold(P)),
     "U7e a purged rest, then another flight: the replay calls none of the later digests a disagreement, and its state is the strict fold's", { rest, base: base.checks.disagree.length, disagree: v.checks.disagree.slice(0, 3) }); }
-// review of #260: a rest batch whose transform op a purge names by index replays as unknown, as the strict fold reads it
+// a rest batch whose transform op a purge names by index replays as unknown, as the strict fold reads it
 { const W = fresh("purge-rest-op"); call(W, "rowan", "create-world", { title: W }); call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG });
   call(W, "rowan", "create", { id: "table-1", model: "table", place: { at: [0, 1] } });
   call(W, "rowan", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "inhabitant" } }, place: { on: "table-1" } });
@@ -670,7 +668,7 @@ function playground(name) {
   let v: any = null, err = null; try { v = P && simFold(P, last.ts + 1000); } catch (x: any) { err = `${x?.code ?? ""} ${String(x?.message)}`.slice(0, 160); }
   ok(!!P && fold(P).status === "ok" && fold(P).entities.ball.c.transform === PURGED && !err && v.checks.disagree.length === 0 && digest(v.st) === digest(fold(P)),
     "U7f a rest batch whose transform op a purge names by index reads as unknown on replay: no crash, no disagreement, the strict fold's state", { rest, k, err, status: P && fold(P).status, disagree: v?.checks?.disagree?.slice(0, 2) }); }
-// review of #260: a purged lift hides what is held past an epoch's cut: the next epoch's digests aren't judged either
+// a purged lift hides what is held past an epoch's cut: the next epoch's digests aren't judged either
 { const W = playground("purge-lift-across-cut");
   call(W, "rowan", "grab", { id: "ball" }); const L0 = log(W); const lift = L0.findLastIndex((e: any) => e?.kind === "sim" && (e.verb === "lift" || e.verb === "catch"));
   call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { ...ENG, tickMs: 16 } });
@@ -681,8 +679,8 @@ function playground(name) {
   const base = simFold(L, last.ts + 1000), v = simFold(P, last.ts + 1000);
   ok(lift > 0 && base.checks.disagree.length === 0 && base.checks.agree > 0 && v.checks.disagree.length === 0 && v.checks.agree === 0,
     "U7g a purged lift, then a cut while the thing is held and a flight in the new epoch: the replay judges none of its digests, since which thing is held is unknown", { lift, base: base.checks.disagree.length, agree: v.checks.agree, disagree: v.checks.disagree.slice(0, 3) }); }
-// review of #260: a cut leaves the epoch unknown while a body the fold reads as gone to a purge still stands: the new
-// epoch's engine lacks it too, where the engine that wrote the log had it
+// a cut leaves the epoch unknown while a body the fold reads as gone to a purge still stands: the new epoch's engine
+// lacks it too, where the engine that wrote the log had it
 { const W = playground("purge-rest-across-cut");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0.3, 2, 2] }); call(W, "rowan", "wait", {}, 6000);
   call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: { ...ENG, tickMs: 16 } }); const cut = log(W).length - 1;
@@ -716,7 +714,7 @@ function playground(name) {
   const base = simFold(L, last.ts + 1000), v = simFold(P, last.ts + 1000), vq = simFold(Q, last.ts + 1000);
   ok(rest > 0 && dg > cut && base.checks.disagree.length === 0 && v.checks.disagree.length === 0 && v.checks.agree > 0 && vq.checks.disagree.some((d: any) => d.seq === dg),
     "U7i a purged rest, the thing written again, then a cut: the new epoch is judged again, and a wrong digest in it is reported", { rest, cut, dg, base: base.checks.disagree.length, agree: v.checks.agree, disagree: v.checks.disagree.slice(0, 2), q: vq.checks.disagree.slice(0, 2) }); }
-// review of #260: a purged catch hides what is held, as a purged lift does: nothing after it is judged, across a cut too
+// a purged catch hides what is held, as a purged lift does: nothing after it is judged, across a cut too
 { const W = playground("purge-catch-across-cut");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 5, 0.3] });
   const p = call(W, "rowan", "look", {}, 250).things.find((x: any) => x.id === "ball").moving.pos;
@@ -731,7 +729,7 @@ function playground(name) {
   const judgedAfter = (sf: any) => sf.checks.agree - simFold(copyOf(L.slice(0, ct)), L[ct - 1].ts).checks.agree;
   ok(c.ok && ct > 0 && after > 0 && base.checks.disagree.length === 0 && judgedAfter(base) > 0 && v.checks.disagree.length === 0 && judgedAfter(v) === 0,
     "U7j a purged catch, then a cut while the thing is held and a flight in the new epoch: nothing after the catch is judged", { c: c.ok, ct, after, base: base.checks.disagree.length, judged: judgedAfter(base), v: judgedAfter(v), disagree: v.checks.disagree.slice(0, 3) }); }
-// review of #260: while the world is unknown, a write that touches a body in flight isn't judged either (L6); known, it is
+// while the world is unknown, a write that touches a body in flight isn't judged either (L6); known, it is
 { const W = playground("purge-launch-inflight");
   const p = openWorld(root, W).state().entities["crate-1"].c.transform.pos; call(W, "rowan", "move", { to: [p[0], 0, p[2] - 0.5] });
   call(W, "rowan", "grab", { id: "crate-1" }); call(W, "rowan", "throw", { id: "crate-1", v: [0.3, 2, 2] }); call(W, "rowan", "wait", {}, 6000);
@@ -743,8 +741,8 @@ function playground(name) {
   const known = simFold(forged, last.ts + 1000), v = simFold(P, last.ts + 1000);
   ok(launches.length === 2 && lc < lb && known.checks.disagree.some((d: any) => /in flight/.test(d.why ?? "")) && v.checks.disagree.length === 0,
     "U7k a write touching a body in flight is reported in a known world, and isn't judged after a purged launch in its epoch", { launches, known: known.checks.disagree.slice(0, 2), disagree: v.checks.disagree.slice(0, 2) }); }
-// review of #260: a folder resumed from a cut (a checkpoint, a joiner) judges what an uninterrupted one does: the cut
-// carries what the replay can't judge from there
+// a folder resumed from a cut (a checkpoint, a joiner) judges what an uninterrupted one does: the cut carries what the
+// replay can't judge from there
 { const W = playground("purge-lift-resumed");
   call(W, "rowan", "grab", { id: "ball" }); const L0 = log(W); const lift = L0.findLastIndex((e: any) => e?.kind === "sim" && (e.verb === "lift" || e.verb === "catch"));
   call(W, "rowan", "say", { text: "a quiet moment" }); const k = log(W).length - 1;
@@ -761,8 +759,8 @@ function playground(name) {
   const c = makeReplica(); c.adopt(JSON.parse(JSON.stringify({ state: wireState(fold(P, { until: k })), head: k, sim: cut })));
   ok(lift > 0 && lift < k && cut.unknownHold === true && v.checks.disagree.length === 0 && v.checks.agree === 0 && whole.checks.disagree.length === 0 && c.sim?.unknownHold === true,
     "U7l a folder resumed from a cut taken after a purged lift judges nothing after it, as the uninterrupted replay doesn't", { lift, k, hold: cut.unknownHold, agree: v.checks.agree, disagree: v.checks.disagree.slice(0, 3), whole: whole.checks.disagree.length }); }
-// review of #260: a cut taken while a purged launch leaves the epoch unknown carries that too, to a resumed folder and to
-// a joiner's replica, so neither judges the rest of that epoch
+// a cut taken while a purged launch leaves the epoch unknown carries that too, to a resumed folder and a joiner's
+// replica, so neither judges the rest of that epoch
 { const W = playground("purge-launch-resumed");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0.3, 2, 2] }); call(W, "rowan", "wait", {}, 6000);
   call(W, "rowan", "say", { text: "a quiet moment" }); const k = log(W).length - 1;
@@ -779,8 +777,8 @@ function playground(name) {
   ok(ln > 0 && ln < k && digestsAfter > 0 && base.checks.disagree.length === 0 && cut.unknownEpoch === true && !cut.unknownHold && v.checks.disagree.length === 0 && v.checks.agree === 0
     && c.sim?.unknownEpoch === true && c.sim?.unknownHold === false,
     "U7m a cut taken after a purged launch, before the epoch's next boundary, carries the unknown epoch: a resumed folder judges none of it, and a joiner's replica adopts it", { ln, k, digestsAfter, epoch: cut.unknownEpoch, agree: v.checks.agree, disagree: v.checks.disagree.slice(0, 2), replica: { epoch: c.sim?.unknownEpoch, hold: c.sim?.unknownHold } }); }
-// review of #260: a body is lost to a purge however the purge takes it: its model, its physics (a stamped shape, no
-// catalogue model), or the place of a thing it hangs under. Each leaves the epoch's later digests unjudged
+// a body is lost to a purge however the purge takes it: its model, its physics (a stamped shape, no catalogue model), or
+// the place of a thing it hangs under; each leaves the epoch's later digests unjudged
 { const purgeSet = (L: any[], seq: number) => { const last = L[L.length - 1]; const { value: _v, salt: _s, ...skel } = L[seq].body;
     return copyOf([...L.map((e: any, i: number) => (i === seq ? { ...e, body: { ...skel, commit: "0".repeat(64) } } : e)), { world: last.world, kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq }] }, ts: last.ts + 100 }]); };
   const throwCrate = (W: string) => { const p = openWorld(root, W).state().entities["crate-1"].c.transform.pos; call(W, "rowan", "move", { to: [p[0], 0, p[2] - 0.5] });
@@ -817,7 +815,7 @@ function playground(name) {
   const base = simFold(L, last.ts + 1000), v = simFold(P, last.ts + 1000), vq = simFold(Q, last.ts + 1000);
   ok(seqs.every((s) => s > 0) && dg > Math.max(...seqs) && base.checks.disagree.length === 0 && v.checks.disagree.length === 0 && v.checks.agree === base.checks.agree && vq.checks.disagree.some((d: any) => d.seq === dg),
     "U7o a purge of a physics-none thing, a switched-off one and one with no collider leaves the epoch known: judged as before, and a wrong digest reported", { seqs, dg, base: base.checks.agree, agree: v.checks.agree, disagree: v.checks.disagree.slice(0, 2), q: vq.checks.disagree.slice(0, 2) }); }
-// review of #260: a turned table supports things over its own top, not over the box of its corners
+// a turned table supports things over its own top, not over the box of its corners
 { const W = playground("turned-table"); const t = openWorld(root, W).state().entities["table-1"].c.transform;   // 1.2 × 0.8 m, at (0, 4)
   const turn = call(W, "rowan", "set", { id: "table-1", component: "transform", value: { ...t, q: yawQ(Math.PI / 4) } });
   const st = openWorld(root, W).state(); const top = 0.75;
@@ -827,9 +825,8 @@ function playground(name) {
   const corner = supportBelow(st, 0.65, 4, 2), along = supportBelow(st, 0.5 * u[0], 4 + 0.5 * u[1], 2);
   ok(turn.ok && !inTop(0.65, 4) && inTop(0.5 * u[0], 4 + 0.5 * u[1]) && corner.id === "ground" && along.id === "table-1" && Math.abs(along.y - top) < 1e-6,
     "U8 a table turned 45 degrees supports at a point over its top, not at a corner of its bounding box", { turn: turn.ok ?? turn.refused, corner, along });
-  // asked to place the 0.6 m crate turned with the table 0.35 m to the side (toward a corner of the box), it is put wholly on
-  // the top: it fits there turned as it is (0.6 m across a 0.8 m top), though its world-axis box (0.85 m) doesn't (house
-  // 6340433633: the test passed on any refusal, and placement tested that box, so it was refused)
+  // asked to place the 0.6 m crate turned with the table 0.35 m to the side (toward a corner of the box), it is put wholly
+  // on the top: it fits there turned as it is (0.6 m across a 0.8 m top), though its world-axis box (0.85 m) doesn't
   const turned = (id: string, yaw: number) => { const c = openWorld(root, W).state().entities[id].c.transform; return call(W, "rowan", "set", { id, component: "transform", value: { ...c, q: yawQ(yaw) } }); };
   const tc = turned("crate-1", Math.PI / 4);
   const put = call(W, "rowan", "place", { id: "crate-1", on: "table-1", offset: [0.35, 0] }); const ct = worldT(openWorld(root, W).state(), "crate-1"), p = ct.pos;
@@ -845,8 +842,8 @@ function playground(name) {
   const ms = call(W, "rowan", "measure", { id: "table-1" }); const top0 = ms.surfaces?.[0];
   ok(ms.ok && JSON.stringify(top0?.size) === "[1.2,0.8]" && Array.isArray(top0?.xAxis), "U8 …and measure gives that top's own size, 1.2 × 0.8 m, with its axis, not the box of its corners", top0); }
 
-// house 6340433633: a thing laid on its side and turned offers its up face as that face's own rectangle, as a standing thing
-// offers its top (it offered the axis-aligned box of the face's corners: a point off the face, inside that box, held things)
+// a thing laid on its side and turned offers its up face as that face's own rectangle, as a standing thing offers its top,
+// never the axis-aligned box of the face's corners
 { const W = playground("lying-turned"); const r = Math.SQRT1_2;
   const side = qmul(yawQ(Math.PI / 4), [r, 0, 0, r]);   // on its side (a quarter turn about x), then turned 45 degrees
   const set = call(W, "rowan", "set", { id: "crate-1", component: "transform", value: { pos: [6, 0.3, 0], q: side, scale: [1, 1, 1] } });
@@ -855,7 +852,7 @@ function playground(name) {
   const mid = supportBelow(st, cx, cz, 3), off = supportBelow(st, cx + 0.3, cz + 0.3, 3); const face = surfacesOf(st, "crate-1").at(-1);
   ok(set.ok && mid.id === "crate-1" && off.id !== "crate-1" && !!face?.rect, "U8b a crate on its side, turned, holds things over its face, not over the box of the face's corners", { set: set.refused ?? set.ok, mid, off, face }); }
 
-// review of #260: a body at rest whose rest isn't logged yet is read where the engine has it, and said to be so
+// a body at rest whose rest isn't logged yet is read where the engine has it, and said to be so
 { const W = playground("rest-unlogged");
   call(W, "rowan", "grab", { id: "ball" }); call(W, "rowan", "throw", { id: "ball", v: [0, 2, 3] }); at(300);
   const w = openWorld(root, W); const real = w.sim;
@@ -874,19 +871,19 @@ function playground(name) {
     { verb: "set", args: { id: "crate-1", component: "physics", value: { kind: "dynamic", who: "builder", shape: fake } } }] });
   ok(r?.ok && want && JSON.stringify(e()?.shape) === JSON.stringify(want), "S9 the second of two physics sets in one batch can't put the asker's shape in place of the measured one", { r: r?.ok ?? r, want, got: e()?.shape }); }
 
-// review of #260: a stamped shape stays while the model can't be measured right now; a changed model still takes it away
+// a stamped shape stays while the model can't be measured right now; a changed model still takes it away
 { const W = playground("shape-unmeasured");
   const w = openWorld(root, W); const before = w.state().entities["crate-1"]?.c.physics?.shape;
   const cat = w.catalogue; w.catalogue = { get: (n: string) => (n === "crate" ? undefined : cat?.get?.(n)), list: (q: string) => cat?.list?.(q) ?? [] };
-  const m = request(w, "rowan", "set", { id: "crate-1", component: "physics", value: { who: "inhabitant" }, merge: true });   // the merge the review traced
+  const m = request(w, "rowan", "set", { id: "crate-1", component: "physics", value: { who: "inhabitant" }, merge: true });   // the merge in question
   const keptM = w.state().entities["crate-1"]?.c.physics?.shape;
   const r = request(w, "rowan", "set", { id: "crate-1", component: "physics", value: { kind: "dynamic", who: "builder" } });   // a whole value, without shape
   const kept = w.state().entities["crate-1"]?.c.physics?.shape; w.catalogue = cat;
   ok(!!before && m.ok && r.ok && JSON.stringify(keptM) === JSON.stringify(before) && JSON.stringify(kept) === JSON.stringify(before) && !JSON.stringify([m.notes, r.notes]).includes("its body is gone"),
     "U10 a stamped shape stays while the catalogue can't measure the model right now (a merge or a whole value), and no 'body is gone' note", { before, keptM, kept, notes: [m.notes, r.notes] }); }
 
-// review of #260: in one rest of several bodies, each body's follow-up is its own: a thrown crate that leaves the world
-// is lost while the crate it knocked, at rest inside, isn't; and a lost thing sent to its home is told it's home
+// in one rest of several bodies each body's follow-up is its own: a thrown crate that leaves the world is lost while
+// the crate it knocked, at rest inside, isn't; and a lost thing sent to its home is told it's home
 if (RIGID) { const W = playground("rr-group");
   call(W, "rowan", "set", { id: "@world", component: "bounds", value: { min: [-20, 0, -20], max: [20, 30, 3] } });
   call(W, "rowan", "set", { id: "crate-1", component: "home", value: { pos: [3, 0, -1], q: [0, 0, 0, 1] } });
@@ -900,6 +897,5 @@ if (RIGID) { const W = playground("rr-group");
   const at = call(W, "rowan", "inspect", { id: "crate-1" }).world?.pos;
   ok(/back at its home/.test(cc?.lost ?? "") && JSON.stringify(at) === "[3,0,-1]", "RR2 …and the lost one, sent to its home, is told it's at its home", { lost: cc?.lost, at }); }
 
-console.log(`${passes} passed, ${fails} failed`);
 fs.rmSync(root, { recursive: true, force: true });
-process.exit(fails ? 1 : 0);
+done();

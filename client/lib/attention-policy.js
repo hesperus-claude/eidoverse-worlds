@@ -1,6 +1,5 @@
-// Private attention, separate from chat rendering (which also renders history).
-// Only the wire's live-entry path calls say(). Captions are visual performance:
-// the durable say is the single attention source for a spoken utterance.
+// Private attention bell, separate from chat rendering (which also renders history); only live wire entries call say().
+// Captions are visual only: the durable say is the single attention source for a spoken utterance.
 export const ATTENTION_COOLDOWN_MS = 3000;
 const UTTERANCE_LIMIT = 1024;
 
@@ -15,12 +14,7 @@ export function createAttentionGate({ me, scope, mentions, now = () => performan
   function participant({ id, session } = {}, arrived = true) {
     sync();
     if (!id) return;
-    // A changed session is a new sender page, whose utterance counter starts
-    // again; the same session again is a reconnect of the same page, whose
-    // counter goes on, so its utterance memory stays. An arrival without a
-    // session (an older server) can't be told apart and counts as a boundary;
-    // a snapshot without one preserves the existing cache. A rejoin missed
-    // while disconnected shows as the snapshot's changed session.
+    // new session = new page (utt counter restarts), same = reconnect; no session: an arrival is a boundary, a snapshot isn't
     if (typeof session === 'string' ? sessions.get(id) !== session : arrived) forget(id);
     if (typeof session === 'string' || !sessions.has(id)) sessions.set(id, session);
   }
@@ -41,9 +35,7 @@ export function createAttentionGate({ me, scope, mentions, now = () => performan
     participant,
     roster(people) {
       sync();
-      // A sender missing from the snapshot may be between two legs of one page,
-      // so its memory stays until its session changes; the utterance cache is
-      // bounded either way.
+      // a sender missing from the snapshot may be between two legs of one page: keep its memory until its session changes
       for (const person of people) participant(person, false);
     },
     say(entry) {
@@ -57,8 +49,7 @@ export function createAttentionGate({ me, scope, mentions, now = () => performan
         const key = JSON.stringify([actor, args.utt]);
         if (utterances.has(key)) return false;
         utterances.set(key, actor);
-        // Bounded session memory, not a timer: a long utterance's later flush
-        // stays consumed even after the burst cooldown has passed.
+        // bounded memory, not a timer: a long utterance's late flush stays consumed past the cooldown
         if (utterances.size > UTTERANCE_LIMIT) utterances.delete(utterances.keys().next().value);
       }
       return admit();

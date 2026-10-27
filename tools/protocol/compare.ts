@@ -1,8 +1,7 @@
-// The JS fold (shared/protocol/fold.js) against the Python reference reader (spec/conformance/reader.py, written from
-// PROTOCOL alone) on every conformance log: status, digest, and diagnostic codes. Ported from
-// the protocol lab's conformance/compare.js @ 11db981. Also runs the reference reader's own tests (test_reader.py,
-// test_chain.py; the latter needs python3 `cryptography`). usage: bun tools/protocol/compare.ts  (exit 1 on any difference; PYTHON=<interpreter>, default python3 on PATH)
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+// The JS fold (shared/protocol/fold.js) vs the Python reference reader (spec/conformance/reader.py, written from PROTOCOL
+// alone) on every conformance log: status, digest, diagnostic codes; also runs the reader's own tests (test_chain.py needs
+// python3 `cryptography`). usage: bun tools/protocol/compare.ts  (exit 1 on any difference; PYTHON=<interpreter>)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import { readLog, fold, digest } from "../../shared/protocol/fold.js";
 import { ENGINE } from "./common.ts";
@@ -10,7 +9,7 @@ import { ENGINE } from "./common.ts";
 const here = ENGINE + "spec/conformance/";
 const py = (args: string[]) => Bun.spawnSync([process.env.PYTHON || "python3", "-B", ...args], { cwd: here, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } });
 const files = ["EXAMPLE-01.jsonl", ...fs.readdirSync(here + "logs").sort().map((f) => "logs/" + f)];
-// Where §2.3/§2.4 (normative) and the reference reader disagree, the JS fold follows the spec; list each here.
+// where §2.3/§2.4 (normative) and the reference reader disagree, the JS fold follows the spec; list each here
 const KNOWN: Record<string, string> = {};
 
 let diffs = 0;
@@ -29,9 +28,8 @@ for (const f of files) {
     if (KNOWN[f]) console.log(`      why: ${KNOWN[f]}`); }
 }
 console.log(`${files.length} logs, ${diffs} unexplained differences`);
-// recut C13b: the set says what each log must fold to, so ANY implementation checks itself against spec/ alone, not only
-// against these two readers. spec/conformance/expected.json: {<log>: {status, digest, codes}}. Both readers must equal it;
-// --write-expected writes it from the JS fold, only when both readers already agree on every log (never from a diff)
+// spec/conformance/expected.json {<log>: {status, digest, codes}} lets ANY implementation check itself against spec/ alone;
+// --write-expected writes it from the JS fold only when both readers already agree on every log (never from a diff)
 { const EXP = here + "expected.json"; let want: any = fs.existsSync(EXP) ? JSON.parse(fs.readFileSync(EXP, "utf8")) : null;
   const got: Record<string, any> = Object.fromEntries(files.map((f) => { const js = fold(readLog(fs.readFileSync(here + f)));
     return [f, { status: js.status, digest: js.status === "ok" ? digest(js) : null, codes: js.diagnostics.map(([s, c]: any) => `${s}:${c}`) }]; }));
@@ -43,20 +41,18 @@ console.log(`${files.length} logs, ${diffs} unexplained differences`);
   if (!want || miss.length || extra.length) { diffs++; console.log(`FAIL expected.json: ${!want ? "missing (spec/conformance/expected.json: what each log must fold to)" : `${miss.length} log(s) fold to something else (${miss.slice(0, 5).join(", ")}), ${extra.length} listed log(s) gone`}`); }
   else console.log(`ok   expected.json: every log folds to what the set says (${files.length})`); }
 
-// the reference reader's own suites. test_reader.py regenerates logs/ from its builders: they must come out byte-identical
+// test_reader.py regenerates logs/ from its builders: they must come out byte-identical
 const before = new Map(files.map((f) => [f, fs.readFileSync(here + f, "utf8")]));
 let suiteFails = 0;
-for (const t of ["test_reader.py", "test_chain.py", "test_gov.py", "ed25519/test_vectors.py"]) {   // test_gov: governance (§13), with the add-key rule (review 10-07 H4); the ed25519 row: §2.4 Keys
+for (const t of ["test_reader.py", "test_chain.py", "test_gov.py", "ed25519/test_vectors.py"]) {   // test_gov: governance (§13) with the add-key rule; the ed25519 row: §2.4 Keys
   const r = py([t]); const out = (r.stdout.toString() + r.stderr.toString()).trim().split("\n");
   console.log(`${r.exitCode === 0 ? "ok  " : "FAIL"} python ${t}: ${out.find((l) => /^\d+\/\d+ passed/.test(l)) ?? out.at(-1)}`);
   if (r.exitCode !== 0) { suiteFails++; console.log(out.slice(-8).join("\n")); }
 }
 const drift = files.filter((f) => fs.readFileSync(here + f, "utf8") !== before.get(f));
 if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${drift.join(", ")} differently (fixtures no longer what the reader's builders make)`); }
-// The engine's OWN output against the spec's readers (review F1, 2026-10-05: the conformance run checked the lab's
-// logs but never what this server writes). Found a world through the engine authority, write a few kinds of request, then
-// the reference reader must say ok with 0 malformed, the Python chain verifier must accept every head and signature,
-// and a value altered after the fact must break the chain.
+// the engine's OWN output vs the spec's readers: reader ok with 0 malformed, chain verifier accepts every head and
+// signature, and a value altered after the fact breaks the chain
 { const { openLive } = await import("../../server/livehost.ts"); const { request } = await import("../../shared/protocol/authority.js");
   const os = await import("node:os"); const path = await import("node:path");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "engine-conf-")); let T = 1800000000000;
@@ -76,7 +72,7 @@ if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${dri
       return L.every((e: any) => e.kind === "change" ? (e.verb === "batch" ? e.body.ops : [{ verb: e.verb, ...e.body }]).every((o: any) => o.verb !== "set" || salted(o)) : !["act", "say", "sim"].includes(e.kind) || salted(e.body))
         && L.some((e: any) => e.kind === "say"); })(), "every set, and every act/say/sim body, carries a 16-byte salt (§2.4; round-2 R3: chat is most of the personal data)", null],
     [bad.status === "broken", "a value altered after the fact breaks the chain", bad]];
-  // a fork's genesis (parent {world, seq, head}) and a founder's own tier-0 key (review 10-07 H4, H5): the spec's readers take them
+  // a fork's genesis (parent {world, seq, head}) and a founder's own tier-0 key: the spec's readers take them
   { const crypto = await import("node:crypto"); const key = "ed25519:" + Buffer.from(crypto.generateKeyPairSync("ed25519").publicKey.export({ format: "der", type: "spki" })).subarray(12).toString("base64url");
     const f: any = openLive(path.join(tmp, "f"), "f", { now: () => (T += 100), custodyFile: path.join(tmp, "custody.json") });
     const made = [request(f, "ann", "create-world", { title: "fork", ownerKey: key, from: { world: "sha256:" + "a".repeat(64), seq: 41, head: "b".repeat(64), name: "src" } }), request(f, "ann", "create", { model: "table" })];

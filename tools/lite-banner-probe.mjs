@@ -1,7 +1,6 @@
-// lite-banner-probe — on a PHONE a died boot demotes to lite and says so in a pinned card (under the gesture
-// row, surviving the history replay) whose first button enters the 3D world; someone who asked for lite gets
-// the card too (a way back, never "type ?lite=0"); a DESKTOP whose boot died is not demoted at all, and gets
-// a status-strip pill offering the light version instead (owner, 10-01: lite is default only on mobile).
+// lite-banner-probe: on a PHONE a died boot demotes to lite and says so in a pinned card (under the gesture row,
+// surviving the history replay) whose first button enters the 3D world; asking for lite gets the card too (a way back,
+// never "type ?lite=0"); a DESKTOP whose boot died isn't demoted, and gets a status-strip pill offering the light version.
 //   bun tools/lite-banner-probe.mjs [origin]   (no origin: an owned scratch world, probe-harness)
 // Mutation witnessed red: drop the liteBanner(WHY) call in lite.js.
 import { tmpdir } from 'node:os';
@@ -25,9 +24,8 @@ try {
     userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 4a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' };
   const DESK = { viewport: { width: 1100, height: 700 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36' };
-  // after a press that chooses a client: the page reloads, lands in that client, and the ADDRESS carries no ?lite
-  // (a ?lite=0 left there would outrank the crash tripwire and reload a phone into the same crash — review #212)
-  // act() is the press; the navigation is awaited from BEFORE it (the address can be unchanged: a plain reload)
+  // after a press that chooses a client, the reloaded ADDRESS carries no ?lite (a ?lite=0 would outrank the crash tripwire
+  // and reload a phone into the same crash, #212); the navigation is awaited from BEFORE the press (it may be a plain reload)
   const landedAfter = async (p, lite, act) => { const nav = p.waitForEvent('framenavigated', { timeout: 15000 }).catch(() => null); await act(); await nav;
     return p.waitForFunction((want) => globalThis.__ewLite === want && !new URLSearchParams(location.search).has('lite'), lite, { timeout: 30000, polling: 250 }).then(() => true, () => false); };
   const run = async (label, q, seed, dev = PHONE) => {
@@ -64,11 +62,10 @@ try {
   ok('layout: the chat is edge to edge — full width, to the bottom, square corners, no dead gap', L.chatBelowCard && L.chatToBottom && L.chatFullWidth && L.square && L.gap <= 16, JSON.stringify(L));
   ok('layout: the card spans the column; the ∃ shows', L.cardFullWidth && L.hudVisible);
   await p.screenshot({ path: SHOT.replace('.png', '-phone.png') });
-  // Enter on a FOCUSED cancel button cancels, not confirms (review #212) — checked here via the ∃ menu later; first the ∃
+  // Enter on a FOCUSED cancel button cancels, not confirms (#212): checked via the ∃ menu later; first the ∃
   ok('tapping the ∃ lands in the full world, address clean (no ?lite)', await landedAfter(p, false, () => p.locator('#hud').click()), p.url());
-  // THE LOOP the review found: that full boot dies (OOM). The next visit to the SAME address must land in lite, once.
-  // (an OOM runs no pagehide, which a navigation from a live page always fires — so the death is planted at the start
-  //  of the NEXT document, the state an OOM-killed tab leaves behind)
+  // that full boot dies (OOM): the next visit to the SAME address must land in lite, once. An OOM runs no pagehide, so the
+  // death is planted at the start of the NEXT document, as an OOM-killed tab leaves it
   await p.addInitScript(() => { if (sessionStorage.getItem('probe-died')) return; sessionStorage.setItem('probe-died', '1'); localStorage.setItem('ew-boot-attempt:busy', String(Date.now())); });
   await p.goto(p.url()); await p.waitForFunction(() => globalThis.__ewLite !== undefined, null, { timeout: 30000 });
   const again = await p.evaluate(() => ({ lite: globalThis.__ewLite, why: globalThis.__ewLiteWhy }));
@@ -154,12 +151,10 @@ try {
       ok('…which offers the lite client as a button', await p.evaluate(() => [...document.querySelectorAll('#stpop button')].some(b => /lite client/.test(b.textContent))));
       await p.screenshot({ path: SHOT.replace('.png', '-desktop-retry.png') });
     }
-    // the ∃ menu offers the light version, behind a centred confirmation (owner, 10-01)
+    // the ∃ menu offers the light version, behind a centred confirmation
     await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-    // reopen the REAL menu deterministically (round-3 review: a pointer that left the menu arms ui.js's 450 ms mouse-away
-    // close; a row that still looked visible skipped the reopen and the timer shut the menu under the click). The pointer
-    // goes onto the ∃ first, which disarms that timer; the ∃ is clicked only if the menu is actually hidden (a click on an
-    // open menu toggles it shut); then the row must be VISIBLE, not merely attached. No force-click.
+    // reopen the REAL menu deterministically: hover the ∃ (disarms ui.js's 450 ms mouse-away close), click only if hidden
+    // (a click toggles an open one shut), then require the row VISIBLE. No force-click.
     const menuRow = async () => {
       await p.locator('#hud').hover();
       if (await p.evaluate(() => document.getElementById('emenu')?.hidden !== false)) await p.locator('#hud').click();
@@ -171,7 +166,7 @@ try {
     ok('…asks first, in the middle of the screen, Switch focused', !!C && Math.abs(C.cx) <= 2 && Math.abs(C.cy) <= 2 && C.ok === 'Switch' && C.focus === 'cc-ok', JSON.stringify(C));
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);
     ok('…Esc says no: the dialog closes and nothing navigates', await p.evaluate(() => !document.getElementById('confirm-center') && !/lite=1/.test(location.search)));
-    // a waterfall row's tooltip sits BESIDE the menus, never over the rows below it (owner, 10-01)
+    // a waterfall row's tooltip sits BESIDE the menus, never over the rows below it
     await menuRow(); await p.locator('#emenu .mrow[data-item=save]').hover(); await p.waitForTimeout(800);
     const T = await p.evaluate(() => { const t = document.getElementById('tipchip'), m = document.getElementById('emenu').getBoundingClientRect(), r = document.querySelector('#emenu .mrow[data-item=save]').getBoundingClientRect(), tr = t.getBoundingClientRect();
       return { show: t.classList.contains('show'), clear: tr.left >= m.right || tr.right <= m.left, level: Math.abs((tr.top + tr.bottom) / 2 - (r.top + r.bottom) / 2) <= 2 || tr.top <= 6 /* the top row's tall tip is held on screen */, tipTop: Math.round(tr.top) }; });
@@ -179,7 +174,7 @@ try {
     await p.mouse.move(5, 600); await p.waitForTimeout(300);
     ok('…and goes when the pointer leaves the row', await p.evaluate(() => !document.getElementById('tipchip').classList.contains('show')));
     ok('the bar at the bottom wears the lantern (the Panels row\'s icon, R 10-08), not the ∃ or the old lighthouse', await p.evaluate(() => { const g = document.querySelector('#lantern-pill .lp-glyph')?.innerHTML ?? ''; return /M72,84V74/.test(g) && !/M208,80/.test(g) && !/M4\.675 3/.test(g); }));
-    // Enter on the FOCUSED cancel button cancels (review #212: Enter used to mean yes whatever had focus); Tab stays in the card
+    // Enter on the FOCUSED cancel button cancels (#212); Tab stays in the card
     ok('…the menu reopens for the next press', await menuRow()); await p.locator('#emenu .mrow[data-item=lite]').click();
     await p.keyboard.press('Tab');
     const onNo = await p.evaluate(() => document.activeElement?.classList.contains('cc-no'));

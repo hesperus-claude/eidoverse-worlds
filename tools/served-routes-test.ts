@@ -1,0 +1,111 @@
+// served-routes-test: every route the client needs, really served, and every response isolated. `bun tools/served-routes-test.ts`
+// One table over a real server: status, a byte floor, COOP same-origin + COEP credentialless per row (server/routes.ts
+// isolate()); without COEP on any subresource crossOriginIsolated goes false and wasm silently loses its threads. The
+// hashed piper chunk name (piper-o91UDS6e.js) is pinned on purpose: this is what notices a dep bump renaming it.
+
+import { spawn } from "node:child_process";
+import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+
+let pass = 0, fail = 0;
+const check = (name: string, ok: boolean, detail = "") => {
+  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
+  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
+};
+
+// a fixed port can be squatted: a random high port whose preflight fetch must FAIL, then the child's per-run nonce on
+// /version (EIDO_BOOT_NONCE) before any vector and again after them
+async function freePort(): Promise<number> {
+  for (let i = 0; i < 20; i++) {
+    const cand = 20000 + Math.floor(Math.random() * 20000);
+    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); }
+    catch { return cand; }
+  }
+  throw new Error("no free port found in 20 tries");
+}
+const PORT = await freePort();
+const BASE = `http://127.0.0.1:${PORT}`;
+const NONCE = randomUUID();
+const scratch = mkdtempSync(join(tmpdir(), "served-routes-"));
+// process.execPath, not "bun": on Windows the PATH "bun" is a .cmd shim whose pid dies at once, so the server outlives the test
+const server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
+  env: { ...process.env, PORT: String(PORT), JOIN_TOKEN: "served-routes-test", WORLDS_DIR: scratch, EIDO_BOOT_NONCE: NONCE },
+  stdio: "ignore",
+});
+const childAlive = () => server.exitCode === null && !server.killed;
+const ours = async () => { try { return (await (await fetch(`${BASE}/version`)).json()).nonce === NONCE; } catch { return false; } };
+process.on("exit", () => {
+  try { server.kill("SIGKILL"); } catch { /* already gone */ }
+  try { rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ }
+});
+
+let up = false;
+for (let i = 0; i < 60 && childAlive() && !up; i++) { up = await ours(); if (!up) await new Promise((r) => setTimeout(r, 250)); }
+check("listener on a verified-free port is OUR child (nonce round-trip)", up, `:${PORT} child ${childAlive() ? "alive" : `exited ${server.exitCode}`}`);
+if (!up) { console.log("\n  refusing to test an unowned server\n"); process.exit(1); }
+
+// [path, expected status, byte floor]; a truncated serve is as dead as a 404. The static tree is rooted AT client/.
+const ROUTES: [string, number, number][] = [
+  ["/", 200, 500],                                   // the document itself
+  ["/main.js", 200, 1_000],
+  ["/lib/core.js", 200, 1_000],
+  ["/nonexistent-404", 404, 0],                      // a 404 is isolated too
+  // the TTS runtime's import-map targets (client/index.html)
+  ["/node_modules/@mintplex-labs/piper-tts-web/dist/piper-tts-web.js", 200, 1_000],
+  ["/node_modules/onnxruntime-web/dist/ort.bundle.min.mjs", 200, 100_000],
+  // the phonemizer chunk piperphon.js resolves for the worker (hashed name, pinned: see header)
+  ["/node_modules/@mintplex-labs/piper-tts-web/dist/piper-o91UDS6e.js", 200, 1_000],
+  // ORT's wasm sidecars, fetched relative to the bundle at session build
+  ["/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm", 200, 1_000_000],
+  ["/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm", 200, 1_000_000],
+  // vendored phonemizer runtime (see client/vendor/piper/NOTICE.md)
+  ["/vendor/piper/piper_phonemize.wasm", 200, 100_000],
+  ["/vendor/piper/piper_phonemize.data", 200, 1_000_000],
+  // the worker itself, and the modules it imports at runtime
+  ["/lib/phon.worker.js", 200, 500],
+  ["/lib/tts.js", 200, 1_000],
+  ["/lib/engine-piper.js", 200, 1_000],
+  // a missing optional TTS chunk 404s honestly (not index.html), so engine-piper's guarded import gets a catchable failure
+  ["/node_modules/@mintplex-labs/piper-tts-web/dist/no-such-chunk.js", 404, 0],
+];
+
+console.log(`\n— served routes (:${PORT}) —`);
+for (const [path, status, minBytes] of ROUTES) {
+  try {
+    const res = await fetch(`${BASE}${path}`);
+    const body = new Uint8Array(await res.arrayBuffer());
+    const coop = res.headers.get("cross-origin-opener-policy"), coep = res.headers.get("cross-origin-embedder-policy");
+    const html = status === 404 && new TextDecoder().decode(body).includes("<html");
+    // exact credentialless, not require-corp (a different product decision): a "stricter is safer" edit has to argue
+    check(`${path} ${status}`, res.status === status && body.byteLength >= minBytes && !html && coop === "same-origin" && coep === "credentialless",
+      `status=${res.status} bytes=${body.byteLength} (need ${status}, ≥${minBytes}) html=${html} COOP=${coop} COEP=${coep}`);
+  } catch (e) { check(path, false, String(e).slice(0, 60)); }
+}
+
+// the client tree is served as /shared/ is (the control): gzipped on request, and an ETag revalidation is a 304
+for (const path of ["/", "/lib/core.js", "/shared/components.js"]) {
+  try {
+    const res = await fetch(`${BASE}${path}`, { headers: { "accept-encoding": "gzip" } }); await res.arrayBuffer();
+    const etag = res.headers.get("etag");
+    const again = etag ? await fetch(`${BASE}${path}`, { headers: { "if-none-match": etag } }) : null;
+    check(`${path}: gzipped on request and revalidated to a 304 by its ETag`, res.status === 200 && res.headers.get("content-encoding") === "gzip" && again?.status === 304,
+      `status=${res.status} encoding=${res.headers.get("content-encoding")} etag=${etag} again=${again?.status}`);
+  } catch (e) { check(path, false, String(e).slice(0, 60)); }
+}
+
+// the websocket upgrade must be untouched: a 101 never reaches fetch(), so the observable is that the socket still opens
+const wsOk = await new Promise<boolean>((resolve) => {
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  const t = setTimeout(() => { try { ws.close(); } catch { /* */ } resolve(false); }, 4000);
+  ws.onopen = () => { clearTimeout(t); ws.close(); resolve(true); };
+  ws.onerror = () => { clearTimeout(t); resolve(false); };
+});
+check("websocket upgrade still succeeds under isolate()", wsOk);
+
+// bind the whole run to the child once more: a mid-run crash + stale listener would pass every row above
+check("child is still alive and still OURS after the vectors", childAlive() && await ours(), `exitCode=${server.exitCode}`);
+
+console.log(`\n${pass} passed, ${fail} failed\n`);
+process.exit(fail ? 1 : 0);

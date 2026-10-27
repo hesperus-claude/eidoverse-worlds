@@ -1,9 +1,7 @@
-// put-settle-test.ts — a thing leaving a hand eases from where it was drawn to where the fold puts it (R 10-11 23:17,
-// WISHLIST-desktop-test-2026-10-10.md: "Lerp on put/attach: presentation-only easing from the hand to the rest/attach
-// pose over ~120 ms"). Headless, through the real client/lib/thingphysics.js with the real bus (base.js) and the real
-// fold view + change events (state.js); the renderer, socket and DOM modules are stubbed (tools/put-settle-stub.mjs).
-// The realizer's part (models.js refreshModel: the change writes the fold's pose onto the object) is played here by a
-// subscriber registered AFTER thingphysics', the order main.js gives them (its import precedes initModelsRealizer()).
+// put-settle-test.ts: a thing leaving a hand eases (presentation only, ~120 ms) from the drawn pose to the fold's.
+// Headless through the real thingphysics.js, bus (base.js) and fold view + change events (state.js); renderer, socket and
+// DOM are stubbed (tools/put-settle-stub.mjs). The realizer's part (models.js refreshModel) is a subscriber registered
+// AFTER thingphysics', the order main.js gives them.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/put-settle-test.ts
 //   … --mutant      the duration set to 0 through the lab knob: the pin must go red
@@ -182,8 +180,8 @@ check('same-pose put: t=60 between', between(world(crate), HAND5, { p: new THREE
 tick(T5 + 120); frame();
 check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in the hand)', same(world(crate), { p: new THREE.Vector3(3, 0, 3), q: new THREE.Quaternion() }, 1e-9), J(world(crate).p.toArray()));
 
-// ---- S1 (review round 2): a throw by anyone — the launch entry lands in the CANONICAL fold before the holds message,
-// the presentation copy only on the next frame. The hold's end must not ask the realizer to revert to the pre-grab pose.
+// ---- a throw by anyone: the launch lands in the CANONICAL fold before the holds message, the presentation copy only
+// on the next frame; the hold's end must not ask the realizer to revert to the pre-grab pose
 {
   const T6 = 18000; const reverts: string[] = []; const off = bus.on('pose-revert', ({ id }: any) => reverts.push(id));
   tick(T6 - 1000); bus.emit('holds', { crate: { by: 'me' } });
@@ -194,7 +192,7 @@ check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in th
   check('a throw: nothing settling', !(tp.physicsApi.settling?.() ?? []).length, J(tp.physicsApi.settling?.()));
   off(); S.replica.sim = null; frame();
 }
-// ---- S2.1: a put row for a hold this client never drew (no hand pose): the old snap, never a slide from the old rest
+// ---- a put row for a hold this client never drew (no hand pose): the old snap, never a slide from the old rest
 {
   const T7 = 20000;
   state.applyView(view([10, 0, 10], q0)); crate.position.set(10, 0, 10); crate.quaternion.identity();
@@ -207,12 +205,10 @@ check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in th
 }
 
 // ---- a launch (a throw/drop: the engine's flight owns it) is not a put: left to the flight's own smoothing
-// (pres.bodies is the flight's; with no engine here there is none, so this only pins the guard's shape)
+// (with no engine here there are no pres.bodies, so this only pins the guard's shape)
 
-// ---- R 10-17 20:14 ("holding this crate from far away"): a crate the physics stacked on another is that one's scene child,
-// and its own scale is LOCAL (1 under a 0.25 host). A held thing is drawn by its centre and its size (localCentre, sizeOf),
-// and both read obj.scale: 4x too big for a child, so it was drawn a metre off the hand. Held, a child and a root of the same
-// world size are drawn at the same world place.
+// ---- a stacked crate is its host's scene child with a LOCAL scale, so localCentre/sizeOf must use world scale: held, a
+// child and a root of the same world size are drawn at the same world place
 {
   const box = { min: new THREE.Vector3(-1.25, 0, -0.75), max: new THREE.Vector3(1.25, 2, 0.75) };
   const host = new THREE.Group(); host.scale.setScalar(0.25); host.position.set(-3, 0, 0); scene.add(host);
@@ -222,8 +218,8 @@ check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in th
   const drawnAt = (id: string, t0: number) => { tick(t0); bus.emit('holds', { [id]: { by: 'me' } }); for (let t = t0; t <= t0 + 600; t += 16) { tick(t); frame(); } const w = world(S.entities.get(id)); bus.emit('holds', {}); return w; };
   const a = drawnAt('solo', 30000), b = drawnAt('kid', 31000);
   check('held: a stacked crate (a scene child, local scale 1 under a 0.25 host) is drawn where the same crate unstacked is', a.p.distanceTo(b.p) < 1e-6, `root ${J(a.p.toArray())} child ${J(b.p.toArray())}`);
-  // …and carried in both arms (a body with hand bones: the crate is 0.625 m, a carry), where its SIZE sets how far out in
-  // front of the body it sits: the same place again, against the body (not a metre out)
+  // …and carried in both arms (a body with hand bones; the crate is 0.625 m), where its SIZE sets how far in front of the
+  // body it sits: the same place again, against the body (not a metre out)
   const bones: any = {}; for (const [n, x] of [['rightHand', -0.18], ['leftHand', 0.18]] as const) { const o = new THREE.Object3D(); o.position.set(x, 1.0, 0.3); me.root.add(o); bones[n] = o; }
   (me as any).vrm = { humanoid: { getRawBoneNode: (n: string) => bones[n] ?? null, getNormalizedBoneNode: (n: string) => bones[n] ?? null }, userData: {} };
   const c = drawnAt('solo', 32000), d = drawnAt('kid', 33000);
@@ -232,10 +228,8 @@ check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in th
   for (const id of ['kid', 'solo']) { S.entities.delete(id); S.colliders.delete(id); delete S.replica.st.entities[id]; }
 }
 
-// ---- R 10-17 20:21/20:22: carrying a barrel, it swung ~1 m away when she turned, worst strafing A-D-A. The barrel's model
-// sits 1.95 m from its own origin (its box z -2.25..-1.65), so it is held by its centre: drawn at hand - q * centre. The
-// centre was turned by the q it was drawn with LAST frame, and the body's new turn applied after: every frame the body
-// turned, the barrel was drawn 2 x 1.95 x sin(turn/2) off the hand. Turned, its centre is still in the hand, that frame.
+// ---- a held thing is drawn at hand - q * centre with THIS frame's q: a barrel whose model sits 1.95 m from its origin
+// must keep its centre in the hand on the frame the body turns
 {
   const box = { min: new THREE.Vector3(-0.3, 0, -2.25), max: new THREE.Vector3(0.3, 1, -1.65) };
   const barrel = new THREE.Group(); barrel.position.set(5, 0, 5); scene.add(barrel);

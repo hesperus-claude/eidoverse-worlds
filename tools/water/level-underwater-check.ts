@@ -1,9 +1,7 @@
-// Underwater under the world's water LEVEL (lakes, rivers, the sea), in a real browser, on both backends.
+// Underwater under the world's water LEVEL, in a real browser on both backends: the camera is driven above the deepest
+// wet spot, under it looking level, and looking up. The underwater state turns on only under the surface; under it the
+// image is fogged toward the water's colour, above it not; no shader errors on WebGPU or WebGL. SHOT_DIR=<dir> saves frames.
 //   WATER_PREVIEW_URL=http://127.0.0.1:<port>/?world=<fresh>&spectate=1&name=lvl bun tools/water/level-underwater-check.ts
-// A terrain with a level is applied locally (the real terrain + water build), the camera is driven (renderer
-// mode) above the deepest wet spot, under its surface looking level, and under it looking up. Checks: the
-// underwater state turns on only under the surface; the image under it is fogged (calmer, toward the water's
-// colour) while above it is not; no shader errors on WebGPU or WebGL. SHOT_DIR=<dir> saves the frames.
 import { chromium } from 'playwright';
 import { strict as assert } from 'node:assert';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
@@ -15,11 +13,8 @@ try {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
     const errors: string[] = []; page.on('pageerror', (e) => errors.push(String(e)));
     page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('401')) errors.push(m.text()); });
-    // The ground builder is upstream's engine module (/library/eidoverse/terrain.js), not in this repo; a test
-    // preview's library may not carry it. Stand in with this repo's own height law (shared/terrainmath.js — the
-    // law the server and agents use), so the water fills real lows; never fetched from any other server.
-    // ENGINE_LIB=<dir of upstream eidoverse/*.js> runs the REAL engine modules (terrain, sky, weather — the weather
-    // system wraps transparent materials, which a stand-in would never exercise); otherwise a stand-in ground.
+    // the ground builder is upstream's, not in this repo: stand in with shared/terrainmath.js. ENGINE_LIB=<dir of upstream
+    // eidoverse/*.js> runs the REAL modules (the weather system wraps transparent materials, which a stand-in never exercises)
     const engine = process.env.ENGINE_LIB;
     if (engine) await page.route('**/library/eidoverse/*.js', (route) => {
       const f = `${engine}/${new URL(route.request().url()).pathname.split('/').pop()}`;
@@ -50,7 +45,7 @@ try {
       applyTerrainState(ground); await until(() => { const h = sample(); return h[h.length - 1] - h[0] > 1; }, 'the terrain');
       const hs = sample(), level = hs[Math.floor(hs.length * 0.35)];
       applyTerrainState({ ...ground, water: { level } }); await until(() => lw.waterLevel() === level, 'the water level');
-      // a real sky over it (its domes draw unfogged — the under-dome must hide them below the surface)
+      // a real sky over it: its domes draw unfogged, so the under-dome must hide them below the surface
       const st = await import('/lib/state.js'); st.foldLive({ seq: 1e9, ts: Date.now(), actor: 'test', verb: 'sky', args: { hours: 11 } });
       await new Promise((r) => setTimeout(r, 1500));
       // the deepest wet spot on a coarse scan
@@ -63,8 +58,8 @@ try {
         camera.position.set(pos[0], pos[1], pos[2]); camera.lookAt(look[0], look[1], look[2]); camera.updateMatrixWorld();
         wv.updateWater();
         await renderer.compileAsync(scene, camera);
-        // WebGL compiles in parallel and skips a draw until its program is ready: settle a few frames, then
-        // capture right after our own render (the drawing buffer is only valid until the next composite)
+        // WebGL compiles in parallel and skips a draw until its program is ready: settle a few frames, then capture right after
+        // our own render (the drawing buffer is valid only until the next composite)
         const { renderWorld } = await import('/lib/render.js');
         for (let i = 0; i < 4; i++) { wv.updateWater(); renderWorld(); await new Promise((r) => setTimeout(r, 60)); }
         wv.updateWater(); renderWorld();
@@ -82,18 +77,17 @@ try {
       const out: any = { best, surf };
       out.above = await frame([best.x - 6, surf + 3, best.z - 6], [best.x + 6, surf - 1, best.z + 6]);
       out.below = await frame([best.x, surf - Math.min(1.2, best.depth * 0.5), best.z], [best.x + 10, surf - Math.min(1.2, best.depth * 0.5), best.z]);
-      // looking up at 50°: Snell's window (inside ~41.4° elevation and up) fills the top of the frame, the
-      // darker water outside it the bottom
+      // looking up at 50°: Snell's window (~41.4° elevation and up) fills the top of the frame, darker water the bottom
       const camY = surf - Math.min(1.2, best.depth * 0.5);
       out.dayAtUp = (await import('/lib/core.js')).sun.intensity;
       out.up = await frame([best.x, camY, best.z], [best.x + 10, camY + 10 * Math.tan(50 * Math.PI / 180), best.z]);
       out.backend = renderer.backend?.isWebGLBackend ? 'webgl' : 'webgpu';
-      // the full sky's weather system wets every material: vec4(colorNode) → rgb × k, alpha kept. The sheet's colour
-      // must survive that wrap (a select() colour compiled to invalid WGSL and no water drew at all on staging)
+      // the full sky's weather system wraps every material (vec4(colorNode) → rgb × k, alpha kept); the sheet's colour must
+      // survive it (a select() colour compiled to invalid WGSL and no water drew)
       { const sheet: any = scene.getObjectByName('water'); const { TSL } = await import('/lib/core.js');
         const base4 = TSL.vec4(sheet.material.colorNode); sheet.material.colorNode = TSL.vec4(base4.rgb.mul(TSL.float(0.9)), base4.a); sheet.material.needsUpdate = true;
         out.wrapped = await frame([best.x - 6, surf + 3, best.z - 6], [best.x + 6, surf - 1, best.z + 6]); await new Promise((r) => setTimeout(r, 1200)); }
-      // back UNDER the surface for the checks that follow (review #254): they test underwater states
+      // back UNDER the surface: the checks that follow test underwater states
       const under = await frame([best.x, camY, best.z], [best.x + 10, camY, best.z]); out.backUnder = under.under;
       // a dry pocket below the level around the camera: the fog stays, the sky is not swapped for the far water
       const st0 = await import('/lib/state.js'); let s0 = 3e9;
@@ -112,7 +106,7 @@ try {
       let seq = 4e9; const fold = (verb: string, args: any) => st2.foldLive({ seq: ++seq, ts: Date.now(), actor: 'test', verb, args });
       for (let i = 0; i < 4; i++) { fold('spawn', { id: `vol${i}`, lib: 'x.glb', pos: [best.x + 200 + i * 20, 0, best.z] }); fold('comp', { id: `vol${i}`, type: 'water', data: { center: [0, 0, 0], size: [4, 4, 4] } }); }
       wv.updateWater(); wv.updateWaterView(); out.fourVolumes = wv.waterDebug();
-      // travel: a world reset clears the level — no level fog, background or sky hiding follows to the next world
+      // travel: a world reset clears the level; no level fog, background or sky hiding follows to the next world
       st2.reset(); wv.updateWater(); wv.updateWaterView();
       out.afterReset = { level: lw.levelWaterInfo(), debug: wv.waterDebug(), backgroundNode: scene.backgroundNode ? 'set' : null };
       out.debug = (globalThis as any).__lvlDebug;

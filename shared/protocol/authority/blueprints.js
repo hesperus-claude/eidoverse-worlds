@@ -1,8 +1,6 @@
 // shared/protocol/authority/blueprints.js — blueprints (publish, update, create {from}, duplicate) and the reads: describe
-// (a thing as an accessibility tree) and the read verbs (help, look, inspect, measure, find, lint, history) as READ_VERBS,
-// which authority.js spreads into VERBS where they stood (refactor split, 2026-10-17; moved from authority.js's
-// "blueprints" and "reads" sections and the VERBS table unchanged). schema stays in VERBS beside the capacity it reports.
-// The write path's resolve/mint and the history readers are above it, reached through UP.
+// (a thing as an accessibility tree) and READ_VERBS (help, look, inspect, measure, find, lint, history). schema is in
+// verbs.js (SCHEMA_VERBS).
 import { grabOf, describeGrab } from "../../grab.js";
 import { isEntityId, PURGED } from "../fold.js";
 import { COMPONENTS, mapRefs } from "../componentspec.js";
@@ -22,8 +20,7 @@ import { isSocketC, socketsOf, socketRole, modelSocketNames } from "./sockets.js
 import { backward, creatorOf, effective, lockStrength, madeBy, roleOf } from "./rights.js";
 import { shieldOf } from "./bodyconsent.js";
 import { actionsOf, offersFor, pivotOf } from "./use.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// layers above this one (a leaf may not import them), through UP (ctx.js)
 const danglingRefs = (...a) => UP.danglingRefs(...a);
 const guess = (...a) => UP.guess(...a);
 const historyDiff = (...a) => UP.historyDiff(...a);
@@ -38,16 +35,16 @@ const warnings = (...a) => UP.warnings(...a);
 const BLUEPRINTS = "blueprints:";
 const blueprintKey = (h) => `${BLUEPRINTS}${String(h).replace(/^sha256:/, "")}`;
 const isPublished = (st, h) => !!st.entities["@world"]?.c[blueprintKey(h)];
-// References across a copy (review 10-07 H5; RESEARCH-event-wiring §4.3): every typed reference in a components map (its
-// parent excepted: copies place parents themselves) through f(id, path) → new id | null (drop) | the same id (keep).
-// Returns the components with dropped references removed (a value whose required reference went is removed whole).
+// References across a copy: every typed reference in a components map (parent excepted: copies
+// place parents themselves) through f(id, path) → new id | null (drop) | the same id (keep). → the components with dropped
+// references removed (a value whose required reference went is removed whole).
 function rebindAll(c, f) {
   for (const k of Object.keys(c)) { if (k === "parent" || k === "copy-of") continue;
     const r = mapRefs(k, c[k], (x, at) => f(x, at, k)); if (r.value === undefined) delete c[k]; else c[k] = r.value; }
   return c;
 }
-// publish: a reference inside what's published becomes that part's key; one outside is refused (a raw id from this world
-// means nothing, or something else, wherever the record lands) unless unwire: true, which drops it and says so
+// publish: a reference inside what's published becomes that part's key; one outside is refused (a raw id means nothing, or
+// something else, wherever the record lands) unless unwire: true, which drops it and says so
 function publishLinks(ctx, a, inside, keyOf, partsOf) {
   const outside = [], unwired = [];
   const parts = partsOf((id, c) => rebindAll(c, (x, at) => { if (inside.has(x)) return keyOf(x); if (a.unwire) { unwired.push({ from: `${id}.${at}`, to: x }); return null; } outside.push({ from: `${id}.${at}`, to: x }); return x; }));
@@ -89,12 +86,8 @@ function publishGroup(ctx, a, w, roots) {
   const hash = w.putBlob(record); ctx.notes.push({ record: hash, parts: parts.length, roots: roots.length }); ctx.refs.add("@world");
   return [setOp("@world", blueprintKey(hash), { name: record.name, parts: parts.length })]; // who published it is a view (creatorOf), never stored (L2)
 }
-// A record's part keys, unique within it (review 10-07 N1: a table holding two copies of a published leg got the keys
-// [top, leg, leg], and no copy of it could ever be placed). A part keeps the key it was copied as (blueprint.key) only
-// when it comes from the same record as what's being published (`lineage`: re-publishing an edited copy, so update {copy,
-// to} still matches part to part); a part nested from another record (a leg inside the table) is keyed by its id. Those
-// come first, so a nested part never takes a key the lineage needs; a key already taken falls back to the id, then to the
-// id with a number. Returns id → key.
+// part keys, unique within a record: a part keeps its copied key only from the same record (`lineage`, so update {copy, to}
+// still matches part to part); nested parts are keyed by id after the lineage's, then id plus a number. → id → key.
 function partKeys(st, ids, lineage, reserved = []) {
   const taken = new Set(reserved); const out = new Map();
   const own = (id) => { const b = st.entities[id].c["copy-of"]; return lineage !== undefined && b?.from === lineage && typeof b.key === "string" ? b.key : null; };
@@ -104,15 +97,14 @@ function partKeys(st, ids, lineage, reserved = []) {
     taken.add(key); out.set(id, key); }
   return (id) => out.get(id) ?? id;
 }
-// Ids for a copy's parts: minted, so they follow §2.3; which part is which lives in each part's blueprint.key.
-// each part of a copy gets a minted id of its own (R 10-17: opaque; a part's id was <copy>-<its key's slug>)
+// each part of a copy gets a minted, opaque id (§2.3); which part is which lives in its blueprint.key
 function partIds(st, copy, rootKey, keys) {
   const map = new Map([[rootKey, copy]]); const used = new Set([copy]);
   for (const k of keys) { if (map.has(k)) continue; const id = mint(st, used); used.add(id); map.set(k, id); }
   return map;
 }
-// Offer a newer record to a copy: per-part, per-component, per-FIELD three-way merge (R13). base = the copy's record,
-// mine = the copy now, theirs = the new record. Recorded as plain results; never re-derived on replay.
+// per-part, per-component, per-FIELD three-way merge (R13): base = the copy's record, mine = the copy now, theirs = the new
+// record. Recorded as plain results; never re-derived on replay.
 function buildUpdate(ctx, a, w) {
   const root = ctx.st.entities[a.copy]; if (!root?.c["copy-of"]) refuse("not-a-copy", `${a.copy} isn't a blueprint copy`, "update offers a newer record to a copy placed from a blueprint; inspect shows a copy's copy-of");
   let base, theirs; try { base = w.getBlob(root.c["copy-of"].from); theirs = w.getBlob(a.to); } catch { refuse("not-found", "unknown record", "find {kind: 'blueprint'}"); }
@@ -120,26 +112,22 @@ function buildUpdate(ctx, a, w) {
   const have = new Map(); for (const id of [a.copy, ...descendants(ctx.st, a.copy)]) { const k = ctx.st.entities[id].c["copy-of"]?.key; if (k !== undefined && !have.has(k)) have.set(k, id); }
   const fresh = partIds(ctx.st, a.copy, base.root, theirs.parts.map((p) => p.key).filter((k) => !have.has(k)));
   const idOf = (key) => (key === base.root ? a.copy : have.get(key) ?? fresh.get(key));
-  // references are merged as values in this world's ids: a part key → its id here (an unknown key is unbound, as on copy).
-  // A part's parent too: it merges like any component, so a part reparented upstream is reparented here (Antra's review
-  // of f91840e5: the merge skipped parent for every existing part, leaving a reparented part's new local transform under
-  // its old parent, 3 m off). The copy's root has no parent in a record (where the copy sits is its own).
+  // references merge as values in this world's ids (unknown keys unbound), and a part's parent like any component, so a part
+  // reparented upstream is reparented here. The copy's root has no parent in a record.
   const inIds = (c) => { const o = rebindAll(clone(c), (x) => idOf(x) ?? null); if (o.parent) o.parent = { ...o.parent, to: idOf(o.parent.to) }; return o; };
   const B = Object.fromEntries(base.parts.map((p) => [p.key, inIds(p.components)])), T = Object.fromEntries(theirs.parts.map((p) => [p.key, inIds(p.components)]));
   const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
   const ops = [], made = [], conflicts = [], kept = [], orphaned = [];
   const unstamp = (k, v) => (k === "physics" && v && typeof v === "object" && !Array.isArray(v) ? (({ shape, ...rest }) => rest)(v) : v);
   const onlyStamp = (k, v) => k === "physics" && eq(Object.keys(unstamp(k, v) ?? {}), ["kind"]) && (v.kind === "static" || v.kind === "kinematic");
-  const skipComp = new Set(["copy-of", "parent"]);   // "is this gone part still as the record left it?" (copy-of, parent: placement)
+  const skipComp = new Set(["copy-of", "parent"]);   // copy-of, parent: placement, not this copy's change
   const unmerged = new Set(["copy-of"]);
   for (const key of new Set([...Object.keys(B), ...Object.keys(T)])) {
     const id = idOf(key), mineE = ctx.st.entities[id];
-    if (!B[key]) { const c = clone(T[key]); c["copy-of"] = { from: a.to, key };   // its parent is already in ids (inIds)
+    if (!B[key]) { const c = clone(T[key]); c["copy-of"] = { from: a.to, key };   // its parent is already in ids
       made.push(...createOps(id, c)); continue; }   // made first: an existing part may be reparented onto a new one
-    // a part the newer version drops goes only if this copy left it as it came: each component it came with unchanged, and
-    // none added since. What the authority stamps isn't this copy's change (house 6340433633): physics.shape is its measure
-    // of the model, and physics {kind: static | kinematic, shape} alone is what it gives every modelled thing in a world that
-    // runs physics (followups.js stampShapes)
+    // a dropped part goes only if this copy left it as it came; the authority's own stamps (followups.js stampShapes)
+    // aren't this copy's change
     if (!T[key]) { if (mineE && Object.keys(B[key]).every((k) => skipComp.has(k) || eq(unstamp(k, B[key][k]), unstamp(k, mineE.c[k]))) && Object.keys(mineE.c).every((k) => skipComp.has(k) || Object.hasOwn(B[key], k) || onlyStamp(k, mineE.c[k]))) ops.push(delOp(id)); else if (mineE) orphaned.push(id); continue; }
     if (!mineE) { kept.push({ id, why: "you deleted it in this copy" }); continue; }
     for (const comp of new Set([...Object.keys(B[key]), ...Object.keys(T[key])])) {
@@ -158,8 +146,8 @@ function buildUpdate(ctx, a, w) {
     }
   }
   if (conflicts.length && !a.resolve) refuse("conflicts", `${conflicts.length} part(s) changed both here and upstream`, "re-send with resolve: {\"<id>.<component>.<field>\": \"yours\"|\"theirs\"} for a field, or {\"<id>.<component>\": …} for a whole value; conflicts lists each one with yours and theirs", { conflicts });
-  // a resolve names every one of these conflicts, each "yours" or "theirs": a key that matches none, another word, or a
-  // conflict left out would otherwise silently mean yours, so each is refused instead (null reads as no resolve)
+  // a resolve names every conflict "yours" or "theirs": an unmatched key, another word or a missing conflict would silently
+  // mean yours, so each is refused (null reads as no resolve)
   if (a.resolve != null) { const keys = new Set(conflicts.flatMap((c) => (c.fields ? c.fields.map((f) => `${c.id}.${c.component}.${f}`) : [`${c.id}.${c.component}`])));
     const res = a.resolve && typeof a.resolve === "object" && !Array.isArray(a.resolve) ? a.resolve : null;
     if (!res) refuse("shape", "resolve is an object of conflict keys", "resolve: {\"<id>.<component>.<field>\": \"yours\"|\"theirs\"}", { conflicts });
@@ -172,10 +160,8 @@ function buildUpdate(ctx, a, w) {
       if (choice === "theirs") { const cur = ops.findLast((o) => o.id === id && o.comp === c.component)?.value ?? clone(ctx.st.entities[id].c[c.component]);
         const v = f ? { ...cur, [f]: c.theirs[f] } : c.theirs; ops.push(setOp(id, c.component, v)); } } }
   ops.push(setOp(a.copy, "copy-of", { ...root.c["copy-of"], from: a.to }));
-  // every part of this lineage still in the record advances with the root (Antra's review of f91840e5: only the root's
-  // copy-of.from moved, so re-publishing an updated copy keyed its parts by id — partKeys keeps a key only for parts from
-  // the root's record — and updating another copy to that record found two bulbs where there was one). A part nested
-  // from another record keeps its own lineage; one gone upstream (orphaned) is no longer the record's.
+  // every part of this lineage still in the record advances with the root, or a re-publish keys them by id; a part
+  // nested from another record keeps its own lineage
   const was = root.c["copy-of"].from;
   for (const [key, id] of have) { const c = ctx.st.entities[id]?.c["copy-of"];
     if (id !== a.copy && T[key] && c?.from === was) ops.push(setOp(id, "copy-of", { ...c, from: a.to })); }
@@ -196,16 +182,15 @@ function buildCreateFrom(ctx, a) {
   if (!isEntityId(id) || id === "@world") refuse("shape", `'${id}' isn't an id you can make`, "§3.1: a–z, 0–9 and '-', up to 64; or leave id out");
   if (ctx.st.entities[id]) refuse("exists", `'${id}' already exists`, "choose another id for the copy");
   const ids = partIds(ctx.st, id, rec.root, rec.parts.map((p) => p.key));
-  // a record published before part keys were unique (N1) may name a key twice: each later twin gets an id of its own
-  // (a part that names a twin as its parent rides the first; there's no telling which was meant)
+  // an older record may name a key twice (N1): each later twin gets its own id (a part naming a twin as parent goes under the first)
   const seen = new Set(), used = new Set([...ids.values()]); const idAt = rec.parts.map((p) => { if (!seen.has(p.key)) { seen.add(p.key); return ids.get(p.key); }
     const x = mint(ctx.st, used); used.add(x); return x; });
   const ops = [], unbound = [];
   for (const [i, p] of rec.parts.entries()) { const c = clone(p.components);
     if (p.key === rec.root && i === rec.parts.findIndex((q) => q.key === rec.root)) c.transform = resolve(ctx, id, "transform", { ...c.transform, ...(a.at ?? {}) });
     if (c.parent) c.parent = { ...c.parent, to: ids.get(c.parent.to) };
-    // a reference to a part key is that part's new id; anything else (a record published before references were typed,
-    // naming a raw id of the world it came from) is unbound here, and said: it would mean something else in this world
+    // a reference to a part key is that part's new id; anything else (a raw id of the world it came from) is unbound here,
+    // and said: it would mean something else in this world
     rebindAll(c, (x, at) => { if (ids.has(x)) return ids.get(x); unbound.push({ from: `${idAt[i]}.${at}`, was: x }); return null; });
     c["copy-of"] = { from: a.from, key: p.key };
     ops.push(...createOps(idAt[i], c)); ctx.refs.add(idAt[i]); }
@@ -213,11 +198,8 @@ function buildCreateFrom(ctx, a) {
   return ops;
 }
 
-// Duplicate (slice 3b; PARITY (b)3): create {from: <a live thing's id>} copies it and everything attached to it, as one
-// explicit batch (L1: the fold sees plain creates). The copy keeps the source's parent (a sibling of it), so its
-// transform stays local to that parent; `at` replaces fields of the root's transform (local to that parent too), and
-// without it the copy sits 0.5 m along x from the source. `lock` isn't copied: a copy is something you're about to
-// move. Who made the copy is the create entry's actor (a view, L2).
+// duplicate: create {from: <id>} copies it and everything attached as one explicit batch (L1), keeping the source's parent;
+// `at` replaces root transform fields, else 0.5 m along x. `lock` isn't copied (you're about to move it).
 function buildDuplicate(ctx, a) {
   const st = ctx.st, src = a.from;
   if (src === "@world" || !st.entities[src]) refuse("not-found", `no thing called '${src}' to copy`, "from takes a blueprint hash (sha256:…) or the id of a thing here", { didYouMean: guess(String(src), Object.keys(st.entities)) });
@@ -232,8 +214,8 @@ function buildDuplicate(ctx, a) {
     if ("lock" in c) { delete c.lock; locks++; }
     for (const k of Object.keys(orig)) if (orig[k] === PURGED) delete c[k]; // a purged value can't be copied
     if (c.parent && typeof c.parent.to === "string") c.parent = { ...c.parent, to: ids.get(c.parent.to) ?? c.parent.to };
-    // every typed reference to something copied now points at its twin (a lamp that looks at its own switch looks at the
-    // copy's switch; a script's scope drives the copy, never the original); one to something else is kept, and listed
+    // every typed reference to something copied points at its twin (a script's scope drives the copy, never the original);
+    // one to something else is kept, and listed
     rebindAll(c, (x, at) => { if (ids.has(x)) return ids.get(x); keptLinks.push({ from: `${ids.get(sid)}.${at}`, to: x, why: `${x} wasn't copied` }); return x; });
     if (sid === src) { const t = { ...COMPONENTS.transform.defaults, ...(c.transform ?? {}) };
       c.transform = resolve(ctx, id, "transform", a.at ?? { pos: [t.pos[0] + 0.5, t.pos[1], t.pos[2]] }, t); }
@@ -242,13 +224,11 @@ function buildDuplicate(ctx, a) {
   return ops;
 }
 
-// a thing in a refusal's words: its label and its id (R 10-17: an id is opaque; the label is what a reader calls it)
+// its label and its id (ids are opaque; the label is what a reader calls it)
 const thingSaid = (st, id) => { const l = st?.entities?.[id]?.c?.label; return typeof l === "string" && l.trim() ? `${l.trim()} (${id})` : id; };
 // ---------- reads ----------
-// R 10-07: a thing reads like an accessibility tree (PROTOCOL §4): its name, its description (alt text; a look clips it,
-// inspect has it whole), then what it can do and its state, generated from its components by shared/a11y.js, the reading
-// mcpl's look and the inspector share
-// a surface's size as a placement reads it: a turned top's own rectangle (with its x axis on the ground), else its box
+// a thing reads like an accessibility tree (PROTOCOL §4): name, description, then what it can do and its state (shared/a11y.js)
+// a surface's size as placement reads it: a turned top's own rectangle (x axis on the ground), else its box
 const surfaceSize = (s) => (s.rect ? { size: [r3(2 * s.rect.hx), r3(2 * s.rect.hz)], xAxis: s.rect.u.map(r3) } : { size: [r3(s.max[0] - s.min[0]), r3(s.max[1] - s.min[1])] });
 function describe(st, id, live = {}, holds = {}, { full = false, w = null } = {}) {
   const e = st.entities[id]; const t = worldT(st, id); const g = grabOf(e.c); const name = e.c.label ?? modelOf(e.c.model)?.label ?? e.c.model ?? id;
@@ -256,14 +236,14 @@ function describe(st, id, live = {}, holds = {}, { full = false, w = null } = {}
   const desc = ax.description == null ? null : full || graphemes(ax.description) <= 200 ? ax.description : `${[...ax.description].slice(0, 200).join("")}… (inspect for all)`;
   return { id, name, ...(desc ? { description: desc } : {}), ...(ax.can.length ? { can: ax.can } : {}), ...(ax.state.length ? { state: ax.state } : {}), at: t.pos.map((n) => Math.round(n * 100) / 100),
     ...(live[id] && !live[id].resting ? { moving: live[id] } : {}),
-    // stopped, its rest not logged yet: where the engine has it, said so (the record still has where it was thrown from)
+    // stopped, rest not logged yet: where the engine has it, said so (the record still has where it was thrown from)
     ...(live[id]?.resting ? { at: live[id].pos.map((n) => Math.round(n * 100) / 100), atRest: "where it came to rest; not yet on the record" } : {}), ...(holds[id] ? { heldBy: holds[id].by, heldAt: holds[id].pose.pos.map((n) => Math.round(n * 100) / 100), ...(holds[id].hand ? { heldIn: holds[id].hand } : {}) } : {}),
     ...(g ? { grab: describeGrab(g, typeof name === "string" ? name : id) } : {}),
     ...(actionsOf(st, id).length ? { actions: actionsOf(st, id) } : {}), ...socketsLine(st, id), ...(e.c.parent ? { in: e.c.parent.to } : {}), ...(lockedC(e.c) ? { lock: w ? { rank: lockStrength(w, st, id) } : true } : {}), ...(e.c.openable && typeof e.c.openable === "object" ? { openable: e.c.openable } : {}),
     ...sayOf(st, e.c) };
 }
 const socketsLine = (st, id) => { const socks = socketsOf(st, id).filter((x) => x.id); return socks.length ? { sockets: socks.map((x) => ({ id: x.id, name: x.name, as: socketRole(st.entities[x.id].c) })) } : {}; };
-// batch 2: what its words and media say (shared/says.js, the same lines mcpl's look prints); things it names by their names
+// what its words and media say (shared/says.js, as mcpl's look prints); things it names by their names
 const sayOf = (st, c) => { const lines = saysOf(c, { nameOf: (x) => (st.entities[x] ? st.entities[x].c.label ?? modelOf(st.entities[x].c.model)?.label ?? x : said(x)), now: CTX.mintW?.now?.() ?? null });
   return lines.length ? { says: lines } : {}; };
 
@@ -288,16 +268,13 @@ const READ_VERBS = {
     const st = w.state(); const ids = Object.keys(st.entities).filter((k) => k !== "@world" && !st.entities[k].c.parent);
     const lim = a.limit ?? 40;
     const live = enginePoses(w.sim());
-    // the tree in the same order as ever, through the index's children map; only what's shown is described (review 10-06:
-    // a child scan per node and a description of every thing made look O(N²) on a big world)
+    // through the index's children map; only what's shown is described (a scan per node made look O(N²) on a big world)
     // a socket is listed with its host (describe's sockets), not as a thing; what sits in it shows at its place
     const kids = kidsMap(st); const order = []; const tree = (id, d, n = 0) => { if (n > 64) return; const sock = isSocketC(st.entities[id]?.c); if (!sock) order.push([id, d]); for (const k of kids.get(id) ?? []) tree(k, sock ? d : d + 1, n + 1); };
     ids.forEach((id) => tree(id, 0));
     const all = order.slice(0, lim).map(([id, d]) => ({ ...describe(st, id, live, w.presence.holds, { w }), depth: d })); const total = order.length;
-    // consent is each person's own (consent gaps 6a, R 10-17 02:45): a viewer sees THEIR table, and who poses, drags or touches
-    // them; of anyone else only where they stand, plus what the viewer is doing to them. Another body's stranger cells and
-    // pause would undo the uniform refusal words (a stranger who reads touch: everyone and is then refused learns they
-    // personally are denied), and who touches whom is nobody else's business
+    // consent is each person's own: a viewer sees THEIR table and who acts on them; of anyone else only where they stand.
+    // Another body's cells would undo the uniform refusal words, and who touches whom is nobody else's business.
     const P = w.presence; const bodies = Object.entries(P.bodies).map(([id, b]) => ({ id, at: b.at,
       ...(id === actor ? { shield: shieldOf(P, id) } : {}),
       ...(b.poseBy && (id === actor || b.poseBy === actor) ? { posedBy: b.poseBy } : {}), ...(b.draggedBy && (id === actor || b.draggedBy === actor) ? { draggedBy: b.draggedBy } : {}),
@@ -327,8 +304,7 @@ const READ_VERBS = {
   lint(w, actor, a) { const st = w.state(); const ids = a.id ? [a.id] : Object.keys(st.entities);
     return { ok: true, warnings: [...warnings(st, ids, true), ...danglingRefs(st, ids)] }; },
   history(w, actor, a) {
-    // one thing's history, newest first, paged backwards (R 10-04: recent by default, deeper on request): before = the seq
-    // to continue from (the reply's `next`), limit = how many acts per page
+    // one thing's history, newest first, paged backwards: before = the seq to continue from (the reply's `next`), limit = acts per page
     if (a.id != null) {
       if (a.verbs !== undefined || a.after !== undefined) refuse("shape", "one thing's history pages back with before only", "leave id out to filter the whole log by verbs, or page it with after");
       const id = String(a.id); const lim = Math.max(1, Math.min(50, a.limit ?? 5)); const before = a.before ?? Infinity; const out = [];
@@ -337,20 +313,20 @@ const READ_VERBS = {
         const ops = opsTouching(e, id); if (!ops.length) continue;
         if (out.length === lim) { next = out.at(-1).seq; break; }
         const act = Number.isInteger(e.cause) ? w.entries[e.cause] : null;
-        // an imported act reads as what it was (spawn, place, comp), never "imported" (batch 2: Credits in History)
+        // an imported act reads as what it was (spawn, place, comp), never "imported"
         out.push({ seq: i, by: e.actor, who: said(e.actor), ts: e.ts, verb: (isE(act) && act.kind === "act" ? (act.verb === "imported" && typeof act.body?.verb === "string" ? act.body.verb : act.verb) : null) ?? ops[0].verb,
           changed: [...new Set(ops.map((o) => o.verb === "create" ? "(created)" : o.verb === "delete" && o.comp === undefined ? "(deleted)" : o.comp))],
           ...(() => { const d = historyDiff(w, id, i, ops); return d ? { diff: d } : {}; })(),
           ...(isE(act) && readback(w, e.cause)?.undoes !== undefined ? { undoes: readback(w, e.cause).undoes } : {}), ...(Number.isInteger(e.cause) ? { act: e.cause } : {}) }); }
       return { ok: true, id, entries: out, ...(next !== null ? { next, more: "send the same with before: next for older" } : {}) };
     }
-    // the whole world's log, a page at a time (Commons audit, agents #3: `verbs` and `before` reached nobody). verbs
-    // matches an entry's verb or kind, and an imported act's original verb (its body names it); before/after page by seq
+    // the whole log, a page at a time: verbs matches an entry's verb or kind, and an imported act's original verb (its body
+    // names it); before/after page by seq
     if (a.verbs !== undefined && !(Array.isArray(a.verbs) && a.verbs.length <= 32 && a.verbs.every((v) => typeof v === "string"))) refuse("shape", "verbs is a list of verb names (at most 32)", "e.g. history {verbs: ['set', 'use']} — an imported entry matches its original verb too ('comp', 'mount')");
     if (a.before !== undefined && a.after !== undefined) refuse("shape", "page one way: before or after, not both", "before: older than that seq (the reply's next); after: newer than it");
     const lim = Math.max(1, Math.min(200, a.limit ?? 12)); const vs = a.verbs?.length ? new Set(a.verbs) : null;   // [] = no filter
-    // speech is arrival-only (R 10-18): a say from before the asker arrived leaves the page too, unless the host says they're
-    // an admin (no floor). The log keeps every say; only an admin reads one back from before they came (storage.js sayFloor)
+    // speech is arrival-only: a say from before the asker arrived leaves the page too, unless the host says they're an admin.
+    // The log keeps every say; only an admin reads one back from before they came (storage.js sayFloor)
     const floor = typeof w.sayFloor === "function" ? w.sayFloor(actor) : null;
     const match0 = (e) => !vs || !isE(e) ? !vs : vs.has(e.verb) || vs.has(e.kind) || (e.verb === "imported" && vs.has(e.body?.verb));
     const match = (e, seq) => match0(e) && !(isE(e) && e.kind === "say" && floor !== null && !(seq > floor));

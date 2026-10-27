@@ -10,6 +10,7 @@
 //
 // Run: bun tools/approach-seed-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { APPROACH_DWELL_MS } from "../mcpl/denoise.ts";
 
@@ -23,7 +24,7 @@ const pose = (x: number, z: number, clip = "idle", extra: Record<string, unknown
   ({ p: [x, 0, z], yaw: 0, speed: 0, clip, ...extra });
 
 function rig() {
-  const ag = new WorldAgent({ name: "seedtest" }) as any;
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "seedtest" }) as any;
   ag.pos = { x: 0, y: 0, z: 0 };
   const acts: any[] = [];
   ag.onEvent = (ev: any) => { if (ev.kind === "act") acts.push(ev); };

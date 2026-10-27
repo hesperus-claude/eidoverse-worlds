@@ -1,9 +1,5 @@
-// skydefs — the sky-preset contract (charter §3). Presets are AUTHORING
-// conveniences: the build panel applies them to its sliders and previews;
-// commit writes concrete sky-verb args. The fold never sees a preset name —
-// foldSkyEntry computes state at fold time, so anything def-referenced
-// there would let a mutable file rewrite logged meaning. This file is why
-// that can't happen: presets live strictly on the authoring side.
+// skydefs — the sky-preset contract (charter §3). Presets are AUTHORING conveniences: commit writes concrete sky-verb args,
+// and the fold never sees a preset name (a def referenced at fold time would let a mutable file rewrite logged meaning).
 
 import { DEF_NAME_RE } from './floradefs.js';
 
@@ -13,11 +9,8 @@ const isStr = (v) => typeof v === 'string' && v.length > 0;
 const NUMERIC = ['hours', 'rate', 'azimuth', 'sun', 'ambient', 'fill', 'exposure', 'fog'];
 const STRINGY = ['clouds', 'weather'];
 
-/** Validate the real-clock sidecar (defs/sky/_clocks.json): named timezones
- *  the sky panel's clock row offers. Same law as the presets — the commit
- *  writes concrete clock/tz args, never a def name. Timezones are checked
- *  against the host's own IANA data: a typo'd tz would otherwise surface as
- *  a runtime throw inside hoursAt, on every client, at once.
+/** Validate defs/sky/_clocks.json (named timezones for the clock row). Same law: commit writes concrete clock/tz args,
+ *  never a def name. Checked against the host's IANA data, or a typo'd tz throws in hoursAt on every client at once.
  *  @param {unknown} clocks @returns {string[]} */
 export function validateSkyClocks(clocks) {
   if (clocks == null || typeof clocks !== 'object' || Array.isArray(clocks)) {

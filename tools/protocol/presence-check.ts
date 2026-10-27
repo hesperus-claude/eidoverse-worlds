@@ -16,10 +16,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("presence");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, done } = suite("presence-check", { quiet: true, cap: 500 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
 const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
@@ -127,6 +127,12 @@ const named = (s) => s.snap?.you;   // the display name the server settled on
   sly.at(20, 0); await sleep(300); k = vic.msgs.length; ks = sly.msgs.length;
   sly.send({ type: "puppet", target: "Vic", targetActor: vic.actor, ragdoll: true }); await tryUntil("Sly is told he is too far away", () => sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), { ms: 2000 });
   ok(got(k, "puppet").length === 0 && sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), "BC3 a knock-over from 20 m is refused (out of reach), whatever the table says", sly.since(ks));
+  // out of reach, the answer is the same whatever the target's switch, so distance can't read it
+  for (const sw of ["refuse", "ask"]) {
+    const r = await vic.req("consent", { switch: sw }); ok(r?.ok, `(BC3b setup) Vic: ${sw}`, r); ks = sly.msgs.length;
+    sly.send({ type: "puppet", target: "Vic", targetActor: vic.actor, ragdoll: true }); await tryUntil(`Sly is told he is too far away (Vic: ${sw})`, () => sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), { ms: 2000 });
+    const e = sly.since(ks).filter((m) => m.type === "error").map((m) => m.error);
+    ok(e.length > 0 && e.every((x) => /away/.test(x) && /get closer/.test(x) && !/ask|isn't taking|consent/.test(x)), `BC3b from 20 m, a body set to ${sw} answers only "get closer", never its switch`, e); }
   // ask: refused, saying how to ask
   sly.at(1, 0); await vic.req("consent", { switch: "ask" }); await sleep(300);
   k = vic.msgs.length; ks = sly.msgs.length;
@@ -147,5 +153,4 @@ const named = (s) => s.snap?.you;   // the display name the server settled on
   vic.close(); sly.close(); }
 
 try { proc.kill(); } catch {}
-console.log(`[presence-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

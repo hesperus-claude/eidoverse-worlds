@@ -62,3 +62,53 @@ unknowingly. Each old entry appears in the new log as an `act` with verb
 `imported` (`body {verb, args, from}`) or as a `say`, followed by the change it
 produced; fields with no component in this protocol ride along as `imported:<name>`. A
 translated world is an ordinary world from then on.
+
+## The tool: `tools/protocol/world.ts`
+
+`world.ts` is the operator's tool for world files (its header lists every command). `found <name> --owner <id>` makes a
+new world through the authority's own `create-world` request (`server/worldlog.ts`
+`foundWorld`), so the founding act writes `@world` (about, bounds, `roles:<owner>`, `default-role` builder) as a live request would. Genesis
+names no owner key (`found` passes none, so tier 0 is empty and the operator's custody key is tier 1). A bare owner
+name is the `local:` account of that name (lowercased), resolved through the shared directory. (A person can also found a world over the
+wire with the `world-found` request; the server never founds one unasked, and a directory holding only an old log is
+refused at open.) `translate` reads `<world>/log.jsonl` and never writes it. In place, it builds the new world in a
+temporary sibling (`.translating-<world>-<8 hex>`), verifies it there (the importer's checks, the world opened as the
+server opens it, and the snapshot oracle below where a `snapshot.json` is present), then swaps it in under the same
+name. If the process dies mid-swap, the next `translate <world>` sees the half-swapped directory and finishes the
+swap with renames and moves only, saying so; it refuses when the old log no longer holds the bytes that were
+translated, or when more than one temporary directory is left.
+
+## The snapshot oracle
+
+`tools/protocol/import-v1/snapshot-oracle.ts` checks the translator against the old engine itself. The translator's
+own checks prove it agrees with itself (its copy of the old fold, its projection, the new fold); the oracle proves it
+agrees with the old server. A first-protocol world directory holds, beside `log.jsonl`, the old server's own folded
+state as `snapshot.json` (`{v: 1, seq, bytes, ts, state}`). When `snapshot.seq` is the log's last seq and
+`snapshot.bytes` is the log's size, the snapshot is the old engine's answer to "what does this whole log mean". A
+snapshot that isn't complete is skipped with its reason, never compared.
+
+Per world, the log is translated with the real path (`translateV1World`, as `translate --no-founder-key`) into a
+scratch worlds directory with its own custody, directory and model index; the source is only read. Then:
+
+- **A.** The translated `world.jsonl` up to its `lift-sockets` act, read by the strict reader and folded by the real fold, against the snapshot put
+  through the translator's own mapping (`project`), with the translated world's identities (read back from its
+  directory) and model hashes beside the paths.
+- **B.** The server's view: the world opened as the server opens it (`openLive`), its socket children already written by
+  the translation's own `lift-sockets` act (`liftWorld` must report nothing left to do), against side A's projection put
+  through the same lift (`legacyHosts`, `liftHostOps`: a stored `sockets` map becomes socket child entities, a mounted
+  thing's parent names the child, its pose re-expressed in the child's frame; shape-repaired only when the log is
+  unmarked, which a translation never is), plus a check that every old seat is a child entity with that name at that pose.
+- **C.** Independent of `project` (so a bug that A shares still shows): the fields the snapshot states plainly, each
+  thing's id, model and model hash, its pose when unparented and its parent, and the world's terrain and grass.
+
+Entity ids are matched through `enc()` (the translator keeps every id, escaping only what the §2.3 grammar refuses);
+people's names (roles, bans, authors) through the translated world's directory. Numbers compare to 1e-9, everything
+else exactly. The only thing left out is the translator's `DROPPED` table, which the oracle prints with its reasons.
+
+With no arguments it compares the repo's own reference fixtures (`spec/fixtures/0*`, each `folded.json` standing in
+as the snapshot), then any worlds `ORACLE_WORLDS` (else `PROTOCOL_WORLDS`) names, as a `:`-separated list (`;` on
+Windows), each distinct complete snapshot once. A world translated in place is read through its kept originals.
+`OPT_DIR` points at the serving checkout's `assets/opt` so store models get the model hash they get on that host;
+`ORACLE_SCRATCH` (default `PROTOCOL_SCRATCH`, else the OS temp directory) holds the scratch worlds, and
+`ORACLE_KEEP=1` keeps them. It exits 0 only when at least one world was compared and every compared world agrees.
+`translate` runs it before an in-place swap and runs it with `ORACLE_SUMMARY=1` and reads its one-line `oracle-summary <json>` result.

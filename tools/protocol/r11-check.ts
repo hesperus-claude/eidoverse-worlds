@@ -23,18 +23,17 @@ import { ENGINE, scratch, copyTree } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 
 // [name, file under the tree, find, replace, rows]
 const MUTANTS: [string, string, string, string, string[]][] = [
-  ["undelegate removes nobody", "shared/protocol/consent.js", "if (a.undelegate !== undefined) t.delegates = (t.delegates ?? []).filter((x) => x !== a.undelegate);", "", ["C1", "C4"]],
-  ["unfriend removes nobody", "shared/protocol/consent.js", "if (a.unfriend !== undefined) t.friends = (t.friends ?? []).filter((x) => x !== a.unfriend);", "", ["C2", "C4"]],
-  ["a delegate may remove", "shared/protocol/consent.js", "if (!self && lists) return", "if (false && lists) return", ["C3"]],
-  ["an unfriend re-checks only the unfriender", "shared/protocol/authority/bodyconsent.js", ", ...(ex ? revokeAfter(w, ex, beforeEx) : [])]", "]", ["C6"]],
-  ["the door doesn't take the words", "shared/protocol/verbspec.js", "unfriend: { type: \"any\"", "unfriendX: { type: \"any\"", ["C2", "C3"]],
-  ["the verb reads a removal as a read", "shared/protocol/authority/bodyconsent.js", "\"delegate\", \"unfriend\", \"undelegate\"].some", "\"delegate\"].some", ["C1", "C2"]],
+  // C1, C2, C3, C6 and their five rows RETIRED with the cases (recut A2: delegates and the friends tier are gone)
+  ["the door doesn't take the retired words", "shared/protocol/verbspec.js", ", delegate: { type: \"any\", doc: \"retired (recut A2)\" }", ", delegateX: { type: \"any\", doc: \"retired (recut A2)\" }", ["C5"]],
+  ["a stored table migrates only narrower: a pause still refuses", "shared/protocol/consent.js", "t.switch = t.paused || modes.includes(\"deny\") ? \"refuse\"", "t.switch = modes.includes(\"deny\") ? \"refuse\"", ["C4"]],
+  ["a stored table migrates only narrower: a closed cell still refuses", "shared/protocol/consent.js", "t.switch = t.paused || modes.includes(\"deny\") ? \"refuse\"", "t.switch = t.paused ? \"refuse\"", ["C4"]],
   ["§7 forgets rename-components", "spec/PROTOCOL.md", "\n| components and fields renamed before release (§4), by the explicit `repair` command (never at load) | its own act `rename-components {renamed, why, failed?}` and its change | `system` | the system's capability, per thing | the actor |", "", ["X1"]],
   ["§4 forgets the rename", "spec/PROTOCOL.md", "**A pure rename is the command's second step, idempotent.**", "**A pure rename runs.**", ["X1"]],
   ["a seated declaration says nothing", "mcpl/tools.ts", "and grants nothing${seated}`); }", "and grants nothing`); }", ["B1"]],
@@ -204,13 +203,11 @@ const cases: Case[] = [
     good: (o) => o.rows.every((r: any) => r && r.name === "ghost" && r.listed === false && /ghost was removed/.test(r.help)) && o.local },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("r11-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[r11-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

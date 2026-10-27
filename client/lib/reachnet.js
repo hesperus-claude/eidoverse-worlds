@@ -1,24 +1,14 @@
-// reachnet — reach descriptors ⇄ the live scene.
+// reachnet — reach descriptors (shared/reachwire.js) ⇄ the live scene, both ends of the wire.
 //
-// shared/reachwire.js says what a reach IS on the wire; this file is the two
-// ends of that wire in a browser:
+//   sending — my descriptor bag rides every presence packet; my arm runs the same resolution path as everyone's,
+//   and my solver's verdict keeps the `reached` attestation the far end's touch fires on.
+//   receiving — a remote body's descriptors are diffed per sample and resolved against MY copy of the scene; every
+//   viewer re-solves the same relation, and the closed-form solver makes them agree.
 //
-//   sending — my reach lives here as a descriptor bag (myReachBag rides every
-//   presence packet, like a held pose), my own arm is driven through the same
-//   resolution path everyone else will run, and my solver's verdict maintains
-//   the `reached` attestation the far end's touch event fires on.
-//
-//   receiving — a remote body's descriptors are diffed per sample
-//   (applyRemoteReach), each new aim resolved against MY copy of the scene
-//   into a live target function for avatar.setReach. Every viewer re-solves
-//   the same relation; the closed-form solver is what makes them agree.
-//
-// Events: a reach aimed at MY body surfaces on the bus —
+// Events for a reach aimed at MY body (the same edges an agent hears); nothing here renders:
 //   bus.emit('reach'  , { who, limb, point?, entry })   they aim at me
 //   bus.emit('touch'  , { who, limb, point?, entry })   their solve arrived
 //   bus.emit('release', { who, limb })                  they let go
-// — the same edges an agent hears through its door. UI can listen; nothing
-// here renders anything.
 
 import { bus } from './base.js';
 import { deriveLandmarks, landmarkWorld } from './landmarks.js';
@@ -34,8 +24,7 @@ let hooks = {
 };
 export function initReachNet(h) { hooks = { ...hooks, ...h }; }
 
-/** Where a named contact point on an avatar is NOW: { pos, normal } in world
- *  space, or null. Landmarks derive once per body and live on it. */
+/** A named contact point NOW: { pos, normal } in world space, or null. Landmarks derive once per body. */
 export function contactFrameOf(avatar, point, standoff = 0.02) {
   if (!avatar) return null;
   avatar.__marks ??= deriveLandmarks(avatar);
@@ -44,13 +33,7 @@ export function contactFrameOf(avatar, point, standoff = 0.02) {
   return hit ? { pos: hit.pos.toArray(), normal: hit.normal.toArray() } : null;
 }
 
-/**
- * A normalized entry → the live target function avatar.setReach re-evaluates
- * every frame. `ownerId` is the REACHER (for 'self' space). Bodies resolve
- * lazily inside the function: a reach at someone still loading starts
- * tracking them the moment their avatar exists, instead of failing once at
- * descriptor time and never again.
- */
+/** `ownerId` is the REACHER. Bodies resolve lazily: a reach at someone still loading tracks once they exist. */
 export function resolveEntryFn(ownerId, entry) {
   const t = entry.t;
   if (t.who !== undefined) {
@@ -75,16 +58,12 @@ export function resolveEntryFn(ownerId, entry) {
 
 // ---------------------------------------------------------------- receiving
 
-/**
- * Apply the newest presence sample's reach bag to a remote body. Called from
- * remotes.js wherever the other presence extras are applied — including the
- * mounted branch, because a seated body still gestures.
- */
+/** Called wherever presence extras apply, the seated branch included: a seated body still gestures. */
 export function applyRemoteReach(r, sample) {
   if (r.avatar) r.avatar._reachOwner = r.id;
   const bag = normalizeReachBag(sample?.reach);
   const prev = r.lastReach ?? null;
-  if (bag === prev) return;                       // both absent, the common case
+  if (bag === prev) return;                       // both absent
   for (const limb of REACH_LIMBS) {
     const d = bag?.[limb] ?? null, p = prev?.[limb] ?? null;
     if (d && (!p || !sameReach(p, d))) {
@@ -92,27 +71,15 @@ export function applyRemoteReach(r, sample) {
     } else if (!d && p) {
       r.avatar?.clearReach(limb);
     } else if (d && r.avatar && !r.avatar._limp && !r.avatar._reach?.has(limb)) {
-      // self-heal: going limp clears the avatar's reach map (a corpse does
-      // not keep reaching) without touching the DESCRIPTOR, which is the
-      // reacher's to clear. Once the body is back up, re-assert.
+      // limp cleared the avatar's reach but not the DESCRIPTOR (the reacher's to clear): re-assert once back up
       r.avatar.setReach(limb, resolveEntryFn(r.id, d), { relation: d.t, palm: d.palm });
     }
   }
   r.lastReach = bag;
 }
 
-/**
- * Reach/touch/release EVENTS off the raw sample stream — deliberately
- * decoupled from applyRemoteReach, which runs only once the avatar has
- * loaded: a touch that begins during a multi-second VRM load must still be
- * heard (this exact race ate the first live event). Called per pushed
- * sample; edge-triggered, so idle samples cost one null check.
- *
- * A body FIRST OBSERVED mid-reach is a baseline, not a transition (the
- * approach lesson, issue #39): a late joiner must not hear "X touches you"
- * for a hand that has rested there since before they arrived — the first
- * sample seeds silently.
- */
+/** Edge events off the raw samples, not applyRemoteReach (which waits for the avatar): a touch mid-load is still heard.
+ *  The first sample seeds silently: a body first seen mid-reach is a baseline, not a transition (#39). */
 export function noteReachEvents(r, pose) {
   const bag = normalizeReachBag(pose?.reach);
   const prev = r.lastReachEvt;
@@ -134,10 +101,10 @@ export function dropRemoteReach(r) {
 
 // ---------------------------------------------------------------- sending
 
-let myBag = null;          // { limb: entry } | null — what rides the wire
+let myBag = null;          // { limb: entry } | null
 
 /**
- * Reach with my own body. `spec` shapes (generous — this is the EW surface):
+ * `spec` shapes (generous — this is the EW surface):
  *   'head_top'                      a name on my own body
  *   ['mythos', 'shoulder_l']        a landmark on someone
  *   [x, y, z]                       a world point
@@ -170,9 +137,7 @@ export function clearMyReach(limb = null) {
   }
 }
 
-/** What sendPose should carry this packet: the bag, with `reached` kept
- *  honest from my own solver's last frame. Undefined when I reach for
- *  nothing, so the field vanishes from the wire. */
+/** The bag, `reached` kept honest from my solver's last frame; undefined (off the wire) when I reach for nothing. */
 export function myReachBag() {
   if (!myBag) return undefined;
   const status = hooks.me()?.reachStatus?.() ?? {};

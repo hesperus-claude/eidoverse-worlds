@@ -1,19 +1,9 @@
-/**
- * seatcore fixture — #101 Phase B: the seat-profile contract as hand math.
- *
- * Pins, in order: profile schema validation (including the review amendment
- * that placeholder-shaped patch evidence is INVALID evidence), the serve-time
- * status verdict, the B1 socket-anchor rule (nothing infers intent), the B3
- * runtime gate (the action that actually ran, the exact clip bytes), the B5
- * occupant-scale definition (uniform-or-abstain), the B2 world-up correction
- * with the pitch/roll DISCRIMINATOR (hand-computed lateral term that fails a
- * parent-normal implementation by name), the seat-claim purity regression
- * (the _v alias lesson — nonzero-Y socket), and the generation guard (a slow
- * fetch from before an acceptance may never roll the acceptance back — the
- * #95 lesson generalized).
- *
- * Run: bun run tools/seatcore-test.ts   (no servers, no clock, all injected)
- */
+/** seatcore (#101 Phase B): the seat-profile contract as hand math. Pins, in order: profile schema validation
+ *  (placeholder-shaped patch evidence is INVALID), the serve-time status verdict, the socket-anchor rule (nothing infers
+ *  intent), the runtime gate (the action that ran, the exact clip bytes), occupant scale (uniform-or-abstain), the world-up
+ *  correction with the pitch/roll DISCRIMINATOR, seat-claim purity (a nonzero-Y socket), and the generation guard (a slow
+ *  fetch may never roll an acceptance back).
+ *  Run: bun run tools/seatcore-test.ts   (no servers, no clock, all injected) */
 
 import {
   validateProfile, profileStatus, socketAnchor, seatGate, seatGateCore,
@@ -32,7 +22,7 @@ const near3 = (a: number[] | null, b: number[], eps = 1e-9) => !!a && a.length =
 
 const A_SHA = "a".repeat(64), C_SHA = "c".repeat(64), OTHER = "b".repeat(64);
 
-/** A profile that passes every gate — tests below break exactly one field. */
+/** A profile that passes every gate: tests below break exactly one field. */
 const good = () => ({
   avatar: "claude", avatarSha256: A_SHA, pose: "sitchair", clipSha256: C_SHA,
   seatContactY: 0.2055,
@@ -66,10 +56,8 @@ console.log("schema");
   const unsup = { avatar: "crow", avatarSha256: A_SHA, pose: "sitchair", unsupported: { refusal: "no humanoid mapping — no seat landmark derivable" } };
   check("unsupported record with refusal validates", validateProfile(unsup).ok === true && validateProfile(unsup).kind === "unsupported");
   check("unsupported without refusal refused", !validateProfile({ ...unsup, unsupported: {} }).ok);
-  // #105 review B2: these strings index rights-bearing maps
-  // #105 review B2: legal syntax is not enough — the language's reserved
-  // names are refused at the schema, and the store's null-prototype maps
-  // refuse them again (tools/seats-store-test.ts)
+  // these strings index rights-bearing maps: reserved names are refused at the schema, and the store's null-prototype
+  // maps refuse them again (tools/seats-store-test.ts)
   check("avatar '__proto__' refused", !validateProfile({ ...good(), avatar: "__proto__" }).ok);
   check("avatar 'constructor' refused", !validateProfile({ ...good(), avatar: "constructor" }).ok);
   check("avatar 'prototype' refused", !validateProfile({ ...good(), avatar: "prototype" }).ok);
@@ -134,7 +122,7 @@ console.log("runtime gate (B3)");
     (() => { const g = seatGate({ ...base, verdict: { status: "missing" } }); return !g.apply && g.reason === "no profile"; })());
   check("pose identity is the contract's, not the filename's",
     (() => { const g = seatGate({ ...base, verdict: { ...accepted, pose: "sitground" } }); return !g.apply && /pose sitground/.test(g.reason!); })());
-  // The headless half: no mixer, so the contract IS the runtime truth.
+  // the headless half: no mixer, so the contract IS the runtime truth
   check("core gate opens on contract identity alone (headless consumer)",
     (() => { const g = seatGateCore({ sock: surface, verdict: accepted }); return g.apply === true && near(g.contactY!, 0.2055); })());
   check("core gate still refuses a legacy socket", !seatGateCore({ sock: {}, verdict: accepted }).apply);
@@ -152,19 +140,18 @@ console.log("occupant scale (B5)");
 // ---- B2: world-up correction + the pitch/roll discriminator ----------------
 console.log("correction (B2)");
 {
-  // Level parent, hand math: socket at [2, 1.5, -3], contactY .2055, scale 1
+  // level parent, hand math: socket at [2, 1.5, -3], contactY .2055, scale 1
   check("level seat: root sits contactY below the socket, XZ untouched",
     near3(applySeatCorrection([2, 1.5, -3], 0.2055), [2, 1.5 - 0.2055, -3]));
   check("scale composes: contactY×1.25 at scale 1.25",
     near3(applySeatCorrection([0, 1, 0], 0.2, 1.25), [0, 1 - 0.25, 0]));
 
-  // THE DISCRIMINATOR — parent pitched 30° about X. Socket local [0,1,0] →
+  // THE DISCRIMINATOR: parent pitched 30° about X. Socket local [0,1,0] →
   // world [0, cos30, sin30] = [0, 0.8660254, 0.5]. contactY 0.2.
   //   world-up (this slice):  [0, cos30 − 0.2, 0.5]
   //   parent-normal (WRONG):  socket − 0.2·n̂ where n̂ = [0, cos30, sin30]
   //                           = [0, cos30 − 0.2·cos30, 0.5 − 0.2·sin30]
-  // The wrong implementation's signature is the lateral term 0.2·sin30 = 0.1
-  // — a body slid 10cm along the bench because the bench is tilted.
+  // the wrong one's signature is the lateral term 0.2·sin30 = 0.1: a body slid 10cm along a tilted bench
   const c30 = Math.cos(Math.PI / 6), s30 = Math.sin(Math.PI / 6);
   const sockW = [0, c30, s30];
   const worldUp = applySeatCorrection(sockW, 0.2)!;
@@ -172,8 +159,7 @@ console.log("correction (B2)");
   check("pitched 30°: world-up result matches hand math", near3(worldUp, [0, c30 - 0.2, s30]));
   check("pitched 30°: parent-normal implementation FAILS by its lateral term (0.1 in Z)",
     near(Math.abs(worldUp[2] - parentNormal[2]), 0.2 * s30) && !near3(worldUp, parentNormal, 1e-3));
-  // Roll 45° about Z, socket local [0,1,0] → world [−sin45, cos45, 0]; the
-  // wrong vector's lateral term moves X by 0.2·sin45.
+  // roll 45° about Z, socket local [0,1,0] → world [−sin45, cos45, 0]; the wrong vector's lateral term moves X by 0.2·sin45
   const c45 = Math.cos(Math.PI / 4), s45 = Math.sin(Math.PI / 4);
   const sockR = [-s45, c45, 0];
   const upR = applySeatCorrection(sockR, 0.2)!;
@@ -186,9 +172,8 @@ console.log("correction (B2)");
 // ---- the _v lesson: seat claim purity at nonzero Y -------------------------
 console.log("seat claim (the _v regression)");
 {
-  // The alias bug returned the FORWARD VECTOR's Y as seatY — ≈0 for a level
-  // parent, so a seat near y=0 hid it. This fixture is the nonzero-Y case:
-  // seat at y=3.638 (the chapel's cushion height), parent yawed 90°.
+  // an aliased register returns the FORWARD VECTOR's Y as seatY, ≈0 for a level parent, so a seat near y=0 hides it:
+  // seat at y=3.638, parent yawed 90°
   const q = qAxisAngle([0, 1, 0], Math.PI / 2);
   const claim = seatClaim([-22.116, 3.638, 16.694], q)!;
   check("seatY is the socket's Y, not the forward vector's", near(claim.seatY, 3.638));
@@ -196,7 +181,7 @@ console.log("seat claim (the _v regression)");
   check("non-finite socket world refuses", seatClaim([0, NaN, 0], q) === null);
 }
 
-// ---- generations (B3/B4 → #105 review B1: whole-request epochs) ------------
+// ---- generations (#105 B1: whole-request epochs) ------------
 console.log("generation guard (epoch)");
 {
   const g = makeGenerationGuard();
@@ -219,7 +204,7 @@ console.log("generation guard (epoch)");
   check("a rev-less response is refused once any rev has been announced", g2.accept("aletheia", g2.begin(), NaN) === false);
 }
 
-// ---- the verdict cache: the review's four vectors, driven end to end -------
+// ---- the verdict cache: four vectors, driven end to end -------
 console.log("verdict cache (shared browser/agent implementation)");
 {
   // a controllable transport: each call resolves when the test says so
@@ -235,10 +220,8 @@ console.log("verdict cache (shared browser/agent implementation)");
     { name: "aletheia", seat: { pose: "sitchair", status: "accepted", contactY: 0.2791 } },
   ] });
 
-  // 1 — initial EMPTY-cache fetch, update arrives mid-flight, and the OLD
-  // response resolves LAST carrying the pre-event snapshot. This is the exact
-  // hole the review named: nothing was cached, so nothing was stamped, and
-  // the per-name-stamp guard read the post-bump generation at response time.
+  // 1: an EMPTY-cache fetch, an update mid-flight, and the OLD response resolving LAST with the pre-event snapshot:
+  // nothing cached means nothing stamped, so a per-name stamp would read the post-bump generation
   const first = cache.init();                       // fetch A departs (cache empty)
   const noted = cache.note("claude", 6);            // event lands mid-flight → fetch B departs
   const resolveA = pendingResolves.shift()!;
@@ -254,7 +237,7 @@ console.log("verdict cache (shared browser/agent implementation)");
   check("vector 1: the stale empty-cache response is discarded — accepted survives",
     cache.get("claude")?.status === "accepted" && near(cache.get("claude").contactY, 0.2055));
 
-  // 2 — held accepted verdict, update lands, refetch FAILS → pending immediately, stays pending
+  // 2: held accepted verdict, update lands, refetch FAILS → pending immediately, stays pending
   failNext = true;
   await cache.note("claude", 7).catch(() => {});
   check("vector 2: the held verdict demotes to pending the moment the event lands",
@@ -264,7 +247,7 @@ console.log("verdict cache (shared browser/agent implementation)");
   check("vector 4: the other name's verdict is untouched by claude's update",
     cache.get("aletheia")?.status === "accepted");
 
-  // 3 — a fresh response under the new generation restores service
+  // 3: a fresh response under the new generation restores service
   const restore = cache.init();
   pendingResolves.shift()!(accepted(8));
   await restore;

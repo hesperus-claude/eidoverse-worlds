@@ -1,8 +1,6 @@
-// shared/protocol/authority/sockets.js — sockets as child entities (PLAN-sockets-entities 2026-10-12). A socket is
-// {transform, parent: {to: host}, socket: {name, part?, accepts?, radius?}, station?}: an attachment point with a pose of
-// its own (Godot's Marker3D, Unity's child Transform), and what a person's body does there, its station (shape audit
-// 10-16: once socket.body). What it is for is read from what it has, never stored: a seat if a station, a snap point if
-// accepts, else an attach point.
+// shared/protocol/authority/sockets.js — sockets as child entities. A socket is {transform, parent: {to: host}, socket:
+// {name, part?, accepts?, radius?}, station?}: an attachment point with its own pose and what a body does there.
+// What it is for is read, never stored: a seat if a station, a snap point if accepts, else an attach point.
 import { ONE_PLACE, socketQ } from "../../components.js";
 import { checkSockets } from "../../sockbody.js";
 import { COMPONENTS, materialize } from "../componentspec.js";
@@ -17,16 +15,14 @@ import { refuse } from "./refuse.js";
 const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v !== PURGED;
 export const isSocketC = (c) => bag(c?.socket);
 export { socketRole } from "../../sockbody.js";
-// what a socket may carry besides its pose and its name: what reads it (label, description), what switches or freezes it
-// (disabled, lock, hidden), a motion of its own (R 10-12 20:44), and the blueprint mark every placed part carries
-// one host holds at most this many sockets (review 10-12 S1-2): a seat map past it is several things. No setting raises it;
-// a socket is an entity, so it also counts in @world.capacity.entities (authority.js CAPACITY)
+// at most this many sockets per host (no setting raises it); each also counts in @world.capacity.entities
 export const SOCKETS_PER_HOST = 64;
+// what a socket may carry besides its pose and name: label/description, disabled/lock/hidden, its own motion, the blueprint mark
 export const ON_A_SOCKET = new Set(["transform", "parent", "socket", "station", "label", "description", "disabled", "lock", "hidden", "motion", "copy-of"]);
 const UNIT = (sc) => sc === undefined || (Array.isArray(sc) && sc.length === 3 && sc.every((x) => x === 1));
 
-/** The door's rules for socket entities, over the state a write leaves: the first that breaks, as {code, reason, fix}, or
- *  null. Only the sockets the write touches are read, and their siblings. */
+/** The door's rules over the state a write leaves: the first that breaks as {code, reason, fix}, or null. Only the touched
+ *  sockets and their siblings are read. */
 export function socketRules(s, ids) {
   let kids = null;
   const kidsOf = (p) => { if (!kids) { kids = new Map(); for (const [k, e] of Object.entries(s.entities)) { const to = e.c.parent?.to; if (to) { let a = kids.get(to); if (!a) kids.set(to, (a = [])); a.push(k); } } } return kids.get(p) ?? []; };
@@ -42,7 +38,6 @@ export function socketRules(s, ids) {
     const under = kidsOf(id).find((k) => isSocketC(s.entities[k].c));
     if (under) return { code: "shape", reason: `${under} is a socket under the socket ${id}: a socket hangs on a thing, never on another socket`, fix: `parent ${under} to ${host}` };
     hosts.add(host); }
-  // (the one-driver rule went with station.input, reserved for later: shape audit 10-16)
   for (const h of hosts) { const socks = kidsOf(h).filter((k) => isSocketC(s.entities[k].c)); const byName = new Map();
     for (const k of socks) { const v = s.entities[k].c.socket; const n = v.name;
       if (byName.has(n)) return { code: "name-taken", reason: `${h} already has a socket called '${v.name}' (${byName.get(n)})`, fix: "a socket's name is unique among its host's sockets: give it another", taken: byName.get(n) };
@@ -50,18 +45,16 @@ export function socketRules(s, ids) {
   return null;
 }
 
-// what a toggle reaction toggles, and whether an openable thing answers 'open' itself: here, beside the station rules, and read by use.js
-export const toggleOf = (h) => { const comp = h.component ?? "openable"; return { comp, field: h.field ?? (comp === "openable" ? "open" : undefined) }; };   // toggling an openable opens/closes it, named or not (10-07 merge)
+// what a toggle reaction toggles, and whether an openable answers 'open' itself (read by use.js)
+export const toggleOf = (h) => { const comp = h.component ?? "openable"; return { comp, field: h.field ?? (comp === "openable" ? "open" : undefined) }; };   // an openable toggles open/closed, named or not
 // only a toggle of openable.open itself (toggleOf's own default) stands in for the implicit open: one of its lock doesn't
 export function implicitOpens(e) { return !!(e?.c.openable && typeof e.c.openable === "object") && !Object.values(e.c.reactions ?? {}).some((h) => { if (h?.kind !== "toggle") return false; const { comp: target, field } = toggleOf(h); return target === "openable" && field === "open"; }); }
-/** One action namespace per thing (shape audit 10-16, R's call 3): what `use {id, action}` names must mean one thing. A
- *  reaction key, or a name grabbable.use fires, never equals a station action of the thing's own sockets (several of its
- *  sockets may share one: a sofa's seats all sit). Over the state a write leaves; the hosts the write touches, directly or
- *  through one of their sockets. The first clash as {code: 'action-taken', reason, fix}, or null. */
+/** One action namespace per thing: a reaction key or a grabbable.use name never equals a station action of its own
+ *  sockets (several sockets may share one). → the first clash as {code: 'action-taken', reason, fix}, or null. */
 export function actionRules(s, ids) {
   const hosts = new Set();
   for (const id of ids) { const e = s.entities[id]; if (!e) continue; if (isSocketC(e.c) && e.c.parent?.to) hosts.add(e.c.parent.to); else hosts.add(id); }
-  let kids = null;   // the children index, built once and only if a touched host could clash
+  let kids = null;   // built once, only if a touched host could clash
   for (const h of hosts) { const c = s.entities[h]?.c; if (!c) continue;
     if (!bag(c.reactions) && !bag(c.grabbable) && !bag(c.openable)) continue;
     if (!kids) { kids = new Map(); for (const [k, e] of Object.entries(s.entities)) { const to = e.c.parent?.to; if (to && isSocketC(e.c) && bag(e.c.station)) { let a = kids.get(to); if (!a) kids.set(to, (a = [])); a.push(k); } } }
@@ -79,9 +72,8 @@ export function actionRules(s, ids) {
   return null;
 }
 
-/** A host's sockets, in its children's order: [{id, name, sock, host}]. A socket switched off on its own is a closed seat:
- *  not listed. */
-export function socketsOf(st, host, { off = false } = {}) {   // off: switched-off ones too (they're still its sockets to delete or undo)
+/** In its children's order: [{id, name, sock, host}]. A socket switched off on its own is a closed seat: not listed. */
+export function socketsOf(st, host, { off = false } = {}) {   // off: switched-off ones too (still its sockets to delete or undo)
   if (!st.entities[host]) return [];
   const out = [];
   for (const k of kidsMap(st).get(host) ?? []) { const c = st.entities[k]?.c; if (isSocketC(c) && (off || c.disabled !== true)) out.push({ id: k, name: c.socket.name, sock: c.socket, station: bag(c.station) ? c.station : null, host }); }
@@ -95,34 +87,31 @@ export function allSockets(st) {
 }
 /** Where a socket is in the world. */
 export const socketPoint = (st, x) => worldT(st, x.id).pos;
-/** The names of the seats a catalogue entry declares (find's answer; they're made as children when the model is). */
+/** A catalogue entry's seats (find's answer; made as children when the model is). */
 export const modelSocketNames = (m) => (bag(m?.sockets) ? Object.keys(m.sockets) : null);
 
-// ---------- the old spelling, lifted at the door (PLAN §3) ----------
-// Every write enters through admit, so admit is where `sockets` maps and parent {to, socket} edges become socket
-// children: requests, undo, a fork's copy, a blueprint's parts, a catalogue model's seats. Nothing after the door
-// stores the old spelling, so nothing after it reads it.
+// ---------- the old spelling, lifted at the door ----------
+// every write enters through admit, which turns `sockets` maps and parent {to, socket} edges into socket children;
+// nothing after the door stores or reads the old spelling
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 const base32 = (bytes) => { let out = "", bits = 0, v = 0; for (const b of bytes) { v = (v << 8) | b; bits += 8; while (bits >= 5) { out += B32[(v >>> (bits - 5)) & 31]; bits -= 5; } } if (bits) out += B32[(v << (5 - bits)) & 31]; return out; };
 const slugOf = (s, n) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, n).replace(/-+$/, "") || "socket";
-/** A lifted socket's id: the same from every loader, fork and agent, so two forks lifting apart agree, and a merge sees
- *  one entity. Readable (its slot's name first), 130 bits after it. */
+/** The same from every loader, fork and agent, so two forks lifting apart agree and a merge sees one entity. Readable (its
+ *  slot's name first), 130 bits after it. */
 export const socketId = (host, slot) => `${slugOf(slot, 20)}-${base32(hexBytes(sha256(`eido-socket\0${host}\0${slot}`))).slice(0, 26)}`;
 const SOCK_FIELDS = ["part", "accepts", "radius"];
 const socketOfSlot = (name, sk) => ({ name, ...Object.fromEntries(SOCK_FIELDS.filter((k) => sk[k] !== undefined).map((k) => [k, sk[k]])) });
-// an old body block as the station it is (shape audit 10-16), materialized as the door writes one. `stored`: a value the log
-// or a catalogue already held is re-spelled with the keys the station registers (the reserved and cut ones no stored value
-// uses are dropped); a request's own body keeps them, and the door refuses them in the station's words
+// an old body block as its station, materialized as the door writes one. `stored`: a value the log or a catalogue held is
+// re-spelled with the station's keys (unused reserved and cut ones dropped); a request's own body keeps them, and the door
+// refuses them in the station's words
 const STATION_KEYS = Object.keys(COMPONENTS.station.fields);
-// A body block's `pose` is the station's `anim` (R 10-17 15:11: the map's body block keeps its old spelling; the station
-// takes the name of the family).
+// a body block's `pose` is the station's `anim` (the map's body block keeps its old spelling)
 export const stationOfBody = (b0, { stored = false } = {}) => { if (!bag(b0)) return null;
   const b = "pose" in b0 && !("anim" in b0) ? (({ pose, ...r }) => ({ ...r, anim: pose }))(b0) : b0;
   const v = stored ? Object.fromEntries(Object.entries(b).filter(([k]) => STATION_KEYS.includes(k))) : { ...b };
   return materialize("station", v).value; };
 const tfOf = (c) => ({ ...COMPONENTS.transform.defaults, ...(c?.transform ?? {}) });
-// a pose written in the host's frame, re-expressed in its socket's (the socket's scale is 1; the host's world scale is
-// carried through so the world pose is the same, a non-uniform host included)
+// a pose in the host's frame re-expressed in its socket's (socket scale 1; the host's world scale carried through, non-uniform included)
 function underSocket(st, host, sockT, t) {
   const hs = worldT(st, host)?.scale ?? [1, 1, 1]; const qi = qinv(sockT.q);
   const d = qrot(qi, t.pos.map((v, i) => (v - sockT.pos[i]) * hs[i])).map((v, i) => v / hs[i]);
@@ -134,18 +123,17 @@ function overSocket(st, host, sockT, t) {
   return { ...t, pos: d, ...(t.q ? { q: qmul(sockT.q, t.q) } : {}) };
 }
 const legacyParent = (v) => bag(v) && typeof v.to === "string" && typeof v.socket === "string";
-/** Is this a parent in the old spelling ({to, socket})? Undo reads it from before the cut, to put back a parent and a
- *  transform written in the host's frame as one group (the door then re-expresses the pose in the socket child's). */
+/** Undo reads it from before the cut, to put back a parent and a host-frame transform as one group. */
 export const isLegacyParent = legacyParent;
 const legacyHome = (v) => bag(v) && legacyParent(v.parent);
 
-/** Does this write carry the old spelling anywhere? (The common write doesn't, and costs one pass.) */
+/** The common write doesn't, and costs one pass. */
 export function carriesLegacy(ops) {
   return ops.some((o) => o.comp === "sockets" || (o.verb === "set" && ((o.comp === "parent" && legacyParent(o.value)) || (o.comp === "home" && legacyHome(o.value))
     || (o.comp === "socket" && bag(o.value) && o.value.body !== undefined) || (o.comp === "model" && typeof o.value === "string" && bag(modelOf(o.value)?.sockets)))));
 }
 
-/** The write in the new spelling: {ops, notes}. `ever` is every id the world has made (a lifted id is never a reused one). */
+/** {ops, notes}. `ever` is every id the world has made (a lifted id is never a reused one). */
 function lifter(st, ever) {
   const s = cowState(st); const out = []; const taken = new Set();
   const emit = (o) => { out.push(o); applyCow(s, [o]); };
@@ -242,15 +230,11 @@ export function liftOps(st, ops, ever = new Set()) {
   return { ops: out, notes };
 }
 
-// ---------- the old spelling, lifted by the maintenance command (lift-sockets; it ran at load until 10-18) ----------
+// ---------- the old spelling, lifted by the maintenance command (lift-sockets) ----------
 const modelSeatsDue = (st, ever, k) => { const c = st.entities[k].c; const ms = modelOf(c.model)?.sockets;
   return bag(ms) && !bag(c.sockets) && !Object.keys(ms).some((n) => ever.has(socketId(k, n))) && !Object.keys(st.entities).some((x) => st.entities[x].c.parent?.to === k && isSocketC(st.entities[x].c)); };
-/** The hosts a stored world still holds in the old spelling, in id order: one that stores a map; one a parent or a home
- *  names a slot of; one whose model declares seats it was never given (none of their ids was ever made, so a seat
- *  someone deleted stays deleted). */
-/** The hosts a stored world holds in the OLD STORED FORMAT (a sockets map, a parent or home naming a slot, a socket child
- *  with a body block): the subset of legacyHosts that is a stale stored format rather than a catalogue model that gained
- *  sockets after the host was stored (modelSeatsDue: a library update, lead 10-18, never a reason to refuse writes). */
+/** The subset of legacyHosts in the OLD STORED FORMAT (a sockets map, a parent or home naming a slot, a socket child with a
+ *  body block), not a catalogue model that gained sockets later (modelSeatsDue: never a reason to refuse writes). */
 export function storedLegacyHosts(st) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;
@@ -260,6 +244,8 @@ export function storedLegacyHosts(st) {
     if (isSocketC(c) && c.socket.body !== undefined && st.entities[c.parent?.to]) hosts.add(c.parent.to); }
   return [...hosts].sort();
 }
+/** In id order: hosts storing a map, named as a slot by a parent or home, or whose model declares seats never given (none
+ *  of their ids ever made, so a deleted seat stays deleted). */
 export function legacyHosts(st, ever = new Set()) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;

@@ -1,21 +1,19 @@
-// bodyscale-probe — "this body" (Profile › Avatar: size + nameplate lift), end to end in the REAL client, TWO browsers:
-// `sizer` changes its own body through the Profile's sliders; `watcher` is the remote that must see it. A plain socket
-// peer `ref` stands beside it at 100% in the same body (claude.vrm) as the yardstick — and reads the relayed packets.
-// Clouds are forced OFF before boot (a cloudy sky bakes on the CPU in headless Chromium and has frozen the host).
-//
+// bodyscale-probe: "this body" (Profile › Avatar: size + nameplate lift) end to end in the REAL client, TWO browsers:
+// `sizer` changes its body through the Profile's sliders; `watcher` must see it; a socket peer `ref` stands beside it
+// at 100% in the same body (claude.vrm) as the yardstick and reads the relayed packets. Clouds are forced OFF before
+// boot (a cloudy sky bakes on the CPU in headless Chromium and has frozen the host).
 //   bun tools/bodyscale-probe.mjs [--shots <dir>]      (SHOT_BASE=130 numbers the shots)
 //   (two browsers: on a small host, run it under a lock and a memory guard)
-//
 // What must hold:
-//   the Profile — Avatars shows the worn body's size and nameplate sliders; moving them (input/change, the DOM's own
-//     events) resizes the body live and saves per body name (ew-body-prefs);
-//   the VR surfaces — the same section rasters into the VR quad (the vendored HTMLMesh domquad uses) and paints on the
-//     canvas fallback quad (panels.js renderCanvas over the same fields);
-//   the wire — the sizer's packets carry `scale` / `plateY` only when not default (read off a peer socket);
-//   the remote — the watcher's copy of the sizer wears the size on vrm.scene (root stays 1), at 70 / 100 / 150 %, and a
-//     wire value out of range is clamped (a peer claiming 500% is drawn at 200%);
-//   the plate — +30 cm on the sizer's claude hangs 30 cm over ref's auto plate on the watcher's screen (same body, same size);
-//   restore — the sizer reloads and wears its saved size again without touching anything.
+//   the Profile: Avatars shows the worn body's size and nameplate sliders; input/change resize the body live and save
+//     per body name (ew-body-prefs);
+//   the VR surfaces: the same section rasters into the VR quad (the vendored HTMLMesh) and the canvas fallback quad
+//     (panels.js renderCanvas);
+//   the wire: the sizer's packets carry `scale` / `plateY` only when not default;
+//   the remote: the watcher's copy wears the size on vrm.scene (root stays 1) at 70 / 100 / 150 %; an out-of-range wire
+//     value is clamped (500% is drawn at 200%);
+//   the plate: +30 cm on the sizer hangs 30 cm over ref's auto plate on the watcher's screen;
+//   restore: the sizer reloads and wears its saved size again untouched.
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
@@ -29,7 +27,7 @@ const WORLD = 'bodies';
 const world = await ownedWorld({ env: { SKIP_OPT_SWEEP: '1' }, worlds: [WORLD] });
 const { browser, close } = await launchBrowser();
 
-const seen = new Map();   // id → the last pose the server relayed (read off the ref socket's frames)
+const seen = new Map();  // id → the last pose relayed (read off the ref socket)
 function peer(id, pose, avatar) {
   const ws = new WebSocket(`${world.origin.replace(/^http/, 'ws')}/ws`);
   const p = { ws, pose, timer: null };
@@ -72,7 +70,7 @@ const view = (pg, id) => pg.evaluate((id) => {
   return { scene: +av.vrm.scene.scale.y.toFixed(4), root: +av.root.scale.y.toFixed(4), plateY: +v.y.toFixed(3), rootY: +av.root.position.y.toFixed(3),
     wire: { scale: r.scale, plateY: r.plateY }, capsule: !!r.capsuleFor, lift: av.plateY };
 }, id);
-// set a Profile slider the way a hand does: the value, an `input` (live), then a `change` (release)
+// set a Profile slider as a hand does: the value, an `input` (live), then a `change` (release)
 const slide = (pg, k, v) => pg.evaluate(([k, v]) => {
   const rows = [...document.querySelectorAll('.frame[data-frame="profile"] .sp-f-range')];
   const row = rows.find((r) => r.querySelector('.sp-label')?.textContent === k);
@@ -86,8 +84,7 @@ const until = async (pred, ms = 20000) => { const t = Date.now(); let v; while (
 try {
   const W = await boot('watcher', { width: 1280, height: 720 });
   const fr = await frameOf(W.pg);
-  // the watcher's own body stands between its follow camera and the subjects: out of the shots (root, not vrm.scene —
-  // the follow camera re-shows vrm.scene every frame)
+  // the watcher's own body is hidden from the shots by root, not vrm.scene (the follow camera re-shows vrm.scene every frame)
   await W.pg.evaluate(() => { EW.me().root.visible = false; });
   const S = await boot('sizer', { width: 1100, height: 760 });
   // stand the sizer and ref 3.4 m in front of the watcher, side by side, facing it
@@ -122,7 +119,7 @@ try {
   check('...the height readout caught up on release (× 1.5) and a reset appeared', rows150.some((t) => /^height.*at 100%/.test(t)) && rows150.some((t) => /size: back to 100%/.test(t)), JSON.stringify(rows150));
   const box = await S.pg.evaluate(() => { const r = document.querySelector('.frame[data-frame="profile"]').getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; });
   await shot(S.pg, 'profile-this-body-desktop', box);
-  // the VR surfaces: the vendored HTMLMesh over the same frame (the domquad path), and the canvas fallback quad
+  // the VR surfaces: the vendored HTMLMesh over the same frame (domquad), and the canvas fallback quad
   const vr = await S.pg.evaluate(async () => {
     const out = {};
     try {
@@ -173,10 +170,8 @@ try {
   check('...and when the field stops coming, it is 100 % again (absence = default, live)', !!vr1, JSON.stringify(await view(W.pg, 'ref')));
 
   // ---------------------------------------------------------------- the plate: auto vs +30 cm on the same body
-  // A plate rides the LIVE hips through a 2 cm dead zone (plateanchor.js smoothY), so it rests up to 2 cm short of its
-  // target on whichever side it came from. Measured (8 readings over 3 s, steady to 1 mm): sizer 1.862, ref 1.901 —
-  // the sizer had just come UP from 70 %, ref DOWN from its 200 % clamp test: −2 cm and +2 cm, 4 cm apart, as designed.
-  // So the auto-vs-auto check allows two dead zones, and the honest measure of the lift is the sizer against ITSELF.
+  // a plate rides the live hips through a 2 cm dead zone (plateanchor.js smoothY), so two bodies can rest 4 cm apart:
+  // auto-vs-auto allows two dead zones, and the lift is measured on the same body
   const over = async (id) => { let n = 0, sum = 0, lo = Infinity, hi = -Infinity;
     for (let i = 0; i < 8; i++) { const v = await view(W.pg, id); if (v) { const h = v.plateY - v.rootY; sum += h; n++; lo = Math.min(lo, h); hi = Math.max(hi, h); } await sleep(400); }
     return { mean: n ? sum / n : NaN, lo, hi, n }; };
@@ -188,7 +183,7 @@ try {
   await slide(S.pg, 'nameplate', 30);
   const w30 = await until(() => seen.get('sizer')?.plateY === 0.3 && seen.get('sizer'));
   check('the wire: plateY 0.3 rides the pose', w30?.plateY === 0.3, JSON.stringify(w30 && { plateY: w30.plateY }));
-  await sleep(3000);   // the plate's Y chase (τ 0.12 s) at a headless frame rate
+  await sleep(3000);  // the plate's Y chase (τ 0.12 s) at a headless frame rate
   const upS = await over('sizer');
   const d = upS.mean - autoS.mean;
   check('+30 cm: on the watcher, the sizer\'s plate rose 30 cm over its own auto (±3 cm)', Math.abs(d - 0.3) < 0.03, `Δ ${d.toFixed(3)} ${JSON.stringify({ autoS, upS })}`);

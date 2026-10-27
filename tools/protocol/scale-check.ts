@@ -1,6 +1,5 @@
-// tools/protocol/scale-check.ts — the authority at scale, and what the 10-06 reviews found there (the 10-06 top-down review
-// S0-2, S0-3 and S3's request globals; the 10-06 security review pass 2, H-A and M-C). Every world on a server shares
-// ONE thread, and every request goes through shared/protocol/authority.js on it: no request may hold it for long.
+// tools/protocol/scale-check.ts: the authority at scale: every world on a server shares ONE thread, and every request
+// goes through shared/protocol/authority.js on it, so no request may hold it for long.
 //   bun tools/protocol/scale-check.ts                 every case
 //   bun tools/protocol/scale-check.ts --only S2,I1    just those
 //   bun tools/protocol/scale-check.ts --tree <dir>    run the cases against another checkout (a mutant, a base)
@@ -23,10 +22,11 @@
 //   R   re-entrancy: a request nested in another (leave → drop, or a host's callback) leaves the outer call's state alone
 //   G   guards (green at base too): the index answers what the scans answered; a derived index files what a fresh one does
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
+import { suite } from "./suite.ts";
 
 import { CAPACITY, CAPACITY_CEILING } from "../../shared/protocol/authority.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
@@ -34,50 +34,43 @@ import { labClock, pinned } from "./clock.ts";
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "d374d2ef";
-// The bound: 50 ms per request on this laptop at rest (the review's target). A host busy with other work runs everything
-// slower, the authority included, so the bound is scaled by how much slower a fixed piece of door-shaped work runs right now
-// than at rest (CAL_REF_MS, its median at rest here), at most 4×: an authority that grows with the world's size misses it by
-// ten to a thousand times (--control). Each op is timed best of 5. The factor is printed with each timing case.
-const BOUND_MS = 50, CAL_REF_MS = 5;
-function calibrate() { const one = () => { const t0 = performance.now(); const m = new Map(); let acc = 0;
-    for (let i = 0; i < 20000; i++) { const a = [i % 7, i % 11, i % 13].map((v) => v * 1.5); m.set(i, a); acc += Math.hypot(a[0], a[1], a[2]); if (i % 50 === 0) acc += JSON.stringify(a).length; }
-    for (let i = 0; i < 20000; i++) acc += m.get(i)[1]; return acc > 0 ? performance.now() - t0 : 0; };
-  const xs = Array.from({ length: 15 }, one).sort((a, b) => a - b); return Math.min(4, Math.max(1, xs[7] / CAL_REF_MS)); }
-let LOAD = 1; const bound = () => BOUND_MS * LOAD;
+// cost is judged machine-free: by how a request GROWS (the same op at a small and a large world, timed seconds apart in this
+// process, so the host's speed cancels: at most GROWS×, an index regressed to a scan is 5–200×) and by counted work (the
+// authority's WORK_METER units, log appends). BOUND_MS only catches a hang. Each op: best of 5
+const BOUND_MS = 500, GROWS = 3, FLOOR_MS = 1;
+const bound = () => BOUND_MS;
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-// [name, file (under the tree), find, replace, cases that must turn red]: an exact replacement found exactly once.
-// (find may instead be a list of [find, replace] pairs: one gate written in two places.) Not listed, because no case can
-// catch them by design: the exact world-axis reject before the 15-axis test and the charge for every cell a place search
-// visits are defences (the first proven to give satDepth's own answer, the second a bound the exact ring stop already
-// keeps); G3 and the reviewers' differential runs check they change no answer.
-const MUTANTS: [string, string, string | [string, string][], string, string[]][] = [
-  ["supportBelow asks the index", "shared/protocol/authority.js", "  for (const id of near(st, [x, -Infinity, z], [x, Infinity, z])) {\n    if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) {\n    if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
-  ["supportUnder asks the index", "shared/protocol/authority.js", "  for (const id of near(st, [b.min[0], -Infinity, b.min[2]], [b.max[0], Infinity, b.max[2]])) { if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) { if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
+// [name, file, find, replace, cases that must turn red]: an exact replacement found once (or a list of [find, replace, file?],
+// the file when it isn't the row's). Not listed:
+// the world-axis reject and the per-cell place-search charge are defences no case can catch; G3 checks they change no answer
+const MUTANTS: [string, string, string | [string, string, string?][], string, string[]][] = [
+  ["supportBelow asks the index", "shared/protocol/authority/spatial.js", "  for (const id of near(st, [x, -Infinity, z], [x, Infinity, z])) {\n    if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) {\n    if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
+  ["supportUnder asks the index", "shared/protocol/authority/spatial.js", "  for (const id of near(st, [b.min[0], -Infinity, b.min[2]], [b.max[0], Infinity, b.max[2]])) { if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) { if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", ["S2", "S3"]],
   ["warnings: each thing against what its box meets", "shared/protocol/authority/followups.js", "for (const o of near(st, g.q.min, g.q.max)) { if (fam.has(o)) continue; const go = ix.rec.get(o);", "for (const o of Object.keys(st.entities)) { if (fam.has(o) || !ix.rec.has(o)) continue; const go = ix.rec.get(o);", ["S3", "S5"]],
-  ["a step asks the index (the old per-sub-step scan of every thing back)", "shared/protocol/authority.js", "function solidAt(w, st, p, except = new Set(), cands = null) {\n  const box = bodyBox(p); const held = w.presence.holds; const ix = cands && spatial(st);\n  if (cands) spend(1 + (cands.length >> 3));   // a sub-step filters the step's candidates by box first\n  for (const id of cands ?? near(st, box.min, box.max)) { if (id === \"@world\" || Object.hasOwn(held, id) || except.has(id)) continue;\n    if (cands) { const q = ix.rec.get(id).q; if (q.min[0] > box.max[0] || q.max[0] < box.min[0] || q.min[1] > box.max[1] || q.max[1] < box.min[1] || q.min[2] > box.max[2] || q.max[2] < box.min[2]) continue; }\n    if (hitsIx(st, box, id, 0.01)) return id; }\n  return null;\n}\nfunction pathBlocked(w, st, from, to) {\n  const already = new Set(); const b0 = bodyBox(from); // a body already inside something may walk out of it\n  for (const id of near(st, b0.min, b0.max)) if (hitsIx(st, b0, id, 0.01)) already.add(id);\n  const b1 = bodyBox(to); const swept = near(st, b0.min.map((v, i) => Math.min(v, b1.min[i])), b0.max.map((v, i) => Math.max(v, b1.max[i])));\n  const n = Math.max(1, Math.ceil(dist(from, to) / 0.05));\n  for (let k = 1; k <= n; k++) { const p = from.map((v, i) => v + (to[i] - v) * k / n); const hit = solidAt(w, st, p, already, swept); if (hit) return hit; }\n  return null;\n}\n", "function solidAt(w, st, p, except = new Set()) {\n  const box = bodyBox(p); const held = new Set(Object.keys(w.presence.holds));\n  for (const id of Object.keys(st.entities)) { if (id === \"@world\" || held.has(id) || except.has(id) || !geomOf(st.entities[id].c.model)) continue; if (hits(box, st, id, 0.01)) return id; }\n  return null;\n}\nfunction pathBlocked(w, st, from, to) {\n  const already = new Set(); const b0 = bodyBox(from); // a body already inside something may walk out of it\n  for (const id of Object.keys(st.entities)) if (geomOf(st.entities[id].c.model) && hits(b0, st, id, 0.01)) already.add(id);\n  const n = Math.max(1, Math.ceil(dist(from, to) / 0.05));\n  for (let k = 1; k <= n; k++) { const p = from.map((v, i) => v + (to[i] - v) * k / n); const hit = solidAt(w, st, p, already); if (hit) return hit; }\n  return null;\n}\n", ["S3", "S6"]],
-  ["delete asks the index (the old set-down scan back: every thing, every support)", "shared/protocol/authority.js", [["for (const id of Object.keys(after.entities)) { if (!over.has(id)) continue; const b = aabb(after, id);", "for (const id of Object.keys(after.entities)) { const b = aabb(after, id);"], ["function supportBelow(st, x, z, y, ignore = new Set()) {\n  let best = { y: 0, id: \"ground\" };\n  const ix = spatial(st);\n  for (const id of near(st, [x, -Infinity, z], [x, Infinity, z])) {\n    if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)\n      if (x >= s.min[0] && x <= s.max[0] && z >= s.min[1] && z <= s.max[1] && s.y <= y + 0.02 && s.y > best.y) best = { y: s.y, id };\n  }\n  return best;\n}\n\n", "function supportBelow(st, x, z, y, ignore = new Set()) {\n  let best = { y: 0, id: \"ground\" };\n  for (const id of Object.keys(st.entities)) {\n    if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))\n      if (x >= s.min[0] && x <= s.max[0] && z >= s.min[1] && z <= s.max[1] && s.y <= y + 0.02 && s.y > best.y) best = { y: s.y, id };\n  }\n  return best;\n}\n\n"]], "", ["S2", "S3"]],
-  ["grab asks the index (the old scan for what rests on it back)", "shared/protocol/authority.js", [["if (fam.has(k) || !over.has(k)) return false;", "if (fam.has(k)) return false;"], ["function supportUnder(st, b, ignore) {\n  let best = { y: 0, id: \"ground\" };\n  const ix = spatial(st);\n  for (const id of near(st, [b.min[0], -Infinity, b.min[2]], [b.max[0], Infinity, b.max[2]])) { if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs) if (b.max[0] > s.min[0] && b.min[0] < s.max[0] && b.max[2] > s.min[1] && b.min[2] < s.max[1] && s.y <= b.min[1] + 0.02 && s.y > best.y) best = { y: s.y, id }; }\n  return best;\n}\n\n", "function supportUnder(st, b, ignore) {\n  let best = { y: 0, id: \"ground\" };\n  for (const id of Object.keys(st.entities)) { if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id)) if (b.max[0] > s.min[0] && b.min[0] < s.max[0] && b.max[2] > s.min[1] && b.min[2] < s.max[1] && s.y <= b.min[1] + 0.02 && s.y > best.y) best = { y: s.y, id }; }\n  return best;\n}\n\n"]], "", ["S2", "S3"]],
+  ["a step asks the index (the old per-sub-step scan of every thing back)", "shared/protocol/authority/physics.js", [["const swept = near(st, lo, hi);", "const swept = null;"], ["for (const id of cands ?? near(st, box.min, box.max)) {", "for (const id of Object.keys(st.entities)) {"], ["    if (hitsIx(st, box, id, 0.01)) return id; }", "    if (hits(box, st, id, 0.01)) return id; }"], ["import { aabb, descendants, localFrom, worldT } from \"./math.js\";", "import { aabb, descendants, hits, localFrom, worldT } from \"./math.js\";"]], "", ["S3", "S6"]],
+  ["delete asks the index (the old set-down scan back: every thing, every support)", "shared/protocol/authority/writes.js", [["for (const id of Object.keys(after.entities)) { if (!over.has(id)) continue; const b = aabb(after, id);", "for (const id of Object.keys(after.entities)) { const b = aabb(after, id);"], ["  for (const id of near(st, [x, -Infinity, z], [x, Infinity, z])) {\n    if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) {\n    if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", "shared/protocol/authority/spatial.js"]], "", ["S2", "S3"]],
+  ["grab asks the index (the old scan for what rests on it back)", "shared/protocol/authority/bodyverbs.js", [["if (fam.has(k) || !over.has(k)) return false;", "if (fam.has(k)) return false;"], ["  for (const id of near(st, [b.min[0], -Infinity, b.min[2]], [b.max[0], Infinity, b.max[2]])) { if (ignore.has(id)) continue;\n    for (const s of ix.rec.get(id).surfs)", "  for (const id of Object.keys(st.entities)) { if (ignore.has(id)) continue;\n    for (const s of surfacesOf(st, id))", "shared/protocol/authority/spatial.js"]], "", ["S2", "S3"]],
   ["place: nearest first, stopping when no ring can be nearer", "shared/protocol/authority/writes.js", "            if (lb > best.d) break; }", "            }", ["S1", "S2", "S3", "Q6"]],
   ["place: the one gate before solving", "shared/protocol/authority/writes.js", "if (!a.__made) admit(ctx.w, ctx.st, { actor: ctx.actor }, [setOp(a.id, \"transform\", COMPONENTS.transform.defaults)]);", "", ["Q1"]],
-  ["previews and batches copy only what they touch (the deep copy per preview back)", "shared/protocol/authority.js", [["const scratch = (st, ops) => { const s = applyCow(cowState(st), ops);", "const scratch = (st, ops) => { const s = applyOps(st, ops);"], ["all.push(...ops); st = applyCow(work, ops); forget(st);", "all.push(...ops); st = scratch(st, ops);"]], "", ["S3"]],
+  ["previews and batches copy only what they touch (the deep copy per preview back)", "shared/protocol/authority/storage.js", [["const scratch = (st, ops) => { const s = applyCow(cowState(st), ops);", "const scratch = (st, ops) => { const s = applyInPlace(cloneState(st), ops);"], ["all.push(...ops); st = applyCow(work, ops); forget(st);", "all.push(...ops); st = scratch(st, ops);", "shared/protocol/authority/verbs.js"], ["import { VOLATILE, delOp, nonce16, setOp } from \"./storage.js\";", "import { VOLATILE, delOp, nonce16, setOp, scratch } from \"./storage.js\";", "shared/protocol/authority/verbs.js"]], "", ["S3"]],
   ["place: a ring's sides bound its distance", "shared/protocol/authority/writes.js", "if (lb > best.d) break; }", "if (lb > best.d + 1e9) break; }", ["Q6"]],
-  ["the work budget", "shared/protocol/authority.js", "if ((WORK.left -= n) < 0 || ((WORK.k += n) >= 64 && ((WORK.k = 0), clockMs() > WORK.until))) {", "if (false) {", ["Q2", "Q3"]],
+  ["the work budget", "shared/protocol/authority/spatial.js", "if ((CTX.work.left -= n) < 0 || ((CTX.work.k += n) >= 64 && ((CTX.work.k = 0), clockMs() > CTX.work.until))) {", "if (false) {", ["Q2", "Q3"]],
   ["a write's warnings never refuse it", "shared/protocol/authority/followups.js", "if (strict || !(e instanceof Refusal) || e.code !== \"too-costly\") throw e;", "throw e;", ["Q3"]],
-  ["look walks the children map", "shared/protocol/authority.js", "for (const k of kids.get(id) ?? []) tree(k, d + 1, n + 1); };", "for (const k of Object.keys(st.entities).filter((x) => st.entities[x].c.parent?.to === id)) tree(k, d + 1, n + 1); };", ["S4"]],
+  ["look walks the children map", "shared/protocol/authority/blueprints.js", "for (const k of kids.get(id) ?? []) tree(k, sock ? d : d + 1, n + 1); };", "for (const k of Object.keys(st.entities).filter((x) => st.entities[x].c.parent?.to === id)) tree(k, sock ? d : d + 1, n + 1); };", ["S4"]],
   ["capacity.entities", "shared/protocol/authority/capacity.js", "if (after > before && after > cap.entities) refuse(\"full\"", "if (false) refuse(\"full\"", ["C1", "C2"]],
-  ["capacity.guestEntities, all guests together", "shared/protocol/authority/capacity.js", "if (g + made > cap.guestEntities) refuse(\"full\"", "if (false) refuse(\"full\"", ["C3", "C3b"]],
-  ["a refused move is never logged", "shared/protocol/authority.js", "    if (verb === \"move\") return;", "    if (verb === \"move\" && args?.teleport !== true && w.presence.bodies[actor]) return;", ["I1"]],
+  ["capacity.guestEntities, all guests together", "shared/protocol/authority/capacity.js", "if (made <= gone || g - gone + made <= cap.guestEntities) return;", "return;", ["C3", "C3b"]],
+  ["a refused move is never logged", "shared/protocol/authority.js", [["    if (verb === \"move\") return;", "    if (verb === \"move\" && args?.teleport !== true && w.presence.bodies[actor]) return;"], ["const PRESENCE_VERBS = new Set([\"move\", \"body\",", "const PRESENCE_VERBS = new Set([\"body\","]], "", ["I1"]],
   ["solids: an enclosed cell is solid", "server/solids.ts", "const solid = (c: number) => occ[c] === 1 || out[c] === 0;", "const solid = (c: number) => occ[c] === 1;", ["I3"]],
   ["solids: cells merge only where their bounds line up", "server/solids.ts", "while (i1 + 1 < nx && free(i1 + 1, j, k) && same(idx(i1 + 1, j, k), s0, 1) && same(idx(i1 + 1, j, k), s0, 2)) i1++;", "while (i1 + 1 < nx && free(i1 + 1, j, k)) i1++;", ["I2"]],
   ["the catalogue measures solids", "server/modelcatalogue.ts", "...(sum!.solids ? { solids: sum!.solids } : {})", "", ["I4"]],
-  ["a nested request keeps the outer call's queues", "shared/protocol/authority.js", "w.changedQ = saved.changedQ; w.sayQ = saved.sayQ; w.heldQ = saved.heldQ;", "", ["R1"]],
+  ["a nested request keeps the outer call's queues", "shared/protocol/authority.js", "w.changedQ = wq.changedQ; w.sayQ = wq.sayQ; w.heldQ = wq.heldQ; ", "", ["R1"]],
   ["a nested leave keeps the outer leave's flag", "shared/protocol/authority/bodyverbs.js", "w.leaving = wasLeaving ?? null; }", "w.leaving = null; }", ["R2"]],
   ["settling orphans: at most ORPHANS.holders", "shared/protocol/authority/scriptrun.js", "if (holders.length > ORPHANS.holders) {", "if (false) {", ["Q5"]],
   ["reads per connection: how many", "server/readmeter.ts", "if (!timeOnly && a.length >= limits.n) return", "if (false) return", ["Q4"]],
   ["reads per connection: how long", "server/readmeter.ts", "if (ms >= limits.ms) return", "if (false) return", ["Q4"]],
-  ["a derived index re-files what rides on a change", "shared/protocol/authority.js", "for (const k of pk.get(t) ?? []) if (!touched.has(k)) todo.push(k);", "", ["G2"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/authority.js", "// ---------- the spatial index", "// ----------  the spatial index", []],
+  ["a derived index re-files what rides on a change", "shared/protocol/authority/spatial.js", "for (const k of pk.get(t) ?? []) if (!touched.has(k)) todo.push(k);", "", ["G2"]],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/authority.js", "// ---------- the verb table's bodies", "// ----------  the verb table's bodies", []],
 ];
 async function runSelf(tree: string, only: string[] | null, timeoutMs = 0) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/scale-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -99,12 +92,12 @@ if (argv.includes("--mutants")) {
   let bad = 0, ran = 0; const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
     if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
-    ran++; const d = mutantTree("smut"); const f = path.join(d, file); let src = fs.readFileSync(f, "utf8");
-    const pairs: [string, string][] = Array.isArray(find) ? find : [[find, repl]];   // a gate in two places is reverted in both
-    const missing = pairs.find(([a]) => src.split(a).length !== 2);
-    if (missing) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    for (const [a, b] of pairs) src = src.replace(a, () => b);
-    fs.writeFileSync(f, src);
+    ran++; const d = mutantTree("smut");
+    // a gate in two places is reverted in both (each in its own file, the row's by default)
+    const edits: [string, string, string][] = (Array.isArray(find) ? find : [[find, repl]]).map(([a, b, g]) => [g ?? file, a, b]);
+    const missing = edits.find(([g, a]) => fs.readFileSync(path.join(d, g), "utf8").split(a).length !== 2);
+    if (missing) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${missing[0]} (the gate moved?)`); continue; }
+    for (const [g, a, b] of edits) { const h = path.join(d, g); fs.writeFileSync(h, fs.readFileSync(h, "utf8").replace(a, () => b)); }
     // a mutant whose cases can't finish in MUTANT_MS is as red as one that fails them (the bound is 50 ms a request)
     const r = await runSelf(d, cases.length ? cases : null, Number(process.env.MUTANT_MS ?? 240000));
     const redIds = r.timedOut ? cases : [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
@@ -118,7 +111,7 @@ if (argv.includes("--mutants")) {
 }
 // ---------------- the authority, from a tree (this checkout unless --tree) ----------------
 const TREE = path.resolve(opt("tree") ?? ENGINE) + "/";
-// the first path that loads: today's name, then the base commit's (before the 10-07 names pass)
+// the first path that loads: today's name, then the base commit's (before the names pass)
 const imp1 = async (...ps: string[]) => { let err: unknown; for (const p of ps) { try { return await import(TREE + p); } catch (e) { err = e; } } throw err; };
 const D = await imp1("shared/protocol/authority.js", "shared/" + "v4/door.js");   // (split: the base's path, not a stale one)
 // fixture-ids.ts opened the fixture seam on ENGINE's authority; a --tree run (mutants, control) imports another instance
@@ -138,11 +131,10 @@ function open(name: string, o: any = {}) {
   if (o.presence) Object.assign(w.presence, o.presence);
   return w;
 }
-// G3 runs the scenario against its base commit too, which speaks the names before the 10-07 conventional-names pass. Known
-// by its layout (the base has no shared/protocol/authority.js), never by being another directory: a mutant is a copy of today's tree
-// and speaks today's names (read as "another tree", every case failed in every mutant, so each read as caught)
+// G3 runs against its base commit too, which speaks the names before the conventional-names pass: known by its layout
+// (no shared/protocol/authority.js), never by being another directory, since a mutant is a copy of today's tree
 const AT_BASE = !fs.existsSync(path.join(TREE, "shared/protocol/authority.js"));
-// the base rung's name in the tree under test (R 10-21: inhabitant; the base commit says visitor): G3 speaks each tree's own word
+// the base rung's name in the tree under test (inhabitant; the base commit says visitor): G3 speaks each tree's own word
 const BASE_RUNG = AT_BASE ? "visitor" : "inhabitant";
 const BASE_VERB: Record<string, string> = { "create-world": "new", lint: "check" };
 // …and its batch ops were {tool, args}
@@ -155,9 +147,11 @@ function session(o: any = {}) {
 }
 const ok = (r: any) => r?.ok === true, code = (r: any) => r?.refused?.code ?? (r?.crashed ? "CRASH" : r?.ok ? "ok" : "?");
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `refused ${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 140)}`);
-const timed = (f: () => any) => { const t0 = performance.now(); const r = f(); return { ms: performance.now() - t0, r }; };
+const SPM: any = await imp1("shared/protocol/authority/spatial.js").catch(() => null);
+const METER: { units: number } | undefined = SPM?.WORK_METER; const BUDGET: number = SPM?.WORK_BUDGET?.units ?? Infinity;
+const timed = (f: () => any) => { const u0 = METER?.units ?? 0; const t0 = performance.now(); const r = f(); const x = { ms: performance.now() - t0, r, units: (METER?.units ?? 0) - u0 }; return x; };
 // best of n: the op itself is given fresh arguments each time by `f(k)`
-const best = (n: number, f: (k: number) => any) => { let out: any = null; for (let k = 0; k < n; k++) { const x = timed(() => f(k)); if (!out || x.ms < out.ms) out = x; if (x.ms <= bound()) break; } return out; };
+const best = (n: number, f: (k: number) => any) => { let out: any = null; for (let k = 0; k < n; k++) { const x = timed(() => f(k)); if (!out || x.ms < out.ms) out = x; if (x.ms <= FLOOR_MS) break; } return out; };
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 // owner olive, builder bob, visitor vic; bounds wide enough for 2 000 things 2 m apart
@@ -201,11 +195,8 @@ function scaleCase(n: number) {
     op("set", (i) => s.call("olive", "set", { id: `c-${20 + i}`, component: "label", value: "x" }, 20000));
     op("batch", (i) => s.call("olive", "batch", { ops: Array.from({ length: 50 }, (_, k) => ({ verb: "create", args: { model: "crate", components: { transform: T0([X - 60 - k, 0, -20 - 4 * i]) } } })) }, 20000));
     s.call("vic", "move", { to: [X - 20.7, 0, 39.4], teleport: true }, 20000);
-    // grab a tray WITH its cup on it (so grab's "what rested on it loses support" pass is timed: the cup is set down), walk
-    // it — untimed — to its own clear spot and drop it there straight down (timed). The op is grab + drop, as before. (It
-    // used to drop every tray at vic's feet: they stacked, the third claimed an overlap (implausible) and stayed held, and
-    // the fifth grab met hold-limit. A fast host never repeats grab — best() stops under the bound — so only a slow one hit
-    // it: fork run 40067199839, Windows, grab "hold-limit".)
+    // grab a tray WITH its cup on it (so the "loses support" pass is timed), walk it untimed to its own clear spot and drop
+    // it (timed): trays dropped in one place stack and a slow host's repeats then hit hold-limit
     { let bestG: any = null;
       for (let i = 0; i < 5; i++) { const t = `tray-${i}`;
         s.call("vic", "move", { to: [X - 20.7, 0, 39.4], teleport: true }, 20000);
@@ -217,11 +208,29 @@ function scaleCase(n: number) {
           if (code(g.r) === "ok" && code(walk) !== "ok") throw new Error(`setup: couldn't walk ${t} to ${JSON.stringify(to)}: ${JSON.stringify(walk).slice(0, 200)}`); }
         const d = timed(() => s.call("vic", "drop", { id: t }, 20000));
         if (code(g.r) === "ok" && code(d.r) !== "ok") throw new Error(`setup: ${t} wouldn't go down: ${JSON.stringify(d.r).slice(0, 200)}`);
-        const x = { ms: g.ms + d.ms, r: g.r }; if (!bestG || x.ms < bestG.ms) bestG = x; if (x.ms <= bound()) break; }
+        const x = { ms: g.ms + d.ms, r: g.r }; if (!bestG || x.ms < bestG.ms) bestG = x; if (x.ms <= FLOOR_MS) break; }
       ms.grab = r1(bestG.ms); codes.grab = code(bestG.r); }
-    return { n, ms, codes, things: Object.keys(s.w().state().entities).length - 1, load: r1(LOAD), bound: r1(bound()) }; };
+    return { n, ms, codes, things: Object.keys(s.w().state().entities).length - 1, bound: r1(bound()) }; };
 }
-const scaleGood = (o: any) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound)
+// each op's time at the large world over its time at the small one (a small time is read as FLOOR_MS: noise, not growth)
+const growth = (small: any, large: any, skip: string[] = []) => Object.fromEntries(Object.keys(large).filter((k) => !skip.includes(k))
+  .map((k) => [k, r1(large[k] / Math.max(small?.[k] ?? 0, FLOOR_MS))]));
+// a write (and grab+drop, two of them) pays the log append and index refile, visible on a fast disk (CI 2.5–4.5×); scan mutants 43–383×
+const GROWS_OP: Record<string, number> = { delete: 10, create: 10, set: 10, grab: 10 };
+const grewOk = (g: any) => !!g && Object.entries(g).every(([k, v]: [string, any]) => v <= (GROWS_OP[k] ?? GROWS));
+// the small world and the large one are built and timed in turn, ROUNDS times, each op's best kept: a busy host then slows
+// both sides alike, where one after the other a burst lands on only one of them
+const ROUNDS = 3;
+const paired = (small: () => any, large: () => any) => { let sm: any = null, lg: any = null;
+  const keep = (a: any, b: any) => (!a?.ms ? b : !b?.ms ? a : { ...b, ms: Object.fromEntries(Object.keys(b.ms).map((k) => [k, Math.min(a.ms[k] ?? Infinity, b.ms[k])])) });
+  for (let r = 0; r < ROUNDS; r++) { sm = keep(sm, small()); lg = keep(lg, large()); if (!lg?.ms || !sm?.ms) break; }
+  return { small: sm, large: lg }; };
+// the same world built at n and at 72 things: check {} reads every thing by design (bounded by the work budget, Q3), so it isn't held to growth
+const scaleGrows = (n: number) => (s: any) => { let first = true;
+  const { small, large: o } = paired(() => scaleCase(72)(session()), () => scaleCase(n)(first ? ((first = false), s) : session()));
+  if (!o?.ms || !small?.ms) return { ...o, small };
+  return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]) }; };
+const scaleGood = (o: any) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && (o.grew === undefined || grewOk(o.grew))
   && JSON.stringify(o.codes) === JSON.stringify({ delete: "ok", step: "ok", check: "ok", place: "ok", placeVisitor: "rights", look: "ok", create: "ok", set: "ok", batch: "ok", grab: "ok" });
 
 // a synthetic building, as triangles: a 6 × 3 m house (floor 0.1 m, walls 0.15 m) with a 1 m doorway in its +z wall
@@ -246,9 +255,9 @@ const withLab = (extra: any) => { const lab = D.LAB_CATALOGUE; return { get: (n:
 
 type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => boolean; o?: any };
 const cases: Case[] = [
-  { id: "S1", what: `at 72 things (the Commons' size) every request takes under ${BOUND_MS} ms`, run: scaleCase(72), good: scaleGood },
-  { id: "S2", what: `at 500 things every request takes under ${BOUND_MS} ms`, run: scaleCase(500), good: scaleGood },
-  { id: "S3", what: `at 2 000 things every request takes under ${BOUND_MS} ms`, run: scaleCase(2000), good: scaleGood },
+  { id: "S1", what: `at 72 things (the Commons' size) every request answers, each under ${BOUND_MS} ms`, run: scaleCase(72), good: scaleGood },
+  { id: "S2", what: `at 500 things every request costs at most ${GROWS}× what it does at 72 (check {} aside)`, run: scaleGrows(500), good: scaleGood },
+  { id: "S3", what: `at 2 000 things every request costs at most ${GROWS}× what it does at 72 (check {} aside)`, run: scaleGrows(2000), good: scaleGood },
 
   // ---------------- Q: the gates in front of the work ----------------
   { id: "Q1", what: "a visitor's place onto a table scaled 1000× is refused (rights) before any search, and still recorded as an attempt", run(s) { cast(s);
@@ -256,23 +265,23 @@ const cases: Case[] = [
       s.call("olive", "create", { id: "lid", model: "crate", components: { transform: T0([0, 0.75, 0], [1000, 1, 1000]) } });   // nothing on it is free
       s.call("olive", "create", { id: "mug", model: "crate", components: { transform: T0([2, 0, 600]) } });
       const n0 = s.w().entries.length; const x = timed(() => s.call("vic", "place", { id: "mug", on: "big" }));
-      return { code: code(x.r), ms: r1(x.ms), bound: r1(bound()), logged: s.w().entries.slice(n0).filter((e: any) => e.kind === "act" && e.body?.refused?.code === "rights").length }; },
-    good: (o) => o.code === "rights" && o.ms <= o.bound && o.logged === 1 },
+      return { code: code(x.r), ms: r1(x.ms), units: x.units, bound: r1(bound()), logged: s.w().entries.slice(n0).filter((e: any) => e.kind === "act" && e.body?.refused?.code === "rights").length }; },
+    good: (o) => o.code === "rights" && o.units === 0 && o.ms <= o.bound && o.logged === 1 },
   { id: "Q2", what: "a builder's place onto a 1000× table with nothing free on it ends inside the work budget: refused too-costly, saying why", run(s) { cast(s);
       s.call("olive", "create", { id: "big", model: "table", components: { transform: T0([0, 0, 0], [1000, 1, 1000]) } });
       s.call("olive", "create", { id: "lid", model: "crate", components: { transform: T0([0, 0.75, 0], [1000, 1, 1000]) } });
       s.call("olive", "create", { id: "mug", model: "crate", components: { transform: T0([2, 0, 600]) } });
       const dry = best(5, () => s.call("bob", "place", { id: "mug", on: "big", dry: true })); const real = best(5, () => s.call("bob", "place", { id: "mug", on: "big" }));
-      return { dry: code(dry.r), dryMs: r1(dry.ms), real: code(real.r), realMs: r1(real.ms), bound: r1(bound()), why: real.r?.refused?.reason }; },
-    good: (o) => o.dry === "too-costly" && o.real === "too-costly" && o.dryMs <= o.bound && o.realMs <= o.bound && /shared by every world/.test(o.why ?? "") },
+      return { dry: code(dry.r), dryMs: r1(dry.ms), dryUnits: dry.units, real: code(real.r), realMs: r1(real.ms), realUnits: real.units, budget: BUDGET, bound: r1(bound()), why: real.r?.refused?.reason }; },
+    good: (o) => o.dry === "too-costly" && o.real === "too-costly" && o.dryUnits >= o.budget && o.realUnits >= o.budget && o.dryUnits <= o.budget + 1000 && o.dryMs <= o.bound && o.realMs <= o.bound && /shared by every world/.test(o.why ?? "") },
   { id: "Q3", what: "check {} on a heap of 700 things in one spot is refused too-costly inside the budget, saying what it was checking; a batch of 120 creates into the heap still lands, its warnings saying what went unchecked", run(s) { cast(s);
       fill(s, 700, () => [0, 0, 0]);
       const c = best(5, () => s.call("vic", "lint", {})); const one = best(5, () => s.call("vic", "lint", { id: "c-3" }));
       const mk = best(3, (i) => s.call("olive", "batch", { ops: Array.from({ length: 120 }, (_, k) => ({ verb: "create", args: { id: `more-${i}-${k}`, model: "crate", components: { transform: T0([0, 0, 0]) } } })) }, 20000));
-      return { check: code(c.r), ms: r1(c.ms), one: code(one.r), oneMs: r1(one.ms), batch: code(mk.r), batchMs: r1(mk.ms), bound: r1(bound()), made: !!s.w().state().entities["more-0-119"],
+      return { check: code(c.r), ms: r1(c.ms), units: c.units, budget: BUDGET, one: code(one.r), oneMs: r1(one.ms), batch: code(mk.r), batchMs: r1(mk.ms), bound: r1(bound()), made: !!s.w().state().entities["more-0-119"],
         unchecked: mk.r?.warnings?.find((x: any) => x.kind === "unchecked")?.things ?? 0, why: c.r?.refused?.reason }; },
-    // the refusal names what it was checking (review r4 F4: a trailing comment once swallowed the line that says so)
-    good: (o) => o.check === "too-costly" && /^checking \d+ things would take more of the authority's time/.test(o.why ?? "") && o.ms <= o.bound && o.one === "ok" && o.oneMs <= o.bound && o.batch === "ok" && o.made && o.unchecked > 0 && o.batchMs <= 2 * o.bound },
+    // the refusal names what it was checking
+    good: (o) => o.check === "too-costly" && o.units >= o.budget && o.units <= o.budget + 1000 && /^checking \d+ things would take more of the authority's time/.test(o.why ?? "") && o.ms <= o.bound && o.one === "ok" && o.oneMs <= o.bound && o.batch === "ok" && o.made && o.unchecked > 0 && o.batchMs <= 2 * o.bound },
   { id: "Q4", what: "reads are metered per connection (server/readmeter.ts): 300 in 10 s, or 1.5 s of the authority's time, then refused (rate) until the window moves", run() {
       if (!RM) return { missing: true };
       const m = RM.readMeter(); const a = {}, b = {}; let t = 1000; const out: any = {};
@@ -288,9 +297,10 @@ const cases: Case[] = [
       for (let i = 0; i < 400; i++) { holds[`g-${i}`] = { by: `h-${i}`, since: clock.t, pose: { pos: [i % 20, 1.1, Math.floor(i / 20)], q: [0, 0, 0, 1], scale: [1, 1, 1] }, handled: [`h-${i}`] }; bodies[`h-${i}`] = { at: [i % 20, 0, Math.floor(i / 20)], ts: clock.t, tokens: 4 }; }
       s.call("olive", "look", {}, 20000);
       const w = s.reopen({ presence: { holds, bodies } });
-      const x = timed(() => D.settleOrphans(w, []));
-      return { ms: r1(x.ms), bound: r1(8 * bound()), settled: x.r.filter((r: any) => r.holder).length, deferred: x.r.find((r: any) => r.deferred)?.deferred ?? 0, holdsLeft: Object.keys(w.presence.holds).length }; },
-    good: (o) => o.ms <= o.bound && o.settled > 0 && o.settled <= 16 && o.deferred === 400 - o.settled && o.holdsLeft === 0 },
+      let appends = 0; const append = w.append.bind(w); w.append = (...a: any[]) => (appends++, append(...a));
+      const x = timed(() => D.settleOrphans(w, [])); w.append = append;
+      return { ms: r1(x.ms), appends, bound: r1(8 * bound()), settled: x.r.filter((r: any) => r.holder).length, deferred: x.r.find((r: any) => r.deferred)?.deferred ?? 0, holdsLeft: Object.keys(w.presence.holds).length }; },
+    good: (o) => o.ms <= o.bound && o.settled > 0 && o.settled <= 16 && o.appends <= 2 * o.settled + 2 && o.deferred === 400 - o.settled && o.holdsLeft === 0 },
 
   { id: "Q6", what: "place {on, offset} far off a 1000× table, or onto one whose middle is taken, ends quickly and answers as the full search would (the nearest free spot)", run(s) { cast(s);
       s.call("bob", "create", { id: "big", model: "table", components: { transform: T0([0, 0, 0], [1000, 1, 1000]) } });
@@ -299,8 +309,8 @@ const cases: Case[] = [
       const far = timed(() => s.call("bob", "place", { id: "mug", on: "big", offset: [1000, 0], attach: false, dry: true }));
       const mid = timed(() => s.call("bob", "place", { id: "mug", on: "big", attach: false, dry: true }));
       const at = (r: any) => r?.would?.find((o: any) => o.comp === "transform")?.value?.pos;
-      return { far: code(far.r), farMs: r1(far.ms), farAt: at(far.r), mid: code(mid.r), midMs: r1(mid.ms), midAt: at(mid.r), bound: r1(bound()) }; },
-    good: (o) => o.far === "ok" && o.mid === "ok" && o.farMs <= o.bound && o.midMs <= o.bound && Math.abs(o.farAt?.[0] - 599.7) < 0.01 && Math.abs(o.farAt?.[2]) < 0.01 && Math.abs(Math.abs(o.midAt?.[0]) - 1.5) < 0.01 && Math.abs(o.midAt?.[2]) < 0.01 },   // the nearest free spots: the edge toward the offset; beside the slab (which side: G3 compares with the full scan)
+      return { far: code(far.r), farMs: r1(far.ms), farUnits: far.units, farAt: at(far.r), mid: code(mid.r), midMs: r1(mid.ms), midUnits: mid.units, midAt: at(mid.r), budget: BUDGET, bound: r1(bound()) }; },
+    good: (o) => o.far === "ok" && o.mid === "ok" && o.farUnits < 1000 && o.midUnits < o.budget / 2 && o.farMs <= o.bound && o.midMs <= o.bound && Math.abs(o.farAt?.[0] - 599.7) < 0.01 && Math.abs(o.farAt?.[2]) < 0.01 && Math.abs(Math.abs(o.midAt?.[0]) - 1.5) < 0.01 && Math.abs(o.midAt?.[2]) < 0.01 },   // the nearest free spots: the edge toward the offset; beside the slab (which side: G3 compares with the full scan)
   // ---------------- C: capacity ----------------
   { id: "C1", what: "a world at capacity.entities refuses what would add (full), a new socket the same as a new thing, a batch that would cross it whole; a delete frees room; other changes stay open", run(s) { cast(s);
       s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 10 } });
@@ -370,7 +380,7 @@ const cases: Case[] = [
       const step = s.call("vic", "move", { to: [0, 0, 5] }, 1000); const step2 = s.call("vic", "move", { to: [0, 0, 3] }, 1000);
       const tp = s.call("bob", "move", { to: [0, 0, 4] }); const tp2 = s.call("vic", "move", { to: [0, 0, 4], teleport: true }, 4000);
       return { arrive: code(arrive), step: [code(step), code(step2)], tp: code(tp), tp2: code(tp2), refusedLogged: n1 - n0, arrivalLogged: n2 - n1, afterArrival: s.w().entries.length - n2 }; },
-    good: (o) => o.arrive === "spawn" && o.step.includes("solid") && o.tp === "solid" && o.tp2 === "solid" && o.refusedLogged === 0 && o.arrivalLogged === 0 && o.afterArrival === 0 },   // review 10-07 M3: an accepted arrival is presence too (it was one act)
+    good: (o) => o.arrive === "spawn" && o.step.includes("solid") && o.tp === "solid" && o.tp2 === "solid" && o.refusedLogged === 0 && o.arrivalLogged === 0 && o.afterArrival === 0 },   // an accepted arrival is presence too
   { id: "I2", what: "a house measured from its triangles: a body walks in through the doorway (not through a wall), arrives inside, and a thing is put down on its floor", run(s) {
       s = session({ catalogue: withLab({ house: houseEntry() }) }); cast(s);
       s.call("olive", "create", { id: "home", model: "house", components: { transform: T0([0, 0, 0]) } });
@@ -408,7 +418,7 @@ const cases: Case[] = [
     good: (o) => o.put === "ok" && o.nested === "ok" && o.annLeft && o.before?.length === 1 && JSON.stringify(o.after) === JSON.stringify(o.before) },
   { id: "R2", what: "…and a leave nested in another leave (a host callback during its drops) doesn't end the outer leave's settlement: its later drops are still never rate-refused", run(s) { cast(s);
       s.call("olive", "set", { id: "@world", component: "roles:ann", value: { role: "inhabitant" } });
-      for (let k = 0; k < 2; k++) s.call("olive", "create", { id: `b-${k}`, model: "book", components: { transform: T0([0.2 * k, 0, 0]), grabbable: { who: "inhabitant", ...(k < 1 ? { release: "return" } : {}) } } });   // one goes home: the second lands alone (two hands: MAX_HELD, 10-10; it was three)
+      for (let k = 0; k < 2; k++) s.call("olive", "create", { id: `b-${k}`, model: "book", components: { transform: T0([0.2 * k, 0, 0]), grabbable: { who: "inhabitant", ...(k < 1 ? { release: "return" } : {}) } } });   // one goes home: the second lands alone (two hands: MAX_HELD)
       s.call("olive", "create", { id: "ball", model: "book", components: { transform: T0([3, 0, 0]), grabbable: { who: "inhabitant" } } });
       s.call("ann", "move", { to: [3, 0, 0.5] }); s.call("ann", "grab", { id: "ball" });
       for (let i = 0; i < 64; i++) s.call("vic", "move", { to: [0, 0, 0.5 + (i % 2) * 0.1], teleport: true }, 10);   // vic's budget for this window is spent (each an act)
@@ -420,9 +430,10 @@ const cases: Case[] = [
     good: (o) => o.nested === "ok" && JSON.stringify(o.dropped) === "[true,true]" && o.held.length === 0 },
 
   // ---------------- G: guards ----------------
-  { id: "S5", what: `rotated furniture at 1 500 things (300 desks turned 30°, four books on each): check {}, look, and placing a book on a turned desk with a box in its middle each take under ${BOUND_MS} ms`, run(s) { cast(s);
+  { id: "S5", what: `rotated furniture at 1 500 things (300 desks turned 30°, four books on each): check {}, look, and placing a book on a turned desk with a box in its middle each cost at most ${GROWS}× what they do with 20 desks`, run(s) {
+      const at = (s: any, desks: number) => { cast(s);
       const yq = (deg: number) => [0, Math.sin(deg * Math.PI / 360), 0, Math.cos(deg * Math.PI / 360)];
-      for (let d = 0; d < 300;) { const ops = []; for (let k = 0; k < 10; k++, d++) { const x = (d % 20) * 3 - 30, z = Math.floor(d / 20) * 3 - 22;
+      for (let d = 0; d < desks;) { const ops = []; for (let k = 0; k < 10; k++, d++) { const x = (d % 20) * 3 - 30, z = Math.floor(d / 20) * 3 - 22;
           ops.push({ verb: "create", args: { id: `desk-${d}`, model: "table", components: { transform: { pos: [x, 0, z], q: yq(30), scale: [1.5, 1, 1.5] } } } });
           for (let b = 0; b < 4; b++) ops.push({ verb: "create", args: { id: `bk-${d}-${b}`, model: "book", components: { transform: { pos: [x + (b - 1.5) * 0.25, 0.75, z], q: yq(30), scale: [1, 1, 1] } } } }); }
         const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; }
@@ -432,23 +443,34 @@ const cases: Case[] = [
       const op = (k: string, f: (i: number) => any) => { const x = best(5, f); ms[k] = r1(x.ms); codes[k] = code(x.r); };
       op("check", () => s.call("vic", "lint", {})); op("look", () => s.call("vic", "look", {}));
       op("place", () => s.call("bob", "place", { id: "cup", on: "desk-0", dry: true }));
-      return { ms, codes, bound: r1(bound()) }; },
-    good: (o) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && JSON.stringify(o.codes) === '{"check":"ok","look":"ok","place":"ok"}' },
-  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) takes under ${BOUND_MS} ms, and one into them is refused (solid) as fast`, run(s) { cast(s);
-      for (let made = 0; made < 800;) { const ops = []; for (let k = 0; k < 50 && made < 800; k++, made++) ops.push({ verb: "create", args: { id: `b-${made}`, model: "book", components: { transform: T0([2.2 + (made % 10) * 0.06, 0.9 + (Math.floor(made / 100) % 8) * 0.1, 2.2 + (Math.floor(made / 10) % 10) * 0.06]) } } });
+      return { ms, codes }; };
+      let first = true; const { small: sm, large: o } = paired(() => at(session(), 20), () => at(first ? ((first = false), s) : session(), 300));
+      const small = sm; if (!o?.ms || !small?.ms) return { ...o, small };
+      return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]), bound: r1(bound()) }; },
+    good: (o) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && grewOk(o.grew) && JSON.stringify(o.codes) === '{"check":"ok","look":"ok","place":"ok"}' },
+  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) costs at most ${GROWS}× as much with 4 000 more things far off (the index, not a scan of the world), and one into them is refused (solid) alike`, run(s) {
+      const at = (s: any, far: number) => { cast(s); const N = 800;
+      if (far) { s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: N + far + 100 } });
+        for (let k = 0; k < far;) { const ops = []; for (let q = 0; q < 50 && k < far; q++, k++) ops.push({ verb: "create", args: { id: `far-${k}`, model: "crate", components: { transform: T0([300 + (k % 60) * 3, 0, 250 + Math.floor(k / 60) * 3]) } } });
+          const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; } }
+      for (let made = 0; made < N;) { const ops = []; for (let k = 0; k < 50 && made < N; k++, made++) ops.push({ verb: "create", args: { id: `b-${made}`, model: "book", components: { transform: T0([2.2 + (made % 10) * 0.06, 0.9 + (Math.floor(made / 100) % 8) * 0.1, 2.2 + (Math.floor(made / 10) % 10) * 0.06]) } } });
         const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; }
       s.call("vic", "move", { to: [0, 0, 2.8] }, 5000);
       const past = best(5, (i) => s.call("vic", "move", { to: i % 2 ? [0, 0, 2.8] : [2.8, 0, 0] }, 2000));
       s.call("vic", "move", { to: [0, 0, 2.8], teleport: true }, 5000);
       const into = best(5, () => s.call("vic", "move", { to: [2.5, 0, 2.5] }, 2000));
-      return { ms: { past: r1(past.ms), into: r1(into.ms) }, past: code(past.r), into: code(into.r), bound: r1(bound()) }; },
-    good: (o) => o.past === "ok" && o.into === "solid" && o.ms.past <= o.bound && o.ms.into <= o.bound },
-  { id: "S4", what: `look over 2 000 things: the first 40 in the tree's order and the total, in under ${BOUND_MS} ms`, run(s) { cast(s);
-      s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 2400 } });
-      fill(s, 2000); for (let k = 0; k < 3; k++) s.call("olive", "create", { id: `kid-${k}`, model: "book", components: { parent: { to: "c-0" }, transform: T0([0, 0.6, 0]) } });
-      const x = best(5, () => s.call("vic", "look", {}));
-      return { ms: r1(x.ms), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
-    good: (o) => o.ms <= o.bound && o.n === 40 && o.total === 2003 && JSON.stringify(o.first) === '["c-0@0","kid-0@1","kid-1@1","kid-2@1","c-1@0"]' },
+      return { ms: { past: r1(past.ms), into: r1(into.ms) }, past: code(past.r), into: code(into.r) }; };
+      let first = true; const { small: sm, large: o } = paired(() => at(session(), 0), () => at(first ? ((first = false), s) : session(), 4000));
+      const small = sm; if (!o?.ms || !small?.ms) return { ...o, small };
+      return { ...o, small: small.ms, grew: growth(small.ms, o.ms), bound: r1(bound()) }; },
+    good: (o) => o.past === "ok" && o.into === "solid" && o.ms.past <= o.bound && o.ms.into <= o.bound && grewOk(o.grew) },
+  { id: "S4", what: `look over 2 000 things: the first 40 in the tree's order and the total, at most ${GROWS}× what look costs over 72`, run(s) {
+      const at = (s: any, n: number) => { cast(s); s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 2400 } });
+        fill(s, n); for (let k = 0; k < 3; k++) s.call("olive", "create", { id: `kid-${k}`, model: "book", components: { parent: { to: "c-0" }, transform: T0([0, 0.6, 0]) } });
+        const x = best(5, () => s.call("vic", "look", {})); return { ms: { look: r1(x.ms) }, r: x.r }; };
+      let first = true; const { small, large } = paired(() => at(session(), 72), () => at(first ? ((first = false), s) : session(), 2000)); const x = { ms: large.ms.look, r: large.r };
+      return { ms: r1(x.ms), grew: growth(small.ms, large.ms), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
+    good: (o) => o.ms <= o.bound && grewOk(o.grew) && o.n === 40 && o.total === 2003 && JSON.stringify(o.first) === '["c-0@0","kid-0@1","kid-1@1","kid-2@1","c-1@0"]' },
   { id: "G2", what: "the index a state's queries use (derived from the last one, write by write) files exactly what a fresh build files, through moves, re-parenting, deletes of parents, creates and undo", run(s) { cast(s);
       if (!D.indexAudit) return { skipped: "no audit at this tree" };
       fill(s, 60); const bad: any[] = []; let rnd = 7; const rand = (n: number) => ((rnd = (rnd * 16807) % 2147483647) % n);
@@ -484,11 +506,11 @@ if (argv.includes("--control")) {
 }
 
 // I4 needs the engine's catalogue (it measures GLBs asynchronously): run before the synchronous cases
-// the G3 scenario: every reply, with what differs between runs by design (chain heads, salts) left out; and the
-// viewer's own consent shield, whose shape recut A2 changed on purpose (a switch, not a preset): G3 is about the index
+// the G3 scenario: every reply, with what differs between runs by design (chain heads, salts) left out, and the viewer's
+// own consent shield, reshaped on purpose (a switch, not a preset): G3 is about the index
 function scenario() {
   // (and log positions: a refused move is no longer recorded, so the seqs after one shift by design)
-  const s = session(); const out: any[] = []; const strip = (r: any) => JSON.parse(JSON.stringify(r ?? null, (k, v) => (["head", "seq", "act", "born", "cause", "recorded", "blocker", "shield"].includes(k) ? undefined : v)));   // recorded: an arrival isn't logged now (review 10-07 M3); blocker: a solid move refusal names what is in the way (body shove, 10-12), additive
+  const s = session(); const out: any[] = []; const strip = (r: any) => JSON.parse(JSON.stringify(r ?? null, (k, v) => (["head", "seq", "act", "born", "cause", "recorded", "blocker", "shield"].includes(k) ? undefined : v)));   // recorded: an arrival isn't logged; a solid move refusal names what is in the way (additive)
   const c = (who: string, verb: string, args: any = {}, step = 200) => { const r = s.call(who, verb, args, step); out.push([who, verb, strip(r)]); return r; };
   cast(s); c("olive", "set", { id: "@world", component: "roles:ann", value: { role: "builder" } });
   fill(s, 100, (i) => [(i % 10) * 2.5 - 12, 0, Math.floor(i / 10) * 2.5 - 12]);
@@ -534,7 +556,7 @@ async function realGlbs() {
   return { solids: te.solids?.length ?? 0, inTower, outWall, container };
 }
 
-// reply keys the names pass renamed (PROPOSAL-conventional-names-2026-10-07): base spelling → today's
+// reply keys the names pass renamed: base spelling → today's
 const RENAMED_KEYS: Record<string, string> = { teach: "fix", touchI: "intimate" };
 async function sameAsBase() {
   const d = scratch("sbase"); const r0 = archiveTo(ENGINE, BASE, ["shared", "server", "package.json"], d);
@@ -542,21 +564,18 @@ async function sameAsBase() {
   const run = (tree: string) => { const r = Bun.spawnSync(["bun", path.join(ENGINE, "tools/protocol/scale-check.ts"), "--tree", tree, "--scenario"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
     const t = r.stdout.toString(); try { return JSON.parse(t); } catch { return { bad: (t + r.stderr.toString()).slice(-400) }; } };
   const a = run(TREE), b0 = run(d); if (!Array.isArray(a) || !Array.isArray(b0)) return { a: a?.bad ?? "ok", b: b0?.bad ?? "ok" };
-  // the base speaks the names before the 10-07 conventional-names pass: its replies' keys are read in today's names
-  // R 10-17 14:41 (consent words): a body's shield in look is read in today's words (tier strangers → everyone; class move →
-  // displace; everyone|nobody → allow|deny): the same table, renamed
+  // the base speaks the names before the conventional-names pass: its replies' keys are read in today's names, and a
+  // body's shield in look in today's words (tier strangers → everyone; class move → displace; everyone|nobody → allow|deny)
   const CONSENT_WORD: Record<string, string> = { everyone: "allow", nobody: "deny" };
   const shieldToday = (sh: any) => Object.fromEntries(Object.entries(sh).map(([k, row]: any) => [k === "strangers" ? "everyone" : k,
     row && typeof row === "object" && !Array.isArray(row) ? Object.fromEntries(Object.entries(row).map(([c, m]: any) => [c === "move" ? "displace" : c, CONSENT_WORD[m] ?? m])) : row]));
-  // R 10-21: the base commit's word for the base rung (visitor) is the rung this tree calls inhabitant
+  // the base commit's word for the base rung (visitor) is the rung this tree calls inhabitant
   const b = JSON.parse(JSON.stringify(b0), function (k, v) { if (k === "shield" && v && typeof v === "object" && !Array.isArray(v)) v = shieldToday(v);
     if ((k === "who" || k === "role") && v === "visitor") return "inhabitant";
     if (!v || typeof v !== "object" || Array.isArray(v)) return v;
     return Object.fromEntries(Object.entries(v).map(([key, x]) => [Object.hasOwn(RENAMED_KEYS, key) ? RENAMED_KEYS[key] : key, x])); });
-  // R 10-07: look and inspect read a thing as its name, description, what it can do and its state (shared/a11y.js): those
-  // fields are additions the base never wrote, generated from components it also had. Compared without them, on both sides
-  // 2026-10-09 (review of b398d7e3): a rotation the authority writes is made unit after rounding (the base wrote 0.707 per
-  // axis, which isn't): compared as the rotation it means, normalised then rounded, on both sides
+  // the a11y fields (shared/a11y.js) are additions the base never wrote: compared without them, on both sides; a rotation
+  // is compared as the rotation it means (normalised then rounded), since the authority makes it unit after rounding
   const unitQ = (v: any) => { const n = Math.hypot(...v); return v.map((x: number) => Math.round((x / n) * 1e6) / 1e6); };
   // the rotations this tree WROTE: a transform's q (in after / would), not a value a request carried and a reply echoes
   const qs: number[][] = []; JSON.stringify(a, (k, v) => { if (k === "transform" && v && Array.isArray(v.q) && v.q.length === 4) qs.push(v.q);
@@ -564,13 +583,9 @@ async function sameAsBase() {
   if (!qs.length) return { same: false, replies: a.length, why: "no written rotation to check (the scan would be vacuous)" };
   const notUnit = qs.find((q) => Math.abs(Math.hypot(...q) - 1) > 1e-9);   // ours must BE unit, not merely compare as one
   if (notUnit) return { same: false, replies: a.length, notUnit };
-  // 2026-10-14: a refusal's code and its fix's shape are the contract; the metres inside its prose are a measurement of
-  // where a body ended up ('mug is 6.316 m from you' here vs 6.349 at the base — put-down-in-front-of-the-body, 2fdadb70,
-  // moved it 3 cm). Prose is compared with its decimals blanked, so a changed number in a reason is not a changed reply.
-  // 2026-10-14 (sockets → child entities, feat/sockets-entities LS4): a create that lands a model with sockets also mints
-  // the socket children, and `after` carries them; the base minted none. Compared without any `after` entry that IS a
-  // socket (a minted id, a `socket` component) — the host's own record still has to match the base's exactly.
-  const noA11y = (x: any) => JSON.stringify(x, (k, v) => (k === "can" || k === "state" || k === "description" || k === "sockets" || (k === "order" && v === "a0") ? undefined   // parent.order: cut by the shape audit 10-16 (nothing read it)
+  // a refusal's code and fix shape are the contract, not the metres in its prose: decimals are blanked. Minted socket
+  // children in `after` are left out (the base minted none); the host's own record must still match exactly
+  const noA11y = (x: any) => JSON.stringify(x, (k, v) => (k === "can" || k === "state" || k === "description" || k === "sockets" || (k === "order" && v === "a0") ? undefined   // parent.order: cut by the shape audit (nothing read it)
       // `sockets` on a look row: the children, listed (same addition)
     : k === "after" && v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, e]: any) => !(e && typeof e === "object" && "socket" in e)))
     : k === "notes" && Array.isArray(v) ? v.filter((e: any) => !(e && typeof e === "object" && "legacy" in e))   // the note saying it minted them
@@ -587,27 +602,23 @@ if (argv.includes("--scenario")) {
 
 // ---------------- run ----------------
 // a row's timings: `ms` (a number or a map of them) and any `<name>Ms`. Red only on timing = it passes with them all at zero
-const isTime = (k: string) => k === "ms" || k.endsWith("Ms");
+const isTime = (k: string) => k === "ms" || k.endsWith("Ms") || k === "grew";
 const zeroTimes = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, !isTime(k) ? v : typeof v === "number" ? 0 :
   v && typeof v === "object" ? Object.fromEntries(Object.keys(v).map((n) => [n, 0])) : v]));
-const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k)).flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
+const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k) && k !== "grew").flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
 const timingOnly = (c: any, o: any) => !!o && typeof o.bound === "number" && Object.keys(o).some(isTime) && !c.good(o) && (() => { try { return !!c.good(zeroTimes(o)); } catch { return false; } })();
-let pass = 0, fail = 0;
+const SUITE = suite("scale-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false; const slow: number[] = [];
   // a row red ONLY on its wall-clock bound is measured again, up to 3 attempts in all (Bazel's flaky_test_attempts); a
-  // pass on a later attempt prints FLAKY with the slow timings, and a row whose behaviour is wrong is never retried
+  // pass on a later attempt is marked FLAKY with the slow timings, and a row whose behaviour is wrong is never retried
   for (let attempt = 1; attempt <= 3; attempt++) {
-    LOAD = calibrate(); good = false;
+    good = false;
     try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
     if (good || !timingOnly(c, o)) break;
     slow.push(slowest(o)); }
-  if (good) pass++; else fail++;
-  const tag = !good ? "FAIL" : slow.length ? "FLAKY" : "ok  ";
-  console.log(`${tag} ${c.id.padEnd(4)} ${c.what}${good && !slow.length && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 900)}`}`);
-  if (slow.length) console.log(`       ${good ? "passed" : "failed"} after ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")}`);
-  if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)} (bound ${o.bound} ms: load ×${r1(LOAD)})`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}${slow.length ? ` (${good ? "FLAKY" : "over the bound every time"}: ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")})` : ""}`, o);
+  if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)}${o.grew ? ` grew ${JSON.stringify(o.grew)}` : ""} (backstop ${o.bound} ms)`);
 }
-console.log(`[scale-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

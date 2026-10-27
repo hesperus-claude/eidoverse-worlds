@@ -1,26 +1,14 @@
-// bootjank — where do the first rough seconds GO?
-//
-//   bun tools/bootjank.ts                     # replay worlds/commons in a scratch
-//                                             #   sequencer, record 40s of frames
-//   bun tools/bootjank.ts --wide              # author a far-city world instead:
-//                                             #   near models + models at 300-500m,
-//                                             #   ASSERT the far libs never fetch
+// bootjank: where do the first rough seconds GO?
+//   bun tools/bootjank.ts                     # replay worlds/commons in a scratch sequencer, record 40s of frames
+//   bun tools/bootjank.ts --wide              # a far-city world: near models + models at 300-500m, ASSERT far libs never fetch
 //   bun tools/bootjank.ts --mbit 25           # throttled arrivals (spread storm)
 //   bun tools/bootjank.ts --secs 60           # longer observation window
 //   bun tools/bootjank.ts --headed --console  # watch it happen
-//
-// bootbench asks "when is the first frame"; this asks "how bad are the next
-// two thousand". A document-start hook wraps the WebGPU device/queue entry
-// points (createRenderPipeline / createShaderModule / writeBuffer /
-// writeTexture / copyExternalImageToTexture) and a rAF loop records every
-// frame's duration with the GPU work that landed inside it, plus longtask
-// spans and 1Hz samples of EW.frame()'s per-system bill. The report is a
-// timeline of the worst frames, each attributed: compile, upload, or CPU.
-//
-// The world is a byte-copy of worlds/commons — the actual world whose early
-// roughness prompted this tool — served by a scratch sequencer so nothing
-// appends to the real log.
-//
+// bootbench asks "when is the first frame"; this asks "how bad are the next two thousand". A document-start hook wraps
+// the WebGPU entry points (createRenderPipeline / createShaderModule / writeBuffer / writeTexture /
+// copyExternalImageToTexture) and a rAF loop records each frame with the GPU work inside it, plus longtasks and 1Hz
+// EW.frame() bills; the report attributes the worst frames to compile, upload or CPU.
+// The world is a byte-copy of worlds/commons served by a scratch sequencer, so nothing appends to the real log.
 // Scaffolding: a scratch sequencer, CDP, and the Windows shim rule (spawn process.execPath, never the PATH bun).
 
 import { existsSync, mkdtempSync, rmSync, mkdirSync, cpSync } from "node:fs";
@@ -40,14 +28,8 @@ const HEADED = has("headed");
 const ECHO = has("console");
 const MBIT = num("mbit", 0);
 const WIDE = has("wide");
-const HEAVYJOIN = has("heavyjoin");   // a 21MB-avatar resident arrives at t≈+12s
-                                      // after boot — measures the VRM-parse halt
-                                      // (the same main-thread path an avatar
-                                      // SWITCH takes, §19b)
-const GRASSDIAG = has("grassdiag");   // §22: run EW.grassDiag() post-boot and
-                                      // print its table. Combine with
-                                      // --pixels N to force the GPU-bound
-                                      // regime the diag needs to show deltas.
+const HEAVYJOIN = has("heavyjoin");   // a 21MB-avatar resident arrives at t≈+12s: the VRM-parse halt an avatar SWITCH takes too (§19b)
+const GRASSDIAG = has("grassdiag");   // §22: EW.grassDiag() post-boot; with --pixels N to force the GPU-bound regime it needs
 const PIXELS = num("pixels", 0);      // renderer.setPixelRatio(N) post-boot
 const SECS = num("secs", WIDE ? 25 : HEAVYJOIN ? 50 : GRASSDIAG ? 75 : 40);
 
@@ -68,9 +50,8 @@ if (!WIDE && !existsSync(join(ROOT, "worlds", "commons", "log.jsonl"))) {
   console.error("✗ worlds/commons/log.jsonl not found — bootjank replays the real commons"); process.exit(2);
 }
 
-// --wide: the libs an arrival should and should NOT fetch. Distinct sets, so
-// the network log is an unambiguous witness (§16.2.C: far entities never
-// load at join — the join gate works from position, geom or no geom).
+// --wide: libs an arrival should and should NOT fetch, distinct so the network log is unambiguous (§16.2.C: far
+// entities never load at join, geom or no geom)
 const NEAR_LIBS = [
   "eidoverse/assets/models/scifi_art_deco_office_desk.glb",
   "eidoverse/assets/models/streetlight_lamp_light_street_blade_runner_cyberpunk.glb",
@@ -251,11 +232,8 @@ if (MBIT > 0) {
 }
 
 // ---- the document-start recorder --------------------------------------------
-// Installed before any module runs. Wraps the GPU entry points so each frame
-// knows what landed inside it; times the SYNCHRONOUS cost of pipeline/shader
-// creation (Chrome defers real compilation to the GPU process, so a long rAF
-// gap right AFTER creations is the compile stall even when the sync ms is 0 —
-// the correlation is the attribution, the sync ms is a bonus).
+// installed before any module runs. Chrome compiles in the GPU process, so a long rAF gap right after creations is the
+// stall even at 0 sync ms.
 
 const RECORDER = `(() => {
   if (globalThis.__jank) return;
@@ -330,7 +308,7 @@ if (!bootReady) await die(2, "✗ client never booted", ...pageErrors.slice(0, 5
 console.log(`  ${dim(bootReady)}`);
 
 if (GRASSDIAG) {
-  await sleep(14_000);   // let the boot storm and warms fully settle
+  await sleep(14_000);  // let the boot storm and warms settle
   if (PIXELS > 0) {
     await evalJson(`(() => { EW.renderer.setPixelRatio(${PIXELS}); return EW.renderer.getPixelRatio(); })()`);
     console.log(dim(`  pixelRatio forced to ${PIXELS} — GPU-bound regime`));
@@ -352,17 +330,15 @@ if (HEAVYJOIN) {
     const hws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
     hws.onopen = () => hws.send(JSON.stringify({
       type: "join", world: WORLD, id, token: "",
-      avatar: "eidoverse/assets/vrms/aletheia.vrm",   // library-relative, like resolveMyAvatarPath
+      avatar: "eidoverse/assets/vrms/aletheia.vrm",  // library-relative, like resolveMyAvatarPath
     }));
     return hws;
   };
-  await sleep(12_000);   // let the boot storm fully settle first
+  await sleep(12_000);  // let the boot storm settle first
   heavyAt = Date.now() - t0;
   console.log(dim(`  heavy resident joins at t=${(heavyAt / 1000).toFixed(1)}s (aletheia.vrm, 21MB)…`));
   const first = heavyJoin("heavyguest");
-  // leave, then a SECOND wearer of the same body: the first parse pooled at
-  // departure, so the rejoin must be a pool hit — §19b's whole point. The
-  // loadLog witness is a "pool-hit" line for aletheia.
+  // a SECOND wearer of the same body after the first leaves must be a pool hit (§19b): the loadLog shows "pool-hit" for aletheia
   await sleep(10_000);
   console.log(dim("  heavy resident leaves (body → pool)…"));
   try { first.close(); } catch { /* fine */ }
@@ -410,12 +386,12 @@ const pct = (p: number) => dts[Math.min(dts.length - 1, Math.floor(dts.length * 
 console.log(`\n${bold("── frames")}  ${frames.length} recorded over ${((frames.at(-1)!.t - frames[0].t) / 1000).toFixed(1)}s`);
 console.log(`  p50 ${pct(0.5)}ms · p95 ${pct(0.95)}ms · p99 ${pct(0.99)}ms · max ${dts.at(-1)}ms`);
 
-// when did it get smooth? — last frame > 25ms, and the rolling-second view
+// when did it get smooth? the last frame > 25ms, and the rolling-second view
 const badFrames = frames.filter((f) => f.dt > 25);
 if (badFrames.length) {
   const lastBad = badFrames.at(-1)!;
   console.log(`  ${badFrames.length} frames over 25ms; last one at t=${(lastBad.t / 1000).toFixed(1)}s`);
-  // per-second worst frame, first 30 lines — the shape of the roughness
+  // per-second worst frame, first 30 lines: the shape of the roughness
   const bySec = new Map<number, Frame>();
   for (const f of frames) {
     const s = Math.floor(f.t / 1000);
@@ -443,7 +419,7 @@ for (const f of worst) {
   if (f.shad) parts.push(`${f.shad} shader${f.shad > 1 ? "s" : ""} (${f.shadMs}ms sync)`);
   if (f.up) parts.push(`buf ${mb(f.up)}`);
   if (f.tex) parts.push(`tex ${mb(f.tex)}${f.bmp ? ` (${f.bmp} img)` : ""}`);
-  // pipelines created in the PREVIOUS ~3 frames — async compile lands here
+  // pipelines created in the PREVIOUS ~3 frames: async compile lands here
   const prior = gpuEv.filter((g) => (g.k === "pipe" || g.k === "cpipe") && g.t >= w0 - 400 && g.t < w0).length;
   if (prior && !f.pipe) parts.push(`(${prior} pipelines created <400ms before — async compile stall)`);
   const lt = lts.filter((l) => l.t < w1 && l.t + l.ms > w0).reduce((s, l) => s + l.ms, 0);
@@ -473,8 +449,7 @@ for (const r of [...resources].sort((a, b) => b.bytes - a.bytes).slice(0, 8)) {
 }
 
 if (data.bills?.length) {
-  // EW.frame() returns an ARRAY of {name, ms, every, enabled} (ms is an
-  // EWMA, α=0.05 — it shows sustained load, never a single spike)
+  // EW.frame() returns an ARRAY of {name, ms, every, enabled}; ms is an EWMA (α=0.05): sustained load, never a spike
   console.log(`\n${bold("── frame bill over time")}  ${dim("(per-system EWMA ms, 1Hz samples — top 5 at each)")}`);
   for (const b of data.bills.filter((_: any, i: number) => i % 5 === 0 || i === data.bills.length - 1)) {
     const rows = (Array.isArray(b.bill) ? b.bill : [])

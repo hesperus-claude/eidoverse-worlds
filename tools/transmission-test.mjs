@@ -1,37 +1,13 @@
-// Transmission: does a transmissive material reach the renderer in a class
-// that can DRAW it, and does the value survive the trip?
-//
-// This test was source-regex, and mica broke it on purpose to prove the point:
-// she injected `if (k === 'transmission') continue;` into the upgrade -- so the
-// runtime dropped the exact property the feature exists to preserve -- and the
-// old test still reported 14 passed, 0 failed. A test that cannot fail is not a
-// test. It also read an absolute path under a contributor's home directory, so
-// it crashed ENOENT on her review host after 11 checks.
-//
-// So this one CALLS prepareObject() on a real mesh with a real
-// MeshPhysicalMaterial and asserts on the material that comes back. No regex
-// over source, no path outside this repo.
-//
-// The failure it guards is silent and looks like missing geometry: a plain
-// MeshPhysicalMaterial with transmission > 0 arrives with every value correct
-// -- visible: true, mesh present, triangles counted -- and renders as nothing,
-// because three's WebGPU renderer only builds the transmission graph for
-// MeshPhysicalNodeMaterial.
+// Transmission: a transmissive material must reach the renderer in a class that can DRAW it, value intact: three's
+// WebGPU renderer builds transmission only for MeshPhysicalNodeMaterial, so a plain MeshPhysicalMaterial renders as
+// nothing, silently. CALLS prepareObject() on a real mesh and asserts on what comes back; no source regex.
 
-// The Avatar constructor makes a nameplate sprite through document/canvas, so
-// the DOM has to exist before avatar.js is imported. Same registrator
-// chat-log-test and frames-resize-test use.
+// the Avatar constructor makes a nameplate sprite through document/canvas, so the DOM must exist before avatar.js imports
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
-// happy-dom ships no 2D canvas context, and the nameplate measures and draws
-// text. An inert recorder is enough: nothing here asserts on pixels, and the
-// alternative is a real canvas binding for a label the lamp does not care
-// about.
+// happy-dom has no 2D canvas context and the nameplate draws text: an inert recorder will do (no pixel asserts here)
 HTMLCanvasElement.prototype.getContext = function () {
-  // Every method returns a SELF-CHAINING stub, because the drawing code builds
-  // objects from the context and calls methods on them (createRadialGradient
-  // -> addColorStop). Returning a bare no-op yielded undefined and threw one
-  // draw call later.
+  // SELF-CHAINING stubs: the drawing code calls methods on what the context returns (createRadialGradient -> addColorStop)
   const anything = new Proxy(function () {}, {
     get: (_t, k) => (k === 'width' ? 100 : anything),
     apply: () => anything,
@@ -44,24 +20,17 @@ HTMLCanvasElement.prototype.getContext = function () {
 };
 
 import { plugin } from 'bun';
-// import.meta.dir is a plain filesystem path; a `file:` URL string reaches
-// readFile as a literal name and ENOENTs on a stub that is right there. This
-// showed up only on a COLD module cache (i.e. right after editing a client
-// file), which is exactly when a mutation test runs -- so the suite appeared
-// to "fail" on mutations for the wrong reason.
+// a plain path, never a `file:` URL string: readFile takes that as a literal name and ENOENTs on a cold module cache
 const HERE = import.meta.dir;
 const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({
   name: 'core-stub',
   setup(build) {
     build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
-    // lightrig pulls warmqueue -> loadwork, which calls requestAnimationFrame
-    // at module scope. Same stub avatar-test and parts-test use.
+    // lightrig pulls warmqueue -> loadwork, which calls requestAnimationFrame at module scope
     build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
-    // avatar.js pulls assets.js, which builds a KTX2Loader against a real
-    // renderer. Without this the run's outcome depended on whether assets.js
-    // had already been imported and cached -- a harness that sometimes passes
-    // is worse than one that fails.
+    // avatar.js pulls assets.js, which builds a KTX2Loader against a real renderer: stub it so the outcome doesn't
+    // depend on module-cache order
     build.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('./assets-stub.mjs') }));
     build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('./loadwork-stub.mjs') }));
   },
@@ -70,14 +39,10 @@ plugin({
 const { readFileSync } = await import('node:fs');
 const { THREE } = await import('./core-stub.mjs');
 
-// The stand-in for MeshPhysicalNodeMaterial lives in core-stub.mjs, which owns
-// the THREE namespace it re-exports (a module namespace object is frozen).
+// the MeshPhysicalNodeMaterial stand-in lives in core-stub.mjs, which owns the THREE namespace it re-exports (frozen)
 
 const { prepareObject } = await import('../client/lib/materials.js');
-// TOP-LEVEL, not inside a block. A dynamic import from inside a test resolved
-// `./core.js` on a cold module cache without the plugin's substitution --
-// ENOENT on a `file:` path -- so whether the suite ran at all depended on
-// import order. Everything the suite touches is loaded here, once.
+// TOP-LEVEL, once: a dynamic import inside a test can resolve `./core.js` without the plugin's substitution on a cold cache
 const { Avatar } = await import('../client/lib/avatar.js');
 const { requestLight, releaseOwner, updateRequest, rigDebug, updateRig }
   = await import('../client/lib/lightrig.js');
@@ -114,11 +79,8 @@ console.log('TRANSMISSION -- a correct file the renderer could not honour');
   check('...specifically MeshPhysicalNodeMaterial',
         out?.isMeshPhysicalNodeMaterial === true, `got ${out?.constructor?.name}`);
 
-  // THE REGRESSION mica injected. `transmission` is a PROTOTYPE ACCESSOR on
-  // MeshPhysicalMaterial, so a copy loop over Object.keys() silently drops the
-  // one value the upgrade exists to carry -- producing a node material with
-  // ior and thickness intact and transmission 0: the same invisibility for a
-  // new reason. This is the check that goes red for that.
+  // `transmission` is a PROTOTYPE ACCESSOR on MeshPhysicalMaterial, so a copy over Object.keys() drops it silently
+  // (transmission 0, invisible again); this goes red for that
   check('TRANSMISSION SURVIVES the upgrade (the accessor bug)',
         out?.transmission === 0.95, `got ${out?.transmission}`);
   check('ior survives', out?.ior === 1.52, `got ${out?.ior}`);
@@ -131,9 +93,7 @@ console.log('TRANSMISSION -- a correct file the renderer could not honour');
         out?.name === 'Glass', `got ${out?.name}`);
   check('it is in the transparent pass', out?.transparent === true);
 
-  // Colour/Vector types must be COPIED, not shared: assigning them would leave
-  // the new material pointing at the old one's Color instance, so a later tweak
-  // to either would silently move the other.
+  // Colour/Vector types must be COPIED, not shared, or a later tweak to either silently moves the other
   check('colour came across by VALUE, not by reference',
         out?.color !== src.color
         && Math.abs(out.color.r - 0.96) < 1e-6
@@ -158,11 +118,7 @@ console.log('\nAND ONLY TRANSMISSIVE MATERIALS -- node materials compile dearer'
 
 console.log('\nSHARING -- one source material, one replacement');
 {
-  // Two meshes wearing THE SAME material must come back wearing the same
-  // replacement. A WeakSet could record that a material had been upgraded but
-  // not what to, so each mesh built its own node material: double the shader
-  // objects for one look, and an author editing the shared material would move
-  // one mesh and not the other (mica: replacementShared:false).
+  // two meshes wearing THE SAME material must come back wearing the same replacement, or editing it moves only one
   const src = new THREE.MeshPhysicalMaterial({ name: 'Glass' });
   src.transmission = 0.9; src.ior = 1.5;
   const a = new THREE.Mesh(new THREE.BoxGeometry(), src);
@@ -174,7 +130,7 @@ console.log('\nSHARING -- one source material, one replacement');
         a.material === b.material ? '' : 'two node materials for one source');
   check('...carrying the value', a.material.transmission === 0.9);
 
-  // And a mesh added LATER, in a separate pass, still shares.
+  // and a mesh added LATER, in a separate pass, still shares
   const c = new THREE.Mesh(new THREE.BoxGeometry(), src);
   const root2 = new THREE.Group(); root2.add(c);
   prepareObject(root2, { kind: 'model' });
@@ -183,9 +139,7 @@ console.log('\nSHARING -- one source material, one replacement');
 
 console.log('\nAUTHORED ZERO -- ?? not ||');
 {
-  // A lamp material authored at emissiveIntensity 0 (starts dark) must not be
-  // "restored" to 1. `|| 1` did exactly that, and the pooled material then
-  // came back brighter than it was written.
+  // a lamp material authored at emissiveIntensity 0 (starts dark) must not be "restored" to 1 (`|| 1`) and pooled brighter
   const av = readFileSync(`${HERE}/../client/lib/avatar.js`, 'utf8');
   check('the lamp base uses ?? so an authored zero survives',
         /base: m\.emissiveIntensity \?\? 1/.test(av) &&
@@ -208,15 +162,8 @@ console.log('\nIDEMPOTENCE -- prepareObject runs on every load and hot-swap');
 
 console.log('\nTHE AVATAR ITSELF -- build-new -> dispose-old, and pool -> rewear');
 {
-  // mica's re-review: the lifecycle checks below drive lightrig DIRECTLY, so
-  // she restored both old defects in avatar.js -- bare `body:${id}` ownership
-  // and no emissive restoration before pooling -- and the suite still passed
-  // 21/21. Manually creating good keys cannot see a bug in how Avatar MAKES
-  // them. These bind the real class.
-  //
-  // (And my note that Avatar could not be imported here was wrong: the ENOENT
-  // was `new URL(...).pathname` reaching Bun's onResolve as a `file:` string,
-  // not the module. A plain path works.)
+  // these bind the real Avatar class: lifecycle checks that drive lightrig directly can't see a bug in how Avatar MAKES
+  // its keys
   /** A body with one emissive mesh -- enough for attachLamps to want a lamp. */
   function glowingVrm() {
     const scene = new THREE.Object3D();
@@ -237,9 +184,8 @@ console.log('\nTHE AVATAR ITSELF -- build-new -> dispose-old, and pool -> rewear
   const lampsOf = (owner) => rigDebug().requests.filter((r) => r.key.startsWith(`lamp:${owner}`)).length;
   const mine = (id) => rigDebug().requests.filter((r) => r.key.includes(`body:${id}`)).length;
 
-  // B2: THE SWAP. mybody.js builds the NEW body and then disposes the old, so
-  // an owner keyed on the identity means the old body's dispose deletes the
-  // live lamp. mica measured requests 1 -> 0.
+  // B2: THE SWAP: mybody.js builds the NEW body, then disposes the old, so an owner keyed on the identity lets the old
+  // body's dispose delete the live lamp
   const v1 = glowingVrm();
   const oldBody = new Avatar('mythos', v1, {});
   check('a glowing body registers a lamp', mine('mythos') === 1, `${mine('mythos')}`);
@@ -253,10 +199,8 @@ console.log('\nTHE AVATAR ITSELF -- build-new -> dispose-old, and pool -> rewear
   check('...and it is the NEW body\'s request that survived',
         lampsOf(newBody._lampOwner) === 1);
 
-  // B3: THE POOL. The breath writes emissiveIntensity every frame and
-  // assets.js resetVrmInstance touches no materials, so a body pooled
-  // mid-breath comes back dim -- and dimmer than attachLamps's threshold means
-  // the NEXT wearer gets no lamp at all (mica: rewear at 0.3, lamps made 0).
+  // B3: THE POOL: the breath writes emissiveIntensity and resetVrmInstance touches no materials, so a body pooled
+  // mid-breath would come back too dim for attachLamps to give the next wearer a lamp
   newBody.update?.(1 / 60, performance.now());            // let the breath write
   v2.mat.emissiveIntensity = 0.3;                         // ...mid-breath, dim
   newBody.dispose();
@@ -271,10 +215,8 @@ console.log('\nTHE AVATAR ITSELF -- build-new -> dispose-old, and pool -> rewear
 
 console.log('\nLAMP LIFECYCLE -- the rig\'s own contract');
 {
-  // B2: OWNERSHIP. A lamp owner keyed to the IDENTITY collides across a body
-  // swap: the swap order is build-new-then-dispose-old (mybody.js), so the new
-  // body registers `body:mythos`, the old body's dispose releases
-  // `body:mythos`, and the LIVE lamp dies. mica measured requests 1 -> 0.
+  // B2: OWNERSHIP: a swap builds new then disposes old (mybody.js), so an owner keyed to the IDENTITY would let the
+  // old body's dispose release the LIVE lamp
   const before = rigDebug().requests.length;
   requestLight('lamp:body:mythos:1:0', { owner: 'body:mythos:1', intensity: 10 });
   requestLight('lamp:body:mythos:2:0', { owner: 'body:mythos:2', intensity: 10 });
@@ -286,22 +228,16 @@ console.log('\nLAMP LIFECYCLE -- the rig\'s own contract');
         `${left} left`);
   releaseOwner('body:mythos:2');
 
-  // ...and the collision itself, so the test states what used to happen.
+  // ...and the collision itself, so the test states what used to happen
   requestLight('lamp:body:janus:0', { owner: 'body:janus', intensity: 10 });
   releaseOwner('body:janus');
   check('(control) a SHARED owner key does take the other body down',
         rigDebug().requests.filter((r) => /janus/.test(r.key)).length === 0);
 
-  // B6: intensity must NOT dirty slot assignment -- the rig recomputes at most
-  // every 600ms and assignment reads tier and camera distance, never intensity.
-  // A breathing lamp patches this 60x a second.
+  // B6: intensity must NOT dirty slot assignment: the rig recomputes at most every 600ms from tier and camera distance,
+  // never intensity, and a breathing lamp patches this 60x a second.
   //
-  // The assertion has to start from a CLEAN flag, or it passes on the broken
-  // code: a fresh requestLight leaves assignDirty true, so "still true after
-  // an intensity patch" proves nothing. updateRig() clears it -- so run one,
-  // confirm it cleared, and only then patch. (My first cut skipped that and
-  // passed against the very implementation it was written to reject, which is
-  // precisely the failure mica found in the rest of this file.)
+  // start from a CLEAN flag (a fresh requestLight leaves assignDirty true): updateRig(), confirm it cleared, then patch
   requestLight('probe:0', { owner: 'probe', intensity: 5 });
   updateRig(performance.now());
   check('(setup) a rig pass clears the assignment flag',

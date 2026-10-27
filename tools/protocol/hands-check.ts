@@ -3,17 +3,13 @@
 // after a put, five crates carried at once, a held barrel moved in edit mode and then stuck).
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/hands-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
-const root = scratch("hands"); const clock = labClock();
-const call = (w, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, w), a, v, args); };
+import { simFold } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
+import { suite } from "./suite.ts";
+const { ok, done } = suite("hands-check", { quiet: true, cap: Infinity });
+const { root, clock, call } = labWorld("hands");
 const pos = (W, id) => fold(openWorld(root, W).entries).entities[id]?.c.transform.pos;
 const held = (W) => Object.keys(openWorld(root, W).presence.holds);
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
@@ -70,5 +66,4 @@ const take = (W, id, x) => { call(W, "vic", "move", { to: [x, 0, -0.8] }); retur
 { const W = "two"; mk(W); const r = [take(W, "a", 0), take(W, "b", 3), take(W, "c", 1.5)].map(code);
   const p = call(W, "vic", "put", { id: "b", at: [1.5, -1.4] }); const again = call(W, "vic", "grab", { id: "c" });
   ok(r.join() === "ok,ok,hold-limit" && p.ok && again.ok, "H8 two hands: a third thing is refused (hold-limit) until one is put down", { r, put: code(p), again: code(again) }); }
-console.log(`[hands-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

@@ -1,12 +1,11 @@
 // eidosim: our own rigid-body engine. Plain JS float64, no build.
-// COVENANT (DESIGN.md): only + − × ÷ Math.sqrt, comparisons, Math.abs/min/max/floor. No Math.hypot, no transcendentals
-// (simmath.js when they're needed). Fixed iteration order everywhere: creation index, and pairs sorted (a, b).
-// Constants are the version.
-// Solver: Box3D's soft step, studied from source with credit (erincatto/box3d, MIT; Catto, "Solver2D", 2024; soft
-// constraint coefficients after Ross Nordby). Per substep: integrate velocities → warm start → push (normal only, soft)
-// → integrate positions → relax (normal rigid + friction). See DESIGN.md "Studied 2026-10-09".
+// COVENANT (spec/PHYSICS.md): only + − × ÷ Math.sqrt, comparisons, Math.abs/min/max/floor; no Math.hypot, no transcendentals
+// (simmath.js when needed). Fixed iteration order everywhere: creation index, pairs sorted (a, b). Constants are the version.
+// Solver: Box3D's soft step, studied from source with credit (erincatto/box3d, MIT, THIRD-PARTY.md; Catto, "Solver2D";
+// soft constraint coefficients after Ross Nordby). Per substep: integrate velocities → warm start → push (normal only,
+// soft) → integrate positions → relax (normal rigid + friction).
 export const VERSION = "eidosim@1.0.0";
-export const _test = {};   // internals exposed to the engine's tests only
+export const _test = {};   // internals for the engine's tests only
 
 const LINEAR_SLOP = 0.005, SPECULATIVE = 4 * LINEAR_SLOP;
 const CONTACT_HERTZ = 30, CONTACT_ZETA = 10, CONTACT_SPEED = 3;
@@ -32,9 +31,8 @@ const qnorm = (q) => { const l = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[
 const qrot = (q, v) => { const t = scl(crs(q, v), 2); return add(add(v, scl(t, q[3])), crs(q, t)); };
 const axesOf = (q) => [qrot(q, [1, 0, 0]), qrot(q, [0, 1, 0]), qrot(q, [0, 0, 1])];
 
-// GYROSCOPIC term (Box3D solver.c:105–163, after Catto): solve I(ω2 − ω1) + h ω2 × Iω2 = 0 for ω2 in the body frame
-// with one Newton step (B3_GYROSCOPIC_ITERATIONS = 1). Our local inertia is diagonal, so the Jacobian's off-diagonal
-// inertia terms vanish. Review 10-09 #5: without it ω, not L, was conserved.
+// GYROSCOPIC term (Box3D solver.c:105–163, after Catto): solve I(ω2 − ω1) + h ω2 × Iω2 = 0 for ω2 in the body frame with one
+// Newton step. Local inertia is diagonal, so the Jacobian's off-diagonal terms vanish. Without it ω, not L, is conserved.
 function gyro(b, h) {
   if (b.invMass === 0) return;
   const i0 = 1 / b.invIl[0], i1 = 1 / b.invIl[1], i2 = 1 / b.invIl[2], o1 = qrot(qconj(b.q), b.w);
@@ -67,7 +65,7 @@ function makeBody(spec, index, density) {
   b.ext = b.shape === "sphere" ? b.radius : Math.max(...b.half);
   return b;
 }
-// world-space inverse inertia R diag(invIl) Rᵀ, cached per step in b.iw (row-major 3×3), as Box3D does in prepare
+// world-space inverse inertia R diag(invIl) Rᵀ, cached per step in b.iw (row-major 3×3), as Box3D's prepare
 const qmat = (q) => { const [x, y, z, w] = q; return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
   2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]; };
 function updateInertia(b) {
@@ -78,7 +76,7 @@ function updateInertia(b) {
 }
 const mv = (m, x) => [m[0] * x[0] + m[1] * x[1] + m[2] * x[2], m[3] * x[0] + m[4] * x[1] + m[5] * x[2], m[6] * x[0] + m[7] * x[1] + m[8] * x[2]];
 const invI = (b, x) => mv(b.iw, x);
-// inverse of a symmetric 3×3 (row-major) by cofactors; a singular one gives zero (no constraint)
+// by cofactors; a singular one gives zero (no constraint)
 function inv3(m) {
   const c0 = m[4] * m[8] - m[5] * m[7], c1 = m[5] * m[6] - m[3] * m[8], c2 = m[3] * m[7] - m[4] * m[6], det = m[0] * c0 + m[1] * c1 + m[2] * c2;
   if (!(Math.abs(det) > 0)) return [0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -132,9 +130,8 @@ function boxSphere(A, B, M) {   // A box, B sphere
   return { n, pts: [{ p: add(pb, scl(n, 0.5 * s)), s, id: 0 }] };
 }
 
-// FEATURE IDS (review 10-09 #4): every polygon vertex is where two LINES cross: an incident-face edge (labels 0–3) or a
-// reference side plane (4–7). A clip point lies on the segment's shared line and the clipping plane, so the label pair
-// {min, max} names it uniquely and stably: id = min·8 + max ∈ [0, 63].
+// FEATURE IDS: every polygon vertex is where two LINES cross, an incident-face edge (0–3) or a reference side plane (4–7);
+// the label pair {min, max} names it uniquely and stably: id = min·8 + max ∈ [0, 63].
 function clipPoly(poly, axis, offset, label) {   // keep dot(p, axis) <= offset; poly: [{p, l: [line, line]}]
   const out = [];
   for (let i = 0; i < poly.length; i++) {
@@ -184,8 +181,8 @@ function boxBox(A, B, M) {
     L = ub[i]; s = Math.abs(dot(T, L)) - eb[i] - proj(L, ua, ea); if (s > M) return null;
     if (s > fb.s) fb = { s, kind: "B", i, L };
   }
-  // hysteresis (Box2D's rule): A's face is the reference unless B's separates clearly more, so a near-tie between two
-  // stacked boxes can't flip the reference face, and with it every feature id, from one step to the next
+  // hysteresis (Box2D's rule): A's face is the reference unless B's separates clearly more, so a near-tie between stacked
+  // boxes can't flip the reference face (and every feature id) from one step to the next
   const bestFace = fb.s > 0.98 * fa.s + 0.5 * LINEAR_SLOP ? fb : fa;
   for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
     let L = crs(ua[i], ub[j]); const l = len(L); if (l < 1e-6) continue; L = scl(L, 1 / l);
@@ -209,12 +206,12 @@ function boxBox(A, B, M) {
   const f = bestFace;
   const face = f.kind === "A" ? faceContact(A, B, f.i, dot(f.L, T) >= 0 ? f.L : scl(f.L, -1), false, M)
     : faceContact(B, A, f.i, dot(f.L, T) <= 0 ? f.L : scl(f.L, -1), true, M);   // B's face normal pointing toward A
-  // within reach but clipping kept no point (a face chosen where an edge axis is the true separation, or a corner over an
-  // edge): fall back to the edge pair, never to "no contact" (review r2 #2: 2.3% of near poses had no manifold at all)
+  // within reach but clipping kept no point (a face chosen where an edge axis truly separates, or a corner over an edge):
+  // fall back to the edge pair, never to "no contact"
   return face ?? edge();
 }
-// a LOWER BOUND on the distance between two shapes (exact for any pair with a sphere; for box–box, the largest SAT
-// separation over the 15 axes, ≤ the true distance), so conservative advancement never steps past a surface
+// a LOWER BOUND on the distance (exact with a sphere; box–box the largest SAT separation over the 15 axes), so conservative
+// advancement never steps past a surface
 function distLB(A, B) {
   if (A.shape === "sphere" && B.shape === "sphere") { const d = sub(B.p, A.p); return len(d) - A.radius - B.radius; }
   if (A.shape !== "sphere" && B.shape !== "sphere") {
@@ -238,10 +235,8 @@ function collide(A, B, M) {
 }
 
 // ---- ground (a height field) ----
-// One normal per manifold, the field's slope under the body's centre (central differences, exact ops); each corner (box) or
-// the sphere's lowest point gives a point whose separation is its height above the field measured along that normal. The
-// speculative margin grows with how fast the body closes on the ground this step (its normal speed plus its spin's reach),
-// so a fast body meets the field before passing it: the field is continuous, so its tangent plane is no phantom.
+// One normal per manifold (the field's slope under the body's centre, exact ops). The speculative margin grows with closing
+// speed this step, so a fast body meets the field before passing it.
 const FIELD_EPS = 0.01;
 function groundContact(height, b, dt) {
   const x = b.p[0], z = b.p[2];
@@ -268,8 +263,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
   const bodies = [], joints = [];
   const WORLD = { index: -1, static: true, invMass: 0, invIl: [0, 0, 0], iw: [0, 0, 0, 0, 0, 0, 0, 0, 0], p: [0, 0, 0], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0], awake: false, dR: [1, 0, 0, 0, 1, 0, 0, 0, 1] };
   const bodyOf = (i) => (i < 0 ? WORLD : bodies[i]);
-  // ground: a height function y = height(x, z) (exact ops, so every runtime agrees), a static collider under everything.
-  // Not part of exportState: whoever restores a world passes the same function again.
+  // ground: y = height(x, z) (exact ops, so every runtime agrees), a static collider under everything. Not in exportState:
+  // whoever restores a world passes the same function again.
   const GROUND = ground ? { uid: -2, index: -2, shape: "field", height: ground.height, static: true, rolling: ground.rollingResistance ?? 0, invMass: 0, invIl: [0, 0, 0], iw: [0, 0, 0, 0, 0, 0, 0, 0, 0],
     p: [0, 0, 0], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0], awake: false, dR: [1, 0, 0, 0, 1, 0, 0, 0, 1], p0: [0, 0, 0], q0c: [0, 0, 0, 1], ext: 0, half: [0, 0, 0], friction: ground.friction ?? friction, combine: ground.frictionCombine ?? "average" } : null;
   let manifolds = [], prevImpulses = new Map(), prevManifold = new Map(), prevByPair = new Map();
@@ -278,7 +273,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     addBody(spec) { const b = makeBody(spec, bodies.length, density); b.spec = spec; if (b.friction === undefined) b.friction = friction; bodies.push(b); return b.index; },
     setVelocity(i, v, w = [0, 0, 0]) { const b = bodies[i]; b.v = v.slice(); b.w = w.slice(); b.sleepTime = 0; b.awake = true; },
     applyImpulse(i, P, at) { const b = bodies[i]; if (!b.invMass) return; updateInertia(b); b.v = add(b.v, scl(P, b.invMass)); b.w = add(b.w, invI(b, crs(sub(at, b.p), P))); b.sleepTime = 0; b.awake = true; },
-    // joints: type "point" | "hinge" (axis) | "fixed"; anchor `at` and `axis` in world space at creation; a or b < 0 = the world
+    // joints: "point" | "hinge" (axis) | "fixed"; anchor `at` and `axis` in world space at creation; a or b < 0 = the world
     addJoint({ type, a, b, at, axis }) {
       const A = bodyOf(a), B = bodyOf(b);
       const j = { type, a, b, alive: true, lA: qrot(qconj(A.q), sub(at, A.p)), lB: qrot(qconj(B.q), sub(at, B.p)), lin: [0, 0, 0], ang: [0, 0, 0] };
@@ -291,8 +286,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     step(dt) { stepWorld(dt); },
     state() { return bodies.map((b) => [...b.p, ...b.q, ...b.v]); },
     asleep() { return bodies.map((b) => b.static || !b.awake); },
-    // The whole persistent state as plain JSON, exact: a world built from it with createWorld(opts, it) steps bit-identically
-    // to this one (warm starts, sleep tags and the step counter included). Everything else is rebuilt every step.
+    // the whole persistent state as plain JSON, exact: createWorld(opts, it) steps bit-identically (warm starts, sleep tags
+    // and the step counter included). Everything else is rebuilt every step.
     exportState() {
       const cp = (x) => (x === undefined ? null : JSON.parse(JSON.stringify(x)));
       return { stepNo,
@@ -337,11 +332,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     for (const b of bodies) updateInertia(b);
     manifolds = [];
     const jointed = new Set(joints.filter((j) => j.alive && j.a >= 0 && j.b >= 0).map((j) => `${Math.min(j.a, j.b)}:${Math.max(j.a, j.b)}`));
-    // WAKE WHOLE ISLANDS (as Box3D's persistent islands; review 10-09 #3): a sleeping island remembers its tag; if any
-    // member was woken (API) or an awake body reaches one (AABB pair or joint), the whole tagged island wakes BEFORE
-    // contacts are built, so its internal contacts exist this step and warm-start from their kept impulses
-    // wokeBy (transient, read by a host right after the step): the uid of the awake body whose reach woke this one,
-    // carried down a cascade to the body that started it; never exported, never an input
+    // wake whole islands BEFORE contacts are built, so internal contacts exist this step and warm-start. wokeBy: the waking
+    // body's transient uid, carried down a cascade; never exported, never an input.
     for (const b of bodies) b.wokeBy = undefined;
     const wakeTag = (t, by) => { for (const b of bodies) if (b.sleepTag === t) { b.awake = true; b.sleepTime = 0; b.sleepTag = undefined; b.wokeBy = by; } };
     for (const b of bodies) if (!b.static && b.awake && b.sleepTag !== undefined) wakeTag(b.sleepTag, b.uid);
@@ -349,9 +341,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     for (let changed = true; changed;) {
       changed = false;
       const reach = (x, y) => { if (!x.static && x.awake && !y.static && !y.awake && y.sleepTag !== undefined) { wakeTag(y.sleepTag, x.wokeBy ?? x.uid); changed = true; } };
-      // a sleeper wakes when an awake body TOUCHES it: a contact manifold with points (shapes within the speculative
-      // distance), as Box3D (contact begins touching → b3LinkContact wakes the set) and Jolt (contact constraint added →
-      // bodies activated) both do. Not on box proximity: a rotated box's AABB reaches well past the box.
+      // a sleeper wakes when an awake body TOUCHES it (a manifold with points), as Box3D and Jolt do; never on box proximity:
+      // a rotated box's AABB reaches well past the box
       const sleeper = (y) => !y.static && !y.awake && y.sleepTag !== undefined;
       for (const [i, j] of pairs) { const A = bodies[i], B = bodies[j];
         const awake = (x) => !x.static && x.awake;
@@ -365,8 +356,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
       const n = m.n, t1 = Math.abs(n[0]) < 0.57735 ? scl(crs(n, [1, 0, 0]), 1 / len(crs(n, [1, 0, 0]))) : scl(crs(n, [0, 1, 0]), 1 / len(crs(n, [0, 1, 0]))), t2 = crs(n, t1);
       const mu = combineFriction(A, B), points = [];
       for (const c of m.pts) {
-        // each body's anchor on ITS OWN surface (midpoint ∓ n·s/2): with a wide speculative gap a shared midpoint sits outside
-        // both bodies, and friction at it torques a ball with a lever longer than its radius (tunnel-1000 case 16)
+        // each body's anchor on ITS OWN surface (midpoint ∓ n·s/2): a shared midpoint in a wide speculative gap sits outside
+        // both, and friction there torques a ball with a lever longer than its radius (tunnel-1000 case 16)
         const rA = sub(sub(c.p, scl(n, 0.5 * c.s)), A.p), rB = sub(add(c.p, scl(n, 0.5 * c.s)), B.p);
         const kOf = (d) => { const ra = crs(rA, d), rb = crs(rB, d); return A.invMass + B.invMass + dot(ra, invI(A, ra)) + dot(rb, invI(B, rb)); };
         const key = `${A.uid}:${B.uid}:${c.id}`, local = qrot(qconj(A.q), rA);
@@ -377,8 +368,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
         }
         points.push({ key, rA, rB, local, s0: c.s, base: c.s - dot(sub(rB, rA), n), nm: 1 / kOf(n), ln: prev ?? 0 });
       }
-      // CENTRAL friction (Box3D contact_solver.c prepare): one coupled 2D tangent impulse at the manifold's weighted
-      // centre, plus twist friction about the normal; points well beyond the speculative distance weigh less
+      // CENTRAL friction (Box3D contact_solver.c prepare): one coupled 2D tangent impulse at the manifold's weighted centre,
+      // plus twist friction about the normal; points well beyond the speculative distance weigh less
       let cA = [0, 0, 0], cB = [0, 0, 0], wsum = 0;
       for (const p of points) { const wgt = Math.max(MIN_FRICTION_WEIGHT, Math.min(1, 2 - p.s0 / SPECULATIVE)); cA = add(cA, scl(p.rA, wgt)); cB = add(cB, scl(p.rB, wgt)); wsum += wgt; }
       cA = scl(cA, 1 / wsum); cB = scl(cB, 1 / wsum);
@@ -387,8 +378,8 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
       const k11 = mm + dot(rtA1, invI(A, rtA1)) + dot(rtB1, invI(B, rtB1)), k22 = mm + dot(rtA2, invI(A, rtA2)) + dot(rtB2, invI(B, rtB2));
       const k12 = dot(rtA1, invI(A, rtA2)) + dot(rtB1, invI(B, rtB2)), det = k11 * k22 - k12 * k12, id = det !== 0 ? 1 / det : 0;
       const tw = dot(n, add(invI(A, n), invI(B, n))), mkey = `${A.uid}:${B.uid}`, pm = prevManifold.get(mkey);
-      // rolling resistance (Box3D contact.c:689, contact_solver.c:609): max of the two materials × the rounded radius (a
-      // box's is 0), an angular impulse on the relative spin bounded by rr × the normal impulse
+      // rolling resistance (Box3D contact.c:689, contact_solver.c:609): the max of the two materials × the rounded radius (a
+      // box's is 0), an angular impulse on relative spin bounded by rr × the normal impulse
       const rr = Math.max(A.rolling, B.rolling) * Math.max(A.shape === "sphere" ? A.radius : 0, B.shape === "sphere" ? B.radius : 0);
       manifolds.push({ A, B, n, t1, t2, mu, points, soft: A.static || B.static ? softStatic : soft, key: mkey,
         cA, cB, tm: [k22 * id, -k12 * id, k11 * id], twm: tw > 0 ? 1 / tw : 0,
@@ -397,7 +388,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
         pA0: A.p.slice(), qA0: A.q.slice(), pB0: B.p.slice(), qB0: B.q.slice() });
     };
     for (const [i, j] of pairs) {
-      if (jointed.has(`${i}:${j}`)) continue;   // course rule: jointed bodies don't collide (Box3D default)
+      if (jointed.has(`${i}:${j}`)) continue;   // jointed bodies don't collide (Box3D default)
       const m = collide(bodies[i], bodies[j], SPECULATIVE);
       if (m) build(bodies[i], bodies[j], m);
     }
@@ -429,7 +420,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     // per body: position and rotation (as a matrix) at step start; the delta rotation is rebuilt once per substep
     for (const b of bodies) { b.p0 = b.p.slice(); b.q0c = qconj(b.q); b.dR = [1, 0, 0, 0, 1, 0, 0, 0, 1]; }
     const sepOf = (m, p) => {   // separation from body motion since the step began (no re-collision per substep)
-      // a sphere's support point toward n doesn't turn with its spin, so its contact anchor doesn't ride dR (joint anchors do)
+      // a sphere's support point toward n doesn't turn with its spin, so its contact anchor doesn't follow dR (joint anchors do)
       const A = m.A, B = m.B, ra = p.rA, rb = p.rB, n = m.n, Ra = A.shape === "sphere" ? I3 : A.dR, Rb = B.shape === "sphere" ? I3 : B.dR;
       const a0 = Ra[0] * ra[0] + Ra[1] * ra[1] + Ra[2] * ra[2], a1 = Ra[3] * ra[0] + Ra[4] * ra[1] + Ra[5] * ra[2], a2 = Ra[6] * ra[0] + Ra[7] * ra[1] + Ra[8] * ra[2];
       const b0 = Rb[0] * rb[0] + Rb[1] * rb[1] + Rb[2] * rb[2], b1 = Rb[3] * rb[0] + Rb[4] * rb[1] + Rb[5] * rb[2], b2 = Rb[6] * rb[0] + Rb[7] * rb[1] + Rb[8] * rb[2];
@@ -437,7 +428,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
         + (B.p[2] - B.p0[2] + b2 - A.p[2] + A.p0[2] - a2) * n[2] + p.base;
     };
 
-    // ---- joints (Box3D spherical/revolute/weld pattern: soft in the biased pass, rigid in relax; anchors ride dR) ----
+    // ---- joints (Box3D spherical/revolute/weld pattern: soft in the biased pass, rigid in relax; anchors follow dR) ----
     const jsoft = softness(Math.min(JOINT_HERTZ, 0.25 * substeps / dt), JOINT_ZETA, h);
     const jact = joints.filter((j) => j.alive && (live(bodyOf(j.a)) || live(bodyOf(j.b))));
     for (const j of jact) { const A = bodyOf(j.a), B = bodyOf(j.b); j.rA0 = qrot(A.q, j.lA); j.rB0 = qrot(B.q, j.lB); }
@@ -445,7 +436,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     const linImp = (A, B, P, rA, rB) => { const l = Math.sqrt(dot(P, P)); if (l > 0) { const u = scl(P, 1 / l); imp(A, -1, l, u, rA); imp(B, 1, l, u, rB); } };
     const warmJoint = (j) => { const A = bodyOf(j.a), B = bodyOf(j.b);
       // a hinge's angular impulse lives in the plane ⟂ its axis; as A turns, drop what now lies ALONG the axis, or the warm
-      // start drives the free DOF like a motor (review 10-09 #1; Box3D stores 2 scalars on rebuilt axes, revolute_joint.c:248)
+      // start drives the free DOF like a motor (Box3D stores 2 scalars on rebuilt axes, revolute_joint.c:248)
       if (j.type === "hinge") { const aA = qrot(A.q, j.axA); j.ang = sub(j.ang, scl(aA, dot(j.ang, aA))); }
       linImp(A, B, j.lin, mv(A.dR, j.rA0), mv(B.dR, j.rB0)); angImp(A, B, j.ang); };
     function solveJoint(j, useBias) {
@@ -521,12 +512,9 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
           imp(m.A, -1, d1, m.t1, m.cA); imp(m.B, 1, d1, m.t1, m.cB); imp(m.A, -1, d2, m.t2, m.cA); imp(m.B, 1, d2, m.t2, m.cB); }
       }
     }
-    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c:556–611, distance.c:1709). Review
-    // round 2 (10-09): (1) sweep against STATIC bodies only (a dynamic one frozen at its end pose dragged formation flyers);
-    // (2) never defer to the solver for a fast body: one speculative edge point can't stop a box at 20 m/s (it pivots on
-    // the point and passes through), and collide() could even return nothing at 1.4 cm; skip only real overlap; (3) a sphere's target lets it sink one slop, so sliding over flush seams never "hits";
-    // a hit at t = 0 is ignored (Box3D's 0 < fraction); (4) rotation is swept too: q interpolated, and the advancement
-    // bound counts the arc a corner can travel; (5) the time lost to the clamp gives back its gravity (timeLoss·g).
+    // ---- CCD: time of impact by conservative advancement, on Box3D's rules (solver.c, distance.c): static and sleeping bodies only;
+    // never defer a fast body to the solver (a speculative point can't stop a box at 20 m/s); t = 0 hits ignored; rotation
+    // swept too; the time lost to the clamp gives back its gravity (timeLoss·g).
     for (const b of bodies) {
       if (!b.ccd || !live(b)) continue;
       const D = sub(b.p, b.p0), travel = len(D), qEnd = b.q, q0 = qconj(b.q0c);
@@ -539,7 +527,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
       const lo = [Math.min(b.p0[0], end[0]) - r, Math.min(b.p0[1], end[1]) - r, Math.min(b.p0[2], end[2]) - r], hi = [Math.max(b.p0[0], end[0]) + r, Math.max(b.p0[1], end[1]) + r, Math.max(b.p0[2], end[2]) + r];
       let tMin = 1;
       for (const o of bodies) {
-        if (o === b || (!o.static && live(o))) continue;   // statics and SLEEPING bodies (they don't move this step): a fast body must not pass through a resting one
+        if (o === b || (!o.static && live(o))) continue;   // statics and SLEEPING bodies: a fast body must not pass through a resting one
         const ob = aabb(o); if (ob[0] > hi[0] || ob[3] < lo[0] || ob[1] > hi[1] || ob[4] < lo[1] || ob[2] > hi[2] || ob[5] < lo[2]) continue;
         pose(0); if (distLB(b, o) <= 0) continue;   // already overlapping: not a tunnel
         let t = 0, hit = false;
@@ -553,7 +541,7 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
       if (tMin < 1) { pose(tMin); const lost = (1 - tMin) * dt; b.v = [b.v[0] - gravity[0] * lost, b.v[1] - gravity[1] * lost, b.v[2] - gravity[2] * lost]; }
       else { b.p = end; b.q = qEnd; }
     }
-    // contacts between bodies that are asleep (or static) keep their impulses while asleep, for warm starting on wake
+    // contacts between sleeping (or static) bodies keep their impulses, for warm starting on wake
     const byUid = new Map(bodies.map((b) => [b.uid, b])); if (GROUND) byUid.set(GROUND.uid, GROUND);
     const resting = (key) => { const [i, j] = key.split(":").map(Number), A = byUid.get(i), B = byUid.get(j); return !!A && !!B && !live(A) && !live(B); };
     const seen = new Set(manifolds.map((m) => m.key)), keep = (M) => { const o = new Map(); for (const [k, v] of M) if (!seen.has(k.split(":").slice(0, 2).join(":")) && resting(k)) o.set(k, v); return o; };

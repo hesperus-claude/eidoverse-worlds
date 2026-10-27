@@ -1,10 +1,6 @@
-// shared/structure_edit.js — the editor's pure half, tested headless.
-//
+// shared/structure_edit.js, the editor's pure half, headless: every operation is data in, data out, so undo keeps the
+// previous value and a preview and a commit are the same function.
 //   bun tools/structure-edit-test.ts
-//
-// Every operation is data in, data out. That is what makes undo "keep the
-// previous value", makes a preview and a commit literally the same function,
-// and makes the whole editor testable with no browser and no pointer.
 
 import {
   emptyStructure, pickEdge, pickEdges, pickCell, addWall, removeWall,
@@ -40,7 +36,7 @@ const G = { tile: 1 };
   check("...nearest first", pickEdges(G, 0.3, 0.3).every((e, i, a) => i === 0 || e.d >= a[i - 1].d));
 }
 
-// 2. nothing is mutated — the whole undo story rests on this
+// 2. nothing is mutated: the whole undo story rests on this
 {
   const a = emptyStructure();
   const before = JSON.stringify(a);
@@ -50,14 +46,14 @@ const G = { tile: 1 };
   check("undo is just the previous value", JSON.stringify(a) === before);
 }
 
-// 3. room drag — the primary tool
+// 3. room drag, the primary tool
 {
   const d = drawRoom(emptyStructure(), { x: 0, z: 0 }, { x: 2, z: 1 });
   check("floor fills the span", tiles(d).size === 6, `${tiles(d).size}`);
   check("walls run right round it", walls(d).size === 10, `${walls(d).size}`);
   check("it is ONE room", planStructure(d).levels[0].rooms.length === 1);
 
-  // THE POINT OF EDGES: a second room against the first shares their wall
+  // a second room against the first shares their wall
   const two = drawRoom(d, { x: 3, z: 0 }, { x: 4, z: 1 });
   check("an adjoining room SHARES the common wall", walls(two).size === 16,
     `${walls(two).size} (18 would mean two walls in one place)`);
@@ -102,7 +98,7 @@ const G = { tile: 1 };
     walls(dg).size === 1 && walls(dg).has(edgeKey(3, 0, 0)));
 }
 
-// 5. erase — a wall survives if it is still someone else's
+// 5. erase: a wall survives if it is still someone else's
 {
   const two = drawRoom(drawRoom(emptyStructure(), { x: 0, z: 0 }, { x: 1, z: 1 }),
     { x: 2, z: 0 }, { x: 3, z: 1 });
@@ -140,8 +136,7 @@ const G = { tile: 1 };
 {
   let d = emptyStructure();
   d = drawRoom(d, { x: 0, z: 0 }, { x: 3, z: 2 });
-  // the divider must span the FULL depth or the space simply flows round it —
-  // which is correct, and was my fixture being wrong rather than the planner
+  // the divider must span the FULL depth, or the space correctly flows round it
   for (let z = 0; z <= 2; z++) d = addWall(d, { axis: 1, x: 2, z });
   d = setAperture(d, { axis: 1, x: 2, z: 1 }, "door");
   d = addWall(d, { axis: 2, x: 3, z: 0 });
@@ -159,9 +154,7 @@ const G = { tile: 1 };
 
 // 8. picking a wall to put a door in
 //
-// Geometric nearness is the wrong question here. The diagonals cross a cell's
-// middle, so anywhere near the centre the nearest edge is a diagonal that
-// usually has no wall — and a door click silently did nothing.
+// not geometric nearness: the diagonals cross a cell's middle, so near the centre the nearest edge is a wall-less diagonal
 {
   const d = drawRoom(emptyStructure(), { x: 0, z: 0 }, { x: 2, z: 1 });
   const mid = pickEdge(d, 1.5, 0.5)!;

@@ -3,22 +3,16 @@
 // headset. Real client + IWER. (Window rAF being parked in a session is not a case here: xr_frame_clock.js routes it
 // to the session's clock on a real runtime, and IWER drives its session ON window rAF.) Empty world (no sky).
 //   bun tools/framebudget-probe.mjs   (with SKIP_OPT_SWEEP=1 its server starts no asset-optimizer jobs)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
 const { check, done } = checker();
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
-await pg.addInitScript(IWER);
-await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-  window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } });
+await iwerInit(pg);
 const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
 const logs = []; pg.on('console', (m) => logs.push(m.text()));
 try {
   await pg.goto(`${world.origin}/?world=staging&name=fbprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 90000 });
+  await visorShown(pg);
   // headless draws on the CPU: a few fps, and boot takes a while — wait for it rather than assume desktop speed
   await pg.waitForFunction(() => !!globalThis.__bootMarks, null, { timeout: 120000, polling: 500 });   // loadwork's 'booted' mirror — present on both sides of an A/B
   await pg.waitForTimeout(2500);
@@ -38,8 +32,7 @@ try {
   check('boot loading ran through the budget (warm or load lanes granted)', (d.b.lanes.warm?.grants ?? 0) + (d.b.lanes.load?.grants ?? 0) > 0, JSON.stringify(d.b.lanes));
 
   // XR
-  await pg.evaluate(() => document.querySelector('#xrbtn').click());
-  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout: 30000, polling: 250 });
+  await enterVR(pg);
   await pg.waitForTimeout(1000);
   const x = await pg.evaluate(async () => {
     const fb = await import('./lib/framebudget.js');

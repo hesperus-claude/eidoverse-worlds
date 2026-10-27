@@ -1,4 +1,4 @@
-// server/repairfiles.ts — the shape repair's rollback (reviewer item 9, 2026-10-18): a world's log as it was before a repair,
+// server/repairfiles.ts — the shape repair's rollback: a world's log as it was before a repair,
 // kept beside the world, and put back byte-identical.
 //   backupBeforeRepair(dir)   copies <dir>/world.jsonl to <dir>/repair-backups/<stamp>/world.jsonl with manifest.json
 //                             {stamp, before: {size, sha256}}; returns the backup dir. The caller records `after` once the

@@ -25,6 +25,7 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -69,7 +70,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["evalLookAt: no heading straight above", "shared/lookat.js", "if (h < 1e-6) {", "if (false) {", ["L6"]],
   ["the editor writes look-at", "shared/editschema.js", "LookAt: ['look-at', { target: '@viewer' }]", "LookAt: ['look', {}]", ["L5"]],
   ["look says what it says", "shared/protocol/authority/blueprints.js", "    ...sayOf(st, e.c) };", " };", ["A1", "P5", "W4"]],
-  ["credits count change entries, not acts (a refused act changed nothing)", "shared/credits.js", "const ops = caused.get(e.seq); if (!ops) continue;", "const ops = caused.get(e.seq) ?? (e.body?.request?.id === id ? [{ verb: e.verb, id, comp: e.body.request.component }] : null); if (!ops) continue;", ["C2"]],
+  ["credits count change entries, not acts (a refused act changed nothing)", "shared/credits.js", "const ops = caused.get(e.seq); if (!ops) continue;", "const ops = caused.get(e.seq) ?? (e.body?.refused ? [{ verb: e.verb, id, comp: \"label\" }] : null); if (!ops) continue;", ["C2"]],
   ["credits: play isn't authorship", "shared/credits.js", "if (!BUILDING.has(verb)) continue;", "", ["C3"]],
   ["credits: moves group into sessions", "shared/credits.js", "if (last && last.by === by && last.what === what && ts - last.at < SESSION_MS) { last.at = ts; continue; }", "", ["C1"]],
   ["CONTROL (no-op: must stay green)", "shared/says.js", "// says — what", "//  says — what", []],
@@ -485,13 +486,11 @@ const cases: Case[] = [
 ];
 
 // ---------------- run ----------------
-let pass = 0, fail = 0;
+const SUITE = suite("batch2-check", { cap: 700 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false;
   try { o = await c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 700)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[batch2-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

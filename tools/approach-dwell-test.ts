@@ -1,24 +1,12 @@
-// approach-dwell-test — an approach means they STOPPED, and a departure means
-// they had arrived first.
-//
-// The defect this pins: `declaration.ts` has always promised that
-// eidoverse:approach means "someone walked up to your body AND STOPPED within
-// arm's reach", while the implementation was a bare edge-trigger on crossing
-// APPROACH_RADIUS. The three gates around it (re-arm past REARM_RADIUS, the
-// per-identity refractory, #39's baseline seeding) all suppress REPEATS — none
-// of them could tell a knock from a body crossing your bubble on its way to
-// the door. Antra, 2026-08-25: "likely debounced so that passing through does
-// not trigger it."
-//
-// The complement, asked for in the same breath and never implemented: the
-// outward crossing re-armed in silence, so nothing ever closed the bracket.
-//
-// Everything here runs on an INJECTED clock (notePose's third argument). Dwell
-// is a claim about time; a suite that cannot move the clock either sleeps —
-// slow, and racy against the refractory — or quietly asserts nothing.
-//
+// approach-dwell-test: an approach means they STOPPED, and a departure means they had arrived first.
+// declaration.ts promises eidoverse:approach means "someone walked up AND STOPPED within arm's reach"; the re-arm,
+// refractory and #39 baseline gates only suppress REPEATS, none tells a knock from a body crossing on its way past. The
+// outward crossing must close the bracket.
+// Runs on an INJECTED clock (notePose's third argument): a suite that can't move the clock sleeps (slow, racy against
+// the refractory) or asserts nothing.
 // Run: bun tools/approach-dwell-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { APPROACH_DWELL_MS, APPROACH_MAX_WAIT_MS, APPROACH_RADIUS, REARM_RADIUS } from "../mcpl/denoise.ts";
 
@@ -28,17 +16,14 @@ function check(name: string, ok: boolean, detail = "") {
   else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
 }
 
-/** A body at (x,z). `clip` and `speed` are what the SENDER claims about
- *  itself — deliberately mismatched with reality in one test below. */
+/** A body at (x,z); `clip` and `speed` are the SENDER's claims, deliberately mismatched with reality below. */
 const pose = (x: number, z: number, clip = "walk", speed = 0) =>
   ({ p: [x, 0, z], yaw: 0, speed, clip });
 
 function rig() {
-  const ag = new WorldAgent({ name: "dwelltest" }) as any;
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "dwelltest" }) as any;
   ag.pos = { x: 0, y: 0, z: 0 };
-  // A real epoch, not 0: `cooled` measures against a last-approach time that
-  // defaults to 0, so a clock starting near zero reads as "approached a moment
-  // ago" and refuses the very first knock.
+  // a real epoch, not 0: `cooled` compares against a last-approach default of 0, so a near-zero clock refuses the first knock
   const T0 = Date.now();
   const seen: { kind: string; who: string; text?: string }[] = [];
   ag.onPing = (p: any) => seen.push({ kind: p.kind, who: p.who, ...(p.text != null ? { text: p.text } : {}) });
@@ -56,18 +41,14 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 {
   const { at, count } = rig();
-  // A straight walk past the agent at 1.4 m/s (strolling), sampled at 5Hz:
-  // 0.28m per sample. The line runs along x at z = 1.5, so the closest
-  // approach is 1.5m — well inside arm's reach — and the body is genuinely
-  // within APPROACH_RADIUS for ~2.9s of the walk.
+  // a 1.4 m/s stroll sampled at 5Hz (0.28m/sample) along z = 1.5: closest approach 1.5m, ~2.9s inside APPROACH_RADIUS
   let t = 0, inside = 0;
   for (let x = -6; x <= 6.0001; x += 0.28) {
     at(t, x, 1.5);
     if (DIST(x, 1.5) < APPROACH_RADIUS) inside++;
     t += 200;
   }
-  // VACUITY GUARD: if the path never actually entered the radius, "no ping"
-  // would be true for the wrong reason and this whole test would be theatre.
+  // VACUITY GUARD: if the path never entered the radius, "no ping" is true for the wrong reason
   check("(guard) the pass-through really did enter arm's reach", inside >= 10, `${inside} samples inside`);
   check("walking straight past you is NOT an approach", count("approach") === 0,
     `${count("approach")} pings`);
@@ -78,11 +59,10 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 {
   const { at, count } = rig();
-  // Identical approach leg — then they stop at 1.5m instead of walking on.
+  // the identical approach leg, then they stop at 1.5m
   let t = 0;
   for (let x = -6; x <= -1.5; x += 0.28) { at(t, x, 1.5); t += 200; }
   check("(control) still nothing while they are still moving", count("approach") === 0);
-  // parked, same spot, sampled across the dwell window
   for (let i = 0; i <= APPROACH_DWELL_MS + 600; i += 200) at(t + i, -1.5, 1.5);
   check("walking up and STOPPING is an approach", count("approach") === 1, `${count("approach")} pings`);
   check("...and it knocks exactly once while they stand there", count("approach") === 1);
@@ -93,7 +73,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 {
   const { at, count } = rig();
   at(0, 10, 0);
-  at(100, 1.2, 0, "walk", 9.9);   // crosses in, LOUDLY claiming to be sprinting
+  at(100, 1.2, 0, "walk", 9.9);  // crosses in, LOUDLY claiming to be sprinting
   for (let i = 0; i <= APPROACH_DWELL_MS + 400; i += 200) at(100 + i, 1.2, 0, "walk", 9.9);
   check("a body whose own pose says 'walking at 9.9 m/s' still counts as still, because it did not move",
     count("approach") === 1, `${count("approach")} pings`);
@@ -102,7 +82,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 {
   const { at, count } = rig();
   at(0, 10, 0);
-  // Crosses in and keeps moving fast, while claiming clip "idle" at speed 0.
+  // crosses in and keeps moving fast, while claiming clip "idle" at speed 0
   let t = 100, x = 2.4;
   for (; x > -2.4; x -= 0.3) { at(t, x, 0.4, "idle", 0); t += 200; }
   check("a body claiming 'idle, speed 0' while crossing at 1.5 m/s is NOT an approach",
@@ -115,7 +95,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
   const { at, count } = rig();
   at(0, 10, 0);
   at(100, 2.0, 0);   // crossing
-  // Circling inside arm's reach, never still, for longer than the max wait.
+  // circling inside arm's reach, never still, for longer than the max wait
   let t = 300;
   for (let i = 0; t <= 100 + APPROACH_MAX_WAIT_MS + 1000; i++) {
     const a = i * 0.6;
@@ -167,12 +147,11 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 {
   const { at, count } = rig();
-  // First: a pass-through, which must be swallowed.
+  // first a pass-through, which must be swallowed
   let t = 0;
   for (let x = -6; x <= 6.0001; x += 0.28) { at(t, x, 1.5); t += 200; }
   check("(setup) the pass-through was swallowed", count("approach") === 0);
-  // Then they go properly away and come back for real, well past the
-  // refractory. The cancelled pending must not have left the gate stuck.
+  // then a real return well past the refractory: the cancelled pending must not have left the gate stuck
   at(700_000, 12, 0);
   at(700_100, 1.4, 0);
   for (let i = 0; i <= APPROACH_DWELL_MS + 400; i += 200) at(700_100 + i, 1.4, 0);
@@ -186,7 +165,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
   const { at, count, seen } = rig();
   at(0, 10, 0, "walk", 0, "digi");
   at(0, 10, 0, "walk", 0, "rabscuttle");
-  // digi walks up and stays; rabscuttle merely passes through.
+  // digi walks up and stays; rabscuttle merely passes through
   at(100, 1.5, 0, "walk", 0, "digi");
   let t = 100;
   for (let x = -6; x <= 6.0001; x += 0.28) { at(t, x, 1.5, "walk", 0, "rabscuttle"); t += 200; }
@@ -198,13 +177,8 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
 
 // ---------------------------------------------------------------- who moved? the wire must not author OUR walk as THEIRS
 
-// Antra's review vector (PR #145): after digi earns an approach at (1.5,0),
-// the AGENT teleports to (10,0) and digi's next sample is the same unmoved
-// pose. The bracket must close — the relation really did end — but the old
-// wire said "* digi walked away" about a body that never took a step. The
-// depart ping now carries its own text: "walked away" only when the departing
-// body is beyond the re-arm edge measured from where WE stood when the
-// approach fired; otherwise the actor-neutral "is no longer nearby".
+// a teleported AGENT must still close the bracket, but "walked away" only if the body is beyond the re-arm edge from
+// where we stood at approach; otherwise "is no longer nearby" (PR #145)
 
 {
   const { ag, at, count, seen } = rig();
@@ -229,9 +203,7 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
   for (let i = 0; i <= APPROACH_DWELL_MS + 400; i += 200) at(100 + i, 1.5, 0);
   check("(setup) approached", count("approach") === 1);
 
-  // Both drift apart: we to (-4,0), digi to (4,0). 8m apart — past the re-arm
-  // edge — but digi is only 4m from where we stood at the approach, so no
-  // single party "walked away"; the separation is shared.
+  // both drift apart 8m (past the re-arm edge), but digi is only 4m from where we stood: no single party "walked away"
   ag.pos = { x: -4, y: 0, z: 0 };
   at(20_000, 4, 0);
   check("a separation both parties caused is worded neutrally",

@@ -1,16 +1,13 @@
-// server/durable.ts — the disk practice a sequencer owes its readers (platforms review 10-06, #5):
-//  - a line is on disk (fsync) BEFORE anyone is told about it: otherwise a crash after a broadcast loses the tail, the
-//    restarted server re-issues the same seq with a different head, and every client holding (seq, head) holds "proof"
-//    the authority equivocated;
-//  - a torn last line (a crash mid-write) is cut off at open, not kept as a permanent malformed entry;
-//  - a blob is written to a temp file and renamed, and one whose bytes don't match its name is rewritten, never kept.
+// The disk practice a sequencer owes its readers:
+//  - a line is fsynced BEFORE anyone is told of it, or a crash re-issues a seq with a new head: "proof" of equivocation;
+//  - a torn last line is cut off at open, not kept as a permanent malformed entry;
+//  - a blob goes to a temp file and is renamed; one whose bytes don't match its name is rewritten, never kept.
 import fs from "node:fs";
 import path from "node:path";
 import { sha256 } from "../shared/protocol/hash.js";
 
-/** The log's bytes, with a torn tail (no final newline) cut off the file first. `cut: false` is a reader's: it leaves the
- *  file alone and only leaves the tail out, since a line without its newline may be one a writer is appending now (review
- *  of #260, server I127: a reader that cut it made the writer's line land broken). Only the log's writer cuts. */
+/** Torn tail (no final newline) cut off first. Only the writer cuts: `cut: false` (a reader) just leaves the tail out,
+ *  since it may be a line being appended now. */
 export function readLogBytes(logPath: string, { cut = true } = {}): Buffer {
   if (!fs.existsSync(logPath)) return Buffer.alloc(0);
   const b = fs.readFileSync(logPath);
@@ -22,8 +19,7 @@ export function readLogBytes(logPath: string, { cut = true } = {}): Buffer {
   return b.subarray(0, keep);
 }
 
-/** Write all of `buf` to `fd`: writeSync may take fewer bytes than it was given (a full disk, a signal, a pipe), and a short
- *  write treated as whole is a torn line in memory. It loops until every byte is taken; a write that takes nothing throws. */
+/** writeSync may take fewer bytes (full disk, signal, pipe): loops until all are taken; a zero-byte write throws. */
 export function writeAll(fd: number, buf: Uint8Array) {
   let off = 0;
   while (off < buf.length) {
@@ -32,25 +28,23 @@ export function writeAll(fd: number, buf: Uint8Array) {
     off += n;
   }
 }
-/** Append one line and fsync before returning: the caller broadcasts only after this. Any throw from here leaves the line's
- *  disk state unknown (open, write, sync and close are not one step): the authority wedges the file and calls it ambiguous. */
+/** fsyncs before returning: broadcast only after this. A throw leaves the line's disk state unknown: the authority
+ *  wedges the file as ambiguous. */
 export function appendDurable(logPath: string, line: string) {
   mkdirDurable(path.dirname(logPath));
   const fresh = !fs.existsSync(logPath);
   const fd = fs.openSync(logPath, "a");
   try { writeAll(fd, Buffer.from(line + "\n", "utf8")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is (review of #260, server I17)
+  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is
 }
-/** fsync a directory, so a file just created or renamed into it survives a crash (POSIX: the entry lives in the directory,
- *  not the file). Windows can't open a directory for this, and NTFS journals names itself: skipped there. */
+/** So a new or renamed entry survives a crash (POSIX names live in the directory). Skipped on Windows (NTFS journals names). */
 export function syncDir(dir: string) {
   if (process.platform === "win32") return;
   const fd = fs.openSync(dir, "r");
   try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
 }
 
-/** fsync every file and directory under `dir`, deepest first, `dir` included: a tree copied with cpSync (a fork's blobs)
- *  is written but not durable until each file's bytes and each directory's entries are synced. */
+/** Deepest first, `dir` included: a cpSync'd tree (a fork's blobs) isn't durable until every file and entry is synced. */
 export function syncTree(dir: string) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, ent.name);
@@ -61,10 +55,7 @@ export function syncTree(dir: string) {
   syncDir(dir);
 }
 
-/** Make `dir` and any missing parents, durably: a directory mkdir just made is named by an entry in its parent, which a
- *  crash can lose like any other new name, taking the directory and what was written in it. So each parent that gained an
- *  entry is synced, from `dir`'s own parent up to the parent of the first directory made. `dir` itself is the caller's to
- *  sync once its file is in it. */
+/** Each parent that gained an entry is synced; `dir` itself is the caller's to sync once its file is in it. */
 export function mkdirDurable(dir: string) {
   const first = fs.mkdirSync(dir, { recursive: true });
   if (first === undefined) return;
@@ -72,17 +63,16 @@ export function mkdirDurable(dir: string) {
   for (let d = path.dirname(path.resolve(dir)); ; d = path.dirname(d)) { syncDir(d); if (d === top || d === path.dirname(d)) break; }
 }
 
-/** Replace `file` with `data`, atomically and durably: written whole to a temp file (`mode`, set before the data goes in)
- *  and synced, renamed over `file`, and the directory that holds the new name synced. */
+/** Temp file (`mode` set before the data goes in) synced, renamed over `file`, then its directory synced. */
 export function replaceDurable(file: string, data: string, mode = 0o644) {
   mkdirDurable(path.dirname(file));
   const tmp = `${file}.${process.pid}.tmp`;
   const fd = fs.openSync(tmp, "w", mode);
   try { fs.fchmodSync(fd, mode); writeAll(fd, Buffer.from(data, "utf8")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
   fs.renameSync(tmp, file);
-  syncDir(path.dirname(file));   // the new name, in its directory
+  syncDir(path.dirname(file));
 }
-/** Store blob text `s` under its hash `h` at `file`: atomically, and replacing a copy that doesn't verify. */
+/** Atomic; replaces a copy that doesn't verify against `h`. */
 export function putBlobFile(file: string, s: string, h: string) {
   if (fs.existsSync(file)) { try { if (`sha256:${sha256(fs.readFileSync(file, "utf8"))}` === h) return; } catch {} }
   mkdirDurable(path.dirname(file));

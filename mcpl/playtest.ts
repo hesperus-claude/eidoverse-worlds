@@ -1,12 +1,7 @@
 /**
- * Playtest: an agent embodied in the commons through the REAL agent-framework
- * WebSocket client — the exact transport + handshake a connectome host uses
- * after `mcpl_deploy {url: "ws://...:8941?token=..."}`.
- *
- * Exercises: token auth, channels/register (world channel), world chat fanned
- * out as channels/incoming (mention-tagged), channels/publish = speaking
- * in-world, and embodiment tools over the same connection.
- *
+ * Playtest: an agent in the commons through the REAL agent-framework WebSocket client, the transport + handshake
+ * a connectome host uses after `mcpl_deploy {url: "ws://...:8941?token=..."}`. Exercises token auth, the world
+ * channel, mention-tagged channels/incoming, channels/publish as speech, and embodiment tools.
  * Prereqs: world sequencer on :8940, net-server on :8941. Run: bun playtest.ts
  */
 
@@ -20,11 +15,8 @@ const HOST_CAPS: McplHostCapabilities = {
   featureSets: true,
 };
 
-/** What this harness-host grants the door (§5.4 allowlist). The framework
- *  computes this from the masked advertisement in registerMcplServerFeatures;
- *  a raw-connection harness must do it by hand — a 0.5 host that never sends
- *  the §5.3 initial policy Request gets every channels/incoming refused at
- *  ITS OWN admission gate, and a 0.5 door holds fan-out until policy lands. */
+/** Hand-sent grant (§5.4; the framework derives it in registerMcplServerFeatures). Without the §5.3 initial policy a
+ *  0.5 door holds fan-out and the host's own gate refuses channels/incoming. */
 const GRANT = ["tools", "channels.register", "channels.lifecycle", "channels.publish", "channels.incoming"];
 
 let failures = 0;
@@ -52,8 +44,7 @@ async function connectHost(url: string, token: string) {
     r.respond({ results: params.messages.map((m) => ({ messageId: m.messageId, accepted: true })) });
   });
   conn.ready();
-  // §5.3: the initial policy Request, then activate the grant host-side.
-  // (Test harness: a duck-typed grant is enough — admission only calls .has.)
+  // §5.3 initial policy, then activate the grant host-side (admission only calls .has, so a duck-typed grant does)
   conn.establishGrant({ has: (p: string) => GRANT.includes(p) } as never);
   await conn.sendFeatureSetsUpdateRequest({ effectiveCapabilities: GRANT } as never);
   return { conn, feed, registered };
@@ -99,7 +90,7 @@ const approach = feed.find((f) => f.text.includes("walked up to you"));
 check("walk-up delivered with metadata.mentioned", approach?.mentioned === true, JSON.stringify(approach));
 
 console.log("\n━━ reach → verdict for the reacher, events for the touched ━━");
-// the bystander stands ~0.6m away after the walk-up; a shoulder is in range
+// ~0.6m apart after the walk-up: a shoulder is in range
 const bystanderPings: any[] = [];
 bystander.onPing = (p) => bystanderPings.push(p);
 const pinged = async (list: any[], kind: string, ms = 4000) => {
@@ -110,8 +101,7 @@ const pinged = async (list: any[], kind: string, ms = 4000) => {
   }
   return false;
 };
-// every body starts at Normal, where everyone's touch is ask: open touch on both sides first, as two people who had
-// agreed to it would, so the reaches below are shown rather than refused
+// everyone starts at Normal (touch is ask): open touch on both sides first so the reaches are shown, not refused
 const OPEN_TOUCH = { set: { class: "touch", tier: "everyone", mode: "allow" } };
 check("the bystander opens its touch", (await bystander.request("consent", OPEN_TOUCH))?.ok === true);
 await conn.sendToolsCall("act", { verb: "consent", args: OPEN_TOUCH });
@@ -124,9 +114,7 @@ check("the touched party hears the reach", await pinged(bystanderPings, "reach")
 const reachPing = bystanderPings.find((p) => p.kind === "reach");
 check("...with the point and limb in words",
   !!reachPing?.text?.includes("your shoulder_l") && !!reachPing.text.includes("right hand"), reachPing?.text);
-// the verdict said how to fix a short reach — close the distance and the
-// STANDING descriptor must re-attest by itself (reachTick), landing a touch
-// knock at the far end with no further tool call
+// close the distance and the STANDING descriptor re-attests by itself (reachTick): a knock with no further call
 if (!reachText.includes("rests on")) {
   bystander.pos.x = 2.3; bystander.pos.z = -2.0;   // step within arm's reach
 }
@@ -134,7 +122,7 @@ check("closing the distance turns the reach into a touch, hands-free",
   await pinged(bystanderPings, "touch", 6000), JSON.stringify(bystanderPings));
 const touchPing = bystanderPings.find((p) => p.kind === "touch");
 check("the touch names the point", !!touchPing?.text?.includes("your shoulder_l"), touchPing?.text);
-// the descriptor is presence-plane state: a LATE JOINER's snapshot carries it
+// presence-plane state: a LATE JOINER's snapshot carries it
 {
   const newcomer = new WorldAgent({ name: "newcomer" });
   await newcomer.connect();
@@ -144,7 +132,7 @@ check("the touch names the point", !!touchPing?.text?.includes("your shoulder_l"
   check("...and seeds as baseline, not as a live knock", !newcomer.pings.some((p: any) => p.kind === "reach"));
   newcomer.close();
 }
-// and the other direction: an agent reaches at the DOOR's body → tagged push
+// the other direction: an agent reaches at the DOOR's body -> tagged push
 const back = await bystander.reach("leftHand", { who: "claude", point: "shoulder_r" });
 console.log(`  \x1b[36mbystander's verdict\x1b[0m  ${back.text}`);
 await hears(feed, "reaches toward your shoulder_r", 4000);
@@ -197,10 +185,7 @@ const reopened = await conn.sendChannelsOpen({ channelId: "world:commons", type:
 check("reopen works", reopened?.channel?.id === "world:commons");
 
 console.log("\n━━ reconnect: missed mentions replay as CATCHUP, never as live traffic ━━");
-// the host sleeps; someone mentions it; the host returns. The replay must
-// carry eidoverse:catchup ALONGSIDE the original addressing (issue #39 —
-// these shipped as bare legacy ["mention"], matching no declared rule), and
-// a live mention on the reconnected session must NOT be catchup-tagged.
+// the replay carries eidoverse:catchup alongside the original addressing (#39); a live mention after reconnect must not
 await conn.close();
 await Bun.sleep(400);
 {
@@ -223,8 +208,7 @@ check("the replay summary is catchup-tagged, not bare", !!summary?.tags?.include
 check("the replay summary is a chat:system notice; the replayed mention is not",
   !!summary?.tags?.includes("chat:system") && !replayed?.tags?.includes("chat:system"),
   `${JSON.stringify(summary?.tags)} / ${JSON.stringify(replayed?.tags)}`);
-// a catchup-defer rule (tagsAny: ["eidoverse:catchup"]) can now match every
-// replayed frame — and must NOT match live traffic:
+// a catchup-defer rule (tagsAny: ["eidoverse:catchup"]) matches every replayed frame and must NOT match live traffic:
 {
   const live2 = new (await import("./agent.ts")).WorldAgent({ name: "liveone" });
   await live2.connect();

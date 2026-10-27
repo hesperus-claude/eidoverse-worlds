@@ -3,11 +3,9 @@ import { existsSync, readFileSync } from "node:fs";
 
 export type TokenAuth = {
   id: string; name: string; world?: string; avatar?: string;
-  /** NARROWING only: keeps this agent to these worlds ("*" = any). Absent =
-   *  no narrowing — the worlds themselves decide who comes in (server/access.ts). */
+  /** NARROWING only ("*" = any). Absent = no narrowing: the worlds decide who comes in (server/access.ts). */
   worlds?: string[];
-  /** `false` narrows founding away. Absent = founding as any member (the
-   *  sequencer's daily cap applies). */
+  /** `false` narrows founding away. Absent = founding as any member (the sequencer's daily cap applies). */
   create?: boolean;
 };
 
@@ -21,13 +19,8 @@ function readObject(path: string): Record<string, TokenAuth> {
   return parsed as Record<string, TokenAuth>;
 }
 
-/**
- * Read the legacy token registry fail-closed.
- *
- * The tracked example file is public. Any key copied from it is deliberately
- * rejected even when it appears in tokens.json; examples document shape, not
- * grant authority. Missing or malformed live registries authorize nobody.
- */
+/** Fail-closed: a missing or malformed registry authorizes nobody; keys from the public example file are rejected
+ *  even in tokens.json. */
 export function readTokenRegistry(tokensPath: string, examplePath: string, log: Log = console): Record<string, TokenAuth> {
   if (!existsSync(tokensPath)) {
     log.error(`[mcpl] token registry missing: ${tokensPath}; legacy token auth disabled`);
@@ -55,8 +48,7 @@ export function readTokenRegistry(tokensPath: string, examplePath: string, log: 
     return {};
   }
 
-  // Null-prototype map: an attacker-controlled token such as `__proto__` or
-  // `constructor` must never resolve through Object.prototype.
+  // null prototype: an attacker token like `__proto__` must never resolve through Object.prototype
   const accepted: Record<string, TokenAuth> = Object.create(null);
   for (const [token, candidate] of Object.entries(live)) {
     const digest = createHash("sha256").update(token).digest("hex").slice(0, 12);
@@ -75,8 +67,7 @@ export function readTokenRegistry(tokensPath: string, examplePath: string, log: 
       name: typeof auth.name === "string" && auth.name ? auth.name : auth.id,
       world: typeof auth.world === "string" ? auth.world : undefined,
       avatar: typeof auth.avatar === "string" ? auth.avatar : undefined,
-      // RFC-005 travel/founding fields survive the fail-closed registry seam.
-      // Travel to an existing world and permission to found one are distinct.
+      // RFC-005: travel to an existing world and permission to found one are distinct
       worlds: Array.isArray(auth.worlds)
         ? auth.worlds.filter((world): world is string => typeof world === "string")
         : undefined,
@@ -85,16 +76,13 @@ export function readTokenRegistry(tokensPath: string, examplePath: string, log: 
   }
   return accepted;
 }
-/** Look up an attacker-controlled credential as an OWN registry key only. */
+/** The credential is attacker-controlled: own keys only. */
 export function lookupToken(registry: Record<string, TokenAuth>, token: string): TokenAuth | undefined {
   return Object.hasOwn(registry, token) ? registry[token] : undefined;
 }
 
-/** id -> display name for every accepted credential, so a remote participant's
- *  token name can ride the wire as `author.name`. Ids
- *  without a distinct name are absent; callers fall back to the id. Conflicting
- *  names for one id are omitted rather than choosing by registry order. Never
- *  keyed by the secret. */
+/** id -> display name for `author.name`; ids with no distinct or with conflicting names are absent (callers fall
+ *  back to the id). Never keyed by the secret. */
 export function displayNameIndex(registry: Record<string, TokenAuth>): Map<string, string> {
   const index = new Map<string, string>();
   const ambiguous = new Set<string>();
@@ -109,16 +97,9 @@ export function displayNameIndex(registry: Record<string, TokenAuth>): Map<strin
 
 export type WireAuthor = { id: string; name: string };
 
-/** The wire contract for "who said this": admitted credentials take precedence
- *  over the registry index, including aid1 identities absent from tokens.json.
- *  Keep the last admitted name after disconnect for replay; this is current
- *  identity metadata, not a historical-name ledger or an authorization cache.
- *  A failed registry reload cannot erase a name an admitted session supplied.
- *  `renderLine` writes the ID, the
- *  addressing handle, into the text (world lines render bare). The prefix is
- *  never the display name: a host that matches its own name against the text
- *  must not be woken by another body whose display name merely contains it.
- *  Every line a host receives, live or replayed, goes through these two. */
+/** "Who said this" for every line, live or replayed: admitted names beat the registry (and outlive disconnect and a
+ *  failed reload). `renderLine` prefixes the id, never the display name, so a host isn't woken by a display name
+ *  that merely contains its own. Not an authorization cache. */
 export function wireAuthors(index: ReadonlyMap<string, string>) {
   const admitted = new Map<string, string>();
   return {

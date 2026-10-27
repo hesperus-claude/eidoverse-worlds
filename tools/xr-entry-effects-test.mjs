@@ -1,13 +1,6 @@
-// bun tools/xr-entry-effects-test.mjs — the ENTRY EFFECT OWNER, executed, not source-checked.
-//
-// WHY THIS EXISTS. The round-two reviewer mutated the shipping xr.js so every busy verdict entered
-// the retry branch, including give-up:
-//     if (true) { // MUTANT: every busy verdict retries
-// and xr-entry-policy-test still passed 31/31 — because it drove the pure policy correctly and then
-// checked the WIRING with regexes. Reproduced here before writing a line of this file.
-//
-// This suite imports client/lib/xr_entry_effects.js — the same module xr.js imports — and runs it
-// with fake timers. Breaking the scheduling breaks this.
+// bun tools/xr-entry-effects-test.mjs: the ENTRY EFFECT OWNER, executed, not source-checked. Imports
+// client/lib/xr_entry_effects.js (the module xr.js imports) and runs it with fake timers, so breaking the scheduling
+// breaks this (xr-entry-policy-test checks the wiring with regexes and passed with every busy verdict retrying).
 import { makeEntryEffects, handleEntryFailure } from '../client/lib/xr_entry_effects.js';
 import { decideEntryFailure, BUSY_RETRY_MS } from '../client/lib/xr_entry_policy.js';
 import { readFileSync } from 'node:fs';
@@ -40,9 +33,7 @@ console.log('\n— 1. exactly one automatic retry per entry intent (the reviewer
   const { eff, log, fire, timers } = rig();
   check('a first busy failure schedules exactly one delayed retry',
     eff.apply(onBusy(false), { intent: 101 }) === 'retried' && eff.hasPending);
-  // THE BACKOFF VALUE, not merely that a timer exists (mutation sweep: `}, 0)` survived green —
-  // the rig recorded `ms` and nothing ever read it, so an immediate re-request loop, the exact thing
-  // the backoff prevents, was invisible).
+  // THE BACKOFF VALUE, not merely that a timer exists: a zero delay is an immediate re-request loop, the thing the backoff prevents
   check('the timer is armed with the POLICY’s delay, not zero or a literal',
     [...timers.values()][0].ms === BUSY_RETRY_MS, `ms=${[...timers.values()][0]?.ms}`);
   const fired = fire();
@@ -62,8 +53,7 @@ console.log('\n— 2. a stale callback can never request a session —');
   eff.apply(onBusy(false), { intent: 101 });
   eff.apply(onBusy(false), { intent: 102 });          // a NEW click supersedes the first
   check('a newer entry intent takes ownership of the pending retry', eff.pendingFor === 102);
-  // THE OLD TIMER MUST BE CLEARED, not merely out-voted by the intent guard (mutation sweep:
-  // dropping cancel() survived, because the guard suppressed the stale entry while the timer leaked).
+  // THE OLD TIMER MUST BE CLEARED, not merely out-voted by the intent guard, or the timer leaks
   check('…and the superseded timer is CLEARED, not left to fire and no-op', timers.size === 1, `${timers.size} timers live`);
   fire();
   check('only ONE re-entry happens, and it belongs to the newer intent',
@@ -86,7 +76,7 @@ console.log('\n— 2. a stale callback can never request a session —');
   });
   eff2.apply(onBusy(false), { intent: 101 });
   eff2.apply(onBusy(false), { intent: 102 });   // intent 2 now owns it
-  captured[0]();                               // intent 1's timer fires late — it must NOT enter
+  captured[0]();                               // intent 1's timer fires late: it must NOT enter
   check('a late timer from a superseded intent drops instead of entering',
     log.enters.length === 0, JSON.stringify(log.enters));
   check('…and says why', log.tee.some((m) => /dropped/.test(m)));
@@ -115,19 +105,14 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
   const e2 = weird();
   check('a WebGPU refusal reloads and does NOT mark absent',
     eff.apply(decideEntryFailure(e2, { gpu: true }), { intent: 1, error: e2 }) === 'reload' && log.absent.length === 1);
-  // …AND SAYS SO. The suite pinned that xr.js must not re-emit this toast, but never that it is
-  // emitted at all — so deleting it from the owner passed, and the page reloaded with NO explanation.
+  // …AND SAYS SO: the owner must emit the toast, or the page reloads with NO explanation
   check('…and the user is TOLD why the page is about to reload',
     log.toast.some(([m, k]) => k === 'info' && /webgl/i.test(m ?? '')), JSON.stringify(log.toast));
   const e3 = weird();
   check('an unknown error on WebGL surfaces', eff.apply(decideEntryFailure(e3, { gpu: false }), { intent: 1, error: e3 }) === 'surface');
   check('…and surfacing schedules nothing', !eff.hasPending);
-  // hasPending is what leaveVR gates on, so it must track the TIMER (mutation sweep: rewiring it to
-  // pendingFor survived, and with the bookkeeping fix above the two now genuinely differ).
-  // hasPending must read the TIMER, not pendingFor. After a normal fire both are null, so that case
-  // cannot tell them apart — the distinguishing state is a DROPPED retry: the timer is gone while
-  // pendingFor still names the newer intent. leaveVR gates on this, so wiring it to pendingFor would
-  // make a leave believe a retry is pending and swallow the leave.
+  // hasPending (what leaveVR gates on) must read the TIMER, not pendingFor: a DROPPED retry has no timer while pendingFor
+  // still names the newer intent, and reading that would swallow the leave
   { const { eff: e2, fire: f2, timers } = rig();
     e2.apply(onBusy(false), { intent: 101 });
     check('hasPending is true while a timer is armed', e2.hasPending === true);
@@ -147,10 +132,7 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
 
 console.log('\n— 5. THE SEAM, executed: decide → act → what the caller must do —');
 {
-  // handleEntryFailure IS the catch body. The round-three mutation rewrote the shipping line as
-  //   const did = false ? entryEffects.apply(...) : 'surface';
-  // keeping the text for every regex while disabling retry, absence and reload. There is now nothing
-  // between the product and this function for such a rewrite to hide in.
+  // handleEntryFailure IS the catch body, so no rewrite of the shipping line can hide between product and function
   const mk = () => { const r = rig(); return { ...r,
     run: (error, { intent = 101, retryOf = null, gpu = false } = {}) =>
       handleEntryFailure({ effects: r.eff, decide: decideEntryFailure, error, intent, retryOf, gpu }) }; };
@@ -182,7 +164,7 @@ console.log('\n— 5. THE SEAM, executed: decide → act → what the caller mus
     check('an unknown error on WebGL is thrown, not swallowed', out === 'throw', `returned ${out}`);
     check('…and nothing was scheduled', !r.eff.hasPending); }
 
-  { // THE ARGUMENT CONSTRUCTION the reviewer's other mutation targeted: retryOf → isRetry
+  { // the argument construction: retryOf → isRetry
     const r = mk(); const first = r.run(busy(), { intent: 101, retryOf: null });
     const r2 = mk(); const asRetry = r2.run(busy(), { intent: 101, retryOf: 101 });
     check('retryOf is what distinguishes a first failure from a retry’s failure',
@@ -201,9 +183,8 @@ console.log('\n— 5. the PRODUCT uses this owner (the wiring the reviewer broke
   check('…and obeys its instruction rather than re-deriving one',
     /if \(next === 'handled'\) return;/.test(xr) && /if \(next === 'throw'\) throw e;/.test(xr));
   check('NO setTimeout survives in the entry catch path', !/busyTimer = setTimeout/.test(xr));
-  // THE SEAM (agent review): apply() already tees and toasts for 'reload-webgl' and returns 'reload'.
-  // xr.js had no 'reload' branch, so it fell through to an identical inline tee + toast and the user
-  // got the 6-second toast TWICE. The module was tested; the caller's double-emission was not.
+  // THE SEAM: apply() already tees and toasts for 'reload-webgl' and returns 'reload'; xr.js must not re-emit, or the user
+  // gets the 6-second toast TWICE
   check('xr.js does NOT re-emit the reload toast the owner already sent',
     !/toast\(verdict\.toast, 'info', 6000\)/.test(xr), 'the reload toast fires twice');
   check('…and does not re-tee the reload line either',

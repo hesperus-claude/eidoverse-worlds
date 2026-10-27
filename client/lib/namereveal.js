@@ -1,4 +1,4 @@
-// namereveal — HOLD to see every name (owner, 09-30). While held, every nameplate in range draws through everything,
+// namereveal — HOLD to see every name. While held, every nameplate in range draws through everything,
 // at full legibility, out to ~60 m (platesize.js says how); release, and they ease back. Hold, not toggle: it is a
 // glance ("who is that, over there?"), and a toggle left on is a wall of labels you forgot you asked for.
 //
@@ -32,7 +32,7 @@ export const revealLevel = (now = nowMs()) => revealEase(rawAt(now));
 export const revealHeld = () => held;
 export const revealSources = () => [...sources];
 
-// ALWAYS SHOW NAMES (owner, 10-02): what holding B/Y did in VR, as a setting (Settings › style), default off. The
+// ALWAYS SHOW NAMES: what holding B/Y did in VR, as a setting (Settings › style), default off. The
 // controller's top face button follows VRChat's convention now (the menu: our panels' quick hide, xr.js). On, it is one
 // more source, so it composes with N and the pulse; persisted per browser.
 export const ALWAYS_LS = 'ew-names-always';

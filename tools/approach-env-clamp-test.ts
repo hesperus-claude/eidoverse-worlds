@@ -1,18 +1,10 @@
-// approach-env-clamp-test — the advertised live knobs may not silently
-// reintroduce the headline defect.
-//
-// PR #145's review (antra, 2026-08-26): "At defaults the straight-pass
-// invariant happens to hold, but it is only a comment." Her exact vectors:
-// EW_APPROACH_MAX_WAIT_SEC=1 lets a body that never stopped be announced as
-// an approach before it exits; lowering EW_APPROACH_STILL_MPS does the same
-// under the default max wait. denoise.ts now CLAMPS the wait to the safe
-// bound (2·APPROACH_RADIUS / APPROACH_STILL_MPS) derived from whatever
-// stillness threshold is in force.
-//
-// The knobs are read once at module load, so each hostile combination runs in
-// a spawned child of this same file — the non-default-env discriminator the
-// review asked for. Run (no env): bun tools/approach-env-clamp-test.ts
+// approach-env-clamp-test: the advertised live knobs may not silently reintroduce the headline defect (PR #145).
+// EW_APPROACH_MAX_WAIT_SEC=1, or a lower EW_APPROACH_STILL_MPS, would announce a body that never stopped before it exits;
+// denoise.ts CLAMPS the wait to 2·APPROACH_RADIUS / APPROACH_STILL_MPS for whatever stillness threshold is in force.
+// The knobs are read once at module load, so each hostile combination runs in a spawned child of this file.
+// Run (no env): bun tools/approach-env-clamp-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { spawnSync } from "node:child_process";
 
 let pass = 0, fail = 0;
@@ -55,12 +47,10 @@ check("the wait can never sit below the safe bound",
   `wait=${APPROACH_MAX_WAIT_MS} safe=${APPROACH_SAFE_WAIT_MS}`);
 check("the stillness threshold is positive", APPROACH_STILL_MPS > 0, String(APPROACH_STILL_MPS));
 
-// A body crossing the bubble on a straight line at just above the effective
-// stillness threshold — the slowest crosser that never counts as still, i.e.
-// the one that spends the LONGEST possible time inside. If the clamp holds,
-// it exits before the max wait and is never announced.
+// the slowest crosser that never counts as still spends the longest inside; with the clamp it exits before the max
+// wait and is never announced
 const speed = APPROACH_STILL_MPS * 1.5;
-const ag = new WorldAgent({ name: "clamptest" }) as any;
+const ag = new WorldAgent({ url: noWorldUrl(), name: "clamptest" }) as any;
 ag.pos = { x: 0, y: 0, z: 0 };
 const T0 = Date.now();
 const pings: any[] = [];

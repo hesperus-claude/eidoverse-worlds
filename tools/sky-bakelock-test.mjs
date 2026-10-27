@@ -4,7 +4,7 @@
 // Review 10b H2: when bake N resolved, a bake queued behind it (the VR prebuild, which swaps a TEMPORARY target in)
 // started BEFORE the awaiting caller's continuation, so the baked dome attached to the temporary. The fix runs the
 // post-bake work inside the lock (BAKE_AFTER); a queued bake re-checks whether it's still wanted at its turn (BAKE_GUARD).
-import { serializeBakes, BAKE_AFTER, BAKE_GUARD, BAKE_HELD } from '../client/lib/sky_bakelock.js';
+import { serializeBakes, BAKE_AFTER, BAKE_GUARD, BAKE_HELD, BAKE_INTERCEPT } from '../client/lib/sky_bakelock.js';
 let pass = 0, fail = 0;
 const ok = (n, c, d = '') => { if (c) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}  ${d}`); } };
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
@@ -92,6 +92,40 @@ const prebuild = (sys, log) => sys.__withBakeLock(async () => {
   const queued = sys.bakeEnv(null, { [BAKE_AFTER]: (r) => after.push(r) });
   await flush(); sys.__dead = true; sys.gates[0].res(); await first; await queued;
   ok('a bake queued for a torn-down sky is skipped, BAKE_AFTER told', sys.raws.length === 1 && after.length === 1 && after[0].skipped, JSON.stringify({ raws: sys.raws.length, after }));
+}
+
+// 5. hook × situation: INTERCEPT, GUARD and AFTER run inside the lock at their own bake's turn (after the bake ahead),
+// each at most once; INTERCEPT's restore runs exactly once whenever INTERCEPT ran, thrown bake included
+for (const sit of ['queued behind another', 'its bake throws', 'its sky is torn down while queued', 'its guard says no']) {
+  const sys = engine(); let aheadDone = false;
+  const seen = { intercept: [], restore: 0, guard: [], after: [] };
+  const ahead = sys.bakeEnv(null, {});
+  const mine = sys.bakeEnv(null, {
+    [BAKE_INTERCEPT]: () => { seen.intercept.push(aheadDone); return () => { seen.restore++; }; },
+    [BAKE_GUARD]: () => { seen.guard.push(aheadDone); return sit !== 'its guard says no'; },
+    [BAKE_AFTER]: (r) => seen.after.push(r),
+  }).catch((e) => e);
+  await flush();
+  const early = seen.intercept.length + seen.guard.length + seen.after.length;
+  if (sit === 'its sky is torn down while queued') sys.__dead = true;
+  aheadDone = true; sys.gates[0].res(); await ahead; await flush();
+  if (sys.gates[1]) sit === 'its bake throws' ? sys.gates[1].rej(new Error('boom')) : sys.gates[1].res();
+  await within(mine); await flush();
+  const skipped = sit === 'its sky is torn down while queued' || sit === 'its guard says no';
+  const want = {
+    intercept: skipped ? [] : [true], restore: skipped ? 0 : 1, guard: sit === 'its sky is torn down while queued' ? [] : [true],
+    after: [{ ok: sit === 'queued behind another', skipped }],
+  };
+  ok(`${sit}: nothing of its own ran while the bake ahead held the lock`, early === 0, JSON.stringify(seen));
+  ok(`${sit}: each hook at its own turn, once; restore ${want.restore}`, JSON.stringify(seen) === JSON.stringify(want), `${JSON.stringify(seen)} want ${JSON.stringify(want)}`);
+}
+{
+  // the holder's own bake (BAKE_HELD) runs raw: no second turn, no hooks of the lock's
+  const sys = engine(); let intercepted = 0;
+  const held = sys.__withBakeLock(() => sys.bakeEnv(null, { [BAKE_HELD]: true, [BAKE_INTERCEPT]: () => { intercepted++; } }));
+  await flush(); ok('a BAKE_HELD bake runs inside its holder\'s lock at once', sys.raws.length === 1, sys.raws.length);
+  sys.gates[0].res(); await within(held);
+  ok('…and the lock runs none of its hooks', intercepted === 0, intercepted);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

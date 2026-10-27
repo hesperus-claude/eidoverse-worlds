@@ -102,6 +102,31 @@ console.log(`  ${rows} num rows; ${typedRed.size} write something other than a v
   check("a mesh size of 0 is refused with the door's words, nothing sent", r0.errors.length > 0 && !flat(r0.ops).length && /must be/.test(r0.errors[0] ?? ""), JSON.stringify(r0.errors));
 }
 
+// every text row with a length cap: the cap itself is written as typed; one past it is refused naming the cap, nothing sent
+{
+  const TEXT: Record<string, [string, any][]> = { ...FIXTURE, Story: [["story", { story: { title: "t", text: "s" } }]],
+    Label: [["flags", { label: "x" }]], Description: [["flags", { description: "y" }]] };
+  let capped = 0;
+  for (const [card, d] of Object.entries(DESCRIPTORS) as [string, any][]) for (const fd of d.fields) {
+    const spec = COMPONENTS[d.key]; const cap = fd.path == null ? spec?.maxLen : spec?.ranges?.[fd.path]?.maxLen;
+    if (fd.ui?.t !== "text" && !(fd.path == null && cap !== undefined) || fd.ui?.own || cap === undefined) continue;
+    const drawn = (TEXT[card] ?? []).map(([group, comp]) => ({ comp, ent: { transform: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, ...comp }, key: `${group}.${fd.path == null ? d.key : fd.k}` }))
+      .find((x) => fieldAt(inspectSchema(x.ent, "t1", {}), x.key));
+    if (!drawn) { check(`${card}.${fd.k}: a capped text row draws from a fixture`, false, "no row drawn: add a fixture"); continue; }
+    capped++;
+    const { ent, key } = drawn;
+    const cur = fd.path == null ? ent[d.key] : ent[d.key]?.[fd.path];
+    // a link keeps its scheme and extension, so only its length is in question
+    const sample = (n: number) => { if (!/^https:\/\//.test(cur)) return "x".repeat(n); const base = cur.slice(0, cur.lastIndexOf("/") + 1), ext = cur.slice(cur.lastIndexOf(".")); return base + "a".repeat(n - base.length - ext.length) + ext; };
+    const sent = (r: any) => { const o = flat(r.ops).find((o: any) => o.verb === "set" && o.args.component === d.key); return fd.path == null ? o?.args.value : o?.args.value?.[fd.path]; };
+    const at = editOps(ent, "t1", { [key]: sample(cap) });
+    check(`${key}: ${cap} characters (its cap) is written as typed`, !at.errors.length && sent(at) === sample(cap), JSON.stringify(at.errors).slice(0, 160));
+    const past = editOps(ent, "t1", { [key]: sample(cap + 1) });
+    check(`${key}: ${cap + 1} characters is refused in the door's words, naming the cap, nothing sent`, past.errors.some((e: string) => e.includes(`${cap + 1} characters; at most ${cap}`) || e.includes(`(≤ ${cap})`) || e.includes(`${cap + 1} characters (at most ${cap})`)) && flat(past.ops).length === 0, `${JSON.stringify(past.errors).slice(0, 160)} ops ${flat(past.ops).length}`);
+  }
+  check("every capped text row the descriptors declare was drawn", capped >= 10, String(capped));
+}
+
 // closed rows: exactly the registry's enums
 for (const [card, d] of Object.entries(DESCRIPTORS) as [string, any][]) for (const fd of d.fields) {
   if (fd.ui?.t !== "enum" || fd.ui.own) continue;

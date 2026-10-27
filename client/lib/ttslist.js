@@ -1,40 +1,5 @@
-// ttslist — THE VOICES YOU HAVE, AS A LIST.
-//
-// 🔴 NAMED ttslist, NOT voicelist (live, 2026-08-16: "shouldn't it be called
-// tts-model-list or something instead of voicelist so it's more understandable
-// what it does at a glance?"). There are ten voice*.js files in this directory
-// and every OTHER one is about the WebRTC voice TRANSPORT — voice, voiceconsent,
-// voiceengines, voicemouths, voicerelay, voicesfu, voicesfubridge, voicesource,
-// voicestore. This one is text-to-speech, and wearing their prefix put it in the
-// wrong neighbourhood: easy to reason about as if it were transport code, which
-// is a decent bet for how the class-overwrite bug below survived so long.
-//
-// Not `ttsmodellist`, because the list holds two DIFFERENT kinds of thing — a
-// local .onnx model file and a remote speech-server endpoint. What they share is
-// being a source of a voice, so the list is of voices; the pairing with
-// ttsrow.js is what makes the feature legible at a glance.
-//
-// R, 2026-08-09: "the add-remove buttons aren't very intuitive... I feel like
-// the current implementation is clunky. Is there another UI you're aware of that
-// would be more suitable?"
-//
-// She was right, and the reason is a rule worth keeping: a DROPDOWN is for
-// choosing among options someone else fixed. The moment the options are ones the
-// user adds and removes, the list wants to be visible — because "what do I have?"
-// and "get rid of that one" both become questions the UI has to answer without
-// being opened first. macOS System Settings, VS Code, OBS all use a visible list
-// with per-row affordances for exactly this.
-//
-// The buttons were clunky for a specific, diagnosable reason: a "−" beside a
-// dropdown acts on *whatever is currently selected*, so you must select a thing
-// in order to destroy it, and the button cannot say which thing it means. Here
-// the × lives ON the row, so the target is never ambiguous and there is nothing
-// to explain.
-//
-// The other half of the clunk: the old dropdown mixed NOUNS ("en_US-amy-low")
-// with VERBS ("voice file on this computer…") and STATUS ("loading voices…") in
-// one list of supposed choices. Verbs are rows here too, but visibly separate
-// and at the bottom, where an "add" affordance belongs.
+// ttslist — your TTS voices (local .onnx models, speech servers) as a list with × per row and add-verbs below.
+// Not named voice*.js: those are the WebRTC transport.
 import { why } from './debuglog.js';
 
 const ROW = `
@@ -115,31 +80,13 @@ function ensureCss() {
   document.head.appendChild(st);
 }
 
-/** Update selection + status on an already-rendered list. Returns false when
- *  the DOM does not match these items, so the caller rebuilds for real.
- *
- *  Deliberately conservative: it compares the rendered ids to the requested
- *  ones and refuses if ANYTHING differs in membership or order. A wrong
- *  in-place update is worse than a rebuild — it leaves the screen disagreeing
- *  with state, which is the failure this whole file keeps hitting. */
+/** false (caller rebuilds) if rendered ids differ: a wrong in-place update is worse than a rebuild */
 function syncSelection(host, { items, selected, busy, loading }) {
   const rows = host.querySelectorAll?.('.vl-row[data-id]');
-  // 🔴 SAY WHY IT REFUSED. This returned a bare false on five different
-  // conditions, so when the panel kept tearing down (live, 2026-08-16, third
-  // report) there was no way to tell WHICH guard was rejecting — I read the
-  // code three times and guessed wrong twice. A predicate that can decline for
-  // five reasons must name the one it used; the debuglog 'tts-list' topic is
-  // readable from /audio and __why('tts-list'), and costs nothing when nobody
-  // looks.
+  // readable via /audio and __why('tts-list')
   const no = (reason) => { why('tts-list', `rebuilt: ${reason}`); return false; };
-  // An EMPTY list is a legitimate steady state, not a failure: with no voices
-  // saved there are no data-id rows, only the two add-verbs. Refusing here sent
-  // every repaint down the rebuild path and reported "no rendered rows carry
-  // data-id", which reads like a bug in the markup and is really "you have no
-  // voices yet" (live, 2026-08-16 — the list was empty and I nearly went looking
-  // for a missing attribute).
+  // an empty list is a steady state, not a reason to rebuild
   if (!rows.length && !items.length) {
-    // Nothing to select; only the status text can have changed.
     if (loading) {
       const note = host.querySelector('.vl-loading .vl-note');
       if (note) note.textContent = busy || loading.status || 'loading…';
@@ -153,16 +100,11 @@ function syncSelection(host, { items, selected, busy, loading }) {
   for (let i = 0; i < rows.length; i++) {
     if (rows[i].dataset.id !== want[i]) return no(`row ${i} is ${rows[i].dataset.id}, wanted ${want[i]}`);
   }
-  // A loading row appearing or clearing IS structural — it adds/removes a node.
   const hasLoadingRow = !!host.querySelector('.vl-loading');
   if (hasLoadingRow !== !!loading) return no(`loading row ${hasLoadingRow} vs ${!!loading}`);
 
   for (const row of rows) {
     const on_ = row.dataset.id === selected;
-    // The mark is a span styled `.vl-radio.on`, NOT an <input type=radio> — I
-    // wrote this against an imagined DOM first and it silently matched nothing,
-    // which would have made the whole in-place path dead code that always fell
-    // back to a rebuild. Read the renderer, then update what it actually paints.
     const mark = row.querySelector('.vl-radio');
     if (!mark) return no('a row has no .vl-radio');
     mark.classList.toggle('on', on_);
@@ -176,65 +118,21 @@ function syncSelection(host, { items, selected, busy, loading }) {
   return true;
 }
 
-/** Build the list.
- *  items:    [{id, name, note}]   — the voices this person has
+/**
+ *  items:    [{id, name, note}]
  *  selected: id | null
  *  on:       {select(id), remove(id), addFile(), addEndpoint()}
  */
 export function renderVoiceList(host, { items, selected, on, busy, loading }) {
   ensureCss();
-  // 🔴 ADD, DO NOT OVERWRITE (live, 2026-08-16 — the panel teardown, report five).
-  // This was `host.className = 'vl'`, which ERASES whatever the caller put
-  // there. ttsrow marks this element `.tts-list` so its in-place updater can
-  // find it again; the first render silently replaced that with `vl`, so from
-  // then on syncInPlace() could not locate the list, refused, and rebuilt the
-  // ENTIRE section on every state change — which is exactly the teardown she
-  // reported three times while I fixed the two layers underneath it.
-  //
-  // A component that styles a host it does not own must contribute a class, not
-  // seize the attribute. classList.add is the whole fix.
+  // never overwrite className: ttsrow's in-place updater finds this host by `.tts-list`
   host.classList.add('vl');
-  // 🔴 A SELECTION CHANGE MUST NOT REBUILD THE LIST (live, 2026-08-16, asking for
-  // the third time and rightly annoyed: "the whole panel is *still* tearing
-  // down when you select one radio button or the other… fix this issue for
-  // EVERY element").
-  //
-  // This function wiped `host` unconditionally, so every caller — including the
-  // ones that had just been fixed not to tear down — got the rows destroyed and
-  // recreated anyway. Marking a different radio is the commonest interaction
-  // there is, and it was the most destructive.
-  //
-  // If the same voices are already rendered, only the SELECTION and the
-  // loading/busy text have changed: write those and return. Anything
-  // structural (a voice added or removed) still falls through to a real build.
   if (syncSelection(host, { items, selected, busy, loading })) return;
   host.textContent = '';
-  // The scrolling part. Only the voices go in here; the "+ add" rows stay below
-  // it, so the thing you click to fix an empty list is never itself scrolled
-  // out of view.
   const pane = document.createElement('div');
   pane.className = 'vl-pane';
   host.appendChild(pane);
-  // NO EMPTY-STATE ROW. R: "you have 'add a voice below' twice now in a table
-  // with no options. Maybe just the add buttons are sufficient." Right — the two
-  // "+ add" rows below already say what to do, and a placeholder pointing AT
-  // them is a caption for a sign. An empty pane collapses to nothing and the
-  // verbs stand alone, which is the whole empty state.
-  // 🔴 A VOICE BEING IMPORTED APPEARS IMMEDIATELY, WITH A RUNNING CLOCK.
-  // R, 2026-08-09: "add the model to the list while it's loading and have a
-  // second-ticker or animating dots so people know it didn't fail silently while
-  // preparing the model". The first import pays the ~27s phonemizer build, and
-  // without this the panel looks inert for half a minute — during which a real
-  // failure and a slow success look exactly the same.
-  //
-  // A COUNTER, not a spinner: a spinner says "something is happening", a clock
-  // says HOW LONG, which is the number that tells you whether to keep waiting.
-  // 🔴 ONLY A GHOST IF THERE IS NO REAL ROW (live, 2026-08-09: "I'm seeing
-  // en_US-glados-high listed twice when I try to load it"). A voice already in
-  // the library HAS a row — adding a second one for its loading state shows the
-  // same voice twice and the ghost reads as an error. Show the status ON the
-  // existing row instead; the ghost is only for a voice being imported for the
-  // first time, which genuinely is not in the list yet.
+  // the add-verbs are the empty state; an import gets a placeholder row with a clock (the first takes ~30 s)
   if (loading && !items.some((it) => it.id === loading.id)) {
     const row = document.createElement('div');
     row.className = 'vl-row vl-loading';
@@ -249,19 +147,10 @@ export function renderVoiceList(host, { items, selected, on, busy, loading }) {
     const clock = document.createElement('span');
     clock.className = 'vl-note';
     clock.style.opacity = '.7';
-    // 🔴 ONE COUNTER, NOT TWO. The engine already tickers its own elapsed seconds
-    // through onProgress ("preparing voice — 12s"), and this row was drawing a
-    // SECOND clock beside it. Prefer the engine's text when it has any: it knows
-    // which phase it is in, and two counters disagreeing by a second reads as
-    // broken. Fall back to our own clock only when nothing was reported yet —
-    // which is exactly the window R saw hang.
+    // the engine's own progress text wins; our clock only fills the gap before it
     const t0 = loading.since || Date.now();
     const tick = () => {
       if (!clock.isConnected) return clearInterval(timer);
-      // The engine's own text already carries elapsed seconds ("compiling voice
-      // model — 12s"). Use it when present. When it is NOT — the gap before the
-      // first progress event, which is exactly where R saw a frozen label — run
-      // our own clock so the row is never static. Never two clocks at once.
       const s = Math.round((Date.now() - t0) / 1000);
       clock.textContent = loading.status
         ? (/\d+s/.test(loading.status) ? loading.status : `${loading.status} — ${s}s`)
@@ -275,22 +164,11 @@ export function renderVoiceList(host, { items, selected, on, busy, loading }) {
   for (const it of items) {
     const row = document.createElement('div');
     row.className = 'vl-row';
-    // Identity ON the node, so an update can find its row without rebuilding
-    // the list. Without this, syncSelection has nothing to match and silently
-    // falls back to a full teardown — the fix would look applied and do
-    // nothing, which is the failure mode this whole morning was made of.
     row.dataset.id = it.id;
     row.tabIndex = 0;
     row.title = it.note || it.name;
     const mark = document.createElement('span');
-    // ● / ○ rather than a checkmark: it reads as "this one is live" at a glance
-    // and needs no colour, which matters on a panel that must survive VR.
-    // 🔴 A REAL RADIO, NOT A BULLET (live, 2026-08-09: "make the radio button more of
-    // a radio button and not a bare dot, because it looks more like a list bullet
-    // and not something that can be clicked"). ● and ○ are TYPOGRAPHY — they read
-    // as list marks because that is what they are used for. A drawn ring with a
-    // filled centre reads as a control: it has a border, it has a hit area, and
-    // it changes on hover, which a glyph never does.
+    // a drawn ring, not a ●/○ glyph: glyphs read as list bullets, not controls
     mark.className = 'vl-radio' + (it.id === selected ? ' on' : '');
     mark.setAttribute('role', 'radio');
     mark.setAttribute('aria-checked', it.id === selected ? 'true' : 'false');
@@ -300,22 +178,11 @@ export function renderVoiceList(host, { items, selected, on, busy, loading }) {
     const x = document.createElement('button');
     x.className = 'vl-x';
     x.textContent = '×';
-    // "forget … (the file stays on your computer)" — without that clause, a ×
-    // next to a filename reads as "delete this file", which is the one thing it
-    // must never be mistaken for.
+    // otherwise a × beside a filename reads as delete-the-file
     x.title = `forget ${it.name} — the file stays on your computer`;
     x.setAttribute('aria-label', `forget ${it.name}`);
-    // NO CONFIRM, NO UNDO, deliberately (live, 2026-08-09). Removing forgets an
-    // IndexedDB handle — your .onnx on disk is never touched — so the worst case
-    // is re-picking a file, with the "+" row sitting directly below. A dialog
-    // guarding a one-click mistake costs everyone friction to save one person a
-    // file-open; an undo row is machinery for the same non-loss.
-    // stopPropagation, or clicking × also selects the row it is destroying.
+    // no confirm: it forgets a handle, never the file; stopPropagation, or × also selects its own row
     x.onclick = (e) => { e.stopPropagation(); on.remove?.(it.id); };
-      // A voice ALREADY in the list that is loading shows its status on its own
-      // row — with the same clock the ghost row runs — rather than getting a
-      // second entry. Without this, clicking a listed voice looked like nothing
-      // happened at all.
       if (loading && loading.id === it.id) {
         row.classList.add('vl-loading');
         const st = document.createElement('span');
@@ -337,31 +204,15 @@ export function renderVoiceList(host, { items, selected, on, busy, loading }) {
     row.onclick = () => on.select?.(it.id);
     row.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); on.select?.(it.id); }
-      // Delete/Backspace on a focused row is the list convention everywhere
-      // else; without it the × is mouse-only in practice.
+      // without it the × is mouse-only in practice
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); on.remove?.(it.id); }
     };
     pane.appendChild(row);
   }
-  // THE VERBS, visibly below the nouns. When the list is empty these are the
-  // whole UI, which is the correct empty state: the only thing you can do is
-  // add one, so that is the only thing showing.
   const add = document.createElement('div');
   add.className = 'vl-row vl-add vl-verbs-start';
   add.tabIndex = 0;
-  // SAY WHAT THE CONTROL WANTS, in the words of the thing it wants (live,
-  // 2026-08-09: "I might label it text-to-speech model or something like that
-  // just to make what this option is looking for most explicit"). "voice file"
-  // could be a .wav; "text-to-speech model" can only be the thing it is. The two
-  // rows deliberately do NOT share a noun — a .onnx is a model, an endpoint is a
-  // running service, and calling both "voice" is what made the old field ask for
-  // a file and get an address (live, 2026-08-08: "it looks like some kind of ip
-  // string instead of a file path...?").
-  // 🔴 STATUS LIVES IN EXACTLY ONE PLACE — the header note. This row used to echo
-  // `busy` too, so "preparing voice…" appeared twice at once (live: "the 'preparing
-  // voice' message repeats twice, once in the add line and once in the checkmark
-  // bool line"). A verb row should always read as the verb; it goes quiet while
-  // busy rather than becoming a second status display.
+  // the two rows deliberately share no noun; status lives only in the header note
   add.textContent = '+ add a text-to-speech model…';
   add.title = 'a Piper .onnx model and its matching .onnx.json, from this computer';
   if (busy) { add.style.opacity = '.3'; add.style.pointerEvents = 'none'; }

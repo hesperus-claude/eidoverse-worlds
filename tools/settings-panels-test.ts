@@ -1,17 +1,10 @@
-// Settings panels (rung 3, desktop UI): the style dial, the video rows, the profile's presence and
-// the bodies list — driven through the REAL stylepanel.js / videopanel.js / profile.js / bodies.js /
-// mybody.js / presence.js / ui.js / windows.js / panels.js, with only the renderer-bound edge stubbed
-// (tools/settings-panels-stub.mjs). Each block names the product line that must turn it red:
+// Settings panels (desktop UI): the style dial, the video rows, the profile's presence and the bodies list, through the
+// REAL stylepanel/videopanel/profile/bodies/mybody/presence/ui/windows/panels.js with only the renderer-bound edge
+// stubbed (tools/settings-panels-stub.mjs). Each block names the product line that must turn it red:
 //   · setPanelAlpha not persisted (stylepanel.js)          → "survives a re-apply from storage"
 //   · renderer select without needsReload (videopanel.js) → "grows the reload button"
 //   · presence dispatch not reaching setPresence (profile.js) → "presence() is busy" / "dock dot"
 //   · announceWorn not emitting avatar-worn (mybody.js)          → "announceWorn emits avatar-worn with the name (the switch site and the initial body call it)"
-//
-// RED AT HEAD 1fd6af8 (a product finding, kept honest rather than skipped): mybody.setMe emits
-// avatar-worn with a `{ name, path }` payload, but bodies.js's `noteWorn(name)` — its only consumer —
-// treats the payload as the name string, so `worn` fills with objects, the roster filter never matches,
-// and the list stays "nothing worn yet" no matter what you put on. One of the two files must change
-// (noteWorn accepting `{name}`, or setMe emitting the name); the five BODIES list checks turn green then.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/settings-panels-test.ts
 import { fileURLToPath } from "node:url";
@@ -51,6 +44,10 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
+
+console.log("ESCAPER — ui.js's escapeHtml is markup.js's, the one that escapes ' (a single-quoted attribute)");
+{ const m = await import('../client/lib/markup.js'); const said = ui.escapeHtml("O'Neil <b>");
+  check("ui.escapeHtml escapes ' and < (markup.js's)", said === "O&#39;Neil &lt;b&gt;" && ui.escapeHtml === m.escapeHtml, said); }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const root = () => document.documentElement.style;
 const computed = (k: string) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
@@ -61,56 +58,68 @@ const fire = (el: Element, type: string) => el.dispatchEvent(new Event(type, { b
 // Settings is TABBED (ui.js makeSection): #sec-<id>-tab chooses the pane #sec-<id>
 const openSection = async (id: string) => { (document.getElementById(`sec-${id}-tab`) as HTMLElement).click(); await tick(); return document.getElementById(`sec-${id}`)!.querySelector('.body')!; };
 
-// ============================================================ style: --panel-a
-console.log('STYLE — setPanelAlpha persists and repaints --panel-a');
+// ============================================================ style: every swatch and dial
+console.log('STYLE — every swatch and dial repaints its token, persists it, survives a re-apply; reset clears them all');
 { style.initStylePanel();
   const body = await openSection('style');
-  const slider = body.querySelector('input[type=range]') as HTMLInputElement;
-  const readout = slider.nextElementSibling as HTMLElement;
-  check('the slider starts from the sheet\'s value', slider.value === '0.9', slider.value);
-  slider.value = '0.5'; fire(slider, 'input');
-  check('dragging the dial repaints --panel-a on :root', computed('--panel-a') === '0.5', computed('--panel-a'));
-  check('the readout follows', readout.textContent === '0.50', readout.textContent ?? '');
-  check('the value is persisted with the style tokens', tokens()['--panel-a'] === '0.5', JSON.stringify(tokens()));
-  style.setPanelAlpha(0.66);
-  check('setPanelAlpha(0.66) repaints', computed('--panel-a') === '0.66', computed('--panel-a'));
-  check('…and persists', tokens()['--panel-a'] === '0.66', JSON.stringify(tokens()));
-  // persistence is what a reload would read: wipe the live property and re-apply from storage
-  root().removeProperty('--panel-a');
-  check('(control) the sheet value shows once the live property is gone', computed('--panel-a') === '.9', computed('--panel-a'));
-  style.applyStyleTokens();
-  check('survives a re-apply from storage (what the next boot does)', computed('--panel-a') === '0.66', computed('--panel-a'));
-  // a colour swatch: live token + persisted + the repaint event sprites listen for
-  const e0 = emitted.length;
-  const sw = body.querySelectorAll('input[type=color]')[1] as HTMLInputElement;   // accent (--brand)
-  sw.value = '#112233'; fire(sw, 'input');
-  check('a swatch repaints its token', computed('--brand') === '#112233', computed('--brand'));
-  check('…persists it', tokens()['--brand'] === '#112233');
-  check('…and emits style{--brand}', emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === '--brand'));
-  // the two opacity dials (owner, 09-30): the desktop one says it is the desktop's, and VR has its own
+  const SHEET: Record<string, string> = { '--panel-rgb': '20 24 28', '--brand': '#aabbcc', '--attn': '#ff5533', '--fg': '#eeeeee', '--panel-a': '.9', '--xr-panel-a': '1' };
+  const inline = () => Object.fromEntries(Array.from({ length: root().length }, (_, i) => root().item(i)).map((k) => [k, root().getPropertyValue(k)]));
+  // the key a control wrote is read off :root, not off its own emit, so a swatch that forgets to emit still has a row
+  const wrote = (before: Record<string, string>) => Object.keys(inline()).filter((k) => before[k] !== root().getPropertyValue(k));
+  const survives = (key: string) => {
+    const v = computed(key);
+    root().removeProperty(key);
+    check(`${key}: (control) the sheet value shows once the live property is gone`, computed(key) === SHEET[key], computed(key));
+    style.applyStyleTokens();
+    check(`${key}: survives a re-apply from storage (what the next boot does)`, computed(key) === v, computed(key));
+  };
+  const swatchKeys: string[] = [];
+  for (const [i, sw] of ([...body.querySelectorAll('input[type=color]')] as HTMLInputElement[]).entries()) {
+    const before = inline(), e0 = emitted.length;
+    sw.value = `#1122${(0x30 + i).toString(16)}`; fire(sw, 'input');
+    const [key, ...more] = wrote(before);
+    const name = sw.nextElementSibling?.textContent ?? `swatch ${i}`;
+    check(`the ${name} swatch repaints one token the sheet declares`, !!key && key in SHEET && more.length === 0 && computed(key) !== SHEET[key], `${key} ${more}`);
+    if (!key) continue;
+    swatchKeys.push(key);
+    check(`${key}: …persists it`, tokens()[key] === computed(key), JSON.stringify(tokens()));
+    check(`${key}: …and emits style{${key}} (what token-baked sprites repaint on)`, emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === key));
+    survives(key);
+  }
+  check('every colour token the sheet declares has a swatch', ['--panel-rgb', '--brand', '--attn', '--fg'].every((k) => swatchKeys.includes(k)), swatchKeys.join(' '));
+
+  // the two opacity dials: the desktop one says it is the desktop's, and VR has its own
+  const DIALS = [
+    { label: 'desktop panel opacity', key: '--panel-a', start: '0.9', min: '0.3', max: '1', drag: '0.5', set: style.setPanelAlpha, code: 0.66, emits: true, follows: true },
+    { label: 'VR panel opacity', key: '--xr-panel-a', start: '1', min: '0.6', max: '1', drag: '0.6', set: style.setXrPanelAlpha, code: 0.7, emits: true, follows: true, clamp: [0.2, '0.6'] as const },
+  ];
   const dials = [...body.querySelectorAll('input[type=range]')] as HTMLInputElement[];
   const label = (el: Element) => el.closest('.row')?.querySelector('.nm')?.textContent ?? '';
-  check('two opacity dials: desktop, then VR', dials.length === 2 && label(dials[0]) === 'desktop panel opacity' && label(dials[1]) === 'VR panel opacity',
-    dials.map(label).join(' | '));
-  const xr = dials[1];
-  check('the VR dial starts opaque (1) and spans 0.6–1', xr?.value === '1' && xr?.min === '0.6' && xr?.max === '1', `${xr?.value} ${xr?.min}–${xr?.max}`);
-  const e1 = emitted.length;
-  xr.value = '0.6'; fire(xr, 'input');
-  check('dragging the VR dial repaints --xr-panel-a (and leaves --panel-a alone)', computed('--xr-panel-a') === '0.6' && computed('--panel-a') === '0.66', `${computed('--xr-panel-a')} ${computed('--panel-a')}`);
-  check('…persists it with the style tokens', tokens()['--xr-panel-a'] === '0.6', JSON.stringify(tokens()));
-  check('…and emits style{--xr-panel-a} (what the VR quads re-raster on)', emitted.slice(e1).some((e) => e[0] === 'style' && e[1]?.key === '--xr-panel-a'));
-  style.setXrPanelAlpha(0.7);
-  const xrReadout = xr.nextElementSibling as HTMLElement;
-  check('setXrPanelAlpha from code moves the VR dial too (value and readout)', xr.value === '0.7' && xrReadout.textContent === '0.70', `${xr.value} ${xrReadout.textContent}`);
-  style.setXrPanelAlpha(0.2);
-  check('setXrPanelAlpha clamps to the dial\'s range', computed('--xr-panel-a') === '0.6', computed('--xr-panel-a'));
-  root().removeProperty('--xr-panel-a'); style.applyStyleTokens();
-  check('the VR value survives a re-apply from storage', computed('--xr-panel-a') === '0.6', computed('--xr-panel-a'));
+  check('two opacity dials: desktop, then VR', dials.length === DIALS.length && DIALS.every((d, i) => label(dials[i]!) === d.label), dials.map(label).join(' | '));
+  for (const [i, d] of DIALS.entries()) {
+    const el = dials[i]!, readout = el.nextElementSibling as HTMLElement;
+    const others = () => DIALS.filter((o) => o !== d).map((o) => computed(o.key)).join();
+    check(`${d.key}: the dial starts from the sheet's value and spans ${d.min}–${d.max}`, el.value === d.start && el.min === d.min && el.max === d.max, `${el.value} ${el.min}–${el.max}`);
+    const o0 = others(), e0 = emitted.length;
+    el.value = d.drag; fire(el, 'input');
+    check(`${d.key}: dragging the dial repaints it on :root, and leaves the other dial's token alone`, computed(d.key) === d.drag && others() === o0, `${computed(d.key)} ${others()}`);
+    check(`${d.key}: the readout follows`, readout.textContent === Number(d.drag).toFixed(2), readout.textContent ?? '');
+    check(`${d.key}: …persists it with the style tokens`, tokens()[d.key] === d.drag, JSON.stringify(tokens()));
+    if (d.emits) check(`${d.key}: …and emits style{${d.key}} (what the VR quads re-raster on)`, emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === d.key));
+    const e1 = emitted.length; d.set(d.code);
+    if (d.emits) check(`${d.key}: setting it from code emits style{${d.key}} too`, emitted.slice(e1).some((e) => e[0] === 'style' && e[1]?.key === d.key && e[1]?.value === String(d.code)));
+    check(`${d.key}: setting it from code (${d.code}) repaints and persists`, computed(d.key) === String(d.code) && tokens()[d.key] === String(d.code), `${computed(d.key)} ${JSON.stringify(tokens())}`);
+    if (d.follows) check(`${d.key}: …and moves the dial too (value and readout)`, el.value === String(d.code) && readout.textContent === d.code.toFixed(2), `${el.value} ${readout.textContent}`);
+    if (d.clamp) { d.set(d.clamp[0]); check(`${d.key}: setting it from code clamps to the dial's range`, computed(d.key) === d.clamp[1], computed(d.key)); }
+    survives(d.key);
+  }
+
   (body.querySelector('button') as HTMLElement).click();   // reset to defaults
-  check('reset clears the live tokens', computed('--panel-a') === '.9' && computed('--brand') === '#aabbcc', `${computed('--panel-a')} ${computed('--brand')}`);
+  const all = [...swatchKeys, ...DIALS.map((d) => d.key)];
+  const left = all.filter((k) => computed(k) !== SHEET[k]);
+  check('reset clears every live token back to the sheet', left.length === 0, left.map((k) => `${k}=${computed(k)}`).join(' '));
   check('reset empties the store', Object.keys(tokens()).length === 0, JSON.stringify(tokens()));
-  check('reset repaints the slider from the sheet', slider.value === '0.9', slider.value);
-  check('reset returns VR panels to opaque, dial included', computed('--xr-panel-a') === '1' && xr.value === '1', `${computed('--xr-panel-a')} ${xr.value}`);
+  check('reset repaints every dial from the sheet', DIALS.every((d, i) => dials[i]!.value === d.start), dials.map((x) => x.value).join(' '));
 }
 
 // ============================================================ video rows
@@ -206,9 +215,8 @@ console.log('PROFILE — presence dispatch reaches setPresence; the dock dot rep
   check('choosing away sets presence()', presence.presence() === 'away', presence.presence());
   check('the pop closes and the header repaints', !b.querySelector('.pf-pop') && b.querySelector('.pf-state')?.textContent === 'away', b.querySelector('.pf-state')?.textContent ?? '');
   check('the dock dot follows', dockBtn.dataset.presence === 'away');
-  // Esc closes the pop and GOES NO FURTHER: profile.js's onKey calls
-  // stopPropagation so the global Esc (windows.js close-all) yields to an open
-  // pop, and dismiss() takes the capture listeners down with it.
+  // Esc closes the pop and GOES NO FURTHER: profile.js's onKey stops propagation so the global Esc (windows.js
+  // close-all) yields to an open pop, and dismiss() takes the capture listeners down with it
   portrait.click();
   check('the pop reopens', !!b.querySelector('.pf-pop'));
   let globalEsc = 0;
@@ -234,11 +242,8 @@ console.log('BODIES — the list populates on avatar-worn, which setMe emits');
   bus.emit('avatars', net.avatars);
   const pane = () => b.querySelector('.pf-pane[data-tab=avatars] .pf-bodies') as HTMLElement;
   check('the avatars tab hosts the bodies list', !!pane());
-  // NO BODY IS IN THE SCENE in this block — the suite never calls setMe. That
-  // is exactly the state R photographed: the header said "wearing claude"
-  // while the list below said "nothing worn yet". getMyAvatarName() is INTENT
-  // (module-load default, never cleared on a failed load); getMe() is fact.
-  // These two assertions used to encode the bug. (2026-09-11)
+  // NO BODY IS IN THE SCENE here (setMe is never called): getMyAvatarName() is INTENT (never cleared on a failed load),
+  // getMe() is fact, and the header must say the fact
   check('with no body in the scene the HEADER says None, not the intended name', /wearing <b>None<\/b>/.test(document.body.innerHTML), (document.body.innerHTML.match(/wearing <b>[^<]*<\/b>/) ?? ['(no header)'])[0]);
   check("...and the bodies panel agrees — no 'claude' beside 'nothing worn yet'", pane().querySelector('.sp-f-info .sp-info')?.textContent === 'None', pane().querySelector('.sp-f-info .sp-info')?.textContent ?? '');
   check('nothing worn yet', pane().querySelector('.sp-empty')?.textContent?.startsWith('nothing worn yet') === true, pane().querySelector('.sp-list')?.textContent ?? '');
@@ -260,8 +265,7 @@ console.log('BODIES — the list populates on avatar-worn, which setMe emits');
   wear?.click(); await tick();
   check('wear dispatches into switchAvatar(path, name)', since(c0, 'switchAvatar').length === 1 && since(c0, 'switchAvatar')[0][1].startsWith('library/'), JSON.stringify(since(c0, 'switchAvatar')));
 }
-  // re-wearing a body already in the list MOVES it to the front — it never
-  // duplicates (bodies.js noteWorn filters the name out before unshifting).
+  // re-wearing a body already in the list MOVES it to the front, never duplicates (bodies.js noteWorn)
   { const e2 = emitted.length;
     mybody.announceWorn('fox', 'library/fox.vrm');
     const stored = JSON.parse(localStorage.getItem('ew-worn') || '[]');
@@ -274,32 +278,32 @@ console.log('TABS — every registered section is a tab; choosing one shows its 
 { const actions = await import('../client/lib/actions.js');
   const frame = ui.settingsFrame() as any;
   const strip = frame.strip as HTMLElement;
-  const ids = ['style', 'video', 'safety'];
-  check('the settings frame carries a tab strip with one tab per section, in registration order',
-    [...strip.querySelectorAll('.pf-tab')].map((b) => b.id).join() === ids.map((i) => `sec-${i}-tab`).join(),
+  // every section the host registered, whoever registered it: the built-ins, the bodies list, a mod's
+  const secs = () => frame.sections as Array<{ key: string; box: HTMLElement; head: HTMLElement }>;
+  check('the settings frame carries a tab strip with one tab per section, in registration order (style, video, safety among them)',
+    [...strip.querySelectorAll('.pf-tab')].every((b, i) => b === secs()[i]?.head) && strip.querySelectorAll('.pf-tab').length === secs().length
+      && ['style', 'video', 'safety'].every((k) => secs().some((x) => x.key === k)),
     [...strip.querySelectorAll('.pf-tab')].map((b) => b.id).join());
   check('no pane lives in the strip, no tab in a pane (a strip, not an accordion)',
-    !strip.querySelector('.sec') && ids.every((i) => !document.getElementById(`sec-${i}`)!.querySelector('.pf-tab')));
-  const state = () => ids.map((i) => `${i}:${document.getElementById(`sec-${i}`)!.classList.contains('open') ? 'open' : '-'}/${document.getElementById(`sec-${i}-tab`)!.classList.contains('on') ? 'on' : '-'}/${document.getElementById(`sec-${i}-tab`)!.getAttribute('aria-selected')}`).join(' ');
-  for (const id of ids) {
-    await openSection(id);
-    check(`clicking the ${id} tab shows its pane ALONE, the tab marked chosen`,
-      state() === ids.map((i) => (i === id ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), state());
+    !strip.querySelector('.sec') && secs().every((x) => !x.box.querySelector('.pf-tab')));
+  const state = () => secs().map((x) => `${x.key}:${x.box.classList.contains('open') ? 'open' : '-'}/${x.head.classList.contains('on') ? 'on' : '-'}/${x.head.getAttribute('aria-selected')}`).join(' ');
+  const alone = (key: string) => secs().map((x) => (x.key === key ? `${x.key}:open/on/true` : `${x.key}:-/-/false`)).join(' ');
+  for (const x of secs()) {
+    x.head.click(); await tick();
+    check(`clicking the ${x.key} tab shows its pane ALONE, the tab marked chosen`, state() === alone(x.key), state());
   }
   frame.hide();
-  for (const id of ids) {
-    actions.run(`section:settings:${id}`); await tick(); await tick();
-    check(`the lantern action section:settings:${id} opens the frame on the ${id} tab`,
-      frame.visible && state() === ids.map((i) => (i === id ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), `${frame.visible} ${state()}`);
+  for (const x of secs()) {
+    actions.run(`section:settings:${x.head.title}`); await tick(); await tick();
+    check(`the lantern action section:settings:${x.head.title} opens the frame on the ${x.key} tab`, frame.visible && state() === alone(x.key), `${frame.visible} ${state()}`);
   }
   // a frame shown with no tab chosen opens the one last chosen (never an empty pane)
   ui.collapseAll(); await tick();
-  check('collapseAll folds the pane away (placing a ghost wants the view)', !ids.some((i) => document.getElementById(`sec-${i}`)!.classList.contains('open')), state());
+  check('collapseAll folds the pane away (placing a ghost wants the view)', !secs().some((x) => x.box.classList.contains('open')), state());
   frame.hide(); frame.show(); await tick();
-  check('shown again with nothing chosen, the frame opens its last tab (the last of them)', state() === ids.map((i) => (i === ids.at(-1) ? `${i}:open/on/true` : `${i}:-/-/false`)).join(' '), state());
+  check('shown again with nothing chosen, the frame opens its last tab (the last of them)', state() === alone(secs().at(-1)!.key), state());
 
-  // a mod's section may share a built-in's label (mods.js passes no id): removing the mod's
-  // must not take the built-in's lantern row with it
+  // a mod's section may share a built-in's label (mods.js passes no id): removing the mod's must keep the built-in's row
   const builtinRun = actions.get('section:settings:video')?.run;
   const mod = ui.makeSection('video', () => {}, { host: 'settings' });
   mod.remove(); await tick();
@@ -321,9 +325,8 @@ console.log('TABS — every registered section is a tab; choosing one shows its 
 
 console.log('WORLD — a viewport restore opens a tab, like show() does');
 {
-  // Last session the viewport auto-hid World; its sections register while it is hidden, so the queued
-  // ensureTab finds it closed and does nothing. When the window grows back, the viewport rule un-hides it
-  // WITHOUT show() — it must still open a tab, not come back as an empty pane.
+  // World's sections register while the viewport has auto-hidden it, so the queued ensureTab finds it closed; when the
+  // viewport rule un-hides it WITHOUT show(), it must still open a tab, not come back as an empty pane
   check('setup: World is not built yet', !getFrame('world'));
   localStorage.setItem('ew-frame-world', JSON.stringify({ x: 700, y: 52, w: 280, h: 320, hidden: true, autoHidden: true }));
   const sec = ui.makeSection('🧪 probe', () => {}, { id: 'probe' });

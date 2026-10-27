@@ -24,17 +24,13 @@ import { creatorOf } from "../../shared/protocol/authority/rights.js";
 import { openLive } from "../../server/livehost.ts";
 import { SANDBOX } from "../../shared/protocol/sandbox.js";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 // the sandbox runs in-process here: this suite tests the protocol's rules around a script, not its isolation (scripts-check
 // does that); the isolated path's first activation can wait on a warm process and read `unavailable`, which is a host fact
 process.env.EIDO_SANDBOX ??= "inprocess";
 const RED = process.env.RED ?? "";          // the check whose setup/expectation is deliberately broken this run
-const red = (id: string) => RED === id;
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ""}`); }
-};
+const { check, red, done } = suite("counter-check", { cap: Infinity });
 const J = JSON.stringify;
 const code = (r: any) => (r?.ok ? "ok" : r?.refused?.code ?? "?");
 
@@ -231,5 +227,4 @@ let H = "";
 }
 
 fs.rmSync(ROOT, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed${RED ? `  (RED=${RED}: that check is expected red)` : ""}`);
-process.exit(failed ? 1 : 0);
+done(`${RED ? `  (RED=${RED}: that check is expected red)` : ""}`);

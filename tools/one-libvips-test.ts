@@ -1,36 +1,13 @@
-// One libvips per optimize process (#122).
-//
-//   bun tools/one-libvips-test.ts
-//
-// The store's root manifest declares `sharp: ^0.33.5`; @gltf-transform/
-// functions reaches sharp through ndarray-pixels, which declares `^0.35.0`.
-// Non-intersecting ranges cannot be deduped, so both copies land on disk and
-// a bare `import("sharp")` inside optimize.ts loads a SECOND native libvips
-// beside the one gltf-transform already has. They disagree about libvips'
-// own enums, and the encode goes wrong in one of two ways:
-//
+// One libvips per optimize process (#122). `bun tools/one-libvips-test.ts`
+// The root manifest declares `sharp: ^0.33.5`; @gltf-transform/functions reaches sharp via ndarray-pixels at
+// `^0.35.0`. The ranges can't dedupe, so a bare `import("sharp")` in optimize.ts loads a SECOND native libvips; the
+// two disagree about libvips' enums and the encode goes wrong:
 //   win32     GLib-GObject-CRITICAL: value "32" ... 'VipsInterpretation'
-//             Error: colourspace: parameter space not set   — it THROWS
-//   show box  no throw. The encode returns uninitialized memory (a repeated
-//             LE uint32, then zeros), gltf-transform stamps it `image/webp`,
-//             and the store serves an image that is not an image.
-//
-// The second is #122: the threshold-lantern's baseColor and normal came out
-// undecodable, the material fell back to baseColorFactor 1,1,1,1, and the
-// lantern rendered white for everyone whose client took the variant.
-//
-// The throw is the merciful case and the one this box reproduces, so an
-// end-to-end check here is a real control: on unmodified main case 1 fails
-// outright. But a machine that happens to dedupe (or a future lockfile that
-// aligns the ranges) would pass case 1 for reasons unrelated to the fix, so
-// case 2 asserts the STRUCTURE — the resolver reaches the nested copy
-// whenever a nested copy exists.
-//
-// Cases 1 and 2 both describe what optimize.ts ASKS for. Case 3 is the one
-// that answers the question directly — it censuses the native binaries this
-// process actually mapped, after a real optimizeGlb run. "Avoids the bare
-// specifier" and "loads one libvips" are different claims, and only the
-// second is the fix.
+//             Error: colourspace: parameter space not set   (it THROWS)
+//   show box  no throw: the encode returns uninitialized memory, stamped `image/webp`, served as an image that isn't (#122)
+// Case 1 (end to end) fails on unmodified main here; a machine that dedupes would pass it by luck, so case 2 asserts
+// the STRUCTURE (the resolver reaches the nested copy whenever one exists). Case 3 censuses the native binaries this
+// process actually mapped: "loads one libvips", not "avoids the bare specifier", is the fix.
 
 import { existsSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -39,9 +16,7 @@ import { join, dirname } from "node:path";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { optimizeGlb } from "../server/optimize.ts";
 
-// getSharp does not exist on main — pull it dynamically so this file still
-// RUNS there and demonstrates the failure, rather than dying at import and
-// proving nothing (the fail-on-main convention, cf. mcpl/effective-test.ts).
+// getSharp doesn't exist on main: pulled dynamically so this file RUNS there and shows the failure, not dies at import
 const OPT = await import("../server/optimize.ts") as {
   getSharp?: () => Promise<{ sharp: any; from: string }>;
 };
@@ -58,10 +33,7 @@ const MAGIC: [number[], string][] = [
   [[0x89, 0x50, 0x4e, 0x47], "image/png"],
   [[0xff, 0xd8, 0xff], "image/jpeg"],
 ];
-/** Declared mimeType vs actual container magic — compared against what the
- *  image CLAIMS to be, never against one hardcoded format. (The first #122
- *  sweep tested every image for webp magic and reported untouched PNGs as
- *  corrupt; the blast radius came out 3× too high.) */
+/** Declared mimeType vs actual container magic: compared against what the image CLAIMS, never one hardcoded format. */
 function sniff(b: Uint8Array): string {
   if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
       && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
@@ -89,14 +61,8 @@ function imagesOf(glb: Uint8Array): { mime: string; bytes: Uint8Array }[] {
 console.log("\none libvips per optimize process (#122):\n");
 
 // ---------------------------------------------- 1. the encode, end to end
-// A JPEG source on purpose: JPEG and webp both route through the CONVERTING
-// path, which is where the two libvips meet. (The lantern's one surviving
-// texture was its PNG-sourced ORM map — the discriminator that named the
-// mechanism in the first place.)
-// The scaffolding resolves its OWN sharp — gltf-transform's copy, directly.
-// It must not go through the module under test: on main that returns the root
-// copy, the fixture encode is then the first place the two libvips meet, and
-// the file dies at setup instead of reporting which checks failed.
+// a JPEG source: JPEG and webp go through the CONVERTING path, where the two libvips meet. Scaffolding resolves
+// gltf-transform's own sharp directly, so a setup failure can't mask the checks.
 const fixtureSharp = await (async () => {
   try {
     const fd = dirname(Bun.resolveSync("@gltf-transform/functions", join(import.meta.dir, "../server")));
@@ -107,9 +73,7 @@ const { from } = await getSharp();
 const sharp = fixtureSharp;
 const tmp = mkdtempSync(join(tmpdir(), "ew-libvips-"));
 try {
-  // A 256² gradient, encoded as JPEG — real image data, deterministic. It has
-  // to VARY: prune() folds a solid-colour texture into baseColorFactor and
-  // drops it, which would leave the pass under test nothing to encode.
+  // a 256² JPEG gradient: it must VARY, or prune() folds a solid texture into baseColorFactor and there's nothing to encode
   const W = 256, px = Buffer.alloc(W * W * 3);
   for (let y = 0; y < W; y++)
     for (let x = 0; x < W; x++) {
@@ -119,16 +83,14 @@ try {
   const jpeg = await sharp(px, { raw: { width: W, height: W, channels: 3 } }).jpeg().toBuffer();
 
   const doc = new Document();
-  const buf = doc.createBuffer();          // GLB resources need one, images included
+  const buf = doc.createBuffer();  // GLB resources need one, images included
   const tex = doc.createTexture("probe").setImage(new Uint8Array(jpeg)).setMimeType("image/jpeg");
   const mat = doc.createMaterial("probeMat").setBaseColorTexture(tex);
   const prim = doc.createPrimitive().setMaterial(mat)
     .setAttribute("POSITION",
       doc.createAccessor().setType("VEC3").setBuffer(buf)
         .setArray(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])))
-    // TEXCOORD_0 is load-bearing: without UVs prune() reads the baseColor
-    // texture as unreferenced and drops it, and the pass under test has
-    // nothing left to encode.
+    // TEXCOORD_0 is load-bearing: without UVs prune() reads the baseColor texture as unreferenced and drops it
     .setAttribute("TEXCOORD_0",
       doc.createAccessor().setType("VEC2").setBuffer(buf)
         .setArray(new Float32Array([0, 0, 1, 0, 0, 1])));
@@ -166,8 +128,7 @@ try {
 }
 
 // ------------------------------------------- 2. the structure, not the luck
-// Case 1 passes on a machine that happens to have one copy, for reasons that
-// have nothing to do with the fix. This is what actually pins it.
+// case 1 passes by luck on a machine with one copy; this pins it
 const fnDir = dirname(Bun.resolveSync("@gltf-transform/functions", join(import.meta.dir, "../server")));
 const npDir = dirname(Bun.resolveSync("ndarray-pixels", fnDir));
 let nested: string | null = null;
@@ -180,21 +141,14 @@ if (nested && existsSync(nested)) {
     !from.includes(join("node_modules", "sharp").replace(/\\/g, "/"))
       || from.includes("ndarray-pixels"), `from=${from}`);
 } else {
-  // Not a failure: a deduped install is the state this fix is chasing.
+  // not a failure: a deduped install is the state this fix is chasing
   console.log("  \x1b[36m—\x1b[0m single sharp install; the bare specifier is safe here");
   console.log(`     resolved: ${from}`);
 }
 
 // ------------------------------------------- 3. the process, not the resolver
-// Cases 1 and 2 show that optimize.ts ASKS for the right copy. This shows what
-// the process actually LOADED, which is the only claim that matters: the fix
-// is "one libvips per optimize process", so count the libvips.
-//
-// process.report.getReport().sharedObjects lists the native binaries mapped
-// into this process by absolute path. Two distinct install roots holding a
-// sharp binding means two libvips, whatever the resolver intended. Measured
-// AFTER case 1's real optimizeGlb run, so it covers the actual optimize path
-// and not a synthetic import.
+// count what the process LOADED: report.sharedObjects lists mapped native binaries; two install roots with a sharp
+// binding means two libvips. Measured after case 1's real optimizeGlb run.
 const report = (process as any).report?.getReport?.();
 if (!report || !Array.isArray(report.sharedObjects)) {
   console.log("  [36m—[0m process.report unavailable on this runtime; skipping the load census");
@@ -211,17 +165,9 @@ if (!report || !Array.isArray(report.sharedObjects)) {
 }
 
 
-// ----------------------------------------- 4. the fail-closed seam (#136 review)
-// Resolution and import are different facts. A nested copy that RESOLVES but
-// fails to IMPORT (ABI mismatch, missing dylib, damaged install) must not send
-// the process to the bare specifier — that loads the root copy beside the one
-// gltf-transform already has and rebuilds the two-libvips condition, in the
-// one situation where things are already going wrong.
-//
-// Driven through pickSharp's injected effects, so this is deterministic on
-// every box rather than dependent on an install actually being broken. The
-// load hook RECORDS every specifier it is handed: the assertion is not merely
-// that the call rejected, but that "sharp" was never reached for.
+// ----------------------------------------- 4. the fail-closed seam (#136)
+// a nested copy that resolves but fails to IMPORT must not fall back to bare "sharp" (two libvips again). Through
+// pickSharp's injected effects; the load hook records every specifier, and "sharp" must never appear.
 if (typeof (OPT as any).pickSharp !== "function") {
   check("pickSharp is exported (resolution split from import)", false, "absent — pre-#136 optimize.ts");
 } else {
@@ -249,9 +195,7 @@ if (typeof (OPT as any).pickSharp !== "function") {
     attempted.length === 1 && attempted[0] === NESTED,
     `load() was handed: ${attempted.join(", ") || "(nothing)"}`);
 
-  // The other side of the same rule: with NO nested copy to resolve, the bare
-  // specifier is the single install and must still be used, or a deduped
-  // machine loses its texture pass for no reason.
+  // with NO nested copy, the bare specifier is the single install and must still be used, or a deduped machine loses its texture pass
   const bare: string[] = [];
   const picked = await pickSharp(() => null, async (spec) => { bare.push(spec); return { default: {} }; });
   check("a genuinely absent nested copy DOES fall back to the bare specifier",

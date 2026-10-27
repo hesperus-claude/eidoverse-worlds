@@ -17,12 +17,13 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "e2238c07";
 
-const MUTANTS: [string, string, string, string, string[]][] = [
+const MUTANTS: [string, string, string | [string, string][], string, string[]][] = [
   ["the shove's own gate", "protocol/authority/bodyverbs.js", "if (a.contact !== undefined) shoveGate(w, st, me, a, flying, actor);\n    else if", "if (false) shoveGate(w, st, me, a, flying, actor);\n    else if", ["S2", "S3", "S4", "S5", "S6", "S9", "S10", "S15", "S17", "S19"]],
   ["reach to the footprint", "protocol/authority/manipulate.js", "if (R.d > SHOVE.reach) refuse(\"out-of-reach\"", "if (false) refuse(\"out-of-reach\"", ["S2"]],
   ["the speed cap", "protocol/authority/manipulate.js", "if (vh > cap + 1e-3 || Math.hypot(vx, vy, vz) > SHOVE.maxV * (1 + SHOVE.lift) + 1e-3) refuse(\"too-fast\"", "if (false) refuse(\"too-fast\"", ["S3"]],
@@ -30,10 +31,11 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["not beneath", "protocol/authority/manipulate.js", "if (b.max[1] <= f[1] + SHOVE.beneath) refuse(\"beneath\"", "if (false) refuse(\"beneath\"", ["S5"]],
   ["not in flight", "protocol/authority/manipulate.js", "if (flying) refuse(\"in-flight\"", "if (false) refuse(\"in-flight\"", ["S6"]],
   ["along the ground", "protocol/authority/manipulate.js", "if (vh < 1e-6 || vy < 0 || vy > SHOVE.lift * vh + 1e-9) refuse(\"shape\"", "if (false) refuse(\"shape\"", ["S9"]],
-  ["a shove carries v", "protocol/authority/manipulate.js", "refuse(\"shape\", \"a shove carries v", "(\"shape\", \"a shove carries v", ["S9"]],
+  ["a shove carries v", "protocol/authority/manipulate.js", "refuse(\"shape\", \"a contact push carries v", "(\"shape\", \"a contact push carries v", ["S9"]],
   ["occupied: a seat", "protocol/authority/occupants.js", "if (who !== actor && s && fam.has(s.to)) return { who, how: \"sits on\" };", "if (false) return { who, how: \"sits on\" };", ["S12", "S21"]],
-  ["occupied: the seat is kept", "protocol/authority/use.js", "if (probe.attach?.to) setOccupant(w, actor, probe.attach.to, probe.near);", "", ["S12", "S21", "S22"]],
-  ["occupied: a seat is left by walking off", "protocol/authority/occupants.js", "if (Math.hypot(to[0] - p[0], to[2] - p[2]) > 1) clearOccupant(w, actor);", "", ["S12", "S21"]],
+  ["occupied: the seat is kept", "protocol/authority/use.js", "if (probe.attach?.to && !a.dry) setOccupant(w, actor, probe.attach.to, probe.near);", "", ["S12", "S21", "S22"]],
+  // a walk clears the seat twice over: the stand-up's own clear, then leftOccupied's distance check after the step
+  ["occupied: a seat is left by walking off", "protocol/authority/bodyverbs.js", [["if (w.presence.occupants?.[actor]) clearOccupant(w, actor); }", "}"], ["else delete w.presence.bodies[actor].size; leftOccupied(w, st, actor, to);", "else delete w.presence.bodies[actor].size;"]], "", ["S12", "S21"]],
   ["occupied: one body per socket", "protocol/authority/use.js", "{ const t = taken(pick); if (t) refuse(\"occupied\"", "{ const t = null; if (t) refuse(\"occupied\"", ["S22"]],
   ["occupied: the free socket is picked", "protocol/authority/use.js", "ok.find((x) => !taken(x)) ?? ok[0]", "ok[0]", ["S22"]],
   ["occupied: snap passes over a sat-in socket", "protocol/authority/manipulate.js", "if (sat?.who) { out.notes.push(", "if (false) { out.notes.push(", ["S23"]],
@@ -47,7 +49,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["by mass", "protocol/authority/manipulate.js", "if (vh > cap + 1e-3 ||", "if (vh > SHOVE.maxV + 1e-3 ||", ["S17"]],
   ["refused shoves unrecorded", "protocol/authority.js", "if (verb === \"punt\" && (args?.contact === true || args?.shove === true)) {", "if (false) {", ["S18"]],
   ["not through a wall", "protocol/authority/manipulate.js", "if (hit) refuse(\"out-of-reach\", `${hit} is between you", "if (false) refuse(\"out-of-reach\", `${hit} is between you", ["S19"]],
-  ["CONTROL (no-op: must stay green)", "protocol/physconst.js", "// a contact push: a punt {contact: true}", "//  a contact push: a punt {contact: true}", []],
+  ["CONTROL (no-op: must stay green)", "protocol/physconst.js", "// a contact push (shared/shove.js)", "//  a contact push (shared/shove.js)", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/shove-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -62,10 +64,14 @@ function mutantTree(tag: string) {
 }
 if (argv.includes("--mutants")) {
   let bad = 0, ran = 0;
+  const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
-    ran++; const d = mutantTree("smut"); const f = path.join(d, "shared", file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
+    ran++; const d = mutantTree("smut"); const f = path.join(d, "shared", file); let src = fs.readFileSync(f, "utf8");
+    const pairs: [string, string][] = Array.isArray(find) ? find : [[find, repl]];   // a gate in two places is reverted in both
+    if (pairs.some(([a]) => src.split(a).length !== 2)) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
+    for (const [a, b] of pairs) src = src.replace(a, () => b);
+    fs.writeFileSync(f, src);
     const r = await runSelf(d, cases.length ? cases : null);
     const redIds = [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => redIds.includes(c)) : r.code === 0;
@@ -299,13 +305,11 @@ const cases: Case[] = [
     good: (o) => o.one === "out-of-reach" && /bar is between you/.test(o.why ?? "") && o.big === "ok" && o.two === "ok" },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("shove-check", { cap: Infinity });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 300) }; }
   let good = false; try { good = !o.threw && c.good(o); } catch { good = false; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id} ${c.what}${good ? "" : `\n      ${JSON.stringify(o)}`}`);
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[shove-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

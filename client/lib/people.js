@@ -1,38 +1,35 @@
-// people.js — who someone is here and what you may do to them (research roles 10-06, S6; PLAN decisions 10-06).
+// people.js — who someone is here and what you may do to them (research roles S6).
 //
-// ONE function decides the menu: personActions(me, them) in shared/protocol/roles.js (pure, tested in tools/protocol/roles-check.ts
-// P1–P3). It shows only what you may do to that one person, so an inhabitant sees "Mention" and nothing else, and when rank
-// is the only reason nothing more shows, one dim line says so. This file draws it on three surfaces, and the authority
-// decides every act again (the menu is a courtesy, never the gate):
+// ONE function decides the menu: personActions(me, them) in shared/protocol/roles.js (tools/protocol/roles-check.ts).
+// It shows only what you may do to that person; when rank is the only reason nothing more shows, one dim line says so.
+// Drawn on three surfaces; the authority decides every act again (the menu is a courtesy, never the gate):
 //   desktop  right-click a row in Chat › People, or the ⋯ on a nameplate card: the house context menu; an act with
 //            choices (how long, which channels, why) opens one small centred card
 //   phone    long-press a row (500 ms, a haptic pulse where the device has one), or the card's ⋯: a bottom sheet at full
 //            width (the people column is 72–260 px), with large chips and no free text required
 //   VR       no popups and no long-presses in a headset (audiopanel.js): a trigger on a row expands an inline strip of
 //            rows under it, choices are rows of chips, and kick and ban take a second trigger on a "confirm" row
-// The role ▸ submenu lists the roles you may give (grantableRoles: ranked below yours, with only permissions you hold).
-// The badge: none for an inhabitant, "guest" for someone without an account, else the role's name (badgeOf).
+// role ▸ lists only roles ranked below yours with permissions you hold; badge: none for an inhabitant, "guest" without an account
 import { CONFIG, bus, report } from './base.js';
 import { net, identities, guests, sendRequest, replica, identityOf } from './net.js';
 import { contextMenu, closeContextMenu } from './panels.js';
 import * as R from '../../shared/protocol/roles.js';
+import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
 import { makeConsentInbox } from './consentinbox.js';
 import { SWITCHES, SWITCH_WORDS, CLASS_WORDS, mySwitch, setSwitch } from './consent.js';
 
 let deps = { mentionPerson: () => {}, presenting: () => false, openModLog: () => {}, toast: () => {} };
 export function initPeople(d) { deps = { ...deps, ...d }; }
 
-// ---------------------------------------------------------------- asks waiting for me (PROTOCOL L6; R 10-14: wire `ask`)
-// The authority files an ask when someone's act on my body meets an `ask` cell and pushes it here as body-inbox (net.js).
-// It marks the asker's row in People Here (badgeHtml), is said once as a toast in the authority's words, and the person's
-// menu answers it: Allow (this once) / Not now / Never. Gone when answered or at its 20 s expiry (consentinbox.js).
+// ---------------------------------------------------------------- asks waiting for me (PROTOCOL L6: wire `ask`)
+// an ask badges the asker's row, toasts once, and their menu answers it; gone when answered or at 20 s
 export const consentInbox = makeConsentInbox({ onChange: (ev) => {
   for (const k of ev.added ?? []) deps.toast(`${displayOf(k.from)} asks to ${CLASS_WORDS[k.cls] ?? k.cls}${k.why ? ` — "${k.why}"` : ''}. Right-click them in People Here to answer; no answer in 20 s is no.`, 'warn', 10000);
-  bus.emit('roster');   // People Here repaints its rows (the mark comes and goes)
+  bus.emit('roster');   // the row's mark comes and goes
 } });
 bus.on('body-inbox', (msg) => consentInbox.take(msg?.messages));
 if (typeof setInterval === 'function') setInterval(() => consentInbox.sweep(), 1000);
-/** The display name behind an identity here (People Here rows are names; the authority's asks name identities). */
+/** The display name behind an identity (rows are names; the authority's asks name identities). */
 export function displayOf(actorId) { if (actorId && actorId === net.you) return CONFIG.name; for (const [n, id] of identities) if (id === actorId) return n; return actorId ?? '?'; }
 /** The ask this person has waiting with me, if any. */
 export const askFrom = (display) => { const id = identityOf(display); return id ? consentInbox.askFrom(id) : null; };
@@ -49,20 +46,20 @@ export function personOf(display) {
   return { display, me: false, id, anon, ...e, muted: !!(id && net.modMuted?.[id]) };
 }
 export const myself = () => personOf(CONFIG.name);
-/** The items the menu shows for this person (pure: roles.js personActions). */
+/** The items the menu shows for this person. */
 export function menuFor(display) {
   const me = myself(), them = personOf(display);
-  if (!them.id && !them.me) return [{ id: 'mention', label: 'Mention' }];   // not known to the authority yet (an old client)
+  if (!them.id && !them.me) return [{ id: 'mention', label: 'Mention' }];   // unknown to the authority yet (an old client)
   const items = R.personActions(me, them, { muted: them.muted });
   if (them.me) return items;
-  // an ask waiting from this person comes first: it has 20 s to live (consentinbox.js)
+  // a waiting ask comes first: it has 20 s to live
   const k = consentInbox.askFrom(them.id);
   const ask = k ? [
     { id: 'ask-allow', label: `Allow: ${askWords(k)} (this once)`, ask: k.id },
     { id: 'ask-no', label: 'Not now', ask: k.id },
     { id: 'ask-never', label: `Never (${k.cls}: deny for them)`, ask: k.id, danger: true },
   ] : [];
-  // my standing table, as a sub-list on every person: ✓ per class that is `allow` for everyone, All at the top
+  // my standing table, on every person
   return [...ask, ...items, { id: 'consent', label: 'Consent ▸' }];
 }
 export const badgeHtml = (display, esc) => { const b = R.badgeOf(personOf(display)); const k = askFrom(display);
@@ -70,7 +67,7 @@ export const badgeHtml = (display, esc) => { const b = R.badgeOf(personOf(displa
 export const isPhone = () => (typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches) || innerWidth <= 600;
 
 // ---------------------------------------------------------------- the acts
-// One duration list for every act, cut to each act's limit (roles.js: a kick lasts at most 60 min, a mute 7 days).
+// one duration list, cut to each act's limit (roles.js)
 const DURATIONS = [[10, '10 min'], [60, '1 hour'], [1440, '1 day'], [10080, '7 days'], [43200, '30 days']];
 const LIMIT = { mute: [5, 10080], kick: [1, 60], ban: [1440, Infinity] };
 const PRESETS = Object.fromEntries(Object.entries(LIMIT).map(([v, [lo, hi]]) => [v, DURATIONS.filter(([m]) => m >= lo && m <= hi)]));
@@ -81,11 +78,10 @@ const SAY = { warn: 'They see a notice they must dismiss.', mute: 'Nobody hears 
 
 async function run(verb, args, what) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(r?.refused ? plainRefusal(what, r) : `${what}: refused`, 'warn', 8000);
   return r;
 }
-/** Do a menu item. Acts with choices open the form on `surface` ('card' | 'sheet' | {strip: host}). An ask's rows carry
- *  the id of the ask they showed (`ask`), and answer that one. */
+/** Acts with choices open the form on `surface` ('card' | 'sheet' | {strip: host}); an ask's row answers the ask it showed. */
 export function act(item, display, surface = 'card', ask = null) {
   const them = personOf(display);
   switch (item) {
@@ -121,8 +117,7 @@ export function sheetFor(display) {
     b.onclick = () => { if (!sh.armed) return; if (!VERB[it.id] && it.id !== 'role' && it.id !== 'consent') closeSheet(); act(it.id, display, 'sheet', it.ask); };
     sh.body.append(b);
   }
-  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger
-  // (the phone probe caught it choosing Ghost…). Rows act only after a fresh press that starts inside the sheet.
+  // the opening press is still down: rows act only after a fresh press inside the sheet, or the lift "clicks" one
   sh.armed = false;
   sh.root.hidden = false; requestAnimationFrame(() => sh.root.classList.add('open'));
   try { navigator.vibrate?.(15); } catch { /* no haptics */ }
@@ -157,7 +152,7 @@ export function closeSheet() { if (!sh) return; sh.root.classList.remove('open')
 function roleMenu(display, surface) {
   const me = myself(), them = personOf(display);
   const roles = R.grantableRoles(wc(), me).filter((r) => r.id !== 'none');
-  // merge when the entry exists: the role menu must not wipe the person's exceptions/note (review 10-14 K3)
+  // merge when the entry exists: the role menu must not wipe the person's exceptions/note
   const pick = (rid) => run('set', { id: '@world', component: `roles:${them.id}`, value: { role: rid }, ...(wc()[`roles:${them.id}`] ? { merge: true } : {}) }, `make ${display} ${rid}`);
   const items = [...roles.map((r) => ({ k: r.id, label: `${r.id === them.role ? '✓ ' : ''}${r.name}` })), ...(R.isOwner(me) || me.permissions.includes('grantRoles') ? [{ k: '::can', label: 'Exceptions…' }] : [])];
   const choose = (k) => (k === '::can' ? openCanForm(display, surface) : pick(k));
@@ -169,23 +164,14 @@ function roleMenu(display, surface) {
 }
 
 // ---------------------------------------------------------------- answering an ask; the Consent ▸ sub-list
-/** Allow (this once) / Not now / Never. Never also files a standing `deny` for that person and class at the authority
- *  (consent {deny, class}: PROTOCOL L6's per-person override, presence-only — it lasts this stay, like the authority's
- *  table itself; my table (consent.js) has no per-person cell to persist it in). */
-// The row answers the ask it showed, by its id (consent {answer: <id>}): never "whatever this person asks now", which
-// could be a newer, different ask the person never saw (review of #260). If that one is gone, nothing is sent.
+/** Never also files a standing `deny` at the authority (PROTOCOL L6), for this stay only. The row answers the ask it
+ *  showed by id, never a newer one they didn't see; if it's gone, nothing is sent. */
 async function answerAsk(item, display, askId) {
   const k = askId ? consentInbox.asks().find((x) => x.id === askId) ?? null : null;
   if (!k) { deps.toast(`the ask from ${display} you were answering is gone (answered, or past its 20 s); nothing was sent`, 'info'); bus.emit('roster'); return null; }
   const yes = item === 'ask-allow'; const words = askWords(k);
   const r = await consentInbox.answer(k.id, yes, sendRequest);
-  // Never's standing no is filed whatever became of the answer to an ask still here at the press: if the authority
-  // refuses the answer (its ask lapsed or was answered there a moment before), that is still a person I said Never to
-  // (review of #260). An ask already gone here by the press (answered, or past its 20 s) returned above, with nothing
-  // sent, so no standing no is filed for it.
-  // The deny goes to the ask's own sender (k.from), never to whoever holds that display name now, which a guest who
-  // left can have passed to another within the ask's 20 s; so the toast names them as the one who asked as `display`.
-  // A reply that never came (mayHaveLanded) isn't a refusal: the answer or the deny may have landed, so the toast says so.
+  // the deny is filed even if the answer is refused, to k.from (never whoever holds the name now); no reply ≠ a refusal
   if (item === 'ask-never') { const d = await sendRequest('consent', { deny: k.from, class: k.cls });
     const gone = r?.ok ? '' : r?.refused?.mayHaveLanded ? `the answer may have landed (${r.refused.reason}); ` : `the ask had gone (${r?.refused?.reason ?? 'refused'}); `;
     deps.toast(d?.ok ? `${gone}the one who asked as ${display} may not ${words} — not now, and not when they ask again`
@@ -196,7 +182,7 @@ async function answerAsk(item, display, askId) {
   deps.toast(yes ? `${display} may ${words}, this once` : `told ${display} not now`, 'info');
   return r;
 }
-/** My body's one switch as three choices (recut A2): ✓ on the current one; a press sets it (consent.js → consentsync). */
+/** My body's one switch as three choices (recut A2), ✓ on the current one. */
 const TIER = 'switch';
 export function consentItems() {
   return SWITCHES.map((v) => ({ k: v, label: `${mySwitch() === v ? '✓ ' : ''}${v} — ${SWITCH_WORDS[v]}` }));
@@ -217,8 +203,7 @@ function consentMenu(display, surface) {
 // ---------------------------------------------------------------- the one form (warn, mute, kick, ban)
 let card = null;
 function closeCard() { card?.remove(); card = null; }
-/** The form: who (name + identity, small: homoglyphs), how long (preset chips), channels (mute), why (chips + text),
- *  confirm. In a strip (VR), kick/ban confirm with a second press on a confirm row. */
+/** The identity shows beside the name (homoglyphs). In a strip (VR), kick/ban take a second press on a confirm row. */
 export function openForm(verb, display, surface = 'card') {
   const them = personOf(display), me = myself(); const owner = R.isOwner(me);
   const st = { len: (PRESETS[verb] ?? [])[0]?.[0], forever: false, ch: new Set(['voice', 'chat']), reason: '', why: '' };
@@ -255,8 +240,9 @@ export function openForm(verb, display, surface = 'card') {
     if (verb === 'mute') Object.assign(args, { minutes: st.len, channels: [...st.ch] });
     if (verb === 'kick') args.minutes = st.len;
     if (verb === 'ban' && !st.forever) args.days = st.len / 1440;
-    const r = await run(verb, args, `${VERB[verb].toLowerCase()} ${display}`);
-    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = r.refused.reason; }
+    const what = `${VERB[verb].toLowerCase()} ${display}`;
+    const r = await run(verb, args, what);
+    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = plainRefusal(what, r); }
   };
   if (surface === 'card') { closeCard(); card = document.createElement('div'); card.id = 'person-form'; const c = document.createElement('div'); c.className = 'pm-card panel'; c.setAttribute('role', 'dialog'); c.append(host); card.append(c);
     card.addEventListener('pointerdown', (e) => { if (e.target === card) closeCard(); }); card.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeCard(); } });
@@ -279,11 +265,9 @@ function openCanForm(display, surface) {
     r.append(l, sel); host.append(r);
   }
   const b = document.createElement('button'); b.type = 'button'; b.className = 'pm-go'; b.textContent = 'Save';
-  // an existing entry is patched (its note and legacy fields stay); someone on the default role gets an entry naming the
-  // role they have now (an exception needs an entry to live on; review 10-07)
+  // patch an existing entry; someone on the default role gets one naming their role (an exception needs an entry)
   const has = !!wc()[`roles:${them.id}`];
-  // a merge keeps keys it isn't sent (RFC 7396): an exception set back to "as the role" goes as null, which removes it
-  // (review 10-07: clearing an exception did nothing)
+  // a merge keeps keys it isn't sent (RFC 7396): a cleared exception must go as null
   b.onclick = async () => { const cleared = Object.fromEntries(Object.keys(cur).filter((k) => !(k in st)).map((k) => [k, null]));
     const value = has ? { can: { ...st, ...cleared } } : { role: them.role, ...(Object.keys(st).length ? { can: st } : {}) };
     const r = await run('set', { id: '@world', component: `roles:${them.id}`, value, ...(has ? { merge: true } : {}) }, `${display}'s exceptions`); if (r?.ok) { closeCard(); closeSheet(); } };
@@ -293,8 +277,7 @@ function openCanForm(display, surface) {
   else { surface.strip.innerHTML = ''; surface.strip.append(host); }
 }
 
-// a warning is a notice you dismiss (research roles §5); the house centred card, kept until pressed
-// a DOM card isn't drawn in a headset (review 10-07 N6): in VR the same notice rides the XR quad (xrask.js), until pressed
+// a warning is a notice you must dismiss (research roles §5); a DOM card isn't drawn in a headset, so VR uses the XR quad
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
   ? chooseXR({ title: `${m.by} warned you`, body: String(m.reason ?? ''), choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
   : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: `${m.by} warned you`, body: String(m.reason ?? ''), ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });

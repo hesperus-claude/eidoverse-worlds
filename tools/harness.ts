@@ -3,9 +3,13 @@ import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync } from "n
 import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
+import { MOVER, TRACK } from "../shared/mover.js";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..");
+/** A WorldAgent's tickEveryMs for walks at `speed` m/s, as fast as the authority's speed track allows with a fifth to
+ *  spare (shared/protocol/authority/bodyverbs.js too-fast; each tick steps 100 ms of the body, mcpl/agent.ts TICK_MS). */
+export const trackTicks = (speed: number = MOVER.walk.speed) => Math.ceil(100 * speed / (TRACK.speed * 0.8));
 export const CHROME = findChrome() ?? "";
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
@@ -16,18 +20,19 @@ export function readSequencerLog(scratch: string): string {
     try { return readFileSync(join(scratch, file), "utf8"); } catch { return ""; }
   }).join("\n");
 }
+// a random start in a 2,000-port window, so suites run side by side don't all probe the same first port (probe, release, bind is a race)
 export function freePort(from: number, tries = 40): number {
-  for (let p = from; p < from + tries; p++) {
+  const start = from + Math.floor(Math.random() * 2000);
+  for (let p = start; p < start + tries; p++) {
     try { const s = Bun.serve({ port: p, hostname: "127.0.0.1", fetch: () => new Response("") }); s.stop(true); return p; }
     catch { /* occupied */ }
   }
-  throw new Error(`no free port in ${from}..${from + tries}`);
+  throw new Error(`no free port in ${start}..${start + tries}`);
 }
 
-/** Found worlds in a scratch WORLDS_DIR before a server serves it. The server never founds a world on join (RFC-005
- *  §3.2.7, security review 10-06 H3: a name with no world behind it is refused), so a test that joins one founds it
- *  first, the way an operator does: `bun tools/protocol/world.ts found <name> --owner <who>`. `owner` is the name the owner
- *  joins with (on a TRUST_NAMES=1 server that typed name IS the founder's account local:<name>). */
+/** Found worlds in a scratch WORLDS_DIR before a server serves it: the server never founds on join (RFC-005 §3.2.7), so
+ *  a test founds first, as an operator does (`bun tools/protocol/world.ts found <name> --owner <who>`). `owner` is the
+ *  name the owner joins with (on TRUST_NAMES=1, the account local:<name>). */
 export function foundWorlds(worldsDir: string, names: string[], owner = "owner") {
   for (const name of names) {
     const r = Bun.spawnSync([process.execPath, join(ROOT, "tools/protocol/world.ts"), "found", name, "--owner", owner], {
@@ -53,12 +58,12 @@ export function saysIn(msgs: any[]) {
 }
 
 let failedChecks = 0;
-// Headless Chromes that are NOT this process's descendants: another suite's or an agent's browser sharing the box.
-// Five gate reds on 2026-10-14 were rows green solo; each cost a solo re-run to classify. The tally line now says so.
+// headless Chromes NOT this process's descendants (another suite's or agent's sharing the box): counted on the tally
+// line so a red under contention can be classified without a solo re-run
 function foreignHeadless(): number {
   try {
     const out = Bun.spawnSync(["ps", "-eo", "pid,ppid,args"]).stdout.toString();
-    // String.split with a limit TRUNCATES (the third piece is one word, not "the rest"): parse pid/ppid and keep the whole command
+    // String.split with a limit TRUNCATES (the third piece is one word): parse pid/ppid and keep the whole command
     const rows = out.split("\n").slice(1).map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter((m): m is RegExpExecArray => !!m).map((m) => [m[1], m[2], m[3]] as [string, string, string]);
     const parent = new Map(rows.map(([pid, ppid]) => [Number(pid), Number(ppid)]));
     const mine = (pid: number) => { for (let p = pid, i = 0; p > 1 && i < 64; p = parent.get(p) ?? 0, i++) if (p === process.pid) return true; return false; };
@@ -71,7 +76,7 @@ export function mkCheck() {
     console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${detail ? dim(`  ${detail}`) : ""}`);
     if (ok) t.passed++; else { t.failed++; failedChecks++; }
   };
-  // "· load 1.2→9.4 (16 cores) · 2 foreign headless chromes" — the box's state at start→end, so a red can be read as load without a re-run
+  // "· load 1.2→9.4 (16 cores) · 2 foreign headless chromes": the box's state start→end, so a red reads as load without a re-run
   t.note = () => { const l1 = loadavg()[0], f1 = foreignHeadless(), cores = cpus().length, hot = Math.max(t.load0, l1) > cores || Math.max(t.foreign0, f1) > 0;
     return ` · load ${t.load0.toFixed(1)}→${l1.toFixed(1)} (${cores} cores) · ${Math.max(t.foreign0, f1)} foreign headless chrome${Math.max(t.foreign0, f1) === 1 ? "" : "s"}${hot ? " · UNDER LOAD: a red here may be timing" : ""}`; };
   return { check, tally: t };
@@ -86,14 +91,16 @@ type ScratchOptions = {
   /** worlds to found before boot (joining never founds one); `owner` founds them (default "owner"). */
   worlds?: string[];
   owner?: string;
+  /** each stdout line as it is written (a file sink is block-buffered by the child: a live log read needs the pipe) */
+  onLine?: (line: string) => void;
 };
 
 /** Own the child and prove its identity before opening any product door. */
 export async function scratchSequencer(name: string, opts: ScratchOptions = {}) {
   const PORT = freePort(opts.portFrom ?? 8950);
   const BASE = `http://127.0.0.1:${PORT}`;
-  // under the gate's per-suite dir when there is one: on Windows tmpdir() is TEMP, which run.ts leaves alone (setting it hung
-  // suites, 10-23), so a failure's [bench] logs would land where CI never uploads them
+  // under the gate's per-suite dir when there is one: on Windows tmpdir() is TEMP, which run.ts leaves alone, so [bench]
+  // logs would land where CI never uploads them
   const SCRATCH = mkdtempSync(join(process.env.PROTOCOL_SCRATCH || tmpdir(), `ew-${name}-`));
   const NONCE = crypto.randomUUID();
   const procs: Bun.Subprocess[] = [];
@@ -141,8 +148,11 @@ export async function scratchSequencer(name: string, opts: ScratchOptions = {}) 
     cwd: ROOT,
     env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
       PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
-    stdout: Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
+    stdout: opts.onLine ? "pipe" : Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
   }));
+  if (opts.onLine) void (async () => { const d = new TextDecoder(); let buf = "";
+    for await (const c of seq.stdout as ReadableStream<Uint8Array>) { const t = d.decode(c); buf += t; try { appendFileSync(join(SCRATCH, "sequencer.log"), t); } catch { /* evidence only */ }
+      let nl; while ((nl = buf.indexOf("\n")) >= 0) { opts.onLine!(buf.slice(0, nl)); buf = buf.slice(nl + 1); } } })();
   let up = false;
   for (let i = 0; i < 80 && !up; i++) {
     if (seq.exitCode !== null) await die(2, `sequencer exited ${seq.exitCode} before readiness`);
@@ -185,10 +195,7 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   }
   const cws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((res, rej) => { cws.onopen = res as any; cws.onerror = rej as any; });
-  // Every page this bench drives runs under the server's Content-Security-Policy (server/csp.ts). A violation is the
-  // client trying something the policy refuses (an inline handler, a host connect-src doesn't name) — a feature that
-  // silently stopped working, so every browser probe is a CSP regression test: any violation fails the run at cleanup,
-  // unless the probe causes them on purpose (cspExpected).
+  // every probe page runs under server/csp.ts's policy: any violation fails the run at cleanup unless expected (cspExpected)
   const cspViolations: string[] = [];
   cws.addEventListener("message", (ev) => {
     const m = JSON.parse(String(ev.data));
@@ -199,18 +206,14 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   });
   const cdp = cdpOn(cws);
   await Promise.all([cdp.send("Runtime.enable"), cdp.send("Page.enable"), cdp.send("Log.enable"), cdp.send("Network.enable")]);
-  // EIDO_CPU_THROTTLE=<n>: slow only the page n times (Chrome's own CPU throttle), so a slow CI runner's page can be
-  // reproduced on a fast host without starving the server or the runner too
+  // EIDO_CPU_THROTTLE=<n>: slow only the page n times (Chrome's CPU throttle), reproducing a slow CI page on a fast host
   const throttle = Number(process.env.EIDO_CPU_THROTTLE);
   if (throttle > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
   // THE SKY GUARD, before any module reads localStorage: a cloudy sky bakes on the CPU in headless Chromium and has
-  // frozen Burrow (memory: feedback_headless_sky_oom). Every page this browser loads from here on starts clouds-off.
+  // frozen a small host. Every page this browser loads starts clouds-off.
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {}" });
-  // THE GPU GUARD: headless Chrome can't present WebGPU, so it destroys the device ~1 s into every page. The client's
-  // recovery (client/lib/gpulost.js) answers a browser-destroyed device with a reload, which would yank the page out
-  // from under a probe mid-check. Seed one recent loss so the rule "a second loss inside 2 min doesn't reload" applies:
-  // the renderer stops (no leak), the page stays, and DOM/state probes run as before. Recovery itself is
-  // gpulost-test.mjs (pure) and gpulost-probe.mjs (its own harness), neither of which loads this.
+  // THE GPU GUARD: headless Chrome destroys the WebGPU device ~1 s in, and gpulost.js reloads; one seeded recent loss
+  // makes a second inside 2 min stop the renderer instead (recovery itself: gpulost-test.mjs, gpulost-probe.mjs)
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
   const evalJson = async (expr: string) => {
     const r = await cdp.send<any>("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });
@@ -231,11 +234,9 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   return { ...run, cleanup, browser, cws, cdp, evalJson, cspViolations };
 }
 
-/** The old authoring words a test written against main used on an agent (`a.verb("spawn", …)`), as the authority
- *  requests the protocol speaks (every world write is a door request; the agent has no raw verbs). Merging the stack
- *  (#235/#236/#239/#241, 10-15) brought tests in that author their scenes this way; this keeps their scenes as they
- *  wrote them. spawn's scale and collide become the transform's scale and the collider component; comp is a set;
- *  mount of the agent itself is the attach tool's path (presence), of a thing a parent set; light is a light thing. */
+/** Old agent authoring words (`a.verb("spawn", …)`) as protocol door requests, so merged tests keep their scenes:
+ *  spawn's scale/collide → transform scale and collider; comp is a set; mount of the agent is attach, of a thing a
+ *  parent set; light is a light thing. */
 /** A scene's name for a thing (legacyVerb's spawn) → the id the authority minted for it. */
 export const sceneId = (a: any, n: string): string => a?.__sceneIds?.get(n) ?? n;
 export async function legacyVerb(a: any, v: string, x: any): Promise<any> {
@@ -243,8 +244,8 @@ export async function legacyVerb(a: any, v: string, x: any): Promise<any> {
   const { qFromYaw } = await import("../shared/rot.js");
   const tf = (o: any) => ({ ...(o.pos ? { pos: o.pos } : {}), ...(typeof o.yaw === "number" ? { q: qFromYaw(o.yaw) } : {}),
     ...(typeof o.scale === "number" ? { scale: [o.scale, o.scale, o.scale] } : {}) });
-  // R 10-17: a writer never chooses an id. A scene's name for a thing becomes a placeholder ('$tower') the authority mints an id
-  // for, and the thing's label (tools take a label as they take an id); later words map the name to the minted id
+  // a writer never chooses an id: a scene's name becomes a placeholder ('$tower') the authority mints for, and the thing's
+  // label; later words map the name to the minted id
   const ids: Map<string, string> = (a.__sceneIds ??= new Map());
   const id = (n: any) => (typeof n === "string" ? ids.get(n) ?? n : n);
   const made = (r: any, n: string) => { const m = r?.ids?.[`$${n}`]; if (m) ids.set(n, m); return r; };

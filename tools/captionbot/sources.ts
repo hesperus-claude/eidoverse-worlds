@@ -1,7 +1,5 @@
-// Audio sources feeding the tap. Two, deliberately: the appliance (ffmpeg
-// pulling the RTSP audio off mediamtx) and a file (rehearsal and tests) —
-// the same 20 ms PCM16LE mono frames either way, so nothing downstream
-// knows which it is.
+// Audio sources feeding the tap: the appliance (ffmpeg pulling RTSP audio off mediamtx) and a file (rehearsal and
+// tests), the same 20 ms PCM16LE mono frames either way, so nothing downstream knows which.
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import type { AudioTap } from './tap.ts';
@@ -21,24 +19,16 @@ export function framer(tap: AudioTap): { write(chunk: Buffer): void; end(): void
       carry = off ? Buffer.from(carry.subarray(off)) : carry;
     },
     end() {
-      // A trailing partial frame is padded with silence, never dropped: the
-      // last syllable of a file is the one a test looks for.
+      // a trailing partial frame is padded with silence, never dropped: a file's last syllable is the one a test looks for
       if (carry.length) { const last = Buffer.alloc(size); carry.copy(last); tap.push(last); }
       tap.end();
     },
   };
 }
 
-/** The appliance: ffmpeg decodes whatever mediamtx serves on RTSP into PCM16LE
- *  mono at the tap's rate. The exact command deploy/projector/smoke.sh checks.
- *
- *  Source loss is OWNED here, not a silent one-shot: when ffmpeg exits
- *  without being asked (the stream ended, the appliance restarted, the
- *  network blinked), the tap is flushed, `onReattach` is told — that is the
- *  caller's cue to rotate the caption session, because "seconds since
- *  attach" starts over — and ffmpeg is respawned after a backoff that
- *  doubles from 2 s to 30 s and resets on a healthy minute. `close()` ends
- *  it for good. */
+/** ffmpeg decodes mediamtx's RTSP into PCM16LE mono at the tap's rate (the command deploy/projector/smoke.sh checks).
+ *  On an unasked exit: flush the tap, call `onReattach` (rotate the caption session), respawn after a backoff
+ *  doubling 2 s → 30 s, reset by a healthy minute. `close()` ends it. */
 export function ffmpegSource(url: string, tap: AudioTap, log: (m: string) => void,
   opts: { onReattach?: () => void; spawnFn?: typeof spawn; minBackoffMs?: number; maxBackoffMs?: number } = {}): { close(): void; attempts: number } {
   const args = ['-hide_banner', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', url,
@@ -75,8 +65,8 @@ export function ffmpegSource(url: string, tap: AudioTap, log: (m: string) => voi
   return handle;
 }
 
-/** A raw PCM16LE mono file at the tap's rate (a .wav is fine — the 44-byte
- *  header is noise the VAD ignores). Paced to real time unless `fast`. */
+/** A raw PCM16LE mono file at the tap's rate (a .wav is fine: the 44-byte header is noise the VAD ignores). Paced to
+ *  real time unless `fast`. */
 export function fileSource(path: string, tap: AudioTap, opts: { fast?: boolean } = {}): Promise<void> {
   const f = framer(tap);
   return new Promise((resolve, reject) => {

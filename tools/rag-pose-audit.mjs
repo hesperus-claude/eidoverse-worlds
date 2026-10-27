@@ -1,18 +1,9 @@
-// What SHAPE does a settled body actually take? — the anatomy audit.
-//
+// What SHAPE does a settled body take? The anatomy audit: rag-tune.mjs asks "is the solver stable", this asks "could a
+// body hold this pose" (a tumble can settle fast, keep bone lengths and never interpenetrate, yet rest with its leg behind
+// its back). Angles are ANATOMICAL (flexion vs extension, not the solver's unsigned cone); each block's reference ranges
+// are the usual clinical figures for a relaxed body.
 //   bun tools/rag-pose-audit.mjs            # the fleet, at settle
 //   bun tools/rag-pose-audit.mjs --peak     # worst reached at ANY point
-//
-// rag-tune.mjs answers "is the solver stable"; this answers "is the pose a
-// body could hold". They are different questions and the second one is not
-// visible in any of the stability numbers: a tumble can settle fast, keep its
-// bone lengths and never interpenetrate, and still come to rest with its leg
-// behind its own back.
-//
-// Every angle is reported in ANATOMICAL terms — flexion vs extension, not the
-// unsigned cone angle the solver stores — because that is the axis on which a
-// pose reads as wrong. Reference ranges in the header of each block are the
-// usual clinical figures for a relaxed (not stretched, not athletic) body.
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
@@ -36,10 +27,8 @@ function anat(rd, from, to) {
     side: d.dot(r),                  // + = toward the body's left
   };
 }
-// How far IN FRONT of the body's frontal plane the limb points: + forward,
-// − behind, and it never wraps. atan2(fwd, down) does wrap — it reads an arm
-// held straight overhead as 180° "behind the body", which is not a pose
-// problem at all, and sent me looking for a shoulder bug that did not exist.
+// how far IN FRONT of the frontal plane the limb points (+ forward, − behind): asin never wraps, where atan2(fwd, down)
+// would read an arm straight overhead as 180° "behind"
 const sagittal = (a) => Math.asin(THREE.MathUtils.clamp(a.fwd, -1, 1)) * DEG;
 const lateral = (a) => Math.asin(THREE.MathUtils.clamp(a.side, -1, 1)) * DEG;
 
@@ -52,9 +41,7 @@ function measure(rd) {
   ]) {
     if (!rd.p[from] || !rd.p[to]) continue;
     const a = anat(rd, from, to);
-    // mirror the right side, or "+45° abducted" on the left and the identical
-    // pose on the right report as opposite numbers and the range looks twice
-    // as wide as it is
+    // mirror the right side, or the identical pose reads as opposite numbers and the range looks twice as wide
     if (key.endsWith('.R')) a.side = -a.side;
     out[key] = { sag: sagittal(a), lat: lateral(a) };
   }

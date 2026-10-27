@@ -1,14 +1,8 @@
-// ui.js — the dock rail, the ∃ menu, pins, and the registerPanel mod seam, run headless against the REAL
-// module (windows.js, icons.js and dropdown.js real underneath it; see dock-stub.mjs for what is not).
-//
-//   bun tools/dock-test.ts
-//
-// What the rail promises (ui.js's own comment): an icon rides the rail while its window is OPEN or while it
-// is PINNED; otherwise it hides. Pinning lives in the ∃ menu, and so does the layout lock. A mod that calls
-// registerPanel() gets the same door as a built-in — a frame, a rail button, a menu row, a pin — and a
-// duplicate id is refused, not doubled. And rail chrome never rides emoji: the four upstream rail labels
-// (💬 🧱 👋 🐞) must resolve through EMOJI_ICON to Phosphor FILL glyphs — never the raw emoji, never the
-// puzzle-piece fallback that means "unknown icon".
+// ui.js: the dock rail, the ∃ menu, pins and the registerPanel mod seam, headless against the REAL module (windows.js,
+// icons.js, dropdown.js real underneath; dock-stub.mjs says what isn't). `bun tools/dock-test.ts`
+// An icon shows on the rail while its window is OPEN or PINNED, otherwise hides. A mod's registerPanel() gets the
+// built-in's door (frame, rail button, menu row, pin); a duplicate id is refused. Rail labels (💬 🧱 👋 🐞) must
+// resolve through EMOJI_ICON to Phosphor FILL glyphs: never the raw emoji, never the puzzle-piece fallback.
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
@@ -37,10 +31,9 @@ document.body.innerHTML = `
 const { bus } = await import("./dock-stub.mjs");
 const { fsvg } = await import("../client/lib/icons.js");
 const { makeFrame, getFrame, isLocked } = await import("../client/lib/windows.js");
-// a returning person's storage from before the action bar's rename (ad90009f, 10-17): pins and frame state under its old
-// id. The old id is ui.js's ACTIONBAR_OLD_ID (the word lives on that one line, names-check E3); a literal copy here would
-// be a second spelling, so it is read the only way that does not import ui.js first: from the source line.
-// Seeded after windows.js has stamped its layout version (so the frame key is not purged) and before ui.js reads pins.
+// storage from before the action bar's rename: pins and frame state under the old id, read from ui.js's
+// ACTIONBAR_OLD_ID source line (names-check E3) without importing ui.js. Seeded after windows.js stamps its layout
+// version and before ui.js reads pins.
 const OLD = /export const ACTIONBAR_OLD_ID = '(\w+)';/.exec(await Bun.file(here("../client/lib/ui.js")).text())![1];
 const RENAMED_FRAME = JSON.stringify({ x: 336, y: 10, w: 352, h: 32 });
 localStorage.setItem("ew-dock-pins", JSON.stringify(["search", "profile", "world", "chat", OLD, "debug", "settings", "edit"]));
@@ -55,7 +48,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
 {
-  // R, gym 10-17 20:00: the bar sat "closer to the dock than it used to" — its saved place was under the old id
+  // the bar's saved place was under the old id
   const p = JSON.parse(localStorage.getItem("ew-dock-pins") ?? "null");
   check("rename carry: a saved pin under the old id is the action bar's 'actions' pin after load", Array.isArray(p) && p.includes("actions") && !p.includes(OLD), JSON.stringify(p));
   check("rename carry: the action bar's saved place/size moves to ew-frame-actions", localStorage.getItem("ew-frame-actions") === RENAMED_FRAME && localStorage.getItem(`ew-frame-${OLD}`) == null,
@@ -69,7 +62,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 const dock = () => document.getElementById("dock")!;
 const menu = () => document.getElementById("emenu")!;
 const btn = (id: string) => dock().querySelector(`button[data-toggles="${id}"]`) as HTMLButtonElement | null;
-// the ∃ menu is a dropdown now (owner, 10-01): what used to be the whole menu lives in its Panels ▸ flyout
+// the ∃ menu is a dropdown: the old menu lives in its Panels ▸ flyout
 const sub = () => document.getElementById("emenu-sub")!;
 const top = (id: string) => menu().querySelector(`.mrow[data-item="${id}"]`) as HTMLButtonElement | null;
 const row = (id: string) => sub().querySelector(`.mrow[data-row="${id}"]`) as HTMLButtonElement | null;
@@ -77,7 +70,7 @@ const pin = (id: string) => sub().querySelector(`.mpin[data-pin="${id}"]`) as HT
 const openPanels = () => { toggleEMenu(true); top("panels")!.click(); };
 const order = () => [...dock().querySelectorAll("button[data-toggles]")].map((b) => (b as HTMLElement).dataset.toggles);
 const savedPins = () => JSON.parse(localStorage.getItem("ew-dock-pins") ?? "null");
-// compare glyphs by their path data: happy-dom re-serializes attribute whitespace, so markup equality lies
+// compare glyphs by path data: happy-dom re-serializes attribute whitespace
 const paths = (name: string) => [...fsvg(name, 15).matchAll(/ d="([^"]+)"/g)].map((m) => m[1]);
 const wears = (html: string, name: string) => paths(name).every((d) => html.includes(d));
 const PUZZLE = "puzzle-piece";
@@ -95,24 +88,23 @@ initDock([
   { id: "debug", label: "🐞" },
   { id: "edit", label: "🔧", icon: "wrench", last: true, action: () => { editFired++; editOn = !editOn; }, active: () => editOn, gate: () => editGate },
 ]);
-await tick();   // initPanels' dynamic imports land and repaint
-// DEFAULT_LAYOUT opens world/chat/gestures at birth; every rail assertion below starts from CLOSED
+await tick();  // initPanels' dynamic imports land and repaint
+// DEFAULT_LAYOUT opens world/chat/gestures at birth; every rail assertion below starts CLOSED
 for (const id of ["chat", "world", "actions", "debug"]) getFrame(id)!.hide();
 bus.emit("frames");
 check("∃ leads the rail", dock().firstElementChild?.id === "hud");
 check("profile leads the buttons (right under the ∃); the wrench closes the list; the grip is last",
   order()[0] === "profile" && order()[order().length - 1] === "edit" && dock().lastElementChild?.classList.contains("dock-grip"), order().join());
-// search sits between gestures and debug (owner, 10-01: "Search almost feels like a less-standard feature, so maybe
-// should be docked by default between gestures and debug"), pinned by default
+// search sits between gestures and debug, pinned by default
 check("dock order follows the entry list, search between actions and debug", order().join() === "profile,chat,world,nofrx,actions,search,debug,edit", order().join());
 check("…and search is pinned by default (shown while the lantern is closed)", btn("search")!.hidden === false && JSON.parse(localStorage.getItem("ew-dock-pins") ?? '["search"]').includes("search"));
-{ // the search entry: the lantern prompt's way in, wearing the magnifying glass, its chord in the tooltip
+{ // the search entry: the lantern prompt's way in, the magnifying glass, its chord in the tooltip
   const { get: getAction, register: registerAction } = await import("../client/lib/actions.js");
   const s = btn("search")!;
   check("the search entry wears the magnifying glass (line at rest + fill)", wears(s.innerHTML, "magnifying-glass") && s.querySelectorAll("svg").length === 2, s.innerHTML.slice(0, 80));
   check("…its tooltip is 'Search & commands · Ctrl K' (⌘K on a Mac)", /^Search & commands · (Ctrl K|⌘K)$/.test(s.title), s.title);
   check("…and it adds no lantern row (a row that opens the prompt you are typing in)", getAction("panel:search") === null);
-  // EVERY rail tooltip names its key where the registry knows one — merged in later, as main.js's key table does
+  // EVERY rail tooltip names its key where the registry knows one, merged in later as main.js's key table does
   registerAction({ id: "panel:debug", key: "F3" });
   registerAction({ id: "panel:chat", key: "Enter" });
   registerAction({ id: "panel:edit", key: "B" });
@@ -125,8 +117,7 @@ check("…and search is pinned by default (shown while the lantern is closed)", 
 check("built-ins are pinned by default: chat's button shows while its frame is closed",
   !getFrame("chat")!.visible && btn("chat")!.hidden === false);
 check("an entry with no frame and no pin is hidden", btn("nofrx")!.hidden === true);
-// GREY, NOT GONE (R, 2026-09-11). A hidden affordance teaches nobody it
-// exists — which is how the wrench went missing from the rail for days.
+// GREY, NOT GONE: a hidden affordance teaches nobody it exists
 check("a gated action entry is PRESENT but dead while its gate is closed",
   btn("edit")!.hidden === false && btn("edit")!.classList.contains("dead") && btn("edit")!.disabled === true,
   `hidden=${btn("edit")!.hidden} dead=${btn("edit")!.classList.contains("dead")} disabled=${btn("edit")!.disabled}`);
@@ -142,9 +133,7 @@ check("...and again to unlight", editFired === 2 && !btn("edit")!.classList.cont
 check("window.eido.ui.registerPanel is the exported seam", (window as any).eido?.ui?.registerPanel === registerPanel);
 
 console.log("DOCK — EMOJI_ICON: rail chrome never rides emoji");
-// world is upstream-labelled '🧱' (main.js), but 🧱 means BUILD — catalog.js's
-// build section wears the hammer correctly. The world PANEL is a planet, so the
-// entry id overrides the emoji (ui.js ID_ICON). Live report, #185.
+// world is labelled '🧱' (main.js), but 🧱 means BUILD; the world PANEL is a planet, so the id overrides (ui.js ID_ICON; #185)
 const RAIL: [string, string, string][] = [["chat", "💬", "chat-circle"], ["world", "🧱", "planet"], ["actions", "👋", "hand-waving"], ["debug", "🐞", "bug"]];
 for (const [id, emoji, icon] of RAIL) {
   const b = btn(id)!;
@@ -173,10 +162,8 @@ toggleEMenu(false);
 
 console.log("DOCK — the rail clears the joystick (mobile landscape)");
 {
-  // R, 2026-09-11: "it doesn't currently take into account the space needed for
-  // the mobile joystick". #stick is left:18 bottom:18, 116px square -> it owns
-  // the bottom 134px of the left column. The rail is taller than what is left
-  // above it at 844x390, so a LEFT edge runs through the thumb.
+  // the mobile joystick (#stick: left:18 bottom:18, 116px) owns the bottom 134px of the left column; at 844x390 a LEFT
+  // rail runs through the thumb
   const { dockEdgeFitsLeft } = ui as any;
   const vw0 = innerWidth, vh0 = innerHeight;
   const setVp = (w: number, h: number) => { (window as any).innerWidth = w; (window as any).innerHeight = h; };
@@ -192,9 +179,7 @@ console.log("DOCK — the rail clears the joystick (mobile landscape)");
   setVp(844, 390);
   check("touch, landscape: the rail cannot clear the stick -> not left", dockEdgeFitsLeft() === false);
 
-  // This assertion used to read back its own localStorage.setItem and would have
-  // passed with ui.js deleted (agent review, 2026-09-11). Drive the real path:
-  // initDock -> loadDockEdge -> applyDockEdge, and read the edge off the DOM.
+  // drive the real path (initDock -> loadDockEdge -> applyDockEdge) and read the edge off the DOM, not back from localStorage
   localStorage.setItem("ew-dock-pos", JSON.stringify({ edge: "right", along: 40 }));
   window.dispatchEvent(new Event("resize"));          // initDock's own listener re-applies the edge
   check("a DELIBERATE drag still wins: a stored ew-dock-pos beats the joystick rule",
@@ -247,13 +232,11 @@ check("voice rows lead: mic, ears, VR", ["glyph:mic", "glyph:ear", "glyph:xr"].e
 check("VR row is dead when no headset is sensed (disabled row + disabled pin)", row("glyph:xr")!.disabled && pin("glyph:xr")!.disabled);
 check("every window with a frame has a row; a frameless entry has none", ["chat", "world", "actions", "debug", "modx"].every((id) => !!row(id)) && !row("nofrx"));
 check("the wrench has a row while gated open", !!row("edit"));
-{ // THE LANTERN'S RESTING LINE pins from here too (owner, 10-01: "add it as a pin feature for the reverse-E menu (might
-  // need its own logo to differentiate), and have it obey the 'esc to hide' feature")
+{ // THE LANTERN'S RESTING LINE pins from here too, with its own glyph, and obeys Esc-to-hide
   const L = await import("../client/lib/commandbar.js");
   const r = row("lantern"), p = pin("lantern");
   const rows = [...sub().querySelectorAll(".mrow[data-row]")].map((x) => (x as HTMLElement).dataset.row);
-  // its own area (owner, 10-01: "It's not *quite* a conventional panel so it can't get docked"): a group of one, after
-  // the voice group, separated from it and from the windows the way the voice group is
+  // its own area (not quite a panel, so it can't dock): a group of one after the voice group, separated like it
   check("the lantern has a row in a group of its own: a separator either side, after the voice rows",
     !!r && r.previousElementSibling?.className === "msep" && r.nextElementSibling?.className === "msep"
       && r.previousElementSibling?.previousElementSibling === row("glyph:xr"), rows.join());
@@ -268,13 +251,12 @@ check("the wrench has a row while gated open", !!row("edit"));
   check("…and the rail's search entry is untouched by it", btn("search")!.hidden === false);
   pin("lantern")!.click();
   check("clicking again pins it back", L.pillPinned() && pin("lantern")!.classList.contains("on"));
-  // every way in that also closes it is a TOGGLE to the lantern's blur (commandbar.js): a held click on one of these used to
-  // close the lantern on blur and reopen it on release (measured in the browser, 10-01)
+  // every way in that also closes it TOGGLES against the lantern's blur (commandbar.js), or a held click closes on blur
+  // and reopens on release
   check("the rail's search entry and the menu's lantern and search rows are lantern toggles",
     ["search"].every((id) => btn(id)!.hasAttribute("data-lantern-toggle")) && row("lantern")!.hasAttribute("data-lantern-toggle") && row("search")!.hasAttribute("data-lantern-toggle"));
-  L.initLantern({});   // main.js boots it; nothing above needed it
-  { // PINNING IS BOOKKEEPING (owner, 10-01: "wouldn't expect *pinning* a menu to close a menu that's open"): a pin
-    // never takes focus, so an open lantern's line keeps it and stays open — a pin's mousedown used to blur the line
+  L.initLantern({});  // main.js boots it
+  { // PINNING IS BOOKKEEPING: a pin never takes focus, so an open lantern's line keeps it and stays open
     const pins = [...sub().querySelectorAll(".mpin:not([disabled])")] as HTMLElement[];
     const kept = pins.filter((p) => { const ev = new MouseEvent("mousedown", { bubbles: true, cancelable: true }); p.dispatchEvent(ev); return ev.defaultPrevented; });
     check("no pin takes focus on mousedown (an open lantern keeps its line)", pins.length > 5 && kept.length === pins.length,
@@ -287,8 +269,7 @@ check("the wrench has a row while gated open", !!row("edit"));
   check("Tab put the panels away (windows.js says so on the bus): the resting line goes with them", L.pillQuiet());
   bus.emit("esc-quiet", "restored");
   check("…and comes back with them", !L.pillQuiet());
-  // the real key, with NO panel open (owner, 10-01: "Basically only the dock should be visible"): Tab still takes the
-  // resting line away, and says so; the next Tab brings it back (Esc did, until R 10-15: Esc is full screen's way out)
+  // the real key with NO panel open: Tab still takes the resting line away, and says so; the next Tab brings it back
   for (const id of ["chat", "world", "actions", "debug", "settings", "profile"]) getFrame(id)?.hide();
   const menuWas = !menu().hidden;
   if (menuWas) toggleEMenu(false);
@@ -301,10 +282,7 @@ check("the wrench has a row while gated open", !!row("edit"));
   check("…the next Tab brings it back", !L.pillQuiet());
   if (menuWas) openPanels();
 }
-{ // ...and a row while gated CLOSED too — dead, not absent (R: "It SHOULD be
-  // in the reverse-E menu regardless"). paintEMenu used to `continue` past a
-  // closed gate, so the only way to learn edit mode existed was to already
-  // have build rights.
+{ // ...and a row while gated CLOSED: dead, not absent, or the only way to learn edit mode exists is to have build rights
   const was = editGate;
   editGate = false; bus.emit("frames");
   const r = row("edit");
@@ -313,22 +291,12 @@ check("the wrench has a row while gated open", !!row("edit"));
     r ? `dead=${r.classList.contains("dead")} disabled=${r.disabled}` : "NO ROW");
   editGate = was; bus.emit("frames");
 }
-{ // AUTO-PIN ON THE GRANT, edge-triggered. R asked for the wrench to pin
-  // itself when build rights arrive, with a manual unpin still winning — so it
-  // must fire on closed->open, never on every repaint.
+{ // AUTO-PIN ON THE GRANT, edge-triggered: closed->open only, never every repaint, and a manual unpin still wins
   const wasGate = editGate;
-  // OBSERVE WHAT THE PRODUCT OBSERVES. savedPins() reads localStorage, which is
-  // null until something calls savePins() — but `pins` already contains 'edit'
-  // from DEFAULT_PINS at block start. So a storage-based probe reports
-  // "unpinned" while the product considers it pinned, the opening unpin is
-  // skipped, and the grant finds nothing to do. The rail is the honest seam:
-  // paintDock hides an action button iff `!active && !pins.has(id)`
-  // (ui.js:553), so with the gate open and the mode off, visible == pinned.
-  // (Three instrumented runs to find this; the storage probe was mine.)
+  // observe what the product observes: `pins` starts with 'edit' from DEFAULT_PINS while savedPins() is null, so a storage
+  // probe lies; paintDock hides an action iff `!active && !pins.has(id)`, so gate open + mode off means visible == pinned
   const isPinned = () => { editGate = true; bus.emit("frames"); return btn("edit")!.hidden === false; };
-  // Re-QUERY the pin button every time: emenuKey() omits a gated-closed action
-  // entry, so flipping editGate changes the key and buildEMenu rebuilds every
-  // row — a captured element goes stale across exactly the emits driven here.
+  // re-QUERY the pin button each time: flipping editGate changes emenuKey() and buildEMenu rebuilds every row
   const pinNow = () => sub().querySelector(`.mpin[data-pin="edit"]`) as HTMLButtonElement | null;
 
   editGate = true; bus.emit("your-rights");            // settle: granted, remembered
@@ -339,21 +307,9 @@ check("the wrench has a row while gated open", !!row("edit"));
   editGate = true; bus.emit("your-rights");            // THE GRANT
   check("a rights grant auto-pins the wrench", isPinned(), JSON.stringify(savedPins()));
 
-  // NOT ASSERTED HERE, and the reason is worth recording: the product now saves
-  // on every edge rather than only when the set changes, because `pins`
-  // hydrates from DEFAULT_PINS (ui.js:313) — which contains 'edit' — so a FIRST
-  // grant found the id already present, skipped savePins(), and wrote nothing.
-  // A browser probe measured it: LS stayed null across boot and first grant.
-  // This suite CANNOT bind it. Any setup that reaches a first grant from this
-  // block must pass through a revoke, and the revoke itself stamps the key —
-  // instrumented: `now=false pins.has=true` deletes and saves, so by the grant
-  // `pins.has=false` and even the OLD guard writes. Recreating the precondition
-  // needs `pins` seeded without a save, and `pins` is module-private.
-  // Disclosed rather than asserted vacuously. (round 6)
+  // not asserted: pins save on every edge, but a first grant here needs a revoke first, which saves; `pins` is private
 
-  // R asked for BOTH verbs: "gray out AND UNPIN ... and it activates and pins
-  // automatically when you do get it". Shipping only the pin left a demoted
-  // user with a dead wrench welded to a GLOBAL pin list. (round 5)
+  // BOTH verbs: losing rights greys AND unpins, or a demoted user keeps a dead wrench on a GLOBAL pin list
   editGate = false; bus.emit("your-rights");
   check("...and losing the rights unpins it again", !isPinned(), JSON.stringify(savedPins()));
 
@@ -365,16 +321,12 @@ check("the wrench has a row while gated open", !!row("edit"));
   check("...and the next repaint does NOT undo the manual unpin (edge, not level)",
     !isPinned(), JSON.stringify(savedPins()));
 
-  // and a dead row's pin must be dead too — the VR row's own treatment
+  // a dead row's pin must be dead too (the VR row's treatment)
   editGate = false; bus.emit("your-rights");
   check("a gated-closed row's pin is disabled, not merely un-hoverable",
     pinNow()?.disabled === true, `disabled=${pinNow()?.disabled}`);
 
-  // NEVER `on` AND `dead`. .on's brand ink and 2px edge-bar come later in the
-  // sheet at equal specificity, so a dead+on button rendered as "active but
-  // broken": 42% opacity in full brand colour. Reachable in the product —
-  // setEditMode has no rights check and KeyB is ungated, so a builder can
-  // enter edit mode and then lose rights mid-session. (round 5)
+  // never `on` AND `dead` (.on's ink wins at equal specificity: "active but broken"); reachable by losing rights in edit mode
   editOn = true; bus.emit("frames");
   check("a dead action button never also paints as active",
     btn("edit")!.classList.contains("dead") && !btn("edit")!.classList.contains("on"),
@@ -384,11 +336,8 @@ check("the wrench has a row while gated open", !!row("edit"));
   editGate = wasGate; bus.emit("frames");
 }
 
-// ORDER AT PAINT TIME. initDock sorts `last` to the end once; registerPanel
-// PUSHES later mods on after that sort has run, so the menu drifted while the
-// rail stayed right (addDockButton inserts before the first [data-last]).
-// Measured before the fix: dock [..., modx, mody, edit], menu [..., edit, modx,
-// mody]. R: "it should always be at the bottom of both until further notice."
+// registerPanel pushes later mods after initDock's one sort, so `last` must sort to the bottom of menu and rail at
+// paint time (the rail's addDockButton inserts before the first [data-last])
 { const rows = [...sub().querySelectorAll(".mrow[data-row]")].map((r: any) => r.dataset.row);
   const btns = [...dock().querySelectorAll("button[data-toggles]")].map((b: any) => b.dataset.toggles);
   const named = rows.filter((r: string) => !r.startsWith("glyph:"));
@@ -396,8 +345,8 @@ check("the wrench has a row while gated open", !!row("edit"));
     named[named.length - 1] === "edit", JSON.stringify(named));
   check("...and last on the rail too", btns[btns.length - 1] === "edit", JSON.stringify(btns)); }
 
-{ // EVERY PIN, on → off → on with the menu open (owner, 10-01: "make sure they pin/unpin and highlight/unhighlight
-  // correctly"): the highlight follows at once, the menu stays open, and the choice is where the next boot reads it
+{ // EVERY PIN, on → off → on with the menu open: the highlight follows at once, the menu stays open, and the choice is
+  // where the next boot reads it
   const { glyphPinned } = await import("./dock-stub.mjs");
   const L = await import("../client/lib/commandbar.js");
   const stored = (id: string) => id === "lantern" ? L.pillPinned() && localStorage.getItem("ew-lantern-pinned") !== "0"
@@ -422,7 +371,7 @@ check("the wrench has a row while gated open", !!row("edit"));
   const reset = [...sub().querySelectorAll(".mrow")].find((r) => /reset layout/.test(r.textContent!)) as HTMLButtonElement;
   reset.click();
   check("the menu's reset layout forgets the resting line's moved spot", localStorage.getItem("ew-lantern-pos") === null, String(localStorage.getItem("ew-lantern-pos")));
-  for (const id of ["chat", "world", "actions", "debug"]) getFrame(id)!.hide();   // the reset reopened the default layout; the checks below start closed
+  for (const id of ["chat", "world", "actions", "debug"]) getFrame(id)!.hide();  // the reset reopened the default layout; the checks below start closed
   bus.emit("frames");
 }
 check("the lock row and reset row close the Panels flyout", !!sub().querySelector(".mrow[data-lock]") && /reset layout/.test(sub().lastElementChild!.textContent!));
@@ -463,7 +412,7 @@ console.log("DOCK — the waterfall: its top level (owner, 10-01)");
     items === "save load | panels lite | login help keys about", items);
   check("…Panels and About carry a caret and open a flyout; the rest are plain items", top("panels")!.getAttribute("aria-haspopup") === "menu" && top("about")!.getAttribute("aria-haspopup") === "menu" && !top("help")!.hasAttribute("aria-haspopup"));
   check("…the menu is a menu to assistive tech", menu().getAttribute("role") === "menu" && top("help")!.getAttribute("role") === "menuitem");
-  // SAVE / LOAD: honest stubs — listed, greyed, and a press says why (no server save points exist; grep, 10-01)
+  // SAVE / LOAD: honest stubs (no server save points exist): listed, greyed, and a press says why
   const toasts = () => [...document.querySelectorAll("#toasts .toast")].map((t) => t.textContent!.trim());
   check("without build rights Save and Load are listed but greyed, and say who they are for",
     top("save")!.getAttribute("aria-disabled") === "true" && top("load")!.getAttribute("aria-disabled") === "true" && /builders/.test(top("save")!.textContent!) && /build rights/.test(top("save")!.title), top("save")!.title);
@@ -591,39 +540,19 @@ console.log("DOCK — the badge the dock button carries (the title bar is hidden
   check("clearing the badge removes BOTH", !document.querySelector('#dock button[data-toggles="chat"] .dk-badge') && !f.el.querySelector(".fr-badge")); }
 
 console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePeopleHere)");
-{ // togglePeopleHere reads the chat frame's side-pane markup (chat.js:696: a
-  // .chat-cols that carries side-closed, and the .chat-side-tog that flips it).
-  // initChat builds that; here we mirror just those two nodes onto the frame
-  // this suite already made, so the REAL togglePeopleHere runs against the real
-  // class contract instead of a recorder.
+{ // togglePeopleHere reads the chat frame's side pane (a .chat-cols with side-closed and its .chat-side-tog); the
+  // real togglePeopleHere runs against this mirror
   const f = getFrame("chat")!;
-  // TWO decoys, because there are two ways to get this wrong and a decoy only
-  // binds the scope it sits outside of:
-  //   outer — elsewhere in the document (catches a document-wide lookup)
-  //   inner — INSIDE this frame's body, BEFORE the real cols (catches any
-  //           unbounded-depth lookup from the body, which is what registerPanel
-  //           actually enables: mount(body, frame) puts a mod's markup in here).
-  // chat.js writes .chat-cols as a DIRECT child of the body and the toggler as
-  // its child, so only a `:scope >` pair addresses the real pane.
+  // TWO decoys, outer (elsewhere in the document) and inner (in this body before the real cols, where a mod mounts):
+  // only a `:scope >` pair addresses the real pane
   const outer = document.createElement("div");
   outer.innerHTML = `<div class="chat-cols side-closed"><button class="chat-side-tog"></button></div>`;
   document.body.prepend(outer);
   let decoyClicks = 0;
   (outer.querySelector(".chat-side-tog") as HTMLElement).onclick = () => { decoyClicks++; };
 
-  // THREE decoys. The third is the one rounds 7-9 kept missing: chat.js nests
-  // the toggler INSIDE .chat-cols, so a mod's toggler can sit inside the REAL
-  // cols — and then an unbounded `cols.querySelector('.chat-side-tog')` finds
-  // the mod's before the chat's. Only `:scope >` on BOTH hops addresses the
-  // real pane; a decoy that is merely a sibling cannot see that mistake.
-  // Decoy ORDER — corrected by the ELEVENTH review, which falsified what this
-  // comment used to claim. I had written that a mod can only mount as a LATER
-  // sibling because initChat writes the chat's cols first. FALSE: mods.js:88
-  // hands a mod `makeFrame`, and windows.js:234 returns an EXISTING frame by
-  // bare id — so `makeFrame('chat')` returns the LIVE chat frame, and a local
-  // mod is an in-page ES module with the whole document (mods.js:5-8). It can
-  // PREPEND. So a decoy before the real cols is not a bent fixture; it is the
-  // product's reachable DOM, and it is what binds the first hop.
+  // THREE decoys: the toggler nests INSIDE .chat-cols, so only `:scope >` on BOTH hops is right; makeFrame('chat') hands
+  // a mod the live chat frame (mods.js, windows.js), so a mod can PREPEND
   f.body.innerHTML = `<div class="chat-cols side-closed">`
     +   `<div class="mod-inside"><button class="chat-side-tog"></button></div>`
     +   `<button class="chat-side-tog"></button>`
@@ -633,22 +562,10 @@ console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePe
   late.innerHTML = `<button class="chat-side-tog"></button>`;
   f.body.append(late);
   (late.querySelector(".chat-side-tog") as HTMLElement).onclick = () => { decoyClicks++; };
-  // Capture the node initChat built BEFORE any decoy exists. Anchoring on a
-  // re-query would find the prepended decoy (also a direct child, and first) —
-  // the fixture would then measure the same wrong node the mutant picks, and
-  // the mutation survives. This is what let M-A through until round 11.
+  // capture initChat's node BEFORE any decoy exists: a re-query would find the prepended decoy, as the mutant does
   const real = f.body.querySelector(":scope > .chat-cols") as HTMLElement;
-  // Mirror initChat's MECHANISM, not just its markup: chat.js captures the
-  // nodes as it writes them and hangs the accessor on the frame it built
-  // (chat.js, right after sideEls). togglePeopleHere reads that. Handing it `real`
-  // is legitimate here precisely because `real` was captured before any decoy
-  // exists — the same discipline this block already uses above.
-  // This suite never imports chat.js — makeFrame/getFrame come from windows.js
-  // and the markup above is hand-mirrored — so this stand-in can bind WHICH
-  // node togglePeopleHere addresses (ownership/order) but NOT the lifetime guard
-  // on chat.js's own read path: a ?.isConnected here would only test this
-  // closure against itself. Lifetime is bound in chat-markdown, which drives
-  // real initChat / sideEl / paintSide.
+  // mirror initChat: chat.js hangs the captured accessor on its frame. Binds WHICH node, not chat.js's lifetime guard
+  // (chat-markdown-test drives the real read path).
   (f as any).sidePane = (k: string) => (k === "cols" ? real
     : k === "tog" ? real.querySelector(":scope > .chat-side-tog") : null);
   const pre = document.createElement("div");   // a mod PREPENDING via makeFrame('chat')
@@ -676,18 +593,17 @@ console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePe
   ui.togglePeopleHere();
   check("pane already open: Tab leaves it open and does NOT toggle", !cols().classList.contains("side-closed") && clicks === 0, `${cols().className} clicks=${clicks}`);
 
-  // review #5's case: pane saved OPEN while the chat frame is hidden —
-  // showing the chat IS the open, so the toggler must not fire.
+  // pane saved OPEN while the chat frame is hidden: showing the chat IS the open, so the toggler must not fire
   f.hide(); clicks = 0;
   ui.togglePeopleHere();
   check("chat hidden + pane saved open: Tab shows chat, pane stays open", f.visible && !cols().classList.contains("side-closed") && clicks === 0, `${cols().className} clicks=${clicks}`);
 
-  // and the inverse still works from hidden+closed
+  // the inverse still works from hidden+closed
   cols().classList.add("side-closed"); f.hide(); clicks = 0;
   ui.togglePeopleHere();
   check("chat hidden + pane closed: Tab shows chat AND opens the pane", f.visible && !cols().classList.contains("side-closed"), `${cols().className} clicks=${clicks}`);
 
-  // the decoy must never have been touched: Tab addresses the CHAT frame's pane
+  // the decoy is never touched: Tab addresses the CHAT frame's pane
   check("Tab never reaches a mod panel carrying the same public classes — outside the body OR nested inside it", decoyClicks === 0
     && outer.querySelector(".chat-cols")!.classList.contains("side-closed")
     && inner.querySelector(".chat-cols")!.classList.contains("side-closed"), `decoyClicks=${decoyClicks}`);

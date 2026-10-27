@@ -1,31 +1,12 @@
-// collider-survey — how badly does one bounding box lie, across a real library?
-//
+// collider-survey: how badly does one bounding box lie, across a real library?
 //   bun tools/collider-survey.ts <dir-or-glb> [<dir-or-glb> ...]
-//
-// colliders.js decide() classifies by SIZE alone: room-scale (>=16m² and
-// >=2.2m) collides against real triangles, tall-and-thin becomes a pillar,
-// everything else becomes ONE box whose top face is the only ground it can
-// report. For a blanket with cushions on it that top face sits at the highest
-// cushion, so the whole 5.4m² reads as walkable at cushion height and you
-// stand 27cm above the cloth.
-//
-// Before changing that rule, this measures the thing the rule should be asking
-// about — "is the top of the bounding box where a body would actually stand?"
-// — across every mesh available, so a threshold can be picked from where real
-// objects fall rather than from the one that annoyed us.
-//
-// Two metrics per mesh, deliberately:
-//
-//   lie_ray   the honest one. Cast a grid of rays straight down, take the
-//             surface height per column, and compare the MEDIAN of those to
-//             bbox.max.y. Needs a BVH, which is fine offline and not fine in
-//             fitCollider — the BVH is the thing we are deciding whether to
-//             build.
-//   lie_cheap the shippable one. Bucket vertices into the same grid, keep the
-//             max y per cell, median those. One linear pass, no BVH, a few ms.
-//
-// If lie_cheap tracks lie_ray across the library, decide() can afford the test
-// at fit time. If it does not, the idea is wrong and better to know now.
+// colliders.js decide(): room-scale (>=16m² and >=2.2m) is exact, tall-and-thin a pillar, a floor-shaped liar (this
+// survey's rule) exact, everything else ONE box whose top is its only ground. This measures "is the box top where a body
+// would stand?" across every mesh, so a threshold comes from where real objects fall. Two metrics:
+//   lie_ray   honest: rays straight down on a grid, MEDIAN surface height vs bbox.max.y. Needs a BVH: fine offline, not
+//             in fitCollider (the BVH is what's being decided)
+//   lie_cheap shippable: vertices bucketed into the same grid, max y per cell, median. One linear pass, a few ms.
+// If lie_cheap tracks lie_ray, decide() can afford the test at fit time.
 
 import { readdirSync, statSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
@@ -53,8 +34,7 @@ async function getIO() {
   return ioP;
 }
 
-/** World-space triangle soup for the scene-reachable meshes, same slice of the
- *  file colliders.js buildExact would take. */
+/** World-space triangles for the scene-reachable meshes, the slice colliders.js buildExact would take. */
 async function loadTris(path: string): Promise<Float32Array | null> {
   const io = await getIO();
   let doc: any;
@@ -153,8 +133,7 @@ if (!args.length) {
 }
 const files: string[] = [];
 for (const a of args) {
-  // plain paths, relative or absolute — no URL round trip. A Windows path
-  // starts "C:", which new URL() reads as a scheme.
+  // plain paths, no URL round trip: a Windows path's "C:" reads as a scheme to new URL()
   const st = statSync(a, { throwIfNoEntry: false });
   if (!st) { console.error(`  skip (not found): ${a}`); continue; }
   if (st.isDirectory()) {
@@ -210,14 +189,10 @@ for (const t of [0.05, 0.10, 0.15, 0.20, 0.30]) {
 }
 
 // ---- the candidate rule -----------------------------------------------------
-// A bare lie threshold flags cars, sharks and rubble alongside the blanket,
-// because a rounded 1.2m-tall thing also sits below its own bbox top. The
-// distinguishing fact about a blanket is not that it lies — it is that it is
-// FLOOR-SHAPED and lies: wide enough to stand on, low enough that standing on
-// it is the only thing you would ever do with it. So gate on shape first.
-const FOOT_MIN = 2.0;    // m² — smaller than this and nobody stands on it
-const H_MAX = 0.8;       // m  — taller than this it is furniture, not ground
-const LIE_MIN = 0.10;    // m  — below this the box top is honest enough
+// a bare lie threshold also flags cars and rubble; a blanket is FLOOR-SHAPED and lies, so gate on shape first
+const FOOT_MIN = 2.0;  // m²: smaller and nobody stands on it
+const H_MAX = 0.8;  // m: taller and it's furniture, not ground
+const LIE_MIN = 0.10;  // m: below this the box top is honest enough
 
 const flat = rows.filter((r) => r.foot >= FOOT_MIN && r.h <= H_MAX);
 const flags = flat.filter((r) => r.lieRay > LIE_MIN && r.kind === 'box');
@@ -229,9 +204,7 @@ for (const r of flat) {
     `foot ${r.foot.toFixed(1).padStart(5)}  h ${r.h.toFixed(2)}  lie ${r.lieRay.toFixed(3)}  (cheap ${r.lieCheap.toFixed(3)})`);
 }
 
-// Does the cheap proxy hold up WITHIN the population the rule applies to? The
-// library-wide error is dominated by tall structured meshes (a watchtower, a
-// perimeter wall) that this gate excludes before the metric is ever consulted.
+// does the proxy hold WITHIN the rule's population? library-wide error is dominated by tall meshes the gate excludes
 if (flat.length) {
   const e = flat.map((r) => Math.abs(r.lieCheap - r.lieRay));
   const worst = flat.reduce((a, b) => (Math.abs(a.lieCheap - a.lieRay) > Math.abs(b.lieCheap - b.lieRay) ? a : b));
@@ -244,9 +217,7 @@ if (flat.length) {
 }
 
 // ---- sensitivity ------------------------------------------------------------
-// H_MAX is the knob with teeth: it decides whether "floor-shaped" means only
-// blankets and rugs, or reaches up into sofas, wrecks and vehicles. Nobody
-// should pick it from taste, so show what each setting actually reclassifies.
+// H_MAX is the knob with teeth (rugs only, or up into sofas and vehicles): what each setting reclassifies
 console.log('\n  sensitivity — what each height gate would reclassify (foot >= 2m², lie > 0.10m):');
 for (const hmax of [0.6, 0.8, 1.0, 1.2, 1.5, 2.2]) {
   const hit = rows.filter((r) => r.kind === 'box' && r.foot >= FOOT_MIN && r.h <= hmax && r.lieRay > LIE_MIN);

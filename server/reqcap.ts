@@ -1,7 +1,7 @@
 // server/reqcap.ts — one immutable capability per request (reviewer item 2, 10-18; docs/DESIGN-txn-capability.md).
 //
 // A request is admitted under WHO the connection was when it arrived: its identity, account, spectator flag, operator
-// status, the credential's world narrowing, the door's decision, its role here, its leg (gen). capture() freezes that once;
+// status, the door's decision, its role here, its leg (gen). capture() freezes that once;
 // recheck() asks, at each await→commit seam, whether the live connection and world still agree with it. Any difference is
 // a refusal (nothing written), never a silent commit under someone else's identity or a door that has since closed. The
 // authority receives cap.actorId — never actorOf(c) read again after an await (a re-join on the same socket reassigns it).

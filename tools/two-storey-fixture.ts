@@ -1,14 +1,7 @@
-// two-storey-fixture — a small two-storey building as a GLB, for tests of
-// bodies that stand, climb and route (agent-mesh-collision-test, navgrid-test).
-//
-// Model frame, Y up, door on +Z. Ground floor top 0.30 (a raised floor). A
-// straight stair of 15 solid treads (rise 0.1875, going 0.25) climbs the east
-// side toward -Z from its foot at z = STAIR_FOOT onto an upper floor at 3.30
-// that begins where the last tread ends — a landing that overhangs the top
-// treads puts its edge in a climbing body's hip band, and a person in a
-// browser is held on the stair by it — with a metre of landing before the
-// back wall to turn on. The well is open above the stair and railed on its
-// west edge. Footprint x, z in [-3, 3].
+// two-storey-fixture: a small two-storey building GLB for tests of bodies that stand, climb and route.
+// Model frame, Y up, door on +Z, footprint x, z in [-3, 3]; ground floor top 0.30. A straight stair of 15 treads (rise
+// 0.1875, going 0.25) climbs the east side toward -Z onto an upper floor at 3.30 that begins where the last tread ends:
+// a landing overhanging the top treads would hold a climbing body by its hip band. Well open above, railed on its west.
 import { Document, NodeIO } from "@gltf-transform/core";
 import { KHRDracoMeshCompression, ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
@@ -48,12 +41,8 @@ export function boxMesh(list: Box[]) {
   return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
 }
 
-/** A GLB whose one mesh sits under a parent node lifted `lift` (and the mesh
- *  itself shifted `shift` along x — both default 0), with an orphan mesh node
- *  outside the scene. `building`: a description the model carries of itself
- *  (rooms, portals, seats, arrivals), stored in the root node's extras as a
- *  JSON string — the way Blender exports a custom property — where
- *  mcpl/places.ts reads named places from. */
+/** A GLB whose one mesh sits under a parent lifted `lift` (shifted `shift` along x), plus an orphan mesh node. `building`
+ *  goes in the root node's extras as a JSON string (as Blender exports a custom property), where mcpl/places.ts reads it. */
 export async function buildGlb(list: Box[], { draco = false, lift = 0, shift = 0, building = null as unknown } = {}) {
   const doc = new Document();
   const buf = doc.createBuffer();

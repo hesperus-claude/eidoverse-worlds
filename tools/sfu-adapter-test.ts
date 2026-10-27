@@ -1,31 +1,41 @@
-// The seven refusals of #104 amendment 1, proven through the SFU adapter.
-//
-// These are ALREADY proven in relay-decision-test.ts (23 tests) against the
-// decision layer directly. This file exists to prove they still hold when the
-// decision layer is driven through the in-process adapter — that reusing
-// relaydecision.ts is a real inheritance and not a claim.
+// admitParticipant's eight refusal branches (#104 amendment 1's seven, less expiry, plus two), through the decision layer
+// AND the in-process SFU adapter, one table: this proves reusing relaydecision.ts is a real inheritance
+import { admitParticipant } from "../server/relaydecision.ts";
 import { mintSfuCredential, admitSfuLeg, setSfuConsent, setSfuModeratorMute,
   revokeSfuLeg, sfuDiag, sfuState, registerSfuSender } from "../server/sfuadapter.ts";
 
 let pass = 0, fail = 0;
 const check = (n: string, c: boolean, d = "") => { console.log(`  ${c ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${n}${d ? "  " + d : ""}`); c ? pass++ : fail++; };
 
+// one refusal table, two columns: the decision layer and the adapter must agree row for row (reuse, not a re-telling)
 const W = "spike";
 const s = sfuState(W);
 const c = mintSfuCredential(W, "alice", 412, 413);
-const live = { world: W, incarnation: c.incarnation, primaryGen: 412, mediaGen: 413, usedNonces: s.usedNonces };
+const live = (o = {}) => ({ world: W, incarnation: c.incarnation, primaryGen: 412, mediaGen: 413, usedNonces: new Set<string>(), ...o });
 const claims = (o = {}) => ({ world: W, id: "alice", primaryGen: 412, mediaGen: 413, incarnation: c.incarnation, nonce: crypto.randomUUID(), ...o });
-
-check("1 wrong world refused", admitSfuLeg(W, claims({ world: "elsewhere" }), live).reason === "wrong world");
-check("2 wrong identity refused", admitSfuLeg(W, claims({ id: "" }), live).reason === "no identity");
-check("3 retired primary generation refused", admitSfuLeg(W, claims({ primaryGen: 411 }), live).reason === "retired primary generation");
-check("4 retired media generation refused", admitSfuLeg(W, claims({ mediaGen: 409 }), live).reason === "retired media generation");
-check("5 prior relay incarnation refused", admitSfuLeg(W, claims({ incarnation: "i0-old" }), live).reason === "prior relay incarnation");
+const REFUSALS: [string, object, Partial<ReturnType<typeof live>>, string | null][] = [
+  ["valid credential admits", {}, {}, null],
+  ["1 wrong world", { world: "elsewhere" }, {}, "wrong world"],
+  ["2 no identity", { id: "" }, {}, "no identity"],
+  ["2b no relay leg issued for the id", {}, { mediaGen: undefined }, "no relay leg issued"],
+  ["3 retired primary generation", { primaryGen: 411 }, {}, "retired primary generation"],
+  ["3b primary gone entirely", {}, { primaryGen: undefined }, "no living primary"],
+  ["4 retired media generation", { mediaGen: 409 }, {}, "retired media generation"],
+  ["5 prior relay incarnation", { incarnation: "i0-old" }, {}, "prior relay incarnation"],
+  ["6 removed participant's replay", { nonce: "burnt" }, { usedNonces: new Set(["burnt"]) }, "credential replay"],
+];
+for (const [name, co, lo, reason] of REFUSALS) {
+  const want = JSON.stringify(reason ? { admit: false, reason } : { admit: true });
+  const decision = JSON.stringify(admitParticipant(claims(co), live(lo) as any));
+  // the adapter keeps its own nonce store: burn the row's nonces by a real admission first
+  const burnt = [...(lo.usedNonces ?? [])].every((n) => admitSfuLeg(W, claims({ nonce: n }), live()).admit === true);
+  const adapter = JSON.stringify(admitSfuLeg(W, claims(co), live(lo)));
+  check(`${name}: decision and adapter both say ${reason ?? "admit"}`, burnt && decision === want && adapter === want, `decision=${decision} adapter=${adapter}`);
+}
 const good = claims();
-check("   (a valid credential IS admitted)", admitSfuLeg(W, good, live).admit === true);
-check("6 removed participant cannot reuse its token", admitSfuLeg(W, good, live).reason === "credential replay");
-// 7 expiry: there is no bearer token at all — the nonce is single-use and the
-// leg dies with the websocket, so there is no window to expire INTO.
+check("   (a valid credential IS admitted)", admitSfuLeg(W, good, live()).admit === true);
+check("6 removed participant cannot reuse its token", admitSfuLeg(W, good, live()).reason === "credential replay");
+// 7 expiry: enforced at TokenVerifier(tolerance=0) upstream; the nonce is single-use and the leg dies with the websocket
 check("7 expiry: no bearer token exists to replay (nonce is single-use)", s.usedNonces.has(good.nonce));
 
 // amendment 3: three independent states
@@ -33,21 +43,14 @@ setSfuConsent(W, "bob", 1, true);
 check("consent is listener-authored and gen-bound", s.consent.get("bob")?.consent === true);
 setSfuModeratorMute(W, "alice", true);
 check("moderator mute is a DIFFERENT state than consent",
-  // ONE store now: the SFU is the enforcement point and therefore owns the fact.
-  // This read the adapter's shadow Set, which is exactly the duplication that
-  // let the two diverge in production.
+  // ONE store: the SFU is the enforcement point and owns the fact; a shadow Set in the adapter is the duplication that diverges
   s.sfu.diag().muted.includes("alice") && s.consent.get("alice") === undefined);
 
 // measurement hygiene: delivered and suppressed reported separately
 const d = sfuDiag(W) as any;
 check("diag separates forwarded from suppressed", typeof d.forwarded === "number" && typeof d.suppressed?.gated === "number");
-// 🔴 ASSERT OPACITY, NOT LENGTH. This read `.length > 20`, which pinned the old
-// full-UUID suffix rather than the property it names — and went red when the
-// incarnation moved to the DURABLE implementation (transport.ts), whose suffix
-// is 8 hex chars. 8 hex is ~4 billion values, plenty to make a lost-file
-// counter reuse non-colliding, which is the entropy suffix's actual job.
-// What matters is: prefixed counter + a non-empty entropy suffix that a caller
-// cannot predict — never that it is long.
+// 🔴 ASSERT OPACITY, NOT LENGTH: a prefixed counter + a non-empty unpredictable suffix (transport.ts uses 8 hex, enough
+// to keep a lost-file counter reuse from colliding)
 check("incarnation is opaque, not a claimed-monotonic counter",
   /^i\d+-[0-9a-f]{6,}$/.test(d.incarnation));
 
@@ -55,77 +58,38 @@ revokeSfuLeg(W, "alice");
 check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length === 0);
 
 // ── THE REVOCATION FAMILY ─────────────────────────────────────────────────
-// The live smoke caught ONE ordering ("audio survived revocation"). A privacy
-// guarantee has to hold under EVERY ordering, so this pins the whole family:
-// stale gen, newer gen, double revoke, reconnect, and a speaker who arrives
-// after consent was given.
-//
-// 🔴 These assert `allows()`, NOT route existence. Routes and consent are
-// deliberately separate — the transceiver stays negotiated and gets STARVED,
-// which is what makes revocation a memory write instead of an SDP round trip.
-// The first version of these tests counted pendingRoutes as "can hear" and
-// reported four false failures on correct code.
+// a privacy guarantee must hold under EVERY ordering: stale gen, newer gen, double revoke, reconnect, a late speaker.
+// 🔴 These assert `allows()`, NOT route existence: a revoked route stays negotiated and is STARVED (a memory write,
+// not an SDP round trip). Each row runs on its own world with listener L and speaker S.
 {
-  const allowed = (w: string, l: string, sp: string) =>
-    (sfuState(w).sfu as unknown as { allows(a: string, b: string): boolean }).allows(l, sp);
-
-// 1. the exact bug: revoke at a stale gen must still silence
-{ const W="w1"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
-  setSfuConsent(W,"L",2,true);
-  check("consent ON permits the pair", allowed(W,"L","S"));
-  setSfuConsent(W,"L",0,false);                      // STALE gen
-  check("revoke at a STALE gen still silences", !allowed(W,"L","S")); }
-
-// 2. revoke at a NEWER gen (the reconnect case)
-{ const W="w2"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
-  setSfuConsent(W,"L",2,true);
-  setSfuConsent(W,"L",99,false);
-  check("revoke at a NEWER gen silences", !allowed(W,"L","S")); }
-
-// 3. double revoke (idempotent NO must stay NO)
-{ const W="w3"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
-  setSfuConsent(W,"L",2,true); setSfuConsent(W,"L",2,false); setSfuConsent(W,"L",2,false);
-  check("double revoke stays silent", !allowed(W,"L","S")); }
-
-// 4. 🔴 THE RECONNECT: a retired leg's consent must NOT resurrect
-{ const W="w4"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
-  setSfuConsent(W,"L",2,true);
-  revokeSfuLeg(W,"L");                               // listener disconnects
-  mintSfuCredential(W,"L",1,6);                      // …and comes back, new gen
-  check("a reconnected listener starts FAIL-CLOSED (no resurrected yes)", !allowed(W,"L","S")); }
-
-// 5. consent BEFORE the speaker exists, then speaker joins (tonight's 2nd bug)
-{ const W="w5"; mintSfuCredential(W,"L",1,2);
-  setSfuConsent(W,"L",2,true);
-  mintSfuCredential(W,"S",1,4);                      // arrives LATER
-  check("a speaker joining after consent IS permitted", allowed(W,"L","S"));
-  setSfuConsent(W,"L",2,false);
-  check("…and revoking still silences that late speaker", !allowed(W,"L","S")); }
-
-// 6. moderator mute vs consent — independent states (amendment 3)
-{ const W="w6"; mintSfuCredential(W,"L",1,2); mintSfuCredential(W,"S",1,4);
-  setSfuModeratorMute(W,"S",true);
-  setSfuConsent(W,"L",2,true);
-  const s = sfuState(W);
-  check("consent does not un-mute a moderator-muted speaker", s.sfu.diag().muted.includes("S")); }
-
-
+  type Op = ["mint", string, number] | ["consent", number, boolean] | ["revoke", string] | ["mute", string];
+  const mL: Op = ["mint", "L", 2], mS: Op = ["mint", "S", 4], yes: Op = ["consent", 2, true];
+  const REVOCATION: { name: string; ops: Op[]; allowed?: boolean; muted?: boolean }[] = [
+    { name: "consent ON permits the pair", ops: [mL, mS, yes], allowed: true },
+    { name: "revoke at a STALE gen still silences", ops: [mL, mS, yes, ["consent", 0, false]], allowed: false },
+    { name: "revoke at a NEWER gen silences", ops: [mL, mS, yes, ["consent", 99, false]], allowed: false },
+    { name: "double revoke stays silent", ops: [mL, mS, yes, ["consent", 2, false], ["consent", 2, false]], allowed: false },
+    { name: "a reconnected listener starts FAIL-CLOSED (no resurrected yes)", ops: [mL, mS, yes, ["revoke", "L"], ["mint", "L", 6]], allowed: false },
+    { name: "a speaker joining after consent IS permitted", ops: [mL, yes, mS], allowed: true },
+    { name: "…and revoking still silences that late speaker", ops: [mL, yes, mS, ["consent", 2, false]], allowed: false },
+    { name: "consent does not un-mute a moderator-muted speaker", ops: [mL, mS, ["mute", "S"], yes], muted: true },
+  ];
+  REVOCATION.forEach(({ name, ops, allowed, muted }, i) => {
+    const w = `revoke-${i}`;
+    for (const op of ops) {
+      if (op[0] === "mint") mintSfuCredential(w, op[1], 1, op[2]);
+      else if (op[0] === "consent") setSfuConsent(w, "L", op[1], op[2]);
+      else if (op[0] === "revoke") revokeSfuLeg(w, op[1]);
+      else setSfuModeratorMute(w, op[1], true);
+    }
+    const st = sfuState(w).sfu as unknown as { allows(a: string, b: string): boolean; diag(): { muted: string[] } };
+    check(name, (allowed === undefined || st.allows("L", "S") === allowed) && (muted === undefined || st.diag().muted.includes("S") === muted));
+  });
 }
 
-// ── RECONNECT MUST NOT RESURRECT CONSENT (live-path bug, 2026-08-14) ──────
-// A reviewer found this by reconnecting a real websocket against a live server:
-// retireRelayLeg never routed to the SFU, so revokeSfuLeg was imported and
-// NEVER CALLED. The old leg lingered, standingConsent survived, and a fresh
-// voice leg inherited a yes it never gave.
-//
-// 🔴 THESE TESTS STILL CANNOT CATCH THE ORIGINAL BUG, and saying so is the
-// point. Verified by mutation: deleting the SFU branch in server.ts's
-// retireRelayLeg — the exact defect that shipped — leaves this file at 25/25,
-// because these tests CALL revokeSfuLeg themselves, which is precisely the call
-// the live path was missing. What they pin is that retirement CLEARS
-// everything; what no unit test here can pin is that retirement is REACHED.
-// That gap belongs to tools/sfu-browser-smoke.mjs and to live probes.
-// If you add a new per-listener map, add it below AND check the live path.
+// ── RECONNECT MUST NOT RESURRECT CONSENT ──────
+// 🔴 these call revokeSfuLeg themselves, so they pin that retirement CLEARS everything, not that server.ts
+// retireRelayLeg REACHES it (tools/sfu-browser-smoke.mjs does). A new per-listener map: add it here AND check the live path
 {
   const W = "reconnect";
   const st = sfuState(W);
@@ -144,25 +108,14 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 
   revokeSfuLeg(W, "spk");
   mintSfuCredential(W, "spk", 1, 8);            // the MUTED speaker reconnects
-  // Was "cleared in BOTH stores" — the duplication is gone, so there is one
-  // store to clear and the divergence it guarded against is now unrepresentable.
-  // The BEHAVIOUR it protected still matters and is still asserted: a fresh leg
-  // must not inherit a moderation act aimed at its predecessor.
+  // a fresh leg must not inherit a moderation act aimed at its predecessor
   check("a reconnected speaker does not inherit its predecessor's mute",
     !st.sfu.diag().muted.includes("spk"),
     `muted=${JSON.stringify(st.sfu.diag().muted)}`);
 }
 
-// 🔴 senders is world-keyed. The SAME listener id in two worlds is routine
-// (ids are per-identity, not per-world), and bare-id keying failed BOTH ways:
-// the world registered last clobbered the first's sender, and revoking the leg
-// in one world deleted the other's. `waiting` in this same file was fixed for
-// this class first; this pins the second map.
-//
-// Ordering matters: the cross-world revoke happens BEFORE any negotiation, so
-// with bare-id keying the surviving entry is deleted and world A's offer has
-// nowhere to go — wsA=0. (A second negotiation round can't be observed here:
-// sfuNegotiate serialises per leg behind a 15s answer wait, by design.)
+// 🔴 senders is world-keyed: the SAME listener id in two worlds is routine, and bare-id keying clobbers or revokes the
+// other world's. The cross-world revoke comes BEFORE any negotiation, so bare-id keying shows as wsA=0
 {
   const wsA: unknown[] = [], wsB: unknown[] = [];
   const WA = "senders-a", WB = "senders-b";
@@ -179,12 +132,12 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("…and nothing leaks into world B's socket", wsB.length === 0, `wsB=${wsB.length}`);
 }
 
-// ── 2026-08-17 adversarial-review regressions ────────────────────────────────
+// ── adversarial-review regressions ────────────────────────────────
 {
   const W2 = "rev-regress";
   const s2 = sfuState(W2);
 
-  // #1 A refused revoke must also flip the STANDING answer — the future tense.
+  // #1 a refused revoke must also flip the STANDING answer: the future tense
   mintSfuCredential(W2, "lis", 1, 2);
   setSfuConsent(W2, "lis", 2, true);                       // consent ON at gen 2
   setSfuConsent(W2, "lis", 1, false);                      // revoke at STALE gen → refused
@@ -194,7 +147,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("…and a speaker joining later is NOT consented to the revoked listener",
     !s2.sfu.diag().consent?.["lis"]?.includes?.("late-speaker"));
 
-  // #2 A re-mint is a retirement first: no inherited consent, admission, or mute.
+  // #2 a re-mint is a retirement first: no inherited consent, admission, or mute
   const W3 = "rev-remint";
   const s3 = sfuState(W3);
   const c1 = mintSfuCredential(W3, "amy", 1, 2);
@@ -212,24 +165,22 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   check("re-mint does not inherit a moderation mute aimed at the predecessor",
     !s3.sfu.diag().muted.includes("amy"));
 
-  // Round 2: consent given while NO leg existed must survive the first mint
-  // (it has no predecessor to inherit from), while takeover still wipes.
+  // consent given while NO leg existed must survive the first mint (no predecessor to inherit from); takeover still wipes
   const W4 = "rev-premint";
   const s4 = sfuState(W4);
   setSfuConsent(W4, "early-bird", 1, true);        // consent BEFORE any leg
-  mintSfuCredential(W4, "early-bird", 1, 2);       // first mint — no predecessor
+  mintSfuCredential(W4, "early-bird", 1, 2);       // first mint: no predecessor
   check("pre-mint consent survives the FIRST mint (no predecessor to inherit from)",
     s4.standingConsent.get("early-bird") === true);
-  mintSfuCredential(W4, "early-bird", 1, 3);       // takeover — predecessor existed
+  mintSfuCredential(W4, "early-bird", 1, 3);       // takeover: predecessor existed
   check("…and a takeover re-mint still wipes it (fail-closed rejoin)",
     s4.standingConsent.get("early-bird") === undefined);
 
-  // Round 3: the gen WATERMARK survives with the answer — a delayed replay of
-  // an older YES must not re-grant consent the listener later revoked.
+  // the gen WATERMARK survives with the answer: a delayed replay of an older YES must not re-grant a revoked consent
   const W5 = "rev-watermark";
   const s5 = sfuState(W5);
   setSfuConsent(W5, "careful", 1, true);           // yes at gen 1, pre-leg
-  setSfuConsent(W5, "careful", 2, false);          // no at gen 2, pre-leg — the last word
+  setSfuConsent(W5, "careful", 2, false);          // no at gen 2, pre-leg: the last word
   mintSfuCredential(W5, "careful", 1, 2);          // first mint
   setSfuConsent(W5, "careful", 1, true);           // delayed REPLAY of the old yes
   check("a replayed older YES after the first mint is refused (watermark preserved)",
@@ -258,9 +209,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 }
 
 // ── #130 item 2: DEGRADED NEVER AGES INTO GREEN; RECOVERY IS A RECEIPT ─────
-// The reviewer's clocked repro: fault at t=0 and t=20 reported LIVE at t=31
-// under the old 30s silence timer. There is no timer now — degraded is sticky
-// until a POSITIVE receipt (a completed negotiation calls markVoiceLive).
+// degraded is sticky (no silence timer) until a POSITIVE receipt: a completed negotiation calls markVoiceLive
 {
   const { markVoiceDegraded, markVoiceLive, voiceServiceState } =
     await import("../server/sfusupervisor.ts");

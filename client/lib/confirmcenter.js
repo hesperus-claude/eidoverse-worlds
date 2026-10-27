@@ -1,13 +1,6 @@
-// confirmcenter — a yes/no question in the middle of the screen, for a press that would otherwise do something
-// big without warning: leaving for the light version, or a VR click that has to restart the page on WebGL
-// (owner, 10-01: "a pop-up confirmation in the center of the screen… that's caught me by surprise a few times").
-// The browser's own confirm() hangs from the top edge, can't be styled, and doesn't exist inside a headset.
-//
-//   confirmCenter({ title, body, ok = 'OK', cancel = 'Cancel' }) → Promise<boolean>
-//
-// Enter or the OK button says yes; Esc, the Cancel button, or a press on the dim backdrop says no. One at a time:
-// asking again while one is open answers the open one no and replaces it.
-// No imports: the lite client and the boot path may use this without pulling the engine in.
+// confirmcenter — a centred yes/no card before a press does something big (leave for lite, a VR restart on WebGL);
+// confirm() can't be styled and doesn't exist in a headset. Esc / Cancel / backdrop = no; a second ask answers the open one no.
+// No imports: the lite client and the boot path use this without pulling the engine in.
 
 let open = null;   // { root, settle }
 
@@ -28,9 +21,9 @@ export function confirmCenter({ title, body = '', ok = 'OK', cancel = 'Cancel' }
     const okB = root.querySelector('.cc-ok'), noB = root.querySelector('.cc-no');
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); settle(false); }
-      // Enter on a focused button presses THAT button (Cancel included) — not "yes" whatever has focus (review #212)
+      // Enter on a focused button presses THAT button (Cancel included), not "yes" whatever has focus
       else if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); settle(!e.target?.classList?.contains('cc-no')); }
-      // Tab stays between the two buttons: focus that wandered off the card would leave Enter meaning yes out of sight
+      // Tab stays on the card: focus off it would leave Enter meaning yes out of sight
       else if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); (e.target === okB ? noB : okB).focus(); }
       else e.stopPropagation();   // typing here is never walking or a hotkey
     };
@@ -54,8 +47,7 @@ export function confirmCenter({ title, body = '', ok = 'OK', cancel = 'Cancel' }
 
 export const confirmOpen = () => !!open;
 
-/** The same centre card asking for a few words (a name): {title, body, value, placeholder, ok, cancel, max} → the
- *  trimmed text, or null (Esc, Cancel, the backdrop, or nothing typed). Enter in the field says OK. */
+/** The card asking for a few words → the trimmed text, or null (Esc, Cancel, the backdrop, or nothing typed). */
 export function askCenter({ title, body = '', value = '', placeholder = '', ok = 'Save', cancel = 'Cancel', max = 80 } = {}) {
   if (typeof document === 'undefined') return Promise.resolve(null);
   open?.settle(open.cancel ?? false);
@@ -95,10 +87,7 @@ export function askCenter({ title, body = '', value = '', placeholder = '', ok =
   });
 }
 
-/** The same centre card with more than two answers (the lock question: ✓ Move anyway / ✕ Cancel / 🔓 Unlock).
- *  choices: [{v, label, danger?}], in the order shown (danger: styled as destructive); `cancel` is the v that Esc and the backdrop answer (and Enter on it).
- *  The first choice has focus (the house yes); Tab walks the buttons. Resolves with the chosen v. Same one-at-a-time
- *  rule: asking again answers the open one with its cancel. */
+/** choices: [{v, label, danger?}]; `cancel` is the v Esc and the backdrop answer, and what a second ask answers the open one. */
 export function chooseCenter({ title, body = '', choices = [], cancel = null, focus = null } = {}) {
   if (typeof document === 'undefined' || !choices.length) return Promise.resolve(cancel);
   open?.settle(open.cancel ?? false);
@@ -137,8 +126,7 @@ export function chooseCenter({ title, body = '', choices = [], cancel = null, fo
     addEventListener('keydown', onKey, true);
     document.body.appendChild(root);
     open = { root, settle, cancel };
-    // `focus`: the answer Enter gives at first — a destructive question focuses its safe answer (review 10-07 S1: Enter
-    // on "This is locked. Delete anyway?" deleted it)
+    // `focus`: the answer Enter gives first; a destructive question focuses its safe answer
     const fi = focus != null ? choices.findIndex((c) => c.v === focus) : -1;
     btns[fi >= 0 ? fi : 0].focus();
   });

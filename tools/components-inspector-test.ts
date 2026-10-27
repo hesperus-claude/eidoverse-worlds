@@ -1,15 +1,10 @@
-// components-inspector-test — the inspector's component cards (schema.sections) over the real corpus.
-//
-// For every entity in every world the corpus test reads: one card per component,
-// every address a card names resolves to a real schema field, no field is owned by
-// two cards, and every editable field of the old groups is reachable from some card
-// (a field nobody can reach is a field only a model can edit). Then add/remove
-// lower to door requests, checked through the real door.
+// components-inspector-test: the inspector's component cards (schema.sections) over the real corpus.
+// For every corpus entity: one card per component, every card address resolves to a schema field, no field owned by two
+// cards, and every editable field of the old groups is reachable from some card (or only a model can edit it). Then
+// add/remove lower to door requests, checked through the real door.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-inspector-test.ts
-//
-// the protocol port (2026-10-06): the corpus is the spec fixtures (and COMPONENTS_CORPUS) TRANSLATED
-// (shared/protocol/translate-v1.js, as a world is migrated) and read as the view (shared/protocol/view.js) — the records an
-// inspector sees. Light-verb lights and guard are gone (a translated light is a thing with a light component).
+// The corpus is the spec fixtures (and COMPONENTS_CORPUS) translated (tools/protocol/import-v1/translate-v1.js) and read
+// as the view (shared/protocol/view.js); a translated light is a thing with a light component.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { inspectSchema, fieldAt, editOps, partLabel, libLabel } from '../shared/editschema.js';
@@ -39,7 +34,7 @@ walk(join(import.meta.dir, '..', 'spec', 'fixtures'));
 for (const d of pathList(process.env.COMPONENTS_CORPUS)) walk(d);
 
 const ents: [string, any][] = [];
-const folds: [string, any][] = [];   // the same entities as the fold holds them (C7b: the editor's one input)
+const folds: [string, any][] = [];  // the same entities as the fold holds them (the editor's one input)
 let untranslated = 0;
 for (const p of logs) {
   const old: any[] = [];
@@ -52,8 +47,8 @@ console.log(`${ents.length} final entities from ${logs.length} logs, translated 
 check('every corpus log translates, and the corpus is not empty', untranslated === 0 && ents.length > 10, `${untranslated} / ${ents.length}`);
 
 {
-  // the fold record is the one input: every corpus entity read as `c` (through view.js recordOf) gives the schema and the
-  // components its view gives, byte for byte — the pin that (b) moved the editor's input, not just its fixtures
+  // the fold record is the one input: every corpus entity read as `c` (view.js recordOf) gives the schema and the
+  // components its view gives, byte for byte
   const J = (v: any) => JSON.stringify(v);
   // (`born` is the entity's, not its bag's: the view carries it as a stamp, a bare `c` can't)
   const comps = (x: any) => { const r = componentsOf(x); const { born: _b, ...stamps } = r.stamps ?? {}; return { ...r, stamps }; };
@@ -72,7 +67,7 @@ for (const [id, e] of ents) {
   const comps = componentsOf(e).components;
   cards += s.sections.list.length;
   const inHeader = comps.filter((c) => c.type === 'Label' || c.type === 'Hidden' || c.type === 'Description' || String(c.key ?? '').startsWith('hesperus/material:')).length;   // (a one-slot material override is a row of the Material card)
-  const emptyParent = s.sections.list.filter((c: any) => (c.type === 'Parent' || c.type === 'Material') && c.present === false).length;   // a root's quiet Parent card (the no-drag path, R 10-04); a model's Material card before any override (R 10-10)
+  const emptyParent = s.sections.list.filter((c: any) => (c.type === 'Parent' || c.type === 'Material') && c.present === false).length;  // a root's quiet Parent card (the no-drag path); a model's Material card before any override
   if (s.sections.list.length - emptyParent !== comps.length - inHeader) probs.push(`${id}: ${comps.length} components (${inHeader} in the header), ${s.sections.list.length} cards`);
   const owned = new Map<string, string>();
   for (const a of s.sections.header) owned.set(a, 'header');
@@ -82,22 +77,19 @@ for (const [id, e] of ents) {
     if (owned.has(a)) probs.push(`${id}: ${a} owned by ${owned.get(a)} and ${sec.title}`);
     owned.set(a, sec.title);
   }
-  // every editable field of the old groups is in some card (the type enum and
-  // come-to-rest are replaced by the card itself and its remove button; the
-  // put-out/take-down/silence buttons likewise; add:* buttons move to Add Component)
+  // every editable field of the old groups is in some card (the type enum, come-to-rest and the put-out/take-down/silence
+  // buttons became the card and its remove button; add:* moved to Add Component)
   for (const g of s.groups) for (const f of g.fields) {
     if (f.k == null || f.t === 'info') continue;
     const a = `${g.group}.${f.k}`;
     const replaced = /(^|\|)(type|rest)$/.test(f.k) && g.group === 'motion' || ['particles.out', 'picture.down', 'sound.silence', 'comp.+'].includes(a) || a.startsWith('comp.add:') || /\.json\|/.test(a)
       || (a === 'flags.lock' && addable.has('Lock'))
-      || a === 'flags.layer' || a === 'flags.clickthrough';   // the selection layer and clicks-go-through are rows of the Attributes tab (editpanels attributesFields), not a card (R 10-17 20:36)
+      || a === 'flags.layer' || a === 'flags.clickthrough';  // the selection layer and clicks-go-through are Attributes-tab rows (editpanels attributesFields), not a card
     if (!owned.has(a) && !replaced && !(g.group === 'comp' && owned.has(`comp.${f.k}`))) probs.push(`${id}: ${a} is in no card`);
   }
 }
-// C8: every engine card the corpus may lack (openable, pivot, description, story, text, particles…) on one synthetic thing —
-// every value row of a typed card is claimed by its card (shared/protocol/descriptors.js claims it, or the card's own
-// extra), and nothing a typed card shows is doubled on the raw-JSON floor. Mutation (2026-10-12): drop `intensity` from
-// the Light descriptor's show → "light.intensity is in no card" on every lamp here and in the corpus.
+// every engine card the corpus may lack, on one synthetic thing: each value row of a typed card is claimed by its card
+// (shared/protocol/descriptors.js or the card's extra), and nothing is doubled on the raw-JSON floor
 {
   const M = (k: string, x: any = {}) => materialize(k, x).value;
   const every: any = { model: 'store/x.glb', pos: [0, 0, 0], yaw: 0, light: { ...M('light'), day: false, important: true }, collider: { shape: 'box' }, pivot: { pos: [0, 1, 0] },
@@ -119,7 +111,7 @@ for (const [id, e] of ents) {
   check(`one thing with every engine card: every value row is claimed by a card (${owned.size} claimed)`, unowned.length === 0, unowned.join(', '));
   check('…and the raw-JSON floor holds only what no typed card draws (reactions, the script, the recipe): no doubled key', JSON.stringify(floor) === JSON.stringify(['reactions', 'local/recipe']), JSON.stringify(floor));
 }
-// the header's lib line reads the Model component, on every corpus entity (it said "lib ?" beside a Model card)
+// the header's lib line reads the Model component, on every corpus entity
 {
   const bad: string[] = []; let titled = 0, lamps = 0; const rawTitles: string[] = [];
   for (const [id, e] of ents) {
@@ -147,7 +139,7 @@ check(`every entity: a card per component (label and hidden in the header), ever
 // add / remove: the door requests, and what they DO through the real door
 const crate = { model: 'store/x.glb', pos: [0, 1, 0], motion: { type: 'pendulum', axis: 'z', amp: 0.24, period: 3.4, t0: 1 }, lock: true };
 const v = (set: Record<string, unknown>, e: any = crate) => editOps(e, 'c1', set);
-// a lock covers everything on the thing (b1d9c7dd, R 10-11): motion and light edits go to an UNLOCKED copy; the lock checks keep the locked one
+// a lock covers everything on the thing: motion and light edits go to an UNLOCKED copy; the lock checks keep the locked one
 const open = { ...crate, lock: undefined };   // the same crate, unlocked (its components sit flat on the record)
 const through = (set: Record<string, unknown>, e: any = crate) => { const W = scratchWorld('compinspector').seed({ c1: e }); const r = v(set); const res = W.sendAll(r.ops); return { r, res, after: W.rec('c1') }; };
 {
@@ -161,22 +153,20 @@ check('add.Spin with a whole motion present → refused, says why', v({ 'add.Spi
   check('remove.motion → delete motion; through the door it no longer moves', JSON.stringify(m.r.ops) === JSON.stringify([{ verb: 'delete', args: { id: 'c1', component: 'motion' } }]) && m.res.ok && m.after?.motion === undefined, JSON.stringify([m.r.ops, m.res.refused]));
   const l = through({ 'remove.lock': null });
   check('remove.lock → delete lock; through the door it is unlocked (any builder may unlock)', JSON.stringify(l.r.ops) === JSON.stringify([{ verb: 'delete', args: { id: 'c1', component: 'lock' } }]) && l.res.ok && l.after?.lock === undefined, JSON.stringify([l.r.ops, l.res.refused]));
-  // step 2 (design §6, revised 10-11: one place per thing): a lamp is a Model with a Light CHILD, a metre up
+  // (design §6) one place per thing: a lamp is a Model with a Light CHILD, a metre up
   const L = through({ 'add.Light': null }, open);
   { const o: any = L.r.ops[0]; const cc = o?.args?.components ?? {};
     check('add.Light on a model → ONE create: a child light a metre up, under c1, with its fields spelled out (write-new-on-edit)', L.r.ops.length === 1 && o.verb === 'create' && o.args.id === '$light' && cc.parent?.to === 'c1' && JSON.stringify(cc.transform?.pos) === '[0,1,0]' && JSON.stringify(cc.light) === JSON.stringify({ color: 0xffd9a0, intensity: 16, range: 10 }), JSON.stringify(L.r.ops)); }
   check('…through the door the child is lit with exactly those values, under c1', L.res.ok && L.after?.light === undefined, JSON.stringify(L.res));
 }
 check('Add Component lists blocked entries with a reason; Light and Collider are no longer among them', (() => { const s = inspectSchema(crate, 'c1'); const st = s.sections.add.find((a: any) => a.name === 'Structure'); const ok = (n: string) => s.sections.add.some((a: any) => a.name === n && !a.blocked); return !!st?.blocked && ok('Particles') && ok('Light') && ok('Collider'); })());
-// KNOWN BUG (reported 2026-10-06, not fixed here): guard is merged into lock, but shared/components.js RECORDS
-// still has Guard, so Add Component offers it UNBLOCKED; choosing it then fails ("Guard: added by a gesture, not a
-// value (see its card)") — a menu entry that can only error. Either drop it from the list or block it saying "use Lock".
+// KNOWN BUG: guard is merged into lock, but shared/components.js RECORDS still has Guard, so Add Component offers it and
+// choosing it can only error ("Guard: added by a gesture, not a value"). Drop it from the list or block it saying "use Lock".
 check('Add Component does not offer Guard as addable (merged into Lock) (KNOWN BUG)', (() => { const g = inspectSchema(crate, 'c1').sections.add.find((a: any) => a.name === 'Guard'); return !g || (!!g.blocked && /lock/i.test(g.blocked)); })(),
   JSON.stringify([inspectSchema(crate, 'c1').sections.add.find((a: any) => a.name === 'Guard'), editOps(crate, 'c1', { 'add.Guard': null }).errors]));
 
-// the trusted rung end to end (R 10-12 10:09): the owner's button plans one @world.trusted-components write; through the real door
-// the world carries it; the schema read with that list flips the chip amber → blue and the offer moves out of "drafts";
-// a builder's same button is refused by the door
+// the trusted rung end to end: the owner's button plans one @world.trusted-components write; through the real door the
+// world carries it, the chip flips amber → blue and the offer leaves "drafts"; a builder's same button is refused
 {
   registerDraft('hesperus/material', { title: 'Material', summary: 'override its look', category: 'Look', applies: (e: any) => e?.model != null });
   const W = scratchWorld('compinspector').seed({ c1: crate });

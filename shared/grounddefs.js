@@ -1,18 +1,13 @@
-// grounddefs — the ground-palette contract (charter §3, defs round two).
-//
-// Same law as the sky presets: everything here is an AUTHORING convenience.
-// The ground panel applies a choice as a concrete terrain/grass verb on a
-// deliberate click, so the log never stores one of these names — a mutable
-// def file can restyle the panel, never rewrite logged meaning.
+// grounddefs — the ground-palette contract (charter §3). Same law as the sky presets: AUTHORING conveniences only. A choice
+// is written as a concrete terrain/grass verb, so the log never stores these names: a def can restyle the panel, never rewrite logged meaning.
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v) => typeof v === 'string' && v.length > 0;
 const isObj = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
-// panel labels, not def files — spaces allowed ("mojave desert"), still bounded
+// panel labels, not def files: spaces allowed, still bounded
 const LABEL_RE = /^[a-z][a-z0-9 _-]{0,32}$/;
 
-/** Validate the ground palette sidecar (defs/ground/_palette.json).
- *  Empty result = servable. @param {unknown} t @returns {string[]} */
+/** defs/ground/_palette.json. Empty result = servable. @param {unknown} t @returns {string[]} */
 export function validateGroundPalette(t) {
   if (!isObj(t)) return ['_palette must be a JSON object'];
   const errs = [];
@@ -47,13 +42,9 @@ export function validateGroundPalette(t) {
 }
 
 // ------------------------------------------------------------ the verb args a choice writes
-// One recipe for "this palette choice → these terrain/grass args", read by the
-// world panel's 🌿 section (client/lib/groundpanel.js) and the Build tab's World
-// section (client/lib/editpanels.js) alike, so the two can never write
-// different args for the same pick.
+// One recipe for the world panel (client/lib/groundpanel.js) and the Build tab (client/lib/editpanels.js): never different args for one pick.
 
-/** The choice the panel starts from when nothing is dialled yet (the names
- *  groundpanel always preferred, else each table's first entry). */
+/** The starting choice when nothing is dialled: groundpanel's preferred names, else each table's first entry. */
 export function paletteDefaults(pal) {
   const first = (o) => Object.keys(o ?? {})[0] ?? null;
   const pref = (o, k) => (o?.[k] != null ? k : first(o));
@@ -61,10 +52,8 @@ export function paletteDefaults(pal) {
     density: pref(pal?.grassDensity, 'normal'), plant: pref(pal?.plantings, 'meadow'), seed: 7 };
 }
 
-/** terrain-verb args for a choice {shape?, tint?, seed?}. With `base` (the
- *  world's current terrain bag) only the chosen dials change and every other
- *  authored field (size, segments, a custom layer's repeat) is kept; without
- *  it, the panel's own ground: 160 m, 200 segments, flat within 16 m. */
+/** terrain-verb args for {shape?, tint?, seed?}. With `base` (the current terrain bag) only the chosen dials change and every
+ *  other authored field is kept; without it: 160 m, 200 segments, flat within 16 m. */
 export function terrainArgs(pal, choice = {}, base = null) {
   const out = base ? JSON.parse(JSON.stringify(base)) : { seed: choice.seed ?? 7, size: 160, segments: 200, flatRadius: 16, layers: [{ repeat: 16 }] };
   if (choice.seed != null) out.seed = choice.seed;
@@ -74,9 +63,8 @@ export function terrainArgs(pal, choice = {}, base = null) {
   return out;
 }
 
-/** grass-verb args for a choice {plant, height?, density?, tint?}: one bag on
- *  the singleton grass verb, straight from the def; blade plantings take the
- *  height dial and the tint row's colour column. null when the planting is unknown. */
+/** grass-verb args for {plant, height?, density?, tint?}: one bag straight from the def; blade plantings take the height dial
+ *  and the tint row's colour column. null when the planting is unknown. */
 export function grassArgs(pal, { plant, height, density, tint } = {}) {
   const p = pal?.plantings?.[plant];
   if (!p) return null;
@@ -90,9 +78,7 @@ export function grassArgs(pal, { plant, height, density, tint } = {}) {
   return args;
 }
 
-/** Read a world's terrain/grass back as palette names: which shape, tint,
- *  planting, height and density they were grown from (null where the bag holds
- *  something the palette doesn't name — an agent's own terrain, say). */
+/** A world's terrain/grass back as palette names (null where the bag holds something the palette doesn't name). */
 export function groundChoice(pal, terrain, grass) {
   const by = (o, pred) => Object.keys(o ?? {}).find((k) => pred(o[k])) ?? null;
   const layer = Array.isArray(terrain?.layers) ? terrain.layers[0]?.color : null;

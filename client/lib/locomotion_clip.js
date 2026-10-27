@@ -1,7 +1,7 @@
 // Which clip the body plays, and how it blends in, as a pure function. controller.js calls it once per tick
 // with the real motion state; tools/locomotion-clip-test.mjs calls it with every combination. No imports on purpose.
 //
-// The policy (owner, 09-19):
+// The policy:
 //   climb   — a mantle owns the body outright.
 //   jump    — a deliberate press is immediate (`jumped`); a walk-off is airborne past a 2-frame guard
 //             (AIRBORNE_GRACE) so stair-stepping does not flicker into a jump.
@@ -9,8 +9,7 @@
 //             ease:true) — the same clip arriving two different ways.
 //   walk/run — while the KEY is down (or the stick deflected). `wantMove` is INTENT, and it is the whole
 //             point: on release the speed coasts down over ~0.3 s, but the clip must leave for idle NOW and
-//             let the crossfade cover the coast (owner: 'blends very late… start as soon as the key is
-//             released'). Selecting on speed alone was ~0.34 s late.
+//             let the crossfade cover the coast. Selecting on speed alone was ~0.34 s late.
 //   sit/sitchair/lie — a held posture, once nothing above claims the body.
 //   idle    — the floor.
 //

@@ -1,22 +1,8 @@
-// floradefs — the flora def contract, as one pure module (charter §3:
-// content is declarative data; code is reserved for new KINDS of things).
-//
-// A flora species def is a JSON object in defs/flora/<name>.json. The server
-// validates each def against this module at load and refuses to serve one
-// that fails — so a typo becomes a boot log line, not a broken world. Same
-// constraints as everything in shared/ (README.md): pure, dependency-free,
-// no Date.now().
-//
-// The checks are TYPE-level, not taste-level: a def that would crash or
-// silently misbuild in the engine is an error; a strange tuning value is the
-// author's business. Unknown keys are PRESERVED, never dropped — the same
-// forward-compatibility rule the log protocol lives by (`doc` is the
-// conventional human-notes field).
+// floradefs — the flora def contract (charter §3: content is data; code is for new KINDS of things). A def is
+// defs/flora/<name>.json, validated at load and refused if it fails. Checks are type-level, not taste-level; unknown keys
+// are PRESERVED, never dropped.
 
-/** The engine's geometry builders. A def naming an archetype outside this
- *  set cannot be built by any current client — refused at load, like an
- *  unknown verb is refused at the door (new archetypes are engine code, so
- *  the set grows here in the same commit that grows the engine).
+/** A def naming another archetype can't be built by any client and is refused at load (new archetypes are engine code).
  *  @type {string[]} */
 export const FLORA_ARCHETYPES = ['blades', 'shrub', 'yucca', 'corn', 'sunflower'];
 
@@ -28,8 +14,7 @@ const isStr = (v) => typeof v === 'string' && v.length > 0;
 const isVec = (v, n) => Array.isArray(v) && v.length === n && v.every(isNum);
 const isObj = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 
-/** Validate one flora def. Returns a list of human-readable problems —
- *  empty means servable.
+/** → problems; empty means servable.
  *  @param {string} name @param {unknown} def @returns {string[]} */
 export function validateFloraDef(name, def) {
   const errs = [];
@@ -61,10 +46,8 @@ export function validateFloraDef(name, def) {
   return errs;
 }
 
-/** Validate the presets sidecar (defs/flora/_presets.json): each named
- *  preset carries a non-empty `strokes` list of templates — `species`
- *  required per stroke; `density`/`inset`/`seedAdd` numeric; `offset` a
- *  [fx, fz] pair; everything else passes through (preserved, as always).
+/** defs/flora/_presets.json: each preset has a non-empty `strokes` list; `species` required per stroke;
+ *  `density`/`inset`/`seedAdd` numeric; `offset` an [fx, fz] pair; everything else passes through.
  *  @param {unknown} presets @returns {string[]} */
 export function validateFloraPresets(presets) {
   if (!isObj(presets)) return ['_presets must be a JSON object'];
@@ -87,9 +70,7 @@ export function validateFloraPresets(presets) {
   return errs;
 }
 
-/** Validate the palette sidecar (defs/flora/_colors.json): each entry is a
- *  [r,g,b] multiplier or a {recolor: [r,g,b]} hue-changer. `doc` rides free
- *  like everywhere else. Returns problems; empty = servable.
+/** defs/flora/_colors.json: each entry an [r,g,b] multiplier or a {recolor: [r,g,b]} hue-changer. Empty = servable.
  *  @param {unknown} colors @returns {string[]} */
 export function validateFloraColors(colors) {
   if (!isObj(colors)) return ['_colors must be a JSON object'];

@@ -1,7 +1,5 @@
-// profile — the PERSON noun's home (four-noun taxonomy, 08-29): who you are,
-// where you are, what you're wearing, what you carry, who you know.
-// Today: identity up top (portrait = presence control, header), and four tabs.
-// satchel / worlds / friends have no server surface yet — R, 2026-09-11: "I would make them fully clickable panels ... aspirational so someone (maybe us!) can build it some day".
+// profile — the PERSON noun's home: who you are, where you are, what you wear, carry, and who you know.
+// Identity up top (portrait = presence control), four tabs; satchel/worlds/friends are deliberate placeholders.
 
 import { CONFIG, bus, colorFor, setName } from './base.js';
 import { registerXRPanel } from './xrpanels.js';
@@ -12,11 +10,11 @@ import { renderDOM } from './panels.js';
 import { makeFrame, fitTabStrip } from './windows.js';
 import { fsvg } from './icons.js';
 import { net } from './net.js';
+import { escapeHtml as escape } from './markup.js';
 
 let frame = null;
 
-// the profile as a VR quad: who you are, your presence, and the bodies list
-// (folded in from bodies.js — one declaration, shown here on both surfaces).
+// the profile as a VR quad, with the bodies list (one declaration, shown on both surfaces)
 function profileFields() {
   return [
     { t: 'info', label: 'name', value: CONFIG.name ?? '—' },
@@ -33,7 +31,7 @@ function profileDispatch(k, v) {
 export function initProfile() {
   registerXRPanel({ id: 'profile', title: 'profile', fields: profileFields, dispatch: profileDispatch });
   frame = makeFrame('profile', {
-    title: 'profile', x: 64, y: 60, w: 420, h: 440, minW: 320, minH: 300, hidden: true,   // portrait + header + tabs + pane
+    title: 'profile', x: 64, y: 60, w: 420, h: 440, minW: 320, minH: 300, hidden: true,
   });
   frame.body.classList.add('profile-body');
   paint();
@@ -44,13 +42,7 @@ export function initProfile() {
 }
 
 // ---- the body: portrait (= presence control) · header · tabs · one pane
-// live — "try for the redesign, it was a stub anyway":
-//   • the portrait circle carries the profile glyph as its placeholder and IS
-//     the presence control: click → a Discord-style pop with present/away/busy
-//   • tabs across the top under the header (side tabs fight 420 px; bottom
-//     tabs read as a dock): avatars · satchel · worlds · friends
-//   • the last tab is remembered per browser (ew-profile-tab)
-//   • the bodies list is the avatars tab's content — no more folding
+// tabs across the top (side tabs fight 420 px); the last one remembered in ew-profile-tab
 const TABS = [
   ['avatars', 'person-arms-spread', 'bodies you have worn'],
   ['satchel', 'backpack', 'personal inventory'],
@@ -64,14 +56,7 @@ const PRESENCE_WORD = { present: 'present · here and active', away: 'away · id
 function paint() {
   if (!frame?.visible && frame?.body.dataset.painted) return;
   frame.body.dataset.painted = '1';
-  // getMyAvatarName() is INTENT, not fact: it is set at module load from
-  // ?avatar= / localStorage / the literal 'claude', and it never clears when a
-  // body fails to load. So the header said "wearing claude" while the bodies
-  // list two tiles down said "nothing worn yet" and the scene held no avatar —
-  // R, 2026-09-11, with the screenshot. getMe() is the real signal (mybody.js:
-  // set only after makeAvatar resolves). Name it when there IS a body; say
-  // None when there isn't. Both panels repaint on `avatar-worn`, which fires
-  // right after setMe on the success path, so a late body is not left stale.
+  // getMyAvatarName() is intent and never clears on a failed load; getMe() is the real signal
   const avatar = getMe() ? (getMyAvatarName() || 'default') : 'None';
   const st = presence();
   frame.body.innerHTML = `
@@ -114,12 +99,9 @@ function paint() {
     dismissRef = dismiss;
   };
 
-  // the name is the control (R 10-11: "make the display name an invisible field that you can click on… a popup window and a
-  // warning to pick carefully because you can only rename yourself every so often"). The account stays (base.js
-  // CONFIG.account); the door enforces the cooldown and says when the next change is allowed (net.renameAfter).
+  // the name is the control; the account stays (CONFIG.account), and the door enforces the cooldown (net.renameAfter)
   frame.body.querySelector('.pf-name').onclick = () => openRenameDialog();
 
-  // tabs
   frame.body.querySelectorAll('.pf-tab').forEach((b) => {
     b.onclick = () => { tab = b.dataset.tab; try { localStorage.setItem(TAB_KEY, tab); } catch {} paint(); };
   });
@@ -138,11 +120,7 @@ function paintPane(pane) {
     return;
   }
 
-  // SAY SO WHEN IT IS EMPTY BY DESIGN. R, 2026-09-11: the old sketch carried
-  // "this is a stub - yet to be built" on these panes "just so you'd know it
-  // hadn't rendered nothing on accident" — an empty box is indistinguishable
-  // from a broken one. satchel/worlds/friends have no server surface yet; the
-  // tabs are aspirational, so the panes say which.
+  // an empty box reads as broken, so a pane with no server surface says so
   const STUB = {
     satchel: 'a stub — what you carry, once there is somewhere to carry it from.',
     worlds: 'a stub — places you know, once the server keeps a list.',
@@ -156,13 +134,9 @@ function paintPane(pane) {
   }
 }
 
-const escape = (v) => String(v).replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// Which rename this session has (house I180): a signed-in name is the sign-in's (net.js takes identity.name over ours on
-// every load, so a reload would undo a change); an account on a name-trusting server renames by reload, under the
-// door's cooldown (the snapshot's renameAfter says so); anyone else is a guest, someone new on each visit, whose name is
-// all they carry (no cooldown, no roles to keep).
+// Which rename this session has: signed-in = the sign-in's (net.js takes identity.name each load); an account on a
+// name-trusting server renames by reload under the door's cooldown (renameAfter); anyone else is a guest.
 const renameKind = () => (CONFIG.authed ? 'signin' : net.renameAfter != null ? 'account' : 'guest');
 
 function openRenameDialog() {

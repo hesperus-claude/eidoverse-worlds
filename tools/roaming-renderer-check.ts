@@ -1,38 +1,36 @@
-// Roaming renderers, end to end, in a real browser against a running server.
+// Roaming renderers end to end, in a real browser against a running server. A renderer waits in a lobby; an agent joins
+// another world alone and builds crates. Its arrival alone must send the renderer over (pre-warm); a snapshot comes only
+// once the world is REALIZED (never a partial frame); a second is fast. Then the watchdog's check (deploy/render-health.ts)
+// runs over real devtools: the roamer is healthy, a page with no client is not joined.
 //   bun tools/roaming-renderer-check.ts http://127.0.0.1:<port> [SHOT=path.png]
 //   (each run founds two worlds: start the scratch sequencer with FOUND_DAILY_CAP=off, or the sixth run is refused)
-// A roaming renderer page waits in a lobby world; an "agent" then joins another world alone and builds there (several
-// crates). Its arrival alone must send the renderer over (pre-warm); a snapshot must come only once the world is
-// REALIZED (every crate loaded — never a partial frame); a second snapshot is fast (the renderer stays). Then the
-// watchdog's own check (deploy/render-health.ts health) runs over real devtools: the roamer is healthy, a page with no
-// client is not joined.
 import { chromium } from 'playwright';
 import { strict as assert } from 'node:assert';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
-const base = process.argv[2] ?? 'http://127.0.0.1:19347';
+import { playwrightArgs } from './protocol/chrome.ts';
+const base = process.argv[2];
+// a manual check against a running server: without one, say so before a browser is launched
+if (!base) { console.log('usage: bun tools/roaming-renderer-check.ts http://127.0.0.1:<port> (needs a running server)'); process.exit(0); }
 const shot = process.env.SHOT;
 const world = `roam-build-${Date.now().toString(36)}`, lobby = `roam-lobby-${Date.now().toString(36)}`;
 const crates = ['blue', 'green', 'red', 'yellow'].map((c, i) => ({ verb: 'spawn', args: { id: `crate-${c}`, lib: `eidoverse/assets/models/crate_large_${c}.glb`, pos: [Math.cos(i * 1.57) * 4, 0, 6 + Math.sin(i * 1.57) * 4], yaw: 0 } }));
 let ws: WebSocket | null = null, keepPose: ReturnType<typeof setInterval> | undefined;
-// A devtools port, so the watchdog's own check (deploy/render-health.ts health) can judge the roamer below. Chrome
-// picks it (port 0) and writes it to DevToolsActivePort in its profile, so no other process can take it between the
-// choosing and the binding; that is why this is a persistent context, in a profile this check owns.
+// a devtools port for the watchdog's check: Chrome picks it (port 0) and writes DevToolsActivePort in its profile, so no
+// other process can take it in between; hence a persistent context in a profile this check owns
 const profile = mkdtempSync(join(tmpdir(), 'roam-check-'));
 const browser = await chromium.launchPersistentContext(profile, { headless: true, channel: 'chrome', viewport: { width: 960, height: 540 },
-  args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--remote-debugging-port=0'] });
+  args: playwrightArgs({ extra: ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])] }) });
 let dbg = 0;
 try {
   for (let i = 0; i < 50 && !dbg; i++) {
     try { dbg = Number(readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]) || 0; } catch { await Bun.sleep(100); }
   }
   assert.ok(dbg > 0, `Chrome wrote no DevToolsActivePort in ${profile}`);
-  // The lobby must exist before the renderer comes: a renderer is a spectator, and there is nothing to watch in a world
-  // nobody has founded (server.ts, 4011, retried forever). Production's lobbies were founded once; found this one.
-  // A refusal (a sequencer that wants JOIN_TOKEN, a founding cap) fails the check with the server's reason, and so
-  // does silence: this must never hang with the browser above left open.
+  // found the lobby first (a renderer is a spectator; an unfounded world is a 4011 retried forever); a refusal or silence
+  // fails with the server's reason: never hang with the browser open
   {
     const f = new WebSocket(base.replace('http', 'ws') + '/ws');
     try {
@@ -51,10 +49,8 @@ try {
     } finally { f.onclose = null; f.close(); }
   }
   const page = await browser.newPage();
-  // TRIPPED (default on; TRIPPED=0 skips): the roamer's profile carries what its watchdog's kills leave behind, a
-  // boot tripwire for its lobby and a spent retry. Before index.html's rule 0 that loaded the LITE client, which still
-  // joined as a renderer, was sent to the agent's world, and answered every snapshot "this client has no renderer"
-  // (2026-10-24). The renderer must boot full anyway, and serve.
+  // TRIPPED (default on; TRIPPED=0 skips): the profile carries a watchdog kill's leftovers; the renderer must still boot
+  // the full client, not the lite one (index.html rule 0), and serve
   const tripped = process.env.TRIPPED !== '0';
   if (tripped) await page.addInitScript((w) => {
     try { localStorage.setItem(`ew-boot-attempt:${w}`, '1'); localStorage.setItem(`ew-boot-retried:${w}`, '1'); } catch { /* storage blocked */ }
@@ -80,8 +76,7 @@ try {
   const tw = Date.now(); while (Date.now() - tw < 20000 && (await rendererWorld()) !== world) await Bun.sleep(250);
   const prewarmMs = Date.now() - tw;
   assert.equal(await rendererWorld(), world, 'the agent arriving brought the roaming renderer (prewarm)');
-  // the agent keeps building while the renderer loads — or (GRACE_MS=0) asks at once: the renderer must WAIT for the
-  // world rather than send what it has so far
+  // the agent keeps building while the renderer loads, or (GRACE_MS=0) asks at once: the renderer must WAIT for the world
   await Bun.sleep(Number(process.env.GRACE_MS ?? 4000));
   const snap = async () => { const t0 = Date.now(); const r = await fetch(`${base}/snap?world=${world}&follow=builder-agent&view=third`);
     return { status: r.status, ms: Date.now() - t0, png: r.ok ? new Uint8Array(await r.arrayBuffer()) : null, err: r.ok ? '' : await r.text() }; };
@@ -99,9 +94,8 @@ try {
   const second = await snap();
   console.log(JSON.stringify({ second: { status: second.status, ms: second.ms } }));
   assert.equal(second.status, 200); assert.ok(second.ms < 3000, 'the renderer stays: the next snapshot is fast');
-  // THE WATCHDOG'S CHECK, over real devtools: the roamer that just served two snapshots is judged healthy (frames
-  // counted, joined, a frame captured), and a page that is not the client is judged not joined. A verdict that
-  // fails a working renderer killed every roamer every two minutes for a week (docs/INCIDENTS.md, 2026-10-24).
+  // THE WATCHDOG'S CHECK: the roamer that just served two snapshots is healthy (frames counted, joined, a frame captured),
+  // a page that is not the client is not joined. A verdict failing a working renderer kills every roamer (docs/INCIDENTS.md)
   const verdict = await health(dbg);
   console.log(JSON.stringify({ watchdog: verdict }));
   assert.ok(verdict.healthy && (verdict.fps ?? 0) > 0 && /snap=\d+KB/.test(verdict.reason), `the watchdog judges the working roamer healthy: ${JSON.stringify(verdict)}`);
@@ -109,10 +103,7 @@ try {
   await plain.goto(`${base}/version?probe=plain`);
   const notClient = await health(dbg, (u) => u.includes('/version?probe=plain'));
   assert.ok(!notClient.healthy && notClient.reason === 'not joined', `a page with no client is not joined: ${JSON.stringify(notClient)}`);
-  // THE ROAMER RESTARTS (its watchdog does this every few hours, and on every client deploy): it comes back as a new page
-  // in its lobby, with the agent's world left unserved. The sweep (server/snapshots.ts) must send it straight back
-  // without a snapshot being asked, so the agent's next snapshot is served at once (2026-10-24: "failing on first try
-  // is bad").
+  // THE ROAMER RESTARTS as a new page in its lobby: the sweep (server/snapshots.ts) must send it back unasked
   await page.close();
   const again = await browser.newPage();
   await again.goto(`${base}/?world=${lobby}&renderer&roam&name=roam-check`);

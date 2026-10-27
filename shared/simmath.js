@@ -1,44 +1,19 @@
-// simmath — deterministic transcendentals for the sim covenant (PROTOCOL_v2
-// Covenant I: owned numerics).
-//
-// The host's Math.sin/cos/atan2/exp are IMPLEMENTATION-APPROXIMATED — two
-// correct engines may disagree in the last bits, which under a deterministic
-// fold is a forked world. Covenant I therefore bans them from sim code and
-// promised "a wasm kernel later". This module is that kernel, delivered in
-// the house's own no-build dialect instead: every function below is built
-// ONLY from operations the covenant already blesses as IEEE-754-exact on
-// every conforming engine — + − × ÷, sqrt, comparisons, floor/abs/min/max,
-// and explicit-endian byte views — evaluated in a FIXED order. Bit-identity
-// across engines is a property of the construction, not a hope; the wasm
-// form remains the named fallback if a host engine is ever caught breaking
-// IEEE exactness (that engine is nonconforming for eidosim wholesale, so
-// this module adds no new exposure).
-//
-// THE COEFFICIENTS ARE THE VERSION (Covenant II, same law as eidosim's
-// constants): editing any constant, coefficient, reduction word, or the
-// evaluation ORDER of a polynomial changes what old logs replay to under
-// any sim that uses this module — that is an epoch bump, never a patch.
-//
-// Accuracy, stated honestly: these are ~1–3 ulp implementations, NOT
-// correctly rounded — the covenant needs IDENTICAL, not perfect. Argument
-// reduction is two-word Cody–Waite, sized for world-scale arguments:
-// |x| ≤ ~1e6 rad keeps full accuracy; beyond that accuracy degrades
-// smoothly but IDENTICALLY on every engine (determinism never degrades).
-// Non-finite inputs: NaN in → NaN out; sinT/cosT(±∞) → NaN;
-// expT(−∞) → 0, expT(+∞) → +∞.
+// simmath — deterministic transcendentals (Covenant I: owned numerics; spec/PHYSICS.md). Host Math.sin/cos/atan2/exp may
+// differ in the last bits between correct engines, forking a world. Built only from IEEE-754-exact ops (+ − × ÷, sqrt,
+// comparisons, floor/abs/min/max, explicit-endian byte views) in a FIXED order: bit-identical on every conforming engine.
+// THE COEFFICIENTS ARE THE VERSION (Covenant II): changing any constant, reduction word or evaluation order is an epoch bump.
+// ~1–3 ulp, not correctly rounded (IDENTICAL, not perfect). Two-word Cody–Waite reduction: full accuracy to |x| ≈ 1e6 rad,
+// degrading identically beyond. NaN → NaN; sinT/cosT(±∞) → NaN; expT(−∞) → 0, expT(+∞) → +∞.
 
 export const SIMMATH_ID = 'simmath@0.1.0';
 
-// Math.PI is the spec-exact double nearest π (a constant, not a computation).
+// spec-exact double nearest π (a constant, not a computation)
 export const PI = Math.PI;
 export const TAU = 2 * PI;
 
 // ---- exact building blocks --------------------------------------------------
 
-// π/2 split into two words (the classic Cody–Waite pair): PIO2_HI carries
-// ~33 leading bits so n·PIO2_HI is exact for |n| < 2^20-ish, and the tail
-// rides PIO2_LO. The decimal literals below round to the intended doubles
-// exactly (shortest-round-trip both ways).
+// π/2 as a Cody–Waite pair: PIO2_HI's ~33 leading bits keep n·PIO2_HI exact for |n| < ~2^20
 const PIO2_HI = 1.57079632673412561417e+00;
 const PIO2_LO = 6.07710050650619224932e-11;
 const TWO_OVER_PI = 2 / PI;
@@ -48,9 +23,7 @@ const LN2_HI = 6.93147180369123816490e-01;
 const LN2_LO = 1.90821492927058770002e-10;
 const INV_LN2 = 1 / LN2_HI;   // reduction estimate only — exactness not required
 
-// Taylor coefficients as exact-op divisions of exactly-representable
-// integers (every factorial below is < 2^53). The division's rounding is
-// IEEE-exact, so each constant is the same double on every engine.
+// Taylor coefficients as IEEE-exact divisions of exact integers (every factorial < 2^53): the same double on every engine
 const S3 = -1 / 6, S5 = 1 / 120, S7 = -1 / 5040, S9 = 1 / 362880;
 const S11 = -1 / 39916800, S13 = 1 / 6227020800, S15 = -1 / 1307674368000;
 const S17 = 1 / 355687428096000;
@@ -63,27 +36,22 @@ const E11 = 1 / 39916800, E12 = 1 / 479001600, E13 = 1 / 6227020800;
 const A3 = -1 / 3, A5 = 1 / 5, A7 = -1 / 7, A9 = 1 / 9, A11 = -1 / 11;
 const A13 = 1 / 13, A15 = -1 / 15, A17 = 1 / 17, A19 = -1 / 19;
 
-// 2^k, built from exponent bits through an EXPLICIT-ENDIAN view — exact and
-// endian-independent (a bare Uint32Array view would flip words on a
-// big-endian host; DataView with littleEndian pinned cannot).
+// 2^k from exponent bits through an EXPLICIT-ENDIAN DataView (a bare Uint32Array would flip words on a big-endian host)
 const _bv = new DataView(new ArrayBuffer(8));
 function pow2(k) {
-  // normal range only (callers split larger |k| into two steps). Under the
-  // pinned little-endian layout the SIGN/EXPONENT word is bytes 4..7; the
-  // low mantissa word is bytes 0..3. The self-check below refuses to serve
-  // a build where this assembly is ever wrong.
+  // normal range only (callers split larger |k|); the self-check below refuses a build where this assembly is wrong
   _bv.setUint32(0, 0, true);
   _bv.setUint32(4, (k + 1023) << 20, true);
   return _bv.getFloat64(0, true);
 }
 
-// kernel sine on |r| ≤ π/4 + reduction slack: fixed Horner order.
+// |r| ≤ π/4 + reduction slack: fixed Horner order
 function sinK(r) {
   const z = r * r;
   return r + r * (z * (S3 + z * (S5 + z * (S7 + z * (S9 + z * (S11
     + z * (S13 + z * (S15 + z * S17))))))));
 }
-// kernel cosine on the same range: fixed Horner order.
+// same range: fixed Horner order
 function cosK(r) {
   const z = r * r;
   return 1 + z * (C2 + z * (C4 + z * (C6 + z * (C8 + z * (C10
@@ -94,40 +62,39 @@ function cosK(r) {
 function reduce(x) {
   const n = Math.floor(x * TWO_OVER_PI + 0.5);
   const r = (x - n * PIO2_HI) - n * PIO2_LO;
-  // k = n mod 4 in {0,1,2,3} — exact integer arithmetic on doubles
+  // exact integer arithmetic on doubles
   const k = n - 4 * Math.floor(n / 4);
   return { k, r };
 }
 
-/** Deterministic sine. @param {number} x radians */
+/** @param {number} x radians */
 export function sinT(x) {
   if (!Number.isFinite(x)) return NaN;
   const { k, r } = reduce(x);
   return k === 0 ? sinK(r) : k === 1 ? cosK(r) : k === 2 ? -sinK(r) : -cosK(r);
 }
 
-/** Deterministic cosine. @param {number} x radians */
+/** @param {number} x radians */
 export function cosT(x) {
   if (!Number.isFinite(x)) return NaN;
   const { k, r } = reduce(x);
   return k === 0 ? cosK(r) : k === 1 ? -sinK(r) : k === 2 ? -cosK(r) : sinK(r);
 }
 
-// arctangent kernel on |t| ≤ ~0.2 (after two halvings): fixed Horner order.
+// |t| ≤ ~0.2 (after two halvings): fixed Horner order
 function atanK(t) {
   const z = t * t;
   return t + t * (z * (A3 + z * (A5 + z * (A7 + z * (A9 + z * (A11
     + z * (A13 + z * (A15 + z * (A17 + z * A19)))))))));
 }
-// atan on [0, 1]: two argument halvings (each an exact-ops identity:
-// atan(t) = 2·atan(t / (1 + √(1+t²)))), then the kernel, then ×4.
+// two exact-ops halvings (atan(t) = 2·atan(t / (1 + √(1+t²)))), then the kernel, then ×4
 function atan01(t) {
   const t1 = t / (1 + Math.sqrt(1 + t * t));
   const t2 = t1 / (1 + Math.sqrt(1 + t1 * t1));
   return 4 * atanK(t2);
 }
 
-/** Deterministic atan2 — the four-quadrant angle of (x, y), in (−π, π].
+/** Four-quadrant angle of (x, y), in (−π, π].
  *  @param {number} y @param {number} x */
 export function atan2T(y, x) {
   if (!Number.isFinite(y) || !Number.isFinite(x)) return NaN;
@@ -140,7 +107,7 @@ export function atan2T(y, x) {
   return y >= 0 ? PI - a : a - PI;
 }
 
-/** Deterministic natural exponential. @param {number} x */
+/** @param {number} x */
 export function expT(x) {
   if (Number.isNaN(x)) return NaN;
   if (x === Infinity) return Infinity;
@@ -163,8 +130,7 @@ export function expT(x) {
 }
 
 // ---- self-check -------------------------------------------------------------
-// A build whose byte-view scaling is broken (endianness surprise, a future
-// refactor) must refuse LOUDLY at import, not fold worlds wrong quietly.
+// a build whose byte-view scaling is broken must refuse LOUDLY at import, not fold worlds wrong quietly
 if (pow2(0) !== 1 || pow2(3) !== 8 || pow2(-3) !== 0.125 || pow2(-1021) * pow2(-1) !== Number.MIN_VALUE * 4503599627370496) {
   throw new Error('[simmath] pow2 bit-assembly failed its self-check — this host cannot serve the sim covenant');
 }

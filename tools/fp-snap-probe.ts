@@ -1,36 +1,18 @@
-// fp-snap-probe — the #75 behavioral receipt, end to end and A/B-able.
-//
+// fp-snap-probe: the #75 behavioural receipt, end to end and A/B-able (tools/fp-view-test.ts pins the unit contract).
 //   bun tools/fp-snap-probe.ts                # spawns its own scratch sequencer
 //   PORT=8987 RECEIPTS=/tmp/fp75 bun tools/fp-snap-probe.ts
-//
-// Run it on this branch and on a throwaway main worktree: the MOUNTED
-// first-person cases fail on main (the fixed root+1.52 snap camera sits
-// inside the big-head rig's own mesh and nothing hides it), and pass here.
-// That pixel difference — a marker the eye can or cannot see — is the
-// fail-on-main evidence for #75; tools/fp-view-test.ts pins the unit
-// contract but is link-novelty on main.
-//
-// What it does:
-//   1. builds the head-volume test rig (claude.vrm with its head bone ×5 —
-//      tools/make-bighead-vrm.ts) into assets/opt, and spawns a scratch
-//      sequencer on PORT with an open door;
-//   2. joins two raw-ws puppets: "puppet" wearing the big-head rig
-//      (nonhumanoid head-volume case) and "ctl" wearing stock claude.vrm
-//      (humanoid control);
-//   3. authors a tower crate with a ground socket and an elevated socket,
-//      magenta light markers on each seat's eye line, and a red crate on the
-//      ground line — every first-person case has something it MUST see;
-//   4. opens a renderer session (agent-browser if available, else waits for
-//      one to be opened by hand at /?renderer&name=probe&world=<world>);
-//   5. walks the acceptance grid — on foot / ground socket / elevated
-//      socket × first (marker REQUIRED), third + selfie (body in frame,
-//      frame must differ from first), dismount (first restored), and a
-//      bob-motion pass where the camera must ride the moving socket;
+// The MOUNTED first-person cases must pass (a fixed root+1.52 camera sat inside the big-head rig's mesh).
+//   1. builds the head-volume rig (claude.vrm, head bone ×5, tools/make-bighead-vrm.ts) into assets/opt and spawns a
+//      scratch sequencer on PORT with an open door;
+//   2. joins raw-ws puppets: "puppet" in the big-head rig, "ctl" in stock claude.vrm (humanoid control);
+//   3. authors a tower crate with a ground and an elevated socket, magenta markers on each seat's eye line and a red
+//      crate on the ground: every first-person case has something it MUST see;
+//   4. opens a renderer session (agent-browser if available, else by hand at /?renderer&name=probe&world=<world>);
+//   5. walks the grid: on foot / ground socket / elevated socket × first (marker REQUIRED), third + selfie (body in
+//      frame, differing from first), dismount (first restored), and an oscillating socket the camera must ride;
 //   6. saves every frame to RECEIPTS and exits non-zero on any violation.
-//
-// Wire facts it leans on (server.ts): join {type:'join',world,id,avatar,token},
-// verbs ≤12/4s per client, mount is self-rank for args.id === self,
-// /snap?world&follow&view needs a c.renderer client in-world.
+// Wire facts (server.ts): join {type:'join',world,id,avatar,token}, verbs ≤12/4s per client, mount is self-rank for
+// args.id === self, /snap?world&follow&view needs a c.renderer client in-world.
 
 import { fileURLToPath } from "node:url";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -62,9 +44,7 @@ function note(name: string, detail: string) {
 
 const rigOut = join(ROOT, "assets/opt/eidoverse/assets/vrms/bighead75.vrm");
 const rigSrc = join(EIDOVERSE_DIR, "eidoverse/assets/vrms/claude.vrm");
-// process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd
-// shim whose pid is not the real process — killing the shim orphans the
-// child (two abandoned sequencers were once found holding ports this way)
+// process.execPath, not "bun": on Windows the PATH "bun" is an npm .cmd shim, and killing the shim orphans the child
 const mk = Bun.spawnSync([process.execPath, join(ROOT, "tools/make-bighead-vrm.ts"), rigSrc, rigOut, "5"]);
 if (mk.exitCode !== 0) { console.error(mk.stderr.toString()); process.exit(1); }
 
@@ -99,8 +79,7 @@ function joinPuppet(id: string, avatar: string, p: [number, number, number], yaw
     const send = (o: unknown) => ws.send(JSON.stringify(o));
     const self: Puppet = {
       id, send, errors,
-      // verbs are rate-limited 12/4s — pace them so a refusal is a finding,
-      // not an artifact of the window (locktest precedent)
+      // verbs are rate-limited 12/4s: paced so a refusal is a finding, not an artifact of the window
       verb: async (verb, args) => { send({ type: "verb", verb, args }); await sleep(420); },
       pose: (pp, yaw2) => send({ type: "pose", pose: { p: pp, yaw: yaw2, clip: "idle" } }),
     };
@@ -115,15 +94,14 @@ function joinPuppet(id: string, avatar: string, p: [number, number, number], yaw
   });
 }
 
-// Both puppets face +z (yaw 0); everything they must see sits at +z.
+// both puppets face +z (yaw 0); everything they must see sits at +z
 const puppet = await joinPuppet("puppet", "eidoverse/assets/vrms/bighead75.vrm", [0, 0, -3], 0);
 const ctl = await joinPuppet("ctl", "eidoverse/assets/vrms/claude.vrm", [3, 0, -3], 0);
 console.log("[probe] puppets joined");
 
 // ---- 3. scene ---------------------------------------------------------------
-// Tower at origin, seats facing +z. Eye lines: ground socket seat y=0.8 →
-// head ≈ 1.9; elevated socket seat y=4 → head ≈ 5.1. Markers 4m ahead on
-// those lines; a red crate on the ground for the on-foot case.
+// tower at origin, seats facing +z: ground seat y=0.8 → head ≈ 1.9, elevated y=4 → head ≈ 5.1; markers 4m ahead on
+// those lines, a red crate on the ground for the on-foot case
 
 await puppet.verb("spawn", { id: "tower", lib: "eidoverse/assets/models/crate_large_yellow.glb", pos: [0, 0, 0], yaw: 0 });
 await puppet.verb("comp", {
@@ -152,7 +130,7 @@ const rendererUrl = `${BASE}/?renderer&name=probe&world=${WORLD}`;
   }
   if (!ready) { console.error("no renderer joined within 2 minutes"); process.exit(1); }
 }
-// let the renderer finish materializing both VRMs before judging pixels
+// let the renderer materialize both VRMs before judging pixels
 await sleep(6_000);
 console.log("[probe] renderer serving");
 
@@ -182,7 +160,7 @@ async function snap(follow: string, view: string, tag: string): Promise<Stats | 
 const meanDiff = (a: Stats, b: Stats) =>
   Math.hypot(a.mean[0] - b.mean[0], a.mean[1] - b.mean[1], a.mean[2] - b.mean[2]);
 const fmt = (s: Stats) => `magenta=${s.magenta} red=${s.red} skyTop=${s.skyTop}`;
-const MARKER = 40;   // px — the gizmo alone is hundreds at these ranges
+const MARKER = 40;  // px: the gizmo alone is hundreds at these ranges
 
 // ---- 6. the acceptance grid -------------------------------------------------
 
@@ -211,8 +189,7 @@ else check("third view differs from first (body back in frame)", meanDiff(highTh
 if ("error" in highSelfie || "error" in highFirst) check("selfie still renders while mounted", !("error" in highSelfie), (highSelfie as { error?: string }).error ?? "");
 else check("selfie differs from first (avatar is the subject)", meanDiff(highSelfie, highFirst) > 6, `Δmean=${meanDiff(highSelfie, highFirst).toFixed(1)}`);
 
-// moving socket: bob the tower; the eye must ride it. Two frames half a
-// period apart must differ far more than two frames of a still scene.
+// moving socket: oscillate the tower; frames half a period apart must differ far more than two of a still scene
 await puppet.verb("comp", { id: "tower", type: "motion", data: { type: "oscillate", amp: 0.7, period: 2.4 } });
 await sleep(600);
 const bobA = await snap("puppet", "first", "bighead-bob-a");

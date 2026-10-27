@@ -1,16 +1,6 @@
-// frames — the resize drag's finish path, run headless.
-//
-//   bun tools/frames-resize-test.ts
-//
-// The regression this exists for: the document-level resize drag tore down
-// only on `pointerup`. Release the button outside the browser and `up` never
-// arrives — `_resizing` stays true, the move/up listeners stay installed, and
-// every future hover and resize is dead until the page reloads. There is no
-// error and nothing looks broken; the frame just quietly stops resizing.
-//
-// So the assertion is not "does resizing work" (it visibly does) but "does it
-// still work AFTER a drag that ended the wrong way", which is exactly the
-// case a happy-path test cannot see.
+// frames: the resize drag's finish path, headless (`bun tools/frames-resize-test.ts`).
+// A drag released outside the browser never gets `pointerup`; teardown on that alone leaves `_resizing` true and the
+// listeners installed, silently killing every later resize. So: does it still work AFTER a drag that ended the wrong way?
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
@@ -25,12 +15,8 @@ plugin({
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
 
-// happy-dom has no pointer capture. Model it on ELEMENTS only — deliberately
-// NOT on `document`, because stubbing document.releasePointerCapture is what
-// masked the original bug: capture was taken on documentElement and released
-// on document, which owns nothing, so the release was a silent no-op and the
-// test still passed. The stub now tracks who holds what, so the assertions
-// below can check that the acquirer is the releaser.
+// happy-dom has no pointer capture: modelled on ELEMENTS only, never `document`, tracking who holds what so the
+// acquirer can be checked as the releaser
 const _captured = new Set<number>();
 (Element.prototype as any).setPointerCapture = function (id: number) { _captured.add(id); (this as any).__cap = id; };
 (Element.prototype as any).releasePointerCapture = function (id: number) { _captured.delete(id); (this as any).__cap = undefined; };
@@ -47,11 +33,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 const f = makeFrame("t", { title: "t", x: 100, y: 100, w: 300, h: 200, minW: 100, minH: 80 });
 f.show();
 
-// happy-dom returns an all-zero DOMRect, and the module's zone math is entirely
-// getBoundingClientRect-based — so without this the pointer never lands in any
-// zone and even the happy path silently fails. Report the frame's real state
-// instead. (First run of this test failed its own baseline for exactly that
-// reason, which is the honest way to find out your harness cannot see.)
+// happy-dom's DOMRect is all zero and the zone math uses getBoundingClientRect: report the frame's real state
 (f.el as any).getBoundingClientRect = () => ({
   left: f.state.x, top: f.state.y, width: f.state.w, height: f.state.h,
   right: f.state.x + f.state.w, bottom: f.state.y + f.state.h, x: f.state.x, y: f.state.y,
@@ -60,11 +42,8 @@ f.show();
 // nothing interactive is under the pointer in these synthetic drags
 (document as any).elementFromPoint = () => null;
 
-// CHROME. state.h is the BODY's height; the rendered frame is taller by the
-// title bar plus .fr-body's 5px top/bottom padding. Without an offsetHeight
-// this suite reports chrome = 0, which makes the south clamp's viewport budget
-// look exact and any assertion about it vacuous — the blindness that hid a 6px
-// overflow through five review rounds. (round 6)
+// CHROME: state.h is the BODY's height; the frame is taller by the title bar and .fr-body padding (without an
+// offsetHeight chrome reads 0 and the south clamp's budget looks exact)
 const CHROME = 30;
 Object.defineProperty(f.el, "offsetHeight", { get: () => f.state.h + CHROME, configurable: true });
 
@@ -73,8 +52,7 @@ const pd = (x: number, y: number) => new PointerEvent("pointerdown",
 const pm = (x: number, y: number) => new PointerEvent("pointermove",
   { clientX: x, clientY: y, bubbles: true, pointerId: 1 });
 
-// the east edge of the frame as painted
-const edgeX = () => f.state.x + f.state.w - 1;    // just inside the east band
+const edgeX = () => f.state.x + f.state.w - 1;  // just inside the east band
 const edgeY = () => f.state.y + 40;
 
 function dragEast(by: number, endWith: "up" | "nothing" | "cancel" | "blur") {
@@ -92,7 +70,7 @@ check("a normal drag resizes the frame", dragEast(60, "up") !== 0,
   `w now ${f.state.w}`);
 
 // --- the regression: a drag that ends without pointerup must not wedge state
-const abandoned = dragEast(40, "nothing");     // pointer left the window, no up
+const abandoned = dragEast(40, "nothing");  // pointer left the window, no up
 check("an abandoned drag still moved the edge", abandoned !== 0, String(abandoned));
 // nothing cleaned it up yet — now the recovery paths
 window.dispatchEvent(new Event("blur"));
@@ -122,8 +100,7 @@ try {
 check("overlapping finish paths do not throw", !threw);
 check("...and the frame still resizes afterward", dragEast(25, "up") !== 0);
 
-// --- capture is released by the element that took it (review catch: releasing
-// on `document` was a no-op, so a blur could leave the capture live forever)
+// --- capture is released by the element that took it (releasing on `document` is a no-op; a blur would leave it live)
 _captured.clear();
 document.dispatchEvent(pd(edgeX(), edgeY()));
 document.dispatchEvent(pm(edgeX() + 20, edgeY()));
@@ -138,72 +115,9 @@ _captured.clear();
 dragEast(20, "cancel");
 check("pointercancel also releases the capture", _captured.size === 0, `${_captured.size} held`);
 
-// --- corners are a real target (antra's live receipt: the corner used to be
-// the intersection of two 2px bands — geometrically present, practically
-// absent). 8px in from the corner point sits INSIDE the 15px corner square
-// but OUTSIDE the 4px edge bands, so a diagonal here proves the corner rule
-// specifically, not a lucky band overlap.
-function dragFrom(px: number, py: number, dx: number, dy: number) {
-  const w0 = f.state.w, h0 = f.state.h;
-  document.dispatchEvent(pd(px, py));
-  document.dispatchEvent(pm(px + dx, py + dy));
-  document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
-  return { dw: f.state.w - w0, dh: f.state.h - h0 };
-}
-const L = () => f.state.x, T = () => f.state.y,
-      Rt = () => f.state.x + f.state.w, B = () => f.state.y + f.state.h;
-{
-  const se = dragFrom(Rt() - 8, B() - 8, 30, 30);
-  check("SE corner (8px inside) resizes BOTH dimensions", se.dw > 0 && se.dh > 0, JSON.stringify(se));
-  const ne = dragFrom(Rt() - 8, T() + 8, 25, -25);
-  check("NE corner grows width and height together", ne.dw > 0 && ne.dh > 0, JSON.stringify(ne));
-  const sw = dragFrom(L() + 8, B() - 8, -25, 25);
-  check("SW corner grows width and height together", sw.dw > 0 && sw.dh > 0, JSON.stringify(sw));
-  const nw = dragFrom(L() + 8, T() + 8, -20, -20);
-  check("NW corner grows width and height together", nw.dw > 0 && nw.dh > 0, JSON.stringify(nw));
-}
-// ...and every plain edge still resizes exactly ONE dimension (midpoints are
-// far from any corner square, so the corner rule must not have eaten them)
-{
-  const e_ = dragFrom(Rt() - 1, T() + f.state.h / 2, 20, 0);
-  check("E edge still resizes width only", e_.dw > 0 && e_.dh === 0, JSON.stringify(e_));
-  const w_ = dragFrom(L() + 1, T() + f.state.h / 2, -20, 0);
-  check("W edge still resizes width only", w_.dw > 0 && w_.dh === 0, JSON.stringify(w_));
-  const s_ = dragFrom(L() + f.state.w / 2, B() - 1, 0, 20);
-  check("S edge still resizes height only", s_.dh > 0 && s_.dw === 0, JSON.stringify(s_));
-  const n_ = dragFrom(L() + f.state.w / 2, T() + 1, 0, -20);
-  check("N edge still resizes height only", n_.dh > 0 && n_.dw === 0, JSON.stringify(n_));
-}
+// every edge and corner, its floor and its viewport margin: a table in frames-layout-test.ts
 
-// --- minimums still hold (the clamp survived the refactor)
-const tiny = dragEast(-9999, "up");
-check("width clamps at minW", f.state.w >= 100, `w=${f.state.w} (delta ${tiny})`);
-
-// --- the south clamp budgets in BODY space, subtracts a VIEWPORT margin ---
-{ // windows.js:144 clamps state.h to `innerHeight - s0.y - 4`, then the frame
-  // renders `chrome` px taller — so a resize to the legal maximum ends past the
-  // bottom edge, unreachable under html,body{overflow:hidden}. fit() does not
-  // share the bug (it clamps against root.offsetHeight), but the resize
-  // finish() path never calls fit, so it persists until the next window resize.
-  f.state.x = 100; f.state.y = 100; f.state.w = 300; f.state.h = 200;
-  const sx = f.state.x + 40, sy = () => f.state.y + f.state.h - 1;   // inside the south band
-  document.dispatchEvent(pd(sx, sy()));
-  document.dispatchEvent(pm(sx, innerHeight + 500));                 // drag far past the bottom
-  document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
-  const bottom = f.state.y + (f.el as any).offsetHeight;
-  check("a south resize to the limit leaves the RENDERED frame inside the viewport",
-    bottom <= innerHeight - 4,
-    `rendered bottom=${bottom} viewport=${innerHeight} state.h=${f.state.h} chrome=${CHROME}`);
-}
-
-// THE FRAME PUBLISHES ITS OWN FLOOR. index.html carries `.frame { min-width:
-// 170px }`, a CSS floor sitting BENEATH the JS one — it silently won for any
-// frame declaring a smaller minW. Measured in Chromium before the fix: the gesture
-// bar asking for w=48/86/124/162 ALL rendered at frameW=170, cols=4, rows=3.
-// That is R's report in one line ("won't go thinner than 4x, but will forcibly
-// go 9x down and not wrap"): the body was painted 336px tall while the clipped
-// width could only lay out three rows. Three rounds of fixing snapTo changed
-// nothing visible, because the arithmetic was right and the RENDER was floored.
+// the frame publishes its own floor: index.html's `.frame { min-width: 170px }` won for any smaller JS minW, flooring the RENDER
 { const narrow = makeFrame("floor", { title: "floor", x: 10, y: 10, w: 48, h: 32, minW: 48, minH: 32 });
   narrow.show();
   check("a frame publishes its OWN minW to the DOM, not the sheet's blanket 170",
@@ -213,10 +127,8 @@ check("width clamps at minW", f.state.w >= 100, `w=${f.state.w} (delta ${tiny})`
   check("...and a frame with a LARGER floor keeps it", (wide.el as HTMLElement).style.minWidth === "320px",
     `minWidth=${(wide.el as HTMLElement).style.minWidth}`); }
 
-// --- a glyph button over the edge band keeps its press (measured in the browser, 10-01: the ∃ menu's Panels flyout
-// hangs over the chat frame's top band, and its gestures pin never pinned — the topmost element under the pointer was
-// the glyph's SVG <path>, which is not an HTMLElement, so the walk up to its <button> never started and the resize
-// took the press). Inside a frame the same: a glyph button within 6px of the frame's edge.
+// --- a glyph button over the edge band keeps its press: the topmost element is the glyph's SVG <path>, not an
+// HTMLElement, and the walk up to its <button> must still start. Inside a frame too, within 6px of its edge.
 for (const where of ["over the band, outside the frame", "inside the frame, at its edge"]) {
   const b = document.createElement("button");
   b.innerHTML = '<svg viewBox="0 0 10 10"><path d="M0 0h10v10z"/></svg>';

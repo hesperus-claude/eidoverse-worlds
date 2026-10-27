@@ -1,9 +1,7 @@
-// parity — the scene against the view (EW.foldParity() in the console): does what this page DRAWS agree with the view
-// of its own fold (state.js)? Run it in any live world, after any suspect sequence of edits. It compares the fold's
-// OWN outputs (entity ids, what each is, parents) and deliberately not realization (transforms mid-motion, loaded
-// meshes): those diverge by design while an object is in flight or riding a motion.
-// (compDiffs — the realizer's `comps` mirror against the view — is retired with the mirror, C7c: every reader holds the
-// fold's own record (world.js bagOf), so there is no second bag to drift. The key stays, always empty, for the benches.)
+// parity — does what this page DRAWS agree with its own fold (state.js)? EW.foldParity() in any live world.
+// Compares the fold's OWN outputs (ids, what each is, parents), deliberately not realization: transforms and loaded
+// meshes diverge by design while an object is in flight or in motion.
+// compDiffs is retired (C7c: readers hold the fold's own record, world.js bagOf); the key stays, always empty, for the benches.
 
 import { state } from './state.js';
 import { entities, childrenOf, ancestorsOf } from './world.js';
@@ -26,9 +24,7 @@ export function foldParity() {
   for (const id of shadowIds) {
     if (!legacyIds.has(id)) continue;
     out.checked++;
-    // identity: the fold's word on WHAT this id is (a light? which model?)
-    // vs what the scene realized — where same-id-spawn overwrite semantics
-    // would drift first (a still-loading reservation is tracked as nothing yet: skip)
+    // identity: where same-id-spawn overwrite would drift first (a still-loading reservation is nothing yet: skip)
     const meta = realizedAs(id);
     if (meta) {
       const ent = shadow.entities[id];
@@ -41,12 +37,8 @@ export function foldParity() {
     }
   }
 
-  // entity→entity mounts: the fold's parent record vs the scene's linkage —
-  // AND, when linked, the child's parent-local transform vs the mount's own
-  // offset. The link can be right while the pose is wrong (a reconcile that
-  // re-applies an absolute pos in the parent's frame — review finding B1),
-  // so both are buckets. Part-socket mounts skip the pose check: attach
-  // bakes the part's live phase into the offset, honestly.
+  // mounts: linkage AND the child's local transform vs the offset (the link can be right while the pose is wrong).
+  // Part-socket mounts skip the pose check: attach bakes the part's phase in.
   for (const id of shadowIds) {
     if (!legacyIds.has(id)) continue;
     const rel = shadow.entities[id].parent ?? null;
@@ -65,8 +57,7 @@ export function foldParity() {
     }
   }
 
-  // the fold's edge index (replica.js, kept op by op at ingest) against the view's records (viewState, rebuilt whole):
-  // two derivations of the same parent fields; a missed ingest path shows here as a child one lists and the other doesn't
+  // replica.js's edge index (kept op by op) vs viewState (rebuilt whole): a missed ingest path shows as a lone child
   for (const id of shadowIds) {
     const kids = childrenOf(id), want = scanChildren(shadow.entities, id);
     if (kids.join('\n') !== want.join('\n')) out.edgeDiffs.push({ id, index: kids, view: want });
@@ -74,7 +65,7 @@ export function foldParity() {
     if (up.join('\n') !== wantUp.join('\n')) out.edgeDiffs.push({ id, indexUp: up, viewUp: wantUp });
   }
 
-  // (bodies on seats are presence — world.js avatarMounts — never the fold: nothing to compare them with here)
+  // bodies on seats are presence (world.js avatarMounts), never the fold: nothing to compare
 
   out.ok = !out.onlyShadow.length && !out.onlyLegacy.length
     && !out.compDiffs.length && !out.mountDiffs.length && !out.identityDiffs.length

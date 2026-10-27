@@ -5,7 +5,7 @@
 // what server/geometry.ts measures from the same GLB the client renders: the bounding box (in the model's own frame:
 // a GLB's origin is wherever its author put it) and the up-facing flat zones (seat pans, table tops) as surfaces.
 //
-// The authority is synchronous and measuring is not, so this is a warm cache (the boxes.ts pattern): warm(libs) is awaited
+// The authority is synchronous and measuring is not, so this is a warm cache: warm(libs) is awaited
 // on the wire before a request reaches the authority (and on world load for every model standing in it); get(lib) answers
 // at once. A lib this server can't find or parse is still a model the authority may NAME (refusing it would make worlds
 // stop at whatever this host happens to have on disk), but it has no size: the authority says it can't place or collide

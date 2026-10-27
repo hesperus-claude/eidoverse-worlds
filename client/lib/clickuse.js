@@ -1,6 +1,5 @@
-// clickuse — the mouse on things (R, 2026-10-10, first minute of the desktop test: "there's a label over the balls that
-// says 'grab one', but left-clicking on them doesn't do anything"). Her rule: LEFT-CLICK is the thing's primary use
-// (grab a ball, open a door, sit on a seat); RIGHT-CLICK opens a menu of everything it offers. The keys stay (T, C, E, X):
+// clickuse — the mouse on things. LEFT-CLICK is the thing's primary use (grab a ball, open a door, sit on a seat);
+// RIGHT-CLICK opens a menu of everything it offers. The keys stay (T, C, E, X):
 // the mouse sends the same requests they do, so the authority's refusals read the same.
 //   A click is a press and release that didn't travel (a drag is the camera's orbit, either button). Not in edit mode
 // (a click selects there), not in a headset, not over a person (bodydrag's capture listener takes that press first).
@@ -30,19 +29,18 @@ const canGrab = (id) => !!physicsApi.grabbable(id)?.enabled;
 /** What a thing offers, most likely first: [{k, label, run}]. The first is what a left-click does. */
 /** spot: where the click landed (the context menu passes it), for "put X on Y" there. */
 export function offersOf(id, { spot = null } = {}) {
-  // its name as its builder wrote it, no quotes: the menu draws it in the accent colour (R, 10-10)
+  // its name as its builder wrote it, no quotes: the menu draws it in the accent colour
   const L = bagOf(id)?.label, name = typeof L === 'string' && L.trim() ? L.trim().slice(0, 40) : (nameOf(id) ?? id), held = physicsApi.mine().includes(id);
-  // every offer that needs me near it carries `reach`: the click walks me there first (R 10-11 23:32: "the walk-to rule
-  // should probably apply to any use action"); without one the offer runs where I stand
+  // every offer that needs me near it carries `reach`: the click walks me there first;
+  // without one the offer runs where I stand
   const near = () => physicsApi.inReach(id), out = [], add = (k, pre, post, run, reach = null) => out.push({ k, label: `${pre}${name}${post}`, parts: [pre, name, post], run, ...(reach ? { reach } : {}) });
   // from the menu a put or a throw is the plain one: at my feet, the way I face (the cursor's spot is the click and the C key)
   if (held) { add('put', 'put ', ' down', () => physicsApi.put(id)); add('throw', 'throw ', '', () => physicsApi.throw()); }
-  // holding something else, on another thing: set it down on that thing where the click landed (R, 10-10: "you can't click
-  // to place it down on another grabbable object ... 'Put down [held item] on [clicked-on item]' at the place that was clicked")
+  // holding something else, on another thing: set it down on that thing where the click landed
   const inHand = physicsApi.mine().find((h) => h !== id);
   if (!held && inHand && spot) { const H = bagOf(inHand)?.label, hn = typeof H === 'string' && H.trim() ? H.trim().slice(0, 40) : (nameOf(inHand) ?? inHand);
     out.push({ k: 'puton', label: `put ${hn} on ${name}`, parts: [`put ${hn} on `, name, ''], run: () => putAtSpot(inHand, onTop(id, spot)) }); }
-  else if (!held && canGrab(id)) add('grab', 'pick up ', '', () => physicsApi.grab(id), near);   // what I hold is never offered to pick up (R 10-17 20:26)
+  else if (!held && canGrab(id)) add('grab', 'pick up ', '', () => physicsApi.grab(id), near);   // what I hold is never offered to pick up
   for (const a of actionsOf(id)) add(`use:${a.action}`, `${a.verb} `, a.barred ? ` (${a.barred})` : '', () => useThing(id, a.action, a.verb), near);
   const seat = occupiableOf(id);
   if (seat) add('sit', `${seat.action ?? 'sit'} on `, '', () => trySitOn(id), near);
@@ -57,10 +55,10 @@ export function thingAt(clientX, clientY) {
   if (lock) ndc.set(0, 0); else ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
   const targets = [];
-  // clickthrough (componentspec): a click passes through it to whatever is behind (R 10-11: a per-thing switch)
+  // clickthrough (componentspec): a click passes through it to whatever is behind (a per-thing switch)
   const through = (id) => bagOf(id)?.clickthrough === true;
-  // holding something, any thing is a place to put it (R 10-17 20:26: right-clicking the desk while holding a crate offered
-  // nothing to put it on: the desk offers nothing of its own, so the ray never saw it)
+  // holding something, any thing is a place to put it (a desk offers nothing of its own, so the ray would
+  // otherwise never see it)
   const holding = physicsApi.mine().length > 0;
   for (const [id, o] of entities) if (o && !through(id) && (holding || canGrab(id) || actionsOf(id).length || occupiableOf(id) || physicsApi.mine().includes(id))) targets.push(o);
   if (!targets.length) return null;
@@ -70,7 +68,7 @@ export function thingAt(clientX, clientY) {
   return root?.userData.entityId ?? null;
 }
 
-// A click on something to pick up that is out of reach: walk over and take it (what a click-to-use game does; R, 10-10).
+// A click on something to pick up that is out of reach: walk over and take it (what a click-to-use game does).
 // Too far to be what you meant: say so, in the status bar. A move key on the way cancels, quietly.
 const WALK_MAX = 14;   // m along the floor
 async function fetchIt(id, offer) {
@@ -104,8 +102,7 @@ function onTop(id, spot) {
   const c = (v, lo, hi) => (hi - lo < 0.1 ? (lo + hi) / 2 : Math.min(hi - 0.05, Math.max(lo + 0.05, v)));
   return [c(spot[0], b.min.x, b.max.x), Math.max(spot[1], b.max.y), c(spot[2], b.min.z, b.max.z)];
 }
-/** Holding something, a click on a spot: set it down THERE (R, 10-10: "my assumption is that my character would try to
- *  drop it where the cursor is, not right at their feet"), walking over first when it is out of reach. */
+/** Holding something, a click on a spot: set it down THERE (where the cursor is, not at my feet), walking over first when it is out of reach. */
 async function putAtSpot(id, spot) {
   { const [x, z] = clampToBounds(spot[0], spot[2], 0); if (x !== spot[0] || z !== spot[2]) { flashHint("that's past the edge of this world", 3200, 'attn'); return null; } }
   if (!physicsApi.canPutAt(spot[0], spot[1], spot[2])) {
@@ -122,8 +119,8 @@ canvas.addEventListener('mousedown', (e) => { press = (e.button === 0 || e.butto
 addEventListener('mouseup', (e) => {
   const p = press; press = null;
   if (!p || e.button !== p.b || off() || Math.hypot(e.clientX - p.x, e.clientY - p.y) > CLICK_TRAVEL || performance.now() - p.t > CLICK_MS) return;
-  // with something in my hand, a click that lands on nothing is about IT (R, 10-10, holding the wrecking ball: "left-click
-  // doesn't drop it ... How do I drop this thing??": in third person my own body hides what I hold, so there is nothing to aim at)
+  // with something in my hand, a click that lands on nothing is about IT (in third person my own body hides what I hold,
+  // so there is nothing to aim at)
   const over = thingAt(e.clientX, e.clientY), heldNow = physicsApi.mine()[0];
   // holding something, a left-click that isn't on a thing to use: set it down at that spot
   if (!over && heldNow && p.b === 0) { const spot = aimPoint(e.clientX, e.clientY); void (spot ? putAtSpot(heldNow, spot) : physicsApi.put(heldNow)); return; }
@@ -138,7 +135,7 @@ addEventListener('mouseup', (e) => {
 let hoverAt = 0, hand = '';
 canvas.addEventListener('mousemove', (e) => {
   const now = performance.now(); if (now - hoverAt < HOVER_MS) return; hoverAt = now;
-  // R: an open hand where a click picks up, a pointing finger for any other use
+  // an open hand where a click picks up, a pointing finger for any other use
   const id = !off() && !e.buttons ? thingAt(e.clientX, e.clientY) : null, k = id ? offersOf(id)[0]?.k : null;
   const cur = !k ? '' : k === 'grab' ? 'grab' : k === 'put' ? 'grabbing' : 'pointer';
   if (cur !== hand) { hand = cur; canvas.style.cursor = cur; }

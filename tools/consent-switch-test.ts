@@ -1,13 +1,12 @@
-// consent-switch-test — my body's switch (recut A2) is what the authority decides by, and a sync that fails is heard, then retried.
-//
-// The client owns the last word (consent.js: "my client applies them to my body, or doesn't"); the table the server
-// checks is a projection of the switches, sent on arrival. Two things kept that honest only by luck (DEBT-SURVEY
-// 2026-10-12 #9): nothing pinned switch → cell, and localbody.js swallowed a refused `consent` sync, leaving the server
-// on Normal (everyone: deny) while the switch said allow.
+// consent-switch-test: my body's switch is what the authority decides by, and a failed sync is heard, then retried.
+// The client owns the last word (consent.js); the server's table is a projection of the switches, sent on arrival, so
+// switch → cell is pinned, and a refused `consent` sync must not leave the server on Normal (deny) while the switch says allow.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/consent-switch-test.ts
 // Mutation (must go red): in client/lib/consentsync.js drop the `on('hydrated', …)` line, or the timer retry, or the toast.
+import { noWorldUrl } from './no-world.ts';
 import { setConsent, decide, SWITCHES } from '../shared/protocol/consent.js';
 import { makeConsentSync } from '../client/lib/consentsync.js';
+import { WorldAgent } from '../mcpl/agent.ts';
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
@@ -17,7 +16,7 @@ const store = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } };
 const C = await import('../client/lib/consent.js');
 
-// 1. (recut A2) each switch value, set through the authority's own setConsent, is what decide answers a stranger
+// 1. each switch value, set through the authority's own setConsent, is what decide answers a stranger
 for (const v of SWITCHES) {
   check(`setSwitch(${v}) is remembered`, (C.setSwitch(v) || C.mySwitch() === v) && C.mySwitch() === v && C.bodyTable().switch === v);
   const P: any = {}; const r = setConsent(P, 'me', { switch: C.bodyTable().switch }, 1000);
@@ -28,6 +27,8 @@ for (const v of SWITCHES) {
 check('setPushable(false) is refuse, (true) is accept — the old /pushable meaning', (C.setPushable(false), C.mySwitch() === 'refuse') && (C.setPushable(true), C.mySwitch() === 'accept'));
 
 // 2. a refused sync is heard (toast) and retried: on the next hydration, and on a timer before that
+// the stubs hold no timers: one turn of the event loop settles whatever a handler left in flight
+const settle = () => new Promise((r) => setImmediate(r));
 const run = async (reply: (n: number) => any, want = 'refuse') => {
   const sent: any[] = [], toasts: any[] = [], handlers: Record<string, Function[]> = {}, timers: Function[] = [];
   const s = makeConsentSync({
@@ -37,16 +38,53 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
     on: (ev: string, fn: Function) => { (handlers[ev] ??= []).push(fn); },
     later: (fn: Function) => { timers.push(fn); },
   });
-  const fire = async (ev: string) => { for (const f of handlers[ev] ?? []) await f(); await new Promise((r) => setTimeout(r, 5)); };
-  const tick = async () => { const t = timers.splice(0); for (const f of t) await f(); await new Promise((r) => setTimeout(r, 5)); };
+  const fire = async (ev: string) => { for (const f of handlers[ev] ?? []) await f(); await settle(); };
+  const tick = async () => { const t = timers.splice(0); for (const f of t) await f(); await settle(); };
   return { s, sent, toasts, handlers, timers, fire, tick };
 };
-{ const t = await run(() => ({ ok: true }));
-  await t.fire('hydrated');
-  check('arrival reads the authority, then sends the switch once', t.sent.length === 2 && t.sent[1][1].switch === 'refuse', JSON.stringify(t.sent));
-  check('a sync that lands says nothing', t.toasts.length === 0 && t.timers.length === 0, JSON.stringify(t.toasts)); }
-{ const sent: any[] = []; const s = makeConsentSync({ table: () => ({ switch: 'ask' }), send: async (v: string, a: any) => { sent.push(a); return { ok: true, table: { switch: 'ask' } }; }, toast: () => {}, on: () => {}, later: () => {} });
-  await s.sync(); check('a switch the authority already holds is not sent again', sent.length === 1, JSON.stringify(sent)); }
+// the replay contract on arrival, one table over both implementations (mcpl/agent.ts replaySwitch, consentsync.js sync):
+// differs → mine is sent; same → no switch sent; never chosen → none; set while the read is out → the newest stands and is
+// the last sent (never the one the replay began with); a burst of changes → the latest. reads: a per-driver count.
+type Row = { name: string; held: string | null; mine: string | null; during?: string[]; heldAfter: string | null; sets?: string[]; reads?: { agent?: number; browser?: number } };
+const REPLAY: Row[] = [
+  { name: 'mine differs from what the authority holds', held: 'accept', mine: 'refuse', heldAfter: 'refuse', sets: ['refuse'], reads: { agent: 1, browser: 1 } },
+  { name: 'the same', held: 'refuse', mine: 'refuse', heldAfter: 'refuse', sets: [] },
+  { name: 'never chosen: the world default stands', held: null, mine: null, heldAfter: null, sets: [], reads: { agent: 0 } },
+  { name: 'a switch set while the read is out', held: 'refuse', mine: 'refuse', during: ['ask'], heldAfter: 'ask' },
+  { name: 'a burst of changes', held: 'accept', mine: 'accept', during: ['ask', 'refuse'], heldAfter: 'refuse', reads: { browser: 2 } },
+];
+// a driver's authority answers the first read after the `during` changes are made (the body's own sets, landed first)
+const authority = (r: Row, change: (v: string) => unknown) => {
+  const st = { held: r.held, reads: 0, sets: [] as string[], first: true };
+  const send = async (args: any) => {
+    if (args.switch !== undefined) { st.sets.push(args.switch); st.held = args.switch; return { ok: true }; }
+    st.reads++; await settle();
+    if (st.first) { st.first = false; for (const v of r.during ?? []) await change(v); }
+    return { ok: true, table: { switch: st.held } };
+  };
+  return { st, send };
+};
+const drivers: Record<string, (r: Row) => Promise<{ held: string | null; sets: string[]; reads: number; heard: number }>> = {
+  agent: async (r) => {
+    const ag = new WorldAgent({ url: noWorldUrl(), name: 'replay' }) as any; ag.consentSwitch = r.mine;
+    const { st, send } = authority(r, (v) => { ag.consentSwitch = v; return ag.request('consent', { switch: v }); });
+    ag.request = async (verb: string, args: any) => (verb === 'consent' ? send(args) : { ok: false });
+    await ag.replaySwitch();
+    return { ...st, heard: 0 };
+  },
+  browser: async (r) => {
+    let mine = r.mine, heard = 0, s: any = null;   // a toast or a retry timer: a sync that lands says nothing
+    const { st, send } = authority(r, (v) => { mine = v; void s.sync(); });   // consent.js syncs on each change
+    s = makeConsentSync({ table: () => ({ switch: mine }), send: (_: string, a: any) => send(a), toast: () => { heard++; }, on: () => {}, later: () => { heard++; } });
+    await s.sync(); await settle();
+    return { ...st, heard };
+  },
+};
+for (const [d, drive] of Object.entries(drivers)) for (const r of REPLAY) {
+  const got = await drive(r), latest = r.during?.at(-1) ?? r.mine, reads = r.reads?.[d as 'agent'];
+  check(`${d}: ${r.name}`, got.held === r.heldAfter && (r.sets ? JSON.stringify(got.sets) === JSON.stringify(r.sets) : got.sets.at(-1) === latest)
+    && (reads === undefined || got.reads === reads) && got.heard === 0, JSON.stringify(got));
+}
 { let down = true;
   const t = await run(() => (down ? { ok: false, refused: { code: 'offline', reason: 'the connection dropped before the authority answered' } } : { ok: true }));
   await t.fire('hydrated');
@@ -59,18 +97,12 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('the next arrival resends and lands (the read and the switch)', t.sent.length === b2 + 2 && t.toasts.length === 1, `${t.sent.length - b2} sent`);
   check('landed: the pending timer retry does nothing new', await (async () => { const n = t.sent.length; await t.tick(); return t.sent.length === n; })());
   check('the next failure is heard again', await (async () => { down = true; await t.fire('hydrated'); return t.toasts.length === 2; })()); }
-{ let v = 'accept'; const sent: any[] = []; let release: Function = () => {}; const gate = new Promise((r) => { release = r; });
-  const s = makeConsentSync({ table: () => ({ switch: v }), send: async (_: string, a: any) => { sent.push(a); await gate; return { ok: true, table: { switch: null } }; }, toast: () => {}, on: () => {}, later: () => {} });
-  const p1 = s.sync(); v = 'ask'; const p2 = s.sync(); v = 'refuse'; const p3 = s.sync();
-  release(); await Promise.all([p1, p2, p3]); await new Promise((r) => setTimeout(r, 5));
-  check('a burst of changes syncs twice (now, then once with the latest)', sent.filter((a) => a.switch === undefined).length === 2, `${sent.length} sent`);
-  check('…and the last switch sent is the latest', sent[sent.length - 1]?.switch === 'refuse', JSON.stringify(sent[sent.length - 1])); }
 { const sent: any[] = [];
   const s = makeConsentSync({ table: () => ({ switch: 'accept' }), send: async (v: string, a: any) => { sent.push(a); return { ok: true }; }, toast: () => {}, on: () => {}, later: () => {}, enabled: () => false });
   await s.sync(); check('a bodiless client sends nothing', sent.length === 0); }
 
-// 3. the ask round-trip (10-14, R: wire `ask`): a body-inbox message holds the ask; answering sends consent {answer, yes}
-// and the ask is gone; an ask nobody answers expires locally with no send (the authority already took it as a no).
+// 3. the ask round-trip: a body-inbox message holds the ask; answering sends consent {answer, yes} and the ask is gone;
+// an unanswered ask expires locally with no send (the authority already took it as a no).
 // Mutation (must go red): in client/lib/consentinbox.js drop the `delete` in answer(), or the expiry in sweep().
 {
   const { makeConsentInbox } = await import('../client/lib/consentinbox.js');
@@ -92,8 +124,8 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('a drag ask is the displace class', box.askFrom('u-wren')?.cls === 'displace', JSON.stringify(box.asks()));
   await box.answer('ask-1001-0', false, send);
   check('answering no sends consent {answer, yes: false}', sent.length === 2 && sent[1][1].yes === false && box.asks().length === 0, JSON.stringify(sent));
-  // a reach to an intimate point: the authority classes it (bodyconsent.js: cls intimate for chest_front), and the
-  // inbox keeps that class, so Allow and Never are for intimate touch, not ordinary touch (review of #260)
+  // a reach to an intimate point: the authority classes it (bodyconsent.js: chest_front is intimate) and the inbox keeps
+  // the class, so Allow and Never are for intimate touch, not ordinary touch
   box.take([{ type: 'body-ask', ask: { ...ask, id: 'ask-1001-1', kind: 'touch', cls: 'intimate', summary: 'u-wren asks to touch (chest_front)' } }]);
   check('a reach the authority classes intimate is held as intimate, not as its kind\'s touch', box.askFrom('u-wren')?.cls === 'intimate', JSON.stringify(box.asks()));
   await box.answer('ask-1001-1', false, send); sent.pop();
@@ -113,10 +145,9 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('a malformed inbox is ignored', (box.take(null as any), box.take([{ type: 'body-ask' }, 7, { type: 'body-ask', ask: { id: 42 } }]), box.asks().length === 0));
 }
 
-// 4. (house review of #260, client/lib I1) an act the authority delivered ({type: 'body', kind, spec}: an ask answered yes,
-// or a standing allow through the body verb) is APPLIED to my body: it becomes the puppet message localbody.js applies.
-// The relay refuses a puppet while my switch is `ask` (server/messages.ts bodyRefusal), so this is the only way it lands.
-// Mutation (must go red): in consentinbox.js bodyActAsPuppet return null for every kind.
+// 4. an authority-delivered act ({type: 'body', kind, spec}) is APPLIED as localbody.js applies a puppet message; the
+// relay refuses puppets while my switch is `ask` (server/messages.ts bodyRefusal), so this is the only way it lands.
+// Mutation: bodyActAsPuppet returns null for every kind.
 {
   const { bodyActAsPuppet } = await import('../client/lib/consentinbox.js');
   const q = [0, 0, 0.38, 0.92];
@@ -126,8 +157,8 @@ const run = async (reply: (n: number) => any, want = 'refuse') => {
   check('…or {pose, merge} as a puppet sends it', JSON.stringify(merged) === JSON.stringify({ pose: { head: q }, merge: true }), JSON.stringify(merged));
   const anim = { dur: 1, tracks: { head: [{ t: 0, q }] }, replace: false };
   check('a delivered anim with tracks is a puppet anim', JSON.stringify(bodyActAsPuppet({ type: 'body', kind: 'anim', spec: anim })) === JSON.stringify({ anim }));
-  // streamed kinds apply nothing from the inbox (they arrive live, where consent gates each sample), and an unknown kind
-  // applies nothing: only pose, anim (with tracks) and shove become puppet messages (client review, 10-21)
+  // streamed kinds apply nothing from the inbox (they arrive live, consent-gated per sample), nor does an unknown kind:
+  // only pose, anim (with tracks) and shove become puppet messages
   check('a delivered drag, occupy or carry, or an unknown kind, applies nothing', ['drag', 'occupy', 'carry', 'teleport'].every((kind) => bodyActAsPuppet({ type: 'body', kind, spec: { tracks: { head: [] }, pose: { head: q } } }) === null));
   check('a delivered shove is a ragdoll, directed by spec.lean when it has one', JSON.stringify(bodyActAsPuppet({ type: 'body', kind: 'shove', spec: { lean: [1, 0, 2] } })) === JSON.stringify({ ragdoll: { lean: [1, 0, 2] } })
     && bodyActAsPuppet({ type: 'body', kind: 'shove' })?.ragdoll === true && bodyActAsPuppet({ type: 'body', kind: 'shove', spec: { lean: [1, 'x', 2] } })?.ragdoll === true);

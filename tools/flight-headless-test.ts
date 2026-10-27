@@ -1,17 +1,9 @@
-// flight-headless-test — the path Mythos will actually fly.
-//
-//   bun tools/flight-headless-test.ts
-//
-// He flies through mcpl, not a browser, and that is a different body: the
-// stand-in skeleton in mcpl/physics.ts is built from HUMANOID bones, and
-// [LR]_Wing_* are not humanoid. So everything the browser proves about wings
-// proves nothing here, and this file exists to stop that gap being invisible
-// twice -- the hair went missing the same way and nothing noticed until
-// someone read the code.
-//
-// No browser, no three, no DOM. Parses the shipped VRM the way the agent does
-// and asserts on what the agent would receive.
+// flight-headless-test: the path a headless agent flies (`bun tools/flight-headless-test.ts`).
+// An agent flies through mcpl, a different body: mcpl/physics.ts's stand-in skeleton is built from HUMANOID bones and
+// [LR]_Wing_* are not humanoid, so the browser's wing proofs prove nothing here. No browser, three or DOM: parses the
+// shipped VRM as the agent does and asserts on what the agent receives.
 
+import { noWorldUrl } from './no-world.ts';
 import { readFileSync } from 'node:fs';
 import { makeConfig, initialState, step, bodyDown, bodyRecovered, takeOff } from '../shared/flight.js';
 import { DEFAULT_LEAF_FORCE, terminalOf, leafForceFor } from '../shared/leafforce.js';
@@ -65,17 +57,13 @@ check('wing roots reparent to chest (no clavicle body in this rig cut)',
 check('wing segments continue their own chain',
       wingParent['L_Wing_Upper_2'] === 'L_Wing_Upper_1' &&
       wingParent['R_Wing_Lower_1'] === 'R_Wing_Lower');
-// worldPositions() yields {x,y,z}, not a triple -- the first version of this
-// assertion tested for an array and failed a graft that was perfectly correct.
+// worldPositions() yields {x,y,z}, not a triple
 check('every grafted bone has a finite world position in P',
       Object.keys(wingParent).every(n => {
         const v = P[n];
         return v && ['x', 'y', 'z'].every(k => Number.isFinite(v[k]));
       }));
-// The wing ROOTS sit above the hips; the lower tips sweep down PAST them,
-// which is what a folded wing does -- an earlier version of this asserted all
-// twelve were above the hips and failed a graft that was correct. Assert the
-// thing that is actually true: roots high, span wide, left and right opposed.
+// wing ROOTS sit above the hips; the lower tips sweep down past them (as a folded wing does): roots high, span wide, sides opposed
 const roots = ['L_Wing_Upper', 'L_Wing_Lower', 'R_Wing_Upper', 'R_Wing_Lower'];
 check('wing ROOTS sit above the hips',
       roots.every(n => P[n].y > P.hips.y));
@@ -143,38 +131,18 @@ check('a broadside wing feels lift-ward drag', f.force.y > 0);
 check('and a flutter torque, not just drag', Math.abs(f.torque.y) > 1e-6);
 
 // ---------------------------------------------- live revocation, the real path
-//
-// mica, CHANGES REQUESTED on d8ceee5: "live grant revocation is still not
-// applied to headless/MCPL agents", with production evidence -- seq 15183
-// granted mythos fly:false, no later fly:true, and seq 15206 was a completed
-// sortie. `myRights` was written once from snapshot.yourRights and nothing
-// on the live path ever changed it, so the action-time provider read a
-// withdrawn grant forever.
-//
-// The pure capability test passed throughout, and that is the lesson worth
-// keeping: it called resolveFlight with a rights object it changed by hand.
-// It never crossed the path where the rights object stopped changing. So this
-// one drives the agent's REAL rights path and asks the REAL flightAllowed() --
-// the function every flight verb actually calls.
-//
-// The protocol: the live path is the server's `your-rights` message, re-sent to
-// every client whenever a role changes (server.ts rightsFor over the door's
-// roles record: who wins between a person's own record and the world's
-// default-role is the SERVER's rule, answered whole -- the agent never merges a
-// delta, so the v1 wildcard-precedence checks that lived here have no subject).
-// The agent's `your-rights` case hands msg.rights to acceptEffectiveRights;
-// that wiring is the mutation control at the end.
+// the server re-sends your-rights on every role change, the agent hands it to acceptEffectiveRights, and flightAllowed()
+// must see the withdrawn grant (hand-editing the rights object never crosses that path); the wiring is the mutation control
 console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'mythos', world: 'commons' });
-  // A winged body, so the RIG half of the capability is satisfied and the only
-  // variable under test is the GRANT half.
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'commons' });
+  // a winged body, so the RIG half is satisfied and only the GRANT half varies
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
     'L_Wing_Lower', 'R_Wing_Lower'];
-  ag.loadBodyBones = async () => {};          // no HTTP in a unit test
-  // exactly what the `your-rights` case does with a message's rights
+  ag.loadBodyBones = async () => {};  // no HTTP in a unit test
+  // what the `your-rights` case does with a message's rights
   const yourRights = (rights: any) => ag.acceptEffectiveRights(rights, 'world');
 
   ag.myRights = null;
@@ -190,19 +158,19 @@ console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
   yourRights({ role: 'owner', gen: true, fly: true });
   check('a later role change that keeps fly keeps flight', ag.flightAllowed().ok && ag.myRights.role === 'owner');
 
-  // THE BLOCKER ITSELF.
+  // the blocker itself
   yourRights({ role: 'owner', gen: true, fly: false });
   check('-fly makes the very next action refuse', !ag.flightAllowed().ok,
         JSON.stringify(ag.myRights));
   const why = ag.flightAllowed().why ?? '';
   check('...and says why, in words a pilot can act on', /grant|flight/i.test(why), why);
 
-  // The answer is whole: an absent fly is no, never "keep what I had"
+  // the answer is whole: an absent fly is no, never "keep what I had"
   yourRights({ role: 'builder', gen: true, fly: true });
   yourRights({ role: 'builder', gen: true });
   check('an answer without fly is a withdrawal (absent is not "unchanged")', !ag.flightAllowed().ok, JSON.stringify(ag.myRights));
 
-  // MUTATION CONTROL, as required: unwire the case and this must go red.
+  // MUTATION CONTROL: unwire the case and this goes red
   const src = readFileSync('mcpl/agent.ts', 'utf8');
   check('the your-rights case installs the server\'s answer (mutation control)',
         /case "your-rights":[\s\S]{0,400}if \(msg\.rights\) this\.acceptEffectiveRights\(msg\.rights, "world"\);/.test(src));

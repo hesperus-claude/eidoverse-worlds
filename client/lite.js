@@ -1,29 +1,9 @@
-// lite.js — the entry point for a device that cannot hold the world.
-//
-// Why a separate entry point and not a flag: main.js statically imports
-// { THREE, scene, camera, renderer } at its line 10, and index.html modulepreloads
-// three.webgpu and three-vrm besides. Static imports and preloads are fetched and
-// parsed before any of our code gets a say, so a runtime `if (lite)` would render
-// nothing and still pay the whole ~2.1MB on a phone. The choice is made in the HTML,
-// ahead of the module graph; see the decision script there.
-//
-// What this is: chat, the action row, and who's here. No scene, no camera, no renderer,
-// no bodies. You can talk to people in the eidoverse from a phone that cannot draw it.
-//
-// What it is NOT: a viewer. There is deliberately no canvas.
-//
-// It runs the REAL net.js. The wire protocol is not forked — net.js takes its
-// participant registry, asset ledger and snapshot renderer by injection now, so this
-// file supplies renderer-free ones and the protocol has exactly one implementation.
+// lite.js — entry for a device that can't hold the world: chat, the action row, who's here; no canvas, the real net.js.
+// A separate entry, not a flag: main.js's static imports would still fetch ~2MB (index.html chooses).
 import { say } from './lib/net.js';
 import { chooseClient } from './lib/litechoice.js';
 import { CONFIG, bus, report, setToken } from './lib/base.js';
-// NOT ui.js. That module is the DESKTOP shell: since #185 it imports videopanel.js and
-// profile.js, which reach the engine through core.js, mybody.js and colliders.js, and it
-// owns the settings sections and world panels besides. None of that belongs on a phone
-// that cannot draw a world, so lite builds its surface from the primitives that are
-// actually renderer-free. Sharing ui.js would mean gutting it; this costs less and
-// leaves the desktop shell untouched.
+// not ui.js: the desktop shell reaches the engine (videopanel.js, profile.js); lite builds from renderer-free primitives
 import { makeFrame } from './lib/windows.js';
 import { initChat, logChat } from './lib/chat.js';
 import {
@@ -33,60 +13,38 @@ import {
 import { initBoot, markPhase, finishBoot } from './lib/boot.js';
 import * as participants from './lib/participants_lite.js';
 import { initLiteActions } from './lib/actionbar_lite.js';
-// Turns live world entries into chat lines — including your own 'say' coming back from
-// the server. Without it a lite client could SEND a message and never see it: the text
-// only appeared on reload, when history replayed through social.js instead. It is the
-// same narrator the full client uses, which is why it also reports builds and grants.
+// without the narrator a sent say never shows
 import { initCauses } from './lib/realize/livechat.js';
 import { initRecentChat } from './lib/realize/recentchat.js';
 
-// The boot watchdog in index.html fails the splash after 20s unless __ewEngineUp is
-// set, and core.js only sets it after renderer.init(). There is no renderer here and
-// never will be, so we claim the flag ourselves. What the watchdog actually guards
-// against still works: if this module never runs, nothing sets it.
+// no renderer will ever set it, so claim the boot watchdog's flag here; if this module never runs, nothing does
 globalThis.__ewEngineUp = true;
 
-// Why this session is lite, decided in index.html. 'crash' is the one that has to SAY
-// so: being silently demoted after your browser died, with no explanation and no way
-// back, is worse than the crash was.
+// decided in index.html; a demotion must SAY why, above all after a crash
 const WHY = globalThis.__ewLiteWhy ?? 'url';
 const WHY_TEXT = {
-  // the card (liteBanner) says why for every reason now; this line is only for a reason with no card
+  // only for a reason with no card (liteBanner)
   default: 'lite client \u2014 chat, the action bar, and who\u2019s here',
 };
 
-/** The way into the 3D world: the person's choice, saved, the address left clean (litechoice.js says why). */
+/** The person's choice, saved, the address left clean (litechoice.js). */
 export function tryFullWorld() { chooseClient(false); }
 
-// A lite client still ARRIVES: the server announces it and everyone else builds a body
-// for it, whether or not we ever say where that body is. So the choice was never "appear
-// or not" - it is "appear as the resident the world remembers, or as a default".
-//
-// THE RESTORE IS HELD VERBATIM AND SENT BACK VERBATIM. It is the server's own settled
-// pose for this body - position, facing, clip, pitch, wings, held bones, pins, and
-// anything added to that vocabulary later. A pose is the resident's WHOLE public body,
-// not a delta, so re-composing one from what this client happens to know is how a wave
-// stood someone up out of a sit, unfolded their wings and dropped their held pose
-// (#188 B2). We add the one-shot and change nothing else.
-//
-// A gesture is not a verb, either: the verb set is closed by design, and asking for one
-// earns "verb not allowed: gesture". It rides the presence pose, which is why a client
-// with no body still has to have something to say about where that body is.
+// Re-send the server's settled pose verbatim plus the one-shot: re-composing a pose undoes sits and wings (#188 B2).
+// A gesture isn't a verb (the set is closed); it rides the presence pose.
 let restored = null;
 
-/** The body the world remembers. Before any restore lands - a first-ever visit - the
- *  origin is all we can honestly claim, and sanePose() requires a finite `p`. */
+/** Before any restore (a first visit) the origin: sanePose() requires a finite `p`. */
 const rememberedBody = () => restored ?? { p: [0, 0, 0], yaw: 0 };
 
-/** One anim, played once: the remembered body, unchanged, carrying pose.anim. */
+/** The remembered body, unchanged, carrying pose.anim. */
 function playOnce(name) {
   if (!sendPoseExact({ ...rememberedBody(), anim: name })) {
     toast('not connected - action not sent', 'warn');
   }
 }
 
-/** The roster in the shape chat.js wants for @-completion and its people pane.
- *  `dist` is always null: distance is a property of a world we are not drawing. */
+/** The roster in chat.js's shape; `dist` is null: no world is drawn. */
 function people() {
   const list = [{ id: CONFIG.name, me: true, dist: null }];
   for (const r of participants.remotes.values()) {
@@ -95,8 +53,7 @@ function people() {
   return list;
 }
 
-/** The few lines of ui.js that lite actually needed. Deliberately not a shared module:
- *  if this grows past a screenful it wants to BE one, and the growth is the signal. */
+/** Deliberately not shared with ui.js: past a screenful it should become a module. */
 function toast(message, kind = 'info', ttl = 5000) {
   const host = document.getElementById('toasts') ?? document.body;
   const t = document.createElement('div');
@@ -107,15 +64,10 @@ function toast(message, kind = 'info', ttl = 5000) {
 }
 
 
-// A DEMOTION says so where it can't scroll away. The chat line above is logged before the
-// join snapshot replays the room's history, so on a busy world it is gone before anyone
-// reads it — and a desktop that lands here after a hung load (the tripwire can't tell a
-// reload-mid-hang from a crash) otherwise looks like it simply booted the wrong client.
-// For every reason, including a link or a saved choice: a choice outlives the memory of making it.
-// a phone taps, a mouse clicks
+// a card, not a chat line: the join replay buries chat
 const TAP = globalThis.matchMedia?.('(pointer: coarse)').matches ? 'Tap' : 'Click';
 const BANNER_TEXT = {
-  // WHY, plainly, then the one way in (owner, 10-01: "make sure the notice correctly tells them why").
+  // WHY, plainly, then the one way in
   phone: `You're on a phone, so you're in the lite client: chat, the action bar and who's here. ${TAP} the \u2203 Eidoverse logo (top left) to load the full 3D world.`,
   crash: `This world didn't finish loading on this device last time, so you're in the lite client: chat, the action bar and who's here. ${TAP} the \u2203 Eidoverse logo (top left) to load the full 3D world.`,
     'no-gpu': "This browser has no 3D support, so you're in the lite client: chat, the action bar and who's here.",
@@ -123,18 +75,12 @@ const BANNER_TEXT = {
   url: `This link opens the lite client: chat, the action bar and who's here. ${TAP} the \u2203 Eidoverse logo (top left) to load the full 3D world.`,
 };
 const NO_WAY_IN = new Set(['no-gpu']);
-// The same card as the full client's capability notice (capnotice.js: .panel.capnotice >
-// .cn-item > b, p, .cn-btns) so the two reduced paths read as one family. Built here, not
-// imported: capnotice.js pulls core.js, and core.js is the engine lite exists to avoid.
-// THE PHONE LAYOUT, one column (owner, 10-01: "the lite client UI is a bit of a hot mess"): the top bar
-// (gestures, scrolling sideways, and the way into the 3D world at its end), then the card if it's up, then the
-// chat filling everything below it. The chat frame keeps its own machinery (tabs, people, compose); only its
-// box is set here, through --lite-top, which index.html's html.lite rules read.
+// capnotice.js's card markup, rebuilt here since capnotice.js pulls core.js.
+// One column: top bar, the card if up, then chat (via --lite-top, read by index.html).
 export function liteLayout() {
   if (typeof document === 'undefined') return;
   const bar = document.getElementById('lite-action-host');
   const card = document.getElementById('lite-banner');
-  // flush under the bar; a breath under the card while it's up
   const below = card ? card.getBoundingClientRect().bottom + 8 : (bar?.getBoundingClientRect().bottom ?? 0);
   document.documentElement.style.setProperty('--lite-top', `${Math.round(below)}px`);
 }
@@ -148,7 +94,7 @@ export function liteBanner(why) {
   card.setAttribute('role', 'status');
   const item = document.createElement('div');
   item.className = 'cn-item';
-  // one button: dismiss, and the chat takes the room. The way in is the logo, which the text names.
+  // the way in is the logo, which the text names
   item.innerHTML = '<b></b><p></p><div class="cn-btns"><button type="button" class="cn-ok">got it</button></div>';
   item.querySelector('b').textContent = 'Lite client';
   item.querySelector('p').textContent = text;
@@ -156,8 +102,7 @@ export function liteBanner(why) {
   item.querySelector('.cn-ok').addEventListener('click', () => { ro?.disconnect(); card.remove(); liteLayout(); });
   card.appendChild(item);
   document.body.appendChild(card);
-  // Under the action row, never over it: that row is fixed to the top and its height
-  // depends on how many gestures wrap, so follow it instead of guessing a number.
+  // follow the action row: its height depends on how many gestures wrap
   const host = document.getElementById('lite-action-host');
   const place = () => { card.style.top = `${Math.round((host?.getBoundingClientRect().bottom ?? 0) + 8)}px`; liteLayout(); };
   place();
@@ -165,16 +110,7 @@ export function liteBanner(why) {
   return card;
 }
 
-/** The key door, renderer-free.
- *
- *  A key-gated world refuses an unknown visitor with close code 4003, and net.js turns
- *  that into `bad-key`. The full client answers it by reopening openDoor - which lives in
- *  ui.js, needs a roster of avatars to show, and arrives with the engine attached. None
- *  of that is available here, and "try the full world" is not a door for someone whose
- *  phone the full world kills (#188 B3). So: an input, on the page that is already up.
- *
- *  Idempotent - a refused key re-emits `bad-key`, and that should refill the same door
- *  rather than stack another. */
+/** Renderer-free door for a 4003 refusal (net.js `bad-key`). Idempotent: a refused key refills the same door. */
 function keyDoor() {
   let host = document.getElementById('lite-door');
   if (host) { host.querySelector('.lite-door-msg').textContent = 'that key was refused'; return; }
@@ -204,9 +140,7 @@ function keyDoor() {
   host.querySelector('.lite-door-go').addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
 
-  // A deployment that wants a login rather than a key already redirects through authcfg;
-  // where one is offered, show it too, because a key box is no use to someone who has an
-  // account instead.
+  // a key box is no use to someone with an account
   const url = loginUrl?.();
   if (url) {
     const a = document.createElement('a');
@@ -220,34 +154,19 @@ function keyDoor() {
 
 async function main() {
   document.documentElement.classList.add('lite');
-  // The splash is static markup that only boot.js takes down, and nothing here would
-  // ever have called it — a lite client would have sat on 'waking the engine' forever
-  // while a perfectly good chat window waited behind it. The engine and body phases are
-  // marked done because in this client they are: there is no engine to wake and no body
-  // to assemble, and a progress bar must never wait on something that will not happen.
-  // Wired before connect(), because the refusal it answers arrives during connect().
+  // before connect(): the refusal arrives during it
   bus.on('bad-key', keyDoor);
 
   initBoot({ world: CONFIG.world, name: CONFIG.name });
   markPhase('engine', 1);
   markPhase('body', 1);
 
-  // The renderer-free half of the client, handed to the real protocol.
   wireNet({
     participants,
     toast,                       // net.js takes a notifier rather than importing ui.js
-    // The SAME avatar the inline early socket joined with, published by index.html before
-    // any of its guards. net.js adopts that socket only when the join it would send
-    // matches byte for byte; asking for '' here missed, so the early socket was dropped
-    // and a second one opened - the server saw arrive -> leave -> arrive, and anything
-    // delivered to the first socket could be thrown away with it (#188 B1; it was a held
-    // whisper then, before whisper was removed). We cannot DRAW the avatar; that was never what this
-    // answers. Everyone else draws our body, and it should be the right one.
+    // must match the early socket's join byte for byte, or the server sees arrive → leave → arrive (#188 B1)
     myAvatarPath: () => globalThis.__ewWantAvatar ?? 'claude',
-    // null, both of them, and deliberately: sendPose() SAMPLES a live body and returns
-    // immediately without these. There is no body here to sample. The one pose this
-    // client ever emits goes through sendPoseExact, which re-asserts what the server
-    // already remembers instead of composing something new.
+    // null on purpose: sendPose() samples a live body; this client's one pose goes through sendPoseExact
     me: () => null,
     myState: null,
     onRestore: (r) => { restored = r; },   // held whole; see rememberedBody()
@@ -255,35 +174,20 @@ async function main() {
 
   await initIdentity();
 
-  // EVERY CONSUMER OF SOCKET TRAFFIC IS BUILT BEFORE connect().
-  //
-  // This used to run the other way round and it lost messages. The early socket is
-  // adopted inside connect(), which then drains what raced ahead of us - the join
-  // snapshot and the first live entries. A chat window that did not exist yet meant
-  // the drain threw, connect() reported it and carried on, and a message that was
-  // successfully delivered was gone for good (#188 round two: it was a held whisper
-  // then, before whisper was removed). main.js has always had this order - initChat at module
-  // scope, connect() later - and the reason is exactly this.
-  //
-  // The rule, stated so it is not re-learned: anything that can receive buffered
-  // arrival traffic is installed here, above the connect, with no await between.
+  // every socket consumer before connect(), no await between: connect() drains the early socket, and a missing consumer loses it for good (#188)
   initChat({
     send: (text) => say(text),
     typing: (to) => sendTyping(to),   // no local avatar to show typing on
     people,
   });
   initCauses();        // live entries -> chat lines (says, builds, grants)
-  initRecentChat();    // the join snapshot's chat window (empty since speech became arrival-only, R 10-18)
+  initRecentChat();    // the join snapshot's chat window (empty since speech became arrival-only)
 
-  // Chrome. None of it consumes socket traffic, but it costs nothing to have it
-  // standing before the first message lands either.
   const actionHost = document.createElement('div');
   actionHost.id = 'lite-action-host';
   document.body.appendChild(actionHost);
   initLiteActions(actionHost, playOnce);
-  // THE LOGO IS THE WAY IN (owner, 10-01): the ∃ leads the top bar and loads the full 3D world. In the full
-  // client it opens the menu; lite has no menu, so here it does the one thing lite can't. Not where the
-  // browser has no 3D at all: there it is just the mark.
+  // THE LOGO IS THE WAY IN to the full world (no menu here); without 3D support it is just the mark
   const mark = document.getElementById('hud');
   if (mark) {
     actionHost.prepend(mark);
@@ -295,13 +199,9 @@ async function main() {
   addEventListener('resize', liteLayout);
   globalThis.__ewTryFullWorld = tryFullWorld;   // also reachable from the console
 
-  // the card says why now, for every reason; the chat line only where there is no card (it repeated it)
   if (!liteBanner(WHY)) logChat('', WHY_TEXT[WHY] ?? WHY_TEXT.default, 'sys');
 
-  // No door screen: openDoor lives in ui.js, and the door's job (pick a body, see who is
-  // here before you commit) is mostly about a world this client does not render, so a
-  // lite arrival steps straight in. A world that wants a KEY is handled - keyDoor() above
-  // answers `bad-key` - and a deployment that wants a login redirects through authcfg.
+  // no door screen: a lite arrival steps straight in; keyDoor() answers `bad-key`
   markPhase('connect', 1);
   await connect();
   markPhase('world', 1);

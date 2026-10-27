@@ -8,13 +8,14 @@ import { mock } from 'bun:test';
 import { fileURLToPath } from 'node:url';
 const noop = () => {};
 const sent: any[] = [], messages: string[] = [];
+let answer: any = { ok: true, people: [] };   // what the door says to a request
 const world: any = { c: {} };
 const modules: any = {
   'base.js': { CONFIG: { name: 'owner' }, bus: { on: noop, emit: noop }, report: noop },
   'capture.js': { captureFrame: noop },
   'world.js': { entities: new Map(), bagOf: () => null, roleOf: noop, worldHasOwner: () => true },
   'net.js': { net: { myId: 'owner' }, identityOf: (n: string) => (n === 'wren' ? 'u-wren' : null), replica: { st: { entities: { '@world': world } }, active: true }, replicaActive: () => true,
-    sendRequest: async () => ({ ok: true, people: [] }), sendMod: noop, sendPuppet: noop, sendWorldFork: noop, sendWorldFound: noop, sendWorldReset: noop, requestDebug: noop, sendAnim: noop, sendDrag: noop },
+    sendRequest: async () => answer, sendMod: noop, sendPuppet: noop, sendWorldFork: noop, sendWorldFound: noop, sendWorldReset: noop, requestDebug: noop, sendAnim: noop, sendDrag: noop },
   'remotes.js': { remotes: new Map() },
   'controller.js': { myState: { pos: { x: 0, y: 0, z: 0 } }, setPosture: noop, flightReport: () => '' },
   'thingphysics.js': { punt: noop, grab: noop, put: noop, drop: noop, throwHeld: noop }, 'chat.js': { logChat: (_w: string, t: string) => messages.push(t) },
@@ -59,5 +60,10 @@ world.c = {};
 r = await run('wren builder +fly');
 check('a role with exceptions for someone new is one whole grant', r?.args?.value?.role === 'builder' && r.args.value.can?.fly === true && !('until' in r.args.value), JSON.stringify(r?.args));
 
+// /bans refused: the door's words through the shared reader (plainRefusal: its fix kept, an actor id named), not the bare reason
+answer = { ok: false, refused: { code: 'rights', reason: 'u-wren may not read the bans', fix: 'ask a moderator' } };
+messages.length = 0; dispatch('bans', ''); await settle();
+check('/bans refused reads as the shared plain() words, fix included', messages.some((m) => /^Couldn't read what's in force here: .*may not read the bans\. Ask a moderator$/.test(m)), JSON.stringify(messages));
+answer = { ok: true, people: [] };
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

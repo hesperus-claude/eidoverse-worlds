@@ -1,7 +1,7 @@
-// bun tools/optimize-pump-test.ts — the optimizer pump with a FAKE child (OPT_CMD): estimate defer with queue
-// continuation, success (+ stale .deferred retired), 'not smaller' marker, capped child death → .deferred and
-// retried, wrapper 126 → environmental (no marker, queue dropped), stale-marker retirement when the variant
-// exists already, and both boot sweeps skipped under SKIP_OPT_SWEEP (subprocess). Each case owns its store.
+// bun tools/optimize-pump-test.ts: the optimizer pump with a FAKE child (OPT_CMD): estimate defer with queue continuation,
+// success (+ stale .deferred retired), 'not smaller' marker, capped child death → .deferred and retried, wrapper 126 →
+// environmental (no marker, queue dropped), stale-marker retirement when the variant exists, and both boot sweeps
+// skipped under SKIP_OPT_SWEEP (subprocess). Each case owns its store.
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, chmodSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,10 +23,10 @@ case "$v" in
   *) echo "fake verdict $v" >&2; exit "$v";;
 esac
 `); chmodSync(fake, 0o755);
-process.env.SKIP_OPT_SWEEP = "1";   // the parent's own boot timers must not sweep the real library through the fake
-process.env.WORLDS_DIR = join(root, "worlds"); process.env.OPT_DIR = join(root, "opt"); process.env.JOIN_TOKEN = "t"; process.env.OPT_CMD = fake;   // OPT_DIR: NEVER the checkout's store
+process.env.SKIP_OPT_SWEEP = "1";  // the parent's boot timers must not sweep the real library through the fake
+process.env.WORLDS_DIR = join(root, "worlds"); process.env.OPT_DIR = join(root, "opt"); process.env.JOIN_TOKEN = "t"; process.env.OPT_CMD = fake;  // OPT_DIR: NEVER the checkout's store
 process.env.OPT_MEM_BUDGET_MB = "10"; process.env.OPT_COST_FACTOR = "1"; process.env.KTX2_TOKTX = "";
-// the verdict names the tools it was measured with (tools-stamp.ts) — THIS process's, which the pump also reads by
+// the verdict names the tools it was measured with (tools-stamp.ts): THIS process's, which the pump also reads by
 const { toolsStamp } = await import("../server/tools-stamp.ts");
 writeFileSync(fake, readFileSync(fake, "utf8").replace("__TOOLS__", toolsStamp()));
 const { queueOptimize, optIdle } = await import("../server/upload.ts");
@@ -63,23 +63,21 @@ if (process.platform === "linux") {
   const s5 = src("s5.glb", 1000, "sig"), s6 = src("s6.glb", 1000, "0"); queueOptimize(s5); queueOptimize(s6); await optIdle();
   ok(existsSync(storeDest(s5) + ".deferred") && /died/.test(readFileSync(storeDest(s5) + ".deferred", "utf8")), "signalled child under the cap → .deferred 'child died'");
   ok(existsSync(storeDest(s6)), "queue continued after the death");
-  // 6. wrapper 126 (a hard RLIMIT_DATA below the budget) → environmental: no marker, queue dropped
-  // a 1 MB HARD data limit (soft first — dash refuses to drop the hard limit below the soft one) makes the wrapper's
-  // `ulimit -d 20480` fail: the 126 path. bun itself must still start under it, or the case is skipped.
-  const canLimit = spawnSync("/bin/sh", ["-c", "ulimit -S -d 2000000 && ulimit -H -d 2000000 && /bin/sh -c 'ulimit -d 4000000000' 2>/dev/null; echo $?"], { encoding: "utf8" }).stdout.trim();   // a 2 GB hard limit (bun starts) that a 4 TB budget cannot raise
+  // 6. wrapper 126 (a hard RLIMIT_DATA below the budget) → environmental: no marker, queue dropped. A 1 MB HARD data limit
+  // (soft first: dash refuses a hard limit below the soft) fails the wrapper's `ulimit -d 20480`; bun must still start, or skip.
+  const canLimit = spawnSync("/bin/sh", ["-c", "ulimit -S -d 2000000 && ulimit -H -d 2000000 && /bin/sh -c 'ulimit -d 4000000000' 2>/dev/null; echo $?"], { encoding: "utf8" }).stdout.trim();  // a 2 GB hard limit (bun starts) that a 4 TB budget can't raise
   if (canLimit !== "0") {
     const sh = spawnSync("/bin/sh", ["-c", `ulimit -S -d 2000000 && ulimit -H -d 2000000; exec "${process.execPath}" -e 'process.env.OPT_MEM_BUDGET_MB="4000000000"; const {queueOptimize,optIdle}=await import("./server/upload.ts"); const {STORE_MIN}=await import("./server/config.ts"); const fs=await import("node:fs"); const p=${JSON.stringify(join(root, "src", "s8.glb"))}; fs.writeFileSync(p, Buffer.alloc(1000,1)); fs.writeFileSync(p+".verdict","0"); queueOptimize(p); await optIdle(); console.log(JSON.stringify({variant:fs.existsSync(STORE_MIN+"/s8.glb"), deferred:fs.existsSync(STORE_MIN+"/s8.glb.deferred"), failed:fs.existsSync(STORE_MIN+"/s8.glb.failed")}))'`],
       { env: { ...process.env, OPT_MEM_BUDGET_MB: "4000000000" }, cwd: import.meta.dir + "/..", encoding: "utf8" });
-    const line = sh.stdout.split("\n").find((l) => l.startsWith("{")) ?? "{}";   // the boot-sweep timers log after the JSON
+    const line = sh.stdout.split("\n").find((l) => l.startsWith("{")) ?? "{}";  // the boot-sweep timers log after the JSON
     try { const v = JSON.parse(line); const loud = /cap wrapper failed/.test(sh.stderr + sh.stdout);
       if (v.variant || v.deferred || v.failed || !loud) console.error("126 case saw", JSON.stringify(v), "loud=" + loud, "| tail:", (sh.stderr + sh.stdout).trim().split("\n").slice(-3).join(" // ").slice(0, 400));
       ok(!v.variant && !v.deferred && !v.failed && loud, "wrapper 126: no variant, no marker, loud"); console.log("(126 case ran: wrapper refused under the hard limit, nothing marked)"); }
     catch { console.log("(126 case: bun could not start under the hard limit — skipped: " + (sh.stderr + sh.stdout).split("\n").pop() + ")"); }
   } else console.log("(126 case: cannot set a hard data limit here — skipped)");
 } else console.log("(non-Linux: capped-death and 126 cases skipped)");
-// 7. SKIP_OPT_SWEEP: with it set, both sweeps queue NOTHING even with a GLB planted in the store; without it,
-//    the same store queues the planted GLB (the positive control). Each direction is its own subprocess: the
-//    flag is a config constant read at import.
+// 7. SKIP_OPT_SWEEP set: both sweeps queue NOTHING even with a GLB planted; unset, the planted GLB queues (the control).
+//    One subprocess per direction: the flag is a config constant read at import.
 const { OPT_DIR } = await import("../server/config.ts");
 mkdirSync(join(OPT_DIR, "store"), { recursive: true }); writeFileSync(join(OPT_DIR, "store", "planted.glb"), Buffer.alloc(500, 1));
 const receipts = join(root, "sweep-receipts");
@@ -95,11 +93,8 @@ const sweep = (skip: boolean) => {
 const skipped = sweep(true), ran = sweep(false);
 ok(skipped.invoked.length === 0 && skipped.status.queued === 0, `SKIP_OPT_SWEEP=1: the child was never invoked (${skipped.invoked.length} receipts)`);
 ok(ran.invoked.some((d) => d.includes("planted.glb")), `SKIP_OPT_SWEEP unset: the planted GLB reached the child (${ran.invoked.length} receipts)`);
-// 8. the library sweep never queues a (source, mode) that is already waiting (Greptile #207): a second sweep, or a ↻
-//    rebuild pressed before the boot sweep, must not run the same encode twice. The costly case: a ↻ queues both passes
-//    FORCED (one starts, one waits), then the sweep adds the same passes unforced; the pump prefers unforced items, so the
-//    waiting pass ran unforced AND forced (a plain unforced duplicate is harmless: the pump skips a fresh dest).
-//    One planted library model: exactly one --ktx2 and one --lod invocation for it.
+// 8. the library sweep never queues a (source, mode) already waiting (#207): the pump prefers unforced items, so a ↻'s
+//    forced pass plus the sweep's unforced copy ran twice. One planted model: one --ktx2, one --lod.
 { const lib = join(root, "lib"), models = join(lib, "eidoverse", "assets", "models"); mkdirSync(models, { recursive: true });
   writeFileSync(join(models, "dup.glb"), Buffer.alloc(500, 2));
   const rf = join(receipts, "dup.txt"); writeFileSync(rf, "");

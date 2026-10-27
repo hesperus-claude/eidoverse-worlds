@@ -1,26 +1,15 @@
-// Ported from the protocol lab (2026-10-05); its words renamed before release (10-17, below).
-// Body consent (PROTOCOL L6 as revised 21:45; research 42 §4). PRESENCE ONLY: nothing here is ever appended to a
-// log or written to world state. The authority keeps one table per body in its presence plane, refuses before delivery,
-// and the target's client has the final word (the lab has no clients; `inbox` stands in for delivery).
+// Body consent (PROTOCOL L6; research 42 §4). PRESENCE ONLY: never appended to a log or written to world state.
+// The authority keeps one table per body in its presence plane and refuses before delivery; the target's client has the final word.
 //   classes: near, follow, touch (social points), intimate (intimate points), pose, shove, displace, voice
-//   cells: allow | ask | deny, separately for everyone and for friends (friends = mutual, between authority-stamped ids:
-//          both named each other in their `friends` list)
-//   presets: the SAME for every body. Normal is the default for every participant; Performer is opt-in.
-//   silence is no: a body that never sent a table gets Normal; an ask nobody answers within 20 s is a no.
-//   delegates: the people YOU named (a list apart from friends) may close your table (pause, deny); only you may open it,
-//          and only you add or remove a friend or a delegate (friend/unfriend, delegate/undelegate)
-// Renamed before release (protocol minor 0, R 10-17 14:41): tier `strangers` → `everyone`; cells everyone|ask|nobody →
-// allow|ask|deny; class `move` → `displace` (someone else displacing your body; `move` is your own walk); the one `friend`
-// list split into the mutual `friends` tier and `delegates`. The old words are still taken on the wire (LEGACY_* below), and
-// a presence file in the old shape is read and rewritten in the new (migratePresence; storage.js calls it at load).
-// The lab enforces touch/intimate, pose, shove and displace (what the lab can model: reach, pose, ragdoll, drag/grab of a
-// body). near, follow and voice are in the table and shown, but the lab has no fade, follow track or SFU to enforce.
+//   silence is no: a body that never chose gets the default; an ask nobody answers within 20 s is a no.
+// Old words (strangers, everyone|ask|nobody, move) are read on the wire (LEGACY_*), never written; migratePresence rewrites
+// an old presence file at load. Enforced: touch/intimate, pose, shove, displace; near, follow and voice are not yet.
 import { CONTACT_POINTS, canonicalPoint } from "../contact.js";
 export const CLASSES = ["near", "follow", "touch", "intimate", "pose", "shove", "displace", "voice"];
 export const ENFORCED = ["touch", "intimate", "pose", "shove", "displace"];
 export const TIERS = ["everyone", "friends"];
 export const MODES = ["allow", "ask", "deny"];
-/** The words before 10-17, read on the wire and in a stored table; never written. */
+/** Old words, read on the wire and in a stored table; never written. */
 export const LEGACY_TIER = Object.freeze({ strangers: "everyone" });
 export const LEGACY_MODE = Object.freeze({ everyone: "allow", nobody: "deny" });
 export const LEGACY_CLASS = Object.freeze({ move: "displace" });
@@ -34,28 +23,21 @@ export const PRESETS = {
   "friends-only": { everyone: Object.fromEntries(CLASSES.map((c) => [c, "deny"])), friends: NORMAL_FRIENDS },
   performer: { everyone: { near: "allow", follow: "ask", touch: "allow", intimate: "deny", pose: "allow", shove: "allow", displace: "ask", voice: "allow" }, friends: NORMAL_FRIENDS },
 };
-export const DEFAULT_PRESET = "normal"; // for every new body: never a property of what kind of participant it is (42 §4.3)
+export const DEFAULT_PRESET = "normal"; // never a property of what kind of participant it is (42 §4.3)
 export const ASK_MS = 20000, COOL_MS = 600000;
-// a reach descriptor the relay strips (server/reachgate.ts → authority.js reachAdmits) is said to the reacher once per
+// a reach the relay strips (server/reachgate.ts → authority.js reachAdmits) is told to the reacher once per
 // (reacher, target, class) per this long: a stream of frames is one attempt, never one message a frame
 export const REACH_NOTE_MS = 15000;
 export const KIND_CLASS = { pose: "pose", anim: "pose", shove: "shove", drag: "displace", occupy: "displace", carry: "displace", touch: "touch" };
-// Touch is judged by where a hand is, not how it was aimed (42 P8): a named point is intimate if it is one of these, and
-// touch if it is any other contact point (shared/contact.js). ONE classifier, namedPointClass, for the relay
-// (server/reachgate.ts), the authority's reach verb and the agent (r2 holes F5: the verb kept its own 19-point list, so
-// cheek, eye, knee and foot, which the relay classes touch and tells you to ask for, could never be asked for).
+// touch is judged by where a hand is, not how it was aimed: ONE classifier (namedPointClass) for the relay, the reach verb and the agent
 export const INTIMATE_POINTS = new Set(["chest_front", "waist_l", "waist_r", "hip_l", "hip_r"]);
 export const REACH_POINTS = Object.keys(CONTACT_POINTS);
 /** a named contact point (any spelling canonicalPoint takes) → { point (canonical), cls: touch | intimate }; null if not a point */
 export function namedPointClass(name) { const point = canonicalPoint(name); return point ? { point, cls: INTIMATE_POINTS.has(point) ? "intimate" : "touch" } : null; }
-// An ask answered yes is ONE touch (r2 holes F3), and lasts at most this long even while the hand is held: the window a
-// no holds (COOL_MS) is the longest a yes holds. Long enough for a held hand on a walk or a slow dance, short enough that
-// a yes forgotten in a long session doesn't stand in for consent an hour on. Letting go, either person leaving, or the
-// target's cell moving off allow ends it sooner (authority.js reachLetGo, leave, revokeAfter).
+// a yes is ONE touch and lasts at most COOL_MS even while held; letting go, leaving, or the cell moving off allow ends it sooner
 export const REACH_GRANT_MS = COOL_MS;
-// What the ASKER is told when a table refuses: the same words for a tier's deny, a per-person no, a pause, an ask
-// answered no and an ask nobody answered (10-13 consent research: the reason leaked a per-person deny). The real cause
-// (decide's why) goes to the target's own attempt ring only.
+// The asker hears the same words for every refusal (deny, per-person no, pause, ask refused or unanswered): the reason
+// must never leak a per-person deny. The real cause (decide's why) goes to the target's own attempt ring only.
 export const refusalWords = (to, cls) => `${to} isn't taking ${cls} right now`;
 export const REFUSAL_FIX = "leave it be: it is theirs to open";
 // a world-space point at a body: inside its capsule (r 0.25 m, feet to 1.8 m) is a touch; the torso/pelvis core is intimate
@@ -65,11 +47,11 @@ export function pointClass(bodyAt, p) {
   return h <= 0.2 && y >= 0.8 && y <= 1.5 ? "intimate" : "touch";
 }
 
-/** What the authority holds for one body (recut A2): its switch (undefined = never chosen) and its per-person answers. */
+/** What the authority holds for one body: its switch (undefined = never chosen) and its per-person answers. */
 export function tableOf(P, who) { const t = P.consent?.[who]; return { switch: t?.switch, overrides: t?.over ?? {} }; }
-// The one switch (recut A2, R 10-20): accept | ask | refuse, and what each means as a decision.
+// accept | ask | refuse, and what each means as a decision
 export const SWITCHES = ["accept", "ask", "refuse"];
-export const DEFAULT_SWITCH = "accept";   // permissive; a world's body-default changes it for people who haven't chosen
+export const DEFAULT_SWITCH = "accept";   // a world's body-default changes it for people who haven't chosen
 const SWITCH_MODE = { accept: "allow", ask: "ask", refuse: "deny" };
 /** What `to` says about `from` doing class `cls` now: { mode: allow | ask | deny, why }. One order, every body kind:
  *  a per-person answer (yours, for that person) > your switch > the world's body-default > accept. */
@@ -81,9 +63,8 @@ export function decide(P, from, to, cls, now, worldDefault) {
   const which = t.switch ?? (SWITCHES.includes(worldDefault) ? worldDefault : DEFAULT_SWITCH);
   return { mode: SWITCH_MODE[which], why: t.switch !== undefined ? `${to}'s body is set to ${t.switch}` : `this world's default for bodies is ${which}` };
 }
-// Change your body's answers. Only you: there is no one who decides for you (recut A2 removed delegates).
-// Names and classes arrive from the wire: every table is prototype-less, and a "who" must look like an identity
-// (security pass 2, H-0: deny '__proto__' wrote into Object.prototype for every world in the process).
+// Only you change your body's answers: no one decides for you.
+// Names and classes arrive from the wire: every table is prototype-less and a "who" must look like an identity ('__proto__' once polluted Object.prototype).
 const BAD_KEY = new Set(["__proto__", "constructor", "prototype"]);
 const isWho = (w) => typeof w === "string" && /^[A-Za-z0-9_.:@+-]{1,64}$/.test(w) && !BAD_KEY.has(w);
 const bag = () => Object.create(null);
@@ -97,7 +78,7 @@ export function setConsent(P, actor, a, now) {
   if (a.allow !== undefined || a.deny !== undefined) {
     if (!isWho(who)) return { ok: false, code: "shape", reason: "allow/deny: an identity" };
     if (!cls.every((c) => CLASSES.includes(c))) return { ok: false, code: "shape", reason: `class: one of ${CLASSES.join(", ")}` };
-    // an allowance lasts the for it names: a positive number of ms. With no for it stands until you revoke it, as a deny does (R 10-20)
+    // an allowance lasts its `for` (positive ms); with none it stands until revoked, as a deny does
     if (a.allow !== undefined && a.for != null && !(typeof a.for === "number" && a.for > 0)) return { ok: false, code: "shape", reason: `for: how long it lasts, in ms (a positive number), got ${JSON.stringify(a.for)}`, fix: "leave for out to allow until you revoke it" };
   }
   const t = ((P.consent ??= bag())[actor] ??= bag());
@@ -107,14 +88,11 @@ export function setConsent(P, actor, a, now) {
     for (const c of cls) ((t.over ??= bag())[who] ??= bag())[c] = { mode: a.allow !== undefined ? "allow" : "deny", ...(until !== undefined ? { until } : {}) }; }
   return { ok: true, target: actor };
 }
-/** The presence plane's consent tables in today's shape. A table stored before 10-17 (cells.strangers, everyone/nobody,
- *  class move, one `friends` list that also closed the table) is rewritten: the old list stays the friends list AND becomes
- *  the delegates list (it did both jobs, so nobody gains or loses a power), and P.consentShape marks the plane as done so a
- *  delegates list emptied since is never refilled. Returns how many tables changed. In place; idempotent. */
+/** Shape of today's tables; P.consentShape marks the plane done. */
 export const CONSENT_SHAPE = 3;
-/** A table stored before the switch (recut A2) becomes a switch, only ever NARROWER than it was: paused, or any enforced
- *  class closed (deny) for everyone → refuse; else any ask → ask; else accept. Friends, delegates and presets go (nobody
- *  gains a power: a friend's wider answer is lost, never a stranger's narrower one). Per-person answers stay. */
+/** A pre-switch table becomes a switch only ever NARROWER than it was: paused, or any enforced class denied for everyone →
+ *  refuse; else any ask → ask; else accept. Friends, delegates and presets go (a friend's wider answer is lost, never a
+ *  stranger's narrower one); per-person answers stay. → tables changed; in place, idempotent. */
 export function migratePresence(P) {
   if (!P || typeof P !== "object" || P.consentShape === CONSENT_SHAPE) return 0;
   let n = 0;

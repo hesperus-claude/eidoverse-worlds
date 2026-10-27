@@ -1,4 +1,4 @@
-// tools/run-client.ts — every tools/*-{test,check} and tools/protocol/*-{test,check}, one command (refactor plan 2, D5).
+// tools/run-client.ts: every tools/*-{test,check} and tools/protocol/*-{test,check}, one command.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/run-client.ts --import-only    each file loads: no SyntaxError, no
 //                                                                                 "Export named … not found", no missing module
@@ -6,15 +6,12 @@
 //                                                                                 dead at import / timed out / env / skipped
 //   … --jobs 4  --timeout 90  --slow (run the SLOW table too)  --unreached (list only)  <name-fragment> … (only those)
 //
-// A test whose stub or import graph broke dies before its first check and says nothing a person reads (six "stub missing
-// export X" commits on 10-12 alone; settings-panels-test was dead for a day). Bun fails the import loudly, so loading each
-// file is the whole stub-contract test. Exit 1 on any dead-at-import file (and, in the full mode, on any red or timed-out one:
-// a hang is usually a broken feature, #260 review I65; a file that is merely long belongs in the SLOW table).
+// A test whose stub or import graph broke dies before its first check, silently; loading each file is the stub-contract
+// test. Exit 1 on any dead-at-import file (full mode: also any red or timed-out one; a merely long file goes in SLOW).
 // Every run lists the files no other runner reaches (tools/protocol/run.ts, package.json scripts): this one is theirs.
-// gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some tools/*-test files start a headless
-// Chromium at their top level. So the files that launch one (the file or a local module it imports calls scratchBench,
-// playwright, puppeteer, a --remote-debugging-port Chrome) run one at a time in their own lane, beside the --jobs others:
-// never two Chromiums at once from here. tools/protocol/run.ts keeps this runner in its browser lane.
+// gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some start a headless Chromium at top
+// level, so those (scratchBench, playwright, puppeteer, a --remote-debugging-port Chrome, directly or via a local
+// import) run one at a time in their own lane: never two Chromiums at once. run.ts keeps this runner in its browser lane.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, relative, basename } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -31,7 +28,7 @@ const JOBS = opt("--jobs", importOnly ? 6 : 2);
 const TIMEOUT_S = opt("--timeout", importOnly ? 15 : 90);
 const only = args.filter((a, i) => !a.startsWith("--") && !["--jobs", "--timeout"].includes(args[i - 1]));
 
-// longer than any sane per-file budget on this box (the 10-12 sweep: still running at 40 s); run with --slow
+// longer than any sane per-file budget on this box; run with --slow
 const SLOW: Record<string, string> = {
   "audio-upload-test.ts": "uploads through a real server and transcodes",
   "image-upload-test.ts": "uploads through a real server and runs libvips",
@@ -60,9 +57,8 @@ for (const [, file] of SUITES) reached.add(rel(join(ROOT, "tools/protocol", file
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 for (const s of Object.values(pkg.scripts ?? {}) as string[]) for (const m of s.matchAll(/tools\/[\w./-]+/g)) reached.add(m[0]);
 const unreached = files.map(rel).filter((p) => !reached.has(p));
-// --skip-suites: the gate runs each of its own suites in full (a load error fails that suite), so loading them here
-// again is the same check twice; on windows-latest those 26 files, each run to the 15 s cap, were what pushed the lane
-// past its budget (358 s, 478 s, then >1010 s on three runs, 10-23)
+// --skip-suites: the gate runs each of its own suites in full, so loading them here again is the same check twice (and
+// pushed the windows lane past its budget)
 const gateSuite = new Map<string, string>(); for (const [n, file] of SUITES) gateSuite.set(rel(join(ROOT, "tools/protocol", file.split(" ")[0])), n);
 
 if (flag("--unreached")) {
@@ -86,17 +82,20 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
   if (!importOnly && SLOW[name] && !flag("--slow")) return done({ file, kind: "skip", why: `slow: ${SLOW[name]} (--slow runs it)`, ms: 0 });
   if (importOnly && flag("--skip-suites") && gateSuite.has(rel(file))) return done({ file, kind: "skip", why: `the gate runs it in full as ${gateSuite.get(rel(file))}`, ms: 0 });
   if (needsMcpl(src) && !mcplDeps) return done({ file, kind: "env", why: "mcpl/node_modules missing: ln -s <a checkout with deps>/mcpl/node_modules mcpl/", ms: 0 });
-  const ch = spawn("bun", [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+  const ch = spawn(process.execPath, [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   live.add(ch.pid!); let out = ""; let timedOut = false;
   ch.stdout.on("data", (d) => { out += d; }); ch.stderr.on("data", (d) => { out += d; });
-  // killSuiteAsync, not process.kill(-pid): a negative pid throws on Windows, so a child past its budget was never killed,
-  // its pipes stayed open, "close" never came and the lane wedged (client-tools, windows-latest, 10-23).
-  // On Windows a kill costs a process-table (WMI) query, so only a timed-out file pays it: sweeping after every one of
-  // 424 files, six at a time, swamped WMI and the run died (10-23). A finished file's debris goes with the gate's own sweep.
+  // killSuiteAsync, not process.kill(-pid), which throws on Windows; only a timed-out file pays its WMI query (a sweep per
+  // file swamps WMI), and a finished file's debris goes with the gate's own sweep
   const kill = (exited = false) => { void killSuiteAsync(ch.pid!, "SIGKILL", process.platform, { exited }).catch(() => {}); };
   // SIGTERM first, so a test with an exit handler cleans up what it wrote; whatever is left a moment later is killed
-  const timer = setTimeout(() => { timedOut = true; void killSuiteAsync(ch.pid!, "SIGTERM").catch(() => {}); setTimeout(() => kill(), 2000); }, TIMEOUT_S * 1000);
-  ch.on("close", (code) => {
+  // a grandchild that outlives the kill (a browser) still holds our pipes, and "close" never comes: let go of them
+  let settled = false;
+  const timer = setTimeout(() => { timedOut = true; void killSuiteAsync(ch.pid!, "SIGTERM").catch(() => {}); setTimeout(() => kill(), 2000);
+    setTimeout(() => { if (!settled) { ch.stdout?.destroy(); ch.stderr?.destroy(); finish(null); } }, 5000); }, TIMEOUT_S * 1000);
+  ch.on("close", (code) => finish(code));
+  function finish(code: number | null) {
+    if (settled) return; settled = true;
     clearTimeout(timer); if (process.platform !== "win32") kill(true); live.delete(ch.pid!);
     const ms = performance.now() - t0; const tail = out.trim().split("\n").slice(-3).join("\n");
     const dead = linkError(out);
@@ -106,12 +105,11 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
     if (timedOut) return done({ file, kind: "timeout", why: `still running at ${TIMEOUT_S} s`, ms, tail });
     if (code === 0) return done({ file, kind: "pass", ms });
     if (code === 2 && /no browser|no chrome|chromium|no gpu|webgpu/i.test(out)) return done({ file, kind: "env", why: tail.split("\n").pop(), ms, tail });
-    // the avatar corpus is gitignored (assets/opt/eidoverse/assets/vrms): a worktree has none until it is linked, and no
-    // host here has every rig a suite names (princess0)
+    // the avatar corpus is gitignored (assets/opt/eidoverse/assets/vrms): a worktree has none until linked, and no host has every rig
     const corpus = /ENOENT[^\n]*assets\/opt\/eidoverse|(\w+) fixture required/.exec(out);
     if (corpus) return done({ file, kind: "env", why: corpus[1] ? `the avatar corpus lacks ${corpus[1]}` : "no avatar corpus: ln -s <an asset root>/assets assets/opt/eidoverse/assets", ms, tail });
     done({ file, kind: "red", why: `exit ${code}`, ms, tail });
-  });
+  }
 });
 
 // a test killed at its time limit can't clean up: say what the run left in the tree (nothing here deletes it)

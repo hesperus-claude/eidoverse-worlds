@@ -3,8 +3,7 @@
 // world. A chip stays for the visit; a click opens its full text with "got it" (folds it) and "don't show again"
 // (gone for good, remembered under the same key the card used).
 //
-// It was a 340px card, top-centre over everything for 30 s (INVENTORY §2: at z 60 it covered the ∃ menu and the help
-// sheet). A chip needs no auto-dismiss: at rest it covers nothing.
+// A chip needs no auto-dismiss: at rest it covers nothing.
 import { backendName } from './core.js';
 import { bus } from './base.js';
 import { takeGpuRecovered, recentGpuLosses } from './gpulost.js';

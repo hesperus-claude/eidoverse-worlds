@@ -1,24 +1,21 @@
-// worldentity-test — the world entity `@world` (design §3, shared/worldentity.js)
-// and the Build tab's memory (design §5, client/lib/edittabs.js).
+// worldentity-test: the world entity `@world` (design §3, shared/worldentity.js) and the Build tab's memory (design §5,
+// client/lib/edittabs.js).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/worldentity-test.ts
 //
-// 1. the alias both ways, on REAL states (a synthetic world through the real
-//    door, then every spec fixture translated): after every entry the
-//    world reads as Sky / Weather / Terrain / Grass and writes back
-//    canon-identical; Sky and Weather partition state.sky; each component at most once
-// 2. picking a sky REPLACES the Sky (no leftovers from the old one) and keeps
-//    the Weather; a ground/grass pick changes only its own dial
-// 3. edits: every card field resolves, commits as the door requests (the sky
-//    and weather tools, set/delete @world terrain|grass), reads back as typed;
-//    the door's undo puts the world back; the owner gate
-// 4. the tab memory: Build the first time (and for a pre-Build layout), then
-//    whatever was used last
+// 1. the alias both ways, on REAL states (a synthetic world through the real door, then every spec fixture translated):
+//    after every entry the world reads as Sky / Weather / Terrain / Grass and writes back canon-identical; Sky and
+//    Weather partition state.sky; each component at most once
+// 2. picking a sky REPLACES the Sky (no leftovers) and keeps the Weather; a ground/grass pick changes only its own dial
+// 3. edits: every card field resolves, commits as the door requests (the sky and weather tools, set/delete @world
+//    terrain|grass), reads back as typed; the door's undo puts the world back; the owner gate
+// 4. the tab memory: Build the first time (and for a pre-Build layout), then whatever was used last
 // 5. the text tier: inspect / edit / hierarchy speak @world (the agent's edit sent to a real door)
 //
-// the protocol port (2026-10-06): the world is read from the view (shared/protocol/view.js viewState); every result is the
-// door's (tools/protocol/scratchworld.ts). worldInverse is gone: undo is the door's `undo`, checked as such.
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+// the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
+// (tools/protocol/scratchworld.ts).
+import { noWorldUrl } from './no-world.ts';
+import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { canon, RECORDS, addable, componentsOf } from '../shared/components.js';
@@ -34,7 +31,7 @@ import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { COMPONENTS as SPEC } from '../shared/protocol/componentspec.js';
 import { pinned } from "./protocol/clock.ts";
 const SKY_DEFAULTS = SPEC.sky.defaults;
-const hexInt = (x: any) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);   // a layer colour is stored as an int (shape audit 10-16)
+const hexInt = (x: any) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);   // a layer colour is stored as an int
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
@@ -80,10 +77,8 @@ console.log('1. the alias both ways, through the real door:');
   step(...grassReq({ preset: 'mojave', width: 90, depth: 80, center: [0, 0], density: 1.4 }));
   step('weather', { weather: 'clear', keepSky: false });                         // discards the standing sky
   step('sky', {});
-  // KNOWN BUG (reported 2026-10-06, a door/catalogue mismatch, not fixed here): a weather pick under a forecast is a
-  // manual override; the door's own skyValue (shared/forecast.js foldSkyEntry) writes sky.override, and the door's sky
-  // schema (shared/protocol/componentspec.js) has no `override` key, so the door refuses its own value: "unknown key 'override'".
-  // The Build tab's weather tile and weather.state are refused in any world with a forecast.
+  // a weather pick under a forecast is a manual override (sky.override, shared/forecast.js foldSkyEntry), which the
+  // door's sky schema (shared/protocol/componentspec.js) must take
   check('the door takes every request of the synthetic world (KNOWN BUG: a weather under a forecast is refused)', refusals.length === 0, refusals.join(' | '));
   check(`the alias round-trips exactly after every request of a synthetic world (${n} states)`, bad.length === 0, bad.join(' | '));
   const W2 = scratchWorld('worldentity');
@@ -91,12 +86,12 @@ console.log('1. the alias both ways, through the real door:');
   const ov = W2.call('weather', { weather: 'storm' });   // the override (the KNOWN BUG above refuses it)
   const types = worldComponents(W2.view()).components.map((c: any) => `${c.type}:${Object.keys(c.params).sort().join(',')}`);
   check('…and reads as Sky (the day, the clouds) + Weather (weather, forecast, override) — not one opaque bag (KNOWN BUG above: the override is refused)',
-    canon(types) === canon(['Sky:ambient,azimuth,clouds,exposure,fog,hours,rate', 'Weather:forecast,override,weather']), /* the registry's defaults are written (shape audit 10-16) */ `${types.join(' | ')} ${ov.ok ? '' : `(weather refused: ${ov.refused?.reason})`}`);
+    canon(types) === canon(['Sky:ambient,azimuth,clouds,exposure,fog,hours,rate', 'Weather:forecast,override,weather']), /* the registry's defaults are written */ `${types.join(' | ')} ${ov.ok ? '' : `(weather refused: ${ov.refused?.reason})`}`);
   check('the world records are components (one engine record each), never addable to a thing',
     ['Sky', 'Weather', 'Terrain', 'Grass'].every((t) => /^[0-9a-f]{64}$/.test((RECORDS as any)[t]?.hash ?? '') && (RECORDS as any)[t].category === 'World')
     && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a: any) => (RECORDS as any)[a.name]?.world));
 
-  // every spec fixture, translated (shared/protocol/translate-v1.js, as a world is migrated), state by state
+  // every spec fixture, translated (tools/protocol/import-v1/translate-v1.js, as a world is migrated), state by state
   const logs: string[] = [];
   const walk = (d: string) => { if (!existsSync(d)) return; for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) walk(p); else if (x === 'log.jsonl') logs.push(p); } };
   walk(join(ROOT, 'spec/fixtures'));
@@ -145,7 +140,7 @@ console.log('\n2. picking a sky replaces the Sky; the Weather stays:');
   const P = { lit: { hours: 6, clouds: 'stratus', exposure: 0.8, fog: 0.4 }, bare: { hours: 12 } };
   W.sendAll(worldPick(st(), 'sky', 'lit', { presets: P, now: now() }).ops);
   W.sendAll(worldPick(st(), 'sky', 'bare', { presets: P, now: now() }).ops);
-  check('picking "bare" after "lit" leaves exactly {hours: 12} — the old clouds, exposure and fog are replaced, not merged', canon(sky()?.params) === canon({ ...SKY_DEFAULTS, hours: 12 }), canon(sky()?.params));   /* + the registry's defaults, written (shape audit 10-16) */
+  check('picking "bare" after "lit" leaves exactly {hours: 12} — the old clouds, exposure and fog are replaced, not merged', canon(sky()?.params) === canon({ ...SKY_DEFAULTS, hours: 12 }), canon(sky()?.params));   /* + the registry's defaults, written */
   check('…and the weather is still the storm', st().sky.weather === 'storm');
   check('a preset that names weather itself wins over the carried one', pickSky(st().sky, { hours: 3, weather: 'clear' }).weather === 'clear');
   check('an unknown preset is refused by name, nothing sent', worldPick(st(), 'sky', 'nope', { presets: P }).ops.length === 0 && /nope/.test(worldPick(st(), 'sky', 'nope', { presets: P }).errors[0]));
@@ -200,9 +195,9 @@ console.log('\n3. the cards: every field commits as door requests and reads back
   check('…and read back as typed (hours 17 now, on a turning day)', Math.abs(readBack('sky.hours') - 17) < 0.05 && readBack('sky.clouds') === 'cirrus' && readBack('sky.exposure') === 1.25, `${readBack('sky.hours')} ${readBack('sky.clouds')} ${readBack('sky.exposure')}`);
   const e2 = edit({ 'terrain.amplitude': '*=2', 'terrain.color': '#112233', 'grass.density': 1.4, 'weather.state': 'rain' });
   check('ground, grass and weather edits: one set terrain, one set grass, one weather request', canon(e2.ops.map((o: any) => o.verb === 'set' ? `set ${o.args.component}` : o.verb).sort()) === canon(['set grass', 'set terrain', 'weather']), JSON.stringify(e2.ops));
-  // KNOWN BUG (reported 2026-10-06, not fixed here): a multi-field world edit is ONE batch, and the door's batch takes
-  // only create/set/delete/place — the `weather` (and `sky`) tool can't ride in it, so the whole edit is refused.
-  // inspect.js commits one field per gesture (unaffected); the agent's `edit @world` with two groups is (section 5).
+  // KNOWN BUG: a multi-field world edit is ONE batch, and the door's batch takes only create/set/delete/place, so the
+  // `weather` (and `sky`) tool can't ride in it and the whole edit is refused. inspect.js commits one field per gesture
+  // (unaffected); the agent's `edit @world` with two groups is (section 5).
   check('…and the door takes the edit as ONE request (one act, one undo) (KNOWN BUG: weather can\'t go in a batch)', e2.one.ok, JSON.stringify(e2.one.refused));
   check('…read back as typed', readBack('terrain.amplitude') === PAL.shapes.hills * 2 && readBack('terrain.color') === 0x112233 && readBack('grass.density') === 1.4 && readBack('weather.state') === 'rain'
     && st().terrain.size === 160 && st().terrain.layers[0].repeat === 16, canon(st().terrain));
@@ -256,13 +251,13 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   W.call('sky', { hours: 17.6, clouds: 'cumulus' });
   W.call(...terrainReq(terrainArgs(PAL, { seed: 7, shape: 'hills', tint: 'meadow' })));
   W.call('create', { id: 'pivot', components: { transform: { pos: [1, 0, 1] } } });
-  const ag = new WorldAgent({ name: 'eye' });
+  const ag = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const A = ag as any;
   // the agent's world is the view; its door is this scratch world's real door (dry runs answered by the door itself)
   const sync = () => { A.st = W.view(); A.replica = { st: W.state() }; A.reconcileFromFold(); };   // componentsOf (edit's expect pins) reads the replica's state
   sync();
   A.door = async (verb: string, args: any) => W.call(verb, args);
-  // edit goes sendOps → request, which answers not-joined for an agent that never joined: answer it from the same door (#260 house I457)
+  // edit goes sendOps → request, which answers not-joined for an agent that never joined: answer it from the same door
   A.request = async (verb: string, args: any) => W.call(verb, args);
   const out = (r: any) => (r?.content ?? []).map((c: any) => c.text).join('\n');
   const insp = out(await HANDLERS.inspect(ag as any, { id: WORLD_ID }));
@@ -271,7 +266,7 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   check('edit @world (dry), one group: the sky tool carrying everything standing, and the door answers the dry run', /would send sky \{"hours":6,"clouds":"cumulus"[,}]/.test(one) && !/refused/.test(one), one);
   const ed = out(await HANDLERS.edit(ag as any, { id: WORLD_ID, set: { 'sky.hours': 6, 'terrain.amplitude': '+=1' }, dry: true }));
   check('edit @world (dry), two groups: ONE request with the sky verb and set terrain (amplitude 3.6)', /would send batch .*"verb":"sky".*"hours":6.*"component":"terrain".*"amplitude":3\.6/.test(ed), ed);
-  // reported 2026-10-06 as refused (sky couldn't go in a batch); answered by the real door it is accepted
+  // once refused (sky couldn't go in a batch); answered by the real door it is accepted
   check('…and the door accepts that request (the sky tool inside a batch)', !/refused|can't go in a batch/.test(ed), ed);
   const bad = out(await HANDLERS.edit(ag as any, { id: WORLD_ID, set: { 'pos.x': 1 }, dry: true }));
   check('…an address the world has not is refused by name', /refused: pos\.x: no such field on @world/.test(bad), bad);
@@ -284,13 +279,9 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   check('…even under a filter that matches nothing else', /^\[@world\]/.test(filtered) && /no placed thing matches "zzz"/.test(filtered), filtered);
 }
 
-// ------------------------------------------------------------ house review of #260, client/lib I95
-// Removing Weather (the Hierarchy row's ✕, editpanels.js removeEnv) wrote `weather.state: clear`: under a forecast that is
-// a manual override the next segment undoes (and the door refuses a weather pick under a forecast: section 1's KNOWN BUG),
-// so the Weather never went. `weather.remove` takes the weather off: the forecast stops too (a sky request that keeps
-// every sky field but the weather's), and Ctrl+Z (the door's undo) brings the forecast back. With no forecast it is the
-// clear weather it always was.
-// Mutation (must go red): in shared/worldentity.js make weather.remove send weatherOp('clear') under a forecast too.
+// ------------------------------------------------------------ I95
+// removing Weather (editpanels.js removeEnv) takes the forecast too, and Ctrl+Z brings it back; `clear` would be an
+// override the next segment undoes. Goes red if weather.remove sends weatherOp('clear') under a forecast
 console.log('\nI95. removing the Weather removes it, forecast and all:');
 {
   const W = scratchWorld('worldentity');
