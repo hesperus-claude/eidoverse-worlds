@@ -13,15 +13,10 @@
 // compiled the mono variant under a stereo name).
 //
 // Run: node tools/xr-switch-compile-probe.mjs   (~30 s; run it under a memory guard)
-import { fileURLToPath } from "node:url";
-import { chromium } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
 
-const ROOT = fileURLToPath(new URL('../client/', import.meta.url));
 const N = Number(process.env.N ?? 60);
-const TYPES = { '.js': 'text/javascript', '.html': 'text/html' };
-const PAGE = `<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>
+const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">
 import * as THREE from 'three';
 import { vec3 } from 'three/tsl';
@@ -76,22 +71,11 @@ window.__probe = (async () => ({ stock: await run('stock'), split: await run('sp
   .catch((e) => ({ error: String(e && e.stack || e) }));
 </script></body></html>`;
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const R = await raw3Page(PAGE);
 let code = 1;
 try {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  await page.route('http://probe.local/**', (route) => {
-    const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (path === '/') return route.fulfill({ body: PAGE, contentType: 'text/html' });
-    const f = join(ROOT, path);
-    if (!f.startsWith(ROOT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
-    return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] ?? 'application/octet-stream' });
-  });
-  await page.goto('http://probe.local/');
-  const res = await Promise.race([page.evaluate(() => window.__probe), new Promise((r) => setTimeout(() => r({ error: 'probe timed out (120 s)' }), 120000))]);
+  const { errors } = R;
+  const res = await R.result(120000);
   if (errors.length) console.log('page errors:', errors.slice(0, 5));
   let pass = 0, fail = 0;
   const check = (n, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}${note ? `  -- ${note}` : ''}`); } };
@@ -115,5 +99,5 @@ try {
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   code = fail ? 1 : 0;
-} finally { await browser.close(); }
+} finally { await R.close(); }
 process.exit(code);

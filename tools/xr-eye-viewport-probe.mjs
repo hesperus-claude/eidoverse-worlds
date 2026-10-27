@@ -11,15 +11,10 @@
 //   guarded   same call through xrpixelratio.js → deferred, the eyes stay put: red
 //
 // Run: node tools/xr-eye-viewport-probe.mjs   (~10 s; run it under a memory guard)
-import { fileURLToPath } from "node:url";
-import { chromium } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
 
-const ROOT = fileURLToPath(new URL('../client/', import.meta.url));
 const W = 160, H = 80;   // per-eye size in the output target (2W × H), like an XR layer
-const TYPES = { '.js': 'text/javascript', '.html': 'text/html' };
-const PAGE = `<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>
+const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">
 import * as THREE from 'three';
 import { guardPixelRatioInXR } from './lib/xrpixelratio.js';
@@ -63,22 +58,11 @@ window.__probe = (async () => ({ control: await run('control'), bug: await run('
   .catch((e) => ({ error: String(e && e.stack || e) }));
 </script></body></html>`;
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const R = await raw3Page(PAGE);
 let code = 1;
 try {
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  await page.route('http://probe.local/**', (route) => {
-    const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (path === '/') return route.fulfill({ body: PAGE, contentType: 'text/html' });
-    const f = join(ROOT, path);
-    if (!f.startsWith(ROOT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
-    return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] ?? 'application/octet-stream' });
-  });
-  await page.goto('http://probe.local/');
-  const res = await Promise.race([page.evaluate(() => window.__probe), new Promise((r) => setTimeout(() => r({ error: 'probe timed out (40 s)' }), 40000))]);
+  const { errors } = R;
+  const res = await R.result(40000);
   console.log(JSON.stringify(res, null, 1));
   if (errors.length) console.log('page errors:', errors.slice(0, 5));
   let pass = 0, fail = 0;
@@ -97,5 +81,5 @@ try {
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   code = fail ? 1 : 0;
-} finally { await browser.close(); }
+} finally { await R.close(); }
 process.exit(code);
