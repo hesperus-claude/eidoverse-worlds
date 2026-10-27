@@ -8,39 +8,121 @@
  "tools/animnames-retry-test.ts": {
   "bare-wait": 1
  },
+ "tools/build-gate-test.ts": {
+  "own-ok": 1
+ },
  "tools/buildcheck-queue-test.ts": {
   "bare-wait": 6
  },
  "tools/buildcheck-route-test.ts": {
   "bare-wait": 1
  },
+ "tools/capsule-recovery-test.mjs": {
+  "own-ok": 1
+ },
+ "tools/channelbox-test.ts": {
+  "own-ok": 1
+ },
+ "tools/collider-test.ts": {
+  "own-ok": 1
+ },
  "tools/colour-picker-bench.ts": {
   "bare-wait": 3
  },
+ "tools/consent-switch-test.ts": {
+  "own-ok": 1
+ },
+ "tools/csp-test.ts": {
+  "own-ok": 1
+ },
  "tools/debug-tabs-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/descriptor-defaults-test.ts": {
+  "own-ok": 1
  },
  "tools/dismount-height-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
  },
  "tools/door-is-error-test.ts": {
+  "agent-url": 4,
   "bare-wait": 1,
-  "agent-url": 4
+  "own-ok": 1
+ },
+ "tools/editcommit-test.ts": {
+  "own-ok": 1
+ },
+ "tools/editor-range-test.ts": {
+  "own-ok": 1
+ },
+ "tools/editschema-test.ts": {
+  "own-ok": 1
+ },
+ "tools/environment-realizer-test.ts": {
+  "own-ok": 1
+ },
+ "tools/first-name-account-test.ts": {
+  "own-ok": 1
+ },
+ "tools/frames-layout-test.ts": {
+  "own-ok": 1
+ },
+ "tools/governor-xr-test.ts": {
+  "own-ok": 1
  },
  "tools/grant-command-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/grant-until-test.ts": {
+  "own-ok": 1
+ },
+ "tools/hierarchy-commit-test.ts": {
+  "own-ok": 1
+ },
+ "tools/history-request-test.ts": {
+  "own-ok": 1
+ },
+ "tools/keyhints-check.ts": {
+  "own-ok": 1
  },
  "tools/knockdown-test.ts": {
-  "bare-wait": 20
+  "bare-wait": 20,
+  "own-ok": 1
+ },
+ "tools/latestread-test.ts": {
+  "own-ok": 1
+ },
+ "tools/lite-graph-test.ts": {
+  "own-ok": 1
  },
  "tools/lying-support-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/models-field-test.ts": {
+  "own-ok": 1
+ },
+ "tools/msgrate-test.ts": {
+  "own-ok": 1
  },
  "tools/navgrid-test.ts": {
   "bare-wait": 1
  },
+ "tools/oldworlds-test.ts": {
+  "own-ok": 1
+ },
+ "tools/originof-test.ts": {
+  "own-ok": 1
+ },
  "tools/panels-test.ts": {
-  "bare-wait": 3
+  "bare-wait": 3,
+  "own-ok": 1
+ },
+ "tools/particles-test.ts": {
+  "own-ok": 1
  },
  "tools/places-test.ts": {
   "bare-wait": 7
@@ -100,8 +182,8 @@
   "raw-symlink": 7
  },
  "tools/protocol/parity-check.ts": {
-  "bare-wait": 5,
-  "raw-symlink": 3
+  "raw-symlink": 3,
+  "bare-wait": 5
  },
  "tools/protocol/party-probe.ts": {
   "bare-wait": 32
@@ -154,10 +236,51 @@
  "tools/reach-order-test.ts": {
   "bare-wait": 1
  },
+ "tools/retired-commands-test.ts": {
+  "own-ok": 1
+ },
+ "tools/role-grammar-test.ts": {
+  "own-ok": 1
+ },
+ "tools/rot-test.ts": {
+  "own-ok": 1
+ },
+ "tools/scriptnew-expect-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shadow-fade-test.mjs": {
+  "own-ok": 1
+ },
+ "tools/shape-attach-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-physics-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-render-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-repair-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shove-test.ts": {
+  "own-ok": 1
+ },
+ "tools/skystamp-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sockets-test.ts": {
+  "own-ok": 1
+ },
  "tools/support-swap-test.ts": {
-  "bare-wait": 2
+  "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/surface-hold-test.ts": {
+  "own-ok": 1
  },
  "tools/unknown-comp-test.ts": {
-  "bare-wait": 2
+  "bare-wait": 2,
+  "own-ok": 1
  }
 }
