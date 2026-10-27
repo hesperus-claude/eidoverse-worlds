@@ -17,8 +17,8 @@ const has = (k) => R.isOwner(me()) || me().permissions.includes(k);
 const isOwner = () => R.isOwner(me());
 const nameOf = (id) => { for (const [n, v] of identities) if (v === id) return n; return net.names?.[id] ?? replica.nameOf?.(id) ?? id; };
 const rankOfId = (id) => R.effectiveOf(wc(), id).rank;
-const ago = (ts) => { const s = Math.round((Date.now() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
-const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - Date.now()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
+const ago = (ts) => { const s = Math.round((serverNow() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - serverNow()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
 const badge = (id) => { const e = R.effectiveOf(wc(), id); const b = R.badgeOf(e); return b ? ` <span class="who-badge" data-tone="${b.tone}">${esc(b.text)}</span>` : ''; };
 async function act(verb, args, what, refresh) {
   const r = await sendRequest(verb, args);
@@ -122,7 +122,7 @@ function paintRoles(body) {
   const holders = (r) => { const ids = holdersOf(r.id); if (!ids.length) return '';
     return `<div class="rp-holders"><b>${esc(r.name)}</b>: ${ids.map((id) => `<span class="rp-holder">${esc(nameOf(id))}${grant && (isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank)) && r.id !== 'owner' ? ` <select class="rp-change" data-who="${esc(id)}"><option value="">change ▸</option>${R.grantableRoles(wc(), { ...me(), permissions: me().permissions }).filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}<option value="::remove">remove (default role)</option></select>` : ''}${timeOf(id, r, grant)}</span>`).join(' · ')}</div>`; };
   // a timed grant (upstream #258): picking a time restarts it from now, "no end" makes it permanent; ownership never ends
-  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, Date.now()))})</span>` : '';
+  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, serverNow()))})</span>` : '';
     if (!may || r.id === 'owner' || !(isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank))) return left;
     return `${left} <select class="rp-until" data-who="${esc(id)}"><option value="">ends ▸</option><option value="never">no end</option><option value="3600000">in 1 hour</option><option value="86400000">in 1 day</option><option value="604800000">in 1 week</option></select>`; };
   let html;
@@ -211,7 +211,7 @@ function paintAccess(body) {
     + `<p class="rp-dim">when set, guests can't come in; agents are exempt</p>`
     + `<p class="rp-dim">moderators and owners always get in${a.soft ? ` · recommended: ${a.soft}` : ''}</p>${warn}${edit ? '' : ro()}`;
   body.querySelectorAll('button[data-door]').forEach((bt) => { bt.onclick = () => { const d = bt.dataset.door; if (d === door) return;
-    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, Date.now())).length : 0;
+    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, serverNow())).length : 0;
     if (out && !confirm(`${out} ${out === 1 ? 'person' : 'people'} here ${out === 1 ? 'has' : 'have'} no role and will have to leave${d === 'watch' ? ' (they may watch)' : ''}. Close the door?`)) return;
     const ops = doorWrites(d, wc()).map((w) => ({ verb: 'set', args: { id: '@world', component: w.component, value: w.value } }));
     act(ops.length === 1 ? ops[0].verb : 'batch', ops.length === 1 ? ops[0].args : { ops }, `door: ${d}`).then(() => paintAccess(body)); }; });

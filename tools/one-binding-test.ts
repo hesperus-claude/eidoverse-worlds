@@ -56,6 +56,9 @@ const ROWS: Row[] = [
     forbidden: [/['"]KeyN['"]|key === ['"][nN]['"]/], raw: true },
   { name: "no controller button reveals names (xr.js never calls setReveal)", owner: [], scope: ["client/lib/xr.js"], forbidden: [/setReveal\(/] },
   { name: "a retired command's line is said before dispatch", owner: [], scope: [], forbidden: [], requires: [["client/lib/chat.js", /row\?\.retired\)\s*\{\s*logChat\('\*',\s*row\.retired\)/]] },
+  // a sky's ts, a role's until, an access list's end are the authority's stamps (tools/server-clock-readers-test.ts runs inspect.js's)
+  { name: "a server stamp is read on serverNow, never this machine's Date.now()", owner: ["client/lib/serverclock.js"],
+    scope: ["client/lib/sky.js", "client/lib/skypanel.js", "client/lib/materials.js", "client/lib/rolespanels.js", "client/lib/editpanels.js", "client/lib/inspect.js"], forbidden: [/\bDate\.now\(\)/] },
 ];
 for (const row of ROWS) {
   const scan = (row.scope ?? files).filter((f) => !row.owner.includes(f) && !(row.exempt ?? []).includes(f));

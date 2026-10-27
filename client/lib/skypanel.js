@@ -3,6 +3,7 @@
 
 import { sendOps } from './editwrites.js';
 import { bus, report } from './base.js';
+import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
 import { defsRegistry } from './defs.js';
 import { flashHint } from './ui.js';
 import { selectRow } from './rows.js';
@@ -51,7 +52,7 @@ export function paintSky(body) {
     const parts = [];
     if (a.system === 'skymesh') parts.push('basic sky');
     // what actually drives the sun: no tz follows Los Angeles, and a tz that doesn't resolve leaves the parked clock
-    const ec = effectiveClock({ ...a, ts: L.t0 }, Date.now());
+    const ec = effectiveClock({ ...a, ts: L.t0 }, serverNow());
     if (ec.mode === 'real') parts.push(`real clock (${ec.tz})`);
     else {
       const h = ((ec.hour % 24) + 24) % 24;

@@ -9,6 +9,7 @@ import { worldHistoryRows, historyView, HISTORY_MODES, mergeHistory } from './hi
 import { creditLine } from '../../shared/libcredits.js';
 import { THREE, scene } from './core.js';
 import { bus, CONFIG } from './base.js';
+import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
 import { entities, bagOf, avatarMounts } from './world.js';
 import { compEntries, compKeys } from '../../shared/protocol/view.js';
 import { requestDebug, sendRequest, replica, net } from './net.js';
@@ -117,7 +118,7 @@ function loadWorldDefs() {
 // the world's display name: @world's about.name, else the name in its address
 const worldName = () => replica.st?.entities?.['@world']?.c?.about?.name || CONFIG.world || 'World';
 // the World row says which world: 'World: <name>', the globe icon and a tooltip
-const worldRowFields = () => ({ t: 'list', k: 'wsel', rows: [{ id: WORLD_ID, icon: 'globe', kind: 'World', label: worldName(), sub: describeWorld(state.st, Date.now(), { presets: skyPresets, clock: false }), active: worldSel(),
+const worldRowFields = () => ({ t: 'list', k: 'wsel', rows: [{ id: WORLD_ID, icon: 'globe', kind: 'World', label: worldName(), sub: describeWorld(state.st, serverNow(), { presets: skyPresets, clock: false }), active: worldSel(),
   title: 'the world itself: its sky, weather, rules and settings. Click to edit them in the Inspector.' }, ...envRows()] });
 // @world's components hang under the World row so they can be found and removed: a click opens the card, ✕ removes.
 const ENV = [
@@ -1019,7 +1020,7 @@ function placeAhead(hash) { return Edits.copyBlueprint(hash, aheadPose()); }
 function worldBuildFields() {
   const owner = mayShape() !== false;
   const ro = owner ? {} : { disabled: true };
-  const now = Date.now();
+  const now = serverNow();
   const ch = worldChoice(state.st, { pal: groundPal, presets: skyPresets, now });
   const names = (o) => Object.keys(o ?? {}).filter((k) => k !== 'doc');
   const f = [
@@ -1044,7 +1045,7 @@ const WORLD_PICKS = { wsky: 'sky', wshape: 'shape', wtint: 'tint', wplant: 'plan
 /** A World tile: the pick as one request (shared/worldentity.js worldPick): one act, one Ctrl+Z. */
 function pickWorld(action, v) {
   const kind = action === 'wplant' && v === '@mow' ? 'mow' : WORLD_PICKS[action];
-  const r = worldPick(state.st, kind, v, { pal: groundPal, presets: skyPresets, now: Date.now(), mayShape: mayShape() });
+  const r = worldPick(state.st, kind, v, { pal: groundPal, presets: skyPresets, now: serverNow(), mayShape: mayShape() });
   if (r.errors.length) { flashHint(r.errors.join(' · '), 5000); return r; }
   Edits.sendOps(r.ops, { what: kind === 'mow' ? 'mowing' : `the ${kind === 'shape' || kind === 'tint' ? 'ground' : kind === 'plant' ? 'grass' : kind}`, expect: false });
   flashHint(kind === 'mow' ? 'field cleared' : html`${kind === 'plant' ? 'grass' : kind}: <b>${v}</b>`, 2500);
@@ -1154,7 +1155,7 @@ function histFailed(id, why, more = false) {
 function historyFields() {
   const id = worldSel() ? null : sceneSelected() ?? null;
   // re-read when the selection changes or the thing does (its components), or the world log moves (nothing selected)
-  const key = id ? `${id}|${JSON.stringify(Edits.compsOf(id))}` : `@|${entities.size}|${Math.floor(Date.now() / 3000)}`;
+  const key = id ? `${id}|${JSON.stringify(Edits.compsOf(id))}` : `@|${entities.size}|${Math.floor(serverNow() / 3000)}`;
   if (key !== hist.key) { hist.key = key; if (hist.id !== id) { hist.entries = []; hist.next = null; hist.who = null; hist.paged = false; hist.failed = null; histRetry.reset(); } hist.id = id; pacedRead(`history:${id ?? '@'}`, () => histLoad(id)); }
   const f = [{ t: 'info', label: id ? 'history of' : 'history', value: id ? (bagOf(id)?.label ?? id) : 'the whole world, newest first — select a thing for its own', hint: 'from the world log: who did what, when' }];
   const view = historyView(hist.entries, Edits.nameOf, { mode: hist.mode, who: hist.who });

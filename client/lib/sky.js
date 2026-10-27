@@ -9,6 +9,7 @@ import { THREE, scene, sun, hemi, renderer, camera } from './core.js';
 // ?shadowdebug=1 dims the fill to a fifth so the shadow map's coverage is legible (sun shadows read only ~10% darker)
 const SHADOW_DEBUG_FILL = new URLSearchParams(globalThis.location?.search ?? '').has('shadowdebug') ? 0.2 : 1;
 import { report, bus, tee, teeNow, CONFIG } from './base.js';
+import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
 import { loadEidoModule, primeFiles, listLibrary, fetchBytes } from './assets.js';
 import { markPhase } from './boot.js';
 import { bandCuts, bandedBakeRender, bakeGeneration } from './sky_baked.js';
@@ -282,7 +283,7 @@ const KNOWN_HEAVY = ['ringworld', 'shieldworld'];
 /** `ts`, the server stamp, makes every client's sun agree without the server simulating anything. */
 export async function applySky(args = {}, ts) {
   // folded args carry their own ts; the param is for un-folded callers (the tuner's preview)
-  clock = { args: { ...args }, t0: args.ts ?? ts ?? Date.now() };
+  clock = { args: { ...args }, t0: args.ts ?? ts ?? serverNow() };
   logged = { args: clock.args, t0: clock.t0 };
   previewing = false;
   await render();
@@ -290,7 +291,7 @@ export async function applySky(args = {}, ts) {
 
 /** The tuner's preview: same path, no new epoch. */
 export async function previewSky(args) {
-  clock = { args: { ...args }, t0: clock?.t0 ?? Date.now() };
+  clock = { args: { ...args }, t0: clock?.t0 ?? serverNow() };
   previewing = true;
   await render();
 }
@@ -312,7 +313,7 @@ export const skyDegraded = () => degrade >= 2;
 
 function nowHours() {
   // the fold's hours-rebase uses the same formula, which keeps the sun from snapping (#29)
-  return clock ? hoursAt({ ...clock.args, ts: clock.t0 }, Date.now()) : 12;
+  return clock ? hoursAt({ ...clock.args, ts: clock.t0 }, serverNow()) : 12;
 }
 
 // how far the sky has been degraded on this GPU:
@@ -751,7 +752,7 @@ async function buildSky(a, world, wantAudio) {
     forecastCursor = null; appliedWeather = null; appliedClouds = null; appliedColors = null;
     lastLiveHours = null;
     // the DERIVED weather (the authored field may be segments stale); mid-transition, the segment's previous state
-    const eff0 = effectiveSky(a, Date.now());
+    const eff0 = effectiveSky(a, serverNow());
     const w0 = (eff0.source === 'forecast' && eff0.inTransition && eff0.seg.prevState)
       ? eff0.seg.prevState : eff0.weather;
     skyApi = await globalThis.makeSky({
@@ -979,7 +980,7 @@ function applyLive(a) {
     changed = true;
   }
   // derived in shared/forecast.js, as the sequencer and agents do, so all agree without the server simulating
-  const eff = effectiveSky(a, Date.now(), forecastCursor);
+  const eff = effectiveSky(a, serverNow(), forecastCursor);
   forecastCursor = eff.cursor;
   if (eff.weather) {
     const key = `${eff.weather}|${(eff.k ?? 1).toFixed(2)}`;
@@ -987,7 +988,7 @@ function applyLive(a) {
       const fresh = appliedWeather === null;
       if (fresh && eff.source === 'forecast' && eff.inTransition && eff.seg.prevState) {
         // mid-transition: ease over the REMAINING time, finishing when everyone else's does
-        const remain = Math.max(1, (eff.seg.startMs + eff.seconds * 1000 - Date.now()) / 1000);
+        const remain = Math.max(1, (eff.seg.startMs + eff.seconds * 1000 - serverNow()) / 1000);
         skyApi.transitionTo?.(eff.weather, eff.k ?? 1, remain);
       } else if (!fresh && eff.seconds) {
         skyApi.transitionTo?.(eff.weather, eff.k ?? 1, eff.seconds);
