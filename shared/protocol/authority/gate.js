@@ -53,6 +53,8 @@ class Admitted { constructor(who, ops, after, notes = [], vacate = [], followUps
 // L7 rate over EVERYTHING the actor makes the log hold (acts and says): admit calls it for state writes, and every word
 // that logs without one (say, use, a teleport, a lift, a return put, a volley punt) calls it before appending. A refused
 // write is logged (R7, authority.js logRefusal) inside the same budget.
+// the cap kinds whose writes spend the L7 rate (admit and commit both ask): none, a reaction, a handle, a caption
+const rated = (cap) => !cap || cap.kind === "reaction" || cap.kind === "handle" || cap.kind === "caption";
 function rateCheck(w, actor, kind = "act", extra = 0) {
   if (w.leaving === actor) return; // a disconnect's settlement is the authority's duty, not the leaver's request: never rate-refused
   const r = rateOf(w, actor); const cap = w.kindOf?.(actor) === "anon" ? RATE.anonBytes : RATE.bytes;
@@ -77,7 +79,7 @@ export const REPAIR_COMP = (c) => c === "access" || c === "default-role" || c ==
 const operatorRepairs = (who, op) => !!CTX.operator && CTX.operator === who.actor && !who.cap && op.id === "@world" && REPAIR_COMP(op.comp) && (op.verb === "set" || op.verb === "delete");
 function admit(w, st, who, ops) {
   const { actor, cap } = who;
-  if (!cap || cap.kind === "reaction" || cap.kind === "handle" || cap.kind === "caption") rateCheck(w, actor);
+  if (rated(cap)) rateCheck(w, actor);
   // preLifted: commit() lifted them already (so its reference clearing saw the lift's deletes), and passes the lift's notes
   const lifted = who.lifting ? { ops, notes: [] } : who.preLifted ? { ops, notes: who.preLifted } : liftOps(st, ops, w.everIds()); ops = lifted.ops;
   if (!ops.length) refuse("nothing", "that changes nothing", "");
@@ -366,4 +368,4 @@ function rolesCheck(st, s, ops) {
   if (bad) refuse(bad.code, `@world.role-defs: ${bad.reason}`, bad.fix, bad.didYouMean ? { didYouMean: bad.didYouMean } : undefined);
   // who fields that name a removed custom role read as owner (whoRank): nothing opens; nothing else to check here
 }
-export { Admitted, SAY_MAX, admit, lacks, lockCheck, needWords, rateCheck, spokenOf };
+export { Admitted, SAY_MAX, admit, lacks, lockCheck, needWords, rateCheck, rated, spokenOf };
