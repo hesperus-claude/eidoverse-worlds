@@ -12,6 +12,9 @@ import { readdirSync } from "node:fs";
 import sharp from "sharp";
 import { validatePose, validateTracks, tracksSpan, poseReport, HUMANOID_BONES, mergePose, puppetPose } from "../shared/humanoid.js";
 import { rigBonesFor } from "./rigbones.ts";
+/** How long the door waits on one world-server read before the tool answers as failed (a hung server never holds a turn). */
+export const HTTP_READ_MS = 10_000;
+const READ = () => ({ signal: AbortSignal.timeout(HTTP_READ_MS) });
 import { CONTACT_POINTS, canonicalPoint } from "../shared/contact.js";
 import { inspectSchema, editOps, describeSchema } from "../shared/editschema.js";
 import * as OP from "../shared/protocol/requests.js";
@@ -153,7 +156,7 @@ const MODELS_DIR = process.env.EIDOVERSE_DIR
  *  objects are findable), falling back to a local dir scan only when a checkout exists. */
 async function searchLibrary(httpBase: string, query: string): Promise<{ path: string; name?: string }[]> {
   try {
-    const r = await fetch(`${httpBase}/library-models?q=${encodeURIComponent(query)}`);
+    const r = await fetch(`${httpBase}/library-models?q=${encodeURIComponent(query)}`, READ());
     if (r.ok) return ((await r.json()) as { path: string; name?: string }[]).slice(0, 24);
   } catch { /* sequencer route unreachable: scan what we can see, if anything */ }
   if (!MODELS_DIR) return [];
@@ -382,7 +385,7 @@ const CHECK_MODEL = async (ag: WorldAgent, a: Record<string, any>) => {
   let r: any;
   // a placed thing is checked as placed: at its scale (the body is not scaled)
   const scale = e ? (e.scale && e.scale > 0 ? e.scale : 1) : (typeof a.scale === "number" && a.scale > 0 ? a.scale : 1);
-  try { r = await (await fetch(`${ag.httpBase}/check?lib=${encodeURIComponent(lib)}${scale !== 1 ? `&scale=${scale}` : ""}`)).json(); }
+  try { r = await (await fetch(`${ag.httpBase}/check?lib=${encodeURIComponent(lib)}${scale !== 1 ? `&scale=${scale}` : ""}`, { signal: AbortSignal.timeout(3 * HTTP_READ_MS) })).json(); }
   catch (err) { return fail(`the check could not be reached: ${String((err as Error)?.message ?? err)}`); }
   if (r.error) return fail(`couldn't check ${lib}: ${r.error}`);
   return text(describeCheck(`${e ? `[${ag.refName(e.id)}] ` : ""}${lib}${r.scale && r.scale !== 1 ? ` at scale ${r.scale}` : ""}`, r, e ? ag.placesOn(e).length : 0, e?.id, e?.collide));
@@ -501,7 +504,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
     return await screenshotTool(ag, typeof a.view === "string" ? a.view : "first", at,
     typeof a.renderer === "string" ? a.renderer : "auto", { dist: a.dist, height: a.height, pitch: a.pitch }); },
   set_avatar: async (ag, a, ctx, name) => {
-      const roster = (await (await fetch(`${ag.httpBase}/avatars`)).json()) as { name: string; path: string }[];
+      const roster = (await (await fetch(`${ag.httpBase}/avatars`, READ())).json()) as { name: string; path: string }[];
       const want = String(a.avatar ?? "").trim();
       if (!want) return text(`bodies on the roster: ${roster.map((r) => r.name).join(", ")}`);
       const path = want.includes("/") ? want : roster.find((r) => r.name === want)?.path;
@@ -566,7 +569,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
         const miss = (reason: string, mayRetry: boolean) => { if (!whys.includes(reason)) whys.push(reason); retry ||= mayRetry; };
         for (const url of tries) {
           let r: Response;
-          try { r = await fetch(url); } catch (e) { miss((e as Error).message || "the request failed", true); continue; }
+          try { r = await fetch(url, READ()); } catch (e) { miss((e as Error).message || "the request failed", true); continue; }
           if (r.status === 404) continue;
           if (!r.ok) { miss(`it answered ${r.status}`, r.status >= 500 || r.status === 408 || r.status === 429); continue; }
           let data: string;
@@ -582,10 +585,10 @@ export const HANDLERS: Record<string, ToolHandler> = {
       const page = Math.max(1, Math.floor(Number(a.page) || 1));
       let items: { name: string; url: string | null; h?: number | null }[];
       if (kind === "avatars") {
-        const roster = (await (await fetch(`${ag.httpBase}/avatars`)).json()) as { name: string; height?: number | null }[];
+        const roster = (await (await fetch(`${ag.httpBase}/avatars`, READ())).json()) as { name: string; height?: number | null }[];
         items = roster.map((r) => ({ name: r.name, url: `${ag.httpBase}/thumb/${encodeURIComponent(r.name)}.png`, h: r.height ?? null }));
       } else {
-        const hits = (await (await fetch(`${ag.httpBase}/library-models`)).json()) as { path: string; name: string; preview: string | null }[];
+        const hits = (await (await fetch(`${ag.httpBase}/library-models`, READ())).json()) as { path: string; name: string; preview: string | null }[];
         items = hits.map((h) => ({
           // library files: the filename IS the spawnable identity; store items: the hash filename means nothing, show the name
           name: h.path.startsWith("store/") ? h.name : h.path.split("/").pop()!.replace(/\.glb$/i, ""),
@@ -601,7 +604,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       const tiles = await Promise.all(slice.map(async (it) => {
         if (!it.url) return { name: it.name, data: null, mime: "", h: it.h };
         try {
-          const r = await fetch(it.url);
+          const r = await fetch(it.url, READ());
           if (!r.ok) return { name: it.name, data: null, mime: "", h: it.h };
           return { name: it.name, data: await r.arrayBuffer(), mime: r.headers.get("content-type")?.split(";")[0] ?? "image/png", h: it.h };
         } catch { return { name: it.name, data: null, mime: "", h: it.h }; }
@@ -1081,7 +1084,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       // error. As this identity (readHeaders): a members-only world's geometry answers only its members. One request
       let d: any;
       let status = 0;
-      try { const r = await fetch(`${base}/geom?${q}`, { headers: ag.readHeaders }); status = r.status;
+      try { const r = await fetch(`${base}/geom?${q}`, { headers: ag.readHeaders, ...READ() }); status = r.status;
         // who this body is, which calling again doesn't change: say who can
         if (r.status === 401 || r.status === 403) return fail(`measure: nothing was measured; ${keyRefused(r.status)}`);
         try { d = await r.json(); } catch { return fail(`measure: the world server answered ${r.status} with something that isn't geometry, so nothing was measured`); } }
