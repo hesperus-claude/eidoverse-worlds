@@ -3,7 +3,7 @@
 // stay in server.ts, where the source-text gates pinning settledPose expect them.
 // tools/voice-wiring-test.ts regexes THIS file's source: moving a body means moving its patterns with it.
 
-import { WORLDS_DIR } from "./config.ts";
+import { WORLDS_DIR, FRAME_SKIP_BUFFERED } from "./config.ts";
 import { LIMITS } from "./limits.ts";
 import { sanePose } from "./posecheck.ts";
 import { gateReach } from "./reachgate.ts";
@@ -61,6 +61,11 @@ export type MsgCtx = {
 /** 1..PAGE_MAX, else the default: NaN or 1.5 never equals a page's length, so readHistory's ceiling would never stop it. */
 export const pageLimit = (v: unknown): number => { const n = Number(v ?? LIMITS.PAGE_DEFAULT); return Number.isInteger(n) && n >= 1 ? Math.min(LIMITS.PAGE_MAX, n) : LIMITS.PAGE_DEFAULT; };
 
+/** A moment, not a fact: a socket still holding a backlog skips it rather than queueing another 64 KB (security review M5). */
+export function relayLossy(w: Pick<World, "clients">, msg: unknown, except?: Client) {
+  const data = JSON.stringify(msg);
+  for (const t of w.clients) if (t !== except && (t.ws.getBufferedAmount?.() ?? 0) <= FRAME_SKIP_BUFFERED) t.ws.send(data);
+}
 export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
   "history": ({ c, ws, now, expel }, msg) => {
     // speech is arrival-only: a page holds only lines said since this connection arrived, unless an admin's (owner,
@@ -117,7 +122,7 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       return;
     }
     // a packet without replace REPLACES the previous animation (legacy); a merge must say replace: false
-    c.world.broadcast({ type: "anim", id: c.id, dur: msg.dur, tracks: msg.tracks, loop: !!msg.loop, replace: msg.replace !== false }, c);
+    relayLossy(c.world, { type: "anim", id: c.id, dur: msg.dur, tracks: msg.tracks, loop: !!msg.loop, replace: msg.replace !== false }, c);
   },
   "puppet": ({ c, ws, now, expel }, msg) => {
     // ROUTED to the target, not broadcast: each client owns its avatar (DESIGN.md), so a puppet is a REQUEST it may refuse

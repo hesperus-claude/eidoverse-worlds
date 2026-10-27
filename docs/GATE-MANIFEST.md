@@ -316,28 +316,29 @@ time.
 | 146 | animnames-retry | main | `tools/animnames-retry-test.ts` | bun | 2.5 s | 180 s |
 | 147 | snapshots | main | `tools/bun-test.ts tools/snapshots-test.ts` | bun | 9 s | 180 s |
 | 148 | snapframe-render | main | `tools/snapframe-render-test.ts` | bun | 0.1 s | 180 s |
-| 149 | panels | main | `tools/panels-test.ts` | bun | 1 s | 180 s |
-| 150 | surface-hold | main | `tools/surface-hold-test.ts` | bun | 19 s | 180 s |
-| 151 | particles | main | `tools/particles-test.ts` | bun | 1 s | 180 s |
-| 152 | shadow-fade | main | `tools/shadow-fade-test.mjs` | bun | 1 s | 180 s |
-| 153 | frames-layout | main | `tools/frames-layout-test.ts` | bun | 1 s | 180 s |
-| 154 | models-field | main | `tools/models-field-test.ts` | bun | 1 s | 180 s |
-| 155 | importer | main | `tools/protocol/importer-check.ts` | bun | 1.2 s | 180 s |
-| 156 | eidosim-v1 | main | `tools/protocol/import-v1/eidosim-v1-test.ts` | bun | 0.2 s | 180 s |
-| 157 | render-scene-import | main | `tools/render-scene-import-test.ts` | bun | ? | 300 s |
-| 158 | channelbox | main | `tools/channelbox-test.ts` | bun | ? | 300 s |
-| 159 | last-world | main | `tools/last-world-test.ts` | bun | 0.6 s | 180 s |
-| 160 | event-wire | main | `tools/event-wire-test.ts` | bun | 0.1 s | 180 s |
-| 161 | browser | browser | `tools/protocol/browser-check.ts` | Chromium | 1.5 s | 180 s |
-| 162 | client | browser | `tools/protocol/client-check.ts` | Chromium | 60 s | 300 s |
-| 163 | refusedjoin | browser | `tools/protocol/refusedjoin-check.ts` | Chromium | 126 s | 630 s |
-| 164 | client-b2 | browser | `tools/protocol/batch2-probe.ts` | Chromium | 19 s | 180 s |
-| 165 | build-client | browser | `tools/protocol/build-probe.ts` | Chromium | 8.1 s | 180 s |
-| 166 | shiplist-probe | browser | `tools/protocol/shiplist-probe.ts` | Chromium | 197 s | 985 s |
-| 167 | xss-probe | browser | `tools/protocol/xss-probe.ts` | Chromium | 15 s | 180 s |
-| 168 | party-probe | browser | `tools/protocol/party-probe.ts` | Chromium | 486 s | 2430 s |
-| 169 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
-| 170 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
+| 149 | anim-backpressure | main | `tools/anim-backpressure-test.ts` | bun | 0.3 s | 180 s |
+| 150 | panels | main | `tools/panels-test.ts` | bun | 1 s | 180 s |
+| 151 | surface-hold | main | `tools/surface-hold-test.ts` | bun | 19 s | 180 s |
+| 152 | particles | main | `tools/particles-test.ts` | bun | 1 s | 180 s |
+| 153 | shadow-fade | main | `tools/shadow-fade-test.mjs` | bun | 1 s | 180 s |
+| 154 | frames-layout | main | `tools/frames-layout-test.ts` | bun | 1 s | 180 s |
+| 155 | models-field | main | `tools/models-field-test.ts` | bun | 1 s | 180 s |
+| 156 | importer | main | `tools/protocol/importer-check.ts` | bun | 1.2 s | 180 s |
+| 157 | eidosim-v1 | main | `tools/protocol/import-v1/eidosim-v1-test.ts` | bun | 0.2 s | 180 s |
+| 158 | render-scene-import | main | `tools/render-scene-import-test.ts` | bun | ? | 300 s |
+| 159 | channelbox | main | `tools/channelbox-test.ts` | bun | ? | 300 s |
+| 160 | last-world | main | `tools/last-world-test.ts` | bun | 0.6 s | 180 s |
+| 161 | event-wire | main | `tools/event-wire-test.ts` | bun | 0.1 s | 180 s |
+| 162 | browser | browser | `tools/protocol/browser-check.ts` | Chromium | 1.5 s | 180 s |
+| 163 | client | browser | `tools/protocol/client-check.ts` | Chromium | 60 s | 300 s |
+| 164 | refusedjoin | browser | `tools/protocol/refusedjoin-check.ts` | Chromium | 126 s | 630 s |
+| 165 | client-b2 | browser | `tools/protocol/batch2-probe.ts` | Chromium | 19 s | 180 s |
+| 166 | build-client | browser | `tools/protocol/build-probe.ts` | Chromium | 8.1 s | 180 s |
+| 167 | shiplist-probe | browser | `tools/protocol/shiplist-probe.ts` | Chromium | 197 s | 985 s |
+| 168 | xss-probe | browser | `tools/protocol/xss-probe.ts` | Chromium | 15 s | 180 s |
+| 169 | party-probe | browser | `tools/protocol/party-probe.ts` | Chromium | 486 s | 2430 s |
+| 170 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
+| 171 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
 
-Lanes: core 17 suites (~78 s), main 143 (~1420 s), browser 10 (~1123 s); 170 suites in all.
+Lanes: core 17 suites (~78 s), main 144 (~1421 s), browser 10 (~1123 s); 171 suites in all.
 <!-- END GENERATED -->
