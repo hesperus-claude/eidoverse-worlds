@@ -227,7 +227,7 @@ export const FEATURE_SETS: Record<string, FeatureSetDecl> = {
   },
   "eidoverse.travel": {
     description:
-      "Walking between the worlds this server fronts, without dropping the connection. Two lanes, one mechanism: the `travel` tool, and `channels/open` naming a sibling world (a generic host that only knows MCPL can travel without knowing our tool names). Authorization is `channels.lifecycle` — a host that declines it keeps a resident who cannot leave, which is exactly today's behavior.",
+      "Walking between the worlds this server fronts, without dropping the connection, through the `travel` tool (`channels/open` opens only the current world; a sibling world's id there is an unknown channel). Authorization is `channels.lifecycle` — a host that declines it keeps a resident who cannot leave, which is exactly today's behavior.",
     uses: [CAP.channelsLifecycle, CAP.tools],
   },
   "eidoverse.typing": {
