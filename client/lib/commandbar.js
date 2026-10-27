@@ -4,6 +4,7 @@
 import { list, grouped } from './actions.js';
 import { svg, has, rsvg, hasLine, fsvg, hasFill } from './icons.js';
 import { escapeHtml as esc } from './markup.js';
+import { bus } from './base.js';
 
 const SEEN_LS = 'ew-lantern-seen';
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
@@ -33,7 +34,7 @@ export function openLantern(text = '') {
   input.focus();
   try { localStorage.setItem(SEEN_LS, '1'); } catch { /* private mode */ }
   if (pill?.classList.contains('fresh')) { pill.classList.remove('fresh'); paintPill(); }
-  dispatchEvent(new CustomEvent('lantern'));   // the rail's search entry lights with it (ui.js)
+  bus.emit('lantern');   // the rail's search entry lights with it (ui.js)
 }
 
 export function closeLantern() {
@@ -47,7 +48,7 @@ export function closeLantern() {
     else input.blur();
   }
   prevFocus = null;
-  dispatchEvent(new CustomEvent('lantern'));
+  bus.emit('lantern');
 }
 
 // ---------------------------------------------------------------- rows

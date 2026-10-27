@@ -255,7 +255,7 @@ function placeMic() {
   }
 }
 addEventListener('resize', placeMic);
-addEventListener('dockmoved', placeMic);   // while the rail is dragged
+bus.on('dock-moved', placeMic);   // while the rail is dragged
 setInterval(placeMic, 2000);          // safety net only
 // the glyph REFLECTS state, never owns it: every surface that changes hush/consent repaints it
 bus.on('audio:hush', paint);

@@ -155,8 +155,8 @@ function endFlash() { releaseStatus('flash'); }
 el.hint.onpointerenter = () => { hovering = true; };
 el.hint.onpointerleave = () => { hovering = false; };
 // the engaged gesture's keys (keyhints.js engage/release): what the keys do RIGHT NOW, while the hand is on something
-addEventListener('ew-keyhint', (e) => {
-  if (e.detail) claimStatus('keys', { priority: 2, content: html`<span>${e.detail}</span>` }); else releaseStatus('keys');
+bus.on('keyhint', (h) => {
+  if (h) claimStatus('keys', { priority: 2, content: html`<span>${h}</span>` }); else releaseStatus('keys');
 });
 
 // ============================================================ cursors
@@ -531,7 +531,7 @@ function initPanels() {
 // the lantern prompt (Ctrl/Cmd+K): an action entry, lit while open; no lantern row (it would open the prompt you're in)
 const SEARCH_ENTRY = { id: 'search', icon: 'magnifying-glass', label: 'Search & commands', noAction: true,
   action: () => (isLanternOpen() ? closeLantern() : openLantern()), active: () => isLanternOpen() };
-addEventListener('lantern', () => paintDock());
+bus.on('lantern', () => paintDock());
 // "Chat · Enter": the key is read from actions.js at paint time, so a key table merged in later shows up
 const DOCK_NAME = { search: 'Search & commands', edit: 'Builder mode', moderation: 'Moderation', 'world-settings': 'World settings' };
 function dockTitle(entry, suffix = '') {
@@ -565,7 +565,7 @@ export function initDock(entries) {
     const move = (ev) => {
       // LIVE snap: the rail rides its nearest edge THROUGHOUT the drag
       applyDockEdge(edgeFromPointer(ev));
-      dispatchEvent(new CustomEvent('dockmoved'));
+      bus.emit('dock-moved');
     };
     const up = (ev) => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up);
@@ -743,7 +743,7 @@ function initEMenu() {
   layoutBar.querySelector('.lb-done').onclick = () => setLayoutMode(false);
   document.body.appendChild(layoutBar);
   addEventListener('resize', () => { paintLayoutBar(); if (!m.hidden) { anchorBeside(m); placeSub(); } });
-  addEventListener('dockmoved', () => { paintLayoutBar(); if (!m.hidden) { anchorBeside(m); placeSub(); } });
+  bus.on('dock-moved', () => { paintLayoutBar(); if (!m.hidden) { anchorBeside(m); placeSub(); } });
 
   // Esc: the deepest level first (flyout, menu, layout mode); windows.js's escapeIsClaimed yields to all three
   addEventListener('keydown', (e) => {

@@ -418,7 +418,7 @@ function enter() {
   for (const e of [top, tools, left, right, lsplit, rsplit]) e.hidden = false;
   els.vbar.hidden = false;
   document.body.classList.add('edit-workspace');
-  dispatchEvent(new CustomEvent('dockmoved'));   // the ∃ just moved into the corner: re-seat its glyphs now (mictoggle.placeMic listens)
+  bus.emit('dock-moved');   // the ∃ just moved into the corner: re-seat its glyphs now (mictoggle.placeMic listens)
   const bd = getFrame('build'), h = getFrame('hierarchy'), i = getFrame('inspector'), c = getFrame('chat');
   bd?.dock(left); h?.dock(left);
   left.prepend(tabs, ...[bd?.el, h?.el].filter(Boolean));   // tabs, then both pages, above the splitter
@@ -449,7 +449,7 @@ function exit() {
   els.vbar.hidden = true;
   document.body.classList.remove('edit-workspace');
   unfitDock();
-  dispatchEvent(new CustomEvent('dockmoved'));   // …and back beside the HUD's ∃
+  bus.emit('dock-moved');   // …and back beside the HUD's ∃
   setShade('shaded');
   if (isolating()) setIsolate(null, (id) => replica.st?.entities?.[id]?.c?.parent?.to ?? null, Object.keys(replica.st?.entities ?? {}));   // the view is whole again outside edit mode
   const c = getFrame('chat');
