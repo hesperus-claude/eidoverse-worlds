@@ -86,8 +86,10 @@ out = ag.look();
 check("an invalid source is refused at the door now (batch 2: the door judges picture sources) and nothing changes", !bad.ok && bad.refused?.code === "shape" && !/smuggled/.test(out), JSON.stringify([bad.refused, out.split("\n").find((l) => l.includes("console"))]));
 await act("delete", { id: "console", component: "picture" }, { who: "antra" });
 check("a removed picture is gone from look()", !/a picture/.test(ag.look()));
-await act("set", { id: "console", component: "recipe", value: { x: 1 } }, { who: "antra" });
-check("other component types still read as they did", /components: recipe/.test(ag.look()), ag.look().split("\n").find((l) => l.includes("console")));
+// a bare unregistered name is refused (PROTOCOL §4); someone's own component carries a namespace
+const rOther = await act("set", { id: "console", component: "example.org/recipe", value: { x: 1 } }, { who: "antra" });
+check("the door takes a namespaced component (the setup)", rOther.ok, JSON.stringify(rOther.refused));
+check("other component types still read as they did", /components: example\.org\/recipe/.test(ag.look()), ag.look().split("\n").find((l) => l.includes("console")));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
