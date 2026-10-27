@@ -45,7 +45,7 @@ export function pngFromDataURL(value: unknown): Buffer | null {
 
 // ROAMING RENDERERS (`roam`): a snapshot of an unserved world sends an idle roamer there (`renderer-travel`); it stays
 // until another world needs it. One deadline (`budgetMs`, under a host's 60 s per call) covers journey, wait and frame.
-export function createSnapshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, maxPending = 16, now = Date.now,
+export function createSnapshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, maxPending = 16, now = () => performance.now(),   // intervals only: monotonic
   travelMs = 25_000, arrivalTimeoutMs = 40_000, pollMs = 200, recentMs = 5 * 60_000,
   queueMs = 20_000, maxQueued = 16, maxQueuedTotal = 64, budgetMs = 55_000, settleMarginMs = 2_000, pinnedGraceMs = 120_000, sweepAfterMs = 30_000,
   sweepBackoffMs = 15_000, sweepBackoffMaxMs = 10 * 60_000,
