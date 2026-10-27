@@ -7,6 +7,7 @@
 //    (tools/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
 // 7. the agent's blueprints / blueprint_place / look() over the library, its door the scratch door
 // 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet); 4, 5, 8 went with v1.
+import { noWorldUrl } from './no-world.ts';
 import "./protocol/fixture-ids.ts";  // fixtures seed the ids they read (writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -305,7 +306,7 @@ console.log('\n7. the text tier — blueprints, blueprint_place, look() (mcpl), 
   const pub = W.call('publish', { from: 'lamp', name: 'Lamp' });
   const H = pub.notes.find((n: any) => n.record).record as string, hex = H.slice(7);
   W.call('create', { id: 'lampa', from: H, at: { pos: [2, 0, 2] } });
-  const ag: any = new WorldAgent({ name: 'eye' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const sync = () => { ag.st = W.view(); ag.replica = { st: W.state(), active: true }; ag.reconcileFromFold(); };
   sync();
   // every handler reaches the authority through request() (there is no door()); here the in-process world

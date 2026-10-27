@@ -15,6 +15,7 @@
 // the SOURCE (the settled-pose-test pattern), so reverting a call site fails
 // the suite.
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,7 @@ function ok(cond: unknown, label: string) {
 const BAG = { hips: [-0.6186, 0.2801, 0.3753, 0.6308] } as Record<string, number[]>;
 
 function agent(): any {
-  return new WorldAgent({ name: "prov-test", world: "prov-test" }) as any;
+  return new WorldAgent({ url: noWorldUrl(), name: "prov-test", world: "prov-test" }) as any;
 }
 
 console.log("authored poses (setPose):");

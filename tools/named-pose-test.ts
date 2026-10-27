@@ -1,5 +1,6 @@
 // named-pose-test: every registered pose name (plus a synthetic one on the wire rows) through every owner and reader; shared/wingpresence.js.
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/named-pose-test.ts (the browser parts re-run this file with --part, for their own mocks)
+import { noWorldUrl } from "./no-world.ts";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 
@@ -102,7 +103,7 @@ async function wirePart() {
     check("an older restore's boolean wingsFolded restores the fold", got.at(-1) === true); }
 
   console.log("\nWINGS: POSTURE IS NOT PROPULSION");
-  const ag: any = new WorldAgent({ name: "mythos", world: "pose-bench" });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: "mythos", world: "pose-bench" });
   ag.bodyBoneNames = ["Hip", "Spine02", "Head", ...WING_BONES];
   ag.loadBodyBones = async () => ag.bodyBoneNames;
   ag.myRights = { role: "builder", fly: false };
@@ -123,7 +124,7 @@ async function wirePart() {
   ag.myRights = { role: "builder", fly: true };
   const tookOff = await ag.takeOff();
   check("after unfold, a granted body can take off", tookOff.ok && /took off/.test(tookOff.text), tookOff.text);
-  const wingless: any = new WorldAgent({ name: "wingless", world: "pose-bench" });
+  const wingless: any = new WorldAgent({ url: noWorldUrl(), name: "wingless", world: "pose-bench" });
   wingless.bodyBoneNames = ["Hip", "Spine02", "Head"];
   wingless.loadBodyBones = async () => wingless.bodyBoneNames;
   const winglessFold = await wingless.foldWings(true);
@@ -132,7 +133,7 @@ async function wirePart() {
   const released = await wingless.foldWings(false);
   check("a wingless swap can always release a carried folded posture", released.ok && /posture released/.test(released.text) && wingless.wingsFolded === false, released.text);
   const foldActs: string[] = [];
-  const watcher: any = new WorldAgent({ name: "watcher", world: "pose-bench" });
+  const watcher: any = new WorldAgent({ url: noWorldUrl(), name: "watcher", world: "pose-bench" });
   watcher.gate = { act: (_id: string, key: string) => foldActs.push(key) };
   const still = { p: [0, 0, 0], yaw: 0, speed: 0, clip: "idle" };
   watcher.noteActs("mythos", null, { ...still, poses: [WINGS_FOLDED] });

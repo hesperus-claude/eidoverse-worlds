@@ -15,6 +15,7 @@
 // The presence gate holds a leave for EW_LEAVE_HOLD_SEC (45s default) to
 // collapse reconnect flaps. Set to zero BEFORE the modules load — the gate
 // reads its env at import — so the exit lands on the next tick.
+import { noWorldUrl } from "./no-world.ts";
 process.env.EW_LEAVE_HOLD_SEC = "0";
 
 const { pingLine, pingDelivery } = await import("../mcpl/ping-wire.ts");
@@ -83,7 +84,7 @@ const P = (kind: any, text?: string) => ({ ts: 1, kind, who: "digi", ...(text !=
 // ---------------------------------------------------------------- disconnect after a delivered approach: one exit, one line
 
 {
-  const ag = new WorldAgent({ name: "wiretest" }) as any;
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "wiretest" }) as any;
   ag.pos = { x: 0, y: 0, z: 0 };
   const T0 = Date.now();
   const pings: any[] = []; const events: any[] = [];

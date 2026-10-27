@@ -14,6 +14,7 @@
 //
 // the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
 // (tools/protocol/scratchworld.ts).
+import { noWorldUrl } from './no-world.ts';
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -250,7 +251,7 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   W.call('sky', { hours: 17.6, clouds: 'cumulus' });
   W.call(...terrainReq(terrainArgs(PAL, { seed: 7, shape: 'hills', tint: 'meadow' })));
   W.call('create', { id: 'pivot', components: { transform: { pos: [1, 0, 1] } } });
-  const ag = new WorldAgent({ name: 'eye' });
+  const ag = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const A = ag as any;
   // the agent's world is the view; its door is this scratch world's real door (dry runs answered by the door itself)
   const sync = () => { A.st = W.view(); A.replica = { st: W.state() }; A.reconcileFromFold(); };   // componentsOf (edit's expect pins) reads the replica's state

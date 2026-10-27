@@ -4,6 +4,7 @@
 // TOOL_FOLDS) is checked through the tool that does it now; a refusal that moved to the world's authority is gone
 // here, with a note saying where it's pinned. body_state/reach use this protocol's facts: o.pose.clip is a clip,
 // a seat is left with detach, a reach is released with reach {release: true}.
+import { noWorldUrl } from "./no-world.ts";
 import { mkCheck } from "./harness.ts";
 import { tryUntil } from "./protocol/wait.ts";
 import { handleTool, screenshotTool, snapCallBudgetMs, TOOLS } from "../mcpl/tools.ts";
@@ -585,7 +586,7 @@ try {
   const linked = await ask("l0", "contacts", scene(...chain));
   check("reaches that link more than 64 bodies say one reading follows at most 64",
     linked.error === "l0's joints and contacts weren't read: the reaches around this body link more than 64 bodies, and one reading follows at most 64", linked.error);
-  const rider: any = new WorldAgent({ name: "rider", world: "w" });
+  const rider: any = new WorldAgent({ url: noWorldUrl(), name: "rider", world: "w" });
   rider.selfObservedAt = Date.now();
   rider.mounts.set("rider", { to: "nowhere", slot: "seat" });
   const unseated = await rider.bodyState("rider");
@@ -617,7 +618,7 @@ try {
   const elbow = said(await call("reach", { point: "elbow_x" }));
   check("a contact point that isn't one is named, with the ones there are",
     /^there's no contact point called "elbow_x", so nothing was reached; the points are hand_l, /.test(elbow), elbow);
-  const hand: any = new WorldAgent({ name: "hand", world: "w" });
+  const hand: any = new WorldAgent({ url: noWorldUrl(), name: "hand", world: "w" });
   hand.reachBodies.set(hand.avatar, null);   // its own model didn't load
   check("an unknown limb is named, with the ones there are",
     (await hand.reach("tentacle", { p: [0, 1, 0] })).text === `there's no limb called "tentacle", so nothing was reached; limb takes leftHand, rightHand, leftFoot or rightFoot`);
@@ -653,7 +654,7 @@ try {
 
   console.log("\nTHE BODY");
   const bodies: any[] = [];
-  const ag: any = new WorldAgent({ name: "nj", world: "w" });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: "nj", world: "w" });
   bodies.push(ag);
   const thrown = (fn: () => unknown) => { try { fn(); return ""; } catch (e) { return (e as Error).message; } };
   // a send over the body's own connection: every world verb here is request(), so a body-side send (animate) stands in
@@ -668,7 +669,7 @@ try {
   const endedMod = thrown(() => ag.sendMod("world-bans"));
   check("...and so does a moderation message", /has ended for good/.test(endedMod), endedMod);
 
-  const pilot: any = new WorldAgent({ name: "pilot", world: "w" });
+  const pilot: any = new WorldAgent({ url: noWorldUrl(), name: "pilot", world: "w" });
   bodies.push(pilot);
   const wingBones = ["Hip", "Spine02", "Head", "L_Wing_Upper", "L_Wing_Upper_1", "R_Wing_Upper", "R_Wing_Upper_1", "L_Wing_Lower", "R_Wing_Lower"];
   const winged = (a: any) => { a.bodyBoneNames = wingBones; a.loadBodyBones = async () => wingBones; a.myRights = { role: "builder", fly: true }; return a; };
@@ -690,7 +691,7 @@ try {
   const limp = (await pilot.foldWings(true)).text;
   check("a fold refused for limp wings doesn't name the state twice",
     /^wings stay as they are — /.test(limp) && !/^wings stay limp/.test(limp), limp);
-  const aloft: any = winged(new WorldAgent({ name: "aloft", world: "w" }));
+  const aloft: any = winged(new WorldAgent({ url: noWorldUrl(), name: "aloft", world: "w" }));
   bodies.push(aloft);
   await aloft.takeOff();
   aloft.acceptEffectiveRights({ role: "builder", fly: false }, "world");

@@ -8,6 +8,7 @@
 //      defaults and bounds, the clock note, the look line and its bound, and
 //      a `describe` that says what the author said and whether it plays.
 //   2. PERCEPTION — what look() carries for a resident who reads.
+import { noWorldUrl } from "./no-world.ts";
 import { normalizeSound, describeSound, allowedSoundSrc, SOUND_ALT_MAX, SOUND_DEFAULTS } from "../shared/sound.js";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const { WorldAgent } = await import("../mcpl/agent.ts");
@@ -60,7 +61,7 @@ console.log("— 2. perception —");
 const T0 = 1_754_000_000_000;
 // the agent's path: a scratch door, its cut adopted, and the next view taken after every write (tools/agent-scratch.ts)
 const { agentOnDoor } = await import("./agent-scratch.ts");
-const ag = new WorldAgent({ name: "reader" });
+const ag = new WorldAgent({ url: noWorldUrl(), name: "reader" });
 const { seed, act } = agentOnDoor(ag, "sound");
 await seed({ radio1: { model: "store/8efae885a443a323.glb", pos: [1, 0, 1] } });
 const r1 = await act("set", { id: "radio1", component: "sound", value: { src: GOOD, alt: "rain on the awning", t0: T0 } }, { who: "ra" });

@@ -1,6 +1,7 @@
 // bun tools/structure-threshold-test.ts — the agent half of structure routing: WorldAgent ticks and the move tool over
 // real plans, renderer/server-free. The planner's own rows are tools/structure-route-test.ts's table; walks are checked
 // against the oracle in tools/structure-oracle.ts.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { planStructure, localizePoint } from "../shared/structure.js";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
@@ -20,7 +21,7 @@ const sparse = { levels: [{ tiles: [], walls: [[1,0,0],[1,100000000,0]], apertur
 
 const agents: WorldAgent[] = [];
 function agent() {
-  const a = new WorldAgent({ name: "walker", avatar: "", world: "test" });
+  const a = new WorldAgent({ url: noWorldUrl(), name: "walker", avatar: "", world: "test" });
   agents.push(a); a.joined = true; return a;
 }
 function entity(data=house, id="house", pos=[0,0,0], yaw=0, scale=1): any {

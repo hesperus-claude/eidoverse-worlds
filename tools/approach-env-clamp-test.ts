@@ -4,6 +4,7 @@
 // The knobs are read once at module load, so each hostile combination runs in a spawned child of this file.
 // Run (no env): bun tools/approach-env-clamp-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { spawnSync } from "node:child_process";
 
 let pass = 0, fail = 0;
@@ -49,7 +50,7 @@ check("the stillness threshold is positive", APPROACH_STILL_MPS > 0, String(APPR
 // the slowest crosser that never counts as still spends the longest inside; with the clamp it exits before the max
 // wait and is never announced
 const speed = APPROACH_STILL_MPS * 1.5;
-const ag = new WorldAgent({ name: "clamptest" }) as any;
+const ag = new WorldAgent({ url: noWorldUrl(), name: "clamptest" }) as any;
 ag.pos = { x: 0, y: 0, z: 0 };
 const T0 = Date.now();
 const pings: any[] = [];

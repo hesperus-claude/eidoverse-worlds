@@ -4,6 +4,7 @@
 
 // agent.ts reads the coalescing window from env at module load, set SHORT (folding is under test, not duration):
 // the import must come AFTER this line, which a hoisted static import wouldn't
+import { noWorldUrl } from "./no-world.ts";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const WINDOW = 250;
 const { WorldAgent } = await import("../mcpl/agent.ts");
@@ -21,7 +22,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // a scratch authority (tools/agent-scratch.ts), every write a door request at T0 (the coalescing window is the agent's,
 // not the door's); the agent takes the next view of its own fold after each, live or not
 async function rig(name = "emitters", at: [number, number] = [0, 0]) {
-  const ag = new WorldAgent({ name });
+  const ag = new WorldAgent({ url: noWorldUrl(), name });
   ag.pos.x = at[0]; ag.pos.z = at[1];
   const events: any[] = [];
   ag.onEvent = (ev) => { if (ev.kind === "world-change") events.push(ev); };

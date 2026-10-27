@@ -4,6 +4,7 @@
 // A bare worktree needs client/node_modules and mcpl/node_modules linked (mcpl/agent.ts pulls three/webgpu).
 //   Run: bun tools/skywatch-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../shared/forecast.js";
 import { agentOnDoor } from "./agent-scratch.ts";
@@ -21,7 +22,7 @@ const policyArgs = { seed: 7, states: ["clear", "overcast", "rain"], dwellSec: [
 // the sky is @world's, set through `sky` / `weather` on a pinned-clock scratch door (tools/agent-scratch.ts) at T0;
 // provenance is the LOG's: the door strips seq/by from the value, so the agent reads them from the entry
 async function rig(args: any, who = "antra") {
-  const ag = new WorldAgent({ name: "skywatch" });
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "skywatch" });
   const events: any[] = [];
   ag.onEvent = (ev) => { if (ev.kind === "weather") events.push(ev); };
   const A = ag as any;
@@ -81,7 +82,7 @@ for (const src of SOURCES) {
   for (let i = 0; i < 10; i++) ag.checkSky(T0 + i * 10 * MIN);
   check("authored-only static sky never speaks", events.length === 0);
 
-  const agNone = new WorldAgent({ name: "skywatch-none" }) as any;
+  const agNone = new WorldAgent({ url: noWorldUrl(), name: "skywatch-none" }) as any;
   let boomed = false;
   try { agNone.checkSky(T0); } catch { boomed = true; }
   check("no sky at all is a no-op, not a crash", !boomed);
@@ -90,7 +91,7 @@ for (const src of SOURCES) {
 // late-join parity: the watcher keys off the SAME fold the door writes, so a joiner adopting the cut resumes without a spam burst
 {
   const live = await rig({ hours: 12, rate: 0, forecast: policyArgs });
-  const ag = new WorldAgent({ name: "late" }) as any; const events: any[] = [];
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "late" }) as any; const events: any[] = [];
   ag.onEvent = (ev: any) => { if (ev.kind === "weather") events.push(ev); };
   ag.replica = live.ag.replica; await ag.applyView(false, null, T0);   // the same cut, adopted at join
   check("a late joiner's sky is the live agent's", JSON.stringify(ag.skyState) === JSON.stringify(live.ag.skyState), JSON.stringify([ag.skyState, live.ag.skyState]));

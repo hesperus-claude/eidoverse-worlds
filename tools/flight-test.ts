@@ -10,6 +10,7 @@
 //   T7 mode tags: not covered (no plan layer)
 //   T8 3.4 s periods: the leaf period in the integrator; not the render periods T8 asks about
 
+import { noWorldUrl } from './no-world.ts';
 import {
   makeConfig, initialState, step, bodyDown, bodyRecovered,
   leafAt, beatRemaining, sinkRate, glideRatio, glideRange,
@@ -1039,7 +1040,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 {
   const live = { type: 'your-rights', rights: { role: 'builder', gen: false, fly: false } };
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'rights-bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'rights-bench' });
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
     'L_Wing_Lower', 'R_Wing_Lower'];
@@ -1060,7 +1061,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 // RED-FIRST: infrastructure flight events must never author resident chat (fails on ccb065c, where flightEvent() called verb("say"))
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'bench' });
   let authored = 0;
   // every way an agent writes: the door (requests, say included) and its say helper
   ag.door = async () => { authored++; return { ok: true }; };

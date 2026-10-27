@@ -3,6 +3,7 @@
 // switch → cell is pinned, and a refused `consent` sync must not leave the server on Normal (deny) while the switch says allow.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/consent-switch-test.ts
 // Mutation (must go red): in client/lib/consentsync.js drop the `on('hydrated', …)` line, or the timer retry, or the toast.
+import { noWorldUrl } from './no-world.ts';
 import { setConsent, decide, SWITCHES } from '../shared/protocol/consent.js';
 import { makeConsentSync } from '../client/lib/consentsync.js';
 import { WorldAgent } from '../mcpl/agent.ts';
@@ -65,7 +66,7 @@ const authority = (r: Row, change: (v: string) => unknown) => {
 };
 const drivers: Record<string, (r: Row) => Promise<{ held: string | null; sets: string[]; reads: number; heard: number }>> = {
   agent: async (r) => {
-    const ag = new WorldAgent({ name: 'replay' }) as any; ag.consentSwitch = r.mine;
+    const ag = new WorldAgent({ url: noWorldUrl(), name: 'replay' }) as any; ag.consentSwitch = r.mine;
     const { st, send } = authority(r, (v) => { ag.consentSwitch = v; return ag.request('consent', { switch: v }); });
     ag.request = async (verb: string, args: any) => (verb === 'consent' ? send(args) : { ok: false });
     await ag.replaySwitch();

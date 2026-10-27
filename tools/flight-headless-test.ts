@@ -3,6 +3,7 @@
 // [LR]_Wing_* are not humanoid, so the browser's wing proofs prove nothing here. No browser, three or DOM: parses the
 // shipped VRM as the agent does and asserts on what the agent receives.
 
+import { noWorldUrl } from './no-world.ts';
 import { readFileSync } from 'node:fs';
 import { makeConfig, initialState, step, bodyDown, bodyRecovered, takeOff } from '../shared/flight.js';
 import { DEFAULT_LEAF_FORCE, terminalOf, leafForceFor } from '../shared/leafforce.js';
@@ -135,7 +136,7 @@ check('and a flutter torque, not just drag', Math.abs(f.torque.y) > 1e-6);
 console.log('\nLIVE REVOCATION -- through the your-rights path, not around it');
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'mythos', world: 'commons' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'commons' });
   // a winged body, so the RIG half is satisfied and only the GRANT half varies
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
