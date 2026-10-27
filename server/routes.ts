@@ -674,7 +674,8 @@ const ROUTES: Route[] = [
   {
     // #104 diagnostics: the adapter's live SFU view (legs, gens, consent, incarnation)
     match: (u) => u.pathname === "/relay-diag",
-    handler: ({ req, url }) => new Response(
+    // who hears whom is the world's live state: behind the joining door, like /snap (security review L8)
+    handler: ({ req, url }) => !mayRead(req) ? unauthorized() : new Response(
       JSON.stringify((() => {
         // a world the caller may not see answers like one with no voice at all
         const name = url.searchParams.get("world") ?? "commons";   // the default world, as /snap and /heightmap
