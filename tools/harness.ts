@@ -3,9 +3,13 @@ import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync } from "n
 import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
+import { MOVER, TRACK } from "../shared/mover.js";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..");
+/** A WorldAgent's tickEveryMs for walks at `speed` m/s, as fast as the authority's speed track allows with a fifth to
+ *  spare (shared/protocol/authority/bodyverbs.js too-fast; each tick steps 100 ms of the body, mcpl/agent.ts TICK_MS). */
+export const trackTicks = (speed: number = MOVER.walk.speed) => Math.ceil(100 * speed / (TRACK.speed * 0.8));
 export const CHROME = findChrome() ?? "";
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;

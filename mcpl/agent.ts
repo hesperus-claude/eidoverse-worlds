@@ -625,6 +625,8 @@ export class WorldAgent {
   private lastSkyCheck = 0;
   worldInfo: Record<string, unknown> = {};
   private ticker: ReturnType<typeof setInterval> | null = null;
+  /** Wall time between ticks; each tick still steps TICK_MS of the body. Tests only, to walk faster than real time. */
+  private readonly tickEveryMs: number;
   /** Highest world-log seq this body has seen: what "where was I up to" means. Not a wall-clock time: it survives
    *  restarts, cannot drift, and compares directly with what the world hands out. */
   lastSeq = -1;
@@ -651,7 +653,8 @@ export class WorldAgent {
     return !!mentionRegexFor([this.name, this.displayName], { dropQualifiers: this.dropMentionQualifiers })?.test(text);
   }
 
-  constructor(opts: { url?: string; name?: string; displayName?: string; dropMentionQualifiers?: boolean; world?: string; avatar?: string; agentToken?: string; declares?: string | null } = {}) {
+  constructor(opts: { url?: string; name?: string; displayName?: string; dropMentionQualifiers?: boolean; world?: string; avatar?: string; agentToken?: string; declares?: string | null; tickEveryMs?: number } = {}) {
+    this.tickEveryMs = opts.tickEveryMs ?? TICK_MS;
     this.url = opts.url ?? process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
     this.name = opts.name ?? process.env.AGENT_NAME ?? "claude";
     // the token's display name ("Artie (kube)"): a second form the body answers to in chat; the id stays the handle
@@ -928,7 +931,7 @@ export class WorldAgent {
             // authority holds, send mine only if it differs. Unset = never chosen: the world's default stands.
             void this.replaySwitch();
             this.seatCache.init().catch(() => { /* declared-approximate until it lands */ });
-            if (!this.ticker) this.ticker = setInterval(() => this.tick(), TICK_MS);
+            if (!this.ticker) this.ticker = setInterval(() => this.tick(), this.tickEveryMs);
             clearTimeout(timeout);
             resolve();
             break;
