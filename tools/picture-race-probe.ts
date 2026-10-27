@@ -13,12 +13,9 @@
 // Writes go through net.sendRequest (shared/protocol/requests.js); the authority mints ids, read from each create's
 // reply. A picture is the thing's own quad (shared/picture.js), judged by its texture; a held load shows the empty
 // plate (hung, no map) until it lands.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { join } from 'node:path';
+import { pictureWorld, req, spawnConsole, state as stateOf, until as untilOf, settle, hold } from './picture-probe-harness.ts';
 import * as OP from '../shared/protocol/requests.js';
-import { qFromYaw } from '../shared/rot.js';
 
-const LIB = 'eidoverse/assets/models/scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower.glb';
 // ONE UNPRIMED IMAGE PER HELD LEG: the host caches library bytes per session (assets.js primeFiles), so a reload never
 // fetches and a hold on it holds nothing; each held leg takes a fresh preview and asserts the hold engaged
 const M = 'eidoverse/assets/models/';
@@ -35,54 +32,13 @@ const POOL = [
 ].map((f) => M + f);
 let poolIdx = 0;
 const fresh = () => { if (poolIdx >= POOL.length) throw new Error('image pool exhausted'); return POOL[poolIdx++]; };
-const { check, done } = checker();
-// founded, owned by the page's typed name (TRUST_NAMES), so its writes are admitted
-const world = await ownedWorld({ worlds: ['raceprobe'], owner: 'raceprobe', env: { TRUST_NAMES: '1', EIDOVERSE_DIR: process.env.EIDOVERSE_DIR ?? join(process.env.HOME!, 'origin/eidoverse-video') } });
-const { page, close } = await launchBrowser();
-const errs: string[] = [];
-
-async function joinAs(name: string) {
-  const pg = await page();
-  pg.on('pageerror', (e) => errs.push(e.message));
-  pg.on('dialog', (d) => d.dismiss().catch(() => {}));
-  await pg.goto(`${world.origin}/?world=raceprobe&key=${world.key}&name=${name}`, { waitUntil: 'domcontentloaded' });
-  await pg.fill('#d-name', name).catch(() => {});
-  await pg.click('#d-go').catch(() => {});
-  await pg.waitForSelector('#mictoggle', { timeout: 30000 });
-  return pg;
-}
-const req = async (pg: any, op: any) => {
-  const r = await pg.evaluate((op: any) => import('/lib/net.js').then((n: any) => n.sendRequest(op.verb, op.args)), op);
-  if (!r?.ok) throw new Error(`${op.verb} refused: ${JSON.stringify(r?.refused ?? r)}`);
-  return r;
-};
+const { check, done, errs, joinAs, close } = await pictureWorld('raceprobe', 'raceprobe');
 let ID = '';  // the console's id, minted by the authority on each spawn
-const spawn = async (pg: any) => {
-  const r = await req(pg, OP.create('$console', { model: LIB, transform: { pos: [1.3, 0.5, -2.2], q: qFromYaw(0.6) } }));
-  ID = r.ids?.['$console'];
-  if (!ID) throw new Error(`create named no id: ${JSON.stringify(r)}`);
-};
+const spawn = async (pg: any) => { ID = await spawnConsole(pg); };
 const remove = (pg: any) => req(pg, OP.remove(ID));
 const comp = (pg: any, src: string | null) => req(pg, src ? OP.set(ID, 'picture', { src, alt: 'race', lit: 'self' }) : OP.unset(ID, 'picture'));
-const state = (pg: any) => pg.evaluate(async (id: string) => {
-  const { entities } = await import('/lib/world.js');
-  const { _hung } = await import('/lib/pictures.js');
-  const root = entities.get(id); const h = _hung.get(id);
-  let mat: any = null; h?.quad?.traverse((o: any) => { if (o.isMesh && !mat) mat = o.material; });
-  return { entity: !!root, hung: !!h, count: _hung.size, hasMap: !!mat?.map, mapSrc: h?.picture?.src ?? null, original: !!root && !h };
-}, ID);
-const until = async (pg: any, pred: (s: any) => boolean, ms = 20000) => { const t0 = Date.now(); let s; while (Date.now() - t0 < ms) { s = await state(pg); if (pred(s)) return s; await new Promise((r) => setTimeout(r, 150)); } return s; };
-const settle = (ms = 1500) => new Promise((r) => setTimeout(r, ms));
-
-/** Hold every library fetch for `src` until release() is called. */
-async function hold(pg: any, src: string) {
-  const file = src.split('/').pop()!;
-  let release!: () => void;
-  const gate = new Promise<void>((r) => { release = r; });
-  let held = 0;
-  await pg.route((u: URL) => u.pathname.includes('/library/') && u.pathname.endsWith(file), async (route: any) => { held++; await gate; await route.continue(); });
-  return { release: async () => { release(); await pg.unroute((u: URL) => u.pathname.includes('/library/') && u.pathname.endsWith(file)); }, heldCount: () => held };
-}
+const state = (pg: any) => stateOf(pg, ID);
+const until = (pg: any, pred: (s: any) => boolean, ms = 20000) => untilOf(pg, () => ID, pred, ms);
 
 try {
   const pg = await joinAs('raceprobe');
@@ -193,6 +149,6 @@ try {
   }
   check('no page errors across the cycle', errs.length === 0, errs.join(' | '));
 } finally {
-  await close(); await world.close();
+  await close();
 }
 done();
