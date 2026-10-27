@@ -10,6 +10,7 @@ import { renderDOM } from './panels.js';
 import { makeFrame, fitTabStrip } from './windows.js';
 import { fsvg } from './icons.js';
 import { net } from './net.js';
+import { escapeHtml as escape } from './markup.js';
 
 let frame = null;
 
@@ -133,8 +134,6 @@ function paintPane(pane) {
   }
 }
 
-const escape = (v) => String(v).replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // Which rename this session has: signed-in = the sign-in's (net.js takes identity.name each load); an account on a
 // name-trusting server renames by reload under the door's cooldown (renameAfter); anyone else is a guest.

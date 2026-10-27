@@ -3,6 +3,7 @@
 // Enter SAYS what you typed; Tab DOES the highlighted action. Enter runs a row only for "/" text or a highlight the person moved.
 import { list, grouped } from './actions.js';
 import { svg, has, rsvg, hasLine, fsvg, hasFill } from './icons.js';
+import { escapeHtml as esc } from './markup.js';
 
 const SEEN_LS = 'ew-lantern-seen';
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
@@ -16,7 +17,6 @@ let moved = false;    // the person moved the highlight themselves: Enter runs i
 let prevFocus = null; // what had focus when it opened: closing hands it back
 let deps = { submit: () => {} };
 
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export const isLanternOpen = () => !!root && !root.hidden;
 

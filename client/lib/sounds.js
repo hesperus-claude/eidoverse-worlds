@@ -15,6 +15,7 @@ import { toast, flashHint } from './ui.js';
 import { normalizeSound, gainAt, TAPER_START, SOUND_ALT_MAX, SOUND_STORE } from '../../shared/sound.js';
 import { mediaTier, clientMayFetch, mediaUrl } from '../../shared/mediasrc.js';
 import { allowUntrusted, isMineMuted, toggleMineMuted, RIGHTS_WARNING } from './mediaprefs.js';
+import { escapeHtml as esc } from './markup.js';
 
 export const VOICES = 8;
 // id → { sound, el, srcNode?, gain?, panner?, plain?, capped, want, done? }
@@ -178,7 +179,6 @@ export function clearSounds() { blocked.clear(); for (const id of [...playing.ke
 
 // ---- the editor block: how a HUMAN puts a sound on a thing ------------------
 const SOUND_ACCEPT = 'audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,.mp3,.ogg,.opus,.wav,.webm,.m4a';
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export async function uploadSound(file) {
   const q = new URLSearchParams({ as: 'audio', name: file.name });

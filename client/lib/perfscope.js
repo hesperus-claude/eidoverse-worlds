@@ -12,11 +12,11 @@ import { positionLocal, normalLocal, positionWorld, cameraPosition, modelScale }
 import { entities, metaOf } from './world.js';
 import * as icons from './icons.js';
 import { modelWord } from '../../shared/eido.js';
+import { escapeHtml as esc } from './markup.js';
 // the fill icon set is optional: without it the loupe button is its word
 const fsvg = (name, size) => (typeof icons.fsvg === 'function' ? icons.fsvg(name, size) : '');
 
 // HTML-attribute escaper for the tooltip strings below
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // data colors, not chrome: a CVD-safe cheap→dear ramp that means the same everywhere, so it does NOT follow the accent
 export const TIERS = TIER_COLORS;   // shared/perfrank.js: the server ranks library cards by the same rule

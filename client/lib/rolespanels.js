@@ -9,9 +9,9 @@ import { DOORS, doorOf, doorWrites, leftWords, listedIn } from '../../shared/pro
 import { serverNow, serverUntil } from './serverclock.js';   // not via remotes.js: an import cycle leaves the re-export unbound at load
 import { COMPONENTS, resolveVersioned, rangeWords, outOfRange } from '../../shared/protocol/componentspec.js';
 import { SIM_ID } from '../../shared/sim.js';
+import { escapeHtml as esc } from './markup.js';
 
 const wc = () => replica.st?.entities?.['@world']?.c ?? {};
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const me = () => { const r = net.myRights ?? {}; return { id: net.you, role: r.role ?? 'inhabitant', rank: r.rank ?? 0, permissions: r.permissions ?? [] }; };
 const has = (k) => R.isOwner(me()) || me().permissions.includes(k);
 const isOwner = () => R.isOwner(me());

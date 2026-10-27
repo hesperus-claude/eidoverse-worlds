@@ -2,6 +2,7 @@
 // real bytes and phases (never a fake timer), and the controls to learn while it waits.
 
 import { bus } from './base.js';
+import { escapeHtml } from './markup.js';
 // Injected, not imported: assets.js pulls in the engine, and this splash also serves a client with no assets.
 // main.js wires the real counters.
 let loadingItems = () => [];
@@ -63,7 +64,6 @@ function paintItems() {
   itemsEl.innerHTML = shown.map((it) => `<div class="sp-load"><span class="sp-load-name">${escapeHtml(prettyLabel(it.label))}</span><span class="sp-load-bytes">${it.total > 0 ? `${(it.done / 1048576).toFixed(1)} / ${(it.total / 1048576).toFixed(1)} MB` : it.done > 0 ? `${(it.done / 1048576).toFixed(1)} MB…` : ''}</span></div>`).join('');
 }
 const prettyLabel = (l) => String(l).split('/').pop().replace(/\.(vrm|glb|gltf|png|jpg|ktx2|json|g|gl)(\?.*)?$/i, '').replace(/[_-]+/g, ' ');   // some labels arrive pre-truncated ('desk.g')
-const escapeHtml = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // The peg is the progress: it enters from the sphere's left skin and rests at 1. Its tip is at x = 48 + 40 = 88 and
 // the sphere's leftmost point is 8, so D >= 80 hides it at rest; +0.5 clears the anti-aliased edge.

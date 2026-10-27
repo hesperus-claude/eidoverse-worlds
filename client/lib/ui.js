@@ -27,6 +27,7 @@ import { makeFrame, getFrame, isLocked, setLocked, resetLayout, escapeHid } from
 import { defsRegistry } from './defs.js';
 import { register as registerAction, get as getAction } from './actions.js';
 import { openLantern, closeLantern, isLanternOpen, CHORD, pillPinned, setPillPinned, setPillQuiet, resetPillPlace } from './commandbar.js';
+import { escapeHtml } from './markup.js';
 
 const $ = (id) => document.getElementById(id);
 export const el = {
@@ -419,8 +420,7 @@ export function collapseAll() {
 // ============================================================ who's here
 
 // 'present' lives in Chat's side pane
-export const escapeHtml = (v) => String(v).replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+export { escapeHtml };   // markup.js's, the one escaper (it escapes ' too)
 
 // ============================================================ dock
 // a closed frame must be findable again

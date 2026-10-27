@@ -12,6 +12,7 @@ import { makeSection, toast, flashHint } from './ui.js';
 import { net } from './net.js';
 import { holdGhost } from './build.js';
 import { logChat } from './chat.js';
+import { escapeHtml as esc } from './markup.js';
 
 // only an http(s) BASE (origin + plain path segments): it is interpolated into markup and fetches and persists, so a
 // sent link must not smuggle markup or a javascript: URL
@@ -89,8 +90,6 @@ async function poll() {
 
 let connected = null;      // null = unknown, false = needs login, object = me
 
-const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 const STAGES = ['images', 'compose', 'mesh'];
 function stageOf(j) {

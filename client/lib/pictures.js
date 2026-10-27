@@ -13,6 +13,7 @@ import { toast, flashHint } from './ui.js';
 import { normalizePicture, PICTURE_LIT, PICTURE_ALT_MAX, PICTURE_STORE, ALT_HINT } from '../../shared/picture.js';
 import { clientMayFetch } from '../../shared/mediasrc.js';
 import { allowUntrusted, RIGHTS_WARNING } from './mediaprefs.js';
+import { escapeHtml as esc } from './markup.js';
 
 // No part = a QUAD of its own: `width` m wide, height from the aspect, facing +Z (the back a second plane turned π so
 // it isn't mirrored); a 1:1 plate until decode; world extent held to 50 m.
@@ -213,7 +214,6 @@ export { THREE as _THREE };
 // a guarded thing gets a read-only line saying who may
 
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export { namedParts };   // from parts.js: the inspector reads the same list
 

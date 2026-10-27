@@ -11,6 +11,7 @@ import { requestHistory } from './net.js';
 // ONLY the registry, never handlers.js, or the cycle chat→handlers→net→chat closes (§14.2)
 import { COMMANDS, resolveCommand } from './commands/registry.js';
 import { register as registerAction } from './actions.js';
+import { escapeHtml as esc } from './markup.js';
 
 const MAX_LINES = 400;
 const HISTORY = 'ew-chat-history';
@@ -828,8 +829,6 @@ function paintSide(force = false) {
   const strip = stripName && listEl.querySelector('.pm-strip');
   if (strip) personUi.stripFor(stripName, strip);
 }
-const esc = (v) => String(v).replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---- chat gear: text size, markdown, which side the people pane sits on; persisted
 const CFS_LS = 'ew-chat-fs';
