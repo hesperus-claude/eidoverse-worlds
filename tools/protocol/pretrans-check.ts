@@ -26,6 +26,7 @@ import { ENGINE, scratch } from "./common.ts";
 import { CAPACITY } from "../../shared/protocol/authority.js";
 import { translatorVersion } from "./import-v1/translate-v1.js";
 import { pin, LAB_EPOCH } from "./clock.ts";
+import { suite } from "./suite.ts";
 const require = createRequire(import.meta.url);
 
 const argv = process.argv.slice(2);
@@ -36,10 +37,8 @@ const imp = async (p: string) => await import(path.join(T, p));
 const FOLD = await imp("shared/protocol/fold.js"), D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js");
 const SD = await imp("tools/protocol/scratchworld.ts");
 const PH = await imp("tools/protocol/pinhistory.ts");
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); }
-  else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 600)}` : ""}`); } };
+const S = suite("pretrans", { cap: 600 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {
   if (only && !only.includes(id)) return;
   try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); }
@@ -879,5 +878,4 @@ await C("P4", "§5 says what touches the log and what doesn't: arrivals don't; a
   const g = SPEC.slice(SPEC.indexOf("## 5."), SPEC.indexOf("## 6.")); const need = ["Arriving is presence", "never logged", "client"];
   return [need.every((n) => g.includes(n)) && !/Arriving,\s+teleporting, putting something down/.test(g), need.filter((n) => !g.includes(n))]; });
 
-console.log(`\npretrans: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

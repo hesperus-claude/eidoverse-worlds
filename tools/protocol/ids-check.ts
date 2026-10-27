@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -26,10 +27,8 @@ const imp = async (p: string) => await import(path.join(T, p));
 const FOLD = await imp("shared/protocol/fold.js"), D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js");
 const IDS = await imp("shared/protocol/ids.js");
 const SD = await imp("tools/protocol/scratchworld.ts");
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); }
-  else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 700)}` : ""}`); } };
+const S = suite("ids", { cap: 700 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {
   if (only && !only.includes(id)) return;
   try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); }
@@ -251,5 +250,4 @@ await C("G2", "at runtime, loading the server's and the agent door's own code ne
   const v = line ? JSON.parse(line.slice(3)) : null;
   return [v && v.ok === false && v.code === "shape" && v.minted, line ?? out.stderr.toString().slice(-600)]; });
 
-console.log(`ids: ${pass} ok, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

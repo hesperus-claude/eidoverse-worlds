@@ -6,10 +6,10 @@
 import { plugin } from "bun";
 import path from "node:path";
 import { ENGINE } from "./common.ts";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); } else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ""}`); } };
+const SU = suite("soundclock", { cap: Infinity });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (SU.runs(id)) SU.ok(cond, `${id} ${what}`, detail); };
 plugin({ name: "soundclock-stubs", setup(b) {   // sound-guard-stub: sounds.js loads with its DOM and audio seams faked
   for (const m of ["core", "base", "world", "net"]) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: path.join(ENGINE, "tools/guard-label-stub.mjs") }));
   for (const m of ["inspect", "ui", "audioctx", "audiounlock", "voiceconsent"]) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: path.join(ENGINE, "tools/sound-guard-stub.mjs") }));
@@ -30,5 +30,4 @@ if (CLK && S.playheadOf) {
   const remotes = await import(path.join(ENGINE, "client/lib/serverclock.js"));
   ok("K3", remotes.serverNow === CLK.serverNow, "one clock: the module everyone imports is the one sounds reads");
 }
-console.log(`\nsoundclock: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SU.done();

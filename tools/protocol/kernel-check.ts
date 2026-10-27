@@ -21,6 +21,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ENGINE } from "./common.ts";
 import { CORE } from "./suites.ts";
+import { suite } from "./suite.ts";
 const T = ENGINE;
 const imp = async (p: string) => await import(path.join(T, p));
 const KS = await imp("shared/protocol/kernelspec.js"), CAT = await imp("shared/protocol/componentspec.js"), FOLD = await imp("shared/protocol/fold.js");
@@ -90,8 +91,8 @@ if (argv.includes("--pin")) {
   fs.writeFileSync(path.join(T, PIN), JSON.stringify(out, null, 1) + "\n"); console.log(`${PIN} written${v.diff.length ? ` over ${v.diff.length} change(s), companions recorded` : " (unchanged kernel)"}`); process.exit(0);
 }
 
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok ${id} ${what}`); } else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 700)}` : ""}`); } };
+const S = suite("kernel", { cap: 700 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 const C = async (id: string, what: string, fn: () => any) => { try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); } catch (e) { ok(id, false, what, `threw: ${e?.stack ?? e}`); } };
 
 await C("K1", "the kernel is what the fold reads (house plan #260 10-20, C11: 'trim the kernel pin to what the fold reads; roles/access keep at most their component shape'): envelope, fold, identity, version, roles, access, each status trial-kernel; roles and access carry their field shape only (status + fields: no ranges, enums, defaults, meanings, grammar); transform, parent and model, which the fold never reads, are ordinary trial components; the ladder's vocabulary is the registry's (roles.vocab)", () => {
@@ -220,5 +221,4 @@ await C("K14", "the TRIM path also takes whole components and component keys lea
 
 // the pin must name the translator the code runs, or it drifts while every row stays green
 ok("K16", pin?.translator === TV1.TRANSLATOR, "the kernel pin names the translator the code runs (a translator bump re-pins: `kernel-check --pin`)", { pinned: pin?.translator, code: TV1.TRANSLATOR });
-console.log(`\nkernel: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

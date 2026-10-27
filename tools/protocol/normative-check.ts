@@ -18,6 +18,7 @@ import * as RC from "../../shared/protocol/refusalcodes.js";
 import * as VC from "../../shared/protocol/verbclasses.js";
 import { writeFileSync, appendFileSync } from "node:fs";
 import * as PH from "./pinhistory.ts";
+import { suite } from "./suite.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // ---- C12: the two pins, and the one rule for moving them ----
@@ -46,10 +47,8 @@ if (process.argv.includes("--pin")) {
 }
 const doc = readFileSync(ROOT + "spec/NORMATIVE.md", "utf8");
 const proto = readFileSync(ROOT + "spec/PROTOCOL.md", "utf8");
-let pass = 0, fail = 0;
-const check = (id: string, what: string, ok: boolean, detail: unknown = "") => {
-  if (ok) { pass++; console.log(`  ✓ ${id} ${what}`); } else { fail++; console.log(`  ✗ ${id} ${what} — ${typeof detail === "string" ? detail : JSON.stringify(detail)}`); }
-};
+const S = suite("normative-check", { cap: Infinity });
+const check = (id: string, what: string, ok: boolean, detail: unknown = "") => { if (S.runs(id)) S.ok(ok, `${id} ${what}`, detail); };
 const section = (title: string) => { const i = doc.indexOf(title); return i < 0 ? "" : doc.slice(i, doc.indexOf("\n## ", i + 1) < 0 ? undefined : doc.indexOf("\n## ", i + 1)); };
 const rows = (text: string) => text.split("\n").filter((l) => /^\|/.test(l) && !/^\|[-| ]+\|$/.test(l)).map((l) => l.split("|").slice(1, -1).map((c) => c.trim()));
 
@@ -116,4 +115,4 @@ check("N5", "PROTOCOL.md never calls a code file normative", !codeNormative.leng
   check("N10", `a pin break is acknowledged in the record: every break between an earlier ${RC_PIN} / ${RB_PIN} (the base's, where this branch left origin/main; and the previous version, before the newest change) and now is a \`  - <break>\` line spec/REGISTRY-CHANGELOG.md gained since then`,
     r.judged.length >= 1 && !r.out.length, { judged: r.judged, base: r.base, unacknowledged: r.out.slice(0, 8) }); }
 
-console.log(`[normative-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();
