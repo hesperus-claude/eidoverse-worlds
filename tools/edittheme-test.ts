@@ -157,12 +157,7 @@ console.log("\nC. the same dispatch as the legacy painter:");
   check("a collapsed group's rows are not painted", !E.regions.some((r: any) => r.action === "hidden:num"));
   check("tree order kept: the disclosure is the FIRST region (it wins over its row)", E.regions[0]?.action === "open" && E.regions[0]?.payload === "benchlamp", JSON.stringify(E.regions[0]));
   check("no theme → the legacy painter, untouched (its 30-px targets are still there)", L.regions.some((r: any) => r.h === 30));
-  // C13: one WIDGETS table (widgets.js) for the desktop, the legacy quad and this painter. Mutation: delete one entry
-  // (say `check`) → this goes red here AND in tools/panels-schema-test.ts (its DOM and legacy-quad pins), not just one.
-  const want: [string, string][] = [["num", "ch:pos.x"], ["vec3", "v"], ["check", "flags.lock"], ["enum", "motion.type"], ["color", "light.color"], ["range", "r"], ["ref", "look.at"], ["btn", "rest"], ["tiles", "stool"], ["group", "fold"], ["list", "ed:sockets.del"], ["tree", "open"], ["tree", "lock"]];
-  const lostE = want.filter(([, a]) => !E.regions.some((r: any) => r.action === a)), lostL = want.filter(([, a]) => !L.regions.some((r: any) => r.action === a));
-  check(`every interactive field type paints its target on the edit painter (${want.length} actions)`, lostE.length === 0, lostE.map(([t, a]) => `${t}:${a}`).join(" · "));
-  check("…and on the legacy painter", lostL.length === 0, lostL.map(([t, a]) => `${t}:${a}`).join(" · "));
+  // every WIDGETS entry on every surface: tools/panels-schema-test.ts
 }
 
 console.log("\nD. the quad's texture is sRGB (xrpanels.makePanel, the real module):");

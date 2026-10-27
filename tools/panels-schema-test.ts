@@ -14,6 +14,7 @@ plugin({
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
+(globalThis as any).Path2D ??= class Path2D { constructor(public d?: string) {} };   // the edit painter strokes icons
 
 // a 2D context that records what was painted and accepts every property write
 const paintLog: string[] = [];
@@ -131,33 +132,38 @@ const slider = byAction('vol')[0];
 check('range: ONE track region carrying {lo,hi,st}', byAction('vol').length === 1 && JSON.stringify(slider.slider) === '{"lo":0,"hi":1,"st":0.05}', JSON.stringify(slider?.slider));
 check('rows stack: every region lies inside the canvas', regions.every((r: any) => r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= cv.height));
 
-// every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads. Mutation: delete one
-// (say `check`) → red for the DOM and the legacy quad; tools/edittheme-test.ts C for the edit quad.
-console.log('PANELS — every field type draws on both surfaces (widgets.js WIDGETS, one table)');
+// every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads: one row per entry
+console.log('PANELS — every WIDGETS entry draws on every surface: the desktop, the legacy quad, the edit quad');
 {
   (globalThis as any).Option ??= function (text: string, value: string) { const o = document.createElement('option'); o.textContent = text; o.value = value; return o; };
-  const ALL = [
-    { t: 'info', k: 'i', label: 'i', value: 'v' }, { t: 'log', k: 'lg', lines: ['a'] }, { t: 'num', k: 'n', label: 'n', value: 1 },
-    { t: 'range', k: 'rg', label: 'r', value: 0.5 }, { t: 'vec3', k: 'v3', label: 'v', value: [1, 2, 3] },
-    { t: 'enum', k: 'en', label: 'e', value: 'a', options: [{ v: 'a', label: 'a' }, { v: 'b', label: 'b' }] },
-    { t: 'color', k: 'co', label: 'c', value: 0xff0000 }, { t: 'check', k: 'ck', label: 'c', value: true },
-    { t: 'text', k: 'tx', label: 't', value: 'x' }, { t: 'json', k: 'js', label: 'j', value: '{}' }, { t: 'ref', k: 'rf', label: 'r', value: 'id1' },
-    { t: 'btn', k: 'bt', label: 'b' }, { t: 'pop', k: 'pp', label: 'p', items: [] },
-    { t: 'tiles', k: 'tl', value: 'a', options: [{ v: 'a', label: 'a' }] },
-    { t: 'group', k: 'gp', label: 'g', open: true },
-    { t: 'list', k: 'ls', label: 'l', rows: [{ id: 'r1', label: 'r', actions: [{ k: 'la', label: 'a' }] }] },
-    { t: 'tree', k: 'tr', rows: [{ id: 't1', label: 't', depth: 0, kids: 1, locked: false }] },
-  ];
+  const { WIDGETS } = await import('../client/lib/widgets.js');
+  // a sample per type, and the action(s) its quad target dispatches ([]: painted, takes no hit)
+  const SAMPLE: Record<string, [any, string[]]> = {
+    info: [{ t: 'info', k: 'i', label: 'i', value: 'v' }, []], log: [{ t: 'log', k: 'lg', lines: ['a'] }, []],
+    num: [{ t: 'num', k: 'n', label: 'n', value: 1 }, ['n']], range: [{ t: 'range', k: 'rg', label: 'r', value: 0.5 }, ['rg']],
+    vec3: [{ t: 'vec3', k: 'v3', label: 'v', value: [1, 2, 3] }, ['v3']],
+    enum: [{ t: 'enum', k: 'en', label: 'e', value: 'a', options: [{ v: 'a', label: 'a' }, { v: 'b', label: 'b' }] }, ['en']],
+    color: [{ t: 'color', k: 'co', label: 'c', value: 0xff0000 }, ['co']], check: [{ t: 'check', k: 'ck', label: 'c', value: true }, ['ck']],
+    text: [{ t: 'text', k: 'tx', label: 't', value: 'x' }, []], json: [{ t: 'json', k: 'js', label: 'j', value: '{}' }, []],
+    ref: [{ t: 'ref', k: 'rf', label: 'r', value: 'id1' }, ['rf']], btn: [{ t: 'btn', k: 'bt', label: 'b' }, ['bt']],
+    pop: [{ t: 'pop', k: 'pp', label: 'p', items: [] }, []], tiles: [{ t: 'tiles', k: 'tl', value: 'a', options: [{ v: 'a', label: 'a' }] }, ['tl']],
+    group: [{ t: 'group', k: 'gp', label: 'g', open: true }, ['fold']],
+    list: [{ t: 'list', k: 'ls', label: 'l', rows: [{ id: 'r1', label: 'r', actions: [{ k: 'la', label: 'a' }] }] }, ['la']],
+    tree: [{ t: 'tree', k: 'tr', rows: [{ id: 't1', label: 't', depth: 0, kids: 1, locked: false }] }, ['open', 'lock']],
+  };
+  const types = Object.keys(WIDGETS), missing = types.filter((t) => !SAMPLE[t]), stale = Object.keys(SAMPLE).filter((t) => !(t in WIDGETS));
+  check(`every one of the ${types.length} WIDGETS entries has a sample row here, and no row names a type that's gone`, missing.length === 0 && stale.length === 0, `missing ${missing} stale ${stale}`);
+  const ALL = types.filter((t) => SAMPLE[t]).map((t) => SAMPLE[t]![0]);
   const b2 = document.createElement('div'); document.body.append(b2);
   renderDOM(b2, ALL, edit);
   const CHROME = new Set(['sp-label', 'sp-ctxbtn', 'sp-revert']);
   const bare = ALL.filter((f, i) => ![...(b2.children[i]?.children ?? [])].some((c: any) => ![...c.classList].some((x) => CHROME.has(x))));
   check(`DOM: every one of the ${ALL.length} field types builds a control in its row`, bare.length === 0, bare.map((f) => f.t).join(','));
-  const R = renderCanvas(document.createElement('canvas'), ALL, { width: W, rowH: ROW, pad: PAD });
-  const has = (a: string) => R.some((r: any) => r.action === a);
-  const want: [string, string][] = [['num', 'n'], ['range', 'rg'], ['vec3', 'v3'], ['enum', 'en'], ['color', 'co'], ['check', 'ck'], ['ref', 'rf'], ['btn', 'bt'], ['tiles', 'tl'], ['group', 'fold'], ['list', 'la'], ['tree', 'open'], ['tree', 'lock']];
-  const lost = want.filter(([, a]) => !has(a));
-  check(`legacy quad: every interactive type paints its target (${want.length} actions)`, lost.length === 0, lost.map(([t, a]) => `${t}:${a}`).join(','));
+  for (const theme of [null, 'edit']) {
+    const R = renderCanvas(document.createElement('canvas'), ALL, { width: W, rowH: ROW, pad: PAD, ...(theme ? { theme } : {}) });
+    const lost = types.flatMap((t) => (SAMPLE[t]?.[1] ?? []).filter((a) => !R.some((r: any) => r.action === a)).map((a) => `${t}:${a}`));
+    check(`${theme ?? 'legacy'} quad: every interactive type paints its target`, lost.length === 0, lost.join(','));
+  }
 }
 
 console.log('PANELS — hitRegion: UV → region; a slider hit is its snapped value');
