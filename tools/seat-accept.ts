@@ -22,13 +22,8 @@
  * refuses instead of blessing a record nobody looked at.
  */
 
-import { resolve, join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { SeatStore } from "../server/seats.ts";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OPT_DIR = join(ROOT, "assets", "opt");
-const LIBRARY_DIR = resolve(process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video"));
+// the server's own store (server/config.ts OPT_DIR, LIBRARY_DIR, PATCH_DIR): the file a running server serves
+import { seatStore as store } from "../server/seats.ts";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -37,7 +32,6 @@ const flag = (name: string) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 
-const store = new SeatStore(OPT_DIR, LIBRARY_DIR);
 
 if (cmd === "list") {
   const { rev, records } = store.list();
