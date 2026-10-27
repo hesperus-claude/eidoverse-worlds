@@ -24,7 +24,8 @@ export interface LiveLegState {
 
 export type Admission = { admit: true } | { admit: false; reason: string };
 
-/** The seven refusals, in amendment 1's order. Identity is the websocket's; every generation check is decided HERE. */
+/** Eight refusal branches in amendment 1's order: six of its seven (expiry is upstream) plus "no living primary" and
+ *  "no relay leg issued". Identity is the websocket's; every generation check is decided HERE. */
 export function admitParticipant(claims: RelayClaims, live: LiveLegState): Admission {
   if (claims.world !== live.world) return { admit: false, reason: "wrong world" };
   if (!claims.id) return { admit: false, reason: "no identity" };

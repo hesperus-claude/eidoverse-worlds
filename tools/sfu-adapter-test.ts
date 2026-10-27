@@ -1,5 +1,5 @@
-// the seven refusals of #104 amendment 1, through the decision layer AND the in-process SFU adapter, one table: this
-// proves reusing relaydecision.ts is a real inheritance
+// admitParticipant's eight refusal branches (#104 amendment 1's seven, less expiry, plus two), through the decision layer
+// AND the in-process SFU adapter, one table: this proves reusing relaydecision.ts is a real inheritance
 import { admitParticipant } from "../server/relaydecision.ts";
 import { mintSfuCredential, admitSfuLeg, setSfuConsent, setSfuModeratorMute,
   revokeSfuLeg, sfuDiag, sfuState, registerSfuSender } from "../server/sfuadapter.ts";

@@ -112,7 +112,7 @@ export function liveLegState(world: string, id: string, primaryGen?: number): Li
 export const sfuLegAdmitted = (world: string, id: string) => !!worlds.get(world)?.admitted.has(id);
 export const markSfuLegAdmitted = (world: string, id: string) => { sfuState(world).admitted.add(id); };
 
-/** Admission: amendment 1's seven refusals, from the shared decision layer; synchronous, as we are the SFU. */
+/** Admission: admitParticipant's eight refusal branches (relaydecision.ts); synchronous, as we are the SFU. */
 export function admitSfuLeg(world: string, claims: RelayClaims, live: LiveLegState) {
   const s = sfuState(world);
   const verdict = admitParticipant(claims, { ...live, usedNonces: s.usedNonces });
