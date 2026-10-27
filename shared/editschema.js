@@ -423,8 +423,10 @@ export function inspectSchema(ent, id, live = {}) {
   const laKeys = Object.keys(c).filter((k) => (k === 'look-at' || k.startsWith('look-at:')) && isBag(c[k]));
   if (laKeys.length) {
     // the door's axis letters (componentspec `axis`: x, y, z or a vector); a stored vector shows as itself
-    const AX = ['z', 'x', 'y'];
-    const fwdOf = (f) => (typeof f === 'string' ? f : Array.isArray(f) ? (axisName({ axis: f }) === 'custom' ? JSON.stringify(f) : axisName({ axis: f })) : 'z');
+    const AX = ['z', 'x', 'y', '-z', '-x', '-y'];
+    const axOf = (f, dflt) => (typeof f === 'string' ? f : Array.isArray(f) ? (axisName({ axis: f }) === 'custom' ? JSON.stringify(f) : axisName({ axis: f })) : dflt);
+    const fwdOf = (f) => axOf(f, 'z');
+    const axOpts = (cur, front) => [...AX, ...(AX.includes(cur) ? [] : [cur])].map((v) => ({ v, label: front && v === 'z' ? '+z (its front)' : v }));
     const fields = [];
     for (const key of laKeys) {
       const la = c[key]; const pre = key === 'look-at' ? '' : `${key.slice(8)}|`; const nm = key === 'look-at' ? '' : `${key.slice(8)} `;
@@ -434,7 +436,8 @@ export function inspectSchema(ent, id, live = {}) {
           hint: 'what it turns to face: pick a thing (a row, or the thing in the world), or "the viewer" (each viewer sees it face them) or "nearest person"' }),
         { t: 'enum', k: `${pre}target@`, label: `${nm}or`, value: T?.startsWith('@') ? T : '', options: [{ v: '', label: '(a thing)' }, { v: '@viewer', label: 'the viewer' }, { v: '@nearest', label: 'nearest person' }] },
         LA('mode', { label: 'turns', value: la.mode === 'aim' ? 'aim' : 'yaw', options: [{ v: 'yaw', label: 'around its up (stays upright)' }, { v: 'aim', label: 'fully (tilts too)' }] }),
-        LA('forward', { label: 'front', value: fwdOf(la.forward), options: [...AX, ...(AX.includes(fwdOf(la.forward)) ? [] : [fwdOf(la.forward)])].map((v) => ({ v, label: v === 'z' ? '+z (its front)' : v })), hint: 'which of its own axes points at the target' }),
+        LA('forward', { label: 'front', value: fwdOf(la.forward), options: axOpts(fwdOf(la.forward), true), hint: 'which of its own axes points at the target' }),
+        LA('up', { label: 'up', value: axOf(la.up, 'y'), options: axOpts(axOf(la.up, 'y'), false), hint: 'which of its own axes stays up as it turns' }),
         LA('speed', { hint: '0 = turns at once' }),
         LA('range', { hint: 'a person further than this: it turns back to rest' }));
     }
@@ -493,8 +496,8 @@ export function inspectSchema(ent, id, live = {}) {
       fields.push({ t: 'enum', k: k('type'), label: `${P}type`, value: ty, options: types.map((v) => ({ v, label: v })) });
       if (['pendulum', 'spin', 'oscillate'].includes(ty)) {
         const ax = axisName(m, ty === 'pendulum' ? 'x' : 'y');
-        // x, y, z only (negative degrees cover the rest; the door takes -x too); a stored negative or custom axis still shows as itself
-        const opts = ['x', 'y', 'z'].map((v) => ({ v, label: v }));
+        // every axis letter the door takes, signed ones too; a custom axis still shows as itself
+        const opts = Object.keys(AXES).map((v) => ({ v, label: v }));
         fields.push({ t: 'enum', k: k('axis'), label: `${P}axis`, value: ax, options: opts.some((o) => o.v === ax) ? opts : [...opts, { v: ax, label: ax }] });
       }
       const card = MOTION_CARD[ty];
@@ -1400,7 +1403,7 @@ export function editOps(ent, id, edits, live = {}) {
         const ck = part ? `look-at:${part}` : 'look-at';
         const next = { ...(comps.get(ck) ?? (isBag(c[ck]) ? c[ck] : {})) };
         if (fk === 'target' || fk === 'target@') { if (raw == null || raw === '') { if (fk === 'target') { comps.set(ck, null); break; } else break; } next.target = String(raw); }
-        else if (fk === 'forward' && typeof raw === 'string' && raw.startsWith('[')) { let v; try { v = JSON.parse(raw); } catch {} if (!Array.isArray(v)) { errors.push(`${key}: x, y, z or [x, y, z]`); break; } next.forward = v; }   // a custom vector's option is its JSON text (fwdOf)
+        else if ((fk === 'forward' || fk === 'up') && typeof raw === 'string' && raw.startsWith('[')) { let v; try { v = JSON.parse(raw); } catch {} if (!Array.isArray(v)) { errors.push(`${key}: x, y, z or [x, y, z]`); break; } next[fk] = v; }   // a custom vector's option is its JSON text (axOf)
         else if (writeField('LookAt', fk, key, f, raw, next)) { /* written */ }
         else if (fk === 'up') next.up = String(raw);
         else if (fk === 'speed' || fk === 'range') { const n = num({ value: next[fk] ?? (fk === 'speed' ? 240 : 12) }, raw); if (n == null || outOfDoor('look-at', fk, round(n), key)) break; next[fk] = round(n); }   // no row yet: the look-at is being made

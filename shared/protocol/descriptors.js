@@ -101,7 +101,7 @@ const CARDS = {
     editor: { text: { ui: { t: 'text' } }, size: { ui: { t: 'num', step: 0.01, dp: 2 } }, width: { ui: { t: 'num', step: 0.1, dp: 2 } },
       align: { ui: { t: 'enum' } }, color: { ui: { t: 'color' } }, outline: { ui: { t: 'check' } }, outlineColor: { ui: { t: 'color' } }, background: { ui: { t: 'color', def: false } }, billboard: { ui: { t: 'enum' } }, lit: { ui: { t: 'enum' } } } },
   LookAt: { key: 'look-at', show: ['target', 'mode', 'forward', 'up', 'yaw', 'pitch', 'speed', 'range'], writeDp: 3, extra: ['target@'],
-    editor: { target: { ui: { t: 'ref' } }, mode: { ui: { t: 'enum' } }, forward: { ui: { t: 'enum' } },
+    editor: { target: { ui: { t: 'ref' } }, mode: { ui: { t: 'enum' } }, forward: { ui: { t: 'enum' } }, up: { ui: { t: 'enum' } },
       speed: { ui: { t: 'num', step: 30, dp: 0, deg: true } }, /* stored rad/s, shown in degrees */ range: { ui: { t: 'num', step: 1, dp: 1, softMin: 0.1 } } } },
   Lock: { key: 'lock', whole: 'value', show: [] },   // true: the whole value is the row (no levels)
   Hidden: { key: 'hidden', whole: 'value' },

@@ -95,7 +95,8 @@ console.log("\nthe Inspector offers only what the door takes; every axis takes t
       offeredRows++; offered.add(`${g.group}.${f.k} ${j(o.v)}`); row(`the Inspector offers ${g.group}.${f.k} ${j(o.v)}, and the door takes it`, `${g.group}.${f.k} ${j(o.v)}`, !!r.ok, j(r.refused ?? r));
     }
   }
-  for (const k of ['openable.axis "-x"', 'motion.type "path"', 'look-at.forward "[0.6,0,0.8]"']) check(`the Inspector's ${k} was offered and sent`, offered.has(k));
+  // signed axes everywhere: every axis row offers -x, -y and -z (and each, sent above, is taken)
+  for (const k of ['openable.axis "-x"', 'motion.type "path"', 'look-at.forward "[0.6,0,0.8]"', ...["motion.axis", "look-at.forward", "look-at.up"].flatMap((a) => ["-x", "-y", "-z"].map((l) => `${a} ${j(l)}`))]) check(`the Inspector's ${k} was offered and sent`, offered.has(k));
   { const la = seed({ model: "store/x.glb", pos: [0, 0, 0], yaw: 0, "look-at": { target: "@viewer", forward: [0.6, 0, 0.8] } });
     const plan: any = editOps(D.rec(la), la, { "look-at.forward": "[0.6,0,0.8]" }); const v = plan.ops.flat(9).find((o: any) => o?.args?.component === "look-at")?.args?.value;
     check("a custom forward's current-value option is sent as its vector", same(v?.forward, [0.6, 0, 0.8]), j(v)); }
