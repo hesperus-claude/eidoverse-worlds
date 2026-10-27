@@ -6,18 +6,11 @@
 // SwiftShader proves ORCHESTRATION, not rendering quality, foveation or ergonomics. The 'reload' verdict (WebGPU refusal
 // → ?webgl=1) isn't bound here: ?xr=1 without XRGPUBinding boots WebGL (backend_choice.js decideBackend).
 // Usage: bun tools/xr-lifecycle-probe.mjs [origin]
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, enterVR } from './probe-harness.mjs';
 
 const { check, done } = checker();
-// IWER's device loop reschedules on globalThis.requestAnimationFrame, which the product's shim would make re-enter
-// itself until the stack overflows: pin the emulator to the NATIVE clock, as a headset runtime is. Both clocks run at
+// IWER's device loop rides the NATIVE clock, as a headset runtime does (probe-harness iwerSource). Both clocks run at
 // 60 Hz here, so this proves the swap happens and is undone, not that it helps a throttled window clock
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` +
-  IWER_RAW.replace(DEVICE_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ live: process.argv[2] ?? null });
 const { browser, page } = await launchBrowser();
@@ -28,21 +21,13 @@ const ev = (fn, arg) => Promise.race([
   new Promise((_, rej) => setTimeout(() => rej(new Error('page main thread pinned for 20 s — evaluate never returned')), 20000)),
 ]);
 
-// IWER before ANY client code: navigator.xr must exist when core.js decides the backend
-await pg.addInitScript(IWER);
+// IWER before ANY client code: navigator.xr must exist when core.js decides the backend. iwerInit hides it (no
+// `globalThis.IWER`) so the product takes a real headset's branch (installEntryClock abstains under an emulator)
+await iwerInit(pg);
 await pg.addInitScript(() => {
   if (window.__probe) return;   // idempotence only: each document gets a fresh window, so this never fires in practice
-  const { XRDevice, metaQuest3 } = window.IWER ?? {};
-  if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
-  const device = new XRDevice(metaQuest3);
-  window.__probeDeviceKept = true;
-  // forceInstall IS REQUIRED: headless Chromium ships a navigator.xr stub, and IWER otherwise declines to replace it
-  device.installRuntime({ forceInstall: true });
+  if (!window.__iwerDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   window.__probe_installed = navigator.xr?.constructor?.name;
-  // THE NON-EMULATED PRODUCT PATH: installEntryClock abstains when it sees an IWER, so the emulator stays the runtime but
-  // hides itself (no `globalThis.IWER`) and the product takes a real headset's branch; the device is kept privately
-  window.__iwerDevice = device;
-  try { delete window.IWER; } catch { window.IWER = undefined; }
   // instrumentation the probe reads: observations of the REAL objects (nothing in the product writes these), so a bypassed
   // call site shows as an absence
   window.__probe = {
@@ -82,16 +67,14 @@ pg.on('requestfailed', (r) => { pending.delete(r); failed.push(`${r.failure()?.e
 try {
 // pageerror never sees an exception thrown inside a frame callback (frameloop.js catches per system and hands it to
 // report(), which console.error()s; tee() goes to the network, not the console): capture console errors
-const reports = [], artifacts = [], consoleTail = [];
-// IWER's XRWebGLLayer.framebuffer is null by design, and three keys a WeakMap on it (WebGLState.drawBuffers):
-// handled by client/lib/xr_nullfb.js (tools/xr-render-errors-probe.mjs), so a count above 0 here is a regression
-const ARTIFACT = /Invalid value used as weak map key.*WebGLState\.drawBuffers/;
+// IWER's null XRWebGLLayer.framebuffer is handled by client/lib/xr_nullfb.js: its WeakMap error counts here like any other
+const reports = [], consoleTail = [];
 pg.on('console', (m) => {
   consoleTail.push(`${m.type()}: ${m.text().replace(/\s+/g, ' ').slice(0, 200)}`); if (consoleTail.length > 40) consoleTail.shift();
   if (m.type() !== 'error') return;
   const t = `${m.text()} ${m.location()?.url ?? ''}`.replace(/\s+/g, ' ').slice(0, 300);
   if (/status of 401 .*\/whoami/.test(t)) return;   // net.js treats a non-OK /whoami as "not signed in" by design; Chrome logs the fetch anyway
-  (ARTIFACT.test(t) ? artifacts : reports).push(t);
+  reports.push(t);
 });
 // ?xr=1 IS THE BOOT MODE: without it a WebGPU host's first click reloads to WebGL and leaves the probe's state; with it
 // the click enters in place on any host (client/lib/backend_choice.js decideBackend)
@@ -231,7 +214,6 @@ check('a SECOND busy failure gives up rather than retrying forever',
 
 check('no page errors during the whole lifecycle', errs.length === 0, errs.slice(0, 2).join(' | '));
 check('no console.error during the whole lifecycle (report() speaks here)', reports.length === 0, `${reports.length}: ` + reports.slice(0, 4).join('\n      '));
-if (artifacts.length) console.log(`  · ${artifacts.length} known-emulator-artifact error(s) (IWER null framebuffer → three WeakMap) — disclosed, not counted`);
 
 } finally {
   // ALWAYS: a throw anywhere above must not leak the owned Chrome and the world server

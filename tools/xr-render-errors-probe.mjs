@@ -13,34 +13,23 @@
 // Real hardware returns an opaque WebGLFramebuffer here and never took this path; this is the emulator's (and the
 // Immersive Web Emulator extension's) path, which every headless VR probe rides.
 // Run one headless browser at a time; clouds are forced off before boot here.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync, mkdirSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
+import { mkdirSync } from 'node:fs';
 
 const { check, done } = checker();
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
 const shotDir = arg('--shots'); const FRAMES = Number(arg('--frames') ?? 40); const CONTROL = process.argv.includes('--control');
 if (shotDir) mkdirSync(shotDir, { recursive: true });
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` +
-  IWER_RAW.replace(DEVICE_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ env: { SKIP_OPT_SWEEP: '1' } });
 const { browser, page } = await launchBrowser();
 const pg = await page();
 const ev = (fn, a) => Promise.race([pg.evaluate(fn, a), new Promise((_, rej) => setTimeout(() => rej(new Error('page main thread pinned for 30 s')), 30000))]);
 
-await pg.addInitScript(() => { try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {} });   // THE SKY GUARD, before boot
-await pg.addInitScript(IWER);
+await iwerInit(pg, { cloud: 'off' });   // THE SKY GUARD, before boot
 await pg.addInitScript(() => {
   if (window.__probe) return;
-  const { XRDevice, metaQuest3 } = window.IWER ?? {};
-  if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
-  const device = new XRDevice(metaQuest3);
-  device.installRuntime({ forceInstall: true });
-  window.__iwerDevice = device;
-  try { delete window.IWER; } catch { window.IWER = undefined; }
+  if (!window.__iwerDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   window.__probe = { grants: 0, sessionFrames: 0 };
   const real = navigator.xr.requestSession.bind(navigator.xr);
   navigator.xr.requestSession = async (...a) => {

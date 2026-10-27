@@ -10,16 +10,9 @@
 // NOT covered: xrPanelsExit's ring unsubscribe (inert by construction: exit nulls the staged quads); the ?canvasquads
 // debug fallback and domquad's resize rebuild. SwiftShader + IWER prove orchestration, not what a headset feels.
 // Usage: bun tools/xr-quad-softswap-probe.mjs [origin]   (run under a memory guard: headless Chromium renders on the CPU)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
 
 const { check, done } = checker();
-// IWER's device loop must ride the NATIVE clock once the product shims window.rAF (see xr-lifecycle-probe.mjs)
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` +
-  IWER_RAW.replace(DEVICE_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ live: process.argv[2] ?? null });
 const { browser, page } = await launchBrowser();
@@ -28,14 +21,9 @@ const ev = (fn, arg) => Promise.race([
   pg.evaluate(fn, arg),
   new Promise((_, rej) => setTimeout(() => rej(new Error('page main thread pinned for 20 s')), 20000)),
 ]);
-await pg.addInitScript(IWER);
+await iwerInit(pg);
 await pg.addInitScript(() => {
-  const { XRDevice, metaQuest3 } = window.IWER ?? {};
-  if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
-  const device = new XRDevice(metaQuest3);
-  device.installRuntime({ forceInstall: true });   // headless Chromium ships a navigator.xr stub IWER won't clobber otherwise
-  window.__iwerDevice = device;
-  try { delete window.IWER; } catch { window.IWER = undefined; }   // the product takes the real-headset branch
+  if (!window.__iwerDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   window.__probe = { grants: 0 };
   const real = navigator.xr.requestSession.bind(navigator.xr);
   navigator.xr.requestSession = async (...a) => { const s = await real(...a); window.__probe.grants++; return s; };

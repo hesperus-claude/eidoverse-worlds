@@ -6,18 +6,19 @@
 //    identity checks skipped.
 import { chromium } from 'playwright';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
 // vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) would stop every visor-clicking probe, so contexts start as a
 // browser that answered "not now"; tools/vrmic-probe.mjs passes null to drive it
 /** SFU_TEST_CHROME override ▸ managed browser. `mic: true` adds the fake-media flags (and mic permission). */
-export async function launchBrowser({ mic = false, vrMicChoice = 'later' } = {}) {
+export async function launchBrowser({ mic = false, vrMicChoice = 'later', args: extra = [] } = {}) {
   const exe = process.env.SFU_TEST_CHROME;
-  const args = mic ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
-    '--autoplay-policy=no-user-gesture-required'] : [];
+  const args = [...(mic ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
+    '--autoplay-policy=no-user-gesture-required'] : []), ...extra];
   const b = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args });
   // BOOT_CHECK_VIEWPORT=390x844 drives a probe at any viewport; without it Playwright's default hides layouts that only
   // fit the authoring viewport
@@ -128,4 +129,83 @@ export function checker() {
     process.exit(fail ? 1 : 0);
   };
   return { check, done };
+}
+
+// IWER under the real client: its device loop pinned to a native rAF, refused unless the pattern matched exactly once
+// (memory: reference_iwer_headless_probe.md §2; an IWER bump that moves the line must turn every IWER probe red)
+export const IWER_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
+export function iwerSource(raw = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8')) {
+  const n = raw.split(IWER_LOOP).length - 1;
+  if (n !== 1) throw new Error(`iwer build changed: expected exactly one '${IWER_LOOP}', found ${n} (the native-rAF pin would silently not apply)`);
+  return 'globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n' +
+    raw.replace(IWER_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
+}
+
+/** Before any client code: an emulated Quest 3 installed with forceInstall (headless Chromium ships a navigator.xr stub
+ *  IWER otherwise won't replace), kept as window.__iwerDevice and hidden from the product (no window.IWER: a real
+ *  headset's branch). `cloud`: the ew-cloud-quality the page boots with (null leaves it alone). */
+export async function iwerInit(pg, { cloud = null } = {}) {
+  if (cloud != null) await pg.addInitScript((q) => { try { localStorage.setItem('ew-cloud-quality', q); } catch {} }, cloud);
+  await pg.addInitScript(iwerSource());
+  await pg.addInitScript(() => {
+    const { XRDevice, metaQuest3 } = window.IWER ?? {};
+    if (!XRDevice) return;   // window.__iwerDevice stays unset: probes gate on it
+    const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
+    window.__iwerDevice = d;
+    try { delete window.IWER; } catch { window.IWER = undefined; }
+  });
+}
+
+/** The visor the product shows (#xrbtn displayed). `me`: also wait for a joined avatar. */
+export async function visorShown(pg, { timeout = 90000, me = false } = {}) {
+  await pg.waitForFunction((m) => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none' && (!m || !!globalThis.EW?.me?.()); }, me, { timeout });
+}
+
+/** Click the real visor and wait until three presents. */
+export async function enterVR(pg, { timeout = 30000 } = {}) {
+  await pg.evaluate(() => document.querySelector('#xrbtn').click());
+  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout, polling: 250 });
+}
+
+/** End the emulated session; resolves whether or not three stopped presenting within `timeout`. */
+export async function exitVR(pg, { timeout = 60000 } = {}) {
+  await pg.evaluate(async () => { await window.__iwerDevice.activeSession?.end(); });
+  return pg.waitForFunction(() => !globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout, polling: 500 }).then(() => true, () => false);
+}
+
+/** Off-tier sky boot: clouds off before load, the real client on staging, the engine up, then `sky` set on @world (the
+ *  world needs `owner: name` + TRUST_NAMES so the write is admitted) and, with `baked`, the baked tier waited for. */
+export async function skyBoot(pg, world, name, { sky = null, baked = false, query = '&lite=0', ready = () => globalThis.__ewEngineUp } = {}) {
+  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
+  await pg.goto(`${world.origin}/?world=staging&name=${name}&key=${world.key}${query}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.waitForFunction(ready, null, { timeout: 120000 });
+  if (sky) await pg.evaluate(async (v) => { const { sendRequest } = await import('./lib/net.js'); const r = await sendRequest('set', { id: '@world', component: 'sky', value: v, merge: true }); if (!r.ok) throw new Error(`sky refused: ${JSON.stringify(r.refused)}`); }, sky);
+  if (baked) for (let i = 0; i < 90 && !(await pg.evaluate(async () => (await import('./lib/sky_baked.js')).bakedActive())); i++) await pg.waitForTimeout(1000);
+}
+
+// RAW3: a page of real three + client/lib modules, served from client/ by route (no world server), on SwiftShader
+const CLIENT = fileURLToPath(new URL('../client/', import.meta.url));
+const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.json': 'application/json', '.wasm': 'application/wasm' };
+export const RAW3_IMPORTMAP = '<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>';
+/** `html` at http://probe.local/; `errors` collects page errors and console errors; `result(ms, q)` loads `/?q` and
+ *  awaits window.__probe, or `{ error }` after `ms`. */
+export async function raw3Page(html) {
+  const { browser, page } = await launchBrowser({ vrMicChoice: null, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const pg = await page(); const errors = [];
+  pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  pg.on('pageerror', (e) => errors.push(String(e)));
+  await pg.route('http://probe.local/**', (route) => {
+    const path = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    const f = join(CLIENT, path);
+    if (!f.startsWith(CLIENT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
+    return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] ?? 'application/octet-stream' });
+  });
+  const result = async (ms, q = '') => {
+    if (q) await pg.goto('about:blank');
+    await pg.goto(`http://probe.local/${q ? `?${q}` : ''}`);
+    return Promise.race([pg.evaluate(() => window.__probe), new Promise((r) => setTimeout(() => r({ error: `probe timed out (${ms / 1000} s)` }), ms))]);
+  };
+  return { browser, page: pg, errors, result, close: () => browser.close() };
 }
