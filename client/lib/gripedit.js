@@ -16,6 +16,7 @@ import { registerSystem } from './frameloop.js';
 import { isEditing, setPointerVeto, setEscapeHook } from './build.js';
 import * as Edits from './editwrites.js';
 import { sendRequest } from './net.js';
+import { plain } from './plainwords.js';
 import { flashHint } from './ui.js';
 import { checkGrabbable, HANDS, ROLES, GRASPS } from '../../shared/grab.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -159,7 +160,7 @@ export { mirrorQ as _mirrorQ };
 async function tryGrip() {
   const g = gripsOf(st.id)[st.name]; if (!g) return;
   const r = await sendRequest('grab', { id: st.id, grip: st.name, ...(g.hand === 'left' ? { hand: 'left' } : {}) });
-  if (!r?.ok) flashHint(r?.refused?.reason ?? 'couldn\'t pick it up', 4200, 'attn');
+  if (!r?.ok) flashHint(r?.refused ? plain('pick it up', r) : 'couldn\'t pick it up', 4200, 'attn');
   return r;
 }
 

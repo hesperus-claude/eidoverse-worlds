@@ -14,6 +14,7 @@ import { CONFIG, bus, report } from './base.js';
 import { net, identities, guests, sendRequest, replica, identityOf } from './net.js';
 import { contextMenu, closeContextMenu } from './panels.js';
 import * as R from '../../shared/protocol/roles.js';
+import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
 import { makeConsentInbox } from './consentinbox.js';
 import { SWITCHES, SWITCH_WORDS, CLASS_WORDS, mySwitch, setSwitch } from './consent.js';
 
@@ -77,7 +78,7 @@ const SAY = { warn: 'They see a notice they must dismiss.', mute: 'Nobody hears 
 
 async function run(verb, args, what) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(r?.refused ? plainRefusal(what, r) : `${what}: refused`, 'warn', 8000);
   return r;
 }
 /** Acts with choices open the form on `surface` ('card' | 'sheet' | {strip: host}); an ask's row answers the ask it showed. */
@@ -239,8 +240,9 @@ export function openForm(verb, display, surface = 'card') {
     if (verb === 'mute') Object.assign(args, { minutes: st.len, channels: [...st.ch] });
     if (verb === 'kick') args.minutes = st.len;
     if (verb === 'ban' && !st.forever) args.days = st.len / 1440;
-    const r = await run(verb, args, `${VERB[verb].toLowerCase()} ${display}`);
-    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = r.refused.reason; }
+    const what = `${VERB[verb].toLowerCase()} ${display}`;
+    const r = await run(verb, args, what);
+    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = plainRefusal(what, r); }
   };
   if (surface === 'card') { closeCard(); card = document.createElement('div'); card.id = 'person-form'; const c = document.createElement('div'); c.className = 'pm-card panel'; c.setAttribute('role', 'dialog'); c.append(host); card.append(c);
     card.addEventListener('pointerdown', (e) => { if (e.target === card) closeCard(); }); card.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeCard(); } });
