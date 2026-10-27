@@ -65,7 +65,8 @@ console.log("knockdown (headless bodies are pushable):\n");
 
 const events: string[] = [];
 const ag = new WorldAgent({ url: URL, name: "kd-bot", world: W });
-(ag as any).onEvent = (e: any) => { if (e?.text) events.push(String(e.text)); };
+// as the host reads it: an act is `* who text` (mcpl/net-server.ts), so the shover's name is its who
+(ag as any).onEvent = (e: any) => { if (e?.text) events.push(e.kind === "act" ? `* ${e.who} ${e.text}` : String(e.text)); };
 await ag.connect();
 await sleep(400);
 const h = await human("shover");
