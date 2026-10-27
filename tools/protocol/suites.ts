@@ -132,6 +132,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["navgrid-rows", "../navgrid-rows-test.ts", 1], // a route on built boxes ends where a body stands or says why; a scaled thing scales its places, never the body's tolerances
   ["places", "../places-test.ts", 1],    // #239: named places (move {to: "thing/place"}, which room you're in, name_place), look's places in sight, "?"
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
+  ["agent-reads", "../../mcpl/agent-reads-test.ts", 1], // every read the agent makes of the world server has a deadline; a geometry read that timed out is asked again
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
   ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],
   ["headless-core", "../../mcpl/headless-core-test.ts", 0.3], // the agent's stand-in core exports each shared name as core.js does: a function where it is a function   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
