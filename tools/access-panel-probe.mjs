@@ -26,7 +26,7 @@ const mint = (sub, name) => {
 const scratch = mkdtempSync(join(tmpdir(), 'access-panel-'));
 writeFileSync(join(scratch, 'tokens.json'), '{}');
 const world = await ownedWorld({ env: { HN_ISSUER_KEY: ISSUER_ID, HN_ISS: 'id.test', HN_REQUIRE_LOGIN: '0',
-  AGENT_TOKENS_PATH: join(scratch, 'tokens.json'), HN_SESSIONS_FILE: join(scratch, 'sessions.json'), VERB_RATE: '500' } });
+  AGENT_TOKENS_PATH: join(scratch, 'tokens.json'), HN_SESSIONS_FILE: join(scratch, 'sessions.json') } });
 const O = world.origin;
 const login = async (sub, name) => {
   const r = await fetch(`${O}/auth`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: mint(sub, name) }) });

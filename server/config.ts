@@ -66,10 +66,6 @@ export const LADDER = [PATCH_DIR, OPT_DIR, LIBRARY_DIR];
 
 mkdirSync(WORLDS_DIR, { recursive: true });
 
-/** Nothing reads it: the server never folds on an append count; every client folds the log itself (server/worldlog.ts). */
-export const FOLD_EVERY = Number(process.env.FOLD_EVERY ?? 150);
-/** Nothing reads it: requests spend from the message bucket (MSG_RATE); there is no separate verb rate. */
-export const VERB_RATE = Number(process.env.VERB_RATE ?? 12);
 /** Per client per second, two seconds of burst (server/msgrate.ts): a backlog the server caused isn't the client's. */
 export const MSG_RATE = Number(process.env.MSG_RATE ?? 60);
 

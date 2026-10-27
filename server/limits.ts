@@ -20,7 +20,6 @@ export const LIMITS = {
   // binary-ish payloads
   ANIM_TRACKS_BYTES: env("EW_ANIM_TRACKS_BYTES", 64_000),
   BODYDRAG_POSE_BYTES: env("EW_BODYDRAG_POSE_BYTES", 24_000),
-  RTC_PAYLOAD_BYTES: env("EW_RTC_PAYLOAD_BYTES", 20_000),   // nothing reads it: server.ts caps an SDP at a literal 20 000
 
   // paging + rings
   PAGE_MAX: env("EW_PAGE_MAX", 300),               // history/debug page ceiling
