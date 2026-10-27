@@ -15,6 +15,7 @@ import { waterParams, vector, MAX_AIR } from "../shared/water.js";
 import { resolveParticles } from "../shared/particle_effects.js";
 import { normalizePicture } from "../shared/picture.js";
 import { normalizeSound } from "../shared/sound.js";
+import { r3 } from "../shared/protocol/round.js";
 import type { Client, World } from "./world.ts";
 
 export const RENDER_VERSION = 1;
@@ -33,7 +34,6 @@ function projectWater(terrain: any, height: (x: number, z: number) => number, si
   const raw = terrain?.water ?? {};
   const a = analyzeWater(height, size, { level: w.level, kind: raw.kind, flow: raw.flow }, n);
   const K: Record<string, number> = { still: 0, river: 1, ocean: 2 };
-  const r3 = (v: number) => Math.round(v * 1000) / 1000;
   const cells: number[] = [];
   for (let k = 0; k < a.depth.length; k++) {
     if (!(a.depth[k] > 0) || a.comp[k] < 0) continue;
