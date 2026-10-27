@@ -18,10 +18,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("agenttools");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 600)}` : ""}`); } };
+const { ok, done } = suite("agenttools-check", { quiet: true, cap: 600 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const T = (r) => { const t = r?.content?.[0]?.text ?? ""; if (process.env.AT_SHOW) console.log(`    · ${t.slice(0, 400)}`); return t; };
 
@@ -352,5 +352,4 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   rid.close(); }
 
 ag.close(); ann.close();
-console.log(`agenttools: ${pass} pass, ${fail} fail`);
-process.exit(fail ? 1 : 0);
+done();

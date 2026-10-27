@@ -34,11 +34,11 @@ import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { ENGINE, scratch } from "./common.ts";
 import { idAliases } from "./idalias.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 const IDS = idAliases();   // the suite's names ride as placeholders and minted ids
 
 const root = scratch("identity");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("identity-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // a test home-node issuer
@@ -524,5 +524,4 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   S4.proc.kill(); }
 
 S2.proc.kill(); srv.proc.kill();
-console.log(`[identity-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

@@ -30,10 +30,10 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("access");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("access-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
@@ -512,5 +512,4 @@ const gonePid = await exitedPid();
     "A17 a revoke takes effect: deleting a present member's role is accepted, removes them now (4010), /access says none, the rejoin is refused, and the log holds the delete",
     { joined: !!jr.snapshot, del: del.refused, closed: r.closed, acc: acc.body, back: [jb.errors, back.closed], logged });
   r.close(); back.close(); ann.close(); try { s4.proc.kill(); } catch {} await sleep(300); }
-console.log(`[access-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

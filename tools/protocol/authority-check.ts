@@ -36,12 +36,12 @@ import { worldPose } from "../../shared/hierarchy.js";
 import { viewState } from "../../shared/protocol/view.js";
 import { worldPose as worldT } from "../../shared/protocol/simlayer.js";
 import { labClock } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("door");
 // lab worlds name people by bare test names; the directory a real server has would know them (roles:<key> checks it)
 const LABKIND = (_id: string) => "human";
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("authority-check", { quiet: true });
 const code = (r: any) => r?.refused?.code;
 const clock = labClock();
 const callAt = (world: string) => (actor, verb, args = {}) => { clock.advance(100); return request(openWorld(root, world), actor, verb, args); };
@@ -1755,5 +1755,4 @@ for (const [name, steps] of [
   const bad = call("olive", "create-world", { title: "x".repeat(5000) });
   const again = call("olive", "create-world", { title: "second try" });
   ok(bad?.ok === false && again?.ok === true && again.you === "owner", "F1 a refused founding leaves nothing: the next founding of that name succeeds", { bad, again }); }
-console.log(`[authority-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
