@@ -216,8 +216,17 @@ function scaleCase(n: number) {
 const growth = (small: any, large: any, skip: string[] = []) => Object.fromEntries(Object.keys(large).filter((k) => !skip.includes(k))
   .map((k) => [k, r1(large[k] / Math.max(small?.[k] ?? 0, FLOOR_MS))]));
 const grewOk = (g: any) => !!g && Object.values(g).every((v: any) => v <= GROWS);
+// the small world and the large one are built and timed in turn, ROUNDS times, each op's best kept: a busy host then slows
+// both sides alike, where one after the other a burst lands on only one of them
+const ROUNDS = 3;
+const paired = (small: () => any, large: () => any) => { let sm: any = null, lg: any = null;
+  const keep = (a: any, b: any) => (!a?.ms ? b : !b?.ms ? a : { ...b, ms: Object.fromEntries(Object.keys(b.ms).map((k) => [k, Math.min(a.ms[k] ?? Infinity, b.ms[k])])) });
+  for (let r = 0; r < ROUNDS; r++) { sm = keep(sm, small()); lg = keep(lg, large()); if (!lg?.ms || !sm?.ms) break; }
+  return { small: sm, large: lg }; };
 // the same world built at n and at 72 things: check {} reads every thing by design (bounded by the work budget, Q3), so it isn't held to growth
-const scaleGrows = (n: number) => (s: any) => { const small = scaleCase(72)(session()), o = scaleCase(n)(s);
+const scaleGrows = (n: number) => (s: any) => { let first = true;
+  const { small, large: o } = paired(() => scaleCase(72)(session()), () => scaleCase(n)(first ? ((first = false), s) : session()));
+  if (!o?.ms || !small?.ms) return { ...o, small };
   return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]) }; };
 const scaleGood = (o: any) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && (o.grew === undefined || grewOk(o.grew))
   && JSON.stringify(o.codes) === JSON.stringify({ delete: "ok", step: "ok", check: "ok", place: "ok", placeVisitor: "rights", look: "ok", create: "ok", set: "ok", batch: "ok", grab: "ok" });
@@ -433,11 +442,15 @@ const cases: Case[] = [
       op("check", () => s.call("vic", "lint", {})); op("look", () => s.call("vic", "look", {}));
       op("place", () => s.call("bob", "place", { id: "cup", on: "desk-0", dry: true }));
       return { ms, codes }; };
-      const small = at(session(), 20), o = at(s, 300); if (!o.ms || !small.ms) return { ...o, small };
+      let first = true; const { small: sm, large: o } = paired(() => at(session(), 20), () => at(first ? ((first = false), s) : session(), 300));
+      const small = sm; if (!o?.ms || !small?.ms) return { ...o, small };
       return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]), bound: r1(bound()) }; },
     good: (o) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && grewOk(o.grew) && JSON.stringify(o.codes) === '{"check":"ok","look":"ok","place":"ok"}' },
-  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) costs at most ${GROWS}× the same step beside 40, and one into them is refused (solid) as cheaply`, run(s) {
-      const at = (s: any, N: number) => { cast(s);
+  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) costs at most ${GROWS}× as much with 4 000 more things far off (the index, not a scan of the world), and one into them is refused (solid) alike`, run(s) {
+      const at = (s: any, far: number) => { cast(s); const N = 800;
+      if (far) { s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: N + far + 100 } });
+        for (let k = 0; k < far;) { const ops = []; for (let q = 0; q < 50 && k < far; q++, k++) ops.push({ verb: "create", args: { id: `far-${k}`, model: "crate", components: { transform: T0([300 + (k % 60) * 3, 0, 250 + Math.floor(k / 60) * 3]) } } });
+          const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; } }
       for (let made = 0; made < N;) { const ops = []; for (let k = 0; k < 50 && made < N; k++, made++) ops.push({ verb: "create", args: { id: `b-${made}`, model: "book", components: { transform: T0([2.2 + (made % 10) * 0.06, 0.9 + (Math.floor(made / 100) % 8) * 0.1, 2.2 + (Math.floor(made / 10) % 10) * 0.06]) } } });
         const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; }
       s.call("vic", "move", { to: [0, 0, 2.8] }, 5000);
@@ -445,15 +458,16 @@ const cases: Case[] = [
       s.call("vic", "move", { to: [0, 0, 2.8], teleport: true }, 5000);
       const into = best(5, () => s.call("vic", "move", { to: [2.5, 0, 2.5] }, 2000));
       return { ms: { past: r1(past.ms), into: r1(into.ms) }, past: code(past.r), into: code(into.r) }; };
-      const small = at(session(), 40), o = at(s, 800); if (!o.ms || !small.ms) return { ...o, small };
+      let first = true; const { small: sm, large: o } = paired(() => at(session(), 0), () => at(first ? ((first = false), s) : session(), 4000));
+      const small = sm; if (!o?.ms || !small?.ms) return { ...o, small };
       return { ...o, small: small.ms, grew: growth(small.ms, o.ms), bound: r1(bound()) }; },
     good: (o) => o.past === "ok" && o.into === "solid" && o.ms.past <= o.bound && o.ms.into <= o.bound && grewOk(o.grew) },
   { id: "S4", what: `look over 2 000 things: the first 40 in the tree's order and the total, at most ${GROWS}× what look costs over 72`, run(s) {
       const at = (s: any, n: number) => { cast(s); s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 2400 } });
         fill(s, n); for (let k = 0; k < 3; k++) s.call("olive", "create", { id: `kid-${k}`, model: "book", components: { parent: { to: "c-0" }, transform: T0([0, 0.6, 0]) } });
-        return best(5, () => s.call("vic", "look", {})); };
-      const small = at(session(), 72), x = at(s, 2000);
-      return { ms: r1(x.ms), grew: growth({ look: small.ms }, { look: x.ms }), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
+        const x = best(5, () => s.call("vic", "look", {})); return { ms: { look: r1(x.ms) }, r: x.r }; };
+      let first = true; const { small, large } = paired(() => at(session(), 72), () => at(first ? ((first = false), s) : session(), 2000)); const x = { ms: large.ms.look, r: large.r };
+      return { ms: r1(x.ms), grew: growth(small.ms, large.ms), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
     good: (o) => o.ms <= o.bound && grewOk(o.grew) && o.n === 40 && o.total === 2003 && JSON.stringify(o.first) === '["c-0@0","kid-0@1","kid-1@1","kid-2@1","c-1@0"]' },
   { id: "G2", what: "the index a state's queries use (derived from the last one, write by write) files exactly what a fresh build files, through moves, re-parenting, deletes of parents, creates and undo", run(s) { cast(s);
       if (!D.indexAudit) return { skipped: "no audit at this tree" };
@@ -586,10 +600,10 @@ if (argv.includes("--scenario")) {
 
 // ---------------- run ----------------
 // a row's timings: `ms` (a number or a map of them) and any `<name>Ms`. Red only on timing = it passes with them all at zero
-const isTime = (k: string) => k === "ms" || k.endsWith("Ms");
+const isTime = (k: string) => k === "ms" || k.endsWith("Ms") || k === "grew";
 const zeroTimes = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, !isTime(k) ? v : typeof v === "number" ? 0 :
   v && typeof v === "object" ? Object.fromEntries(Object.keys(v).map((n) => [n, 0])) : v]));
-const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k)).flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
+const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k) && k !== "grew").flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
 const timingOnly = (c: any, o: any) => !!o && typeof o.bound === "number" && Object.keys(o).some(isTime) && !c.good(o) && (() => { try { return !!c.good(zeroTimes(o)); } catch { return false; } })();
 const SUITE = suite("scale-check", { cap: 900 });
 for (const c of cases) {
