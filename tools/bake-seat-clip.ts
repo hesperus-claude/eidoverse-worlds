@@ -1,4 +1,4 @@
-// bake-seat-clip: regenerate upstream-patched/…/sitting_normal_chair.vrma, lowered onto the seat.
+// bake-seat-clip: regenerate patched/…/sitting_normal_chair.vrma (config.ts PATCH_DIR, served first), lowered onto the seat.
 // The stock clip is floor-origin but seats put the root on the surface, so the hips track is lowered by Δ ≈ 0.409 in the
 // clip (createVRMAnimationClip scales it per rig; restHipsPosition comes from the rest graph, so the scale is untouched).
 // Re-derive from the seated mass, never a single minimum vertex: Δ = rest height / 0.865 — see docs/research/seat-clip-delta.md.
@@ -25,7 +25,7 @@ const REL = "eidoverse/assets/animations/sitting_normal_chair.vrma";
 const ROOT = join(import.meta.dir, "..");
 const LIB = process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video");
 const SRC = join(LIB, REL);
-const OUT = join(ROOT, "upstream-patched", REL);
+const OUT = join(ROOT, "patched", REL);
 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 
