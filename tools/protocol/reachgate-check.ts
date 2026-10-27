@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
+import { suite } from "./suite.ts";
 const root = scratch("reachgate");
 process.env.WORLDS_DIR = path.join(root, "w"); process.env.OPT_DIR = path.join(root, "opt"); process.env.SKIP_OPT_SWEEP = "1";
 process.env.JOIN_TOKEN ??= "test-door";
@@ -26,8 +27,7 @@ const { foundWorld } = await import("../../server/worldlog.ts");
 const { World } = await import("../../server/world.ts");
 const { MESSAGES } = await import("../../server/messages.ts");
 const { REACH_NOTE_MS, refusalWords } = await import("../../shared/protocol/consent.js");
-let pass = 0, fail = 0;
-const ok = (c, what, d?) => { if (c) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${d !== undefined ? " — " + JSON.stringify(d).slice(0, 500) : ""}`); } };
+const { ok, done } = suite("reachgate-check", { cap: 500 });
 
 foundWorld(path.join(process.env.WORLDS_DIR, "touch"), "touch", "olive");
 const w = new World("touch");
@@ -383,4 +383,4 @@ let skipped = null; const SKIP = Symbol("skip");
   } catch (e) { if (e !== SKIP) ok(false, "AG threw", String(e?.stack ?? e).slice(0, 600)); else console.log(`  SKIP AG1-AG2: the agent can't load here (${skipped}); NODE_PATH=<node_modules with it> runs them`); }
   try { ag?.close(); } catch {} try { vs?.close(); } catch {} try { proc.kill(); } catch {} }
 
-console.log(`[reachgate-check] ${pass} passed, ${fail} failed${skipped ? ", AG skipped (agent can't load)" : ""}`); process.exit(fail ? 1 : 0);
+done(`${skipped ? ", AG skipped (agent can't load)" : ""}`);

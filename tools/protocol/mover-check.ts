@@ -26,9 +26,9 @@ import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { pause } from "./wait.ts";
 import { labClock, unpinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 600)}` : ""}`); } };
+const { ok, done } = suite("mover-check", { quiet: true, cap: 600 });
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 const src = (p) => fs.readFileSync(path.join(ENGINE, p), "utf8");
 
@@ -478,5 +478,4 @@ if (M) {
   // a crate already on the hill is what a second one lands on (a thing's top still outranks the ground under it)
   ok(call("hill", "olive", "create", { id: "stack", model: "crate", at: [10, 0] }).ok && near(bottom("hill", "stack"), hH(10, 0) + 0.6, 0.01), "GP5 create {at} where a crate already sits on the hill: on the crate's top", bottom("hill", "stack"));
 }
-console.log(`mover: ${pass} pass, ${fail} fail`);
-process.exit(fail ? 1 : 0);
+done();

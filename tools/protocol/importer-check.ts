@@ -28,6 +28,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 // IM-I9's child: one translation under TRUST_NAMES=1 (read at import), printed as JSON
@@ -46,8 +47,7 @@ const { custodyFileIn } = await import("../../server/keyfiles.ts");
 const { HN_ISS } = await import("../../server/auth.ts");
 const { emptyState: v1Empty, foldEntry: v1Fold } = await import("./import-v1/fold.js");
 
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 600)}` : ""}`); } };
+const { ok, done } = suite("importer-check", { cap: 600 });
 const row = (what: string, fn: () => void) => { try { fn(); } catch (e) { ok(false, what, `threw: ${e?.stack ?? e}`); } };
 const root = scratch("importer");
 let n = 0;
@@ -289,5 +289,4 @@ row("IM-I14", () => {
   const got = liftFailures([{ repairNeeded: { steps: ["repair-shapes"], blocking: [], optional: [] } }, { host: "h", made: [] }]);
   ok(got.length === 1 && got[0].repairNeeded, "IM-I17 the oracle counts a lifted world that still needs maintenance (liftWorld's repairNeeded) as a lift failure", got); }
 
-console.log(`[importer-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

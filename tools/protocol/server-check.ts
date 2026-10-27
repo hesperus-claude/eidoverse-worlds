@@ -23,12 +23,12 @@ import { enc } from "../../shared/protocol/names.js";
 import { worldPose } from "../../shared/hierarchy.js";
 import { idAliases } from "./idalias.ts";
 import { shellWord } from "../../server/oldworlds.ts";
+import { suite } from "./suite.ts";
 const IDS = idAliases();
 
 
 const root = scratch("server");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, done } = suite("server-check", { quiet: true, cap: 500 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- a measured model: a 1.2 × 0.75 × 0.8 m box, origin at its base centre, written as a real GLB ----
@@ -650,5 +650,4 @@ console.log("SL " + JSON.stringify({ atLoad, r: { ok: r.ok, lift: r.steps?.lift 
   ok(!!got && got.atLoad.a === 0 && got.atLoad.b === 0 && got.atLoad.aMap && got.atLoad.notes.some((n) => n.kind === "repair-needed" && n.steps?.includes("lift-sockets") && n.blocking?.includes("lift-sockets")), "SL1 at load nothing is lifted (a load never writes: lead 10-18); the flight recorder is told the world needs lift-sockets and refuses writes meanwhile (repair-needed)", got);
   ok(!!got && got.r.ok && got.b === 1 && got.a === 0 && got.aMap && got.by === "opie" && got.r.lift?.failed?.some((f) => f.host === "a-cart" && f.code === "shape") && got.r.lift?.made?.some((m) => m.host === "b-bench"), "SL1 …the operator's repair (operator-repair {verb: repair}) lifts the healthy host, recorded with the operator's id, and names the host the door refuses ({host, code}), left as it was", got); }
 
-console.log(`[server-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
