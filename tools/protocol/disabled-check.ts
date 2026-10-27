@@ -10,9 +10,9 @@ import { fold } from "../../shared/protocol/fold.js";
 import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
 import { scratch } from "./common.ts";
 import { labClock } from "./clock.ts";
+import { suite } from "./suite.ts";
 const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) { pass++; console.log("  ✓", name); } else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
+const { ok, done } = suite("disabled-check", { cap: Infinity });
 const root = scratch("disabled"); const clock = labClock();
 const call = (w, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, w), a, v, args); };
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
@@ -71,5 +71,4 @@ const holds = (W) => Object.keys(openWorld(root, W).presence.holds);
   const d = call(W, "vic", "drop", { id: "top" });
   ok(g.ok && s.ok && !holds(W).includes("top") && (s.notes ?? []).some((n) => n.id === "top" && n.tookFromHand) && code(d) === "not-holding",
     "D6 switching off a parent lets go of the held child (the note says so; nothing left to drop)", { g: code(g), s: code(s), notes: s.notes, held: holds(W), d: code(d) }); }
-console.log(`[disabled-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

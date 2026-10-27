@@ -1,8 +1,8 @@
 // consent-table-check: decide() and setConsent() over every class in CLASSES; one order (a personal never > my switch >
 // the world's body-default > accept), and nothing from the wire reaches a prototype. Rows: PROTOCOL L6, consent.js.
 import * as C from "../../shared/protocol/consent.js";
-let pass = 0, fail = 0;
-const ok = (c: boolean, n: string, d: unknown = "") => { c ? pass++ : fail++; console.log((c ? "ok   " : "FAIL ") + n + (c ? "" : "  " + JSON.stringify(d))); };
+import { suite } from "./suite.ts";
+const { ok, done } = suite("consent-table-check", { cap: Infinity });
 const ME = "u-aaaaaaaaaaaaaaaaaaaa", PAL = "u-bbbbbbbbbbbbbbbbbbbb", now = 1e12;
 const MODE: Record<string, string> = { accept: "allow", ask: "ask", refuse: "deny" };
 const PROTO = ["__proto__", "constructor", "prototype"];
@@ -61,4 +61,4 @@ for (const cls of C.CLASSES) { const p = fresh(), year = 365 * 24 * 3600000;
   ok(p.consent[ME].over[PAL][cls].until === now + year && C.decide(p, PAL, ME, cls, now + year - 1, "refuse").mode === "allow" && C.decide(p, PAL, ME, cls, now + year, "refuse").mode === "deny", `R4b ${cls}: an allow for a year lasts a year, then the switch answers`, p.consent[ME].over[PAL][cls]);
   set(p, { deny: PAL, class: cls }); const dn = p.consent[ME].over[PAL][cls];
   ok(dn?.mode === "deny" && dn.until === undefined, `R4c ${cls}: revoking (deny) replaces the standing allow at once`, dn); }
-console.log(`[consent-table-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

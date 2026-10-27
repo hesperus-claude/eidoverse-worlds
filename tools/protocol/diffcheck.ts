@@ -4,8 +4,8 @@
 // lines, and a patch whose context lines end in spaces. Main's own older files outside the range are not this check's business.
 //   bun tools/protocol/diffcheck.ts            (base: $DIFFCHECK_BASE, else the merge-base with origin/main or anima/main)
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { spawnSync } from "node:child_process";
-const ENGINE = path.resolve(import.meta.dir, "../.."); let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}`); if (info !== undefined) console.log("     ", typeof info === "string" ? info : JSON.stringify(info)); } };
+import { suite } from "./suite.ts";
+const ENGINE = path.resolve(import.meta.dir, "../.."); const { check, done } = suite("diffcheck", { cap: Infinity });
 const git = (args: string[], cwd = ENGINE) => spawnSync("git", args, { cwd, encoding: "utf8" });
 
 const EXEMPT = ["spec/conformance/logs/12a-blank-crlf.jsonl", "tools/water/native-coordinate-fix.patch"];
@@ -50,4 +50,4 @@ if (!b) {
   check("D3 .gitattributes exempts exactly the two documented files from whitespace checks", JSON.stringify(exempt) === JSON.stringify([...EXEMPT].sort()), exempt);
 }
 
-console.log(`[diffcheck] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();
