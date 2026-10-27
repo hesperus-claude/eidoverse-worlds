@@ -1059,12 +1059,12 @@ const ROUTES: Route[] = [
   },
   {
     match: (u) => u.pathname === "/" || u.pathname === "/index.html",
-    handler: () => serveFrom(join(ROOT, "client"), "index.html"),
+    handler: ({ req }) => serveFrom(join(ROOT, "client"), "index.html", false, req),
   },
   {
     // the catch-all: the browser client's static tree
     match: () => true,
-    handler: ({ url }) => serveFrom(join(ROOT, "client"), url.pathname.slice(1)),
+    handler: ({ req, url }) => serveFrom(join(ROOT, "client"), url.pathname.slice(1), false, req),
   },
 ];
 
