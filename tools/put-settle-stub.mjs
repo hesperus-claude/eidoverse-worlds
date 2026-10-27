@@ -13,7 +13,9 @@ export const colliderFor = () => ({ r: 0.3, h: 1.6 });
 export const replica = { active: true, sim: null, simVersion: 0, head: 0, st: { entities: {} }, simClone: () => null };
 export const net = { you: 'me', joined: true };
 export const sent = [];
-export async function sendRequest(verb, args) { sent.push([verb, args]); return { ok: true }; }
+let reply = () => ({ ok: true });
+export const setReply = (f) => { reply = f; };   // the authority's answer to a request (tools/track-teleport-test.ts)
+export async function sendRequest(verb, args) { sent.push([verb, args]); return reply(verb, args); }
 export const identities = new Map();
 export const flashHint = () => {};
 export const logChat = () => {};
