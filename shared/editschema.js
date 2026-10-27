@@ -424,7 +424,7 @@ export function inspectSchema(ent, id, live = {}) {
   if (laKeys.length) {
     // the door's axis letters (componentspec `axis`: x, y, z or a vector); a stored vector shows as itself
     const AX = ['z', 'x', 'y'];
-    const fwdOf = (f) => (typeof f === 'string' ? f : Array.isArray(f) ? JSON.stringify(f) : 'z');
+    const fwdOf = (f) => (typeof f === 'string' ? f : Array.isArray(f) ? (axisName({ axis: f }) === 'custom' ? JSON.stringify(f) : axisName({ axis: f })) : 'z');
     const fields = [];
     for (const key of laKeys) {
       const la = c[key]; const pre = key === 'look-at' ? '' : `${key.slice(8)}|`; const nm = key === 'look-at' ? '' : `${key.slice(8)} `;
@@ -493,8 +493,7 @@ export function inspectSchema(ent, id, live = {}) {
       fields.push({ t: 'enum', k: k('type'), label: `${P}type`, value: ty, options: types.map((v) => ({ v, label: v })) });
       if (['pendulum', 'spin', 'oscillate'].includes(ty)) {
         const ax = axisName(m, ty === 'pendulum' ? 'x' : 'y');
-        // x, y, z only (negative degrees cover the rest, and the authority refuses '-x'); a stored negative or custom axis
-        // still shows as itself
+        // x, y, z only (negative degrees cover the rest; the door takes -x too); a stored negative or custom axis still shows as itself
         const opts = ['x', 'y', 'z'].map((v) => ({ v, label: v }));
         fields.push({ t: 'enum', k: k('axis'), label: `${P}axis`, value: ax, options: opts.some((o) => o.v === ax) ? opts : [...opts, { v: ax, label: ax }] });
       }
@@ -982,12 +981,13 @@ export function addOps(ent, id, name, value) {
   if (own.errors.length) return own;
   return { ops: [...np.ops, ...own.ops], errors: [], ...(np.brings ? { brings: np.brings } : {}) };
 }
+// a path's points are in its parent's frame (as the renderer reads them): it starts where it stands and goes 2 m on
+const pathPoints = (ent) => { const p0 = (Array.isArray(ent?.parent?.offset) ? ent.parent.offset : Array.isArray(ent?.pos) ? ent.pos : [0, 0, 0]).map((v) => round(+v || 0, 4));
+  return [p0, [p0[0], p0[1], round(p0[2] + 2, 4)]]; };
 function addOwnOps(ent, id, name, value) {
   const c = recordComponents(ent);
-  // a path's points are in its parent's frame (as the renderer reads them): it starts where it stands and goes 2 m on
-  const p0 = (Array.isArray(ent?.parent?.offset) ? ent.parent.offset : Array.isArray(ent?.pos) ? ent.pos : [0, 0, 0]).map((v) => round(+v || 0, 4));
   // a motion seed states what makes it visible (a swing of 15°, a 1 m orbit); the rest the authority writes (componentspec.js)
-  const motion = { Pendulum: { type: 'pendulum', amp: 0.26 }, Spin: { type: 'spin', degPerSec: 36 }, Orbit: { type: 'orbit', radius: 1, degPerSec: 12 }, Oscillate: { type: 'oscillate', amp: 0.3, period: 4 }, Path: { type: 'path', points: [p0, [p0[0], p0[1], round(p0[2] + 2, 4)]], speed: 1 } };
+  const motion = { Pendulum: { type: 'pendulum', amp: 0.26 }, Spin: { type: 'spin', degPerSec: 36 }, Orbit: { type: 'orbit', radius: 1, degPerSec: 12 }, Oscillate: { type: 'oscillate', amp: 0.3, period: 4 }, Path: { type: 'path', points: pathPoints(ent), speed: 1 } };
   if (motion[name]) {
     const part = typeof value === 'string' && value.trim() ? value.trim() : null;
     // a node's motion: motion:<slot> {node: <its name, as the file spells it>} (the node is data; partSlot makes the key)
@@ -1286,6 +1286,7 @@ export function editOps(ent, id, edits, live = {}) {
           // leftover); t0 stays so the change is not also a phase jump
           for (const p of Object.keys(next)) if (!['type', 'axis', 'pivot', 'phase', 't0', 'part', 'node'].includes(p)) delete next[p];
           next.type = raw;
+          if (raw === 'path' && !Array.isArray(next.points)) next.points = pathPoints(ent);   // the door requires a path's points (Add Path's seed)
         }
         else if (!writeField(MOTION_CARD[motionType(prev)] ?? 'Spin', param, key, f, raw, next)) { errors.push(`${key}: no such field`); break; }
         motions.set(mkey, next);
@@ -1399,6 +1400,7 @@ export function editOps(ent, id, edits, live = {}) {
         const ck = part ? `look-at:${part}` : 'look-at';
         const next = { ...(comps.get(ck) ?? (isBag(c[ck]) ? c[ck] : {})) };
         if (fk === 'target' || fk === 'target@') { if (raw == null || raw === '') { if (fk === 'target') { comps.set(ck, null); break; } else break; } next.target = String(raw); }
+        else if (fk === 'forward' && typeof raw === 'string' && raw.startsWith('[')) { let v; try { v = JSON.parse(raw); } catch {} if (!Array.isArray(v)) { errors.push(`${key}: x, y, z or [x, y, z]`); break; } next.forward = v; }   // a custom vector's option is its JSON text (fwdOf)
         else if (writeField('LookAt', fk, key, f, raw, next)) { /* written */ }
         else if (fk === 'up') next.up = String(raw);
         else if (fk === 'speed' || fk === 'range') { const n = num({ value: next[fk] ?? (fk === 'speed' ? 240 : 12) }, raw); if (n == null || outOfDoor('look-at', fk, round(n), key)) break; next[fk] = round(n); }   // no row yet: the look-at is being made

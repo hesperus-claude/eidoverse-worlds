@@ -187,7 +187,7 @@ function mediaCheck(s, id, comp, v, at, obj) {
     // radians (PROTOCOL §9.2): the limits are [min, max] from rest
     for (const f of ["yaw", "pitch"]) if (v[f] !== undefined) { const lim = f === "yaw" ? Math.PI : Math.PI / 2;
       if (!(Array.isArray(v[f]) && v[f].length === 2 && v[f].every((x) => isNum(x) && Math.abs(x) <= lim + 1e-12) && v[f][0] <= v[f][1])) refuse("bounds", `${at}.${f} is [min, max] radians from rest, each within ±${f === "yaw" ? "π" : "π/2"}, min ≤ max`, `e.g. ${f}: [-0.785, 0.785] (±45°)`); }
-    for (const f of ["forward", "up"]) if (typeof v[f] === "string" && !["x", "y", "z"].includes(v[f])) refuse("shape", `${at}.${f} is an axis: x|y|z or [x, y, z] (a negative one is a vector: [0, 0, -1])`, ""); }
+    for (const f of ["forward", "up"]) if (typeof v[f] === "string" && !AXIS_LETTERS.includes(v[f].toLowerCase())) refuse("shape", `${at}.${f} is an axis: x|y|z|-x|-y|-z or [x, y, z]`, ""); }
   // one driver per node: a node turned by a rotating motion can't also turn to face something, and a dynamic thing's
   // rotation is the sim's
   if ((isLookAt(comp) || comp === "motion" || comp.startsWith("motion:")) && obj) {
@@ -201,10 +201,11 @@ function mediaCheck(s, id, comp, v, at, obj) {
 // L7 (research 40 T10): values are checked against their schema at admit. A KNOWN name with an unknown key is refused with
 // a "did you mean" (terrain {amp: 0} is not `amplitude`, and a flat world got 3 m hills). Unknown namespaced NAMES are still kept (L5).
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+const AXIS_LETTERS = ["x", "y", "z", "-x", "-y", "-z"];
 const TYPES = { number: isNum, int: Number.isInteger, string: (x) => typeof x === "string", bool: (x) => typeof x === "boolean", any: () => true,
   sha256: (x) => typeof x === "string" && /^sha256:[0-9a-f]{64}$/.test(x),   // a content hash (model-hash; the one spelling, as copy-of.from's)
   vec3: (x) => Array.isArray(x) && x.length === 3 && x.every(isNum),
-  axis: (x) => (Array.isArray(x) && x.length === 3 && x.every(isNum)) || x === "x" || x === "y" || x === "z", // the text-tier shorthand the renderer reads (motioneval.js)
+  axis: (x) => (Array.isArray(x) && x.length === 3 && x.every(isNum)) || (typeof x === "string" && AXIS_LETTERS.includes(x.toLowerCase())), // the letters the renderer reads (motioneval.js AXES)
   array: Array.isArray, object: (x) => x && typeof x === "object" && !Array.isArray(x),
   // references (componentspec REF_TYPES): ids of things, identities of people, or @words where a field takes them
   ref: (x) => isEntityId(x), refs: (x) => Array.isArray(x) && x.every((y) => isEntityId(y)), person: (x) => isIdentity(x), people: (x) => Array.isArray(x) && x.every((y) => isIdentity(y)),

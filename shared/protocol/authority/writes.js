@@ -160,7 +160,7 @@ function needThing(ctx, id) {
 const outsideWorld = (B, p) => p[0] < B.min[0] || p[0] > B.max[0] || p[2] < B.min[2] || p[2] > B.max[2] || p[1] > B.max[1];
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
-const MOTION_AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };   // motioneval.js AXES
+const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };   // motioneval.js AXES
 // resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
 // admit's
 function resolve(ctx, id, comp, value, prev) {
@@ -196,13 +196,12 @@ function resolve(ctx, id, comp, value, prev) {
     value = { ...value, layers: value.layers.map((l) => (typeof l?.color === "string" && /^#[0-9a-f]{6}$/i.test(l.color) ? { ...l, color: parseInt(l.color.slice(1), 16) } : l)) };
   // a sky written by hand is stamped like the sky act's: ts is the instant its hours held (stamped fields are refused in buildSet)
   if (comp === "sky" && value && typeof value === "object" && !Array.isArray(value) && value.ts === undefined) value = { ...value, ts: Math.floor(ctx.w.now()) };
-  if (isLookAt(comp) && value && typeof value === "object" && !Array.isArray(value)) { const AXV = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };   // the letters the door takes (tools/lookat-forward-check: no negative letter)
-    for (const f of ["forward", "up"]) if (typeof value[f] === "string" && AXV[value[f]]) value = { ...value, [f]: AXV[value[f]].slice() }; }
   // every parameter written down (PROTOCOL §4): the definition's defaults and per-kind rules (componentspec materialize)
   const filled = (v, list) => { if (list.length) ctx.notes.push({ id, component: comp, filled: list, why: "defaults written out so the engine can't change them later" }); return v; };
-  // an axis is a vector (PROTOCOL §9.2): the letters the readers take are stored as their vectors
-  if ((comp === "motion" || comp.startsWith("motion:")) && value && typeof value === "object" && !Array.isArray(value) && typeof value.axis === "string" && MOTION_AXES[value.axis.toLowerCase()]) {
-    ctx.notes.push({ id, component: comp, field: "axis", sent: value.axis, kept: MOTION_AXES[value.axis.toLowerCase()], why: "an axis is stored as a vector" }); value = { ...value, axis: MOTION_AXES[value.axis.toLowerCase()].slice() }; }
+  // an axis is a vector (PROTOCOL §9.2): on every `axis` field (motion.axis, openable.axis, look-at.forward/up) a letter, signed or not, is stored as its vector
+  if (value && typeof value === "object" && !Array.isArray(value)) for (const [f, t] of Object.entries(COMPONENTS[comp.split(":")[0]]?.fields ?? {}))
+    if (t === "axis" && typeof value[f] === "string" && Object.hasOwn(AXES, value[f].toLowerCase())) {
+      const kept = AXES[value[f].toLowerCase()].slice(); ctx.notes.push({ id, component: comp, field: f, sent: value[f], kept, why: "an axis is stored as a vector" }); value = { ...value, [f]: kept }; }
   if (comp === "collider" && value && typeof value === "object" && !Array.isArray(value) && value.shape === "exact") { ctx.notes.push({ id, component: comp, field: "shape", sent: "exact", kept: "mesh", why: "mesh is the word for its triangles" }); value = { ...value, shape: "mesh" }; }
   if (comp === "parent" && value && typeof value === "object" && !Array.isArray(value) && "order" in value) { const { order, ...rest } = value; ctx.notes.push({ id, component: comp, field: "order", sent: order, why: "siblings have no stored order: dropped" }); value = rest; }
   if (comp === "motion" && value && typeof value === "object") { const m = materialize("motion", value); const v = filled(m.value, m.filled);
