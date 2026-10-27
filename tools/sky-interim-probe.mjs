@@ -4,7 +4,7 @@
 // near you has settled. Cloud quality OFF before load (a software cloud bake exhausts this machine); the tier still
 // builds, holds and bakes. Real client.
 //   bun tools/sky-interim-probe.mjs
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'interim', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser(); const pg = await page();
@@ -14,11 +14,7 @@ pg.on('console', (m) => { const t = m.text(); if (/sky/.test(t)) lines.push(`${(
 pg.on('request', (r) => { const b = r.postData(); if (b && /\[sky\]/.test(b)) for (const x of b.match(/\[sky\][^"\\]*/g) ?? []) lines.push(`${((Date.now() - T0) / 1000).toFixed(1)} ${x.slice(0, 900)}`); });
 try {
   // a world whose log already has a cloudy sky, so boot builds it
-  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded' });
-  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
-  await pg.goto(`${world.origin}/?world=staging&name=interim&key=${world.key}&lite=0`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => globalThis.__ewEngineUp, null, { timeout: 120000 });
-  await pg.evaluate(async () => { const { sendRequest } = await import('./lib/net.js'); const r = await sendRequest('set', { id: '@world', component: 'sky', value: { hours: 17, rate: 22.5, clouds: 'cumulus' }, merge: true }); if (!r.ok) throw new Error(`sky refused: ${JSON.stringify(r.refused)}`); });
+  await skyBoot(pg, world, 'interim', { sky: { hours: 17, rate: 22.5, clouds: 'cumulus' } });
   await pg.waitForTimeout(1500);
   await pg.reload({ waitUntil: 'domcontentloaded' });
   const t1 = Date.now();
