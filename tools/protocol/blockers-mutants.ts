@@ -6,6 +6,7 @@
 // This suite's output is the PR's red/green table: `id → mutant → row turned red`.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/blockers-mutants.ts            every mutant (the gate's MAIN lane)
 //   … --only B3,M5                                                                        a subset
+//   … --group a                                                                           one of the gate's pieces (GROUPS); --list prints the ids it would run
 // Bounded: each mutant runs only the one suite it names; the scratch tree links node_modules and copies server/, shared/,
 // client/lib, mcpl/, tools/, spec/, docs/ (the suites read spec and docs as text). No browser.
 // @ts-nocheck
@@ -97,9 +98,28 @@ const M: Mutant[] = [
     find: "// persist before publishing: a line reaches memory", repl: "//  persist before publishing: a line reaches memory", suite: "txn", rows: [], expect: 1 },
 ];
 
+// the gate's pieces (blockers-mutants-a…d in suites.ts), balanced by measured time; each runs the CONTROL too, and every
+// mutant is in exactly one piece (checked below, in every piece, so a mutant added to M and to no group fails them all)
+const GROUPS: Record<string, string[]> = {
+  a: ["B8", "B9", "M6a", "M6b", "M6c"],                                                      // inplace
+  b: ["M6d", "M6e", "M6f", "M7"],                                                            // inplace
+  c: ["r14-M3", "M4", "sec-L11", "B4", "M1", "M2", "r14-M1", "B6", "B7", "B10", "M5", "M8", "M9", "r14-H1"], // inplace, identity, the quick suites
+  d: ["B1", "B2", "B5", "M3", "r14-M2", "sec-H1", "sec-H2", "sec-M6"],                       // authority, access
+};
 const argv = process.argv.slice(2);
 const onlyI = argv.indexOf("--only"); const only = onlyI >= 0 ? new Set(argv[onlyI + 1].split(",")) : null;
-const todo = only ? M.filter((m) => only.has(m.id)) : M;
+const groupI = argv.indexOf("--group"); const group = groupI >= 0 ? argv[groupI + 1] : null;
+const partition: string[] = [];
+{ const seen = new Map<string, string>(); const ids = new Set(M.map((m) => m.id));
+  for (const [g, xs] of Object.entries(GROUPS)) for (const x of xs) {
+    if (x === "CONTROL" || !ids.has(x)) partition.push(`group ${g} names "${x}", which is not a mutant`);
+    else if (seen.has(x)) partition.push(`"${x}" is in group ${seen.get(x)} and group ${g}`); else seen.set(x, g); }
+  for (const m of M) if (m.id !== "CONTROL" && !seen.has(m.id)) partition.push(`"${m.id}" is in no group`); }
+if (group !== null && !GROUPS[group]) partition.push(`no group "${group}" (${Object.keys(GROUPS).join(" | ")})`);
+if (partition.length) { for (const p of partition) console.log(`FAIL partition: ${p}`); process.exit(1); }
+const inGroup = group ? new Set([...GROUPS[group], "CONTROL"]) : null;
+const todo = M.filter((m) => (!only || only.has(m.id)) && (!inGroup || inGroup.has(m.id)));
+if (argv.includes("--list")) { console.log(todo.map((m) => m.id).join("\n")); process.exit(0); }
 
 /** A scratch copy of the tree: what the suites read (code and text), node_modules linked. client/ is linked except lib/ (copied: B7 edits it). */
 function copyTree(tag: string) {
@@ -116,7 +136,7 @@ function copyTree(tag: string) {
 const redRows = (out: string) => [...new Set([...out.replace(/\x1b\[[0-9;]*m/g, "").matchAll(/^\s*(?:FAIL|✗)\s+(\S+)/gm)].map((m) => m[1].replace(/[:,]$/, "")))];   // colours stripped (the tools/ tests paint ✗)
 
 let bad = 0; const table: string[] = [];
-console.log(`[blockers-mutants] ${todo.length} mutant(s): each applied to a scratch copy of the tree, then its one suite run`);
+console.log(`[blockers-mutants]${group ? ` group ${group}:` : ""} ${todo.length} mutant(s): each applied to a scratch copy of the tree, then its one suite run`);
 for (const m of todo) {
   const t0 = performance.now();
   const src = fs.readFileSync(path.join(ENGINE, m.file), "utf8");
@@ -134,5 +154,5 @@ for (const m of todo) {
   fs.rmSync(d, { recursive: true, force: true });
 }
 console.log(`\n| id | mutant | suite | row(s) it must turn red | seen |\n|---|---|---|---|---|\n${table.join("\n")}`);
-console.log(`\n[blockers-mutants] ${todo.length} run, ${bad} wrong (each mutant must turn its row(s) red; the control must stay green)`);
+console.log(`\n[blockers-mutants]${group ? ` group ${group}:` : ""} ${todo.length} run, ${bad} wrong (each mutant must turn its row(s) red; the control must stay green)`);
 process.exit(bad ? 1 : 0);
