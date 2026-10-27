@@ -1,7 +1,9 @@
 // Real HTTP + WS integration; --native holds an isolated sequencer for the UE probe.
 // (ported 10-17: worlds are founded first — joining never founds one — joins fold the log (replica: true), and the
 // broker speaks capture / capture-result here (main: snap / snap-result))
-import { foundWorlds } from "./harness.ts";
+// Then outcomes(): every snap outcome over the door, one status and one escaped [snap] line per cause, on scratch
+// sequencers of their own (SNAP_TIMEOUT_SEC=2, =20, and each invalid value).
+import { foundWorlds, scratchSequencer, readSequencerLog } from "./harness.ts";
 import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,15 +29,144 @@ let control: ReturnType<typeof Bun.serve> | undefined;
 async function wait(fn: () => boolean, label: string) {
   for (let i = 0; i < 100; i++) { if (fn()) return; await Bun.sleep(50); } throw Error(`Timeout: ${label}`);
 }
-async function connect(id: string, extras = {}, world = "snapshot-test") {
-  const messages: any[] = []; const ws = new WebSocket(origin.replace("http:", "ws:") + "/ws"); sockets.push(ws);
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id, token: "snapshot-test-door", replica: true, ...extras }));
+async function connect(id: string, extras = {}, world = "snapshot-test", at = { origin, token: "snapshot-test-door" }) {
+  const messages: any[] = []; const ws = new WebSocket(at.origin.replace("http:", "ws:") + "/ws"); sockets.push(ws);
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id, ...(at.token ? { token: at.token } : {}), replica: true, ...extras }));
   ws.onmessage = e => messages.push(JSON.parse(String(e.data)));
   await wait(() => messages.some(m => m.type === "snapshot"), id + " join");
   return { ws, messages, send: (m: object) => ws.send(JSON.stringify(m)) };
 }
 // a box with a door key keeps its world reads behind it (identity-check LC): every /snap carries the key
 const KEY = { headers: { authorization: "Bearer snapshot-test-door" } };
+const ok = (name: string, cond: unknown, detail = "") => { assert.ok(cond, `${name}${detail ? ` — ${detail}` : ""}`); console.log(`  ok  ${name}`); };
+/** A snap's outcome per cause, on a sequencer whose frame window is 2 s (and one of 20 s for the long frame). */
+async function outcomes() {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  // the bystander's (refused) image differs from the renderer's, so a 200 says whose reply answered it
+  const PNG_BYSTANDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const bytesOf = (dataUrl: string) => Buffer.from(dataUrl.split(",")[1], "base64");
+  const env = { SKIP_OPT_SWEEP: "1", RECORD_FRAMES: "0" };
+  const lines: string[] = [];
+  const A = await scratchSequencer("snap-window", { serverEnv: { ...env, SNAP_TIMEOUT_SEC: "2" }, worlds: ["snapt"], onLine: (l) => lines.push(l) });
+  const C = await scratchSequencer("snap-long", { serverEnv: { ...env, SNAP_TIMEOUT_SEC: "20" }, worlds: ["snapt"], portFrom: 9050 });
+  // [snap] lines are stdout's, read as they are written
+  const log = () => lines;
+  const logLine = async (from: number, pred: (l: string) => boolean, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (log().slice(from).some(pred)) return true; await Bun.sleep(20); }
+    return false;
+  };
+  const on = (s: { BASE: string }) => ({ origin: s.BASE, token: "" });
+  /** A fake renderer leg: `reply(id)` decides each capture; `next()` resolves on the next capture it receives. */
+  const fakeRenderer = async (s: { BASE: string }, id: string) => {
+    const { ws } = await connect(id, { spectate: true, renderer: true }, "snapt", on(s));
+    const r = { ws, reply: (_id: string) => {}, waiters: [] as ((id: string) => void)[], next: () => new Promise<string>((res) => r.waiters.push(res)) };
+    ws.addEventListener("message", (ev) => { const m = JSON.parse(String(ev.data)); if (m.type !== "capture") return; r.waiters.splice(0).forEach((w) => w(m.id)); r.reply(m.id); });
+    return r;
+  };
+  const reply = (ws: WebSocket, id: unknown, body: object) => ws.send(JSON.stringify({ type: "capture-result", id, ...body }));
+  /** Resolves once the server has handled everything `ws` sent before it (a clock ask is answered as it is handled). */
+  const handled = (ws: WebSocket) => new Promise<void>((res, rej) => {
+    const t0 = Math.random(); const t = setTimeout(() => rej(new Error("no clock answer in 5s")), 5000);
+    ws.addEventListener("message", function answered(ev) { const m = JSON.parse(String(ev.data)); if (m.type !== "clock" || m.t0 !== t0) return; ws.removeEventListener("message", answered); clearTimeout(t); res(); });
+    ws.send(JSON.stringify({ type: "clock", t0 }));
+  });
+
+  // past the default 12 s window: started first, checked last
+  await connect("target", {}, "snapt", on(C));
+  const slow = await fakeRenderer(C, "renderer-slow");
+  slow.reply = (id) => setTimeout(() => reply(slow.ws, id, { dataUrl: PNG }), 13_000);
+  const longT0 = performance.now();   // the monotonic clock: a wall-clock step isn't time waited
+  const longSnap = fetch(`${C.BASE}/snap?world=snapt&follow=target`).then(async (r) => ({ status: r.status, body: Buffer.from(await r.arrayBuffer()), ms: performance.now() - longT0 }));
+
+  await connect("target", {}, "snapt", on(A));
+  const renderer = await fakeRenderer(A, "renderer-fake");
+  const bystander = (await connect("retina-bystander", { spectate: true }, "snapt", on(A))).ws;
+  // the broker's per-renderer cooldown (2 s), stamped at dispatch: space each snap past it, or it answers 429
+  let lastSnap = 0;
+  const cooldown = () => Bun.sleep(Math.max(0, lastSnap + 2100 - Date.now()));
+  const snap = async () => { await cooldown(); const r = await fetch(`${A.BASE}/snap?world=snapt&follow=target`); lastSnap = Date.now(); return r; };
+  // a connection logs one dropped reply per 10 s: a case that needs a line gets a fresh connection
+  let freshN = 0;
+  const fresh = async (renderer: boolean) => (await connect(`fresh-${renderer ? "renderer" : "bystander"}-${++freshN}`, renderer ? { spectate: true, renderer: true } : { spectate: true }, "snapt", on(A))).ws;
+
+  // the reply table: what the renderer sends → the status, its body, and the one [snap] line it writes
+  const later = (ms: number, body: object) => (id: string) => setTimeout(() => reply(renderer.ws, id, body), ms);
+  const ROWS: { name: string; send: (id: string) => void; status: number; body?: (r: Response) => Promise<boolean>; line?: (l: string) => boolean; only?: () => boolean }[] = [
+    { name: "a reply inside the window → 200 PNG", send: later(300, { dataUrl: PNG }), status: 200, body: async (r) => r.headers.get("content-type") === "image/png" },
+    { name: "a renderer's error reply → 503 with its text, logged on one escaped line", send: (id) => reply(renderer.ws, id, { error: "gpu lost\n[perm] forged by a renderer" }), status: 503,
+      body: async (r) => (await r.text()).startsWith("gpu lost"), line: (l) => l.includes("[snap]") && l.includes("renderer-fake") && l.includes("\\n[perm] forged") && l.includes("503") },
+    { name: "a reply that is not a PNG → 502, logged", send: (id) => reply(renderer.ws, id, { dataUrl: "data:image/png;base64,bm90IGEgcG5n" }), status: 502,
+      line: (l) => l.includes("[snap]") && l.includes("renderer-fake") && l.includes("no valid PNG") && l.includes("502") },
+  ];
+  for (const row of ROWS) {
+    renderer.reply = row.send; const mark = log().length;
+    const r = await snap();
+    ok(row.name, r.status === row.status && (!row.body || await row.body(r)) && (!row.line || await logLine(mark, row.line)) && !log().slice(mark).some((l) => l.startsWith("[perm]")), `${r.status} ${log().slice(mark).join(" | ")}`);
+  }
+  // after the window: 504 at ~2 s, a timeout line, and the late frame's drop line
+  renderer.reply = () => {};
+  const lateId = renderer.next();
+  let mark = log().length;
+  await cooldown();
+  const t0 = performance.now(); let r = await snap(); const waited = performance.now() - t0;
+  ok("a reply after the window → 504, answered at ~2 s, not 12 s", r.status === 504 && waited >= 1800 && waited < 10_000, `${r.status} after ${waited} ms`);
+  ok("…the timeout is logged with the snap, follow and renderer", await logLine(mark, (l) => l.includes("[snap]") && l.includes(`follow="target"`) && l.includes("renderer-fake") && l.includes("in 2s")));
+  reply(renderer.ws, await lateId, { dataUrl: PNG });
+  ok("…and the late frame's drop is logged as expired/unknown", await logLine(mark, (l) => l.includes("[snap]") && l.includes("expired or unknown") && l.includes("renderer-fake")));
+
+  // a non-renderer's reply is dropped and the pending snap stays pending
+  renderer.reply = () => {};
+  const seen = renderer.next();
+  const pendingSnap = snap();
+  const first = await Promise.race([seen.then((id) => ({ id })), pendingSnap.then(async (res) => ({ refused: `${res.status} ${await res.clone().text()}` }))]);
+  ok("the held snap reached the renderer", "id" in first, "refused" in first ? `answered ${first.refused} before dispatch` : "");
+  if ("id" in first) {
+    mark = log().length;
+    reply(bystander, first.id, { dataUrl: PNG_BYSTANDER });
+    ok("a non-renderer's reply is logged and dropped", await logLine(mark, (l) => l.includes("not a renderer") && l.includes("retina-bystander")));
+    reply(renderer.ws, first.id, { dataUrl: PNG });
+    const held = await pendingSnap;
+    ok("…without consuming the pending snap (the renderer's frame answers it)", held.status === 200 && Buffer.from(await held.arrayBuffer()).equals(bytesOf(PNG)), String(held.status));
+  }
+  // drops are bounded per connection, a credential or not: after a burst, a fresh connection's line is the ordering marker
+  for (const [who, flood, id] of [["retina-bystander", bystander, "spam"], ["renderer-claimed", (await fakeRenderer(A, "renderer-claimed")).ws, "flood"]] as const) {
+    mark = log().length;
+    for (let i = 0; i < 50; i++) reply(flood, `${id}-${i}`, { dataUrl: PNG_BYSTANDER });
+    await handled(flood);
+    reply(await fresh(true), `marker-${id}`, { dataUrl: PNG });
+    const marked = await logLine(mark, (l) => l.includes(`"marker-${id}"`));
+    const lines = log().slice(mark).filter((l) => l.includes(who));
+    // the bystander already logged its line above; the claimant logs its first, and only that
+    ok(`50 replies from ${who} inside 10 s write ${who === "retina-bystander" ? "no more lines" : "one line"}`, marked && (who === "retina-bystander" ? lines.length === 0 : lines.length === 1 && lines[0].includes(`"${id}-0"`)), `${marked ? "" : "no marker; "}${lines.join(" | ")}`);
+  }
+  // log hygiene, a security boundary: every drop site × every forged id, each from a connection of its own
+  const FORGED: [string, unknown, (lines: string[]) => boolean][] = [
+    ["an id with newlines cannot start its own log line", "missing\n[perm] forged by a client\n", (ls) => ls.some((l) => l.includes("\\n[perm] forged"))],
+    ["a non-string id logs as (invalid id)", { not: "a string" }, (ls) => ls.some((l) => l.includes("(invalid id)"))],
+    ["a huge id is bounded in the log", "x".repeat(5000), (ls) => ls.some((l) => l.includes("xxxx"))],
+  ];
+  for (const [site, asRenderer] of [["expired or unknown", true], ["not a renderer", false]] as const) for (const [name, id, seenIn] of FORGED) {
+    mark = log().length;
+    const ws = await fresh(asRenderer);
+    reply(ws, id, { dataUrl: PNG });
+    await handled(ws);
+    await logLine(mark, (l) => l.includes(site));
+    const lines = log().slice(mark);
+    ok(`${site}: ${name}`, lines.some((l) => l.includes(site)) && seenIn(lines) && !lines.some((l) => l.startsWith("[perm]")) && lines.every((l) => l.length < 400), lines.join(" | ").slice(0, 300));
+  }
+
+  const long = await longSnap;
+  ok("a 13 s frame answers 200 under SNAP_TIMEOUT_SEC=20, past the default 12 s window, after ~13 s", long.status === 200 && long.body.equals(bytesOf(PNG)) && long.ms >= 12_500, `${long.status} after ${long.ms} ms`);
+  await A.cleanup(); await C.cleanup();
+  // (the values these fall back to, and the cap's own boundary, are read from config.ts in tools/config-env-test.ts)
+  for (const bad of ["300", "abc", "0", "-5"]) {
+    const B = await scratchSequencer("snap-config", { serverEnv: { ...env, SNAP_TIMEOUT_SEC: bad } });
+    const warned = await (async () => { for (let i = 0; i < 100; i++) { if (readSequencerLog(B.SCRATCH).includes(`SNAP_TIMEOUT_SEC=${JSON.stringify(bad)} is not valid — using 12`)) return true; await Bun.sleep(30); } return false; })();
+    ok(`SNAP_TIMEOUT_SEC=${bad} falls back to 12 with a warning`, warned, readSequencerLog(B.SCRATCH).split("\n").filter((l) => l.includes("config")).join(" | "));
+    await B.cleanup();
+  }
+}
 const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=";
 const forged = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR42mP4z8DwH4QZYAwAR8oH+Rq28akAAAAASUVORK5CYII=";
 try {
@@ -122,5 +253,7 @@ try {
     const log = readFileSync(join(scratch, "worlds", "snapshot-test", "world.jsonl"), "utf8");
     assert.ok(!log.includes("capture-result") && !log.includes("capture-capabilities"), "capture is ephemeral");
     console.log("SNAPSHOTS_WIRE_PASS: embodied donor, PNG route, ownership, a busy renderer waited for, Retry-After only when retryable, ?budget= bounds an ask, opt-out, legacy browser, disconnect cleanup, a joining roamer swept to an agent, no log writes");
+    await outcomes();
+    console.log("SNAPSHOTS_OUTCOMES_PASS: one status and one escaped line per cause, drops bounded per connection, SNAP_TIMEOUT_SEC honoured and validated");
   }
 } finally { control?.stop(true); for (const ws of sockets) ws.close(); child.kill(); await child.exited; }

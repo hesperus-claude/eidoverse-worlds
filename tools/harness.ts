@@ -85,6 +85,8 @@ type ScratchOptions = {
   /** worlds to found before boot (joining never founds one); `owner` founds them (default "owner"). */
   worlds?: string[];
   owner?: string;
+  /** each stdout line as it is written (a file sink is block-buffered by the child: a live log read needs the pipe) */
+  onLine?: (line: string) => void;
 };
 
 /** Own the child and prove its identity before opening any product door. */
@@ -140,8 +142,11 @@ export async function scratchSequencer(name: string, opts: ScratchOptions = {}) 
     cwd: ROOT,
     env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
       PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
-    stdout: Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
+    stdout: opts.onLine ? "pipe" : Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
   }));
+  if (opts.onLine) void (async () => { const d = new TextDecoder(); let buf = "";
+    for await (const c of seq.stdout as ReadableStream<Uint8Array>) { const t = d.decode(c); buf += t; try { appendFileSync(join(SCRATCH, "sequencer.log"), t); } catch { /* evidence only */ }
+      let nl; while ((nl = buf.indexOf("\n")) >= 0) { opts.onLine!(buf.slice(0, nl)); buf = buf.slice(nl + 1); } } })();
   let up = false;
   for (let i = 0; i < 80 && !up; i++) {
     if (seq.exitCode !== null) await die(2, `sequencer exited ${seq.exitCode} before readiness`);
