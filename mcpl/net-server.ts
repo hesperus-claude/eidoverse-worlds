@@ -31,7 +31,7 @@ import { shown } from "../shared/shown.js";
 import { toolList, handleTool, type ToolCtx } from "./tools.ts";
 import { pingDelivery, type WirePing } from "./ping-wire.ts";
 import { TypingRelay } from "./typing-relay.ts";
-import { MANIFEST_WITH_REVISION, ManifestAnnouncer } from "./manifest.ts";
+import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
 import { atomicWrite } from "../server/fsutil.ts";
 import { displayNameIndex, lookupToken, readTokenRegistry, wireAuthors, type TokenAuth } from "./token-registry.ts";
@@ -110,8 +110,6 @@ class Session {
   private conn: McplConnection;
   private agent: WorldAgent;
   private channelId: string;
-  /** §17 announcer, seeded at handshake; silent while the declared surface stays static. */
-  private manifestAnnouncer: ManifestAnnouncer | null = null;
   private channelOpen = true;   // the world channel is home: open unless the agent closes it
   /** Each `start` names the body it signals through; the body's speech, travel and the session's close stop it. */
   private typing = new TypingRelay();
@@ -735,10 +733,6 @@ class Session {
       serverInfo: { name: "eidoverse-worlds", version: "0.1.0" },
     };
     this.conn.sendResponse(msg.request.id, result);
-    // §17: seed last-announced from this handshake so a fresh connection never re-announces it
-    this.manifestAnnouncer = new ManifestAnnouncer((params) => {
-      try { this.conn.sendNotification("mcpl/manifestChanged", params as unknown as Record<string, unknown>); } catch { /* peer gone */ }
-    });
     const inited = await this.conn.nextMessage();
     if (!(inited.type === "notification" && inited.notification.method === "notifications/initialized")) {
       this.conn.close();

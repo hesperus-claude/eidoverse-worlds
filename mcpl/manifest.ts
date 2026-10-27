@@ -1,12 +1,12 @@
 /**
  * §17 server side for the eidoverse door (RFC-003 / SPEC 0.5, eidoverse#2): the canonical digest (§17.2), the complete-manifest
- * answer (§17.4), and a per-connection announce seed from initialize, so a fresh connection doesn't re-announce.
+ * answer (§17.4).
  *
  * Digest rules follow the frozen mcpl conformance corpus (its conformance/README): revision = "sha256:" +
  * base64url_unpadded(SHA-256(JCS(manifest minus root revision))); set semantics only for all-string arrays at the
  * three set paths, everything else hashed verbatim; the sole refusal is identifier_charset.
  *
- * The declared surface is static, so nothing triggers mcpl/manifestChanged yet; announceIfChanged is wired anyway.
+ * The declared surface is static, so the door never sends mcpl/manifestChanged (§17.3).
  */
 
 import { createHash } from "node:crypto";
@@ -171,26 +171,3 @@ export const MANIFEST_WITH_REVISION: Record<string, unknown> = (() => {
   const base = MCPL_ADVERTISEMENT as unknown as Record<string, unknown>;
   return { ...base, revision: manifestRevision(base) };
 })();
-
-/**
- * Per-connection announcement seed + trigger (§17 impl note), seeded from initialize so a fresh connection never
- * fires a redundant announce; it fires only when the CURRENT revision differs from the last this connection was told.
- */
-export class ManifestAnnouncer {
-  private lastAnnounced: string;
-  constructor(
-    private readonly send: (params: { revision: string; domains: string[] }) => void,
-    seedRevision: string = MANIFEST_WITH_REVISION.revision as string,
-  ) {
-    this.lastAnnounced = seedRevision;
-  }
-  /** Domains come from the CALLER of the mutation (it knows what it changed); the notification carries no payload
-   *  either way (§17.3). */
-  announceIfChanged(domains: Array<"capabilities" | "featureSets" | "tagOntology">): boolean {
-    const current = manifestRevision(MCPL_ADVERTISEMENT as unknown as Record<string, unknown>);
-    if (current === this.lastAnnounced) return false;
-    this.lastAnnounced = current;
-    this.send({ revision: current, domains });
-    return true;
-  }
-}
