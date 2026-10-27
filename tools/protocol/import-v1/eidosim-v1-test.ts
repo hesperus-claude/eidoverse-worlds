@@ -5,6 +5,7 @@
 //   bun tools/protocol/import-v1/eidosim-v1-test.ts   (suite eidosim-v1 in tools/protocol/run.ts)
 
 import { emptySim, simEntry, advanceSim, tickOf, simPose, simSnapshot, SIM_ID } from "./eidosim-v1.js";
+import { suite } from "../suite.ts";
 
 // the engine's input view (st.entities[id].{lib, pos, yaw, scale}, st.terrain; simlayer.js v1View), kept by hand for the
 // dialect-3 verbs these scripts use; not a fold of any log format
@@ -19,11 +20,7 @@ function foldEntry(st: ReturnType<typeof emptyState>, e: LogEntry) {
   else if (e.verb === "terrain") st.terrain = a;
 }
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const { check, done } = suite("eidosim-v1-test", { cap: Infinity });
 const digest = (sim: any) => JSON.stringify(simSnapshot(sim));
 
 const T0 = 1_700_000_000_000;
@@ -362,5 +359,4 @@ console.log("\nthe sim fold (shared/sim.js) — " + SIM_ID);
   check("active-to-rest catch-up preserves the complete snapshot", JSON.stringify(staged) === JSON.stringify(resume));
 }
 
-console.log(`\n${fail ? "\x1b[31mRED\x1b[0m" : "\x1b[32mGREEN\x1b[0m"} — ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

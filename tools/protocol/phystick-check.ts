@@ -13,9 +13,10 @@ import { request, settle } from "../../shared/protocol/authority.js";
 import { openLive } from "../../server/livehost.ts";
 import { restsOf, digestOf, simFold, livePoses } from "../../shared/protocol/simlayer.js";
 import { scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
-const root = scratch("phystick"); let fails = 0, passes = 0;
-const ok = (c, what, d) => { if (c) passes++; else { fails++; console.log("FAIL", what, d !== undefined ? JSON.stringify(d).slice(0, 300) : ""); } };
+const root = scratch("phystick");
+const { ok, done } = suite("phystick-check", { quiet: true, cap: 300 });
 const NO_TICK = process.env.NO_TICK === "1";
 const TICK = 33;
 function world(name, N) {
@@ -169,5 +170,4 @@ function world(name, N) {
   const a = restY("t9a", false), b = restY("t9b", true);
   ok(a === b && Math.abs(a) < 0.05, `T9 a crate dropped after the terrain is removed rests exactly where one in a never-terrained world does (${a.toFixed(3)} vs ${b.toFixed(3)})`, { a, b });
 }
-console.log(`phystick: ${passes} ok, ${fails} failed${NO_TICK ? " (NO_TICK: the old shape)" : ""}`);
-process.exit(fails ? 1 : 0);
+done(`${NO_TICK ? " (NO_TICK: the old shape)" : ""}`);

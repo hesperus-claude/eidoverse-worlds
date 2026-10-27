@@ -13,13 +13,14 @@ import { ENGINE, scratch } from "./common.ts";
 import { worldT, yawQ, qrot, qmul, aabb, surfacesOf } from "../../shared/protocol/authority/math.js";
 import { supportBelow } from "../../shared/protocol/authority/spatial.js";
 import { labClock, pinEnv } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("phys");
-const clock = labClock(); let fails = 0, passes = 0;
+const clock = labClock();
 const fresh = (name) => { for (const f of [`${name}.jsonl`, `${name}.presence.json`]) fs.rmSync(`${root}worlds/${f}`, { force: true }); return name; };
 const at = (ms) => { clock.advance(ms); };
 function call(world, actor, verb, args = {}, step = 100) { at(step); return request(openWorld(root, world), actor, verb, args); }
-function ok(cond, what, detail) { if (cond) passes++; else { fails++; console.log("FAIL", what, detail !== undefined ? JSON.stringify(detail).slice(0, 400) : ""); } }
+const { ok, done } = suite("phys-check", { quiet: true });
 const log = (world) => openWorld(root, world).entries;
 const view = (world) => { const w = openWorld(root, world); return simFold(w.entries, w.now()); };
 // a tampered copy of a log, re-read from text as any reader would (positions are seqs; a copy has no stored seq)
@@ -896,6 +897,5 @@ if (RIGID) { const W = playground("rr-group");
   const at = call(W, "rowan", "inspect", { id: "crate-1" }).world?.pos;
   ok(/back at its home/.test(cc?.lost ?? "") && JSON.stringify(at) === "[3,0,-1]", "RR2 …and the lost one, sent to its home, is told it's at its home", { lost: cc?.lost, at }); }
 
-console.log(`${passes} passed, ${fails} failed`);
 fs.rmSync(root, { recursive: true, force: true });
-process.exit(fails ? 1 : 0);
+done();
