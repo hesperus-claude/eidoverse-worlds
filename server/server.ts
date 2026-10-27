@@ -38,6 +38,7 @@ import { directoryFor, foldName } from "./directory.ts";
 import { route, avatarRoster } from "./routes.ts";
 import { snapshots } from "./snapshots.ts";
 import { registerSystem, startTick } from "./tick.ts";
+import { startVideo } from "./videosources.ts";
 import { MESSAGES } from "./messages.ts";
 import { LIMITS } from "./limits.ts";
 import { defsFingerprint } from "./defs.ts";
@@ -1310,6 +1311,9 @@ registerSystem({ name: "stage-frames", everyMs: FRAME_MS, fn: () => {
 // The heartbeat starts once every system is on it — the base is the finest
 // cadence in the registry (stage frames); everything coarser rides it.
 startTick(FRAME_MS);
+// video screens (shared/video.js): the operator's source registry (VIDEO_SOURCES), the appliance's source state, the brokered
+// WHEP sessions. Until a registry admits a source, every video write is refused at the door.
+startVideo(() => worlds.values());
 
 // On the way out, everyone connected sleeps where they stand (every log line is already on disk: the authority appends
 // and fsyncs each one before its request returns).
