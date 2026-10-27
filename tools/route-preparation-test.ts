@@ -1,58 +1,16 @@
-// bun tools/route-preparation-test.ts: exact cap and authored-cache boundaries, through real editor operations and the
+// bun tools/route-preparation-test.ts: the authored-plan cache's boundaries, through real editor operations and the
 // received-entry fold; unrelated geometry I/O is disabled so this suite cannot fetch assets from a running sequencer.
+// The cap rows (16384 admitted, 16385 refused, the worst case's time) are tools/structure-route-test.ts's.
 import { strict as assert } from "node:assert";
 import { WorldAgent } from "../mcpl/agent.ts";
-import { planStructure, prepareRouteLocal, planRouteLocal } from "../shared/structure.js";
-import { ROUTE_MAX_CELLS, routeGeometryFor } from "../shared/structure-route.js";
+import { prepareRouteLocal } from "../shared/structure.js";
+import { routeGeometryFor } from "../shared/structure-route.js";
 import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../shared/structure_edit.js";
 import { agentOnDoor } from "./agent-scratch.ts";
 import { qFromYaw } from "../shared/rot.js";
 let count=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);count++;console.log("✓ "+label);};
 const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
-function capPlan(x:number,z:number) {
- return planStructure({levels:[{y:0,tiles:[[x,z]],walls:[[1,0,0]],apertures:[]}]});
-}
-// the search region is the authored geometry's cells padded by one, counted from the plan, not the planner
-function paddedCells(plan:any) {
- let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;
- const include=(x:number,z:number)=>{minX=Math.min(minX,x);minZ=Math.min(minZ,z);maxX=Math.max(maxX,x);maxZ=Math.max(maxZ,z);};
- for(const lv of plan.levels){
-  for(const k of lv.level.tiles.keys()){const [x,z]=k.split(",").map(Number);include(x,z);include(x+1,z+1);}
-  for(const e of lv.level.walls.values()){include(e.x,e.z);include(e.x+1,e.z+1);}
- }
- return (maxX-minX+2)*(maxZ-minZ+2);
-}
-check(paddedCells(capPlan(125,125))===ROUTE_MAX_CELLS&&paddedCells(capPlan(2,3274))===ROUTE_MAX_CELLS+1,"the fixtures' padded regions are 16384 and 16385 cells");
-const exact=prepareRouteLocal(capPlan(125,125),terrain()).route(-.5,.5,.5,.5);
-// the wall [1,0,0] stands at x = 0 for z in [0, 1]; a leg meeting it there crosses it
-const meetsWall=(p:number[],q:number[])=>{
- if(p[0]*q[0]>0||p[0]===q[0]) return false;
- const z=p[1]+(0-p[0])/(q[0]-p[0])*(q[1]-p[1]);return z>=0&&z<=1;
-};
-check(exact.kind==="routed"&&exact.points.length>2&&!exact.points.some((p:number[],i:number)=>i>0&&meetsWall(exact.points[i-1],p)),
- "16384-cell region is admitted and routes around the obstructing wall");
-const over=prepareRouteLocal(capPlan(2,3274),terrain()).route(-.5,.5,.5,.5);
-check(over.kind==="blocked"&&over.reason.includes("5×3277 cells (5×3277 m)")&&over.reason.includes("over the 16384-cell routing limit")
- &&over.reason.includes("nearer endpoints won't help"),"16385-cell region refuses before search, naming its footprint in metres: "+over.reason);
-const scaled=prepareRouteLocal(capPlan(2,3274),{...terrain(),scale:2}).route(-.5,.5,.5,.5);
-check(scaled.kind==="blocked"&&scaled.reason.includes("(10×6554 m)"),"a scaled structure's footprint is given in world metres");
-const empty=prepareRouteLocal(planStructure({levels:[{y:0,tiles:[],walls:[]},{y:3,tiles:[],walls:[]}]}),{kind:"floor",level:1,height:3.1,step:.5}).route(.5,.5,1.5,.5);
-check(empty.kind==="blocked"&&empty.reason==="the identified floor has no cells","a walk on an empty floor is refused as one, not as over the limit");
-
-// the cap's worst case: 126×126 short walls padded to 16,384 cells and a sealed destination, so every reachable cell is
-// visited; each wall check reads only the walls filed under the cells its leg touches
-const field:number[][]=[];
-for(let x=0;x<126;x+=2)for(let z=0;z<126;z+=2)field.push([0,x,z]);
-field.push([0,63,63],[0,63,64],[1,63,63],[1,64,63],[1,125,125]);
-const fieldPlan=planStructure({levels:[{y:0,tiles:[],walls:field,apertures:[]}]});
-check(paddedCells(fieldPlan)===ROUTE_MAX_CELLS,"the worst-case field is padded to exactly the limit");
-const worstFrom=performance.now();
-const worst=planRouteLocal(fieldPlan,-.5,-.5,63.5,63.5);
-const worstMs=performance.now()-worstFrom;
-check(worst.kind==="blocked"&&worst.reason==="no path through its doorways and arches connects the start to the destination (windows don't count); pick a destination you can reach through an opening"&&worstMs<2000,
- `a search of every cell at the limit, among ${field.length} walls, finishes in ${worstMs.toFixed(0)} ms (bound 2000)`);
-
 const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
 const agent=new WorldAgent({name:"cache-test",avatar:"",world:"cache-test"});
 (agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test

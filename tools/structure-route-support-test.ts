@@ -1,94 +1,22 @@
-// bun tools/structure-route-support-test.ts
-// Support mode, terrain crossing height, world/local transforms; no server or renderer, legs drive the real WorldAgent tick.
+// bun tools/structure-route-support-test.ts — real WorldAgent bodies over transformed (translated, rotated, scaled)
+// structures: the support mode, the band and the crossing height in world metres; no server or renderer, legs drive the
+// real tick (tools/structure-oracle.ts). The planner's rows for the same rules are tools/structure-route-test.ts's.
 import { strict as assert } from "node:assert";
-import { planStructure, prepareRouteLocal, planRouteLocal, localizePoint } from "../shared/structure.js";
+import { localizePoint } from "../shared/structure.js";
+import { walk } from "./structure-oracle.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 let n=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);n++;console.log("✓ "+label);};
-const terrain=(heightAt=(x:number,z:number)=>0,step=.5)=>({kind:"terrain",heightAt,step});
-const floor=(level:number,height:number)=>({kind:"floor",level,height,step:.5});
 const upper={y:3,tiles:[[0,0],[2,0]],walls:[],apertures:[]};
 const ground={y:0,tiles:[[0,0],[1,0],[2,0]],walls:[[1,1,0]],apertures:[[1,1,0,"door"]]};
 const basement={y:-3,tiles:[[0,0]],walls:[],apertures:[]};
-for(const levels of [[ground,basement],[basement,ground]]) {
- const ctx=prepareRouteLocal(planStructure({levels}),terrain());
- const result=ctx.route(.5,.5,3.5,.5);
- check(result.kind==="clear"&&!ctx.confined,"ground exit above basement is independent of level ordering");
-}
-for(const levels of [[upper], [{y:0,tiles:[],walls:[]},upper],[upper,{y:0,tiles:[],walls:[]}]]) {
- const plan=planStructure({levels}), index=levels.indexOf(upper);
- const below=prepareRouteLocal(plan,terrain());
- check(below.route(.5,.5,2.5,.5).kind==="clear"&&!below.confined,"overhead tiles do not confine a terrain walker");
- const supported=prepareRouteLocal(plan,floor(index,3.1));
- check(supported.route(.5,.5,2.5,.5).kind==="blocked"&&supported.confined,"identified raised-only or upper floor cannot bridge its gap");
- check(supported.route(.5,.5,.5,-2).kind==="blocked","identified floor refuses exterior support transition");
-}
 const wall={levels:[{y:0,tiles:[],walls:[[1,1,0]],apertures:[]}]};
-let ctx=prepareRouteLocal(planStructure(wall),terrain());
-check(!ctx.clear(.5,.5,1.5,.5),"ordinary wall base 0.1m above terrain intersects feet-to-step band");
-ctx=prepareRouteLocal(planStructure({wallH:5,levels:[{y:-3,tiles:[],walls:[[1,1,0]]}]}),terrain());
-check(!ctx.clear(.5,.5,1.5,.5),"tall basement wall obstructs independently of its floor support");
-ctx=prepareRouteLocal(planStructure({wallH:2,levels:[{y:-3,tiles:[],walls:[[1,1,0]]}]}),terrain());
-check(ctx.clear(.5,.5,1.5,.5),"wall ending below the feet does not obstruct");
-ctx=prepareRouteLocal(planStructure({levels:[{y:3,tiles:[[0,0]],walls:[[1,1,0]]}]}),terrain());
-check(ctx.clear(.5,.5,1.5,.5),"overhead wall above the feet-to-step band is irrelevant");
-ctx=prepareRouteLocal(planStructure(wall),terrain(x=>4*x));
-check(ctx.clear(0,.5,2,.5),"terrain height at crossing clears a wall despite low start height");
-ctx=prepareRouteLocal(planStructure(wall),terrain(x=>4*(x-1)**2));
-check(!ctx.clear(0,.5,2,.5),"terrain dip at crossing obstructs despite high endpoints");
-const doorway={levels:[{y:0,tiles:[],walls:[[1,1,0]],apertures:[[1,1,0,"door"]]}]};
-check(prepareRouteLocal(planStructure(doorway),terrain()).clear(0,.5,2,.5),"door opening is clear at ordinary terrain height");
-check(!prepareRouteLocal(planStructure(doorway),terrain(()=>2)).clear(0,.5,2,.5),"higher terrain meets the door lintel");
-check(!prepareRouteLocal(planStructure(wall),terrain(()=>NaN)).clear(0,.5,2,.5),"unknown terrain height is not an assumed clear route");
-check(prepareRouteLocal(planStructure({levels:[upper]}),floor(0,0)).route(.5,.5,2.5,.5).kind==="blocked","wrong supplied floor height is refused rather than inferred from x/z");
-
-// counts every read of the wall map: checks after preparation must read the prepared geometry, never the map again
-let preparedReads=0;
-const preparedPlan=planStructure(wall);
-const wallLevel=preparedPlan.levels[0].level;
-const wallMap=wallLevel.walls;
-wallLevel.walls=new Proxy(wallMap,{get(target,key){
- preparedReads++;const value=Reflect.get(target,key,target);return typeof value==="function"?value.bind(target):value;
-}});
-const frozenBasis:any=terrain();
-const frozen=prepareRouteLocal(preparedPlan,frozenBasis);
-const readsAfterPrepare=preparedReads;
-frozenBasis.kind="floor";frozenBasis.height=100;
-for(let i=0;i<20;i++) frozen.clear(0,.5,2,.5);
-check(readsAfterPrepare>0&&preparedReads===readsAfterPrepare,"candidate checks reuse prepared wall geometry, reading the wall map through no accessor");
-check(frozen.route(0,.5,2,.5).kind!=="blocked"&&preparedReads===readsAfterPrepare,"and so does a search over it");
-check(!frozen.clear(0,.5,2,.5),"mutating caller basis cannot change the prepared walking mode");
-const closed={levels:[{y:0,tiles:[[0,0]],walls:[[0,0,0],[0,0,1],[1,0,0],[1,1,0]]}]};
-check(prepareRouteLocal(planStructure(closed),terrain()).route(.5,.5,2,.5).kind==="blocked",
-  "new prepared API retains sealed-room refusal");
-
-// stacked levels cut one cell along different diagonals: a terrain walker meets the ground floor's ↗, so the halves are ↗'s
-// whichever level comes first
-const groundDiagonal={y:0,tiles:[],walls:[[3,0,0]],apertures:[]}, upperDiagonal={y:3,tiles:[],walls:[[2,0,0]],apertures:[]};
-// whether p→q crosses ↗ in cell (0,0), the segment (1,0)–(0,1)
-const crossesUp=(p:number[],q:number[])=>{
- const side=(r:number[])=>r[0]+r[1]-1, sp=side(p), sq=side(q);
- if(sp*sq>0||sp===sq) return false;
- const t=sp/(sp-sq), x=p[0]+t*(q[0]-p[0]);return x>=0&&x<=1;
-};
-for(const levels of [[groundDiagonal,upperDiagonal],[upperDiagonal,groundDiagonal]]) {
- const r=planRouteLocal(planStructure({levels}),.15,.25,.85,.75);
- check(r.kind==="routed"&&!r.points.some((p:number[],i:number)=>i>0&&crossesUp(r.points[i-1],p)),
-  "a terrain walker routes around the diagonal it meets, under another level's: "+levels.map(l=>l.y).join(" then "));
-}
 
 const agents:WorldAgent[]=[];
 function body(entity:any,height:(x:number,z:number)=>number,from:[number,number]) {
  const a=new WorldAgent({name:"walker",avatar:"",world:"support-test"});agents.push(a);a.joined=true;
  a.entities.set(entity.id,entity);(a as any).terrain={heightAt:height};
  a.pos={x:from[0],y:height(...from),z:from[1]};return a;
-}
-async function walk(a:WorldAgent,to:[number,number],run=true) {
- const points=[[a.pos.x,a.pos.y,a.pos.z]];
- const promise=a.walkTo(...to,run,10000,0);
- for(let i=0;i<1000&&(a as any).target;i++){(a as any).tick();points.push([a.pos.x,a.pos.y,a.pos.z]);}
- if((a as any).target){a.stop();throw new Error("bounded tick limit");}
- return {arrived:await promise,points};
 }
 function transform(e:any,x:number,z:number):[number,number] {
  const c=Math.cos(e.yaw),s=Math.sin(e.yaw);
@@ -101,7 +29,7 @@ try{
  ]) {
   const a=body(e,()=>e.pos[1],transform(e,.5,.5));
   const r=await walk(a,transform(e,3.5,.5));
-  check(r.arrived&&r.points.every(p=>p[1]===e.pos[1]),"real terrain-mode body exits ground above basement with translated/scaled frame");
+  check(r.arrived&&r.points.every(p=>p.y===e.pos[1]),"real terrain-mode body exits ground above basement with translated/scaled frame");
  }
  const e={id:"overhead",pos:[10,1,-5],yaw:.6,scale:2,structure:{levels:[upper]}};
  const a=body(e,()=>1,transform(e,.5,.5));
@@ -111,7 +39,7 @@ try{
  const raised={id:"band",pos:[0,.4,0],yaw:0,scale:2,structure:wall};
  const b=body(raised,()=>0,[0,1]);
  const r=await walk(b,[4,1]);
- check(r.arrived&&r.points.every(p=>Math.abs(p[2]-1)<1e-10),"world-scaled step band leaves a 0.6m raised wall above a terrain walk");
+ check(r.arrived&&r.points.every(p=>Math.abs(p.z-1)<1e-10),"world-scaled step band leaves a 0.6m raised wall above a terrain walk");
 
  const sole={id:"sole",pos:[0,0,0],yaw:0,scale:1,structure:{levels:[upper]}};
  const soleBody=body(sole,()=>0,[.5,.5]);soleBody.pos.y=3.1;
@@ -121,8 +49,8 @@ try{
  const highAtCross=(wx:number,wz:number)=>{const [lx]=localizePoint(slope,wx,0,wz);return 2+8*lx;};
  const c=body(slope,highAtCross,transform(slope,0,.5));
  // walked, not run: shared/mover.js refuses a stride rising over a step (0.8 m); a run's stride here rises 1.6 m, a walk's 0.62 m
- const high=await walk(c,transform(slope,2,.5),false);
- check(high.arrived&&high.points.every(p=>Math.abs(localizePoint(slope,p[0],p[1],p[2])[2]-.5)<1e-8),
+ const high=await walk(c,transform(slope,2,.5),{run:false});
+ check(high.arrived&&high.points.every(p=>Math.abs(localizePoint(slope,p.x,p.y,p.z)[2]-.5)<1e-8),
    "transformed real body uses terrain at wall crossing rather than origin height");
  console.log("PASS "+n+" support-basis checks");
 }finally{for(const a of agents)a.close();}
