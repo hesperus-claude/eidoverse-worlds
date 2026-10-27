@@ -313,6 +313,44 @@ try {
     sky.SKY_WORLDS.pop();
   }
 
+  // ---- 5. EVERY HEAVY ENTRY POINT WHILE PRESENTING: nothing builds in the session; at exit each held change applies ONCE
+  {
+    const ROWS = [
+      ['low chosen in the headset', () => sky.setCloudQuality('low'),
+        () => JSON.stringify(sky.skyHeld()) === JSON.stringify({ quality: 'low', rebuild: false }) && localStorage.getItem('ew-cloud-quality') === 'low',
+        () => sky.getCloudQuality() === 'low'],
+      ['high chosen in the headset (the cap)', () => sky.setCloudQuality('high'),
+        () => sky.cloudCap()?.from === 'high' && sky.getCloudChoice() === 'high' && localStorage.getItem('ew-cloud-quality') === 'high',
+        () => sky.getCloudQuality() === 'high' && !sky.cloudCap()],
+      ['a sky-world switch in the headset', () => sky.applySky({ ...ARGS, world: 'mars', ts: ++T }),
+        () => sky.skyHeld()?.rebuild === true, () => true],
+    ];
+    sky.SKY_WORLDS.push('mars');
+    for (const [name, act, heldOk, exitOk] of ROWS) {
+      await freshSky('medium');
+      enter(); curtain(); await settle();
+      const b0 = BAKE.builds;
+      await act(); await settle();
+      const inSession = { q: sky.getCloudQuality(), builds: BAKE.builds - b0, held: sky.skyHeld(), cap: sky.cloudCap() };
+      const ok = inSession.q === 'medium' && inSession.builds === 0 && heldOk();
+      leave(); await settle(); await settle();
+      check(`${name}: in the session nothing builds, the quality stays, the change is held (and saved)`, ok, inSession);
+      check(`${name}: at exit it applies once, and nothing is left held`, exitOk() && !sky.skyHeld() && BAKE.builds - b0 <= 1,
+        { q: sky.getCloudQuality(), builds: BAKE.builds - b0, held: sky.skyHeld() });
+    }
+    sky.SKY_WORLDS.pop();
+  }
+
+  {
+    // the stand-in gradient is an ARRIVAL: skyBusy() and the panel's skyRendering() go up at once (only a render waits
+    // LOAD_SHOW_MS), and come down with it
+    const si = await import(lib('sky_interim.js'));
+    const states = []; const off = bus.on('sky-state', () => states.push(sky.skyRendering()));
+    si.showInterimSky(null); const up = { busy: sky.skyBusy(), rendering: sky.skyRendering(), told: states.at(-1) };
+    si.hideInterimSky(); const down = { busy: sky.skyBusy(), rendering: sky.skyRendering() }; off();
+    check('the stand-in gradient: skyBusy and skyRendering at once, the panel told', up.busy && up.rendering && up.told === true, up);
+    check('…and both clear when it goes', !down.busy && !down.rendering, down);
+  }
   check('no reported errors', reports.length === 0, reports.slice(0, 3));
 } catch (e) { check('ran', false, e?.stack ?? String(e)); }
 
