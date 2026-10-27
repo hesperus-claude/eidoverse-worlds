@@ -25,6 +25,7 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -485,13 +486,11 @@ const cases: Case[] = [
 ];
 
 // ---------------- run ----------------
-let pass = 0, fail = 0;
+const SUITE = suite("batch2-check", { cap: 700 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false;
   try { o = await c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 700)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[batch2-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
