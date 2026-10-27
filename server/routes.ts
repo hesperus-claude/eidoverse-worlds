@@ -484,7 +484,7 @@ const ROUTES: Route[] = [
       // geometry as DATA, public like the world log: ?lib=<path> one asset; ?world=W&id=<entity> plus its transform;
       // ?world=W the whole scene (&boxes=0 skips the parses). Raw bytes stay at GET /library/<lib>.
       const j = (o: unknown, status = 200) =>
-        new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+        new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
       const wname = url.searchParams.get("world");
       if (!wname) {
         const lib = url.searchParams.get("lib") ?? "";

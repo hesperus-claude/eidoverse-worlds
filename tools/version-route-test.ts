@@ -26,8 +26,8 @@ console.log("\n— the GET-route contract —");
 {
   const s = await serve("contract", {}, ["yard"]);
   const worldsDir = join(s.SCRATCH, "worlds"), before = readdirSync(worldsDir).sort();
-  // [route, promises no-store]: /geom carries no cache-control today
-  const ROUTES: [string, boolean][] = [["/worlds", true], ["/version", true], ["/geom?world=yard", false], ["/geom?world=yard&id=nothing", false]];
+  // [route, promises no-store]
+  const ROUTES: [string, boolean][] = [["/worlds", true], ["/version", true], ["/geom?world=yard", true], ["/geom?world=yard&id=nothing", true], ["/geom?lib=nothing", true]];
   for (const [route, noStore] of ROUTES) {
     const r = await fetch(`${s.BASE}${route}`); const ct = r.headers.get("content-type") ?? "";
     const body = await r.text(); let json = true; try { JSON.parse(body); } catch { json = false; }
