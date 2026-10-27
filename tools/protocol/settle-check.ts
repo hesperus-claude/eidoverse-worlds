@@ -3,17 +3,13 @@
 // the crate a row lower (read under its centre) and ride along above it when that one is carried.
 //   Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/settle-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, restsOf, worldPose } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
+import { restsOf, worldPose } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
 import { suite } from "./suite.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
 const { ok, done } = suite("settle-check", { quiet: true, cap: Infinity });
-const root = scratch("settle"); const clock = labClock();
-const call = (W, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, W), a, v, args); };
+const { root, clock, call } = labWorld("settle");
 const st = (W) => fold(openWorld(root, W).entries);
 const box = (W, id, pos, scale = [1, 1, 1]) => call(W, "rowan", "create", { id, model: "crate", components: { physics: { kind: "dynamic", who: "inhabitant" }, transform: { pos, q: [0, 0, 0, 1], scale } } });
 { const W = "gap"; call(W, "rowan", "create-world", { title: W }); call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG }); call(W, "rowan", "set", { id: "@world", component: "access", value: { join: "anyone" } });

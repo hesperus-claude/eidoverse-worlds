@@ -2,14 +2,12 @@
 // history {id}: each entry says WHAT changed (R 10-10 23:55: "does the World log actually not know what I set?").
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/history-diff-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
+import { labWorld } from "./labworld.ts";
 import { suite } from "./suite.ts";
 const { ok, done } = suite("history-diff-check", { quiet: true, cap: Infinity });
-const root = scratch("histdiff"); const clock = labClock(); const W = "h";
-const call = (a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, W), a, v, args); };
+const W = "h", L = labWorld("histdiff"), { root } = L;
+const call = (a, v, args = {}) => L.call(W, a, v, args);
 call("rowan", "create-world", { title: W });
 call("rowan", "create", { id: "sign", components: { label: "Sign", transform: { pos: [0, 1, 0] }, text: { text: "hi", size: 0.2, width: 5.076 } } });
 call("rowan", "set", { id: "sign", component: "text", value: { text: "hi", size: 0.2, width: 3.912 } });
