@@ -5,7 +5,7 @@
 // (tools.ts TOOL_FOLDS), so the FLIGHT checks call the agent's acts as main's tools did, and FLIGHT THROUGH THE
 // DOOR checks the door's own calls.
 import { tryUntil } from './protocol/wait.ts';
-const { WorldAgent } = await import('../mcpl/agent.ts');
+const { WorldAgent, GLIDE_ARRIVE_M } = await import('../mcpl/agent.ts');
 const { handleTool } = await import('../mcpl/tools.ts');
 
 let pass = 0, fail = 0;
@@ -336,6 +336,12 @@ for (const [x, done] of [[8.1, true], [7.9, false]] as const) {
   check(`a touchdown ${(10 - x).toFixed(1)} m from the target is ${done ? 'done' : 'failed as short'}`,
     done ? ok(r) && /at the target$/.test(said(r)) : failed(r) && /^landed short at /.test(said(r)), said(r));
 }
+// one radius for both arrivals: the touchdown rows above are at 2 m, and an arrival in the air just inside it counts
+check('the glide arrival radius is 2 m', GLIDE_ARRIVE_M === 2, String(GLIDE_ARRIVE_M));
+await relaunch();
+ag.flight.pos.x = ag.flight.pos.z = 0;
+r = await midway(ag, call('glide_to', { x: 10, z: 0 }), () => { ag.flight.pos.x = 10 - (GLIDE_ARRIVE_M - 0.1); });
+check('a glide in the air just inside the arrival radius has arrived', ok(r) && /^arrived at \(8\.1, 0\.0\)/.test(said(r)), said(r));
 r = await glides(3, 0);
 check('a glide that lands short is failed', failed(r) && /^landed short at .*7\.0m short/.test(said(r)), said(r));
 r = await glides(4, 0, 'LEAF');
