@@ -2,12 +2,10 @@
 // that failed or timed out isn't cached, so the next walk near that model asks again; an answer is kept.
 //   bun mcpl/agent-reads-test.ts
 process.env.WORLD_TOKEN = "";
+import { suite } from "../tools/protocol/suite.ts";
 const { WorldAgent } = await import("./agent.ts");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
-};
+const { check, done } = suite("agent-reads");
 
 type Seen = { url: string; signal: unknown };
 const seen: Seen[] = [];
@@ -46,5 +44,4 @@ try {
 } finally {
   globalThis.fetch = realFetch;
 }
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

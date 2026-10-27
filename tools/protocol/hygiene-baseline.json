@@ -47,7 +47,6 @@
   "own-ok": 1
  },
  "tools/door-is-error-test.ts": {
-  "agent-url": 4,
   "bare-wait": 1,
   "own-ok": 1
  },
@@ -182,8 +181,8 @@
   "raw-symlink": 7
  },
  "tools/protocol/parity-check.ts": {
-  "raw-symlink": 3,
-  "bare-wait": 5
+  "bare-wait": 5,
+  "raw-symlink": 3
  },
  "tools/protocol/party-probe.ts": {
   "bare-wait": 32

@@ -5,6 +5,7 @@
 // (tools.ts TOOL_FOLDS), so the FLIGHT checks call the agent's acts as main's tools did, and FLIGHT THROUGH THE
 // DOOR checks the door's own calls.
 import { tryUntil } from './protocol/wait.ts';
+import { noWorldUrl } from './no-world.ts';
 const { WorldAgent, GLIDE_ARRIVE_M } = await import('../mcpl/agent.ts');
 const { handleTool } = await import('../mcpl/tools.ts');
 
@@ -36,7 +37,7 @@ const WINGED = [
   'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
   'L_Wing_Lower', 'R_Wing_Lower',
 ];
-const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench' });
+const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench', url: noWorldUrl() });
 ag.bodyBoneNames = WINGED;
 ag.loadBodyBones = async () => ag.bodyBoneNames;
 /** An act's answer as the door gives it: failed when it didn't do what it asked (tools.ts act()). */
@@ -673,7 +674,7 @@ check('a fold that finds the flight\'s wings folded, with the rig known, is done
 ag.wingsFolded = false; ag.flight = null;
 
 console.log('\nBONES NOT KNOWN');
-const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench' });
+const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench', url: noWorldUrl() });
 unread.bodyBoneNames = null;
 unread.loadBodyBones = async () => null;
 unread.myRights = { role: 'builder', fly: true };
@@ -699,7 +700,7 @@ r = await callU('fold_wings');
 check('a fold in the air of wings the flight holds folded, while the bones are unknown, is done, and the posture follows, saying so',
   ok(r) && said(r) === 'wings are already folded; the posture now shows them folded' && unread.wingsFolded === true, `${said(r)}; wingsFolded ${unread.wingsFolded}`);
 unread.flight = null; unread.wingsFolded = false;
-const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench' });
+const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench', url: noWorldUrl() });
 wingless.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
 wingless.loadBodyBones = async () => wingless.bodyBoneNames;
 r = await callOn(wingless, 'unfold_wings');
@@ -710,7 +711,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
 // the door answers each act's {ok} as isError (tools.ts act()); a fly-mode move stops at the first failed step,
 // reporting where the flight stands
 {
-  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench' });
+  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench', url: noWorldUrl() });
   pilot.bodyBoneNames = WINGED;
   pilot.loadBodyBones = async () => pilot.bodyBoneNames;
   const fly = (name: string, a: Record<string, unknown> = {}) => settle(handleTool({ agent: pilot } as any, name, a));
@@ -766,7 +767,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   r = await fly('act', { verb: 'land', args: { to: [5, 5] } });
   check('act {verb: "land"} on the ground is failed', failed(r) && said(r) === 'land: you are on the ground — move {mode: "fly"} gets you up', said(r));
   // a wingless body's fold didn't happen, so nothing plays
-  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench' });
+  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench', url: noWorldUrl() });
   bare.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
   bare.loadBodyBones = async () => bare.bodyBoneNames;
   r = await settle(handleTool({ agent: bare } as any, 'anim', { name: 'wings-folded' }));

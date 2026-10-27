@@ -12,7 +12,7 @@
  * body stands in first, read the scale per axis too.
  */
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { toWorld, toLocal, inRegion, destinationOf } from "./places.ts";
 
 let failures = 0;

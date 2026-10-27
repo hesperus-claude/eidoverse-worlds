@@ -17,7 +17,7 @@
  * drawn, so it answers that top or, if the stretch was lost, something lower.
  */
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { tryUntil } from "../tools/protocol/wait.ts";
 import { registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, inWorld } from "./physics.ts";
 import { boxMesh } from "../tools/two-storey-fixture.ts";
