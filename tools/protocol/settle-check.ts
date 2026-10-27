@@ -9,9 +9,9 @@ import { fold } from "../../shared/protocol/fold.js";
 import { ENGINES, restsOf, worldPose } from "../../shared/protocol/simlayer.js";
 import { scratch } from "./common.ts";
 import { labClock } from "./clock.ts";
+import { suite } from "./suite.ts";
 const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
+const { ok, done } = suite("settle-check", { quiet: true, cap: Infinity });
 const root = scratch("settle"); const clock = labClock();
 const call = (W, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, W), a, v, args); };
 const st = (W) => fold(openWorld(root, W).entries);
@@ -174,5 +174,4 @@ for (const verb of ["delete", "grab"]) { const W = `straddle-foreign-${verb}`; c
   ok(sw.ok && on === "plinth" && !r.ok && r.refused?.code === "foreign-engine" && r.refused.reason.includes(foreign) && r.refused.reason.includes("crate") && !added.some((e: any) => e.kind === "change") && st(W).entities.plinth.c.mesh.size[1] === 0.6,
     "SE21 under a version this server doesn't carry, reshaping what a thing rests on is refused, naming the engine and what rests on it (only that engine re-drops it); the host keeps its shape", { sw: sw.ok ?? sw.refused, on, r: r.ok ?? r.refused, added: added.map((e: any) => [e.kind, e.verb]) }); }
 
-console.log(`[settle-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

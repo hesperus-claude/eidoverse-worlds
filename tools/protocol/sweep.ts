@@ -27,9 +27,9 @@ import { emptyState as v1Empty, foldEntry } from "./import-v1/fold.js";
 import * as eidosim from "./import-v1/eidosim-v1.js";   // the first eidosim: what v1 logs mean
 import { localOf } from "../../shared/hierarchy.js";
 import { mapGrassArgs, isLegacyArgs } from "../../shared/flora_args.js";   // the grass READER's own mapping (not the repair)
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) pass++; else { fail++; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`); } };
+const { check, done } = suite("sweep", { quiet: true, cap: Infinity });
 const parse = (raw: string) => raw.split("\n").filter((l) => l.trim()).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
 const text = (out: any[]) => out.map((e) => JSON.stringify(e)).join("\n") + "\n";
 const c = (o: any) => JSON.stringify(o, (_k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((x) => [x, v[x]])) : v));
@@ -319,5 +319,4 @@ console.log(`[sweep] ${total} distinct world logs, ${entries} entries, divergenc
 console.log(`[sweep] translate-v1@2: ${mountVerbs} v1 mounts translated; ${mounted} things ride a parent at the end (door-shaped: transform local, parent {to, socket?}); ${guards} guards became locks in ${guardWorlds} world(s)`);
 console.log(`[sweep] DROPPED (by design): ${Object.keys(DROPPED).join("; ")}`);
 if (!process.env.PROTOCOL_WORLDS) console.log("OPTIONAL sweep-local-worlds: swept the repo fixtures only (set PROTOCOL_WORLDS=<dir>[:<dir>…] (`;` on Windows) to add a host's own world logs)");
-console.log(`[sweep] ${pass} passed, ${fail} failed`);
-process.exit(fail || !total ? 1 : 0);
+done("", !total);

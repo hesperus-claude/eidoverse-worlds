@@ -19,10 +19,10 @@ import { ENGINE, scratch } from "./common.ts";
 import { openLive } from "../../server/livehost.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { readLog } from "../../shared/protocol/fold.js";
+import { suite } from "./suite.ts";
 
 const TOOL = process.env.MIGRATE_TOOL ?? path.join(ENGINE, "tools/protocol/migrate-identities.ts");
-let pass = 0, fail = 0;
-const ok = (c: any, what: string, info?: unknown) => { if (c) { pass++; console.log(`ok   ${what}`); } else { fail++; console.log(`FAIL ${what}${info === undefined ? "" : ` — ${JSON.stringify(info).slice(0, 600)}`}`); } };
+const { ok, done } = suite("migrate-identities-check", { cap: 600 });
 const minted = (s: unknown) => typeof s === "string" && /^u-[a-z2-7]{20}$/.test(s);
 
 /** An old world: founded by ann; bob a builder whose role carries his account; acts, a say to ann, a use with ann as the
@@ -93,4 +93,4 @@ const idWithSub = (root: string, sub: string) => Object.entries<any>(entriesOf(d
   ok(r.code === 9 && fs.readFileSync(path.join(d, "world.jsonl")).equals(before) && minted(idWithSub(root, "aid1:example.org:bob")),
     "MI6 a crash between the directory and the logs: the logs are as they were and the directory already holds the ids (I91)", { code: r.code, bob: idWithSub(root, "aid1:example.org:bob"), out: r.out.slice(-300) }); }
 
-console.log(`[migrate-identities-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

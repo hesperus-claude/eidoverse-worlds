@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { sinT, cosT, atan2T, SIMMATH_ID } from "../../shared/simmath.js";
 import * as PH from "./pinhistory.ts";
 import { fileURLToPath } from "node:url";
+import { suite } from "./suite.ts";
 export const LAW = "heading-trig@1";
 const DATA = ["sin", "cos", "atan2"] as const;
 const FILE = new URL("../../spec/conformance/trig.json", import.meta.url);
@@ -22,8 +23,7 @@ if (process.argv.includes("--write")) {
   const moved = had?.law === LAW ? DATA.filter((k) => JSON.stringify(had[k]) !== JSON.stringify(now[k])) : [];
   if (moved.length) { console.log(`refusing to write: ${moved.join(", ")} would change under ${LAW} (a change meant to alter results is a new version: bump LAW in trig-check.ts)`); process.exit(1); }
   fs.writeFileSync(FILE, JSON.stringify({ law: LAW, kernel: SIMMATH_ID, contract: CONTRACT, note: "inputs and outputs are IEEE-754 float64 bits, big-endian hex", ...now }, null, 1) + "\n"); console.log(`trig.json written (${LAW})`); process.exit(0); }
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`); if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 400)); } };
+const { check, done } = suite("trig-check");
 const want = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, "utf8")) : null;
 check("TR0 the trig vectors exist", !!want);
 if (want) for (const k of ["sin", "cos", "atan2"] as const) {
@@ -36,4 +36,4 @@ check(`TRV the file names its law's version (${LAW}), and an earlier trig.json u
   const ROOT = fileURLToPath(new URL("../../", import.meta.url)); const F = "spec/conformance/trig.json";
   const r = PH.sameVersionChanged(ROOT, F, (f) => (fs.existsSync(ROOT + f) ? fs.readFileSync(ROOT + f, "utf8") : null), [{ law: "trig", versionOf: (x) => x?.law, data: [...DATA] }]);
   if (r.out.length) console.log("     ", JSON.stringify(r).slice(0, 400)); return want?.law === LAW && !r.out.length; })(), { law: want?.law, LAW });
-console.log(`[trig-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();
