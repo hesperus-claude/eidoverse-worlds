@@ -42,7 +42,7 @@ export function sliderTable(fields, obj, {
       const show = () => { val.textContent = fmt(f, get(f)); };
       sl.oninput = () => { set(f, Number(sl.value)); show(); onSet?.(f); };
       show();
-      const ctl = mk('span', 'ctl'); val.style.width = vW; ctl.append(sl, val);
+      const ctl = mk('span', 'ctl'); ctl.append(sl, val);
       wrap.append(nm, ctl);
       el.appendChild(wrap);
     }
