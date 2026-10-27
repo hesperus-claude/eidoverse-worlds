@@ -3892,16 +3892,16 @@ export class WorldAgent {
       return world ? this.bodiesAtPoint(world) : [];
     }
     // their own frame: theirs, and wherever it lands in the world, as their pose draws it
-    const own = WorldAgent.reachClass(t, t.space);
+    const own = WorldAgent.reachClass(t, t.space, clampBodyScale((this.people.get(t.space)?.pose as any)?.scale));
     const world = WorldAgent.poseToWorld(this.people.get(t.space)?.pose, p);
     return [...(own ? [{ name: t.space as string, cls: own }] : []), ...(world ? this.bodiesAtPoint(world).filter((h) => h.name !== t.space) : [])];
   }
-  /** As server/reachgate.ts's frameToWorld places it: at the body's size, turned by the pose's q when it carries one (a
-   *  swimmer's whole-body turn), else by its yaw about +y. Null without a position. */
+  /** As server/reachgate.ts's frameToWorld places it: metres at any size (docs/body-state.md), turned by the pose's q when it
+   *  carries one (a swimmer's whole-body turn), else by its yaw about +y. Null without a position. */
   private static poseToWorld(pose: any, local: number[]): number[] | null {
     const at = pose?.p;
     if (!Array.isArray(at) || at.length !== 3 || !at.every(Number.isFinite)) return null;
-    const sc = clampBodyScale(pose.scale), l = local.map((v) => v * sc), q = pose.q;
+    const l = local, q = pose.q;
     if (Array.isArray(q) && q.length === 4 && q.every(Number.isFinite)) {
       const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1, x = q[0] / n, y = q[1] / n, z = q[2] / n, w = q[3] / n;
       const cx = y * l[2] - z * l[1], cy = z * l[0] - x * l[2], cz = x * l[1] - y * l[0];   // v' = v + 2w (u × v) + 2 u × (u × v)
@@ -3913,9 +3913,10 @@ export class WorldAgent {
   }
   /** The class the relay (server/reachgate.ts) gives a target on `name`'s body: a named point by consent.js's one table, a
    *  point in their own frame by their capsule; null for a point beside them (the relay relays it) or another kind of target. */
-  static reachClass(t: any, name: string): string | null {
+  static reachClass(t: any, name: string, scale = 1): string | null {
     if (t?.who === name) return namedPointClass(t.point)?.cls ?? null;
-    if (t?.space === name && Array.isArray(t.p)) return pointClass([0, 0, 0], t.p);
+    // the point is metres in their root frame; their capsule is at their size (bodiesAtPoint)
+    if (t?.space === name && Array.isArray(t.p)) return pointClass([0, 0, 0], t.p.map((v: number) => v / scale));
     return null;
   }
   /** A fresh refusal from any body it is held to (waits a few frames for one), or one said within REACH_NOTE_MS (the
