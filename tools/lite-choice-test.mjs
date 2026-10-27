@@ -139,6 +139,30 @@ const phoneUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chr
 { const r = boot({ userAgent: phoneUA, deviceMemory: 4 }, true); check('page: an Android phone after a died boot loads lite (crash)', r.lite === true && r.why === 'crash', JSON.stringify(r)); }
 { const r = boot({ userAgent: winUA, deviceMemory: 8 }, false); check('page: a healthy desktop loads full (default)', r.lite === false && r.why === 'default', JSON.stringify(r)); }
 
+console.log('  -- the tripwire is per world: capability is a property of the (device, world) pair --');
+{ // a page whose pagehide can be fired, so a clean exit is the page's own handler, not a hand-cleared key
+  const visit = (world, st, nav = { userAgent: winUA, deviceMemory: 8 }) => {
+    const ls = {}; const h = { ...g, location: { search: `?world=${world}` }, navigator: { gpu: {}, ...nav },
+      localStorage: { getItem: (k) => (st.has(k) ? st.get(k) : null), setItem: (k, v) => st.set(k, String(v)), removeItem: (k) => st.delete(k) },
+      addEventListener: (t, f) => (ls[t] ??= []).push(f) };
+    h.globalThis = h;
+    new Function('globalThis', 'navigator', 'location', 'localStorage', 'document', 'console', 'URLSearchParams', 'addEventListener', src)
+      .call(h, h, h.navigator, h.location, h.localStorage, h.document, h.console, URLSearchParams, h.addEventListener);
+    return { lite: h.__ewLite, why: h.__ewLiteWhy, leave: () => (ls.pagehide ?? []).forEach((f) => f({ persisted: false })) };
+  };
+  const st = new Map([['ew-boot-attempt:alpha', '1']]);
+  const beta = visit('beta', st);
+  check('page: a different world on the same desktop is not touched by alpha\'s died boot (default, not retry)', beta.lite === false && beta.why === 'default', JSON.stringify(beta));
+  const phone = visit('beta', new Map([['ew-boot-attempt:alpha', '1'], ['ew-boot-retried:alpha', '1']]), { userAgent: phoneUA, deviceMemory: 4 });
+  check('page: …nor on a phone (phone, not crash)', phone.why === 'phone', JSON.stringify(phone));
+  // alpha's died boot takes its retry (the page writes it); beta's died boot must still get one of its own
+  const st2 = new Map([['ew-boot-attempt:alpha', '1'], ['ew-boot-attempt:beta', '1']]);
+  const alpha2 = visit('alpha', st2), beta2 = visit('beta', st2);
+  check('page: alpha\'s spent retry is alpha\'s: beta\'s died boot still gets its own retry', alpha2.why === 'retry' && beta2.why === 'retry', JSON.stringify([alpha2.why, beta2.why]));
+  beta.leave();
+  check('page: surviving beta (its clean exit) clears beta\'s flag and not alpha\'s', !st.has('ew-boot-attempt:beta') && st.has('ew-boot-attempt:alpha'), JSON.stringify([...st.keys()]));
+}
+
 console.log('  -- a renderer is never lite (rule 0; 2026-10-24, the roaming renderers) --');
 // The /snap renderers' watchdog kills them by design, and a kill runs no pagehide: the tripwire read every kill as a
 // device that cannot, two in a row landed four of five roamers in lite, and a lite roamer answered every snapshot in

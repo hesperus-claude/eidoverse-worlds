@@ -5,9 +5,9 @@ import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 
 const ENGINE = /three\.webgpu|three\.tsl|three-vrm|three-mesh-bvh/;
 const { check, done } = checker();
-// every world this test joins is founded (joining never founds one), or the arrival and tripwire absence checks pass vacuously
+// every world this test joins is founded (joining never founds one), or the arrival checks pass vacuously
 const ARRIVAL = 'arrival';
-const world = await ownedWorld({ worlds: [ARRIVAL, 'alpha', 'beta', 'gamma'] });
+const world = await ownedWorld({ worlds: [ARRIVAL] });
 const { browser, page: mkPage } = await launchBrowser();
 
 async function weigh(query, label) {
@@ -320,56 +320,7 @@ const RAW = `
   await page.close();
 }
 
-// THE TRIPWIRE: only the mechanism is testable locally and it's cause-agnostic (an OOM reap and a hand kill look the
-// same), so arming and per-world keying are what's proved
-{
-  const page = await mkPage();
-
-  // 1. a world whose last full boot never finished: lite, saying why. The flag is planted from a page that arms nothing:
-  // leaving a full boot fires pagehide (a clean exit) and clears it, which an OOM kill never does
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => localStorage.setItem('ew-boot-attempt:alpha', String(Date.now())));
-  await page.goto(`${world.origin}/?world=alpha&name=trip&key=${world.key}`, { waitUntil: 'load' });
-  const alpha = await page.evaluate(() => ({ lite: globalThis.__ewLite, why: globalThis.__ewLiteWhy }));
-  console.log(`\n  tripwire: world alpha (died) -> lite=${alpha.lite} why=${alpha.why}`);
-  // this page is a DESKTOP: only a phone or tablet is demoted by a died boot, so a desktop retries the full world and says
-  // so. The phone half is lite-banner-probe's; lite-choice-test pins the rule.
-  check('a desktop whose last boot died RETRIES the full world (why=retry), not lite', alpha.lite === false && alpha.why === 'retry');
-  // the retry cleared alpha's flag on its clean exit, so re-plant the death before checking ANOTHER world leaves it alone
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => localStorage.setItem('ew-boot-attempt:alpha', String(Date.now())));
-
-  // 2. a DIFFERENT world on the same device is untouched: a device-wide flag would strand lite on worlds the hardware holds
-  await page.goto(`${world.origin}/?world=beta&name=trip&key=${world.key}`, { waitUntil: 'load' });
-  const beta = await page.evaluate(() => ({ lite: globalThis.__ewLite, why: globalThis.__ewLiteWhy }));
-  console.log(`  tripwire: world beta (fine)  -> lite=${beta.lite} why=${beta.why}`);
-  check('a different world on the same device is NOT demoted', beta.lite === false,
-    'the key is per world: capability is a property of the (device, world) pair');
-
-  // 3. a surviving full boot disarms its own world, only after the load tail goes quiet (not at arrival)
-  const armedDuring = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:beta') !== null);
-  // the meaningful disarm is PAGEHIDE (a leave fires it, an OOM kill doesn't); the 60s dwell is deliberately not gated.
-  // Arrive first, so this is a SURVIVING boot (leaving mid-load is clean too; lite-choice-test covers it).
-  const betaArrived = await page.waitForFunction(
-    () => { const el = document.getElementById('splash'); return !el || el.classList.contains('gone'); },
-    { timeout: 60000 },
-  ).then(() => true).catch(() => false);
-  check('the full client arrives on a fresh world', betaArrived);
-
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'load' });
-  const disarmed = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:beta') === null);
-  console.log(`  tripwire: beta armed during boot=${armedDuring}, cleared on clean exit=${disarmed}`);
-  check('a full boot arms the flag before fetching the engine', armedDuring);
-  check('leaving a surviving world cleanly disarms it', disarmed,
-    'pagehide is the signal an OOM kill cannot fake');
-
-  // 4. alpha is still tripped: surviving beta says nothing about alpha
-  const alphaStill = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:alpha') !== null);
-  check('surviving one world does not clear another', alphaStill);
-
-  await page.close();
-}
-
+// the tripwire (arming, clean exit, per-world keys): tools/lite-choice-test.mjs, over the page's own script
 const back = await weigh('&lite=0', 'escape hatch (?lite=0)');
 check('?lite=0 forces the full client back', back.lite === false && back.why === 'url');
 check('?lite=0 fetches the engine again', back.engine.length > 0);
