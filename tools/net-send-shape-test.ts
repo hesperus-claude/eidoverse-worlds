@@ -15,11 +15,18 @@ const { mock } = await import("bun:test");
 for (const m of ["core", "assets", "world", "chat", "fp_view", "boot", "ui", "avatar", "xrbody"]) {
   mock.module(`${import.meta.dir}/../client/lib/${m}.js`, () => stubs);
 }
-const { net, identities, say, sendPuppet, sendBodyDrag, sendTyping } = (await import("../client/lib/net.js")) as any;
+const { net, identities, say, sendPuppet, sendBodyDrag, sendTyping, sendJoined } = (await import("../client/lib/net.js")) as any;
 const sent: any[] = [];
 const online = () => { net.joined = true; net.status = "connected"; net.ws = { readyState: 1, send: (s: string) => sent.push(JSON.parse(s)) }; };
 const offline = () => { net.joined = false; net.status = "reconnecting"; net.ws = null; };
 identities.set("pip", "u-pip");
+
+// sendJoined (the SFU bridge's sender): an open socket that has not joined yet carries nothing
+{ online(); net.joined = false; sent.length = 0;
+  check("sendJoined: an open socket not yet joined → nothing goes out", sendJoined?.({ type: "sfu-pos" }) === false && sent.length === 0, JSON.stringify(sent));
+  net.joined = true;
+  check("sendJoined: joined → it goes out as sent", sendJoined({ type: "sfu-pos", x: 1 }) === true && sent.length === 1 && sent[0].type === "sfu-pos" && sent[0].x === 1, JSON.stringify(sent));
+  sent.length = 0; offline(); }
 
 // every sender that names a person, every typing state
 const SENDERS: { name: string; type: string; key: string; send: (to: string | null) => void }[] = [

@@ -1,7 +1,7 @@
 // voicesfubridge — joins voicesfu.js (pure WebRTC, testable without a socket) to the world websocket and the bus.
 // window.relayDiag / window.relayMic are the shape every browser smoke asserts against.
 import { bus, CONFIG } from './base.js';
-import { net, sendRelayCredRequest, sendVoiceConsent } from './net.js';
+import { net, sendRelayCredRequest, sendVoiceConsent, sendJoined } from './net.js';
 import { sfuConnect, sfuOnOffer, sfuOnIce, sfuMic, sfuPeerLevels, sfuMyLevel,
   sfuDiagClient, sfuClose, sfuActive, sfuSpeakerEntries, sfuInboundStats, sfuMicOn,
   sfuMicWanted, sfuDropSpeaker } from './voicesfu.js';
@@ -10,7 +10,7 @@ import { myState } from './controller.js';
 import { isHushed, volumeFor, receivingVoice, VOICE_FULL_M, VOICE_SILENT_M } from './voiceconsent.js';
 import { setGeneratorRebuildHook, synthProvider } from './voicesource.js';
 
-const send = (o) => { if (net.ws?.readyState === 1) net.ws.send(JSON.stringify(o)); };
+const send = (o) => { sendJoined(o); };
 
 // a synth track arriving with no lane (mic off, TTS loaded later) must become the lane
 setGeneratorRebuildHook(() => {

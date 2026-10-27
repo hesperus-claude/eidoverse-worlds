@@ -207,6 +207,11 @@ export function sendMod(type, extra = {}) {
   } else logChat('*', 'not connected — try again in a moment');
 }
 
+/** A message for the world socket once joined (an open socket not yet joined is the early one, or a rejoin); true when sent. */
+export function sendJoined(o) {
+  if (!(net.joined && net.ws?.readyState === 1)) return false;
+  net.ws.send(JSON.stringify(o)); return true;
+}
 /** #104: ask the sequencer to mint this body's media credential. */
 export function sendRelayCredRequest(scopes = {}) {
   if (net.joined && net.ws?.readyState === 1) net.ws.send(JSON.stringify({ type: 'relay-cred', ...scopes }));
