@@ -7,11 +7,18 @@
 //     same reads of the world while open answer (the control).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/renderer-cred-test.ts
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { scratchSequencer, mkCheck } from "./harness.ts";
 
 const W = "closed", DOOR = "door-key", RKEY = "renderer-key";
+// an agent registry holding a key from the public example file (mcpl/tokens.example.json) beside a private one
+const EXAMPLE_KEY = Object.keys(JSON.parse(readFileSync(new URL("../mcpl/tokens.example.json", import.meta.url), "utf8")))[0], OWN_KEY = "own-agent-key";
+const TOKENS = join(mkdtempSync(join(tmpdir(), "ew-renderercred-tok-")), "tokens.json");
+writeFileSync(TOKENS, JSON.stringify({ [EXAMPLE_KEY]: { id: "copied" }, [OWN_KEY]: { id: "resident" } }));
 const h = await scratchSequencer("renderercred", { worlds: [W], owner: "keeper",
-  serverEnv: { JOIN_TOKEN: DOOR, RENDERER_TOKEN: RKEY, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" } });
+  serverEnv: { JOIN_TOKEN: DOOR, RENDERER_TOKEN: RKEY, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1", AGENT_TOKENS_PATH: TOKENS } });
 const { check, tally } = mkCheck();
 const WS = h.BASE.replace("http", "ws") + "/ws";
 type Conn = { ws: WebSocket; msgs: any[]; closedWith: number | null; snap: () => any };
@@ -71,6 +78,12 @@ try {
   check("a stranger's /heightmap of the members-only world: 404, nothing about it", hm.status === 404, `${hm.status} ${await hm.text()}`);
   const sn = await fetch(`${h.BASE}/snap?world=${W}&follow=keeper`, KEY);
   check("a stranger's /snap of the members-only world: 404 'unknown world'", sn.status === 404, `${sn.status} ${await sn.text()}`);
+  // the HTTP doors read the agent registry as the MCPL door does: a public example key opens nothing, a private one does
+  const asKey = (k: string) => fetch(`${h.BASE}/geom?world=${W}`, { headers: { authorization: `Bearer ${k}` } });
+  const ex = await asKey(EXAMPLE_KEY), own = await asKey(OWN_KEY);
+  check(`(setup) the example file's key is "${EXAMPLE_KEY}", the registry is the scratch one`, !!EXAMPLE_KEY && EXAMPLE_KEY !== OWN_KEY);
+  check("a key copied from the public example file is refused at an HTTP door (401)", ex.status === 401, String(ex.status));
+  check("…where a private registry key passes the door (the world then answers as closed to it)", own.status !== 401, String(own.status));
 } finally {
   for (const s of socks) { try { s.close(); } catch {} }
 }

@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { JtiCache, verifyToken, aid1Slug, type Aid1Payload } from "./aid1.ts";
 import { ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
+import { readTokenRegistry } from "../mcpl/token-registry.ts";
 
 // ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
 // Second door beside JOIN_TOKEN: an aid1 token swaps for a session cookie at /auth. Verification is offline
@@ -65,6 +66,7 @@ try {
 // MCPL per-agent tokens (hot-reloaded by mtime): an agent's name is RESERVED against plain browser joins; a join
 // with the right token is a verified agent. AGENT_TOKENS_PATH is for tests only.
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
+const AGENT_TOKENS_EXAMPLE = resolve(process.env.MCPL_TOKENS_EXAMPLE ?? join(ROOT, "mcpl", "tokens.example.json"));
 let agentTokCache: { mtime: number; byToken: Map<string, string>; names: Set<string>; bySub: Map<string, string> } | null = null;
 export function agentTokens() {
   try {
@@ -76,12 +78,14 @@ export function agentTokens() {
       // display name that slugs the same
       const bySub = new Map<string, string>();
       if (mtime) {
-        const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { id?: string; subs?: string[] }>;
-        for (const [tok, v] of Object.entries(raw)) {
-          if (!v?.id) continue;
+        // the MCPL door's reader (mcpl/token-registry.ts): a public example key is refused here too
+        const accepted = readTokenRegistry(AGENT_TOKENS_PATH, AGENT_TOKENS_EXAMPLE);
+        const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { subs?: unknown }>;
+        for (const [tok, v] of Object.entries(accepted)) {
           byToken.set(tok, v.id);
           names.add(v.id.toLowerCase());
-          for (const s of v.subs ?? []) if (typeof s === "string") bySub.set(s, v.id);
+          const subs = Object.hasOwn(raw, tok) && Array.isArray(raw[tok]?.subs) ? raw[tok].subs as unknown[] : [];
+          for (const s of subs) if (typeof s === "string") bySub.set(s, v.id);
         }
       }
       agentTokCache = { mtime, byToken, names, bySub };
