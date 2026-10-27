@@ -279,7 +279,8 @@ try {
   check("S3 …and its tile shows in 'saved here'", await waitFor(`[...${bf}.querySelectorAll('.sp-tile')].some((t) => t.textContent.trim() === 'tbl')`));
   n0 = myActs().length;
   await evalJson(`[...${bf}.querySelectorAll('.sp-tile')].find((t) => t.textContent.trim() === 'tbl').click(), true`);
-  check("S4 the tile places a copy: create {from: <hash>}, ONE act", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "create" && /^sha256:/.test(myActs().at(-1).e.body.request.from)), myActs().slice(n0).map((a) => a.e.body.request));
+  check("S4 the tile places a copy: create {from: <hash>}, ONE act", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "create" && /^sha256:/.test(myActs().at(-1).e.body.request.from)), { acts: myActs().slice(n0).map((a) => a.e.body.request), refused: await evalJson(`__refused.slice(-2).map((r) => r.text)`), errs: await evalJson(`__errs`),
+    tiles: await evalJson(`[...${bf}.querySelectorAll('.sp-tile')].map((t) => [t.textContent.trim(), t.disabled])`) });   // a red S4 once said only [] (#260, Windows)
 
   // ==== research 44: polish ====
 
