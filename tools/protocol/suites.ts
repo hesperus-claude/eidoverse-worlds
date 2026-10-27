@@ -163,6 +163,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["first-name-account", "../first-name-account-test.ts", 1], // the first-run door's name becomes the account
   ["retired-commands", "../retired-commands-test.ts", 1], // a retired command says why it is gone
   ["animnames-retry", "../animnames-retry-test.ts", 1], // a failed defs fetch is retried with back-off
+  ["snapshots", "../bun-test.ts tools/snapshots-test.ts", 1], // the capture broker: selection, cooldown, journeys, timeouts
+  ["snapframe-render", "../snapframe-render-test.ts", 1], // where the renderer leg puts the camera
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
