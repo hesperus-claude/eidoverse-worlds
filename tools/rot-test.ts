@@ -2,8 +2,6 @@
 // Checks shared/rot.js against three.js (an independent implementation), and
 // that rot.js owns its numerics. (The v1 fold's q semantics that lived here went
 // with the v1 fold: a transform now carries q itself, folded by shared/protocol/fold.js.)
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import * as THREE from "three";
 import { qNorm, qFromYaw, qMul, qRotate, qHeading, qWithHeading } from "../shared/rot.js";
 
@@ -36,9 +34,7 @@ for (const [name, q] of [["face down", qNorm([-Math.SQRT1_2, 0, 0, Math.SQRT1_2]
   for (const yaw of [-2, 0.3, 3]) ok(`heading of a thing ${name}, turned to ${yaw}`, Math.abs(qHeading(qWithHeading(q, yaw)!) - yaw) < 1e-12);
 ok("qNorm refuses junk", [null, [1, 2, 3], [0, 0, 0, 0], [NaN, 0, 0, 1], "q", [1, 0, 0, Infinity]].every(q => qNorm(q as any) === null));
 
-// ---- owned numerics: no host transcendentals in rot.js (PROTOCOL_v2 Covenant I's discipline, applied to the instant fold)
-const rotSrc = readFileSync(join(import.meta.dir, "..", "shared", "rot.js"), "utf8").replace(/\/\/.*$/gm, "");
-ok("rot.js uses no host sin/cos/atan2/pow/exp", !/Math\.(sin|cos|tan|atan2?|asin|acos|pow|exp|log|hypot)\b/.test(rotSrc));
+// owned numerics (no host transcendental in rot.js, PROTOCOL_v2 Covenant I's discipline): tools/one-binding-test.ts
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

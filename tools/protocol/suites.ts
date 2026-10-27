@@ -57,7 +57,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
   ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
   ["role-grammar", "../role-grammar-test.ts", 1], // one role-id grammar (grab, sockbody, rolespanels, commands)
-  ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation, and no host transcendental
+  ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation
+  ["one-binding", "../one-binding-test.ts", 1], // a shared constant, grammar or table has one binding: importers carry no copy (reaches, rounding, roles, rot numerics, names key)
   ["onepose", "onepose-check.ts", 1], // one worldPose (simlayer's and hierarchy's agree bit for bit) and one set of quaternion functions (shared/rot.js)
   ["dismount-height", "../dismount-height-test.ts", 1], // standing up keeps the height I'm let go at (vacated.at, a socket exit, a leave clip's end)
   ["latestread", "../latestread-test.ts", 1], // the panels' paced re-read and the History retry's back-off (latestread.js, backoff.js)

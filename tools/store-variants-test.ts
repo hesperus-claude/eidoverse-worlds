@@ -125,16 +125,7 @@ console.log("\nthe store's KTX2 shadow (store-variants.ts, shared/ktx2.js):\n");
   check("a content verdict stands regardless (nothing to convert)", verdictStands("[optimize] ktx2: no convertible raster images (12ms) — keeping original"));
   check("…and so does a hard failure", verdictStands("exit 1") && verdictStands(""));
 
-  // every refusal the CLI can exit 2 with names its KIND on a [verdict] line, read from the emitter itself, not a
-  // hand-kept list: a new exit-2 site without one is a record typed only by grammar
-  {
-    const cliSrc = readFileSync(join(import.meta.dir, "..", "server", "optimize.ts"), "utf8");
-    const main = cliSrc.slice(cliSrc.indexOf("if (import.meta.main)"));
-    const exits = [...main.matchAll(/process\.exit\(2\)/g)].map((m) => main.slice(Math.max(0, m.index! - 400), m.index!));
-    const bare = exits.filter((pre) => !/console\.error\(verdictLine\([^\n]*\);\s*$/.test(pre));
-    check(`every exit-2 site in the CLI (${exits.length}) emits a typed [verdict] line just before it`, exits.length >= 6 && bare.length === 0,
-      bare.map((b) => b.split("\n").slice(-2).join(" ").trim().slice(0, 120)));
-  }
+  // every exit-2 site in the CLI emits a typed [verdict] line just before it: tools/one-binding-test.ts
   // the LOD recipe DERIVES from its parameters: a floor change is a generation change by construction
   check("LOD_RECIPE derives from (gen, ratio, screen budget px/ppd/tpp, texture-only share, the switch distance, texel, floor)",
     LOD_RECIPE === lodRecipeFor() && LOD_RECIPE === `lod${LOD_GEN}-r25-px2ppd25-tpp1-tx5-d80k4f45h25-texel${KTX2_TEXEL_CAP}-min${LOD_MIN_VERTS}`, LOD_RECIPE);
