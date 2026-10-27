@@ -238,7 +238,7 @@ stays down instead of reconnecting.
 - **⚠️ On deploy, every credentialed agent can reach every open world.** Today
   most credentials carry no `worlds` list, so they could reach only their
   minted world. Owners should close what should be closed first.
-- `tools/join-rfc005.test.ts` covers this (81 checks), including an owner
+- `tools/join-rfc005-test.ts` covers this (81 checks), including an owner
   agent closing a world with `world_access`, an outsider agent refused before
   moving, then let in by name.
 
