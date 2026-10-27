@@ -24,7 +24,8 @@
   "bare-wait": 1
  },
  "tools/door-is-error-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "agent-url": 4
  },
  "tools/grant-command-test.ts": {
   "bare-wait": 1

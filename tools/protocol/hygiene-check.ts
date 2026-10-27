@@ -24,6 +24,9 @@
 //   lab-clock     the authority's clock env set or deleted by hand: 124 inline "advance then pin" copies in 34 files (10-22),
 //                 where a helper that forgot to advance (or two sharing one counter) could run time backwards silently. Use
 //                 tools/protocol/clock.ts (labClock().advance, pin, unpinned).
+//   agent-url     a WorldAgent built without `url`: it falls back to 127.0.0.1:8940, whatever runs there (or a closed port,
+//                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: tools/no-world.ts noWorldUrl().
+//                 Checked over tools/ only.
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE } from "./common.ts";
@@ -43,12 +46,14 @@ export const RULES: Record<string, RegExp> = {
   // the gate runs under Bun, and under Bun on Windows playwright neither launches (its pipe descriptors don't pass through
   // Bun's spawn) nor connects over CDP: browser-check hung to its timeout on every Windows run until 10-22. Gate suites drive
   // Chrome with chrome.ts cdpPage / harness scratchBench. Benches run under node may use it.
+  "agent-url": /\bnew\s+WorldAgent\s*\(\s*(?:\{(?![^{}]*\burl\b)[^{}]*\})?\s*\)/g,
   "playwright": /\bfrom\s+["']playwright(?:-core)?["']|\b(?:require|import)\(\s*["']playwright(?:-core)?["']/g,
 };
 const SELF = "tools/protocol/hygiene-check.ts";   // its fixtures are the bad shapes on purpose
-const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"] };
+const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"], "agent-url": ["tools/dummy.ts"] };   // dummy is the show host's service: WORLD_URL is how it is told where
 const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright"]);   // the waiting rules are about tests; server code may wait on purpose
-const ALL_TOOLS = new Set(["chrome-flags"]);
+const ALL_TOOLS = new Set(["chrome-flags", "agent-url"]);
+const TOOLS_ONLY = new Set(["agent-url"]);   // mcpl/ has its own owner and its server builds its agent from the env on purpose
 
 export function scan(text: string): Record<string, number> {
   const out: Record<string, number> = {};
@@ -78,7 +83,7 @@ export function measure(): Record<string, Record<string, number>> {
   for (const f of [...files].sort()) {
     const counts = scan(fs.readFileSync(path.join(ENGINE, f), "utf8"));
     for (const k of Object.keys(counts)) {
-      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
+      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (TOOLS_ONLY.has(k) && !f.startsWith("tools/")) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
       (out[f] ??= {})[k] = counts[k];
     }
   }
@@ -113,10 +118,11 @@ if (import.meta.main) {
     // split: the whole flag in this file would make suites.ts read the hygiene suite as one that launches a browser
     "chrome-flags": 'Bun.spawn([CHROME, "--headless=new", `--remote-' + 'debugging-port=${port}`, url]);',
     // split, like chrome-flags: the whole import in this file would make suites.ts read hygiene as a browser suite
+    "agent-url": 'new WorldAgent({ name: "a", world: "w" }); new WorldAgent(); new WorldAgent({\n  name: "b",\n  avatar: "",\n});',
     "playwright": 'import { chromium } from "play' + 'wright"; const { chromium: c2 } = await import("playwright-core");',
   };
-  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "playwright": 2 };
-  const good = 'await until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f);';
+  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "playwright": 2, "agent-url": 3 };
+  const good = 'await until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts);';
   let i = 1;
   for (const k of Object.keys(RULES)) check(`H${i++} ${k}: caught in its known-bad form (${want[k]}), and not in the right way`, (scan(bad[k])[k] ?? 0) === want[k] && !(scan(good)[k] ?? 0), { bad: scan(bad[k]), good: scan(good) });
   // own-until has one false friend in the tree ('const poll = (p: any) => post(...)', native-login-test); it's a request, not a loop
