@@ -82,7 +82,7 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
   if (!importOnly && SLOW[name] && !flag("--slow")) return done({ file, kind: "skip", why: `slow: ${SLOW[name]} (--slow runs it)`, ms: 0 });
   if (importOnly && flag("--skip-suites") && gateSuite.has(rel(file))) return done({ file, kind: "skip", why: `the gate runs it in full as ${gateSuite.get(rel(file))}`, ms: 0 });
   if (needsMcpl(src) && !mcplDeps) return done({ file, kind: "env", why: "mcpl/node_modules missing: ln -s <a checkout with deps>/mcpl/node_modules mcpl/", ms: 0 });
-  const ch = spawn("bun", [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+  const ch = spawn(process.execPath, [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   live.add(ch.pid!); let out = ""; let timedOut = false;
   ch.stdout.on("data", (d) => { out += d; }); ch.stderr.on("data", (d) => { out += d; });
   // killSuiteAsync, not process.kill(-pid), which throws on Windows; only a timed-out file pays its WMI query (a sweep per
