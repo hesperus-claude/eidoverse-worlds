@@ -125,6 +125,18 @@ const head0 = w.log.head;
   ok(out && !out.reach, "RG22 a point in Sly's own frame, turned by q, that lands inside Vic is stripped", out);
   pose(sly, { p: [0.6, 0, 0], yaw: 0 }); }
 
+// RG23: a `space` point is metres at any body size (docs/body-state.md; reachnet.js localToWorld on the unscaled root);
+// only the frame's own capsule grows with the body. Vic at 2×
+{ const big = pose(vic, { p: [0, 0, 0], yaw: 0, scale: 2 });
+  ok(big?.scale === 2, "(RG23 setup) Vic stands at 2×", big);
+  const out = reachTo(sly, { p: [-0.62, 1.2, 0.05], space: "Vic" });   // 0.62 m out is Tom's middle, not 1.24 m
+  ok(out && !out.reach, "RG23 a point 0.62 m out in a 2× Vic's frame lands 0.62 m out, inside Tom, and is stripped", out);
+  const out2 = reachTo(tom, { p: [0, 1.2, 0.5], space: "Vic" });   // halved, 0.25 m: inside her 2× capsule
+  ok(out2 && !out2.reach, "RG23 …and her own capsule is judged at her size: a point 0.5 m in front of a 2× Vic is on her", out2);
+  const out3 = reachTo(tom, { p: [0, 1.2, 1.5], space: "Vic" });
+  ok(out3?.reach?.rightHand?.t?.space === "Vic", "RG23 …one 1.5 m in front of her relays", out3);
+  pose(vic, { p: [0, 0, 0], yaw: 0 }); }
+
 // RG10 (everything above went through the relay only)
 ok(w.log.head === head0, "RG10 nothing about a reach is appended to the log", w.log.live.entries.slice(head0 + 1).map((e) => e.verb));
 
