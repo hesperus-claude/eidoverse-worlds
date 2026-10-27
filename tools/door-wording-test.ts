@@ -709,6 +709,7 @@ try {
   const answers: Record<string, (ws: any, n: number) => void> = {
     kicked: (ws) => { ws.send(snapshot()); setTimeout(() => ws.close(4006, "kicked"), 200); },
     denied: (ws) => ws.close(4005, "refused"),
+    "taken-over": (ws) => { ws.send(snapshot()); setTimeout(() => ws.close(4002, "session takeover"), 200); },
     // a refusal's close says whether it is final (agent.ts onclose: a 4005 that isn't "full" is)
     "refused-silently": (ws) => { ws.send(JSON.stringify({ type: "error" })); ws.close(4005, "refused"); },
     "refused-blank": (ws) => { ws.send(JSON.stringify({ type: "error", error: "" })); ws.close(4005, "refused"); },
@@ -761,6 +762,13 @@ try {
   const afterDenial = thrown(send(denied));
   check("a body whose join the world refuses (4005) has ended for good too",
     denied.closed === true && /has ended for good .* calling again won't change that$/.test(afterDenial), afterDenial);
+  const taken = body("taken-over");
+  taken.redial.next = () => 50;   // a dial again, were there one, comes at once
+  const takenJoin = await outcome(taken.connect());
+  await tryUntil("the taken-over body has closed", () => taken.closed, { ms: 3000 });
+  await tryUntil("the taken-over body dials again", () => joins.get("taken-over")! > 1, { ms: 1000 });
+  check("a body a newer session of its identity takes over (4002) stays down: it doesn't dial again and take that one over",
+    takenJoin === "joined" && taken.closed === true && joins.get("taken-over") === 1, `${takenJoin}, closed ${taken.closed}, joins ${joins.get("taken-over")}`);
   const grounded = winged(body("grounded"));
   await grounded.takeOff();
   const groundedJoin = await outcome(grounded.connect());

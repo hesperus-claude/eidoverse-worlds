@@ -812,6 +812,12 @@ export class WorldAgent {
         // 4010 = this world is not open to this identity (server/access.ts): refused at the door, or its access ended or
         // changed. Same answer as a ban for redialling: the door will not open on its own, so the body stays down.
         if (code === 4005 || code === 4010) { this.close(); return; }
+        // 4002 = a newer session of this identity took over: dialling again would take that one over in turn, back and forth
+        // for ever (client/lib/net.js yields too)
+        if (code === 4002) {
+          console.warn(`[agent] ${this.name}: taken over by another session of this identity (4002); not dialling again`);
+          this.close(); return;
+        }
         // any other drop (an outage, a restart): dialled again on the browser's schedule (shared/redial.js, reset by a join),
         // not a fixed 1.5 s that every agent of a restarted server would keep in step
         if (!this.closed) setTimeout(() => this.connect().catch(() => {}), this.redial.next());
