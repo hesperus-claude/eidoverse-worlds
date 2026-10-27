@@ -815,10 +815,15 @@ r = await call('reach', { release: true });
 check('...and with nothing reaching it changes nothing, and is done', ok(r) && said(r) === "you weren't reaching for anything", said(r));
 r = await call('body_state', { who: 'nobody-here' });
 check('body_state of someone not here is failed', failed(r), said(r).slice(0, 200));
+// the rig's read fails at once: a library that answers 404, not the default door's address (unanswered here, a ~135 s wait)
+const noRig = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('no', { status: 404 }) });
+const realUrl = ag.url;
+ag.url = `ws://127.0.0.1:${noRig.port}/ws`;
 r = await call('anim', { joints: { leftUpperArm: [0, 0, 1] } });
 check('a pose with nothing usable is failed', failed(r) && /^no pose set — nothing usable/.test(said(r)), said(r));
 r = await call('anim', {});
 check('a bare anim that cannot read the rig to list its bones is failed', failed(r) && /^can't read your rig to list its bones/.test(said(r)), said(r));
+ag.url = realUrl; noRig.stop(true);
 const TRACKS = { leftUpperArm: [{ t: 0, q: [0, 0, 0, 1] }, { t: 0.5, q: [0, 0, -0.7, 0.7] }] };
 r = await call('anim', { tracks: TRACKS });
 check('an animation with no duration is failed', failed(r) && /^animate needs dur/.test(said(r)), said(r));
