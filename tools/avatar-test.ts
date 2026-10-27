@@ -213,44 +213,22 @@ for (const constant of [false, true]) {
     return av._lids?.[0] ?? null;
   };
 
-  // 1. AUTHORED POSE: taken as-is, already the angle from rest
-  const posed = lidsOf({ blink_closed_src: 'pose', blink_closed_x: 0.6593 });
-  check('an authored closed pose is used verbatim',
-    posed?.exported !== null && Math.abs((posed?.exported ?? 0) - 0.6593) < 1e-4,
-    `exported=${posed?.exported}`);
-  check('...and it is nowhere near the generic 1.2 rad dial',
-    Math.abs((posed?.exported ?? 0) - BLINK.closed) > 0.4,
-    `pose ${posed?.exported} vs dial ${BLINK.closed}`);
-
-  // a pose wins over constraints also present: the stated pose outranks a range that brackets it
-  const both = lidsOf({
-    blink_closed_src: 'pose', blink_closed_x: 0.6593,
-    limit_min_x: 2.618, limit_max_x: 4.189,
-  });
-  check('an authored pose outranks the constraints beside it',
-    Math.abs((both?.exported ?? 0) - 0.6593) < 1e-4, `exported=${both?.exported}`);
-
-  // 2. CONSTRAINTS: absolute angles, so the delta is closed - centre (150/240 around a ~195 rest closes 45 deg)
-  const limited = lidsOf({ limit_min_x: 2.618, limit_max_x: 4.189, blink_closed_x: 4.189 });
-  const wantDelta = 4.189 - (2.618 + 4.189) / 2;
-  check('a Limit Rotation is read as closed MINUS the range centre',
-    Math.abs((limited?.exported ?? 0) - wantDelta) < 1e-3,
-    `exported=${limited?.exported} want ${wantDelta.toFixed(4)}`);
-  check('...which is a plausible lid sweep, not a 240-degree one',
-    Math.abs(limited?.exported ?? 9) < 1.0, `exported=${limited?.exported}`);
-
-  // 3. NEITHER: fall back to the dial
-  const bare = lidsOf({});
-  check('a rig with no closed angle falls back to the dial',
-    bare?.exported === null, `exported=${bare?.exported}`);
-
-  // nonsense is refused rather than driven through the eye
-  const absurd = lidsOf({ blink_closed_src: 'pose', blink_closed_x: 2.9 });
-  check('an implausible pose angle is refused', absurd?.exported === null,
-    `exported=${absurd?.exported}`);
-  const inverted = lidsOf({ limit_min_x: 4.189, limit_max_x: 2.618, blink_closed_x: 4.189 });
-  check('an inverted constraint range is refused', inverted?.exported === null,
-    `exported=${inverted?.exported}`);
+  // source order: an authored pose verbatim (it outranks constraints beside it), else a Limit Rotation as closed MINUS
+  // the range centre (absolute angles), else null (the dial); nonsense is refused rather than driven through the eye
+  const LIM = { limit_min_x: 2.618, limit_max_x: 4.189 };
+  const LIDS: [string, Record<string, unknown>, number | null][] = [
+    ['an authored closed pose is used verbatim (nowhere near the 1.2 rad dial)', { blink_closed_src: 'pose', blink_closed_x: 0.6593 }, 0.6593],
+    ['an authored pose outranks the constraints beside it', { blink_closed_src: 'pose', blink_closed_x: 0.6593, ...LIM }, 0.6593],
+    ['a Limit Rotation is closed minus the range centre (a lid sweep, not 240°)', { ...LIM, blink_closed_x: 4.189 }, 4.189 - (2.618 + 4.189) / 2],
+    ['a rig with no closed angle falls back to the dial', {}, null],
+    ['an implausible pose angle is refused', { blink_closed_src: 'pose', blink_closed_x: 2.9 }, null],
+    ['an inverted constraint range is refused', { limit_min_x: 4.189, limit_max_x: 2.618, blink_closed_x: 4.189 }, null],
+  ];
+  for (const [label, extras, want] of LIDS) {
+    const got = lidsOf(extras)?.exported;
+    check(`eyelids: ${label}`, want === null ? got === null : Math.abs((got ?? 99) - want) < 1e-3, `exported=${got} want ${want}`);
+  }
+  check('eyelids: the authored pose is not the dial', Math.abs(0.6593 - BLINK.closed) > 0.4);
 }
 
 // ---- wings ------------------------------------------------------------------
@@ -861,68 +839,42 @@ console.log('\nmeasured jump take-off (#196 review B2):');
     return a.time;
   };
 
-  // rest .864, dip to .494, back through rest at t=0.50: the real jump.vrma's shape
-  const real = timeFor(jumpClip([0, 0.33, 0.50, 0.75], [0.864, 0.494, 0.870, 1.20]));
-  check('the jump starts where the hips rise back through rest height, not at frame 0',
-    Math.abs(real - 0.50) < 1e-6, `a.time = ${real}`);
-  check('…and not at the bottom of the anticipation squat',
-    Math.abs(real - 0.33) > 1e-6);
-
-  const noDip = timeFor(jumpClip([0, 0.2, 0.4], [0.864, 0.9, 1.3]));
-  check('a clip that only rises has no take-off to find (starts at 0)', noDip === 0, `a.time = ${noDip}`);
-
-  // the dip is sought in the FIRST HALF, so the track needs enough keys: with 3, `half` is 1 and the 1 cm guard never runs
-  const noise = timeFor(jumpClip([0, 0.1, 0.2, 0.3, 0.4, 0.5], [0.864, 0.860, 0.858, 0.870, 1.10, 1.30]));
-  check('a sub-centimetre wobble is not a dip (the 1 cm guard, actually exercised)',
-    noise === 0, `a.time = ${noise}`);
-  // the same shape with a REAL dip is found, so the case above fails on depth, not shape
-  const realDip = timeFor(jumpClip([0, 0.1, 0.2, 0.3, 0.4, 0.5], [0.864, 0.700, 0.494, 0.870, 1.10, 1.30]));
-  check('…while the same track shape with a real dip does find the rise',
-    Math.abs(realDip - 0.3) < 1e-6, `a.time = ${realDip}`);
-
-  const noHips = (() => {
-    const c = new THREE.AnimationClip('jump', 1, [new THREE.QuaternionKeyframeTrack('hips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1])]);
-    return timeFor(c);
-  })();
-  check('a clip with no hips track starts at 0 rather than throwing', noHips === 0, `a.time = ${noHips}`);
-
-  // a LATER, DEEPER dip (a landing crouch, .400 < .494) must not be taken for the take-off: the first-half search buys that
-  const withLanding = timeFor(jumpClip(
-    [0, 0.33, 0.50, 0.75, 0.95, 1.10, 1.30],
-    [0.864, 0.494, 0.870, 1.20, 0.700, 0.400, 0.870]));
-  check('a deeper landing crouch later in the clip is not mistaken for the take-off',
-    Math.abs(withLanding - 0.50) < 1e-6, `a.time = ${withLanding}`);
+  // [label, hips times, hips heights, the take-off a.time must read]; rest is the first key (.864, the real jump.vrma's)
+  const R = [0, 0.33, 0.50, 0.75], RY = [0.864, 0.494, 0.870, 1.20];
+  const SIX = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
+  const CASES: [string, number[], number[], number][] = [
+    ['the real shape: where the hips rise back through rest, not frame 0 nor the squat\'s bottom', R, RY, 0.50],
+    ['a clip that only rises has no take-off to find', [0, 0.2, 0.4], [0.864, 0.9, 1.3], 0],
+    // the dip is sought in the FIRST HALF, so the track needs enough keys: with 3, `half` is 1 and the 1 cm guard never runs
+    ['a sub-centimetre wobble is not a dip (the 1 cm guard, exercised)', SIX, [0.864, 0.860, 0.858, 0.870, 1.10, 1.30], 0],
+    ['…while the same shape with a real dip finds the rise', SIX, [0.864, 0.700, 0.494, 0.870, 1.10, 1.30], 0.3],
+    ['a later, deeper landing crouch is not the take-off (the first-half search)', [...R, 0.95, 1.10, 1.30], [...RY, 0.700, 0.400, 0.870], 0.50],
+    // the guard is bound from above too: 10 cm would call a small character's jump noise
+    ['a shallow (4 cm) real dip is still a take-off', [0, 0.1, 0.2, 0.33, 0.50, 0.75], [0.864, 0.836, 0.820, 0.870, 1.10, 1.30], 0.33],
+    ['a key exactly at rest height IS the take-off (`<` vs `<=`)', SIX, [0.864, 0.700, 0.494, 0.864, 1.10, 1.30], 0.3],
+  ];
+  for (const [label, times, ys, want] of CASES) {
+    const got = timeFor(jumpClip(times, ys));
+    check(`take-off: ${label}`, Math.abs(got - want) < 1e-6, `a.time = ${got}, want ${want}`);
+  }
+  const noHips = timeFor(new THREE.AnimationClip('jump', 1, [new THREE.QuaternionKeyframeTrack('hips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1])]));
+  check('take-off: a clip with no hips track starts at 0 rather than throwing', noHips === 0, `a.time = ${noHips}`);
 
   // THE CACHE ships: production reuses one loaded jump.vrma clip, so from the second jump only the memo reaches the mixer
-  {
-    const shared = jumpClip([0, 0.33, 0.50, 0.75], [0.864, 0.494, 0.870, 1.20]);
-    const first = timeFor(shared);
-    const second = timeFor(shared);   // same clip object, as a second jump does
-    const third = timeFor(shared);
-    check('a second jump on the same clip starts at the same measured take-off',
-      Math.abs(second - 0.50) < 1e-6, `first ${first}, second ${second}`);
-    check('…and a third, so a poisoned memo cannot ship a wrong time after the first jump',
-      Math.abs(third - 0.50) < 1e-6, `third ${third}`);
+  const shared = jumpClip(R, RY), times = [timeFor(shared), timeFor(shared), timeFor(shared)];
+  check('a second and third jump on the same clip start at the same take-off (a poisoned memo can\'t ship)',
+    times.every((t) => Math.abs(t - 0.50) < 1e-6), JSON.stringify(times));
+
+  // only the jump slot is re-timed: every other slot starts at 0, even with a findable dip in its hips track
+  const { CLIP_SLOTS } = await import('../shared/clipdefs.js');
+  for (const slot of CLIP_SLOTS.filter((x: string) => x !== 'jump')) {
+    const { self } = stand();
+    for (const m of ['setClip', '_setAction']) self[m] = (Avatar.prototype as any)[m];
+    const wa = self.mixer.clipAction(jumpClip([0, 0.1, 0.2, 0.33, 0.50, 0.75], [0.864, 0.700, 0.494, 0.500, 0.870, 1.20], slot));
+    wa.enabled = true; wa.setEffectiveWeight(0); wa.play();
+    self.actions[slot] = wa; self.setClip(slot);
+    check(`the ${slot} slot is not re-timed`, wa.time === 0, `${slot} time = ${wa.time}`);
   }
-
-  // a SHALLOW real dip is still found: the 1 cm guard is bound from above too (10 cm would call a small character's jump noise)
-  const shallow = timeFor(jumpClip([0, 0.1, 0.2, 0.33, 0.50, 0.75], [0.864, 0.836, 0.820, 0.870, 1.10, 1.30]));
-  check('a shallow (4 cm) but real anticipation dip is still a take-off, not noise',
-    Math.abs(shallow - 0.33) < 1e-6, `a.time = ${shallow}`);
-
-  // the rise-scan stops at the FIRST key at or above rest (`<` vs `<=`)
-  const exact = timeFor(jumpClip([0, 0.1, 0.2, 0.3, 0.4, 0.5], [0.864, 0.700, 0.494, 0.864, 1.10, 1.30]));
-  check('a keyframe sitting exactly at rest height IS the take-off (no off-by-one)',
-    Math.abs(exact - 0.3) < 1e-6, `a.time = ${exact}`);
-
-  // only the jump slot is re-timed: idle/walk start at 0. The track needs enough keys for the dip search to FIND a dip.
-  const { self } = stand();
-  for (const m of ['setClip', '_setAction']) self[m] = (Avatar.prototype as any)[m];
-  const wc = jumpClip([0, 0.1, 0.2, 0.33, 0.50, 0.75], [0.864, 0.700, 0.494, 0.500, 0.870, 1.20], 'walk');
-  const wa = self.mixer.clipAction(wc); wa.enabled = true; wa.setEffectiveWeight(0); wa.play();
-  self.actions.walk = wa; self.setClip('walk');
-  check('a non-jump clip is not re-timed, even with a findable dip in its hips track',
-    wa.time === 0, `walk time = ${wa.time}`);
 }
 
 // setSeatBlend clears currentSlot, so a seat gate on it never met a seated body; playingSlot is the slot carrying
