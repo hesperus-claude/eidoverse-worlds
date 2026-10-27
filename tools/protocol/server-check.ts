@@ -47,12 +47,13 @@ async function writeBoxGlb(file: string, [sx, sy, sz]: number[]) {
 }
 
 // ---- servers ----
+// callers start at a random port in a 2,000-port window: suites run side by side raced for the same first one (probe, release, bind)
 async function freePort(from: number) { for (let p = from; p < from + 200; p++) { if (p === 8968 || p === 8970) continue;
   const ok2 = await new Promise((res) => { try { const s = Bun.listen({ hostname: "0.0.0.0", port: p, socket: { data() {} } }); s.stop(true); res(true); } catch { res(false); } }); if (ok2) return p; } throw new Error("no free port"); }
 const procs: any[] = [];
 process.on("exit", () => { for (const p of procs) try { p.kill(); } catch {} });
 async function startServer(tree: string, worlds: string, opt: string, tag: string) {
-  const port = await freePort(8990 + procs.length * 7);
+  const port = await freePort(8990 + procs.length * 7 + Math.floor(Math.random() * 2000));
   const logf = path.join(root, `${tag}.log`);
   const p = Bun.spawn(["bun", "server/server.ts"], { cwd: tree, env: { ...process.env, PORT: String(port), WORLDS_DIR: worlds, OPT_DIR: opt, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1", RENAME_COOLDOWN_DAYS: "0.001",
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", WORLD_ADMIN: "", EIDO_FLIGHT_REHEARSAL: "" }, stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });

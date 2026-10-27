@@ -126,10 +126,11 @@ const temps = () => fs.readdirSync(W).filter((f) => f.startsWith(".translating-"
 const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
 
 // ---- a real server on the scratch worlds dir ----
+// callers start at a random port in a 2,000-port window: suites run side by side raced for the same first one (probe, release, bind)
 async function freePort(from: number) { for (let p = from; p < from + 200; p++) { if (p === 8968 || p === 8970) continue;
   const free = await new Promise((res) => { try { const s = Bun.listen({ hostname: "0.0.0.0", port: p, socket: { data() {} } }); s.stop(true); res(true); } catch { res(false); } }); if (free) return p; } throw new Error("no free port"); }
 async function boot(tag: string, extra: Record<string, string> = {}) {
-  const port = await freePort(9240); const log = path.join(root, `${tag}.log`);
+  const port = await freePort(9240 + Math.floor(Math.random() * 2000)); const log = path.join(root, `${tag}.log`);
   const proc = Bun.spawn(["bun", "server/server.ts"], { cwd: ENGINE, env: { ...process.env, PORT: String(port), WORLDS_DIR: W, OPT_DIR: OPT, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1",
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", WORLD_ADMIN: "", EIDO_FLIGHT_REHEARSAL: "", ...extra }, stdout: Bun.file(log), stderr: Bun.file(log + ".err") });
   process.on("exit", () => { try { proc.kill(); } catch {} });
