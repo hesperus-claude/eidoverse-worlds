@@ -137,7 +137,7 @@ const BODY_VERBS = {
   // one shape for every act on a body (42 §4.4): pose, anim, shove, drag. Waits for nothing in the lab; says what happened.
   body(w, actor, a) { const me = body(w, actor); const to = bodyRef(a.to); expireAsks(w);
     if (!["pose", "anim", "shove", "drag", "occupy", "carry"].includes(a.kind)) refuse("shape", `no body kind '${a.kind}'`, "body {to, kind: pose|anim|shove|drag|occupy|carry}");
-    const t = w.presence.bodies[to]; if (t && ["shove", "drag", "carry"].includes(a.kind) && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "walk closer");
+    const t = w.presence.bodies[to]; if (t && ["shove", "drag", "carry"].includes(a.kind) && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer");
     const g = bodyGate(w, actor, to, a.kind, { spec: a.spec, why: a.why });
     if (!g.ok) refuse(g.code, g.reason, g.fix, { class: g.class });
     if (g.asked) return { ok: true, outcome: "asked", ask: g.ask, delivered: false, note: `${to} was asked; no answer in 20 s is no` };
@@ -146,12 +146,12 @@ const BODY_VERBS = {
   reach(w, actor, a) { const me = body(w, actor); const P = w.presence; let to, cls, point = a.point ?? null; expireAsks(w);
     if (Array.isArray(a.at)) { if (a.at.length !== 3 || a.at.some((n) => !Number.isFinite(n))) refuse("shape", "at: [x, y, z]", "");
       for (const [k, b] of Object.entries(P.bodies)) { if (k === actor) continue; const c = C.pointClass(b.at, a.at); if (c) { to = k; cls = c; break; } }
-      if (dist(gripPoint(me), a.at) > REACH) refuse("out-of-reach", `that point is ${r3(dist(gripPoint(me), a.at))} m from your hand`, "walk closer");
+      if (dist(gripPoint(me), a.at) > REACH) refuse("out-of-reach", `that point is ${r3(dist(gripPoint(me), a.at))} m from your hand`, "get closer");
       if (!to) { (P.reaches ??= {})[actor] = { at: a.at.slice() }; w.presenceDirty = true; return { ok: true, touching: null, recorded: false }; } }
     else { to = bodyRef(a.who); if (!to || !point) refuse("shape", "reach {who, point} or {at: [x, y, z]}", "points: " + C.REACH_POINTS.join(", "));
       const np = C.namedPointClass(point); if (!np) refuse("shape", `no point '${point}'`, C.REACH_POINTS.join(", "));   // the relay's own classifier
       point = np.point; cls = np.cls;
-      const t = P.bodies[to]; if (t && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "walk closer"); }
+      const t = P.bodies[to]; if (t && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer"); }
     delete P.reaches?.[actor];
     const g = bodyGate(w, actor, to, "touch", { cls, spec: { point, ...(a.at ? { at: a.at } : {}) }, why: a.why });
     if (!g.ok) { w.presenceDirty = true; refuse(g.code, g.reason, g.fix, { class: g.class, stripped: true }); }

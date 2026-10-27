@@ -127,6 +127,12 @@ const named = (s) => s.snap?.you;   // the display name the server settled on
   sly.at(20, 0); await sleep(300); k = vic.msgs.length; ks = sly.msgs.length;
   sly.send({ type: "puppet", target: "Vic", targetActor: vic.actor, ragdoll: true }); await tryUntil("Sly is told he is too far away", () => sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), { ms: 2000 });
   ok(got(k, "puppet").length === 0 && sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), "BC3 a knock-over from 20 m is refused (out of reach), whatever the table says", sly.since(ks));
+  // out of reach, the answer is the same whatever the target's switch, so distance can't read it
+  for (const sw of ["refuse", "ask"]) {
+    const r = await vic.req("consent", { switch: sw }); ok(r?.ok, `(BC3b setup) Vic: ${sw}`, r); ks = sly.msgs.length;
+    sly.send({ type: "puppet", target: "Vic", targetActor: vic.actor, ragdoll: true }); await tryUntil(`Sly is told he is too far away (Vic: ${sw})`, () => sly.since(ks).some((m) => m.type === "error" && /away/.test(m.error)), { ms: 2000 });
+    const e = sly.since(ks).filter((m) => m.type === "error").map((m) => m.error);
+    ok(e.length > 0 && e.every((x) => /away/.test(x) && /get closer/.test(x) && !/ask|isn't taking|consent/.test(x)), `BC3b from 20 m, a body set to ${sw} answers only "get closer", never its switch`, e); }
   // ask: refused, saying how to ask
   sly.at(1, 0); await vic.req("consent", { switch: "ask" }); await sleep(300);
   k = vic.msgs.length; ks = sly.msgs.length;

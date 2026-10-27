@@ -248,7 +248,7 @@ export function trySitOn(arg, slot = null) {
   if (best && slot && best.slot !== slot) { const o = socketsOn(best.id).find((x) => x.name === slot); const b = bodyOf(o?.station); if (b) Object.assign(best, { sock: o.id, slot, body: b }); }
   if (!best) {
     const far = arg ? null : nearestSeat(null, 30);
-    if (far) logChat('*', `nearest seat is on ${called(far.id)} (${far.slot}), ${far.d.toFixed(0)}m away — walk closer, or /sit ${typeable(far.id)}`);
+    if (far) logChat('*', `nearest seat is on ${called(far.id)} (${far.slot}), ${far.d.toFixed(0)}m away — get closer, or /sit ${typeable(far.id)}`);
     return false;
   }
   if (mine && !best.body.fromSeat) { logChat('*', `get up first — ${called(best.id)} (${best.slot}) doesn't take you straight from another seat`); return true; }

@@ -35,13 +35,14 @@ function bodyRefusal(c: Client, tc: Client, cls: "shove" | "pose" | "displace", 
   if (c.actorId && c.actorId === tc.actorId) return null;            // your own body
   const live = c.world?.log?.live;
   if (!live || !c.actorId || !tc.actorId) return `${tc.id}'s body isn't taking ${cls} right now`;
-  const d = consentDecide(live.presence, c.actorId, tc.actorId, cls, live.now());
-  if (d.mode === "deny") return refusalWords(tc.id, cls);   // one sentence whatever the cause: the real cause is theirs, not yours
-  if (d.mode === "ask") return `${tc.id} asks first for ${cls}: ask with the body request — body {to: "${tc.actorId}", kind: "${kind}"}`;
+  // range before consent, so someone out of reach can't learn the target's switch (the door does the same)
   const a = c.lastPose?.p, b = tc.lastPose?.p, r = BODY_RANGE[cls];
   if (!Array.isArray(a) || !Array.isArray(b)) return `can't tell where you and ${tc.id} are yet — try again in a moment`;
   const m = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-  if (!(m <= r)) return `${tc.id} is ${m.toFixed(1)} m away (${cls} reaches ${r} m) — walk closer`;
+  if (!(m <= r)) return `${tc.id} is ${m.toFixed(1)} m away (${cls} reaches ${r} m) — get closer`;
+  const d = consentDecide(live.presence, c.actorId, tc.actorId, cls, live.now());
+  if (d.mode === "deny") return refusalWords(tc.id, cls);   // one sentence whatever the cause: the real cause is theirs, not yours
+  if (d.mode === "ask") return `${tc.id} asks first for ${cls}: ask with the body request — body {to: "${tc.actorId}", kind: "${kind}"}`;
   return null;
 }
 function presenceTarget(w: World, actor: unknown, name: string, embodied = true): { tc: Client | null; byActor: boolean; actor: string | null } {
