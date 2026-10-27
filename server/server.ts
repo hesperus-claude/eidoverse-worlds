@@ -10,7 +10,7 @@ import { join } from "node:path";
 // config FIRST: this import order IS the boot order, mkdir → session restore → ban restore (§15, step 7a)
 import { TRUST_NAMES } from "./config.ts";
 // how often a person may change the name they show (moderation: a name is how people recognise who did what)
-const RENAME_COOLDOWN_MS = Math.max(0, Number(process.env.RENAME_COOLDOWN_DAYS ?? 7)) * 86400000;
+const RENAME_COOLDOWN_MS = envNumber("RENAME_COOLDOWN_DAYS", 7) * 86400000;
 import { PORT, HOST, JOIN_TOKEN, RENDERER_TOKEN, RECORD, ROOT, WORLDS_DIR, LIBRARY_DIR, OPT_DIR, MSG_RATE, FRAME_MS, FRAME_SKIP_BUFFERED, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS } from "./config.ts";
 import { type HnSession, agentTokens, aid1JoinIdentity } from "./auth.ts";
 import { addrSanctionsFor, saveAddrSanctions } from "./moderation.ts";
@@ -32,7 +32,7 @@ import { route, avatarRoster } from "./routes.ts";
 import { snapshots } from "./snapshots.ts";
 import { registerSystem, startTick } from "./tick.ts";
 import { MESSAGES } from "./messages.ts";
-import { LIMITS } from "./limits.ts";
+import { LIMITS, envNumber } from "./limits.ts";
 import { defsFingerprint } from "./defs.ts";
 // seat profiles (#101, §24r): routes.ts owns the HTTP half, seats.ts the one store and the update push
 import { seatStore } from "./seats.ts";
@@ -147,7 +147,7 @@ function describe(w: World): string {
 
 // access expiry: a grant stands until the authority writes its end (expire-roles), so a replay agrees
 setLoadedWorlds(() => worlds);
-registerSystem({ name: "access-sweep", everyMs: Math.max(250, Number(process.env.ACCESS_SWEEP_MS ?? 1000)),
+registerSystem({ name: "access-sweep", everyMs: Math.max(250, envNumber("ACCESS_SWEEP_MS", 1000)),
   fn: (now) => sweepAccess(worlds.values(), expel as Expel, now) });
 
 // countersign has no HTTP path (#101): tools/seat-accept.ts edits the store from another process; this notices and pushes

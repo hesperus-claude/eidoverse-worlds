@@ -369,6 +369,7 @@ export class WorldLog {
 // ---- founding and translating (tools/protocol/world.ts is the command line) ----
 import { opsOf, DIALECT, VERSION } from "../shared/protocol/fold.js";
 import { isOwner } from "../shared/protocol/roles.js";
+import { envNumber } from "./limits.ts";
 
 /** `dir` must not hold a world. */
 export function foundWorld(dir: string, name: string, owner: string, title?: string, now?: () => number) {
@@ -386,9 +387,9 @@ export function foundWorld(dir: string, name: string, owner: string, title?: str
 // ---------- a person founds a world they own ----------
 // who may is requestwire.ts world-found's call. Ledger caps: perAccount is a lifetime cap, perHour stops a land rush.
 export const FOUNDING = {
-  perAccount: Number(process.env.FOUND_PER_ACCOUNT ?? 3),
-  perHour: Number(process.env.FOUND_PER_HOUR ?? 12),
-  gapMs: Number(process.env.FOUND_GAP_MS ?? 10 * 60_000),
+  perAccount: envNumber("FOUND_PER_ACCOUNT", 3),
+  perHour: envNumber("FOUND_PER_HOUR", 12),
+  gapMs: envNumber("FOUND_GAP_MS", 10 * 60_000),
 };
 export const FOUND_NAME = /^[a-z0-9][a-z0-9-]{2,31}$/;
 const foundersPath = () => path.join(WORLDS_DIR, ".founders.json");

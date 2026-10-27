@@ -2,10 +2,17 @@
 // or truncated, each cap env-overridable (the idiom of mcpl/denoise.ts). config.ts keeps the boot/cadence knobs;
 // docs/WIRE.md describes the shapes.
 
-const env = (k: string, d: number) => {
-  const v = Number(process.env[k]);
-  return Number.isFinite(v) ? v : d;
-};
+/** An env number, VALIDATED: unset or "" is the fallback; not a number, or outside `ok`, is the fallback with a warning
+ *  (NaN silently disabled a cap; Number("") is 0). Every env number in server/ reads through it. */
+export function envNumber(name: string, fallback: number, ok: (n: number) => boolean = (n) => n >= 0): number {
+  const raw = process.env[name]?.trim();
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (Number.isFinite(n) && ok(n)) return n;
+  console.warn(`[config] ${name}=${JSON.stringify(raw)} is not valid — using ${fallback}`);
+  return fallback;
+}
+const env = (k: string, d: number) => envNumber(k, d);
 
 export const LIMITS = {
   // identity + naming
