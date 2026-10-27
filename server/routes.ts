@@ -253,25 +253,18 @@ function serveFrom(base: string, rel: string, cache = false, req?: Request, immu
   const headers: Record<string, string> = { "content-type": contentType(path), ...(opts.headers ?? {}) };
   // a page carries its Content-Security-Policy, its own inline scripts hashed in (server/csp.ts)
   if (headers["content-type"].startsWith("text/html")) headers["content-security-policy"] = cspForFile(path, f.lastModified, () => readFileSync(path, "utf8"));
-  // ETag from size+mtime: no-cache revalidation is a 304, not a re-download (an 11MB avatar per reload)
-  if (f.size > 0) {
-    const etag = `"${f.size}-${f.lastModified}"`;
-    headers["etag"] = etag;
-    if (req?.headers.get("if-none-match") === etag) {
-      // cache-control must ride the 304 (it refreshes the stored response's lifetime)
-      headers["cache-control"] = provisional ? "no-cache"
-        : variant ? VARIANT_CC
-        : immutable ? "public, max-age=31536000, immutable"
-        : cache && hardCacheable(path) ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
-      return new Response(null, { status: 304, headers });
-    }
-  }
   // client code is never heuristically cached; library assets cache hard except hardCacheable's exclusions
-  const hard = cache && hardCacheable(path);
   headers["cache-control"] = provisional ? "no-cache"
     : variant ? VARIANT_CC
     : immutable ? "public, max-age=31536000, immutable"
-    : hard ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
+    : cache && hardCacheable(path) ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
+  // ETag from size+mtime: no-cache revalidation is a 304, not a re-download (an 11MB avatar per reload); the 304 carries
+  // cache-control too (it refreshes the stored response's lifetime)
+  if (f.size > 0) {
+    const etag = `"${f.size}-${f.lastModified}"`;
+    headers["etag"] = etag;
+    if (req?.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
+  }
   // gzip text and uncompressed binaries (three.webgpu.js 2.1MB → ~500KB; VRMs ~0.50, VRMA ~0.44); GLBs (~0.99, already
   // packed) are left out
   if (/\.(m?js|json|css|html|vrma|vrm|wasm)$/.test(path) && req?.headers.get("accept-encoding")?.includes("gzip") && f.size > 10_000) {
