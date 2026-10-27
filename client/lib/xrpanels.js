@@ -126,7 +126,7 @@ export function xrPanelsPick(handRay, click = false) {
   _rc.ray.origin.setFromMatrixPosition(handRay.matrixWorld);
   _rc.ray.direction.set(0, 0, -1).applyMatrix4(_m);
   _rc.far = 3;
-  const hit = _rc.intersectObjects(panels.map((p) => p.mesh), false)[0];
+  const hit = _rc.intersectObjects(panels.filter((p) => p.mesh.visible).map((p) => p.mesh), false)[0];   // a raycast ignores visibility
   if (!hit) return null;
   if (click && hit.uv) {
     const p = panels.find((q) => q.mesh === hit.object);
