@@ -27,7 +27,7 @@
   "own-ok": 1
  },
  "tools/colour-picker-bench.ts": {
-  "bare-wait": 3
+  "bare-wait": 2
  },
  "tools/consent-switch-test.ts": {
   "own-ok": 1
