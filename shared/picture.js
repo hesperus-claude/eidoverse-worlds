@@ -54,7 +54,7 @@ export function normalizePicture(data) {
   if (data.width !== undefined) { const w = Number(data.width); if (Number.isFinite(w) && w > 0) picture.width = Math.min(PICTURE_MAX_WIDTH, w); else notes.push('width is a number of metres above 0 — using 1'); }
   if (altOf(data) != null) {
     const alt = String(altOf(data)).replace(/\s+/g, ' ').trim();
-    if (graphemes(alt) > PICTURE_ALT_MAX) return { ok: false, why: `alt is ${graphemes(alt).toLocaleString('en')} characters; it must be ≤ ${PICTURE_ALT_MAX}` };   // the door's bound and words (checks.js maxLen)
+    if (graphemes(alt) > PICTURE_ALT_MAX) return { ok: false, why: `alt is ${graphemes(alt).toLocaleString('en')} characters (at most ${PICTURE_ALT_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
     if (alt) picture.alt = alt;
   }
   if (!picture.alt) notes.push('no alt text — anyone who can\'t see it (or reads the world as text) gets only the file name; say what it shows');

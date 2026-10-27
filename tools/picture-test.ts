@@ -45,8 +45,8 @@ const nPart = normalizePicture({ src: GOOD });
 check("no part is a picture of its own (batch 2: quad mode), 1 m wide", nPart.ok && nPart.picture.part === undefined && nPart.picture.width === 1, JSON.stringify(nPart));
 check("an older bag's part is not read (noted, drawn as a quad of its own)", normalizePicture({ src: GOOD, part: "x" }).ok && !("part" in normalizePicture({ src: GOOD, part: "x" }).picture) && normalizePicture({ src: GOOD, part: "x" }).notes.some((x) => /ignored by the evaluator: part/.test(x)));
 const nLook = normalizePicture({ src: GOOD, part: "p", alt: "  many   spaces\n\nand " + "z".repeat(400) });
-// an over-long alt is refused in the door's words (checks.js maxLen), never clipped
-check("an over-long alt is refused, in the door's words", nLook.ok === false && new RegExp(`^alt is \\d+ characters; it must be ≤ ${PICTURE_ALT_MAX}$`).test(nLook.why), JSON.stringify(nLook));
+// an over-long alt is refused naming the cap (the door's bound), never clipped
+check("an over-long alt is refused, naming the cap", nLook.ok === false && new RegExp(`^alt is \\d+ characters \\(at most ${PICTURE_ALT_MAX}\\)$`).test(nLook.why), JSON.stringify(nLook));
 const nFit = normalizePicture({ src: GOOD, alt: "  many   spaces and " + "y".repeat(PICTURE_ALT_MAX - 16) });
 check("an alt exactly at the cap, after whitespace collapses, is taken whole", nFit.ok && nFit.picture.alt.length === PICTURE_ALT_MAX && nFit.picture.alt.startsWith("many spaces and "), JSON.stringify(nFit.ok ? nFit.picture.alt.length : nFit));
 const nNoLook = normalizePicture({ src: GOOD, part: "p" });

@@ -40,8 +40,8 @@ const nUrl = normalizeSound({ src: "https://x/y.mp3", alt: "x" });
 // batch 2 (R 10-07): an https link is a source; who fetches it is its tier (shared/mediasrc.js). http and local hosts are refused
 check("an https link is taken with its tier; http and a bare host are refused, legibly", nUrl.ok === false && /address or a local name/.test(nUrl.why) && normalizeSound({ src: "https://radio.example.org/y.mp3" }).tier?.tier === "link" && !normalizeSound({ src: "http://radio.example.org/y.mp3" }).ok);
 const nLook = normalizeSound({ src: GOOD, alt: "  many   spaces and " + "x".repeat(300) });
-// an over-long alt is refused in the door's words (checks.js maxLen), never clipped
-check("an over-long alt is refused, in the door's words", nLook.ok === false && new RegExp(`^alt is \\d+ characters; it must be ≤ ${SOUND_ALT_MAX}$`).test(nLook.why), JSON.stringify(nLook));
+// an over-long alt is refused naming the cap (the door's bound), never clipped
+check("an over-long alt is refused, naming the cap", nLook.ok === false && new RegExp(`^alt is \\d+ characters \\(at most ${SOUND_ALT_MAX}\\)$`).test(nLook.why), JSON.stringify(nLook));
 const nFit = normalizeSound({ src: GOOD, alt: "  many   spaces and " + "y".repeat(SOUND_ALT_MAX - 16) });
 check("an alt exactly at the cap, after whitespace collapses, is taken whole", nFit.ok && nFit.sound.alt.length === SOUND_ALT_MAX && nFit.sound.alt.startsWith("many spaces and "), JSON.stringify(nFit.ok ? nFit.sound.alt.length : nFit));
 const nNo = normalizeSound({ src: GOOD, t0: 1 });

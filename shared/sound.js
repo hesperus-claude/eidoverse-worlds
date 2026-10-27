@@ -86,7 +86,7 @@ export function normalizeSound(data) {
   } else if (sound.playing) notes.push('no t0 — the authority stamps one when it starts; without it each client starts from the top');
   if (data.alt != null) {
     const alt = String(data.alt).replace(/\s+/g, ' ').trim();
-    if (graphemes(alt) > SOUND_ALT_MAX) return { ok: false, why: `alt is ${graphemes(alt).toLocaleString('en')} characters; it must be ≤ ${SOUND_ALT_MAX}` };   // the door's bound and words (checks.js maxLen)
+    if (graphemes(alt) > SOUND_ALT_MAX) return { ok: false, why: `alt is ${graphemes(alt).toLocaleString('en')} characters (at most ${SOUND_ALT_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
     if (alt) sound.alt = alt;
   }
   if (!sound.alt) notes.push('no alt text — anyone who can\'t hear it (or reads the world as text) gets only the file name; say what is playing');

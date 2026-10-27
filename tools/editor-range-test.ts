@@ -106,8 +106,6 @@ console.log(`  ${rows} num rows; ${typedRed.size} write something other than a v
 {
   const TEXT: Record<string, [string, any][]> = { ...FIXTURE, Story: [["story", { story: { title: "t", text: "s" } }]],
     Label: [["flags", { label: "x" }]], Description: [["flags", { description: "y" }]] };
-  // the editor clamps an alt to its cap instead of refusing it: kept as rows that say so, until the editor refuses
-  const CLAMPS = new Set(["picture.alt", "sound.alt"]);
   let capped = 0;
   for (const [card, d] of Object.entries(DESCRIPTORS) as [string, any][]) for (const fd of d.fields) {
     const spec = COMPONENTS[d.key]; const cap = fd.path == null ? spec?.maxLen : spec?.ranges?.[fd.path]?.maxLen;
@@ -124,8 +122,7 @@ console.log(`  ${rows} num rows; ${typedRed.size} write something other than a v
     const at = editOps(ent, "t1", { [key]: sample(cap) });
     check(`${key}: ${cap} characters (its cap) is written as typed`, !at.errors.length && sent(at) === sample(cap), JSON.stringify(at.errors).slice(0, 160));
     const past = editOps(ent, "t1", { [key]: sample(cap + 1) });
-    if (CLAMPS.has(key)) check(`${key}: ${cap + 1} characters is clamped to ${cap}, never past it (known: the editor's rule wants a refusal)`, !past.errors.length && sent(past)?.length === cap, JSON.stringify(past.errors).slice(0, 160));
-    else check(`${key}: ${cap + 1} characters is refused in the door's words, naming the cap, nothing sent`, past.errors.some((e: string) => e.includes(`${cap + 1} characters; at most ${cap}`) || e.includes(`(≤ ${cap})`) || e.includes(`${cap + 1} characters (at most ${cap})`)) && flat(past.ops).length === 0, `${JSON.stringify(past.errors).slice(0, 160)} ops ${flat(past.ops).length}`);
+    check(`${key}: ${cap + 1} characters is refused in the door's words, naming the cap, nothing sent`, past.errors.some((e: string) => e.includes(`${cap + 1} characters; at most ${cap}`) || e.includes(`(≤ ${cap})`) || e.includes(`${cap + 1} characters (at most ${cap})`)) && flat(past.ops).length === 0, `${JSON.stringify(past.errors).slice(0, 160)} ops ${flat(past.ops).length}`);
   }
   check("every capped text row the descriptors declare was drawn", capped >= 10, String(capped));
 }
