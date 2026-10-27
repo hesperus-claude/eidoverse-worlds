@@ -54,8 +54,8 @@ try {
   await new Promise((r, j) => { bob.onopen = r; bob.onerror = j; });
   const bobReq = (verb: string, args: any) => new Promise<any>((res) => { const id = `b${++rn}`; replies.set(id, res); bob.send(JSON.stringify({ type: "request", id, verb, args })); setTimeout(() => res({ ok: false, refused: { code: "timeout" } }), 6000); });
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__errs = []; addEventListener('error', (e) => __errs.push('error: ' + e.message));
-    window.__refused = []; window.__hints = []; addEventListener('ew-keyhint', (e) => __hints.push(e.detail));
-    import('/lib/base.js').then((m) => { m.bus.on('edit-refused', (e) => __refused.push(e)); });` });
+    window.__refused = []; window.__hints = [];
+    import('/lib/base.js').then((m) => { m.bus.on('edit-refused', (e) => __refused.push(e)); m.bus.on('keyhint', (h) => __hints.push(h)); });` });
   await cdp.send("Page.navigate", { url: `${BASE}/?name=${ME}&world=${WORLD}` });
   let secs = 0; for (let i = 0; i < 160 && secs < 4; i++) { secs = (await evalJson(`document.querySelectorAll('.sec').length`).catch(() => 0)) ?? 0; if (secs < 4) await sleep(500); }
   check("boot: the client comes up", secs >= 4, `${secs} sections`);
