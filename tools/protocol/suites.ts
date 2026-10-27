@@ -49,13 +49,12 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["migrate-identities", "migrate-identities-check.ts", 1],   // migrate-identities.ts: one id per person everywhere (actors, role keys, say.to, capability, sponsor, the moderator log), a gate that reads the two logs side by side, refused twice
   ["oldworlds", "../oldworlds-test.ts", 1], // an old-format world is found and named at boot (the exact translate command), and a visitor is told in plain words
   ["browser", "browser-check.ts", 1],   // the shared core imported by headless Chromium, byte-for-byte with bun
-  ["descriptors", "../descriptor-defaults-test.ts", 1], // every record and inspector default is the registry's, through the editor translation
+  ["descriptors", "../descriptor-defaults-test.ts", 1], // every record and inspector default is the registry's; every option the Inspector offers, and every axis word, is one the door takes
   ["light-readers", "../light-readers-test.ts", 1], // a light is found by kindOf and the rig's complight key; its gizmo is no box or material slot
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
   ["editor-range", "../editor-range-test.ts", 1], // the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
   ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
-  ["lookat-forward", "../lookat-forward-check.ts", 1], // the authority and the door give one verdict on every LookAt.forward
   ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
   ["role-grammar", "../role-grammar-test.ts", 1], // one role-id grammar (grab, sockbody, rolespanels, commands)
   ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation, and no host transcendental

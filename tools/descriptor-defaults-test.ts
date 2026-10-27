@@ -10,8 +10,9 @@
 import { DESCRIPTORS, editorDefault, materializedOf, toWire, axisLetter, axisVector } from "../shared/protocol/descriptors.js";
 import { COMPONENTS, materialize } from "../shared/protocol/componentspec.js";
 import { RECORDS, LIGHT_DEFAULTS } from "../shared/components.js";
-import { inspectSchema, fieldAt, addOps } from "../shared/editschema.js";
+import { inspectSchema, fieldAt, addOps, editOps } from "../shared/editschema.js";
 import { DEFAULTS as GRAB_DEFAULTS } from "../shared/grab.js";
+import { scratchWorld } from "./protocol/scratchworld.ts";
 
 let pass = 0, fail = 0, unwritten = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -22,6 +23,13 @@ const note = (name: string) => { unwritten++; console.log(`  \x1b[33m·\x1b[0m $
 const j = (x: any) => JSON.stringify(x);
 const same = (a: any, b: any) => j(a) === j(b);
 const GROUP: Record<string, string> = { "look-at": "look-at" };
+// a thing carrying the descriptor's registry bag, plus what the key can't stand without
+const entOf = (d: any): any => {
+  const bag = materializedOf(Object.keys(DESCRIPTORS).find((c) => DESCRIPTORS[c] === d)!);
+  if (!bag || typeof bag !== "object" || !d.fields.some((f: any) => f.path != null)) return null;
+  const value = d.key === "sound" || d.key === "picture" ? { src: "store/x", ...bag } : d.key === "story" ? { title: "t", text: "x", ...bag } : d.key === "text" ? { text: "hi", ...bag } : d.key === "look-at" ? { target: "@viewer", ...bag } : d.key === "particles" ? { effect: "fire", ...bag } : bag;
+  return { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, [d.key]: value };
+};
 
 console.log("\nevery record default is the registry's, through the translation:");
 for (const [card, d] of Object.entries(DESCRIPTORS)) {
@@ -43,10 +51,7 @@ for (const [card, d] of Object.entries(DESCRIPTORS)) {
 
 console.log("\nevery inspector def is the registry's, through the translation:");
 for (const [card, d] of Object.entries(DESCRIPTORS)) {
-  const bag = materializedOf(card);
-  if (!bag || typeof bag !== "object" || !d.fields.some((f) => f.path != null)) continue;
-  const value = d.key === "sound" || d.key === "picture" ? { src: "store/x", ...bag } : d.key === "story" ? { title: "t", text: "x", ...bag } : d.key === "text" ? { text: "hi", ...bag } : d.key === "look-at" ? { target: "@viewer", ...bag } : d.key === "particles" ? { effect: "fire", ...bag } : bag;
-  const ent: any = { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, [d.key]: value };
+  const ent = entOf(d); if (!ent) continue;
   const schema = inspectSchema(ent, "x", { parts: ["lid"] });
   const group = GROUP[d.key] ?? d.key;
   for (const f of d.fields) {
@@ -57,6 +62,62 @@ for (const [card, d] of Object.entries(DESCRIPTORS)) {
     if (want === undefined) { check(`${card}.${f.k}: the inspector's def is ${j(fld.def)}, the registry writes nothing — decided on the descriptor`, typeof (f as any).absent === "string"); continue; }
     check(`inspector ${group}.${f.k} def = ${j(want)}`, same(fld.def, want), `editschema says ${j(fld.def)}`);
   }
+}
+
+console.log("\nthe Inspector offers only what the door takes; every axis takes the door's words, and its words are the door's:");
+{
+  const D = scratchWorld("descriptor-options"); let n = 0;
+  const seed = (rec: any) => { const id = `t${++n}`; D.seed({ [id]: rec }); return id; };
+  // every descriptor's thing, a dynamic body (physics.kind), a crate (flags.layer): each option of each field, through the
+  // Inspector's own planner (editOps) and the real authority, dry
+  const target = seed({ pos: [0, 0, 3] });
+  // what the door needs beyond the registry bag: a mesh or light is its own thing, a path its points, a file a real link
+  const NEEDS: Record<string, (v: any) => any> = { pivot: () => ({ pos: [0, 0.5, 0] }), parent: () => ({ to: target }), picture: (v) => ({ ...v, src: "https://example.com/x.png" }),
+    sound: (v) => ({ ...v, src: "https://example.com/x.mp3" }), collider: (v) => ({ shape: "box", ...v }), motion: (v) => (v.type === "path" ? { ...v, points: [[0, 0, 0], [0, 0, 4]] } : v) };
+  const ents = [...Object.values(DESCRIPTORS).map((d: any) => { const e = entOf(d); if (!e) return null;
+    if (NEEDS[d.key]) e[d.key] = NEEDS[d.key](e[d.key]); if (d.key === "mesh" || d.key === "light") delete e.model; return e; }).filter(Boolean),
+    { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, physics: materialize("physics", { kind: "dynamic" }).value }];
+  // red on the tree today, each pinned as STILL red so a fix flips it (and its entry goes); a red elsewhere is still red
+  const GAPS: Record<string, string> = {
+    'openable.axis "-x"': "the Inspector offers a signed hinge axis the door's axis type refuses", 'openable.axis "-y"': "as -x", 'openable.axis "-z"': "as -x",
+    'motion.type "path"': "switching a motion to path writes no points, which the door requires",
+    'look-at.forward "[0,0,1]"': "the current-value option is the vector's JSON text, sent as a string",
+    'refuses motion.axis "-x"': "motion's axis takes a signed letter where look-at's and openable's refuse it", 'refuses motion.axis "-y"': "as -x", 'refuses motion.axis "-z"': "as -x",
+  };
+  const gapSeen = new Set<string>();
+  const row = (name: string, key: string, ok: boolean, detail: string) => {
+    if (!GAPS[key]) return check(name, ok, detail);
+    gapSeen.add(key); check(`gap, still open: ${key}: ${GAPS[key]}`, !ok, "it is fixed: drop its GAPS entry");
+  };
+  let offeredRows = 0;
+  for (const ent of ents) {
+    const id = seed(ent), rec = D.rec(id);
+    for (const g of inspectSchema(rec, id).groups) for (const f of g.fields as any[]) for (const o of Array.isArray(f.options) ? f.options : []) {
+      const plan: any = editOps(rec, id, { [`${g.group}.${f.k}`]: o.v });
+      const r = plan.errors.length ? { ok: false, refused: plan.errors } : D.sendAll(plan.ops, { dry: true });
+      offeredRows++; row(`the Inspector offers ${g.group}.${f.k} ${j(o.v)}, and the door takes it`, `${g.group}.${f.k} ${j(o.v)}`, !!r.ok, j(r.refused ?? r));
+    }
+  }
+  check("the Inspector offers a look-at forward row", (fieldAt(inspectSchema(entOf(DESCRIPTORS.LookAt), "x"), "look-at.forward") as any)?.options?.length > 0);
+  // the door's `axis` type, on every registry field of that type: x, y, z or a vector taken; anything else refused
+  const BASE: Record<string, any> = { motion: { type: "pendulum" }, openable: { open: false }, "look-at": { target } };
+  const TAKES = ["x", "y", "z", [0, 0, -1], [1, 0, 0]], REFUSES = ["-x", "-y", "-z", "w", "", 5, [0, 0], ["x"]];
+  const named = (text: string) => [...new Set((text.match(/(?<![\w-])-?[xyz](?=\s*\||\s*$|\s*,|\s*\)|\s+or\b)/g) ?? []).map((x) => x.trim()))];
+  const axes = Object.entries(COMPONENTS as any).flatMap(([key, c]: any) => Object.entries(c.fields ?? {}).filter(([, t]) => t === "axis").map(([field]) => [key, field]));
+  check("the axis fields are found (motion.axis, openable.axis, look-at.forward and .up)", axes.length >= 4, j(axes));
+  const post = seed({ pos: [0, 0, 0] });
+  for (const [key, field] of axes) {
+    check(`${key}.${field}: a base the door takes`, !!BASE[key], key);
+    const verdict = (v: any) => { const r = D.call("set", { id: post, component: key, value: { ...BASE[key], [field]: v }, dry: true }); return { ok: !!r.ok, words: r.ok ? "" : `${r.refused?.reason ?? ""} ${r.refused?.fix ?? ""}` }; };
+    for (const v of TAKES) check(`${key}.${field} ${j(v)}: the door takes it`, verdict(v).ok);
+    const said = new Set<string>();
+    for (const v of REFUSES) { const r = verdict(v); row(`${key}.${field} ${j(v)}: the door refuses it`, `refuses ${key}.${field} ${j(v)}`, !r.ok, r.words); if (!r.ok) said.add(r.words); }
+    const help = new RegExp(`${field}\\?\\s*\\(([^)]*)\\)`).exec(String((COMPONENTS as any)[key].help))?.[1] ?? "";
+    for (const l of named(help)) check(`${key}'s help names ${field} '${l}', and the door takes it`, verdict(l).ok, help);
+    for (const w of said) for (const l of named(w)) check(`a ${key}.${field} refusal names '${l}', and the door takes it`, verdict(l).ok, w.trim().slice(0, 120));
+  }
+  for (const k of Object.keys(GAPS)) check(`the gap ${k} is still reached`, gapSeen.has(k));
+  console.log(`  (${offeredRows} offered options sent)`);
 }
 
 console.log("\nthe other restated defaults:");
