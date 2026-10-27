@@ -283,7 +283,9 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     ok(wn.ok && rejoin.msgs.some((m) => m.type === "warned" && m.reason === "keep it kind") && mt.ok && wren.msgs.some((m) => m.type === "moderated" && m.verb === "mute" && m.you)
       && own.msgs.some((m) => m.type === "mod-state" && m.muted?.[you(jw)]), "RS5 a warning reaches its person; a mute is told to its person and to everyone's badges (mod-state)", [wn.ok, mt.ok]);
     // RS5c: a muted person's speech bubble (caption: presence, never logged) reaches nobody; an unmuted one's does (the control)
-    { const k = own.msgs.length; wren.raw({ type: "caption", text: "muted words", utt: 1 }); fern.raw({ type: "caption", text: "free words", utt: 1 }); await sleep(400);
+    { const k = own.msgs.length; wren.raw({ type: "caption", text: "muted words", utt: 1 }); fern.raw({ type: "caption", text: "free words", utt: 1 });
+      fern.raw({ type: "caption", text: "free words, again", utt: 2 });   // two control round-trips after the muted one: it would have landed by then
+      await tryUntil("the control captions reach Rowan", () => own.msgs.slice(k).some((m) => m.type === "caption" && m.text === "free words, again"), { ms: 3000 });
       const caps = own.msgs.slice(k).filter((m) => m.type === "caption").map((m) => m.text);
       ok(caps.includes("free words") && !caps.includes("muted words"), "RS5c a muted person's caption reaches nobody; the moderator's own still does", caps); }
     // RS5b: the warning's moderator is told it went (as a mute or kick tells them), and no bystander is
