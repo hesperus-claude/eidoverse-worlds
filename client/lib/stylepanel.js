@@ -46,6 +46,7 @@ export const panelAlpha = () => parseFloat(getComputedStyle(document.documentEle
 export function setPanelAlpha(v) {
   rootStyle().setProperty('--panel-a', String(v));
   const o = load(); o['--panel-a'] = String(v); save(o);
+  bus.emit('style', { key: '--panel-a', value: String(v) });   // as every style setter: the dials and token-baked sprites follow
 }
 
 // --xr-panel-a: the VR quads' panel alpha (domquad.js reads it; 1 = opaque). Separate from --panel-a on purpose: the
@@ -66,7 +67,7 @@ export function setXrPanelAlpha(v) {
 // the opacity dials follow the token whoever sets it (a command, a reset, code): a dial showing 1.00 while the VR
 // panels sit at 0.6 is a control that lies. One listener, the newest panel's repaint.
 let repaintDials = null;
-bus.on('style', (e) => { if (e?.key === '--xr-panel-a' || e?.key === '*') repaintDials?.(); });
+bus.on('style', (e) => { if (e?.key === '--xr-panel-a' || e?.key === '--panel-a' || e?.key === '*') repaintDials?.(); });
 
 function currentHex(f) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(f.key).trim();

@@ -86,7 +86,7 @@ console.log('STYLE — every swatch and dial repaints its token, persists it, su
 
   // the two opacity dials: the desktop one says it is the desktop's, and VR has its own
   const DIALS = [
-    { label: 'desktop panel opacity', key: '--panel-a', start: '0.9', min: '0.3', max: '1', drag: '0.5', set: style.setPanelAlpha, code: 0.66, emits: false, follows: false },
+    { label: 'desktop panel opacity', key: '--panel-a', start: '0.9', min: '0.3', max: '1', drag: '0.5', set: style.setPanelAlpha, code: 0.66, emits: true, follows: true },
     { label: 'VR panel opacity', key: '--xr-panel-a', start: '1', min: '0.6', max: '1', drag: '0.6', set: style.setXrPanelAlpha, code: 0.7, emits: true, follows: true, clamp: [0.2, '0.6'] as const },
   ];
   const dials = [...body.querySelectorAll('input[type=range]')] as HTMLInputElement[];
@@ -102,7 +102,8 @@ console.log('STYLE — every swatch and dial repaints its token, persists it, su
     check(`${d.key}: the readout follows`, readout.textContent === Number(d.drag).toFixed(2), readout.textContent ?? '');
     check(`${d.key}: …persists it with the style tokens`, tokens()[d.key] === d.drag, JSON.stringify(tokens()));
     if (d.emits) check(`${d.key}: …and emits style{${d.key}} (what the VR quads re-raster on)`, emitted.slice(e0).some((e) => e[0] === 'style' && e[1]?.key === d.key));
-    d.set(d.code);
+    const e1 = emitted.length; d.set(d.code);
+    if (d.emits) check(`${d.key}: setting it from code emits style{${d.key}} too`, emitted.slice(e1).some((e) => e[0] === 'style' && e[1]?.key === d.key && e[1]?.value === String(d.code)));
     check(`${d.key}: setting it from code (${d.code}) repaints and persists`, computed(d.key) === String(d.code) && tokens()[d.key] === String(d.code), `${computed(d.key)} ${JSON.stringify(tokens())}`);
     if (d.follows) check(`${d.key}: …and moves the dial too (value and readout)`, el.value === String(d.code) && readout.textContent === d.code.toFixed(2), `${el.value} ${readout.textContent}`);
     if (d.clamp) { d.set(d.clamp[0]); check(`${d.key}: setting it from code clamps to the dial's range`, computed(d.key) === d.clamp[1], computed(d.key)); }
