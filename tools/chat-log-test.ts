@@ -223,7 +223,7 @@ console.log("\nCHAT — a command that acts on whoever is nearest fills the lant
     check(`/${n} fills "/${n} " and has no run`, A.get(`cmd:${n}`)?.fill === `/${n} ` && typeof A.get(`cmd:${n}`)?.run !== "function",
       JSON.stringify({ fill: A.get(`cmd:${n}`)?.fill, run: typeof A.get(`cmd:${n}`)?.run }));
   check("/who (no target) still runs", typeof A.get("cmd:who")?.run === "function");
-  check("/boom is no lantern action (removed: the v4 door has no blast)", A.get("cmd:boom") === null);
+  check("/boom is no lantern action (removed: the door has no blast)", A.get("cmd:boom") === null);
   check("/w is no lantern action (unlisted since whisper was removed)", A.get("cmd:w") === null);
 }
 
