@@ -3,7 +3,8 @@
 // @ts-nocheck
 import { noteRoundTrip, serverNow, localNow, clockDebug, noteServerFloor, onClockDoubt } from "../../client/lib/serverclock.js";
 import { pause } from "./wait.ts";
-let fails = 0, passes = 0; const ok = (c, what, d) => { if (c) passes++; else { fails++; console.log("FAIL", what, d !== undefined ? JSON.stringify(d) : ""); } };
+import { suite } from "./suite.ts";
+const { ok, done } = suite("sclock-check", { quiet: true, cap: Infinity });
 const t = localNow();
 noteRoundTrip(t - 20, t + 1000 - 10, t);      // offset +1000 at rtt 20
 serverNow(); const a = clockDebug();
@@ -35,4 +36,4 @@ noteServerFloor(localNow() + 4620 + 1620);                           // stamped 
 ok(asks === 1, "C8 a floor above the estimate asks for a round trip at once", { asks });
 noteServerFloor(localNow() + 4620 + 1620); noteServerFloor(localNow() + 4620 + 1700);
 ok(asks === 1, "C9 …once, not per entry (one ask a second)", { asks });
-console.log(`sclock: ${passes} ok, ${fails} failed`); process.exit(fails ? 1 : 0);
+done();

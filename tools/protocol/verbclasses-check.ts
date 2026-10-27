@@ -6,9 +6,9 @@
 //   bun tools/protocol/verbclasses-check.ts
 import { readFileSync } from "node:fs";
 import { ENGINE } from "./common.ts";
+import { suite } from "./suite.ts";
 
-let fails = 0;
-const ok = (c: unknown, what: string) => { if (!c) { fails++; console.log("FAIL " + what); } };
+const { ok, done } = suite("verbclasses-check", { quiet: true });
 const show = (s: Iterable<string>) => "{" + [...s].sort().join(", ") + "}";
 const diff = (a: Set<string>, b: Set<string>) => new Set([...a].filter((v) => !b.has(v)));
 const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((v) => b.has(v));
@@ -43,5 +43,4 @@ ok(!aRO && /from "\.\/verbclasses\.js"/.test(auth), `authority.js imports READ_O
 ok(!wR && !wP && /from "\.\.\/shared\/protocol\/verbclasses\.js"/.test(wire), `requestwire.ts imports its READS/PERSON_ACTS from verbclasses.js (literal READS: ${wR ? show(wR) : "none"})`);
 if (aRO && wR) console.log(`  today's drift: READ_ONLY − READS = ${show(diff(aRO, wR))}; READS − READ_ONLY = ${show(diff(wR, aRO))}`);
 
-console.log(fails ? `verbclasses: ${fails} FAILED` : "verbclasses: ok");
-process.exit(fails ? 1 : 0);
+done();

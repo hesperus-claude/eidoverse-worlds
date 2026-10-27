@@ -6,9 +6,9 @@
 //   bun tools/protocol/authority-layers-check.ts
 import { readFileSync, readdirSync } from "node:fs";
 import { ENGINE } from "./common.ts";
+import { suite } from "./suite.ts";
 
-let fails = 0;
-const ok = (c: unknown, what: string) => { if (!c) { fails++; console.log("FAIL " + what); } };
+const { ok, done } = suite("authority-layers-check", { quiet: true });
 
 const DIR = ENGINE + "shared/protocol/authority/";
 const ORDER = ["ctx", "refuse", "catalogue", "storage", "math", "spatial", "sockets", "rights", "bodyconsent", "moderation", "use", "blueprints", "undo", "scripts", "scriptrun", "occupants", "physics", "manipulate", "bodyverbs", "capacity", "checks", "gate", "followups", "writes", "verbs"];   // sockets (10-12 branch, merged 10-14) sits on spatial/catalogue/math/storage/refuse   // leaf-most first; the gate is last
@@ -35,5 +35,4 @@ for (const leaf of files) {
 const gate = readFileSync(ENGINE + "shared/protocol/authority.js", "utf8");
 for (const leaf of ORDER.filter((n) => n !== "ctx")) ok(importsOf(gate).includes(`./authority/${leaf}.js`), `authority.js imports ./authority/${leaf}.js`);
 
-console.log(`[authority-layers-check] ${fails === 0 ? "ok" : fails + " failed"}: ${files.length} leaves under shared/protocol/authority/, order ${ORDER.join(" → ")} → authority.js`);
-if (fails) process.exit(1);
+done(`: ${files.length} leaves under shared/protocol/authority/, order ${ORDER.join(" → ")} → authority.js`);

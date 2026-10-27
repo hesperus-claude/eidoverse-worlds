@@ -27,6 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { scratch, copyTree } from "./common.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 // [name, file, find, replace, rows it must turn red]: the mutation each row exists to catch
 const MUTANTS: [string, string, string, string, string[]][] = [
   ["unpublished lines: publish only when the authority returned (no finally)", "server/worldlog.ts", "    finally { this.publish(from, held); }\n    const o = txnOutcome(live, from, { threw: threw !== null, error: threw, refused: !!r && typeof r === \"object\" && r.ok === false, wedgedBefore });\n    if (threw !== null) {\n      console.error(", "    if (threw === null) this.publish(from, held);\n    const o = txnOutcome(live, from, { threw: threw !== null, error: threw, refused: !!r && typeof r === \"object\" && r.ok === false, wedgedBefore });\n    if (threw !== null) {\n      console.error(", ["T1"]],
@@ -62,7 +63,7 @@ if (process.argv.includes("--mutants")) {
     const d = scratch("txnmut");
     for (const dir of ["server", "shared", "client", "mcpl"]) copyTree(path.join(ENGINE, dir), path.join(d, dir));
     fs.mkdirSync(path.join(d, "tools/protocol"), { recursive: true });
-    for (const f of ["common.ts", "txn-check.ts", "wait.ts"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
+    for (const f of ["common.ts", "suite.ts", "txn-check.ts", "wait.ts"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
     fs.copyFileSync(path.join(ENGINE, "package.json"), path.join(d, "package.json")); fs.symlinkSync(path.join(ENGINE, "node_modules"), path.join(d, "node_modules"), "junction");
     const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
     if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the fix moved?)`); continue; }
@@ -88,8 +89,7 @@ const { openLive } = await import("../../server/livehost.ts");
 const { appendDurable } = await import("../../server/durable.ts");
 const { OPERATORS } = await import("../../server/operators.ts");
 const nodefs = (await import("node:fs")).default;
-let pass = 0, fail = 0;
-const ok = (c, what, d?) => { if (c) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${d !== undefined ? " — " + JSON.stringify(d).slice(0, 400) : ""}`); } };
+const { ok, done } = suite("txn-check");
 const W = process.env.WORLDS_DIR;
 const logFile = (name) => path.join(W, name, "world.jsonl");
 const lines = (name) => fs.readFileSync(logFile(name), "utf8").split("\n").filter(Boolean);
@@ -437,4 +437,4 @@ ok(!publishedNotOnDisk.length, "T3d every line any client was sent was on disk w
   const direct = srv.split("\n").map((l, i) => [i + 1, l] as const).filter(([, l]) => /\.log\.request\(/.test(l) && !/^\s*\/\//.test(l)).map(([n, l]) => `${n}: ${l.trim().slice(0, 100)}`);
   ok(!direct.length && /requestAs\(c, ws, w,/.test(srv) && /export function requestAs\(/.test(rw) && /recheck\(cap\)/.test(rw.slice(rw.indexOf("export function requestAs"))),
     "T11 server.ts has no direct w.log.request caller (voice-moderate goes through requestwire.requestAs: capture, the connection's queue, the busy meter, recheck at both seams)", direct); }
-console.log(`[txn-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

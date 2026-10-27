@@ -26,6 +26,7 @@ import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never c
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
+import { suite } from "./suite.ts";
 
 import { CAPACITY, CAPACITY_CEILING } from "../../shared/protocol/authority.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
@@ -567,14 +568,12 @@ async function sameAsBase() {
 if (argv.includes("--scenario")) { console.log(JSON.stringify(scenario())); process.exit(0); }
 
 // ---------------- run ----------------
-let pass = 0, fail = 0;
+const SUITE = suite("scale-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false; LOAD = calibrate();
   try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 900)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
   if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)} (bound ${o.bound} ms: load ×${r1(LOAD)})`);
 }
-console.log(`[scale-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
