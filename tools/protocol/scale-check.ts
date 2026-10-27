@@ -215,8 +215,8 @@ function scaleCase(n: number) {
 // each op's time at the large world over its time at the small one (a small time is read as FLOOR_MS: noise, not growth)
 const growth = (small: any, large: any, skip: string[] = []) => Object.fromEntries(Object.keys(large).filter((k) => !skip.includes(k))
   .map((k) => [k, r1(large[k] / Math.max(small?.[k] ?? 0, FLOOR_MS))]));
-// a write pays the log append and its index refile, which a fast disk leaves visible (CI 3–4.5×); its scan mutant is 383×
-const GROWS_OP: Record<string, number> = { delete: 10, create: 10, set: 10 };
+// a write (and grab+drop, two of them) pays the log append and index refile, visible on a fast disk (CI 2.5–4.5×); scan mutants 43–383×
+const GROWS_OP: Record<string, number> = { delete: 10, create: 10, set: 10, grab: 10 };
 const grewOk = (g: any) => !!g && Object.entries(g).every(([k, v]: [string, any]) => v <= (GROWS_OP[k] ?? GROWS));
 // the small world and the large one are built and timed in turn, ROUNDS times, each op's best kept: a busy host then slows
 // both sides alike, where one after the other a burst lands on only one of them
