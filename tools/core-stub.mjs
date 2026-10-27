@@ -47,7 +47,7 @@ export const angleDelta = (a, b) => {
   return d;
 };
 // real URLSearchParams: lightrig reads CONFIG.params.get('slots') at module scope; empty query = every default
-export const CONFIG = { params: new URLSearchParams(), name: 'test' };
+export const CONFIG = { params: new URLSearchParams(globalThis.location?.search ?? ''), name: 'test' };   // as base.js reads it
 // warmqueue.js needs the shader-node namespace and the sun (a MISSING export is a SyntaxError at import); a real
 // DirectionalLight, since lightrig configures its shadow fields at module scope
 export const sun = (() => {
