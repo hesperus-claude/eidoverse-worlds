@@ -34,14 +34,11 @@ import { labClock, pinned } from "./clock.ts";
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "d374d2ef";
-// 50 ms per request at rest, scaled (at most 4×) by how much slower a fixed door-shaped job runs now than CAL_REF_MS: a busy
-// host isn't a failure, while an authority that grows with the world misses by 10–1000× (--control). Each op: best of 5
-const BOUND_MS = 50, CAL_REF_MS = 5;
-function calibrate() { const one = () => { const t0 = performance.now(); const m = new Map(); let acc = 0;
-    for (let i = 0; i < 20000; i++) { const a = [i % 7, i % 11, i % 13].map((v) => v * 1.5); m.set(i, a); acc += Math.hypot(a[0], a[1], a[2]); if (i % 50 === 0) acc += JSON.stringify(a).length; }
-    for (let i = 0; i < 20000; i++) acc += m.get(i)[1]; return acc > 0 ? performance.now() - t0 : 0; };
-  const xs = Array.from({ length: 15 }, one).sort((a, b) => a - b); return Math.min(4, Math.max(1, xs[7] / CAL_REF_MS)); }
-let LOAD = 1; const bound = () => BOUND_MS * LOAD;
+// cost is judged machine-free: by how a request GROWS (the same op at a small and a large world, timed seconds apart in this
+// process, so the host's speed cancels: at most GROWS×, an index regressed to a scan is 5–200×) and by counted work (the
+// authority's WORK_METER units, log appends). BOUND_MS only catches a hang. Each op: best of 5
+const BOUND_MS = 500, GROWS = 3, FLOOR_MS = 1;
+const bound = () => BOUND_MS;
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
 // [name, file, find, replace, cases that must turn red]: an exact replacement found once (or a list of [find, replace, file?],
@@ -73,7 +70,7 @@ const MUTANTS: [string, string, string | [string, string, string?][], string, st
   ["reads per connection: how many", "server/readmeter.ts", "if (!timeOnly && a.length >= limits.n) return", "if (false) return", ["Q4"]],
   ["reads per connection: how long", "server/readmeter.ts", "if (ms >= limits.ms) return", "if (false) return", ["Q4"]],
   ["a derived index re-files what rides on a change", "shared/protocol/authority/spatial.js", "for (const k of pk.get(t) ?? []) if (!touched.has(k)) todo.push(k);", "", ["G2"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/authority.js", "// ---------- the spatial index", "// ----------  the spatial index", []],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/authority.js", "// ---------- the verb table's bodies", "// ----------  the verb table's bodies", []],
 ];
 async function runSelf(tree: string, only: string[] | null, timeoutMs = 0) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/scale-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -150,9 +147,11 @@ function session(o: any = {}) {
 }
 const ok = (r: any) => r?.ok === true, code = (r: any) => r?.refused?.code ?? (r?.crashed ? "CRASH" : r?.ok ? "ok" : "?");
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `refused ${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 140)}`);
-const timed = (f: () => any) => { const t0 = performance.now(); const r = f(); return { ms: performance.now() - t0, r }; };
+const SPM: any = await imp1("shared/protocol/authority/spatial.js").catch(() => null);
+const METER: { units: number } | undefined = SPM?.WORK_METER; const BUDGET: number = SPM?.WORK_BUDGET?.units ?? Infinity;
+const timed = (f: () => any) => { const u0 = METER?.units ?? 0; const t0 = performance.now(); const r = f(); const x = { ms: performance.now() - t0, r, units: (METER?.units ?? 0) - u0 }; return x; };
 // best of n: the op itself is given fresh arguments each time by `f(k)`
-const best = (n: number, f: (k: number) => any) => { let out: any = null; for (let k = 0; k < n; k++) { const x = timed(() => f(k)); if (!out || x.ms < out.ms) out = x; if (x.ms <= bound()) break; } return out; };
+const best = (n: number, f: (k: number) => any) => { let out: any = null; for (let k = 0; k < n; k++) { const x = timed(() => f(k)); if (!out || x.ms < out.ms) out = x; if (x.ms <= FLOOR_MS) break; } return out; };
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 // owner olive, builder bob, visitor vic; bounds wide enough for 2 000 things 2 m apart
@@ -209,11 +208,18 @@ function scaleCase(n: number) {
           if (code(g.r) === "ok" && code(walk) !== "ok") throw new Error(`setup: couldn't walk ${t} to ${JSON.stringify(to)}: ${JSON.stringify(walk).slice(0, 200)}`); }
         const d = timed(() => s.call("vic", "drop", { id: t }, 20000));
         if (code(g.r) === "ok" && code(d.r) !== "ok") throw new Error(`setup: ${t} wouldn't go down: ${JSON.stringify(d.r).slice(0, 200)}`);
-        const x = { ms: g.ms + d.ms, r: g.r }; if (!bestG || x.ms < bestG.ms) bestG = x; if (x.ms <= bound()) break; }
+        const x = { ms: g.ms + d.ms, r: g.r }; if (!bestG || x.ms < bestG.ms) bestG = x; if (x.ms <= FLOOR_MS) break; }
       ms.grab = r1(bestG.ms); codes.grab = code(bestG.r); }
-    return { n, ms, codes, things: Object.keys(s.w().state().entities).length - 1, load: r1(LOAD), bound: r1(bound()) }; };
+    return { n, ms, codes, things: Object.keys(s.w().state().entities).length - 1, bound: r1(bound()) }; };
 }
-const scaleGood = (o: any) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound)
+// each op's time at the large world over its time at the small one (a small time is read as FLOOR_MS: noise, not growth)
+const growth = (small: any, large: any, skip: string[] = []) => Object.fromEntries(Object.keys(large).filter((k) => !skip.includes(k))
+  .map((k) => [k, r1(large[k] / Math.max(small?.[k] ?? 0, FLOOR_MS))]));
+const grewOk = (g: any) => !!g && Object.values(g).every((v: any) => v <= GROWS);
+// the same world built at n and at 72 things: check {} reads every thing by design (bounded by the work budget, Q3), so it isn't held to growth
+const scaleGrows = (n: number) => (s: any) => { const small = scaleCase(72)(session()), o = scaleCase(n)(s);
+  return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]) }; };
+const scaleGood = (o: any) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && (o.grew === undefined || grewOk(o.grew))
   && JSON.stringify(o.codes) === JSON.stringify({ delete: "ok", step: "ok", check: "ok", place: "ok", placeVisitor: "rights", look: "ok", create: "ok", set: "ok", batch: "ok", grab: "ok" });
 
 // a synthetic building, as triangles: a 6 × 3 m house (floor 0.1 m, walls 0.15 m) with a 1 m doorway in its +z wall
@@ -238,9 +244,9 @@ const withLab = (extra: any) => { const lab = D.LAB_CATALOGUE; return { get: (n:
 
 type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => boolean; o?: any };
 const cases: Case[] = [
-  { id: "S1", what: `at 72 things (the Commons' size) every request takes under ${BOUND_MS} ms`, run: scaleCase(72), good: scaleGood },
-  { id: "S2", what: `at 500 things every request takes under ${BOUND_MS} ms`, run: scaleCase(500), good: scaleGood },
-  { id: "S3", what: `at 2 000 things every request takes under ${BOUND_MS} ms`, run: scaleCase(2000), good: scaleGood },
+  { id: "S1", what: `at 72 things (the Commons' size) every request answers, each under ${BOUND_MS} ms`, run: scaleCase(72), good: scaleGood },
+  { id: "S2", what: `at 500 things every request costs at most ${GROWS}× what it does at 72 (check {} aside)`, run: scaleGrows(500), good: scaleGood },
+  { id: "S3", what: `at 2 000 things every request costs at most ${GROWS}× what it does at 72 (check {} aside)`, run: scaleGrows(2000), good: scaleGood },
 
   // ---------------- Q: the gates in front of the work ----------------
   { id: "Q1", what: "a visitor's place onto a table scaled 1000× is refused (rights) before any search, and still recorded as an attempt", run(s) { cast(s);
@@ -248,23 +254,23 @@ const cases: Case[] = [
       s.call("olive", "create", { id: "lid", model: "crate", components: { transform: T0([0, 0.75, 0], [1000, 1, 1000]) } });   // nothing on it is free
       s.call("olive", "create", { id: "mug", model: "crate", components: { transform: T0([2, 0, 600]) } });
       const n0 = s.w().entries.length; const x = timed(() => s.call("vic", "place", { id: "mug", on: "big" }));
-      return { code: code(x.r), ms: r1(x.ms), bound: r1(bound()), logged: s.w().entries.slice(n0).filter((e: any) => e.kind === "act" && e.body?.refused?.code === "rights").length }; },
-    good: (o) => o.code === "rights" && o.ms <= o.bound && o.logged === 1 },
+      return { code: code(x.r), ms: r1(x.ms), units: x.units, bound: r1(bound()), logged: s.w().entries.slice(n0).filter((e: any) => e.kind === "act" && e.body?.refused?.code === "rights").length }; },
+    good: (o) => o.code === "rights" && o.units === 0 && o.ms <= o.bound && o.logged === 1 },
   { id: "Q2", what: "a builder's place onto a 1000× table with nothing free on it ends inside the work budget: refused too-costly, saying why", run(s) { cast(s);
       s.call("olive", "create", { id: "big", model: "table", components: { transform: T0([0, 0, 0], [1000, 1, 1000]) } });
       s.call("olive", "create", { id: "lid", model: "crate", components: { transform: T0([0, 0.75, 0], [1000, 1, 1000]) } });
       s.call("olive", "create", { id: "mug", model: "crate", components: { transform: T0([2, 0, 600]) } });
       const dry = best(5, () => s.call("bob", "place", { id: "mug", on: "big", dry: true })); const real = best(5, () => s.call("bob", "place", { id: "mug", on: "big" }));
-      return { dry: code(dry.r), dryMs: r1(dry.ms), real: code(real.r), realMs: r1(real.ms), bound: r1(bound()), why: real.r?.refused?.reason }; },
-    good: (o) => o.dry === "too-costly" && o.real === "too-costly" && o.dryMs <= o.bound && o.realMs <= o.bound && /shared by every world/.test(o.why ?? "") },
+      return { dry: code(dry.r), dryMs: r1(dry.ms), dryUnits: dry.units, real: code(real.r), realMs: r1(real.ms), realUnits: real.units, budget: BUDGET, bound: r1(bound()), why: real.r?.refused?.reason }; },
+    good: (o) => o.dry === "too-costly" && o.real === "too-costly" && o.dryUnits >= o.budget && o.realUnits >= o.budget && o.dryUnits <= o.budget + 1000 && o.dryMs <= o.bound && o.realMs <= o.bound && /shared by every world/.test(o.why ?? "") },
   { id: "Q3", what: "check {} on a heap of 700 things in one spot is refused too-costly inside the budget, saying what it was checking; a batch of 120 creates into the heap still lands, its warnings saying what went unchecked", run(s) { cast(s);
       fill(s, 700, () => [0, 0, 0]);
       const c = best(5, () => s.call("vic", "lint", {})); const one = best(5, () => s.call("vic", "lint", { id: "c-3" }));
       const mk = best(3, (i) => s.call("olive", "batch", { ops: Array.from({ length: 120 }, (_, k) => ({ verb: "create", args: { id: `more-${i}-${k}`, model: "crate", components: { transform: T0([0, 0, 0]) } } })) }, 20000));
-      return { check: code(c.r), ms: r1(c.ms), one: code(one.r), oneMs: r1(one.ms), batch: code(mk.r), batchMs: r1(mk.ms), bound: r1(bound()), made: !!s.w().state().entities["more-0-119"],
+      return { check: code(c.r), ms: r1(c.ms), units: c.units, budget: BUDGET, one: code(one.r), oneMs: r1(one.ms), batch: code(mk.r), batchMs: r1(mk.ms), bound: r1(bound()), made: !!s.w().state().entities["more-0-119"],
         unchecked: mk.r?.warnings?.find((x: any) => x.kind === "unchecked")?.things ?? 0, why: c.r?.refused?.reason }; },
     // the refusal names what it was checking
-    good: (o) => o.check === "too-costly" && /^checking \d+ things would take more of the authority's time/.test(o.why ?? "") && o.ms <= o.bound && o.one === "ok" && o.oneMs <= o.bound && o.batch === "ok" && o.made && o.unchecked > 0 && o.batchMs <= 2 * o.bound },
+    good: (o) => o.check === "too-costly" && o.units >= o.budget && o.units <= o.budget + 1000 && /^checking \d+ things would take more of the authority's time/.test(o.why ?? "") && o.ms <= o.bound && o.one === "ok" && o.oneMs <= o.bound && o.batch === "ok" && o.made && o.unchecked > 0 && o.batchMs <= 2 * o.bound },
   { id: "Q4", what: "reads are metered per connection (server/readmeter.ts): 300 in 10 s, or 1.5 s of the authority's time, then refused (rate) until the window moves", run() {
       if (!RM) return { missing: true };
       const m = RM.readMeter(); const a = {}, b = {}; let t = 1000; const out: any = {};
@@ -280,9 +286,10 @@ const cases: Case[] = [
       for (let i = 0; i < 400; i++) { holds[`g-${i}`] = { by: `h-${i}`, since: clock.t, pose: { pos: [i % 20, 1.1, Math.floor(i / 20)], q: [0, 0, 0, 1], scale: [1, 1, 1] }, handled: [`h-${i}`] }; bodies[`h-${i}`] = { at: [i % 20, 0, Math.floor(i / 20)], ts: clock.t, tokens: 4 }; }
       s.call("olive", "look", {}, 20000);
       const w = s.reopen({ presence: { holds, bodies } });
-      const x = timed(() => D.settleOrphans(w, []));
-      return { ms: r1(x.ms), bound: r1(8 * bound()), settled: x.r.filter((r: any) => r.holder).length, deferred: x.r.find((r: any) => r.deferred)?.deferred ?? 0, holdsLeft: Object.keys(w.presence.holds).length }; },
-    good: (o) => o.ms <= o.bound && o.settled > 0 && o.settled <= 16 && o.deferred === 400 - o.settled && o.holdsLeft === 0 },
+      let appends = 0; const append = w.append.bind(w); w.append = (...a: any[]) => (appends++, append(...a));
+      const x = timed(() => D.settleOrphans(w, [])); w.append = append;
+      return { ms: r1(x.ms), appends, bound: r1(8 * bound()), settled: x.r.filter((r: any) => r.holder).length, deferred: x.r.find((r: any) => r.deferred)?.deferred ?? 0, holdsLeft: Object.keys(w.presence.holds).length }; },
+    good: (o) => o.ms <= o.bound && o.settled > 0 && o.settled <= 16 && o.appends <= 2 * o.settled + 2 && o.deferred === 400 - o.settled && o.holdsLeft === 0 },
 
   { id: "Q6", what: "place {on, offset} far off a 1000× table, or onto one whose middle is taken, ends quickly and answers as the full search would (the nearest free spot)", run(s) { cast(s);
       s.call("bob", "create", { id: "big", model: "table", components: { transform: T0([0, 0, 0], [1000, 1, 1000]) } });
@@ -291,8 +298,8 @@ const cases: Case[] = [
       const far = timed(() => s.call("bob", "place", { id: "mug", on: "big", offset: [1000, 0], attach: false, dry: true }));
       const mid = timed(() => s.call("bob", "place", { id: "mug", on: "big", attach: false, dry: true }));
       const at = (r: any) => r?.would?.find((o: any) => o.comp === "transform")?.value?.pos;
-      return { far: code(far.r), farMs: r1(far.ms), farAt: at(far.r), mid: code(mid.r), midMs: r1(mid.ms), midAt: at(mid.r), bound: r1(bound()) }; },
-    good: (o) => o.far === "ok" && o.mid === "ok" && o.farMs <= o.bound && o.midMs <= o.bound && Math.abs(o.farAt?.[0] - 599.7) < 0.01 && Math.abs(o.farAt?.[2]) < 0.01 && Math.abs(Math.abs(o.midAt?.[0]) - 1.5) < 0.01 && Math.abs(o.midAt?.[2]) < 0.01 },   // the nearest free spots: the edge toward the offset; beside the slab (which side: G3 compares with the full scan)
+      return { far: code(far.r), farMs: r1(far.ms), farUnits: far.units, farAt: at(far.r), mid: code(mid.r), midMs: r1(mid.ms), midUnits: mid.units, midAt: at(mid.r), budget: BUDGET, bound: r1(bound()) }; },
+    good: (o) => o.far === "ok" && o.mid === "ok" && o.farUnits < 1000 && o.midUnits < o.budget / 2 && o.farMs <= o.bound && o.midMs <= o.bound && Math.abs(o.farAt?.[0] - 599.7) < 0.01 && Math.abs(o.farAt?.[2]) < 0.01 && Math.abs(Math.abs(o.midAt?.[0]) - 1.5) < 0.01 && Math.abs(o.midAt?.[2]) < 0.01 },   // the nearest free spots: the edge toward the offset; beside the slab (which side: G3 compares with the full scan)
   // ---------------- C: capacity ----------------
   { id: "C1", what: "a world at capacity.entities refuses what would add (full), a new socket the same as a new thing, a batch that would cross it whole; a delete frees room; other changes stay open", run(s) { cast(s);
       s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 10 } });
@@ -412,9 +419,10 @@ const cases: Case[] = [
     good: (o) => o.nested === "ok" && JSON.stringify(o.dropped) === "[true,true]" && o.held.length === 0 },
 
   // ---------------- G: guards ----------------
-  { id: "S5", what: `rotated furniture at 1 500 things (300 desks turned 30°, four books on each): check {}, look, and placing a book on a turned desk with a box in its middle each take under ${BOUND_MS} ms`, run(s) { cast(s);
+  { id: "S5", what: `rotated furniture at 1 500 things (300 desks turned 30°, four books on each): check {}, look, and placing a book on a turned desk with a box in its middle each cost at most ${GROWS}× what they do with 20 desks`, run(s) {
+      const at = (s: any, desks: number) => { cast(s);
       const yq = (deg: number) => [0, Math.sin(deg * Math.PI / 360), 0, Math.cos(deg * Math.PI / 360)];
-      for (let d = 0; d < 300;) { const ops = []; for (let k = 0; k < 10; k++, d++) { const x = (d % 20) * 3 - 30, z = Math.floor(d / 20) * 3 - 22;
+      for (let d = 0; d < desks;) { const ops = []; for (let k = 0; k < 10; k++, d++) { const x = (d % 20) * 3 - 30, z = Math.floor(d / 20) * 3 - 22;
           ops.push({ verb: "create", args: { id: `desk-${d}`, model: "table", components: { transform: { pos: [x, 0, z], q: yq(30), scale: [1.5, 1, 1.5] } } } });
           for (let b = 0; b < 4; b++) ops.push({ verb: "create", args: { id: `bk-${d}-${b}`, model: "book", components: { transform: { pos: [x + (b - 1.5) * 0.25, 0.75, z], q: yq(30), scale: [1, 1, 1] } } } }); }
         const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; }
@@ -424,23 +432,29 @@ const cases: Case[] = [
       const op = (k: string, f: (i: number) => any) => { const x = best(5, f); ms[k] = r1(x.ms); codes[k] = code(x.r); };
       op("check", () => s.call("vic", "lint", {})); op("look", () => s.call("vic", "look", {}));
       op("place", () => s.call("bob", "place", { id: "cup", on: "desk-0", dry: true }));
-      return { ms, codes, bound: r1(bound()) }; },
-    good: (o) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && JSON.stringify(o.codes) === '{"check":"ok","look":"ok","place":"ok"}' },
-  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) takes under ${BOUND_MS} ms, and one into them is refused (solid) as fast`, run(s) { cast(s);
-      for (let made = 0; made < 800;) { const ops = []; for (let k = 0; k < 50 && made < 800; k++, made++) ops.push({ verb: "create", args: { id: `b-${made}`, model: "book", components: { transform: T0([2.2 + (made % 10) * 0.06, 0.9 + (Math.floor(made / 100) % 8) * 0.1, 2.2 + (Math.floor(made / 10) % 10) * 0.06]) } } });
+      return { ms, codes }; };
+      const small = at(session(), 20), o = at(s, 300); if (!o.ms || !small.ms) return { ...o, small };
+      return { ...o, small: small.ms, grew: growth(small.ms, o.ms, ["check"]), bound: r1(bound()) }; },
+    good: (o) => !!o.ms && Object.values(o.ms).every((v: any) => v <= o.bound) && grewOk(o.grew) && JSON.stringify(o.codes) === '{"check":"ok","look":"ok","place":"ok"}' },
+  { id: "S6", what: `a 4 m step beside 800 small things at body height (books on shelves) costs at most ${GROWS}× the same step beside 40, and one into them is refused (solid) as cheaply`, run(s) {
+      const at = (s: any, N: number) => { cast(s);
+      for (let made = 0; made < N;) { const ops = []; for (let k = 0; k < 50 && made < N; k++, made++) ops.push({ verb: "create", args: { id: `b-${made}`, model: "book", components: { transform: T0([2.2 + (made % 10) * 0.06, 0.9 + (Math.floor(made / 100) % 8) * 0.1, 2.2 + (Math.floor(made / 10) % 10) * 0.06]) } } });
         const r = s.call("olive", "batch", { ops }, 20000); if (!ok(r)) return { fill: show(r) }; }
       s.call("vic", "move", { to: [0, 0, 2.8] }, 5000);
       const past = best(5, (i) => s.call("vic", "move", { to: i % 2 ? [0, 0, 2.8] : [2.8, 0, 0] }, 2000));
       s.call("vic", "move", { to: [0, 0, 2.8], teleport: true }, 5000);
       const into = best(5, () => s.call("vic", "move", { to: [2.5, 0, 2.5] }, 2000));
-      return { ms: { past: r1(past.ms), into: r1(into.ms) }, past: code(past.r), into: code(into.r), bound: r1(bound()) }; },
-    good: (o) => o.past === "ok" && o.into === "solid" && o.ms.past <= o.bound && o.ms.into <= o.bound },
-  { id: "S4", what: `look over 2 000 things: the first 40 in the tree's order and the total, in under ${BOUND_MS} ms`, run(s) { cast(s);
-      s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 2400 } });
-      fill(s, 2000); for (let k = 0; k < 3; k++) s.call("olive", "create", { id: `kid-${k}`, model: "book", components: { parent: { to: "c-0" }, transform: T0([0, 0.6, 0]) } });
-      const x = best(5, () => s.call("vic", "look", {}));
-      return { ms: r1(x.ms), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
-    good: (o) => o.ms <= o.bound && o.n === 40 && o.total === 2003 && JSON.stringify(o.first) === '["c-0@0","kid-0@1","kid-1@1","kid-2@1","c-1@0"]' },
+      return { ms: { past: r1(past.ms), into: r1(into.ms) }, past: code(past.r), into: code(into.r) }; };
+      const small = at(session(), 40), o = at(s, 800); if (!o.ms || !small.ms) return { ...o, small };
+      return { ...o, small: small.ms, grew: growth(small.ms, o.ms), bound: r1(bound()) }; },
+    good: (o) => o.past === "ok" && o.into === "solid" && o.ms.past <= o.bound && o.ms.into <= o.bound && grewOk(o.grew) },
+  { id: "S4", what: `look over 2 000 things: the first 40 in the tree's order and the total, at most ${GROWS}× what look costs over 72`, run(s) {
+      const at = (s: any, n: number) => { cast(s); s.call("olive", "set", { id: "@world", component: "capacity", value: { entities: 2400 } });
+        fill(s, n); for (let k = 0; k < 3; k++) s.call("olive", "create", { id: `kid-${k}`, model: "book", components: { parent: { to: "c-0" }, transform: T0([0, 0.6, 0]) } });
+        return best(5, () => s.call("vic", "look", {})); };
+      const small = at(session(), 72), x = at(s, 2000);
+      return { ms: r1(x.ms), grew: growth({ look: small.ms }, { look: x.ms }), bound: r1(bound()), n: x.r.things?.length, total: x.r.total, first: x.r.things?.slice(0, 5).map((t: any) => `${t.id}@${t.depth}`) }; },
+    good: (o) => o.ms <= o.bound && grewOk(o.grew) && o.n === 40 && o.total === 2003 && JSON.stringify(o.first) === '["c-0@0","kid-0@1","kid-1@1","kid-2@1","c-1@0"]' },
   { id: "G2", what: "the index a state's queries use (derived from the last one, write by write) files exactly what a fresh build files, through moves, re-parenting, deletes of parents, creates and undo", run(s) { cast(s);
       if (!D.indexAudit) return { skipped: "no audit at this tree" };
       fill(s, 60); const bad: any[] = []; let rnd = 7; const rand = (n: number) => ((rnd = (rnd * 16807) % 2147483647) % n);
@@ -584,11 +598,11 @@ for (const c of cases) {
   // a row red ONLY on its wall-clock bound is measured again, up to 3 attempts in all (Bazel's flaky_test_attempts); a
   // pass on a later attempt is marked FLAKY with the slow timings, and a row whose behaviour is wrong is never retried
   for (let attempt = 1; attempt <= 3; attempt++) {
-    LOAD = calibrate(); good = false;
+    good = false;
     try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
     if (good || !timingOnly(c, o)) break;
     slow.push(slowest(o)); }
   SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}${slow.length ? ` (${good ? "FLAKY" : "over the bound every time"}: ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")})` : ""}`, o);
-  if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)} (bound ${o.bound} ms: load ×${r1(LOAD)})`);
+  if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)}${o.grew ? ` grew ${JSON.stringify(o.grew)}` : ""} (backstop ${o.bound} ms)`);
 }
 SUITE.done();
