@@ -33,6 +33,8 @@ export function aid1JoinIdentity(tok: string): { slug: string; payload: Aid1Payl
 export type HnSession = { sub: string; name: string; scopes: string[]; claims?: Record<string, unknown>; exp: number; native?: true; nativeWorld?: string };
 export const hnSessions = new Map<string, HnSession>();
 export const hnJti = new JtiCache();
+/** The credential in `Authorization: Bearer <key>` (the scheme case-insensitive, RFC 7235), or "". Never the URL. */
+export const bearerOf = (req: Request): string => /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
 export function sessionFromCookie(cookie: string | null): HnSession | null {
   const m = /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(cookie ?? "");
   if (!m) return null;
