@@ -85,7 +85,7 @@ The client's `applyEntry` both *updates world state* and *does scene work*
 (async asset loads, GPU compiles, awaited terrain builds). Consequences:
 
 - Join replay is a **serial `await` loop over entries** (`net.js:578-590`) —
-  exactly the "another serial loader" that `SCALING_AND_SNAPSHOT_PLAN.md` §9
+  exactly the "another serial loader" that `docs/history/SCALING_AND_SNAPSHOT_PLAN.md` §9
   warns about. 12s of one measured 13s cold boot was one crate download
   blocking the loop (`net.js:562-563`).
 - Live entries race each other: `ws.onmessage` is async and unserialized
@@ -1527,7 +1527,7 @@ fixture/tool matrix.
   in 30s, steady 38-41fps (was 30-31), zero oscillation over 100s.
   Everything else about §17d stands — no other lever enters the band.
   Gate: paritybench PASS, lightbench 30/30, bootjank clean.
-  Housekeeping: TEL0S_NOTES.md itself contained a raw NUL byte (§21's
+  Housekeeping: docs/history/TEL0S_NOTES.md itself contained a raw NUL byte (§21's
   whisperKey line) that made every grep against this file silently
   return nothing — the build.js:1089 footgun's sibling, now spelled
   out as text.

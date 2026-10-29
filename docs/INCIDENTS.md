@@ -7,7 +7,7 @@ they cite are gone. The lessons are kept because they outlive the code that
 taught them. Nothing here describes how the current protocol works — for
 that, read AGENTS.md.*
 
-Harvested 2026-08-08 ahead of the skeleton-first rebuild (TEL0S_NOTES.md §8,
+Harvested 2026-08-08 ahead of the skeleton-first rebuild (docs/history/TEL0S_NOTES.md §8,
 step 1). This codebase does not carry TODO/FIXME markers — there are zero in
 the tree. Instead, nearly every non-obvious decision carries the incident,
 measurement, or date that produced it, written into the comment beside the
@@ -472,7 +472,7 @@ fixes, re-exports) and a 24h-stale avatar is a debugging nightmare (2026-07-22:
 'sydney's arms are swapped' was three of us looking at three different cached
 rigs). no-cache = revalidate each load, still cheap."
 Lesson: mutable-name assets cannot be cached hard. The real fix is content
-addressing (TEL0S_NOTES.md §4), which retires this hack.
+addressing (docs/history/TEL0S_NOTES.md §4), which retires this hack.
 
 **Measured 2026-07-26: VRM 0.50, VRMA 0.44, GLB 0.99 gzip ratios**
 `server/server.ts:1352-1361`
@@ -553,7 +553,7 @@ join and twenty seconds of freezes there."
 The ask, either form: expose the wrap as a factory callable at material-creation
 time, or "build the branches in always, gated by uniforms" so the graph shape
 never changes (the ubershader pattern).
-Lesson: this is Disease A of TEL0S_NOTES.md §2 — runtime shader-graph *shape*
+Lesson: this is Disease A of docs/history/TEL0S_NOTES.md §2 — runtime shader-graph *shape*
 instability. Nearly all the client's hold/cap machinery exists to absorb it. A
 client-side material factory that wraps before first compile deletes the
 machinery.
@@ -788,7 +788,7 @@ here would fight it — a sunset would get our noon-ish curve stamped back over
 Skye's. So on this path the tuner only applies the knobs the world genuinely
 owns: exposure, and the lamp response to time of day."
 Lesson: name the owner of every light. Two owners writing one intensity is a
-fight nobody wins. (TEL0S_NOTES.md flags the consequence: five of eight tuner
+fight nobody wins. (docs/history/TEL0S_NOTES.md flags the consequence: five of eight tuner
 sliders silently do nothing on the primary sky path — `sky.js:660-691` vs
 `build.js:975-983`.)
 
@@ -841,7 +841,7 @@ slot… The cost is real (every cast is a scene-wide recompile + per-frame GPU),
 which is why keep is a deliberate checkbox and not the default." Un-keeping a
 casting light re-enters the budget and drops its cast if that overcommits.
 Lesson: an escape hatch from a measured safety budget is a loaded gun; document
-it as such. (TEL0S_NOTES.md: "50 kept lights reproduce exactly the hang the
+it as such. (docs/history/TEL0S_NOTES.md: "50 kept lights reproduce exactly the hang the
 budget exists to prevent" — see the landmine list.)
 
 **Pre-warm the scene-wide recompile off the click**
@@ -1313,7 +1313,7 @@ silently dropped. Now it is remembered and applied when the body lands — which
 also makes it safe to stop waiting for every asset before replaying."
 Lesson: `pendingOps` is the price of decoupling replay from bytes. A rebuild that
 folds synchronously and realizes asynchronously deletes this machinery instead of
-paying it (TEL0S_NOTES.md §3).
+paying it (docs/history/TEL0S_NOTES.md §3).
 
 **A mount whose parent or child is still downloading waits**
 `client/lib/world.js:37-38`, `:497-500`, `:519-521`
@@ -1437,7 +1437,7 @@ could drift apart, they eventually would, and the difference would be a world
 that looks different depending on when you arrived. Order matters the way it does
 in a log: ground before the things standing on it."
 Lesson: this principle survives the rebuild; only its LEVEL moves (fold → state →
-realize, TEL0S_NOTES.md §3).
+realize, docs/history/TEL0S_NOTES.md §3).
 
 **Synthetic pre-history entries carry negative seq and must not advance it**
 `client/lib/world.js:602`, `client/lib/net.js:580-581`,
@@ -1863,7 +1863,7 @@ Lesson: any automatic redirect needs a rate cap and a fallback surface.
 "otherwise the door panel and the local nameplate greet a stale localStorage name
 while the server (correctly) calls this person by their Discord name."
 Lesson: identity is a boot-order dependency, not a late correction. (It costs an
-RTT before the socket — TEL0S_NOTES.md §4 collapses the 3-RTT prologue into the
+RTT before the socket — docs/history/TEL0S_NOTES.md §4 collapses the 3-RTT prologue into the
 join hello.)
 
 **The server's `you` is authoritative, and a silently different nameplate is confusing**
@@ -2126,7 +2126,7 @@ stray separator character made every held whisper unreachable, silently), and th
 failure mode is a private message that simply never arrives."
 Lesson: any composite key read and written in different functions gets one
 constructor. (This file's NUL separator is also why `grep -r` silently skips
-`client/lib/build.js` — TEL0S_NOTES.md §2.)
+`client/lib/build.js` — docs/history/TEL0S_NOTES.md §2.)
 
 **A stale SDP is worthless, so `rtc` has no pending queue**
 `server/server.ts:2623-2635`
@@ -2170,7 +2170,7 @@ by anyone in the world… the log is public, so the reasons things bounced off i
 public too." Kinds: `denied`, `rejected`, `rate-limit`, `reaction`,
 `reaction-skip`, `reaction-error`, `script-error`, `script-pause`,
 `motion-lint`, `particles-lint`, `lease-swept`.
-Lesson: TEL0S_NOTES.md keeps this verbatim as a thing the rebuild must preserve.
+Lesson: docs/history/TEL0S_NOTES.md keeps this verbatim as a thing the rebuild must preserve.
 "Check here first."
 
 **A folded motion that can't move is a silence someone will debug at 4am**
@@ -2215,7 +2215,7 @@ Lesson: format-identification fixes are only ever prospective; ship them early.
 "The tail is served from memory; older pages read the log, which is O(file) per
 request and the obvious place a real index goes when that starts to hurt."
 Lesson: self-acknowledged debt with the fix named is the right way to leave a known
-cost. (TEL0S_NOTES.md §7 names it the present offender.)
+cost. (docs/history/TEL0S_NOTES.md §7 names it the present offender.)
 
 **History and the flight recorder are open to spectators**
 `server/server.ts:2366-2369`, `:2379-2384`
@@ -2883,7 +2883,7 @@ Lesson: one regex, two implementations, guaranteed drift — this belongs in
 `shared/`.
 
 **The token-tap: 485ms vs 507ms first-delta**
-`NOTE-token-tap.md:16-27`
+`docs/history/NOTE-token-tap.md:16-27`
 "a ~400-line local HTTP relay… Measured: the tapped interactive session is a dead
 heat with headless streaming (485ms vs 507ms first-delta in our porch-era tests) —
 i.e. subscription users get full API-grade streaming latency without per-token
@@ -4338,7 +4338,7 @@ the revision base for that design doc.
 **Do not resolve in this repository** (they belong to sibling repos — exultation,
 discord-mcpl, the connectome stack, or predate this history):
 - `8b37f0f` — `README.md:40`.
-- `a99adaa` — `SCALING_AND_SNAPSHOT_PLAN.md:5` (the plan's base revision).
+- `a99adaa` — `docs/history/SCALING_AND_SNAPSHOT_PLAN.md:5` (the plan's base revision).
 - `732abbf`, `d5cbba5`, `e5fd11e` — `docs/DESIGN-local-chat-spaces.md:14, 25, 76`
   (revision history of that design).
 - `2cdc7fb`, `a77be49` — `mcpl/manifest.ts:10` (upstream MCPL spec/digest vectors).

@@ -43,8 +43,8 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 ## History — ledgers and retired plans
 
-[INCIDENTS](INCIDENTS.md) · [TEL0S_NOTES](../TEL0S_NOTES.md) · [SCALING_AND_SNAPSHOT_PLAN](../SCALING_AND_SNAPSHOT_PLAN.md) ·
-[PROPOSAL-sensory-channel](../PROPOSAL-sensory-channel.md) · [NOTE-token-tap](../NOTE-token-tap.md) ·
+[INCIDENTS](INCIDENTS.md) · [TEL0S_NOTES](history/TEL0S_NOTES.md) · [SCALING_AND_SNAPSHOT_PLAN](history/SCALING_AND_SNAPSHOT_PLAN.md) ·
+[PROPOSAL-sensory-channel](history/PROPOSAL-sensory-channel.md) · [NOTE-token-tap](history/NOTE-token-tap.md) ·
 [UPSTREAM-FLAGS](UPSTREAM-FLAGS.md) · [UPSTREAM-WRAP-ONCE](upstream-wrap-once.md) ·
 [FLIGHT-MCP-INTERFACE](../tools/flightbench/FLIGHT-MCP-INTERFACE.md)
 

@@ -87,7 +87,7 @@ are settings; `0` turns one off:
 - `mcpl/` — the agent frontend: door requests in, tiered perception out
 - `tools/` — smoke tests, a boot benchmark, load test, asset converters, the voice bot
 - `spec/` — the protocol (CC0) and its conformance suite (`spec/conformance/`)
-- `DESIGN.md`, `SCALING_AND_SNAPSHOT_PLAN.md` — design notes; `docs/` — everything else a person reads, mapped in `docs/README.md`
+- `DESIGN.md` — the current design; `docs/` — everything else a person reads, mapped in `docs/README.md`
 
 Changing the engine: `CONTRIBUTING.md`.
 

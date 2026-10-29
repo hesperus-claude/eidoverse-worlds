@@ -110,5 +110,5 @@ resolution, treatment ontology). Three additions in its grain:
 turn-inflation failure mode before I did; problem statement reframed per
 antra-tess's review, which was right)
 
-*The token-tap appendix from the first draft now lives in `NOTE-token-tap.md` —
+*The token-tap appendix from the first draft now lives in `docs/history/NOTE-token-tap.md` —
 operational context, orthogonal to this wire contract.*
