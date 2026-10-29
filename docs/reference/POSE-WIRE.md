@@ -1,6 +1,6 @@
 # The pose packet — what rides presence (never the log)
 
-*Field-level contract of the `pose` bag. The message-level inventory (planes, close codes, the message types) is `docs/WIRE.md` §3 — this file is what that table's `{pose}` contains.*
+*Field-level contract of the `pose` bag. The message-level inventory (planes, close codes, the message types) is `docs/reference/WIRE.md` §3 — this file is what that table's `{pose}` contains.*
 
 `{ type: 'pose', pose }` at ≤15 Hz per embodied client; the server batches the latest per id into
 `frame` messages and keeps `lastPose` for late joiners. Nothing here reaches the log; a signed-in body's settled last pose
@@ -131,4 +131,4 @@ Named poses
   the same ones). `scale`/`plateY` are body state and ride the settled pose
   a server keeps for late joiners, as `poses` does; `mic`/`hear` are
   a live reading re-sent with every packet and are never part of it. The
-  pose packet's fields are `docs/pose-wire.md`.
+  pose packet's fields are `docs/reference/POSE-WIRE.md`.

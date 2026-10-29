@@ -63,7 +63,7 @@ constantly:
 
 - Upstream `weather_system` / `sky_system` integrate by **sweeping the scene
   and rewrapping existing materials** after first compile
-  (`docs/upstream-wrap-once.md` — 44 materials rewrapped on one Safari join,
+  (`docs/history/UPSTREAM-WRAP-ONCE.md` — 44 materials rewrapped on one Safari join,
   ~2–6s per graph on WebKit, ~0.5s on Chrome).
 - Every point-light grant/loss changes the lighting loop of every material
   (`lights.js:11-13`; measured: grass + 4 lights never finished compiling,
@@ -266,7 +266,7 @@ load jank — deletes outright.
 ## 5. Lighting, redesigned
 
 **Contract: the shader graph's shape is fixed at boot; runtime changes are
-uniform writes.** This is the wrap-once ask (`docs/upstream-wrap-once.md`,
+uniform writes.** This is the wrap-once ask (`docs/history/UPSTREAM-WRAP-ONCE.md`,
 option 2 — ubershader, uniform-gated) pursued in two moves:
 
 - **Client-side material factory**: every material entering the scene passes
@@ -490,7 +490,7 @@ fixture/tool matrix.
   (reads matrices AFTER the sim applier's writes: no lag), originals
   authoritative for picking/collision/parts, conservative exclusions
   (transparent, skinned, sheared, overlapping, tangents), `?batching=0`
-  escape hatch, docs/draw-calls.md with numbers (194→6 on the fixture,
+  escape hatch, docs/reference/DRAW-CALLS.md with numbers (194→6 on the fixture,
   53→33 on 32 real crates, worst pixel delta 18/480k). Its own gates
   pass (drawbench 13 GPU cases, draw-batches-test); ours pass on top:
   parity, lightbench 30/0, smoke 85/85, sim-smoke 15/0,
@@ -499,7 +499,7 @@ fixture/tool matrix.
   pushed — main's only own commit was its old anima merge. PR:
   https://github.com/anima-research/eidoverse-worlds/pull/160
   (tel-0s:main → anima-research:main) — the body is the briefing;
-  docs/UPSTREAM-FLAGS.md is the reviewer's document. anima remains
+  docs/history/UPSTREAM-FLAGS.md is the reviewer's document. anima remains
   fetch-only; nothing was pushed there.
 
 - **2026-09-04 — §24t-12: CATCH-UP MERGE, folded wings on presence
@@ -580,7 +580,7 @@ fixture/tool matrix.
   object-lod-test 0 failed (upstream's own), smoke 85/85, sim-smoke
   10/0, sim-test 32/0, replaybench 1/1, parity PASS. rimward is 0
   behind anima/main; colleagues take 90 commits with
-  docs/UPSTREAM-FLAGS.md as the briefing. Local `main` untouched this
+  docs/history/UPSTREAM-FLAGS.md as the briefing. Local `main` untouched this
   round (tel0s's call whether it follows).
 
 - **2026-09-01 — §24t-8: COLLIDERS FOR THE SIM, AND THE PROD FLEET
@@ -820,7 +820,7 @@ fixture/tool matrix.
   applier), defs-smoke 31/0, smoke 85/85, paritybench, panelbench.
 
 - **2026-08-30 — §24s: THE OPEN ROAD — owned numerics + the renderer
-  seam (4235a38, fb85d8c, 8a739fa).** (1) docs/UPSTREAM-FLAGS.md: the
+  seam (4235a38, fb85d8c, 8a739fa).** (1) docs/history/UPSTREAM-FLAGS.md: the
   one-document merge briefing for colleagues (6 upstream reds w/ fixes,
   the now-live dormant features, the physics instrument fixes prod may
   want, process lessons, the structural map). (2) shared/simmath.js
@@ -835,7 +835,7 @@ fixture/tool matrix.
   deno-V8, pinned to a committed golden. No shipped sim uses it yet —
   it exists so §6's vocabulary can grow without reopening Covenant I
   (PROTOCOL_v2 §2 records the delivery; wasm stays the named fallback).
-  (3) docs/RENDERER-SEAM.md: full 113-module inventory of the charter
+  (3) docs/design/RENDERER-SEAM.md: full 113-module inventory of the charter
   thesis — ALREADY ~63% TRUE by line count (shared/ provably
   three-free; 72 modules import no three; the 17k coupled lines
   concentrate in ten files); two channels (core.js import chokepoint,
@@ -1267,7 +1267,7 @@ fixture/tool matrix.
   principle, server-side), per-beat error isolation, gauges at
   GET /tick. Verbatim bodies, cadences unchanged; the seam for the
   future fixed-step sim core. Wire additions /defs + /tick recorded
-  in WIRE.md. Gates across both: defs-smoke 12/12, flora.test 67/67,
+  in docs/reference/WIRE.md. Gates across both: defs-smoke 12/12, flora.test 67/67,
   tick-test 7/7, smoke 85/85, leasetest 19/19, paritybench PASS,
   lightbench 30/30, bootjank clean at 153k planted, replaybench green.
 
@@ -1283,7 +1283,7 @@ fixture/tool matrix.
   exclusions: sky, chat window, bans, roles.sub), and a per-machine
   baseline digest in worlds/.replaybench.json. Adversarially verified
   (doctored snapshot, malformed line, baseline mismatch each RED as
-  intended); commons green, baseline recorded. And `docs/WIRE.md`
+  intended); commons green, baseline recorded. And `docs/reference/WIRE.md`
   (8e7afe6) — the live-wire protocol inventory freeze v0: WS session
   model (legs/gen/takeover/close codes/rate caps), both planes, every
   message both directions, the rank-gated verb table, HTTP surface,
@@ -1297,7 +1297,7 @@ fixture/tool matrix.
   engine has outgrown a three.js webpage — port to another engine and
   rework the systems to be "more Rimworld-y" (modular, data-driven,
   extensible). Grass optimization paused. Branch `overhaul/rimward`
-  opened; `docs/overhaul-charter.md` drafted (11fa681) — nothing locked.
+  opened; `docs/design/OVERHAUL-CHARTER.md` drafted (11fa681) — nothing locked.
   Thesis on the table: split an engine-agnostic sim core (fixed tick,
   defs, the append-only log promoted to event spine) from a swappable
   presentation layer, so the port becomes a *client* port and the
@@ -1782,7 +1782,7 @@ fixture/tool matrix.
   per-GLB texture phases COLLAPSED — CRT textures 10ms (the Mac paid
   1221ms for the raw original). Encoder for this box: a portable
   toktx v4.4.2 (7z-extracted NSIS, scratchpad, no install); prod Mac:
-  pkgutil-extract per docs/ktx2-encoder.md (brew has no formula — a
+  pkgutil-extract per docs/operator/KTX2-ENCODER.md (brew has no formula — a
   correction; the pkg's Rosetta demand is an installer-metadata bug over
   a fully arm64 payload). Gate: 5/5 transcodes + ktx2check, lightbench 30/30
   (the cloud-easing check now samples up to 5 rAF pairs — a loaded
@@ -1933,7 +1933,7 @@ fixture/tool matrix.
   the degrade ladder counts FAILURES not builds (one recovered boot no
   longer condemns every later sky verb to a stacked frozen SkyMesh);
   azimuth stays dropped (units undefined upstream — ask #8).
-  docs/upstream-wrap-once.md Addendum 2: per-bakeKey cache,
+  docs/history/UPSTREAM-WRAP-ONCE.md Addendum 2: per-bakeKey cache,
   authoritative includeClouds, bopts.target, api dispose (67MB leak
   per rebuild), azimuth setter. OPEN, tel0s's call: the one-time c1
   compile stall remains (~5-10s cold GPU, once) — options: pre-pay it
@@ -2345,7 +2345,7 @@ fixture/tool matrix.
   EXPLICIT values into updateLight — which also fixed a live landmine
   where a cleared `keep` folded as absent and slipped through the
   null-skip patch guard, leaving the old value stuck on. The inspector
-  grew the "burns at noon" checkbox. docs/upstream-wrap-once.md gained
+  grew the "burns at noon" checkbox. docs/history/UPSTREAM-WRAP-ONCE.md gained
   the addendum for Skye: the `strikeLight` injection ask, a per-material
   cloud-shadow wrap, and blessing `noWet`/`noCloudShadow` as contract
   (noting AGENTS.md says materials where the code checks meshes).
@@ -2677,7 +2677,7 @@ fixture/tool matrix.
 - **2026-08-09 — landmines 1 and 2 fixed** (`sendAnim` import; house rule 3
   guards on `open`/`close` and the module-level intervals). Both pushed.
 - **2026-08-09 — incident ledger landed** (sequence step 1):
-  `docs/INCIDENTS.md`, 475 entries across 11 subsystem sections — every
+  `docs/history/INCIDENTS.md`, 475 entries across 11 subsystem sections — every
   measured-incident comment in the tree, numbers verbatim, plus the
   AGENTS.md house rules with attributions and the cited commit hashes.
   The harvest also surfaced **active landmines** (constraints current code
@@ -3002,7 +3002,7 @@ MToon under the ported wetness wrap (today's sweep already wraps MToon —
 parity, not regression); the Proxy seam against `weatherRegistry`'s
 WeakMap identity (one stable proxy per scene); bootbench before/after
 (the settle beat should vanish). Upstream asks to record alongside
-`docs/upstream-wrap-once.md`: `strikeLight` injection, a per-material
+`docs/history/UPSTREAM-WRAP-ONCE.md`: `strikeLight` injection, a per-material
 cloud-shadow wrap entry, and blessing `noWet`/`noCloudShadow` as
 supported markers.
 
@@ -3444,7 +3444,7 @@ castShadow on shrub stems (blob-shadow philosophy; kills 5 unwarmed
 depth pipelines). (5) The discarded original InstancedMesh (64B/inst
 + n identity setMatrixAt, pure garbage at 109k instances) — upstream
 ask for Skye (a build-without-mesh entry point), recorded in
-docs/upstream-wrap-once.md; not worth an adapter hack.
+docs/history/UPSTREAM-WRAP-ONCE.md; not worth an adapter hack.
 
 **C. The join gate + promote budget (models.js/colliders.js).**
 (1) The residency gate works from POSITION with a conservative default
@@ -3520,7 +3520,7 @@ encoder gap (task record 2026-08-10).
 **Encoder** (the one hard gap): KTX-Software's toktx/ktx CLI, probed
 KTX2_TOKTX env → toktx → ktx on PATH; absent = optimize exit code 3 =
 env-skip, never a .failed marker (the sharp-degrade pattern,
-optimize.ts:50-59). Prod Mac: pkgutil-extract the arm64 pkg (docs/ktx2-encoder.md —
+optimize.ts:50-59). Prod Mac: pkgutil-extract the arm64 pkg (docs/operator/KTX2-ENCODER.md —
 brew has no formula, and the pkg installer falsely demands Rosetta:
 its metadata lacks hostArchitectures while the payload is pure arm64).
 Dev box: a portable

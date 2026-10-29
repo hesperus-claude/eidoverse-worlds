@@ -46,10 +46,10 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the browser sends client", "client/lib/thingphysics.js", "sendRequest('move', { to: to.map(r3) });", "sendRequest('move', { to: to.map(r3), client: 'human' });", ["M2"]],
   ["a say's trio by kind (doc)", "shared/protocol/verbspec.js", "spoken: { type: \"any\", doc: \"true: the words were voice-performed", "spoken: { type: \"any\", doc: \"true: a voice leg performs it (an agent)", ["V1"]],
   ["§6a gone", "spec/PROTOCOL.md", "## 6a. One kind of participant", "## 6a. Participants", ["X1"]],
-  ["§8 agent-shaped again", "docs/SCRIPTS.md", "one minted-shaped (`u-` and 20 lowercase) and one of another valid shape", "one person-shaped (`u-` and 20 lowercase) and one agent-shaped", ["X2"]],
+  ["§8 agent-shaped again", "docs/guide/SCRIPTS.md", "one minted-shaped (`u-` and 20 lowercase) and one of another valid shape", "one person-shaped (`u-` and 20 lowercase) and one agent-shaped", ["X2"]],
   ["verbspec: arrival on the record", "shared/protocol/verbspec.js", "Arriving is presence (nothing is logged); teleport: true is an act on the record, and can't carry things", "Your first move (arriving) and teleport: true are acts on the record, and can't carry things", ["X3"]],
   ["the stale consent comment", "client/lib/consent.js", "const KEY = 'ew-body-switch';", "const KEY = 'ew-body-switch';   // agents accept by default", ["X4"]],
-  ["WIRE: the agent flag", "docs/WIRE.md", "`{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?", "`{world, id?, token?, avatar?, surface?, spectate?, agent?, renderer?", ["X5"]],
+  ["WIRE: the agent flag", "docs/reference/WIRE.md", "`{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?", "`{world, id?, token?, avatar?, surface?, spectate?, agent?, renderer?", ["X5"]],
   ["whois infers a kind", "server/requestwire.ts", "...(said.has(id) ? { declares: said.get(id) } : {}),", "kind: dir.entry(id)?.subs?.some((x) => /^(agent|aid1):/.test(x)) ? \"agent\" : \"person\",", ["W1"]],
   ["whois drops the declaration", "server/requestwire.ts", "...(said.has(id) ? { declares: said.get(id) } : {}),", "", ["W1"]],
   ["the directory infers a kind", "server/directory.ts", "return add({ name, subs: [sub], kind: \"account\", since: now() }); }", "return add({ name, subs: [sub], kind: (/^(agent|aid1):/.test(sub) ? \"agent\" : \"human\") as any, since: now() }); }", ["W1"]],
@@ -273,8 +273,8 @@ const cases: Case[] = [
       const SK = await import(TREE + "shared/sockbody.js"); const C = await import(TREE + "shared/protocol/consent.js");
       return { occ: show(occ), seat: show(seat), reach: !!SK.OCCUPY_REACH, old: "SIT_REACH" in SK || "SEAT_REACH" in SK, cls: C.KIND_CLASS?.occupy ?? null, oldCls: C.KIND_CLASS?.seat ?? null }; },
     good: (o) => !/^refused shape/.test(o.occ) && /^refused shape/.test(o.seat) && o.reach && !o.old && o.cls === "displace" && o.oldCls === null },
-  { id: "O4", what: "…the readers and the words follow: sockbody's vacatedAt/vacatedFromMine read `socket`, the browser and the agent read `vacated`, the spec, AGENTS.md, SCRIPTS.md and WIRE.md say `vacated {socket, …}` and never `unseated`, and the version history records it", async run() {
-      const SK = await import(TREE + "shared/sockbody.js"); const lb = readText("client/lib/localbody.js"), ag = readText("mcpl/agent.ts"), md = readText("spec/PROTOCOL.md"), a = readText("AGENTS.md"), sc = readText("docs/SCRIPTS.md"), wi = readText("docs/WIRE.md");
+  { id: "O4", what: "…the readers and the words follow: sockbody's vacatedAt/vacatedFromMine read `socket`, the browser and the agent read `vacated`, the spec, AGENTS.md, docs/guide/SCRIPTS.md and docs/reference/WIRE.md say `vacated {socket, …}` and never `unseated`, and the version history records it", async run() {
+      const SK = await import(TREE + "shared/sockbody.js"); const lb = readText("client/lib/localbody.js"), ag = readText("mcpl/agent.ts"), md = readText("spec/PROTOCOL.md"), a = readText("AGENTS.md"), sc = readText("docs/guide/SCRIPTS.md"), wi = readText("docs/reference/WIRE.md");
       return { mine: SK.vacatedFromMine?.({ socket: "s1" }, { to: "s1" }) === true && SK.vacatedFromMine?.({ seat: "s1" }, { to: "s1" }) === false, at: JSON.stringify(SK.vacatedAt?.({ at: [1, 2, 3] })),
         lb: /m\?\.type === 'vacated'/.test(lb) && !/'unseated'/.test(lb), ag: /m\.type === "vacated"/.test(ag) && !/"unseated"/.test(ag),
         docs: [md.slice(0, md.indexOf("## Version history")), a, sc, wi].every((t) => !/\bunseat/i.test(t)) && /`vacated \{socket, by,\s+why, at\}`/.test(md) && /`vacated`/.test(a) && /`vacated \{socket, host\?, by, why, at\?\}`/.test(wi), vh: /occupy/.test(md.slice(md.indexOf("## Version history")) + readText("spec/history/PRE-RELEASE-RENAMES.md")) }; },
@@ -352,10 +352,10 @@ const cases: Case[] = [
         r4: /\*\*The same constraints on every path\.\*\*/.test(s6a), r5: /\*\*Policy by kind is a world's choice, in the open\.\*\*/.test(s6a), r6: /\*\*A false declaration is a moderation matter\*\*/.test(s6a),
         s31: /§6a/.test(s31) && /shape MUST NOT encode what holds it/.test(s31), s5: /the same way for every kind of\s+body/.test(s5) && /Arriving is presence/.test(s5) }; },
     good: (o) => o.head && o.rules === "123456" && o.r1 && o.r2 && o.r3 && o.tts && o.r4 && o.r5 && o.r6 && o.s31 && o.s5 },
-  { id: "X2", what: "(research #18) §8, SCRIPTS.md and scriptaudit.js name the stand-ins by shape (minted-shaped and another valid shape), never person- or agent-shaped, and no script \"greets people and not agents\"", run() {
-      const md = readText("spec/PROTOCOL.md"), sc = readText("docs/SCRIPTS.md"), au = readText("shared/protocol/scriptaudit.js"); const s8 = section(md, /\n## 8\. /);
+  { id: "X2", what: "(research #18) §8, docs/guide/SCRIPTS.md and scriptaudit.js name the stand-ins by shape (minted-shaped and another valid shape), never person- or agent-shaped, and no script \"greets people and not agents\"", run() {
+      const md = readText("spec/PROTOCOL.md"), sc = readText("docs/guide/SCRIPTS.md"), au = readText("shared/protocol/scriptaudit.js"); const s8 = section(md, /\n## 8\. /);
       const kindWords = /(person|agent)-\s*shaped|greets people and not\s+agents|stand-ins? of (different|another) KINDS?\b/i;
-      return { s8: /one minted-shaped \(`u-` and 20 lowercase\) and one of another valid shape/.test(sc) && /auditor's re-run of a script is a\s+check/.test(s8),   // the procedure is docs/SCRIPTS.md since the house's view (#260 10-20)
+      return { s8: /one minted-shaped \(`u-` and 20 lowercase\) and one of another valid shape/.test(sc) && /auditor's re-run of a script is a\s+check/.test(s8),   // the procedure is docs/guide/SCRIPTS.md since the house's view (#260 10-20)
         md: kindWords.test(md), sc: kindWords.test(sc), au: kindWords.test(au), scMint: /minted-shaped/.test(sc), auMint: /minted-shaped/.test(au) }; },
     good: (o) => o.s8 && !o.md && !o.sc && !o.au && o.scMint && o.auMint },
   { id: "X3", what: "(research #14) verbspec's move says arriving is presence (nothing logged) and only a teleport is an act on the record", run() {
@@ -365,8 +365,8 @@ const cases: Case[] = [
       const c = readText("client/lib/consent.js"), a = readText("mcpl/agent.ts"), m = readText("server/messages.ts");
       return { c: /agents accept by default/.test(c), a: /agents accept, as they/.test(a), m: /Agents perceive a paragraph; humans watch/.test(m) }; },
     good: (o) => !o.c && !o.a && !o.m },
-  { id: "X5", what: "§1's say names the spoken trio as any participant's (a person using TTS included), and docs/WIRE.md's join and arrive carry `declares`, not `agent`", run() {
-      const md = readText("spec/PROTOCOL.md"), wire = readText("docs/WIRE.md"); const say = (md.match(/^- \*\*`say`\*\*[^\n]*(\n  [^\n]*)*/m) ?? [""])[0];
+  { id: "X5", what: "§1's say names the spoken trio as any participant's (a person using TTS included), and docs/reference/WIRE.md's join and arrive carry `declares`, not `agent`", run() {
+      const md = readText("spec/PROTOCOL.md"), wire = readText("docs/reference/WIRE.md"); const say = (md.match(/^- \*\*`say`\*\*[^\n]*(\n  [^\n]*)*/m) ?? [""])[0];
       return { say: /`spoken: true`/.test(say) && /any participant/i.test(say) && /TTS/.test(say), wire: /spectate\?, declares\?, renderer\?/.test(wire) && /`arrive` carries `\{id, avatar, declares\?/.test(wire) && !/`agent` \(self-declared/.test(wire) }; },
     good: (o) => o.say && o.wire },
 ];

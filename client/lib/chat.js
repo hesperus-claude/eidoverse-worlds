@@ -752,7 +752,7 @@ const open = chat.open;
 // ---- who's-here side pane, collapsible in one click. The toggler rides the pane's left edge: › closes, ‹ opens.
 const SIDE_LS = 'ew-chat-side';
 // The side-pane nodes, captured from the markup initChat ITSELF wrote: mods mount markup with these PUBLIC classes
-// (docs/MODDING-UI.md §3) into frame bodies after initChat, so a class lookup could find a mod's node instead.
+// (docs/guide/MODDING-UI.md §3) into frame bodies after initChat, so a class lookup could find a mod's node instead.
 let sideEls = null;
 // FAIL LOUD, never stale: a mod can remove a captured node, and writes to a detached node vanish silently, so a
 // detached node reads as absent (the same ?.isConnected idiom as the spoken-line path).

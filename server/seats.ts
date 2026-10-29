@@ -1,4 +1,4 @@
-// seats — the server side of seat profiles (docs/SEATS.md): storage, judgment, push.
+// seats — the server side of seat profiles (docs/reference/SEATS.md): storage, judgment, push.
 //
 // One judge, three readers. This module owns the profile store (assets/opt/seats/profiles.json + an append-only
 // provenance log), computes the serve-time verdict against the CURRENT bytes on disk (via seatcore, the file every

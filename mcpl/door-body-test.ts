@@ -98,7 +98,7 @@ check("(2 m in front of a body is beside it, not in it)", !pointClass([0, 0, 0],
 }
 {
   // Ann at twice her size, pitched back a quarter about x by her pose's q (her yaw still 0). A point in her frame is metres
-  // at any size (docs/body-state.md): [0, 2, 1.2] pitched back is [0, 1.2, -2], in Cal standing there. Scaled by her size
+  // at any size (docs/guide/BODY-STATE.md): [0, 2, 1.2] pitched back is [0, 1.2, -2], in Cal standing there. Scaled by her size
   // it would land [0, 2.4, -4], in nobody; turned by her yaw alone, [0, 2, 1.2], in nobody.
   const ag = reacher([0, 0, -2], { q: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2], scale: 2 });
   const local = [0, 2, 1.2];

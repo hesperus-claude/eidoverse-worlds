@@ -1,5 +1,5 @@
 import { helloOf } from "../shared/protocol/hello.js";
-// tools/operator-repair.ts — one server operator's request into a world, from the command line (docs/TRANSLATING-OLD-WORLDS.md).
+// tools/operator-repair.ts — one server operator's request into a world, from the command line (docs/operator/TRANSLATING-OLD-WORLDS.md).
 // usage: EIDO_SESSION=<ew_sess cookie> | EIDO_AGENT_TOKEN=<token>  [EIDO_KEY=<door key>]
 //        bun tools/operator-repair.ts <server url> <world> <verb> ['<args as JSON>']
 //   verb whois {name} looks someone up; every other verb is operator-repair (spec/PROTOCOL.md "Operator repair").

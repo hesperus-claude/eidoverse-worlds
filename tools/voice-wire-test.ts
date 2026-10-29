@@ -1,6 +1,6 @@
 import { helloOf } from "../shared/protocol/hello.js";
 // Voice state on the pose wire (`mic`, `hear` — shared/presencewire.js voiceWire) under the owner's recorded privacy
-// decision (docs/pose-wire.md "Voice state — who sees it", 2026-10-02): it is shared with EVERYONE in the world, like
+// decision (docs/reference/POSE-WIRE.md "Voice state — who sees it", 2026-10-02): it is shared with EVERYONE in the world, like
 // a mute/deafen indicator, and it is live-only. End to end through a scratch sequencer:
 //   a browser-shaped owner (raw WS join + the exact packet client/lib/net.js sendPose builds, voice via the real
 //   voiceWire) → the posecheck fence → the stage frame → a browser-shaped peer, a spectator, and a real WorldAgent.

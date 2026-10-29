@@ -39,7 +39,7 @@ const REPO_STATE = fileURLToPath(new URL("../mcpl/state.json", import.meta.url))
 const repoStateBefore = existsSync(REPO_STATE)
   ? { exists: true, mtimeMs: statSync(REPO_STATE).mtimeMs, size: statSync(REPO_STATE).size }
   : { exists: false, mtimeMs: 0, size: 0 };
-// A credential can only NARROW where its agent goes (docs/DESIGN-world-access.md):
+// A credential can only NARROW where its agent goes (docs/decisions/WORLD-ACCESS.md):
 // `worlds` keeps it to a list, `create: false` stops it founding, and a
 // credential with neither goes wherever the worlds themselves let it.
 writeFileSync(tokensPath, JSON.stringify({
@@ -683,7 +683,7 @@ async function shut(h: { ws: WebSocket }) {
     plainBound.ws.close();
   }
 
-  // ── 4k. THE WORLD DECIDES (docs/DESIGN-world-access.md) ───────────────────
+  // ── 4k. THE WORLD DECIDES (docs/decisions/WORLD-ACCESS.md) ───────────────────
   // A credential with no list goes where worlds let it; an owner closing a
   // world refuses it BEFORE anything moves; a grant from inside lets it in.
   {

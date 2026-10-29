@@ -14,7 +14,7 @@
 // The foreign-light seam: makeWeatherSystem scene.add()s one lightning PointLight at construction, and one frame with
 // a foreign light in the scene is a recompile storm. So the weather factory is handed a Proxy of the scene (the same
 // defineProperty seam sky.js uses) whose add/remove ADOPT lights into requests; a slot mirrors the adopted light's live
-// properties each frame. The seam goes the day upstream grows a strikeLight injection (docs/upstream-wrap-once.md).
+// properties each frame. The seam goes the day upstream grows a strikeLight injection (docs/history/UPSTREAM-WRAP-ONCE.md).
 //
 // Measurements and the chest lamp's shadow tuning: docs/research/light-rig.md.
 

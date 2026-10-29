@@ -1,6 +1,6 @@
 # The renderer seam — inventory and program
 
-The charter's thesis (docs/overhaul-charter.md §5, as re-argued after the
+The charter's thesis (docs/design/OVERHAUL-CHARTER.md §5, as re-argued after the
 Godot reopening): **own the architecture, rent the renderer** — three.js
 WebGPU behind a narrow interface, so the presentation layer can be swapped
 without touching sim/fold/protocol truth. This document is the measured

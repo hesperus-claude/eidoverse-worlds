@@ -1,4 +1,4 @@
-// Every seam of the voice-state contract (docs/pose-wire.md "Voice state — who sees it") must be load-bearing: break
+// Every seam of the voice-state contract (docs/reference/POSE-WIRE.md "Voice state — who sees it") must be load-bearing: break
 // it in place (source rewrite at load, tools/contact-mutation-preload.ts — passed to the scratch sequencer too) and
 // the named check in voice-wire-test.ts must go red.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/voice-wire-mutation-test.ts

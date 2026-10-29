@@ -1,7 +1,7 @@
 # Registry changelog
 
 Every re-pin of spec/registry-pin.json that changed, removed or narrowed a trial or reserved component (PROTOCOL §4 Status;
-docs/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pin --ack "<why>"`, newest last.
+docs/contributing/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pin --ack "<why>"`, newest last.
 
 - 2026-10-16: shape audit wave 1 (R 10-16): training-consent removed (a server's terms); imported-epoch merged into imported:epoch; roles.sub dropped (no person data); capacity and script-settings are policy numbers with no pinned defaults (absent = this server's default), script-settings trimmed to {run, max, budget, cpu}. First pin with status, ranges, required, keyPattern/maxKeys, itemEnums, scopeFields and writtenBy.
   - imported-epoch: the name is gone (a registered name is read forever)
@@ -272,7 +272,7 @@ docs/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pi
 - 2026-10-22: sky.law and terrain.law no longer define the law by naming reference code; the law is pinned as data in spec/conformance/laws.json (the house's view, #260 10-20)
   - sky.law: its meaning of absence "forecast@1: shared/forecast.js segmentAt's draw order (dwell, then state, then intensity) per (seed, segment) at this commit" → "forecast@1: per (seed, segment), drawn in the order dwell, then state, then intensity; spec/conformance/laws.json pins its segments"
   - terrain.law: its meaning of absence "the ground's height is shared/terrainmath.js makeHeightField over these numbers, held by eidosim's conformance digests (engine-check) (then features and heightmap: shared/terrainshape.js)" → "the ground's height over these numbers, then features and heightmap; spec/conformance/laws.json pins heights bit for bit"
-- 2026-10-22: surface, terrain-grid and terrain-tile stay reserved by name with no shape pinned, and physics' reserved fields lose their pre-pinned units/ranges/enums: pre-shaping builds ahead of any world (the house's view, #260 10-20); the sketches are docs/RESERVED-SHAPES.md
+- 2026-10-22: surface, terrain-grid and terrain-tile stay reserved by name with no shape pinned, and physics' reserved fields lose their pre-pinned units/ranges/enums: pre-shaping builds ahead of any world (the house's view, #260 10-20); the sketches are docs/reference/RESERVED-SHAPES.md
   - surface.friction: type number → gone
   - surface.restitution: type number → gone
   - surface.density: type number → gone

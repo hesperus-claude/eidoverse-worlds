@@ -36,6 +36,6 @@ ok(lost.length === 0, "every tool main served is served, folded, refused as remo
   const read = (f: string) => fs.readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
   const said = /\(((?:`[a-z_-]+`, )+)[^)]*\) is refused as `removed`/.exec(read("AGENTS.md"))?.[1].match(/`([a-z_-]+)`/g)?.map((x) => x.slice(1, -1)) ?? [];
   ok(said.length > 0 && said.every((v) => v in REMOVED_VERBS), "AGENTS.md lists only removed verbs as refused (REMOVED_VERBS)", said.filter((v) => !(v in REMOVED_VERBS)));
-  const calls = OLD.filter((old) => new RegExp("`" + old + " \\{").test(read("docs/REMOTE-SCREENSHOTS.md")));
-  ok(calls.length === 0, "docs/REMOTE-SCREENSHOTS.md calls no renamed tool (screenshot, not snapshot)", calls); }
+  const calls = OLD.filter((old) => new RegExp("`" + old + " \\{").test(read("docs/operator/REMOTE-SCREENSHOTS.md")));
+  ok(calls.length === 0, "docs/operator/REMOTE-SCREENSHOTS.md calls no renamed tool (screenshot, not snapshot)", calls); }
 console.log(`alias-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);

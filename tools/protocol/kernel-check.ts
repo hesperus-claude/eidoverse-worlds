@@ -204,7 +204,7 @@ await C("K8", "the real readers run as vectors run them: today's fold reads a cl
   const wid = FOLD.worldIdOf(g); const a = { world: wid, kind: "request", actor: "olive", verb: "x", ts: 1, body: { args: {} } };
   return [verdict(FOLD, [g, a]) === "ok" && verdict(FOLD, [g, { ...a, "zz-no-such-field": 1 }]) === "malformed:unknown-field", [verdict(FOLD, [g, a]), verdict(FOLD, [g, { ...a, "zz-no-such-field": 1 }])]]; });
 await C("K9", "the words: §4 of the spec and the ladder doc say what trial-kernel is and what a kernel change must carry; the gate runs this check in its core lane", () => {
-  const spec = read("spec/PROTOCOL.md"), ladder = read("docs/COMPONENT-LADDER.md");
+  const spec = read("spec/PROTOCOL.md"), ladder = read("docs/contributing/COMPONENT-LADDER.md");
   const need = ["trial-kernel", "kernel-pin.json", "translator", "REGISTRY-CHANGELOG", "vectors"];
   return [need.every((n) => spec.includes(n)) && need.every((n) => ladder.includes(n)) && CORE.includes("kernel"), { spec: need.filter((n) => !spec.includes(n)), ladder: need.filter((n) => !ladder.includes(n)) }]; });
 await C("K10", "the registry pin agrees: roles and access are trial-kernel there, and transform, parent and model are trial again (each status change acknowledged in the changelog), and pretrans's status rule knows the kernel's names", () => {

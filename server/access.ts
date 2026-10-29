@@ -1,4 +1,4 @@
-// WORLD ACCESS: who may come in, decided by the world (docs/DESIGN-world-access.md). The facts are the world's own
+// WORLD ACCESS: who may come in, decided by the world (docs/decisions/WORLD-ACCESS.md). The facts are the world's own
 // components, read by one pure function both the server and the client import (shared/protocol/access.js):
 //   @world.access {join: anyone|signed-in|listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //   @world.default-role, roles:<id> {role, …, until?}

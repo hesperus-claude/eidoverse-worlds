@@ -138,7 +138,7 @@ Building blocks:
 - **`grabbable` / `physics`** — a thing a hand can carry, and a thing that
   falls and flies when the world runs physics.
 
-**Scripts** are the Layer-2 tier (docs/SCRIPTS.md): a `script:<name>`
+**Scripts** are the Layer-2 tier (docs/guide/SCRIPTS.md): a `script:<name>`
 component naming an uploaded source, run by the door in a QuickJS sandbox
 with its sponsor's rights narrowed to a declared scope, fuel- and
 rate-budgeted, paused loudly after repeated failures. Each activation is

@@ -16,7 +16,7 @@ const fin3 = (p: unknown): p is number[] => Array.isArray(p) && p.length === 3 &
 const poseScale = (pose: any) => (typeof pose?.scale === "number" && Number.isFinite(pose.scale) && pose.scale > 0 ? pose.scale : 1);
 const bodyLeg = (o: Client) => !o.spectator && (o.surface ?? "world") === "world";
 const sameBody = (c: Client, o: Client) => o === c || (!!c.actorId && o.actorId === c.actorId);
-/** root frame → world, as root.localToWorld (the root never scales: a `space` point is metres at any size, docs/body-state.md):
+/** root frame → world, as root.localToWorld (the root never scales: a `space` point is metres at any size, docs/guide/BODY-STATE.md):
  *  `q` if present (remotes.js gives it precedence), else yaw about +y */
 function frameToWorld(pose: any, local: number[]): number[] | null {
   if (!fin3(pose?.p)) return null;

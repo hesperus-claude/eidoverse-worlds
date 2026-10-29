@@ -1,5 +1,5 @@
 // tools/protocol/upgrade-check.ts — opening an old-format world: the verified backup, the structured refusal, the operator's upgrade.
-// Design: docs/TRANSLATING-OLD-WORLDS.md ("Upgrading from the browser", "Backups").
+// Design: docs/operator/TRANSLATING-OLD-WORLDS.md ("Upgrading from the browser", "Backups").
 //   UB1  an in-place `translate` first copies the whole old world dir to BACKUPS_DIR/<world>-<UTC stamp>/ with SHA256SUMS, every hash verified; the output names it
 //   UB2  a backup copy that doesn't verify (injected: WORLD_TS_CORRUPT_BACKUP) refuses the translation: nothing moved
 //   UB3  translation.json names the backup's path
@@ -255,7 +255,7 @@ const byOwner = async (sid: string, world: string, id: string) => { const j = aw
   ok(/You are this server's operator: upgrade it/.test(said) && /TRANSLATING-OLD-WORLDS\.md/.test(said) && /upgrade/.test(said) && /older/.test(said), "US7 an agent (the operator's) refused at an old-format world is told in words: saved by an older Eidoverse, a one-time upgrade it may run from the server or the browser, and where the doc is (a stranger's agent is told world-unavailable: F23)", said);
 }
 // ================= UD: the main-era upgrade section, its commands run as the doc writes them =================
-{ const doc = fs.readFileSync(path.join(ENGINE, "docs/TRANSLATING-OLD-WORLDS.md"), "utf8");
+{ const doc = fs.readFileSync(path.join(ENGINE, "docs/operator/TRANSLATING-OLD-WORLDS.md"), "utf8");
   const sec = /^## Upgrading a main-era server\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(doc)?.[1] ?? "";
   const LEGACY = "WORLD" + "_ADMIN";   // the migration note's old variable, spelled apart (hygiene role-words)
   ok(new RegExp(`${LEGACY}=\\S+`).test(sec) && /SERVER_OPERATORS=\S+/.test(sec) && /\/whoami/.test(sec) && /locked out/.test(sec) && /display name/.test(sec),

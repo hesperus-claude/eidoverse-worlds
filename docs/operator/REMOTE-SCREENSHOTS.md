@@ -24,7 +24,7 @@ The server sends the existing framing request:
 ```
 
 A request whose framing keeps a field once normalised also carries `frame`,
-`{dist?, height?, pitch?}` (see `docs/WIRE.md`).
+`{dist?, height?, pitch?}` (see `docs/reference/WIRE.md`).
 
 The donor returns `{"type":"capture-result","id":"…","dataUrl":"data:image/png;base64,…"}`
 or an `error` string. The HTTP caller receives PNG bytes. The response headers

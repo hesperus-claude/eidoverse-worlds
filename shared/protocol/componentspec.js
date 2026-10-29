@@ -162,7 +162,7 @@ export const COMPONENTS = {
                help: "an attachment point on its parent (its host): {name (letters, digits, - and _, unique among the host's sockets; what use {args: {socket}} names), part? (a node of the host's model it rides), accepts? [keywords, ≤ 8] + radius? (m; absent, 0.15): a thing released within radius whose grabbable.fits shares a keyword snaps in}. Its pose is its transform (local to the host; scale 1). It holds one thing or one body at a time. A person attaches by using it when the same entity has a station. It carries nothing else but station, label, description, disabled, lock and motion. Things attach with parent {to: <its id>}" },
   // what a person's body does at a socket (VRChat Station, Resonite AvatarAnchor, Roblox Seat), on the socket entity
   // beside `socket`. The alpha registers the core only; the rest of
-  // the researched shape is reserved (refused, names held: STATION_RESERVED below; docs/COMPONENT-LADDER.md) and comes back
+  // the researched shape is reserved (refused, names held: STATION_RESERVED below; docs/contributing/COMPONENT-LADDER.md) and comes back
   // as additions. Materialized on write: the action table fills anim, so editing the table never re-poses a stored seat.
   // anim (was pose): an OPEN name, of a pose (one frame) or a clip (more than one key): a built-in
   // name today, a world's anim-pose/anim-clip later; one the body doesn't know is its default, never a refusal.
@@ -303,7 +303,7 @@ export const COMPONENTS = {
   // same four (minimum, maximum) but resolves a mismatch the other way round (average first), so an importer resolves per
   // pair, never per mode
   surface:   { status: "reserved", instead: "nothing yet: no engine here reads surfaces (eidosim's friction and bounce are its own constants)", on: "world", keyed: true, key: "instance",
-               help: "reserved (refused until an engine reads surfaces): on @world, keyed by name, a surface material things name with physics.surface; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
+               help: "reserved (refused until an engine reads surfaces): on @world, keyed by name, a surface material things name with physics.surface; no shape is pinned until a world needs one (a sketch: docs/reference/RESERVED-SHAPES.md)" },
   // spec/PHYSICS.md §3.3: the constraint between two bodies is `physics-joint` (OMI_physics_joint; it sits beside physics and
   // physics-engine). `joint` is the skeleton node (Maya, glTF, VRM: an avatar's entity tree), below. Both reserved:
   // one anchor can't carry the two frames every engine and glTF/OMI use, so no fields are pinned (the target shape is
@@ -476,7 +476,7 @@ export const COMPONENTS = {
   access:    { status: "trial-kernel", on: "world", fields: { join: "string", watch: "string", max: "int", soft: "int", minAccountDays: "int" }, enums: { join: ["anyone", "signed-in", "listed"], watch: ["anyone"] },
     absentMeans: { watch: "watching follows join: whoever join turns away can't watch either, and a world that admits only people listed is invisible to everyone else (what every access before 10-17 meant)" }, ranges: { max: { min: 1, max: 200 }, soft: { min: 1, max: 200 }, minAccountDays: { min: 0, max: 365 } }, docs: { join: "who may come in: anyone, signed-in, or listed (people the world has granted a role, unexpired)", watch: "anyone: whoever join turns away may still watch, with no body", max: "most bodies at once (1–200)", soft: "the recommended capacity (≤ max)", minAccountDays: "an account must be at least this many days old to come in (0–365; 0 is off)" }, help: "on @world (owner): who may come in {join: anyone|signed-in|listed (only people the world has granted a role, unexpired; a listed-only world is invisible to everyone else), watch? (anyone: whoever join turns away may still watch, with no body), max? (1–200 at once), soft? (≤ max: the recommended capacity), minAccountDays? (0–365: a person's account must be at least this many days old; a guest is then refused, an enrolled agent is exempt; 0 or absent = off)}; moderators and owners always get in" },
   about:     { on: "world", fields: { name: "string", text: "string" }, ranges: { name: { maxLen: 80 }, text: { maxLen: 2000 } }, docs: { name: "the world's name, ≤ 80 characters", text: "its blurb, ≤ 2000 characters" }, help: "on @world: the world's name (≤ 80) and blurb (≤ 2000)" },
-  // the component ladder's second rung (docs/COMPONENT-LADDER.md): the drafts this world's owner trusts here.
+  // the component ladder's second rung (docs/contributing/COMPONENT-LADDER.md): the drafts this world's owner trusts here.
   // A fact about the world, not the engine: the authority still doesn't read a trusted draft. Owner-gated like the rest of @world.
   "trusted-components": { on: "world", fields: { components: "array" }, ranges: { components: { maxItems: 64 } }, docs: { components: "the namespaced draft component names trusted in this world (≤ 64, each once)" }, help: "on @world (owner): {components: [<namespaced draft names>]} — the draft COMPONENTS used and trusted in this world (never a list of people; was `trusted`, renamed by the world's maintenance command) (a blue chip in the Inspector, offered in the main Add Component list); never a bare name (that is the engine's or nothing); ≤ 64, each once. Trust ≠ engine understanding: the authority doesn't read them" },
   bounds:    { on: "world", fields: { min: "vec3", max: "vec3" }, required: ["min", "max"], units: { min: "m", max: "m" }, docs: { min: "the box's low corner [x, y, z], world metres", max: "its high corner [x, y, z], world metres" },
@@ -574,8 +574,8 @@ export const COMPONENTS = {
                  factor: "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows",
                  modes: "which movement modes it touches: walk | swim | fly | climb (Unreal's per-mode settings); absent: all. Main's slow water translates to ['swim']" },
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1)}. Where speed areas overlap the zone's priority decides" },
-  "terrain-grid": { status: "reserved", on: "world", help: "reserved: the sculpt grid; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
-  "terrain-tile": { status: "reserved", on: "world", keyed: true, key: "partition", help: "reserved: a sculpted tile, keyed <i>-<j>; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
+  "terrain-grid": { status: "reserved", on: "world", help: "reserved: the sculpt grid; no shape is pinned until a world needs one (a sketch: docs/reference/RESERVED-SHAPES.md)" },
+  "terrain-tile": { status: "reserved", on: "world", keyed: true, key: "partition", help: "reserved: a sculpted tile, keyed <i>-<j>; no shape is pinned until a world needs one (a sketch: docs/reference/RESERVED-SHAPES.md)" },
   // a behaviour. Keyed, so §5's creator rule decides who may change it and who its SPONSOR is.
   // the lists the install check reads are here, so the pin sees them: each item of `on` is one of
   // itemEnums.on ('changed:*' = changed:<a component name>), each of scope.bodies one of itemEnums["scope.bodies"]; scope's
@@ -584,7 +584,7 @@ export const COMPONENTS = {
                required: ["src", "scope"], grammar: { src: "sha256" }, units: { every: "s" }, ranges: { every: { min: 5 } },
                itemEnums: { on: ["use", "say", "enter", "leave", "grab", "release", "changed:*"], "scope.bodies": ["shove", "pose"] },
                scopeFields: { ids: "scope", comps: "array", create: "bool", say: "bool", bodies: "array" },
-               docs: { src: "the source blob's name", scope: "what it may touch: {ids, comps, create?, say?, bodies?}", on: "the events that wake it (use, say, enter, leave, grab, release, changed:<comp>)", every: "seconds between ticks (≥ 5)", always: "true: it runs with nobody present (owner)", knobs: "its settings (≤ 4 KiB)", paused: "true: it doesn't run" }, help: "keyed <name>: a script (JavaScript; docs/SCRIPTS.md). {src: the source blob's name (upload {text} gives it), scope: {ids: 'self'|'subtree'|[ids], comps: [names, 'name:*'], create?, say?, bodies?: ['shove'|'pose']}, on: ['use', 'say', 'enter', 'leave', 'grab', 'release', 'changed:<comp>'], every?: s (>= 5; it gets tick, and wake after sleeping), always?: bool (run with nobody present; owner), knobs?: {…} (<= 4 KiB), paused?}. It acts with its sponsor's rights now, never beyond its scope; a `use` reaches it through a reactions handler {kind: 'script', script: <name>}" },
+               docs: { src: "the source blob's name", scope: "what it may touch: {ids, comps, create?, say?, bodies?}", on: "the events that wake it (use, say, enter, leave, grab, release, changed:<comp>)", every: "seconds between ticks (≥ 5)", always: "true: it runs with nobody present (owner)", knobs: "its settings (≤ 4 KiB)", paused: "true: it doesn't run" }, help: "keyed <name>: a script (JavaScript; docs/guide/SCRIPTS.md). {src: the source blob's name (upload {text} gives it), scope: {ids: 'self'|'subtree'|[ids], comps: [names, 'name:*'], create?, say?, bodies?: ['shove'|'pose']}, on: ['use', 'say', 'enter', 'leave', 'grab', 'release', 'changed:<comp>'], every?: s (>= 5; it gets tick, and wake after sleeping), always?: bool (run with nobody present; owner), knobs?: {…} (<= 4 KiB), paused?}. It acts with its sponsor's rights now, never beyond its scope; a `use` reaches it through a reactions handler {kind: 'script', script: <name>}" },
   // §5: keyed names say which kind of key they are. instance: the creator rule; partition: one shared surface
   // reserved: no format for a "written definition" exists yet and nothing writes one, so the name is held
   // until one does (it may then be a set-once string sha256:<64 hex>)
@@ -621,7 +621,7 @@ export const COMPONENTS = {
                help: "on @world (owner): {run? (false stops every script), max? (how many scripts), budget? (script entries per hour; each sponsor gets a fair share), cpu? (ms of the authority's time per sponsor per minute; the world 3×)}. Each absent field is this server's current default, and none may go above the server's ceiling (schema reports both). Who may install a script is the role's scripts permission (role-defs)" },
 };
 
-// ---- status (PROTOCOL §4 Status, docs/COMPONENT-LADDER.md) ----
+// ---- status (PROTOCOL §4 Status, docs/contributing/COMPONENT-LADDER.md) ----
 // Every registered name has one. trial: admitted and written, but its shape may still change during the alpha (about a
 // year); where it changes we translate or repair stored values where we can. reserved: the name is held (nobody else may
 // take it) but the authority refuses every write of it, with one wording (authority.js, the write door); `instead` says

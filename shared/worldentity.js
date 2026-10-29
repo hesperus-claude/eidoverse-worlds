@@ -240,7 +240,7 @@ export function worldSchema(st, live = {}) {
   ] : [{ t: 'info', label: '', value: 'nothing growing. Pick a planting in Build ▸ World' }];
   groups.push({ group: 'grass', label: 'Grass', fields: grassFields });
 
-  // Trusted components (docs/COMPONENT-LADDER.md, the second rung): the drafts this world's owner trusts here,
+  // Trusted components (docs/contributing/COMPONENT-LADDER.md, the second rung): the drafts this world's owner trusts here,
   // @world.trusted-components — live.trusted is the list as the client read it (mayTrust: this viewer is the owner)
   const trusted = Array.isArray(live.trusted) ? live.trusted : [];
   const trustedFields = trusted.length ? trusted.flatMap((n) => [{ t: 'info', label: 'trusted', value: n, hint: 'a draft used and trusted in this world: a blue chip, offered in the main Add Component list. The engine still doesn\'t read it' },

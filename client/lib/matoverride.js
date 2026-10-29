@@ -1,4 +1,4 @@
-// matoverride — the reader for the DRAFT component `hesperus/material` (docs/COMPONENT-LADDER.md, rung 1).
+// matoverride — the reader for the DRAFT component `hesperus/material` (docs/contributing/COMPONENT-LADDER.md, rung 1).
 //
 // Absent, a thing shows its model's own materials. Present, the value
 // overrides fields of them: {color?, roughness?, metalness?, emissive?, emissiveStrength?, opacity?} (glTF PBR terms).

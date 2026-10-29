@@ -312,7 +312,7 @@ console.log("\nphysics as fields (R 10-10: 'hard to interact with unless you kno
   check("friction (reserved) is refused before it is sent", !bad.ops.length && /friction/.test(bad.errors[0] ?? ""), JSON.stringify(bad));
 }
 
-console.log("\nMaterial, the draft hesperus/material (docs/COMPONENT-LADDER.md):");
+console.log("\nMaterial, the draft hesperus/material (docs/contributing/COMPONENT-LADDER.md):");
 {
   const live = { materials: [{ slot: "wood", name: "Wood", color: 0x8a5a2b, roughness: 0.8, metalness: 0, opacity: 1, emissive: 0 }] };
   const plain = { model: "eidoverse/assets/models/crate_large_blue.glb", pos: [0, 0, 0] };
@@ -395,7 +395,7 @@ console.log("\nmesh (a parametric body with no model):");
   check("a carried thing with both a lib and a mesh is shown as its model: no mesh card", !inspectSchema({ ...cube, model: "m/crate.glb" }, "m2").groups.some((g) => g.group === "mesh"));
 }
 
-// R 10-12 10:09 (the trusted rung, docs/COMPONENT-LADDER.md): a draft this client reads is offered under "drafts" with an
+// R 10-12 10:09 (the trusted rung, docs/contributing/COMPONENT-LADDER.md): a draft this client reads is offered under "drafts" with an
 // amber chip and the unproven hint; once the owner trusts it in this world it sits in the main list with a blue chip
 // and no hint; a draft nothing here reads is never offered
 console.log("\ntrusted drafts (the ladder's second rung):");

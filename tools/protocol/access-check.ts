@@ -24,7 +24,7 @@
 //       from any other peer the socket's own address is used (a guest can't pick or frame an address)
 //   A14 (10-18 M6) a timed grant whose until has passed is ABSENT on every read, loaded or not: an unloaded world's /access and
 //       /worlds refuse the ex-member before any sweep, and so does the join, while the log still holds the grant
-//   A15 (DESIGN-world-access.md, review 10-17) what a join proves is that join's own credential: a credentialed socket's re-join
+//   A15 (docs/decisions/WORLD-ACCESS.md, review 10-17) what a join proves is that join's own credential: a credentialed socket's re-join
 //       under a member's name is refused, with its own token it is still itself, and it files no identity under a typed name
 //   A16 (review 10-17) the review's second bypass, a name lookup that revoked another record, can't arise: a role is addressed
 //       only by the actor's id. Pinned: a role under a bare name is refused, and deleting one member's role leaves a co-owner
@@ -626,7 +626,7 @@ const gonePid = await exitedPid();
   const m = entryFor({ name: "m1", wc: mem, label: "members" }, { account: "acct-m", actorId: "u-member0000000000000000", addr: "1.2.3.5" }, "embody");
   ok(m === null, "A9 a LISTED moderator still gets in", m);
 }
-// ---- A15–A17 (docs/DESIGN-world-access.md, "Review (independent, 2026-10-17)"): the three bypasses that review reproduced,
+// ---- A15–A17 (docs/decisions/WORLD-ACCESS.md, "Review (independent, 2026-10-17)"): the three bypasses that review reproduced,
 // once tools/access-test.ts §5b, on this protocol. A world of their own (door) and an open one (yard), on a fresh server.
 { ok(tool(["found", "door", "--owner", "Ann"]).code === 0 && tool(["found", "yard", "--owner", "Ann"]).code === 0, "(A15 setup) found door and yard, Ann owns both");
   const s4 = await start();

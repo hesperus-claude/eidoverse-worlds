@@ -70,7 +70,7 @@ check("N1", `the normative set's ${listed.length} files exist, all under spec/`,
   const def = row("Default"); const ord = row("Order");
   check("N3", "the default row says each gate's DEFAULT_GATES value, and the order row says block > allow > the gate > the world's default",
     C.GATES.every((x) => new RegExp(`\`${x}\` ${C.DEFAULT_GATES[x] ? "on" : "off"}`).test(def)) && ord.indexOf("`block`") < ord.indexOf("`allow`") && ord.indexOf("`allow`") < ord.indexOf("gate") && ord.indexOf("gate") < ord.indexOf("body-default"), { def, ord, code: C.DEFAULT_GATES });
-  check("N3b", "the retired designs are kept as a record in docs/", existsSync(ROOT + "docs/CONSENT-TABLE-RECORD.md")); }
+  check("N3b", "the retired designs are kept as a record in docs/", existsSync(ROOT + "docs/decisions/CONSENT-TABLE-RECORD.md")); }
 
 // N4
 const roles = section("### World roles");

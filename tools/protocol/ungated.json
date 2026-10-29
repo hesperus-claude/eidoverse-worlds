@@ -70,7 +70,7 @@
  "tools/sound-probe.ts": "Chromium probe: 2 fixed waits to turn into conditions; red on the CDP harness: FAIL A. the gain carries the volume — 0.09814278036355972 || FAIL F. …and with the listener's world volume at 0 it is heard at 0, the authored 0.5 pre",
  "tools/spoken-say-door-test.ts": "passes; before it can be a row: 14 fixed waits onto wait.ts / suite.ts",
  "tools/store-variants-test.ts": "needs a KTX2 encoder (toktx/ktx); times out at 150 s without one",
- "tools/support-lifecycle-test.ts": "needs claude.vrm from the library and red on its own (12/22 heights 0.00, PATHFINDING-ACCEPTANCE.md); times out at 150 s",
+ "tools/support-lifecycle-test.ts": "needs claude.vrm from the library and red on its own (12/22 heights 0.00, docs/decisions/PATHFINDING-ACCEPTANCE.md); times out at 150 s",
  "tools/syncgate-probe.mjs": "Chromium probe: waits converted; red last run when the client reloaded itself mid-evaluate (cdp-pw now re-runs such an evaluation, as playwright does): rerun, then gate",
  "tools/tts-test.ts": "passes; before it can be a row: 26 fixed waits onto wait.ts / suite.ts",
  "tools/typing-mcpl-test.ts": "red under load: a 55 s walk-timing run; its rows need waits on the condition",

@@ -362,7 +362,7 @@ const DOWNED_POSE: Record<string, number[]> = {
 };
 
 /** What a person's voice state means for YOU, in words. Read from the live pose (shared/presencewire.js voiceWire,
- *  docs/pose-wire.md). The headphones gate spoken voice only (mics and synthesized speech, an agent's included); chat
+ *  docs/reference/POSE-WIRE.md). The headphones gate spoken voice only (mics and synthesized speech, an agent's included); chat
  *  text always arrives. Absent = the client didn't say: no claim is made. */
 export function voiceNote(pose: unknown): string {
   const v = (pose ?? {}) as { mic?: unknown; hear?: unknown; xr?: unknown };
@@ -927,7 +927,7 @@ export class WorldAgent {
         if (code === 4005 && why === "full" && !this.closed) {
           clearTimeout(timeout);
           // the words are this body's, kept open: the agent doors (mcpl/server.ts, net-server's serve and travel) end on this
-          // rejection and close it, so they say only what a body that is kept does (docs/WIRE.md 4005)
+          // rejection and close it, so they say only what a body that is kept does (docs/reference/WIRE.md 4005)
           reject(new Error(`${refused ?? "the world is full"} — trying again by itself while this body is kept open (closing it gives up the wait)`));
           setTimeout(() => { if (!this.closed && !this.joined) this.connect().catch(() => {}); }, this.redial.next(REDIAL.full));
           return;
@@ -962,7 +962,7 @@ export class WorldAgent {
               // world's own words, as the cause inside whatever sentence carries this (travel's, for one)
               const said = String(msg.error ?? "").trim().replace(/\.+$/, "");
               const base = said ? `the world refused the join: ${said}` : "the world refused the join without giving a reason";
-              // an old-format world: who may upgrade it, and the doc, in words (shared/oldformat.js; docs/WIRE.md 4005)
+              // an old-format world: who may upgrade it, and the doc, in words (shared/oldformat.js; docs/reference/WIRE.md 4005)
               const words = msg.refused?.code === "old-format" ? `${base}. ${oldFormatWords(msg.refused, this.world)}` : base;
               if (typeof msg.until === "number") { clearTimeout(timeout); reject(new Error(words)); }
               else this.joinRefused = words;
@@ -4347,7 +4347,7 @@ export class WorldAgent {
     const world = WorldAgent.poseToWorld(this.people.get(t.space)?.pose, p);
     return [...(own ? [{ name: t.space as string, cls: own }] : []), ...(world ? this.bodiesAtPoint(world).filter((h) => h.name !== t.space) : [])];
   }
-  /** As server/reachgate.ts's frameToWorld places it: metres at any size (docs/body-state.md), turned by the pose's q when it
+  /** As server/reachgate.ts's frameToWorld places it: metres at any size (docs/guide/BODY-STATE.md), turned by the pose's q when it
    *  carries one (a swimmer's whole-body turn), else by its yaw about +y. Null without a position. */
   private static poseToWorld(pose: any, local: number[]): number[] | null {
     const at = pose?.p;
@@ -4572,7 +4572,7 @@ export class WorldAgent {
       const reading = this.reachReading;
       if (!reading || !sameReach(reading.reaches?.[limb], entry)) return { state: "pending" };
       const solved = reading.reachEvaluation?.[limb];
-      // cyclic-reach is body_state's code for the loop (docs/body-state.md); the reply says it in words.
+      // cyclic-reach is body_state's code for the loop (docs/guide/BODY-STATE.md); the reply says it in words.
       if (!solved?.ok) return { state: "err", err: solved?.why === "cyclic-reach"
         ? "it depends on a loop of reaches (limbs reaching for limbs that reach back), so it can't be solved until a limb in the loop lets go"
         : solved?.why ?? reading.error ?? "body pose could not be evaluated" };

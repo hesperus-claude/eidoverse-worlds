@@ -42,7 +42,7 @@ const winRefuses = () => globalThis.process?.platform === "win32" && globalThis.
 /** Is the sandbox here? (The authority says "unavailable" for every activation when it isn't.) */
 export const sandboxAvailable = () => (!Q ? unavailable : winRefuses() ? WINDOWS : true);
 
-// The whole script-facing API, in one place (docs: docs/SCRIPTS.md). Runs inside the VM before the source.
+// The whole script-facing API, in one place (docs: docs/guide/SCRIPTS.md). Runs inside the VM before the source.
 const PRELUDE = String.raw`"use strict";
 (() => {
   const host = globalThis.__host; delete globalThis.__host;

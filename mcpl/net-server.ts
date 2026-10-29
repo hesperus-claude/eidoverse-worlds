@@ -921,7 +921,7 @@ async function accessProbe(name: string, token: string): Promise<AccessAnswer | 
 }
 
 /** RFC-005 join policy for both lanes (dial-time ?world= and travel). It can only NARROW: a `worlds` list keeps an
- *  agent to those; no list means the worlds decide (server/access.ts via accessProbe; docs/DESIGN-world-access.md).
+ *  agent to those; no list means the worlds decide (server/access.ts via accessProbe; docs/decisions/WORLD-ACCESS.md).
  *  The name-shape gate is the sequencer's own (server/limits.ts), checked early. */
 function joinAllowed(auth: Auth, world: string, home = auth.world ?? "commons"): boolean {
   if (!WORLD_NAME_RE.test(world)) return false;

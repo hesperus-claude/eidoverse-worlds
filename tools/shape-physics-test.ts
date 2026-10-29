@@ -180,7 +180,7 @@ await tryRow('SR', () => {
 await tryRow('SU', () => {
   const U = COMPONENTS.surface;
   check('SU1 surface is reserved, and no shape is pinned for it until a world needs one (the house\'s view, #260 10-20): its name only', statusOf('surface') === 'reserved' && !U.fields && !U.absentMeans && !U.ranges, U);
-  check('SU2 the sketch it was reserved with is kept in docs, KHR\'s combine reversal included', /KHR/.test(read('docs/RESERVED-SHAPES.md')) && /RESERVED-SHAPES/.test(U.help), '');
+  check('SU2 the sketch it was reserved with is kept in docs, KHR\'s combine reversal included', /KHR/.test(read('docs/reference/RESERVED-SHAPES.md')) && /RESERVED-SHAPES/.test(U.help), '');
   const W = scratchWorld('w2p-surface');
   check('SU3 a surface write is refused as reserved', code(W.call('set', { id: '@world', component: 'surface:ice', value: { friction: 0.02 } })) === 'reserved');
 });

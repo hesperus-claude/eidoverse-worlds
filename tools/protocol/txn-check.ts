@@ -1,4 +1,4 @@
-// tools/protocol/txn-check.ts: the transaction service and the request capability (docs/DESIGN-txn-capability.md).
+// tools/protocol/txn-check.ts: the transaction service and the request capability (docs/decisions/TXN-CAPABILITY.md).
 // Real World, WorldLog, authority, files and REQUEST_MESSAGES; storage faults are injected at node:fs (the calls
 // server/durable.ts makes), and a slow warm() is a gate held in front of the real WorldLog.request.
 //   T1  a durable write throws on the 2nd line of a commit → ambiguous, `from` = that line; the 1st line is published

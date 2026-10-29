@@ -289,7 +289,7 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   const wz = await vic.req("whois", { name: "zed" });
   ok(wz.ok && wz.people?.length === 1 && wz.people[0].id === ZED && wz.people[0].here === false && wz.people[0].role === "builder" /* a new world's newcomer role (R 10-21) */ && !("kind" in wz.people[0]) && !JSON.stringify(wz).includes("local:"),
     "CM3 whois finds someone absent by name (case-folded): their identity, role, not here, and never their account", wz);
-  // ---- DR: a live drag is relayed with who is dragging, and its last sample says end (docs/WIRE.md: a live drag is a claim) ----
+  // ---- DR: a live drag is relayed with who is dragging, and its last sample says end (docs/reference/WIRE.md: a live drag is a claim) ----
   { const da = await client(srv.port, "garden", "Dana", REPLICA); const db = await client(srv.port, "garden", "Dev", REPLICA);
     await ann.req("set", { id: "@world", component: "default-role", value: { role: "builder" } });
     const mk = await da.req("create", { id: "drg", model: "test/cup.glb", place: { at: [2, 2] } });

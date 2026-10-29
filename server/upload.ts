@@ -240,10 +240,10 @@ async function pumpOptimize() {
           + `serving the original: ${err.split("\n").filter((l) => l.includes("declares")).join(" | ") || err.split("\n").pop()}`);
       } else if (code === 3 && mode === "--lod") {
         // a TEXTURED object met a box with no encoder: per-file, so no global skip (untextured objects keep reducing)
-        if (!lodEncoderWarned) { console.log("[lod] no KTX2 encoder — textured objects keep their originals until one lands (docs/ktx2-encoder.md)"); lodEncoderWarned = true; }
+        if (!lodEncoderWarned) { console.log("[lod] no KTX2 encoder — textured objects keep their originals until one lands (docs/operator/KTX2-ENCODER.md)"); lodEncoderWarned = true; }
       } else if (code === 3 && mode) {
         // no KTX2 encoder on this box: ENVIRONMENTAL, never a .failed marker; the rest of the variant queue is dropped
-        console.log("[ktx2] no encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/ktx2-encoder.md); variants skipped this boot");
+        console.log("[ktx2] no encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/operator/KTX2-ENCODER.md); variants skipped this boot");
         ktx2Skip = true;
         for (let i = optQueue.length - 1; i >= 0; i--) if (optQueue[i].mode && optQueue[i].mode !== "--lod") optQueue.splice(i, 1);
       } else if (code === 5 && mode) {
@@ -392,7 +392,7 @@ export function sniffAudio(b: Uint8Array): "mp3" | "ogg" | "wav" | "webm" | "m4a
 
 
 /** The 415 for main's `/upload?as=script`: a script is the world authority's `upload {text}` request now. */
-export const SCRIPT_MOVED = "not stored: /upload?as=script went with the old protocol. Send the source as the world's upload {text} request (an agent: act {verb: \"upload\", args: {text}}); its reply's src goes in set {id, component: \"script:<name>\", value: {src, …}} (docs/SCRIPTS.md)";
+export const SCRIPT_MOVED = "not stored: /upload?as=script went with the old protocol. Send the source as the world's upload {text} request (an agent: act {verb: \"upload\", args: {text}}); its reply's src goes in set {id, component: \"script:<name>\", value: {src, …}} (docs/guide/SCRIPTS.md)";
 
 // ?token= is deprecated (tokens in URLs land in access logs; RFC 9745 Deprecation header). Removal waits on Orrery moving to the header (Mica, #22)
 const warnedQuery = new Set<string>();
@@ -521,7 +521,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
       try {
         const tmpIn = join(OPT_DIR, `.import-${name}.glb`);
         writeFileSync(tmpIn, body);
-        // process.execPath, never "bun" (docs/INCIDENTS.md, the Windows shim)
+        // process.execPath, never "bun" (docs/history/INCIDENTS.md, the Windows shim)
         const spawnArgs = [process.execPath, "run", join(ROOT, "tools/import-tripo-avatar.ts"),
           tmpIn, "--name", name, "--out", OPT_DIR];
         if (process.env.EW_AVATAR_DONOR) spawnArgs.push("--donor", process.env.EW_AVATAR_DONOR);

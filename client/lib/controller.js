@@ -208,7 +208,7 @@ export const myState = {
   pose: undefined,   // held custom bone override (null clears); presence only
   wingsFolded: false, // semantic body posture; each rig renders its own fold
   bodyMode: 'stand',  // what the body is doing as a whole (shared/bodymode.js): published as presence bodyMode
-  q: undefined,        // full-body orientation while swimming (docs/UNDERWATER-PRESENCE.md); undefined = upright, by yaw
+  q: undefined,        // full-body orientation while swimming (docs/reference/UNDERWATER-PRESENCE.md); undefined = upright, by yaw
   locomotion: undefined, // {mode, medium, body} while swimming: presence, descriptive only
   seat: null,        // { id, chair } while seated on something
 };

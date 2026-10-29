@@ -1,6 +1,6 @@
 // tools/protocol/access-panel-probe.ts — World Settings › Who may come in › Listed here, in headless Chromium against a scratch
 // sequencer (tools/harness.ts scratchBench). The panel reads @world's roles:* from the page's own fold and edits them with
-// ordinary requests; the authority judges, and its refusal is shown in words (R 10-27; docs/DESIGN-world-access.md § UX).
+// ordinary requests; the authority judges, and its refusal is shown in words (R 10-27; docs/decisions/WORLD-ACCESS.md § UX).
 //   AP1  an unlisted person here is a chip; adding them writes roles:<their identity>; the row then shows them listed, here now
 //   AP2  a name search covers only people this world has seen: someone known elsewhere on the server isn't found by name
 //   AP3  an exact identity (u-…) adds someone the world hasn't seen, with the chosen role and time

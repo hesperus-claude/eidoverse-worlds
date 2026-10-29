@@ -12,7 +12,7 @@ export const HOST = process.env.HOST ?? "0.0.0.0";
 // Show-night door policy. Empty = open (dev on a tailnet). On a public box you
 // MUST set this — the boot log shouts if you forgot. Checked at join and upload.
 export const JOIN_TOKEN = process.env.JOIN_TOKEN ?? "";
-// The RENDERERS' own credential (docs/DESIGN-world-access.md): a renderer presenting it may WATCH any world, invite-only
+// The RENDERERS' own credential (docs/decisions/WORLD-ACCESS.md): a renderer presenting it may WATCH any world, invite-only
 // ones included (invisible, never authoring). Distinct from JOIN_TOKEN on purpose: the door key rides invite links and
 // "renderer" is a flag any client can set, so the two together must never open a private world. Unset = none trusted.
 export const RENDERER_TOKEN = process.env.RENDERER_TOKEN ?? "";

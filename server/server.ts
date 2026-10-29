@@ -414,7 +414,7 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
       ws.send(JSON.stringify({ type: "error", code: u.code, error: u.message })); c.ws.close?.(unavailableClose(!!(msg.spectate || msg.renderer)), u.code); return null; };
     // What this joiner may be told (access.ts toldOf, the one predicate): a world discoverable to them opens; an interrupted
     // in-place conversion or an old-format world is diagnosed only to the operator and (an old one) its recognised owner, with
-    // its structured reason (server/upgrade.ts; docs/WIRE.md 4005); to anyone else it is world-unavailable, as a missing or
+    // its structured reason (server/upgrade.ts; docs/reference/WIRE.md 4005); to anyone else it is world-unavailable, as a missing or
     // private world. Asked of the door on disk, before loading: a refused join never loads or pins the world. Joining never
     // FOUNDS a world (security review 10-06 H3; RFC-005 §3.2.7).
     { const dir = directoryFor(WORLDS_DIR);   // read-only: an undiscoverable world records nothing about who asked

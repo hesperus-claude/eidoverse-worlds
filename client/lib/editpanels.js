@@ -566,7 +566,7 @@ function pushCards(f, schema, id, opts = {}) {
     const key = `c:${sec.key ?? sec.type}`;
     const prov = sec.present !== false ? touchLine(touched[wireOf(sec)]) : null;
     const acts = sec.removable && sec.key ? [{ k: `ed:remove.${sec.key}`, icon: 'x', title: `remove ${sec.title}`, danger: true }] : [];
-    // provenance dot: amber = a draft this client reads (docs/COMPONENT-LADDER.md), hollow = a namespaced component nothing
+    // provenance dot: amber = a draft this client reads (docs/contributing/COMPONENT-LADDER.md), hollow = a namespaced component nothing
     // here reads; a core component has none
     const dot = sec.trusted ? 'trusted' : sec.draft ? 'draft' : (sec.key && String(sec.key).includes('/') ? 'foreign' : null);
     f.push({ t: 'group', k: key, actions: acts, ...(dot ? { dot } : {}), label: `${sec.title}${locked && sec.type === 'Transform' ? ' 🔒' : ''}${sec.present === false ? (sec.type === 'Parent' ? ' · none' : ' · default') : ''}`, ...(away && sec.type === 'Transform' ? away : {}), hint: `${prov ? `${prov}\n` : ''}${sec.summary} — ${sec.category} · engine record ${(sec.hash ?? 'draft').slice(0, 12)}${sec.status ? ` · ${sec.status}${sec.status === 'trial' ? ' (its shape may change during the alpha)' : ''}` : ''}${sec.part ? ` · part: ${sec.part}` : ''}`, open: isOpen(id, key), ...(prov ? { prov } : {}) });
@@ -930,7 +930,7 @@ async function refreshWatch() {
   } catch { /* a poll that fails keeps the last good tail */ }
 }
 function consoleFields() {
-  const f = [{ t: 'list', k: 'cwatch', empty: 'no scripts in this world — a script is a script:<name> component on a thing (docs/SCRIPTS.md)',
+  const f = [{ t: 'list', k: 'cwatch', empty: 'no scripts in this world — a script is a script:<name> component on a thing (docs/guide/SCRIPTS.md)',
     rows: behaviors.map((b) => ({ id: b.id, label: b.id,   // words, not glyphs: the VR painter has no icon for these (bot #553)
       sub: [running(b) ? 'running' : (b.status ?? 'paused'), b.attach ? `on ${b.attach}` : 'world', b.timers ? `${b.timers} timer${b.timers === 1 ? '' : 's'}` : null].filter(Boolean).join(' · '),
       active: b.id === watching,

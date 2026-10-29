@@ -643,10 +643,10 @@ copy that was updated and is published again keeps its parts' keys.
   (moving, jumping, one press of the get-up), but the escape stays on and
   no seat can remove it: every client offers a deliberate escape that
   always stands the occupant up (an agent's `detach {escape: true}`; the
-  reference client's binding is `docs/SEATS.md`). A
+  reference client's binding is `docs/reference/SEATS.md`). A
   yes to an ask is one touch: it ends when the hand lets go, when either
   body leaves, when the target closes that class, or after 10 minutes. The pose packet's fields, and how a
-  receiver renders them, are `docs/pose-wire.md`; what binds every
+  receiver renders them, are `docs/reference/POSE-WIRE.md`; what binds every
   implementation is this: a body's declared mode (`pose.bodyMode`) is a
   self-declared description, and the authority and every server MUST NOT
   grant or relax any rule, consent check or permission because of it (a
@@ -706,7 +706,7 @@ copy that was updated and is published again keeps its parts' keys.
   the haul-out line), and a ground ledge over a step is refused as solid
   (`blocker: "ground"`). `place {at}`, `create {at: [x, z]}` and the spawn
   alias seat a model's bottom on the support at that one point (x, z): a
-  top there, else the ground (not the whole footprint; docs/BUILDING.md). A
+  top there, else the ground (not the whole footprint; docs/guide/BUILDING.md). A
   world with no `terrain` is flat at y 0 and dry; `terrain {kind: 'flat',
   height}` is flat at its height. A heightmap world whose
   grid isn't on the server yet has no ground to judge on, and the authority
@@ -758,7 +758,7 @@ copy that was updated and is published again keeps its parts' keys.
   enforces one reads that first. The designs this replaced (the
   table of presets, tiers, pause and delegates; then one switch
   `accept|ask|refuse` with live asks) are kept as a record in
-  `docs/CONSENT-TABLE-RECORD.md`; a stored table or switch is read once as
+  `docs/decisions/CONSENT-TABLE-RECORD.md`; a stored table or switch is read once as
   gates and lists never wider than it was.
 
 ### Private attention metadata
@@ -1125,7 +1125,7 @@ Your body is yours. Today a body is presence, never an entity, so no write
 reaches one. When body parts become entities, **every write to a body goes
 through the one request path, and the body's owner decides**. How that is
 built (who the owner is, the paths a write takes, co-editing, where body
-edits are stored) is direction, not protocol, in `docs/AVATAR-DIRECTION.md`
+edits are stored) is direction, not protocol, in `docs/design/AVATAR-DIRECTION.md`
 until avatars are shared. The names it uses are reserved now (`body-owner`,
 `edit-grant`, `avatar-deny` in the registry; the request `arrive`; the
 refusal code `body`).
@@ -1155,8 +1155,8 @@ put the thing back (no engine, or no stored pose): that one has none and,
 like a departure, records no identity). What a script writes with the
 identities it receives live is its
 own request, signed with its sponsor's rights. An auditor's re-run of a script is a
-check, never the record; its procedure is `docs/SCRIPTS.md` ("Auditing a script"). A sponsor reader skips the authority's follow-ups (§3). The reference API, limits and determinism rules are
-`docs/SCRIPTS.md`.
+check, never the record; its procedure is `docs/guide/SCRIPTS.md` ("Auditing a script"). A sponsor reader skips the authority's follow-ups (§3). The reference API, limits and determinism rules are
+`docs/guide/SCRIPTS.md`.
 
 ## 9. Conventions
 
@@ -1455,7 +1455,7 @@ this protocol. A translated log is an ordinary log of this protocol, and these h
   rules produced the log.
 
 The operator's procedure (the dry-run report and its hash, the in-place swap, rollback) is in
-`docs/TRANSLATING-OLD-WORLDS.md`.
+`docs/operator/TRANSLATING-OLD-WORLDS.md`.
 
 ## Version history
 

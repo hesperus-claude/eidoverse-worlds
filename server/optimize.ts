@@ -988,7 +988,7 @@ if (import.meta.main) {
   let encoder: string | null = null;
   if (mode === "--lod") encoder = findKtx2Encoder();   // optional here: an untextured object reduces fine without one
   else if (ktx2Mode && !(encoder = findKtx2Encoder())) {
-    console.error("[optimize] ktx2: no encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/ktx2-encoder.md)");
+    console.error("[optimize] ktx2: no encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/operator/KTX2-ENCODER.md)");
     process.exit(3);
   }
   try {
@@ -1016,7 +1016,7 @@ if (import.meta.main) {
     } else if (mode === "--lod") {
       const r = await optimizeGlbLod(src, encoder);
       if (r.verdict === "__no_encoder__") {
-        console.error("[optimize] lod: textured object and no KTX2 encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/ktx2-encoder.md)");
+        console.error("[optimize] lod: textured object and no KTX2 encoder — set KTX2_TOKTX or put toktx/ktx on PATH (docs/operator/KTX2-ENCODER.md)");
         process.exit(3);
       }
       if (r.verdict) {   // a typed content refusal — fail closed, marker's business; stamped with the recipe like the ktx2 size verdict

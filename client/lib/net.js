@@ -410,7 +410,7 @@ export function sendPose(now) {
   // what I press while I hold a thing (grabbable's presence tier: every receiver draws its fx while this rides;
   // absent = not pressing). Never logged: a use.down/up that changes the world is a request of its own
   if (s.useHeld) pose.use = s.useHeld;
-  // full-body orientation and a locomotion bag (docs/UNDERWATER-PRESENCE.md): presence only, optional, never authority
+  // full-body orientation and a locomotion bag (docs/reference/UNDERWATER-PRESENCE.md): presence only, optional, never authority
   if (s.q) pose.q = s.q;
   if (s.locomotion) pose.locomotion = s.locomotion;
   if (s.climb) pose.climb = s.climb;   // on a climb route: {host, progress} (shared/climb.js), resolved by every receiver through the host
@@ -684,7 +684,7 @@ function wireSocket(ws) {
 
 /** What the server said when it refused this join: the `error` that arrives before the snapshot is the refusal's own
  *  words, and the close (4005 …) that follows shows THEM rather than a guess from the code. Reset per connection. */
-let joinRefusal = null, joinRefused = null;   // …and its structured reason, where the wire carries one (old-format: docs/WIRE.md 4005)
+let joinRefusal = null, joinRefused = null;   // …and its structured reason, where the wire carries one (old-format: docs/reference/WIRE.md 4005)
 function noteRefusal(text, refused) { if (!net.joined && text) { joinRefusal = String(text); joinRefused = refused && typeof refused === 'object' ? refused : null; } }
 
 /** A refused join, shown where the person is looking: the splash stays (or comes back) with the server's sentence on

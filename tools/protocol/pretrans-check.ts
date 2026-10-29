@@ -773,7 +773,7 @@ await C("PN3", "a stable name's break is never re-pinned, acknowledged or not; a
   const add = CAT.pinVerdict(CAT.pinOf(), wide, null);
   return [!st.ok && /STABLE/.test(st.why) && add.ok && !add.breaks.length && !add.changelog, [st.why, add]]; });
 await C("PN4", "the ladder doc says trial isn't draft, and how a break is acknowledged", () => {
-  const t = read("docs/COMPONENT-LADDER.md"); const need = ["trial", "reserved", "stable", "--ack", "REGISTRY-CHANGELOG"]; return [need.every((n) => t.includes(n)) && /draft[^\n]*not[^\n]*admitted|not admitted/i.test(t), need.filter((n) => !t.includes(n))]; });
+  const t = read("docs/contributing/COMPONENT-LADDER.md"); const need = ["trial", "reserved", "stable", "--ack", "REGISTRY-CHANGELOG"]; return [need.every((n) => t.includes(n)) && /draft[^\n]*not[^\n]*admitted|not admitted/i.test(t), need.filter((n) => !t.includes(n))]; });
 
 // ---- W: world-meta tightenings (shape audit 10-16) ----
 await C("W1", "about: a name over 80 or a blurb over 2000 characters is refused at the door (the client's limits, now the registry's)", () => {

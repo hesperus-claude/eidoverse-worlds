@@ -110,7 +110,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["an object may hold live", "shared/grab.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["a station may play live", "shared/sockbody.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["the tool forgets the rest", "mcpl/tools.ts", "and rests in your body-mode's own anim (stand: idle, sit: the sit loop, lie: lie, swim: tread, fly: soar) — never the bind pose; the body-mode is unchanged", "", ["K5"]],
-  ["the spec has no rest rule", "docs/pose-wire.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
+  ["the spec has no rest rule", "docs/reference/POSE-WIRE.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
   ["sit asks for no body-mode", "mcpl/tools.ts", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = { sit: \"sit\", sitchair: \"sit\", lie: \"lie\", stand: \"stand\" };", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = {};", ["B1"]],
   ["an old sample's clip isn't read", "shared/bodymode.js", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : (typeof sample.clip === 'string' ? modeFromClip(sample.clip) : null);", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : null;", ["B2"]],
   ["the fence takes any body-mode", "server/posecheck.ts", "if (\"bodyMode\" in p && !isBodyMode(p.bodyMode)) delete p.bodyMode;", "", ["B2"]],
@@ -534,7 +534,7 @@ const cases: Case[] = [
       const a = readText("AGENTS.md"), md = readText("spec/PROTOCOL.md");
       const says = (x: string) => /rests in your body-mode's own anim \(stand: idle/.test(x) && /never the bind pose/i.test(x) && /body-mode[^.]{0,40}unchanged/i.test(x) && /stop: \\?"live\\?"/.test(x) && /reserved/.test(x) && /that layer/.test(x);
       const body = md.slice(0, md.indexOf("## Version history"));
-      return { tool: says(d), agents: says(a), spec: (() => { const pw = fs.readFileSync(TREE + "docs/pose-wire.md", "utf8"); return /never the bind pose/i.test(pw) && /`\{type: "anim", stop: true\}`/.test(pw) && /`live` is reserved/.test(md); })() }; },   // the rest rule and the relay message are client docs since the house's view (#260 10-20); the reserved name is the spec's
+      return { tool: says(d), agents: says(a), spec: (() => { const pw = fs.readFileSync(TREE + "docs/reference/POSE-WIRE.md", "utf8"); return /never the bind pose/i.test(pw) && /`\{type: "anim", stop: true\}`/.test(pw) && /`live` is reserved/.test(md); })() }; },   // the rest rule and the relay message are client docs since the house's view (#260 10-20); the reserved name is the spec's
     good: (o) => o.tool && o.agents && o.spec },
   // ---------------- E: the old name of a gesture, gone (R 10-17 16:26) ----------------
   { id: "E1", what: "(R 16:26) presence pose.anim: the agent's once anim rides the next packet as anim (never the old key); the browser sends pose.anim; a receiver (browser, agent) reads anim alone (the pre-release key is gone: no build that sent it shipped); the server remembers neither", async run() {

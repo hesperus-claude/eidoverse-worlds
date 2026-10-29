@@ -11,42 +11,42 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 ## Guides — using a world
 
-[BUILDING](BUILDING.md) · [SCRIPTS](SCRIPTS.md) · [MODDING-UI](MODDING-UI.md) · [BODY-STATE](body-state.md)
+[BUILDING](guide/BUILDING.md) · [SCRIPTS](guide/SCRIPTS.md) · [MODDING-UI](guide/MODDING-UI.md) · [BODY-STATE](guide/BODY-STATE.md)
 
 ## Operator — running a server
 
-[TRANSLATING-OLD-WORLDS](TRANSLATING-OLD-WORLDS.md) · [KTX2-ENCODER](ktx2-encoder.md) ·
-[NATIVE-LOGIN](NATIVE-LOGIN.md) · [REMOTE-SCREENSHOTS](REMOTE-SCREENSHOTS.md) · [SFU-OPERATOR](../notes/SFU-OPERATOR.md) ·
-[CUTOVER-ROLLBACK](../notes/CUTOVER-ROLLBACK.md) · [SHOW-RUNBOOK](../deploy/SHOW_RUNBOOK.md)
+[TRANSLATING-OLD-WORLDS](operator/TRANSLATING-OLD-WORLDS.md) · [KTX2-ENCODER](operator/KTX2-ENCODER.md) ·
+[NATIVE-LOGIN](operator/NATIVE-LOGIN.md) · [REMOTE-SCREENSHOTS](operator/REMOTE-SCREENSHOTS.md) · [SFU-OPERATOR](operator/SFU-OPERATOR.md) ·
+[CUTOVER-ROLLBACK](operator/CUTOVER-ROLLBACK.md) · [SHOW-RUNBOOK](operator/SHOW-RUNBOOK.md)
 
 ## Contributing — changing this repo
 
-[GATE-MANIFEST](GATE-MANIFEST.md) · [COMPONENT-LADDER](COMPONENT-LADDER.md) · [TOOL-LADDER](TOOL-LADDER.md) ·
-[LABS](LABS.md) · [SURFACE-PARITY](../tools/protocol/SURFACE-PARITY.md)
+[GATE-MANIFEST](contributing/GATE-MANIFEST.md) · [COMPONENT-LADDER](contributing/COMPONENT-LADDER.md) · [TOOL-LADDER](contributing/TOOL-LADDER.md) ·
+[LABS](contributing/LABS.md) · [SURFACE-PARITY](contributing/SURFACE-PARITY.md)
 
 ## Reference — what is built, described
 
-[WIRE](WIRE.md) · [POSE-WIRE](pose-wire.md) · [UNDERWATER-PRESENCE](UNDERWATER-PRESENCE.md) · [SEATS](SEATS.md) ·
-[DRAW-CALLS](draw-calls.md) · [NATIVE-WORLD-RENDERING](NATIVE-WORLD-RENDERING.md) · [RESERVED-SHAPES](RESERVED-SHAPES.md)
+[WIRE](reference/WIRE.md) · [POSE-WIRE](reference/POSE-WIRE.md) · [UNDERWATER-PRESENCE](reference/UNDERWATER-PRESENCE.md) · [SEATS](reference/SEATS.md) ·
+[DRAW-CALLS](reference/DRAW-CALLS.md) · [NATIVE-WORLD-RENDERING](reference/NATIVE-WORLD-RENDERING.md) · [RESERVED-SHAPES](reference/RESERVED-SHAPES.md)
 
 ## Design — what isn't built yet, and why it should be
 
-[DESIGN](../DESIGN.md) (current) · [PHYSICS-DIRECTION](PHYSICS-DIRECTION.md) · [AVATAR-DIRECTION](AVATAR-DIRECTION.md) ·
-[SCHOOLS](SCHOOLS.md) · [RENDERER-SEAM](RENDERER-SEAM.md) · [SFU-SPEC](../notes/SFU-SPEC.md) ·
-[AWARENESS-ROADMAP](../notes/AWARENESS-ROADMAP.md) · [OVERHAUL-CHARTER](overhaul-charter.md)
+[DESIGN](../DESIGN.md) (current) · [PHYSICS-DIRECTION](design/PHYSICS-DIRECTION.md) · [AVATAR-DIRECTION](design/AVATAR-DIRECTION.md) ·
+[SCHOOLS](design/SCHOOLS.md) · [RENDERER-SEAM](design/RENDERER-SEAM.md) · [SFU-SPEC](design/SFU-SPEC.md) ·
+[AWARENESS-ROADMAP](design/AWARENESS-ROADMAP.md) · [OVERHAUL-CHARTER](design/OVERHAUL-CHARTER.md)
 
 ## Decisions — dated records, superseded rather than edited
 
-[TXN-CAPABILITY](DESIGN-txn-capability.md) · [WORLD-ACCESS](DESIGN-world-access.md) ·
-[CONSENT-TABLE-RECORD](CONSENT-TABLE-RECORD.md) · [PATHFINDING-ACCEPTANCE](PATHFINDING-ACCEPTANCE.md) ·
-[CUTOVER-ARTIFACTS](../notes/CUTOVER-ARTIFACTS.md)
+[TXN-CAPABILITY](decisions/TXN-CAPABILITY.md) · [WORLD-ACCESS](decisions/WORLD-ACCESS.md) ·
+[CONSENT-TABLE-RECORD](decisions/CONSENT-TABLE-RECORD.md) · [PATHFINDING-ACCEPTANCE](decisions/PATHFINDING-ACCEPTANCE.md) ·
+[CUTOVER-ARTIFACTS](decisions/CUTOVER-ARTIFACTS.md)
 
 ## History — ledgers and retired plans
 
-[INCIDENTS](INCIDENTS.md) · [TEL0S_NOTES](history/TEL0S_NOTES.md) · [SCALING_AND_SNAPSHOT_PLAN](history/SCALING_AND_SNAPSHOT_PLAN.md) ·
+[INCIDENTS](history/INCIDENTS.md) · [TEL0S_NOTES](history/TEL0S_NOTES.md) · [SCALING_AND_SNAPSHOT_PLAN](history/SCALING_AND_SNAPSHOT_PLAN.md) ·
 [PROPOSAL-sensory-channel](history/PROPOSAL-sensory-channel.md) · [NOTE-token-tap](history/NOTE-token-tap.md) ·
-[UPSTREAM-FLAGS](UPSTREAM-FLAGS.md) · [UPSTREAM-WRAP-ONCE](upstream-wrap-once.md) ·
-[FLIGHT-MCP-INTERFACE](../tools/flightbench/FLIGHT-MCP-INTERFACE.md)
+[UPSTREAM-FLAGS](history/UPSTREAM-FLAGS.md) · [UPSTREAM-WRAP-ONCE](history/UPSTREAM-WRAP-ONCE.md) ·
+[FLIGHT-MCP-INTERFACE](history/FLIGHT-MCP-INTERFACE.md)
 
 ## Local READMEs
 

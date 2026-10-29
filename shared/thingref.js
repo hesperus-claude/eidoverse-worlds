@@ -7,7 +7,7 @@
 //   resolveThing  what someone typed → one thing: its exact id; else its label (case and outer spaces ignored); else a
 //              unique id prefix of 4 or more characters. Several things matching is refused with the candidates, never
 //              resolved by picking one. Pure: the agent's tools (mcpl) and the editor's Hierarchy read the same rules.
-// Scripts never look things up by label: they reference by id (docs/SCRIPTS.md).
+// Scripts never look things up by label: they reference by id (docs/guide/SCRIPTS.md).
 export const HANDLE_MIN = 4;
 export const WHOLE_UP_TO = 12;
 

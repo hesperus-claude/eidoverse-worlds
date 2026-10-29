@@ -1,4 +1,4 @@
-// server/backups.ts — a world directory's verified copy, made before an in-place upgrade (docs/TRANSLATING-OLD-WORLDS.md, "Backups").
+// server/backups.ts — a world directory's verified copy, made before an in-place upgrade (docs/operator/TRANSLATING-OLD-WORLDS.md, "Backups").
 // One path for the CLI (tools/protocol/world.ts translate) and the server's operator upgrade (which runs that CLI).
 // A backup is written once and never again: nothing here, and nothing that calls it, writes to one afterwards.
 import fs from "node:fs";

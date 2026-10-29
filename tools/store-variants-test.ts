@@ -330,7 +330,7 @@ fs.copyFileSync(new URL("./canned.ktx2", import.meta.url), outPath);
 process.exit(0);
 `);
 // the wrapper: findKtx2Encoder wants an existing path, and the optimizer spawns it directly and detects toktx by basename.
-// process.execPath, not "bun" (the Windows .cmd shim; docs/INCIDENTS.md)
+// process.execPath, not "bun" (the Windows .cmd shim; docs/history/INCIDENTS.md)
 let FAKE_TOKTX: string;
 if (process.platform === "win32") {
   FAKE_TOKTX = join(FAKE_DIR, "toktx.cmd");
@@ -413,7 +413,7 @@ console.log("\n  the optimizer, against the fake encoder:");
       r.err.includes(`${recipeStamp()} ${toolsStamp(toolsDigest(toolVersions(FAKE_TOKTX)))}`), r.err.split("\n").pop());
 
     const real = findKtx2Encoder();
-    if (!real) console.log("  - real encoder: skipped — none on this box (KTX2_TOKTX / toktx / ktx; docs/ktx2-encoder.md)");
+    if (!real) console.log("  - real encoder: skipped — none on this box (KTX2_TOKTX / toktx / ktx; docs/operator/KTX2-ENCODER.md)");
     else {
       r = await runKtx2(two, ktx2VariantPath(two) + ".real", { KTX2_TOKTX: real });
       check(`the real encoder (${real.split(/[\\/]/).pop()}): exit 0, a KTX2 variant`, r.code === 0 && r.wrote && isKtx2Glb(new Uint8Array(readFileSync(ktx2VariantPath(two) + ".real"))),

@@ -35,7 +35,7 @@ The default browser request still prefers optimized bytes. Original files that
 already require unsupported codecs can still fail in the native client.
 
 Browser-approved native login issues an ordinary session for every world the
-account may join (docs/NATIVE-LOGIN.md); there is no destination guard any more.
+account may join (docs/operator/NATIVE-LOGIN.md); there is no destination guard any more.
 Approval needs same-origin browser approval with a valid join-capable browser
 session, and native sessions cannot approve other native sessions. All existing
 per-world rights, bans and identity checks apply as for any browser session.

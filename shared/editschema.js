@@ -165,7 +165,7 @@ const HAND = {
     },
   },
   Material: {
-    // the DRAFT hesperus/material (docs/COMPONENT-LADDER.md rung 1): the model's own materials (live.materials, read-only
+    // the DRAFT hesperus/material (docs/contributing/COMPONENT-LADDER.md rung 1): the model's own materials (live.materials, read-only
     // swatches), then the overrides — `hesperus/material` every slot, `hesperus/material:<slot>` one
     read(c, live) {
       const MATK = 'hesperus/material'; const ov = c[MATK] && typeof c[MATK] === 'object' ? c[MATK] : null;
@@ -561,7 +561,7 @@ export function inspectSchema(ent, id, live = {}) {
     groups.push({ group: 'home', label: 'Home', types: ['home'], fields });
   }
 
-  // Material: the DRAFT hesperus/material (docs/COMPONENT-LADDER.md rung 1). Every thing with a model shows the card:
+  // Material: the DRAFT hesperus/material (docs/contributing/COMPONENT-LADDER.md rung 1). Every thing with a model shows the card:
   // its model's own materials (live.materials: a swatch each, read-only), then the overrides. `hesperus/material` changes
   // every slot; `hesperus/material:<slot>` one (keyed by the model's material name; a key the model no longer has is said).
   if (ent.model || compMesh(ent)) groups.push(HAND.Material.read(c, live));   // every thing with meshes: a model's, or a mesh thing's one 'surface'
@@ -880,7 +880,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
     });
   for (const name of ['Model', 'Structure', 'Parent']) if (!have.has(name) && !add.some((a) => a.name === name) && WIRE_BLOCKED[name])
     add.push({ name, category: RECORDS[name].category, summary: RECORDS[name].summary, hash: RECORDS[name].hash, blocked: WIRE_BLOCKED[name](have, ent) });
-  // the ladder's drafts (docs/COMPONENT-LADDER.md): only what this client has a reader for, where it applies, once.
+  // the ladder's drafts (docs/contributing/COMPONENT-LADDER.md): only what this client has a reader for, where it applies, once.
   // Trusted here (the owner's @world.trusted-components): the main list, blue. A plain draft: under "drafts", amber, unproven.
   for (const d of draftsRead()) {
     if (ent?.[d.name] != null || !d.applies(ent)) continue;

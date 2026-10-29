@@ -58,7 +58,7 @@ The bone (normative): **every act on someone else's body goes through one reques
 | Who sets it | Only the body's owner | **guarantee** |
 | A refused act | Leaves no record in the world log: the asker gets the uniform refusal, and the body owner's own record keeps the cause | **guarantee** · ratified tel0s 11-06 (delegated) (D6) |
 
-The earlier designs — eight classes × two tiers × allow/ask/deny, presets, pause, delegates (to 10-20), then one switch `accept`|`ask`|`refuse` with live asks (to 10-28) — are kept as a record in `docs/CONSENT-TABLE-RECORD.md`, not as a direction.
+The earlier designs — eight classes × two tiers × allow/ask/deny, presets, pause, delegates (to 10-20), then one switch `accept`|`ask`|`refuse` with live asks (to 10-28) — are kept as a record in `docs/decisions/CONSENT-TABLE-RECORD.md`, not as a direction.
 
 ### World roles (who may do what in a world)
 
@@ -92,7 +92,7 @@ does, and no role overrides it).
 A 10-17 audit found the line between the two tables isn't yet drawn for **avatars**: once an avatar's parts are entities,
 they fall under the *thing* rules (roles, log history, and an owner who can do anything), not under body consent. The
 spec's "Body ownership (avatars)" section keeps the one rule (every write to a body goes through the one request path,
-and the body's owner decides); how it is built is direction in `docs/AVATAR-DIRECTION.md` until avatars are shared. Five
+and the body's owner decides); how it is built is direction in `docs/design/AVATAR-DIRECTION.md` until avatars are shared. Five
 write paths (the hand and physics path, copying, and others in the audit) don't yet check it. **Open** · needs all three.
 
 ### Not yet listed

@@ -510,7 +510,7 @@ const DOCKPOS_LS = 'ew-dock-pos';
 // lesson — the HUD is a REGISTRY, core panels are just the built-in entries).
 // A mod calls eido.ui.registerPanel() and gets: a frame, a menu row, a rail
 // icon when open/pinned, arrange/lock/reset participation — everything the
-// built-ins get, through the same door. See docs/MODDING-UI.md.
+// built-ins get, through the same door. See docs/guide/MODDING-UI.md.
 export function registerPanel({ id, icon = 'puzzle-piece', title = id, mount,
                                 w = 260, h = 200, x = 60, y = 60 }) {
   if (!id || dockEntries.some((e) => e.id === id)) return null;
@@ -1352,7 +1352,7 @@ export function openDoor({ roster = [], needsKey = false, login = null, onEnter 
 export function togglePeopleHere() {
   const f = getFrame('chat'); const wasVisible = !!f?.visible; if (f && !wasVisible) f.show();
   // ASK the frame for the nodes chat.js built; do NOT re-derive them by class:
-  // .chat-cols and .chat-side-tog are PUBLIC class contract (docs/MODDING-UI.md
+  // .chat-cols and .chat-side-tog are PUBLIC class contract (docs/guide/MODDING-UI.md
   // §3), so a trusted mod may mount markup carrying them in this very body. chat.js
   // hangs the accessor on the frame (getFrame('chat')): no import edge.
   const cols = f?.sidePane?.('cols');

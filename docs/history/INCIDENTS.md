@@ -538,7 +538,7 @@ Lesson: every path an error message names must be fetchable, case-insensitively.
 ## 3. Sky and lighting
 
 **Upstream wraps materials AFTER first compile: 44 materials, ~2–6s per graph**
-`docs/upstream-wrap-once.md` (2026-08-02, written for Skye; "Everything here
+`docs/history/UPSTREAM-WRAP-ONCE.md` (2026-08-02, written for Skye; "Everything here
 was measured on live multiplayer clients")
 "`weather_system` (wetness/puddles) and `sky_system` (cloud shadows) integrate
 with a world by sweeping the scene and rewriting existing materials… The wrap
@@ -560,7 +560,7 @@ machinery.
 
 **scene.environment identity must never change — the cure, already proven**
 `client/lib/sky.js:28-35`, `client/lib/sky_baked.js:52-61`,
-`docs/upstream-wrap-once.md:49-57`
+`docs/history/UPSTREAM-WRAP-ONCE.md:49-57`
 "The environment exists from the first frame — BLACK, contributing nothing — so
 every material's lighting graph is born with its env branch in place.
 scene.environment flipping null→texture later regrew the lighting branch of
@@ -2501,7 +2501,7 @@ it only with the capability in hand. A watchdog that kills by design must not fe
 a heuristic that reads each kill as evidence.
 
 **Show-night baselines, recorded**
-`deploy/SHOW_RUNBOOK.md:42-44`, `:63`
+`docs/operator/SHOW-RUNBOOK.md:42-44`, `:63`
 "Local baseline (M-series, loopback): join p95 19ms, 14.8 f/s all spectators,
 latency p95 11ms, server 53MB RSS / ~2% CPU with recording on." Gate: "latency p95
 < 250ms, chat burst complete, reconnect churn survives." And: "Verified:
@@ -4337,7 +4337,7 @@ the revision base for that design doc.
 
 **Do not resolve in this repository** (they belong to sibling repos — exultation,
 discord-mcpl, the connectome stack, or predate this history):
-- `8b37f0f` — `README.md:40`.
+- `8b37f0f` — `docs/README.md:40`.
 - `a99adaa` — `docs/history/SCALING_AND_SNAPSHOT_PLAN.md:5` (the plan's base revision).
 - `732abbf`, `d5cbba5`, `e5fd11e` — `docs/DESIGN-local-chat-spaces.md:14, 25, 76`
   (revision history of that design).

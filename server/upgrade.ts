@@ -5,7 +5,7 @@
 // A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
 // that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional):
 // the access index (worldindex.ts ownerIn, server/ownerrecognise.ts). An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
-// recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/TRANSLATING-OLD-WORLDS.md).
+// recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/operator/TRANSLATING-OLD-WORLDS.md).
 import fs from "node:fs";
 import path from "node:path";
 import { WORLDS_DIR, BACKUPS_DIR, OPT_DIR, ROOT } from "./config.ts";
@@ -28,7 +28,7 @@ export function provenWho(c: Client, msg: Any): { account: string; name: string 
 }
 export const provenAccount = (c: Client, msg: Any): string | null => provenWho(c, msg)?.account ?? null;
 
-/** The refusal an old-format world's join carries beside its words (docs/WIRE.md 4005). `owner`: how the caller was recognised as its owner. */
+/** The refusal an old-format world's join carries beside its words (docs/reference/WIRE.md 4005). `owner`: how the caller was recognised as its owner. */
 export function oldFormatRefused(kind: OldWorldKind, reason: string, operator: boolean, owner: "bound" | "name" | null = null) {
   return { code: "old-format", reason, doc: OLD_FORMAT_DOC, upgrade: kind === "translatable" ? "operator-or-owner" : "operator-cli", operator,
     may: kind === "translatable" && (operator || !!owner), ...(owner && kind === "translatable" ? { owner } : {}) };

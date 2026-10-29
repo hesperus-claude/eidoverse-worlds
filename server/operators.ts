@@ -4,9 +4,9 @@
 // An entry with no ":" is refused loudly at boot, never silently ignored: an operator who THINKS they listed themselves must
 // find out now. The server still boots with the good entries (refusing boot would lock everyone out of every
 // world), and with none left it mints the setup link as a server with no operator does.
-// WORLD_ADMIN is the legacy name, read and merged for one release with a warning (docs/TRANSLATING-OLD-WORLDS.md).
+// WORLD_ADMIN is the legacy name, read and merged for one release with a warning (docs/operator/TRANSLATING-OLD-WORLDS.md).
 // First run: with no operator at all, the server mints a one-use setup link; whoever opens it signed in becomes the
-// operator, stored in OPERATORS_FILE and merged with the env at every boot (docs/TRANSLATING-OLD-WORLDS.md, "Becoming the operator").
+// operator, stored in OPERATORS_FILE and merged with the env at every boot (docs/operator/TRANSLATING-OLD-WORLDS.md, "Becoming the operator").
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";

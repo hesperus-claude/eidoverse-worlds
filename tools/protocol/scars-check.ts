@@ -303,9 +303,9 @@ const cases: Case[] = [
       return { para: /\*\*Where the authority reads old requests \(readback\)\.\*\*/.test(spec) && /treats a redacted body as \*\*unknown\*\*/.test(spec),
         purge12: /request body the authority reads back, §1, may be redacted/.test(spec), rows: Object.keys(RB), whole: Object.values(RB).every((r: any) => r.fields?.length && r.where && r.unknown) }; },
     good: (o) => o.para && o.purge12 && ["request:undo", "request:use", "request:script", "request:*", "physics:launch"].every((k) => o.rows.includes(k)) && o.whole },
-  { id: "X3", what: "avatars (house markup D, #260 10-20): the spec keeps only the bone (every write to a body goes through the one request path, and the body's owner decides), under its own heading, no 'sealed'; the guard rails (owner stamped at wear, one predicate, every path, the grant, the wearer's log) are direction in docs/AVATAR-DIRECTION.md; the precedence ladder between a world and the person in the body is in neither", run() {
-      const spec = read("spec/PROTOCOL.md"); const sec = spec.slice(spec.indexOf("### Body ownership (avatars)"), spec.indexOf("\n## 8. ")); const dir = read("docs/AVATAR-DIRECTION.md");
-      return { bone: /\*\*every write to a body goes\s+through the one request path, and the body's owner decides\*\*/.test(sec), noRules: !/\*\*B[1-6]\./.test(sec), pointer: sec.includes("docs/AVATAR-DIRECTION.md"), sealed: !/sealed/i.test(sec),
+  { id: "X3", what: "avatars (house markup D, #260 10-20): the spec keeps only the bone (every write to a body goes through the one request path, and the body's owner decides), under its own heading, no 'sealed'; the guard rails (owner stamped at wear, one predicate, every path, the grant, the wearer's log) are direction in docs/design/AVATAR-DIRECTION.md; the precedence ladder between a world and the person in the body is in neither", run() {
+      const spec = read("spec/PROTOCOL.md"); const sec = spec.slice(spec.indexOf("### Body ownership (avatars)"), spec.indexOf("\n## 8. ")); const dir = read("docs/design/AVATAR-DIRECTION.md");
+      return { bone: /\*\*every write to a body goes\s+through the one request path, and the body's owner decides\*\*/.test(sec), noRules: !/\*\*B[1-6]\./.test(sec), pointer: sec.includes("docs/design/AVATAR-DIRECTION.md"), sealed: !/sealed/i.test(sec),
         moved: ["B1.", "B2.", "B3.", "B5.", "B6."].filter((x) => !dir.includes(`**${x}`)), stamped: /stamped by the authority at wear/.test(dir) && /MUST NOT be derived from the log's history/.test(dir), grant: dir.includes("`edit-grant:<identity> {until?,"),
         wearer: /stored in the wearer's log, never the world's/.test(dir), ladder: spec.includes("consent > body owner and grantees > world") || dir.includes("consent > body owner and grantees > world"), b4out: /\*\*B4 [\s\S]{0,120}?taken out\*\*/.test(dir) }; },
     good: (o) => o.bone && o.noRules && o.pointer && o.sealed && !o.moved.length && o.stamped && o.grant && o.wearer && !o.ladder && o.b4out },
@@ -316,7 +316,7 @@ const cases: Case[] = [
       return { comps: ["body-owner", "edit-grant", "avatar-deny"].map((n) => CS.statusOf?.(n) ?? null), arrive: code(arrive), wearing: !!VS?.RESERVED_VERBS?.arrive?.args?.wearing, body: !!RC.body?.reserved, squat: code(squat) }; },
     good: (o) => JSON.stringify(o.comps) === '["reserved","reserved","reserved"]' && o.arrive === "reserved" && o.wearing && o.body && o.squat === "reserved" },
   { id: "X5", what: "COMPONENT-LADDER: anything needing its own transform, lock, rights, refs or children is a child entity, not a key suffix", run() {
-      return { rule: read("docs/COMPONENT-LADDER.md").includes("**anything that needs its own transform, lock, rights, references or children is a child entity, not a key suffix.**") }; },
+      return { rule: read("docs/contributing/COMPONENT-LADDER.md").includes("**anything that needs its own transform, lock, rights, references or children is a child entity, not a key suffix.**") }; },
     good: (o) => o.rule },
   { id: "X6", what: "PROTOCOL §7 and §8 say what a refused act and a script act keep: argument names and a code; presence reads as counts, body effects without consent", run() {
       const spec = read("spec/PROTOCOL.md");

@@ -261,7 +261,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     const i = lc("vic", "inspect", { id: "stage" });
     ok(i.lock?.rank === 255, "PL16 inspect says the lock's strength (its setter's rank)", { lock: i.lock });
   }
-  { // the trusted rung (R 10-12 10:09; docs/COMPONENT-LADDER.md): @world.trusted-components {components: [drafts]} is the owner's word,
+  { // the trusted rung (R 10-12 10:09; docs/contributing/COMPONENT-LADDER.md): @world.trusted-components {components: [drafts]} is the owner's word,
     // gated like the rest of @world (never a permission); the list is namespaced draft names only, ≤ 64, distinct
     const tc = callAt("trust");
     const TW = () => openWorld(root, "trust").state();

@@ -1,4 +1,4 @@
-// A tool, not a gate test: a draw-call measurement over the asset library (docs/draw-calls.md).
+// A tool, not a gate test: a draw-call measurement over the asset library (docs/reference/DRAW-CALLS.md).
 // bun tools/draw-world-measure.ts — real asset loader + warm conductor + world
 // lifecycle on an OWNED scratch sequencer. Requires the usual asset library.
 import { chromium } from 'playwright';

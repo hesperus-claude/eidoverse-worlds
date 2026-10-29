@@ -1,13 +1,13 @@
 // mods — runtime-loaded client scripts: physics, animation, in-game UI.
 //
-// The trust model, decided deliberately (docs/MODDING-UI.md):
+// The trust model, decided deliberately (docs/guide/MODDING-UI.md):
 //
 //   * A mod is LOCAL and TRUSTED — full access, an in-page ES module with
 //     the whole EW surface (your bones, the scene, door requests, the wire).
 //     It can act as you; loading one is a mod-install decision, like a
 //     browser extension. Stored in IndexedDB, yours alone, survives reloads.
 //     (A world doesn't offer client mods: what runs in a world is its own
-//     scripts, on the server, through the door — docs/SCRIPTS.md.)
+//     scripts, on the server, through the door — docs/guide/SCRIPTS.md.)
 //
 // What a mod can DO needs no new machinery: it animates your own body freely
 // (it is you), other bodies by their consent (bodydrag), objects through the

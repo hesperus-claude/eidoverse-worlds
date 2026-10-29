@@ -115,7 +115,7 @@ export function setConsent(P, actor, a) {
     if (op !== "unlist") (t[op] ??= dict())[who] = true; }
   return { ok: true, target: actor };
 }
-// migratePresence: an older stored table read as today's gates + lists, never wider; in place, idempotent (docs/CONSENT-TABLE-RECORD.md)
+// migratePresence: an older stored table read as today's gates + lists, never wider; in place, idempotent (docs/decisions/CONSENT-TABLE-RECORD.md)
 export const CONSENT_SHAPE = 4;
 /** The classes no gate covers (near, follow, voice): an old no to one is kept in the table's `closed`, which decide reads (#260, Stella item 2).
  *  The day a class gets its own setting, its `closed` entry moves into that setting, so no old no outlives the switch that can reopen it. */

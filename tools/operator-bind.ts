@@ -1,5 +1,5 @@
 // tools/operator-bind.ts — `operator-repair.ts bind`: the host's operator lets an account wear an imported identity (a
-// main-era name with no account yet), so whoever signs in with it holds that identity's roles. docs/TRANSLATING-OLD-WORLDS.md.
+// main-era name with no account yet), so whoever signs in with it holds that identity's roles. docs/operator/TRANSLATING-OLD-WORLDS.md.
 // The account goes in the directory only (server/directory.ts bind), never in a log; world.mod.jsonl records that it was bound.
 import fs from "node:fs";
 import path from "node:path";
@@ -30,7 +30,7 @@ export function bindIdentity(worldsDir: string, world: string, who: string, acco
   const no = (refused: string): Out => ({ ok: false, refused });
   if (!NAME.test(world ?? "")) return no(`"${String(world).slice(0, 64)}" isn't a world name`);
   const wd = path.join(worldsDir, world);
-  if (!isWorldDir(wd)) return no(`there is no world "${world}" in ${worldsDir} (an old-format world is upgraded first: docs/TRANSLATING-OLD-WORLDS.md)`);
+  if (!isWorldDir(wd)) return no(`there is no world "${world}" in ${worldsDir} (an old-format world is upgraded first: docs/operator/TRANSLATING-OLD-WORLDS.md)`);
   if (!ACCOUNT_SHAPE.test(account ?? "") || !WELL_FORMED.test(account)) return no(`"${String(account).slice(0, 80)}" isn't an account: human:<provider>:<id>, agent:token:<id>, aid1:<iss>:<sub> or local:<name> (the "sub" /whoami shows)`);
   const dir = directoryFor(worldsDir); const named = ownIn(wd);
   const ids = isMinted(who) ? (named.has(who) ? [who] : []) : [...named].filter((id) => { const n = dir.nameOf(id); return n != null && foldName(n) === foldName(who); });
@@ -40,7 +40,7 @@ export function bindIdentity(worldsDir: string, world: string, who: string, acco
   if (imported.length > 1) return no(`${imported.length} imported identities in "${world}" are called "${who}" (${imported.join(", ")}): name one by its id`);
   const id = imported[0], name = dir.nameOf(id) ?? id;
   const worn = dir.idOfSub(account);
-  if (worn && worn !== id) return no(`that account already wears ${dir.nameOf(worn) ?? "an identity"} (${worn}) on this server: it can't be two people. Joining the two into one person is an alias merge, coming with portable identity; until then, to give them ${name}'s roles, operator-repair set/delete (docs/TRANSLATING-OLD-WORLDS.md)`);
+  if (worn && worn !== id) return no(`that account already wears ${dir.nameOf(worn) ?? "an identity"} (${worn}) on this server: it can't be two people. Joining the two into one person is an alias merge, coming with portable identity; until then, to give them ${name}'s roles, operator-repair set/delete (docs/operator/TRANSLATING-OLD-WORLDS.md)`);
   dir.bind(id, account);
   const out: Out = { ok: true, id, name, account: `${account.split(":").slice(0, 2).join(":")}:… (tag ${accountTag(account)})`, logged: "world.mod.jsonl" };
   const rec = { ts: Date.now(), actor: "system", verb: "bind", who: id, by: String(by).slice(0, 64), operator: true };

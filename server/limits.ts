@@ -1,5 +1,5 @@
 // The wire-limit table: what a message may carry before it is refused or truncated, each cap named and
-// env-overridable. WIRE.md describes the shapes; this is where their bounds live (config.ts keeps boot/cadence knobs).
+// env-overridable. docs/reference/WIRE.md describes the shapes; this is where their bounds live (config.ts keeps boot/cadence knobs).
 
 /** An env number, VALIDATED: unset or "" is the fallback; not a number, or outside `ok`, is the fallback with a warning
  *  (NaN silently disabled a cap; Number("") is 0). Every env number in server/ reads through it. */

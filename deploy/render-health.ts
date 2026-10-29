@@ -4,7 +4,7 @@
 //
 // The verdict is the watchdog's whole job, and it has been wrong before. It scraped "NNfps" from
 // #hud, and when the client moved fps into the debug panel it read 0 forever: every healthy
-// renderer was killed on schedule, for a week, before anyone noticed (docs/INCIDENTS.md,
+// renderer was killed on schedule, for a week, before anyone noticed (docs/history/INCIDENTS.md,
 // 2026-10-24). Each probe below asks the page something that depends on nothing the client
 // displays.
 

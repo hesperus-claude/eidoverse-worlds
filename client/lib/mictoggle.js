@@ -99,7 +99,7 @@ const micIsOn = () => {
     return window.relayDiag?.().micPublished ?? micOn();
   } catch { return micOn(); }
 };
-// mic and hearing state ride the pose packet to everyone, agents included (docs/pose-wire.md "Voice state — who sees
+// mic and hearing state ride the pose packet to everyone, agents included (docs/reference/POSE-WIRE.md "Voice state — who sees
 // it"); the tooltip says so
 const SHARED = '\nmic and hearing on/off are visible to everyone in this world';
 function paint() {

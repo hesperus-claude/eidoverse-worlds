@@ -117,7 +117,7 @@ try {
   assert.equal(second.status, 200); assert.ok(second.ms < 3000, 'the renderer stays: the next screenshot is fast');
   // THE WATCHDOG'S CHECK, over real devtools: the roamer that just served two screenshots is judged healthy (frames
   // counted, joined, a frame captured), and a page that is not the client is judged not joined. A verdict that
-  // fails a working renderer killed every roamer every two minutes for a week (docs/INCIDENTS.md, 2026-10-24).
+  // fails a working renderer killed every roamer every two minutes for a week (docs/history/INCIDENTS.md, 2026-10-24).
   const verdict = await health(dbg);
   console.log(JSON.stringify({ watchdog: verdict }));
   assert.ok(verdict.healthy && (verdict.fps ?? 0) > 0 && /snap=\d+KB/.test(verdict.reason), `the watchdog judges the working roamer healthy: ${JSON.stringify(verdict)}`);

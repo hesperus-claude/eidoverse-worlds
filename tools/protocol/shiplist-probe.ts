@@ -784,7 +784,7 @@ try {
   check("AT1b rotation order and the quaternion are in Attributes ('Rotation, as stored'), not an Inspector 'Advanced' group (R 10-10 23:38)", r?.ag?.includes("Rotation, as stored") && !r?.ig?.includes("Advanced"), { ag: r?.ag, ig: r?.ig });
   check("AT2 a removable card's title line carries a ✕ that removes it (Spin)", r.spinX && r.removed === true, r);
   });
-  // ---- MT: the draft hesperus/material, drawn (docs/COMPONENT-LADDER.md rung 1; R 10-10) ----
+  // ---- MT: the draft hesperus/material, drawn (docs/contributing/COMPONENT-LADDER.md rung 1; R 10-10) ----
   await stage("MT", async () => {
   const me = await evalJson(`import('/lib/controller.js').then((c) => [c.myState.pos.x, c.myState.pos.z])`);
   // ids are the authority's (10-17): a create's id is a placeholder the reply maps to the minted one

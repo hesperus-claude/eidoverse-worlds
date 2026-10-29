@@ -17,7 +17,7 @@ SHOULD / MAY are RFC-2119. Parts marked **reserved** are names held now, because
 the log, the registry pin or shipped clients would otherwise freeze whatever took
 them first: an authority refuses what they name until it implements them. How
 the unbuilt parts are expected to work is direction, not protocol, in
-`docs/PHYSICS-DIRECTION.md`.
+`docs/design/PHYSICS-DIRECTION.md`.
 
 ## 0. The idea
 
@@ -212,7 +212,7 @@ doesn't yet.
 `reserved`) until an engine declares that it reads it: a number a builder can
 type that nothing honours is a number tuned for nothing. Their expected units,
 limits and meanings of absence, and how the names map to the major engines,
-are direction (`docs/PHYSICS-DIRECTION.md`). `physics.kind` is **required**: a
+are direction (`docs/design/PHYSICS-DIRECTION.md`). `physics.kind` is **required**: a
 bare `{}` read as dynamic while the component's absence means static or
 nothing.
 
@@ -220,7 +220,7 @@ nothing.
   only, with `physics`' reserved fields: no shape is pinned until a world
   needs one, and a `physics.surface` naming no surface reads as none. The
   shape it was sketched with, and how two surfaces' modes would combine, are
-  `docs/RESERVED-SHAPES.md`.
+  `docs/reference/RESERVED-SHAPES.md`.
 - **Angular velocity is `w`: [x, y, z] in rad/s about world axes, everywhere**
   (acts, launches, state samples). Orientation is `q`, a unit quaternion
   (PROTOCOL §9.1).
@@ -258,7 +258,7 @@ nothing.
   for a cone or a spring. `parent` is a rigid attachment and never a solver
   joint; `openable` is kinematic animation; a *physical* door is a
   physics-joint.
-- **The target shape** of a joint is direction (`docs/PHYSICS-DIRECTION.md`), not
+- **The target shape** of a joint is direction (`docs/design/PHYSICS-DIRECTION.md`), not
   registered and not pinned.
 
 ## 4. Covenant III — the planes stand
@@ -300,7 +300,7 @@ updates; VRChat splits them the same way):
   `v`); the thing's own motion ignores the body. Carrying a person is reserved,
   and whatever form it takes, the carried person may stop it at any moment;
   how it would work, and simulated bodies, are direction
-  (`docs/PHYSICS-DIRECTION.md`).
+  (`docs/design/PHYSICS-DIRECTION.md`).
 - **Live simulation authority** over a thing is presence: transient, cheap, unlogged. What is built and binding:
   - **The holder's switch.** `grabbable.steal` defaults to `true` (the latest grab wins); under `steal: false` the second
     `grab` is refused (`held`) until a `launch` or a settlement.
@@ -310,7 +310,7 @@ updates; VRChat splits them the same way):
     engine until it rests (§4); a flight's outcome never depends on a presence-plane fact (Covenant III).
   - **A held object rides its holder's hand**: it travels in the holder's pose as which grip and where, never as a
     separate stream. Taking a resting thing into live authority is a `lift`; leaving it is a `launch`.
-  - **Reserved names, refused until built** (their intended rules are direction, in docs/PHYSICS-DIRECTION.md): the verb
+  - **Reserved names, refused until built** (their intended rules are direction, in docs/design/PHYSICS-DIRECTION.md): the verb
     `cohold`, the `steal` value `"ask"`, and on `@world.physics-engine` the fields `claimDebounceMs` and
     `liveAuthorityExpiryMs`.
 - **Write authority** is the door: it alone appends to the log, and it checks
@@ -332,7 +332,7 @@ into rollback the moment bodies collide.
 
 The presence message `state` (a live authority streaming a thing's samples) and the settlement claim are reserved names:
 the server refuses every `state` sample, and nothing settles by claim yet. Their intended shapes are direction, not
-contract: docs/PHYSICS-DIRECTION.md.
+contract: docs/design/PHYSICS-DIRECTION.md.
 
 ## 5. Covenant IV — tick-indexed time
 

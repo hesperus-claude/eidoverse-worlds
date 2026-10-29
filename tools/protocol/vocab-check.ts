@@ -130,7 +130,7 @@ for (const d of [...RUNTIME, ...DEPLOYED]) oscWalk(path.join(ROOT, d));
 for (const rel of OSC_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) oscScan(rel, fs.readFileSync(p, "utf8"), OSC_DOC); else offences.push(`${rel}: missing (OSC_DOCS lists it)`); }
 // "person"/"people" means anyone, human or agent (AGENTS.md house rule 6): set against "agent" it meant human — say human
 const PERSON = /(?<!["'`])\b(?:person|people)\s+(?:\(\s*)?(?:or|and|nor|vs\.?)\s+agents?\b|\bagents?\s+(?:or|and|nor|vs\.?)\s+(?:person|people)\b(?!["'`])/i;
-const PERSON_DOCS = ["AGENTS.md", "DESIGN.md", "README.md", ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md") && f !== "INCIDENTS.md").map((f) => `docs/${f}`), "spec/PROTOCOL.md"];
+const PERSON_DOCS = ["AGENTS.md", "DESIGN.md", "README.md", ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md") && f !== "docs/history/INCIDENTS.md").map((f) => `docs/${f}`), "spec/PROTOCOL.md"];
 const personScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
   if (PERSON.test(line)) offences.push(`${rel}:${i + 1}: "person" set against "agent" means human: write human (AGENTS.md rule 6) — ${line.trim().slice(0, 100)}`); });
 const personWalk = (dir: string) => {

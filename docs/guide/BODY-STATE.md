@@ -188,7 +188,7 @@ published rotations available and reports the geometry failure explicitly.
 
 The optional real-avatar gate can write exact input names, byte counts and
 SHA-256 hashes via `BODY_STATE_MANIFEST_OUT`. The
-[2026-09-10 corpus manifest](body-state-corpus-20260910.json) records the
+[2026-09-10 corpus manifest](../history/evidence/body-state-corpus-20260910.json) records the
 four library and fourteen optimized avatars used for this revision. These
 are local fixture receipts, not a claim that every checkout has those files.
 

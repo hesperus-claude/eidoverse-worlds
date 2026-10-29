@@ -231,7 +231,7 @@ export function bansOf(world: string, r: Any, describe: (id: string) => Any) {
 export function ownerWarning(world: string, people: Any[] = []): string | null {
   const owners = people.filter((p) => p.role === "owner");
   if (owners.some((p) => p.account)) return null;
-  const how = `a server operator still enters it and can bind them (bun tools/operator-repair.ts bind ${world} <name> <their account>) or give it to someone with operator-repair set (docs/TRANSLATING-OLD-WORLDS.md)`;
+  const how = `a server operator still enters it and can bind them (bun tools/operator-repair.ts bind ${world} <name> <their account>) or give it to someone with operator-repair set (docs/operator/TRANSLATING-OLD-WORLDS.md)`;
   return owners.length ? `no owner of "${world}" is bound to an account: ${owners.map((p) => p.name).join(", ")}. Until one is, nobody who signs in is its owner; ${how}`
     : `"${world}" has no owner at all after the upgrade; ${how}`;
 }

@@ -3,7 +3,7 @@
 //   bun tools/protocol/run.ts hostile phys    only the named suites (a PARTIAL run: it says so, and it is not the gate)
 //   bun tools/protocol/run.ts --lane core     only one lane (core | main | browser), also PARTIAL
 //   bun tools/protocol/run.ts --shard 2/4     shard 2 of 4 (1-based; shard.ts packs SUITES); the gate is all 4 merged by merge-receipts.ts
-//   bun tools/protocol/run.ts --manifest      print the suite table docs/GATE-MANIFEST.md carries (generated from here)
+//   bun tools/protocol/run.ts --manifest      print the suite table docs/contributing/GATE-MANIFEST.md carries (generated from here)
 //   bun tools/protocol/run.ts --check-manifest   exit 1 if the doc's table is not what --manifest prints
 //   bun tools/protocol/run.ts --siblings      fetch, pin and build the sibling repos (SIBLINGS, below) in tools/protocol/.siblings/, and install the packages that take them
 //   bun tools/protocol/run.ts --library <dir>    clone (or move) the asset library to its pin at <dir>, for EIDOVERSE_DIR
@@ -108,7 +108,7 @@ function manifest() {
   rows.push("", `Lanes: core ${CORE.length} suites (~${Math.round(sum("core"))} s), main ${SUITES.filter(([n]) => laneOf(n) === "main").length} (~${Math.round(sum("main"))} s), browser ${BROWSER.length} (~${Math.round(sum("browser"))} s); ${SUITES.length} suites in all.`);
   return rows.join("\n");
 }
-const DOC = ENGINE + "docs/GATE-MANIFEST.md", BEGIN = "<!-- BEGIN GENERATED: bun tools/protocol/run.ts --manifest -->", END = "<!-- END GENERATED -->";
+const DOC = ENGINE + "docs/contributing/GATE-MANIFEST.md", BEGIN = "<!-- BEGIN GENERATED: bun tools/protocol/run.ts --manifest -->", END = "<!-- END GENERATED -->";
 function manifestDrift(): string | null {
   if (!fs.existsSync(DOC)) return `${path.relative(ENGINE, DOC).split(path.sep).join("/")} is missing`;
   const t = fs.readFileSync(DOC, "utf8"), a = t.indexOf(BEGIN), b = t.indexOf(END);
@@ -188,7 +188,7 @@ if (argv.includes("--library")) {
   process.exit(0);
 }
 if (argv.includes("--manifest")) { console.log(manifest()); process.exit(0); }
-if (argv.includes("--check-manifest")) { const d = manifestDrift(); console.log(d ?? "manifest: docs/GATE-MANIFEST.md matches run.ts"); process.exit(d ? 1 : 0); }
+if (argv.includes("--check-manifest")) { const d = manifestDrift(); console.log(d ?? "manifest: docs/contributing/GATE-MANIFEST.md matches run.ts"); process.exit(d ? 1 : 0); }
 const laneArg = valueOf("--lane");
 const only = argv.filter((a, i) => !a.startsWith("--") && !VALUED.includes(argv[i - 1]));
 for (const n of only) if (!SUITES.some(([s]) => s === n)) { console.log(`protocol gate: no suite named "${n}" (bun tools/protocol/run.ts --manifest lists them)`); process.exit(2); }

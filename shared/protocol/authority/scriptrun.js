@@ -423,7 +423,7 @@ function scriptsOf(w, st, id, floor = null) {
 /** The status view for a host's own readers (a server's debug panel): what `scripts {id?}` answers, without a request. */
 export function scriptsView(w, id, floor = null) { if (!w.exists || w.state().status !== "ok") return { scripts: [], imported: [] }; return withAuthority(w, () => scriptsOf(w, w.state(), id, floor)); }
 // an imported world carries its old bindings as @world imported-behavior:<name> (their old shape, kept as a record). The authority never runs them.
-const IMPORTED_WHY = "an imported behaviour, carried by translation from the world's old log. It doesn't run here: it was written for the old script API (world.emit, world.kv) with its author's rights and no declared scope. Re-install it as script:<name> on the thing it belongs to: rewrite the source for today's script API (docs/SCRIPTS.md), upload {text}, then set script:<name> {src, scope, on}";
+const IMPORTED_WHY = "an imported behaviour, carried by translation from the world's old log. It doesn't run here: it was written for the old script API (world.emit, world.kv) with its author's rights and no declared scope. Re-install it as script:<name> on the thing it belongs to: rewrite the source for today's script API (docs/guide/SCRIPTS.md), upload {text}, then set script:<name> {src, scope, on}";
 function importedBehaviours(w, st) {
   return Object.entries(st.entities["@world"]?.c ?? {}).filter(([k]) => k.startsWith("imported-behavior:")).map(([k, b]) => ({ id: "@world", behavior: k,
     attach: b?.attach ?? null, src: b?.src ?? null, author: b?.author ?? null, status: "needs-reinstall", why: IMPORTED_WHY }));
@@ -435,12 +435,12 @@ const SCRIPT_VERBS = {
   upload(w, actor, a) {
     if (a.effect !== undefined) return uploadEffect(w, actor, a);
     if (!may(w.state(), actor, "scripts")) refuse("rights", `uploading a script needs the scripts permission; you are ${roleOf(w.state(), actor)}`, "ask the world's owner", { needs: "scripts" });
-    if (typeof a.text !== "string") refuse("shape", "upload {text}: the script's JavaScript source", "docs/SCRIPTS.md");
+    if (typeof a.text !== "string") refuse("shape", "upload {text}: the script's JavaScript source", "docs/guide/SCRIPTS.md");
     { const now = w.now(), U = ((w.presence.uploads ??= {})[actor] ??= []).filter((t) => now - t < 60000); w.presence.uploads[actor] = U; // presence: never logged
       if (U.length >= SR.LIMITS.uploads) refuse("rate", `${said(actor)} has uploaded ${U.length} sources in the last minute; at most ${SR.LIMITS.uploads}`, "slow down");
       U.push(now); w.presenceDirty = true; }
     const dirty = SR.hygiene(a.text); if (dirty) refuse(dirty.code, dirty.reason, dirty.fix ?? "refused: reviewers must see what runs");
-    const syn = w.scripts?.checkSyntax?.(a.text); if (syn) refuse("syntax", syn.why, "docs/SCRIPTS.md shows the API");
+    const syn = w.scripts?.checkSyntax?.(a.text); if (syn) refuse("syntax", syn.why, "docs/guide/SCRIPTS.md shows the API");
     if (a.dry) return { ok: true, dry: true, note: syn === undefined ? "it's clean; syntax unchecked (no sandbox here); nothing stored" : "it parses and is clean; nothing stored" };   // undefined = no checker ran (sandbox.js checkSyntax)
     return { ok: true, src: w.putBlob({ lang: SR.LANG, api: SR.API, text: a.text }), next: "set {id, component: 'script:<name>', value: {src, scope: {ids: 'self', comps: [...]}, on: ['use']}}" };
   },

@@ -84,7 +84,7 @@ export function scan(text: string): Record<string, number> {
 const ROLE_WORDS = /WORLD_ADMIN|\bworld[- ]admins?\b|\bworld operators?\b/gi;
 export const roleWords = (text: string) => [...text.matchAll(ROLE_WORDS)].length;
 // where the legacy name stays (R 10-27): its reader, its compatibility test, the migration notes; and dated records kept verbatim
-const ROLE_WORDS_OK = new Set([SELF, "server/operators.ts", "tools/protocol/identity-check.ts", "docs/TRANSLATING-OLD-WORLDS.md", "deploy/SHOW_RUNBOOK.md", "docs/INCIDENTS.md", "docs/history/TEL0S_NOTES.md"]);
+const ROLE_WORDS_OK = new Set([SELF, "server/operators.ts", "tools/protocol/identity-check.ts", "docs/operator/TRANSLATING-OLD-WORLDS.md", "docs/operator/SHOW-RUNBOOK.md", "docs/history/INCIDENTS.md", "docs/history/TEL0S_NOTES.md"]);
 /** "file:line" for each role-word hit in the repo's text outside ROLE_WORDS_OK (frozen/ is history, never edited). */
 export function roleWordHits(root = ENGINE): string[] {
   const out: string[] = [];

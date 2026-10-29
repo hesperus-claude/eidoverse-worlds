@@ -43,7 +43,7 @@ The signed-in WebSocket guard (server/auth.ts `crossSiteUpgrade`):
 - not sent, with an Origin: it must equal `ownOrigin`, which is `HN_NATIVE_ORIGIN`
   when set (scheme, host, port, exactly), else the request's own scheme and its
   `Host` header (the URL's host without one). Behind a proxy that is not the public origin, so
-  set `HN_NATIVE_ORIGIN` there (README, deploy/SHOW_RUNBOOK.md).
+  set `HN_NATIVE_ORIGIN` there (README, docs/operator/SHOW-RUNBOOK.md).
 
 The existing `HN_ISSUER_KEY` enables the feature and
 `HN_LOGIN_URL` supplies the browser login destination. `HN_SESSIONS_FILE` optionally

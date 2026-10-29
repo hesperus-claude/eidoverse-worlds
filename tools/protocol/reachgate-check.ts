@@ -157,7 +157,7 @@ const head0 = w.log.seq;
   ok(out && !out.reach, "RG22 a point in Sly's own frame, turned by q, that lands inside Vic is stripped", out);
   pose(sly, { p: [0.6, 0, 0], yaw: 0 }); }
 
-// RG23: a `space` point is metres at any body size (docs/body-state.md; reachnet.js localToWorld on the unscaled root);
+// RG23: a `space` point is metres at any body size (docs/guide/BODY-STATE.md; reachnet.js localToWorld on the unscaled root);
 // only the frame's own capsule grows with the body. Vic at 2×
 { const big = pose(vic, { p: [0, 0, 0], yaw: 0, scale: 2 });
   ok(big?.scale === 2, "(RG23 setup) Vic stands at 2×", big);

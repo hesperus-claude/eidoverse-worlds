@@ -1,7 +1,7 @@
 import { recordComponents } from './protocol/view.js';
 import { isVrmModel } from './eido.js';
 // Selection layers: which kind of thing a click in the edit viewport can land on. A thing's layer
-// is world data a builder may set (the DRAFT component hesperus/layer, docs/COMPONENT-LADDER.md rung 1); without it, a
+// is world data a builder may set (the DRAFT component hesperus/layer, docs/contributing/COMPONENT-LADDER.md rung 1); without it, a
 // sensible default by kind, and whatever rides an avatar is on 'people' with it. Which layers each PERSON can click is
 // theirs alone (client/lib/selectmask.js). The Hierarchy always selects anything: nothing can be stranded.
 export const LAYER_KEY = 'hesperus/layer';

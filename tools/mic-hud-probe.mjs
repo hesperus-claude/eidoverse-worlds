@@ -53,7 +53,7 @@ try {
   const s1 = await state();
   check('click ON reaches the SFU: slash gone, tooltip no longer "mic off"',
     s1.slashed === false && !/mic off/i.test(s1.title ?? ''), JSON.stringify(s1));
-  // the disclosure (owner's decision 10-02, docs/pose-wire.md): every mic tooltip, on and off, says who can see it
+  // the disclosure (owner's decision 10-02, docs/reference/POSE-WIRE.md): every mic tooltip, on and off, says who can see it
   check('the mic tooltip says mic/headphone state is visible to everyone in this world, on and off',
     /visible to everyone in this world/.test(s0.title ?? '') && /visible to everyone in this world/.test(s1.title ?? ''), JSON.stringify({ s0: s0.title, s1: s1.title }));
   // hud-mic-truth, as an assertion: while the transport says publishing, the

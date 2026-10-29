@@ -174,7 +174,7 @@ function report(src: string, dest: string, r: ReturnType<typeof translateV1World
 function translateInPlace(name: string, approval: Approval, approvedSource: { size: number; sha256: string }) {
   const D = path.join(WORLDS_DIR, name), log = path.join(D, "log.jsonl");
   if (!fs.existsSync(log)) die(`"${name}" holds no old log (${log}): there's nothing to translate here. Nothing was changed.`);
-  let kept = "";   // the verified backup, once made: a failure after it keeps it (review L5; docs/TRANSLATING-OLD-WORLDS.md "Backups")
+  let kept = "";   // the verified backup, once made: a failure after it keeps it (review L5; docs/operator/TRANSLATING-OLD-WORLDS.md "Backups")
   const fail = (why: string, T?: string): never => {
     if (T) fs.rmSync(T, { recursive: true, force: true });
     die(`${why}\nNothing was moved: "${name}" is exactly as it was (its log.jsonl untouched)${kept ? `. The verified backup made first is kept at ${kept} (each try makes another: delete the ones you don't need).` : ", and nothing was left behind."}`);

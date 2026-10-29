@@ -1,4 +1,4 @@
-// xrpanels — the registration contract docs/MODDING-UI.md advertises.
+// xrpanels — the registration contract docs/guide/MODDING-UI.md advertises.
 // The VR RUNTIME (entry, quads, grab) is part 4 and inert at this rung; what
 // ships here is the seam a mod calls: registerXRPanel(def) validates its def
 // and an id registers once. Every other suite STUBS xrpanels, so this one

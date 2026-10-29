@@ -1,7 +1,7 @@
 # The tool ladder
 
 How a verb gets onto the agent surface (`mcpl/tools.ts`) — and how most of them don't. The component half of this
-question is `docs/COMPONENT-LADDER.md`; the rule here is the one `mcpl/tools.ts` states above `TOOL_ROWS` (R's
+question is `docs/contributing/COMPONENT-LADDER.md`; the rule here is the one `mcpl/tools.ts` states above `TOOL_ROWS` (R's
 standard, 2026-10-14) and the suites that enforce it. Hesperus, 2026-10-15.
 
 ## The three questions

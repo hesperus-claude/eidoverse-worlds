@@ -245,7 +245,7 @@ const USE_VERBS = {
         const old = Object.entries(wc).find(([k, b]) => k.startsWith("imported-behavior:") && (k === `imported-behavior:${probe.script}` || b?.attach === a.id));
         const lt = lastTouch(w, a.id, "reactions", { authored: true }); const ce = lt ? w.entries[w.entries[lt.seq]?.cause] : null;
         if (old || (isE(ce) && ce.kind === "request" && ce.verb === "imported"))
-          refuse("no-runtime", `${a.id}'s '${probe.action}' runs the imported behaviour '${old ? old[0].slice("imported-behavior:".length) : probe.script}', carried by translation; the authority doesn't run the old script API`, `re-install it as script:${probe.script} on ${a.id} (docs/SCRIPTS.md); scripts lists imported behaviours as needs-reinstall`);
+          refuse("no-runtime", `${a.id}'s '${probe.action}' runs the imported behaviour '${old ? old[0].slice("imported-behavior:".length) : probe.script}', carried by translation; the authority doesn't run the old script API`, `re-install it as script:${probe.script} on ${a.id} (docs/guide/SCRIPTS.md); scripts lists imported behaviours as needs-reinstall`);
         refuse("no-handler", `${a.id}'s '${probe.action}' runs ${key}, which isn't installed on it`, "scripts {id} lists what runs here"); }
       const ev = { on: "use", action: probe.action, ...(a.args !== undefined ? { args: a.args } : {}), ...(held ?? {}) };
       if (a.dry) return { ok: true, dry: true, script: activate(w, a.id, probe.script, { ...ev, by: actor, dry: true, requester: actor }) };
@@ -260,7 +260,7 @@ const USE_VERBS = {
     return world.length ? { ...r, world } : r;
   },
 };
-// A script on @world that lists `use` is world-level (docs/SCRIPTS.md): it hears every logged use after the thing's own
+// A script on @world that lists `use` is world-level (docs/guide/SCRIPTS.md): it hears every logged use after the thing's own
 // reaction, never its own use nor the @world script that use just ran. `ran`: the script name the use ran on @world
 function worldHears(w, id, action, by, act, args, held, ran) {
   const wc = w.state().entities["@world"]?.c ?? {}, out = [];
@@ -270,7 +270,7 @@ function worldHears(w, id, action, by, act, args, held, ran) {
     out.push(activate(w, "@world", name, { on: "use", id, action, ...(args !== undefined ? { args } : {}), ...(held ?? {}), by, seq: act, cause: act })); }
   return out;
 }
-// A script's world.use (docs/SCRIPTS.md): the target's own gate as a visitor's use, asked with the sponsor's rights; the
+// A script's world.use (docs/guide/SCRIPTS.md): the target's own gate as a visitor's use, asked with the sponsor's rights; the
 // use is its own act (actor the script, cause the script's act), so a cascade's depth and the audit follow it
 function scriptUse(w, sid, sponsor, cause, u) {
   const actor = `script:${sid}`, req = { id: u.id, action: u.action, ...(u.args !== undefined ? { args: u.args } : {}) }, out = { id: u.id, action: u.action };

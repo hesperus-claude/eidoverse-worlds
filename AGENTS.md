@@ -370,7 +370,7 @@ near-miss of a registered one (`ligth`) with a "did you mean"
 a new reading of an old one. An owner may list the drafts this world uses and
 trusts in `@world.trusted-components {components: [<namespaced names>]}`
 (the Inspector offers them; the authority still doesn't read them; the ladder
-is docs/COMPONENT-LADDER.md).
+is docs/contributing/COMPONENT-LADDER.md).
 
 **Reactions** are the data half of interaction. Each handler names its
 `kind`, may add `who` (a role id: that rank or above) and `fix` (shown when
@@ -646,7 +646,7 @@ socket's `radius` (a key on its hook); `return`/`returnAfter` send it home
 `use` (`args: {phase: 'up'}` for the release): each press and release is
 one act, for state changes (a hose on, then off); rapid effects while
 pressed (a spray, a muzzle flash) will be presence (`grabbable.fx`, reserved
-for now), never a stream of acts. Scripts hear `grab` and `release` (docs/SCRIPTS.md).
+for now), never a stream of acts. Scripts hear `grab` and `release` (docs/guide/SCRIPTS.md).
 `punt {id, power? | v?}` sends a loose thing beside your body into flight
 (or volleys one in the air beside you); it is never `kick`, which is
 moderation's remove-a-person. A body moving into a loose thing pushes it
@@ -696,7 +696,7 @@ world.on("use", (e) => {
 ```
 
 The whole API, its events, limits and determinism rules are in
-**docs/SCRIPTS.md** — read it before writing one. The essentials:
+**docs/guide/SCRIPTS.md** — read it before writing one. The essentials:
 state lives in components in the script's scope (there is no private kv);
 writes are proposals that land together or not at all; `Date.now()` and
 `Math.random()` are frozen and seeded per activation; **replay never
@@ -708,7 +708,7 @@ a visitor keeps in their own browser (IndexedDB) as trusted in-page
 modules — the whole client surface, speaking AS that visitor, like a
 browser extension. They reach the world only through the requests and
 presence that visitor's client sends. A world can't offer a mod to its
-visitors yet. docs/MODDING-UI.md covers the UI a mod can build.
+visitors yet. docs/guide/MODDING-UI.md covers the UI a mod can build.
 
 ## Code, through this repo — extending the vocabulary itself
 
@@ -726,7 +726,7 @@ client-side meaning — are code. Pull the repo, then:
   the record's flat components (`shared/protocol/view.js` viewState,
   realized by `client/lib/realize/`); how a name gets into the registry, so
   the authority can check its shape and `schema` can teach it, is
-  `docs/COMPONENT-LADDER.md`.
+  `docs/contributing/COMPONENT-LADDER.md`.
 
 House rules, learned the hard way (each one is a past incident):
 
@@ -800,7 +800,7 @@ into a new name instead, leaving the old directory as it was. Its entries
 appear in the translated world's history as `imported` acts (`{verb, args, from}`), and fields the protocol has no
 component for ride along as `imported:<name>`. Old runtime scripts are kept
 as a record on `@world` and never run: `scripts` lists them as
-`needs-reinstall` (docs/SCRIPTS.md says how to port one).
+`needs-reinstall` (docs/guide/SCRIPTS.md says how to port one).
 
 This protocol's own pre-release worlds were never deployed, so none is migrated: a log this server's reader
 doesn't fold is refused, loudly. The worlds dir's key files are renamed to `.custody.json` /
@@ -820,7 +820,7 @@ doesn't fold is refused, loudly. The worlds dir's key files are renamed to `.cus
   limited (10 a minute per address, 60 a minute for the whole server: 429 with
   `retry-after`) and queued (past 16 waiting: 503, ask again in a minute),
   each refusal in words saying when to ask again.
-  It is advice, never a refusal (docs/BUILDING.md).
+  It is advice, never a refusal (docs/guide/BUILDING.md).
 - `?as=image&name=foo` + a PNG/JPEG/WebP body (≤8MB) →
   `store/images/<hash>.<ext>`, a picture source. The kind is read from the
   bytes, not the name; the store is inert — what hangs in a world is the
@@ -925,7 +925,7 @@ shallowest first:
 
 Griddled structures route by their own planner, below. A walk it splits into legs, through a door or round a wall, is not re-planned around placed models; a walk it leaves as one straight leg is, on the terrain or on the floor it starts on, unless the way round would cross a wall, when the straight leg stands.
 
-Making a building of your own? **[docs/BUILDING.md](docs/BUILDING.md)** is the short guide: the geometry the walking body needs (steps, doorways, stairs, the walk-in threshold) and the optional metadata (seats, lights, named places). `measure {id | lib, check: true}` is the build check (#241): what a model is like to walk into, measured with the walking body's own rules, before or after it is placed.
+Making a building of your own? **[docs/guide/BUILDING.md](docs/guide/BUILDING.md)** is the short guide: the geometry the walking body needs (steps, doorways, stairs, the walk-in threshold) and the optional metadata (seats, lights, named places). `measure {id | lib, check: true}` is the build check (#241): what a model is like to walk into, measured with the walking body's own rules, before or after it is placed.
 
 ### Named places
 
@@ -975,7 +975,7 @@ Routes use the structures known when the walk begins, where they are then. A flo
   `detail: "all"` for geometry, or `"contacts"` with `points:
   ["chest_front", "hand_l"]`. Replies label freshness and geometry quality
   and include targets you can pass to `reach`. See
-  [body perception and reach examples](docs/body-state.md).
+  [body perception and reach examples](docs/guide/BODY-STATE.md).
 - **`world_history {verbs?, before?, after?, limit?}`** (MCPL) — raw log
   entries. The log is the world's source, so reading it is reading the
   world. Filter by the authority's words (`create`, `set`, `delete`, `place`,

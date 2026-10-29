@@ -282,7 +282,7 @@ export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, 
         engine: renderer.capture?.engine ?? "browser", scene: renderer.capture?.scene ?? "world-fold",
         finish(r) { if (!pending.delete(id)) return; clearTimeout(timer); resolve(r); } };
       pending.set(id, p);
-      // `capture` / `capture-result` (docs/WIRE.md). Framing (shared/snapframe.js) rides nested, only when given; `at`
+      // `capture` / `capture-result` (docs/reference/WIRE.md). Framing (shared/snapframe.js) rides nested, only when given; `at`
       // frames a placed thing instead. `wait`: how long the renderer may load the world (net_capture.js settle), this
       // frame's window less a margin for the capture and the send.
       try { renderer.ws.send(JSON.stringify({ type: "capture", id, follow, view, width: 960, height: 540,

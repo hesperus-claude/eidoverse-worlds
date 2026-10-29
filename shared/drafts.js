@@ -1,4 +1,4 @@
-// drafts — the component ladder's first two rungs as the editor sees them (docs/COMPONENT-LADDER.md).
+// drafts — the component ladder's first two rungs as the editor sees them (docs/contributing/COMPONENT-LADDER.md).
 //
 // A DRAFT is a namespaced component (`hesperus/material`) the authority stores but doesn't read: it is only as real as
 // the readers that choose to read it. A reader registers the draft it reads here, and Add Component and the Inspector

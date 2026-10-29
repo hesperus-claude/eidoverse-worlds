@@ -1,6 +1,6 @@
 # Seat-profile store: write authority and integrity
 
-The design behind `server/seats.ts` (the server side of seat profiles; see also docs/SEATS.md).
+The design behind `server/seats.ts` (the server side of seat profiles; see also docs/reference/SEATS.md).
 
 ## Write authority
 
