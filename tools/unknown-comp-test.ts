@@ -1,5 +1,5 @@
 // unknown-comp-test — what today's engine does with a component type it does
-// not know (the baseline docs/COMPONENTS-TODAY.md states under "An unknown
+// not know (the baseline COMPONENTS-TODAY.md, deleted in f39948ff0, states under "An unknown
 // component", on the protocol).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/unknown-comp-test.ts

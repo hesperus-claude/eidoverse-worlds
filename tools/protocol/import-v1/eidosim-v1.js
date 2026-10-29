@@ -1,4 +1,4 @@
-// sim — the deterministic sim fold (spec/PROTOCOL_v2.md, dialect 3), as one
+// sim — the deterministic sim fold (spec/history/PROTOCOL-v2-sim.md, dialect 3), as one
 // pure module. This is the reference eidosim: fold the sim-scoped entries of
 // an epoch through it, advance to a tick, and every conforming
 // implementation holds bit-identical state — that is the whole covenant.

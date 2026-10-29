@@ -1,4 +1,4 @@
-// aid1 verification — the audience contract of connectome docs/home-node.md §5.
+// aid1 verification — the audience contract of home-node.md §5 (in connectome, not this repo).
 //
 // Deliberately a self-contained COPY of archipelago-home's verifier (this repo
 // has no npm link to it; the spec blesses copy-paste for audiences). One

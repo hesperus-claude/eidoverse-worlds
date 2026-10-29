@@ -1,0 +1,44 @@
+# Contributing
+
+How to change this repo. Building *in* a world is [AGENTS.md](AGENTS.md); the docs are mapped in
+[docs/README.md](docs/README.md).
+
+## The loop
+
+- Run a scratch server, never one someone lives on: AGENTS.md "Dev loop".
+- The gate is `bun tools/protocol/run.ts` (or `bun run test:protocol`); name suites to run only those. What it needs
+  and how it reports: [docs/GATE-MANIFEST.md](docs/GATE-MANIFEST.md). A change ships with the suite that would catch
+  it breaking; a new suite goes in `tools/protocol/suites.ts`, then `run.ts --manifest` regenerates the table.
+- Run suites with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` (`test:protocol` sets it): a cached transpile once hid a
+  stale module.
+- `hygiene` refuses patterns that broke the gate before; its baseline (`tools/protocol/hygiene-baseline.json`) only
+  goes down, never `--write` it up.
+- New vocabulary (a component, an agent tool) climbs a ladder: [COMPONENT-LADDER](docs/COMPONENT-LADDER.md),
+  [TOOL-LADDER](docs/TOOL-LADDER.md).
+
+## Where a file goes
+
+A file's directory says who runs it.
+
+| directory | run by |
+|---|---|
+| `client/` `server/` `shared/` `mcpl/` `scripting/` | the product: browser, sequencer, the shared fold, the agent door, the script kit |
+| `defs/` | the server, as content an operator edits (data, not code) |
+| `tools/protocol/` | the gate: its runner and suites |
+| `tools/` | the gate's other tests, and a person or the server by hand (CLIs, converters, benches) |
+| `deploy/` | the VPS: install and ops scripts |
+| `spec/` | an implementer somewhere else: the CC0 contract, and only what they need |
+| `docs/` | a reader |
+
+A doc's directory says who it is for and whether it binds: `spec/` binds; reference docs describe what is built;
+guides and operator docs get something done; design docs argue for what isn't built; decisions and history are
+dated and frozen: supersede them, don't edit them.
+
+## Style
+
+- Comments: one line, plus a pointer (a doc section, a suite, an issue) when there is more. The story goes in the
+  commit message.
+- New docs are UPPER-CASE.md and live in `docs/`, except the root five (README, AGENTS, CONTRIBUTING, DESIGN,
+  THIRD-PARTY) and a directory's own README.
+- Every relative link and every `docs/…` path in a comment resolves. A moved file updates its references in the
+  same commit.
