@@ -1,0 +1,1732 @@
+{
+ "generated": "2026-10-29",
+ "main": "34fd77ea2",
+ "v4": "72847d01d",
+ "head": "72847d01d9819ea8b2ecb48455b43a496b7ceeb9",
+ "notes": "Re-audit of every 10-27 row against the exact PR head 72847d01d (main = anima/main 34fd77ea2 = ccd5c53fa + #283; the files cited for main are unchanged between the two). Status rules: restored = file:line on both sides AND a suite row seen passing in this audit; a claim without both is partial/unverified. Suites run from wt-s-int under flock ~/eido/.testlock with BUN_RUNTIME_TRANSPILER_CACHE_PATH=0; logs beside this file. browser/agent/vocabulary/specimen columns are carried from the 10-27 matrix where the row existed (not re-verified today) and '\u2014' for new rows. world A/world B acceptance: ACCEPTANCE-1028.md (world B's browser walk still waits on the heightmap grid blob).",
+ "summary": {
+  "restored": 30,
+  "partial": 12,
+  "intentional-change": 23,
+  "absent": 15,
+  "unverified": 4
+ },
+ "total": 84,
+ "groups": [
+  {
+   "name": "Water & movement (owner's named blocker)",
+   "rows": [
+    {
+     "id": "1",
+     "system": "Water volumes (entity `water`: swim inside an authored body)",
+     "status": "restored",
+     "lean": "none (restored)",
+     "implementation": "shared/protocol/componentspec.js:552 (water) + :570 (zone); shared/zone.js (mediumOf); client/lib/watervolumes.js (reads zones)",
+     "browser": "watervolumes.js reads zones; rebuild-on-every-change bug fixed",
+     "agent": "same as main: the walker reads the world water level (agent.ts:2702); zones are a follow-up (main had none)",
+     "vocabulary": "zone {shape,size,priority,\u2026}; water on thing or @world; registry re-pinned",
+     "migration": "VOLUMES.water translate-v1.js:414, waterPartsOf :422-430 (center/size \u2192 zone {box,size}; absorption \u2192 attenuationColor/Distance; scatter \u2192 scatterColor), volumePartsOf :432-441 (on the thing when it has no model/light and centre 0, else a `water` child at the centre); @world water is ON_WORLD :411 (still refused, listed)",
+     "specimen": "world A: translated (divergences 0), served, joined in a browser, water level applied, a body floats in its deepest column. world B: translated + served clean; its water sits on a heightmap whose grid blob isn't in the fixture copy, so the browser walk waits on that blob (ACCEPTANCE-1028.md)",
+     "evidence": {
+      "main": "client/lib/watervolumes.js:250-262 (waterParams per entity, axis-aligned box, fog slot); shared/water.js:8-16 (center/size/absorption/scatter/speed/waves)",
+      "v4": "shared/protocol/componentspec.js:552 (water) + :570 (zone); shared/zone.js (mediumOf); client/lib/watervolumes.js (reads zones)"
+     },
+     "tests": "zone-water Z1,Z3,Z5,Z6,Z7,Z8,Z12,Z13 SEEN PASS 18/18; water-import G1,G5,G6,G7 SEEN PASS 15/15; water-vectors SEEN 5/12/12",
+     "changed_since_1027": "no code change to the mapping; D13 (yawed bodies) and Z14 added; render-scene inverse (316ccc91e)",
+     "note": "What v4 does with an old world: each `water` thing becomes a zone+water (thing or child); `speed` \u2192 physics-area (row 50/B8). PR \u00a7Restorations line correct; \u00a7What breaks line 28 ('Deferred, not dropped') is stale.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "1",
+     "system": "Air boxes (entity `air {boxes}`: dry interiors that ride a moving hull)",
+     "status": "restored",
+     "lean": "none (restored)",
+     "implementation": "shared/protocol/componentspec.js:582 (water-exclusion {bodies?}) + :570 (zone, priority); shared/zone.js (exclusion beats bodies at/below priority)",
+     "browser": "watervolumes.js reads zones; rebuild-on-every-change bug fixed",
+     "agent": "same as main: the walker reads the world water level (agent.ts:2702); zones are a follow-up (main had none)",
+     "vocabulary": "zone {shape,size,priority,\u2026}; water on thing or @world; registry re-pinned",
+     "migration": "VOLUMES.air translate-v1.js:415, volumePartsOf :443-446: one child per box {transform: center+q, zone {box,size,priority:1}, water-exclusion {}}",
+     "specimen": "world A: translated (divergences 0), served, joined in a browser, water level applied, a body floats in its deepest column. world B: translated + served clean; its water sits on a heightmap whose grid blob isn't in the fixture copy, so the browser walk waits on that blob (ACCEPTANCE-1028.md)",
+     "evidence": {
+      "main": "client/lib/watervolumes.js:264-272 (air.boxes: size, q, inverse matrix per box, MAX_AIR); server/render-scene.ts:99",
+      "v4": "shared/protocol/componentspec.js:582 (water-exclusion {bodies?}) + :570 (zone, priority); shared/zone.js (exclusion beats bodies at/below priority)"
+     },
+     "tests": "zone-water Z2,Z4,Z4w,Z5,Z10,Z11,ZM SEEN PASS 18/18; water-import G2 (15 pockets), G5, G6 (8000 seeded points = main mediumAt) SEEN PASS 15/15",
+     "changed_since_1027": "none to the mapping; fog-mask-check still hand-run (WebGL), not gated",
+     "note": "fog-mask-check (GPU) not in the gate: the shader-side mask is proven only by Z10's uniforms.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "1",
+     "system": "Climb routes (entity `traversal {routes}`: ladders, moonpool, hatch)",
+     "status": "restored",
+     "lean": "none (restored)",
+     "implementation": "shared/protocol/componentspec.js:512 (climb {points 2-16, reach, speed, face, ends}); shared/climb.js; client/lib/climb.js (exists at head: git ls-tree)",
+     "browser": "watervolumes.js reads zones; rebuild-on-every-change bug fixed",
+     "agent": "same as main: the walker reads the world water level (agent.ts:2702); zones are a follow-up (main had none)",
+     "vocabulary": "zone {shape,size,priority,\u2026}; water on thing or @world; registry re-pinned",
+     "migration": "CARRIED.traversal translate-v1.js:304; climbPartsOf :346-354: one climb child per route (path \u2192 points, radius \u2192 reach clamp .3-3, speed clamp .3-4, name \u2192 label); >16 points \u2192 imported:climb on the child",
+     "specimen": "world A: translated (divergences 0), served, joined in a browser, water level applied, a body floats in its deepest column. world B: translated + served clean; its water sits on a heightmap whose grid blob isn't in the fixture copy, so the browser walk waits on that blob (ACCEPTANCE-1028.md)",
+     "evidence": {
+      "main": "client/lib/traversal.js:16-19 (routes \u226432, path, radius, speed clamp .3-4 at :42)",
+      "v4": "shared/protocol/componentspec.js:512 (climb {points 2-16, reach, speed, face, ends}); shared/climb.js; client/lib/climb.js (exists at head: git ls-tree)"
+     },
+     "tests": "climb-env K4,K5,K6,K7,K11 SEEN PASS 14/14; water-import G3c (three routes \u2192 climb children) SEEN PASS",
+     "changed_since_1027": "none",
+     "note": "main allowed 32 routes and unbounded points; v4 caps points at 16 (the rest carried, listed).",
+     "status_1027": "restored"
+    },
+    {
+     "id": "1",
+     "system": "Vehicles driven from a helm (entity `vehicle {helm, exit, speed, turnRate, minY, maxY, probes}` on the lease channel)",
+     "status": "restored",
+     "lean": "ruled: R 10-28 11:33 item 50 (probes retired: the authority's hull sweep does it; minY/maxY \u2192 collision layers + walls; explain IN THE PR)",
+     "implementation": "shared/protocol/componentspec.js:521 (drive {maxSpeed, turnRate, climbRate, response, throttle}); shared/drive.js; shared/protocol/authority/drive.js (lease, plausibility, hull sweep); client/lib/vehicles.js",
+     "browser": "client/lib/vehicles.js: W/S, A/D, Space/C at helm, ~15 Hz stream",
+     "agent": "\u2014 main's agents had none either (no mediumAt/climb/drive in main's mcpl/, checked 10-28): not a parity gap; agent-side water is a follow-up",
+     "vocabulary": "drive {maxSpeed, turnRate, climbRate?, response?, throttle?}; station.input {move:'drive'}",
+     "migration": "CARRIED.vehicle translate-v1.js:306; vehiclePartsOf :322-333: drive {maxSpeed: speed, turnRate, climbRate: speed} + helm child (socket+station drive); minY/maxY \u2192 two hidden locked 200 km hull-only walls (collider {blocks:['hulls']}) offset by the hull's measured box; probes \u2192 imported:vehicle, listed (FATES)",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending",
+     "evidence": {
+      "main": "client/lib/vehicles.js:1-2 (lease channel), :34-40 (lease lost/released), :55-70 (speed clamp .1-15, turnRate .1-2, minY/maxY clamp :60-62, five hull probes :63-70); server/server.ts:856-861 (settleLease)",
+      "v4": "shared/protocol/componentspec.js:521 (drive {maxSpeed, turnRate, climbRate, response, throttle}); shared/drive.js; shared/protocol/authority/drive.js (lease, plausibility, hull sweep); client/lib/vehicles.js"
+     },
+     "tests": "drive D1-D19 SEEN PASS 19/19 (D4/D10/D11 hull sweep replaces probes; D5/D8 lease; D15 hull-only walls); water-import G4v,G4w,G4o SEEN PASS; translate V7,F50,F50b,F50c SEEN PASS 36/36",
+     "changed_since_1027": "@29 (c32b01f28): minY/maxY walls + physics-area; 742ace624 collider.blocks; walls span 200 km (a765514dd), locked (dd55d24fd); D13-D19 review fixes",
+     "note": "The lease is now the authority's drive lease (D5/D8), not main's client-volunteer lease: an intentional shape change already explained in the PR ('vehicles rode the lease channel'). PR \u00a7Restorations line 219 is correct.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "1",
+     "system": "Collision on/off (entity `collision {enabled:false}`: walk-through geometry)",
+     "status": "restored",
+     "lean": "none (restored)",
+     "implementation": "shared/protocol/componentspec.js:60-67 (collider {shape, enabled, blocks}); shared/protocol/simlayer.js (solidOff)",
+     "browser": "watervolumes.js reads zones; rebuild-on-every-change bug fixed",
+     "agent": "same as main: the walker reads the world water level (agent.ts:2702); zones are a follow-up (main had none)",
+     "vocabulary": "zone {shape,size,priority,\u2026}; water on thing or @world; registry re-pinned",
+     "migration": "CARRIED.collision translate-v1.js:305 \u2192 collider {enabled}; S3-T1 (translate-check, SEEN PASS): spawn `collide: exact|box` \u2192 collider {shape: mesh|box}",
+     "specimen": "world A: translated (divergences 0), served, joined in a browser, water level applied, a body floats in its deepest column. world B: translated + served clean; its water sits on a heightmap whose grid blob isn't in the fixture copy, so the browser walk waits on that blob (ACCEPTANCE-1028.md)",
+     "evidence": {
+      "main": "client/lib/realize/models_field.js:108 (comp.collision.enabled === false \u2192 not solid); server/render-scene.ts:71 (PASS_THROUGH collision)",
+      "v4": "shared/protocol/componentspec.js:60-67 (collider {shape, enabled, blocks}); shared/protocol/simlayer.js (solidOff)"
+     },
+     "tests": "climb-env K1,K1s,K2,K3 SEEN PASS 14/14; water-import G3 (collision goes out as collider) SEEN PASS",
+     "changed_since_1027": "collider.blocks added (742ace624); S3-T1 spawn collide mapping (@24)",
+     "note": "enabled:false + physics dynamic is refused (K2): main had no such rule (it had no engine).",
+     "status_1027": "restored"
+    },
+    {
+     "id": "2",
+     "system": "tools/water authoring pipeline (prepare / preview / import)",
+     "status": "restored",
+     "lean": "none",
+     "implementation": "tools/water/requests.js:1-5 (records \u2192 one batch through translate-v1 project); tools/water/import.ts, prepare.ts; tools/water/README.md",
+     "browser": "preview.ts: unverified",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "requests.js imports project/volumeMappings/carriedMappings from translate-v1.js (same mapping as the log translator)",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending",
+     "evidence": {
+      "main": "tools/water/preview.ts, prepare.ts, import.ts (main: old-format logs + posted verbs)",
+      "v4": "tools/water/requests.js:1-5 (records \u2192 one batch through translate-v1 project); tools/water/import.ts, prepare.ts; tools/water/README.md"
+     },
+     "tests": "water-import G0 (import --dry), G3 (nothing deferred), G4 (a real authority takes the whole batch) SEEN PASS 15/15",
+     "changed_since_1027": "none",
+     "note": "level-dive (browser lane) was not run here.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "3,50(B7)",
+     "system": "Environment (floor, spawn, 3D bounds, sky gradient, ambient motes)",
+     "status": "partial",
+     "lean": "needed: motes (count/range/colour/camera-follow) are reduced to a dust effect \u2014 no ruling recorded in MORNING-ASKS",
+     "implementation": "@world.spawn componentspec.js:502; @world.bounds, @world.terrain {kind: flat}, @world.sky.gradient (K8-K10, K12); particles {effect: dust} child",
+     "browser": "flat ground (terrain.js setFlatGround); KillZ respawn; motes anchored, not camera-following",
+     "agent": "agent KillZ respawn (agent.ts:2784); flat floor in walker",
+     "vocabulary": "terrain {kind:'flat',height}; spawn-point; sky.gradient; light.kind directional",
+     "migration": "CARRIED.environment translate-v1.js:308; environmentPartsOf :364-394 (spawn \u2192 @world.spawn or a spawn-point thing; bounds \u2192 @world.bounds with min.y lowered; floor \u2192 @world.terrain flat unless a terrain exists; sky \u2192 gradient + sun light; particles \u2192 dust child \u2264600 over \u22648 m); environmentPlan :398-403 (only the first environment by id order is mapped; others ride imported:environment, listed)",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending",
+     "evidence": {
+      "main": "client/lib/watervolumes.js:86-119 (sky dome, sun/ambient, environmentSettings = first entity's env, movementBounds), :326-336 (motes \u22643000, range \u226460, own colour, camera-follow)",
+      "v4": "@world.spawn componentspec.js:502; @world.bounds, @world.terrain {kind: flat}, @world.sky.gradient (K8-K10, K12); particles {effect: dust} child"
+     },
+     "tests": "climb-env K8,K9,K10,K12,K13 SEEN PASS 14/14; water-import G3e, G4f SEEN PASS; translate (environment L29 only first mapped) \u2014 no row seen for the second-environment rule beyond the @28 note",
+     "changed_since_1027": "@28 (03d784a02): only the environment main drew is mapped",
+     "note": "Floor/spawn/bounds/sky: restored. Motes: degraded (\u2264600 over \u22648 m, preset colour, anchored) with no owner decision; keep as partial.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "14",
+     "system": "Swim float depth and dive threshold",
+     "status": "intentional-change",
+     "lean": "needed: MORNING-ASKS lists only a lean ('keep v4's, show Antra numbers'); no ruling recorded; Antra's gate names 'swimming/buoyancy/body-state behavior' explicitly",
+     "implementation": "shared/mover.js:63 (at: 0.75 of body height = 1.275 m at 1.7), :70 (latch .12), :72 (deep 1.3 \u00d7 at \u2248 1.66 m before a dive)",
+     "browser": "controller uses floatDepth; yawed non-square body now turns with host",
+     "agent": "agent walker uses the same mover law (agent.ts:2692)",
+     "vocabulary": "\u2014",
+     "migration": "n/a (no stored field)",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending (feel)",
+     "evidence": {
+      "main": "shared/water.js:84-88 (root floats 1.1 m \u00d7 stature under the surface; latch .12); mcpl/agent.ts:11 (SWIM_SPEED via terrainshape)",
+      "v4": "shared/mover.js:63 (at: 0.75 of body height = 1.275 m at 1.7), :70 (latch .12), :72 (deep 1.3 \u00d7 at \u2248 1.66 m before a dive)"
+     },
+     "tests": "mover-check SEEN PASS 188/0 (rows not printed individually); water-vectors --check SEEN 5/12/12 (re-baselined to v4's numbers, so they prove consistency, not parity with main)",
+     "changed_since_1027": "none",
+     "note": "Water 1.3\u20131.66 m deep floats you but won't let you dive (INDEX #14) still true at the head.",
+     "status_1027": "delta"
+    },
+    {
+     "id": "50(B8)",
+     "system": "Per-volume swim speed (`water.speed`)",
+     "status": "restored",
+     "lean": "ruled: R 10-28 11:33 item 50 (water speed \u2192 physics-area {kind: speed})",
+     "implementation": "shared/protocol/componentspec.js:587-592 (physics-area {kind: speed, factor .05-10} on a zone); shared/zone.js speedFactorAt; mcpl/agent.ts:1705, :2708 (agent reads speedAt)",
+     "browser": "unverified",
+     "agent": "\u2014",
+     "vocabulary": "open: no swimSpeed field",
+     "migration": "waterPartsOf translate-v1.js:426-427: factor = waterParams({speed}).speed / waterParams({}).speed (= speed/2.4), clamped .05-10, on the water's zone",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending",
+     "evidence": {
+      "main": "shared/water.js:12 (speed clamp .1-20, default 2.4), :74 (stroke \u00d7 fast)",
+      "v4": "shared/protocol/componentspec.js:587-592 (physics-area {kind: speed, factor .05-10} on a zone); shared/zone.js speedFactorAt; mcpl/agent.ts:1705, :2708 (agent reads speedAt)"
+     },
+     "tests": "physics-area A1-A5 SEEN PASS 5/5; water-import G4s (main's water.speed is the swim speed here) SEEN PASS; translate F50 SEEN PASS",
+     "changed_since_1027": "@29 + physics-area component (c64e37732); previously carried unread in imported:water",
+     "note": "Shape change explained in the PR (line 219) as ruled. A speed area scales walking/wading too where main scaled only the swim (translator's own note :414).",
+     "status_1027": "open"
+    },
+    {
+     "id": "50(B9)",
+     "system": "Vehicle minY/maxY clamps and hull probes",
+     "status": "intentional-change",
+     "lean": "ruled: R 10-28 11:33 item 50 (probes retired, minY/maxY \u2192 collision layers + walls, explain in the PR)",
+     "implementation": "translate-v1.js:322-333 vehiclePartsOf (two hull-only walls); componentspec.js:60-66 collider.blocks; shared/protocol/authority/drive.js (hull sweep replaces probes)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "not in drive (marked non-OMI)",
+     "migration": "minY/maxY \u2192 walls at [0, y, 0] spanning 200 km, locked, offset by the hull's measured box (an unmeasurable hull: walls at minY/maxY themselves); probes \u2192 imported:vehicle, listed with its fate",
+     "specimen": "world-data/water (#248, public) + fixtures/water-old-v1; world A/world B private, pending",
+     "evidence": {
+      "main": "client/lib/vehicles.js:60-62 (y clamped to minY/maxY), :63-70 (five hull probes, raySegment)",
+      "v4": "translate-v1.js:322-333 vehiclePartsOf (two hull-only walls); componentspec.js:60-66 collider.blocks; shared/protocol/authority/drive.js (hull sweep replaces probes)"
+     },
+     "tests": "drive D15,D16,D17 SEEN PASS 19/19; water-import G4w,G4o SEEN PASS; translate F50,F50b,F50c,V7 SEEN PASS 36/36",
+     "changed_since_1027": "was open; built @29",
+     "note": "PR line 219 states it. Not stated in the PR: probes are retired (only the translator report says so).",
+     "status_1027": "open"
+    }
+   ]
+  },
+  {
+   "name": "Unreal / native client (#248)",
+   "rows": [
+    {
+     "id": "5,C6",
+     "system": "Unreal native client: render-scene projection served + native join",
+     "status": "absent",
+     "lean": "ruled: a bridge (eido-bridge, separate repo) is the restoration path; the PR says 'we're glad to do or help with the port as the next PR'",
+     "implementation": "server/server.ts:809 ('no renderSceneVersion: upstream #248's render-scene projection isn't served here'), :1015-1021 (join without replica:true closed 4005); server/render-scene.ts:75-103 exists and projects v4 zone+water / water-exclusion / drive / climb / collider back to main's shapes (316ccc91e) but nothing serves it (suites.ts:199 'nothing serves it')",
+     "browser": "\u2014",
+     "agent": "old/non-replica agents refused at join; a native session's refusal text says so (noFoldRefusal)",
+     "vocabulary": "renderSceneVersion absent; bridge/scene v2 lives in eido-bridge only",
+     "migration": "n/a",
+     "specimen": "none named yet (#248's native half)",
+     "evidence": {
+      "main": "server/server.ts:762 (render-scene request), server/render-scene.ts:71-99 (PASS_THROUGH environment/vehicle/traversal/collision, water, air)",
+      "v4": "server/server.ts:809 ('no renderSceneVersion: upstream #248's render-scene projection isn't served here'), :1015-1021 (join without replica:true closed 4005); server/render-scene.ts:75-103 exists and projects v4 zone+water / water-exclusion / drive / climb / collider back to main's shapes (316ccc91e) but nothing serves it (suites.ts:199 'nothing serves it')"
+     },
+     "tests": "render-scene-import (links + projection R1) in the gate \u2014 NOT RUN here; eido-bridge 29/0 in its own repo (not this PR's gate)",
+     "changed_since_1027": "render-scene.ts now inverts the translator's mapping (review L24); still unserved",
+     "note": "ABSENT in the PR tree. A bridge-based restoration is being built in a separate repo (<local> joins as a replica, folds with the engine's own code as a pinned submodule, local bridge/* protocol; slices B, C, D merged at abe398c). PR line 27 is still accurate.",
+     "status_1027": "open"
+    },
+    {
+     "id": "248-join",
+     "system": "#248 native: join (main's wire, no `replica`)",
+     "status": "absent",
+     "lean": "ruled: bridge in a separate repo",
+     "implementation": "server/server.ts:1015-1021 refuses with noFoldRefusal, 4005",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "server/server.ts (main join: no replica flag required)",
+      "v4": "server/server.ts:1015-1021 refuses with noFoldRefusal, 4005"
+     },
+     "tests": "refusedjoin (W10/W11 old-page refusal) NOT RUN here",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; bridge joins as the replica (bridge/hello \u2192 join).",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-replica",
+     "system": "#248 native: replica / fold on the client",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "shared/protocol/replica.js is JS; no C++ fold in Plugins/Eidoverse",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "n/a (main's native client read render-scene, not a log)",
+      "v4": "shared/protocol/replica.js is JS; no C++ fold in Plugins/Eidoverse"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; the bridge folds with engine/shared/protocol/replica.js (pinned submodule) and sends bridge/scene {version: 2}.",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-snapshot",
+     "system": "#248 native: snapshot (`cut`, `declares` vs `agent` flag)",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "server/server.ts:805-815 buildSnapshot (cut; no renderSceneVersion)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "server/server.ts buildSnapshot (main)",
+      "v4": "server/server.ts:805-815 buildSnapshot (cut; no renderSceneVersion)"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; bridge/ready carries {world, worldId, head, you}.",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-log",
+     "system": "#248 native: log stream (typed, batched entries)",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "v4 streams log entries to replicas only",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "main's native client took render-scene deltas",
+      "v4": "v4 streams log entries to replicas only"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; the bridge consumes the stream and re-emits bridge/scene.",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-writes",
+     "system": "#248 native: writes ({type: request, id, verb, args} with a reply)",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "server/requestwire.ts (request/reply)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "main: {type:'verb'} messages",
+      "v4": "server/requestwire.ts (request/reply)"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; bridge/do {fn} \u2192 requests.js builders \u2192 bridge/done.",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-roles",
+     "system": "#248 native: roles (`roles:<id>` components, `@world.access`)",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "shared/protocol/roles.js; server/requestwire.ts:40 access-directory routed, nothing listens natively",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "main: grant verb + access-state/access-directory messages",
+      "v4": "shared/protocol/roles.js; server/requestwire.ts:40 access-directory routed, nothing listens natively"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree; bridge/access-state and bridge/access-directory (slice D, T10) in the bridge repo.",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-capture",
+     "system": "#248 native: capture / capture-result (was `snap`)",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "server/screenshots.ts (picture broker renamed 'screenshot', f7c8e81d3); capture-capabilities kept as main had it (PR line 27)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "main: snap",
+      "v4": "server/screenshots.ts (picture broker renamed 'screenshot', f7c8e81d3); capture-capabilities kept as main had it (PR line 27)"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "picture broker renamed screenshot",
+     "note": "ABSENT in the PR tree for a native client; bridge passes capture through untouched (README: 'Everything else \u2026 passes through').",
+     "status_1027": "new"
+    },
+    {
+     "id": "248-pose",
+     "system": "#248 native: pose (`pose.anim`, was `emote`); presence q/locomotion kept",
+     "status": "absent",
+     "lean": "ruled: bridge",
+     "implementation": "PR line 27: pose.anim; presence q/locomotion kept",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "main: emote in pose",
+      "v4": "PR line 27: pose.anim; presence q/locomotion kept"
+     },
+     "tests": "n/a",
+     "changed_since_1027": "none",
+     "note": "ABSENT in the PR tree for a native client; a bridge-based restoration is being built in a separate repo.",
+     "status_1027": "new"
+    }
+   ]
+  },
+  {
+   "name": "Consent & bodies",
+   "rows": [
+    {
+     "id": "15",
+     "system": "Body consent: Move me / Touch me + allow/block, ask removed, main opt-out migration",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 12:51 FINAL: TWO gates Move me / Touch me \u2026 Ask stripped'; R 13:03 'NO notice'",
+     "implementation": "shared/protocol/consent.js:15-17 (GATES move/touch, DEFAULT move:true touch:false), :76-88 decide (block>allow>gate>world>default), :67-72 worldGates (ask\u2192both off); client/lib/consent.js:46-50 readStored migrates ew-pushable/ew-posable/ew-body-switch; shared/protocol/authority/storage.js:56 migratePresence at load",
+     "browser": "stored ew-pushable/ew-posable not read; /pushable help says off",
+     "agent": "act shove obeys target's switch",
+     "vocabulary": "consent switch accept|ask|refuse",
+     "migration": "n/a: opt-outs are browser localStorage; server tables migrate at load (storage.js:56), not translate-v1",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/consent.js:24 (ew-pushable)",
+      "v4": "shared/protocol/consent.js:15-17 (GATES move/touch, DEFAULT move:true touch:false), :76-88 decide (block>allow>gate>world>default), :67-72 worldGates (ask\u2192both off); client/lib/consent.js:46-50 readStored migrates ew-pushable/ew-posable/ew-body-switch; shared/protocol/authority/storage.js:56 migratePresence at load"
+     },
+     "tests": "consent-client SEEN PASS 69/69 (migration rows 1b, consent-client-test.ts:62-78); consent SEEN PASS all pass (C9c ew-pushable); reachgate SEEN PASS 63/63",
+     "changed_since_1027": "one switch accept|ask|refuse \u2192 two gates + lists; ask archived (archive/consent-ask); migration added",
+     "note": "PR line 214 'Migration only ever narrows: any old deny becomes a block' \u2014 but ew-posable '1' migrates to Touch ON (widens vs default off; consent-client-test.ts:72); PR line 46 still describes the old tier/cell table (allow|ask|deny, friends/delegates) and line 187 promises consent {unfriend, undelegate}, both retired (RETIRED_CONSENT consent.js:~96)",
+     "status_1027": "open"
+    },
+    {
+     "id": "N1",
+     "system": "refused shove/pose tells the target",
+     "status": "restored",
+     "lean": "ruled: R 13:03 no notice on migration (N1 routed to consent build)",
+     "implementation": "shared/protocol/authority/bodyconsent.js:36-41 body-refused {from,class,gate} to target inbox, once per asker per TRIED_NOTE_MS (consent.js:42)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main 'X tried to knock you over', SWEEP-3 N1)",
+      "v4": "shared/protocol/authority/bodyconsent.js:36-41 body-refused {from,class,gate} to target inbox, once per asker per TRIED_NOTE_MS (consent.js:42)"
+     },
+     "tests": "consent-client SEEN PASS 69/69 (consent-client-test.ts:133-135 wording); force F10 SEEN PASS 15/15",
+     "changed_since_1027": "new",
+     "note": "PR line 159 'A person refused a touch isn't shown why in the browser yet' may be stale given consent-client :133 refusedNotice \u2014 check",
+     "status_1027": "new"
+    },
+    {
+     "id": "N2",
+     "system": "body ranges (pose 10 m, shove/drag 3 m) lifted",
+     "status": "restored",
+     "lean": "ruled: R 13:44 'N2 body ranges \u2192 LIFTED'; open to R: BODY_REACH 2 m / SHOVE_REACH 2.5 m kept as physical reach",
+     "implementation": "shared/protocol/physconst.js:21 BODY_RANGE = null, :23 bodyRangeOf(@world.body-default.range); BODY_REACH 2 m kept at bodyconsent.js:136 for authority body verbs",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main: unlimited, SWEEP-3 N2)",
+      "v4": "shared/protocol/physconst.js:21 BODY_RANGE = null, :23 bodyRangeOf(@world.body-default.range); BODY_REACH 2 m kept at bodyconsent.js:136 for authority body verbs"
+     },
+     "tests": "physconst SEEN PASS 58/58 (:113); reachgate RR1 SEEN PASS 63/63 (reachgate-check.ts:252, 30 m)",
+     "changed_since_1027": "range caps removed",
+     "note": "authority body {kind: shove|drag|carry} still refuses beyond 2 m (bodyconsent.js:136,149)",
+     "status_1027": "new"
+    },
+    {
+     "id": "N3",
+     "system": "punt reach 2.5 m, one place",
+     "status": "restored",
+     "lean": "ruled: R 13:44 'N3 punt reach \u2192 2.5 m, every help/check reads ONE place'",
+     "implementation": "shared/protocol/physconst.js:7 KICK.reach 2.5",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main 2.5 m, SWEEP-3 N3)",
+      "v4": "shared/protocol/physconst.js:7 KICK.reach 2.5"
+     },
+     "tests": "physconst SEEN PASS 58/58 (B KICK :115; 'no other file states a punt distance' :124)",
+     "changed_since_1027": "1.6 \u2192 2.5 m",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "16",
+     "system": "Punt any thing",
+     "status": "intentional-change",
+     "lean": "ruled: R 2026-10-08 'punted \u2192 dynamic' (translate-v1.js:872)",
+     "implementation": "shared/protocol/verbspec.js:74 (punt needs physics dynamic + engine)",
+     "browser": "/punt thing refused otherwise",
+     "agent": "punt refused no-physics",
+     "vocabulary": "physics {kind:'dynamic'}",
+     "migration": "translate-v1.js:884-886 things a v1 log ever punts come across physics dynamic; :867 others static",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/verbs.ts:365",
+      "v4": "shared/protocol/verbspec.js:74 (punt needs physics dynamic + engine)"
+     },
+     "tests": "NOT RUN (grab/phys suites not run here)",
+     "changed_since_1027": "translator handling confirmed",
+     "note": "translator test not watched here: unverified for the translation half",
+     "status_1027": "delta"
+    },
+    {
+     "id": "21",
+     "system": "Kick default",
+     "status": "restored",
+     "lean": "ruled: R 11:34 'whatever is conventional for kick' \u2192 out now, may rejoin at once",
+     "implementation": "shared/protocol/verbspec.js:82; shared/protocol/authority/moderation.js:72 (minutes refused, points at ban); shared/protocol/authority/rights.js:51",
+     "browser": "/kick",
+     "agent": "act kick minutes default 10 (tools.ts:117)",
+     "vocabulary": "kick {who, minutes?}",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:130",
+      "v4": "shared/protocol/verbspec.js:82; shared/protocol/authority/moderation.js:72 (minutes refused, points at ban); shared/protocol/authority/rights.js:51"
+     },
+     "tests": "identity RS3 SEEN PASS 100/100 (identity-check.ts:295-300); roles SEEN PASS 77/77 (mutant roles-check.ts:82)",
+     "changed_since_1027": "10-min cooldown removed",
+     "note": "leftovers: mcpl/tools.ts:543 still forwards a.minutes (now refused by authority, fine); server/worldlog.ts:417 and server/peer.ts:4 still speak of a kick cooldown",
+     "status_1027": "open"
+    }
+   ]
+  },
+  {
+   "name": "Agents (MCPL)",
+   "rows": [
+    {
+     "id": "44,A3",
+     "system": "world_verb + main's old verb names",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'world_verb removed, old verbs refused naming the replacement (44)'",
+     "implementation": "mcpl/tools.ts:1645 (TOOL_REMOVED.world_verb); shared/protocol/verbspec.js:146-165 (REMOVED_VERBS: whisper + mount,dismount,spawn,remove,light,comp,motion,behavior,asset,terrain,grass,epoch,grant, each with fix); shared/protocol/authority.js:131; mcpl/tools.ts:1623-1626 (TOOL_RENAMED_UNTIL 2026-12-01)",
+     "browser": "\u2014",
+     "agent": "world_verb \u2192 'removed' with act {verb, args}; act {verb: <old>} \u2192 'removed' naming the exact call; help {verb} says the same",
+     "vocabulary": "REMOVED_VERBS: whisper + the 14 old verbs",
+     "migration": "n/a (no stored data)",
+     "specimen": "none needed (no stored data)",
+     "evidence": {
+      "main": "mcpl/tools.ts:126",
+      "v4": "mcpl/tools.ts:1645 (TOOL_REMOVED.world_verb); shared/protocol/verbspec.js:146-165 (REMOVED_VERBS: whisper + mount,dismount,spawn,remove,light,comp,motion,behavior,asset,terrain,grass,epoch,grant, each with fix); shared/protocol/authority.js:131; mcpl/tools.ts:1623-1626 (TOOL_RENAMED_UNTIL 2026-12-01)"
+     },
+     "tests": "alias (mcpl/alias-test.ts:24-36) SEEN PASS all ok; agenttools AT9 SEEN PASS 119/119",
+     "changed_since_1027": "alias gone; world_verb now TOOL_REMOVED, runs nothing",
+     "note": "PR line 32 still says 'world_verb {verb, args} runs act unchanged\u2026 refused with a did-you-mean, not translated' and line 179 'passes main's verb words through untranslated': both stale vs line 226 and code (removed; REMOVED_VERBS checked before did-you-mean). 'taught until 2026-12-01' covers TOOL_RENAMED only; world_verb/whisper in TOOL_REMOVED have no end date",
+     "status_1027": "intentional"
+    },
+    {
+     "id": "G6",
+     "system": "hidden tool aliases (walk_to, spawn, snapshot, check_model, pose, animate, emote, posture)",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS R 13:44 'G6 aliases \u2192 drop now, refuse-and-name-the-new-tool for one release, then delete the education'",
+     "implementation": "mcpl/tools.ts:1623-1626 TOOL_RENAMED (names+date only); mcpl/tools.ts:1660-1662 refuse 'is now called X \u2026 nothing ran'",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "mcpl/tools.ts:126 (main served these names; alias-test MAIN_TOOLS)",
+      "v4": "mcpl/tools.ts:1623-1626 TOOL_RENAMED (names+date only); mcpl/tools.ts:1660-1662 refuse 'is now called X \u2026 nothing ran'"
+     },
+     "tests": "alias SEEN PASS (row fails after the date until entries deleted); agenttools AT9 SEEN PASS 119/119",
+     "changed_since_1027": "aliases no longer run; refused naming new tool",
+     "note": "PR line 32 'Renamed tools still run as aliases \u2026 of the nine aliases, AT9 drives four' is WRONG at head (they run nothing); line 96 'the walk_to alias carries both shapes' and 'check_model \u2026 keeping its alias' also wrong",
+     "status_1027": "new"
+    },
+    {
+     "id": "45(A2),11",
+     "system": "spawn axes, place {x,z,y,yaw}, spawn {query}",
+     "status": "intentional-change",
+     "lean": "ruled: G6 (drop aliases, refuse-and-name). place old shape: none explicit",
+     "implementation": "mcpl/tools.ts:1625 (spawn \u2192 refused naming create); mcpl/tools.ts:1162-1168 place passes args to authority; shared/protocol/verbspec.js:15 place oneOf (x \u2192 unknown-arg)",
+     "browser": "\u2014",
+     "agent": "silent arg drops; two calls for query spawn",
+     "vocabulary": "place on/beside/at[x,z] + facing",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:824",
+      "v4": "mcpl/tools.ts:1625 (spawn \u2192 refused naming create); mcpl/tools.ts:1162-1168 place passes args to authority; shared/protocol/verbspec.js:15 place oneOf (x \u2192 unknown-arg)"
+     },
+     "tests": "agenttools AT9 SEEN PASS 119/119 (create at/place shapes); no row for place {x,z} refusal found",
+     "changed_since_1027": "spawn alias gone entirely (G6), so per-axis/query translation moot: every spawn call refused naming create",
+     "note": "PR line 32 'spawn {lib,x,z} \u2192 create {model, at} (with yaw, place\u2026)' and 'spawn {query} refuses and names the two calls' stale: spawn is now just 'is now called create'. place {x,z} refusal is generic unknown-arg, no pointer to at",
+     "status_1027": "open"
+    },
+    {
+     "id": "29",
+     "system": "catch_up promise vs arrival-only speech",
+     "status": "absent",
+     "lean": "none (lean was wording only)",
+     "implementation": "mcpl/tools.ts:107 (description unchanged: 'What happened in the world while you were not thinking'); handler mcpl/tools.ts:1087; server/messages.ts:82-83 arrival-only pages",
+     "browser": "\u2014",
+     "agent": "description still promises old backlog",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:98",
+      "v4": "mcpl/tools.ts:107 (description unchanged: 'What happened in the world while you were not thinking'); handler mcpl/tools.ts:1087; server/messages.ts:82-83 arrival-only pages"
+     },
+     "tests": "none exists (mention-delivery-test.ts:136 checks markers only) NOT RUN",
+     "changed_since_1027": "line moved 1148\u2192107; no wording change",
+     "note": "description never says 'since you arrived'; an agent is still promised backlog it cannot get",
+     "status_1027": "open"
+    },
+    {
+     "id": "10",
+     "system": "world_debug recorder",
+     "status": "partial",
+     "lean": "none",
+     "implementation": "mcpl/tools.ts:133 (args script/scripts), :1439; server/messages.ts:96-119; kinds at head: refused, ambiguous, script, script-log (git grep '\\.debug(\"' 72847d01d -- server)",
+     "browser": "\u2014",
+     "agent": "behavior/behaviors args not aliased",
+     "vocabulary": "script/scripts",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:129 (args behavior/behaviors); server/lint.ts:162 (spawn-lint, one of ~12 kinds)",
+      "v4": "mcpl/tools.ts:133 (args script/scripts), :1439; server/messages.ts:96-119; kinds at head: refused, ambiguous, script, script-log (git grep '\\.debug(\"' 72847d01d -- server)"
+     },
+     "tests": "none exists for world_debug kinds/args NOT RUN",
+     "changed_since_1027": "no change",
+     "note": "main's behavior/behaviors args are not aliased: passed as unknown props they are silently ignored (no refusal), returning the refusal ring instead",
+     "status_1027": "partial"
+    },
+    {
+     "id": "A4,A5,A7",
+     "system": "punt {dir}, light keep, shove target trim",
+     "status": "partial",
+     "lean": "none",
+     "implementation": "A4 punt: shared/protocol/verbspec.js:74 (no dir \u2192 unknown-arg via validate); A5: mcpl/tools.ts:1635 TOOL_FOLDS.light points to create {components:{light}}, keep\u2192important only in create doc mcpl/tools.ts:115; A7: mcpl/tools.ts:510 String(a.target) untrimmed, server/messages.ts:159 replies \"isn't here to pose\" for a shove",
+     "browser": "\u2014",
+     "agent": "three silent or misleading refusals",
+     "vocabulary": "keep \u2192 important",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:115 (light keep arg); mcpl/tools.ts:340",
+      "v4": "A4 punt: shared/protocol/verbspec.js:74 (no dir \u2192 unknown-arg via validate); A5: mcpl/tools.ts:1635 TOOL_FOLDS.light points to create {components:{light}}, keep\u2192important only in create doc mcpl/tools.ts:115; A7: mcpl/tools.ts:510 String(a.target) untrimmed, server/messages.ts:159 replies \"isn't here to pose\" for a shove"
+     },
+     "tests": "none exists NOT RUN",
+     "changed_since_1027": "light tool now a fold pointer (G6); otherwise unchanged",
+     "note": "A4 dir refused generically (no 'dir \u2192 v' pointer); A5 fold text omits keep\u2192important; A7 untrimmed and says 'to pose' for a shove",
+     "status_1027": "open"
+    },
+    {
+     "id": "A6",
+     "system": "/upload?as=script",
+     "status": "absent",
+     "lean": "none",
+     "implementation": "server/upload.ts:586-587 (415 'not a GLB container' before any as= check); as= handled: image:508, heightmap:546, audio:558, avatar:588 \u2014 ABSENT: git grep 'as\") === \"script' 72847d01d -- server/upload.ts",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "upload {text} verb",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/upload.ts:478",
+      "v4": "server/upload.ts:586-587 (415 'not a GLB container' before any as= check); as= handled: image:508, heightmap:546, audio:558, avatar:588 \u2014 ABSENT: git grep 'as\") === \"script' 72847d01d -- server/upload.ts"
+     },
+     "tests": "none exists",
+     "changed_since_1027": "line moved 587; no pointer added",
+     "note": "upload {text} verb exists (verbspec.js:124) but the 415 doesn't name it",
+     "status_1027": "open"
+    },
+    {
+     "id": "A8",
+     "system": "name_place 8 KB guard",
+     "status": "intentional-change",
+     "lean": "needed: confirm 64 KiB general cap replaces main's 8 KB places guard",
+     "implementation": "shared/protocol/authority/gate.js:115 (any value >64 KiB refused too-big); shared/protocol/componentspec.js:192 places keyPattern \u226448, label \u226480",
+     "browser": "\u2014",
+     "agent": "unverified (server wording)",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "tools/door-is-error-test.ts:1194",
+      "v4": "shared/protocol/authority/gate.js:115 (any value >64 KiB refused too-big); shared/protocol/componentspec.js:192 places keyPattern \u226448, label \u226480"
+     },
+     "tests": "none exists for places size NOT RUN",
+     "changed_since_1027": "none",
+     "note": "server wording exists (gate.js:115) but is unverified by a test on name_place",
+     "status_1027": "delta"
+    },
+    {
+     "id": "34(tool)",
+     "system": "world_access tool, timed grant for:'2h'",
+     "status": "partial",
+     "lean": "needed: restore a duration form (for:'2h') or accept epoch-ms until",
+     "implementation": "mcpl/tools.ts:1638 TOOL_FOLDS.world_access (pointer to act set @world access|roles:<id>); shared/protocol/componentspec.js:483 roles.until int; server/access.ts:193-209 warns before until",
+     "browser": "\u2014",
+     "agent": "agent computes until in ms via act set",
+     "vocabulary": "roles:<id> {until}",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "mcpl/tools.ts:134",
+      "v4": "mcpl/tools.ts:1638 TOOL_FOLDS.world_access (pointer to act set @world access|roles:<id>); shared/protocol/componentspec.js:483 roles.until int; server/access.ts:193-209 warns before until"
+     },
+     "tests": "alias SEEN PASS (world_access is taught, not lost); no timed-grant test run",
+     "changed_since_1027": "world_access now refused with a pointer (was silent)",
+     "note": "agent must compute until in epoch ms; fold pointer doesn't mention until",
+     "status_1027": "open"
+    },
+    {
+     "id": "G2",
+     "system": "world_history entry kinds + default page",
+     "status": "unverified",
+     "lean": "none (SWEEP-3 routed to features)",
+     "implementation": "mcpl/tools.ts:132 (kinds arg, default act+say, 50); handler mcpl/tools.ts:1420-1437",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "mcpl/tools.ts (main world_history kinds arg; SWEEP-3 G2)",
+      "v4": "mcpl/tools.ts:132 (kinds arg, default act+say, 50); handler mcpl/tools.ts:1420-1437"
+     },
+     "tests": "no named row found (grep 'kinds' in agenttools/history-* suites empty); agenttools SEEN PASS 119/119 touches world_history only as a read",
+     "changed_since_1027": "new: kinds + before/after window + 50 default",
+     "note": "(lead) downgraded: code at head reads kinds, but no suite row drives it. code present but no test proving it: should be 'unverified' strictly; marked restored on code only \u2014 downgrade if lead requires a test",
+     "status_1027": "new"
+    },
+    {
+     "id": "G1a",
+     "system": "body_state posture key (deprecated twin of clip)",
+     "status": "unverified",
+     "lean": "none",
+     "implementation": "mcpl/body-state.ts:265 posture: p?.clip ?? null (twin)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "mcpl/body-state.ts (main key posture)",
+      "v4": "mcpl/body-state.ts:265 posture: p?.clip ?? null (twin)"
+     },
+     "tests": "none exists (grep 'posture' in tests finds none for this key)",
+     "changed_since_1027": "new twin added",
+     "note": "no test asserts the twin",
+     "status_1027": "new"
+    }
+   ]
+  },
+  {
+   "name": "Builders & components",
+   "rows": [
+    {
+     "id": "4",
+     "system": "force verb + /boom radial blast",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 11:00: go with your lean. I am fond of fun toys' \u2014 force {at, radius, power}, same bounds, builder rank, bodies via shove consent, things via punt",
+     "implementation": "shared/protocol/verbspec.js:76 (force {at, radius 0.5\u201330, power 0.2\u201312}); shared/protocol/authority/bodyverbs.js:362 (force(): bodies via bodyGate 'shove', loose things punted); shared/blast.js:9,14 (blastArgs, linear falloff); shared/protocol/physconst.js:28 (BLAST bounds); client/lib/commands/handlers.js:308 (/boom), registry.js:34 (alias /blast); defs/ui/_help.json:110",
+     "browser": "/boom, /blast absent",
+     "agent": "world_verb force \u2192 unknown-verb",
+     "vocabulary": "no force in VERBSPEC",
+     "migration": "n/a (a cause, folds to nothing in both protocols)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/verbs.ts:350 (vForce); shared/force.js:12 (FORCE_RADIUS 4, FORCE_POWER 3)",
+      "v4": "shared/protocol/verbspec.js:76 (force {at, radius 0.5\u201330, power 0.2\u201312}); shared/protocol/authority/bodyverbs.js:362 (force(): bodies via bodyGate 'shove', loose things punted); shared/blast.js:9,14 (blastArgs, linear falloff); shared/protocol/physconst.js:28 (BLAST bounds); client/lib/commands/handlers.js:308 (/boom), registry.js:34 (alias /blast); defs/ui/_help.json:110"
+     },
+     "tests": "force-check F1\u2013F15 (13 mutants + control); SEEN PASS 15/15",
+     "changed_since_1027": "built from absent: verb, authority, shared/blast.js (not shared/force.js: a new pure module), /boom + /blast, help, 15-row suite",
+     "note": "shared/force.js is NOT back (the brief expected it): the arithmetic lives in shared/blast.js. PR line 'force / /boom (objects too, through the body gate)' holds. Consent wording uses the new Move-me switch (verbspec.js:91).",
+     "status_1027": "open"
+    },
+    {
+     "id": "7",
+     "system": "use as free-form event lane",
+     "status": "intentional-change",
+     "lean": "none \u2014 not in MORNING-ASKS rulings; the old lean 'declared use {actions}; old events \u2192 custom action' was never put to R",
+     "implementation": "shared/protocol/authority/use.js:57-60 (buildUse: refuses 'no-action' unless the thing offers actions; action must be offered)",
+     "browser": "\u2014",
+     "agent": "use {action} refused unless offered",
+     "vocabulary": "use {actions:[\u2026]} (proposed)",
+     "migration": "n/a (old use acts stay as acts; no field)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/verbs.ts:651 (use: {after: reactToUse} \u2014 any use is a cause)",
+      "v4": "shared/protocol/authority/use.js:57-60 (buildUse: refuses 'no-action' unless the thing offers actions; action must be offered)"
+     },
+     "tests": "scripts-check W1/W2 (world.use through offered reactions); SEEN PASS 100/100 \u2014 no row for a free-form use",
+     "changed_since_1027": "nothing for this row (world.use for scripts added, but still through offered actions)",
+     "note": "Still an unruled absence against Antra's parity gate; PR description does not mention it.",
+     "status_1027": "open"
+    },
+    {
+     "id": "8,B5",
+     "system": "Script-free swing (impulse reaction, default pivot)",
+     "status": "partial",
+     "lean": "none for 'new impulse reaction' \u2014 not in rulings; translated swings pinned by R 10-27 (item 47)",
+     "implementation": "shared/protocol/authority/checks.js:139 (a NEW reactions handler of a reserved kind refused 'reserved'; impulse reserved per componentspec.js:197); use.js:117-134 (a carried impulse still swings a pendulum); use.js:120 (no pivot \u2192 'no-pivot'); shared/protocol/shaperepair.js:48,91 (OLD_READINGS.wholePendulumPivot [0,2,0] written for a translated pendulum with no pivot)",
+     "browser": "\u2014",
+     "agent": "unverified",
+     "vocabulary": "reactions {kind:'impulse'} reserved",
+     "migration": "translate-v1.js:37 (v1 impulse \u2192 v4 {kind:'impulse', angular} carried exactly); @21 (:144) maxAmp 1.1; pivot via shaperepair.js:91",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/reactions.ts:50 (pendulumImpulse); client/lib/motioneval.js:99 (period ?? 3.5)",
+      "v4": "shared/protocol/authority/checks.js:139 (a NEW reactions handler of a reserved kind refused 'reserved'; impulse reserved per componentspec.js:197); use.js:117-134 (a carried impulse still swings a pendulum); use.js:120 (no pivot \u2192 'no-pivot'); shared/protocol/shaperepair.js:48,91 (OLD_READINGS.wholePendulumPivot [0,2,0] written for a translated pendulum with no pivot)"
+     },
+     "tests": "authority-check SW1 ('an impulse handler is refused as a reserved kind'); SEEN PASS 483/483 (authority); shape-repair PASS (no per-row count printed by the suite)",
+     "changed_since_1027": "nothing: translated swings carried, new impulse handlers still refused",
+     "note": "B5 (default pivot for translated swings) is restored via shaperepair.js:91; item 8 (a builder writing a new impulse reaction) remains refused, unruled. PR does not mention.",
+     "status_1027": "open"
+    },
+    {
+     "id": "9",
+     "system": "Behaviour SDK and script capabilities",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 11:26 I agree with all of the above' (reviews/item9-fable-2026-10-28.md); 'world.nearby (positions stay out of it)'",
+     "implementation": "scripting/world.d.ts:46 (nearby(r): {id, d}[] \u2014 no positions, as ruled), scripting/run.ts, scripting/examples/{greeter,bellkeeper,lighthouse}.js; shared/protocol/authority/use.js (scripts-check mutant 'a script on @world hears every use'); scriptrun.js (world.use recorded, scope-checked: scripts-check.ts:118-124)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "world.near/count, no positions; no private kv",
+     "migration": "translate-v1.js:562-565 importedBehaviours: v1 bindings carried as @world imported-behavior:<name>, never run (listed needs-reinstall)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "sdk/behavior.d.ts:55 (main's types)",
+      "v4": "scripting/world.d.ts:46 (nearby(r): {id, d}[] \u2014 no positions, as ruled), scripting/run.ts, scripting/examples/{greeter,bellkeeper,lighthouse}.js; shared/protocol/authority/use.js (scripts-check mutant 'a script on @world hears every use'); scriptrun.js (world.use recorded, scope-checked: scripts-check.ts:118-124)"
+     },
+     "tests": "scripts-check 100/100 SEEN PASS (incl. W1, W2, N1 nearby rows); scripting-check 5/5 SEEN PASS (greeter + bellkeeper examples through the local runner)",
+     "changed_since_1027": "sprint/scripts9 merged: world.use, @world world-level scripts, world.nearby, scripting/ kit (types + runner + 3 examples)",
+     "note": "PR line 'World-level scripts (@world), world.use, world.nearby (positions stay out of it), and the scripting/ kit' holds. Offline harness = scripting/run.ts; the old radio example is not back (greeter/bellkeeper/lighthouse instead).",
+     "status_1027": "open"
+    },
+    {
+     "id": "43(B1)",
+     "system": "Alt text (picture/sound look \u2192 alt)",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'Already settled: description not alt (43)'",
+     "implementation": "shared/protocol/componentspec.js:340 (picture fields {src, width, description, lit}; no alt \u2192 refused as not a field), :350 (material description); shared/protocol/shaperepair.js:202-211 (stored alt/look renamed description once); shared/sound.js:41 (SOUND_DESCRIPTION_MAX)",
+     "browser": "picture and sound editors write description (pictures.js:301, sounds.js:275)",
+     "agent": "look() reads description via describePicture / describeSound / describeMaterial",
+     "vocabulary": "description (alt and look retired by R's ruling)",
+     "migration": "translate-v1.js:139 (@22 sound.look \u2192 description), :136/:316 (@23 picture look \u2192 material.description), :287-288",
+     "specimen": "synthetic fixtures in inplace-check TR1/TR2; no production specimen named",
+     "evidence": {
+      "main": "shared/picture.js:37 (KNOWN_KEYS src/part/look/lit/flip)",
+      "v4": "shared/protocol/componentspec.js:340 (picture fields {src, width, description, lit}; no alt \u2192 refused as not a field), :350 (material description); shared/protocol/shaperepair.js:202-211 (stored alt/look renamed description once); shared/sound.js:41 (SOUND_DESCRIPTION_MAX)"
+     },
+     "tests": "shape-render DS1\u2013DS6, PI1, PI2, MA3; SEEN PASS 112/112",
+     "changed_since_1027": "none in substance (lines moved)",
+     "note": "PR line '`description` is the stored field and `look` reads it; `alt` is refused' holds (DS4 'the door takes description and refuses alt'). The old row's 'inplace-check TR1/TR2' rows no longer exist under those ids; inplace 88/88 passed without them.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "47(B3,B4)",
+     "system": "Pendulum defaults",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'Already settled: pendulum pinned for translated worlds (47)'",
+     "implementation": "shared/protocol/componentspec.js:130 (new pendulum 2.4 / 0.08 / 0.9); shared/protocol/shaperepair.js:48 (OLD_READINGS 3.5 / 0 / 1.1 / pivot [0,2,0]), :60",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "pendulum {period, damp, maxAmp}",
+     "migration": "translate-v1.js:144 (@21: a pendulum with no maxAmp written 1.1); shaperepair writes period/damp",
+     "specimen": "synthetic (shape-repair RP19); no production specimen named",
+     "evidence": {
+      "main": "client/lib/motioneval.js:99-100 (period ?? 3.5, damp ?? 0)",
+      "v4": "shared/protocol/componentspec.js:130 (new pendulum 2.4 / 0.08 / 0.9); shared/protocol/shaperepair.js:48 (OLD_READINGS 3.5 / 0 / 1.1 / pivot [0,2,0]), :60"
+     },
+     "tests": "shape-repair PASS (suite prints no count; RP19 not seen by name); shape-physics MO8/MO10 NOT RUN",
+     "changed_since_1027": "none",
+     "note": "Status 'intentional' kept; the per-row evidence is file:line only, the shape-repair run printed just its last \u2713 line.",
+     "status_1027": "intentional"
+    },
+    {
+     "id": "48(B2),36",
+     "system": "Picture on a named model part (+ UV flip)",
+     "status": "partial",
+     "lean": "ruled: MORNING-ASKS 'Already settled: picture = sprite, picture-on-part \u2192 material (48)'",
+     "implementation": "shared/protocol/componentspec.js:339-342 (picture: part/flip dropped, naming material), :350 (material {node, texture, description, lit}); client/lib/materialcomp.js:18,35,48 (cloned material per mesh, restored on removal); tools/protocol/import-v1/translate-v1.js:312-316 (materialOf; flip \u2192 left)",
+     "browser": "materialcomp.js wears a cloned material per mesh of the node, restores it on removal; Create \u25b8 Picture places a standalone picture (build.js:290); no material inspector card yet",
+     "agent": "look() reads 'an image on its <node>' (describeMaterial)",
+     "vocabulary": "material {node, texture, description, lit}",
+     "migration": "translate-v1.js:136 (@23), :307 ('picture on a model's part \u2192 material; flip: true \u2192 imported:material, listed; no part \u2192 imported:picture')",
+     "specimen": "synthetic (inplace-check TR2/TR3); no production specimen named",
+     "evidence": {
+      "main": "client/lib/pictures.js:81 (findPart(root, picture.part))",
+      "v4": "shared/protocol/componentspec.js:339-342 (picture: part/flip dropped, naming material), :350 (material {node, texture, description, lit}); client/lib/materialcomp.js:18,35,48 (cloned material per mesh, restored on removal); tools/protocol/import-v1/translate-v1.js:312-316 (materialOf; flip \u2192 left)"
+     },
+     "tests": "shape-render MA1\u2013MA4, PI1, PI2; SEEN PASS 112/112",
+     "changed_since_1027": "none",
+     "note": "Still partial: UV flip unmapped (listed), no material inspector card (grep 'material' + card in inspect/build: none). Matches the ruling; PR does not claim more.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "B6",
+     "system": "Socket with no pos",
+     "status": "absent",
+     "lean": "none \u2014 not in MORNING-ASKS",
+     "implementation": "shared/protocol/authority/sockets.js:173 (hv.pos ?? [0, 0, 0]); translate-v1.js:70-73 (newSockets writes pos only when v1 had one)",
+     "browser": "unverified",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:62-76: pos passed through; absent pos \u2192 nothing written \u2192 seat at y 0 (main 0.5)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/world.js:419 (sock.pos ?? [0, 0.5, 0])",
+      "v4": "shared/protocol/authority/sockets.js:173 (hv.pos ?? [0, 0, 0]); translate-v1.js:70-73 (newSockets writes pos only when v1 had one)"
+     },
+     "tests": "sockets-test SEEN PASS 83/83, but no row covers a pos-less translated seat (grep '0.5' in sockets-test: none); translate-check S3-T2 uses pos [0,0.5,0] explicitly",
+     "changed_since_1027": "none (T2 seatAnchor landed beside it, pos default did not)",
+     "note": "A translated seat with no pos sits 0.5 m lower than main drew it. Fix is one line in newSockets (pos ?? [0,0.5,0] for legacy). Unruled; not in PR.",
+     "status_1027": "open"
+    },
+    {
+     "id": "17",
+     "system": "Particles: preset knobs, several emitters",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 11:52: keep v4 effect documents, translator derives an effect document from preset + knobs'",
+     "implementation": "tools/protocol/import-v1/translate-v1.js:620 (KNOBS bounded as main's), :627-655 (particlesOf: derivedEffect(preset, over) \u2192 effect document, stored by content address; a knob with no faithful reading \u2192 imported:particles with why), :754,:782 (effects map written), :286 (report text)",
+     "browser": "knobs not drawn",
+     "agent": "\u2014",
+     "vocabulary": "particles {effect, params}",
+     "migration": "translate-v1.js:135 (@24): derives an effect document from preset + knobs; NOT merely imported:particles (only unfaithful knobs ride there)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "shared/particles.js:117 (NUMERIC_BOUNDS, the knob table)",
+      "v4": "tools/protocol/import-v1/translate-v1.js:620 (KNOBS bounded as main's), :627-655 (particlesOf: derivedEffect(preset, over) \u2192 effect document, stored by content address; a knob with no faithful reading \u2192 imported:particles with why), :754,:782 (effects map written), :286 (report text)"
+     },
+     "tests": "translate-check P17, P17a\u2013P17h (derived effect, gravity/rotate/grow, unfaithful knob carried, unknown preset, named emitter, scale clamp, writer stores blobs/, in-place + rollback); SEEN PASS 36/36. describe-particles 40/40, particles-test 95/95 SEEN PASS",
+     "changed_since_1027": "@24 particlesOf + derived effect storage (P17g/P17h) built; was 'knobs carried, not drawn'",
+     "note": "PR line 'particle knobs as a derived effect' holds. Several emitters per thing still become child things (@15), as before.",
+     "status_1027": "open"
+    },
+    {
+     "id": "18,B10,B11",
+     "system": "Sound radius, rolloff, voice cap",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 11:53 Yes to both' (200 m, 8 \u2192 32 voices)",
+     "implementation": "shared/sound.js:44 (SOUND_MAX_RADIUS = 200, R 10-28), :99,:106; client/lib/sounds.js:44,71 (VOICES = 32, was 8)",
+     "browser": "8-voice cap",
+     "agent": "\u2014",
+     "vocabulary": "sound {radius \u2264100}",
+     "migration": "translate-check S3-X1 (sound radius > 200 clamped to 200 via toSpec, translate-v1.js:691); no translator field change",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "shared/sound.js:83 (radius: num(data.radius, 1, 200, \u2026))",
+      "v4": "shared/sound.js:44 (SOUND_MAX_RADIUS = 200, R 10-28), :99,:106; client/lib/sounds.js:44,71 (VOICES = 32, was 8)"
+     },
+     "tests": "sound-test rows 'SOUND_MAX_RADIUS is 200 m\u2026', '\u2026registry ranges say the same', '\u2026still silent at radius at 200 m' (sound-test.ts:59-62); SEEN PASS 48/48",
+     "changed_since_1027": "100 \u2192 200 m; 8 \u2192 32 voices",
+     "note": "PR line 'sound radius 200 m / 32 voices' holds. The 10-07 'silent at radius' taper kept (not main's rolloff): per the 11:54 correction that was never a cut.",
+     "status_1027": "open"
+    },
+    {
+     "id": "B12",
+     "system": "Motion path points",
+     "status": "intentional-change",
+     "lean": "none \u2014 delta accepted by the 10-27 matrix ('delta; translator splits or refuses with a count'); the translator now clamps with a count instead",
+     "implementation": "shared/protocol/authority/checks.js:124 (points must be 2 to 64); componentspec.js:143 (docs '2\u201364')",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "motion path.points \u226464",
+     "migration": "translate-v1.js:689-700 toSpec: 'a path resampled to 64', listed in adjusted (S3-X1 shows the first 64 kept: points[63] = the 70th? no: [69,0,0] is kept, so it IS resampled, not truncated)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/motioneval.js:120-123 (path needs \u2265 2 points, no upper bound)",
+      "v4": "shared/protocol/authority/checks.js:124 (points must be 2 to 64); componentspec.js:143 (docs '2\u201364')"
+     },
+     "tests": "translate-check S3-X1 (70 points \u2192 first 64 kept, listed); SEEN PASS 36/36",
+     "changed_since_1027": "translator clamps (was: didn't)",
+     "note": "Old row's 'translator doesn't clamp' is fixed by X1.",
+     "status_1027": "delta"
+    },
+    {
+     "id": "19",
+     "system": "Fork",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'R 12:00: keep v4 (state + link back, no chat, no positions); fork limits become server policy with today's numbers as defaults'; full copy with history OPEN, not built",
+     "implementation": "server/worldlog.ts:531-534 (forkWorld: state copy, founding act links back, 'Chat history isn't copied'); server/config.ts:155,157 (FORK_GAP_SEC 60, FORK_PER_HOUR 5, 0 = none); server/requestwire.ts:248-249 (enforced)",
+     "browser": "/fork help says as it stands",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/world.ts:547 (fork copies the log)",
+      "v4": "server/worldlog.ts:531-534 (forkWorld: state copy, founding act links back, 'Chat history isn't copied'); server/config.ts:155,157 (FORK_GAP_SEC 60, FORK_PER_HOUR 5, 0 = none); server/requestwire.ts:248-249 (enforced)"
+     },
+     "tests": "fork-reset-check FL1, FL3, FL4 (limits as policy, 0 = none); SEEN PASS 54/54",
+     "changed_since_1027": "limits became env config (FORK_GAP_SEC/FORK_PER_HOUR)",
+     "note": "PR 'founding and fork quotas are removed or are config with 0 meaning none' holds.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "20",
+     "system": "Locked delete; guard",
+     "status": "intentional-change",
+     "lean": "none \u2014 not in MORNING-ASKS; the 10-27 matrix accepted the rank-lock delta",
+     "implementation": "shared/protocol/authority/gate.js:190-201 (lockCheck: delete of a locked thing refused 'locked' unless throughLock by someone at the lock's rank), :209-214 (lockLevelCheck); client/lib/build.js:611 + confirmcenter.js:141 ('This is locked. Delete anyway?' re-sends with throughLock)",
+     "browser": "build.js confirm dialog",
+     "agent": "unverified",
+     "vocabulary": "lock (no guard, no placer)",
+     "migration": "n/a (guard dropped by design; lock carried)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/build.js:421 (removeSelected: lockedHint refuses)",
+      "v4": "shared/protocol/authority/gate.js:190-201 (lockCheck: delete of a locked thing refused 'locked' unless throughLock by someone at the lock's rank), :209-214 (lockLevelCheck); client/lib/build.js:611 + confirmcenter.js:141 ('This is locked. Delete anyway?' re-sends with throughLock)"
+     },
+     "tests": "authority-check P8 (locked cup can't be deleted), PL1\u2013PL6; SEEN PASS 483/483",
+     "changed_since_1027": "none",
+     "note": "Locked delete IS refused at the authority (not just a client prompt); the 'delete anyway' is a throughLock re-send recorded in history. Old row's 'agent: unverified' now covered by P8.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "33",
+     "system": "World-offered client mods, EW.lease",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'R 11:26: KEEP world-offered mods removed (safety); restore the per-client object physics off switch; EW.lease stays replaced by EW.physics'",
+     "implementation": "client/lib/mods.js:9-10 ('A world doesn't offer client mods'), :190,:219-221 (per-client object-physics switch, R 10-28 item 33); client/lib/thingphysics.js:532-533 (physicsEnabled/setPhysicsEnabled), :909 (EW.physics surface); grep 'EW.lease|lease' in mods.js/base.js: none",
+     "browser": "no promote/run once/trust UI",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js: behavior runtime:client \u2192 imported-behavior (not carried as a mod)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/mods.js:141 (offers(): behaviors with runtime 'client')",
+      "v4": "client/lib/mods.js:9-10 ('A world doesn't offer client mods'), :190,:219-221 (per-client object-physics switch, R 10-28 item 33); client/lib/thingphysics.js:532-533 (physicsEnabled/setPhysicsEnabled), :909 (EW.physics surface); grep 'EW.lease|lease' in mods.js/base.js: none"
+     },
+     "tests": "physics-off-test 7/7 SEEN PASS (off mid-flight reverts to committed pose, kept in ew-phys, nothing sent); modhole-check 13/13 SEEN PASS (nothing a world sends runs as code)",
+     "changed_since_1027": "physics-off switch built (mods panel button + thingphysics)",
+     "note": "PR line 'the physics-off switch' holds.",
+     "status_1027": "open"
+    },
+    {
+     "id": "35",
+     "system": "Sitting across rejoin, \u25c8 agent marker, keyboard nudges",
+     "status": "intentional-change",
+     "lean": "none for marker/nudges \u2014 not in MORNING-ASKS; sitting-as-presence cites an earlier '00:50 ruling 1'",
+     "implementation": "shared/protocol/authority/occupants.js:1,34 (sitting is presence, never logged); client/lib/build.js:799-800 ('old per-key nudges Q/E , . R/F are retired; the tools do those with a drag'); grep '\u25c8' at head: no hit anywhere",
+     "browser": "Q/E, ,/., R/F now tool keys",
+     "agent": "agent without 'agent' declaration unlabeled",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:273 ('mounts: bodies sitting: presence in v4, never history (00:50 ruling 1); their old entries survive as acts')",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "shared/fold.js:482 (mount folded into state)",
+      "v4": "shared/protocol/authority/occupants.js:1,34 (sitting is presence, never logged); client/lib/build.js:799-800 ('old per-key nudges Q/E , . R/F are retired; the tools do those with a drag'); grep '\u25c8' at head: no hit anywhere"
+     },
+     "tests": "none exists for the three as restorations",
+     "changed_since_1027": "none (SWEEP-3 notes posture across rejoin restored, agent.ts:1167 \u2014 but server/agent.ts does not exist at 72847d01d; that path is wrong at the head)",
+     "note": "Three unruled deltas remain; the PR does not mention them. SWEEP-3's 'agent.ts:1167' citation is stale at this head.",
+     "status_1027": "open"
+    },
+    {
+     "id": "36(sky)",
+     "system": "Sky sun/fill sliders, world select",
+     "status": "partial",
+     "lean": "ruled: MORNING-ASKS 13 'Fix the sky panel world select' (R 12:18); R 13:44 'Sky audio \u2192 a `sound` on @world, spatial:false (conventional ambient), NO sky.audio field'",
+     "implementation": "shared/protocol/componentspec.js:407,420-421 (sky fields incl. system, colors, audio: bool; no sun/fill/world); client/lib/skypanel.js:114 (sun/fill/world cut), :158 ('no world select: the sky stores no world'); translate-v1.js:794 (sky.audio = Boolean)",
+     "browser": "sliders gone; select inert",
+     "agent": "\u2014",
+     "vocabulary": "sky has no sun/fill/world",
+     "migration": "translate-v1.js:134 (@25): main's sky.audio \u2192 @world.sky.audio bool; sun/fill: deleted on repair (unchanged)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/skypanel.js:30 (sun/fill sliders, world select)",
+      "v4": "shared/protocol/componentspec.js:407,420-421 (sky fields incl. system, colors, audio: bool; no sun/fill/world); client/lib/skypanel.js:114 (sun/fill/world cut), :158 ('no world select: the sky stores no world'); translate-v1.js:794 (sky.audio = Boolean)"
+     },
+     "tests": "translate-check S3-SA (sky.audio bool, not unmapped) SEEN PASS 36/36; skypanel-state-test.ts:82 (the world select is gone) \u2014 skypanel-state-test 18/18 SEEN PASS",
+     "changed_since_1027": "world select removed (fix); sky.audio added as a bool field (@25)",
+     "note": "PR line '`sky.audio` as a bool (the sounds stay in the asset library; the engine ships none)' CONTRADICTS R's 13:44 ruling ('no sky.audio field'; a sound on @world). Needs R's re-confirmation or a rework. sun/fill stay cut, unruled.",
+     "status_1027": "open"
+    },
+    {
+     "id": "37",
+     "system": "Caption deed; bare component names",
+     "status": "intentional-change",
+     "lean": "none \u2014 not in MORNING-ASKS",
+     "implementation": "shared/protocol/componentspec.js:398 (captioners {ids} on the screen); shared/protocol/verbspec.js:121-123 (caption verb; no grant-time deed: grep 'caption' in verbspec outside :121-123 = none); shared/protocol/authority/checks.js:294-300 (bare/old names refused with teaching)",
+     "browser": "\u2014",
+     "agent": "caption verb kept",
+     "vocabulary": "captioners; namespaced custom names",
+     "migration": "unknown custom names \u2192 <ns>/name (translate-v1.js:601-603 NAMESPACE/namespaceOf)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/verbs.ts:136 (grant {caption: <entityId>} deed, bound to the creation generation)",
+      "v4": "shared/protocol/componentspec.js:398 (captioners {ids} on the screen); shared/protocol/verbspec.js:121-123 (caption verb; no grant-time deed: grep 'caption' in verbspec outside :121-123 = none); shared/protocol/authority/checks.js:294-300 (bare/old names refused with teaching)"
+     },
+     "tests": "authority-check CA1\u2013CA\u2026 (captioners rights, revoke); SEEN PASS 483/483",
+     "changed_since_1027": "none",
+     "note": "Deed (end, born-binding) still absent; the captioners list is the v4 shape. Unruled; not in PR.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "12,C4,C5",
+     "system": "Emote data: _emotes.json, VR panel spot, /defs key",
+     "status": "absent",
+     "lean": "none \u2014 not in MORNING-ASKS",
+     "implementation": "server/defs.ts:76 (actionbar: loadSidecar('animations/_actionbar.json') only); ABSENT: git grep '_emotes' 72847d01d = no hit; client/lib/domquad.js:24 (ew-xr-quads still the VR panel key)",
+     "browser": "VR panel spot resets once",
+     "agent": "\u2014",
+     "vocabulary": "emotes \u2192 actionbar",
+     "migration": "n/a (server sidecar, not world data)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/defs.ts:76 (emotes: loadSidecar('animations/_emotes.json'))",
+      "v4": "server/defs.ts:76 (actionbar: loadSidecar('animations/_actionbar.json') only); ABSENT: git grep '_emotes' 72847d01d = no hit; client/lib/domquad.js:24 (ew-xr-quads still the VR panel key)"
+     },
+     "tests": "none exists",
+     "changed_since_1027": "none",
+     "note": "A library with only _emotes.json serves no emotes; /defs key is 'actionbar'. Unruled; not in PR.",
+     "status_1027": "open"
+    },
+    {
+     "id": "13,46,C3",
+     "system": "Access words and help: members/visitors, visitor role, +gen/+fly",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 12:18 member everywhere'; 'R 12:27 inhabitant only exists on our PR. Kill with prejudice. Plain rename, NO alias'; 13 '/access invalid options error, teaching the real words'",
+     "implementation": "shared/protocol/roles.js:8,44-46 (base rung member; RENAMED_ROLES visitor\u2192member, refusal teaches); client/lib/commands/handlers.js:182-191 (/access: invite-only|listed|watch|public|open\u2026; an unknown word \u2192 notADoor teaching the doors), :122-149 (/grant \u2026 +gen/+fly, /grant * +gen \u2192 default-role.can), :91-92,:104-112 (/role shows +gen/+fly); grep 'inhabitant' at head: 19 hits, all spec/REGISTRY-CHANGELOG.md history",
+     "browser": "help teaches inhabitant and names +gen, +fly, /epoch; /access members|visitors \u2192 usage error",
+     "agent": "role refusals name inhabitant (authority checks)",
+     "vocabulary": "inhabitant (was visitor; refusal words only)",
+     "migration": "translate-v1.js @24 mainRights (R22a\u2013f): main's '*' visitor \u2192 member; rights written out explicitly",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/commands/handlers.js:109 (/access members|visitors)",
+      "v4": "shared/protocol/roles.js:8,44-46 (base rung member; RENAMED_ROLES visitor\u2192member, refusal teaches); client/lib/commands/handlers.js:182-191 (/access: invite-only|listed|watch|public|open\u2026; an unknown word \u2192 notADoor teaching the doors), :122-149 (/grant \u2026 +gen/+fly, /grant * +gen \u2192 default-role.can), :91-92,:104-112 (/role shows +gen/+fly); grep 'inhabitant' at head: 19 hits, all spec/REGISTRY-CHANGELOG.md history"
+     },
+     "tests": "roles-check 77/77, access-check 53/53, grant-command-test 21/21 ('/grant * +gen merges generate into default-role.can'), retired-commands 6/6; translate-check R22c ('*' visitor \u2192 members); all SEEN PASS",
+     "changed_since_1027": "inhabitant \u2192 member everywhere; /access teaches the doors; /grant * \u00b1gen; /role shows +gen",
+     "note": "PR line '`inhabitant` \u2192 `member` (never shipped, so no alias; main's `visitor` still reads as member)' holds: 'reads as member' is via the translator (R22c) plus a refusal naming member for a live 'visitor' (roles.js:46), not a live alias. /access members|visitors still errors (by ruling, teaching).",
+     "status_1027": "partial"
+    },
+    {
+     "id": "51",
+     "system": "Walking body (step / radius)",
+     "status": "intentional-change",
+     "lean": "needed: MORNING-ASKS lists 51 under 'Feel \u2014 only you can judge (sandbox)' with lean step 0.45 / radius 0.3; no ruling recorded in 'R's rulings'",
+     "implementation": "shared/mover.js:43 (radius: 0.2), :45 (step: 0.8)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "client/lib/colliders.js:30 (STEP = 0.55), :703 (r = 0.32)",
+      "v4": "shared/mover.js:43 (radius: 0.2), :45 (step: 0.8)"
+     },
+     "tests": "mover-check PASS (prints 'all passed', no count); no row pins 0.45/0.3",
+     "changed_since_1027": "none (0.8 / 0.2 unchanged)",
+     "note": "(lead) relabelled from absent: the body exists, its numbers changed (0.32\u00d71.9 step 0.55 \u2192 0.2\u00d71.7 step 0.8); unruled. Not in the PR description. Still R's call.",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-T1",
+     "system": "Thing-level collide exact|box \u2192 collider shape",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'SWEEP-3 routed T1 \u2192 translate agent' (no R objection)",
+     "implementation": "shared/protocol/shaperepair.js:16,92 (collider exact \u2192 mesh); shared/protocol/componentspec.js:60 (collider shape enum mesh|box|sphere)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "via fold + shaperepair.js:92; translate-v1.js:109 comment",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "shared/fold.js:205 (`collide` exact|box is the spawner's override)",
+      "v4": "shared/protocol/shaperepair.js:16,92 (collider exact \u2192 mesh); shared/protocol/componentspec.js:60 (collider shape enum mesh|box|sphere)"
+     },
+     "tests": "translate-check S3-T1 (exact \u2192 mesh, box \u2192 box, other \u2192 imported:collide); SEEN PASS 36/36",
+     "changed_since_1027": "new since SWEEP-3 (10-28)",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-T2",
+     "system": "Socket seatAnchor surface \u2192 body.anchor",
+     "status": "restored",
+     "lean": "ruled: routed to translate agent (MORNING-ASKS 13:36)",
+     "implementation": "tools/protocol/import-v1/translate-v1.js:68,73 (seatAnchor 'surface' \u2192 body.anchor 'surface'; other values \u2192 imported:sockets)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:73 (@24)",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main seatcore socketAnchor; per SWEEP-3)",
+      "v4": "tools/protocol/import-v1/translate-v1.js:68,73 (seatAnchor 'surface' \u2192 body.anchor 'surface'; other values \u2192 imported:sockets)"
+     },
+     "tests": "translate-check S3-T2; SEEN PASS 36/36",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-X1",
+     "system": "Translator clamps out-of-range values to spec",
+     "status": "restored",
+     "lean": "ruled: routed to translate agent",
+     "implementation": "tools/protocol/import-v1/translate-v1.js:689-700 (toSpec: numbers clamped, gt-bound fields dropped to default, text/lists cut, path to 64, each listed), :848 (applied to every thing)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:691",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "n/a (main had no registry ranges)",
+      "v4": "tools/protocol/import-v1/translate-v1.js:689-700 (toSpec: numbers clamped, gt-bound fields dropped to default, text/lists cut, path to 64, each listed), :848 (applied to every thing)"
+     },
+     "tests": "translate-check S3-X1 (sound 200, 64 points, scale 1000, light range gt-bound dropped); SEEN PASS 36/36",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-L2/P1/M1",
+     "system": "Light CSS colour names; particles.scale clamp; motion pivot on scaled things",
+     "status": "restored",
+     "lean": "ruled: routed to translate agent",
+     "implementation": "translate-v1.js:23,43 (CSS_NAMES from cssnames.js); :628-630 (scale clamped 0.01..20, listed); :683-687 (unscalePivot divides by scale, listed)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "as above",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(three.js read CSS names; main particles scale 0.01..20; main motioneval rotateAtPivot unscaled)",
+      "v4": "translate-v1.js:23,43 (CSS_NAMES from cssnames.js); :628-630 (scale clamped 0.01..20, listed); :683-687 (unscalePivot divides by scale, listed)"
+     },
+     "tests": "translate-check S3-L2, P17f, S3-M1; SEEN PASS 36/36",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-S1",
+     "system": "Sky system skymesh + colors",
+     "status": "restored",
+     "lean": "ruled: routed to features agent (S1 restore system + colors; quality \u2192 client pref; audio \u2192 R)",
+     "implementation": "shared/protocol/componentspec.js:407,420 (sky.system eidoverse|skymesh, colors {star, cloud, sky, fog, shield}); client/lib/sky.js:473 (a.system === 'skymesh'), :1360-1363 (a.colors \u2192 setColors)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "carried as spec fields (no rename)",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main sky.system 'skymesh' and colors; SWEEP-3)",
+      "v4": "shared/protocol/componentspec.js:407,420 (sky.system eidoverse|skymesh, colors {star, cloud, sky, fog, shield}); client/lib/sky.js:473 (a.system === 'skymesh'), :1360-1363 (a.colors \u2192 setColors)"
+     },
+     "tests": "skystamp-test 6/6 (skystamp-test.ts:28 sky {system:'skymesh', colors}) and skypanel-state-test 18/18 (:47-49 system skymesh); SEEN PASS",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-N4",
+     "system": "Light live-preview sliders",
+     "status": "restored",
+     "lean": "ruled: routed to features agent",
+     "implementation": "client/lib/inspect.js:59-63 (registerHandler('light'): intensity/range with opts.live \u2192 previewLight)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main's light sliders previewed live; SWEEP-3)",
+      "v4": "client/lib/inspect.js:59-63 (registerHandler('light'): intensity/range with opts.live \u2192 previewLight)"
+     },
+     "tests": "editcommit-test (SWEEP-3 N4 rows, editcommit-test.ts:186+); SEEN PASS 31/31",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-N5",
+     "system": "/grant * +gen",
+     "status": "restored",
+     "lean": "ruled: routed to features agent",
+     "implementation": "client/lib/commands/handlers.js:122-149 (/grant * [role] \u00b1gen \u00b1fly \u2192 default-role {role, can} merge); shared/protocol/componentspec.js:490 (default-role.can)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main /grant * +gen; SWEEP-3)",
+      "v4": "client/lib/commands/handlers.js:122-149 (/grant * [role] \u00b1gen \u00b1fly \u2192 default-role {role, can} merge); shared/protocol/componentspec.js:490 (default-role.can)"
+     },
+     "tests": "grant-command-test '/grant * +gen merges generate into default-role.can\u2026' (grant-command-test.ts:90-91); SEEN PASS 21/21",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-N6",
+     "system": "/role shows +gen",
+     "status": "restored",
+     "lean": "ruled: routed to features agent",
+     "implementation": "client/lib/commands/handlers.js:91-92 (extras), :104-112 (/role prints role + ' +gen'/' +fly')",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main /role listed +gen; SWEEP-3)",
+      "v4": "client/lib/commands/handlers.js:91-92 (extras), :104-112 (/role prints role + ' +gen'/' +fly')"
+     },
+     "tests": "grant-command-test (help/usage rows) SEEN PASS 21/21 \u2014 no row named for /role's +gen specifically",
+     "changed_since_1027": "new",
+     "note": "Code present; a dedicated row was not found \u2014 treat the test leg as unverified.",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-G1",
+     "system": "Grass extras (maxSlope, windDir, variant, footprint\u2026)",
+     "status": "restored",
+     "lean": "ruled: routed to translate agent",
+     "implementation": "tools/protocol/import-v1/translate-v1.js:664-668 (grassExtras: a preset-less bag becomes one stroke carrying its keys)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:666",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main createFlora read every key; SWEEP-3)",
+      "v4": "tools/protocol/import-v1/translate-v1.js:664-668 (grassExtras: a preset-less bag becomes one stroke carrying its keys)"
+     },
+     "tests": "translate-check S3-G1 (maxSlope/windDir/variant/footprint on the stroke, nothing in imported:grass, mapped listed); SEEN PASS 36/36",
+     "changed_since_1027": "new",
+     "note": "",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-L1",
+     "system": "Light decay / translated lights scaled for parity",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS R 13:44 'L1 lights \u2192 keep physical decay 2; translator scales translated lights once for visual parity, docs fixed'",
+     "implementation": "shared/protocol/componentspec.js:97-99 (default decay 2, intensity 25.93 = 16 cd at 1.7 matched at 5 m); tools/protocol/import-v1/translate-v1.js:674-681 (parityIntensity, lightParity: \u00d7 (range/2)^0.3 once, listed)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "translate-v1.js:677-681",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "(main rig decay 1.7, 16 cd default)",
+      "v4": "shared/protocol/componentspec.js:97-99 (default decay 2, intensity 25.93 = 16 cd at 1.7 matched at 5 m); tools/protocol/import-v1/translate-v1.js:674-681 (parityIntensity, lightParity: \u00d7 (range/2)^0.3 once, listed)"
+     },
+     "tests": "translate-check S3-LP, S3-LD, S3-RP; SEEN PASS 36/36; light-readers PASS (no count printed)",
+     "changed_since_1027": "new",
+     "note": "PR line 'new-light intensity retuned to match main at half reach' holds. 'docs fixed' leg not verified.",
+     "status_1027": "new"
+    },
+    {
+     "id": "S3-S4",
+     "system": "Doc rot (5 lines)",
+     "status": "unverified",
+     "lean": "ruled: routed to features agent (docs)",
+     "implementation": "deploy/SHOW_RUNBOOK.md exists at head; SWEEP-3 says 'SHOW_RUNBOOK partly fixed (still stale :81)'; the five lines are not enumerated anywhere in feature-audit-260 (grep 'doc rot' \u2192 SWEEP-3.md:21 only)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "n/a",
+      "v4": "deploy/SHOW_RUNBOOK.md exists at head; SWEEP-3 says 'SHOW_RUNBOOK partly fixed (still stale :81)'; the five lines are not enumerated anywhere in feature-audit-260 (grep 'doc rot' \u2192 SWEEP-3.md:21 only)"
+     },
+     "tests": "none exists",
+     "changed_since_1027": "docs commits since main: c9dd6b926 ('force is live (AGENTS.md); headless screenshots call screenshot'), 1274a9c2c (operator wording), bad4a7672",
+     "note": "Cannot verify without the sweep's list of the five lines; ask the SWEEP-3 author (Fable) which they were.",
+     "status_1027": "new"
+    }
+   ]
+  },
+  {
+   "name": "Access, moderation, operators",
+   "rows": [
+    {
+     "id": "6",
+     "system": "Add someone not present (directory, add all)",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'Already settled': 'access panel: seen-people + exact id (6)'",
+     "implementation": "client/lib/accesspanel.js:5-6, :56 (whois by name), :61 (u-\u2026 hint), :88 (Add someone input); server/requestwire.ts:34-43 (whois scoped to this world, never the whole directory)",
+     "browser": "accesspanel.js: Add someone (name seen here or u-\u2026 id), role select, \u2715 revoke; no add all",
+     "agent": "grant only to known identities (whois scoped to this world)",
+     "vocabulary": "roles:<id> {role, until?}",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/accesspanel.js:200 (add someone), :260 (add all N); :212 access-directory lookup",
+      "v4": "client/lib/accesspanel.js:5-6, :56 (whois by name), :61 (u-\u2026 hint), :88 (Add someone input); server/requestwire.ts:34-43 (whois scoped to this world, never the whole directory)"
+     },
+     "tests": "access-panel AP0-AP6 (browser lane, EIDOVERSE_DIR=asset-lib); SEEN PASS 16/16",
+     "changed_since_1027": "none in shape; accesspanel.js lines moved (:52 \u2192 :56/:88)",
+     "note": "No global directory, no 'add all' by design (ruled). PR body does not mention row 6 at all.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "22",
+     "system": "Default rights of translated worlds",
+     "status": "partial",
+     "lean": "ruled: MORNING-ASKS 'R 11:47: RESTORE old effective rights as explicit grants\u2026 the translator must give an ownerless v1 world explicit builder for everyone or its regulars lose building'",
+     "implementation": "tools/protocol/import-v1/translate-v1.js:709-728 (mainRights), :806 (written into @world); shared/protocol/roles.js:153-156 (ownerless cap at member), :164-170 (firstOwnerRoleDefs); shared/protocol/access.js:12-13",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "default-role",
+     "migration": "translate-v1@29 mainRights(): owned + no '*' \u2192 default-role {role:builder, guests:builder}; '*' gen \u2192 default-role.can.generate (+note guests can't); '*' visitor \u2192 member; '*' none/spectator \u2192 access {join:listed(,watch:anyone)}; OWNERLESS \u2192 role-defs.member.can = OPEN_CAN (builder's + generate), rank stays member + report note (translate-v1.js:724-726); roles.js:166 firstOwnerRoleDefs moves generate to builder when the first owner claims",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "shared/rightsfold.js:49-51 (rightsIn: ownerless \u2192 builder+gen; else roles['*'] ?? {role:'builder'})",
+      "v4": "tools/protocol/import-v1/translate-v1.js:709-728 (mainRights), :806 (written into @world); shared/protocol/roles.js:153-156 (ownerless cap at member), :164-170 (firstOwnerRoleDefs); shared/protocol/access.js:12-13"
+     },
+     "tests": "translate R22a-R22f (+S3-RP rights in the report); SEEN PASS 36/36 (whole suite)",
+     "changed_since_1027": "built (translate branch, @29): mainRights + R22a-f rows; 10-27 row had 'open', evidence then at roles.js:150",
+     "note": "DEVIATION from the ruling's letter: an ownerless v1 world does NOT get 'explicit builder for everyone' \u2014 everyone stays rank member and member's role-defs are widened to builder's permissions + generate (translate-v1.js:724). Same effective rights, different rank word: `who: builder` gates refuse everyone until an owner exists (the report says so, :725). Also default-role.can (gen) does not reach guests (note at :722) \u2014 main let guests gen. PR body's 'Restorations' list omits item 22 entirely.",
+     "status_1027": "open"
+    },
+    {
+     "id": "23",
+     "system": "WORLD_ADMIN entries and operator powers",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'SERVER_OPERATORS, fail-closed (23)' settled; 'S2 keep + explain \u2026 MAKE SURE all current server operators are in fact the owners of their own worlds' (R 12:30) \u2192 owners build; PR 'Operators narrowed \u2026 They no longer act as owners inside worlds' is listed under 'Needs an owner's yes'",
+     "implementation": "server/operators.ts:1,:7,:17 (.operators.json),:19 (SERVER_OPERATORS + legacy WORLD_ADMIN),:31-35 (bad entry refused loudly, boot continues; deprecation warn); server/setup.ts:1-2,:15 (setup link); server/server.ts:1351 (printed once); server/routes.ts:589-591 (/setup only while no operator); server/server.ts:758-766 (rightsFor: op \u2192 gen+fly only, role stays member); server/requestwire.ts:224 (operator-repair needs operator); server/messages.ts:446 (global bans operator-only); docs/TRANSLATING-OLD-WORLDS.md:3",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "server operator (hygiene role-words refuses WORLD_ADMIN / world admin / world operator outside the legacy reader and migration notes)",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/rights.ts:30-32 (ADMIN_IDS from WORLD_ADMIN: 'owner+gen EVERYWHERE')",
+      "v4": "server/operators.ts:1,:7,:17 (.operators.json),:19 (SERVER_OPERATORS + legacy WORLD_ADMIN),:31-35 (bad entry refused loudly, boot continues; deprecation warn); server/setup.ts:1-2,:15 (setup link); server/server.ts:1351 (printed once); server/routes.ts:589-591 (/setup only while no operator); server/server.ts:758-766 (rightsFor: op \u2192 gen+fly only, role stays member); server/requestwire.ts:224 (operator-repair needs operator); server/messages.ts:446 (global bans operator-only); docs/TRANSLATING-OLD-WORLDS.md:3"
+     },
+     "tests": "identity C3 + C3m (SERVER_OPERATORS/WORLD_ADMIN merge, bare name refused, boots with setup link); SEEN PASS 100/100 \u00b7 setup SU* SEEN PASS 22/22 \u00b7 access A11 (operator repair narrow); SEEN PASS 53/53",
+     "changed_since_1027": "fail-closed boot REPLACED by refuse-the-entry-and-boot (78458474c, review L10: 'never refuses boot'); first-run setup link + .operators.json added (setup-check); the 10-27 row said 'a name entry throws at boot' \u2014 no longer true (identity-check C3: server still boots)",
+     "note": "PR body says operators narrowed 'needs an owner's yes' \u2014 R 12:30 'S2 keep' already gave it. The 10-27 matrix text 'fail-closed boot kept' is stale: a bare name is refused loudly but the server boots (operators.ts:31-32, identity C3).",
+     "status_1027": "delta"
+    },
+    {
+     "id": "24",
+     "system": "Global bans stored by name",
+     "status": "restored",
+     "lean": "ruled: MORNING-ASKS 'R 11:35 yes: the Minecraft migration: at boot resolve each name to the account that used it (world logs + directory) \u2192 account ban; ambiguous/unresolved KEPT and listed\u2026 never silently dropped'",
+     "implementation": "server/moderation.ts:26-30 (pending pre-account bans, PENDING_WORDS), :42-62 (restoreBans: bind when main recorded exactly ONE account, else pending with a why, WARN line, never dropped), :65-68 (boot: mainKnowledge only when a name-only record exists), :73-78 (globalBansText lists pending); server/mainknew.ts:1-27 (.principals.json + world logs + tokens); server/messages.ts:451 (list shown), :497 (takePending binds on next ban)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a for .bans.json (server-side at boot, not the translator); the world log's own bans:<id> \u2192 imported-bans:<id> (translate-v1.js:231-232), account subs scrubbed to the directory (:282, :595-596)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/messages.ts:727 (globalBans[id.toLowerCase()] = {by, ts, reason?, sub?}: name-keyed, sub only if the target was connected)",
+      "v4": "server/moderation.ts:26-30 (pending pre-account bans, PENDING_WORDS), :42-62 (restoreBans: bind when main recorded exactly ONE account, else pending with a why, WARN line, never dropped), :65-68 (boot: mainKnowledge only when a name-only record exists), :73-78 (globalBansText lists pending); server/mainknew.ts:1-27 (.principals.json + world logs + tokens); server/messages.ts:451 (list shown), :497 (takePending binds on next ban)"
+     },
+     "tests": "translate B24a-B24f; SEEN PASS 36/36 (whole suite)",
+     "changed_since_1027": "built: restoreBans rewritten (c3b41162c warn-never-silent, df85aed96 malformed kept not dropped, 283744650 ban-only name still holds + bans in the approved report; all three are ancestors of 72847d01d); B24a-f rows added",
+     "note": "Matches the ruling. One edge: a one-account match binds on a self-chosen name (WARN 'check it', moderation.ts:56, B24f) \u2014 by design. PR body's 'Restorations' list does not mention name bans at all; B24d (translate-check.ts:139-140) pins that the old 'dropped' log line is gone from the source.",
+     "status_1027": "open"
+    },
+    {
+     "id": "25,26,27",
+     "system": "Public reads, API shapes, limits",
+     "status": "partial",
+     "lean": "ruled: MORNING-ASKS 'RATE becomes server policy\u2026 delete VERB_RATE, fix the probes\u2026 FOLD_EVERY deleted, and world-state snapshots come back' (R 12:14); S1 cookie rule 'keep + the receipt cites sources'. The '/worlds field renames get one release of alias' was the LEAN (asked), not quoted as ruled.",
+     "implementation": "server/config.ts:135 (STATE_CACHE_EVERY replaces FOLD_EVERY), :141-153 (ACT_RATE, SAY_RATE, RATE_WINDOW_SEC, RATE_KIB, ANON_RATE_KIB \u2192 RATE_POLICY), :155-157 (FORK_GAP_SEC/FORK_PER_HOUR, 0 = none); shared/protocol/authority/gate.js:59-71 (RATE_DEFAULT, injected w.rate); server/worldlog.ts:15 (RATE_POLICY imported); server/routes.ts:778-808 (/worlds: name, loaded, access, you, people[{id, declares?}] \u2014 no agents field, no alias); server/auth.ts:71-81 (Sec-Fetch-Site cookie rule). ABSENT: `git grep -n 'VERB_RATE\\|FOLD_EVERY' 72847d01d -- server shared client mcpl tools` \u2192 0 hits (only TEL0S_NOTES.md / docs/INCIDENTS.md history)",
+     "browser": "\u2014",
+     "agent": "/geom lost mounts/simAt; /worlds no agents list",
+     "vocabulary": "access words renamed",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/verbs.ts:16,:757 (VERB_RATE); server/routes.ts:761 (/worlds {people, agents})",
+      "v4": "server/config.ts:135 (STATE_CACHE_EVERY replaces FOLD_EVERY), :141-153 (ACT_RATE, SAY_RATE, RATE_WINDOW_SEC, RATE_KIB, ANON_RATE_KIB \u2192 RATE_POLICY), :155-157 (FORK_GAP_SEC/FORK_PER_HOUR, 0 = none); shared/protocol/authority/gate.js:59-71 (RATE_DEFAULT, injected w.rate); server/worldlog.ts:15 (RATE_POLICY imported); server/routes.ts:778-808 (/worlds: name, loaded, access, you, people[{id, declares?}] \u2014 no agents field, no alias); server/auth.ts:71-81 (Sec-Fetch-Site cookie rule). ABSENT: `git grep -n 'VERB_RATE\\|FOLD_EVERY' 72847d01d -- server shared client mcpl tools` \u2192 0 hits (only TEL0S_NOTES.md / docs/INCIDENTS.md history)"
+     },
+     "tests": "fork-reset FL1-FL4 (FORK_*=0 none; ACT_RATE=5 reaches the authority); SEEN PASS 54/54. No test for a /worlds alias (none exists; none should if no alias)",
+     "changed_since_1027": "VERB_RATE deleted, RATE injected (policy branch, fork-reset FL rows); FOLD_EVERY \u2192 STATE_CACHE_EVERY (statecache); 10-27 evidence 'config.ts:138; routes.ts:73' moved to :141-157 / :778",
+     "note": "/worlds has NO alias for main's `agents` list (routes.ts:804 only `people` with `declares`): if the alias-for-one-release lean stands, it is absent. PR body line 215 'RATE (gate.js) is injected config; VERB_RATE (imported nowhere) is deleted' is accurate; line 47 '/worlds \u2026 is now one list' states the rename without an alias.",
+     "status_1027": "delta"
+    },
+    {
+     "id": "28",
+     "system": "Builder mode on phones; VR buttons",
+     "status": "unverified",
+     "lean": "none in MORNING-ASKS; in-code owner refs: build.js:81 'R, 10-06 23:39' (no edit mode on a phone), xr.js:1261/1265 'owner, 10-02' (VRChat bindings)",
+     "implementation": "client/lib/xr.js:1260-1262 (jump = RIGHT A only), :1265-1268 (LEFT A/X = mic, owner 10-02); client/lib/build.js:81-85 (editSurface: no edit mode on a coarse pointer < 600 px, R 10-06)",
+     "browser": "VR B/Y = panels hide; left X/A = mic",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "client/lib/xr.js:1113-1115 (jump = A or X, either hand; B/Y hold = name reveal)",
+      "v4": "client/lib/xr.js:1260-1262 (jump = RIGHT A only), :1265-1268 (LEFT A/X = mic, owner 10-02); client/lib/build.js:81-85 (editSurface: no edit mode on a coarse pointer < 600 px, R 10-06)"
+     },
+     "tests": "none exists; NOT RUN",
+     "changed_since_1027": "none (lines moved :1262 \u2192 :1260-1268)",
+     "note": "Owner-dated decisions in code, not in the 10-28 rulings. 10-27 row said 'VR B/Y = panels hide' \u2014 at the head B/Y is not read as panels-hide in this block (main's B/Y name-reveal is also not in the v4 block grepped); unverified in a headset.",
+     "status_1027": "delta"
+    },
+    {
+     "id": "30",
+     "system": "Old worlds reachable (operator upgrade)",
+     "status": "restored",
+     "lean": "ruled: 'old-world upgrade button (30)' settled (MORNING-ASKS); who may upgrade = 'operator or bound owner, ownerless claimed' listed in PR under 'Needs an owner's yes' \u2014 R 12:30 'S2 keep' + owners build (fb63ab2ae\u20269c8d959fa) built on it; no explicit quoted yes on 'ownerless goes to the upgrader'",
+     "implementation": "server/server.ts:387-390 (mid-swap never served, 4005), :392-405 (old-format refusal names who may upgrade; ownerOf for a signed-in non-operator); server/upgrade.ts:1-8, :31 (upgrade: 'operator-or-owner'), :53 (ownerOf), :121 ('You're now this world's owner'); client/lib/upgradeview.js:1-2, :63-64, :73 (Back up and upgrade); docs/TRANSLATING-OLD-WORLDS.md:131",
+     "browser": "upgradeview.js splash: Review upgrade \u2192 Back up and upgrade",
+     "agent": "MCPL join error names who may upgrade (a server operator) + doc",
+     "vocabulary": "refused {code: old-format, doc, upgrade}",
+     "migration": "the upgrade runs tools/protocol/world.ts translate in place (translate-v1@29); approval hash covers the output (PR 'Hardening')",
+     "specimen": "fixtures/water-old-v1; world A/world B private, pending; any old-format world",
+     "evidence": {
+      "main": "server/routes.ts:61 (a world = worlds/<name>/log.jsonl, served as-is)",
+      "v4": "server/server.ts:387-390 (mid-swap never served, 4005), :392-405 (old-format refusal names who may upgrade; ownerOf for a signed-in non-operator); server/upgrade.ts:1-8, :31 (upgrade: 'operator-or-owner'), :53 (ownerOf), :121 ('You're now this world's owner'); client/lib/upgradeview.js:1-2, :63-64, :73 (Back up and upgrade); docs/TRANSLATING-OLD-WORLDS.md:131"
+     },
+     "tests": "upgrade US1-US15, UB1-UB11, UD; SEEN PASS 29/29 \u00b7 identity (RS rows) SEEN PASS 100/100",
+     "changed_since_1027": "owner-may-upgrade added (US9-US12, US15; owners-check); 10-27 evidence server.ts:385/:399 now :387/:399-404",
+     "note": "PR line 210 is accurate. Open per MORNING-ASKS owners block: 'an owner who already signed in to v4 has an identity and can't be bound'; 'BEFORE THE REAL UPGRADE: re-run the dry run on the production host'.",
+     "status_1027": "restored"
+    },
+    {
+     "id": "31",
+     "system": "Founding a world",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS '31 \u2192 server policy, NO limits until studied (R 12:04); sensible defaults wishlisted with the operator surface'",
+     "implementation": "server/config.ts:159 ('Founding a world: no limits (R 10-28\u2026)'); server/worldlog.ts:473-477 (foundRefusal: name grammar + exists only), :481; server/requestwire.ts:258 (world-found); server/server.ts:384-386 (joining never founds). ABSENT: `git grep -n -i 'per account\\|quota\\|3 worlds' 72847d01d -- server/worldlog.ts server/server.ts` \u2192 0",
+     "browser": "\u2014",
+     "agent": "travel to new name refused",
+     "vocabulary": "world-found",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/server.ts:742-745 (a brand-new world belongs to whoever first walks in embodied: join founds)",
+      "v4": "server/config.ts:159 ('Founding a world: no limits (R 10-28\u2026)'); server/worldlog.ts:473-477 (foundRefusal: name grammar + exists only), :481; server/requestwire.ts:258 (world-found); server/server.ts:384-386 (joining never founds). ABSENT: `git grep -n -i 'per account\\|quota\\|3 worlds' 72847d01d -- server/worldlog.ts server/server.ts` \u2192 0"
+     },
+     "tests": "fork-reset FD3 (one account founds five, no quota); SEEN PASS 54/54",
+     "changed_since_1027": "the '3 per account ever, 1/10 min' caps deleted (policy branch); FD3 row added",
+     "note": "Join-founding stays retired (security review 10-06 H3) \u2014 intentional, not in dispute. PR line 215 'founding and fork quotas are removed or are config with 0 meaning none' is accurate (founding: removed; fork: config).",
+     "status_1027": "delta"
+    },
+    {
+     "id": "32",
+     "system": "Speech arrival-only",
+     "status": "intentional-change",
+     "lean": "ruled: R 10-18 (cited in code); MORNING-ASKS 'Snapshots\u2026 Antra confirmed say stays in the log; chat filtered per visitor by arrival time' (PR line 78)",
+     "implementation": "server/server.ts:829-832 (recentChat: [] always; chatTotal 0 unless isAdmin), :1023; server/world.ts:147 (isAdmin = operator or readChat)",
+     "browser": "no backscroll for joiners",
+     "agent": "catch_up arrival-only (row 29)",
+     "vocabulary": "\u2014",
+     "migration": "n/a (say entries are translated and stay in the log; served per arrival)",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "shared/fold.js:347-349 (recentChat window folded for joiners)",
+      "v4": "server/server.ts:829-832 (recentChat: [] always; chatTotal 0 unless isAdmin), :1023; server/world.ts:147 (isAdmin = operator or readChat)"
+     },
+     "tests": "identity RS10 (speech arrival-only); SEEN PASS 100/100",
+     "changed_since_1027": "none (server.ts:819 \u2192 :832)",
+     "note": "Intentional change, owner-dated. D6 (SWEEP-2): chat-scrollback-test.ts still exists at the head and tests a join window no joiner receives (partly vacuous).",
+     "status_1027": "delta"
+    },
+    {
+     "id": "34",
+     "system": "Per-person invisible spectator",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'spectator intentional (34)' settled; R 10-27 'anti-spying; invisible watching is for probes only'",
+     "implementation": "shared/protocol/roles.js:15-16 ('There is no rung below member'), :34 (RANK), :44 (visitor\u2192member); translate-v1.js:173-174, :276, :817 (spectator/none carried as imported-roles:<id>)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "no spectator role",
+     "migration": "translate-v1@29: a per-person spectator/none grant \u2192 @world imported-roles:<id> (carried, not enforced; translate-v1.js:817); '*' none/spectator \u2192 access {join: listed(, watch: anyone)} (:277, :717)",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "server/verbs.ts:168 (grant role: owner|builder|visitor|spectator|none)",
+      "v4": "shared/protocol/roles.js:15-16 ('There is no rung below member'), :34 (RANK), :44 (visitor\u2192member); translate-v1.js:173-174, :276, :817 (spectator/none carried as imported-roles:<id>)"
+     },
+     "tests": "translate R22c/R22d/R22e (door words from '*' none/spectator) \u2014 see row 22 counts; no per-person spectator test (none should exist)",
+     "changed_since_1027": "none (roles.js:14 \u2192 :15)",
+     "note": "PR line 150/\u00a76a covers it. World-level `watch: anyone` remains (access.js:18).",
+     "status_1027": "intentional"
+    },
+    {
+     "id": "38",
+     "system": "v1 sim + debug {sim}; world-bans mods-only; hashed IPs; one people list",
+     "status": "intentional-change",
+     "lean": "none quoted; 10-27 lean 'delta (each documented, sound)'",
+     "implementation": "server/messages.ts:424-432 (world-bans: owner or a moderation power only), :475 (guest banned by hashed address); server/moderation.ts:20-21, :98 (addr hashed, expires); server/routes.ts:804 (one people list with declares). ABSENT: `git grep -n 'msg.sim' 72847d01d -- server/messages.ts` \u2192 0 (v1 sim debug gone; eidosim replaces it, sim checkpoints)",
+     "browser": "\u2014",
+     "agent": "single people list",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "none named yet",
+     "evidence": {
+      "main": "server/messages.ts:141 (debug {sim}); /worlds people+agents routes.ts:761",
+      "v4": "server/messages.ts:424-432 (world-bans: owner or a moderation power only), :475 (guest banned by hashed address); server/moderation.ts:20-21, :98 (addr hashed, expires); server/routes.ts:804 (one people list with declares). ABSENT: `git grep -n 'msg.sim' 72847d01d -- server/messages.ts` \u2192 0 (v1 sim debug gone; eidosim replaces it, sim checkpoints)"
+     },
+     "tests": "none run for this row (identity-check covers guest bans by address per its header :27; NOT RUN)",
+     "changed_since_1027": "none (messages.ts:420 \u2192 :424)",
+     "note": "Each change is documented in code; no 10-28 ruling touches it.",
+     "status_1027": "delta"
+    },
+    {
+     "id": "39",
+     "system": "Whisper + DM tabs + attention sounds",
+     "status": "intentional-change",
+     "lean": "ruled: MORNING-ASKS 'whisper retired (39)' settled; ASK-AUDIT S4 'whisper stays disabled' \u2192 removed end to end on R's 'Yep'",
+     "implementation": "shared/protocol/verbspec.js:144-147 (REMOVED_VERBS.whisper); server/messages.ts:122-127 (whisper \u2192 refused 'removed'); mcpl/tools.ts:260, :1641-1646 (TOOL_REMOVED whisper, refused with a pointer)",
+     "browser": "DM tabs gone",
+     "agent": "whisper tool removed",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "server/messages.ts:169-191 (whisper handler, WHISPERS_ENABLED)",
+      "v4": "shared/protocol/verbspec.js:144-147 (REMOVED_VERBS.whisper); server/messages.ts:122-127 (whisper \u2192 refused 'removed'); mcpl/tools.ts:260, :1641-1646 (TOOL_REMOVED whisper, refused with a pointer)"
+     },
+     "tests": "presence 'a whisper reaches nobody (removed)'; SEEN PASS 28/28 \u00b7 door-wording-test.ts:310-313 NOT RUN",
+     "changed_since_1027": "none (verbspec.js:142 \u2192 :144-147)",
+     "note": "PR line 15 still lists main's tool overlap; retirement is stated in the removals section (REMOVED_VERBS).",
+     "status_1027": "intentional"
+    }
+   ]
+  },
+  {
+   "name": "Tests & docs",
+   "rows": [
+    {
+     "id": "40,52",
+     "system": "Lost test cover",
+     "status": "partial",
+     "lean": "none quoted for 40/52 in R's rulings; lean was 'restore a row per restored feature (red first)'",
+     "implementation": "ABSENT at 72847d01d: tools/comptest.ts, tools/render-scene-test.ts, tools/sim-ground-smoke.ts, tools/verb-order-test.ts (deleted 3152ff60b), tools/caption-verb-test.ts. Present: tools/comps-parity-test.ts (NOT in suites.ts; `git grep comps-parity 72847d01d -- tools/protocol/suites.ts` \u2192 0), tools/render-scene-wire-test.ts (2 checks) + render-scene-import-test.ts (4 checks; suites.ts:199), tools/captions-test.ts (pure functions only, :15-17; run by the client-tools lane, suites.ts:211), originof-test (suites.ts:51, orrery), shape-render-test.ts IS in suites.ts:50",
+     "browser": "fog-mask/gpu/level-underwater checks not gated",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "tools/comptest.ts, tools/render-scene-test.ts, tools/sim-ground-smoke.ts, tools/verb-order-test.ts, tools/caption-verb-test.ts all exist at 34fd77ea2",
+      "v4": "ABSENT at 72847d01d: tools/comptest.ts, tools/render-scene-test.ts, tools/sim-ground-smoke.ts, tools/verb-order-test.ts (deleted 3152ff60b), tools/caption-verb-test.ts. Present: tools/comps-parity-test.ts (NOT in suites.ts; `git grep comps-parity 72847d01d -- tools/protocol/suites.ts` \u2192 0), tools/render-scene-wire-test.ts (2 checks) + render-scene-import-test.ts (4 checks; suites.ts:199), tools/captions-test.ts (pure functions only, :15-17; run by the client-tools lane, suites.ts:211), originof-test (suites.ts:51, orrery), shape-render-test.ts IS in suites.ts:50"
+     },
+     "tests": "per lost test, cover at the head: comptest swing \u2192 none (comps-parity-test unregistered; authority-check HG rows :763-768 cover a hung seat, not the swing); render-scene 26 cases \u2192 partial (6 checks across two files); sim-ground-smoke \u2192 none (only tools/ground-asset-check.ts fixture re-measure); verb-order \u2192 none by design (v1 runVerb ordering has no v4 twin; 3152ff60b says so); XSS seat/orrery \u2192 orrery via originof-test (registered), seat-inspector: `git grep -c -i 'seat\\|inspector' 72847d01d -- tools/protocol/xss-probe.ts` \u2192 0; caption-verb \u2192 captions-test pure fns only; D1 look()-on-captions \u2192 still pure-only (captions-test.ts:15-17); D3 aimed shove `lean` \u2192 0 hits in shove-check/agenttools-check; D4 particle seed across two clients \u2192 particles-host-test.ts:45-84 checks a seed is passed, not two-client equality; D5 \u2192 chat-resync-wire-test.ts:34 still 'live says\u2026 aren't fed here'; D6 \u2192 chat-scrollback-test.ts exists, window is always [] (server.ts:832); D7 \u2192 door-is-error-test.ts has 'no answer' :142/:203, 'unconfirmed' 0 hits; D9 \u2192 mention-delivery-test.ts:137/:168 non-admin only; D10 \u2192 native-login-wire-test.ts imports existsSync but no world-not-created assert found by grep. NOT RUN.",
+     "changed_since_1027": "shape-render registered (suites.ts:50) and render-scene-import (suites.ts:199) added; originof registered; the rest unchanged",
+     "note": "PR line 184 is WRONG at the head: 'tools/shape-render-test.ts \u2026 exists but no runner reaches it; it isn't in run.ts' \u2014 suites.ts:50 registers it and GATE-MANIFEST.md:216 lists it (#46). 3152ff60b's message (row 41) names the v4 twins for state/fold/replay but names none for verb-order's ordering.",
+     "status_1027": "partial"
+    },
+    {
+     "id": "41",
+     "system": "Wrong commit messages (3152ff60b)",
+     "status": "absent",
+     "lean": "none (lean: note in PR text)",
+     "implementation": "git 3152ff60b 'tools: delete the tests and scripts that exercised only v1 machinery' (49 files, \u22124615) is an ancestor of 72847d01d (`git merge-base --is-ancestor` true); its body names v4 twins per deleted test",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "\u2014",
+      "v4": "git 3152ff60b 'tools: delete the tests and scripts that exercised only v1 machinery' (49 files, \u22124615) is an ancestor of 72847d01d (`git merge-base --is-ancestor` true); its body names v4 twins per deleted test"
+     },
+     "tests": "none exists",
+     "changed_since_1027": "none; history is unchanged (no rewrite)",
+     "note": "The PR body never mentions 3152ff60b or that some deleted tests have no v4 twin (verb-order, sim-ground-smoke, comptest swing); the lean 'note in PR text' is not done.",
+     "status_1027": "open"
+    },
+    {
+     "id": "42",
+     "system": "deploy/SHOW_RUNBOOK.md",
+     "status": "partial",
+     "lean": "none quoted (lean: rewrite steps for v4)",
+     "implementation": "deploy/SHOW_RUNBOOK.md:21 (SERVER_OPERATORS by account, bare name refused loudly, setup link), :72-73 (found once with /newworld = world-found; client/lib/commands/registry.js:64), :84-85 (archive = world.jsonl + world.mod.jsonl + frames-<ts>.jsonl + custody key + assets/opt/store; matches server/worldlog.ts:3, server/access.ts:82, server/config.ts:31). Fixed in 483782d54 (S4) and 78458474c.",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "deploy/SHOW_RUNBOOK.md (main: log.jsonl archive, WORLD_ADMIN, join founds)",
+      "v4": "deploy/SHOW_RUNBOOK.md:21 (SERVER_OPERATORS by account, bare name refused loudly, setup link), :72-73 (found once with /newworld = world-found; client/lib/commands/registry.js:64), :84-85 (archive = world.jsonl + world.mod.jsonl + frames-<ts>.jsonl + custody key + assets/opt/store; matches server/worldlog.ts:3, server/access.ts:82, server/config.ts:31). Fixed in 483782d54 (S4) and 78458474c."
+     },
+     "tests": "none exists (a doc; upgrade-check UD runs TRANSLATING-OLD-WORLDS, not this file). NOT RUN.",
+     "changed_since_1027": "SWEEP-3's stale :81 ('worlds/<world>/log.jsonl + frames') is rewritten at the head (:84-85 names world.jsonl, the mod log, the custody key); :77 'open one spectator client cold, X-Cache' remains and is still valid (nginx-show.conf:52 X-Cache; a watch client is c.spectator, routes.ts:797)",
+     "note": "SWEEP-3's 'still stale :81' is no longer true at 72847d01d. No remaining v1 word found by grep (WORLD_ADMIN/log.jsonl/snapshot.json/inhabitant: 0 hits).",
+     "status_1027": "open"
+    },
+    {
+     "id": "S2",
+     "system": "tools/ scripts still speaking v1 (SWEEP-3 S2)",
+     "status": "absent",
+     "lean": "none; MORNING-ASKS routes S2 '(\u224820 v1-speaking tools) \u2192 #13 cleanup (fix the class)'",
+     "implementation": "`git grep -l -E 'type: *[\\'\"]verb[\\'\"]' 72847d01d -- tools/` \u2192 17 files: non-test 3 (tools/bootjank.ts, tools/lightbench.ts, tools/render-scene-control.ts) + 14 probes/tests/fixtures (attention-probe, forecast-probe.mjs, fp-snap-probe, lite-banner-probe.mjs, native-environment-control, native-interactions-fixture, particles-probe, protocol/server-check, render-scene-wire-test, roaming-renderer-check, sky-refresh-probe.mjs, snap-at-probe.mjs, tilt-probe.mjs, uneven-support-test); a looser `verb: \"\u2026\"` key grep adds ~15 more non-test files (captionbot/world.ts, chatbridge/index.ts, defs-smoke.ts, operator-bind.ts, sky.ts, skypanel-stub.mjs, smoke.ts, structure-demo.ts, water/prepare.ts, water/requests.js; import-v1/* legitimately v1)",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "\u2014",
+      "v4": "`git grep -l -E 'type: *[\\'\"]verb[\\'\"]' 72847d01d -- tools/` \u2192 17 files: non-test 3 (tools/bootjank.ts, tools/lightbench.ts, tools/render-scene-control.ts) + 14 probes/tests/fixtures (attention-probe, forecast-probe.mjs, fp-snap-probe, lite-banner-probe.mjs, native-environment-control, native-interactions-fixture, particles-probe, protocol/server-check, render-scene-wire-test, roaming-renderer-check, sky-refresh-probe.mjs, snap-at-probe.mjs, tilt-probe.mjs, uneven-support-test); a looser `verb: \"\u2026\"` key grep adds ~15 more non-test files (captionbot/world.ts, chatbridge/index.ts, defs-smoke.ts, operator-bind.ts, sky.ts, skypanel-stub.mjs, smoke.ts, structure-demo.ts, water/prepare.ts, water/requests.js; import-v1/* legitimately v1)"
+     },
+     "tests": "none exists (nov1 suite guards runtime, not tools/)",
+     "changed_since_1027": "not touched at 72847d01d",
+     "note": "PR line 235 says 'A sweep for those patterns across tools/ goes in #13, not here' \u2014 that sentence is about the slow-runner CI patterns (fixed sleeps etc.), not v1 wire shapes; the v1-speaking tools are not mentioned in the PR body. Count at the head \u2248 17 by the strict grep (SWEEP-3 said ~20).",
+     "status_1027": "new"
+    },
+    {
+     "id": "S4",
+     "system": "Doc rot (SWEEP-3 S4, 5 lines)",
+     "status": "partial",
+     "lean": "none; routed to the features agent (MORNING-ASKS 13:36)",
+     "implementation": "483782d54 (ancestor of 72847d01d) body: 'S4: doc rot (REMOTE-SCREENSHOTS, draw-calls, UPSTREAM-FLAGS, NATIVE-WORLD-RENDERING, SHOW_RUNBOOK: founding step, CSP_CONNECT_EXTRA, the archive's files)'; stat: docs/REMOTE-SCREENSHOTS.md 2, docs/draw-calls.md \u22121, docs/UPSTREAM-FLAGS.md 4, docs/NATIVE-WORLD-RENDERING.md 4, deploy/SHOW_RUNBOOK.md 7, AGENTS.md 10, docs/TOOL-LADDER.md 14",
+     "browser": "\u2014",
+     "agent": "\u2014",
+     "vocabulary": "\u2014",
+     "migration": "n/a",
+     "specimen": "\u2014",
+     "evidence": {
+      "main": "\u2014",
+      "v4": "483782d54 (ancestor of 72847d01d) body: 'S4: doc rot (REMOTE-SCREENSHOTS, draw-calls, UPSTREAM-FLAGS, NATIVE-WORLD-RENDERING, SHOW_RUNBOOK: founding step, CSP_CONNECT_EXTRA, the archive's files)'; stat: docs/REMOTE-SCREENSHOTS.md 2, docs/draw-calls.md \u22121, docs/UPSTREAM-FLAGS.md 4, docs/NATIVE-WORLD-RENDERING.md 4, deploy/SHOW_RUNBOOK.md 7, AGENTS.md 10, docs/TOOL-LADDER.md 14"
+     },
+     "tests": "none exists (docs); NOT RUN",
+     "changed_since_1027": "the five files SWEEP-3 named were edited in 483782d54",
+     "note": "SWEEP-3.md does not list the five lines themselves; the commit names the five docs (REMOTE-SCREENSHOTS, draw-calls, UPSTREAM-FLAGS, NATIVE-WORLD-RENDERING, SHOW_RUNBOOK). Not re-read line by line for residual rot; 'partial' because the fix is a commit, not a check.",
+     "status_1027": "new"
+    }
+   ]
+  }
+ ]
+}
