@@ -42,7 +42,7 @@ const DT = 1 / FPS;
 // The rig the bench flies. Derived from the shipped asset by
 // test/fixtures/flight-fixture.ts -- a hand-typed list could not go stale against the
 // file, so it would prove nothing about the file.
-const FIX = JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8'));
+const FIX = JSON.parse(readFileSync('test/fixtures/mythos-wings-rig.json', 'utf8'));
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
                '.css': 'text/css', '.mjs': 'text/javascript' };

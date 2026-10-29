@@ -7,7 +7,7 @@
 // 'the shipped body'." Right -- an array typed into a test cannot go stale
 // against a file, so it proves nothing about the file.
 //
-// This reads the VRM and writes spec/fixtures/mythos-wings-rig.json: SHA-256
+// This reads the VRM and writes test/fixtures/mythos-wings-rig.json: SHA-256
 // (integrity), byte size, and the full bone map. The ASSET is not in the branch
 // (24 MB, gitignored); the FIXTURE is, so a reviewer without the asset still
 // sees exactly which rig was tested and can verify the hash against their own
@@ -27,5 +27,5 @@ const fx = {
   boneCount: bones.length,
   bones,
 };
-writeFileSync('spec/fixtures/mythos-wings-rig.json', JSON.stringify(fx, null, 2) + '\n');
+writeFileSync('test/fixtures/mythos-wings-rig.json', JSON.stringify(fx, null, 2) + '\n');
 console.log('bytes', fx.bytes, '\nsha256', fx.sha256, '\nbones', fx.boneCount);

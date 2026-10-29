@@ -480,7 +480,7 @@ await C("K21", "the sweep's independent reading agrees with the translator on ac
   // the sweep counts this world beside the repo's own fixture logs (distinct by content, as it reads them)
   const seen = new Set<string>(); const walk = (d: string, depth = 0) => { if (depth > 5) return; for (const n of fs.readdirSync(d)) { const q = path.join(d, n);
     if (n === "log.jsonl") { const t = fs.readFileSync(q, "utf8"); if (t.trim()) seen.add(t); } else if (fs.statSync(q).isDirectory()) walk(q, depth + 1); } };
-  walk(path.join(T, "spec/fixtures")); const counted = out.includes(`[sweep] ${seen.size + 1} distinct world logs`);
+  walk(path.join(T, "test/fixtures/v1-worlds")); walk(path.join(T, "spec/fixtures")); const counted = out.includes(`[sweep] ${seen.size + 1} distinct world logs`);
   const { translateV1World } = await imp("tools/import-v1/world.ts"); const OR = await imp("tools/import-v1/snapshot-oracle.ts");
   const r = translateV1World(dir, path.join(W, "worlds", "acct-new"));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes("local:ann")).map(([id]) => id);

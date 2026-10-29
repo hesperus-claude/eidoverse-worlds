@@ -35,6 +35,7 @@ const walk = (d: string, depth = 0) => {
     if (st.isDirectory()) { if (n !== 'node_modules' && n !== '.git') walk(p, depth + 1); } else if (n === 'log.jsonl') logs.push(p);
   }
 };
+walk(join(import.meta.dir, '..', 'fixtures', 'v1-worlds'));
 walk(join(import.meta.dir, '..', '..', 'spec', 'fixtures'));
 for (const d of pathList(process.env.COMPONENTS_CORPUS)) walk(d);
 

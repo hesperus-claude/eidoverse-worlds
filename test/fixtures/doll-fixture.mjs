@@ -1,7 +1,7 @@
 // Committed skeleton used by the wing/hair and lifecycle regression gates.
 import { readFileSync } from 'node:fs';
 import { humanBones, worldPositions, isVrm0 } from '../harness/rig-load.mjs';
-export const dollGltf = JSON.parse(readFileSync(new URL('../../spec/fixtures/ammodoll-rig.json', import.meta.url), 'utf8'));
+export const dollGltf = JSON.parse(readFileSync(new URL('./ammodoll-rig.json', import.meta.url), 'utf8'));
 const bones = humanBones(dollGltf), wp = worldPositions(dollGltf);
 const P = Object.fromEntries(Object.entries(bones).map(([name, node]) => [name, wp(node)]));
 const nodeOf = new Map(Object.entries(bones).map(([name, node]) => [node, name]));

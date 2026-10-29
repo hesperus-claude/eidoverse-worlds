@@ -43,7 +43,7 @@ const { rigs, makeAvatar, toppleLean, fixtureRig, VRM_DIR } = await import('../h
 const S = suite("bodysim");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
-// the avatar library (assets/opt, untracked) when it is on disk; else the rig the repo carries (spec/fixtures), so a clean
+// the avatar library (assets/opt, untracked) when it is on disk; else the rig the repo carries (test/fixtures), so a clean
 // checkout runs this suite instead of throwing ENOENT (#260 house I438)
 const { existsSync } = await import('node:fs');
 const FLEET = existsSync(VRM_DIR) ? rigs().filter((r: any) => !r.err) : [fixtureRig('ammodoll')];

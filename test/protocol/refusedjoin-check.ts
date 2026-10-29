@@ -37,7 +37,7 @@ import { helloOf } from "../../shared/protocol/hello.js";
 
 process.env.AGENT_BODY_ENGINE = "verlet";
 // any first-protocol log will do (a v1 world is recognised by its genesis line): the repo's own fixture unless V1_LOG names one
-const V1 = process.env.V1_LOG ?? path.resolve(import.meta.dir, "../../spec/fixtures/01-build/log.jsonl");
+const V1 = process.env.V1_LOG ?? path.resolve(import.meta.dir, "../fixtures/v1-worlds/01-build/log.jsonl");
 // W10/W11: a signed-in server operator (SERVER_OPERATORS) and its session, beside the guest the other rows are
 const OP_SID = "e".repeat(64), AUTHOR_SID = "f".repeat(64), VEE_SID = "9".repeat(64), SESS = path.join(fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "refusedjoin-sess-")), "sessions.json");
 fs.writeFileSync(SESS, JSON.stringify({ [OP_SID]: { sub: "human:test:op", name: "Opal", scopes: ["worlds:join"], exp: Date.now() + 3600_000 },

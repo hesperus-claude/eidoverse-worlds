@@ -91,7 +91,7 @@ sentence on its splash, suite `refusedjoin`). The sweep
 
 **This directory is temporary.** It stays only until the live Commons has been cut over to v4 (decided 2026-10-06); a
 follow-up change, about a month after that cutover, deletes this directory, the sweep's v1 half and the v1 fixtures in
-`spec/fixtures/`.
+`test/fixtures/v1-worlds/`.
 
 ## The Commons and governance keys (PROTOCOL §13)
 

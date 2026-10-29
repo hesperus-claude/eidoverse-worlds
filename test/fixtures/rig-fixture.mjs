@@ -1,6 +1,6 @@
 // test/fixtures/rig-fixture.mjs — write a VRM's skeleton (nodes + humanoid map, no meshes, no textures) as a repo fixture, so a
 // suite that needs a real rig runs on a host without the avatar library (rig-load.mjs fixtureRig reads it back).
-//   bun test/fixtures/rig-fixture.mjs <path/to/name.vrm>        → spec/fixtures/<name>-rig.json
+//   bun test/fixtures/rig-fixture.mjs <path/to/name.vrm>        → test/fixtures/<name>-rig.json
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
@@ -14,6 +14,6 @@ if (g.extensions?.VRMC_vrm) ext.VRMC_vrm = { specVersion: g.extensions.VRMC_vrm.
 if (g.extensions?.VRM) ext.VRM = { humanoid: g.extensions.VRM.humanoid };
 const fx = { source: { file: basename(src), bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') },
   scene: g.scene, scenes: g.scenes, nodes, extensions: ext };
-const out = new URL(`../../spec/fixtures/${name}-rig.json`, import.meta.url);
+const out = new URL(`./${name}-rig.json`, import.meta.url);
 writeFileSync(out, JSON.stringify(fx) + '\n');
 console.log(`wrote ${out.pathname} (${nodes.length} nodes)`);

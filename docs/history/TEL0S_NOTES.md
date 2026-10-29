@@ -431,7 +431,7 @@ fixture/tool matrix.
   is refactored into updateSimWorld(wall, frameTime) so the hills gate
   drives the REAL applier at fixed 60Hz clocks (11/11, also at ~3fps) and
   pins the asset RESPONSE hash (GLB and KTX2 variant). Committed skeleton
-  fixture spec/fixtures/ammodoll-rig.json (extracted from the private
+  fixture test/fixtures/ammodoll-rig.json (extracted from the private
   VRM, source hash recorded — flagged for the rig owner's consent): the
   doll suite runs 69/69 without the VRM, --fleet adds installed avatars.
   replaybench-test 9/9 (five rejected mutations; Bun/Node/Deno identity);

@@ -483,7 +483,7 @@ console.log('\nBODY -- flight binds to bone NAMES, not to an avatar hash');
   // an array in a test file cannot go stale against an asset, which is exactly
   // why it must not be called "the shipped body". Regenerate with
   // `bun test/fixtures/flight-fixture.ts` when the body changes.
-  const fx = JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8'));
+  const fx = JSON.parse(readFileSync('test/fixtures/mythos-wings-rig.json', 'utf8'));
   const real: string[] = fx.bones;
   check(`fixture is the shipped asset (${fx.bytes} B, sha256 ${fx.sha256.slice(0, 12)}...)`,
         fx.bytes === 24755464 && /^[0-9a-f]{64}$/.test(fx.sha256));
@@ -597,7 +597,7 @@ console.log('\nRECEIPTS -- the impact velocity is the impact velocity');
 console.log('\nCAPABILITY -- default deny, action-time, semantic rig binding');
 {
   const MYTHOS: string[] =
-    JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8')).bones;
+    JSON.parse(readFileSync('test/fixtures/mythos-wings-rig.json', 'utf8')).bones;
   const COMMONS = ['Hip','Spine01','Spine02','Head','NeckTwist01'];   // no wings
 
   // 1. Default provider / no profile -> nothing.

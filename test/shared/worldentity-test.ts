@@ -97,7 +97,7 @@ console.log('1. the alias both ways, through the real door:');
   // every spec fixture, translated (tools/import-v1/translate-v1.js, as a world is migrated), state by state
   const logs: string[] = [];
   const walk = (d: string) => { if (!existsSync(d)) return; for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) walk(p); else if (x === 'log.jsonl') logs.push(p); } };
-  walk(join(ROOT, 'spec/fixtures'));
+  walk(join(ROOT, 'test/fixtures/v1-worlds')); walk(join(ROOT, 'spec/fixtures'));
   let states = 0, worldStates = 0, translated = 0; const fbad: string[] = [];
   for (const p of logs) {
     const old: any[] = [];

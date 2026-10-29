@@ -27,7 +27,7 @@
 //
 // usage: bun tools/import-v1/snapshot-oracle.ts [<world dir> …]
 //   a world dir translated in place is read through its kept originals (log.original.jsonl, snapshot.original.json)
-//   no args: ORACLE_WORLDS=<dir>[:<dir>…] (`;` on Windows) (a world dir, or a dir of worlds), else PROTOCOL_WORLDS; always the repo's spec/fixtures (folded.json as each snapshot)
+//   no args: ORACLE_WORLDS=<dir>[:<dir>…] (`;` on Windows) (a world dir, or a dir of worlds), else PROTOCOL_WORLDS; always the repo's test/fixtures/v1-worlds (folded.json as each snapshot)
 //   (walked like the sweep), each distinct complete snapshot once. Exit 0 only when every compared world has 0 differences.
 //   OPT_DIR=<serving checkout>/assets/opt so store models get the model-hash they get on this host (read only).
 //   ORACLE_SCRATCH=<dir> where the scratch worlds go (default $PROTOCOL_SCRATCH or the OS temp dir); ORACLE_KEEP=1 keeps it.
@@ -102,7 +102,7 @@ export function completeSnapshot(dir) {
 /** The conformance fixtures as old worlds in the scratch: log.jsonl, and snapshot.json whose state is folded.json (the
  *  reference implementation's fold of the whole log: its last seq, the log's byte size), so completeSnapshot takes it. */
 function fixtureWorlds() {
-  const src = path.join(ENGINE, "spec/fixtures"), out = [];
+  const src = path.join(ENGINE, "test/fixtures/v1-worlds"), out = [];
   for (const n of fs.readdirSync(src).sort()) {
     const d = path.join(src, n); if (!fs.existsSync(path.join(d, "log.jsonl")) || !fs.existsSync(path.join(d, "folded.json"))) continue;
     const w = path.join(SCRATCH, "fixture-worlds", n); fs.mkdirSync(w, { recursive: true });
@@ -326,7 +326,7 @@ function printWorld(w) {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  // no args: the repo's own old worlds first (spec/fixtures/0*: each log with the reference implementation's fold of it,
+  // no args: the repo's own old worlds first (test/fixtures/v1-worlds/0*: each log with the reference implementation's fold of it,
   // folded.json, as its snapshot), then any host worlds ORACLE_WORLDS / PROTOCOL_WORLDS name. It never walks outside the
   // checkout unasked; not comparing a host's own worlds is an OPTIONAL line the gate counts.
   const roots = process.env.ORACLE_WORLDS ?? process.env.PROTOCOL_WORLDS;

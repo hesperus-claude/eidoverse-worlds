@@ -40,7 +40,7 @@ fs.writeFileSync(TOK, JSON.stringify({ "tok-rowan": { id: "Rowan" } }));
 const ANN = "a".repeat(64), BEA = "b".repeat(64), SESS = path.join(root, "sessions.json");
 fs.writeFileSync(SESS, JSON.stringify({ [ANN]: { sub: "human:test:ann", name: "Ann", scopes: ["worlds:join"], exp: Date.now() + 3600_000 },
   [BEA]: { sub: "human:test:bea", name: "Bea", scopes: ["worlds:join"], exp: Date.now() + 3600_000 } }), { mode: 0o600 });
-const V1 = path.resolve(ENGINE, "spec/fixtures/01-build/log.jsonl");
+const V1 = path.resolve(ENGINE, "test/fixtures/v1-worlds/01-build/log.jsonl");
 const worldsDir = (tag) => { const W = path.join(root, tag); const d = path.join(W, "old-x"); fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, "log.jsonl"), fs.readFileSync(V1, "utf8").split("\n").slice(0, 200).filter(Boolean).join("\n") + "\n"); return W; };
 const env = (W, extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BACKUPS_DIR: path.join(root, `${path.basename(W)}-backups`), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",

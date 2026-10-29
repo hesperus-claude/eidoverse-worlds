@@ -1,5 +1,5 @@
 // test/protocol/sweep.ts — the translators against real logs, and the pins the core relies on.
-//   bun test/protocol/sweep.ts                  # every distinct log.jsonl under spec/fixtures (the repo's own)
+//   bun test/protocol/sweep.ts                  # every distinct log.jsonl under test/fixtures/v1-worlds and spec/fixtures (the repo's own)
 //   PROTOCOL_WORLDS=<dir>[:<dir>…] (`;` on Windows) bun test/protocol/sweep.ts
 // Required, for every distinct world log found:
 //   - translate-v1: 0 divergences (the fold agrees with the projection of the engine's own fold after EVERY
@@ -300,10 +300,10 @@ function lossAt(oldSt: any, st: any, phys: any = null) {
   return { other: true };
 }
 
-// the gate's sweep is hermetic: the repo's own old-format logs (spec/fixtures), plus any PROTOCOL_WORLDS a host adds (this
+// the gate's sweep is hermetic: the repo's own old-format logs (test/fixtures/v1-worlds, spec/fixtures/replay), plus any PROTOCOL_WORLDS a host adds (this
 // box's real worlds, say). It never walks outside the checkout unasked: the parent directory is a different place on
 // every host. Not sweeping local worlds is reported as an OPTIONAL line the gate counts.
-const roots = [path.join(ENGINE, "spec/fixtures"), ...pathList(process.env.PROTOCOL_WORLDS)];
+const roots = [path.join(ENGINE, "test/fixtures/v1-worlds"), path.join(ENGINE, "spec/fixtures"), ...pathList(process.env.PROTOCOL_WORLDS)];
 const logs: string[] = [];
 const walk = (d: string, depth = 0) => { if (depth > 5) return; let ents: string[] = []; try { ents = fs.readdirSync(d); } catch { return; }
   for (const n of ents) { if (n === "node_modules" || n === ".git") continue; const p = path.join(d, n);

@@ -63,7 +63,7 @@ const read = (p) => readLog(fs.readFileSync(p));
   const ing2 = r2.ingest([{ ...red, kind: "purge" }], 10, {}); ok(ing2.resync === false && r2.seq === 10 && !ing2.changed, "F5 mutation: the old kind `purge` is no redaction: a malformed line, folded past (status ok, nothing resynced): only the kind rename makes F5 hold", ing2); }
 
 // ---- F10: the translator writes this vocabulary ----
-{ const v1 = fs.readFileSync(path.join(ENGINE, "spec/fixtures/01-build/log.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+{ const v1 = fs.readFileSync(path.join(ENGINE, "test/fixtures/v1-worlds/01-build/log.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const r = translate(v1, { foldBuild: "x" }); const out = r.out; const g = out[0];
   const text = out.map((e) => JSON.stringify(e)).join("\n") + "\n"; const st = fold(readLog(text));
   const KINDS = new Set(["genesis", "change", "request", "physics", "say", "redaction", "governance"]);

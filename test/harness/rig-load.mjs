@@ -72,10 +72,10 @@ export function rigFromGltf(name, g) {
   return { name, P, realParent, vrm0: isVrm0(g), boneCount: Object.keys(P).length };
 }
 
-/** A rig's skeleton as the repo carries it (spec/fixtures/<name>-rig.json), for a suite that must run without the
+/** A rig's skeleton as the repo carries it (test/fixtures/<name>-rig.json), for a suite that must run without the
  *  avatar library on disk. Throws when there is no such fixture: a missing fixture is a broken checkout, not a skip. */
 export function fixtureRig(name) {
-  const g = JSON.parse(readFileSync(fileURLToPath(new URL(`../../spec/fixtures/${name}-rig.json`, import.meta.url)), 'utf8'));
+  const g = JSON.parse(readFileSync(fileURLToPath(new URL(`../fixtures/${name}-rig.json`, import.meta.url)), 'utf8'));
   return { ...rigFromGltf(name, g), fixture: true };
 }
 

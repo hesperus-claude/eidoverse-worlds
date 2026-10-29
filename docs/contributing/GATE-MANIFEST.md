@@ -94,10 +94,10 @@ Ctrl-C, SIGTERM or SIGHUP to the gate kills the running suite's group and remove
 
 Every fixture the gate needs is in the repo:
 
-- `spec/fixtures/*`: old-format logs, with `folded.json` holding the reference fold of each. The sweep reads them,
+- `test/fixtures/v1-worlds/*`: old-format logs, with `folded.json` holding the reference fold of each. The sweep reads them,
   and so does the oracle, which uses each `folded.json` as the snapshot.
-- `spec/fixtures/01-build/log.jsonl`: the first-protocol world that refusedjoin refuses.
-- `spec/fixtures/claude_suit-rig.json`: the skeleton reach-order uses. `test/fixtures/rig-fixture.mjs` writes it from the VRM
+- `test/fixtures/v1-worlds/01-build/log.jsonl`: the first-protocol world that refusedjoin refuses.
+- `test/fixtures/claude_suit-rig.json`: the skeleton reach-order uses. `test/fixtures/rig-fixture.mjs` writes it from the VRM
   and records the VRM's sha256.
 - `test/fixtures/dims-1024x512.jpg`: the JPEG header for the decompression-bomb row (batch2 P6).
 - `test/fixtures/v1-commons-shape.jsonl`: the Commons' governance lines, for roles T2.
@@ -121,7 +121,7 @@ print an `OPTIONAL` line for the host-data version. The optional extensions toda
 | name | what is missing | turn it on with |
 |---|---|---|
 | `control-arm` | the protocol lab's pre-fix door and fold (each attack is shown to be an attack) | `PROTOCOL_LAB=<protocol lab checkout>` |
-| `sweep-local-worlds` | the translators against a host's own world logs, on top of `spec/fixtures` | `PROTOCOL_WORLDS=<dir>[:<dir>…]` |
+| `sweep-local-worlds` | the translators against a host's own world logs, on top of `test/fixtures/v1-worlds` and `spec/fixtures/replay` | `PROTOCOL_WORLDS=<dir>[:<dir>…]` |
 | `oracle-host-worlds` | the snapshot oracle against a host's old worlds (`log.jsonl` + `snapshot.json`) | `ORACLE_WORLDS` or `PROTOCOL_WORLDS` |
 | `ep3-real-commons` | directory EP3 (an epoch entered after thousands of instant-fold entries) on the real Commons log instead of its synthetic 3000-entry copy | `PROTOCOL_COMMONS=<commons-0927 log.jsonl>` and `PROTOCOL_COMMONS_LIBRARY=<its library>` |
 

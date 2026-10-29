@@ -16,24 +16,4 @@ refused-join suites boot from `01-build`. What each exercised, in v1's words:
 
 01–04 were recorded from the v1 sequencer's websocket door; 05's and 06's `folded.json` are v1's fold of their logs.
 
-License: CC0 1.0, same as ../PROTOCOL.md.
-
-Additional gates use separate fixture shapes:
-
-- `replay/` holds nested sim stories and golden digests; it is not itself an
-  instant-fold fixture directory.
-- `ammodoll-rig.json` contains node transforms, parentage and humanoid bone
-  mapping extracted from the source VRM named and SHA-256-bound inside it.
-  Meshes and textures are omitted. Reproduce the extraction with
-  `bun test/fixtures/extract-doll-fixture.ts path/to/mythos-wings.vrm`.
-  `bun test/client/ammodoll-test.ts` uses this committed skeleton and a copy with
-  digit bones removed, including every wing/hair matrix assertion. Add
-  `--fleet` to also test installed local avatars; that optional extension
-  reports a missing library before running it.
-- `sim-ground-assets.json` binds the ground-smoke offsets and bounds to
-  measured source and KTX2 response hashes. The smoke hashes the response
-  consumed by the browser, including negotiated/overlay variants. Before
-  adding another hash, run `bun tools/ground-asset-measure.ts path/to/file.glb`
-  and verify its measured geometry fits this fixture. Its source and KTX2
-  variants both have 6,040 triangles and the same millimetre-rounded bounds
-  and visual-center offset.
+License: CC0 1.0, as when they lived under spec/.

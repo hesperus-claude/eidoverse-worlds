@@ -8,7 +8,7 @@ const {Avatar}=await import('../../client/lib/avatar.js');
 const {makeAvatar,rigs,libraryRigs,fixtureRig,VRM_DIR}=await import('../harness/rig-load.mjs');
 const {existsSync}=await import('node:fs');
 export const realRigs=()=>[...rigs(),...libraryRigs()].filter((r:any)=>!r.err);
-// one named rig: the store's or the library's when on disk, else the skeleton the repo carries (spec/fixtures/<name>-rig.json)
+// one named rig: the store's or the library's when on disk, else the skeleton the repo carries (test/fixtures/<name>-rig.json)
 export const rigNamed=(name:string)=>[...(existsSync(VRM_DIR)?rigs():[]),...libraryRigs()].find((r:any)=>!r.err&&r.name===name)??fixtureRig(name);
 export function frameBody(rig:any){
  const av:any=makeAvatar(rig.P,{realParent:rig.realParent,vrm0:rig.vrm0});av._composed=new Map();
