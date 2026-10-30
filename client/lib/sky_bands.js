@@ -1,4 +1,4 @@
-// sky_bands — where the baked sky's strips are cut (sky_baked.js), kept free of imports so tools/sky-bands-test.mjs
+// sky_bands — where the baked sky's strips are cut (sky_baked.js), kept free of imports so tools/sky-lifecycle-test.mjs
 // can load it under node.
 
 /** Band edges in v (0..1) for re-marching a width x height equirect in strips of equal COST (see attachBakedDome's
