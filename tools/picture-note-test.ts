@@ -19,11 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
-let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("picture-note");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 plugin({ name: 'picture-note-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'world', 'inspect', 'ui', 'net'])
@@ -31,6 +28,7 @@ plugin({ name: 'picture-note-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub: any = await import('./guard-label-stub.mjs');
@@ -111,5 +109,4 @@ console.log('\n7. a quad frees a link\'s texture, never a store file\'s (#565)')
   check('a store file\'s (cached) texture is left to the cache', store.disposed === 0, `disposed=${store.disposed}`);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

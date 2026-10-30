@@ -31,6 +31,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["fetchbytes", "../fetchbytes-test.mjs", 1], // fetchBytes retries 5xx and network failures, never a 4xx, and evicts a failure
   ["variant-status", "../variant-status-test.ts", 1], // store-variants variantStatus/classifyVariant: every optimization's state for a model
   ["optimize-pump", "../optimize-pump-test.ts", 1], // the optimizer pump with a fake child: estimate, defer, queue
+  ["rebuild", "../rebuild-test.ts", 1], // a Build card's rebuild: rebuildAsset reruns one object's KTX2 + LOD passes; POST /rebuild takes a sign-in, refuses a key in the URL, 4 per address per minute
   ["ktx2-tf-purge", "../ktx2-tf-purge-test.ts", 1], // the KTX2 purge tool's two detectors on synthetic headers
   ["image-lie", "../image-lie-test.ts", 1], // the optimizer's output check (findImageLies) catches an image that is not what its mimeType says
   ["glbperf-file", "../glbperf-file-test.ts", 1], // glbPerfOfFile ranks a GLB on disk from its header, JSON chunk and image heads
@@ -109,6 +110,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["oldworlds", "../oldworlds-test.ts", 1], // owner 10-15: an old-format world is found and named at boot (the exact translate command), and a visitor is told in plain words             // the old-world importer (tools/protocol/import-v1/) on every local old world log + her dialect-3 goldens + pins
   ["browser", "browser-check.ts", 1],   // the shared core imported by headless Chromium, byte-for-byte with bun
   ["descriptors", "../descriptor-defaults-test.ts", 1], // C5 (DEBT 10-12 #3a): every record and inspector default is the registry's, through the editor translation
+  ["schema-layers", "../schema-layers-test.ts", 1], // one description per component field (componentspec.js): the inspector, the door's refusals and limitsOf all read it
   ["light-readers", "../light-readers-test.ts", 1], // D2 (DEBT-2 #5): a light is found by kindOf and the rig's complight key, its gizmo is no box or material slot
   ["kind", "../kind-test.ts", 1], // one kindOf: a light component is a light, a bare thing an Empty, a model a model; the route and the agent's inspect head agree
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // D1: every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
@@ -130,6 +132,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["role-grammar", "../role-grammar-test.ts", 1], // D7: one role-id grammar (grab, sockbody, rolespanels, commands)
   ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation, and no host transcendental (R1: lyingFrame had three)
   ["one-binding", "../one-binding-test.ts", 1], // a shared constant, grammar or table has one binding: importers carry no copy (reaches, rounding, roles, rot numerics, names key)
+  ["reexport-binding", "../reexport-binding-test.mjs", 1], // no client module uses a name it only re-exports (export { X } from … binds nothing locally)
   ["wiring", "../wiring-check.ts", 1], // "this product file still says X / no longer says Y" as one table, every row with its controls
   ["onepose", "onepose-check.ts", 1], // audit 10-22 #7: one worldPose (simlayer's and hierarchy's agree bit for bit) and one set of quaternion functions (shared/rot.js)
   ["helm-leave", "../helm-leave-test.ts", 1], // review of PR #260 (vehicles.js:26): getting up from a helm lets its hull go: its relayed moves show, a later seat drives on from where it is
@@ -228,6 +231,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["batch2", "batch2-check.ts", 1],
   ["describe-particles", "describe-particles-check.ts", 1], // R 10-07: description (the accessibility reading) and particles as effect documents (Godot's CPUParticles3D ported)     // build mode v1 batch 2: story, text, picture, sound (+ where media may come from), look-at, Credits in History
   ["client-b2", "batch2-probe.ts", 1],  // batch 2 in headless Chromium: a stage per component, and an untrusted link never fetched without the viewer's opt-in
+  ["picture-note", "../picture-note-test.ts", 1], // the picture block's status line: survives a repaint and a demote/promote, not a remove; an agreeing echo keeps it, a disagreeing one retires it
   ["access-panel", "access-panel-probe.ts", 1], // World Settings › Who may come in › Listed here in headless Chromium: listed rows, add by a name seen here or an exact identity, the authority's refusal in words (R 10-27)
   ["lock-strength", "../lock-strength-test.ts", 1], // review of PR #260 (editpanels.js:479): the Hierarchy row's padlock word is the lock the thing holds now: a builder's re-lock after an owner's reads as a builder's, and a refused ask is asked again
   ["swim-lists", "../swim-lists-test.ts", 1], // review of PR #260 (watervolumes.js:123): swimming reads every water body and dry pocket, not only the ones the fog keeps
@@ -312,6 +316,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
   ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
+  ["grass-quality", "../grass-quality-test.ts", 1], // the resident's local grass cap (#60): density, the governor's shed, one applied report the grass⚙ row reads
   ["terrainshape", "../terrainshape-test.ts", 1], // placed features and heightmaps over the terrain noise (shared/terrainshape.js)
   ["flora", "../flora.test.ts", 1], // the grass verb's translation and a field's retirement (every hook drained)
   ["grant-until", "../grant-until-test.ts", 1], // a timed grant's end is a whole millisecond (the authority refuses a fractional one)
@@ -371,6 +376,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["lod-policy", "../lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
   ["lod-client", "../lod-client-test.ts", 1], // #170: the dial, the residency sweep, the loader's wire, an owned sequencer's answer, the in-place swap and the collider agree
+  ["realized-lifecycle", "../realized-lifecycle-test.ts", 1], // the model realizer's lifecycle over a held loader: full life, remove mid-load, re-model over a held load, demote/promote, reset, sockets
+  ["components-wire", "../components-wire-test.ts", 1], // components from the door to the realizer: an Empty is an invisible group (a light-carrying one is a light), lamps, colliders, parents, an imported lamp
   ["translate", "translate-check.ts", 1], // R 10-28 translation rulings (22 rights, 17 particles, 24 name bans, 50 report, version) + SWEEP-3 + light parity
   ["owners", "owners-check.ts", 1], // R 10-28: a translated world's owners are bound to the accounts main recorded for them; the rest listed, bindable (operator-repair bind)
   ["setup", "setup-check.ts", 1], // R 10-28: the first-run setup link: no operator → one boot line; a signed-in human or agent claims it once, stored, live; guests, other sites, wrong tokens refused

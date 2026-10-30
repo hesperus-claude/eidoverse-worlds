@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMPONENTS } from '../shared/protocol/componentspec.js';
 const LD = COMPONENTS.light.defaults;   // the registry's light defaults (spec/registry-pin.json pins the numbers)
+import { suite } from "./protocol/suite.ts";
 
 // the realizer's renderer/network cone, stubbed exactly as unknown-comp-test does
 // (tools/lod-client-stub.mjs records light requests and collider fits)
@@ -38,11 +39,8 @@ plugin({
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-comp-wire-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
-};
+const T = suite("components-wire");
+const check = (name: string, ok: unknown, detail?: unknown) => T.check(name, ok, detail);
 const jeq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const entScaleOf = (e: any) => { const s = e?.scale3 ?? e?.scale ?? 1; return Array.isArray(s) && s.every((x: number) => x === s[0]) ? s[0] : s; };
 
@@ -54,8 +52,8 @@ console.log('\n3. the browser (client/lib/realize/models.js, real bus + state, s
 const stub: any = await import('./unknown-comp-stub.mjs');
 const M: any = await import('../client/lib/realize/models.js');
 const S: any = await import('../client/lib/state.js');
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.(); M.drainPromoteTail?.(); await sleep(15); } };
+// the realizer's work is microtasks (the scheduler pumps on queueMicrotask): a few loop turns, no timer
+const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.(); M.drainPromoteTail?.(); for (let k = 0; k < 4; k++) await new Promise((r) => setImmediate(r)); } };
 {
   // the world as a client holds it: a scratch world behind the real door; the realizer is fed the views a
   // client's own fold reaches (hydrate the cut's view, then applyView after every door write)
@@ -86,7 +84,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   check('an Empty realizes at once as an invisible Group at its folded transform', !!piv && piv.isGroup && piv.userData.empty === true
     && jeq(piv.position.toArray().map((x: number) => +x.toFixed(9)), [1, 2, 3]) && Math.abs(piv.rotation.y - 0.5) < 1e-9, `${piv?.type} ${JSON.stringify(piv?.position)}`);
   check('…loads nothing (no asset request names it) and is listed with kind "light" (one kindOf: an Empty carrying a light IS a light)',
-    !stub.loads.some((l: any) => l.lib == null || l.lib === 'undefined') && stub.metaOf('pivot')?.kind === 'light', JSON.stringify([stub.loads.map((l: any) => l.lib), stub.metaOf('pivot')]));   // loads: the loader's own record (its lib path, as userData.lib), not a view record
+    !stub.loads.some((l: any) => l.model == null || l.model === 'undefined') && stub.metaOf('pivot')?.kind === 'light', JSON.stringify([stub.loads.map((l: any) => l.model), stub.metaOf('pivot')]));   // loads: the loader's own record (its model path), not a view record
   check('…and owns no collider', !stub.colliderLog.some((e: any) => e[1] === 'pivot'), JSON.stringify(stub.colliderLog));
   const cup = stub.entities.get('cup');
   check('a model parented to an Empty rides it (parented into the Empty\'s Group at its offset)', !!cup && cup.parent === piv && jeq(cup.position.toArray().map((x: number) => +x.toFixed(9)), [0, 0.5, 0]), `${cup?.parent?.type} ${JSON.stringify(cup?.position)}`);
@@ -324,5 +322,4 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
 }
 
 rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+T.done();
