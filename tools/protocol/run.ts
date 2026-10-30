@@ -2,6 +2,7 @@
 //   bun tools/protocol/run.ts                 the declared gate (= bun run test:protocol): core, then main, then browser
 //   bun tools/protocol/run.ts hostile phys    only the named suites (a PARTIAL run: it says so, and it is not the gate)
 //   bun tools/protocol/run.ts --lane core     only one lane (core | main | browser), also PARTIAL
+//   bun tools/protocol/run.ts --shard 2/4     shard 2 of 4 (1-based; shard.ts packs SUITES); the gate is all 4 merged by merge-receipts.ts
 //   bun tools/protocol/run.ts --manifest      print the suite table docs/GATE-MANIFEST.md carries (generated from here)
 //   bun tools/protocol/run.ts --check-manifest   exit 1 if the doc's table is not what --manifest prints
 //   bun tools/protocol/run.ts --siblings      fetch, pin and build the sibling repos (SIBLINGS, below) beside this checkout
@@ -32,7 +33,8 @@ import fs from "node:fs"; import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { ENGINE, controlNote, siblingBuiltAt } from "./common.ts";
-import { failLines, outputKeeper, setAside, type Lane, SUITES, CORE, BROWSER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
+import { failLines, outputKeeper, setAside, type Lane, SUITES, CORE, BROWSER, ORDER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
+import { loadTimes, parseShard, partition, partitionHash } from "./shard.ts";
 
 
 // what a suite needs beyond bun and this checkout (a scratch dir, loopback ports: every suite may use those)
@@ -42,7 +44,7 @@ for (const n of BROWSER) NEEDS[n] = "Chromium";
 // hermetic env; the browser lane from the house gate's run the same day). The timeout
 // is 5x that, at least 180 s: a slow host gets room, a hung suite is still killed.
 const EXPECT: Record<string, number> = {
-  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
+  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "shard": 1, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
   "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2, "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "collider-off-bodies": 2, "lying-support": 16, "replay": 0.4,
   "conformance": 2.9, "sweep": 0.3, "oracle": 0.4, "importer": 1.2, "translate": 6, "eidosim-v1": 0.2, "inplace": 15, "migrate-identities": 1.7, "oldworlds": 1.2, "browser": 1.5, "descriptors": 0.1,
@@ -93,7 +95,7 @@ function manifestDrift(): string | null {
 }
 
 const argv = process.argv.slice(2);
-const VALUED = ["--lane", "--receipt", "--scratch-out", "--library"];
+const VALUED = ["--lane", "--receipt", "--scratch-out", "--library", "--shard"];
 const valueOf = (flag: string) => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] ?? null : null;
 const headOf = (dir: string) => { const r = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }); return r.status === 0 ? r.stdout.trim() : null; };
 // The browser pages load the asset library (Skye's toolkit modules, sky, avatars): a separate public repo, pinned here.
@@ -157,8 +159,12 @@ const laneArg = valueOf("--lane");
 const only = argv.filter((a, i) => !a.startsWith("--") && !VALUED.includes(argv[i - 1]));
 for (const n of only) if (!SUITES.some(([s]) => s === n)) { console.log(`protocol gate: no suite named "${n}" (bun tools/protocol/run.ts --manifest lists them)`); process.exit(2); }
 if (laneArg && !["core", "main", "browser"].includes(laneArg)) { console.log(`protocol gate: no lane "${laneArg}" (core | main | browser)`); process.exit(2); }
-const selected = (name: string) => (!only.length || only.includes(name)) && (!laneArg || laneOf(name) === laneArg);
-const partial = only.length > 0 || !!laneArg;
+const shardArg = valueOf("--shard"), shard = argv.includes("--shard") ? parseShard(shardArg) : null;
+if (typeof shard === "string") { console.log(`protocol gate: ${shard}`); process.exit(2); }
+if (shard && (only.length || laneArg)) { console.log("protocol gate: --shard takes no suite names or --lane (a shard is its whole bin)"); process.exit(2); }
+const bins = shard ? partition(SUITES.map(([n]) => n), loadTimes(), shard.of) : [], assigned = shard ? bins[shard.index - 1] : [];
+const selected = (name: string) => shard ? assigned.includes(name) : (!only.length || only.includes(name)) && (!laneArg || laneOf(name) === laneArg);
+const partial = only.length > 0 || !!laneArg;   // a shard is not partial: it checks the manifest, and the merge checks coverage
 
 // ---- preflight: the gate's own shape, then the runtimes. Any problem here stops the gate before a suite runs ----
 const problems: string[] = [];
@@ -181,6 +187,7 @@ if (needSiblings) for (const [dir, , commit] of SIBLINGS) { const h = siblingHea
 for (const dir of ["", "client/", ...(needSiblings ? ["mcpl/"] : [])]) if (!fs.existsSync(ENGINE + dir + "node_modules")) problems.push(`${dir || "./"}node_modules is missing: run \`bun install --frozen-lockfile\` in ${dir || "the checkout root"}`);
 
 console.log(`protocol gate @ ${ENGINE}`);
+if (shard) console.log(`  shard     ${shard.index}/${shard.of}: ${assigned.length} of ${SUITES.length} suites, partition ${partitionHash(bins).slice(0, 12)}`);
 const RUNTIMES: Record<string, { found: string | null; declared?: string; where?: string }> = {};   // for --receipt
 const runtime = (label: string, found: string | null, want: string | undefined, rule: "major" | "min-major", extra = "") => {
   RUNTIMES[label] = { found, declared: want, where: extra || undefined };
@@ -306,7 +313,7 @@ async function run(name: string, file: string): Promise<{ code: number | null; s
 
 // ---- the gate ----
 const results: Result[] = []; const t0 = performance.now();
-const order = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];
+const order = ORDER;
 let stopped = "";
 for (const name of order) {
   if (!selected(name)) continue;
@@ -353,7 +360,8 @@ console.log(`  optional, not run: ${optional.size}${optional.size ? "" : " (none
 const left = results.reduce((a, r) => a + r.leftovers, 0); if (left) console.log(`  leftover processes killed with their suite's group: ${left}`);
 const bad = count(null, "fail") + count(null, "skip");
 const notRun = SUITES.filter(([n]) => !selected(n)).length;
-console.log(`protocol gate: ${bad ? "FAILED" : partial ? `PARTIAL PASS (${notRun} suite(s) not selected: this is not the gate)` : "PASS"}`);
+console.log(`protocol gate: ${shard ? `SHARD ${shard.index}/${shard.of} ${bad ? "FAILED" : "PASS"} (${assigned.length} of ${SUITES.length} suites: the gate is all ${shard.of} shards, merged by tools/protocol/merge-receipts.ts)`
+  : bad ? "FAILED" : partial ? `PARTIAL PASS (${notRun} suite(s) not selected: this is not the gate)` : "PASS"}`);
 // --receipt <file>: a machine-readable record of THIS run at THIS head (review #260 rereview: "a durable exact-head gate
 // receipt: environment/runtime identities, source head, pinned library head, tally, and log/artifact hash")
 const receiptAt = valueOf("--receipt");
@@ -361,7 +369,7 @@ if (receiptAt) {
   const git = (a: string[]) => spawnSync("git", ["-C", ENGINE, ...a], { encoding: "utf8" }).stdout?.trim() ?? "";
   const suites = results.map(({ name, lane, status, why, ms, leftovers, outSha256 }) => ({ name, lane, status, why, ms: Math.round(ms), leftovers, outSha256 }));
   const receipt = {
-    v: 1, verdict: bad ? "FAILED" : partial ? "PARTIAL" : "PASS", head: git(["rev-parse", "HEAD"]),
+    v: 1, verdict: bad ? "FAILED" : shard ? "SHARD" : partial ? "PARTIAL" : "PASS", head: git(["rev-parse", "HEAD"]),
     // a pull_request run checks out GitHub's merge commit: `head` is that, `prHead` the PR's own head, `mergeOf` HEAD's parents
     prHead: process.env.GATE_PR_HEAD || null, mergeOf: process.env.GATE_PR_HEAD ? git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1) : null, dirty: git(["status", "--porcelain"]) !== "",
     os: { platform: process.platform, release: os.release(), arch: process.arch }, runtimes: { ...RUNTIMES, bun: { ...RUNTIMES.bun, found: Bun.version } },
@@ -370,6 +378,7 @@ if (receiptAt) {
     notSelected: notRun, suites, optional: Object.fromEntries(optional),
     // one hash over every suite's kept output (its tail and every verdict line, outputKeeper), in run order: the log this verdict rests on
     logSha256: createHash("sha256").update(suites.map((x) => `${x.name}\t${x.outSha256 ?? ""}`).join("\n")).digest("hex"),
+    ...(shard ? { shard: { index: shard.index, of: shard.of, hash: partitionHash(bins), assigned } } : {}),
   };
   fs.writeFileSync(receiptAt, JSON.stringify(receipt, null, 1) + "\n");
   console.log(`receipt: ${receiptAt} (head ${receipt.head.slice(0, 12)}${receipt.dirty ? ", DIRTY tree" : ""}, ${receipt.verdict})`);
