@@ -31,6 +31,7 @@ const HISTORY = 'ew-chat-history';
 
 let frame = null;
 let logEl = null;
+let jumpEl = null;   // the unread pill (paintUnread)
 let inputEl = null;
 let onSend = null;
 const recent = [];   // the log's tail, for the VR quad
@@ -566,7 +567,7 @@ function scrollToEnd() {
 }
 
 function paintUnread() {
-  const jump = document.getElementById('chat-jump');
+  const jump = jumpEl;   // initChat's own node: a mod's earlier #chat-jump would win a document lookup
   if (jump) {
     jump.style.display = unread > 0 ? 'block' : 'none';
     jump.textContent = `${unread} new ${unreadMentions ? `· ${unreadMentions} ✱` : ''}↓`;
@@ -1227,7 +1228,7 @@ export function initChat({ send, typing, people, person }) {
 
   paintTabs();
 
-  frame.body.querySelector('#chat-jump').onclick = scrollToEnd;
+  jumpEl = frame.body.querySelector('#chat-jump'); jumpEl.onclick = scrollToEnd;
   logEl.addEventListener('scroll', () => {
     // Reaching the bottom clears the unread counters — but never touch
     // scrollTop from inside the scroll handler: snapping back to the end
