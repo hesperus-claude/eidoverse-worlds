@@ -4,7 +4,7 @@
 //   residency/LOD distance (realize/models.js entDist, via residencyDistance): an entity at the origin is ~360 m away
 //   (the rig-local read said ~1.6 m: everything near spawn loaded at full detail and never went to its LOD in VR);
 //   an entity next to the rig is close; the baked sky dome (if the boot built one) centres on the rig, not the origin.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, drawn } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser();
@@ -13,7 +13,7 @@ try {
   const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
   await pg.goto(`${world.origin}/?world=staging&name=camprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(() => globalThis.__ewEngineUp, null, { timeout: 60000 });
-  await pg.waitForTimeout(3000);
+  await drawn(pg, 120);   // the boot's first frames
   const r = await pg.evaluate(async () => {
     const { THREE, scene, camera } = await import('./lib/core.js');
     const M = await import('./lib/realize/models.js');

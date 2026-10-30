@@ -8,7 +8,7 @@
 //   raycast   — a ray through the canopy hits each leaf plane once (the core twin answers no raycasts)
 //   auto      — resolves to soft on the desktop
 // Usage: bun tools/foliage-probe.mjs   (run under a memory guard: headless Chromium renders on the CPU)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, drawn } from './probe-harness.mjs';
 
 const { check, done } = checker();
 const world = await ownedWorld({});
@@ -20,7 +20,7 @@ try {
   pg.on('pageerror', (e) => errs.push(String(e)));
   await pg.goto(`${world.origin}/?world=staging&name=folprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(() => globalThis.__ewEngineUp && globalThis.EW?.overdraw, null, { timeout: 60000 });
-  await pg.waitForTimeout(3000);
+  await drawn(pg, 120);   // the boot's first frames
   const r = await Promise.race([pg.evaluate(async () => {
     const { THREE, scene, renderer } = await import('./lib/core.js');
     const { prepareObject } = await import('./lib/materials.js');
@@ -61,7 +61,7 @@ try {
     const soft1 = await shot();
     const odSoft = await EW.overdraw({ mode: 'actual', w: W, camera: cam });
     F.setFoliageMode('fast');
-    for (let i = 0; i < 100 && F.foliageDebug().showing < reg.meshes; i++) await new Promise((res) => setTimeout(res, 100));
+    for (let i = 0; i < 600 && F.foliageDebug().showing < reg.meshes; i++) await new Promise((f) => requestAnimationFrame(f));
     const fastDbg = F.foliageDebug();
     const fast = await shot();
     const odFast = await EW.overdraw({ mode: 'actual', w: W, camera: cam });
@@ -80,7 +80,7 @@ try {
     const c1 = skeletonClone(proto); F.registerFoliage(c1); c1.position.set(10, 50, -200); scene.add(c1);
     F.setFoliageMode('fast');
     const c2 = skeletonClone(proto); F.registerFoliage(c2); c2.position.set(14, 50, -200); scene.add(c2);
-    for (let i = 0; i < 100 && F.foliageDebug().showing < reg.meshes + 2; i++) await new Promise((res) => setTimeout(res, 100));
+    for (let i = 0; i < 600 && F.foliageDebug().showing < reg.meshes + 2; i++) await new Promise((f) => requestAnimationFrame(f));
     // a clone BEHIND the viewer (its own material): the warm must compile it anyway (review 5: frustum culling made the
     // compile a no-op that still marked the material warm)
     const { camera: mainCam } = await import('./lib/core.js');
@@ -93,7 +93,7 @@ try {
     const origCA = renderer.compileAsync.bind(renderer);
     renderer.compileAsync = (o, ...rest) => { if (o?.userData?.foliageCore) culledAtCompile.push(o.frustumCulled); return origCA(o, ...rest); };
     F.registerFoliage(behind); scene.add(behind);
-    for (let i = 0; i < 60 && culledAtCompile.length === 0; i++) await new Promise((res) => setTimeout(res, 100));
+    for (let i = 0; i < 360 && culledAtCompile.length === 0; i++) await new Promise((f) => requestAnimationFrame(f));
     renderer.compileAsync = origCA;
     scene.remove(behind);
     const coreOf = (c) => c.children[0].children.find((k) => k.userData.foliageCore);

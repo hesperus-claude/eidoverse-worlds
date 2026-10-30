@@ -558,14 +558,15 @@ time.
 | 385 | xr-lifecycle | browser | `tools/xr-lifecycle-probe.mjs` | Chromium | 60 s | 300 s |
 | 386 | xr-res | browser | `tools/xr-res-probe.mjs` | Chromium | 70 s | 350 s |
 | 387 | xr-debug-live | browser | `tools/xr-debug-live-probe.mjs` | Chromium | 60 s | 300 s |
-| 388 | xr-eye-binding | browser | `tools/xr-eye-binding-probe.mjs` | Chromium | 10 s | 180 s |
-| 389 | htmlmesh-pick | browser | `tools/htmlmesh-pick-probe.mjs` | Chromium | 6 s | 180 s |
-| 390 | vrmic-exec | browser | `tools/vrmic-exec-test.mjs` | Chromium | 0.5 s | 180 s |
-| 391 | xr-nullfb | browser | `tools/xr-nullfb-test.mjs` | Chromium | 0.3 s | 180 s |
-| 392 | xr-desktop-banner | browser | `tools/xr-desktop-banner-probe.mjs` | Chromium | 80 s | 400 s |
-| 393 | sky-bake-time | browser | `tools/sky-bake-time-probe.mjs` | Chromium | 75 s | 375 s |
-| 394 | sky-bakegraph | browser | `tools/sky-bakegraph-probe.mjs` | Chromium | 95 s | 475 s |
-| 395 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites --strict-env` | Chromium | 202 s | 1010 s |
+| 388 | xr-quad-softswap | browser | `tools/xr-quad-softswap-probe.mjs` | Chromium | 60 s | 300 s |
+| 389 | xr-eye-binding | browser | `tools/xr-eye-binding-probe.mjs` | Chromium | 10 s | 180 s |
+| 390 | htmlmesh-pick | browser | `tools/htmlmesh-pick-probe.mjs` | Chromium | 6 s | 180 s |
+| 391 | vrmic-exec | browser | `tools/vrmic-exec-test.mjs` | Chromium | 0.5 s | 180 s |
+| 392 | xr-nullfb | browser | `tools/xr-nullfb-test.mjs` | Chromium | 0.3 s | 180 s |
+| 393 | xr-desktop-banner | browser | `tools/xr-desktop-banner-probe.mjs` | Chromium | 80 s | 400 s |
+| 394 | sky-bake-time | browser | `tools/sky-bake-time-probe.mjs` | Chromium | 75 s | 375 s |
+| 395 | sky-bakegraph | browser | `tools/sky-bakegraph-probe.mjs` | Chromium | 95 s | 475 s |
+| 396 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites --strict-env` | Chromium | 202 s | 1010 s |
 
-Lanes: core 18 suites (~79 s), main 351 (~2065 s), browser 26 (~1624 s); 395 suites in all.
+Lanes: core 18 suites (~79 s), main 351 (~2065 s), browser 27 (~1684 s); 396 suites in all.
 <!-- END GENERATED -->

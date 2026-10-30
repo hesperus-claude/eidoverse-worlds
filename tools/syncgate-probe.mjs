@@ -16,7 +16,7 @@
 // and whether the 55 s freeze becomes a late pop-in, is a headset-machine fact — the '[syncgate] installed' tee says
 // which, and '[syncgate] render-path build …' lines name every slow build and its material.
 // Usage: bun tools/syncgate-probe.mjs [origin] [--mutate-never-drain]   (run under a memory guard: headless Chromium renders on the CPU)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, drawn } from './probe-harness.mjs';
 
 const { check, done } = checker();
 const MUTATE = process.argv.includes('--mutate-never-drain');
@@ -95,7 +95,7 @@ async function run({ gateOn, emulate }) {
     new Promise((_, rej) => setTimeout(() => rej(new Error('page main thread pinned for 20 s')), 20000))]);
   await pg.goto(`${world.origin}/?world=staging&name=gateprobe&key=${world.key}&xr=1${gateOn ? '' : '&syncgate=0'}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(() => !!globalThis.__syncGate && globalThis.__ewEngineUp, null, { timeout: 60000 });
-  await pg.waitForTimeout(8000);   // let the boot's own warms settle
+  await drawn(pg, 120);   // let the boot's own warms settle
   if (emulate) await ev(emulateParallel);
   const res = await ev(addUnwarmed, MUTATE);
   res.oneShot = emulate ? await ev(oneShotIntoTarget) : null;
