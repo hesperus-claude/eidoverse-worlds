@@ -31,9 +31,10 @@ import { fileURLToPath } from "node:url";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { ok ? pass++ : fail++; console.log(`${ok ? '  ok' : 'FAIL'}  ${name}${ok || !detail ? '' : ` — ${detail}`}`); };
+const S = suite("mkconfig");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const SCRIPT = fileURLToPath(new URL('../deploy/projector/mkconfig.sh', import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), 'mkconfig-'));
 let n = 0;
@@ -162,5 +163,4 @@ if (YAML) {
 }
 
 rmSync(dir, { recursive: true, force: true });
-console.log(`\n${pass} ok, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

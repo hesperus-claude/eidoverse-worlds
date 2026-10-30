@@ -17,12 +17,10 @@
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("renderer-join");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 const ROOT = join(import.meta.dir, "..");
 
 type Join = { id: string; spectate: boolean; renderer: boolean; roam?: boolean };
@@ -106,5 +104,4 @@ console.log("the entry points wire what this test assumes");
   check("main.js wires net_capture.js's snapshot before it first calls start() or connect()", wiredAt >= 0 && firstStart >= 0 && wiredAt < firstStart, `wired at ${wiredAt}, first start/connect at ${firstStart}`);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

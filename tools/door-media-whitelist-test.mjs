@@ -9,10 +9,11 @@
 // Source-level, because the door needs a live world websocket to run. It reads
 // the shipped file, so it cannot pass against a copy.
 import { readFileSync } from 'fs';
+import { suite } from "./protocol/suite.ts";
 const src = readFileSync(new URL('../mcpl/agent.ts', import.meta.url), 'utf8');
 
-let pass = 0, fail = 0;
-const check = (n, c) => { c ? (pass++, console.log(`ok   ${n}`)) : (fail++, console.log(`FAIL ${n}`)); };
+const S = suite("door-media-whitelist");
+const check = (n, c) => S.check(n, c);
 
 // ---- OUTBOUND (sidecar → world): the dangerous direction ----
 const guard = src.slice(src.indexOf('const t = String(frame?.type ?? "")'),
@@ -54,5 +55,4 @@ check('control: the forbidden-matcher detects "say" injected into the real guard
 check('control: the inbound-matcher detects a case removed from the real block',
   !inbound.replace(/case "voice-service":/g, '').includes('case "voice-service":'));
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

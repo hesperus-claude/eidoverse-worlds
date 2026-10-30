@@ -20,15 +20,13 @@ import { join } from 'node:path';
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { inspectSchema, fieldAt } from "../shared/editschema.js";
+import { suite } from "./protocol/suite.ts";
 // config.ts makes WORLDS_DIR at import: keep the bench out of the repo's worlds/
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-blueprint-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
-};
+const S = suite("blueprint");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const J = JSON.stringify;
 // a copy's parts are minted (R 10-17: opaque ids, never <copy>-<key>): the part with record key `key` under copy `copy`
 const partOf = (E: any, copy: string, key: string) => Object.keys(E).find((x) => { if (E[x]?.['copy-of']?.key !== key) return false; for (let p: any = x, n = 0; p && n < 64; p = E[p]?.parent?.to, n++) if (p === copy) return true; return false; }) ?? `${copy}-${key}`;
@@ -345,5 +343,4 @@ console.log('\n7. the text tier — blueprints, create {from}, look() (mcpl), th
 }
 
 rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+S.done();

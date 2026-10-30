@@ -6,6 +6,7 @@
 // same drives with the switch off DO shed, so every "nothing moved" has a subject.
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 const STUB = fileURLToPath(new URL('./full-detail-stub.mjs', import.meta.url));
 plugin({ name: 'full-detail-stub', setup(b) {
   for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./emitters\\.js$',
@@ -15,8 +16,8 @@ plugin({ name: 'full-detail-stub', setup(b) {
 } });
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, String(v)), removeItem: (k: string) => mem.delete(k) };
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? '✓' : '✗'} ${n}${ok ? '' : `  ${JSON.stringify(d)}`}`); };
+const T = suite("full-detail");
+const check = (n: string, ok: unknown, d?: unknown) => T.check(n, ok, d);
 
 const stub: any = await import(STUB);
 const S = stub.state;
@@ -88,4 +89,4 @@ stub.renderer.xr.isPresenting = false;
 bus.emit('xr:exit-resized'); G.applyPendingPixelRatio();
 check('…and after exit the desktop comes back at the base ratio, not the shed one', ratios.at(-1) === 1 && dbg().pixelRatio === 1, { writes: ratios.slice(w0), now: dbg().pixelRatio });
 
-console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+T.done();

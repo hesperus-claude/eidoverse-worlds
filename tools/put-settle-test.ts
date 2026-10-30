@@ -18,6 +18,7 @@
 //   the collider sits out the ease and comes back at the end; whereIs (what a request reads) is the truth throughout
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('./put-settle-stub.mjs');
 plugin({
@@ -30,11 +31,8 @@ plugin({
 });
 const MUTANT = process.argv.includes('--mutant');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const SU = suite("put-settle");
+const check = (name: string, ok: unknown, detail?: unknown) => SU.check(name, ok, detail);
 const J = (x: any) => JSON.stringify(x, (_k, v) => typeof v === 'number' ? +v.toFixed(4) : v);
 
 const S: any = await import('./put-settle-stub.mjs');
@@ -252,5 +250,4 @@ check('same-pose put: t=120 exactly the fold\'s pose (it never stays drawn in th
   S.entities.delete('barrel'); S.colliders.delete('barrel'); delete S.replica.st.entities.barrel;
 }
 
-console.log(`\n${pass} passed, ${fail} failed${MUTANT ? ' (mutant: duration 0 — red is the expected shape)' : ''}`);
-process.exit(fail ? 1 : 0);
+SU.done();

@@ -18,10 +18,11 @@ import { worldComponents, worldOf, worldState } from '../shared/worldentity.js';
 import { blueprintRefusal, blueprintHash, expand, overridesOf, placeVerbs, placeRefusal, copyTree, modernize, localComponents, LINK_KEY } from '../shared/blueprint.js';
 import { treeOf } from '../shared/hierarchy.js';
 import { pathList } from "./protocol/common.ts";
+import { suite } from "./protocol/suite.ts";
 
 const J = JSON.stringify;
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("components-corpus");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 console.log('the primitives:');
 check('sha256("abc") is the FIPS 180-2 vector', sha256hex('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
@@ -154,5 +155,4 @@ for (const path of unique) {
 check(`every entity of every world, as the view a client reads, round-trips through its components exactly (${checkedE} entities)`, bad.length === 0 && checkedE > 0, '\n   ' + bad.join('\n   '));
 console.log('\ncomponents in the worlds:', [...types].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} ${n}`).join(' · '));
 console.log('keys no record names (kept in extra, not lost):', extras.size ? [...extras].map(([k, n]) => `${k} ×${n}`).join(' · ') : 'none');
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

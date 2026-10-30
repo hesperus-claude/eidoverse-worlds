@@ -9,10 +9,10 @@
 //   drop the dt clamp                                    → the stall check
 //   widen CURL_TAU_S past ~0.12                          → the responsiveness check
 import { readFileSync } from 'node:fs';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name, ok, extra = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${extra ? ` — ${extra}` : ''}`); } };
+const S = suite("finger-curl");
+const check = (name, ok, extra) => S.check(name, ok, extra);
 
 const src = readFileSync(new URL('../client/lib/xr.js', import.meta.url), 'utf8');
 
@@ -124,5 +124,4 @@ check('index and grip are filtered independently', fingerCurl.left.grip === 0 &&
 // ---- 6. the value the WIRE sees stays in range
 check('the filtered value never leaves 0..1', fingerCurl.left.index >= 0 && fingerCurl.left.index <= 1);
 
-console.log(`\n${pass}/${pass + fail} passed`);
-process.exit(fail ? 1 : 0);
+S.done();

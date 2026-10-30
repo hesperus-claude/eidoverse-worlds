@@ -1,3 +1,4 @@
+import { suite } from "./protocol/suite.ts";
 // namereveal — hold-to-reveal's input side (client/lib/namereveal.js), driven directly: the module the client loads.
 //
 //   bun tools/namereveal-test.mjs
@@ -7,11 +8,8 @@
 // it is, reaching 1 and 0 in REVEAL_EASE_MS; the action is registered where every binding list reads (actions.js) with
 // its key; and N is bound NOWHERE else in the client (the reason it was chosen), nor are the VR reveal's buttons.
 
-let pass = 0, fail = 0;
-const check = (name, ok, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("namereveal");
+const check = (name, ok, detail) => S.check(name, ok, detail);
 // a document whose focus the test controls (typingTarget reads document.activeElement)
 let active = null;
 globalThis.document = { get activeElement() { return active; } };
@@ -71,5 +69,4 @@ if (!R.err) {
   check('…off: gone, and stored off', !R.revealHeld() && !R.alwaysNames() && store.get(R.ALWAYS_LS) === '0');
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

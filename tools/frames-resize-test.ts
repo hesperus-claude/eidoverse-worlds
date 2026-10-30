@@ -13,6 +13,7 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 // happy-dom has no pointer capture: modelled on ELEMENTS only, never `document`, tracking who holds what so the
@@ -24,11 +25,8 @@ const _captured = new Set<number>();
 
 const { makeFrame } = await import("../client/lib/windows.js");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("frames-resize");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const f = makeFrame("t", { title: "t", x: 100, y: 100, w: 300, h: 200, minW: 100, minH: 80 });
 f.show();
@@ -145,5 +143,4 @@ for (const where of ["over the band, outside the frame", "inside the frame, at i
 }
 (document as any).elementFromPoint = () => null;
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
