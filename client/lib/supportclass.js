@@ -1,19 +1,14 @@
 // supportclass — one classifier for "can a box top be trusted as ground?"
 //
 // The browser's collider decide() and the headless support pipeline must
-// agree about which assets are floor-shaped with a lying box top (#84), and
-// "identical constants in two places" drifts (#92 review taught the same
-// lesson about motion math). So the grid arithmetic, the decision
-// arithmetic, and the constants live HERE, dependency-free; colliders.js
-// and server/geometry.ts are adapters that gather vertices their own way
-// and feed the same math.
+// agree about which assets are floor-shaped with a lying box top, so the grid
+// arithmetic, the decision arithmetic and the constants live HERE,
+// dependency-free; colliders.js and server/geometry.ts are adapters that
+// gather vertices their own way and feed the same math.
 //
-// The vertex-grid lie probe is surveyed: within the floor-shaped population
-// the gates admit, the 24×24 max-y-per-cell grid tracks a raycast ground
-// truth to 1.8cm worst case (tools/collider-survey.ts, 58-model library +
-// 8 store meshes). That is why the same grid doubles as the headless
-// HEIGHTFIELD for this class — the probe that detects the lie is, for
-// exactly the population it detects it in, a truthful floor.
+// Within the floor-shaped population the gates admit, the 24×24 max-y grid
+// tracks a raycast ground truth to 1.8cm worst case (tools/collider-survey.ts),
+// which is why the same grid doubles as the headless HEIGHTFIELD for this class.
 
 export const TOPGRID_VERSION = 1;
 export const LIE_GRID = 24;              // cells per side
@@ -24,12 +19,10 @@ export const FLOOR_MIN_AREA = 2;         // m² (scaled) — smaller and nobody 
 export const FLOOR_MAX_H = 1.0;          // m (scaled) — decide()'s one movable line
 export const UNEVEN_MIN_LIE = 0.10;      // m (scaled) — below this a box is honest enough
 export const TOPGRID_MAX_JSON = 8192;    // hard cap on the serialized payload
-/** Per-cell certification (#94 review B1): a cell may be OFFERED as support
- *  only when a within-cell ray subsample proves its surface varies by no
- *  more than this (model metres). A body may stand anywhere in a cell, so
- *  an uncertified cell is a floating false top in miniature — those serve
- *  as null. 0.03 model units keeps the WORLD-space bound (0.05m) honest up
- *  to scale ~1.66; consumers must refuse grids their scale stretches. */
+/** Per-cell certification: a cell is OFFERED as support only when a within-cell
+ *  ray subsample proves its surface varies by no more than this (model metres);
+ *  uncertified cells serve as null. 0.03 keeps the world bound (0.05m) up to
+ *  scale ~1.66; consumers must refuse grids their scale stretches. */
 export const CERT_SPREAD = 0.03;         // m, model frame — max within-cell surface spread
 export const CERT_MAX_WORLD = 0.05;      // m, world frame — the agreed per-cell truth bound
 export const CERT_SUBSAMPLE = 4;         // rays per cell axis (4×4 per cell)
@@ -74,10 +67,9 @@ export function decideSupportClass({ w, d, h, lie = 0 }) {
   return { roomScale, floorShaped, uneven };
 }
 
-/** Is a served topGrid payload usable as support? Versioned, self-
- *  describing, finite, bounded — anything else is refused, and the caller's
- *  duty on refusal is to ABSTAIN, never to fall back to the box top (#84
- *  review). Unoccupied cells are explicit nulls. */
+/** Is a served topGrid payload usable as support? Anything not versioned, finite
+ *  and bounded is refused; on refusal the caller ABSTAINS, never falls back to
+ *  the box top. Unoccupied cells are explicit nulls. */
 export function validTopGrid(g) {
   if (!g || typeof g !== "object") return false;
   if (g.version !== TOPGRID_VERSION) return false;
