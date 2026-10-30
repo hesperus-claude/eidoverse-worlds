@@ -44,6 +44,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["toast-group", "toast-group-check.ts", 1],   // load failures of one kind are one toast counting the things; dismissed, that kind stays quiet (R 10-28)
   ["avatar", "../avatar-test.ts", 1], // the avatar rig: clip timing, seat-blend slot, a lowering clip under a limp body (upstream #282/#283)
   ["remotes-limp-edge", "../remotes-limp-edge-test.ts", 1], // a remote going limp or getting up is drawn at the edge sample, not lerped through it (upstream #283)
+  ["remotes-lifecycle", "../remotes-lifecycle-test.ts", 1], // #95: a departed participant dies whole; only arrive and the roster build a body, presence never
   ["colliders", "../collider-test.ts", 1], // the walker's reading of placed geometry, incl. things a tumbling engine laid on their sides (review of b398d7e3 #1)
   ["collider-off-bodies", "../collider-off-bodies-test.ts", 1], // review of PR #260: collision off for bodies gives the walker nothing to meet, on a mesh's and a building's every realizing path
   ["lying-support", "../lying-support-test.ts", 1], // an agent's support for a thing lying down: its true top, no phantom deck at its origin (review of b398d7e3 #1)
