@@ -829,7 +829,7 @@ const ROUTES: Route[] = [
     handler: ({ req, url, srv }) => new Response(
       JSON.stringify((() => {
         // a world the caller may not see answers like one with no voice at all
-        const name = url.searchParams.get("world") ?? "staging";
+        const name = url.searchParams.get("world") ?? "commons";   // the default world, as /snap and /heightmap
         const w = worlds.get(name);
         return w && !visibleTo(doorFor(name), httpVisitor(req, srv)) ? { transport: "sfu", active: false } : sfuDiag(name);
       })()),
