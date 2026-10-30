@@ -1,15 +1,5 @@
-// The action row for a client with no body.
-//
-// NOT a reuse of actionbar.js, and the reason is worth stating: that bar is a draggable
-// frame with whole-tile snapping, viewport caging and an XR panel registration, and it
-// reaches the local avatar through controller.js and mybody.js to play the clip. Every
-// one of those pulls the engine, and none of them means anything on a phone with no
-// scene — there is no body to pose and no VR to register into.
-//
-// So this is the same VOCABULARY (animnames.js, the shared data the split bought) with
-// a phone's interaction model: a wrapping row of buttons that put ONE gesture on the
-// presence pose (playOnce, lite.js). Everyone with a renderer sees the animation;
-// nothing is said in chat.
+// The action row for a client with no body: actionbar.js's vocabulary (animnames.js) as a wrapping
+// row of buttons. Not a reuse of actionbar.js, whose frame, snapping and XR panel all pull the engine.
 import { ANIM_ORDER, ANIM_ICONS } from './animnames.js';
 import { bus } from './base.js';
 
