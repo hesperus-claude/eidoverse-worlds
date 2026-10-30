@@ -210,7 +210,7 @@ function applyHeldWorldWhenUp(after) {
 export const cloudCap = () => (xrCappedFrom ? { from: xrCappedFrom, to: CAP_TO } : null);
 /** What the person CHOSE — a settings row shows this, not the level the VR cap is running meanwhile. */
 // the cap's memory first: choosing the capped level in a headset HOLDS its stand-in (high → medium held), and the choice
-// is still high (sky-cap-ui-probe)
+// is still high
 export const getCloudChoice = () => xrCappedFrom ?? heldQuality ?? pendingTier ?? cloudQuality;   // a choice made in the headset (or while the sky arrives) shows at once
 export const skyInXR = () => xrPresenting;
 

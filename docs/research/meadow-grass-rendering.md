@@ -46,7 +46,7 @@ InstancedMesh, never culled. It now tiles without changing a blade: every tuft k
 tile's count is only a CEILING (entries are in global order, so a prefix drops exactly the tufts whose rank exceeds
 keep at the tile's nearest XZ point, less `GR_MARGIN`). Re-applied whenever the eye moves `GR_MARGIN/2`; hooks run
 before movement, so the budget is one frame behind (a teleport can under-draw one frame). `?grassgrank=0` restores the
-refusal. Verified by tools/meadow-grank-probe.mjs.
+refusal.
 
 ## Density
 

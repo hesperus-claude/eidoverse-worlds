@@ -3,7 +3,7 @@
 //   bun tools/skypanel-state-test.ts
 //
 // The lines say what the log has and, only while this client shows something else, what and why; which controls show
-// by sky, clock and headset. The sky is tools/skypanel-stub.mjs; sky-state-probe.mjs keeps the real-wiring smoke.
+// by sky, clock and headset. The sky is tools/skypanel-stub.mjs.
 
 import { fileURLToPath } from "node:url";
 import { tryUntil } from "./protocol/wait.ts";

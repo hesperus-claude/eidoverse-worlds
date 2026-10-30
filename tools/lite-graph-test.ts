@@ -2,8 +2,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/lite-graph-test.ts
 //
-// lite.js exists so a phone that can't draw the world never downloads the renderer (lite-weight-test.mjs proves it
-// with a browser's network ledger). This is the same claim read off the source, no browser: walk every static
+// lite.js exists so a phone that can't draw the world never downloads the renderer. This checks that off the source, no browser: walk every static
 // import/export-from from client/lite.js and check that none reaches core.js (which constructs the WebGPU renderer at
 // import), world.js (which imports core.js), or a bare three/three-vrm specifier. net.js reached core.js through
 // world.js for one Map (avatarMounts), which lives in the leaf mounts.js now.

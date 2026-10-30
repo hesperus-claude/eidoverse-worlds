@@ -17,7 +17,7 @@ Each is red on anima/main as it stands:
 2. **The mesh-fallback suite tests deleted delegation.** micstate's
    delegation back to voice.js was removed by the cutover; the suite still
    exercises it. Ours was rewritten post-cutover
-   (tools/micstate-mesh-fallback-test.mjs, 5 checks).
+   (tools/micstate-single-transport-test.mjs).
 3. **`mcpl/agent.ts` imports `three/webgpu` with no `three` in any root
    lockfile** — the agent door cannot boot clean from a fresh clone. Root
    package.json needs `three` (we pinned ^0.184.0).

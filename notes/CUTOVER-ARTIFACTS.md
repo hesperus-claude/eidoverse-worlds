@@ -77,8 +77,7 @@ retires and relay-only is the product.
 **Canary, before and after any cutover deploy:** `tools/join-probe.mjs` over
 the public URL (protocol-level: good-key joins AND bad-key refused — the
 negative control is the half that catches auth wired open), plus `/relay-diag`
-showing the six-claim credential path and `tools/audio-cmd-probe.mjs` for the
-client chain. The composed receipt set for this PR is the pre-deploy gate.
+showing the six-claim credential path. The composed receipt set for this PR is the pre-deploy gate.
 
 ## 5 · Operator approval
 

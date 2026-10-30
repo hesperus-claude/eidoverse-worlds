@@ -226,7 +226,7 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   // recovery (client/lib/gpulost.js) answers a browser-destroyed device with a reload, which would yank the page out
   // from under a probe mid-check. Seed one recent loss so the rule "a second loss inside 2 min doesn't reload" applies:
   // the renderer stops (no leak), the page stays, and DOM/state probes run as before. Recovery itself is
-  // gpulost-test.mjs (pure) and gpulost-probe.mjs (its own harness), neither of which loads this.
+  // gpulost-test.mjs (pure), which doesn't load this.
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
   const evalJson = async (expr: string) => {
     const r = await cdp.send<any>("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });

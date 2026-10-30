@@ -1,5 +1,5 @@
 // SINGLE-TRANSPORT micstate — the #132 cutover's successor to
-// micstate-mesh-fallback-test.mjs, which pinned the mesh-delegation seam that
+// the mesh-fallback test, which pinned the mesh-delegation seam that
 // made #131 standalone-safe on mesh-main. The cutover deletes the mesh
 // (client/lib/voice.js) and that seam with it, so the discriminator's premise
 // ("current main's transport is the mesh") is no longer true anywhere. What

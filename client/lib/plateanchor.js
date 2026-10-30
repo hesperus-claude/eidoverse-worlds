@@ -8,7 +8,7 @@
 // term (head + head span) only wins when the head rises above where the hips say it should be (a stretch, a jump).
 // LYING (Basis doesn't handle it): when the head drops under LIE_START of its rest height above the feet, the anchor
 // blends to over the head, smoothly down to LIE_FULL. A LOW HEAD ALONE IS NOT LYING: sitting on the ground puts the
-// head at ~40% of rest height (tools/plateanchor-shot-probe.mjs). The TORSO tells them apart: head-over-hips is ~0.9
+// head at ~40% of rest height. The TORSO tells them apart: head-over-hips is ~0.9
 // of rest sitting and ~0.4 lying. So lying = a low head AND a torso that has gone over (TORSO_START → TORSO_FULL);
 // the lower of the two blends wins. A bow or a crouch keeps the head high, so it doesn't count either.
 // Y is smoothed (a critically-damped chase with a small dead zone for breathing and head bob); X/Z are not — a plate

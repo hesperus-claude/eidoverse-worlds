@@ -16,8 +16,8 @@
 // in the same order.
 //
 // Not covered here (disclosed): the prebuild under the splash (navigator.xr is absent, so headsetPresent() is false);
-// banded bakes (bandCuts is faked to one band); how the real sky_baked parks domes (its own probe:
-// sky-xr-livehold-probe); anything visual. Those are the fakes' contracts, stated beside each fake.
+// banded bakes (bandCuts is faked to one band); how the real sky_baked parks domes;
+// anything visual. Those are the fakes' contracts, stated beside each fake.
 //
 //   bun tools/sky-lifecycle-test.mjs
 import { fileURLToPath } from "node:url";

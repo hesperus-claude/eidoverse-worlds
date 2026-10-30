@@ -168,7 +168,7 @@ function wrapMaterial(mat, receiver, pbr) {
   // grid up), coarse octave warps the fine one so outlines meander
   // COST GATES (value-exact): a material that opted out of puddles never builds the noise, and at runtime the taps
   // run only above wet 0.35 (where the puddle factor leaves 0), in a uniform branch. docs/research/material-factory.md.
-  const gates = CONFIG.params.get('pudgate') !== '0';   // ?pudgate=0 builds the pre-gate graph (tools/puddle-gate-probe.mjs A/B)
+  const gates = CONFIG.params.get('pudgate') !== '0';   // ?pudgate=0 builds the pre-gate graph
   const noPud = gates && (!pbr || !!(mat.userData?.noPuddles || receiver?.userData?.noPuddles));
   const pnNode = noPud ? null : !gates ? pnUngated() : Fn(() => {
     const pnv = float(0).toVar();

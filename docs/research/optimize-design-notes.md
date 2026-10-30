@@ -62,4 +62,3 @@ A LOD's KTX2 textures are routinely 2–5× larger on disk than a JPEG original 
 byte gate used for the other modes would refuse most real candidates. `--lod` instead requires that the vertex cut
 (or for a texture-only LOD, the texture cut) holds, and that its textures cost no more GPU memory than the
 original's (`glbPerf` texMB). The download ratio is logged on success because a far placement fetches the LOD first.
-Tests: tools/lod-gate-test.ts.

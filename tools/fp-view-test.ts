@@ -16,8 +16,8 @@
 //
 // NOTE for the main-tree control: this suite namespace-imports the module.
 // On a tree without fp_view.js it fails as LINK NOVELTY, not behavioral
-// evidence — the behavioral fail-on-main proof for #75 is the browser A/B
-// receipt (tools/fp-snap-probe.ts), where main's mounted first-person cannot
+// evidence — the behavioral fail-on-main proof for #75 was a one-off browser A/B
+// receipt (in #75's history), where main's mounted first-person cannot
 // see a marker the branch sees. (Sky-contract review N2 case law.)
 
 import * as fp from "../client/lib/fp_view.js";

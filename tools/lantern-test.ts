@@ -1,5 +1,5 @@
 // lantern (client/lib/commandbar.js) — the keys' contract, against the REAL module and the real action
-// registry, in happy-dom. The browser walk is tools/lantern-probe.mjs; this pins the logic it rides on:
+// registry, in happy-dom. This pins the logic:
 //   Enter SAYS what you typed (unless it starts with "/" or the person moved the highlight)
 //   Tab DOES the highlighted action — and never says, even when nothing matches
 //   a command that names its target fills the line instead of running with a default

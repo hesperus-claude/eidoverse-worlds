@@ -105,7 +105,7 @@ console.log('lying:');
   check('...which is well under the Basis answer (hips + hips→crown)', lie.p[1] < 0.15 + rest.hipsToCrown + gap - 0.3, J(lie));
   check('lieAmount: 0 at ≥50%, 1 at ≤30%, between in between', lieAmount(0.5, 1) === 0 && lieAmount(0.3, 1) === 1
     && lieAmount(0.4, 1) > 0.4 && lieAmount(0.4, 1) < 0.6 && lieAmount(0.9, 1) === 0 && lieAmount(0, 1) === 1);
-  // MEASURED on sitting_on_ground (plateanchor-shot-probe, 09-30): the head sits at ~40% of its rest height above the
+  // MEASURED on sitting_on_ground: the head sits at ~40% of its rest height above the
   // feet — inside the head-height band — but the torso is upright (head over hips ~0.9 of rest)
   const gsit = plateAnchor({ hips: [0, 0.1, 0.05], head: [0, 0.58, 0.1], feetY: 0.06, rest, s: 1, gap });
   check('sitting on the ground with the head at 37% of rest is NOT lying (the torso is upright)', gsit.lie === 0 && near(gsit.p[0], 0) && near(gsit.p[2], 0.05), J(gsit));

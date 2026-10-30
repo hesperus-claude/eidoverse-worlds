@@ -2,7 +2,7 @@
 //
 //   bun tools/sound-test.ts
 //
-// Two legs, the picture-test shape:
+// Two legs:
 //   1. DECLARATION — the source rule (allowedSoundSrc: library-relative audio under
 //      eidoverse/assets/ or store/audio/, never a path escape; normalizeSound also
 //      takes an https link, whose tier decides who fetches it — shared/mediasrc.js),
