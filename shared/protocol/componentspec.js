@@ -384,14 +384,10 @@ export const COMPONENTS = {
                 units: { speed: "rad/s", range: "m", yaw: "rad", pitch: "rad" },
                 docs: { target: "what it turns to face: a thing's id, @viewer (each viewer's own eyes), @nearest (whoever is nearest within range), or a person's identity", mode: "yaw (turns about its up only, stays upright) | aim (tilts too)", forward: "which of its own axes points at the target, [x, y, z] (a letter x, y or z is taken and stored as its vector); [0, 0, 1] is its front",
                   up: "its up axis, [x, y, z]", yaw: "[min, max] radians it may turn from rest, within ±π", pitch: "[min, max] radians it may tilt from rest, within ±π/2", speed: "radians a second; 0 = turns at once", range: "a person further than this many metres: it turns back to rest" },
-                help: "it turns to face something: {target (a thing's id, @viewer: each viewer's own eyes, @nearest: whoever is nearest within range, or a person's identity u-…), mode?: yaw (turns about up only, stays upright) | aim (tilts too), forward? ([x, y, z] in its own frame, default [0, 0, 1], its front; a letter x|y|z is taken and stored as its vector; a negative one is a vector, [0, 0, -1]), up? (default [0, 1, 0]), yaw? [min, max] and pitch? [min, max] (radians from rest), speed? rad/s (default 240°/s; 0 = at once), range? m (a person beyond it: back to rest)}. look-at:<part> turns one model part" },
-  // captions (a screen's live subtitles): written only by the caption request, a line at a time (shared/captions.js);
-  // who may caption a screen is the screen's own captioners list (R leaned that way, 10-06, as the roles branch's CAPTION_ON_SCREENS does)
-  // shape audit 10-16 (render-media-env §11): each caption write holds ITS line, once (WebVTT/TTML store a cue once); the 20-line
-  // window re-logged each line up to twenty times, the very cost the caption request was made to remove. A reader wanting
-  // the last lines reads the last captions changes (the log is the transcript); mediaTime was line.t1. An older value
-  // keeps its lines in `window` (with mediaTime), which captions.js still reads (normalizeCaptions): `fields` names
-  // neither, since neither is written now, and `line`'s absentMeans (pinned) is that older window
+                help: "it turns to face something: {target (a thing's id, @viewer: each viewer's own eyes, @nearest: whoever is nearest within range, or a person's identity u-…), mode?: yaw (turns about up only, stays upright) | aim (tilts too), forward? ([x, y, z] in its own frame, default [0, 0, 1], its front; a letter x|y|z|-x|-y|-z is taken and stored as its vector), up? (default [0, 1, 0]), yaw? [min, max] and pitch? [min, max] (radians from rest), speed? rad/s (default 240°/s; 0 = at once), range? m (a person beyond it: back to rest)}. look-at:<part> turns one model part" },
+  // captions: written only by the caption request, ONE line per write (shared/captions.js); who may caption is the
+  // screen's captioners list. The log is the transcript. An older value keeps its lines in `window`, still read
+  // (normalizeCaptions); `line`'s pinned absentMeans is that window.
   captions:   { on: "thing", fields: { session: "string", n: "int", gen: "number", title: "string", line: "object" }, required: ["session", "n", "line"],
                 ranges: { title: { maxLen: 120 } }, units: { gen: "the leg's generation" },
                absentMeans: { line: "an older value's window [{t0, t1, text, speaker?}]: its last entry is the line on screen" },
