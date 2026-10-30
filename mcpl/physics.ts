@@ -908,7 +908,7 @@ export class ReachBody {
     return this.chains.get(limb);
   }
 
-  /** Arm span of one chain, for "walk closer" advice. */
+  /** Arm span of one chain, for "get closer" advice. */
   armLength(limb: string): number | null {
     const ch = this.chain(limb);
     return ch ? ch.L1 + ch.L2 : null;

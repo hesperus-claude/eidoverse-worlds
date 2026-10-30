@@ -295,6 +295,9 @@ let tierNobody, perPerson;   // the two ways to be refused: a gate off, and a bl
   pose(far, { p: [44, 0, 40], yaw: 0 });
   ok(puppet({ ragdoll: true }).got === 1, "RR3 …and forwards them within it");
   req(una, "consent", { move: false }); ok(puppet({ ragdoll: true }).got === 0, "RR4 …where consent still decides");
+  pose(far, { p: [70, 0, 40], yaw: 0 }); const shut = puppet({ ragdoll: true });
+  req(una, "consent", { move: true }); const open = puppet({ ragdoll: true });
+  ok(shut.got === 0 && open.got === 0 && /get closer/.test(shut.err ?? "") && shut.err === open.err, "RR5 …and out of range the answer is the same whatever her gates, so distance can't read them", { shut, open });
   w.log.requestSync(OWNER, "set", { id: "@world", component: "body-default", value: {} }); }
 
 let skipped = null; const SKIP = Symbol("skip");
