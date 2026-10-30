@@ -1,9 +1,7 @@
 // videopanel — the resident's graphics dials, in Settings where a visitor can
 // find them. Every row here is LOCAL: a preference about this machine, never
 // shared with the world (the build panel is for what the world looks like;
-// this is for what your GPU can afford). The APIs already existed, scattered —
-// render scale lived in the build panel, the rest were URL params or governor-
-// only.
+// this is for what your GPU can afford).
 //
 // Two rows apply on RELOAD, and say so: renderer backend and antialiasing are
 // construction-time choices in three's WebGPURenderer (core.js), not live.
@@ -83,7 +81,7 @@ function videoFields() {
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
     { t: 'check', k: 'msaa', label: 'antialiasing (on reload)', value: msaaOn },
-    // batch 2 (R 10-07): the safety row rides the same VR quad (the desk has its own 🛡 safety section, below)
+    // the safety row rides the same VR quad (the desk has its own 🛡 safety section, below)
     { t: 'check', k: 'untrusted', label: UNTRUSTED_WORDS.label.toLowerCase(), value: allowUntrusted(), hint: UNTRUSTED_WORDS.hint },
   ];
 }
@@ -109,16 +107,15 @@ export function initVideoPanel() {
     if (body.dataset.init) return;
     body.dataset.init = '1';
 
-    // renderer: ONE control (live 09-07). auto matches the backend to what VR will use so entry never reloads;
+    // renderer: ONE control. auto matches the backend to what VR will use so entry never reloads;
     // force WebGPU / force WebGL are the overrides. A headset present + WebGPU-XR flags absent is the case that
     // makes force-WebGPU cost a reload-into-VR, so that combination is warned; force-WebGPU is disabled outright
     // when the machine has no WebGPU at all.
     const backend = backendName();
     const forced = CONFIG.params.has('webgl') || CONFIG.params.has('webgpu');
     const rpref = lsGet(PREF_BACKEND) || 'auto';
-    // HISTORY, not presence (#197 review B3). Nothing clears this when a headset is unplugged, and a
-    // live re-probe is no better — isSessionSupported stays optimistic after one is switched off
-    // (mictoggle.js:91). So the copy says what is actually known: a headset has been USED here.
+    // HISTORY, not presence: nothing clears this when a headset is unplugged, and isSessionSupported stays
+    // optimistic after one is switched off (mictoggle.js). So the copy says what is known: a headset was USED here.
     const headsetSeen = headsetSeenRecently();
     const autoTail = headsetSeen
       ? (WEBGPU_XR ? 'A headset has been used here before, and this browser can present VR from WebGPU, so auto is WebGPU and VR enters without a reload.'
@@ -196,15 +193,15 @@ export function initVideoPanel() {
       '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload.',
       msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row); }));
   }, { id: 'video', host: 'settings' });
-  // 🛡 safety (batch 2, R 10-07): what this browser may fetch from other websites. One row, off by default: VRChat's
+  // 🛡 safety: what this browser may fetch from other websites. One row, off by default: VRChat's
   // "Allow Untrusted URLs" (Comfort & Safety). Its own section so it can't be mistaken for a graphics dial.
   makeSection('🛡 safety', (body) => {
     if (body.dataset.init) return;
     body.dataset.init = '1';
     body.appendChild(checkRow(UNTRUSTED_WORDS.label, UNTRUSTED_WORDS.hint, allowUntrusted(), (on) => {
-      setAllowUntrusted(on); flashHint(on ? 'links from any site play for you now' : 'only this server\'s files and trusted hosts play for you');   // no emoji outside Chat and the action bar (R)
+      setAllowUntrusted(on); flashHint(on ? 'links from any site play for you now' : 'only this server\'s files and trusted hosts play for you');   // no emoji outside Chat and the action bar
     }));
-    // the explanation runs the panel's full width (R 10-10: it was squeezed into the label column, a word a line)
+    // the explanation runs the panel's full width, not squeezed into the label column
     const p = document.createElement('div'); p.style.cssText = 'display:block;width:100%;box-sizing:border-box;padding:2px 8px 6px;font-size:11px;color:var(--dim);line-height:1.4';
     p.textContent = UNTRUSTED_WORDS.hint; body.appendChild(p);
   }, { id: 'safety', host: 'settings' });
