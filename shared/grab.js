@@ -262,7 +262,7 @@ export function checkGrabbable(v, at = 'grabbable') {
   const held = Object.keys(v).find((k) => RESERVED_KEYS.includes(k));
   if (held) return bad('reserved', `${at}.${held} is reserved: held for a shape that isn't settled, and nothing may write it`, `leave ${held} out`);
   if (v.home !== undefined) return bad('schema', `${at}.home: where a thing goes home to is its own home component now`, "home {pos, q?, scale?, parent?: {to}} (the authority stamps it for a returning grabbable)", ['home']);
-  let r = keys(at, v, KEYS, 'grabbable'); if (r) return r;
+  let r = checkKeys(at, v, KEYS, 'grabbable'); if (r) return r;
   for (const k of ['enabled', 'steal', 'twoHanded', 'carries']) if (v[k] !== undefined && typeof v[k] !== 'boolean') return bad('shape', `${at}.${k} is true or false`);
   if (v.who !== undefined && !isWho(v.who)) return bad('shape', `${at}.who is a role (${WHO.join(', ')} or this world's own), {permission: '<name>'} or {roles: [...]} (who may pick it up)`);
   if (v.hold !== undefined && !HOLDS.includes(v.hold)) return bad('shape', `${at}.hold is ${HOLDS.join(', ')} (auto: press-to-hold in VR, sticky on desktop)`);
@@ -278,7 +278,7 @@ export function checkGrabbable(v, at = 'grabbable') {
     for (const n of names) { const g = v.grips[n], gat = `${at}.grips.${n}`;
       if (!NAME_RE.test(n)) return bad('shape', `${at}.grips: a grip's name is letters, digits, - and _ (up to 32)`);
       if (!isObj(g)) return bad('shape', `${gat} must be {pos, q?, hand?, role?, grasp?, part?}`);
-      if ((r = keys(gat, g, GRIP_KEYS, 'a grip'))) return r;
+      if ((r = checkKeys(gat, g, GRIP_KEYS, 'a grip'))) return r;
       if (!nums(g.pos, 3)) return bad('shape', `${gat}.pos must be [x, y, z] in the thing's own frame (where the palm goes)`);
       if (g.q !== undefined && !unitQ(g.q)) return bad('shape', `${gat}.q is a unit quaternion [x, y, z, w] (the palm's frame: +Z out of the palm, +Y along the fingers' base)`);
       if (g.hand !== undefined && !HANDS.includes(g.hand)) return bad('shape', `${gat}.hand is ${HANDS.join(', ')}`);
@@ -302,13 +302,15 @@ export function checkAccepts(sk, sat) {
   return null;
 }
 
-function keys(at, v, allowed, what) {
-  for (const k of Object.keys(v)) if (!allowed.includes(k)) { const dym = near(k, allowed);
+/** An unknown key in `v` refused with a did-you-mean (sockbody.js shares it). */
+export function checkKeys(at, v, allowed, what) {
+  for (const k of Object.keys(v)) if (!allowed.includes(k)) { const dym = nearMiss(k, allowed);
     return bad('schema', `${at}: unknown key '${k}'${dym.length ? `; did you mean '${dym[0]}'?` : ''}`, `${what} takes: ${allowed.join(', ')}`, dym); }
   return null;
 }
 const bad = (code, reason, fix = '', didYouMean = null) => ({ code, reason, fix, ...(didYouMean?.length ? { didYouMean } : {}) });
-function near(k, allowed) {
+// a near miss: a prefix either way, or an edit distance of at most a third of the word
+export function nearMiss(k, allowed) {
   const x = String(k).toLowerCase();
   const lev = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j);
     for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }

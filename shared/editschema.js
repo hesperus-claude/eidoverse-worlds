@@ -45,7 +45,7 @@ import { qNorm, qHeading, qFromYaw, qWithHeading, qRotate } from './rot.js';
 import { scale3, scaleWire, entScale } from './scale3.js';
 import { localOf, parentOps, childrenOf, worldPose } from './hierarchy.js';
 import { recordOf } from './protocol/view.js';
-import { partSlot, motionNode, motionType } from './protocol/names.js';
+import { partSlot, motionNode, motionType, rateOf } from './protocol/names.js';
 import { modelWord } from './eido.js';
 import { isBase } from './protocol/roles.js';
 import { DESCRIPTORS, fieldOf, claimOf, CLAIMED_KEYS, editorDefault, toWire } from './protocol/descriptors.js';
@@ -71,9 +71,6 @@ export function motionChannels(m) {
 export const MOTION_TYPES = ['pendulum', 'spin', 'orbit', 'oscillate', 'path'];
 /** A motion's type → its card's name (the type is the card). */
 export const MOTION_CARD = Object.freeze({ pendulum: 'Pendulum', spin: 'Spin', orbit: 'Orbit', oscillate: 'Oscillate', path: 'Path' });
-// a spin's or an orbit's rate in °/s, read as client/lib/motioneval.js rateOf reads it (shared/ can't import the client;
-// tools/protocol/shiplist-check.ts holds the two together): degPerSec, else 360 / period, else an old rpm × 6, else the default
-const rateOf = (m, def) => (Number.isFinite(m.degPerSec) ? m.degPerSec : Number.isFinite(m.period) && m.period > 0 ? 360 / m.period : Number.isFinite(m.rpm) ? m.rpm * 6 : def);
 export const PARTICLE_PRESETS = ESSENTIAL_NAMES;   // the Essentials (shared/particle_effects.js): the effects every world has by name
 const round = (v, dp = 3) => +(+v).toFixed(dp);
 /** A row's hard limits ({min?, max?}) and unit from the registry (componentspec ranges / units): the one place a field's

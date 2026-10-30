@@ -15,7 +15,7 @@
 // Part-frame motion (`motion:<slot> {node}` keys, or an old `motion` carrying `part`: shared/protocol/names.js motionNode)
 // does not displace the entity's ROOT transform at all — those stay in
 // motion.js, THREE-side, and this module reports the root as unmoved.
-import { motionType } from '../../shared/protocol/names.js';
+import { motionType, rateOf } from '../../shared/protocol/names.js';
 import { qMul, qRotate as qApply, qAxisAngle as qAxisAngleUnit } from '../../shared/rot.js';
 
 // ---- quaternions: shared/rot.js's -----------------------------------------
@@ -75,15 +75,7 @@ export const since = (m, nowMs) => {
   return Math.max(0, (nowMs - t0) / 1000);
 };
 
-/** A spin's or an orbit's rate in degrees a second: degPerSec, else a period
- *  (seconds a turn: 360 / period), else an old world's rpm (× 6), else `def`.
- *  One reading for the renderer, the part path, the seat signals and the agent. */
-export function rateOf(m, def) {
-  if (Number.isFinite(m.degPerSec)) return m.degPerSec;
-  if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;
-  if (Number.isFinite(m.rpm)) return m.rpm * 6;
-  return def;
-}
+export { rateOf };   // shared/protocol/names.js: the one reading (renderer, part path, seat signals, agent, editor)
 
 /** ⚠ MIRRORS the pendulum push in shared/protocol/authority/use.js — keep in sync, or a
  *  joiner's swing disagrees with the one being pushed.

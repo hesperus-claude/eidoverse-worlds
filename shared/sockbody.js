@@ -40,7 +40,7 @@
 
 import { REACH_CHAINS } from './joints.js';
 import { HUMANOID_BONES } from './humanoid.js';
-import { checkAccepts } from './grab.js';
+import { checkAccepts, checkKeys, nearMiss } from './grab.js';
 import { isReservedAnimName } from './animdefs.js';
 import { BUILTIN_IDS, isWhoValue, whoWords } from './protocol/roles.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
@@ -245,7 +245,7 @@ export function checkSockets(v, at = 'sockets') {
     const sat = `${at}.${k}`;
     if (!/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(k)) return bad('shape', `${sat}: a socket's name is letters, digits, - and _ (up to 32)`);
     if (!isObj(sk)) return bad('shape', `${sat} must be {pos, q?, part?, body?}`);
-    let r = keys(sat, sk, SOCKET_KEYS, 'a socket'); if (r) return r;
+    let r = checkKeys(sat, sk, SOCKET_KEYS, 'a socket'); if (r) return r;
     if (!nums(sk.pos, 3)) return bad('shape', `${sat}.pos must be [x, y, z] in the thing's own frame`);
     if (sk.q !== undefined && !unitQ(sk.q)) return bad('shape', `${sat}.q is a unit quaternion [x, y, z, w] (the socket's rotation in the thing's frame)`);
     if (sk.part !== undefined && !(typeof sk.part === 'string' && sk.part)) return bad('shape', `${sat}.part names a node of its model`);
@@ -263,7 +263,7 @@ export function checkSockets(v, at = 'sockets') {
 export function checkSocket(v, at = 'socket') {
   if (!isObj(v)) return bad('shape', `${at} must be {name, part?, accepts?, radius?}`);
   if (v.body !== undefined) return bad('schema', `${at}.body: what a person's body does at a socket is the station component on the same entity now`, 'station {action, anim?, anchor?, exit?, leaveBy?, who?} beside socket', ['station']);
-  let r = keys(at, v, SOCKET_ENTITY_KEYS, 'a socket'); if (r) return r;
+  let r = checkKeys(at, v, SOCKET_ENTITY_KEYS, 'a socket'); if (r) return r;
   if (!(typeof v.name === 'string' && NAME_RE.test(v.name))) return bad('shape', `${at}.name is letters, digits, - and _ (up to 32): the name use {args: {socket}} calls it by`);
   if (v.part !== undefined && !(typeof v.part === 'string' && v.part)) return bad('shape', `${at}.part names a node of its host's model`);
   if ((r = checkAccepts(v, at))) return r;
@@ -276,7 +276,7 @@ export function checkStation(v, at = 'station') {
   if (!isObj(v)) return bad('shape', `${at} must be {action?, anim?, anchor?, exit?, leaveBy?, who?}`);
   const held = Object.keys(v).find((k) => STATION_RESERVED.includes(k));
   if (held) return bad('reserved', `${at}.${held} is reserved: the alpha holds the station's core only (${STATION_KEYS.join(', ')}); ${held} comes back later as an addition`, `leave ${held} out; reserved for later: ${STATION_RESERVED.join(', ')}`);
-  let r = keys(at, v, STATION_KEYS, 'a station'); if (r) return r;
+  let r = checkKeys(at, v, STATION_KEYS, 'a station'); if (r) return r;
   // anim (formerly pose): a pose or clip by name, or {clip, …} / a blend: the body grammar's own check, under its name
   if (v.anim !== undefined && (r = checkPose(v.anim, `${at}.anim`))) return r;
   if (isReservedAnimName(v.anim)) return bad('shape', `${at}.anim "${v.anim}" is reserved: it names ad-libbed anims, never a pose or clip`, 'name the pose or clip');
@@ -289,7 +289,7 @@ export function checkStation(v, at = 'station') {
 
 function checkBody(b, at) {
   if (!isObj(b)) return bad('shape', `${at} must be {action?, anchor?, pose?, …}`);
-  let r = keys(at, b, BODY_KEYS, "a socket's body"); if (r) return r;
+  let r = checkKeys(at, b, BODY_KEYS, "a socket's body"); if (r) return r;
   if (b.action !== undefined && !(typeof b.action === 'string' && ACTION_RE.test(b.action))) return bad('shape', `${at}.action is a verb in lower case ('sit', 'ride', 'drive')`);
   if (b.anchor !== undefined && !ANCHORS.includes(b.anchor)) return bad('shape', `${at}.anchor is ${ANCHORS.join(', ')} (the body point that lands on the socket)`);
   if (b.pose !== undefined && (r = checkPose(b.pose, `${at}.pose`))) return r;
@@ -307,9 +307,9 @@ function checkBody(b, at) {
     if (!isObj(b.reach)) return bad('shape', `${at}.reach must be {<limb>: {at, q?, part?, hint?, vr?}}`);
     for (const [limb, t] of Object.entries(b.reach)) {
       const lat = `${at}.reach.${limb}`;
-      if (!REACH_CHAINS[limb]) return bad('schema', `${at}.reach: no limb '${limb}'`, `limbs: ${Object.keys(REACH_CHAINS).join(', ')}`, near(limb, Object.keys(REACH_CHAINS)));
+      if (!REACH_CHAINS[limb]) return bad('schema', `${at}.reach: no limb '${limb}'`, `limbs: ${Object.keys(REACH_CHAINS).join(', ')}`, nearMiss(limb, Object.keys(REACH_CHAINS)));
       if (!isObj(t)) return bad('shape', `${lat} must be {at, q?, part?, hint?, vr?}`);
-      if ((r = keys(lat, t, REACH_KEYS, 'a reach'))) return r;
+      if ((r = checkKeys(lat, t, REACH_KEYS, 'a reach'))) return r;
       if (!nums(t.at, 3)) return bad('shape', `${lat}.at must be [x, y, z] (the thing's frame, or its part's)`);
       if (t.q !== undefined && !unitQ(t.q)) return bad('shape', `${lat}.q is a unit quaternion [x, y, z, w] (the hand's frame; the palm faces its -Y)`);
       if (t.part !== undefined && !(typeof t.part === 'string' && t.part)) return bad('shape', `${lat}.part names a node of the model (the target moves with it)`);
@@ -320,19 +320,19 @@ function checkBody(b, at) {
   if (b.hold !== undefined) {
     if (!isObj(b.hold)) return bad('shape', `${at}.hold must be {<bone>: [x, y, z, w]}`);
     for (const [bone, q] of Object.entries(b.hold)) {
-      if (!HUMANOID_BONES.includes(bone)) return bad('schema', `${at}.hold: no bone '${bone}'`, 'VRM humanoid bone names: hips, spine, chest, neck, head, leftUpperArm…', near(bone, HUMANOID_BONES));
+      if (!HUMANOID_BONES.includes(bone)) return bad('schema', `${at}.hold: no bone '${bone}'`, 'VRM humanoid bone names: hips, spine, chest, neck, head, leftUpperArm…', nearMiss(bone, HUMANOID_BONES));
       if (!unitQ(q)) return bad('shape', `${at}.hold.${bone} is a unit quaternion [x, y, z, w]`);
     }
   }
   if (b.look !== undefined) {
     if (!isObj(b.look)) return bad('shape', `${at}.look must be {yaw?, pitch?, up?}`);
-    if ((r = keys(`${at}.look`, b.look, LOOK_KEYS, 'look'))) return r;
+    if ((r = checkKeys(`${at}.look`, b.look, LOOK_KEYS, 'look'))) return r;
     for (const [k, lim] of [['yaw', 180], ['pitch', 90]]) if (b.look[k] !== undefined && !(nums(b.look[k], 2, lim) && b.look[k][0] <= b.look[k][1])) return bad('shape', `${at}.look.${k} is [min, max] in degrees, within ±${lim}`);
     if (b.look.up !== undefined && !UPS.includes(b.look.up)) return bad('shape', `${at}.look.up is world or socket (does the view roll with the thing?)`);
   }
   if (b.input !== undefined) {
     if (!isObj(b.input)) return bad('shape', `${at}.input must be {move?, look?}`);
-    if ((r = keys(`${at}.input`, b.input, INPUT_KEYS, 'input'))) return r;
+    if ((r = checkKeys(`${at}.input`, b.input, INPUT_KEYS, 'input'))) return r;
     if (b.input.move !== undefined && !MOVES.includes(b.input.move)) return bad('shape', `${at}.input.move is ${MOVES.join(', ')}`);
     if (b.input.look !== undefined && !LOOKS.includes(b.input.look)) return bad('shape', `${at}.input.look is ${LOOKS.join(', ')}`);
   }
@@ -345,7 +345,7 @@ function checkBody(b, at) {
 function checkPose(p, at) {
   if (typeof p === 'string') return CLIP_RE.test(p) ? null : bad('shape', `${at} names a clip ('sitchair', 'sitting_normal_chair')`);
   if (!isObj(p)) return bad('shape', `${at} is a clip name, {clip, time?, offset?} or a blend {by, clips, time?, offset?}`);
-  const r = keys(at, p, POSE_KEYS, 'a pose'); if (r) return r;
+  const r = checkKeys(at, p, POSE_KEYS, 'a pose'); if (r) return r;
   if (p.time !== undefined && !TIMES.includes(p.time)) return bad('shape', `${at}.time is loop or phase (phase: the clip's time follows the thing's motion)`);
   if (p.offset !== undefined && !nums(p.offset, 3, 10)) return bad('shape', `${at}.offset is [x, y, z] metres in the socket's frame`);
   if (p.clip !== undefined) {
@@ -364,21 +364,7 @@ function checkPose(p, at) {
   }
   return null;
 }
-
-function keys(at, v, allowed, what) {
-  for (const k of Object.keys(v)) if (!allowed.includes(k)) { const dym = near(k, allowed);
-    return bad('schema', `${at}: unknown key '${k}'${dym.length ? `; did you mean '${dym[0]}'?` : ''}`, `${what} takes: ${allowed.join(', ')}`, dym); }
-  return null;
-}
 const bad = (code, reason, fix = '', didYouMean = null) => ({ code, reason, fix, ...(didYouMean?.length ? { didYouMean } : {}) });
-// a near miss: a prefix either way, or an edit distance of at most a third of the word
-function near(k, allowed) {
-  const x = String(k).toLowerCase();
-  const lev = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j);
-    for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }
-    return d[b.length]; };
-  return allowed.filter((a) => { const y = a.toLowerCase(); return (x.length > 2 && (y.startsWith(x) || x.startsWith(y))) || lev(x, y) <= Math.max(1, Math.floor(y.length / 3)); }).slice(0, 3);
-}
 
 /** A seat named in a presence frame, as a socket id: {to: <socket id>} passes; the old frame {to: <host>, slot} (one
  *  release: clients from before sockets were entities) names the host's socket child of that name. `world` is a fold

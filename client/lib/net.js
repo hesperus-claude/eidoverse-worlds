@@ -103,6 +103,9 @@ export function wireNet(h) {
  *  the server sends it on arrive and in the join roster). A role, a ban or a rollback goes to THIS, never to a typed
  *  name. */
 export const identities = new Map();
+/** A person's name: as they show it here, else as the world last named them, else their id (the people panels read this). */
+export const presentName = (id) => { for (const [n, v] of identities) if (v === id) return n; return null; };
+export const personName = (id) => presentName(id) ?? net.names?.[id] ?? replica.nameOf?.(id) ?? id;
 /** A presence message names its person by IDENTITY too: the server routes it to that identity, and
  *  a name someone else wears never catches it. `key` is the field the server reads (targetActor / toActor). */
 const actorFor = (name, key) => { const a = name ? identities.get(name) : null; return a ? { [key]: a } : {}; };
