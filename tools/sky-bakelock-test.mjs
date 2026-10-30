@@ -5,10 +5,12 @@
 // started BEFORE the awaiting caller's continuation, so the baked dome attached to the temporary. The fix runs the
 // post-bake work inside the lock (BAKE_AFTER); a queued bake re-checks whether it's still wanted at its turn (BAKE_GUARD).
 import { serializeBakes, BAKE_AFTER, BAKE_GUARD, BAKE_HELD, BAKE_INTERCEPT } from '../client/lib/sky_bakelock.js';
-let pass = 0, fail = 0;
-const ok = (n, c, d = '') => { if (c) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}  ${d}`); } };
+import { pause } from './protocol/wait.ts';
+import { suite } from "./protocol/suite.ts";
+const S = suite("sky-bakelock");
+const ok = (n, c, d) => S.check(n, c, d);
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
-const within = (p, ms = 2000) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);   // a deadlocked mutant fails, not hangs
+const within = (p, ms = 2000) => Promise.race([p, pause('a deadlocked mutant fails, not hangs', ms)]);   // a deadlocked mutant fails, not hangs
 const deferred = () => { let res, rej; const p = new Promise((a, b) => { res = a; rej = b; }); return { p, res, rej }; };
 
 function engine() {
@@ -128,4 +130,4 @@ for (const sit of ['queued behind another', 'its bake throws', 'its sky is torn 
   ok('…and the lock runs none of its hooks', intercepted === 0, intercepted);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

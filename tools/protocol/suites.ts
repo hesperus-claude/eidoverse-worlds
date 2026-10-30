@@ -125,6 +125,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["capsule-recovery", "../capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers
   ["debug-tabs", "../debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups
   ["governor-xr", "../governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio
+  ["gpulost", "../gpulost-test.mjs", 1], // after a lost GPU the page reloads once, never loops, and drops the XR boot flag (gpulost.js)
   ["render-aside", "../render-aside-test.mjs", 1], // renderAside: an off-eye render while presenting leaves the XR state as it was
   ["quadcolour", "../quadcolour-test.mjs", 1], // the VR panel grade (quadgrade.js) as numbers: the JS twin of the shader
   ["headset-seen", "../headset-seen-test.mjs", 1], // the stored headset bit is history, and says so (#197)
@@ -215,6 +216,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["audioctx", "../audioctx-test.ts", 1], // one AudioContext per page
   ["sound-editor", "../sound-editor-test.ts", 1], // the sound editor block (its clock, t0, no guard); R 10-28 item 18: 32 world sounds at once, the radius field to 200 m
   ["skypanel", "../skypanel-state-test.ts", 1], // the sky panel's state lines; R 10-28: every shared select commits what it shows (the world select saved nothing)
+  ["sky-bakelock", "../sky-bakelock-test.mjs", 1], // the sky's one-bake-at-a-time lock (sky_bakelock.js): a queued prebuild waits, BAKE_AFTER runs inside the lock, no deadlock
+  ["sky-swapchain", "../sky-swapchain-test.mjs", 1], // the sky's tier swaps (sky_swapchain.js): a superseded swap records nothing shown, a return after one acts, a stand-down keeps the dome
+  ["sky-lifecycle", "../sky-lifecycle-test.mjs", 1], // the sky's quality lifecycle on a scaled clock: held in the headset and applied once at exit, the cap takes the pending choice, a failed bake puts the live clouds back
   ["forecast", "../forecast-test.ts", 1], // the deterministic weather forecast: late joiner, override, provenance
   ["physics-off", "../physics-off-test.ts", 1], // R 10-28 item 33: the per-client object-physics switch: off, no flights folded or drawn, committed poses // a sound's shared playhead is on the server's clock (serverNow), never Date.now
   ["eidomodel", "eidomodel-check.ts", 1], // review 10-07 H3: a translated world's models are eido:sha256 addresses; the index, /eido/, /library/eido/, the client's mapping
@@ -271,6 +275,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["animnames-retry", "../animnames-retry-test.ts", 1], // a failed defs fetch is retried with back-off
   ["screenshots", "../bun-test.ts tools/screenshots-test.ts", 1], // the screenshot broker: selection, cooldown, journeys, timeouts
   ["snapframe-render", "../snapframe-render-test.ts", 1], // where the renderer leg puts the camera
+  ["snapframe", "../snapframe-test.ts", 1], // /snap framing (dist, height, pitch) end to end through the door's agent on an owned sequencer
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
@@ -286,7 +291,15 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["chat-log", "../chat-log-test.ts", 1], // the chat log: the spoken-utterance merge and unread accounting
   ["attention", "../attention-test.ts", 1], // the attention gate (attention-policy.js) and the real chat.js attention prefs
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
+  ["sfu-adapter", "../sfu-adapter-test.ts", 1], // admitParticipant's refusal branches through the decision layer and the in-process SFU adapter, one table; legs keyed per world
+  ["relay-decision", "../relay-decision-test.ts", 1], // relay incarnation and consent rules (#104 amendments 2, 3)
+  ["sfu-mic-intent-race", "../sfu-mic-intent-race-test.mjs", 1], // the SFU transport executed: mic intent that changes while an acquisition is in flight ends where the latest intent says (#148)
+  ["mic-ptt", "../mic-ptt-test.mjs", 1], // push-to-talk: the gate decision executed under both regimes, the hang time and the rate limit
+  ["voice-wire", "../voice-wire-test.ts", 1], // voice state (mic, hear) on the pose wire, shared with everyone in the world per the owner's ruling; a late joiner sees it
   ["captions", "../captions-test.ts", 1], // shared/captions.js: the caption bag a reader sees and the request's rules
+  ["tts-fault", "../tts-fault-test.ts", 1], // TTS failure paths executed: a hung or dead phonemizer worker and an orphaned synthesis fail loudly, never hang (#91 r3 B3)
+  ["spoken-form", "../spoken-form-test.mjs", 1], // what the TTS speaks (tts-chunk.js spokenForm, ttsChunks), as a table: fenced code never spoken, how text is chunked
+  ["ttsrow", "../ttsrow-test.mjs", 1], // the audio panel's TTS section executed (ttsrow.js, ttslist.js): file and folder picks, the voice list in place
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
   ["particles-host", "../particles-host-test.ts", 1], // the browser particle host (emitters.js) over a stand-in GPU half
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting

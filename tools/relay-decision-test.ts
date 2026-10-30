@@ -3,13 +3,10 @@
 import { relayIdentity, parseRelayIdentity, nextIncarnation,
   subscriptionActive, applyConsentUpdate,
 } from "../server/relaydecision.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const t = (name: string, got: unknown, want: unknown) => {
-  const okv = JSON.stringify(got) === JSON.stringify(want);
-  okv ? pass++ : fail++;
-  console.log(`  ${okv ? "✅" : "❌"} ${name}${okv ? "" : ` — got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`);
-};
+const S = suite("relay-decision");
+const t = (name: string, got: unknown, want: unknown) => S.check(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
 
 // the eight refusal branches: one table through admitParticipant AND admitSfuLeg in tools/sfu-adapter-test.ts
 
@@ -47,5 +44,4 @@ t("moderator mute beats consent",
     { changed: false, reason: "stale listener generation" });
 }
 
-console.log(`\n${fail === 0 ? "✅" : "❌"} relay-decision: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

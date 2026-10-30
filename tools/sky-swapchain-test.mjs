@@ -3,9 +3,10 @@
 // The screen work (swapTierInner) is a scripted fake here: each call waits for the test to answer it with what the real
 // one would return. What's bound is the SHOWN bookkeeping — which tier the next run swaps FROM, and whether it acts.
 import { makeSwapChain, SHOWN_UNKNOWN } from '../client/lib/sky_swapchain.js';
-let pass = 0, fail = 0;
-const ok = (n, c, d = '') => { if (c) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}  ${d}`); } };
-const tick = () => new Promise((r) => setTimeout(r, 0));
+import { suite } from "./protocol/suite.ts";
+const S = suite("sky-swapchain");
+const ok = (n, c, d) => S.check(n, c, d);
+const tick = () => new Promise((r) => setImmediate(r));
 
 function rig(start) {
   const st = { q: start, api: 1, calls: [] };
@@ -77,4 +78,4 @@ function rig(start) {
   ok('reset() forgets the shown tier', chain.shown() === null);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

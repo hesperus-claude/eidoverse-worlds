@@ -18,7 +18,8 @@ process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { voiceWire } = await import("../shared/presencewire.js");
-const { scratchSequencer, mkCheck, sleep } = await import("./harness.ts");
+const { scratchSequencer, mkCheck } = await import("./harness.ts");
+const { until: waitUntil } = await import("./protocol/wait.ts");
 const { fixture, postureFixture } = await import("./body-fixture.ts");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
@@ -52,10 +53,7 @@ async function join_(id: string, extra: Record<string, unknown> = {}): Promise<S
   });
   return s;
 }
-async function until(fn: () => boolean, what: string) {
-  const end = Date.now() + 5000;
-  while (!fn()) { if (Date.now() > end) throw new Error(`timed out waiting for ${what}`); await sleep(20); }
-}
+const arrives = (fn: () => boolean, what: string) => waitUntil(what, fn, { ms: 5000, step: 20 });
 
 const owner = await join_(OWNER);
 const peer = await join_("voice-peer");
@@ -75,7 +73,7 @@ function ownerSends(voice: Record<string, unknown> | null, raw = false) {
 const at = (x: number) => (s: Sock) => s.last?.p?.[0] === x;
 const agentPose = () => agent.people.get(OWNER)?.pose ?? null;
 async function everyoneHas(x: number, what: string) {
-  await until(() => at(x)(peer) && at(x)(spectator) && agentPose()?.p?.[0] === x, what);
+  await arrives(() => at(x)(peer) && at(x)(spectator) && agentPose()?.p?.[0] === x, what);
 }
 const both = (o: any, mic: unknown, hear: unknown) => !!o && o.mic === mic && o.hear === hear;
 
@@ -118,10 +116,10 @@ const seen = late.snapshot?.present?.find((o: any) => o.id === OWNER)?.pose;
 check("a late joiner's roster has the owner's body", Array.isArray(seen?.p), JSON.stringify(seen));
 check("...without mic or hear (the next live frame brings them)", !!seen && !("mic" in seen) && !("hear" in seen), JSON.stringify(seen));
 x = ownerSends({ mic: true, hear: false });
-await until(() => at(x)(late), "late joiner live frame");
+await arrives(() => at(x)(late), "late joiner live frame");
 check("...and the next live frame does", both(late.last, true, false), JSON.stringify(late.last));
 owner.ws.close();
-await until(() => peer.left.has(OWNER), "the owner's leave");   // its pose is remembered on leave: wait for that, not a guess
+await arrives(() => peer.left.has(OWNER), "the owner's leave");   // its pose is remembered on leave: wait for that, not a guess
 const back = await join_(OWNER);
 check("the owner's own restore is there (its body remembered)", !!back.snapshot?.restore && Array.isArray(back.snapshot.restore.p), JSON.stringify(back.snapshot?.restore));
 check("...and carries neither mic nor hear", !!back.snapshot?.restore && !("mic" in back.snapshot.restore) && !("hear" in back.snapshot.restore), JSON.stringify(back.snapshot?.restore));
