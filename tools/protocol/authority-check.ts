@@ -36,12 +36,12 @@ import { worldPose } from "../../shared/hierarchy.js";
 import { viewState } from "../../shared/protocol/view.js";
 import { worldPose as worldT } from "../../shared/protocol/simlayer.js";
 import { labClock } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("door");
 // lab worlds name people by bare test names; the directory a real server has would know them (roles:<key> checks it)
 const LABKIND = (_id: string) => "human";
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("authority-check", { quiet: true });
 const code = (r: any) => r?.refused?.code;
 const clock = labClock();
 const callAt = (world: string) => (actor, verb, args = {}) => { clock.advance(100); return request(openWorld(root, world), actor, verb, args); };
@@ -1770,5 +1770,4 @@ for (const [name, steps] of [
   const bytes = R({ ...P, bytes: 1024 })("ann", "create", { id: "rb", model: "crate", components: { "t/note": "x".repeat(2000) } });
   ok(def.every((x) => x === "ok") && acts.join() === "ok,ok,ok,rate" && says.join() === "ok,ok,rate" && win.join() === "ok,ok,ok,rate,ok" && bytes === "rate",
     "RP1 the host's rate is the one met: its acts, says, window and bytes (8 acts pass on the defaults)", { def, acts, says, win, bytes }); }
-console.log(`[authority-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
