@@ -1,6 +1,6 @@
 // tools/protocol/zone-water-check.ts — zone + water (on @world or a thing) + water-exclusion: the door's refusals, the bodies
 // shared/zone.js reads in world space (priority, pockets, a moving carrier), @world.water as it was, the client's rebuild rule,
-// and tools/water/math-test.ts's expectations on bodies built through zone.js.
+// and the water math's expectations (formerly tools/water/math-test.ts) on bodies built through zone.js.
 //   bun tools/protocol/zone-water-check.ts                 every case
 //   bun tools/protocol/zone-water-check.ts --only Z1,Z3    just those
 //   bun tools/protocol/zone-water-check.ts --tree <dir>    against another checkout's shared/ (a mutant)
@@ -248,7 +248,7 @@ await C("Z11", "the client's level asks mediumOf: worldLevelAt is null in a pock
   const o = { room: L([0, -7.5, 0]), beside: L([6, -7.5, 0]), above: L([0, 3, 0]), picky: L([20, -7.5, 0]), none: [L([0, -7.5, 0], none), L([0, 3, 0], none)], noLevel: Z.worldLevelAt([0, -7.5, 0], z, null) };
   return [o.room === null && o.beside === 0 && o.above === 0 && o.picky === 0 && o.none.join() === "0,0" && o.noLevel === null, o]; });
 
-// tools/water/math-test.ts's expectations, on bodies and pockets built through zone.js (a thing's zone, not a hand-made box)
+// the water math's expectations (formerly tools/water/math-test.ts), on bodies and pockets built through zone.js (a thing's zone, not a hand-made box)
 await C("ZM", "math-test on zone-built bodies: wet/dry boundaries, a pocket, path lengths (nested, overlapping, rotated pockets), ascent to the float, diving, a half-size body, waves", () => {
   const s = session(); const FLOAT = MV.floatDepth(MV.MOVER.body.height); const bad: string[] = [];
   const eq = (k: string, a: any, b: any) => { if (a !== b) bad.push(`${k}: ${a} != ${b}`); }, ok = (k: string, c: boolean) => { if (!c) bad.push(k); };
