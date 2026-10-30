@@ -3,70 +3,28 @@
 //
 //   bun tools/worlds-route-test.ts
 //
-// One real sequencer on a verified-free port with a scratch WORLDS_DIR:
+// One real sequencer (harness.scratchSequencer: a scratch WORLDS_DIR, the child proven ours by its nonce):
 //   A. on-disk worlds with a log are listed, junk dirs and log-less dirs are not
 //   B. a joined body shows under its world; a spectator shows as nothing
-//   C. a world that exists only because it was LOADED still lists
-//   D. /worlds never founds a world (asking for the map leaves it unchanged)
-// Port discipline per the stale-listener incident: nonce file served from
-// THIS tree before any assertion counts.
-import { spawn, type ChildProcess } from "node:child_process";
+//   C. a join to a world nobody founded is refused and founds nothing
+// The GET-route contract (JSON, no-store, asking never founds) is version-route-test's loop over every route.
 import { join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { foundWorlds } from "./harness.ts";
+import { mkdirSync, writeFileSync, readdirSync } from "node:fs";
+import { mkCheck, scratchSequencer } from "./harness.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-
-const REPO = join(import.meta.dir, "..");
-const children: ChildProcess[] = [];
-const nonces: string[] = [];
-process.on("exit", () => {
-  for (const c of children) { try { c.kill(); } catch { /* gone */ } }
-  for (const n of nonces) { try { rmSync(n); } catch { /* ok */ } }
-});
-
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); }
-    catch { return cand; }
-  }
-  throw new Error("no free port");
-}
-
-const worldsDir = mkdtempSync(join(tmpdir(), "worlds-route-"));
-// on disk: two real worlds, one dir with no log (never a world), one junk name
-foundWorlds(worldsDir, ["commons", "annex"]);   // two worlds (a world.jsonl whose line 0 is a genesis)
-mkdirSync(join(worldsDir, "logless"), { recursive: true });
-// an OLD world: a v1 log and no new one. The server serves only the protocol, so it isn't listed (it's translated once by the
-// operator, in place: bun tools/protocol/world.ts translate <name>)
-mkdirSync(join(worldsDir, "oldv1"), { recursive: true });
-writeFileSync(join(worldsDir, "oldv1", "log.jsonl"), JSON.stringify({ seq: 0, ts: 0, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } }) + "\n");
-mkdirSync(join(worldsDir, ".clientlogs"), { recursive: true });
-
-async function spawnServer(): Promise<{ port: number }> {
-  const port = await freePort();
-  const nonce = `wr-nonce-${crypto.randomUUID().slice(0, 8)}`;
-  const noncePath = join(REPO, "client", `${nonce}.txt`);
-  writeFileSync(noncePath, nonce); nonces.push(noncePath);
-  const child = spawn(process.execPath, [join(REPO, "server", "server.ts")], {
-    env: { HOME: process.env.HOME, PATH: process.env.PATH, PORT: String(port), WORLDS_DIR: worldsDir, SKIP_OPT_SWEEP: "1" },
-    stdio: "ignore",
-  });
-  children.push(child);
-  for (let i = 0; i < 40; i++) {
-    try { await fetch(`http://127.0.0.1:${port}/`); break; }
-    catch { await new Promise((r) => setTimeout(r, 250)); }
-  }
-  const own = await fetch(`http://127.0.0.1:${port}/${nonce}.txt`).then((r) => r.ok && r.text()).catch(() => false);
-  if (own !== nonce) throw new Error(`listener on :${port} is not our child — refusing to test it`);
-  return { port };
-}
+const { check, tally } = mkCheck();
+const seq = await scratchSequencer("worlds-route", { serverEnv: { SKIP_OPT_SWEEP: "1" }, worlds: ["commons", "annex"],   // two worlds (a world.jsonl whose line 0 is a genesis)
+  prepare: (scratch) => {
+    const worldsDir = join(scratch, "worlds");
+    // one dir with no log (never a world)
+    mkdirSync(join(worldsDir, "logless"), { recursive: true });
+    // an OLD world: a v1 log and no new one. The server serves only the protocol, so it isn't listed (it's translated once by
+    // the operator, in place: bun tools/protocol/world.ts translate <name>)
+    mkdirSync(join(worldsDir, "oldv1"), { recursive: true });
+    writeFileSync(join(worldsDir, "oldv1", "log.jsonl"), JSON.stringify({ seq: 0, ts: 0, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } }) + "\n");
+    mkdirSync(join(worldsDir, ".clientlogs"), { recursive: true });
+  } });
+const port = seq.PORT, worldsDir = join(seq.SCRATCH, "worlds");
 
 type Row = { name: string; loaded: boolean; people: { id: string; declares?: string }[]; agents?: unknown };
 const fetchWorlds = async (port: number) => {
@@ -89,13 +47,10 @@ function joinBody(port: number, world: string, id: string, extra: Record<string,
   });
 }
 
-const { port } = await spawnServer();
-
 console.log("\n— A. on-disk worlds —");
 {
-  const { res, rows } = await fetchWorlds(port);
+  const { rows } = await fetchWorlds(port);
   const names = rows.map((r) => r.name);
-  check("content-type json, no-store", res.headers.get("content-type")?.includes("json") === true && res.headers.get("cache-control") === "no-store");
   check("both logged worlds listed", names.includes("commons") && names.includes("annex"), names.join(","));
   check("a dir with no log is not a world", !names.includes("logless"), names.join(","));
   check("a dir with only an old v1 log is not a world here", !names.includes("oldv1"), names.join(","));
@@ -121,7 +76,7 @@ console.log("\n— B. presence —");
   check("leaving empties the row (still loaded)", after.annex?.loaded === true && after.annex?.people.length === 0, JSON.stringify(after.annex));
 }
 
-console.log("\n— C. a join never founds; D. the map never founds —");
+console.log("\n— C. a join never founds —");
 {
   // joining a world nobody founded is refused (security review 10-06 H3): nothing loads, nothing lands on disk
   const before = readdirSync(worldsDir).sort();
@@ -130,13 +85,8 @@ console.log("\n— C. a join never founds; D. the map never founds —");
   const m = byName((await fetchWorlds(port)).rows);
   check("a join to a world that doesn't exist is refused, and says so", /no world called "fresh"/.test(refused ?? ""), String(refused));
   check("…and founds nothing: not listed, nothing on disk", !m.fresh && JSON.stringify(readdirSync(worldsDir).sort()) === JSON.stringify(before), Object.keys(m).join(","));
-  await fetch(`http://127.0.0.1:${port}/worlds?world=never-made`);
-  await fetch(`http://127.0.0.1:${port}/worlds`);
-  const afterDirs = readdirSync(worldsDir).sort();
-  check("/worlds creates nothing on disk", JSON.stringify(before) === JSON.stringify(afterDirs), afterDirs.join(","));
-  check("no phantom world from the query string", !(await fetchWorlds(port)).rows.some((r) => r.name === "never-made"));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-rmSync(worldsDir, { recursive: true, force: true });
-process.exit(fail ? 1 : 0);
+console.log(`\n${tally.passed} passed, ${tally.failed} failed`);
+await seq.cleanup();
+process.exit(tally.failed ? 1 : 0);
