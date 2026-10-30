@@ -78,7 +78,7 @@ function recordRefusal(c: Client): boolean {
 function modLine(w: World, by: string, verb: string, who: string) {
   const name = directoryFor(WORLDS_DIR).nameOf(who) ?? "someone";
   return verb === "ban" ? `${by} banned ${name} from this world` : verb === "kick" ? `${by} removed ${name} from this world` : verb === "mute" ? `${by} muted ${name}`
-    : verb === "unmute" ? `${by} unmuted ${name}` : `${by} lifted the ban on ${name}`;
+    : verb === "unmute" ? `${by} unmuted ${name}` : verb === "warn" ? `${by} warned ${name}` : `${by} lifted the ban on ${name}`;
 }
 /** The identity the authority stamps for this connection: its opaque directory id, set at join (server.ts admitJoin). A
  *  connection without one (it never joined a world) has no identity here: a request from it is a server bug. */
@@ -176,8 +176,10 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
       if (r?.ok && PERSON_ACTS.has(verb)) { sweep?.(w);
         const who = String(args.who ?? ""); const notice = verb === "warn" ? { type: "warned", by: c.id, reason: String(args.reason ?? "") }
           : verb === "mute" ? { type: "moderated", verb: "mute", by: c.id, you: true, channels: r.channels, until: r.until, ...(args.reason ? { reason: String(args.reason) } : {}) } : null;
-        if (notice) for (const t of w.clients) if (t.actorId === who) { try { t.ws.send(JSON.stringify(notice)); } catch { /* gone */ } } }
-      // a guest's mute also names their address here, and its lift lifts that (R 10-07)
+        if (notice) for (const t of w.clients) if (t.actorId === who) { try { t.ws.send(JSON.stringify(notice)); } catch { /* gone */ } }
+        // a warning is private: its moderator alone is told it went, as the broadcast tells them of a mute or kick
+        if (verb === "warn") try { ws.send(JSON.stringify({ type: "moderated", verb, by: c.id, text: modLine(w, c.id, verb, who) })); } catch { /* gone */ } }
+      // a guest's mute also names their address here, and its lift lifts that
       if (r?.ok && ["mute", "unmute"].includes(verb) && typeof args.who === "string" && args.who !== cap.actorId)
         guestSanctionByAddress(w, cap.actorId, c.id, verb, String(args.who), typeof args.reason === "string" ? args.reason : undefined);
       if (r?.ok && (verb === "ban" || verb === "kick" || verb === "unban" || verb === "mute" || verb === "unmute") && typeof args.who === "string") {
