@@ -9,6 +9,7 @@ export type Lane = "core" | "main" | "browser";
 export const SUITES: [string, string, number][] = [ // name, file, tail lines to show
   ["kernel", "kernel-check.ts", 1],
   ["trig", "trig-check.ts", 1],
+  ["simmath", "../simmath-test.ts", 1], // Covenant I: the numerics kernel's accuracy, its digest under a second engine (node or deno), and the committed golden
   ["laws", "laws-check.ts", 1],            // the ground's height and the sky's forecast are data: spec/conformance/laws.json            // the heading law's trig is data: spec/conformance/trig.json, bit for bit
   ["engine", "engine-check.ts", 1],          // what "carries" means: every carried engine version reproduces its conformance digests (house, #260 10-21)
   ["normative", "normative-check.ts", 1], // spec/NORMATIVE.md is the closed set, and its consent/roles tables equal the reference (10-20, nissa-seru)     // reviewer item 5 (10-18): the kernel (envelope, kinds, ops, identity grammar, version, transform, parent) is trial-kernel: a change is red unless the same change carries a translator, a changelog line and old-red/new-green vectors (spec/kernel-pin.json)
@@ -181,6 +182,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent-replay", "../consent-replay-test.ts", 0.1],   // an agent's gates and lists, replayed on arrival, are what it holds when the read returns (house 6340433633; R 10-28)
   ["history-request", "../history-request-test.ts", 1], // #267 (main): a history request with no answer rejects, so scrolling up can reach what a long disconnect missed
   ["named-pose", "../named-pose-test.ts", 1], // #159: every named pose rides the presence wire (absence is not release; survives late join, reconnect, swap)
+  ["settled-pose", "../settled-pose-test.ts", 1], // #61: a body looks the same to a joiner as to itself (settledPose strips ragdoll frames on every hand-off)
+  ["pose-provenance", "../pose-provenance-test.ts", 1], // #61's agent half: a physics pose leaves the agent only labelled ragdoll; a decision to move sheds the held pose
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
   ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
