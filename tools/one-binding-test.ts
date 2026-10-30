@@ -61,6 +61,10 @@ const ROWS: Row[] = [
     scope: ["client/lib/sky.js", "client/lib/skypanel.js", "client/lib/materials.js", "client/lib/rolespanels.js", "client/lib/editpanels.js", "client/lib/inspect.js"], forbidden: [/\bDate\.now\(\)/] },
   { name: "an HTML escaper is markup.js's escapeHtml (it escapes ')", owner: ["client/lib/markup.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
     forbidden: [/\.replace\(\/\[&<>"'?\]\/g/] },
+  // exempt: the boot trip keys read the live URL (a rename's replaceState changes ?name); breadcrumbs and warmqueue are leaves
+  { name: "the page's query is CONFIG.params (base.js), read once", owner: ["client/lib/base.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
+    exempt: ["client/lib/boot.js", "client/lib/litechoice.js", "client/lib/gpulost.js", "client/lib/breadcrumbs.js", "client/lib/warmqueue.js"],
+    forbidden: [/new URLSearchParams\((globalThis\.)?(win\.)?location\??\.search/] },
 ];
 for (const row of ROWS) {
   const scan = (row.scope ?? files).filter((f) => !row.owner.includes(f) && !(row.exempt ?? []).includes(f));

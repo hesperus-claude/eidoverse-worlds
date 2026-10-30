@@ -737,7 +737,7 @@ async function setVoice(name) {
 // Callable from a console, from a harness, or by an agent mid-session.
 if (typeof window !== 'undefined') window.setVoice = setVoice;
 {
-  const want = new URLSearchParams(location.search).get('voice');
+  const want = CONFIG.params.get('voice');
   if (want) setVoice(want).catch((e) => console.warn('[voice] ?voice failed:', e));
 }
 
@@ -745,7 +745,7 @@ if (typeof window !== 'undefined') window.setVoice = setVoice;
 // common case — nothing connects and the microphone stays the only source, so
 // a human client is byte-for-byte unaffected.
 {
-  const q = new URLSearchParams(location.search);
+  const q = CONFIG.params;
   if (q.has('tts')) {
     const port = Number(q.get('tts')) || 8927;
     import('./lib/piperbridge.js')

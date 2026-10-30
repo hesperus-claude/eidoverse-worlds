@@ -14,9 +14,8 @@
 // renderer answers it is an implementation detail the world log never sees.
 
 import { THREE, scene, sun, hemi, renderer, camera } from './core.js';
-// ?shadowdebug=1 — R 09-07 19:17: 'crank it way up to see if it's there at all'. Sun shadows measured ~10 % darker than lit
-// ground (fill light drowns the sun's share); this dims the fill to a fifth so the shadow map's coverage is legible.
-const SHADOW_DEBUG_FILL = new URLSearchParams(globalThis.location?.search ?? '').has('shadowdebug') ? 0.2 : 1;
+// ?shadowdebug=1 dims the fill to a fifth so the shadow map's coverage is legible (sun shadows read only ~10% darker)
+const SHADOW_DEBUG_FILL = CONFIG.params.has('shadowdebug') ? 0.2 : 1;
 import { report, bus, tee, teeNow, CONFIG } from './base.js';
 import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
 import { loadEidoModule, primeFiles, listLibrary, fetchBytes } from './assets.js';
