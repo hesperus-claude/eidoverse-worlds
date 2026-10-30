@@ -31,9 +31,9 @@ export type Place = {
   min?: Vec3; max?: Vec3;    // region
   source: "model" | "component";
 };
-// its transform: pos, and q (a full rotation, [x, y, z, w]) or yaw, and scale (a number or [x, y, z]). Shape audit 10-16:
-// a place is in the thing's own frame, the same full transform every other "own frame" in the registry means.
-export type PlaceHolder = { id: string; pos: number[]; yaw?: number; q?: number[]; scale?: number | number[]; name?: string };   // name: how a reader calls it (its unique label, else its handle: R 10-17)
+// its transform: pos, and q (a full rotation, [x, y, z, w]) or yaw, and scale (a number or [x, y, z]): the full
+// "own frame" transform the registry means everywhere.
+export type PlaceHolder = { id: string; pos: number[]; yaw?: number; q?: number[]; scale?: number | number[]; name?: string };   // name: how a reader calls it (its unique label, else its handle)
 
 const finite3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 const NAME = /^[A-Za-z0-9_][A-Za-z0-9_ .:'-]{0,47}$/;
@@ -77,7 +77,7 @@ export function placesFromComponent(data: unknown): Map<string, Place | null> {
     if (!NAME.test(name)) continue;
     if (v === null) { out.set(name, null); continue; }
     const label = typeof v?.label === "string" ? v.label.slice(0, 80) : undefined;
-    if (finite3(v?.at)) out.set(name, { name, label, kind: "point", at: v.at, source: "component" });   // kind is gone (shape audit 10-16): a stored one names nothing
+    if (finite3(v?.at)) out.set(name, { name, label, kind: "point", at: v.at, source: "component" });   // a stored `kind` is ignored
     else if (finite3(v?.min) && finite3(v?.max)) {
       const min: Vec3 = [0, 1, 2].map((k) => Math.min(v.min[k], v.max[k])) as Vec3;
       const max: Vec3 = [0, 1, 2].map((k) => Math.max(v.min[k], v.max[k])) as Vec3;
@@ -142,7 +142,7 @@ export type Destination = { x: number; y: number; z: number; reach: number; labe
   below?: number;
   /** a region: only places to stand inside it count, anywhere in it */
   inside?: (x: number, z: number) => boolean;
-  /** where to walk instead when no walk reaches this spot: beside what the thing stands on (a cup on a table: review r6 L1) */
+  /** where to walk instead when no walk reaches this spot: beside what the thing stands on (a cup on a table) */
   orBeside?: Destination;
   /** a person's own spot, short of which the walk stops: y is their root
    *  there, and their floor the one their body is on */
@@ -156,30 +156,22 @@ export const ROOM_FLOOR_EPS = 0.1;
  *  plus the seat's half-width, which IS the model's and scales with it. */
 export const SEAT_STANDOFF = 0.7, SEAT_HALF = 0.3;
 
-/** Where to walk to reach a place. A region: anywhere on its floor, the
- *  middle preferred. A seat: the floor beside it (not the seat's own surface
- *  — the body sits by mounting it), the nearest floor below the seat. A door
- *  or point: there. */
+/** Where to walk to reach a place: a region's floor (middle preferred); the floor beside a seat (sitting is a
+ *  mount); a door or point itself. */
 export function destinationOf(e: PlaceHolder, p: Place): Destination {
   const s = scale3(e.scale);   // per axis: a stretched thing's room and seat are stretched with it
   const label = `${e.name ?? e.id}/${p.name}${p.label ? ` (${p.label})` : ""}`;
   if (p.kind === "region") {
     const mid = toWorld(e, [(p.min![0] + p.max![0]) / 2, p.min![1], (p.min![2] + p.max![2]) / 2]);
-    // reach covers the whole room (its half-diagonal); `inside` keeps the
-    // search to the room itself — a long or furnished room is reached at
-    // whatever clear floor it has, not only round its middle
+    // reach covers the room's half-diagonal; `inside` keeps the search in the room, so any clear floor counts
     const half = Math.hypot((p.max![0] - p.min![0]) * s[0], (p.max![2] - p.min![2]) * s[2]) / 2;
     const room = { ...p, min: [p.min![0], -Infinity, p.min![2]] as Vec3, max: [p.max![0], Infinity, p.max![2]] as Vec3 };
     return { x: mid[0], y: mid[1], z: mid[2], reach: Math.max(0.6, half), label, above: ROOM_FLOOR_EPS, below: ROOM_FLOOR_EPS,
       inside: (x, z) => inRegion(e, room, [x, 0, z]) };
   }
   const w = toWorld(e, p.at!);
-  // a seat's point is where hips rest, at or a little above the seat's
-  // surface: the floor beside it is the nearest one below. The margin that
-  // keeps the seat's own surface out is the model's (an authoring error grows
-  // with the thing; never less than 5cm) — it only looks below the seat, so
-  // it can't pick another storey over the floor beside it.
-  // (a stretched seat's half-width: the wider of its two)
+  // a seat's point is where hips rest: aim at the nearest floor below, with a margin (model-scaled, >= 5cm)
+  // keeping the seat's own surface out; a stretched seat's half-width is the wider of its two
   if (p.kind === "seat") return { x: w[0], y: w[1] - 0.05 * Math.max(1, s[1]), z: w[2], reach: SEAT_STANDOFF + SEAT_HALF * Math.max(s[0], s[2]), label, above: 0 };
   return { x: w[0], y: w[1], z: w[2], reach: 0.6, label };
 }
