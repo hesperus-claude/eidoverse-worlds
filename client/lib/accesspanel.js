@@ -1,5 +1,5 @@
 // accesspanel.js — World Settings › Who may come in › Listed here: everyone this world lists (@world roles:*), who is here
-// unlisted, and adding someone (R 10-27; docs/DESIGN-world-access.md § UX).
+// unlisted, and adding someone (docs/DESIGN-world-access.md § UX).
 // Facts come from the page's own fold; edits are ordinary set/delete requests on @world, and the authority judges every one
 // (its refusal is shown here in its words). Controls follow your rights as roles.js reads them, never wider.
 // Adding someone: a name is looked up only among the people this world has seen (whois); anyone else is added by their exact

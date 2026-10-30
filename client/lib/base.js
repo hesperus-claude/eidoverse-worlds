@@ -1,11 +1,7 @@
-// base — the renderer-free substrate (RENDERER-SEAM move 2, split from
-// core.js): the event bus, config, error routing, the participant colours,
-// and two small helpers. Nothing here touches three.js, the DOM tree, or
-// the GPU — which is the point: the ~35 modules that only ever wanted
-// `bus`/`CONFIG`/`report` no longer import the module that constructs the
-// renderer, and headless tests get the REAL bus and report instead of a
-// stub's (this file guards its browser touches, so it imports clean under
-// bun).
+// base — the renderer-free substrate: the event bus, config, error routing, the participant
+// colours, and two small helpers. Nothing here touches three.js, the DOM tree, or the GPU, so
+// modules that only want `bus`/`CONFIG`/`report` don't import the renderer, and headless tests get
+// the REAL bus and report (browser touches are guarded, so it imports clean under bun).
 //
 // Import rule (inherited from core): base imports NOTHING from the rest of
 // the client. core.js imports base; everything else may import either.
@@ -34,18 +30,11 @@ export const bus = {
 // "who am I" from query params. Both are guarded: headless hosts have neither,
 // and get the defaults.
 
-// Which world: the link's ?world= if it names one; otherwise the world THIS
-// TAB was last in (sessionStorage, so a reload keeps the tab where it was
-// whatever other tabs have joined since); otherwise the world this browser
-// was last IN as a person (localStorage), so a bare link (a bookmark, the
-// login's return to '/') goes back where you were; the commons only for a
-// browser that has been nowhere. Both are written by net.js rememberWorld.
-// Spectators, renderers and the thumbnail minter ignore the memory: a link
-// points them, and a renderer must never inherit a person's last stop.
-// index.html's early-socket script makes this same choice before any module
-// loads and publishes it as __ewWorld, which CONFIG takes when present, so
-// the page has one answer (tools/last-world-test.ts holds the two copies
-// in agreement).
+// Which world: the link's ?world=; else the world THIS TAB was last in (sessionStorage); else the
+// world this browser was last in as a person (localStorage); else the commons. Both memories are
+// written by net.js rememberWorld. Spectators, renderers and the thumbnail minter ignore the memory.
+// index.html's early-socket script makes the same choice first and publishes it as __ewWorld, which
+// CONFIG takes when present (tools/last-world-test.ts holds the two copies in agreement).
 export const LAST_WORLD_KEY = 'ew-world';      // localStorage: the browser's last world
 export const TAB_WORLD_KEY = 'ew-world-tab';   // sessionStorage: this tab's
 /** A name a world can have — the client's copy of server.ts admitJoin's rule
@@ -107,9 +96,9 @@ export const CONFIG = {
 };
 if (params.get('key')) store?.setItem('ew-key', CONFIG.token);
 store?.setItem('ew-name', CONFIG.name);
-// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (R 10-11: renaming herself
-// "Rab" made her a stranger with no role in her own world). Fixed at the first real name this browser used; ?account=
-// overrides. A server with sign-in ignores it: the session is the account there.
+// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (so a rename keeps your
+// roles). Fixed at the first real name this browser used; ?account= overrides. A server with sign-in ignores it: the
+// session is the account there.
 { let acct = params.get('account') || store?.getItem('ew-account') || '';
   if (!acct && !/^guest-/.test(CONFIG.name)) acct = CONFIG.name;
   CONFIG.account = acct || null; if (acct) store?.setItem('ew-account', acct); }
@@ -144,10 +133,8 @@ export function setToken(token) {
 let errorSink = null;
 export function setErrorSink(fn) { errorSink = fn; }
 
-// A fault inside the frame loop reports 60 times a second. Identical messages
-// are counted and re-reported on a decaying schedule instead of flooding the
-// console and the toast stack — the first one is the useful one, and the
-// hundredth actively hides everything else.
+// A fault inside the frame loop reports 60 times a second: identical messages are counted
+// and re-reported on a decaying schedule instead of flooding the console and the toasts.
 const seenErrors = new Map(); // key -> { n, nextAt }
 // ---- console tee: what a visitor's page says, where the operator can read it.
 // Every report() plus window errors post to /clientlog (key-gated, bounded
@@ -188,9 +175,8 @@ export function teeNow(line) { tee(line); try { clearTimeout(teeTimer); teeFlush
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => tee(`[window.error] ${e.message} @ ${(e.filename ?? '').split('/').pop()}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e) => tee(`[unhandled] ${e.reason?.message ?? e.reason}`));
-  // wake CAUSE, not just the URL (cribbed from agent-framework #141's turn
-  // provenance: who woke you ≠ whose words are in view): reload vs navigate
-  // vs back_forward separates "R reloaded" from "the tunnel reconnected"
+  // wake CAUSE, not just the URL: reload vs navigate vs back_forward separates
+  // "someone reloaded" from "the tunnel reconnected"
   let cause = '?'; try { cause = performance.getEntriesByType('navigation')[0]?.type ?? '?'; } catch { /* old UA */ }
   tee(`[boot] cause=${cause} host=${location.host} ${location.pathname}${location.search.replace(/key=[^&]+/, 'key=…')} ua=${navigator.userAgent.slice(0, 120)}`);
 }
@@ -234,18 +220,10 @@ export async function parallelMap(items, fn, limit = 6) {
 }
 
 // ---- per-participant colour --------------------------------------------------
-// A wall of chat all in one colour makes you read every name to follow a
-// conversation. Each participant gets a stable colour instead, derived from
-// their name alone — so it is the SAME colour in every client, and "the blue
-// one" means the same person to everyone in the world. No assignment, no
-// server state, nothing to keep in sync.
-//
-// A curated palette rather than hue = hash % 360: hand-picked entries are all
-// legible on the dark panel and reliably distinct from each other, which a
-// continuous hue wheel is not (it wanders through muddy olives and near-blacks
-// at fixed lightness). Amber and mint are deliberately absent — those are the
-// UI's own words for "you were mentioned" and "link/accent", and a person
-// wearing them would be reading as punctuation.
+// Each participant gets a stable colour derived from their name alone — the SAME colour in
+// every client, with no server state. A curated palette (legible on the dark panel, mutually
+// distinct) rather than a hue wheel; amber and mint are absent because the UI uses them for
+// "you were mentioned" and "link/accent".
 const NAME_COLORS = [
   '#7cc4ff', '#ff9fc4', '#b8e06a', '#ffab6b',
   '#c4a6ff', '#6ee0d0', '#ff9a8f', '#9fb8ff',
@@ -262,18 +240,10 @@ export function preferredColor(name) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
-// Hashing alone is not enough. With twelve colours and six people in a room
-// there is a ~78% chance two of them collide — and two speakers wearing one
-// colour is exactly the confusion this was meant to remove. (Measured, not
-// theorised: the first build put lyra and antra both on #ffab6b.)
-//
-// So the hash is a PREFERENCE, and the people actually present negotiate. Every
-// client runs the same assignment over the same roster in the same order, so
-// the answer is identical everywhere without a byte crossing the wire: sort the
-// names, let each take its preferred colour, and linear-probe when it is taken.
-// Whoever sorts first keeps their preference, so a colour only ever moves for
-// the loser of a collision. People who have left keep the colour they had —
-// their lines are still on the screen.
+// The hash is a PREFERENCE (twelve colours, six people: ~78% chance of a collision); the people
+// present negotiate. Every client runs the same assignment over the same roster: sort the names,
+// each takes its preferred colour, linear-probe when taken — identical everywhere, no wire bytes.
+// Only a collision's loser moves; people who have left keep their colour (their lines are on screen).
 const claimed = new Map();   // name -> colour, sticky once assigned
 
 /** The colour to draw `name` in, anywhere in the UI. */
