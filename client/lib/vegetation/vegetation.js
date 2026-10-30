@@ -6,6 +6,7 @@
 // Motion: derived from CK42BB/procedural-grass-threejs (MIT) — 3-layer wind
 //         (global sway / gust fronts with a noise envelope / per-instance
 //         flutter) and quadratic-falloff pushers, all ×height², constants kept.
+//         Copyright (c) 2026 Kingsley, MIT licence; full notice in THIRD-PARTY.md.
 // Bodies: our own card models — curved, cupped strips; tufts of 3 crossed cards;
 //         shrub clusters of outward-fanned cards with bent (sphere-blended)
 //         normals so the bush shades as a volume; rosettes as crossed fans.
