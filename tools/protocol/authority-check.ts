@@ -2,7 +2,7 @@
 // server-check.ts). usage: bun tools/protocol/authority-check.ts
 //   N   names.js: one encoding for actors, ids and components; the lab's `0abc` / `n0abc` collision is gone
 //   T   the engine translator's own name, and the v1 fold build it stamps
-//   P   locks (PROTOCOL §5): v1's matrix (tools/locktest.ts), ancestors, throughLock, the gameplay lock inside
+//   P   locks (PROTOCOL §5): every component, ancestors, throughLock, the gameplay lock inside
 //       its own component, and v1 lock/guard through the translator
 //   U   the act index (undo, wait): equals a fresh build after every request; entityBefore equals the fold at every
 //       seq; a later write, a purge and a new act each change undo's answer the way a full scan would
@@ -79,10 +79,8 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(JSON.stringify(r.out[0].body.owners) === JSON.stringify([[], [r.out[0].body.sequencer]]) && r.out[1].body.from.roles?.Marigold?.role === "owner" && !r.final.translated["@world"]?.[`roles:${enc("Marigold")}`], "T4 genesis is custodial (tier 0 empty, the authority's key in tier 1); v1 genesis roles, which v1 never folds, are kept verbatim in the translated act and grant nothing", [r.out[0].body.owners, r.out[1].body.from])
   ok(v1FoldFiles().includes("tools/protocol/import-v1/fold.js") && v1FoldFiles().length >= 5 && /^[0-9a-f]{16}$/.test(v1FoldBuild()), "T5 the fold build covers the importer's v1 fold and its imports", v1FoldFiles()); }
 
-// ---- P: locks (PROTOCOL §5), mirroring v1's lock matrix (tools/locktest.ts) plus what the protocol adds ----
-// v1: a lock refuses everything that would MOVE, REPLACE or REMOVE the thing, for everyone, its locker included;
-// everything that doesn't relocate it stays open (sit, use, motion, other comps); any builder may unlock. The protocol adds:
-// it binds what's attached to it too; throughLock: true lets whoever may remove it act through it.
+// ---- P: locks (PROTOCOL §5): a lock refuses every write to the thing and what's attached, for everyone, its locker
+// included; use stays open; throughLock: true lets whoever may remove it act through it ----
 { const name = "locks";
   const call = callAt(name);
   const W = () => openWorld(root, name);
@@ -107,8 +105,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(code(call("bob", "delete", { id: "cup" })) === "locked" && code(call("bob", "place", { id: "cup", at: [4, 4] })) === "locked", "P8 …nor deleted or placed elsewhere");
   ok(code(call("bob", "delete", { id: "cup", component: "parent" })) === "locked", "P9 …nor lifted off (deleting its parent)");
   ok(code(call("bob", "set", { id: "bell", component: "transform", value: { pos: [0, 0.6, 0] } })) === "locked", "P10 a grandchild is bound too (the lock is two levels up)");
-  // what stays open: everything that doesn't relocate it (v1: "sit / use / motion / other comps all stay open while locked")
-  // a lock covers EVERYTHING (R 10-11 16:21; review C-S1-1): every component, on it and on what's attached; use stays open
+  // a lock covers every component, on it and on what's attached (review C-S1-1); use stays open
   ok(code(call("bob", "set", { id: "tbl", component: "label", value: "the long table" })) === "locked" && code(call("bob", "set", { id: "cup", component: "label", value: "a crate" })) === "locked", "P11 a label is locked too (on it, and on what's attached to it)");
   ok(code(call("bob", "set", { id: "tbl", component: "motion", value: { type: "spin", axis: [0, 1, 0], amp: 0.2, period: 4 } })) === "locked", "P12 motion is locked");
   ok(code(call("bob", "set", { id: "tbl", component: "light", value: { range: 4 } })) === "locked" && code(call("bob", "set", { id: "tbl", component: "physics", value: { kind: "none" } })) === "locked"

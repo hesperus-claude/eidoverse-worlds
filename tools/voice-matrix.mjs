@@ -1,19 +1,13 @@
 // voice-matrix — EXTERNAL browser harness for the late-consent orders.
 //
-// HONESTY CONTRACT (#36 review, antra): this file is NOT part of the merge
-// receipt — the traveling regression lives in tools/voice-lifecycle-test.ts
-// (fake-RTC, runs with bun, no dependencies). This harness exists for
-// real-media verification on a workstation that has Playwright + real
-// browsers; it is documentation-plus-tool, not CI.
+// NOT part of the merge receipt and not CI: it drives the pre-SFU /lib/voice.js,
+// which is no longer in client/lib, so it does not run against this tree.
 //
 //   Requirements: playwright installed OUTSIDE this repo (run it from a
 //   directory that has it, e.g. `cd ~/lab && node <repo>/tools/voice-matrix.mjs`),
 //   a running server on :8940, and fake-media Chromium flags (below).
 //
-// The probe reads REAL stats via voice.js's exported voiceStats() — the
-// previous revision read a `__voicePcs` global that was never defined, so
-// its inbound numbers were structurally zero (review catch). It now ASSERTS
-// and exits nonzero on failure instead of printing YES/NO prose.
+// It reads real getStats via voice.js voiceStats() and exits nonzero on failure.
 //
 import { chromium } from 'playwright';
 
