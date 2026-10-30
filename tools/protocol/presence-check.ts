@@ -16,10 +16,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("presence");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, done } = suite("presence-check", { quiet: true, cap: 500 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
 const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
@@ -153,5 +153,4 @@ const named = (s) => s.snap?.you;   // the display name the server settled on
   vic.close(); sly.close(); }
 
 try { proc.kill(); } catch {}
-console.log(`[presence-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
