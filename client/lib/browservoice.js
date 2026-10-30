@@ -1,31 +1,17 @@
-// browservoice — BRING YOUR OWN VOICE.
+// browservoice — BRING YOUR OWN VOICE: a synthesized voice for anyone in a browser, with the server serving nothing.
+// You point at a synthesizer you already run; it stays on your machine and nobody else pays for it (bundling an
+// in-browser TTS would charge every visitor ~82 MB for a voice they didn't choose).
 //
-// A synthesized voice for anyone in a browser, with the server serving nothing. The obvious
-// alternative was bundling an in-browser TTS (kokoro-js, ~82MB), and it works —
-// but it charges every visitor 82MB of bandwidth for a generic voice they did
-// not choose, including everyone who only ever wanted a microphone. Wrong cost
-// in the wrong place (R, 2026-08-08).
+//   ws://  / http://   a synthesizer you are already running — the same protocol a headless harness speaks.
+//                      Piper, Coqui, a cloud TTS, a two-line Flask app.
 //
-// So: a file field. You point at a model or an endpoint you already have, it
-// stays on your machine, and nobody else pays for it.
-//
-//   ws://  / http://   a synthesizer you are already running — the same
-//                      protocol a headless harness speaks, so a browser and a
-//                      harness point at the same kind of thing through the
-//                      same call. Piper, Coqui, a cloud TTS, a two-line Flask app.
-//
-// Why not the browser's own speechSynthesis: it plays straight to the output
-// device and offers no route to an AudioNode, MediaStream or Blob — on Linux
-// synthesis is not even in the browser (speech-dispatcher over a socket).
-// WICG/speech-api#69 asks for exactly that and is still open. A voice that can
-// be SENT must come from a synthesizer that returns bytes.
+// Not the browser's speechSynthesis: it plays straight to the output device with no route to an AudioNode,
+// MediaStream or Blob (WICG/speech-api#69). A voice that can be SENT must come from a synthesizer that returns bytes.
 
 import { setTtsSource } from './tts.js';
 import { report } from './base.js';
 
-/** Point the mouth at a synthesizer already running locally — the same ws
- *  protocol a headless harness uses, so a browser and a harness are pointing
- *  at the same kind of thing through the same call. */
+/** Point the mouth at a synthesizer already running locally (the same ws protocol a headless harness uses). */
 export async function setEndpointVoice(url, label) {
   const isWs = /^wss?:/.test(url);
   if (isWs) {
@@ -48,8 +34,7 @@ export async function setEndpointVoice(url, label) {
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       r({ pcm: new Int16Array(bytes.buffer), sampleRate: m.sampleRate || 22050 });
     };
-    // A synthesizer that goes away must surface as a failed utterance, never as
-    // a caller left hanging forever.
+    // a synthesizer that goes away surfaces as a failed utterance, never a caller left hanging
     ws.onclose = () => { for (const [, r] of pending) r({ pcm: new Int16Array(0), sampleRate: 22050 }); pending.clear(); };
     setTtsSource((text) => new Promise((resolve) => {
       if (ws.readyState !== 1) return resolve({ pcm: new Int16Array(0), sampleRate: 22050 });
@@ -61,16 +46,13 @@ export async function setEndpointVoice(url, label) {
     return true;
   }
 
-  // HTTP: POST {text} → wav/mp3 bytes. Deliberately the dumbest possible
-  // contract, so anything from a two-line Flask app to a cloud TTS fits.
+  // HTTP: POST {text} → wav/mp3 bytes — the dumbest possible contract, so anything fits.
   const probe = await fetch(url, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: 'test' }),
   }).catch(() => null);
   if (!probe?.ok) return false;
-  // ONE AudioContext per page (#86's whole reason to exist; #91 B4 caught
-  // this constructing a second one). decodeAudioData is context-agnostic —
-  // the shared context serves it fine even suspended.
+  // ONE AudioContext per page (audioctx.js); decodeAudioData works on the shared context even suspended.
   const { audioContext } = await import('./audioctx.js');
   const ctx = audioContext();
   setTtsSource(async (text) => {
@@ -89,8 +71,5 @@ export async function setEndpointVoice(url, label) {
   return true;
 }
 
-// NOT OFFERED YET: a raw .onnx voice model from disk. Piper's graph takes
-// PHONEME IDS, not text, so it needs the espeak-ng phonemizer (a second wasm
-// blob) before a file picker could do anything but fail silently. A field that
-// accepts a model and then never speaks is worse than no field. When the
-// phonemizer is wired this is where it goes — the seam does not change.
+// NOT OFFERED YET: a raw .onnx voice model from disk. Piper's graph takes PHONEME IDS, so it needs the espeak-ng
+// phonemizer (a second wasm blob) first; a field that accepts a model and never speaks is worse than none.

@@ -1,4 +1,4 @@
-// My body's consent (R 10-28): two gates — Allow being moved, Allow being posed and touched — each on or off, and two lists of people — Allow (always
+// My body's consent: two gates — Move me, Touch me — each on or off, and two lists of people — Allow (always
 // yes) and Block (always no), whatever the gates say. The authority is the only place it's decided (shared/protocol/
 // consent.js decide; A1: no client gate). This module remembers my choice (localStorage, so it survives the session and
 // follows me between worlds) and hands it to consentsync, which sends it on every arrival and every change.
@@ -19,22 +19,22 @@ const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* private mo
 const plainList = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([id, n]) => typeof id === 'string' && typeof n === 'string')) : {});
 
 /** What is stored: {move?, touch?, allow: {id: name}, block: {id: name}, queue: [{op, id, name, at, world, acked}]}; a gate
- *  absent = never chosen (the world's default answers, F2b). allow/block are my lists as last seen (the authority's, which
- *  is the source: review full-260 L9); `queue` is my own changes not yet landed, drained as they land (consentsync). A block
- *  follows me into every world for BLOCK_FOLLOW_MS (narrower); an allow or an unlist lands only in the world it was made in
- *  (wider). A setting kept under an older key is carried into the gates silently (R 10-28 13:03: "we're keeping their gates"),
- *  and written under KEY on first read. Never broader than main allowed: the body switch's refuse or ask → both off (F3,
- *  R 10-28 16:02), accept → move on, touch off; with no switch, main's ew-pushable → move ('0' off; only if present) and
- *  ew-posable → touch off if present. Main's posable '1' allowed posing only, and Allow being posed and touched also opens touch and intimate,
- *  so it can't carry: Allow being posed and touched stays off and `notice` is set, kept under KEY until takeNotice says it once (fixF). A stored list from before the queue: its
+ *  absent = never chosen (the world's default answers, F2b). allow/block are my lists as last seen (the authority's is
+ *  the source); `queue` is my own changes not yet landed, drained as they land (consentsync). A block follows me into
+ *  every world for BLOCK_FOLLOW_MS (narrower); an allow or an unlist lands only in the world it was made in (wider).
+ *  A setting kept under an older key is carried into the gates silently and written under KEY on first read. Never
+ *  broader than main allowed: the body switch's refuse or ask → both off (F3), accept → move on, touch off; with no
+ *  switch, main's ew-pushable → move ('0' off; only if present) and ew-posable → touch off if present. Main's posable
+ *  '1' allowed posing only, and Touch me also opens touch and intimate, so it can't carry: Touch me stays off and
+ *  `notice` is set, kept under KEY until takeNotice says it once (fixF). A stored list from before the queue: its
  *  blocks follow as queued blocks, its unlists follow too but only take someone off allow (never wider), its allows stay where they landed. */
 /** what a person whose old "allow posing" couldn't carry over is told, once (takeNotice) */
 export const TOUCH_NOTICE = "Your old \u201callow posing\u201d setting couldn't carry over: Allow being posed and touched now covers being touched, intimate places included, as well as being posed, so it is off. To turn it on, open Settings ▸ body and tick Allow being posed and touched.";
 export const BLOCK_FOLLOW_MS = 30 * 86_400_000;
-/** what the panel and the toast say of it (review delta-260 L-F) */
+/** what the panel and the toast say of it */
 export const BLOCK_FOLLOW_WORDS = `it follows you into the worlds you enter in the next ${BLOCK_FOLLOW_MS / 86_400_000} days; where it has landed, it stays until you remove it`;
 const OPS = ['allow', 'block', 'unlist'];
-/** a change that follows me into every world until BLOCK_FOLLOW_MS: a block, or an unlist from before the queue (its world unknown: it only ever takes someone off allow; review delta-260 #2) */
+/** a change that follows me into every world until BLOCK_FOLLOW_MS: a block, or an unlist from before the queue (its world unknown: it only ever takes someone off allow) */
 const follows = (q) => q.op === 'block' || (q.op === 'unlist' && q.world === null);
 const liveOp = (q, now) => q && OPS.includes(q.op) && typeof q.id === 'string' && Number.isFinite(q.at) && (!follows(q) || now - q.at < BLOCK_FOLLOW_MS);
 export function readStored(get = lsGet, now = Date.now()) {
@@ -57,7 +57,7 @@ export function readStored(get = lsGet, now = Date.now()) {
 }
 
 let current = readStored();
-// a guest's id is minted per connection, so their entries last for the visit: in memory only, never stored (review full-260 #2)
+// a guest's id is minted per connection, so their entries last for the visit: in memory only, never stored
 const guests = new Set();
 const save = () => { lsSet(KEY, JSON.stringify({ v: CONSENT_SHAPE, move: current.move, touch: current.touch, ...(current.notice ? { notice: true } : {}), ...(Object.keys(current.opened ?? {}).length ? { opened: current.opened } : {}),
   allow: Object.fromEntries(Object.entries(current.allow).filter(([id]) => !guests.has(id))), block: Object.fromEntries(Object.entries(current.block).filter(([id]) => !guests.has(id))),

@@ -1,17 +1,14 @@
-// lantern — one line for everything: type to talk, `/` for commands, or a word
-// ("sky", "wave", "mute") for the matching ACTIONS, with their keys shown so the
-// keys teach themselves. Direction C of the HUD redesign mockups (the "lantern" direction).
+// lantern — one line for everything: type to talk, `/` for commands, or a word ("sky", "wave", "mute") for the
+// matching ACTIONS, with their keys shown so the keys teach themselves.
 //
-// Additive: Ctrl/Cmd+K or the resting line bottom-centre opens it; Enter-to-chat is
-// untouched. It owns no knowledge of what can be done — that is lib/actions.js,
-// filled at each definition site — and no send path: plain text and /commands go
-// through the chat compose box's own submit (chat.submit), so there is one path.
+// Ctrl/Cmd+K or the resting line bottom-centre opens it; Enter-to-chat is untouched. It owns no knowledge of what can
+// be done (lib/actions.js, filled at each definition site) and no send path: plain text and /commands go through the
+// chat compose box's own submit (chat.submit), so there is one path.
 //
-// THE KEYS (R, 09-29): Enter SAYS what you typed — always; the say row is first.
-// Tab DOES the highlighted action (default: the best match, wearing a Tab badge).
-// So "sit"+Enter says "sit", "sit"+Tab sits. Two exceptions to Enter-says: text
-// starting with "/" (the command path), and a highlight the person MOVED themselves
-// (↑/↓ or the mouse onto a row) — then Enter runs that row.
+// THE KEYS: Enter SAYS what you typed — always; the say row is first. Tab DOES the highlighted action (default: the
+// best match, wearing a Tab badge). So "sit"+Enter says "sit", "sit"+Tab sits. Two exceptions to Enter-says: text
+// starting with "/" (the command path), and a highlight the person MOVED themselves (↑/↓ or the mouse onto a row) —
+// then Enter runs that row.
 import { list, grouped } from './actions.js';
 import { svg, has, rsvg, hasLine, fsvg, hasFill } from './icons.js';
 import { escapeHtml as esc } from './markup.js';
@@ -187,12 +184,10 @@ function onEnter() {
 }
 
 // ---------------------------------------------------------------- placement
-// One horizontal axis for the resting line, the hint bar that borrows its spot,
-// and the open panel: the viewport's centre, unless that would sit on the chat
-// frame's compose box — then the centre of the free span beside the frame.
-// A pill MOVED in HUD layout mode (owner, 10-01) sits where it was put instead: --ln-x
-// and --ln-b carry its centre and bottom to the hint bar too, and the open panel
-// takes its own clamped centre (--ln-px) and hangs DOWN from a pill in the top half.
+// One horizontal axis for the resting line, the hint bar that borrows its spot, and the open panel: the viewport's
+// centre, unless that would sit on the chat frame's compose box — then the centre of the free span beside the frame.
+// A pill MOVED in HUD layout mode sits where it was put: --ln-x and --ln-b carry its centre and bottom to the hint bar
+// too, and the open panel takes its own clamped centre (--ln-px), hanging DOWN from a pill in the top half.
 // Phones keep the corner glyph (index.html's ≤600px rules); the spot is a desktop one.
 const POS_LS = 'ew-lantern-pos';   // {x: centre as a fraction of the width, b: px from the bottom}
 let spot = null;
@@ -280,12 +275,10 @@ function initPillDrag() {
 
 // ---------------------------------------------------------------- boot
 
-// THE RESTING LINE'S TWO PERMISSIONS (owner, 10-01: "add it as a pin feature for the reverse-E menu … and have it obey
-// the 'esc to hide' feature"). PINNED (the default, so nobody who leaves it alone sees a change) = the pill rests
-// bottom-centre; unpinned = no resting pill, but Ctrl/Cmd+K and the rail's search entry still open the lantern —
-// unpinning puts away its resting place, not the command line. QUIET = Tab put the panels away (windows.js
-// panelsToggle, relayed by ui.js; Esc was the key until R 10-15 moved it): the pill goes with them and comes back with them. Either hides it, as a class
-// (index.html: display:none — the pill's own display:flex would beat [hidden]); the hint bar keeps the spot either way.
+// THE RESTING LINE'S TWO PERMISSIONS. PINNED (the default) = the pill rests bottom-centre; unpinned = no resting pill,
+// but Ctrl/Cmd+K and the rail's search entry still open the lantern. QUIET = Tab put the panels away (windows.js
+// panelsToggle, relayed by ui.js): the pill goes and comes back with them. Either hides it, as a class (index.html:
+// display:none — the pill's own display:flex would beat [hidden]); the hint bar keeps the spot either way.
 const PIN_LS = 'ew-lantern-pinned';
 let pinned = true;
 try { pinned = localStorage.getItem(PIN_LS) !== '0'; } catch { /* private mode */ }
@@ -303,8 +296,7 @@ function paintRest() {
   pill?.classList.toggle('quiet', quiet);
 }
 
-// the bar wears the same lantern its Panels row does, so the two read as one thing (owner, 10-01: "make sure the
-// icon actually makes it down to the bar"); the ∃ stays the menu's
+// the bar wears the same lantern its Panels row does, so the two read as one thing; the ∃ stays the menu's
 const EMARK = () => fsvg('lantern', 20) || '∃';
 
 function paintPill() {
