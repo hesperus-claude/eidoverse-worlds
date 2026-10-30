@@ -60,9 +60,9 @@
 //
 // BOUNDS are in CHARACTERS (String.length, UTF-16 code units), not bytes: a
 // 240-character line of CJK is ~720 UTF-8 bytes and that is fine — the bag is
-// folded state, not a verb payload under the comp cap; and that cap is the
-// same unit (8192 characters of JSON, server/verbs.ts vComp), so a bag of 20
-// full lines plus title and speakers stays well inside it in any script.
+// folded state, not a verb payload under the comp cap; and the authority keeps each
+// value under 64 KiB of UTF-8 (authority/gate.js), so a bag of 20 full lines plus
+// title and speakers stays well inside it in any script.
 
 import { shown } from './shown.js';
 

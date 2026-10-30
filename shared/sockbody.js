@@ -5,8 +5,7 @@
 // leaveBy, who). The rest of the researched shape below is RESERVED: the door refuses it (STATION_RESERVED), its names are
 // held, and this reader still reads it generously so it comes back as an addition, not a rewrite. hold is cut.
 //
-// One shape for every way a body attaches to a thing (research: notes/eidoverse/RESEARCH-socket-body-2026-10-06.md,
-// "The shape we build"): a chair, a swing, a saddle, a car's driver seat, a rocket couch, a bunk, a lectern you stand
+// One shape for every way a body attaches to a thing: a chair, a swing, a saddle, a car's driver seat, a rocket couch, a bunk, a lectern you stand
 // at. The cross-platform pattern it follows: one occupant per socket (VRChat Station, Roblox Seat); WHICH body point
 // lands on the socket (Resonite AvatarAnchor PositionNode); a pose that is a clip, a blend by state, or time locked to
 // the thing's motion (Unreal/Godot AnimBP/AnimationTree, without the state machine: data says what the body does in a
