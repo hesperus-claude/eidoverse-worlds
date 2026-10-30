@@ -1,18 +1,13 @@
-// The one claim the whole lite-mode change rests on: a lite boot must never REQUEST
-// the engine. Decided in index.html ahead of the module graph precisely because a
-// runtime branch inside main.js would render nothing and still pay the download — so
-// the test is a network ledger, not a screenshot. Measured against an owned server.
-//
-// Recipe: `node tools/lite-weight-test.mjs` (BUN_PATH=<abs bun.exe> on Windows —
-// playwright's launch hangs under bun there, see probe-harness).
+// The claim lite mode rests on: a lite boot must never REQUEST the engine. Decided in index.html ahead of the module
+// graph (a runtime branch in main.js still pays the download), so this is a network ledger against an owned server.
+// Recipe: `node tools/lite-weight-test.mjs` (BUN_PATH=<abs bun.exe> on Windows: playwright's launch hangs under bun there).
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 
 const ENGINE = /three\.webgpu|three\.tsl|three-vrm|three-mesh-bvh/;
 const { check, done } = checker();
-// every world this test joins is founded (joining never founds one): otherwise the arrival and tripwire scenarios join
-// nothing and their absence checks pass vacuously (#260 house I12, I196)
+// every world this test joins is founded (joining never founds one), or the arrival checks pass vacuously
 const ARRIVAL = 'arrival';
-const world = await ownedWorld({ worlds: [ARRIVAL, 'alpha', 'beta', 'gamma'] });
+const world = await ownedWorld({ worlds: [ARRIVAL] });
 const { browser, page: mkPage } = await launchBrowser();
 
 async function weigh(query, label) {
@@ -22,7 +17,7 @@ async function weigh(query, label) {
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
   await page.goto(`${world.origin}/?world=staging&name=liteprobe&key=${world.key}${query}`, { waitUntil: 'load' });
-  await page.waitForTimeout(6000);   // generous: preloads start at parse, not at load
+  await page.waitForTimeout(6000);  // generous: preloads start at parse, not at load
   const why = await page.evaluate(() => globalThis.__ewLiteWhy ?? null);
   const lite = await page.evaluate(() => globalThis.__ewLite === true);
   const engine = asked.filter((u) => ENGINE.test(u));
@@ -45,9 +40,8 @@ check('a lite boot is dramatically lighter overall',
   lite.asked.length < full.asked.length,
   `lite ${lite.asked.length} vs full ${full.asked.length} requests`);
 
-// Weight is only half the claim: a lite client that never boots is 7 requests of
-// nothing. The splash is the seam — it is static markup that only boot.js takes down,
-// so a cleared splash proves lite.js ran, connected, and called finishBoot.
+// a lite client must also boot: the splash is static markup only boot.js takes down, so a cleared splash proves lite.js
+// ran, connected, and called finishBoot
 {
   const page = await mkPage();
   const errs = [];
@@ -68,11 +62,7 @@ check('a lite boot is dramatically lighter overall',
   await page.close();
 }
 
-// Reported from a real phone, 2026-09-15: "my messages were not appearing... but once I
-// reloaded the client the chat history appeared". A lite client could SEND and never
-// see. The live path is realize/livechat.js turning a 'say' entry into a chat line, which
-// lite.js was not subscribing to; the reload path is social.js replaying history, which
-// it was — hence a chat that only worked in the past tense. This pins the live path.
+// realize/livechat.js turns a 'say' entry into a chat line, and lite.js must subscribe (replay alone is past tense)
 {
   const page = await mkPage();
   const errs = [];
@@ -101,15 +91,8 @@ check('a lite boot is dramatically lighter overall',
   await page.close();
 }
 
-// The socket, observed from INSIDE the page.
-//
-// Playwright's `framesent` was the instrument here and it is not reliable: this suite
-// reported 19/19 locally while an independent reviewer got 18/19 on the same commit,
-// the gesture frame missing from the observer while an in-page receipt proved the product
-// had sent it (#188 B4). A gate that flakes is worse than no gate - it taught us the
-// wrong thing about our own code. So we patch WebSocket.prototype.send before any app
-// script runs and keep the frames ourselves: same object the client actually calls,
-// nothing between us and it.
+// the socket observed from INSIDE the page (Playwright's `framesent` missed frames, #188): WebSocket.prototype.send is
+// patched before any app script, the same object the client calls
 const SOCKET_SPY = `
   globalThis.__frames = { sent: [], opened: 0 };
   const _send = WebSocket.prototype.send;
@@ -124,11 +107,8 @@ const SOCKET_SPY = `
 `;
 const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: [], opened: 0 });
 
-// B1: one arrival, one socket generation. The inline early socket joins before the lite
-// decision exists, and net.js adopts it ONLY when the join it would send matches byte for
-// byte. lite asking for avatar:'' missed, so the early socket was discarded and a second
-// opened - the server saw arrive -> leave -> arrive, and anything delivered to the first
-// socket could be thrown away with it (it was a held whisper then; whisper was removed, R 10-18).
+// one arrival, one socket generation: net.js adopts the inline early socket only when its join matches byte for byte;
+// a mismatch opens a second (arrive → leave → arrive) and can discard what the first delivered
 {
   const page = await mkPage();
   await page.addInitScript(SOCKET_SPY);
@@ -152,21 +132,18 @@ const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: []
   await page.close();
 }
 
-// B2: a gesture must carry the remembered body UNCHANGED and add only the one-shot.
-// Specimen shape borrowed from the review: a seated, pitched, wing-folded resident
-// holding a custom pose. Before the fix a wave emitted idle/0/false and no held pose.
+// a gesture carries the remembered body UNCHANGED and adds only the one-shot (specimen: a seated, pitched, wing-folded
+// resident holding a custom pose)
 {
   const page = await mkPage();
   await page.addInitScript(SOCKET_SPY);
   const STORED = { p: [2, 0, 3], yaw: 1.2, clip: 'sit', pitch: 0.1, wingsFolded: true, pose: { head: [0, 0, 0, 1] } };
 
-  // Establish the body as the FULL client would leave it, so the server remembers it.
+  // the body as the FULL client would leave it, so the server remembers it
   await page.goto(`${world.origin}/?world=staging&name=bodykeep&key=${world.key}&lite=1`, { waitUntil: 'load' });
   await page.waitForFunction(() => globalThis.__ewLite === true, { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(2000);
-  // Route to a remembered pose: join as this identity on a plain socket, send the pose,
-  // disconnect. The server calls rememberPose on disconnect (server.ts:212), so the next
-  // join under the same id gets it back as `restore`.
+  // the server calls rememberPose on disconnect (server.ts), so the next join under the id gets it back as `restore`
   await page.evaluate(async (pose) => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
@@ -181,7 +158,7 @@ const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: []
   }, STORED);
   await page.waitForTimeout(1200);
 
-  // Now arrive in lite under that identity and tap one gesture.
+  // arrive in lite under that identity and tap one gesture
   await page.goto(`${world.origin}/?world=staging&name=bodykeep&key=${world.key}&lite=1`, { waitUntil: 'load' });
   await page.waitForFunction(() => document.querySelectorAll('.lite-action').length > 0, { timeout: 20000 })
     .catch(() => {});
@@ -219,18 +196,8 @@ const framesOf = (page) => page.evaluate(() => globalThis.__frames ?? { sent: []
   await page.close();
 }
 
-// ARRIVAL DELIVERY. The window between adopting the early socket and having somewhere
-// to put what it carries.
-//
-// Round two of the review found real message loss here: connect() adopts the early
-// socket and drains what raced ahead of us - the join snapshot and the first live
-// entries. A chat window that did not exist yet meant the drain threw, connect()
-// reported it and carried on, and a delivered message was gone for good (it was a held
-// whisper then). These gates hold the ordering that fixes it. Since R 10-18 speech is
-// arrival-only and whisper is removed: what was said before the reader arrived, and a
-// whisper sent while it was away, must NOT appear; the drain must still not throw.
-//
-// `raw` drives a plain socket from inside the page: a second participant, no client.
+// ARRIVAL DELIVERY: connect() adopts the early socket and drains what raced ahead before a chat window may exist; the
+// drain must not throw, and with arrival-only speech earlier says must NOT appear. `raw` is a second participant.
 const RAW = `
   globalThis.__raw = async (msgs, { id, wait = 900 }) => {
     const q = new URLSearchParams(location.search);
@@ -254,15 +221,14 @@ const RAW = `
   const SECRET = `removed-whisper-${Date.now()}`;
   const PRIOR = `prior-say-${Date.now()}`;
 
-  // A page that is NOT the reader, used only to drive the other participant.
+  // a page that is NOT the reader, only to drive the other participant
   const driver = await mkPage();
   await driver.addInitScript(RAW);
   await driver.goto(`${world.origin}/?world=${WORLD}&name=driver&key=${world.key}&lite=1&earlysock=0`,
     { waitUntil: 'load' });
   await driver.waitForTimeout(1500);
 
-  // One ordinary say before the reader arrives, then a whisper to it while it is away
-  // (refused as removed: held for nobody).
+  // one ordinary say before the reader arrives, then a whisper while it's away (refused as removed: held for nobody)
   await driver.evaluate(async ({ secret, prior, reader }) => {
     await globalThis.__raw([
       { type: 'request', id: 'prior-say', verb: 'say', args: { text: prior } },
@@ -271,7 +237,7 @@ const RAW = `
   }, { secret: SECRET, prior: PRIOR, reader: READER });
   await driver.close();
 
-  // Now the reader arrives, in lite, for the first time.
+  // the reader arrives, in lite, for the first time
   const page = await mkPage();
   const asked = [];
   page.on('request', (r) => asked.push(r.url()));
@@ -287,7 +253,7 @@ const RAW = `
   ).catch(() => {});
   await page.waitForTimeout(3000);
 
-  // the positive control: a line said AFTER the reader arrived does reach it, so the absences below mean something
+  // the positive control: a line said AFTER arrival reaches it, so the absences below mean something
   const AFTER = `after-say-${Date.now()}`;
   const driver2 = await mkPage();
   await driver2.addInitScript(RAW);
@@ -316,19 +282,15 @@ const RAW = `
   await page.close();
 }
 
-// B3: a first-time visitor to a key-gated world must be able to GET IN from lite.
-// The owned world sets JOIN_TOKEN, so arriving without ?key= earns close code 4003, which
-// net.js turns into `bad-key`. The full client answers that by reopening openDoor - which
-// lives in ui.js and arrives with the engine attached. "Try the full world" is not a door
-// for someone whose phone the full world kills, so lite needs its own, and it has to work
-// without fetching a single engine byte.
+// a first-time visitor to a key-gated world gets in from lite: close 4003 → `bad-key`; the full client's openDoor lives
+// in ui.js with the engine, so lite has its own door that fetches no engine bytes
 {
   const page = await mkPage();
   const asked = [];
   page.on('request', (r) => asked.push(r.url()));
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
-  // A first-time visitor remembers nothing.
+  // a first-time visitor remembers nothing
   await page.addInitScript(() => { try { localStorage.removeItem('ew-key'); } catch (e) {} });
 
   await page.goto(`${world.origin}/?world=staging&name=doorprobe&lite=1`, { waitUntil: 'load' });
@@ -358,89 +320,13 @@ const RAW = `
   await page.close();
 }
 
-// THE TRIPWIRE, which cannot be tested against the world that motivated it: the commons
-// is a different deployment serving its own client, and a world log only arrives over the
-// socket on join, so there is no way to mirror that load locally. What CAN be tested is
-// the mechanism, and the mechanism is cause-agnostic by design - it asks only "did a full
-// boot arm the flag and never come back to clear it". A tab the OS reaped for memory and
-// a tab killed by hand leave identical evidence, so the arming and the per-world keying
-// are the whole of what needs proving here.
-{
-  const page = await mkPage();
-
-  // 1. A world whose last full boot never finished: lite, and SAYS why.
-  // Plant the flag from a page that arms NOTHING (another world, lite). Planting it from a full boot of alpha itself
-  // (the old setup) is not a death: leaving that page fires pagehide, the clean-exit signal, which clears the flag
-  // it just planted. A real OOM kill runs no handler, and that's exactly the difference being tested.
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => localStorage.setItem('ew-boot-attempt:alpha', String(Date.now())));
-  await page.goto(`${world.origin}/?world=alpha&name=trip&key=${world.key}`, { waitUntil: 'load' });
-  const alpha = await page.evaluate(() => ({ lite: globalThis.__ewLite, why: globalThis.__ewLiteWhy }));
-  console.log(`\n  tripwire: world alpha (died) -> lite=${alpha.lite} why=${alpha.why}`);
-  // This page is a DESKTOP, and since 2026-10-01 only a phone or tablet is demoted by a died boot (owner: lite is
-  // default only on mobile): a desktop retries the full world and says so. The phone half - died boot -> lite 'crash'
-  // - is lite-banner-probe's, in a real 360 px Android context; lite-choice-test pins the rule itself.
-  check('a desktop whose last boot died RETRIES the full world (why=retry), not lite', alpha.lite === false && alpha.why === 'retry');
-  // The retry boot armed alpha's flag itself and leaving it is a clean exit that clears it, so re-plant the death
-  // (from a page that arms nothing) before checking that surviving ANOTHER world leaves alpha's flag alone.
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => localStorage.setItem('ew-boot-attempt:alpha', String(Date.now())));
-
-  // 2. A DIFFERENT world on the same device is untouched. This is the one the phone
-  //    report forced: an empty instance runs the full client fine on hardware the
-  //    commons kills, so a device-wide flag would strand it in lite on worlds it holds.
-  await page.goto(`${world.origin}/?world=beta&name=trip&key=${world.key}`, { waitUntil: 'load' });
-  const beta = await page.evaluate(() => ({ lite: globalThis.__ewLite, why: globalThis.__ewLiteWhy }));
-  console.log(`  tripwire: world beta (fine)  -> lite=${beta.lite} why=${beta.why}`);
-  check('a different world on the same device is NOT demoted', beta.lite === false,
-    'the key is per world: capability is a property of the (device, world) pair');
-
-  // 3. A full boot that survives disarms its own world, and only after the load tail goes
-  //    quiet - not at arrival, which is when the phone was still alive and about to die.
-  const armedDuring = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:beta') !== null);
-  // The disarm has two paths, and this gates the one that carries the meaning: PAGEHIDE.
-  // Leaving deliberately fires it; an out-of-memory kill does not, and that asymmetry is
-  // the whole discrimination. Navigating away is exactly the event a real clean exit
-  // raises, so this is the product path, not a simulation of it.
-  //
-  // The 60s dwell is the other path and is deliberately NOT gated here: waiting it out
-  // costs the suite a minute and a half and turns a green run into a race against
-  // whatever else is loading the server - which is precisely how the previous version of
-  // this check passed on a 5s boot and failed on a 12s one, teaching us about the
-  // harness instead of the code.
-  // ARRIVE first, so this check is about a SURVIVING boot. (Leaving mid-load is also a clean exit now: index.html
-  // listens for pagehide from the moment it arms; lite-choice-test covers that case.)
-  const betaArrived = await page.waitForFunction(
-    () => { const el = document.getElementById('splash'); return !el || el.classList.contains('gone'); },
-    { timeout: 60000 },
-  ).then(() => true).catch(() => false);
-  check('the full client arrives on a fresh world', betaArrived);
-
-  await page.goto(`${world.origin}/?world=gamma&name=trip&key=${world.key}&lite=1`, { waitUntil: 'load' });
-  const disarmed = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:beta') === null);
-  console.log(`  tripwire: beta armed during boot=${armedDuring}, cleared on clean exit=${disarmed}`);
-  check('a full boot arms the flag before fetching the engine', armedDuring);
-  check('leaving a surviving world cleanly disarms it', disarmed,
-    'pagehide is the signal an OOM kill cannot fake');
-
-  // 4. alpha is still tripped: surviving beta says nothing about alpha.
-  const alphaStill = await page.evaluate(() => localStorage.getItem('ew-boot-attempt:alpha') !== null);
-  check('surviving one world does not clear another', alphaStill);
-
-  await page.close();
-}
-
+// the tripwire (arming, clean exit, per-world keys): tools/lite-choice-test.mjs, over the page's own script
 const back = await weigh('&lite=0', 'escape hatch (?lite=0)');
 check('?lite=0 forces the full client back', back.lite === false && back.why === 'url');
 check('?lite=0 fetches the engine again', back.engine.length > 0);
 
-// THE FULL CLIENT MUST STILL BE ABLE TO PLAY A GESTURE.
-//
-// Splitting the gesture table out from behind avatar.js's engine imports left avatar.js
-// re-exporting ANIM_CLIPS without a local binding, so playOnce threw ReferenceError - and
-// nothing noticed, because every gate here boots the client and none of them presses a
-// button a person presses. Reported from a phone as a red "ANIM_CLIPS is not defined" toast.
-// tools/reexport-binding-test.mjs catches the class; this catches the behaviour.
+// the full client still plays a gesture (a re-export without a local binding threw in playOnce);
+// tools/reexport-binding-test.mjs catches the class, this the behaviour
 {
   const page = await mkPage();
   const errs = [];
