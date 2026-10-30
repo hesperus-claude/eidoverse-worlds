@@ -9,7 +9,7 @@ import { isCacheFile } from "./statecache.ts";
 import { mkdirDurable, syncDir, syncTree } from "./durable.ts";
 import { WORLD_NAME_RE } from "./limits.ts";
 
-export const SUMS = "SHA256SUMS";
+const SUMS = "SHA256SUMS";
 export type Backup = { dir: string; files: number; bytes: number };
 
 /** sha256 of a file, read in chunks (a world's log can be large). */

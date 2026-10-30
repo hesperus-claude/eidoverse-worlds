@@ -88,11 +88,11 @@ export const ACT_RATE = envNumber("ACT_RATE", 60, (n) => n > 0);
 /** One person's says per window, counted apart from acts so chat and building can't starve each other. */
 export const SAY_RATE = envNumber("SAY_RATE", 20, (n) => n > 0);
 /** The act/say window, in seconds. */
-export const RATE_WINDOW_SEC = envNumber("RATE_WINDOW_SEC", 10, (n) => n > 0);
+const RATE_WINDOW_SEC = envNumber("RATE_WINDOW_SEC", 10, (n) => n > 0);
 /** Bytes one account may make the log hold per window, in KiB. */
-export const RATE_KIB = envNumber("RATE_KIB", 256, (n) => n > 0);
+const RATE_KIB = envNumber("RATE_KIB", 256, (n) => n > 0);
 /** Bytes one guest (no account) may make the log hold per window, in KiB. */
-export const ANON_RATE_KIB = envNumber("ANON_RATE_KIB", 32, (n) => n > 0);
+const ANON_RATE_KIB = envNumber("ANON_RATE_KIB", 32, (n) => n > 0);
 /** The act rate as the authority takes it (injected: the authority is shared code, livehost opts.rate). */
 export const RATE_POLICY = { n: ACT_RATE, says: SAY_RATE, ms: RATE_WINDOW_SEC * 1000, bytes: RATE_KIB * 1024, anonBytes: ANON_RATE_KIB * 1024 };
 /** Seconds between two copies of one world (world-fork copies on the shared thread); 0 = no limit. */

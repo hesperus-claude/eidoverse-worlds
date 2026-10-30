@@ -31,14 +31,14 @@ const hslInt = (h, s, l) => {
   const a = s * Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
   return (f(0) << 16) | (f(8) << 8) | f(4);
 };
-export const PICK_GRID = [
+const PICK_GRID = [
   ...Array.from({ length: 12 }, (_, i) => { const v = Math.round(255 * (1 - i / 11)); return (v << 16) | (v << 8) | v; }),
   ...[[0.9, 0.88], [0.85, 0.74], [0.8, 0.58], [0.75, 0.44], [0.7, 0.28]].flatMap(([s, l]) => Array.from({ length: 12 }, (_, i) => hslInt(i * 30, s, l))),
 ];
 const openPickers = new Set();
 const RECENT_KEY = 'eido-recent-colours', RECENT_MAX = 12;
 let recent = null;
-export function recentColours() {
+function recentColours() {
   if (recent) return recent;
   try { const r = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); recent = Array.isArray(r) ? r.filter(Number.isInteger).slice(0, RECENT_MAX) : []; } catch { recent = []; }
   return recent;

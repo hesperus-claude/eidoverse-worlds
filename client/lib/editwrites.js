@@ -212,12 +212,6 @@ export function blueprints() {
   const c = replica.st?.entities?.['@world']?.c ?? {};
   return Object.keys(c).filter((k) => k.startsWith('blueprints:')).map((k) => ({ hash: `sha256:${k.slice('blueprints:'.length)}`, ...(c[k] && typeof c[k] === 'object' ? c[k] : {}) }));
 }
-/** Is this thing (or anything it rides) locked, as the authority reads it (truthy, a purged value isn't)? */
-export function lockedBy(id) {
-  const st = replica.st; let x = idIn(id), n = 0;
-  while (x && n++ < 33) { const v = st?.entities?.[x]?.c.lock; if (v !== undefined && !(v && v.purged === true) && !!v) return idOut(x); x = st?.entities?.[x]?.c.parent?.to; }
-  return null;
-}
 
 // harness window: the stacks and the module, for the suites (tools/protocol/client-check.ts)
 globalThis.__editWrites = () => ({ undo: [...undoStack], redo: [...redoStack], active: replicaActive() });

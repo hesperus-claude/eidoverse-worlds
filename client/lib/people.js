@@ -22,8 +22,6 @@ import { listOf, setListed, BLOCK_FOLLOW_WORDS } from './consent.js';
 let deps = { mentionPerson: () => {}, presenting: () => false, openModLog: () => {}, toast: () => {} };
 export function initPeople(d) { deps = { ...deps, ...d }; }
 
-/** The display name behind an identity here (People Here rows are names; the authority names identities). */
-export function displayOf(actorId) { if (actorId && actorId === net.you) return CONFIG.name; for (const [n, id] of identities) if (id === actorId) return n; return actorId ?? '?'; }
 
 const wc = () => replica.st?.entities?.['@world']?.c ?? {};
 /** The person behind a display name here: {display, id, anon, role, name, rank, permissions, muted, me}. */
@@ -37,7 +35,7 @@ export function personOf(display) {
 }
 export const myself = () => personOf(CONFIG.name);
 /** The items the menu shows for this person (pure: roles.js personActions). */
-export function menuFor(display) {
+function menuFor(display) {
   const me = myself(), them = personOf(display);
   if (!them.id && !them.me) return [{ id: 'mention', label: 'Mention' }];   // not known to the authority yet (an old client)
   const items = R.personActions(me, them, { muted: them.muted });
@@ -128,7 +126,7 @@ function sheet() {
   sh = { root, title: root.querySelector('.pm-title'), body: root.querySelector('.pm-body') };
   return sh;
 }
-export function closeSheet() { if (!sh) return; sh.root.classList.remove('open'); sh.root.hidden = true; }
+function closeSheet() { if (!sh) return; sh.root.classList.remove('open'); sh.root.hidden = true; }
 
 // ---------------------------------------------------------------- the role ▸ submenu
 function roleMenu(display, surface) {
@@ -148,7 +146,7 @@ function roleMenu(display, surface) {
 // ---------------------------------------------------------------- my lists, per person
 // Always allow / Never allow / Default per person (by identity, ✓ on the current one) → consent.js lists; consentsync sends.
 const LIST_ITEMS = [['consent-allow', 'allow', 'Always allow'], ['consent-block', 'block', 'Never allow'], ['consent-default', null, 'Default']];
-export function consentItems(id) {
+function consentItems(id) {
   const now = listOf(id);
   return LIST_ITEMS.map(([k, list, label]) => ({ id: k, label: `${now === list ? '✓ ' : ''}${label}`, ...(list === 'block' ? { danger: true } : {}) }));
 }
@@ -167,7 +165,7 @@ let card = null;
 function closeCard() { card?.remove(); card = null; }
 /** The form: who (name + identity, small: homoglyphs), how long (preset chips), channels (mute), why (chips + text),
  *  confirm. In a strip (VR), kick/ban confirm with a second press on a confirm row. */
-export function openForm(verb, display, surface = 'card') {
+function openForm(verb, display, surface = 'card') {
   const them = personOf(display), me = myself(); const owner = R.isOwner(me);
   const st = { len: (PRESETS[verb] ?? [])[0]?.[0], forever: false, ch: new Set(['voice', 'chat']), reason: '', why: '' };
   const host = document.createElement('div'); host.className = 'pm-form'; host.dataset.verb = verb;

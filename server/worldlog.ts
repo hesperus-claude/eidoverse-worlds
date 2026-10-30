@@ -23,7 +23,7 @@ import { clientCutOf, spokenOf } from "../shared/protocol/replica.js";
 import { viewState, idOut } from "../shared/protocol/view.js";
 import { holdWire } from "../shared/grab.js";
 import { hear } from "../shared/chatwindow.js";
-import { openLive, isWorldDir, isPreNamesDir, isSwapUnfinished } from "./livehost.ts";
+import { openLive, isWorldDir, isSwapUnfinished } from "./livehost.ts";
 import { dropCache } from "./statecache.ts";
 import { ENGINE_CATALOGUE, warm, modelsIn } from "./modelcatalogue.ts";
 import { backupBeforeRepair, sealBackup, dropBackup } from "./repairfiles.ts";
@@ -38,7 +38,7 @@ export type WorldView = { entities: Record<string, Any>; terrain: Any; grass: An
 /** An entry as clients are sent it: without the chain fields (world, head, sig) and an act/say body's salt. Clients
  *  adopt a cut at join and fold ops; nothing reads those fields, and on a two-character say they were 380 of its 488
  *  bytes (Commons audit #8). The log on disk keeps them, and the authority's history serves them whole. */
-export function wireEntry(e: Any) {
+function wireEntry(e: Any) {
   if (!e || typeof e !== "object") return e;
   const { world: _w, head: _h, sig: _s, ...rest } = e;
   if ((rest.kind === "say" || rest.kind === "act") && rest.body && typeof rest.body === "object" && !Array.isArray(rest.body) && "salt" in rest.body) { const { salt: _t, ...b } = rest.body; rest.body = b; }
@@ -46,8 +46,6 @@ export function wireEntry(e: Any) {
 }
 /** Does this world's directory hold a log? (Decided once, when the world is first opened.) */
 export function isWorldSaved(name: string): boolean { const d = path.join(WORLDS_DIR, name); return isWorldDir(d) && !isSwapUnfinished(d); }
-/** Does it hold a log saved before the names pass (livehost isPreNamesDir)? */
-export function isPreNamesSaved(name: string): boolean { return isPreNamesDir(path.join(WORLDS_DIR, name)); }
 
 /** What a WorldLog needs from the World around it (injected: this file never imports world.ts). */
 export type LogHost = {
@@ -458,7 +456,7 @@ export function foundWorld(dir: string, name: string, owner: string, title?: str
 // The authority's own founding act, built aside and renamed into place. Who may is requestwire.ts world-found; the engine
 // sets no quotas: how many worlds, and how often, is the server runner's policy.
 // .founders.json records who founded what (name → {account, actor, ts}); a dot-name is never a world.
-export const FOUND_NAME = /^[a-z0-9][a-z0-9-]{2,31}$/;
+const FOUND_NAME = /^[a-z0-9][a-z0-9-]{2,31}$/;
 const foundersPath = () => path.join(WORLDS_DIR, ".founders.json");
 export function foundersLedger(): Record<string, { account: string; actor: string; ts: number }> {
   try { const v = JSON.parse(fs.readFileSync(foundersPath(), "utf8")); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; }

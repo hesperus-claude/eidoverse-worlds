@@ -114,7 +114,7 @@ export function setSpace(t, s) {
   return s;
 }
 /** The active tool's key pressed again steps its space (Blender's double-press, one key): G G = move in object axes. */
-export function cycleSpace(t = tool) {
+function cycleSpace(t = tool) {
   const list = SPACES[t]; if (!list || list.length < 2) return getSpace(t);
   return setSpace(t, list[(list.indexOf(getSpace(t)) + 1) % list.length]);
 }
@@ -590,7 +590,6 @@ function marqueeEnd(e) { const m = marquee; marquee = null; if (!m) return; m.el
     _mb.getCenter(_mc).project(camera); if (_mc.z > 1) continue;
     const sx = (_mc.x + 1) / 2 * innerWidth, sy = (1 - _mc.y) / 2 * innerHeight; if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) ids.push(id); }
   if (ids.length) bus.emit('edit-select-add', ids); }
-export const marqueeActive = () => !!marquee;
 
 /** The nearest hit under a viewport point (NDC) on a thing MY selection layers let me click (selectmask.js; the floor is
  *  'environment', off at first) and that is in my view (a thing hidden with the eye is not drawn, so not clicked). */

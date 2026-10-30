@@ -7,7 +7,7 @@
 // every arrival (a world's presence plane is its own) and every change; a refusal is said once and the table is sent
 // again on a timer and on the next arrival.
 // A leaf like consent.js — everything it touches comes in, so tools/consent-client-test.ts can drive it.
-export const RETRY_MS = 5000;
+const RETRY_MS = 5000;
 export function makeConsentSync({ table, send, toast, on, later = (fn) => setTimeout(fn, RETRY_MS), enabled = () => true, held = () => {}, gone = () => {}, landed = () => {} }) {
   let failing = false, retryArmed = false;
   // ONE sync in flight: changes made while it runs collapse into a single follow-up that reads the latest table, so a

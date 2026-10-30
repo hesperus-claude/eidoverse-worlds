@@ -17,14 +17,14 @@ import { mainKnowledge, type Known } from "./mainknew.ts";
 // connection's address (hashed, never stored raw) and expires (ADDR_BAN_MS) — an address is shared and reassigned.
 export type BanRec = { by: string; ts: number; reason?: string; name?: string; account?: string; addr?: string; until?: number; world?: string; legacySub?: boolean; boundFrom?: string };
 export const ADDR_BAN_MS = 24 * 3600 * 1000;
-export const BANS_FILE = join(WORLDS_DIR, ".bans.json");
+const BANS_FILE = join(WORLDS_DIR, ".bans.json");
 export const globalBans: Record<string, BanRec> = {};
 const refusedBans: Record<string, BanRec> = {};   // refused at boot (restoreBans): never enforced, written back as they were
 /** Pre-account bans (a name alone) main's records bind to no one account: kept on disk, never enforced, listed for operators. */
 export const pendingBans: Record<string, BanRec & { why: string }> = {};
 /** Why a ban bound by name alone is worth a look: the name was typed, so its wearer may not be that account. */
 export const BOUND_BY_NAME = "the name was typed, so a guest who wore it may have been someone else; global-unban <the name> lifts it";
-export const PENDING_WORDS = "pre-account ban: bind to a person (global-ban <the name> binds whoever wears it here) or lift (global-unban <the name>)";
+const PENDING_WORDS = "pre-account ban: bind to a person (global-ban <the name> binds whoever wears it here) or lift (global-unban <the name>)";
 export function saveGlobalBans() {
   try {
     const pending = Object.fromEntries(Object.entries(pendingBans).map(([k, { why: _w, ...b }]) => [k, b]));
@@ -82,7 +82,7 @@ export function takePending(id: string, fold: (s: string) => string, pending: Re
 }
 /** Whether a ban record names this account: its own account, or, for a record from before accounts (`legacySub`), the aid1
  *  account whose sub it names, under any issuer. */
-export function banHoldsAgainst(b: BanRec, account: string | null | undefined): boolean {
+function banHoldsAgainst(b: BanRec, account: string | null | undefined): boolean {
   if (!account || !b.account) return false;
   return b.account === account || (!!b.legacySub && account.startsWith("aid1:") && account.endsWith(`:${b.account}`));
 }
@@ -112,9 +112,9 @@ export const banKey = (account: string | null | undefined, addr?: string | null,
 // the same sanction (server.ts, at join). Lifting it on any identity it was carried to lifts the address record. Kept
 // apart from the ban list so nothing that reads bans (findBan, the operator's list) can mistake a mute for a ban.
 export type AddrSanction = { kind: "mute"; world: string; addr: string; actor: string; by: string; ts: number; until: number; channels?: string[]; reason?: string; ids: string[] };
-export const ADDR_SANCTIONS_FILE = join(WORLDS_DIR, ".addr-sanctions.json");
-export const addrSanctions: Record<string, AddrSanction> = {};
-export const addrSanctionKey = (kind: string, world: string, addr: string) => `world:${world}:addr:${addr}:${kind}`;
+const ADDR_SANCTIONS_FILE = join(WORLDS_DIR, ".addr-sanctions.json");
+const addrSanctions: Record<string, AddrSanction> = {};
+const addrSanctionKey = (kind: string, world: string, addr: string) => `world:${world}:addr:${addr}:${kind}`;
 export function saveAddrSanctions(now = Date.now()) {
   for (const [k, s] of Object.entries(addrSanctions)) if (!(s.until > now)) delete addrSanctions[k];
   try { writePrivate(ADDR_SANCTIONS_FILE, JSON.stringify(addrSanctions, null, 2)); }
