@@ -131,7 +131,7 @@ function paintRoles(body) {
   if (narrow(body)) {   // one role at a time (phone, VR, a squeezed panel)
     if (!roles.some((r) => r.id === gridRole)) gridRole = roles[0]?.id;
     const r = roles.find((x) => x.id === gridRole);
-    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (house review I68)
+    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (I68)
     html = `<label class="rp-field">role <select class="rp-pick">${roles.map((x) => `<option value="${esc(x.id)}" ${x.id === gridRole ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
       + `<table class="rp-grid rp-one"><thead><tr><th></th>${head(r)}</tr></thead><tbody>${R.PERMISSION_NAMES.map((k) => `<tr><th scope="row"><b>${k}</b><div class="rp-dim">${esc(R.PERMISSIONS[k].text)}</div></th>${cell(r, k)}</tr>`).join('')}</tbody></table>${holders(r)}`;
   } else {
@@ -170,7 +170,7 @@ function addRole(body) {
   box.querySelector('.pm-go').onclick = () => {
     const name = inp.value.trim(); if (!name) return inp.focus();
     // an id of its own: a name that slugs like an existing role's (or two names with no Latin letters) must never land on
-    // that role's key and overwrite its permissions (review 10-07)
+    // that role's key and overwrite its permissions
     const base = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '').slice(0, 20) || 'role';
     const defs = defsValue(); const taken = (x) => R.BUILTIN_IDS.includes(x) || !R.isRoleId(x) || Object.hasOwn(defs, x);
     let id = base; for (let n = 2; taken(id); n++) id = `${base}-${n}`;

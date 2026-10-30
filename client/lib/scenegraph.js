@@ -94,11 +94,9 @@ let editingComp = null;    // comp type whose JSON is open, or true for a new on
 function paintScene(force = false) {
   if (!sceneBody) return;
   const selected = sceneSelected();
-  // don't yank an editor out from under the user: an open JSON textarea, or
-  // any focused editor control (a light slider mid-drag, a half-typed pos
-  // field), holds repaints — the echo of a committed verb queues one, and it
-  // must not rebuild the DOM under the pointer. Interior state changes
-  // (opening/closing an editor) repaint with force.
+  // don't rebuild the DOM under the pointer: an open JSON textarea or any
+  // focused editor control holds repaints (a committed verb's echo queues one);
+  // opening/closing an editor repaints with force.
   if (!force) {
     if (editingComp != null) return;
     const ae = document.activeElement;
@@ -153,10 +151,9 @@ function paintScene(force = false) {
     eds = editorsFor({ id: selected, obj, meta, bag, esc,
       commit: (component, value) => sendOps([value == null ? OP.unset(target, component) : OP.set(target, component, value)], { what: `${component} on ${target}` }) });
 
-    // generic component editor — meaning-free by design, the UI twin of the
-    // blind fold: any comp type, known or invented this morning, shows as a
-    // row and edits as raw JSON. A saved edit replaces that type's data
-    // WHOLESALE (that is the comp verb's contract); ✕ removes (data: null).
+    // generic component editor, meaning-free like the blind fold: any comp
+    // type shows as a row and edits as raw JSON. A save replaces that type's
+    // data WHOLESALE (the comp verb's contract); ✕ removes (data: null).
     const compRows = compEntries(bag).map(([type, data]) => {
       if (editingComp === type) {
         return `<div style="margin:2px 0"><b>${esc(type)}</b>
@@ -213,7 +210,7 @@ function paintScene(force = false) {
   // semantic editors wire their own controls
   for (const e of eds) { try { e.wire(sceneBody); } catch { /* an editor must not break the panel */ } }
 
-  // transform: commit on change — one `place` per gesture, carrying only the field that changed (house review I18: the
+  // transform: commit on change — one `place` per gesture, carrying only the field that changed (I18: the
   // shown yaw is whole degrees and the shown scale one number, so resubmitting them on a pos edit flattened a tilt and a
   // per-axis scale). transformOf keeps the rest as the fold has it. No local preview: the echo lands in a frame or two.
   for (const el of sceneBody.querySelectorAll('[data-tf]')) {
@@ -266,9 +263,7 @@ function paintScene(force = false) {
 
 /** World-click → panel: select the entity's row, open the scene section
  *  (and the panel frame, if hidden), and scroll the row into view. Exported
- *  for build.js — clicking a thing in build mode and clicking its row are the
- *  same act, so the inspector (transform, semantic editors, comp bag) arrives
- *  with the selection instead of hiding behind a second gesture. */
+ *  for build.js: clicking a thing in build mode and clicking its row are the same act. */
 export const sceneSelected = () => { const s = Sel.selection(); return s.kind === 'things' ? s.ids[0] ?? null : null; };
 // while the build-mode frames are up they ARE the inspector: a selection must
 // not also yank the World panel open onto the section they retire
@@ -296,10 +291,9 @@ function followSelection({ ids, kind }) {
     sceneBody?.querySelector(`.sg-row[data-id="${CSS.escape(id)}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   };
-  // toggle(true) surfaces the panel frame (even when the section is already
-  // open) and — on first open — assigns sceneBody synchronously BEFORE its
-  // async roster fetch. So paint now: selection must never be hostage to a
-  // network round-trip. Repaint when the roster lands (📜 badges refine).
+  // toggle(true) assigns sceneBody synchronously BEFORE its roster fetch, so
+  // paint now (selection is never hostage to a round-trip) and again when the
+  // roster lands (📜 badges refine).
   const t = sceneApi.toggle(true);
   reveal();
   Promise.resolve(t).then(reveal).catch(() => {});
@@ -315,10 +309,9 @@ export function sceneAttach(childId, parentId, slot) {
   }
   doAttach(childId, parentId);
 }
-// One path for every attach and detach — this section, /mount, /dismount, the
-// build-mode Hierarchy and the inspector's Parent field: the shared parenting
-// edit (shared/hierarchy.js parentVerbs via inspect.js commitEdit). It keeps
-// the FULL world pose (q and scale, not just a yaw), refuses a loop / lock /
+// One path for every attach and detach (this section, /mount, /dismount, the
+// Hierarchy, the inspector's Parent field): shared/hierarchy.js parentVerbs via
+// inspect.js commitEdit. Keeps the FULL world pose, refuses a loop / lock /
 // guard by name, and lands on the undo stack as one step.
 function doAttach(childId, parentId) {
   if (childId === parentId) return;

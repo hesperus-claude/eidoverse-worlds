@@ -1,13 +1,9 @@
 // rows — the house row builders, one copy.
 //
 // Every tuning panel in this client is the same three-element row: a name span,
-// a control, a readout. Before this file the slider variant alone was spelled
-// SEVEN times (six inside debug.js — dials, joints, blink, limp, hair, wings —
-// plus the sky panel's), each a private loop with its own accidental widths and
-// its own repaint bug surface (survey §B5). The builders here are DUMB on
-// purpose: they own layout and wiring, never state — state lives in the table
-// the caller hands in (TUNING, HAIR_TUNING, a def bag), which is what keeps
-// "reset" a one-line write-then-repaint everywhere.
+// a control, a readout. The builders are DUMB on purpose: they own layout and
+// wiring, never state; state lives in the table the caller hands in (TUNING,
+// HAIR_TUNING, a def bag), which keeps "reset" a write-then-repaint everywhere.
 
 const mk = (tag, className, cssText) => {
   const n = document.createElement(tag);
@@ -16,7 +12,7 @@ const mk = (tag, className, cssText) => {
   return n;
 };
 
-/** The house <select> skin — build's panels spelled this cssText five times. */
+/** The house <select> skin. */
 export const SELECT_CSS = 'font:11px var(--font); background:rgba(4,14,20,.9); '
   + 'color:var(--fg); border:1px solid var(--edge); border-radius:5px; padding:5px;';
 
@@ -63,8 +59,8 @@ export function sliderTable(fields, obj, {
 
 /** A labelled checkbox row. get/set keep the state in the caller's table. */
 export function checkRow(labelText, get, set, { className = 'row' } = {}) {
-  // label first, the box in the control column (R 10-11: "the label text right-justified and the interactables
-  // left-justified against the same invisible line"); still a <label>, so a click on the words toggles it
+  // label first, the box in the control column (the label text right-justified and the interactables
+  // left-justified against the same invisible line); still a <label>, so a click on the words toggles it
   const wrap = mk('label', className === 'row' ? 'row wide' : className);
   const cb = mk('input');
   cb.type = 'checkbox';
