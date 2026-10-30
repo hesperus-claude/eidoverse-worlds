@@ -180,8 +180,11 @@ const modelMeta = new Map<string, unknown>();
  *  its geometry for as long as they stand; this only bounds what is kept for
  *  fits yet to come. Least recently used goes first; downloads in flight stay. */
 const MESH_CACHE_BYTES = 256 * 1024 * 1024, MESH_FETCH_MS = 8000;
-/** How long a walk waits for placed geometry still loading before it is
- *  refused (see walkTo). Covers a fetch's own timeout plus some queueing. */
+/** A read of the world server (roster, terrain, a grid, geometry, bones) not answered by then has failed, as a host's
+ *  tool call would. */
+const WORLD_READ_MS = 10_000;
+/** How long a walk waits for placed geometry still loading before it is refused (see walkTo); covers a fetch's own
+ *  timeout plus some queueing. */
 const WALK_READY_MS = 15_000;
 /** The world entity (places that belong to no thing live on it), and how far and how many places look lists (owner
  *  22:40/22:43: only what you can see, nearest first; move {to: "?"} lists them all, nearest 200; "?<text>" narrows). */
@@ -740,7 +743,7 @@ export class WorldAgent {
   // holes). effective.ts reads these through the view — never a rederived
   // hash, never a quiet default.
   private seatCache = makeVerdictCache(async () => {
-    const res = await fetch(`${this.httpBase}/avatars`);
+    const res = await fetch(`${this.httpBase}/avatars`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
     if (!res.ok) throw new Error(`roster ${res.status}`);
     const rev = Number(res.headers.get("x-profiles-rev") ?? NaN);
     return { rev, entries: await res.json() as { name: string; seat?: any }[] };
@@ -2043,7 +2046,7 @@ export class WorldAgent {
     // Builds can overlap (a grid fetch is slow, a terrain edit is not): only the newest one may commit.
     const rev = ++this.terrainRev;
     if (!this.terrainSrc) {
-      const r = await fetch(`${this.httpBase}/library/eidoverse/terrain.js`);
+      const r = await fetch(`${this.httpBase}/library/eidoverse/terrain.js`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
       this.terrainSrc = await r.text();
       (0, eval)(this.terrainSrc);
     }
@@ -2053,7 +2056,10 @@ export class WorldAgent {
     const shape = shapeParams(args);
     if (shape?.heightmap) {
       const base = this.httpBase;
-      setGridFetcher(async (ref: string) => { const g = await fetch(`${base}/library/${ref}`); if (!g.ok) throw new Error(`${g.status}`); return g.json(); });
+      setGridFetcher(async (ref: string) => {
+        const g = await fetch(`${base}/library/${ref}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
+        if (!g.ok) throw new Error(`${g.status}`); return g.json();
+      });
       const g = await requestGrid(shape.heightmap.grid);
       if (rev !== this.terrainRev) return;   // a newer terrain arrived while this one's grid was in flight
       if (!g) {
@@ -2393,11 +2399,13 @@ export class WorldAgent {
   private geomFor(lib: string): Promise<any | null> {
     let p = this.geomCache.get(lib);
     if (!p) {
-      p = fetch(`${this.httpBase}/geom?lib=${encodeURIComponent(lib)}`)
+      // no geometry is a soft state, never a crash; a read that failed or timed out isn't kept, so the next one asks again
+      const q: Promise<any | null> = fetch(`${this.httpBase}/geom?lib=${encodeURIComponent(lib)}`,
+        { signal: AbortSignal.timeout(WORLD_READ_MS) })
         .then((r) => (r.ok ? r.json() : null))
         .then((g) => (g && !g.error && g.bbox ? g : null))
-        .catch(() => null);                            // no geometry is a soft state, never a crash
-      this.geomCache.set(lib, p);
+        .catch(() => { if (this.geomCache.get(lib) === q) this.geomCache.delete(lib); return null; });
+      this.geomCache.set(lib, p = q);
     }
     return p;
   }
@@ -3086,7 +3094,7 @@ export class WorldAgent {
     const avatar = this.avatar;
     if (this.bodyBoneNames && this.bodyBonesFor === avatar) return this.bodyBoneNames;
     try {
-      const res = await fetch(`${this.httpBase}/library/${avatar}`);
+      const res = await fetch(`${this.httpBase}/library/${avatar}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
       if (!res.ok) throw new Error(String(res.status));
       const buf = new Uint8Array(await res.arrayBuffer());
       const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
