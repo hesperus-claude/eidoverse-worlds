@@ -10,13 +10,11 @@
 // cap height (PLATE_CAP_H) at the size the function returns — the check fails if either drifts from the other.
 
 import * as PS from "../client/lib/platesize.js";
+import { suite } from "./protocol/suite.ts";
 const { plateSize, PLATE_CAP_H, PLATE_W, TEXT_DEG, MAX_GROW } = PS as any;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("platesize");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 // the angle the name's capitals subtend at distance d, at the width the function chose
 const capDeg = (d: number) => 2 * Math.atan((PLATE_CAP_H * plateSize(d).lw / PLATE_W) / 2 / d) * 180 / Math.PI;
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol * b;
@@ -101,5 +99,4 @@ if (typeof P.plateBox === "function") {
   check("box: a long name is clamped to the canvas", P.plateBox({ asc: 30, desc: 9, width: 900 }, ref).pillW <= 512 - 2 * P.PLATE_MARGIN);
 } else check("plateBox exists", false);
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

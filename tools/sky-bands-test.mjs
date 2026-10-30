@@ -1,8 +1,9 @@
 // sky-bands-test — the baked sky's strips (client/lib/sky_bands.js): every band has width, bands are cut on texel rows,
 // cover [0,1] in order, and cost about the same. `node tools/sky-bands-test.mjs`
 import { bandCuts } from '../client/lib/sky_bands.js';
-let pass = 0, fail = 0;
-const ok = (n, c, d = '') => { if (c) pass++; else { fail++; console.log(`  FAIL ${n} ${d}`); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("sky-bands");
+const ok = (n, c, d) => S.check(n, c, d);
 // the same row weight bandCuts uses (the march's chord estimate), to measure each band's cost
 const weight = (v) => { const lat = (0.5 - v) * Math.PI; return 0.05 + (lat <= 0 ? 0.05 : Math.min(1 / Math.max(Math.sin(lat), 0.03), 30)); };
 for (const [W, H, P, B] of [[4096, 2048, 8, 0.4e6], [2048, 1024, 8, 0.4e6], [1024, 512, 4, 0.4e6], [4096, 2048, 8, 1.5e6], [64, 8, 8, 1]]) {
@@ -18,4 +19,4 @@ for (const [W, H, P, B] of [[4096, 2048, 8, 0.4e6], [2048, 1024, 8, 0.4e6], [102
   if (H >= 512) ok(`${tag}: the heaviest band ≤ 1.6× the mean (one horizon row is the floor)`, Math.max(...costs) / mean <= 1.6, (Math.max(...costs) / mean).toFixed(2));
   if (H >= 512) ok(`${tag}: at least 90% of the bands asked for`, cuts.length - 1 >= 0.9 * Math.min(H, Math.ceil(W * H * P / B)), `${cuts.length - 1}`);
 }
-console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

@@ -6,6 +6,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -16,8 +17,8 @@ plugin({ name: 'core-stub', setup(build) {
 const { THREE, camera, sun } = await import('./core-stub.mjs');
 const { updateRig, registerCaster, setCasterBudget, rigDebug, requestLight, releaseLight, isCasting, setSlotCap } = await import('../client/lib/lightrig.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("shadow-follow");
+const check = (name, ok, note) => S.check(name, ok, note);
 const near = (a, b, eps = 1e-3) => Math.abs(a - b) < eps;
 
 // the rig: where you STAND; the camera: your head's offset inside it (xr.js)
@@ -86,5 +87,4 @@ console.log('POINT-LIGHT SLOTS — ranked by WORLD distance (review 10a M4)');
     JSON.stringify({ before, after: isCasting('lamp-ahead') }));
   for (const k of ['lamp-near-local', 'lamp-near-world', 'lamp-ahead']) releaseLight(k); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

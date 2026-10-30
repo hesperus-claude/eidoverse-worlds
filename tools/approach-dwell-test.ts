@@ -22,12 +22,10 @@
 import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { APPROACH_DWELL_MS, APPROACH_MAX_WAIT_MS, APPROACH_RADIUS, REARM_RADIUS } from "../mcpl/denoise.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("approach-dwell");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 /** A body at (x,z). `clip` and `speed` are what the SENDER claims about
  *  itself — deliberately mismatched with reality in one test below. */
@@ -240,5 +238,4 @@ const DIST = (x: number, z: number) => Math.hypot(x, z);
     JSON.stringify(seen.filter((p) => p.kind === "depart")));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

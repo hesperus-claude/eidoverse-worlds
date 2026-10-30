@@ -12,6 +12,7 @@
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
 const mkTrack = (label) => ({ kind: "audio", label, enabled: true, stopped: false,
@@ -45,11 +46,8 @@ mock.module(fileURLToPath(new URL("../client/lib/net.js", import.meta.url)), () 
 // module and every lane assertion below would silently test the wrong world.
 window.__sfuMic = async () => false;
 const m = await import("../client/lib/micstate.js");
-let pass = 0, fail = 0;
-const check = (n, ok, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${n}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("micstate-release");
+const check = (n, ok, extra) => S.check(n, ok, extra);
 
 // ── device path: the lane survives release, twice, and is REUSED on return ──
 const raw1 = mkStream("device-1");
@@ -88,5 +86,4 @@ check("repeated synthetic release does not throw and stays inert", true);
 const synth2 = mkStream("synth-2", true);
 check("a new synthetic source acquires cleanly after release", m.gateFor(synth2) === synth2);
 
-console.log(`\n${fail === 0 ? "\x1b[32m" : "\x1b[31m"}${pass} passed, ${fail} failed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+S.done();

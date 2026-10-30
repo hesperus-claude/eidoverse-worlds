@@ -21,6 +21,7 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 // Seeded BEFORE the import: chat.js reads ew-chat-fs at module load (chat.js:782),
@@ -42,11 +43,8 @@ const { frameStub } = await import('./chat-frames-stub.mjs');
 // emit lands where paintSide is not listening — assertions that cannot fail.
 const { bus } = await import('./chat-base-stub.mjs');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("chat-markdown");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 check('/version is fetched once: chat.js reads version.js\'s answer', versionAsks.length === 1, JSON.stringify(versionAsks));
 let roster: any[] = [{ id: 'keir', declares: 'agent' }, { id: 'rab' }];
 initChat({ send: () => {}, people: () => roster });
@@ -280,5 +278,4 @@ console.log('CHAT — People Here swaps sides');
   dLog.remove();
   decoy.remove(); }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
