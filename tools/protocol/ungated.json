@@ -93,7 +93,6 @@
  "tools/snap-settle-test.ts": "MERGE into tools/snapframe-render-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/sound-probe.ts": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first",
  "tools/spoken-say-door-test.ts": "passes; hygiene to pay before it can be a row (bare-wait14, own-ok1): fixed waits onto wait.ts, rows onto suite.ts",
- "tools/stdio-door-test.ts": "stale: written for pose/light tools that became anim and create {components}; rows need rewriting",
  "tools/store-variants-test.ts": "needs a KTX2 encoder (toktx/ktx); times out at 150 s without one",
  "tools/structure-route-support-test.ts": "MERGE into tools/structure-threshold-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/support-lifecycle-test.ts": "needs claude.vrm from the library and red on its own (12/22 heights 0.00, PATHFINDING-ACCEPTANCE.md); times out at 150 s",

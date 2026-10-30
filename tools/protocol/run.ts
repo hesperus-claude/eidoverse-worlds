@@ -82,7 +82,7 @@ const EXPECT: Record<string, number> = {
   "xrshadow": 0.2, "voice-wire-mutation": 10.5, "voicesource-real": 0.2, "vrmheight": 0.6, "waterkind": 0.5, "wiring": 0.2, "worldentity": 1.4, "manifest": 0.2, "hierarchy": 17,
   "worn-name": 0.1, "voicebot": 3, "water-lifecycle": 1.8, "walk-support-lifecycle": 0.8, "worlds-route": 2.8, "xr-lifecycle": 60, "xr-res": 70, "xr-debug-live": 60,
   "xr-eye-binding": 10, "htmlmesh-pick": 6, "vrmic-exec": 0.5, "xr-nullfb": 0.3, "reexport-binding": 0.3, "schema-layers": 0.3, "picture-note": 0.3, "realized-lifecycle": 0.7,
-  "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1, "skywatch": 1.3
+  "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1, "skywatch": 1.3, "stdio-door": 14
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;

@@ -8,7 +8,7 @@ import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { findChrome, chromeArgs } from './protocol/chrome.ts';
 import { killChild } from './protocol/procgroup.ts';
-import { until } from './protocol/wait.ts';
+import { until, tryUntil } from './protocol/wait.ts';
 
 const KEYS = {
   Enter: [13, 'Enter', '\r'], Escape: [27, 'Escape'], Tab: [9, 'Tab'], Backspace: [8, 'Backspace'], Delete: [46, 'Delete'],
@@ -117,10 +117,21 @@ function makePage(C, S, { targetId, browserContextId }) {
       if (h) Promise.resolve(h.handler(route)).catch(() => {}); else void route.continue();
     }
   });
-  const evaluate = async (fn, arg) => {
+  // as playwright does: an evaluation cut off by a navigation (the client reloading itself) runs again in the new document
+  const LOST = /Inspected target navigated or closed|Execution context was destroyed|Cannot find context/;
+  const evaluateOnce = async (fn, arg) => {
     const r = await send('Runtime.evaluate', { expression: fnSource(fn, arg), awaitPromise: true, returnByValue: true, userGesture: true });
     if (r.exceptionDetails) throw new Error(`evaluate: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
     return r.result.value;
+  };
+  const evaluate = async (fn, arg) => {
+    let out, err = null, lost = null;
+    const done = await tryUntil('an evaluation outlives a navigation', async () => {
+      try { out = await evaluateOnce(fn, arg); return true; } catch (e) { if (LOST.test(String(e?.message))) { lost = e; return false; } err = e; return true; }
+    }, { ms: 30_000, step: 100 });
+    if (err) throw err;
+    if (!done) throw lost;
+    return out;
   };
   const center = async (sel) => {
     await until(`${sel} is on the page and visible`, () => evaluate((s) => { const e = document.querySelector(s); if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }, sel), { ms: 30_000 });
