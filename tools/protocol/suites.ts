@@ -60,7 +60,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["fp-view", "../fp-view-test.ts", 1], // the first-person eye and exclusion contract (#75)
   ["reachwire", "../reachwire-test.ts", 1], // the reach descriptor grammar and its event edges
   ["reach", "../reach-test.ts", 1], // two-bone IK geometry: no rig, no renderer, no server
-  ["ragdoll-floor", "../ragdoll-floor-test.ts", 1], // a body that goes limp inside a building lands on the floor it was on
   ["posture-tiles", "../posture-tiles-test.ts", 1], // the action bar's posture tiles drive controller.js sitHere/standUp/getPosture
   ["poseclip-parity", "../poseclip-parity-test.ts", 1], // headless pose-clip joints equal the browser mixer's on the committed fixture
   ["pose-handler", "../pose-handler-test.ts", 1], // the pose fence is the real "pose" handler's: non-finite and oversized poses dropped

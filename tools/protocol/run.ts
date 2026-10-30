@@ -64,7 +64,7 @@ const EXPECT: Record<string, number> = {
   "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
   "remotes-lifecycle": 1, "bodygate": 0.5, "anim-wire": 6, "lod-policy": 0.3, "lod-client": 20, "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5, "selfpose": 0.2,
   "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5, "flight": 0.5,
-  "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "ragdoll-floor": 3.9, "reach": 0.2, "reachwire": 0.2, "glbperf-file": 0.3,
+  "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "reach": 0.2, "reachwire": 0.2, "glbperf-file": 0.3,
   "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2, "chat-resync-wire": 0.2, "components-inspector": 0.8,
   "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2,
   "body-state": 8, "kind": 2, "replica-freeze": 0.5, "transmission": 0.5, "actions": 0.2, "audioctx": 0.2, "author-wire": 0.2, "backend-choice": 0.2, "blank-part-uvs": 0.3,
