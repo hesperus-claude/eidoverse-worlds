@@ -21,7 +21,8 @@ import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { idAliases } from "./idalias.ts";
 import { tryUntil, pause } from "./wait.ts";
 import { labClock, pinned } from "./clock.ts";
-const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids (R 10-17)
+import { suite } from "./suite.ts";
+const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -1618,14 +1619,13 @@ serverCases.push({ id: "S2", server: true, what: "the server: while a hostile sc
   }, good: (o) => o.inst === "ok" && o.rounds.filter((r: any) => r.code !== "unavailable").length === 3 && o.rounds.every((r: any) => (r.code === "unavailable" || (r.status === "failed" && r.code === "time")) && r.ms < 800 && r.maxOther < 800) && o.last === "time" });
 
 // ---------------- run ----------------
-let pass = 0, fail = 0, na = 0;
+const SUITE = suite("scripts-check", { cap: 700 }); let na = 0;
 // The I rows test isolation itself (a killed process, the deadline held against a native builtin). A host without it
 // (Windows: shared/protocol/sandbox.js fifoOk) runs scripts in-process, where those guarantees are the documented gap, so
 // they print OPTIONAL with the reason (the gate receipt shows them). I0 keeps that from hiding a regression: isolation must be on everywhere else.
 const { SANDBOX: SBX } = await import("../../shared/protocol/sandbox.js");
 const isolating = !!SBX.isolated(), mustIsolate = process.platform !== "win32" && process.env.EIDO_SANDBOX !== "inprocess";
-{ const good = isolating || !mustIsolate; if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} I0   isolation is on on every host but Windows (here: ${process.platform}, isolated ${isolating})`); }
+SUITE.ok(isolating || !mustIsolate, `I0   isolation is on on every host but Windows (here: ${process.platform}, isolated ${isolating})`);
 const all = [...cases, ...(argv.includes("--no-server") ? [] : serverCases)];
 for (const c of all) {
   if (ONLY && !ONLY.includes(c.id)) continue;
@@ -1633,8 +1633,6 @@ for (const c of all) {
   if (!isolating && (/^I\d/.test(c.id) || c.id === "S2")) { na++; console.log(`OPTIONAL ${c.id}: not run, no isolation on ${process.platform}${process.env.EIDO_SANDBOX === "inprocess" ? " (EIDO_SANDBOX=inprocess)" : ""} — ${c.what}`); continue; }
   let o: any, good = false;
   try { o = c.server ? await c.run(null) : c.run(session(c.opts)); good = !!c.good(o) && !o?.absent; } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 700)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[scripts-check] ${pass} passed, ${fail} failed${na ? `, ${na} not applicable (no isolation here)` : ""}`);
-process.exit(fail ? 1 : 0);
+SUITE.done(`${na ? `, ${na} not applicable (no isolation here)` : ""}`);
