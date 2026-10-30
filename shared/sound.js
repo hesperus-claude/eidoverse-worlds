@@ -114,7 +114,7 @@ export function normalizeSound(data) {
   } else if (sound.playing) notes.push('no t0 — the authority stamps one when it starts; without it each client starts from the top');
   if (data.description != null) {
     const d = String(data.description).replace(/\s+/g, ' ').trim();
-    if (graphemes(d) > SOUND_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters; it must be ≤ ${SOUND_DESCRIPTION_MAX}` };   // the door's bound and words (checks.js maxLen)
+    if (graphemes(d) > SOUND_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters (at most ${SOUND_DESCRIPTION_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
     if (d) sound.description = d;
   }
   if (!sound.description) notes.push('no description — anyone who can\'t hear it (or reads the world as text) gets only the file name; say what is playing');
