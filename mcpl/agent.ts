@@ -1,7 +1,7 @@
 // WorldAgent — a headless world participant: the MCPL's body.
 // Owns its avatar exactly like the browser client owns a human's: simulated
 // position/yaw/speed ticked at 10Hz, pose intent streamed to the sequencer,
-// terrain replicated (Skye's terrain.js eval'd in Bun) so feet agree with
+// terrain replicated (terrain.js eval'd in Bun) so feet agree with
 // every renderer. No GPU here — rendering is the retina's job (see server.ts).
 
 import { bodyOf } from "../shared/components.js";
@@ -47,10 +47,9 @@ import { bodyModeTracker, isBodyMode, readBodyMode } from "../shared/bodymode.js
 import { clampBodyScale } from "../shared/presencewire.js";
 import { DEFAULT_LEAF_FORCE as LEAF_FORCE } from "../shared/leafforce.js";
 
-/** An act's answer for its tool. `ok` is false when the call didn't do what
- *  it asked: a refusal, a cut, a climb or glide that fell short, a name the
- *  world refused. A call that changed nothing because what it asked for
- *  already held is ok. */
+/** An act's answer for its tool. `ok` is false when the call didn't do what it
+ *  asked (a refusal, a cut, a climb or glide that fell short, a refused name);
+ *  a call that changed nothing because it already held is ok. */
 export interface ActResult { ok: boolean; text: string }
 const done = (text: string): ActResult => ({ ok: true, text });
 const refused = (text: string): ActResult => ({ ok: false, text });
@@ -140,10 +139,8 @@ const SHOVE_TRIES = 5, SHOVE_WAIT_MS = 2500, SHOVE_SETTLE_MS = 800;
 type Blocker = { id: string; ref: any; phase: "approach" | "pushed"; until: number };
 type WalkGate = { mode: "sync" | "tracked" | "open"; permit: number[] | null; busy: boolean; blocker?: Blocker | null; shoves?: number; slow?: number; waitUntil?: number; hold?: number; retrackAt?: number };
 const STATURE_FALLBACK = MOVER.body.height;   // an ordinary adult (the mover's body), while a body's own height is being read (main #242)
-/** Longest horizontal move between two collision checks. A run covers 0.4m in
- *  one 100ms tick; checked only at its end, that leaps a 0.2m wall the walking
- *  capsule (r 0.32) never touched. The planner steps lines at the same scale
- *  (navgrid.ts NAV_SUBSTEP, which says why it is a browser frame's worth). */
+/** Longest horizontal move between two collision checks, so a run's 0.4m tick
+ *  can't leap a thin wall (navgrid.ts NAV_SUBSTEP says why this scale). */
 const COLLIDE_SUBSTEP = NAV_SUBSTEP;
 /** A walk that has made less than this fraction of its intended progress for
  *  STALL_TICKS consecutive ticks is held by something solid: it ends, saying
@@ -159,19 +156,15 @@ const BONES_NOT_KNOWN = "this body's bones aren't known (its model hasn't loaded
 const flightFixInOurTools = (reason: string) => String(reason)
   .replace(/unfold them first/, 'open them first (anim {stop: "wings-folded"})')
   .replace(/land first/, 'land first (act {verb: "land", args: {to}})');
-/** Quiet window for world-change narration, per (entity, component). Tuning a
- *  live emitter is a burst of `comp` entries; this is how long they fold into
- *  one line. Long enough to swallow a slider drag, short enough that "puts the
- *  fire out" still arrives while you are looking at it. */
+/** Quiet window for world-change narration, per (entity, component): a burst
+ *  of `comp` entries (a slider drag on a live emitter) folds into one line. */
 const EMITTER_COALESCE_MS = Number(process.env.EW_EMITTER_COALESCE_SEC ?? 4) * 1000;
 
 type Vec2 = { x: number; z: number };
 type CollisionMesh = { positions: Float32Array; indices: Uint32Array; building?: unknown };
-/** Collision triangles per (sequencer, lib), for every agent in this process.
- *  A lib's bytes are immutable for its lifetime here (store paths are content
- *  hashes; library models change only on a redeploy, which restarts us), and
- *  the decode is the expensive part — a world full of agents decodes each
- *  model once. */
+/** Collision triangles per (sequencer, lib), shared by every agent in this
+ *  process. A lib's bytes are immutable while we run (content-hashed store;
+ *  library changes redeploy), so each model decodes once. */
 const meshCache = new Map<string, Promise<CollisionMesh | null>>();
 /** Each model's own description of itself (its `building` extras), by the same
  *  key, once its bytes have been read — the defaults for its named places. */
@@ -280,16 +273,10 @@ function floorAtLocal(plan: any, lv: any, lx: number, lz: number): boolean {
   return !node.includes(":") || halfFloored(lv.level, cx, cz, node.split(":")[1]);
 }
 
-/** A floor walk's navgrid probe, standing nowhere lower than the walk's
- *  floor. The walk's feet go no lower than that floor's height to its end:
- *  its ground is the floor's height (walkHeightAt), and stepFeet stands them
- *  on what's placed above it, never below. So a column whose ground is
- *  lower is no ground at all. Without that, placed tops a step apart could
- *  lead the grid down beside the floor, to the drop walkProbeGround answers
- *  off it or onto a platform below, and route the walk across them with the
- *  feet held at the floor's height, over the air. At or above the floor the
- *  grid stands where the feet do, on what's placed there. `GROUNDED` is
- *  stepFeet's own nearness: feet that near a surface stand on it. */
+/** A floor walk's navgrid probe, standing nowhere lower than the walk's floor.
+ *  The walk's feet never go below that floor (walkHeightAt, stepFeet), so a
+ *  lower column is no ground: otherwise the grid could route the walk over air
+ *  beside the floor. `GROUNDED` is stepFeet's own nearness. */
 function onOrAboveFloor(probe: NavProbe, floor: number): NavProbe {
   const GROUNDED = 0.02;
   return {
@@ -323,10 +310,8 @@ function stepSides(ok: (Vec2 | null)[]): Vec2[] {
   return sides;
 }
 
-/** Presence is a live, lossy plane: a just-joining browser can briefly send a
- * pose shell whose coordinates are null/non-finite before its controller has
- * a real transform. Treat that as "position unknown", never as a reason for
- * the entire text-tier sense to throw. */
+/** A just-joining browser can briefly send a pose with null/non-finite
+ * coordinates: treat that as "position unknown", never throw. */
 function posePosition(pose: Pose | null | undefined): [number, number, number] | null {
   const p = pose?.p;
   if (!Array.isArray(p) || p.length < 3) return null;
@@ -348,37 +333,17 @@ function frameToWorld(p: number[], yaw: number, local: number[]): number[] {
 }
 type InboxItem = { ts: number; kind: "say" | "arrive" | "leave" | "act"; who: string; text?: string; seq?: number | null };
 
-/** How much of a `/geom` top-surface band is actually SURFACE.
- *
- *  A Surface carries the real up-facing `area` and, separately, the x/z
- *  rectangle that BOUNDS the band. Those are very different claims, and this
- *  is the first consumer to have treated the rectangle as solid extent. A
- *  palm's fronds bound a wide rectangle around almost nothing; a rubble pile
- *  spreads 1.8m² of jagged faces across 404m² of bounding box. Registering
- *  the rectangle invents a floor in the canopy and rests bodies on air. */
+/** Fraction of a `/geom` top-surface band's bounding x/z rectangle that is real
+ *  up-facing `area`. The rectangle alone would invent floors in sparse things
+ *  (a palm canopy, a rubble pile). */
 const fillOf = (t: { area: number; x: number[]; z: number[] }) => {
   const rect = (t.x[1] - t.x[0]) * (t.z[1] - t.z[0]);
   return rect > 1e-6 ? t.area / rect : 0;
 };
 
-/** Minimum fill before a band may be believed as a floor.
- *
- *  From a survey of the shipped library (59 libs, 342 surfaces, 57 that this
- *  code would otherwise register), NOT from taste. The two populations
- *  separate cleanly and the gap is empty: everything sparse lands at or below
- *  0.361 (rubble piles 0.004–0.036 — the worst is 226× overclaim, 1.8m² of
- *  surface in a 404m² rectangle; palm canopy 0.101; excavators and rig
- *  superstructure 0.019–0.31), while every real deck lands at or above 0.532
- *  (perimeter walls 0.53–0.57, tank hull 0.73, wall pillar 0.76, watchtower
- *  decks 0.76 and 0.86, rig top deck 0.83, wall gate 1.00). No surveyed
- *  surface falls between. 0.45 sits in the middle of that empty band, so
- *  library drift in either direction has to travel before it changes an
- *  answer. This is the one line to move if the split needs revisiting.
- *
- *  The cost is deliberate: a real-but-open deck (a catwalk, a grating) is
- *  abstained on and a body falls to terrain instead. That is the honest
- *  pre-#17 answer. The alternative is inventing geometry, and a body resting
- *  in a palm canopy is exactly the bug this PR exists to end. */
+/** Minimum fill before a band may be believed as a floor. Set from a library
+ *  survey (docs/research/deck-fill-threshold.md); a real-but-open deck (a
+ *  catwalk) is abstained on by design and a body falls to terrain instead. */
 const DECK_FILL = 0.45;
 
 // A canned "knocked over" pose for headless agents, which cannot simulate.
@@ -392,10 +357,9 @@ const DOWNED_POSE: Record<string, number[]> = {
   leftLowerLeg: [-0.7, 0, 0, 0.71], rightLowerLeg: [-0.7, 0, 0, 0.71],
 };
 
-/** What a person's voice state means for YOU, in words (owner, 10-02: "something more understandable — their headphones
- *  are off, but they can still receive text"). Read from the live pose (shared/presencewire.js voiceWire, shared with
- *  everyone in the world: docs/pose-wire.md). The headphones gate spoken voice only (people's mics and synthesized
- *  speech, an agent's included); chat text always arrives. Absent = the client didn't say: no claim is made. */
+/** What a person's voice state means for YOU, in words. Read from the live pose (shared/presencewire.js voiceWire,
+ *  docs/pose-wire.md). The headphones gate spoken voice only (mics and synthesized speech, an agent's included); chat
+ *  text always arrives. Absent = the client didn't say: no claim is made. */
 export function voiceNote(pose: unknown): string {
   const v = (pose ?? {}) as { mic?: unknown; hear?: unknown; xr?: unknown };
   const parts: string[] = [];
@@ -427,10 +391,8 @@ export class WorldAgent {
   /** The height the walk under way stands at, wherever it is: the live terrain for a terrain walk, the admitted floor
    *  for a floor walk. Null when no walk is under way. */
   private walkHeightAt: ((x: number, z: number) => number) | null = null;
-  /** Why the last walkTo() call was refused, or null when it was accepted:
-   * its arguments, or no route. Planning is synchronous; a caller can capture
-   * this immediately after walkTo() so a later replacement walk cannot change
-   * its refusal receipt. */
+  /** Why the last walkTo() call was refused (its arguments, or no route), or
+   * null when accepted. Planning is synchronous, so read it right after walkTo(). */
   walkRefusal: string | null = null;
   /** This body's standing height (rigbones.ts bodyHeightFor) — what water depth is measured against. */
   bodyH: number | null = null;
@@ -453,34 +415,22 @@ export class WorldAgent {
    *  it rides the pose packet and is never a log verb, because it is a moment,
    *  not a change to the world. `null` clears. */
   heldPose: Record<string, PoseValue> | null = null;
-  /** Where heldPose came from. An AUTHORED pose (set deliberately — the pose
-   *  tool, a puppet, the server's settled memory) is a place: it survives
-   *  walking, posture changes and sleep. A PHYSICS pose (ragdoll sim frame,
-   *  drag stream, knockdown slump) is a moment: it may only ever leave this
-   *  process under the "ragdoll" clip, and any decision to move sheds it.
-   *  Without this line the two were indistinguishable — one settled tumble
-   *  frame got relabelled "idle", slipped every clip-keyed sanitizer, and
-   *  haunted princess across sessions and joiners for weeks (#61). */
+  /** Where heldPose came from. An AUTHORED pose (the pose tool, a puppet, the
+   *  server's settled memory) is a place: it survives walking, posture changes
+   *  and sleep. A PHYSICS pose (sim frame, drag stream, knockdown slump) is a
+   *  moment: it only ever leaves this process under the "ragdoll" clip, and any
+   *  decision to move sheds it. */
   heldPoseAuthored = false;
 
-  /** The height of the feet when this body was last knocked over standing
-   *  (knockDown). A canned slump, held before any sim has run or with no sim
-   *  to run, keeps its root at that height: the fallback with no body to
-   *  simulate shoves it along, and nothing lifts or lowers it until a sim's
-   *  frame or a dragging hand puts it where physics lays it. So a slumped
-   *  body whose root is still at this height is a canned slump (rootCanned),
-   *  and any other has its feet RAGDOLL_ROOT_DROP above its root (feetY). */
+  /** Feet height when this body was last knocked over standing (knockDown). A
+   *  canned slump keeps its root at this height until a sim frame or a dragging
+   *  hand moves it, so a slumped root still here is canned (rootCanned); any
+   *  other has its feet RAGDOLL_ROOT_DROP above its root (feetY). */
   private cannedY: number | null = null;
 
-  /** The exact pose object that was granted "hold this while I walk".
-   *
-   *  Stored as the OBJECT, not a boolean, and compared by identity — so any
-   *  other writer of `heldPose` (a tumble frame, a puppet, a drag sample, a
-   *  restore) revokes stickiness for free by simply assigning a different
-   *  object. A parallel boolean would have to be cleared at all nine of those
-   *  sites, and the one that got missed would be a pose that outlived every
-   *  walk forever. This cannot be missed: it is the same identity trick the
-   *  renderer's `_composeBegin` and the interpolator's `lastPose` both use. */
+  /** The exact pose object granted "hold this while I walk", compared by
+   *  identity: any other writer of `heldPose` revokes it just by assigning a
+   *  different object, so no call site can forget to clear a flag. */
   private heldPoseSticky: Record<string, PoseValue> | null = null;
   draggedBy: string | null = null;   // whose takeover sim drives this body (bodydrag)
   dragAt = 0;                        // last drag sample, for the silence timeout
@@ -488,11 +438,9 @@ export class WorldAgent {
   body: HeadlessBody | null | undefined = undefined; // the REAL ragdoll (undefined = not tried yet)
   private simTicker: ReturnType<typeof setInterval> | null = null;
   private walkDone: ((arrived: boolean) => void) | null = null;
-  // ---- the authority's track of this body (E1, tools audit 10-07: "two bodies") ----
-  // The authority keeps its own body for every actor (authority.js EMBODIED_VERBS.move: 6 m/s, 4 m at most in one go, not
-  // through what it calls solid) and every hand verb measures from it. A person's client streams `move` steps to it
-  // (client/lib/thingphysics.js track); this body walks the same way: it asks the authority for each stretch BEFORE it
-  // walks it, so a wall the authority refuses stops this body exactly where the authority's stops.
+  // ---- the authority's track of this body (E1) ----
+  // The authority keeps its own body per actor (authority.js EMBODIED_VERBS.move) and every hand verb measures from it.
+  // This body asks for each stretch BEFORE walking it, so a wall the authority refuses stops both at the same place.
   /** the authority knows this body (its arrival was accepted); every snapshot forgets it (leaving drops the track) */
   private trackArrived = false;
   /** where the authority last accepted this body, [x, y, z] */
@@ -543,8 +491,8 @@ export class WorldAgent {
     return sock && typeof sock === "object" ? { id: String(id), host: this.mounts.get(String(id))?.to ?? null, name: String(sock.name ?? ""), sock, station: station && typeof station === "object" ? station : null } : null;
   }
   /** "host (name)" for a socket — how anyone reads where someone is occupying; the bare id for anything else. */
-  socketName(id: string) { const s = this.socketRec(id); return s ? `${s.host ? this.refName(String(s.host)) : s.host} (${s.name})` : this.entities.has(id) ? this.refName(id) : id; }   // by its name (R 10-17)
-  /** A thing's short handle here (R 10-17, shared/thingref.js): the shortest unique id prefix of 4+, derived fresh. */
+  socketName(id: string) { const s = this.socketRec(id); return s ? `${s.host ? this.refName(String(s.host)) : s.host} (${s.name})` : this.entities.has(id) ? this.refName(id) : id; }   // by its name
+  /** A thing's short handle here (shared/thingref.js): the shortest unique id prefix of 4+, derived fresh. */
   handle(id: string): string { return handleOf(id, this.entities.keys()); }
   /** What a reader calls a thing in a sentence or a "thing/place" ref: its label when that names it alone, else its handle. */
   refName(id: string): string { const l = (this.entities.get(id) as any)?.label; if (typeof l === "string" && l.trim() && !/[/\[\]"]/.test(l)) { const r = this.thingRef(l); if ("id" in r && r.id === id) return l.trim(); } return this.handle(id); }
@@ -556,7 +504,7 @@ export class WorldAgent {
     const where = up && this.entities.has(up) ? `on ${(this.entities.get(up) as any)?.label ?? `[${this.handle(up)}]`}` : f.ok ? `at (${f.pos[0].toFixed(1)}, ${f.pos[1].toFixed(1)}, ${f.pos[2].toFixed(1)})` : "where unknown";
     return `${typeof e.label === "string" && e.label ? `"${e.label}" ` : ""}${what} ${where} [${this.handle(id)}]`;
   }
-  /** A thing by what an agent calls it (R 10-17 ID HARDENING (5)): its id, its label, or a unique id prefix (4+, git-style).
+  /** A thing by what an agent calls it: its id, its label, or a unique id prefix (4+, git-style).
    *  Several matching is refused with the candidates (label, what, where, handle), never resolved by picking one. A
    *  placeholder ('$x'), @world, a blueprint hash or a person's identity is not a thing name: it passes as it is.
    *  {id} | {refusal} | {none} (nothing here is called that: a caller may try a place or a person next). */
@@ -586,7 +534,7 @@ export class WorldAgent {
         const lean = Array.isArray(m.spec?.lean) && m.spec.lean.length === 3 && m.spec.lean.every(Number.isFinite) ? m.spec.lean : null;
         const by = this.nameOfActor(String(m.from ?? "")) ?? String(m.from ?? "someone"); this.knockDown(by, lean, `(${by} knocks you over)`); }
       else if (m.type === "body") text = `the world let ${m.from}'s ${m.kind}${m.spec?.point ? ` (${m.spec.point})` : ""} reach your body (consent: ${m.consent})`;
-      else if (m.type === "vacated") {   // review r9 M3: an edit by someone else moved the seat I sat on, and the authority let me go
+      else if (m.type === "vacated") {   // an edit by someone else moved the seat I sat on, and the authority let me go
         if (vacatedFromMine(m, this.myOccupancy)) { const on = this.socketName(m.socket); this.setOccupant(null);
           // stand where the authority let me go (its track of my body starts again there, r9 M2)
           const at = vacatedAt(m); if (at) { this.pos.x = at[0]; this.pos.y = at[1]; this.pos.z = at[2]; }
@@ -612,42 +560,31 @@ export class WorldAgent {
   people = new Map<string, Person>();
   inbox: InboxItem[] = [];
   private inboxCursor = 0;
-  /** Highest world-log seq whose `say` already sits in the inbox. A mid-life
-   *  reconnect replays the same snapshot tail — without this guard every
-   *  server restart re-appended history and the next look() dumped chat the
-   *  agent had already seen. */
+  /** Highest world-log seq whose `say` is already in the inbox, so a reconnect's
+   *  replayed snapshot tail isn't appended twice. */
   private inboxSeen = -Infinity;
   pings: { ts: number; kind: "mention" | "approach" | "depart" | "reach" | "touch"; who: string; text?: string }[] = [];
   onPing: ((p: { ts: number; kind: string; who: string; text?: string }) => void) | null = null;
   /** live world events (say/arrive/leave/activity) — the channel fan-out hook */
   onEvent: ((ev: { ts: number; kind: "say" | "arrive" | "leave" | "act" | "activity" | "weather" | "world-change"; who: string; text?: string; mention?: boolean }) => void) | null = null;
-  /** MEDIA seam (#104 / #57): the SFU's publish path is gated to the EMBODIED
-   *  PRIMARY (`relay-cred is the embodied primary's ask`, server.ts) — and for
-   *  an agent, the primary IS this server. So an agent with a local synthesizer
-   *  could not publish at all: its sidecar has the audio and no credential, the
-   *  door has the credential and no audio.
-   *
-   *  Same shape as #100's fix, one layer out: rather than forcing the agent onto
-   *  a raw world-ws side connection (which is what my media-peer was, and it
-   *  landed on the MESH while everyone else was on the SFU), the authority forwards
-   *  the media-signalling frames it is the only one authorized to carry. The
-   *  door NEVER synthesizes, encodes, or holds a peer connection — it relays
-   *  four message types and stays a text-tier participant.
+  /** MEDIA seam. The SFU's publish path is gated to the embodied primary, which
+   *  for an agent is this server, so the door relays the media-signalling frames
+   *  between the world and a local voice sidecar. The door never synthesizes,
+   *  encodes or holds a peer connection; it stays a text-tier participant.
    *
    *  Frames out (server→sidecar): relay-cred · sfu-offer · sfu-ice · sfu-route
    *  Frames in  (sidecar→server): sfu-answer · sfu-ice · sfu-want-negotiate
-   *  Nothing else is forwarded in either direction — a whitelist, not a pipe,
-   *  for exactly #100's reason: server-side validation stays the one authority. */
+   *  Nothing else is forwarded: a whitelist, not a pipe, so server-side
+   *  validation stays the one authority (tools/door-media-whitelist-test.mjs). */
   onMedia: ((frame: Record<string, unknown>) => void) | null = null;
   /** Our own recent says (seq → text) and our surface generation, both needed
    *  to mint a performance receipt on a sidecar's behalf. */
   ownSays = new Map<number, string>();
   surfaceGen: number | null = null;
 
-  /** The performance receipt (#57 B1 / PR #103). Sent by the DOOR, never by the
-   *  sidecar: attest is identity-bearing and generation-stamped, and a loopback
-   *  peer able to mint one could suppress every listener's TTS fallback for
-   *  audio it never aired. The digest is over the WORLD's copy of the text. */
+  /** The performance receipt. Sent by the DOOR, never the sidecar: attest is
+   *  identity-bearing, and a sidecar able to mint one could suppress listeners'
+   *  TTS fallback for audio never aired. The digest is over the WORLD's copy of the text. */
   async attestSay(seq: number): Promise<boolean> {
     const text = this.ownSays.get(seq);
     if (text == null || this.ws?.readyState !== 1) return false;
@@ -665,31 +602,19 @@ export class WorldAgent {
    *  away (> REARM_RADIUS) before another boundary crossing can ever count —
    *  someone pacing at 2–3m otherwise re-triggers on every crossing. */
   private nearArmed = new Map<string, boolean>();
-  /** An inward crossing that has NOT yet earned its ping. `since` is when they
-   *  crossed into arm's reach, `stillSince` when they were last observed
-   *  moving faster than APPROACH_STILL_MPS, and `at`/`atTs` the previous
-   *  sample, so the next one yields an observed speed. Cleared the moment they
-   *  leave the radius — that clearing IS the pass-through fix. */
+  /** An inward crossing that has NOT yet earned its ping (dwell pending): `since`
+   *  = entered arm's reach, `stillSince` = last seen faster than
+   *  APPROACH_STILL_MPS, `at`/`atTs` = previous sample. Cleared when they leave the radius. */
   private approachPending = new Map<string, { since: number; stillSince: number; at: [number, number]; atTs: number }>();
-  /** Someone whose approach was DELIVERED and whose departure therefore still
-   *  owes a ping. Gating "walked away" on this is what stops the fix at the
-   *  top of the radius being undone at the bottom: a passer-by never earned an
-   *  approach, so their leaving is not a departure — it is just traffic.
-   *
-   *  The value is OUR OWN (x,z) at the moment the approach fired — the
-   *  vantage the walk-up was true from. The radius is relative, so "they
-   *  crossed the re-arm edge" alone cannot say who moved; measuring the
-   *  departing body against this anchor can: past REARM_RADIUS from where we
-   *  STOOD, their own movement accounts for the exit and the wire may say
-   *  "walked away". Anything less means we carried some (or all) of the
-   *  separation ourselves, and the wire only claims the relation ended. */
+  /** Someone whose approach was DELIVERED, so their departure owes a ping (a
+   *  passer-by never earned one). The value is OUR (x,z) when the approach fired:
+   *  past REARM_RADIUS from there, their own movement explains the exit and the
+   *  wire may say "walked away"; otherwise it only says the relation ended. */
   private approachOpen = new Map<string, [number, number]>();
   /** participant -> when their current non-locomotion stint began (jump, sit…) */
   private nonLocoSince = new Map<string, number>();
-  /** My live reach descriptors, one entry per limb (shared/reachwire.js).
-   *  They travel on every presence packet; every receiver re-solves the relation
-   *  against its own scene. The `reached` flag is MY solver's attestation,
-   *  kept honest by reachTick(). */
+  /** My live reach descriptors, one per limb (shared/reachwire.js), sent on
+   *  every presence packet; `reached` is my solver's attestation (reachTick). */
   reaches = new Map<string, { t: any; palm?: false; reached?: true }>();
   private reachBodies = new Map<string, ReachBody | null>();               // avatar path -> solver body
   private reachBodyLoads = new Map<string, Promise<ReachBody | null>>();
@@ -722,23 +647,18 @@ export class WorldAgent {
   /** reach/touch ping refractory, keyed "kind:who:limb" — a hand trembling
    *  across the touch threshold must not knock twice. */
   private lastReachPing = new Map<string, number>();
-  /** Local-awareness accumulator, reset every pulse. Records what happened
-   *  within ACTIVITY_RADIUS_M since the last pulse — RAW where rawness is
-   *  truth (movement, says: jump spam is genuine liveliness even when its
-   *  narration is denoised) but DENOISED for arrivals/departures (a reconnect
-   *  flap is not activity, it is weather). */
+  /** Local-awareness accumulator, reset every pulse: RAW for movement and says
+   *  (jump spam is real liveliness) but DENOISED for arrivals/departures (a
+   *  reconnect flap is not activity). */
   private act30 = { says: new Map<string, number>(), moved: new Map<string, number>(), acts: 0, arrivals: 0, departures: 0, builds: 0 };
   /** The last EMITTED pulse — novelty gate state. `sig` fingerprints the
    *  ambient scenery (roster + movers + acts); `roster` lets an unchanged
    *  cast be compacted to a count instead of ten names, every time. */
   private lastPulse = { sig: "", roster: "", at: 0 };
-  // Seat-profile verdicts (#101): the same server-judged values /avatars
-  // hands the browser, fetched over httpBase at join and on the two update
-  // events. The cache — epochs, pending demotion, event-rev floors — is
-  // seatcore.makeVerdictCache, the SAME implementation the browser runs
-  // (#105 review B1: the logic existed twice and each copy had the same
-  // holes). effective.ts reads these through the view — never a rederived
-  // hash, never a quiet default.
+  // Seat-profile verdicts: the server-judged values /avatars hands the browser,
+  // fetched at join and on the two update events, cached by seatcore's
+  // makeVerdictCache (the browser's own implementation). effective.ts reads
+  // these through the view, never a rederived hash or a quiet default.
   private seatCache = makeVerdictCache(async () => {
     const res = await fetch(`${this.httpBase}/avatars`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
     if (!res.ok) throw new Error(`roster ${res.status}`);
@@ -784,10 +704,8 @@ export class WorldAgent {
    *  DERIVED from this at look() time, so the described hour/weather is the
    *  one the forecast implies NOW, not the one at the last log entry. */
   private skyState: any = null;
-  // The sky WATCH: pull is look(), this is the push half — one ambient
-  // percept per meaningful boundary (forecast segment change, manual
-  // override landing/expiring, coarse day-phase crossing). Deduped by
-  // signature, never a synthetic log verb, never a continuous clock.
+  // The sky WATCH (look() is the pull half): one ambient percept per meaningful
+  // boundary, deduped by signature, never a synthetic log verb or a clock.
   private skyCursor: any = null;
   private lastSkyKey: string | null = null;
   private lastDayPhase: string | null = null;
@@ -817,7 +735,7 @@ export class WorldAgent {
   private pendingDebug = new Map<string, (m: any) => void>();
   private histId = 0;
 
-  /** Does `text` mention this body: its name, or the display name its credential gave it (#184)? */
+  /** Does `text` mention this body: its name, or the display name its credential gave it? */
   mentionsMe(text: string): boolean {
     return !!mentionRegexFor([this.name, this.displayName], { dropQualifiers: this.dropMentionQualifiers })?.test(text);
   }
@@ -866,28 +784,19 @@ export class WorldAgent {
     this.gate.dispose(); // held narration dies with the session
     for (const s of this.emitterNarration.values()) clearTimeout(s.timer);
     this.emitterNarration.clear();
-    // Take this world's floors out with us. The collider map is process
-    // state (see physics.ts's declared seam), so an agent that leaves and is
-    // replaced by one joining somewhere else would otherwise leave its
-    // platforms standing in empty air under the new world — a ghost floor by
-    // the back door, and the exact failure the motion fence exists to
-    // prevent. Leaving is the one moment this agent knows they are its own.
+    // Take this world's floors out with us: the collider map is process state
+    // (physics.ts), so a successor agent elsewhere would otherwise stand on them.
     for (const id of [...this.supportIds.keys()]) this.dropSupport(id);
     this.ws?.close();
   }
 
-  /** The activity pulse: local awareness as ONE event per window, and only
-   *  while something is happening. See denoise.ts (ACTIVITY_*) for the why.
-   *  Deliberately not pushed to the inbox — look() already shows presence
-   *  live and chat verbatim; the pulse is a wake signal, not scrollback.
+  /** The activity pulse: ONE event per window, only while something happens
+   *  (denoise.ts ACTIVITY_*). Not pushed to the inbox: it is a wake signal.
    *
-   *  NOVELTY-GATED (field report: "antra moving about" every 30s buried a
-   *  context in near-identical lines). Discrete events — speech, arrivals,
-   *  departures, builds — always pulse: each one HAPPENED since the last
-   *  window. Ambient continuation — the same cast, still milling about,
-   *  still fidgeting — is scenery: it pulses when the scenery CHANGES
-   *  (someone new moves, someone stops, the roster shifts) and otherwise
-   *  repeats no more often than ACTIVITY_REFRESH. Recurrence is not novelty. */
+   *  NOVELTY-GATED: discrete events (speech, arrivals, departures, builds)
+   *  always pulse; ambient continuation pulses when it CHANGES (someone new
+   *  moves, someone stops, the roster shifts), otherwise at most every
+   *  ACTIVITY_REFRESH. */
   private activityPulse() {
     const a = this.act30;
     const msgs = [...a.says.values()].reduce((s, n) => s + n, 0);
@@ -921,25 +830,19 @@ export class WorldAgent {
 
   /** A malformed log entry is WORLD data, not this agent's mistake — say so
    *  a few times, then stay quiet: a poisoned tail replays on every
-   *  reconnect and must not flood the log with the same diagnosis (#88). */
+   *  reconnect and must not flood the log with the same diagnosis. */
   private malformedSeen = 0;
   private noteMalformed(verb: string, args: unknown) {
     if (this.malformedSeen++ >= 5) return;
     console.error(`[agent ${this.name}] malformed ${verb} entry — position kept: ${JSON.stringify(args)?.slice(0, 160)}`);
   }
 
-  /** Server-to-local clock offset — the headless serverNow(), kept as
-   *  client/lib/remotes.js keeps it: the same samples, by the same rule
-   *  (shared/clockoffset.js: the least-delayed sample wins, so a late frame
-   *  moves it by no more than the leak), on the same kind of clock: this
-   *  process's monotonic one (localNow), which a step of the host's wall
-   *  clock can't move.
-   *  Motion is a function of SEQUENCER time; evaluating it on a skewed host
-   *  clock makes this body report a different pendulum phase than every
-   *  browser looking at the same swing, while both run the same closed form
-   *  (#92 review, B1). Fed from the clock message the server sends just
-   *  before each snapshot to a join that asks, as this agent's joins do, and
-   *  from the embodied plane's frame stamps. */
+  /** Server-to-local clock offset, the headless serverNow(): the same samples
+   *  and rule as client/lib/remotes.js (shared/clockoffset.js, least-delayed
+   *  sample wins), on this process's monotonic clock (localNow). Motion is a
+   *  function of SEQUENCER time, so a skewed host clock would show a different
+   *  pendulum phase than every browser. Fed from the server's pre-snapshot
+   *  clock message and the embodied plane's frame stamps. */
   private clock: { offset: number; at: number } | null = null;
   /** This process's own clock in epoch ms, monotonic: performance.now() from
    *  its origin, as a browser's serverNow() reads its own. */
@@ -956,14 +859,14 @@ export class WorldAgent {
 
   /** A composition gap is a perception limit, not a world error: say so a
    *  few times (the noteMalformed bound), then stay quiet. Callers that hit
-   *  one must ABSTAIN, never fall back to a stale coordinate (#92, B2). */
+   *  one must ABSTAIN, never fall back to a stale coordinate. */
   effGaps = 0;
   private noteEffGap(id: string, why: string) {
     if (this.effGaps++ >= 5) return;
     console.error(`[agent ${this.name}] effective transform unavailable for ${id} — ${why}`);
   }
 
-  /** A support seam is the same species (#84): a floor this side cannot
+  /** A support seam is the same species: a floor this side cannot
    *  truthfully model. Declared, bounded, and never papered over with the
    *  known-false box top. */
   supportSeams = 0;
@@ -986,26 +889,15 @@ export class WorldAgent {
       this.ws = ws;
       this.joinRefused = null;
       const timeout = setTimeout(() => reject(new Error(this.joinRefused ?? "the world didn't answer the join within 8 seconds")), 8000);
-      // `agent: true` is not a capability — it changes nothing about what this
-      // body may do. It exists so the world can SAY who it is talking to.
-      // Knowing whether the thing across the table thinks in tokens or neurons
-      // matters here in a way it doesn't in a chat app.
+      // The join declares what this body is (joinMsg); it grants no capability.
       ws.onopen = () => ws.send(JSON.stringify(this.joinMsg()));
       ws.onclose = (ev) => {
         this.joined = false;
-        // 4006 = removed by moderation (kicked or banned). Reconnecting would
-        // either hammer a banned door or instantly undo a kick — the body
-        // stays down; its host reconnecting later is the deliberate return.
-        // The branch's meaning is close()'s meaning ("never reconnect, stop
-        // the body"), so it goes THROUGH close(): setting `closed` alone left
-        // every support holder this instance owned registered in the
-        // process-global physics state — a ghost floor by the moderation
-        // door, holding up bodies in later worlds at the same coordinates
-        // (#83; the #17 symptom reached through a ban).
-        // …unless the removal said when they may come back (a kick's cooldown, research roles S4: "4006 = never
-        // reconnect" made every kicked agent a permanent one). Then the body still lets go of what it holds up now
-        // (its floors: the #83 reason close() is the path), and the host dials again once the cooldown has passed.
-        // Bans and anything longer than two hours stay what they were: the body stays down.
+        // 4006 = removed by moderation (kicked or banned): the body stays down,
+        // and goes THROUGH close() so it also drops the floors it holds up in
+        // the process-global physics state.
+        // …unless the removal said when they may come back (a kick's cooldown): the body still lets go of what it holds
+        // up now, and the host dials again once the cooldown has passed. Bans and anything over two hours stay down.
         if ((ev as { code?: number } | undefined)?.code === 4006) {
           const wait = (this.removedUntil ?? 0) - Date.now();
           if (wait > 0 && wait <= 2 * 3600_000 && !this.closed) {
@@ -1016,19 +908,16 @@ export class WorldAgent {
           }
           this.close(); return;
         }
-        // 4005 = the sequencer REFUSED the join: a malformed or reserved name, a bad token, no such world, an old-format
-        // world, an access refusal, a client that doesn't fold the log. A refusal is an answer, not an outage — redialing
-        // it every 1.5s is the polite-DoS the sequencer's own comments warn about (RFC-005 review D1: a granted ?world=
-        // dial with a name the sequencer rejects used to hammer forever).
-        // …except reason "full" (the world is at its access max): temporary, someone leaving makes room. The join is
-        // refused in the server's words and the body dials again by itself, backing off as a person's page does
-        // (shared/redial.js; review r4 claims C2). The other refusals end the body, as before.
+        // 4005 = the sequencer REFUSED the join (bad or reserved name, bad token, no such world, access refused…). A
+        // refusal is an answer, not an outage: redialing it would hammer the sequencer.
+        // …except reason "full": temporary, so the body dials again by itself, backing off as a person's page does
+        // (shared/redial.js). The other refusals end the body.
         const code = (ev as { code?: number } | undefined)?.code, why = String((ev as { reason?: string } | undefined)?.reason ?? "");
         const refused = this.joinRefused; this.joinRefused = null;
         if (code === 4005 && why === "full" && !this.closed) {
           clearTimeout(timeout);
           // the words are this body's, kept open: the agent doors (mcpl/server.ts, net-server's serve and travel) end on this
-          // rejection and close it, so they say only what a body that is kept does (review r5 F4; docs/WIRE.md 4005)
+          // rejection and close it, so they say only what a body that is kept does (docs/WIRE.md 4005)
           reject(new Error(`${refused ?? "the world is full"} — trying again by itself while this body is kept open (closing it gives up the wait)`));
           setTimeout(() => { if (!this.closed && !this.joined) this.connect().catch(() => {}); }, this.redial.next(REDIAL.full));
           return;
@@ -1044,28 +933,23 @@ export class WorldAgent {
           this.close(); return;
         }
         // any other drop (an outage, a restart): dialled again on the browser's schedule (shared/redial.js, reset by a join),
-        // not a fixed 1.5 s that every agent of a restarted server would keep in step (review r5 F4)
+        // not a fixed 1.5 s that every agent of a restarted server would keep in step
         if (!this.closed) setTimeout(() => this.connect().catch(() => {}), this.redial.next());
       };
       ws.onmessage = async (ev) => {
-        // House rule #3, applied to the DOOR: no event may ever exit the
-        // process. An uncaught throw here killed the whole MCPL door per
-        // pose event tonight (isAgent-not-a-function → systemd restart loop
-        // → every resident's connection "flapping"). One bad message is one
-        // logged line, never a shared outage.
+        // No event may ever exit the process: one bad message is one logged line,
+        // never an outage for every resident on this door.
         try {
         const msg = JSON.parse(String(ev.data));
         switch (msg.type) {
           case "error":
             if (typeof msg.until === "number") this.removedUntil = msg.until;   // when a kick lets us back (onclose 4006)
-            // A pre-join refusal (reserved name, bad token) is final —
-            // retrying the identical join every 1.5s can only produce the
-            // same refusal. Surface the sequencer's reason instead of the
-            // silent join-timeout loop this used to be.
+            // A pre-join refusal is final: surface the sequencer's reason
+            // instead of retrying the identical join.
             if (!this.joined) {
               // a cooldown isn't final: onclose 4006 dials again after it. Any other refusal's close says whether it is
               // final (4005 "full" is not: onclose dials again); onclose answers this connect() with these words. The
-              // world's own words, as the cause inside whatever sentence carries this (travel's, for one) (#247)
+              // world's own words, as the cause inside whatever sentence carries this (travel's, for one)
               const said = String(msg.error ?? "").trim().replace(/\.+$/, "");
               const base = said ? `the world refused the join: ${said}` : "the world refused the join without giving a reason";
               // an old-format world: who may upgrade it, and the doc, in words (shared/oldformat.js; docs/WIRE.md 4005)
@@ -1073,11 +957,9 @@ export class WorldAgent {
               if (typeof msg.until === "number") { clearTimeout(timeout); reject(new Error(words)); }
               else this.joinRefused = words;
             } else {
-              // A mid-life refusal (insufficient rank, a bad moderation
-              // target, being kicked…). Verbs are fire-and-forget, so this is
-              // the only place the answer lands: remember it so a tool call
-              // can report it (modOutcome), and put it in the inbox so a
-              // later look() shows what the world said no to.
+              // A mid-life refusal. Verbs are fire-and-forget, so this is the only
+              // place the answer lands: kept for a tool call (modOutcome) and in
+              // the inbox for a later look().
               this.lastRefusal = { ts: Date.now(), text: String(msg.error ?? "refused") };
               this.inbox.push({ ts: Date.now(), kind: "act", who: "world", text: `refused: ${msg.error}` });
             }
@@ -1103,33 +985,19 @@ export class WorldAgent {
             this.inbox.push({ ts: Date.now(), kind: "act", who: "world", text: String(msg.text ?? "") });
             break;
           // ── media signalling (see onMedia) ─────────────────────────────
-          // Forwarded verbatim to whoever holds this identity's audio. The
-          // door does not interpret SDP; it is the authenticated carrier, and
-          // nothing more. If no sidecar is attached these are dropped, which
-          // is the correct behaviour for a text-only agent — it never asked
-          // for a credential, so the server never sends these.
+          // Forwarded verbatim to whoever holds this identity's audio; the door
+          // doesn't interpret SDP. With no sidecar attached they are dropped.
           case "relay-cred": case "sfu-offer": case "sfu-ice": case "sfu-route":
           case "voice-consent":   // the world's ack of our own receive toggle
-          // A speaker's voice leg was (re)born. The media half needs this to
-          // restate consent — the server clears standing consent when a leg is
-          // revoked (deliberately: a reconnect must not inherit a yes), so
-          // after both sides reconnect nobody hears anybody and nothing errors.
+          // A speaker's voice leg was (re)born: the media half must restate
+          // consent, since the server clears it when a leg is revoked.
           case "surface-transition":
-          // 🔴 ADDED 2026-08-16 — the server broadcasts both of these to every
-          // client and the authority dropped them on the floor, so an agent could
-          // not learn that its own voice had degraded or that a moderator had
-          // silenced it. Both are facts ABOUT THIS IDENTITY's audio, which is
-          // exactly what the media lane carries.
-          //
-          // voice-service: the SFU's supervised state {state, incarnation}. A
-          // sidecar holding a peer connection needs it — a degraded service
-          // means its frames are going nowhere, and the incarnation tells it
-          // whether the service RESTARTED (rejoin) or merely flapped (wait).
+          // Both are facts ABOUT THIS IDENTITY's audio, which the media lane carries.
+          // voice-service: the SFU's supervised state {state, incarnation}; the
+          // incarnation says whether it RESTARTED (rejoin) or merely flapped (wait).
           case "voice-service":
-          // voice-moderated: a moderator muted/unmuted someone for everyone. If
-          // that someone is us, our audio is being dropped at ingress and no
-          // other signal says so — the alternative is an agent that keeps
-          // speaking into a void and cannot tell.
+          // voice-moderated: a moderator muted/unmuted someone for everyone; if
+          // it's us, our audio is dropped at ingress and nothing else says so.
           case "voice-moderated":
             this.onMedia?.(msg);
             break;
@@ -1145,14 +1013,10 @@ export class WorldAgent {
           case "snapshot":
             this.cut = msg.cut ?? null;
             // Our surface generation, issued by the server on acceptance —
-            // every attest must echo it or the receipt is refused (PR #103 B2).
+            // every attest must echo it or the receipt is refused.
             if (typeof msg.gen === "number") this.surfaceGen = msg.gen;
-            // WHAT THIS WORLD PERMITS THIS IDENTITY. Flight reads `fly` from
-            // here and nowhere else: the previous cut fell back to an
-            // allow-self dev provider whenever none was injected, and since
-            // nothing ever injected one, that fallback WAS the policy. A
-            // server that never sends this leaves myRights null, which the
-            // provider reads as no.
+            // WHAT THIS WORLD PERMITS THIS IDENTITY: flight reads `fly` from here
+            // and nowhere else. No message leaves myRights null, which reads as no.
             if (msg.yourRights) this.acceptEffectiveRights(msg.yourRights, "world");
             // a seat rides a body's pose (notePose), so the bodies' seats come back with their next poses
             this.entities.clear(); this.people.clear(); this.mounts.clear(); this.bodySeats.clear();
@@ -1193,7 +1057,7 @@ export class WorldAgent {
             this.st.recentChat = structuredClone(msg.state?.recentChat ?? []);
             this.st.chatTotal = msg.state?.chatTotal ?? 0;
             for (const m of this.st.recentChat) this.hearSay({ seq: m.seq ?? -1, ts: m.ts, actor: m.actor, verb: "say", args: { text: m.text } }, false);
-            // the feet hold their height until the floors this join is about to learn about have been fitted (#235) —
+            // the feet hold their height until the floors this join is about to learn about have been fitted —
             // before that, the only ground a body could find is the terrain under the building it is in
             this.feetSettling = true;
             await this.applyView(false, null, null);
@@ -1210,15 +1074,10 @@ export class WorldAgent {
             resolve();
             break;
           case "puppet":
-            // A headless agent has no renderer to apply a pose TO — honouring a
-            // puppet means re-broadcasting it as its own presence, so the
-            // renderers that draw this body show it. Pose → held pose; anim →
-            // re-send as ours.
-            //
-            // Ragdoll is the exception it cannot fully honour: with no skeleton
-            // in-process there is nothing to run physics ON. So it slumps into a
-            // fixed collapsed pose instead of simulating — visibly down, just
-            // not physically settled. A renderer-backed body does the real sim.
+            // A headless agent has no renderer, so honouring a puppet means
+            // re-broadcasting it as its own presence (pose → held pose; anim →
+            // re-sent as ours). Ragdoll can't be simulated here (no skeleton), so it
+            // slumps into a fixed collapsed pose; a renderer-backed body does the sim.
             if (msg.ragdoll) {
               // {lean:[x,y,z]} m/s says which way the shove sends them — a
               // headless body cannot tumble, but it CAN land where the shove
@@ -1228,13 +1087,10 @@ export class WorldAgent {
                 "knocks you over");
             }
             // posed BY someone = authored. merge: only the bones sent, over an
-            // authored held pose (null releases one); otherwise the pose is
-            // theirs whole, and an empty one releases.
-            // Say what the request leaves this body holding, as the browser's
-            // hint does: a pose, or its pose released, whether by the pose it
-            // carried or by a replacing animation, which ends a held pose
-            // too; and any animation. A request that carried no pose and no
-            // animation (a knock-over has its own line above) says nothing.
+            // authored held pose (null releases one); otherwise the pose is theirs
+            // whole, and an empty one releases. Say what the request leaves this
+            // body holding, as the browser's hint does; a request with neither pose
+            // nor animation says nothing.
             let posed: string | null = null;
             if (msg.pose) {
               const next = msg.merge ? mergePose(this.heldPoseAuthored ? this.heldPose : null, msg.pose)
@@ -1253,11 +1109,9 @@ export class WorldAgent {
             if (posed || msg.anim) this.bodyNotice(msg.by, `${posed ?? "posed you"}${msg.anim ? `${posed ? "," : ""} with an animation` : ""}`);
             break;
           case "bodydrag":
-            // A renderer-backed dragger runs the physics this headless body
-            // cannot (see the ragdoll note above) — accepting its stream is
-            // the same act as accepting a puppet pose, continuously. Only a
-            // limp body drags; walking breaks the hold; 1.2s of dragger
-            // silence returns the body to itself (see tick).
+            // A renderer-backed dragger runs the physics this body can't: its stream
+            // is a continuous puppet pose. Only a limp body drags; walking breaks
+            // the hold; 1.2s of dragger silence returns the body to itself (tick).
             if (msg.grab != null) {
               const limp = this.clip === "ragdoll" || this.heldPose === DOWNED_POSE;
               if (!limp || this.target || (this.draggedBy && this.draggedBy !== msg.by)) {
@@ -1272,22 +1126,16 @@ export class WorldAgent {
               break;
             }
             if (msg.unpin != null) {
-              // pulling one of this body's nails: the server has already
-              // checked this body's consent table (one table and one preset
-              // for every body, PROTOCOL §6a), and this runtime applies what
-              // reached it (the browser re-reads its everyone row: one shared
-              // final word is open, research parity #13). The live sim lets go
-              // of that joint and the body sags from what remains.
+              // pulling one of this body's nails: the server already checked the
+              // consent table (PROTOCOL §6a); the live sim lets go of that joint.
               const j = String(msg.unpin.joint ?? "");
               if (this.pins.delete(j)) this.body?.setPin(j, null);
-              if (msg.end == null) break;   // an unpin can ride an end: apply the end too (house 6340433633 Q3)
+              if (msg.end == null) break;   // an unpin can ride an end: apply the end too
             }
             if (msg.end != null) {
               if (this.draggedBy === msg.by) {
-                // Explicit release carries one final authoritative sample. The
-                // browser target applies it before rebuilding its own sim; a
-                // headless target must do the same, or a release between 15Hz
-                // samples starts from a stale root under fresh joint state.
+                // Explicit release carries one final authoritative sample: apply it
+                // before rebuilding the sim, or it starts from a stale root.
                 const releasePose = msg.pose && typeof msg.pose === "object" && Object.keys(msg.pose).length > 0
                   ? msg.pose : null;
                 if (releasePose) { this.heldPose = releasePose; this.heldPoseAuthored = false; } // a drag's last sample is physics
@@ -1365,7 +1213,7 @@ export class WorldAgent {
             this.invalidateBodyAsset(msg.name);
             // avatar bytes changed: the held verdict demotes to pending NOW
             // and the refetch departs after the bump — a response already in
-            // flight can never install the pre-change value (#105 B1)
+            // flight can never install the pre-change value
             this.seatCache.note(msg.name, NaN).catch(() => { /* pending names stay pending; the next event retries */ });
             break;
           case "avatar-profile-updated":
@@ -1383,7 +1231,7 @@ export class WorldAgent {
           case "frame":
             // batched embodied plane: latest pose per id, one message per tick.
             // The frame's server stamp also feeds the clock estimate — the
-            // same samples the browser folds into serverNow() (#92, B1).
+            // same samples the browser folds into serverNow().
             this.noteServerTime((msg as { t?: unknown }).t);
             for (const [id, pose] of Object.entries(msg.poses as Record<string, Pose>)) {
               if (id !== this.name) this.notePose(id, pose);
@@ -1458,32 +1306,17 @@ export class WorldAgent {
   }
 
   /** What this participant DECLARED at its door (PROTOCOL §6a rule 3), exactly as relayed in the join snapshot
-   *  (`present[].declares`) and `arrive`, or null (undeclared). Passed on as data; nothing here reads a kind from it
-   *  (review r11 L2: comparing it to "agent" filtered a participant declaring "ai" as not-one). */
+   *  (`present[].declares`) and `arrive`, or null (undeclared). Passed on as data; no kind is read from it. */
   declaresOf(who: string): string | null {
     return this.people.get(who)?.declares ?? null;
   }
 
-  /** Track someone's latest pose + fire the approach ping when they cross
-   *  into conversational range. An approach is precious as a knock — and
-   *  worthless as a metronome (Fable: Digi "walked up" six times in a row,
-   *  just strolling nearby). Four gates now: edge-triggered at the radius,
-   *  RE-ARMED only after the person actually goes away (> REARM_RADIUS),
-   *  a long per-person refractory on top, and — since 2026-08-26 — DWELL.
-   *
-   *  The first three all suppress REPEATS. None of them could tell a knock
-   *  from someone crossing your bubble on the way to the authority, so the event
-   *  did not mean what declaration.ts promised it meant: "walked up to your
-   *  body AND STOPPED within arm's reach". Now the crossing only opens a
-   *  pending approach; delivery waits for stillness (see stepApproach).
-   *
-   *  The symmetric half, also asked for and also missing: the outward crossing
-   *  used to re-arm in silence. It now pings `depart` — but only for someone
-   *  whose approach was actually delivered.
-   *
-   *  `now` is injectable because dwell is a claim about TIME, and a test that
-   *  cannot control the clock either sleeps (slow, flaky) or asserts nothing.
-   *  Same reason and same shape as NoiseGate.presence/act's `ts`. */
+  /** Track someone's latest pose and run the approach/depart machine
+   *  (stepApproach). An approach is a knock, not a metronome: edge-triggered at
+   *  the radius, re-armed only beyond REARM_RADIUS, a per-person refractory, and
+   *  DWELL (delivered only once they stop: "walked up AND STOPPED within arm's
+   *  reach", declaration.ts). `depart` pings only for a delivered approach.
+   *  `now` is injectable so dwell tests control the clock. */
   private notePose(id: string, pose: Pose, now = Date.now()) {
     // A dirty stage frame can flush after the participant's leave event.
     // Once joined, only the snapshot/arrive roster introduces a body; a late
@@ -1506,30 +1339,20 @@ export class WorldAgent {
     const [x, , z] = xyz;
     const prevXYZ = posePosition(prev);
     const dist = Math.hypot(x - this.pos.x, z - this.pos.z);
-    // First SPATIAL observation of this person is a BASELINE, not a
-    // transition (issue #39): reconnect/state replay lands here for every
-    // body already in the room, and narrating it synthesized live-looking
-    // "walked up to you" / "sits down" bursts that residents answered as
-    // live. Seed silently; the approach arms only for someone first seen
-    // properly far away, so a body standing beside you at (re)join must
-    // actually leave and come back before it can "walk up".
+    // The first SPATIAL observation is a BASELINE, not a transition: reconnect
+    // replay lands here for every body already in the room. Seed silently; a
+    // body already beside you must leave and come back before it can "walk up".
     if (!prevXYZ) {
       this.nearArmed.set(id, dist > REARM_RADIUS);
       return;
     }
     const prevDist = Math.hypot(prevXYZ[0] - this.pos.x, prevXYZ[2] - this.pos.z);
     if (id !== this.name) {
-      // Approach/depart is about OTHER bodies. Guarded like noteActs and
-      // noteReachEvents beside it: self arrives here from the roster path too,
-      // and a self-echo that lands >REARM_RADIUS from our own authoritative
-      // pos (a teleport, mid-update) must not report that we walked away from
-      // ourselves. Under the old edge-trigger self could never cross the
-      // radius at all, so nothing depended on the omission.
+      // Approach/depart is about OTHER bodies (guarded like noteActs and
+      // noteReachEvents): a self-echo must never report walking away from ourselves.
       this.stepApproach(id, x, z, dist, prevDist, now);
-      // Movement feeds the activity pulse as accumulated DISPLACEMENT, not a
-      // speed flag — idle jitter and a body parked mid-walk-cycle never
-      // qualify; actually going somewhere does. Steps over 8m in one packet
-      // are teleports/takeovers, not travel.
+      // The activity pulse counts accumulated DISPLACEMENT, not a speed flag
+      // (idle jitter never qualifies); steps over 8m in one packet are teleports.
       if (dist <= this.activityRadiusM && prev) {
         const step = Math.hypot(pose.p[0] - prev.p[0], pose.p[2] - prev.p[2]);
         if (step > 0.001 && step < 8)
@@ -1539,26 +1362,17 @@ export class WorldAgent {
     }
   }
 
-  /** One spatial sample of someone else, run through the approach/depart state
-   *  machine. Three zones, and the whole fix lives in which zone clears what:
+  /** One spatial sample of someone else, through the approach/depart machine:
    *
    *    dist > REARM_RADIUS      gone. Re-arm, and settle any owed departure.
-   *    APPROACH_RADIUS..REARM   nearby but not close. CANCELS a pending
-   *                             approach — this is the pass-through case, the
-   *                             body that entered arm's reach and kept going.
+   *    APPROACH_RADIUS..REARM   nearby. CANCELS a pending approach (pass-through).
    *    dist < APPROACH_RADIUS   close. Open a pending approach on the inward
    *                             crossing; deliver it once they hold still.
    *
-   *  Stillness is measured from the positions WE watched (metres over the
-   *  observed interval), never from `pose.speed` — a sender fills that field
-   *  in itself, and the activity pulse below already refuses to trust it.
-   *
-   *  Note the asymmetry between the zones, which is deliberate: leaving arm's
-   *  reach cancels a pending approach, but does NOT close a delivered one.
-   *  Someone who walked up and then drifted to 3m has not departed; making the
-   *  departure edge the same radius as the arrival edge would fire a
-   *  walked-up/walked-away pair every time a seated body's pose jittered
-   *  across 2.5m. Departure is the honest, already-existing re-arm boundary. */
+   *  Stillness is measured from positions WE observed, never `pose.speed`.
+   *  Deliberate asymmetry: leaving arm's reach cancels a PENDING approach but
+   *  doesn't close a delivered one; departure is the re-arm edge, so a seated
+   *  body's jitter across 2.5m never fires walked-up/walked-away pairs. */
   private stepApproach(id: string, x: number, z: number, dist: number, prevDist: number, now: number) {
     if (dist > REARM_RADIUS) {
       this.nearArmed.set(id, true);
@@ -1566,13 +1380,11 @@ export class WorldAgent {
       const anchor = this.approachOpen.get(id);
       if (anchor) {
         this.approachOpen.delete(id);
-        // Who moved? `dist` is measured from wherever WE are now, so on its
-        // own it authored our movement as theirs ("* digi walked away" while
-        // digi stood still and we left). Measure them against the anchor —
-        // our position when the approach fired: beyond the re-arm edge from
-        // THERE, their own legs did it. Anything closer and the separation
-        // is at least partly ours, so the ping carries the actor-neutral
-        // sentence instead. Both renderers print `who` + this text verbatim.
+        // Who moved? `dist` is from where WE are now, so measure them against
+        // the anchor (our position when the approach fired): beyond the re-arm
+        // edge from there, they walked; otherwise the separation is at least
+        // partly ours and the ping says it actor-neutrally. Renderers print
+        // `who` + this text verbatim.
         const walked = Math.hypot(x - anchor[0], z - anchor[1]) > REARM_RADIUS;
         this.ping({ ts: now, kind: "depart", who: id, text: walked ? "walked away" : "is no longer nearby" });
       }
@@ -1617,26 +1429,11 @@ export class WorldAgent {
     this.ping({ ts: now, kind: "approach", who: id });
   }
 
-  /** A body left the WORLD (the `leave` message; extracted so the seam is
-   *  testable without a socket).
-   *
-   *  🔴 THE PER-PARTICIPANT MAPS MUST GO TOO (2026-08-16). `people` was
-   *  cleaned here and these three were not, so every identity that ever
-   *  appeared kept an entry for the LIFE OF THE PROCESS — a door in a
-   *  busy world grows without bound, and the local convention elsewhere
-   *  in this file is explicitly bounded rings (pings 64, heldActivity
-   *  8, malformedSeen 5). These were the exception, not the rule.
-   *
-   *  Correctness, not just memory: nearArmed is the approach-ping
-   *  re-arm bit, so a returning visitor inherited the arm state from
-   *  their PREVIOUS visit — walking away and back could fail to
-   *  re-announce them, or announce them twice.
-   *
-   *  Same rule for the dwell/depart pair. Dropping approachOpen here
-   *  is also CORRECTNESS, not just hygiene: someone who disconnects
-   *  while standing next to you has already been narrated by the
-   *  presence gate ("left the world"), and must not ALSO be reported
-   *  as having walked away — one exit, one line. */
+  /** A body left the WORLD (the `leave` message; extracted so it's testable
+   *  without a socket). Every per-participant map goes too: otherwise they grow
+   *  for the life of the process, and a returning visitor would inherit stale
+   *  approach arm state. Dropping approachOpen also keeps one exit to one line:
+   *  the presence gate already said "left the world", so no "walked away" too. */
   private noteLeave(id: string) {
     this.people.delete(id);
     if (this.bodySeats.delete(id)) this.mounts.delete(id);   // a departed body rides nothing
@@ -1652,17 +1449,10 @@ export class WorldAgent {
     this.gate.presence(id, "leave");
   }
 
-  /** Embodied acts as events. The presence stream is 15Hz noise; what an
-   *  agent should hear about is TRANSITIONS — a gesture fired, a pose struck
-   *  or released, someone sitting down or getting up. Edge-triggered, so a
-   *  held pose (or a ragdoll, which streams through the same field) speaks
-   *  once when it starts and once when it ends, never per-frame.
-   *
-   *  Two denoising layers on top (Fable: 40+ jump pairs in one evening):
-   *  the gate's per-(person, act) refractory makes a burst of the same act
-   *  speak once per window instead of per repetition; and a non-locomotion
-   *  stint shorter than SHORT_STINT_MS earns no "gets up" — the start
-   *  already told the story, a jump is one thing, not two. */
+  /** Embodied acts as events: TRANSITIONS (a gesture fired, a pose struck or
+   *  released, sitting down or getting up), edge-triggered, never per frame.
+   *  Denoised by the gate's per-(person, act) refractory, and a non-locomotion
+   *  stint shorter than SHORT_STINT_MS earns no "gets up". */
   private noteActs(id: string, prev: Pose | null, pose: Pose & { anim?: string; pose?: Record<string, unknown> | null }, dist = Infinity) {
     const acts: { key: string; text: string }[] = [];
     const once = onceAnimOf(pose);   // pose.anim (its pre-release key still read for one release)
@@ -1702,11 +1492,6 @@ export class WorldAgent {
   /** Reconcile the derived maps from the folded state — the ONLY writer of
    *  this.entities/this.mounts outside the sim stamp. Fresh objects each
    *  pass: nothing stale survives a spawn-replace or a fold-side cascade. */
-  /** The FOLDED record for a placed thing — every field the fold keeps
-   *  (a light's colour/intensity/range/important/day, a model's collide), which
-   *  the perception view above deliberately thins. The inspector tools read
-   *  this; `parent` is attached from the mount view so the shape matches
-   *  what shared/editschema.js expects. */
   /** Every placed thing's id in the fold (the hierarchy tools walk them). */
   foldedIds(): string[] { return Object.keys(this.st.entities); }
   /** × my speed at p: a physics-area {kind: speed} (shared/zone.js, the client's and the authority's reading), once per view */
@@ -1723,7 +1508,6 @@ export class WorldAgent {
   blueprintStore(): Record<string, { record: unknown; by: string; ts: number }> {
     return ((this.st as any).blueprints ?? {}) as Record<string, { record: unknown; by: string; ts: number }>;
   }
-  /** This world's blueprints from the fold: @world blueprints:<hash> → {name, parts?} (the authority's publish). */
   /** a placed copy (or one of its parts) says which blueprint it is: the authority stamps copy-of {from, key} on every
    *  part; the copy is the part whose parent isn't of the same copy */
   copyLine(id: string): string | null {
@@ -1732,12 +1516,16 @@ export class WorldAgent {
     let root = id; for (let i = 0; i < 64; i++) { const p = E[root]?.parent?.to; if (!p || E[p]?.["copy-of"]?.from !== f) break; root = p; }
     return root === id ? `a copy of "${name}"` : `part "${E[id]["copy-of"].key}" of ${root} (a copy of "${name}")`;
   }
+  /** This world's blueprints from the fold: @world blueprints:<hash> → {name, parts?} (the authority's publish). */
   worldBlueprints(): Record<string, { name?: string }> {
     const w = this.replica?.st?.entities?.["@world"]?.c ?? {};
     const out: Record<string, { name?: string }> = {};
     for (const [k, v] of Object.entries(w)) if (k.startsWith("blueprints:")) out[k.slice("blueprints:".length)] = (v ?? {}) as { name?: string };
     return out;
   }
+  /** The FOLDED record for a placed thing: every field the fold keeps (the
+   *  perception view thins them), for the inspector tools; `parent` comes from
+   *  the mount view, the shape shared/editschema.js expects. */
   foldRecord(id: string): Record<string, unknown> | null {
     const e = (this.st.entities as Record<string, any>)[id];
     if (!e) return null;
@@ -1745,9 +1533,8 @@ export class WorldAgent {
     return m ? { ...e, parent: m } : { ...e };
   }
   /** A thing's components as this body's replica folds them now (a copy), or null: what a write planned from them pins
-   *  with expect, as a person's edit does (client/lib/editwrites.js compsOf). id and the component
-   *  names are the authority's own, as requests.js encodes them. A purged component is the fold's PURGED itself, not a
-   *  copy: the authority's expect counts a purged value equal to nothing, so a pin has to tell one apart and leave it out. */
+   *  with expect (client/lib/editwrites.js compsOf). A purged component is the fold's PURGED itself, not a copy: the
+   *  authority's expect counts a purged value equal to nothing, so a pin has to tell one apart and leave it out. */
   componentsOf(id: string): Record<string, unknown> | null {
     const c = this.replica?.st?.entities?.[id]?.c;
     return c ? Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v === PURGED ? PURGED : structuredClone(v)])) : null;
@@ -1774,7 +1561,7 @@ export class WorldAgent {
         ...((e as any).scale != null ? { scale: (e as any).scale } : {}),
         ...(Array.isArray((e as any).scale3) ? { scale3: (e as any).scale3 } : {}),   // a stretched thing stays stretched
         ...(Array.isArray((e as any).q) ? { q: (e as any).q } : {}),
-        ...(colliderOf(e) != null ? { collide: String(colliderOf(e)) } : {}),   // the collider override decide() reads (#235): comp.collider, else the spawn's collide
+        ...(colliderOf(e) != null ? { collide: String(colliderOf(e)) } : {}),   // the collider override decide() reads: comp.collider, else the spawn's collide
         actor: (e as any).actor,
         ...((e as any).placer ? { placer: (e as any).placer } : {}),
         ...recordComponents(e as any),   // its components, flat (view.js): what a thing can DO
@@ -1824,7 +1611,7 @@ export class WorldAgent {
     // the world's own keys: the ground this body walks on, the sky, the grass
     const W = this.st as any;
     try {
-      // the world's water is its own component (shape audit 10-16): it rides on the terrain args the ground is built from
+      // the world's water is its own component: it rides on the terrain args the ground is built from
       if ((d.world.includes("terrain") || d.world.includes("water")) && W.terrain) await this.buildTerrain(W.water ? { ...W.terrain, water: W.water } : W.terrain);
       if (d.world.includes("terrain")) { if (W.terrain) this.worldInfo.terrain = { seed: W.terrain.seed, size: W.terrain.size, amplitude: W.terrain.amplitude, flatRadius: W.terrain.flatRadius }; else delete this.worldInfo.terrain; }
       if (d.world.includes("sky")) this.skyState = W.sky as typeof this.skyState;
@@ -1842,7 +1629,7 @@ export class WorldAgent {
         // particles:<name>) is lit in that instant, and narrates as lighting it, as a particles set would; otherwise a build
         if (live && now?.particles != null) { const fx = this.eff(id, this.serverNow()); if (fx.ok) this.noteEmitter(actor, id, null, now.particles, fx.pos, ts); else { this.noteEffGap(id, fx.why); this.noteBuild(actor, now?.pos); } }
         else if (live) this.noteBuild(actor, now?.pos);
-        this.trackSupport(this.syncSupport(id));   // a placed thing is a thing bodies can rest on (#17)
+        this.trackSupport(this.syncSupport(id));   // a placed thing is a thing bodies can rest on
         if (this.mounts.has(id)) this.dropSupport(id);   // …unless it rides a parent (it collides as the parent)
         break;
       case "pose":
@@ -1859,7 +1646,7 @@ export class WorldAgent {
         if (this.mounts.has(id)) this.dropSupport(id); else this.trackSupport(this.syncSupport(id));
         break;
       case "comp":
-        // an emitter beginning, changing or ending is something you SEE happen (#25); gated on where it actually is
+        // an emitter beginning, changing or ending is something you SEE happen; gated on where it actually is
         if (comp === "particles" && live) {
           const fx = this.eff(id, this.serverNow());
           if (fx.ok) this.noteEmitter(actor, id, was?.particles ?? null, now?.particles ?? null, fx.pos, ts);
@@ -1883,12 +1670,8 @@ export class WorldAgent {
     if (seq != null && seq >= 0 && seq <= this.inboxSeen) return;
     if (seq != null && seq >= 0) this.inboxSeen = seq;
     this.inbox.push({ ts, kind: "say", who: actor, text: args.text, seq });
-    // mention ping — @name or bare whole-word name, live messages only.
-    // The agent's OWN say is deliberately never fanned out: the world log
-    // echoes it back here, and delivering that echo as an incoming message
-    // made every resident hear themselves (Fable: "моё собственное эхо").
-    // It stays in the inbox — the scrollback record is honest — but it is
-    // not an event.
+    // mention ping: @name or bare whole-word name, live messages only. The
+    // agent's OWN say (the log's echo) stays in the inbox but is never an event.
     if (live && actor !== this.name) {
       // speech near this body feeds the activity pulse (a speaker whose
       // position is unknown — just arrived — counts as near)
@@ -1898,26 +1681,18 @@ export class WorldAgent {
       // A null regex means this body has no usable name (a malformed tokens
       // entry). Not being mentionable is degraded, not fatal — the body still
       // hears the room; it just cannot be addressed by name.
-      const mention = this.mentionsMe(String(args.text));   // the name, or the credential's display name (#184)
+      const mention = this.mentionsMe(String(args.text));   // the name, or the credential's display name
       if (mention) this.ping({ ts, kind: "mention", who: actor, text: args.text });
       this.onEvent?.({ ts, kind: "say", who: actor, text: args.text, mention });
     }
   }
 
   /**
-   * A live `particles` attach / replace / remove near this body — ONE ambient
-   * world-change percept, never per particle and never per frame (#25).
-   *
-   * Coalesced by (entity, component): the first change in a quiet period
-   * speaks at once (someone lighting a fire beside you is news the moment it
-   * happens), and everything inside the following window is folded into at
-   * most one further line describing the NET result. So dragging a parameter
-   * slider — twenty `comp` entries in ten seconds — is one "retunes", not
-   * twenty, while a genuine fire→smoke→out sequence still ends up truthful.
-   *
-   * Radius-gated like every other ambient sense, and silent for this body's
-   * own authoring: the world log echoes your own verbs back to you, and
-   * delivering that echo as an event is the self-echo bug (see `say`).
+   * A live `particles` attach / replace / remove near this body: ONE ambient
+   * world-change percept per (entity, component). The first change in a quiet
+   * period speaks at once; the rest of the window folds into at most one line
+   * of the NET result (a slider drag is one "retunes"). Radius-gated, and silent
+   * for this body's own authoring (the self-echo rule, see `say`).
    * `nowMs`/`setTimer` are injectable for tests.
    */
   private noteEmitter(actor: string | undefined, id: string, before: unknown, after: unknown,
@@ -1960,10 +1735,8 @@ export class WorldAgent {
     this.emitterNarration.set(id, { announced, latest: announced, actor, timer });
   }
 
-  /** The push half of sky perception (the pull half is look()). Runs at 1Hz
-   *  off tick(); the forecast cursor keeps each check O(1). First observation
-   *  after a join initializes SILENTLY — arrival narration is look()'s job;
-   *  this only speaks when something CHANGES while the body is present.
+  /** The push half of sky perception (look() is the pull half), 1Hz off tick().
+   *  The first observation after a join is SILENT; this speaks only on change.
    *  `nowMs` is injectable for tests. */
   private skyStamp: { seq: number; by: string } | null = null;
   checkSky(nowMs = Date.now()) {
@@ -1971,7 +1744,7 @@ export class WorldAgent {
     const eff = effectiveSky(this.skyState, nowMs, this.skyCursor);
     this.skyCursor = eff.cursor;
     const key = `${eff.source}:${eff.seg?.idx ?? "-"}:${eff.weather ?? "-"}`;
-    // the canonical clock decides whether day phases can move (#65) — under a
+    // the canonical clock decides whether day phases can move — under a
     // real clock the folded bag no longer carries rate at all
     const advancing = effectiveClock(this.skyState, nowMs).mode !== "fixed";
     const phase = advancing ? dayPhase(hoursAt(this.skyState, nowMs)) : null;
@@ -1997,18 +1770,8 @@ export class WorldAgent {
     }
   }
 
-  /** Recent pings, for a host that polls instead of subscribing.
-   *
-   *  🔴 BOUNDED (2026-08-16). This array grew forever: the live path is
-   *  `onPing` (net-server subscribes), and `takePings` — the only drain — has no
-   *  caller in this repo. So on a push host the array accumulated every mention,
-   *  approach and reach for the life of the process and nothing ever read it.
-   *
-   *  Kept rather than deleted because a PLAIN-MCP host has no push channel and
-   *  polling is its documented path (AGENTS.md says digests are "held and handed
-   *  over each time you call the tool"). But it is a RING now, like every other
-   *  buffer in this file — pings 64, heldActivity 8, malformedSeen 5. An
-   *  unbounded buffer whose only consumer is optional is a leak with a plan. */
+  /** Recent pings, for a plain-MCP host that polls (takePings) instead of
+   *  subscribing (onPing). A ring, like every buffer in this file. */
   private static readonly PING_RING = 64;
 
   private ping(p: { ts: number; kind: "mention" | "approach" | "depart" | "reach" | "touch"; who: string; text?: string }) {
@@ -2072,7 +1835,7 @@ export class WorldAgent {
     // …and a body that falls in floats on the same water, rising and falling on the same waves
     void setWaterField(this.waterFieldNow());
     // the settle sim clamps against the SAME ground the walking clamp reads —
-    // not one height sampled at the fall site (#17)
+    // not one height sampled at the fall site
     void setHeightField((x, z) => this.heightAt(x, z));
   }
 
@@ -2108,10 +1871,9 @@ export class WorldAgent {
   /** This world's @world.bounds as written (the edge flight banks at; shared/flight.js boxOf reads it), else null. */
   worldBox(): unknown { return this.replica?.st?.entities?.["@world"]?.c?.bounds ?? null; }
 
-  /** Each structure's plan, per entity id, for the revision it holds now: the same object is a hit without a read;
-   *  else the same content (JSON) is (the view clones every component every view, view.js viewOf, so a received
-   *  revision's object doesn't outlive the next log entry); else it is planned afresh. Entity transforms and each
-   *  walk's support basis stay outside this cache. */
+  /** Each structure's plan per entity id, for the revision it holds now: the same object is a hit; else the same
+   *  content (JSON) is (view.js clones every component every view); else it is planned afresh. Entity transforms and
+   *  each walk's support basis stay outside this cache. */
   private plans = new Map<string, { data: object; json: string; plan: ReturnType<typeof planStructure> }>();
   private planFor(id: string, data: unknown): ReturnType<typeof planStructure> {
     // Opaque primitive components normalize as empty and are planned afresh each time.
@@ -2130,39 +1892,14 @@ export class WorldAgent {
     return planStructure(data);
   }
 
-  /** The upper storey of a griddled building that the feet stand on at
-   *  (x, z), if any: the structure, the level's index and the floor's world
-   *  height. Griddled structures are outside the headless colliders (their
-   *  walls are routed by walkStructures), so this is how the feet, a walk's
-   *  support and its routes know such a floor is there (ew#140). A storey
-   *  counts when it rests above its building's base, its floor is more than
-   *  the walk grid's step (NAV_STEP, the one walker's, 0.8 m) above the terrain under the
-   *  point, `yHint`, the feet's height, is no more than a route step
-   *  (ROUTE_STEP_METRES, 0.5 m) below it and less than its storey's height
-   *  (the grid's wallH, the router's floor-to-floor) above it, and it has a
-   *  tile under the point and, on a cell a diagonal cuts, a floor on the half
-   *  the point falls in: the other half is a hole. A level resting on the
-   *  base or below it, such as a ground floor at the base or a basement, is
-   *  the terrain's: a body there walks on the terrain, in and out of the
-   *  building, as the router's terrain walk expects. A ground floor declared
-   *  above the base is a raised floor like any other. A floor within a body's
-   *  step (NAV_STEP) of the terrain is the terrain's, such as a low porch: a
-   *  body steps on and off it as it walks, and a floor route can't step down
-   *  off its edge, so standing on it would keep a body that walked onto it
-   *  there. That's decided under the point, so a deck over rising ground is
-   *  the terrain's, for standing, where the ground comes within a step of it:
-   *  a floor walk on the deck still crosses that part at the deck's height
-   *  (walkProbeGround), and the feet stand on the terrain there once the walk
-   *  ends, as on a porch. Feet anywhere in the storey count, on something
-   *  placed on its floor too (a table, a bed, a landing), so a body standing
-   *  up on a table upstairs walks on from that floor. Where two storeys'
-   *  ranges meet, feet within a route step below the upper floor and still
-   *  under the lower storey's height, the highest floor wins: feet stepping
-   *  up onto it are on it. `yHint` only picks which real floor qualifies and
-   *  never becomes the height, so a body far above the house is not on its
-   *  top storey. Each building is placed where it
-   *  is now (eff), as walkStructures places it, and one that can't be read
-   *  costs only itself. */
+  /** The upper storey of a griddled building the feet stand on at (x, z), if
+   *  any: the structure, the level's index and the floor's world height.
+   *  Griddled structures are outside the headless colliders, so this is how
+   *  the feet, a walk's support and its routes know such a floor is there.
+   *  A floor within NAV_STEP of the terrain, or at/below the base, is the
+   *  terrain's; where storeys' ranges meet the highest wins; `yHint` only picks
+   *  which real floor qualifies, never the height. The full rule:
+   *  docs/research/headless-storeys.md. */
   private storeyUnder(x: number, z: number, yHint = this.pos.y): { entity: string; level: number; height: number } | null {
     const terrain = this.heightAt(x, z), nowMs = this.serverNow();
     let best: { entity: string; level: number; height: number } | null = null;
@@ -2187,13 +1924,11 @@ export class WorldAgent {
     return best;
   }
 
-  /** The floors a floor walk tells apart at (x, z): the ground (entity
-   *  null), which takes the terrain and every floor within a step of it, as
-   *  storeyUnder does for standing, and each griddled storey with a floor at
-   *  the point, at any height. Where the walk's own floor, `own`, lies within
-   *  a step of the terrain either way, as at a deck's low end, the ground
-   *  there is that floor: a floor walk crosses it at the floor's height, and
-   *  the feet stand on the terrain once it ends (storeyUnder). */
+  /** The floors a floor walk tells apart at (x, z): the ground (entity null:
+   *  the terrain and every floor within a step of it, as in storeyUnder) and
+   *  each griddled storey with a floor at the point. Where the walk's own floor
+   *  `own` lies within a step of the terrain (a deck's low end), the ground
+   *  there is that floor. */
   private floorsAt(x: number, z: number, own: { entity: string; level: number }): { entity: string | null; level: number; height: number }[] {
     type Floor = { entity: string | null; level: number; height: number };
     const terrain = this.heightAt(x, z), nowMs = this.serverNow();
@@ -2218,16 +1953,12 @@ export class WorldAgent {
     return floors;
   }
 
-  /** Of the floors a floor walk tells apart at (x, z) (floorsAt), the one a
-   *  destination's height means, by move's rule for a height, the
-   *  navgrid's (mcpl/navgrid.ts, route): the one nearest y, no more than
-   *  `above` (NAV_STEP unless given) above it and, with `below`, no more than
-   *  that below it; null when none is. Ties go to the walk's own floor, then
-   *  to the higher. With `body`, y is a body's root and the floor is the one
-   *  it is on: the highest that fits, not the nearest, since a body lies up to
-   *  RAGDOLL_ROOT_DROP above its root, and none stands with a floor less than
-   *  that above its feet. Surfaces placed there are the navgrid's to read
-   *  (placedNear). */
+  /** Of floorsAt's floors, the one a destination height means, by the navgrid's
+   *  rule (mcpl/navgrid.ts, route): nearest y, at most `above` (NAV_STEP
+   *  default) above it and, with `below`, at most that below; null if none.
+   *  Ties go to the walk's own floor, then the higher. With `body`, y is a
+   *  body's root and the floor is the highest that fits (a body lies up to
+   *  RAGDOLL_ROOT_DROP above its root). Placed surfaces: placedNear. */
   private floorMeant(x: number, z: number, y: number, near: { above?: number; below?: number },
     own: { entity: string; level: number }, body = false): { entity: string | null; level: number; height: number } | null {
     type Floor = { entity: string | null; level: number; height: number };
@@ -2243,12 +1974,9 @@ export class WorldAgent {
     return best;
   }
 
-  /** Whether something placed on a floor walk's own floor stands at about
-   *  height y at (x, z): the top of a collider over the point within the
-   *  destination's bounds (`above` and `below`, a step each unless given),
-   *  no lower than the floor, as the walk's own navgrid probe stands
-   *  (onOrAboveFloor), and under `ceiling`, the next floor above it there,
-   *  on which anything higher rests. */
+  /** Whether something placed on a floor walk's own floor stands at about y at
+   *  (x, z): a collider top within `above`/`below` (a step each by default), no
+   *  lower than the floor (as onOrAboveFloor) and under `ceiling`, the next floor up. */
   private placedNear(x: number, z: number, y: number, near: { above?: number; below?: number }, floor: number, ceiling = Infinity): boolean {
     const probe = navProbe((px, pz) => this.heightAt(px, pz));
     if (!probe) return false;
@@ -2257,29 +1985,20 @@ export class WorldAgent {
   }
 
   /** The height the feet belong at: an upper storey's floor under them
-   *  (storeyUnder), else the terrain. Every standing body's ground goes
-   *  through here: the idle tick's, a stand-up's, and a flight's at its
-   *  start and end (a walk's is its support's, walkSupport). A flight under way and a tumble's
-   *  physics read the terrain alone, since griddled floors aren't headless
-   *  colliders. */
+   *  (storeyUnder), else the terrain. Every standing body's ground goes through
+   *  here (a walk's is walkSupport's); a flight under way and a tumble's physics
+   *  read the terrain alone, since griddled floors aren't headless colliders. */
   groundAt(x: number, z: number, yHint = this.pos.y): number {
     return this.storeyUnder(x, z, yHint)?.height ?? this.heightAt(x, z);
   }
 
-  // ---- support surfaces (#17) ----------------------------------------------
-  // A body settling headless used to see bare terrain: every placed floor —
-  // a platform, a deck, the bell pavilion's slab — simply was not there, and
-  // a body released above one settled through it to the dirt underneath.
-  // The server already reads shape as data (GET /geom: bbox + up-facing flat
-  // zones); each entity this agent knows about contributes support boxes to
-  // the sim's collider map — the browser's own collider, fitted from the
-  // model's triangles (meshFor → registerMeshSupport), whenever this process
-  // can fetch and decode them; then walls, furniture and stairs are as solid
-  // here as in a browser, for the ragdoll and the walking feet alike. The
-  // summary path is the fallback: small solid things contribute their whole
-  // box, room-scale things their floor DECKS as thin slabs (so a body can
-  // rest on the pavilion floor without it sealing into a block) — floors,
-  // not architecture.
+  // ---- support surfaces -----------------------------------------------------
+  // Each entity this agent knows contributes support to the sim's collider map:
+  // the browser's own collider fitted from the model's triangles when they can
+  // be fetched (meshFor → registerMeshSupport), so walls, furniture and stairs
+  // are as solid here as in a browser. Fallback, from GET /geom's summary:
+  // small things their whole box, room-scale things their floor DECKS as thin
+  // slabs (floors, not architecture).
 
   private geomCache = new Map<string, Promise<any | null>>();
   private supportIds = new Map<string, string[]>();
@@ -2288,25 +2007,16 @@ export class WorldAgent {
   /** How long until the next dial after a drop or a full world (shared/redial.js: the browser's rule); reset by a join. */
   private redial = redialer();
   private removedUntil: number | null = null;   // a moderation removal's end (a kick's cooldown): reconnect then   // entity id -> registered box ids
-  /** This agent's claim token on shared support boxes. Per INSTANCE, not per
-   *  name: two agents can carry the same name across a reconnect, and a
-   *  holder set that collapsed them would let the departing one release the
-   *  arriving one's floors. */
+  /** This agent's claim token on shared support boxes, per INSTANCE: two agents
+   *  can share a name across a reconnect, and must not release each other's floors. */
   private readonly supportHolder = `agent#${++WorldAgent.holderSeq}`;
   private static holderSeq = 0;
-  /** Every support sync currently in flight. Replay fires one per spawn and
-   *  `/geom` is a network round trip, so for the first moment of a join the
-   *  world's floors exist in the log but not yet in the sim — and a body
-   *  released in that window falls through a platform that this agent simply
-   *  had not finished learning about. supportReady() is the barrier; a settle
-   *  that intends to claim placed-floor support waits on it. */
+  /** Every support sync in flight (`/geom` is a round trip, so just after a join
+   *  floors exist in the log before the sim). supportReady() is the barrier. */
   private supportPending = new Set<Promise<void>>();
 
-  /** Resolves once every support sync issued so far has landed. Re-checked in
-   *  a loop because a sync can enqueue while we wait (a spawn replayed behind
-   *  the one we were waiting on). Bounded so a hung fetch cannot freeze a
-   *  body forever — a late floor is a bug, a body that never settles is
-   *  worse. */
+  /** Resolves once every support sync issued so far has landed. Loops because a
+   *  sync can enqueue while we wait; bounded so a hung fetch can't freeze a body. */
   private async supportReady(timeoutMs = 3000) {
     const deadline = Date.now() + timeoutMs;
     while (this.supportPending.size && Date.now() < deadline) {
@@ -2327,19 +2037,10 @@ export class WorldAgent {
    *
    *  A motion component is PARAMETERS, not frames: the browser evaluates a
    *  pendulum/spin/orbit/oscillate/path every frame and its collider rides along.
-   *  A support box registered from the AUTHORED transform does not — it would
-   *  sit where the swing used to be, and a body would come to rest on a floor
-   *  that is no longer there. A ghost floor is worse than no floor: no floor
-   *  is the honest pre-#17 answer for that entity, while a ghost floor is
-   *  geometry this code invented.
-   *
-   *  Deliberately conservative — ANY motion, including a `motion:<part>` on a
-   *  single named node, disqualifies the whole entity. A part motion leaves
-   *  the entity's own transform alone, but the /geom summary that produced
-   *  these boxes measured the model WITH that part in it, and nothing here
-   *  can tell which deck belongs to the moving piece. Until headless
-   *  evaluates the same deterministic motion the browsers do, the safe answer
-   *  is to abstain. */
+   *  A support box from the AUTHORED transform would be a ghost floor, which is
+   *  worse than no floor. ANY motion, a `motion:<part>` included, disqualifies the
+   *  whole entity: /geom measured the model with that part in it, and nothing
+   *  here can tell which deck is the moving piece. */
   private hasActiveMotion(e: Entity | undefined): boolean {
     if (!e) return false;
     for (const [k, v] of Object.entries(recordComponents(e))) {
@@ -2400,17 +2101,12 @@ export class WorldAgent {
     const before = this.entities.get(id);
     if (!before?.model) return;  // only a model carries a collider
     if (solidOffRecord(before)) { this.dropSupport(id); return; }   // collision off (collider.enabled): nothing to stand on
-    // A moving thing supports nothing here — and stops supporting the moment
-    // it starts moving, so this is the drop path as well as the skip path.
-    // Mounted cargo is the same story told by a different verb: it rides a
-    // parent whose transform this code does not track.
+    // A moving thing supports nothing here (drop path as well as skip path); so
+    // does mounted cargo, whose parent's transform this code doesn't track.
     if (this.hasActiveMotion(before) || this.mounts.has(id)) { this.dropSupport(id); return; }
     const [g, mesh] = await Promise.all([this.geomFor(before.model), this.meshFor(before.model)]);
-    // Re-read, and re-CHECK: an id can be removed and respawned as something
-    // else while its geometry is in flight, and "the entity still exists" is
-    // not the same question as "it is still the thing I fetched for". Without
-    // the lib comparison a crate's decks could land under a lamp post that
-    // merely inherited its id.
+    // Re-read and re-CHECK: the id may have been removed and respawned as
+    // something else while its geometry was in flight (hence the lib comparison).
     const e = this.entities.get(id);
     if ((!g && !mesh) || !e || e.model !== before.model) return;
     // started moving, or got mounted, while its geometry was in flight —
@@ -2419,11 +2115,8 @@ export class WorldAgent {
     const s = e.scale ?? 1;
     // a stretched thing's per-axis scale (scale3), beside the one number decide() reads, as the browser's applyScale
     const s3 = Array.isArray(e.scale3) && e.scale3.length === 3 && e.scale3.every(Number.isFinite) ? e.scale3 as number[] : [s, s, s];
-    // A transform that cannot be a place in the world registers NOTHING —
-    // and abstains BEFORE the drop, leaving whatever support already stands.
-    // This is the layer that turned one malformed packet into everyone's
-    // outage: undefined rode e.pos into fitSupportBox and killed the shared
-    // door (#88). This holds if such a transform arrives anyway.
+    // A transform that can't be a place registers NOTHING, and abstains BEFORE
+    // the drop, leaving whatever support already stands.
     if (!isFiniteVec3(e.pos) || !Number.isFinite(s) || !Number.isFinite(e.yaw ?? 0)) {
       // If position is readable, the entity has moved and any box at its old
       // address is now a ghost floor. Retaining existing support is correct
@@ -2434,10 +2127,9 @@ export class WorldAgent {
     }
     this.dropSupport(id);
     const xform = { position: e.pos, yaw: e.yaw ?? 0, scale: s, ...(Array.isArray(e.scale3) ? { scale3: s3 } : {}) };
-    // lying down (a tumbling engine's rest, or a hand's tilt): its box turned into the frame of its own yaw, and no
-    // decks or grid (those are measured upright); read by its yaw alone it was a phantom deck where it no longer stands
-    // A stretch acts on the model's own axes, before its rotation, so a stretched box is stretched first and then turned,
-    // and is registered at scale 1 (the turn would carry a stretch applied afterwards onto the wrong axes).
+    // A thing lying down (a tumbling engine's rest, or a hand's tilt) registers its box turned into its own frame, with
+    // no decks or grid (those are measured upright).
+    // A stretch acts on the model's own axes before its rotation: stretched first, then turned, registered at scale 1.
     const stretched = Array.isArray(e.scale3) && !(Math.abs(s3[0]) === Math.abs(s3[1]) && Math.abs(s3[1]) === Math.abs(s3[2]));
     const st = (v: number[]) => stretched ? v.map((x, i) => x * Math.abs(s3[i])) : v;
     const lying = Array.isArray(e.q) && e.q.length === 4 && g?.bbox?.min ? lyingFrame(e.q, st(g.bbox.min), st(g.bbox.max)) : null;
@@ -2448,18 +2140,14 @@ export class WorldAgent {
       this.supportIds.set(id, [bid]);
       return;
     }
-    // The real collider when the triangles are to hand: fitted from the same
-    // mesh, with the same override, by the same decide() a browser runs — so
-    // a room-scale interior holds this body up AND holds it back, walls and
-    // furniture included. Everything below is the summary fallback, for a
-    // model whose bytes could not be fetched or decoded here.
+    // The real collider when the triangles are to hand: fitted by the same
+    // decide() a browser runs, walls and furniture included. Everything below
+    // is the summary fallback for a model whose bytes couldn't be read here.
     if (mesh) {
       const bid = `${this.world}/${id}`;
-      // awaited, unlike the summary boxes below: the fit itself is what a
-      // joining body's feet wait on (supportReady), and it cannot throw.
-      // The id is RESERVED before the wait, so a remove, mount or close
-      // during it has something to drop — and if one happened, the fit that
-      // lands afterwards is taken straight back out.
+      // awaited, unlike the summary boxes: a joining body's feet wait on the fit
+      // (supportReady). The id is RESERVED first, so a remove/mount/close during
+      // the wait has something to drop, and a fit landing afterwards is taken back out.
       this.supportIds.set(id, [bid]);
       const ok = await registerMeshSupport(this.supportHolder, bid, mesh, { ...xform, collide: e.collide, model: e.model });
       const now = this.entities.get(id);
@@ -2491,14 +2179,10 @@ export class WorldAgent {
       }
     } else if (!roomScale) {
       const bid = `${this.world}/${id}`;
-      // Floor-shaped things whose box top is a KNOWN lie (a blanket, a
-      // rubble pile — the browser collides those against exact triangles
-      // for the same reason) get heightfield support from the served grid,
-      // and NEVER the box: the box top floats bodies by the documented
-      // 0.73m/0.44m (#84). Identification uses the summary's `lie` through
-      // the same shared classifier the browser's decide() runs; a summary
-      // without `lie` (older server) cannot accuse anyone, so honest small
-      // boxes keep today's behavior either way.
+      // Floor-shaped things whose box top is a KNOWN lie (a blanket, a rubble
+      // pile) get heightfield support from the served grid and NEVER the box.
+      // Identified from the summary's `lie` by the browser's own classifier; a
+      // summary without `lie` accuses nothing.
       const cls = decideSupportClass({ w, d, h, lie: Number.isFinite(g.lie) ? g.lie * a3[1] : 0 });
       if (cls.uneven) {
         // the certification is a MODEL-frame bound; this spawn's scale must
@@ -2507,10 +2191,7 @@ export class WorldAgent {
         const stretched = Number.isFinite(g.topGrid?.certSpread) && g.topGrid.certSpread * a3[1] > CERT_MAX_WORLD;
         const fit = !stretched && await registerSupportGrid(this.supportHolder, bid, g.topGrid, xform);
         if (fit) ids.push(bid);
-        // refused grid (absent/malformed/oversized/over-stretched): a
-        // DECLARED abstention — the body finds terrain, which is at worst
-        // the browser's under-the-rubble disagreement, never a floating
-        // false floor
+        // refused grid: a DECLARED abstention (the body finds terrain), never a floating false floor
         else this.noteSupportSeam(id, `uneven top (lie ${(g.lie * a3[1]).toFixed(2)}m) without a usable grid${stretched ? ` (certification stretched past ${CERT_MAX_WORLD}m at ×${a3[1]} high)` : ""} — abstaining, no box`);
       } else {
         void registerSupport(this.supportHolder, bid, g.bbox.min, g.bbox.max, xform);
@@ -2540,19 +2221,18 @@ export class WorldAgent {
       this.lastWalkNote = `you fell below this world's bounds: you are back at its arrival place (${sp.pos.map((n: number) => n.toFixed(1)).join(", ")})${r?.ok ? "" : `, though the authority said ${r?.refused?.code ?? "nothing"}`}`;
     } finally { this.respawning = false; }
   }
-  // ---------------- anim (R 10-17 15:31/15:32): one way to play a pose or a clip, by name or live ----------------
+  // ---------------- anim: one way to play a pose or a clip, by name or live ----------------
   /** The anims this body plays or holds now, when they last (mode loop or hold), oldest first; a once anim ends by itself,
-   *  silently. Each is a LAYER (R 10-17 16:26): a clip (held as the presence clip), the named pose wings-folded, a held
-   *  frame of live keys (joints, or tracks in mode hold: the held pose), or live tracks looping (relayed to every client).
-   *  A new one replaces only the one in its own layer: a pose struck over a sit leaves the sit playing. */
+   *  silently. Each is a LAYER: a clip (held as the presence clip), the named pose wings-folded, a held frame of live
+   *  keys (joints, or tracks in mode hold: the held pose), or live tracks looping (relayed to every client). A new one
+   *  replaces only the one in its own layer: a pose struck over a sit leaves the sit playing. */
   anims: { name: string; mode: "loop" | "hold"; kind: "clip" | "pose" | "live" | "track"; clip?: string; bodyMode?: string }[] = [];
   /** The newest of them (or null). */
   get anim() { return this.anims.at(-1) ?? null; }
-  /** The body-mode (R 10-17 15:34/15:45: was posture, the clip label): stand | sit | lie | swim | fly | fall, every one
-   *  declarable for looks (anim {bodyMode}; an anim may ask for one: the built-in sit and lie do, and its end by a move,
-   *  another anim or a fall returns to stand; anim {stop} leaves it as it is, R 16:26); the mover's real transitions
-   *  (flight, water) set it and end a declaration. Published as presence bodyMode (bodyModeNow). A self-declared
-   *  description: it grants nothing (take-off still wants the fly permission). */
+  /** The body-mode: stand | sit | lie | swim | fly | fall, every one declarable for looks (anim {bodyMode}; an anim may
+   *  ask for one, as the built-in sit and lie do, and its end by a move, another anim or a fall returns to stand; anim
+   *  {stop} leaves it as it is); the mover's real transitions (flight, water) set it and end a declaration. Published as
+   *  presence bodyMode (bodyModeNow). A self-declared description: it grants nothing (take-off still wants fly). */
   modeTracker = bodyModeTracker();
   get bodyMode() { return this.modeTracker.declared ?? "stand"; }
   set bodyMode(m: string | null) { this.modeTracker.declare(m === "stand" ? null : m); }
@@ -2562,7 +2242,7 @@ export class WorldAgent {
   bodyModeNow() { const m = this.modeTracker.step({ flying: this.airborne() && this.clip !== "ragdoll", swimming: this.clip === "swim" || this.clip === "tread" }); return m === "stand" && this.myOccupancy ? "sit" : m; }
   /** The clip a sit at rest plays: the last sitting anim's (sitchair keeps the chair's height), else sit. */
   private sitRest = "sit";
-  /** A body-mode's own resting anim (R 10-17 16:26): stand → idle, sit → the sit loop, lie → lie, swim → tread, fly →
+  /** A body-mode's own resting anim: stand → idle, sit → the sit loop, lie → lie, swim → tread, fly →
    *  soar; null where something else owns the clip (a station's occupant, a real flight, a fall). Never the bind pose. */
   restClip(mode: string): string | null {
     if (mode === "stand") return this.myOccupancy ? null : "idle";
@@ -2595,10 +2275,10 @@ export class WorldAgent {
     this.anims.push(a); if (a.bodyMode && isBodyMode(a.bodyMode)) { this.bodyMode = a.bodyMode; if (a.bodyMode === "sit" && a.clip) this.sitRest = a.clip; }
     if (a.kind === "clip") this.animHold = a.mode === "hold" ? holdAt : null;
   }
-  /** anim {stop} (R 10-17 16:26/16:27). which null: every anim this body plays or holds, each layer, and any held pose;
-   *  then the CURRENT body-mode's own resting anim plays (restClip; never the bind pose) and the body-mode is unchanged
-   *  (to stand up, declare stand or walk). A name: only that layer, the rest going on; "live" names every ad-libbed one
-   *  (joints, tracks). Returns what was stopped (empty: nothing by that name was playing, which is a note, not an error). */
+  /** anim {stop}. which null: every anim this body plays or holds, each layer, and any held pose; then the CURRENT
+   *  body-mode's own resting anim plays (restClip; never the bind pose) and the body-mode is unchanged (to stand up,
+   *  declare stand or walk). A name: only that layer; "live" names every ad-libbed one (joints, tracks). Returns what
+   *  was stopped (empty: nothing by that name was playing, which is a note, not an error). */
   async stopAnims(which: string | null): Promise<string[]> {
     const hit = this.anims.filter((a) => which == null || a.name === which);
     this.animEnded("stopped", (a) => hit.includes(a));
@@ -2608,7 +2288,7 @@ export class WorldAgent {
     // folding the wings open waits for the bones: a walk (it bumps bodyEpoch) or an anim begun meanwhile keeps its clip
     const epoch = this.bodyEpoch, before = new Set(this.anims);
     if ((which == null || kinds.has("pose")) && this.wingsFolded) await this.foldWings(false);
-    // …a tracks loop plays in its own layer and takes no clip, so one begun meanwhile doesn't (house 6340433633)
+    // …a tracks loop plays in its own layer and takes no clip, so one begun meanwhile doesn't
     const newer = this.bodyEpoch !== epoch || this.anims.some((a) => !before.has(a) && a.kind !== "track");
     if ((which == null || kinds.has("clip")) && !newer) {
       if (this.clip === "ragdoll") this.setPose(null);   // a slump ends in the rest too (setPose stands it, and stops its sim)
@@ -2641,9 +2321,8 @@ export class WorldAgent {
     this.watchAnim();
     if (!this.joined) return;
     const dt = TICK_MS / 1000;
-    // The world's physics (@world.physics-engine): stamp where each flying thing IS into the entity view — the same engine state
-    // every renderer draws (shared/protocol/replica.js simAt, advanced to the authority's clock) — so look() sees a punted crate
-    // where it is, and, at rest, where it came to rest. Support rebuilds when a thing comes to rest.
+    // The world's physics (@world.physics-engine): stamp where each flying thing IS into the entity view (replica.js
+    // simAt, the state every renderer draws), so look() sees a punted crate where it is. Support rebuilds at rest.
     // a heightmap terrain waiting on its grid: ask again (requestGrid backs off by itself), and build the
     // waiting bag — only if it is still the newest — the moment the grid is here
     const pend = this.pendingTerrain;
@@ -2677,10 +2356,8 @@ export class WorldAgent {
       this.lastSkyCheck = Date.now();
       this.checkSky();
     }
-    // Being dragged: the dragger's stream owns pos/pose/yaw — no walking, no
-    // terrain clamp (a lifted body is off the ground on purpose). A silent
-    // dragger loses the body; the last streamed pose just holds, lying
-    // wherever it was dropped.
+    // Being dragged: the dragger's stream owns pos/pose/yaw (no walking, no
+    // terrain clamp). A silent dragger loses the body, which holds its last pose.
     if (this.draggedBy && Date.now() - this.dragAt > 1200) {
       this.draggedBy = null;                 // a silent dragger loses the body
       void this.settleFromDrag(null);        // — and my own sim settles it
@@ -2702,21 +2379,19 @@ export class WorldAgent {
       // a loose thing just shoved (shoveNow): for a moment the walk keeps the speed the shove left it, as a cap on the stride
       const capped = this.walkCap && Date.now() < this.walkCap.until ? this.walkCap.v : Infinity;
       if (capped < Infinity) room = Math.min(room, Math.max(0, capped) * dt);
-      // ONE stride of the shared mover (shared/mover.js): the same stride the client takes and the authority checks.
-      // The floor is the walk's admitted support (walkHeightAt: the live terrain, or the floor that admitted the route;
-      // placed floors otherwise reach this body through the sim's support boxes, not its walk); what blocks is the
-      // authority's permit, asked above, and the route the walk was planned on (walkTo).
+      // ONE stride of the shared mover (shared/mover.js), the same stride the client takes and the authority checks.
+      // The floor is the walk's admitted support (walkHeightAt, else the live terrain); what blocks is the authority's
+      // permit, asked above, and the route the walk was planned on (walkTo).
       const walkFloor = this.walkHeightAt ?? ((x: number, z: number) => this.heightAt(x, z));
-      // #235: with the colliders loaded the floor is what the feet will find (colliders.resolveColliders: placed floors and
+      // with the colliders loaded the floor is what the feet will find (colliders.resolveColliders: placed floors and
       // stairs within the mover's step, else the walk's floor) — the same answer the collider pass below gives the stride
       const colliding0 = collidersReady() && !this.myOccupancy && !this.feetSettling;
       const floorAt = colliding0 ? (x: number, z: number, y?: number) => this.feetAt(x, z, y ?? this.pos.y, walkFloor) : walkFloor;
-      // WATER (upstream #242) is the mover's too: handed the world's level (env.waterAt) and this body's measured stature,
+      // WATER is the mover's too: handed the world's level (env.waterAt) and this body's measured stature,
       // the stride wades (dragged) or swims (a stroke's pace, afloat at the chest) — no water arithmetic here.
       const water = this.water;
-      // feet on the live ground BEFORE the stride: terrain that loads late or changes under the walker lifts the body here, so
-      // the mover judges a ledge AHEAD against where the feet now stand — not against a y the ground has since left (the
-      // lifecycle test's mid-walk terrain swap; before 10-15 one refused stride, then the feet clamp, then on)
+      // feet on the live ground BEFORE the stride, so the mover judges a ledge AHEAD against where the feet stand now,
+      // even when terrain loads late or changes mid-walk
       // (colliding, the feet below do this themselves, falling to a lower floor rather than jumping to it)
       if (!colliding0 && !this.flight && !this.draggedBy && this.pins.size === 0) { const g0 = floorAt(this.pos.x, this.pos.z); if (Number.isFinite(g0) && (!water || g0 >= water.level)) this.pos.y = g0; }
       const r = walkToward({ pos: [this.pos.x, this.pos.y, this.pos.z], target: [T.x, T.z], dt, run: T.run, tolerance: T.tolerance ?? MOVER.arrive.tolerance, room,
@@ -2735,7 +2410,7 @@ export class WorldAgent {
         }
       } else if (r.blocked) {
         // the stride was refused (a ledge, a wall, a mode): the walk ends here and says why, instead of pushing at it for
-        // 90 s and reporting "interrupted or timed out" (review 10-15 #4; the ledge hang was older than the water)
+        // 90 s and reporting "interrupted or timed out"
         this.walkStopReason = r.blocked.by === "ledge" ? `a ledge ${Number.isFinite(r.blocked.top) ? `${(r.blocked.top - this.pos.y).toFixed(2)} m` : ""} too high to step onto at (${this.pos.x.toFixed(2)}, ${this.pos.z.toFixed(2)})` : `blocked by ${r.blocked.by}`;
         this.target = null; this.legs.length = 0; this.walkHeightAt = null; this.walkGate = null; this.speed = 0;
         this.clip = r.stance?.swimming ? "tread" : "idle";
@@ -2743,7 +2418,7 @@ export class WorldAgent {
       } else {
         this.speed = r.moved > 0 ? r.moved / dt : 0; this.clip = r.stance?.swimming ? "swim" : T.run ? "run" : "walk";
         if (r.yaw !== null) this.yaw = r.yaw;
-        // the stride's horizontal move; the feet below carry it out (against the fitted colliders when they are loaded, #235)
+        // the stride's horizontal move; the feet below carry it out (against the fitted colliders when they are loaded)
         moveX = r.pos[0] - this.pos.x; moveZ = r.pos[2] - this.pos.z;
         snap = r.pos[0] === T.x && r.pos[2] === T.z; distBefore = Math.hypot(T.x - this.pos.x, T.z - this.pos.z);
       }
@@ -2754,10 +2429,10 @@ export class WorldAgent {
     const feetFree = !this.draggedBy && this.pins.size === 0 && this.clip !== "ragdoll" && !this.flight;
     const terrainG = admittedHeight ?? this.standingGround();   // the storey the feet stand on, else the terrain (storeyUnder)
     const target = this.target;
-    // #235: with the collision modules loaded, the feet are the browser controller's (client/lib/controller.js): the
-    // mover's stride above, then colliders.resolveColliders (standOn) pushes the capsule out of anything solid and answers
-    // the ground under it — a stair tread within the mover's step, a floor below the feet, else terrain — and the body
-    // snaps onto it or falls toward it. Seated, or just joined, the feet keep the floor they last stood on.
+    // with the collision modules loaded, the feet are the browser controller's (client/lib/controller.js): the mover's
+    // stride above, then colliders.resolveColliders (standOn) pushes the capsule out of anything solid and answers the
+    // ground under it (a stair tread within the mover's step, a floor below, else terrain); the body snaps onto it or
+    // falls toward it. Seated, or just joined, the feet keep the floor they last stood on.
     const colliding = feetFree && collidersReady();
     let groundY: number | null = null;
     const yBefore = this.pos.y;   // a float that starts this tick starts from the body as it stood, not mid-fall
@@ -2792,16 +2467,10 @@ export class WorldAgent {
         else if (!st.swimming && (this.clip === "tread" || this.clip === "swim")) this.clip = this.target ? "walk" : "idle";
       } else { this.endFloat(); if (!colliding) this.pos.y = groundY; }
     } else if (!feetFree) this.endFloat();   // a ragdoll, a drag, a nail or a flight has the body: a later float starts afresh
-    // FLIGHT: one fixed-step integration of shared/flight.js per tick, and the
-    // body's position is whatever it says. The integrator is the same function
-    // the browser bench and the capture path run -- authority here is the
-    // agent's own process, exactly as it is for walking.
-    // ONE AUTHOR PER BONE, and per position. Once the ragdoll owns the body
-    // the flight integrator must stop writing pos: the 15Hz sim was setting
-    // the true ragdoll position and the 10Hz flight tick was overwriting it
-    // with its own stale value a hipsOffset higher, which is exactly the
-    // "floating a few feet off the ground" Janus saw. The flight state stays
-    // alive (recovery still needs it) -- it just no longer drives.
+    // FLIGHT: one fixed-step integration of shared/flight.js per tick (the same
+    // function the browser bench runs); the body's position is whatever it says.
+    // ONE AUTHOR PER POSITION: once the ragdoll owns the body (simTicker), the
+    // flight integrator stops writing pos. The flight state stays alive for recovery.
     if (this.flight && !this.simTicker) this.flightTick(dt);
     // KILLZ (shared/spawn.js, as the browser's controller): fallen below @world.bounds.min.y, back to an arrival place, on the record
     if (!this.myOccupancy && !this.draggedBy && !this.respawning && belowWorld(this.replica?.st, [this.pos.x, this.pos.y, this.pos.z])) void this.respawnFell();
@@ -2816,10 +2485,8 @@ export class WorldAgent {
       pose: {
         p: [this.pos.x, this.pos.y, this.pos.z], yaw: this.yaw, speed: this.speed, clip: this.clip, bodyMode: this.bodyModeNow(), clipTime: this.animHold ?? this.clipPhase(), clipTimeSlot: this.bodyClip(), clipRate: this.animHold != null ? 0 : 1,
         ...wingFoldPresence(this.wingsFolded),
-        // a physics bag only ever leaves this process labelled as what it is —
-        // "ragdoll" — so every clip-keyed sanitizer downstream can see it.
-        // Shipping one under "idle" is how princess's tumble frame became
-        // immortal (#61): rememberPose kept it, restore re-armed it, forever.
+        // a physics bag only ever leaves this process labelled "ragdoll", so every
+        // clip-keyed sanitizer downstream can see it (see heldPoseAuthored).
         ...(this.heldPose && (this.heldPoseAuthored || this.clip === "ragdoll") ? { pose: this.heldPose } : {}),
         ...(this.pins.size ? { pins: [...this.pins].map(([j, at]) => ({ j, at })) } : {}),
         ...(this.pendingAnim ? { anim: this.pendingAnim } : {}),
@@ -2843,19 +2510,12 @@ export class WorldAgent {
     if (!this.isSlumped()) this.cannedY = this.pos.y;
     if (this.target) { this.walkDone?.(false); this.walkDone = null; this.target = null; this.legs = []; this.walkHeightAt = null; this.walkGate = null; }
     this.speed = 0;
-    // Down NOW, not when the physics finishes loading. tumble() awaits the
-    // skeleton, the height field and the support barrier before it can set
-    // this — and every one of those is a real wait on a cold join. In that
-    // window the body was knocked over but still reported clip "idle", so a
-    // hand reaching for it was refused ("only limp bodies drag") and the
-    // tumble then landed on top of the drag that never happened. Being
-    // knocked over is a fact about the blow, not about our readiness to
-    // simulate it; the canned slump holds the shape until the sim produces a
-    // real pose, exactly as it does when there is no sim at all.
-    // A fall starts from the pose the body is drawn in, as a browser's sim
-    // starts from the bones it draws (a kneel falls from kneeling height):
-    // what it holds when the fall begins (tumble). This is what it held when
-    // the blow landed, for when that is still the canned slump put up below.
+    // Down NOW, not when the physics finishes loading: tumble() awaits the
+    // skeleton, height field and support barrier, and a body still reporting
+    // "idle" meanwhile would refuse a drag. The canned slump holds the shape
+    // until the sim produces a real pose.
+    // A fall starts from the pose the body is drawn in (a kneel falls from
+    // kneeling height): this is what it held when the blow landed.
     const held = this.heldPose;
     this.clip = "ragdoll";
     this.heldPose ??= DOWNED_POSE;
@@ -2872,17 +2532,10 @@ export class WorldAgent {
     return this.body;
   }
 
-  /** Whose turn it is to drive this body.
-   *
-   *  tumble() and settleFromDrag() both await real latency — the skeleton
-   *  parse, the height field, the support barrier — and the world does not
-   *  hold still for them. A knockdown that pauses on a slow /geom can resume
-   *  AFTER a hand has grabbed the body, dragged it somewhere and let go, and
-   *  then begin() its own stale fall on top of the settle that was already
-   *  running. Checking `draggedBy` alone cannot see that: by the time the
-   *  tumble wakes, the drag is over and the field is null again. Every act
-   *  that takes authority over the body bumps this, and any suspended act
-   *  that finds it changed abandons itself. */
+  /** Whose turn it is to drive this body. tumble() and settleFromDrag() await
+   *  real latency, and the world moves meanwhile (a drag can start and end
+   *  while a knockdown waits on /geom). Every act that takes authority over the
+   *  body bumps this; a suspended act that finds it changed abandons itself. */
   private bodyEpoch = 0;
 
   private async tumble(lean: number[] | null, held: Record<string, PoseValue> | null = null) {
@@ -2915,10 +2568,8 @@ export class WorldAgent {
       yaw: this.yaw,
       // no direction given = the browser default: you fall the way you face
       lean: lean ?? [Math.sin(this.yaw) * 0.9, 0, Math.cos(this.yaw) * 0.9],
-      // What the body holds now: a pose given or released while the fall
-      // waited counts. Only the canned slump the blow itself put up isn't a
-      // pose the body was drawn in before it, so then the one it held when
-      // the blow landed.
+      // What the body holds now (a pose given or released while the fall waited
+      // counts); the blow's own canned slump defers to what it held before.
       pose: this.heldPose === DOWNED_POSE ? held : this.heldPose,
       // where it stands, on a floor or a support, or where a swimmer floats:
       // not the terrain or the bed under it
@@ -2940,10 +2591,8 @@ export class WorldAgent {
     // the sim's ground is process state — assert OURS before every run
     await setHeightField((x, z) => this.heightAt(x, z)); await setWaterField(this.waterFieldNow());
     if (this.bodyEpoch !== epoch) return;
-    // A release (or a 1.2s dragger silence) can land in the first moment of a
-    // join, while replayed spawns are still fetching their geometry. Settling
-    // then would drop the body through a platform the log already knows
-    // about — the #17 failure, arriving by a different door.
+    // A release can land while a join's replayed spawns are still fetching
+    // geometry: wait, or the body settles through a platform the log knows.
     await this.supportReady();
     if (this.bodyEpoch !== epoch || this.draggedBy) return;
     body.begin({
@@ -2958,19 +2607,15 @@ export class WorldAgent {
     this.startSim();
   }
 
-  /** The tumble's own clock: browser-parity 15Hz stepping AND streaming, so a
-   *  falling agent looks exactly like a falling human to every renderer. The
-   *  10Hz main tick keeps running; while the sim owns pos/pose it just
-   *  re-streams the sim's latest truth. */
+  /** The tumble's own clock: browser-parity 15Hz stepping and streaming. The
+   *  10Hz main tick keeps running and just re-streams the sim's latest truth. */
   private startSim() {
     if (this.simTicker) return;
     this.simTicker = setInterval(() => {
       const body = this.body;
       if (!body?.active || this.draggedBy) { this.stopSim(); return; }
-      // A LIMP FALL IS AERODYNAMIC. Before each sim step, push the air onto
-      // every body: this is R2's falling leaf as forces on the real ragdoll
-      // rather than as a curve played over it, so she can be struck, snagged
-      // and land badly on the way down.
+      // A LIMP FALL IS AERODYNAMIC: push the air onto every body before each sim
+      // step (the falling leaf as forces on the real ragdoll, not a curve).
       if (this.flight?.wings === "LIMP" && this.pos.y > 0.4) {
         this.leafT += 1 / 15;
         body.applyLeaf?.(this.leafCfg, this.leafT);
@@ -2996,13 +2641,10 @@ export class WorldAgent {
 
   // ---------------------------------------------------------------- flight
   //
-  // A flying body owns its own position, the way a walking one does: the
-  // integrator runs HERE, in the agent's own process, at the tick rate. That
-  // is the spec's authority model -- one deterministic function, and the
-  // server's verb-receipt timestamps as the tie-breaker -- and it is also why
-  // no new plan abstraction is needed. Mythos scripts a sortie by calling
-  // take_off then climb_to then glide_to from his own code, exactly as he
-  // already calls walk_to; the mode tag is honest because it really is him.
+  // A flying body owns its own position, as a walking one does: the integrator
+  // runs HERE, at the tick rate (the spec's authority model: one deterministic
+  // function, the server's verb-receipt timestamps as tie-breaker). A sortie is
+  // just take_off, climb_to, glide_to called in turn.
 
   /** null when not flying. Holds the integrator's state between ticks. */
   flight: any = null;
@@ -3014,11 +2656,9 @@ export class WorldAgent {
   /** The vigil posture, mirrored for anything that renders this body. */
   wingsFolded = false;
   private flightWaiters: Array<{ done: (r: string) => void; test: (s: any) => string | null }> = [];
-  /** Counts of the calls that set the flight's course (glide_to, a landing's glide among them, climb_to and take_off's
-   *  fresh flight), and of those that set or end its climb (climb_to, land_at and take_off). A call's own answer ends
-   *  the flight or stops its climb only while no later call has taken it over: the stdio door runs calls as they come,
-   *  and a call whose host has stopped waiting for it goes on beside the host's next one. The flight's own object
-   *  can't tell, since every tick replaces it. */
+  /** Counts of the calls that set the flight's course (glide_to, a landing's glide, climb_to, take_off) and of those
+   *  that set or end its climb (climb_to, land_at, take_off). A call's answer ends the flight or its climb only while no
+   *  later call has taken it over: the stdio door runs calls concurrently, and every tick replaces the flight object. */
   private flightCourse = 0;
   private climbCourse = 0;
 
@@ -3042,18 +2682,12 @@ export class WorldAgent {
   /** Resolve the capability, freshly, every time -- never cached. An avatar
    *  can hot-swap and a grant must not ride across it. */
   private flightAllowed(): { ok: boolean; why: string } {
-    // Bone names come from the VRM this body is actually WEARING, fetched once
-    // and re-fetched on an avatar change -- the capability binds to the rig,
-    // not to a hash, so a re-export with the same load-bearing names keeps
-    // flying and a swap to a wingless commons avatar stops it.
-    // Unknown stays unknown: until the worn body's bones have been read, the
-    // provider is given no list, which it answers as such, rather than an
-    // empty list, which it would read as a body with no hips, spine or head.
+    // Bone names come from the VRM this body is actually WEARING (re-fetched on
+    // an avatar change): the capability binds to the rig, not a hash. Until they
+    // are read the provider gets no list (unknown), never an empty one (no bones).
     const bones = this.bodyBoneNames;
-    // THE WORLD'S GRANT, or an explicitly injected one for a bench. What is
-    // gone is the third option -- a self-authorizing dev provider conjured
-    // when neither was present, which was every production path (mica,
-    // Blocker 1). A bench sets `agent.flightCap`; nothing else grants.
+    // THE WORLD'S GRANT, or one injected for a bench (`agent.flightCap`);
+    // nothing else grants flight.
     const prov = this.flightCap ?? worldFlightProvider({ rights: () => this.myRights, label: "world-grant" });
     const r = resolveFlight(prov, { identity: this.name, avatar: { boneNames: bones } });
     return { ok: r.enabled === true, why: r.enabled ? "" : (r.reason ?? "denied") };
@@ -3066,9 +2700,7 @@ export class WorldAgent {
   private bodyBonesFor: string | null = null;
 
   /** Read the worn VRM's bone list, once per avatar. A failed read keeps
-   *  nothing, so the list stays unknown and the next flight act reads again.
-   *  A read that lands while another body is worn is dropped: its bones are
-   *  that other body's. */
+   *  nothing (still unknown); a read landing after an avatar change is dropped. */
   async loadBodyBones(): Promise<string[] | null> {
     const avatar = this.avatar;
     if (this.bodyBoneNames && this.bodyBonesFor === avatar) return this.bodyBoneNames;
@@ -3108,41 +2740,20 @@ export class WorldAgent {
    *  ordinary locomotion; a cut hands it to the ragdoll. */
   private flightTick(dt: number) {
     const before = this.flight.phase;
-    // A COMMANDED CLIMB IS A CLIMB, NOT A LIFT. The first cut nudged pos.y
-    // after the step, which produced exactly what Janus saw from the ground:
-    // "you shot straight upward". Worse, flightStep runs groundContact FIRST,
-    // so near the ground she registered as landed and the nudge then hauled a
-    // landed body into the air -- which is where the 100m teleport came from.
-    //
-    // A climbing bird flies FORWARD and gains height as it goes. So the climb
-    // is handed to the integrator as sustained lift and it does the rest: the
-    // polar still costs her airspeed, the ground check still sees a body that
-    // is rising, and an onlooker sees a body climbing away rather than a
-    // firework.
-    // A CLIMB THAT HAS TO BE EARNED. Janus: "it would be okay if the wings had
-    // to flap and it looked like the wings are lifting the body ... the ascent
-    // to start slow and potentially pick up speed." So the lift EASES IN over
-    // the first couple of seconds rather than switching on at full rate: the
-    // first beats barely hold her, and she gathers. It also reads as effort,
-    // which is the honest thing for the verb that costs 1 stamina per metre.
-    // HOLDING STATION: a slow circle over the point, which is spec section 1's
-    // `circle` in embryo and the honest thing for a body that has arrived and
-    // has not been told what next.
+    // A COMMANDED CLIMB IS A CLIMB, NOT A LIFT: handed to the integrator as
+    // sustained lift (never a pos.y nudge, which flightStep's ground check would
+    // fight), so the body flies forward and gains height as it goes. The lift
+    // EASES IN over the first seconds, so it reads as effort.
+    // HOLDING STATION: a slow circle over the point (spec §1's `circle` in
+    // embryo) for a body that has arrived and has no next verb.
     if (this.flight.holdAt && this.flight.phase === "PILOT") {
       const h = this.flight.holdAt;
       const dx = this.flight.pos.x - h.x, dz = this.flight.pos.z - h.z;
       const r = Math.hypot(dx, dz);
       const bearing = Math.atan2(dz, dx);
-      // A TANGENT PLUS A CORRECTION, proportional to the error. The first cut
-      // aimed tangentially with a fixed nudge, which is a spiral: measured, it
-      // wandered out to 48m and hit the ground, and from the ground Janus saw
-      // her "more like 30 meters away". At 6.4 m/s and 1.2 rad/s the turn
-      // radius is 5.3m, so a tight circle was always available -- the aim was
-      // just never pointed inward hard enough to close the error.
-      //
-      // Lead the tangent by an angle that grows as the radius does: at the
-      // target radius it is pure tangent, far out it is nearly straight at the
-      // point, and inside it eases off. That converges instead of spiralling.
+      // A TANGENT PLUS A CORRECTION proportional to the error: the lead angle
+      // grows with the radius error (pure tangent at the target radius, nearly
+      // straight at the point far out), so it converges instead of spiralling.
       const R = 8;                                   // metres, the held circle
       const err = (r - R) / R;                       // >0 outside, <0 inside
       const lead = Math.max(-1.2, Math.min(1.2, err * 1.4));
@@ -3174,20 +2785,13 @@ export class WorldAgent {
     }
     const f = this.flight;
     this.pos.x = f.pos.x; this.pos.y = f.pos.y; this.pos.z = f.pos.z;
-    // TWO YAW CONVENTIONS, converted at the boundary. The world (and every
-    // renderer) uses atan2(dx, dz) -- see walkTo and face. The flight
-    // integrator uses the mathematical atan2(dz, dx), because its forward is
-    // (cos yaw, sin yaw) in the XZ plane. They differ by a quarter turn and a
-    // reflection, which is why Janus saw her "backwards when you fly".
+    // TWO YAW CONVENTIONS, converted at the boundary: the world uses
+    // atan2(dx, dz) (walkTo, face); the integrator uses atan2(dz, dx), its
+    // forward being (cos yaw, sin yaw) in XZ.
     this.yaw = worldYaw(f.yaw);
     this.speed = Math.hypot(f.vel.x, f.vel.z);
-    // The clip an onlooker sees. LIMP is the truth-telling state and must read
-    // as a ragdoll, not as a pose someone chose.
-    // The clip an onlooker sees. LIMP must read as a ragdoll -- it is the
-    // truth-telling state, not a pose anyone chose. Airborne uses the flight
-    // slots rather than a stride: "the running animation during flying is a
-    // bit goofy" (Janus), and it is, because a run is legs working against
-    // ground that is not underneath them.
+    // The clip an onlooker sees. LIMP must read as a ragdoll (the truth-telling
+    // state, not a chosen pose); airborne uses the flight slots, never a stride.
     this.clip = f.wings === "LIMP" ? "ragdoll"
       : (f.phase === "GROUND" || f.phase === "LANDED") ? "idle"
       : f.flapping ? "fly"          // climbing: wings doing the work
@@ -3238,12 +2842,9 @@ export class WorldAgent {
     // Wing posture is carried independently of an active flight state. A body
     // can fold without a propulsion grant, so the sky door checks the public
     // posture before it constructs a fresh integrator.
-    if (this.wingsFolded) return refused(`still standing — your wings are folded; open them first (anim {stop: "wings-folded"})`);   // main #245's words, our tool
-    // START FROM THE BODY, ALWAYS. A stale flight state -- LANDED after a
-    // glide, or RAGDOLL after a cut -- carried the old position and phase into
-    // the new launch, so take_off "worked" and the next verb found her back on
-    // the ground with the stamina already spent. A launch is a fresh flight
-    // from wherever the body actually is.
+    if (this.wingsFolded) return refused(`still standing — your wings are folded; open them first (anim {stop: "wings-folded"})`);   // shared/flight.js's words, our tool
+    // START FROM THE BODY, ALWAYS: a launch is a fresh flight from wherever the
+    // body is, never a stale LANDED/RAGDOLL state's position and phase.
     // A limp fall can't be launched out of: the body is in the air, and starting a fresh flight from the
     // ground under it would move it there.
     if (this.flight?.phase === "LEAF") return refused(downRefusal(this.flight));
@@ -3263,42 +2864,18 @@ export class WorldAgent {
     return done(`took off — ${this.flight.pos.y.toFixed(1)}m, stamina ${this.flight.stamina.toFixed(0)}/100`);
   }
 
-  // WORLD-FACING FLIGHT TELEMETRY IS ABSENT ON PURPOSE, for now.
-  //
-  // takeoff/landing/down/winded were published as `say` with a "[flight]"
-  // prefix -- infrastructure observations written into the durable
-  // conversational log as though the resident had spoken them, and takeoff
-  // was published twice besides (here AND by the integrator's own event).
-  // mica, Blocker 5: this "places technical strings into the durable
-  // conversational world log" and "entangles the just-repaired AF
-  // world-publication boundary with body telemetry".
-  //
-  // The right shape is a dedicated structured world/presence event carrying
-  // explicit actor, cause and generation -- which is new log vocabulary, and
-  // therefore not something to invent inside a flight branch that is already
-  // under review. Removed rather than reshaped: a landing nobody announces is
-  // a missing feature, a landing announced in the resident's own voice is a
-  // falsified record, and of the two only the second is a lie. The verb
-  // return values still report everything to the caller.
-  //
-  // Proposed to mica in the stage-3 response; nothing here publishes until
-  // that channel is agreed.
+  // WORLD-FACING FLIGHT TELEMETRY IS ABSENT ON PURPOSE: it must never be
+  // published as the resident's `say` (a falsified record in the durable log).
+  // The right shape is a dedicated structured event with actor, cause and
+  // generation, not yet agreed; the verbs' return values report everything.
 
-  /** fold_down / unfold (spec §1). The vigil posture, and the explicit act
-   *  that ends it.
-   *
-   *  Folding is a GROUND posture and needs no flight state to exist, so it
-   *  lazily makes one rather than demanding take_off first -- a body standing
-   *  in the world has wings whether or not it has flown today. */
+  /** fold_down / unfold (spec §1): the vigil posture and the act that ends it.
+   *  A GROUND posture: it needs no flight state and doesn't make one. */
   async foldWings(fold: boolean): Promise<ActResult> {
     await this.loadBodyBones();
-    // Folding is body autonomy, not propulsion authority. A world may deny
-    // `fly` while the person still closes or opens wings they visibly wear.
-    // The rig check prevents a wingless body from claiming a silhouette it
-    // cannot render; take_off remains separately grant-gated.
-    // The rig decides a fold. An unfold never needs it: it asks for nothing to
-    // be folded, so unknown bones don't hold a body folded, and an unfold with
-    // nothing folded is the no-op it would be on any rig.
+    // Folding is body autonomy, not propulsion authority: no `fly` grant needed.
+    // The rig decides a fold (a wingless body can't claim the silhouette); an
+    // unfold never needs it, and unfolding nothing is the no-op it is on any rig.
     const bones = this.bodyBoneNames;
     if (bones == null && fold) {
       // Wings already folded are what a fold asks for, bones known or not.
@@ -3316,10 +2893,8 @@ export class WorldAgent {
     if (!fold && bones != null && !body.canAnimateWings && !this.wingsFolded)
       return done(`this body has no folded-wing posture to release`);
 
-    // Do not create a flight integrator merely to strike a ground posture. A
-    // dormant GROUND flight object owns position on the 10Hz tick and would
-    // fight ordinary walking. When a real flight state exists, keep its wing
-    // state in step; otherwise the semantic presence field is the whole act.
+    // Never create a flight integrator just for a ground posture (a dormant one
+    // would own position on the tick and fight walking); keep an existing one in step.
     if (this.flight) {
       this.flightCfg ??= flightConfig();
       const before = this.flight.wings;
@@ -3328,7 +2903,7 @@ export class WorldAgent {
       const ref = this.flight.events.find((e: any) => /refused$/.test(e.kind));
       // Wings already folded, or already open, are what the call asked for.
       // The reason says why the wings didn't change (shared/flight.js); many reasons name the wings' state too, and
-      // flight_status always gives it, so the sentence around the reason doesn't add the state (#247)
+      // flight_status always gives it, so the sentence around the reason doesn't add the state
       if (ref) {
         const text = `wings stay as they are — ${flightFixInOurTools(ref.reason)}`;
         if (before !== (fold ? "FOLDED" : "OPEN")) return refused(text);
@@ -3393,12 +2968,9 @@ export class WorldAgent {
       s.yaw = Math.atan2(z - s.pos.z, x - s.pos.x);
       return null;
     });
-    // ARRIVING MEANS STOPPING. The verb returned at the target and left her
-    // flying: she was over Janus at 7.8m, the reply said "arrived", and she
-    // then glided another 78m while nobody was driving. A verb that returns
-    // while the body is still committed to a heading is not finished -- it has
-    // just stopped watching. Hold station instead: circle the point until the
-    // next verb, which is what a bird over a place actually does.
+    // ARRIVING MEANS STOPPING: a verb that returns while the body is still
+    // committed to a heading isn't finished. Hold station (circle the point)
+    // until the next verb.
     if (arrived === "arrived" && this.flight && this.flight.phase === "PILOT") {
       this.flight.holdAt = { x, z };
     }
@@ -3429,36 +3001,24 @@ export class WorldAgent {
     const ceiling = ceilingOf(this.worldBox()), want = Math.min(alt, ceiling);
     const gain = Math.max(0, want - from);
     const cost = gain * cfg.stamina.climbPerMetre;
-    // A SHORT CLIMB IS STILL A CLIMB. This branch used to assign `f.pos.y =
-    // from + afford` and return -- the exact teleport class the comment below
-    // was written to forbid, exempted by being in the other half of an if
-    // (mica, Blocker 6). It also emitted no trajectory: a body that "climbed"
-    // 8m without passing through 4m has no flight path to inspect, and R3,
-    // ground contact and a mid-climb cut all had nothing to act on.
-    //
-    // So an unaffordable climb now flies the part it CAN afford, through the
-    // same ticked integrator, and ends honestly where the pool ran out.
+    // A SHORT CLIMB IS STILL A CLIMB: an unaffordable climb flies the part it
+    // CAN afford through the same ticked integrator (never a pos.y assignment,
+    // which would teleport with no trajectory) and ends where the pool ran out.
     const winded = cost > f.stamina;
     const afford = f.stamina / cfg.stamina.climbPerMetre;
     const reach = winded ? from + afford : want;
     const spend = winded ? f.stamina : cost;
-    // CLIMB THROUGH THE INTEGRATOR, not around it. The first cut set pos.y
-    // directly and awaited a timer -- and the flight tick, which owns y while
-    // airborne, overwrote it on the very next frame. She reported 12m, was
-    // actually at 2.2m, and the glide that followed had no altitude to spend.
-    // Anything that moves a flying body has to move it the way the body moves.
+    // CLIMB THROUGH THE INTEGRATOR, not around it: the flight tick owns y while
+    // airborne and would overwrite a direct write on the next frame.
     f.phase = "PILOT"; f.mode = "live"; f.holdAt = null;
     f.stamina = Math.max(0, f.stamina - spend);
     const climbRate = 2.0;   // m/s of ascent while flying forward
     f.climbTo = reach; f.climbRate = climbRate; f.climbT = 0;  // consumed by flightTick
     this.flightCourse++;
     const climb = ++this.climbCourse;
-    // The wait covers the longer of a rise to the height, at the lift less the polar's sink, and a descent to it from
-    // the ceiling, at the lift alone. stepPilot takes its pitch from the stick, which the door doesn't give, so the
-    // airspeed settles at the polar's minimum-sink speed, where a climb rises about 1.5 m/s with the default polar,
-    // and the lift alone is 2 m/s; a descent goes down faster than that. The descent is there for take-off's launch,
-    // which can carry the body up past a height below it or just above it before the climb brings it back down. The
-    // body never flies above the ceiling, so a descent from there bounds that without the door knowing the launch.
+    // The wait covers the longer of a rise to the height (lift less the polar's sink: ~1.5 m/s at the default polar's
+    // minimum-sink speed, since the door gives no stick) and a descent to it from the ceiling (lift alone, 2 m/s): the
+    // descent covers take-off's launch carrying the body past the height. The ceiling bounds it.
     const got = await this.flightAwait((st) => {
       if (isDown(st.phase)) return "cut";
       // A climb that meets the ground ends there, at the height asked (within the tick's 0.4 m) or not. Asked,
@@ -3532,12 +3092,10 @@ export class WorldAgent {
     // than dropping. This is the one place a landing animation is correct --
     // T4 forbids it only for a body that never chose to land.
     f.phase = "PILOT"; f.pitch = 0.2;
-    // The flare comes down at the polar's sink: stepPilot takes its pitch from the stick, which the door doesn't
-    // give, so the airspeed settles at the minimum-sink speed, about 0.46 m/s of sink with the default polar.
-    // Its wait is sized for a flare from the ceiling down to the ground under the body as it begins, since a low
-    // flare can still be rising on take-off's launch, and is never shorter than the 60 s main's flare had, so a flare
-    // that begins over high ground and comes down on lower, or one the launch holds at the ceiling, gets at least the
-    // wait main gave it. A flare that begins well above where its circle comes down can still outlast it.
+    // The flare comes down at the polar's sink (~0.46 m/s at minimum-sink speed with the default polar; the door gives
+    // no stick). Its wait is sized for a flare from the ceiling to the ground under the body as it begins (a low flare
+    // can still be rising on take-off's launch), and never shorter than 60 s. A flare that begins well above where its
+    // circle comes down can still outlast it.
     const top = ceilingOf(this.worldBox()), fall = Math.max(0, (Number.isFinite(top) ? top : f.pos.y) - this.heightAt(f.pos.x, f.pos.z));
     const flare = await this.flightAwait((s) => isDown(s.phase) ? "cut"
       : (s.phase === "LANDED" || s.phase === "GROUND") ? "down" : null,
@@ -3586,14 +3144,10 @@ export class WorldAgent {
     // step, and the flight tick, which settles waits, doesn't run while it does, so a climb, glide or flare
     // waiting could otherwise hear of the cut only once the body came to rest, or at its wait's end.
     this.flightSettle();
-    // R2 hands the body to the REAL ragdoll, from altitude. HeadlessBody.begin
-    // already takes a rootY "for a lifted drop", so a cut at 20m is the case it
-    // was written for -- and using it means a cut body is hit by props, catches
-    // on geometry and lands badly, none of which a scripted curve can do.
-    //
-    // The leaf is then FORCES on those bodies rather than a path: see
-    // shared/leafforce.js. The kinematic leafAt() stays for the deterministic
-    // bench and the capture path, where a bit-exact trajectory is the point.
+    // R2 hands the body to the REAL ragdoll, from altitude (HeadlessBody.begin
+    // takes a rootY for a lifted drop), so a cut body is hit by props and lands
+    // badly. The leaf is FORCES on those bodies (shared/leafforce.js); the
+    // kinematic leafAt() stays for the bit-exact bench and capture path.
     if (this.flight.phase === "LEAF") void this.flightRagdoll();
     return done(`down — ${this.flight.phase}`);
   }
@@ -3653,18 +3207,12 @@ export class WorldAgent {
   }
 
   /** The ground a walk's navgrid probe stands on: the terrain, or on a floor
-   *  walk the walk's own floor, at its height, wherever that level has floor
-   *  and the ground there is no more than a step (NAV_STEP) above it, with
-   *  everywhere else a drop the grid won't take. A floor walk's feet go no
-   *  lower than its floor's height to its end, so its grid must not step off
-   *  onto the terrain or onto another floor, however close below they are.
-   *  On its own floor it goes where the floor route goes, over ground that
-   *  comes within a step of the floor too; where the ground rises more than a
-   *  step above the floor, the floor is buried and no walk crosses it at its
-   *  height. The grid also stands on what's placed there, as it does on the ground
-   *  (navProbe takes placed models' tops over this surface), beside the floor
-   *  too: a placed top within a step above the floor is a step it can take,
-   *  and one lower than the floor is not (onOrAboveFloor). */
+   *  walk the walk's own floor at its height, wherever that level has floor and
+   *  the ground is no more than NAV_STEP above it; everywhere else is a drop the
+   *  grid won't take (a floor walk's feet never go below its floor). Where the
+   *  ground rises more than a step above the floor, the floor is buried. Placed
+   *  tops count as on the ground (navProbe), but none lower than the floor
+   *  (onOrAboveFloor). */
   private walkProbeGround(support: WalkSupport): (x: number, z: number) => number {
     if (support.kind !== "floor") return (x, z) => this.heightAt(x, z);
     const drop = support.height - 2 * NAV_STEP;
@@ -3680,9 +3228,8 @@ export class WorldAgent {
   }
 
   /** What the feet stand on for a walk from here: the upper storey of a
-   * griddled building the feet stand on (storeyUnder, #200), which walkTo's floor
-   * branch then serves, else the terrain. The router never manufactures
-   * floor support itself. `yHint` is the feet's height (feetY), which for a
+   * griddled building under them (storeyUnder), which walkTo's floor branch
+   * serves, else the terrain. `yHint` is the feet's height (feetY), which for a
    * body a sim has laid down is RAGDOLL_ROOT_DROP above its root. */
   private walkSupport(yHint = this.pos.y): WalkSupport {
     const floor = this.storeyUnder(this.pos.x, this.pos.z, yHint);
@@ -3690,11 +3237,9 @@ export class WorldAgent {
   }
 
   /** Every known structure as a walk sees it: placed where it is now, and
-   * prepared against the walk's support. A structure whose place can't be
-   * composed, whose plan throws or whose geometry can't be prepared has no
-   * walls a walk can be checked against: it is skipped, for every walk, as
-   * the straight walk before #218 skipped it, and the operator's log says so
-   * once per component revision. */
+   * prepared against the walk's support. One whose place, plan or geometry
+   * can't be read has no walls to check against: it is skipped for every walk,
+   * and the operator's log says so once per component revision. */
   private walkStructures(support: WalkSupport): WalkStructure[] {
     const nowMs = this.serverNow(), out: WalkStructure[] = [];
     for (const e of this.entities.values()) {
@@ -3708,7 +3253,7 @@ export class WorldAgent {
         console.warn(`[${this.name}] move skips structure [${e.id}], which can't be checked: ${why}`);
       };
       // Where it is now, carried or moving included, as every other spatial
-      // claim reads it (#82): not its rest pose.
+      // claim reads it: not its rest pose.
       const fx = this.eff(e.id, nowMs);
       if (!fx.ok) { skip(`its place can't be composed (${fx.why})`); continue; }
       const sc = fx.scale > 0 ? fx.scale : 1;
@@ -3737,9 +3282,9 @@ export class WorldAgent {
   }
 
   /** A route from `from` to `to` that every structure clears: the straight
-   * leg when none offers a detour, else the shortest structure's offered
-   * detour that the others clear too. This is local planning, not global
-   * multi-building search. A refusal names each structure's reason. */
+   * leg when none offers a detour, else the shortest offered detour the others
+   * clear too (local planning, not a multi-building search). A refusal names
+   * each structure's reason. */
   private routeFrom(from: Vec2, to: Vec2, structures: WalkStructure[]): { points: Vec2[] } | { refusal: string } {
     const candidates: { points: Vec2[]; length: number; owner: WalkStructure }[] = [];
     const refusals: string[] = [];
@@ -3779,9 +3324,8 @@ export class WorldAgent {
   }
 
   /** The legs of a walk from where the body stands to `to`, or why there is
-   * none. A body standing in a wall (a door edited to a window under its feet)
-   * first steps out to the nearest clear point beside it, within half a
-   * metre, and is routed from there. */
+   * none. A body standing in a wall first steps out to the nearest clear point
+   * within half a metre and is routed from there. */
   private planWalk(to: Vec2, support: WalkSupport): { legs: Vec2[] } | { refusal: string } {
     const structures = this.walkStructures(support), from = { x: this.pos.x, z: this.pos.z };
     if (structures.every((s) => s.clear(from, from))) {
@@ -3789,10 +3333,8 @@ export class WorldAgent {
       return "refusal" in route ? route : { legs: route.points.slice(1) };
     }
     for (const r of STEP_OUT_METRES) {
-      // A step's sides: the directions whose point is clear, and which a step
-      // from just off the wall reaches without crossing one. Runs of them
-      // around the circle are the sides of the wall; the middle of each run
-      // stands for that side, so each side is planned from once.
+      // A step's sides: the clear directions a step from just off the wall reaches
+      // without crossing it; each run of them is one side, planned from its middle.
       const ok = Array.from({ length: STEP_OUT_DIRECTIONS }, (_, k) => {
         const th = (2 * Math.PI * k) / STEP_OUT_DIRECTIONS;
         const p = { x: from.x + r * Math.cos(th), z: from.z + r * Math.sin(th) };
@@ -3814,8 +3356,8 @@ export class WorldAgent {
     return { refusal: "the body stands in a wall, with no clear point within half a metre to step out to" };
   }
 
-  /** `y`, when given, picks the floor at the destination (#236): the place to stand nearest that height, no more than a
-   *  step above it. Without it, the body's own storey if the destination has a floor within a step of it, else the lowest
+  /** `y`, when given, picks the floor at the destination: the place to stand nearest that height, no more than a step
+   *  above it. Without it, the body's own storey if the destination has a floor within a step of it, else the lowest
    *  there. `near.reach`: how far from (x, z) a place to stand may be (a room is reached anywhere in it; a point within a
    *  hand's width or so). `near.above` / `near.below`: how far above / below y its floor may be (a step above and anything
    *  below, unless the floor's height is known exactly, as a named room's is). `near.inside`: only spots in a region.
@@ -3838,11 +3380,9 @@ export class WorldAgent {
       if (receipt) receipt.refusal = this.walkRefusal;   // set synchronously by the plan
       return p;
     };
-    // Placed things whose geometry is still on its way (a spawn just made, a
-    // join's replay) are not yet solid here: planning now would walk through
-    // them. The walk waits for them — every sync issued until they're all in,
-    // ones that arrive during the wait included — and if they don't land in
-    // time it is refused, never walked on the terrain underneath.
+    // Placed things whose geometry is still on its way aren't solid here yet:
+    // the walk waits for every pending sync (new ones included), and is refused
+    // if they don't land in time, never walked on the terrain underneath.
     if (!this.supportPending.size) return now();
     return this.supportReady(WALK_READY_MS).then(() => {
       if (ticket !== this.walkTicket) {   // stopped, or another walk asked for, meanwhile
@@ -3864,30 +3404,21 @@ export class WorldAgent {
 
   private walkNow(x: number, z: number, run: boolean, timeoutMs: number, tolerance: number, y: number | undefined,
     near: Pick<NavTarget, "reach" | "above" | "below" | "inside"> & { bodyAt?: { x: number; z: number } }, replanned = false): Promise<boolean> {
-    // Plan before touching the body, from the ground under it: a refused walk
-    // leaves it seated, pinned, dragged, posed or tumbling as it was, and sends nothing. The
-    // walk's floor, its grid's start and where it stands up are all found
-    // from the feet, as when it stands up (setPosture, feetGround).
+    // Plan before touching the body, from the ground under it (as setPosture's
+    // feetGround): a refused walk leaves the body exactly as it was and sends nothing.
     const slumped = this.isSlumped();
     const feetY = this.feetY(slumped);
     const support = this.walkSupport(feetY);
     const plan = this.planWalk({ x, z }, support);
     if ("refusal" in plan) { this.walkRefusal = plan.refusal; return Promise.resolve(false); }
-    // A walk from a floor stays on it: the router plans it on that floor
-    // alone, and a griddled building's storeys have no stairs between
-    // them or to the ground. So a destination whose height means another
-    // of the floors there (floorMeant: move's own rule for a height,
-    // with the destination's bounds), another storey, another building's
-    // or the ground, is refused here, once the router has planned the
-    // walk and before the navgrid routes it or its legs are walked (the
-    // planner's legs never read y), rather than walked to at the same x
-    // and z on this floor. Unless something placed on this floor, under
-    // the next floor above, stands at about that height there
-    // (placedNear): then the walk goes, and the navgrid, when it routes
-    // the walk, reads the height against what is placed. A named
-    // destination's height and bounds are the world's: a place, a seat, a
-    // room, a thing's entrance, a person, whose floor is the one their
-    // body is on where they are, not where the walk stops short of them.
+    // A walk from a floor stays on it: griddled storeys have no stairs between
+    // them or to the ground. So a destination whose height means another floor
+    // there (floorMeant, with the destination's bounds) is refused here, after
+    // the router plans and before the navgrid routes, rather than walked to at
+    // the same x, z on this floor. Unless something placed on this floor (under
+    // the next one up) stands at about that height (placedNear): then the walk
+    // goes. A named destination's height and bounds are the world's (a person's
+    // floor is the one their body is on).
     if (support.kind === "floor" && y != null) {
       const at = near.bodyAt ?? { x, z };
       const meant = this.floorMeant(at.x, at.z, y, near, support, near.bodyAt != null);
@@ -3906,11 +3437,9 @@ export class WorldAgent {
     // straight leg is routed against the colliders the feet will meet —
     // round the furniture, through the door, up the stair (mcpl/navgrid.ts).
     let legs = plan.legs, snapped = false, routed = false, passIds = new Set<string>();
-    // A floor walk's probe stands on that storey, which the colliders don't
-    // hold, so placed models on it are routed round as they are on the
-    // ground (walkProbeGround), and nowhere lower than that floor
-    // (onOrAboveFloor). Its grid is the walk's own: the cached one answers
-    // for the terrain.
+    // A floor walk's probe stands on that storey (not in the colliders), routes
+    // round placed models as on the ground (walkProbeGround), never lower than
+    // the floor (onOrAboveFloor). Its grid is the walk's own.
     const surface = this.walkProbeGround(support);
     const raw = plan.legs.length === 1 ? navProbe(surface) : null;
     const probe = raw && support.kind === "floor" ? onOrAboveFloor(raw, support.height) : raw;
@@ -3937,21 +3466,18 @@ export class WorldAgent {
         return withoutColliders(passable, () => {
           const first = grid.route(from, { x, z, y, ...near });
           // A person's bound reaches the surface a body lies on (destination()),
-          // which no route may reach, such as a top bunk: then the place to
-          // stand nearest them no higher than their root, the floor beside it.
-          // (No higher than the root, not within a step of it: the walker's
-          // step, NAV_STEP, is more than RAGDOLL_ROOT_DROP, so a step above the
-          // root of someone lying down still reaches the bunk they lie on.)
+          // which no route may reach (a top bunk): then the place to stand
+          // nearest them no higher than their root, the floor beside it.
+          // (Not "within a step": NAV_STEP > RAGDOLL_ROOT_DROP would reach the bunk.)
           if (!("refusal" in first) || !near.bodyAt) return first;
           const beside = grid.route(from, { x, z, y, ...near, above: 0 });
           return "refusal" in beside ? first : beside;
         });
       });
       if ("refusal" in nav) { this.walkRefusal = nav.refusal; return Promise.resolve(false); }
-      // griddled structures keep their walls out of the headless colliders,
-      // so a detour round the furniture is checked against them like any
-      // structure route; one that crosses a wall gives way to the structure
-      // planner's own legs
+      // griddled structures' walls aren't in the headless colliders, so a detour
+      // round the furniture is checked against them; one that crosses a wall
+      // gives way to the structure planner's own legs
       const structures = this.walkStructures(support);
       const pts = [{ x: this.pos.x, z: this.pos.z }, ...nav.points.map((p) => ({ x: p.x, z: p.z }))];
       const crosses = structures.length > 0 && pts.slice(1).some((p, k) => structures.some((st) => !st.clear(pts[k], p)));
@@ -3968,15 +3494,10 @@ export class WorldAgent {
     this.pins.clear();      // and walking tears out every nail
     ++this.bodyEpoch;       // ...and outranks a tumble or settle still loading
     this.body?.stop(); this.stopSim();   // a body that decides to walk is done tumbling
-    // deciding to walk IS getting up — shed the held pose, or the body zombie-
-    // walks with it frozen over the stride. The default stays "held until you
-    // clear_pose or move" for everything that did NOT ask otherwise, because
-    // that unconditional shed is also what lets a store poisoned with a
-    // relabelled tumble frame (#61) self-heal on the resident's first walk —
-    // and a restored pose arrives marked authored, so authorship alone is NOT
-    // a safe test. Only a pose this body deliberately pinned with `hold`
-    // survives, identified by object (see heldPoseSticky), which a restore or
-    // a tumble frame can never satisfy.
+    // deciding to walk IS getting up: shed the held pose, or the body walks
+    // with it frozen over the stride. Authorship alone is not a safe test (a
+    // restored pose arrives authored); only a pose pinned with `hold` survives,
+    // identified by object (heldPoseSticky), which a restore or tumble frame can't satisfy.
     const sticky = this.heldPose != null && this.heldPose === this.heldPoseSticky;
     if ((this.heldPose && !sticky) || this.clip === "ragdoll") {
       if (!sticky) { this.heldPose = null; this.heldPoseAuthored = false; }
@@ -3986,13 +3507,13 @@ export class WorldAgent {
     // glues this body to its socket on every renderer, wherever the feet go
     if (this.joined && this.myOccupancy && this.mayVacate("menu")) this.setOccupant(null);
     // and stand on the ground you got up onto: with colliders loaded, the floor under the feet found from where they
-    // are (a body seated upstairs stands up upstairs, #235); the planner's support answer otherwise
+    // are (a body seated upstairs stands up upstairs); the planner's support answer otherwise
     const supportAt = support.kind === "terrain" ? (wx: number, wz: number) => this.heightAt(wx, wz) : () => support.height;
     const standFrom = { x: this.pos.x, y: feetY, z: this.pos.z };
     this.pos.y = inWorld(this.world, () => (collidersReady() ? standOn(standFrom, supportAt) : null)) ?? support.height;
     this.vy = 0; this.grounded = true; this.stallTicks = 0; this.walkStall = null;
     // A structure route's corners are reached exactly (its doorways are planned to the centimetre); a routed walk's
-    // (#236) may sit where something nudges the body a little, so they — and its end — count within that.
+    // may sit where something nudges the body a little, so they — and its end — count within that.
     this.legTolerance = routed ? NAV_NUDGE : 0;
     this.walkTolerance = routed ? Math.max(tolerance, NAV_NUDGE) : tolerance;
     // A terrain walk reads the live terrain each tick, as the planner read it;
@@ -4094,9 +3615,8 @@ export class WorldAgent {
   private static placeLine(x: { ref: string; place: Place; dest: Destination; d: number }) {
     return `${x.ref}${x.place.label && x.place.label !== x.place.name.replace(/_/g, " ") ? ` "${x.place.label}"` : ""} (${x.d.toFixed(1)} m, floor ${x.dest.y.toFixed(2)} m)`;
   }
-  /** move {to: "?"}: every named place, seen or not (owner 22:40) — nearest first, at most PLACE_LIST_MAX (a built-up
-   *  world's list was megabytes; review r3 F7). move {to: "?<text>"} lists only those whose "thing/place" or label
-   *  holds that text (any case). */
+  /** move {to: "?"}: every named place, seen or not, nearest first, at most PLACE_LIST_MAX. move {to: "?<text>"}
+   *  lists only those whose "thing/place" or label holds that text (any case). */
   placeList(filter = ""): string {
     const f = filter.trim().toLowerCase();
     const all = this.placesNear().filter((x) => !f || x.ref.toLowerCase().includes(f) || (x.place.label ?? "").toLowerCase().includes(f));
@@ -4106,10 +3626,9 @@ export class WorldAgent {
     return `named places here${f ? ` holding "${filter.trim()}"` : ""}, nearest first (move {to: "<thing>/<place>"} or a place's name):\n${shown.map((x) => `  ${WorldAgent.placeLine(x)}`).join("\n")}`
       + (more ? `\n…and ${more} more, farther away — narrow it with move {to: "?<text>"} (e.g. "?${shown[shown.length - 1].ref.split("/")[0]}"): only places whose name or label holds that text` : "");
   }
-  /** look's listing (owner 22:43): the places this body can SEE — a ray from its eye to the place (a point, or a room's
-   *  middle a metre over its floor) unblocked by the placed models' fitted colliders (the same ones the feet use, #235)
-   *  and the terrain — within PLACE_SIGHT_M, nearest first, at most PLACE_LOOK_MAX. Before the collision modules have
-   *  loaded, distance alone decides (and the line says so). */
+  /** look's listing: the places this body can SEE (a ray from its eye to the place, or a room's middle a metre over
+   *  its floor, unblocked by the placed models' fitted colliders and the terrain) within PLACE_SIGHT_M, nearest first,
+   *  at most PLACE_LOOK_MAX. Before the collision modules load, distance alone decides (and the line says so). */
   placesInSight(): { lines: string[]; more: number; byDistance: boolean } {
     const eye = [this.pos.x, this.pos.y + this.stature() * 0.93, this.pos.z];
     const seen: string[] = []; let byDistance = false, total = 0;
@@ -4141,11 +3660,10 @@ export class WorldAgent {
     return out.sort((a, b) => a.vol - b.vol);
   }
 
-  /** Where `to` is, as a walk can aim at it: "thing/place", a thing alone
-   *  (its entrance, else its door, else up to it and beside it), a place's name or label alone (the
-   *  nearest, if several things have one), a thing by its label, or a person
-   *  (stopping short of them) — in that order: a person's name never hides a
-   *  thing's, by id or by label. */
+  /** Where `to` is, as a walk can aim at it, in this order: "thing/place", a
+   *  thing alone (its entrance, else its door, else beside it), a place's name
+   *  or label alone (the nearest), a thing by its label, or a person (stopping
+   *  short of them). A person's name never hides a thing's. */
   destination(to: string): Destination | { refusal: string } {
     const q = to.trim();
     if (!q) return { refusal: "move's to names nothing" };
@@ -4163,7 +3681,7 @@ export class WorldAgent {
       return h ? destinationOf(h, p) : { refusal: `where [${this.refName(e.id)}] is right now cannot be worked out (${why})${partHint(why)}` };
     };
     if (slash > 0) {
-      const tr = this.thingRef(q.slice(0, slash));   // its id, its label or a unique id prefix (R 10-17); a shared label is refused with the candidates
+      const tr = this.thingRef(q.slice(0, slash));   // its id, its label or a unique id prefix; a shared label is refused with the candidates
       if ("refusal" in tr) return tr;
       const e = ents.find((x) => "id" in tr && x.id === tr.id) ?? ents.find((x) => ci(x.id, q.slice(0, slash)));
       if (!e) return { refusal: `no thing called "${q.slice(0, slash)}" here` };
@@ -4171,8 +3689,8 @@ export class WorldAgent {
       if (!p) return { refusal: `[${this.refName(e.id)}] has no place called "${name}"${ps.length ? ` — its places: ${ps.map((x) => x.name).join(", ")}` : " (it has no named places)"}` };
       return at(e, p);
     }
-    // a thing: its entrance, else its door, else walked up to and stood beside (review r5 F3: here, not in a second
-    // resolver of move's — a person named like it never captures the walk, and of several, the nearest is taken)
+    // a thing: its entrance, else its door, else walked up to and stood beside (one resolver for move: a person
+    // named like it never captures the walk, and of several, the nearest is taken)
     const thing = (x: Entity): Destination | { refusal: string } => {
       const ps = this.placesOn(x);
       const p = ps.find((y) => y.name === "entrance") ?? ps.find((y) => y.kind === "door");
@@ -4188,28 +3706,21 @@ export class WorldAgent {
       if (!("refusal" in d)) hits.push(d);
     }
     if (hits.length) return hits.sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
-    // a thing by its label (a display name someone gave it) or a unique id prefix — before any person too (review r4 claims
-    // C1: a visitor named like a thing's label captured the walk). R 10-17: a label two things share is refused with the
-    // candidates (label, what, where, handle), never resolved to the nearest
+    // a thing by its label (a display name someone gave it) or a unique id prefix, before any person; a label two
+    // things share is refused with the candidates (label, what, where, handle), never resolved to the nearest
     { const tr = this.thingRef(q); if ("refusal" in tr) return tr;
       if ("id" in tr) { const x = ents.find((y) => y.id === tr.id); if (x) return thing(x); } }
-    // a person, last (review r3 F4): a visitor who joins as "tower" must not capture every walk to the tower
+    // a person, last: a visitor who joins as "tower" must not capture every walk to the tower
     for (const p of this.people.values()) {
       if (!ci(p.id, q)) continue;
       const xyz = posePosition(p.pose);
       if (!xyz) return { refusal: `${p.id}'s position is not known yet` };
       const [x, root, z] = xyz, d = Math.hypot(me.x - x, me.z - z), back = d > 0.01 ? Math.min(0.9, d) / d : 0;
-      // Presence carries the root, not how a body came to be there: one
-      // standing, or held by a canned slump, has its root on its floor; one a
-      // sim laid down, under clip "ragdoll" or a physics pose held under
-      // another, has it about RAGDOLL_ROOT_DROP below the surface it lies on.
-      // So their floor may be up to that drop above the root: the navgrid
-      // takes the place to stand nearest the root within it (the floor they
-      // lie on, or the floor beside the bed they lie on; where no route
-      // reaches it, walkNow routes again within a step), and a floor walk's
-      // check the floor their body is on where they are (bodyAt). Without the
-      // bound, a walk to someone lying on this floor reads as one to a floor
-      // beneath.
+      // Presence carries the root: standing (or a canned slump) has it on its
+      // floor; a sim-laid body has it about RAGDOLL_ROOT_DROP below the surface
+      // it lies on. So their floor may be up to that drop above the root: the
+      // navgrid takes the place to stand nearest the root within it, and a
+      // floor walk checks the floor their body is on (bodyAt).
       return { x: x + (me.x - x) * back, y: root, z: z + (me.z - z) * back, reach: 0.6, label: p.id,
         above: RAGDOLL_ROOT_DROP + 0.05, bodyAt: { x, z } };
     }
@@ -4232,7 +3743,7 @@ export class WorldAgent {
     const d = Math.hypot(me.x - px, me.z - pz), back = d > 0.01 ? Math.min(off, d) / d : 0;
     const dest: Destination = { x: px + (me.x - px) * back, y: box ? box.min[1] : at[1], z: pz + (me.z - pz) * back, reach: 0.6, label: `[${this.refName(x.id)}]` };
     // a thing standing on another (a cup on a table): the spot beside it may be on that other's top, where a walk can't
-    // climb — then the spot beside what holds it up, on ITS floor, is walked to instead (review r6 L1)
+    // climb — then the spot beside what holds it up, on ITS floor, is walked to instead
     const under = box && depth < 4 ? this.supportOf(x.id, box) : null;
     if (under) { const ob = this.besideThing(under, now, depth + 1); if (!("refusal" in ob)) dest.orBeside = { ...ob, label: dest.label }; }
     return dest;
@@ -4264,11 +3775,10 @@ export class WorldAgent {
    *  one's echo confirmed, so two in a row don't overwrite each other. */
   private placeEdits: Promise<unknown> = Promise.resolve();
 
-  /** Name a spot (the body's own, by default) as a place on a thing: written
-   *  into that thing's `places` component, in its frame, alongside what is
-   *  already there. `remove` retires a name (null: that also hides one the
-   *  model itself declares). `at` may leave out y: the floor there nearest
-   *  the body's own height. Answers once the world accepts or refuses it. */
+  /** Name a spot (the body's own by default) as a place on a thing, in its
+   *  `places` component and frame. `remove` retires a name (null also hides a
+   *  model-declared one). `at` may omit y: the floor there nearest the body's
+   *  height. Answers once the world accepts or refuses it. */
   namePlace(name: string, opts: { on?: string; label?: string; remove?: boolean; at?: { x: number; z: number; y?: number } } = {}): Promise<ActResult> {
     const run = this.placeEdits.then(() => this.namePlaceNow(name, opts));
     this.placeEdits = run.catch(() => {});
@@ -4335,12 +3845,10 @@ export class WorldAgent {
         const l = toLocal(h, w).map((v) => Math.round(v * 1000) / 1000);
         cur[name] = { at: l, ...(opts.label ? { label: opts.label.slice(0, 80) } : {}) };
       }
-      // an ordinary set of the places component, through the authority: rights, the gate and undo apply as to any edit.
-      // Adding a name merges just that name (RFC 7396); retiring one replaces the bag with the name held as null, since a
-      // merge's null would delete the entry and let a name the model declares back in, and re-pointing one replaces the
-      // bag too (above). Its size is the authority's to judge (its gate keeps values under 64 KiB). That replace is
-      // built from this replica, so it is PINNED to the bag it read (expect, §3a): if someone else wrote a name in between,
-      // the authority refuses it as `changed`, and it is rebuilt from the bag as it now is (review r3 F5)
+      // an ordinary set of the places component, through the authority (rights, the gate and undo apply). Adding a name
+      // merges just that name (RFC 7396); retiring one replaces the bag with the name held as null (a merge's null would
+      // let a model-declared name back in), as re-pointing does. That replace is PINNED to the bag it read (expect,
+      // §3a): if someone wrote a name in between, it is refused as `changed` and rebuilt from the bag as it now is
       const op = replace ? OP.set(id, "places", cur) : OP.set(id, "places", { [name]: cur[name] }, { merge: true });
       const pin = replace ? { expect: [{ id: op.args.id, component: op.args.component, ...(had !== undefined ? { value: had } : {}) }] } : {};
       r = await this.sendOps([op], pin);
@@ -4367,11 +3875,10 @@ export class WorldAgent {
   }
 
   // ---- feet ----------------------------------------------------------------
-  // The browser walking controller's vertical model (client/lib/controller.js),
-  // run against the same fitted colliders: move, resolveColliders (which pushes
-  // the capsule out of anything solid and answers the ground under it — a
-  // stair tread within a step, a floor below the feet, else terrain), then snap
-  // onto that ground or fall toward it under gravity.
+  // The browser walking controller's vertical model (client/lib/controller.js)
+  // against the same fitted colliders: move, resolveColliders (push the capsule
+  // out of anything solid, answer the ground under it), then snap onto that
+  // ground or fall toward it under gravity.
   private vy = 0;
   private grounded = true;
   /** What the route planner has learned about this world's columns, good
@@ -4412,7 +3919,7 @@ export class WorldAgent {
     return inWorld(this.world, () => standOn(p, floor)) ?? floor(x, z);
   }
   /** The height a stretch asked of the authority stands at: the floor the feet will find there (an upstairs walk asks for
-   *  upstairs, #235), the terrain where the colliders aren't loaded. */
+   *  upstairs), the terrain where the colliders aren't loaded. */
   private permitFloor(x: number, z: number): number {
     return this.feetAt(x, z, this.pos.y, (wx, wz) => this.heightAt(wx, wz));
   }
@@ -4424,19 +3931,16 @@ export class WorldAgent {
   }
 
   /** The ground the tick holds a body's feet to when nothing else does:
-   *  groundAt from the feet (feetY), so a body holding a physics pose under
-   *  another clip, its root RAGDOLL_ROOT_DROP under its feet, keeps the
-   *  storey it lies on. */
+   *  groundAt from the feet (feetY), so a body lying under another clip keeps
+   *  the storey it lies on. */
   private standingGround(): (x: number, z: number) => number {
     const feetY = this.feetY(this.isSlumped());
     return (x, z) => this.groundAt(x, z, feetY);
   }
 
   /** The height of the feet, for finding the floor a body stands on: its y,
-   *  but a slumped or tumbling body has its feet RAGDOLL_ROOT_DROP above its
-   *  root, as a sim lays it, unless the slump is canned (rootCanned): held
-   *  before any sim has run or with no sim to run, its root is at its feet's
-   *  height. */
+   *  but a slumped or tumbling body's feet are RAGDOLL_ROOT_DROP above its root,
+   *  unless the slump is canned (rootCanned), whose root is at its feet. */
   private feetY(slumped: boolean): number {
     return slumped && !this.rootCanned() ? this.pos.y + RAGDOLL_ROOT_DROP : this.pos.y;
   }
@@ -4450,10 +3954,8 @@ export class WorldAgent {
    *  colliders when loaded, over the ground groundAt gives (an upper
    *  storey's floor, else the terrain); without colliders, that ground. */
   private feetGround(fromRagdoll = false): number {
-    // a settled ragdoll's root lies ~0.68m BELOW the surface holding it up
-    // (support-lifecycle-test's hipsOffset); probing from the root itself
-    // would start under a thin upper floor and find the storey beneath. A
-    // canned slump's root is at its feet, and the probe starts there (feetY).
+    // a settled ragdoll's root lies ~0.68m BELOW its support, so probe from the
+    // feet (feetY), or a thin upper floor would find the storey beneath.
     const from = { x: this.pos.x, y: this.feetY(fromRagdoll), z: this.pos.z };
     // under the colliders, the terrain or a griddled storey's floor
     const terrain = (x: number, z: number) => this.groundAt(x, z, from.y);
@@ -4462,11 +3964,10 @@ export class WorldAgent {
     return g ?? terrain(this.pos.x, this.pos.z);
   }
 
-  /** A walk pressed against something solid ends, and says so. Routes go
-   *  round what was there when they were planned (navgrid); this catches what
-   *  was not — a thing spawned, placed or set moving since. Progress is
-   *  distance closed on the current waypoint; a body sliding along a wall it
-   *  will never get past makes a little and is still stopped. */
+  /** A walk pressed against something solid ends, and says so: this catches
+   *  what the route didn't plan round (spawned, placed or set moving since).
+   *  Progress is distance closed on the current waypoint, so sliding along a
+   *  wall it will never pass still stops. */
   private noteWalkProgress(distBefore: number, intended: number) {
     const t = this.target;
     if (!t) { this.stallTicks = 0; return; }
@@ -4480,7 +3981,7 @@ export class WorldAgent {
       `expect (it moved or arrived after the walk was planned) — move there again and the route will take it into account`;
     this.stallTicks = 0;
     // pressed against a thing the route planned to walk into (its shove doesn't move it): round it, once. Only a thing
-    // the stride presses INTO is blamed (its contact's normal head-on to the walk, as a shove's is: review r5 F5) — a
+    // the stride presses INTO is blamed (its contact's normal head-on to the walk, as a shove's is) — a
     // walk stalled by something else while it grazes a crate doesn't mark the crate solid
     const plan = this.walkPlan, st = this.replica?.st, cap = BODY_CAP, feet = [this.pos.x, this.pos.y, this.pos.z];
     const dx = t.x - this.pos.x, dz = t.z - this.pos.z, dd = Math.hypot(dx, dz);
@@ -4553,7 +4054,7 @@ export class WorldAgent {
       g.busy = false;
       if (!r?.ok && r?.refused?.code === "solid" && this.walkUpTo(g, from, T, r.refused)) return;
       // too fast is "not yet": the track refills at its speed, and it is spent by a shove's re-track (shoveNow), by walking
-      // just before, or on a slow host by steps the authority saw bunched up (AS16; CI macOS 10-22). Asked again shortly,
+      // just before, or on a slow host by steps the authority saw bunched up (AS16). Asked again shortly,
       // five times at most (2 s refills 12 m, three full tracks), never ended as a refused walk on the first
       if (!r?.ok && r?.refused?.code === "too-fast" && (g.slow = (g.slow ?? 0) + 1) <= 5) { g.waitUntil = Date.now() + 400; return; }
       if (!r?.ok) { this.refuseWalk(r?.refused ?? { code: "no-answer", reason: "the authority didn't answer" }); return; }
@@ -4582,9 +4083,8 @@ export class WorldAgent {
     return budges(massOf(this.replica?.st, id) ?? NaN, run ? MOVER.walk.run : MOVER.walk.speed);
   }
   /** What a thing's shove depends on besides where it stands: its lock and every lock over it, its physics (kind, who,
-   *  mass, density, surface) and its size in the world (its derived mass goes with it: review r6 L3) — the judgement of a
-   *  misjudged thing holds only while these do (review r5 F5: a crate locked once and unlocked was solid to this body's
-   *  walks for good). */
+   *  mass, density, surface) and its size in the world (its derived mass goes with it). A misjudged thing's judgement
+   *  holds only while these do. */
   private shoveState(id: string): string {
     const st = this.replica?.st, locks: unknown[] = [];
     let k: string | undefined = id;
@@ -4728,7 +4228,7 @@ export class WorldAgent {
   request(verb: string, args: Record<string, unknown> = {}): Promise<any> {
     if (!this.joined || this.ws?.readyState !== 1) return Promise.resolve({ ok: false, refused: { code: "not-joined", reason: "not in a world" } });
     // speech ends composing, by whichever route it's sent (say(), or act {verb: "say"}): the throttle clears, and whoever
-    // keeps this body's typing dots up (the door's TypingRelay, #234) lets them end with the bubble
+    // keeps this body's typing dots up (the door's TypingRelay) lets them end with the bubble
     if (verb === "say") { this._typingUntil = 0; this.onSaid?.(); }
     // holes r3 F2: the authority judges this body's water with the stature its mover is handed (in water: stature())
     if (verb === "move" && this.water && args.height === undefined) args = { ...args, height: this.stature() };
@@ -4850,10 +4350,10 @@ export class WorldAgent {
     const r = [...this.reachRefusals].reverse().find((x) => holderOf(x) && x.ts > Date.now() - REACH_NOTE_MS);   // (target, class) exactly (F9)
     return r ? { r, by: holderOf(r)!.name, fresh: false } : null;
   }
-  /** A gesture's ops (shared/protocol/requests.js) as ONE request — one act, the authority's answer — sent after the previous one
-   *  was answered (its log arrived first). Ops planned before that wait don't see what landed meanwhile, so a caller that
-   *  planned from the replica pins what it read with `expect` (componentsOf), and a change since is refused, not overwritten
-   *  `extra` rides the request (dry, expect, throughLock). The same requests a person's edit sends: one vocabulary, both audiences. */
+  /** A gesture's ops (shared/protocol/requests.js) as ONE request, sent after the previous one was answered. Ops planned
+   *  before that wait don't see what landed meanwhile, so a caller that planned from the replica pins what it read with
+   *  `expect` (componentsOf): a change since is refused, not overwritten. `extra` rides the request (dry, expect,
+   *  throughLock). The same requests a person's edit sends. */
   async sendOps(ops: any[], extra: Record<string, unknown> = {}): Promise<any> {
     const req: any = OP.batch(ops);
     if (!req) return { ok: true, noop: true };
@@ -4863,9 +4363,8 @@ export class WorldAgent {
   }
 
   // ---- moderation ----
-  // Per-world kick/ban/unban are requests (door()). These are the extra
-  // plumbing: the server's own moderation messages, and a way to hear the
-  // world's answer.
+  // Per-world kick/ban/unban are requests (door()); this is the server's own
+  // moderation messages and a way to hear the world's answer.
 
   /** The world's most recent mid-life refusal / moderation reply. */
   lastRefusal: { ts: number; text: string } | null = null;
@@ -4889,28 +4388,19 @@ export class WorldAgent {
     this.ws.send(JSON.stringify({ type: "relay-cred", ...scopes }));
   }
 
-  /** Carry ONE media-signalling frame from the sidecar to the world. Whitelisted
-   *  by type for #100's reason — the authority must not become a general tunnel into
-   *  the sequencer, and server-side validation stays the single authority.
-   *  Payload shape is deliberately NOT inspected here: SDP and ICE are the
-   *  server's to validate, and a door that parsed them would be a second,
-   *  weaker validator that could disagree. */
+  /** Carry ONE media-signalling frame from the sidecar to the world,
+   *  whitelisted by type so the door is never a general tunnel into the
+   *  sequencer. Payload (SDP, ICE) is deliberately NOT inspected: the server is
+   *  the one validator. */
   sendMedia(frame: { type: string; [k: string]: unknown }): void {
     if (!this.joined || this.ws?.readyState !== 1) return;
     const t = String(frame?.type ?? "");
     // `voice-consent` is the LISTENER half: the world requires it from the
-    // primary (server.ts refuses a spectator and keys on c.id/c.gen), so an
-    // agent that wants to HEAR must send it through this server too. It carries
-    // no audio and no identity claim beyond the one the authority already holds —
-    // it is a boolean about our own ears.
-    //
-    // 🔴 `voice-moderate` is DELIBERATELY NOT HERE (2026-08-16). It silences a
-    // speaker for EVERYONE and needs owner rank — a moderation act, not media.
-    // The authority already exposes moderation as first-class tools (kick/ban), which
-    // go through the verb path with its rights check and its `mod` confirmation.
-    // Letting it ride the media lane would give a SIDECAR — a process holding a
-    // peer connection, not an identity — the ability to mute people, which is
-    // precisely the authority the whitelist exists to withhold.
+    // primary, so an agent that wants to HEAR sends it through here. It's a
+    // boolean about our own ears.
+    // `voice-moderate` is DELIBERATELY NOT HERE: muting someone for everyone is
+    // a moderation act (kick/ban tools, with their rights check), and a sidecar
+    // is a process, not an identity.
     if (t !== "sfu-answer" && t !== "sfu-ice" && t !== "sfu-want-negotiate"
         && t !== "sfu-pos" && t !== "voice-consent") {
       console.warn(`[door] refusing to forward non-media frame "${t}"`);
@@ -4920,9 +4410,8 @@ export class WorldAgent {
   }
 
   /** Wait briefly for the world's answer to a moderation act issued at t0: a
-   *  `mod` confirmation (or the authoritative log echo of our own ban/kick),
-   *  or an `error` refusal. Verbs are fire-and-forget by doctrine; moderation
-   *  is the act where "did that actually happen" deserves a real answer. */
+   *  `mod` confirmation (or the log echo of our own ban/kick), or an `error`
+   *  refusal. Verbs are fire-and-forget; moderation deserves a real answer. */
   async modOutcome(t0: number, ms = 1500): Promise<string | null> {
     const deadline = Date.now() + ms;
     while (Date.now() < deadline) {
@@ -4934,10 +4423,7 @@ export class WorldAgent {
   }
 
   // extra carries ONLY the spoken-say protocol trio, guarded with the same
-  // shapes the server enforces (r3 review: name-picking without value guards
-  // still let an internal caller send utt:-1 or t0:NaN — two layers that
-  // disagree on well-formed are one layer). Malformed trio → plain say: an
-  // internal caller's bug must not silently ride protocol keys.
+  // shapes the server enforces. A malformed trio → plain say.
   say(text: string, extra?: { spoken?: boolean; utt?: number; t0?: number; to?: string }): Promise<any> {
     // (speech ends composing: request() clears the typing throttle and calls onSaid for every say)
     const args: Record<string, unknown> = { text, ...(typeof extra?.to === "string" && extra.to ? { to: extra.to } : {}) };
@@ -4954,16 +4440,11 @@ export class WorldAgent {
    *  let them end with the bubble. */
   onSaid: (() => void) | null = null;
 
-  /** Show "composing" over this body. Presence-only (never logged), the same
-   *  signal a human client sends while typing in the chat box. The world relays
-   *  it and renderers draw the dots above the head for ~4s. Called repeatedly
-   *  while the host says the agent's turn runs (MCPL channels/typing, through
-   *  the door's TypingRelay), so it is throttled to one packet per second — the
-   *  world extends the 4s window on each, so a long turn keeps the dots up
-   *  continuously. A `say` verb clears the throttle and calls `onSaid`, which
-   *  stops the relay: the bubble that follows ends the dots, and the host's
-   *  next `start` raises them again if the turn goes on. The throttle runs on a
-   *  monotonic clock, so a wall clock stepping back can't hold the signals. */
+  /** Show "composing" over this body: presence-only, the signal a human client
+   *  sends while typing; renderers draw the dots for ~4s. Called repeatedly
+   *  while the host's turn runs (MCPL channels/typing, the door's TypingRelay),
+   *  throttled to one packet per second on a monotonic clock. A `say` clears the
+   *  throttle and calls `onSaid`, which stops the relay. */
   private _typingUntil = 0;
   typing() {
     if (!this.joined || this.ws?.readyState !== 1) return;
@@ -4991,13 +4472,11 @@ export class WorldAgent {
 
   // ---- reaching: a relation streamed as a descriptor ----------------------
   //
-  // The descriptor (shared/reachwire.js) rides the presence packet; every
-  // browser re-solves the same closed-form IK against its own scene and draws
-  // this body's arm tracking the target. What happens HERE is only the part a
-  // blind body needs: resolving the target from streamed presence + stand-in
-  // skeletons (physics.ts ReachBody), solving its own arm once for the tool
-  // reply, and keeping the `reached` attestation honest as things move —
-  // that attestation's rising edge is the touch event at the other end.
+  // The descriptor (shared/reachwire.js) rides the presence packet, and every
+  // browser re-solves the IK against its own scene. HERE is only what a blind
+  // body needs: resolving the target from presence + stand-in skeletons
+  // (physics.ts ReachBody), solving its arm once for the tool reply, and keeping
+  // the `reached` attestation honest (its rising edge is the touch event).
 
   private static readonly LIMB_WORD: Record<string, string> = {
     leftHand: "left hand", rightHand: "right hand", leftFoot: "left foot", rightFoot: "right foot",
@@ -5158,10 +4637,9 @@ export class WorldAgent {
       : `your ${WorldAgent.LIMB_WORD[limb]} wasn't reaching for anything`);
   }
 
-  /** Re-attest `reached` for every live reach (runs at ~2Hz off tick()).
-   *  While a needed skeleton is missing the last attestation HOLDS — flapping
-   *  to "not touching" because a load is slow would fire spurious release/
-   *  touch edges at the other end. Loads are kicked here so blindness heals. */
+  /** Re-attest `reached` for every live reach (~2Hz off tick()). While a needed
+   *  skeleton is missing the last attestation HOLDS (a slow load must not fire
+   *  spurious release/touch edges); loads are kicked here so blindness heals. */
   private reachTick() {
     if (this.joined) {
       if (this.reachReadingBusy) return;
@@ -5189,16 +4667,14 @@ export class WorldAgent {
   }
 
   /** Someone's hands, read off their presence stream: reach/touch events for
-   *  hands aimed at THIS body. Ping-grade (a touch is a knock, like an
-   *  approach), edge-triggered by diffReach, with a per-(kind,limb,person)
-   *  refractory so a hand trembling across the threshold knocks once. */
+   *  hands aimed at THIS body. Ping-grade, edge-triggered by diffReach, with a
+   *  per-(kind,limb,person) refractory so a trembling hand knocks once. */
   private noteReachEvents(id: string, prev: Pose | null, pose: Pose) {
     const bag = normalizeReachBag((pose as { reach?: unknown }).reach);
     const prevBag = prev ? normalizeReachBag((prev as { reach?: unknown }).reach) : null;
     if (!bag && !prevBag) return;
-    // First observation of this body is a BASELINE, not a transition (issue
-    // #39): rejoin/replay lands here for hands resting where they have been
-    // for an hour. Seed silently; edges count from the next sample.
+    // First observation of this body is a BASELINE, not a transition (rejoin
+    // replay): seed silently; edges count from the next sample.
     if (!prev) return;
     const REACH_REFRACT_MS = 15_000;
     for (const ev of diffReach(prevBag, bag, this.name)) {
@@ -5230,10 +4706,8 @@ export class WorldAgent {
   setPosture(clip: string) {
     this.stop();
     this.speed = 0;
-    // choosing a posture ends a tumble the same way walking does — a physics
-    // frame must not survive under the new label. (This exact gap is how
-    // "posture stand" failed to stand princess up: it relabelled the clip
-    // and left the ragdoll bones riding every subsequent packet.)
+    // choosing a posture ends a tumble the same way walking does: a physics
+    // frame must not survive under the new label.
     if (this.clip === "ragdoll" || (this.heldPose && !this.heldPoseAuthored)) {
       this.body?.stop(); this.stopSim();
       this.heldPose = null; this.heldPoseAuthored = false;
@@ -5282,12 +4756,8 @@ export class WorldAgent {
       pose: spec.pose ?? null, ...(spec.merge ? { merge: true } : {}), anim: spec.anim ?? null, ragdoll: spec.ragdoll ?? null }));
   }
 
-  /** Ask the world what happened in a range of its history.
-   *
-   *  An agent does not experience time continuously — it exists in bursts,
-   *  with the world moving between them. Live events fill the inbox while the
-   *  process is up; this is how it recovers everything else, including what
-   *  happened before it was ever started. */
+  /** Ask the world what happened in a range of its history: how an agent that
+   *  exists in bursts recovers what happened while it wasn't running. */
   history(opts: { before?: number; after?: number; limit?: number; verbs?: string[] } = {}):
       Promise<{ entries: any[]; oldestSeq: number | null; hasMore: boolean }> {
     if (!this.joined || this.ws?.readyState !== 1) {
@@ -5328,11 +4798,9 @@ export class WorldAgent {
   }
 
   /** Everything said since a given point, oldest first. */
-  /** Advance the unread cursor past replayed history at or before `seq` —
-   *  chat a previous session already presented. The persisted per-agent
-   *  cursor (state.json) survives process restarts; without this, every
-   *  fresh session's first look() re-dumped the tail as "since you last
-   *  looked". Entries without a real seq are never presumed seen. */
+  /** Advance the unread cursor past replayed history at or before `seq` (chat
+   *  a previous session already presented; the cursor persists in state.json).
+   *  Entries without a real seq are never presumed seen. */
   skipInboxThrough(seq: number) {
     let i = 0;
     for (; i < this.inbox.length; i++) {
@@ -5355,11 +4823,9 @@ export class WorldAgent {
     return dirs[Math.round(((a + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
   }
 
-  /** Where a thing ACTUALLY is right now: the mount chain and any whole-
-   *  entity motion, composed at read time by effective.ts with the same
-   *  closed forms the renderer runs. Every numeric spatial claim in
-   *  perception goes through this — reading `e.pos` directly is how mounted
-   *  cargo was reported 11m from its carrier (#82). */
+  /** Where a thing ACTUALLY is right now: the mount chain and any whole-entity
+   *  motion, composed by effective.ts with the renderer's closed forms. Every
+   *  numeric spatial claim in perception goes through this, never `e.pos`. */
   private eff(id: string, nowMs: number): Effective {
     return effectiveWorldTransform(id, {
       entity: (eid) => this.entities.get(eid),
@@ -5380,7 +4846,7 @@ export class WorldAgent {
     return nm ? this.seatCache.get(nm) : undefined;
   }
 
-  /** The declared-approximation suffix for a seated person's line (#101):
+  /** The declared-approximation suffix for a seated person's line:
    *  the same reason string the browser consoles and the nameplate ≈ carry —
    *  one contract, three declarations. Empty when the seat is profiled. */
   private seatSuffix(id: string, occ: { to: string }): string {
@@ -5423,19 +4889,15 @@ export class WorldAgent {
 
   look(nowMs = this.serverNow()): string {
     const L: string[] = [];
-    // The agent's own seat rides its parent too: seated on a moving ferry,
-    // every distance below is measured from where the body actually is.
-    // this.pos itself stays the controller's (dismount restores it) — the
-    // composition is a READ, here and nowhere else. When the OWN chain
-    // cannot compose (a part-socket seat), the position is UNKNOWN: the
-    // header says so and every dependent distance/bearing below is
-    // suppressed — never measured from the stale controller pos while the
-    // same line claims "seated on" (#92, B2).
+    // The agent's own seat rides its parent too: distances below are measured
+    // from where the body actually is (a READ; this.pos stays the controller's).
+    // When the OWN chain can't compose, position is UNKNOWN: the header says so
+    // and every dependent distance/bearing is suppressed.
     const selfOcc = this.mounts.get(this.name);
     const selfEff = selfOcc ? this.eff(this.name, nowMs) : null;
     const meKnown = !selfOcc || selfEff?.ok === true;
     const me = selfEff?.ok ? { x: selfEff.pos[0], y: selfEff.pos[1], z: selfEff.pos[2] } : this.pos;
-    // #101: an uncorrected seat composition is never silent — the same
+    // an uncorrected seat composition is never silent — the same
     // "(seat approximate: reason)" every renderer consumer declares.
     const selfSeatNote = selfEff?.ok && selfEff.seat?.state === "approximate" ? ` (seat approximate: ${selfEff.seat.reason})` : "";
     const seated = selfOcc ? `, seated on ${this.socketName(selfOcc.to)}${selfEff?.ok && selfEff.moving ? ` (carried by its ${selfEff.moving})` : ""}${selfSeatNote}` : "";
@@ -5446,11 +4908,8 @@ export class WorldAgent {
     }
     { const ws = this.waterSummary(); if (ws) L.push(ws); }
     if (this.pendingTerrain) L.push(`The world's ground is a heightmap that has not loaded yet: heights here are the last ground you had${this.terrain ? "" : " (flat)"}, until it does.`);
-    // WHERE YOU ARE, ARCHITECTURALLY. A conjured building can only ever be
-    // "a mesh 4m away"; a griddled one knows its own rooms, so standing inside
-    // one is a fact perception can state. Derived from folded state alone —
-    // this runs in a headless agent with no scene and no triangles, which is
-    // the entire point of keeping the planner pure.
+    // WHERE YOU ARE, ARCHITECTURALLY: a griddled building knows its rooms, so
+    // standing inside one is stated, derived from folded state alone (no scene).
     if (meKnown) {
       // The storey is found from the feet: a laid body's root lies
       // RAGDOLL_ROOT_DROP under them (feetY), below its own floor.
@@ -5472,10 +4931,8 @@ export class WorldAgent {
       const sight = this.placesInSight();
       if (sight.lines.length || sight.more) L.push(`Places ${sight.byDistance ? `within ${PLACE_SIGHT_M} m (line of sight not checked yet: the collision modules are still loading)` : "you can see"}, nearest first: ${sight.lines.length ? sight.lines.join("; ") : "none"}${sight.more ? ` — and ${sight.more} more: move {to: "?"} lists every place` : ""}.`);
     }
-    // Structured object, NEVER a bare string: consumers of look() were
-    // reading {hours, azimuth, clouds, ts, …} long before the forecast
-    // existed, and a type change here silently breaks them (Sill, postdeploy
-    // #37). The folded fields stay; derivation is ADDED alongside.
+    // Structured object, NEVER a bare string: look() consumers read {hours,
+    // azimuth, clouds, ts, …}. The folded fields stay; derivation is ADDED alongside.
     if (this.skyState) {
       const now = Date.now();
       const eff = effectiveSky(this.skyState, now);
@@ -5485,7 +4942,7 @@ export class WorldAgent {
         currentHour: Number(hoursAt(this.skyState, now).toFixed(2)),
         ...(eff.weather ? { currentWeather: eff.weather } : {}),
         source: eff.source,
-        // the one canonical clock object (#65): machine consumers read THIS,
+        // the one canonical clock object: machine consumers read THIS,
         // not rate/hours precedence folklore — the folded fields alongside are
         // active state only (a real-clock fold carries no top-level rate)
         effectiveClock: { ...ck, hour: Number(ck.hour.toFixed(2)) },
@@ -5509,10 +4966,9 @@ export class WorldAgent {
       const moded = ((m) => (m && m !== "stand" ? `, ${m === "sit" ? "sitting" : m === "lie" ? "lying down" : m === "swim" ? "swimming" : m === "fly" ? "flying" : "falling"}` : ""))(mode);
       const occ = this.mounts.get(p.id);
       const occupying = occ ? ` — on ${this.socketName(occ.to)}${this.seatSuffix(p.id, occ)}` : "";
-      // Their heading is on the wire (pose.yaw, world yaw like our own): say it, or an agent can't tell which side of
-      // someone it will see (upstream #225). An occupant's body follows the socket, so their root yaw isn't where they
-      // face; a body knocked over (the ragdoll) or lying down keeps its standing yaw (the anim changes, not the heading).
-      // For those, say nothing rather than something false.
+      // Their heading is on the wire (pose.yaw, world yaw like our own): say it, so an agent can tell which side of
+      // someone it will see. An occupant's body follows the socket and a body knocked over or lying down keeps its
+      // standing yaw, so for those say nothing rather than something false.
       const lying = p.pose.clip === "ragdoll" || mode === "lie";
       const facing = !occ && !lying && Number.isFinite(p.pose.yaw) ? `, facing ${this.bearing(Math.sin(p.pose.yaw), Math.cos(p.pose.yaw))}` : "";
       L.push(`  - ${p.id}: ${meKnown ? `${Math.hypot(dx, dz).toFixed(1)}m ${this.bearing(dx, dz)} ` : ""}at (${x.toFixed(1)}, ${z.toFixed(1)}), ${doing}${facing}${posed}${moded}${winged}${occupying}${voiceNote(p.pose)}`);
@@ -5522,11 +4978,9 @@ export class WorldAgent {
     const ents = [...this.entities.values()].filter((e) => e.kind !== "socket");
     L.push(ents.length ? `\nThings (${ents.length}):` : "\nNo placed things yet.");
     // one composition per entity per look, shared by the sort and the line.
-    // Resolved things sort by their EFFECTIVE distance; unresolved ones make
-    // no spatial claim at all, so they list last in stable fold order —
-    // never placed by their abandoned pre-mount address (#92, B2). And with
-    // the agent's own position unknown, distance itself means nothing:
-    // fold order for everything.
+    // Resolved things sort by EFFECTIVE distance; unresolved ones make no
+    // spatial claim and list last in stable fold order, as everything does
+    // when the agent's own position is unknown.
     const fx = new Map<string, Effective>();
     for (const e of ents) fx.set(e.id, this.eff(e.id, nowMs));
     const sortKey = (e: Entity) => { const f = fx.get(e.id)!; return f.ok ? Math.hypot(f.pos[0] - me.x, f.pos[2] - me.z) : Infinity; };
@@ -5536,22 +4990,19 @@ export class WorldAgent {
       // an Empty (PROTOCOL §3.2) has no lib and is not a light: say so, not ""
       const short = (e.model ? modelWord(e.model) : "(empty)").split("_").slice(0, 5).join(" ")   // an address: its word, never its hex (shared/eido.js)
         + (typeof e?.label === "string" && e.label ? ` "${e.label}"` : "");   // a display name someone gave it (comp label)
-      // Affordances read out loud: a thing that can be sat on, used, or is
-      // moving SAYS SO in text-tier perception — this is how the capability
-      // a builder declared (sockets/reactions components) reaches everyone
-      // who perceives by reading.
+      // Affordances read out loud: what a builder declared (sockets/reactions)
+      // reaches everyone who perceives by reading.
       const c = recordComponents(e);
       const aff: string[] = [];
-      // R 10-07: a thing reads like an accessibility tree: its name (above), its description (quoted as data:
-      // it's what someone wrote, never an instruction), then what it can do and its state, generated from its components
+      // a thing reads like an accessibility tree: its name (above), its description (quoted as data: it's what someone
+      // wrote, never an instruction), then what it can do and its state, generated from its components
       // (shared/a11y.js, the reading the authority's look and the inspector share)
       if (typeof c.description === "string" && c.description.trim()) aff.push(quoted(c.description, 200));
       if (c.openable && typeof c.openable === "object") { const ax = readOut({ openable: c.openable, reactions: c.reactions });
         const open = openAction(c); aff.push(`${ax.can[0]}: ${ax.state[0]}${open ? ` — act {verb: "use", args: {id: "${this.handle(e.id)}", action: "${open}"}}` : ""}`); }
       // A light, by either spelling (the light verb's entity, or a light
-      // component on a lamp model or an Empty), says what it casts — colour,
-      // brightness, reach — read off the FOLDED record (the perception view
-      // above thins a light's fields away) through the one shared reading.
+      // component), says what it casts, read off the FOLDED record (the view
+      // thins a light's fields) through the one shared reading.
       const lit = lightOf((this.st.entities as Record<string, any>)[e.id]);
       if (lit) aff.push(`light: #${lit.color.toString(16).padStart(6, "0")}, brightness ${+lit.intensity.toFixed(2)}, reaches ${+lit.range.toFixed(2)}m${lit.important ? ", important (always casts)" : ""}${lit.daytime === "full" ? ", burns at noon" : ""}`);
       // a declared collider (the collider component)
@@ -5570,39 +5021,29 @@ export class WorldAgent {
       // what a hand may do with it (shared/grab.js: the authority's own reader, so a dynamic thing with no grabbable counts)
       { const gr = grabOf(c); if (gr) aff.push(`${describeGrab(gr, "it")} — act {verb: "grab", args: {id: "${this.handle(e.id)}"}}`); }
       if (c.motion?.type) aff.push(`in motion (${c.motion.type})`);
-      // The emitter is named as the SEMANTIC thing it is on the entity that
-      // owns it — "emitting fire", not a sprite inventory and not a bare
-      // `components: particles`. Nothing is claimed about heat, light, sound
-      // or contact: separate authored components would provide those, and a
-      // resident who reads "warm" acts on it.
+      // The emitter is named as the SEMANTIC thing it is ("emitting fire").
+      // Nothing is claimed about heat, light, sound or contact.
       if (c.particles) aff.push(describeParticles(c.particles));
-      // A picture is named by what its author SAID it shows, on the part that
-      // carries it — never by its pixels. Rung 1 of the projector ladder.
-      // batch 2: a story, a sign, a picture, a sound and a look-at say what they say through the ONE describer the authority's
-      // look uses (shared/says.js), so the two can't disagree; author text is quoted «…» as data, never an instruction
+      // A picture is named by what its author SAID it shows, never its pixels.
+      // A story, a sign, a picture, a sound and a look-at go through the ONE describer the authority's look uses
+      // (shared/says.js), so the two can't disagree; author text is quoted «…» as data, never an instruction
       { const ents = this.st.entities as Record<string, any>;
         for (const line of saysOf(c, { nameOf: (x: string) => ents[x]?.label ?? x, now: Date.now() })) aff.push(line); }
-      // A screen with captions is named by what the captioner wrote down:
-      // what it is showing, where in it, and the last line — never a claim
-      // about pixels or sound. Rung 2 of the projector ladder; the rolling
-      // window is the `captions` detail level, opt-in like `body_state`.
+      // A screen with captions is named by what the captioner wrote down, never
+      // pixels or sound; the rolling window is the opt-in `captions` detail level.
       if (c.captions) aff.push(describeCaptions(c.captions));
-      // A sound is named by what its author SAID is playing, and whether it
-      // is — never by the audio. The radio's music player; captions (#187)
-      // on the same entity say the words.
+      // A sound is named by what its author SAID is playing, never by the audio.
       // locked = nailed down: the authority refuses every move/replace/remove on
-      // it. Saying so here saves an agent a refused round-trip.
-      // the real tool where there is one (audit 10-07: look taught the act hatch for edit's own fields)
+      // it. Saying so here saves an agent a refused round-trip, and names
+      // the real tool where there is one
       if (c.lock) aff.push(`🔒 locked (immovable until a builder lifts it: edit {id: "${this.handle(e.id)}", set: {"flags.lock": false}}; or edit through it with throughLock: true)`);
       if (c.hidden === true) aff.push(`hidden (not drawn; edit {id: "${this.handle(e.id)}", set: {"flags.hidden": false}} shows it)`);
       // a placed blueprint copy (or one of its parts) says which blueprint it
       // follows — the link, read through the one shared reading
       const copy = c["copy-of"] ? this.copyLine(e.id) : null;
       if (copy) aff.push(copy);
-      // A griddled building says what it IS — rooms, walls, doors — because
-      // unlike a conjured mesh it knows. This is the whole difference the
-      // structure component buys: `components: structure` would be true and
-      // useless, where "a building: 2 rooms, 14 walls, 1 door" is actionable.
+      // A griddled building says what it IS (rooms, walls, doors), which is
+      // actionable where `components: structure` would not be.
       if (c.structure) { try { aff.push(describeStructure(c.structure)); } catch { /* a broken house is not a broken look() */ } }
       const spoken = ["model", "parent", "sockets", "socket", "reactions", "motion", "particles", "picture", "material", "captions", "sound", "lock", "structure", "label", "hidden", "description", "openable", "story", "text", "look-at"];
       if (copy) spoken.push("blueprint");
@@ -5619,14 +5060,12 @@ export class WorldAgent {
       if (f.ok) {
         // the EFFECTIVE position — mount chain and motion composed at nowMs.
         // For an unmounted, unmoving thing this is exactly the folded pos.
-        // Distance/bearing only exist relative to a KNOWN self (#92, B2).
+        // Distance/bearing only exist relative to a KNOWN self.
         const dx = f.pos[0] - me.x, dz = f.pos[2] - me.z;
         L.push(`  - [${this.handle(e.id)}] ${short}: ${meKnown ? `${Math.hypot(dx, dz).toFixed(1)}m ${this.bearing(dx, dz)} ` : ""}at (${f.pos[0].toFixed(1)}, ${f.pos[1].toFixed(1)}, ${f.pos[2].toFixed(1)})${f.pos[1] > 0.05 ? " (elevated)" : ""}${aff.length ? ` — ${aff.join(" · ")}` : ""}`);
       } else {
-        // No number is better than a wrong number: when the chain cannot be
-        // composed (a part socket, an unknown motion type, a malformed link),
-        // perception says whose frame the thing rides and why the coordinate
-        // is withheld — never the stale pre-mount pos next to "mounted on".
+        // No number is better than a wrong number: when the chain can't compose,
+        // say whose frame the thing rides and why the coordinate is withheld.
         const where = mnt ? `position rides ${this.socketName(mnt.to)}` : `position unavailable`;
         L.push(`  - [${this.handle(e.id)}] ${short}: ${where} — ${f.why}${aff.length ? ` — ${aff.join(" · ")}` : ""}`);
       }
