@@ -75,6 +75,7 @@ const { makeModelQuality, askFor, tierOf } = await import('../client/lib/lod_pol
 const { keyFromVersion, lodFromVersion, negotiate, withLod } = await import('../shared/ktx2.js');
 const { LOD_RECIPE } = await import('../server/store-variants.ts');
 const rig: any = await import('./rig-load.mjs');
+const { freePort } = await import('./harness.ts');
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
@@ -229,7 +230,7 @@ const sinceMark = (mark: number, id: string) => stub.colliderLog.slice(mark).fil
 const deps: [string, (id: string) => void][] = [
   ['a body sits on it (avatarMounts)', (id) => stub.avatarMounts.set(`occupant-of-${id}`, { to: id })],
   ['cargo is parented to it (parent.to)', (id) => { spawnAt(`cargo-${id}`, 10); door('set', { id: `cargo-${id}`, component: 'parent', value: { to: id } }); }],
-  ['a part motion arrives (comp.motion.part)', (id) => door('set', { id, component: 'motion', value: { type: 'pendulum', part: 'Door', axis: [0, 1, 0], amp: 0.3, period: 2 } })],   // a swinging door is a pendulum now
+  ['a part motion arrives (motion:<slot> {node})', (id) => door('set', { id, component: 'motion:door', value: { node: 'Door', type: 'pendulum', axis: [0, 1, 0], amp: 0.3, period: 2 } })],
   ['an edit hold begins (editHolds)', (id) => stub.editHolds.add(id)],
 ];
 let k = 0;
@@ -292,7 +293,7 @@ console.log('\n  entry points — the governor lever and the dial callback\n');
 console.log('\nlod-client — the wire half (an OWNED sequencer answers the loader\'s exact URLs)\n');
 
 const ROOT = resolve(import.meta.dir, '..');
-const OPT = join(ROOT, 'assets', 'opt');
+const OPT = mkdtempSync(join(tmpdir(), 'ew-lodc-opt-'));   // the child's OPT_DIR: its boot sweep bakes here, never into the checkout
 const NOWHERE = mkdtempSync(join(tmpdir(), 'ew-lodc-nowhere-'));   // no encoder anywhere: an untextured fixture reduces without one
 const LIB = mkdtempSync(join(tmpdir(), 'ew-lodc-lib-'));
 mkdirSync(join(LIB, 'eidoverse', 'assets', 'models'), { recursive: true });
@@ -303,7 +304,7 @@ let child: ChildProcess | null = null;
 const cleanup = () => {
   try { child?.kill(); } catch { /* gone */ }
   for (const rel of mine) try { rmSync(join(OPT, rel), { force: true }); } catch { /* best effort */ }
-  for (const d of [LIB, NOWHERE]) try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+  for (const d of [LIB, NOWHERE, OPT]) try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
 };
 process.on('exit', cleanup);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { cleanup(); process.exit(1); });
@@ -337,19 +338,12 @@ async function gridGlb(tag: string, cells: number, extras: object | null): Promi
   return new NodeIO().writeBinary(doc);
 }
 
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); } catch { return cand; }
-  }
-  throw new Error('no free port in 20 tries');
-}
 /** Process-owned, as object-lod-test spawns it: the per-run nonce goes INTO
  *  the child and must come back on /version before anything counts as up. */
 async function startServer() {
-  const PORT = await freePort();
+  const PORT = freePort(20000);
   const nonce = crypto.randomUUID();
-  const env: Record<string, string | undefined> = { ...process.env, PORT: String(PORT), JOIN_TOKEN: 'test-door',
+  const env: Record<string, string | undefined> = { ...process.env, SKIP_OPT_SWEEP: undefined, OPT_DIR: OPT, PORT: String(PORT), JOIN_TOKEN: 'test-door',
     WORLD_INSTANCE_NONCE: nonce, WORLDS_DIR: mkdtempSync(join(tmpdir(), 'ew-lodc-w-')), EIDOVERSE_DIR: LIB,
     KTX2_TOKTX: join(NOWHERE, 'no-such'), PATH: NOWHERE, HOME: NOWHERE, USERPROFILE: NOWHERE };
   const proc = spawnProc(process.execPath, [join(ROOT, 'server', 'server.ts')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
