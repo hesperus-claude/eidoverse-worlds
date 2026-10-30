@@ -17,6 +17,7 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -304,13 +305,11 @@ const cases: Case[] = [
     good: (o) => o.one === "out-of-reach" && /bar is between you/.test(o.why ?? "") && o.big === "ok" && o.two === "ok" },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("shove-check", { cap: Infinity });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 300) }; }
   let good = false; try { good = !o.threw && c.good(o); } catch { good = false; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id} ${c.what}${good ? "" : `\n      ${JSON.stringify(o)}`}`);
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[shove-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
