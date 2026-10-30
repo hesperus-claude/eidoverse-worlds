@@ -27,6 +27,7 @@ import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writer
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
+import { suite } from "./suite.ts";
 
 import { CAPACITY, CAPACITY_CEILING } from "../../shared/protocol/authority.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
@@ -590,7 +591,7 @@ const zeroTimes = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) 
   v && typeof v === "object" ? Object.fromEntries(Object.keys(v).map((n) => [n, 0])) : v]));
 const slowest = (o: any) => Math.max(...Object.entries(o).filter(([k]) => isTime(k)).flatMap(([, v]) => typeof v === "number" ? [v] : Object.values(v ?? {}) as number[]));
 const timingOnly = (c: any, o: any) => !!o && typeof o.bound === "number" && Object.keys(o).some(isTime) && !c.good(o) && (() => { try { return !!c.good(zeroTimes(o)); } catch { return false; } })();
-let pass = 0, fail = 0;
+const SUITE = suite("scale-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false; const slow: number[] = [];
@@ -601,11 +602,7 @@ for (const c of cases) {
     try { o = c.id === "I4" ? await realGlbs() : c.id === "G3" ? await sameAsBase() : c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
     if (good || !timingOnly(c, o)) break;
     slow.push(slowest(o)); }
-  if (good) pass++; else fail++;
-  const tag = !good ? "FAIL" : slow.length ? "FLAKY" : "ok  ";
-  console.log(`${tag} ${c.id.padEnd(4)} ${c.what}${good && !slow.length && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 900)}`}`);
-  if (slow.length) console.log(`       ${good ? "passed" : "failed"} after ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}${slow.length ? ` (${good ? "FLAKY" : "over the bound every time"}: ${slow.length} over-bound attempt(s): ${slow.map((m) => `${m} ms`).join(", ")})` : ""}`, o);
   if (good && o?.ms !== undefined) console.log(`       ${JSON.stringify(o.ms)} (bound ${o.bound} ms: load ×${r1(LOAD)})`);
 }
-console.log(`[scale-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
