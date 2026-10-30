@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { WORLDS_DIR, JOIN_TOKEN } from "./config.ts";
 import { serverBans, findBan, doorLocked, LOCKED_WHY } from "./moderation.ts";
 import { isOperator } from "./operators.ts";
-import { sessionOfRequest, accountOf } from "./auth.ts";
+import { sessionOfRequest, accountOf, bearerOf } from "./auth.ts";
 import { directoryFor } from "./directory.ts";
 import { accountAgeRefusal } from "./accountage.ts";
 import { effectiveOf, isOwner, MOD_POWERS } from "../shared/protocol/roles.js";
