@@ -52,8 +52,8 @@ import { onVoiceServiceChange, markVoiceDegraded, voiceServiceState } from "./sf
 import { isOwner } from "../shared/protocol/roles.js";
 import { inForceOf } from "../shared/protocol/authority.js";
 import { newBucket, admitMessage } from "./msgrate.ts";
-import { mintSfuCredential, setSfuConsent, setSfuModeratorMute, revokeSfuLeg, sfuDiag,
 import { DEFAULT_BODY } from "../shared/avatardefs.js";
+import { mintSfuCredential, setSfuConsent, setSfuModeratorMute, revokeSfuLeg, sfuDiag,
   sfuAcceptAnswer, sfuAcceptIce, sfuNegotiate, sfuSetPosition, registerSfuSender, admitSfuLeg, liveLegState, sfuLegAdmitted, markSfuLegAdmitted } from "./sfuadapter.ts";
 // 🔴 The incarnation is DURABLE (transport.ts): a restart strands every old credential. Scratch servers keep their
 // counter beside their own logs.
