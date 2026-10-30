@@ -403,7 +403,7 @@ export function fitSupportGrid(id, topGrid, { position, yaw = 0, scale = 1 } = {
 }
 
 // ---- declared structure boxes -----------------------------------------------
-// A griddled building (client/lib/structure_field.js) is the one case where the
+// A griddled building (shared/structure.js plans it, realize/structure.js declares its boxes) is the one case where the
 // collider does not have to be INFERRED: the generator knows exactly what it
 // built, so it declares its boxes and decide() never runs. That matters more
 // than it saves. decide()'s comment above records that its earlier "hollow"
