@@ -18,6 +18,8 @@ import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
 import { readFileSync } from "node:fs";
+import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
 mock.module(fileURLToPath(new URL("../client/lib/core.js", import.meta.url)), () => ({
@@ -33,12 +35,12 @@ mock.module(fileURLToPath(new URL("../client/lib/audioctx.js", import.meta.url))
 
 const emitted = [];
 const m = await import("../client/lib/micstate.js");
+// micstate emits on base.js's bus (not core.js's): hear it there
+const { bus } = await import("../client/lib/base.js");
+bus.on("audio:mic", (v) => emitted.push(["audio:mic", v]));
 
-let pass = 0, fail = 0;
-const check = (n, ok, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${n}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("micstate-single-transport");
+const check = (n, ok, extra) => S.check(n, ok, extra);
 
 // ── 3 first, statically: no mesh residue in the module source ───────────────
 const src = readFileSync(new URL("../client/lib/micstate.js", import.meta.url), "utf8");
@@ -72,7 +74,7 @@ await m.toggleMic();   // back to OFF
 const callsBefore = sfuCalls; hints.length = 0;
 window.__voiceRelayAbsent = true;
 const absent = await m.toggleMic();
-await new Promise((r) => setTimeout(r, 20));   // the lazy ui.js import settles
+await tryUntil('the lazy ui.js import lands its hint', () => hints.length > 0, { ms: 2000, step: 5 });
 check("no relay: toggleMic does not hand the press to a transport that cannot exist", sfuCalls === callsBefore, `calls ${sfuCalls - callsBefore}`);
 check("no relay: …returns the honest current state (off)", absent === false);
 check("no relay: …and SAYS so — the no-voice-relay hint, not silence", hints.some((h) => /no voice relay/.test(h)), JSON.stringify(hints));
@@ -88,5 +90,4 @@ const off = await m.toggleMic();
 check("no relay, mic live: the press goes to the hook and turns it off", sfuCalls === callsLive + 1 && off === false && m.micOn() === false, `calls ${sfuCalls - callsLive}, returned ${off}, micOn ${m.micOn()}`);
 delete window.__voiceRelayAbsent;
 
-console.log(`\n${fail === 0 ? "\x1b[32m" : "\x1b[31m"}${pass} passed, ${fail} failed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+S.done();

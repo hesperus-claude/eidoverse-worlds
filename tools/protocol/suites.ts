@@ -255,6 +255,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["htmlmesh-pick", "../htmlmesh-pick-probe.mjs", 1], // a VR panel click picks what a browser's hit test would (vendor/htmlmesh.js), in the real client
   ["vrmic-exec", "../vrmic-exec-test.mjs", 1], // vrmic.js's effects on a fake clock: the mic ask never blocks entering VR; a promise made in VR is kept after it
   ["xr-nullfb", "../xr-nullfb-test.mjs", 1], // xr_nullfb.js on a fake renderer: installs only for a null-framebuffer (emulated) session, once, never on hardware
+  ["xr-desktop-banner", "../xr-desktop-banner-probe.mjs", 1], // the desktop banner follows the session (xrmirror.js): the killswitch's outranks 'In VR', which outranks none; it follows the pref mid-session
+  ["sky-bake-time", "../sky-bake-time-probe.mjs", 1], // every strip of a sky bake draws at one sky time and one sun (the VR 'banding', 09-27)
+  ["sky-bakegraph", "../sky-bakegraph-probe.mjs", 1], // switching sky tiers back and forth reuses each bake graph instead of rebuilding the bake program
   ["alias", "../../mcpl/alias-test.ts", 1], // old tool names AND their old argument shapes run the new tool (10-15)
   // socketteer's pathfinding stack (#235/#236/#239/#241, merged into the protocol 10-15): its own suites, as it ships them
   ["agent-mesh-collision", "../agent-mesh-collision-test.ts", 1], // #235: an agent's body collides with placed models (the support barrier, the 3-at-once governor)
@@ -319,6 +322,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
+  ["panels-schema", "../panels-schema-test.ts", 1], // the schema panels (panels.js): rows, lists, row actions; a refresh held while an input is focused paints a tick after it blurs
   ["dock", "../dock-test.ts", 1], // ui.js on the real module: the dock rail, the menu, pins, the waterfall's dismiss rules, the registerPanel seam
   ["perfscope", "../perfscope-test.ts", 1], // the viewer-local cost overlay (perfscope.js) with real three: modes, solid vs overlay, hull and veil
   ["clickuse", "../clickuse-test.ts", 1], // the mouse on things while holding one: the held thing offers put down, not pick up; a surface offers put here
@@ -342,6 +346,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["relay-decision", "../relay-decision-test.ts", 1], // relay incarnation and consent rules (#104 amendments 2, 3)
   ["sfu-mic-intent-race", "../sfu-mic-intent-race-test.mjs", 1], // the SFU transport executed: mic intent that changes while an acquisition is in flight ends where the latest intent says (#148)
   ["mic-ptt", "../mic-ptt-test.mjs", 1], // push-to-talk: the gate decision executed under both regimes, the hang time and the rate limit
+  ["micstate-exec", "../micstate-exec-test.mjs", 1], // every micstate export executed, not source-grepped
+  ["micstate-release", "../micstate-release-test.mjs", 1], // releaseMicrophone keeps the lanes it should (#131 review finding 2)
+  ["micstate-single-transport", "../micstate-single-transport-test.mjs", 1], // the SFU hook is the one mic transport: no hook gives an honest hint, the hook is called and audio:mic emitted, no relay says so
   ["voice-wire", "../voice-wire-test.ts", 1], // voice state (mic, hear) on the pose wire, shared with everyone in the world per the owner's ruling; a late joiner sees it
   ["voice-wire-mutation", "../voice-wire-mutation-test.ts", 1], // every seam of the voice-state wire contract is load-bearing: each broken in place turns its row red
   ["voicesource-real", "../voicesource-real-test.mjs", 1], // voiceSource() on the shipped module (voicesource.js)
@@ -386,7 +393,7 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
 // at a time) once
 // sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
-export const BROWSER = ["browser", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "client-tools"];
+export const BROWSER = ["browser", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "xr-desktop-banner", "sky-bake-time", "sky-bakegraph", "client-tools"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 // the order the gate runs them: core (in CORE's order), then main, then browser
 export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];

@@ -13,6 +13,8 @@ plugin({
   setup(b) { b.onResolve({ filter: /^\.\/windows\.js$/ }, () => ({ path: here('./chat-frames-stub.mjs') })); },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 (globalThis as any).Path2D ??= class Path2D { constructor(public d?: string) {} };   // the edit painter strokes icons
 
@@ -27,11 +29,8 @@ HTMLCanvasElement.prototype.getContext = function () {
 
 const { renderDOM, renderCanvas, hitRegion, makeSchemaFrame } = await import('../client/lib/panels.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("panels-schema");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const edits: any[][] = [];
 const edit = (...a: any[]) => { edits.push(a); };
 // edit(k, value, field?, opts?): field = Godot's axis index, opts.live = a preview. Trailing empty args aren't asserted;
@@ -110,8 +109,8 @@ console.log('PANELS — makeSchemaFrame holds a refresh while an input is focuse
   const inp = scroll.querySelector('input') as HTMLInputElement; inp.focus();
   set([{ t: 'text', k: 'a', label: 'a', value: 'two' }], edit);
   check('focused: the old input survives (caret kept)', scroll.querySelector('input') === inp && inp.value === 'one');
-  inp.blur();
-  check('blur: the queued state paints', (scroll.querySelector('input') as HTMLInputElement)?.value === 'two'); }
+  inp.blur();   // the queued state paints a tick after the blur (panels.js holdUntilBlur), so the focus move lands first
+  check('blur: the queued state paints', await tryUntil('the queued state paints', () => (scroll.querySelector('input') as HTMLInputElement)?.value === 'two', { ms: 2000, step: 5 })); }
 
 console.log('PANELS — renderCanvas: regions carry the same action/payload');
 const cv = document.createElement('canvas');
@@ -199,5 +198,4 @@ console.log('PANELS — a region OWNS its outer boundary (the laser lands on tho
   check('one pixel past the right edge is NOT', at(b.x + b.w + 1, b.y + b.h / 2)?.action !== 'del');
   check('one pixel above the top edge is NOT', at(b.x + b.w / 2, b.y - 1)?.action !== 'del'); }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
