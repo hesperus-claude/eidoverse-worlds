@@ -14,7 +14,7 @@ import { join } from "node:path";
 // file's boot order: mkdir → session restore → ban restore (§15, step 7a).
 import { TRUST_NAMES } from "./config.ts";
 // how often a person may change the name they show (moderation: a name is how people recognise who did what)
-const RENAME_COOLDOWN_MS = Math.max(0, Number(process.env.RENAME_COOLDOWN_DAYS ?? 7)) * 86400000;
+const RENAME_COOLDOWN_MS = envNumber("RENAME_COOLDOWN_DAYS", 7) * 86400000;
 import { PORT, HOST, JOIN_TOKEN, RENDERER_TOKEN, RECORD, ROOT, WORLDS_DIR, LIBRARY_DIR, OPT_DIR, MSG_RATE, FRAME_MS, FRAME_SKIP_BUFFERED, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS } from "./config.ts";
 import { type HnSession, agentTokens, accountOf } from "./auth.ts";
 import { addrSanctionsFor, saveAddrSanctions } from "./moderation.ts";
@@ -44,7 +44,7 @@ import { route, avatarRoster } from "./routes.ts";
 import { screenshots } from "./screenshots.ts";
 import { registerSystem, startTick } from "./tick.ts";
 import { MESSAGES } from "./messages.ts";
-import { LIMITS } from "./limits.ts";
+import { LIMITS, envNumber } from "./limits.ts";
 import { defsFingerprint } from "./defs.ts";
 // Seat profiles (#101, upstream; write-half ported §24r): the store, its
 // external-change poll, the verdict lane on /avatars and the POST
@@ -240,7 +240,7 @@ function describe(w: World): string {
 // (expire-roles) and whoever lost entry with it is removed. Every second: between `until` and the sweep the grant still
 // stands (it ends when its end is written, so a replay agrees).
 setLoadedWorlds(() => worlds);
-registerSystem({ name: "access-sweep", everyMs: Math.max(250, Number(process.env.ACCESS_SWEEP_MS ?? 1000)),
+registerSystem({ name: "access-sweep", everyMs: Math.max(250, envNumber("ACCESS_SWEEP_MS", 1000)),
   fn: (now) => sweepAccess(worlds.values(), expel as Expel, now) });
 
 registerSystem({ name: "seat-store-poll", everyMs: 5000, fn: () => {
