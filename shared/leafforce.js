@@ -1,19 +1,10 @@
 // leafforce — make a REAL ragdoll fall like a leaf, by adding the forces a
 // leaf actually feels rather than by animating a leaf-shaped curve.
 //
-// Janus: "it would be cool if you somehow used the normal ragdoll physics for
-// falling, but added forces that caused it to fall like a leaf."
-//
-// That is the better design and it is worth saying why. shared/flight.js's
-// leafAt() is KINEMATICS: a closed form that produces the right trajectory and
-// is deterministic to the bit, which is what the spec's acceptance tests and
-// the capture path need. But a scripted curve cannot be hit by a thrown prop,
-// cannot catch a wing on a rail, cannot land badly. The ragdoll can do all
-// three, and eidoverse already has one.
-//
-// So this is the other half: given any set of rigid bodies, return the force
-// each should feel this step so that the ASSEMBLY tumbles the way a falling
-// leaf does. Bullet integrates it; nothing here moves anything.
+// shared/flight.js's leafAt() is KINEMATICS: a closed form, deterministic to the bit, for the spec's acceptance tests
+// and the capture path. But a scripted curve can't be hit by a thrown prop or land badly; a ragdoll can. So this is
+// the other half: given any set of rigid bodies, return the force each should feel this step so the ASSEMBLY tumbles
+// the way a falling leaf does. Bullet integrates it; nothing here moves anything.
 //
 // THE PHYSICS, briefly, because the parameters mean something.
 //
@@ -61,15 +52,9 @@ export const DEFAULT_LEAF_FORCE = {
   copOffset: 0.42,            // centre of pressure, as a fraction of the plate's
                               // half-width, forward of centre. THE flutter term.
 
-  // Flutter shaping. These do not create the oscillation -- the two terms above
-  // do -- they set how much of it survives contact with a solver running at
-  // 60Hz on a 34-body doll.
-  // TURNED UP, on the evidence of a fall watched from the ground: "it mostly
-  // looked like a falling body". The per-plate numbers were defensible in
-  // isolation -- 79 rad/s^2 on a wing at 4 m/s -- but a wing is not free. It is
-  // bound into a joint chain that absorbs most of a torque before it becomes
-  // rotation, so the isolated figure overstates what the body actually does by
-  // a large factor. The dial has to be set against the assembly, not the plate.
+  // Flutter shaping. These do not create the oscillation (the two terms above do); they set how much of it survives
+  // a 60 Hz solver on a 34-body doll. Tuned against the assembly, not the plate: a joint chain absorbs most of a torque
+  // before it becomes rotation, so per-plate figures overstate what the body does.
   swirl: 2.4,                 // torque gain, N.m per (m/s)^2 of normal flow
   damp: 0.06,                 // angular damping. LOWER is more flutter: this is
                               // what lets a swing survive into the next one

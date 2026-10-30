@@ -1,5 +1,5 @@
 // material — what a `material` component MEANS: an image on a NAMED node of the thing's model (glTF's material
-// baseColorTexture, Godot's surface_material_override). A standalone image is a picture (shared/picture.js); R 10-27: two
+// baseColorTexture, Godot's surface_material_override). A standalone image is a picture (shared/picture.js): two
 // shapes, no overlap. Shared by the browser host (client/lib/materialcomp.js), the door and every reader.
 //
 //   material {node, texture, description?, lit?}

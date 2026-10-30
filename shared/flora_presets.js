@@ -1,5 +1,5 @@
-// shared/flora_presets.js — the named biome presets a grass write may name (shape audit 10-16): the authority checks a name
-// against these at write (shared/protocol/assetref.js) and stores the name (R 10-17; Fable #4: expanding later is cheap,
+// shared/flora_presets.js — the named biome presets a grass write may name: the authority checks a name
+// against these at write (shared/protocol/assetref.js) and stores the name (expanding later is cheap,
 // un-expanding impossible). The SAME data as defs/flora/_presets.json (the client's hot-reloadable copy):
 // tools/shape-render-test GR2 holds the two equal, so editing one without the other turns red.
 export const FLORA_PRESETS = Object.freeze({

@@ -131,7 +131,7 @@ export function kindHint(ent) {
  *  its members from the tree). */
 export function treeOf(world) {
   const kids = new Map(); const roots = [];
-  // ordered by the name a person sees, numbers as numbers (R 10-10: 'domino 11, domino 12, domino 3')
+  // ordered by the name a person sees, numbers as numbers ('domino 3' before 'domino 11')
   const nm = (id) => { const l = world[id]?.label; return typeof l === 'string' && l ? l : id; };
   const order = Object.keys(world ?? {}).sort((a, b) => nm(a).localeCompare(nm(b), 'en', { numeric: true, sensitivity: 'base' }) || (a < b ? -1 : a > b ? 1 : 0));
   for (const id of order) {

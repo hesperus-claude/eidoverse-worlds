@@ -129,7 +129,7 @@ function rowOf(card, k, bag, over = {}) {
   // the row's hint is the registry's one-line doc (componentspec `docs`, through the descriptor) unless the card says more
   return { ...widget, t, k, value, ...(def !== undefined && offersDef !== false && t !== 'check' ? { def } : {}), ...(f?.doc && over.hint === undefined ? { hint: f.doc } : {}), ...over };
 }
-// The light component (PROTOCOL §4, 2026-10-01): a lamp is a thing with a `light` component.
+// The light component (PROTOCOL §4): a lamp is a thing with a `light` component.
 const compLight = (ent) => isBag(ent?.light);
 const compMesh = (ent) => isBag(ent?.mesh) && ent.model == null && MESH_SHAPES.includes(ent.mesh.shape);
 // The reading a viewer with no hint gets: canonical (middle axis within ±90°,
@@ -146,13 +146,10 @@ const motionKeys = (ent) => Object.keys(recordComponents(ent)).filter((k) => (k 
 // The four the descriptor table marks `hand` (shared/protocol/descriptors.js HAND_CARDS): their rows are not built from
 // the table — a Transform's channels are an editor's reading of one pose, a Sockets' rows are per slot, a Material's are
 // the model's own slots, and a Grabbable's registry fields ride beside the hand's own (pose, carries, fits, use, prompt,
-// grips). Each keeps a `read` (its rows) and a `write` (its edits); the inspector and editOps call them where the card
-// stands. Transform's hooks are inline in inspectSchema/editOps (its edits coalesce into the one place every channel
-// shares); HAND.Transform names where.
-// A host's sockets are its socket children (PLAN-sockets-entities); until the Parts UI (PLAN §10 12b) the Sockets card
-// still reads and writes them as the one map it was built on: the children, read as `sockets.<name>` (shared/sockbody.js
-// socketMapIn); a write of the whole map is translated into the children at the door (authority/sockets.js liftOps).
-// Needs the world (live.world); without it a record shows the sockets it carries itself (none, after the cut).
+// grips). Each keeps a `read` (its rows) and a `write` (its edits); Transform's hooks are inline in inspectSchema/editOps
+// (its edits coalesce into one place). A host's sockets are its socket children, which the Sockets card reads and
+// writes as one map, `sockets.<name>` (shared/sockbody.js socketMapIn; the door lifts a whole-map write into children,
+// authority/sockets.js liftOps). Needs the world (live.world).
 function withSocketMap(ent, id, live) {
   if (!ent || !live?.world || ent.sockets) return ent;
   const map = socketMapIn(live.world, id);
@@ -179,17 +176,17 @@ const HAND = {
         const b = bodyOf(s.body);
         fields.push({ t: 'check', k: `${slot}|body`, label: `${slot}: people attach`, value: !!b, hint: 'a person attaches here by using it (sit, ride…); off: an attachment point for things only' });
         if (b) {
-          // the body block is the socket child's station (shape audit 10-16; shared/sockbody.js): its core fields as rows
+          // the body block is the socket child's station (shared/sockbody.js): its core fields as rows
           const raw = s.body ?? {}; const d = ACTION_DEFAULTS[b.action] ?? ACTION_DEFAULTS.sit;
           fields.push({ t: 'text', k: `${slot}|action`, label: `${slot} action`, value: b.action, hint: "what using it is called: sit, ride, lie, stand, drive… (it also picks the default pose and anchor)" });
           fields.push({ t: 'enum', k: `${slot}|anchor`, label: `${slot} anchor`, value: b.anchor, def: d.anchor, options: ANCHORS.map((v) => ({ v, label: v })), hint: 'the body point that lands on the socket: hips (a seat), feet (a place to stand), head, or the root' });
-          // its anim (R 10-17: station.pose → anim; the legacy map's body block keeps the word pose, and the lift makes it
+          // its anim (station.pose → anim; the legacy map's body block keeps the word pose, and the lift makes it
           // the station's anim). Addressed |anim; |pose is still taken on a write (below)
           if (typeof b.pose === 'string') fields.push({ t: 'enum', k: `${slot}|anim`, label: `${slot} anim`, value: b.pose, def: d.pose, options: [...new Set([...SOCKET_POSES, b.pose])].map((v) => ({ v, label: v })), hint: 'the clip the body holds (any animation-library name; a blend or a phase-locked clip: edit as JSON)' });
           else fields.push({ t: 'json', k: `${slot}|anim`, label: `${slot} anim`, value: JSON.stringify(b.pose, null, 2), hint: '{clip, time: "phase"} or a blend {by: "speed", clips: [[0, "idle"], [2, "walk"]]}; a clip name string makes it one clip again' });
           fields.push({ t: 'enum', k: `${slot}|leaveBy`, label: `${slot} leave by`, value: b.leaveBy, def: 'any', options: [['any', 'moving, jumping or X'], ['jump', 'jump or X'], ['menu', 'X only'], ['script', 'only the world (a script)']].map(([v, label]) => ({ v, label })) });
           fields.push({ t: 'enum', k: `${slot}|who`, label: `${slot} who`, value: b.who ?? 'anyone', def: 'anyone', options: [['anyone', 'anyone'], ['builder', 'builders'], ['owner', 'owners']].map(([v, label]) => ({ v, label })) });
-          // the station's reserved keys (fromSeat, enter/leave, input, look, reach…: shape audit 10-16) have no rows: the door refuses them
+          // the station's reserved keys (fromSeat, enter/leave, input, look, reach…) have no rows: the door refuses them
         }
       }
       fields.push({ t: 'btn', k: 'add', label: '+ socket here', hint: 'click the spot on the thing where a body (or a thing) attaches', client: true });
@@ -268,7 +265,7 @@ const HAND = {
       if (!ov) fields.push({ t: 'btn', k: 'override', label: own.length > 1 ? 'change every material…' : 'override its look…', hint: "Change its colour, roughness, metalness, glow or opacity. Fields you leave blank keep the model's own." });
       if (own.length > 1) for (const [i, m] of own.slice(0, 12).entries()) if (!slotKeys.includes(`${MATK}:${m.slot}`))
         fields.push({ t: 'btn', k: `slot|${m.slot}|add`, label: `change ${label(m, i)} only…`, hint: `Override just the model's material "${m.name}".` });
-      // the ladder's second rung (R 10-12): the world's owner may trust this draft here; everyone else sees only the chip
+      // the ladder's second rung: the world's owner may trust this draft here; everyone else sees only the chip
       if (live.mayTrust === true) fields.push(isTrusted(MATK, live.trusted)
         ? { t: 'btn', k: 'trust', label: 'stop trusting it in this world', hint: 'Takes hesperus/material off this world\'s trusted list: back to a draft (amber), offered under "drafts". Nothing stored changes.' }
         : { t: 'btn', k: 'trust', label: 'trust this in this world', hint: 'Not engine-official, but used and trusted in this world: the owner\'s word (@world.trusted-components). It moves into the main Add Component list with a blue chip. The engine still doesn\'t read it.' });
@@ -376,7 +373,7 @@ export function inspectSchema(ent, id, live = {}) {
     // callers; the channel box shows the Rotate channels instead (alias).
     transform.push({ t: 'num', k: 'yaw', label: 'heading', value: round(pv.yaw ?? 0, 4), step: 5, deg: true, alias: 'rot', ...tf,
       hint: tf.hint ?? `turn about ${L.mounted ? 'its parent\'s' : 'world'} up to this heading, keeping any tilt (the Rotate channels are the full orientation)` });
-    // scale: three channels like translate and rotate (R 10-04); `scale` stays as the uniform setter (all three to one
+    // scale: three channels like translate and rotate; `scale` stays as the uniform setter (all three to one
     // number), an alias the channel box doesn't draw
     const S = scale3(entScale(ent));
     transform.push({ t: 'num', k: 'scale', label: 'scale', value: round(S[1]), def: 1, step: 0.05, dp: 2, min: 0.01, softMax: 12, ...tf,
@@ -401,8 +398,8 @@ export function inspectSchema(ent, id, live = {}) {
   }
   const driven = c.motion?.type && !c.motion.part ? 'motion' : null;   // a whole-entity motion composes onto this REST pose
   // drivenBy: the card's own title (a pendulum's card is Pendulum), so the field's ~ names what you'll land on
-  // only the channels the motion actually moves (R 10-11: "spin doesn't impact scale or translate, and only the rotation axes
-  // in question"); an unknown type marks every channel it might own
+  // only the channels the motion actually moves (a spin touches only its rotation axes,
+  // not scale or translate); an unknown type marks every channel it might own
   if (driven) { const ch = motionChannels(c.motion);
     for (const f of [...transform, ...rotation]) { if (f.t !== 'num') continue; const lb = String(f.label ?? '');
       const hit = /^translate ([xyz])$/.test(lb) ? ch.t.has(lb.slice(-1)) : /^rotate ([xyz])$/.test(lb) ? ch.r.has(lb.slice(-1)) : /^quat /.test(lb) ? ch.r.size > 0 : lb === 'heading' ? ch.r.has('y') : false;
@@ -429,11 +426,11 @@ export function inspectSchema(ent, id, live = {}) {
     { t: 'check', k: 'hidden', label: 'hidden', value: c.hidden === true, hint: 'not drawn, still there — a comp every client honours' },
     { t: 'check', k: 'clickthrough', label: 'clicks go through', value: c.clickthrough === true, hint: 'a pointer click passes through it to what is behind; it is still drawn, collides, and a hand or a tool can still take it (R 10-11)' },
     { t: 'check', k: 'disabled', label: 'switched off', value: c.disabled === true, hint: 'switched off: kept in the record and the Hierarchy, but nobody downloads, sees or touches it, and it has no physics; what hangs under it goes with it. Switch it on again to bring it back' },
-    // selection layer (R 10-11; the draft hesperus/layer): 'auto' is its default by kind; a builder may set it
+    // selection layer (the draft hesperus/layer): 'auto' is its default by kind; a builder may set it
     { t: 'enum', k: 'layer', label: 'layer', value: LAYERS.includes(c[LAYER_KEY]) ? c[LAYER_KEY] : 'auto', options: [{ v: 'auto', label: `auto (${defaultLayer(ent)})` }, ...LAYERS.map((v) => ({ v, label: v }))],
       hint: 'which selection layer it is on: each person chooses in Select ▾ which layers their clicks can land on (the Hierarchy selects anything). auto = by kind; anything riding an avatar is on people' },
     { t: 'text', k: 'label', label: 'name', value: typeof c.label === 'string' ? c.label : '', placeholder: 'give it a name', hint: 'what people see; rename it freely — its id never changes' },
-    // R 10-07: how it is described to anyone who reads rather than sees; what it can do and its state are read
+    // how it is described to anyone who reads rather than sees; what it can do and its state are read
     // out from its components (shared/a11y.js), shown below as everyone who reads it gets it
     { t: 'text', k: 'description', label: 'description', value: typeof c.description === 'string' ? c.description : '', multiline: true, placeholder: 'what it is and looks like, for people who can\'t see it and for agents',
       hint: `${graphemes(typeof c.description === 'string' ? c.description : '')} / ${SPEC.description.maxLen}. Don't list what it does: that is read from its components. A visible nameplate is a child thing with a sign (Text, billboard yaw)` },
@@ -453,13 +450,9 @@ export function inspectSchema(ent, id, live = {}) {
     ] });
   }
 
-  // look — the first user of the `ref` field: name ANOTHER entity for this one
-  // to face. The value is a target id (or null). The picker reuses attach's
-  // arming: arm, then click a row or the thing in the world. Only shown once a
-  // `look` comp exists (add it via + component) so we add no UI to things that
-  // don't use it — the field TYPE is the deliverable; this is its demonstrator.
-  // look-at (batch 2; the wire name, `look` is one letter off `lock` and the authority refuses it): a group per key, its
-  // fields addressed `look-at.<k>` for the whole thing and `look-at.<part>|<k>` for a part's
+  // look-at (the wire name: `look` is one letter off `lock`, and the authority refuses it): a `ref` field naming the
+  // entity to face, a group per key, fields addressed `look-at.<k>` for the whole thing and `look-at.<part>|<k>` for a
+  // part's
   const laKeys = Object.keys(c).filter((k) => (k === 'look-at' || k.startsWith('look-at:')) && isBag(c[k]));
   if (laKeys.length) {
     // the door's axis letters (componentspec `axis`: x, y, z or a vector); a stored vector shows as itself
@@ -500,7 +493,7 @@ export function inspectSchema(ent, id, live = {}) {
     groups.push({ group: 'light', label: 'light', types: ['light'], fields });
   }
 
-  // the `mesh` card (R 10-12, primitives): a parametric body on a model-less thing; its shape and its size in metres.
+  // the `mesh` card (primitives): a parametric body on a model-less thing; its shape and its size in metres.
   // What each axis means per shape is said in the hint (a sphere reads x as its diameter; a plane has no height).
   if (compMesh(ent)) {
     const m = c.mesh; const size = Array.isArray(m.size) && m.size.length === 3 ? m.size : [1, 1, 1];
@@ -513,7 +506,7 @@ export function inspectSchema(ent, id, live = {}) {
     groups.push({ group: 'mesh', label: 'mesh', types: ['mesh'], fields });
   }
 
-  // the collider component (PROTOCOL §4, 2026-10-01), or the spawn verb's
+  // the collider component (PROTOCOL §4), or the spawn verb's
   // legacy `collide` it overrides. Editing writes the component either way:
   // `collide` has no verb but spawn, and re-spawning would re-author the thing.
   if (isBag(c.collider) || ent.collide != null) {
@@ -574,7 +567,7 @@ export function inspectSchema(ent, id, live = {}) {
 
   if (c.sockets && typeof c.sockets === 'object') groups.push(HAND.Sockets.read(c));
 
-  // openable (R 10-07; shared/protocol/componentspec.js): open and locked are its state; it turns `angle` about its pivot (or slides
+  // openable (shared/protocol/componentspec.js): open and locked are its state; it turns `angle` about its pivot (or slides
   // `slide` in its own frame) over `time`. The hinge buttons put the pivot on an edge of the model's own box (live.box).
   if (isBag(c.openable)) {
     const o = c.openable; const slides = Array.isArray(o.slide); const box = live.box; const O = (p, over) => rowOf('Openable', p, o, over);
@@ -603,7 +596,7 @@ export function inspectSchema(ent, id, live = {}) {
     groups.push(HAND.Grabbable.read(c));
   }
 
-  // physics (R 10-10: 'hard to interact with unless you know code'): what a builder tunes, as fields; the measured shape as
+  // physics: what a builder tunes, as fields; the measured shape as
   // a fact; everything else (layers, combine rules, centre of mass) through the JSON hatch the group grows below.
   // A blank number means its absence: the engine's own reading (componentspec's absentMeans), not zero.
   if (c.physics && typeof c.physics === 'object') {
@@ -614,13 +607,13 @@ export function inspectSchema(ent, id, live = {}) {
       { t: 'enum', k: 'kind', label: 'body', value: ph.kind ?? 'dynamic', def: 'dynamic', options: SPEC.physics.enums.kind.map((v) => ({ v, label: v })), hint: SPEC.physics.docs.kind },
       ...((ph.kind ?? 'dynamic') === 'dynamic' ? [{ t: 'enum', k: 'who', label: 'pushed by', value: ph.who ?? 'member', def: 'member', options: [['member', 'anyone'], ['builder', 'builders'], ['owner', 'owners']].map(([v, label]) => ({ v, label })), hint: SPEC.physics.docs.who }] : []),
       { t: 'text', k: 'mass', label: `mass (${SPEC.physics.units.mass})`, value: opt(ph.mass), placeholder: 'from its size', hint: SPEC.physics.docs.mass },
-      // friction, bounciness and the rest are reserved until an engine reads them (shape audit 10-16): said, never offered
+      // friction, bounciness and the rest are reserved until an engine reads them: said, never offered
       { t: 'info', label: 'friction, bounce', value: 'the engine\'s own', hint: `reserved: ${SPEC.physics.reservedFields.join(', ')} are named but no engine here reads them yet, so none can be written` },
       { t: 'info', label: 'shape', value: shapeWords, hint: `${SPEC.physics.docs.shape}. To change how it bumps into things, use a Collider component` },
     ] });
   }
 
-  // Home: where the reset button sends it (R 10-11: "'Home' should probably get a proper UI"). Position, turn and size, and
+  // Home: where the reset button sends it. Position, turn and size, and
   // what it hangs under; the component's JSON stays below like every card's. A tilted home (a q that isn't a turn about
   // up) shows its turn and says so; editing the turn writes a level one.
   if (c.home && typeof c.home === 'object' && Array.isArray(c.home.pos)) {
@@ -645,10 +638,9 @@ export function inspectSchema(ent, id, live = {}) {
   if (ent.model || compMesh(ent)) groups.push(HAND.Material.read(c, live));   // every thing with meshes: a model's, or a mesh thing's one 'surface'
 
   if (c.particles && typeof c.particles === 'object') {
-    // R 10-07: the instance is {effect, part?, at?, seed?, playing?, scale?, params?}; the knobs are the effect's own params
-    // (an Essential's: count, size, opacity, speed, lifetime, area, texture, quality). An older value (the first
-    // protocol's flat bag) is shown in today's shape and written back in it on the first edit
-    // an Essential is stored by its name (R 10-17); one stored as its address before is shown, and written, by its name too
+    // the instance is {effect, part?, at?, seed?, playing?, scale?, params?}; the knobs are the effect's own params
+    // (an Essential's: count, size, opacity, speed, lifetime, area, texture, quality). An older flat bag is shown in
+    // today's shape and written back in it on the first edit; an Essential is shown and written by its name
     const inst0 = instanceOf(c.particles) ?? {}; const inst = essentialNameOf(inst0.effect) ? { ...inst0, effect: essentialNameOf(inst0.effect) } : inst0;
     const doc = effectFor(inst.effect, live.effects ?? (() => null)); const at = Array.isArray(inst.at) ? inst.at : [0, 0, 0];
     const effects = ESSENTIAL_NAMES.includes(inst.effect) ? ESSENTIAL_NAMES : [...ESSENTIAL_NAMES, inst.effect ?? '?'];
@@ -724,7 +716,7 @@ export function inspectSchema(ent, id, live = {}) {
     groups.push({ group: 'sound', label: 'sound', types: ['sound'], fields });
   }
 
-  // story (batch 2): why it's here, a museum label. Shown on Inspect and read by agents
+  // story: why it's here, a museum label. Shown on Inspect and read by agents
   if (isBag(c.story)) {
     const st = c.story;
     const ST = (k, over) => rowOf('Story', k, st, over);
@@ -735,7 +727,7 @@ export function inspectSchema(ent, id, live = {}) {
     ] });
   }
 
-  // text (batch 2): a sign
+  // text: a sign
   if (isBag(c.text)) {
     const tx = c.text; const D = SPEC.text.defaults;
     const lumaInt = (c) => (0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255)) / 255;   // as texts.js picks the edge
@@ -758,7 +750,7 @@ export function inspectSchema(ent, id, live = {}) {
 
   // scripts (research 41): each script:<name> gets an on/off switch, `paused`, like Unity's `enabled`. Flipping it
   // writes only {paused} (a merge), so it needs nothing of the script (its source, its scope) and adopts nothing: the
-  // script's sponsor stays who it was (R on lab 49 F4), and the authority's `scripts` view says who paused it, from the log
+  // script's sponsor stays who it was, and the authority's `scripts` view says who paused it, from the log
   const scriptKeys = Object.keys(c).filter((k) => k.startsWith('script:') && isBag(c[k]));
   if (scriptKeys.length) groups.push({ group: 'script', label: 'scripts', types: scriptKeys,
     fields: scriptKeys.map((k) => ({ t: 'check', k: k.slice(7), label: 'paused', value: c[k].paused === true,
@@ -806,9 +798,8 @@ const WIRE_BLOCKED = {
     return ent?.physics?.kind === 'dynamic' ? 'physics turns it (it is dynamic): make it static, or add LookAt to a part' : null; },
 };
 const MOTION_GROUP = { Pendulum: 1, Spin: 1, Orbit: 1, Oscillate: 1, Path: 1 };
-// not offered by Add Component: what the authority refuses today (none: LookAt writes `look-at` since batch 2, and the
-// agent's add.LookAt already worked while this list still hid it from people: audit 10-07). tools/protocol/shiplist-check.ts
-// R1 sends every offered entry to the real door: all must be accepted.
+// not offered by Add Component: what the authority refuses today (none). tools/protocol/shiplist-check.ts R1 sends
+// every offered entry to the real door: all must be accepted.
 const NOT_OFFERED = new Set();
 /** The words people search Add Component with that aren't in a component's name or summary (review 10-07 S9: "seat"
  *  found nothing; the seat is Sockets). Shared so an agent's surface can use the same words. */
@@ -857,7 +848,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
   let partOrdinal = 0;
   for (const inst of components) {
     const rec = RECORDS[inst.type];
-    // every card's title starts with a capital (R 10-10: 'physics' was the only one that didn't)
+    // every card's title starts with a capital
     const sec = { type: inst.type, key: inst.key ?? null, title: String(inst.type).charAt(0).toUpperCase() + String(inst.type).slice(1), hash: rec.hash, category: rec.category, summary: rec.summary, fields: [], removable: false };
     // the registry's status (componentspec STATUSES: trial during the alpha), shown on the card; a draft has none
     { const st = statusOf(String(inst.key ?? inst.type).toLowerCase()); if (st) sec.status = st; }
@@ -884,7 +875,7 @@ function componentSections(ent, groups, live = {}, id = '?') {
       // on a socket: the socket is the parent (a child entity of its host, PLAN-sockets-entities), named with its host
       case 'Parent': { const on = live.world?.[ent.parent?.to]; const sk = on?.c?.socket ?? on?.socket;
         sec.info = sk && typeof sk === 'object' ? [['socket', `${String(sk.name)} on ${String(on.parent?.to ?? on.c?.parent?.to ?? '?')}`]] : []; }
-        sec.fields = refs('parent', (f) => f.k !== 'children'); break;   // children are the Hierarchy's (R, 10-04)   // the Parent card (R, 10-04: a component, named as engines name it)
+        sec.fields = refs('parent', (f) => f.k !== 'children'); break;   // children are the Hierarchy's; the Parent card is a component, named as engines name it
       case 'Light':
         // keyless = the light-verb light (the light group is its); keyed = the
         // component: the group when it is the entity's light, raw JSON when a
@@ -925,19 +916,19 @@ function componentSections(ent, groups, live = {}, id = '?') {
           sec.title = 'Material'; sec.fields = refs('hmat'); sec.removable = true; sec.draft = true;   // a draft: the card wears its dot
           if (isTrusted(inst.key, live.trusted)) sec.trusted = true;   // …blue once the world's owner trusts it here
         } else if (inst.key === 'physics' && g('physics')) {
-          sec.title = 'Physics'; sec.fields = refs('physics'); sec.removable = true;   // its own fields (R 10-10), not raw JSON
+          sec.title = 'Physics'; sec.fields = refs('physics'); sec.removable = true;   // its own fields, not raw JSON
         } else if (inst.key === 'home' && g('home')) {
-          sec.title = 'Home'; sec.fields = refs('home'); sec.removable = true;   // its own fields (R 10-11); the card named comp.home, a row the floor no longer held, until C8's every-card pin (10-12)
+          sec.title = 'Home'; sec.fields = refs('home'); sec.removable = true;   // its own fields, not raw JSON
         } else {
           sec.fields = [`comp.${inst.key}`];         // the raw-JSON floor (Annotation, Structure, Reactions, Captions, Stage)
           sec.removable = inst.type !== 'Captions';
           if (inst.type === 'Annotation') sec.title = inst.key;
         }
     }
-    if (typeof sec.title === 'string' && sec.title) sec.title = sec.title.charAt(0).toUpperCase() + sec.title.slice(1);   // every card starts with a capital (R 10-10: 'physics')
+    if (typeof sec.title === 'string' && sec.title) sec.title = sec.title.charAt(0).toUpperCase() + sec.title.slice(1);   // every card starts with a capital
     out.push(sec);
   }
-  // R 10-10: every thing with a model shows a Material card, its model's own materials, even with no override yet
+  // every thing with a model shows a Material card, its model's own materials, even with no override yet
   if (g('hmat') && !components.some((x) => x.key === 'hesperus/material')) {
     const anySlot = Object.keys(recordComponents(ent)).some((k) => k.startsWith('hesperus/material:'));
     out.push({ type: 'Material', key: null, title: 'Material', hash: null, category: 'Look', summary: "its model's own materials, and an override", fields: refs('hmat'), removable: false, present: anySlot, draft: true, ...(isTrusted('hesperus/material', live.trusted) ? { trusted: true } : {}) });
@@ -972,8 +963,8 @@ function componentSections(ent, groups, live = {}, id = '?') {
   // never disagree with the Model card; an Empty and a light say what they are
   const model = components.find((c) => c.type === 'Model')?.params.lib;
   const lib = model != null ? String(model) : null;
-  // parenting lives on the Parent card (R, 10-04), not the header
-  // clicks-go-through left the Inspector's header for Attributes (R 10-17 20:36: a less-used option, beside the selection layer)
+  // parenting lives on the Parent card, not the header
+  // clicks-go-through left the Inspector's header for Attributes (a less-used option, beside the selection layer)
   return { header: refs('flags', (f) => f.k === 'label' || f.k === 'hidden' || f.k === 'disabled' || f.k === 'description' || f.k === 'reads'), list: out, add,
     model: lib, libLabel: lib != null ? libLabel(lib) : isBag(ent?.mesh) && MESH_SHAPES.includes(ent.mesh.shape) ? ent.mesh.shape : ent?.light ? 'light' : 'empty' };
 }
@@ -997,7 +988,7 @@ const NEEDS = {
   // a model is placed from the Library (spawn on the id would replace this
   // entity wholesale: its components, its placer, its born)
   Model: {
-    met: (ent) => ent?.model != null || compMesh(ent),   // a mesh thing has a body to act on, as the authority reads it (review S2.2)
+    met: (ent) => ent?.model != null || compMesh(ent),   // a mesh thing has a body to act on, as the authority reads it
     plan: (ent, id, name) => ({ choice: { need: 'Model', options: [],
       prompt: `${article(name)} ${name.toLowerCase()} needs a model to act on (${id} has none) — place a model from the Library and add the ${name} to it, or put ${id} under one` } }),
   },
@@ -1077,7 +1068,7 @@ function addOwnOps(ent, id, name, value) {
   // so a later change of the engine's defaults cannot change this lamp
   if (name === 'Light') {
     if (c.light != null) return { ops: [], errors: [`${id} already has a light`] };
-    // one place per thing (R 10-11; the authority refuses a light on a model): on a model, the light is a CHILD thing a
+    // one place per thing (the authority refuses a light on a model): on a model, the light is a CHILD thing a
     // metre up, so its pose is its own and the gizmo moves one thing
     // on a mesh thing the bulb hangs half a metre over its top (a plane's at 0.55, a 5 m box's at 5.5), not at a fixed metre
     const top = compMesh(ent) ? (c.mesh.shape === 'plane' ? 0.05 : c.mesh.shape === 'sphere' ? +c.mesh.size?.[0] || 1 : c.mesh.shape === 'capsule' ? Math.max(+c.mesh.size?.[0] || 1, +c.mesh.size?.[1] || 1) : +c.mesh.size?.[1] || 1) : null;
@@ -1266,8 +1257,8 @@ export function editOps(ent, id, edits, live = {}) {
   };
 
   // A key that reports an error writes NOTHING: whatever it began (a bag, a coalesced place, a component's next value) is
-  // put back as the edit's earlier keys left it, so a refused value never travels as an op carrying the old one (F2
-  // 10-12: a mistyped light colour sent `set light` with the colour it already had). The edit's other keys still commit.
+  // put back as the edit's earlier keys left it, so a refused value never travels as an op carrying the old one
+  // (a mistyped light colour must not send `set light` with the colour it already had). The edit's other keys still commit.
   const plans = [comps, motions, bags];
   const keep = () => ({ errs: errors.length, ops: ops.length, place: structuredClone(place), maps: plans.map((m) => structuredClone([...m])) });
   const undoKey = (was) => {
@@ -1449,7 +1440,7 @@ export function editOps(ent, id, edits, live = {}) {
           if (bool(raw)) { if (!Object.values(rx).some((h) => h?.kind === 'play')) rx[rx.ring ? 'play' : 'ring'] = { kind: 'play' }; }
           else for (const [a, h] of Object.entries(rx)) if (h?.kind === 'play') delete rx[a];
           comps.set('reactions', Object.keys(rx).length ? rx : null); break; }
-        // a new sound plays (R 10-07: no start-paused; its radius keeps it to its place)
+        // a new sound plays (no start-paused; its radius keeps it to its place)
         const b = bag('sound', () => ({ playing: true, loop: true, volume: 0.8, radius: 12 })); if (!b) { errors.push('sound: silenced in this same edit'); break; }
         // play and restart send no t0: the authority stamps it (shared/protocol/authority.js stampMedia), on its clock, for everyone
         if (k === 'play') { b.playing = true; delete b.t0; }
@@ -1512,7 +1503,7 @@ export function editOps(ent, id, edits, live = {}) {
       case 'comp': {
         if (k === '+') { const type = String(raw ?? '').trim(); if (!type) break;
           // a component's own name ("Openable", "openable", "look-at") is Add Component, needs and defaults included — the
-          // same ops a person's menu writes (review 10-07 B4: comp.+ "Openable" minted a junk x--… component instead)
+          // same ops a person's menu writes
           const rec = Object.keys(RECORDS).find((n) => n.toLowerCase() === type.toLowerCase().replace(/[-_ ]/g, ''));
           if (rec && !RECORDS[rec].world && !RECORDS[rec].readOnly) { const r = addOps(ent, id, rec); errors.push(...r.errors); ops.push(...r.ops); if (r.choice) asks.push({ kind: 'choice', ...r.choice, key: `add.${rec}` }); break; }
           if (!/^([a-z0-9.-]+\/)?[a-z][a-z0-9-]*$/.test(type)) { errors.push(`comp.+: '${type}' isn't a component name (lowercase a–z, 0–9 and '-'; one of your own carries a namespace, e.g. 'example.org/${type.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}'); Add Component's names are ${Object.keys(RECORDS).filter((n) => !RECORDS[n].world).join(', ')}`); break; }
@@ -1567,7 +1558,7 @@ export function editOps(ent, id, edits, live = {}) {
     comps.set(type, type === 'picture' ? n.picture : n.sound);
   }
   // the pivot (research 52; Maya's channel box): a rotate or scale edit goes ABOUT the pivot, so the position moves to
-  // keep the pivot where it was (agent lab round 2, Rowan: 'edit rot.y +=90' turned the gate about its origin). A typed
+  // keep the pivot where it was (so 'edit rot.y +=90' turns a gate about its hinge, not its origin). A typed
   // translate in the same edit wins. The same frame for a root and a child: pos/q/scale here are the local pose.
   const pivp = Array.isArray(c.pivot?.pos) && c.pivot.pos.length === 3 ? c.pivot.pos : null;
   if (place && pivp && !posTyped) {
