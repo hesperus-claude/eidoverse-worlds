@@ -16,6 +16,7 @@ import { chooseClient } from './lib/litechoice.js';
 import { THREE, scene, camera, renderer, canvas } from './lib/core.js';
 import { releaseBodyGate, armBodyGate } from './lib/bodygate.js';
 import { CONFIG, bus, report, tee, colorFor, emptyWorldNotice } from './lib/base.js';
+import { versionReady } from './lib/version.js';
 import { contributeThumbnail, makeAvatar, makeCapsuleAvatar, ANIM_ORDER } from './lib/avatar.js';
 import { updateSky, updateAutoSystems, skyArgs, setCloudQuality, hideSkyForWater } from './lib/sky.js';
 import { setSkyArgsSource, entities, buildsPending, anyBuildsPending, avatarMounts, roleOf, worldHasOwner, bagOf, bags, seatSocket, socketsOn, currentTerrainArgs, terrainEditBase, noteTerrainSent, terrainPending } from './lib/world.js';
@@ -89,13 +90,8 @@ import {
 import { registerXRPanel } from './lib/xrpanels.js';
 import { initDebug, updateDebug, toggleDebug } from './lib/debug.js';
 
-// Which build is this world running? One console line at boot, so "what's
-// deployed here" is a glance instead of an inference (the audio
-// mystery that turned out to be a stale deploy). Server route: GET /version — same answer, one curl away, for
-// anyone without a browser console.
-fetch('/version').then((r) => r.json())
-  .then(({ sha, commitTime, dirty, startedAt }) => console.log(`[eidoverse] server build ${sha}${dirty === true ? ' (DIRTY TREE)' : dirty === false ? '' : ' (dirty: unknown)'} (code from ${commitTime}), up since ${startedAt}`))
-  .catch(() => console.log('[eidoverse] server build unknown (/version unavailable)'));
+// which server build: one console line at boot
+versionReady.then((v) => console.log(v ? `[eidoverse] server build ${v.sha}${v.dirty === true ? ' (DIRTY TREE)' : v.dirty === false ? '' : ' (dirty: unknown)'} (code from ${v.commitTime}), up since ${v.startedAt}` : '[eidoverse] server build unknown (/version unavailable)'));
 import { dragSim, updateBodyDrag, dragState } from './lib/bodydrag.js';
 import { initChat, logChat, chatXRPanel, mentionPerson } from './lib/chat.js';
 import { initPlates, updatePlates } from './lib/platecard.js';
