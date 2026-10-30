@@ -306,7 +306,7 @@ time.
 | 134 | pretrans | main | `tools/protocol/pretrans-check.ts` | bun | 2.8 s | 180 s |
 | 135 | soundclock | main | `tools/protocol/soundclock-check.ts` | bun | 0.2 s | 180 s |
 | 136 | sound | main | `tools/sound-test.ts` | bun | ? | 300 s |
-| 137 | sound-editor | main | `tools/sound-guard-test.ts` | bun | ? | 300 s |
+| 137 | sound-editor | main | `tools/sound-editor-test.ts` | bun | ? | 300 s |
 | 138 | skypanel | main | `tools/skypanel-state-test.ts` | bun | ? | 300 s |
 | 139 | physics-off | main | `tools/physics-off-test.ts` | bun | ? | 300 s |
 | 140 | predict-pending | main | `tools/predict-pending-test.ts` | bun | 0.5 s | 180 s |
