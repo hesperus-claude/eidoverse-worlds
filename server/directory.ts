@@ -1,6 +1,5 @@
 // server/directory.ts — who an identity is (PROTOCOL §2.3: "the mapping from an identity to a person lives
-// outside the log, so purging a person never needs the skeleton"). Round-2 review R1/R2 (10-05); security review
-// 10-06 (M2, M6, H4).
+// outside the log, so purging a person never needs the skeleton").
 //
 // Every actor a log names is an OPAQUE id, `u-` + 20 base32 characters, minted here. Nothing about the person is in
 // the log: their display name, the account(s) that prove them, and anything else about them live in this file, which
@@ -8,12 +7,11 @@
 //   - a role is held by an id, and an id is reached only through its account (a `sub`): typing someone's display name
 //     gets you nothing. Two people who share a name are two ids; one person renamed is still one id.
 //   - forgetting a person is deleting their entries here: the log keeps ids that no longer mean anyone.
-//   - one id per account per server, the same in every world (R 10-06 14:05: friends, messages and "ask to be invited",
-//     as VRChat does, need a person who stays the same person between worlds; per-world ids — review M6 — were
-//     tried and withdrawn). A world's slice of this file (exportSlice) travels with the world to another server.
+//   - one id per account per server, the same in every world (friends, messages and "ask to be invited" need a person
+//     who stays the same between worlds). A world's slice of this file (exportSlice) travels with the world.
 // Accounts (`sub`): "human:<provider>:<id>" from a verified session, "agent:token:<name>" for an operator-enrolled agent,
 // "aid1:<iss>:<sub>" for a home-node-verified agent, "local:<name>" only on a private TRUST_NAMES server. A connection
-// with no account is ANONYMOUS: a fresh id per connection, held in memory only (never written: M2), kind "anon".
+// with no account is ANONYMOUS: a fresh id per connection, held in memory only (never written), kind "anon".
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -21,7 +19,7 @@ import { readLog, worldIdOf } from "../shared/protocol/fold.js";
 import { directoryFileIn } from "./keyfiles.ts";
 
 // kind is about the ACCOUNT, never what holds it (PROTOCOL §6a rule 3): "account" (one is bound), "anon" (none: a guest),
-// "imported" (a name from an imported log, no account yet). Files written before 10-17 said "human"/"agent": read as "account".
+// "imported" (a name from an imported log, no account yet). Older files' "human"/"agent" read as "account".
 export type Entry = { name: string; subs: string[]; kind: "account" | "anon" | "imported"; since: number; world?: string; renamedAt?: number };
 type File = { v: 1 | 2; ids: Record<string, Entry> };
 
@@ -41,12 +39,12 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
   if (d.v !== 2) {
     d.v = 2; void existingWorlds;
     // v1 keyed an agent by its display slug (`agent:<name>`); v2 keys an enrolled agent by its enrolment
-    // (`agent:token:<id>`), never a slug (C2). The enrolled agents keep their ids through the rename.
+    // (`agent:token:<id>`), never a slug. The enrolled agents keep their ids through the rename.
     for (const e of Object.values(d.ids)) e.subs = e.subs.map((s) => (/^agent:(?!token:)/.test(s) ? `agent:token:${s.slice(6)}` : s));
   }
   const keyOf = (sub: string, _world?: string | null) => sub;   // server-wide: the same person in every world
   const byKey = new Map<string, string>();
-  // a file written before 10-17 kept an inferred "human"/"agent": read as "account" (§6a rule 3: nothing infers what holds one)
+  // an older file's inferred "human"/"agent" reads as "account" (§6a rule 3: nothing infers what holds one)
   const unkind = (e: Entry) => { if ((e.kind as string) === "human" || (e.kind as string) === "agent") e.kind = "account"; return e; };
   const index = (id: string, e: Entry) => { for (const s of e.subs) byKey.set(e.world ? `${s}|${e.world}` : s, id); };
   for (const [id, e] of Object.entries(d.ids)) index(id, unkind(e));
@@ -55,7 +53,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
     if (odd.length) console.log(`[directory] ${odd.length} stored account(s) refused (not an account shape; kept on disk, nobody wears them): ${odd.map(([id, e]) => `${e.name} (${id})`).join(", ")}`); }
   const anon = new Map<string, Entry>();   // in memory only: an anonymous id is never written, never outlives the process
   // two writers (the CLI tools and a running server) share this file: re-read and merge before every write, so neither
-  // drops the other's entries (M2). Ours win on a clash (the same id can only be minted by one of them).
+  // drops the other's entries. Ours win on a clash (the same id can only be minted by one of them).
   const tomb = new Set<string>();   // ids this process forgot (forgetPlanned): the merge below must not bring them back from disk
   // an account another writer bound to an id this process holds (tools/operator-bind.ts, the server running): a bind only
   // adds, so it is taken, never written over; an account this process already gives another id stays that id's
@@ -77,8 +75,8 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
     for (const [id, e] of Object.entries(disk.ids ?? {})) if (!d.ids[id]) { d.ids[id] = unkind(e); index(id, e); } else takeBinds(id, e); };
   const add = (e: Entry) => { let id = mintId(); while (d.ids[id] || anon.has(id)) id = mintId(); d.ids[id] = e; index(id, e); save(); return id; };
   const get = (id: string) => d.ids[id] ?? anon.get(id) ?? null;
-  /** …claimed by an account OTHER than `sub` (security pass 3, H2: an account-holder may not appear under a name another
-   *  account wears in this directory, present or not — the presence plane is read by people, who read names) */
+  /** …claimed by an account OTHER than `sub` (an account-holder may not appear under a name another account
+   *  wears here, present or not: people read names) */
   const claimedByOther = (name: string, sub: string): boolean => { const k = foldName(name); for (const e of Object.values(d.ids)) if (e.subs.length && !e.subs.includes(sub) && foldName(e.name) === k) return true; return false; };
   return {
     /** The id for a connection in a world: its account's id there (minted on first sight; the display name kept
@@ -118,20 +116,20 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
     },
     nameOf: (id: string): string | null => get(id)?.name ?? null,
     entry: (id: string): Entry | null => get(id),
-    /** the display names an account-holding identity has claimed here (an anonymous joiner may not take one: H1/M3) */
+    /** the display names an account-holding identity has claimed here (an anonymous joiner may not take one) */
     claimedName(name: string): boolean { const k = foldName(name); for (const e of Object.values(d.ids)) if (e.subs.length && foldName(e.name) === k) return true; return false; },
     claimedByOther,
     /** The name a spectator's account takes on first sight: the typed name, unless another account wears it; then the
      *  typed name with the account's tag (`-` and accountTag), the name cut so the tag always
-     *  fits in `max`, and a number after the tag until no other account wears the result (review of #260, server I42). */
+     *  fits in `max`, and a number after the tag until no other account wears the result. */
     spectatorName(name: string, sub: string, max: number): string {
       if (!claimedByOther(name, sub)) return name;
       const tag = accountTag(sub);
       for (let k = 1; ; k++) { const suffix = k === 1 ? tag : `${tag}${k}`; const n = `${name.slice(0, Math.max(0, max - suffix.length - 1))}-${suffix}`;
         if (!claimedByOther(n, sub)) return n; }
     },
-    /** the accounts of every identity wearing this (folded) display name here: what a GLOBAL ban by name binds to (security
-     *  review 10-18 H1; an identity with no account is nobody to ban by account). */
+    /** the accounts of every identity wearing this (folded) display name here: what a GLOBAL ban by name binds to (an
+     *  identity with no account is nobody to ban by account). */
     accountsNamed(name: string): string[] { const k = foldName(name); const out: string[] = []; for (const e of Object.values(d.ids)) if (foldName(e.name) === k) out.push(...e.subs); return [...new Set(out)]; },
     /** id → display name for the ids given (what a client is sent; never subs). */
     names(ids: Iterable<string>): Record<string, string> { const o: Record<string, string> = {};
@@ -144,7 +142,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
 export type Directory = ReturnType<typeof directoryAt>;
 
 /** A display name folded for comparison: Unicode-compatibility normalized, case-folded, format characters (zero-width,
- *  bidi controls) and separators removed — so "Marígold", "marigold", "Mari​gold" are the same claim (M3). */
+ *  bidi controls) and separators removed — so "Marígold", "marigold", "Mari​gold" are the same claim. */
 export function foldName(s: string): string {
   return String(s).normalize("NFKC").toLowerCase().replace(/[\p{Cf}\p{Z}\p{P}\p{S}_]/gu, "");
 }

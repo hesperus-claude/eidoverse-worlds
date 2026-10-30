@@ -1,10 +1,8 @@
 // The ONE resolver from a library path (a model's lib) to a file on disk. It answers exactly what /library would serve
 // (routes.ts): the same ladder, in the same order — a patch, then the optimized copy, then the source library — and the
 // first rung holding the NAME decides, so a directory there shadows a file below it, as the route's 404 does. Refuses
-// anything that isn't a .glb/.vrm or that walks out of the library. (Upstream #213's contract, ported 2026-10-14; the
-// authority refuses a model this can't name, so this is where "does /library have it" is decided once.) The name is
-// read as the route reads it (upstream #220, ported 2026-10-19): the lib as a client's URL carries it, each run of
-// escapes decoded back to the disk name by libraryRel(), which the /library route calls too.
+// anything that isn't a .glb/.vrm or that walks out of the library. The authority refuses a model this can't name, so
+// "does /library have it" is decided here once. The name is read as the route reads it (libraryRel()).
 import { statSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { LADDER } from "./config.ts";
@@ -61,7 +59,7 @@ export function libraryFile(lib: unknown, extension: RegExp): string | null {
 
 export function resolveLibFile(lib: string): string | null {
   if (typeof lib !== "string") return null;
-  // a content address (eido:sha256/<hex>; review 10-07 H3): the original bytes it names, wherever this host keeps them
+  // a content address (eido:sha256/<hex>): the original bytes it names, wherever this host keeps them
   const hex = eidoHex(lib); if (hex) return eidoFile(hex);
   return libraryFile(lib, /\.(glb|vrm)$/i);
 }

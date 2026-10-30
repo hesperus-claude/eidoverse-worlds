@@ -1,9 +1,6 @@
-// eidoverse-worlds sequencer — ban DATA (TEL0S_NOTES §15, step 7a).
-// The instance-wide ban list and its persistence, plus the one lookup both
-// doors share. Only the data lives here: `expel` (the act of removing a live
-// body) stays in server.ts with the session's client maps — moderation owns
-// what is REMEMBERED, not what is done. Imported by server.ts right after
-// auth, so the restore-at-boot block runs exactly where it always did.
+// Ban DATA: the instance-wide ban list and its persistence, plus the one lookup both doors share. `expel` (removing a
+// live body) stays in server.ts: this owns what is REMEMBERED, not what is done. Imported by server.ts right after auth,
+// so the restore-at-boot block runs there.
 
 import { existsSync, readFileSync } from "node:fs";
 import { writePrivate } from "./fsutil.ts";
@@ -15,7 +12,7 @@ import { mainKnowledge, type Known } from "./mainknew.ts";
 // ---- global bans ------------------------------------------------------------
 // The door's own list, across all its worlds (each world's own bans are its door's moderator log). There is no global
 // log, so it is a JSON file INSIDE WORLDS_DIR (bans are world data: a scratch WORLDS_DIR gets a scratch list).
-// Keyed by ACCOUNT (security review 10-06 H4/L4): a display name is typed, not proven, so banning a name hit every
+// Keyed by ACCOUNT: a display name is typed, not proven, so banning a name hit every
 // namesake and missed the person the moment they picked another. A guest has no account: their ban names their
 // connection's address (hashed, never stored raw) and expires (ADDR_BAN_MS) — an address is shared and reassigned.
 export type BanRec = { by: string; ts: number; reason?: string; name?: string; account?: string; addr?: string; until?: number; world?: string; legacySub?: boolean; boundFrom?: string };
@@ -25,7 +22,7 @@ export const globalBans: Record<string, BanRec> = {};
 const refusedBans: Record<string, BanRec> = {};   // refused at boot (restoreBans): never enforced, written back as they were
 /** Pre-account bans (a name alone) main's records bind to no one account: kept on disk, never enforced, listed for operators. */
 export const pendingBans: Record<string, BanRec & { why: string }> = {};
-/** Why a ban bound by name alone is worth a look (review full-260 L11): the name was typed, so its wearer may not be that account. */
+/** Why a ban bound by name alone is worth a look: the name was typed, so its wearer may not be that account. */
 export const BOUND_BY_NAME = "the name was typed, so a guest who wore it may have been someone else; global-unban <the name> lifts it";
 export const PENDING_WORDS = "pre-account ban: bind to a person (global-ban <the name> binds whoever wears it here) or lift (global-unban <the name>)";
 export function saveGlobalBans() {
@@ -36,8 +33,8 @@ export function saveGlobalBans() {
 }
 /** The ban list as stored, made current. A record from before accounts carried the principal's bare `sub`: a signed-in
  *  person's account is that sub still, but an aid1 agent's is now `aid1:<iss>:<sub>`, so such a record is kept with
- *  `legacySub` and matches the aid1 account whose sub it names (review of #260). A name-keyed record with neither is
- *  bound to the one account main recorded for that name (`known`: mainknew.ts; R 10-28, the Minecraft migration); one
+ *  `legacySub` and matches the aid1 account whose sub it names. A name-keyed record with neither is
+ *  bound to the one account main recorded for that name (`known`: mainknew.ts); one
  *  main's records bind to no one account is never enforced (it would hit namesakes): kept in `pending`, listed. */
 export function restoreBans(raw: Record<string, BanRec>, refused: Record<string, BanRec> = {}, { known = () => null, pending = {} }: { known?: (name: string) => Known | null; pending?: Record<string, BanRec & { why: string }> } = {}): Record<string, BanRec> {
   const out: Record<string, BanRec> = {}; const dropped: string[] = [], bound: string[] = [];
@@ -108,7 +105,7 @@ export function findBan(map: Record<string, BanRec> | undefined, account: string
 /** The key a ban is filed under. */
 export const banKey = (account: string | null | undefined, addr?: string | null, world?: string | null) => `${world ? `world:${world}:` : ""}${account ? `acct:${account}` : `addr:${addr}`}`;
 
-// ---- a guest's mute, by address (R 10-07) ----------------------
+// ---- a guest's mute, by address ----------------------
 // A guest is a fresh identity per connection, so a mute on one was shed by reconnecting. Like a guest's ban
 // (above), the sanction is also filed against the connection's HASHED address in that world, for at most
 // ADDR_BAN_MS (or the sanction's own shorter end), and every new guest joining that world from the address is given

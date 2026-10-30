@@ -1,14 +1,6 @@
-// eidoverse-worlds sequencer — filesystem idioms (R2, survey §4.1).
-//
-// The tmp-write + rename pair was hand-rolled TEN times across the server
-// (auth, moderation, routes, upload, world ×2, seats ×2, optimize, and the
-// MCPL door), with accidental differences: two sites passed mode 0600,
-// one had orphan-tmp cleanup, exactly one (seats) routed through an
-// injectable fs surface so its failure atomicity is TESTABLE. One helper
-// now, carrying the best of each: atomicity by rename, explicit mode,
-// injectable fs (the seats fault-injection precedent — every caller
-// inherits testability), and stale-tmp tolerance (a crash between write
-// and rename leaves <path>.tmp; the next write simply overwrites it).
+// Filesystem idioms: the one write-then-rename helper, with an explicit mode, an injectable fs (so a caller's failure
+// atomicity is testable) and stale-tmp tolerance (a crash between write and rename leaves <path>.tmp; the next write
+// overwrites it).
 
 import { writeFileSync, renameSync, lstatSync, openSync, writeSync, fsyncSync, closeSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -31,7 +23,7 @@ export function atomicWrite(
 }
 
 /** A private file (0600), written atomically: a fresh random temp made with "wx" (a planted temp or symlink is never followed),
- *  and a symlink at the target refused rather than replaced (post-review 10-28 #5). */
+ *  and a symlink at the target refused rather than replaced. */
 export function writePrivate(path: string, data: string) {
   let link = false; try { link = lstatSync(path).isSymbolicLink(); } catch { /* absent: fine */ }
   if (link) throw new Error(`${path} is a symlink: refused (remove it, then try again)`);

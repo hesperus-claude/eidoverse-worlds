@@ -1,4 +1,4 @@
-// server/accountage.ts — how old an account is, for @world.access.minAccountDays (R 10-07: a throwaway account made
+// server/accountage.ts — how old an account is, for @world.access.minAccountDays (against a throwaway account made
 // to come back after a ban). Pure: no I/O, no clock of its own (the caller passes now).
 //
 // A person signs in with Discord (the only human provider: human:discord:<snowflake>). A Discord id IS its creation

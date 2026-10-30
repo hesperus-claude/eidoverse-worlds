@@ -1,12 +1,5 @@
-// eidoverse-worlds sequencer — the wire-limit table (R2, survey §1.1).
-//
-// "What does this server accept" used to be answerable only by reading 900
-// lines of ws switch: every cap below lived as a bare literal inside its
-// case, unnamed and un-overridable. One table now, env-overridable with the
-// same idiom mcpl/denoise.ts established — the values are unchanged, the
-// names are new. config.ts keeps the boot/cadence knobs; this file is the
-// PROTOCOL surface: what a message may carry before it is refused or
-// truncated. WIRE.md describes the shapes; this is where their bounds live.
+// The wire-limit table: what a message may carry before it is refused or truncated, each cap named and
+// env-overridable. WIRE.md describes the shapes; this is where their bounds live (config.ts keeps boot/cadence knobs).
 
 /** An env number, VALIDATED: unset or "" is the fallback; not a number, or outside `ok`, is the fallback with a warning
  *  (NaN silently disabled a cap; Number("") is 0). Every env number in server/ reads through it. */
@@ -41,8 +34,7 @@ export const LIMITS = {
   PAGE_DEFAULT: env("EW_PAGE_DEFAULT", 50),
   BC_RING: env("EW_BC_RING", 40),                  // crash breadcrumbs kept
 
-  // one websocket message, whole: past it the socket closes (Bun's default was 16 MB; security review 10-06 pass 2,
-  // M-A). The door's own cap on one log line is 1 MiB; a request that writes one fits with room for its envelope.
+  // one websocket message, whole: past it the socket closes (Bun's default is 16 MB). The door's own cap on one log line is 1 MiB; a request that writes one fits with room for its envelope.
   WS_MESSAGE_BYTES: env("EW_WS_MESSAGE_BYTES", 2 * 1024 * 1024),
 
   // receipts

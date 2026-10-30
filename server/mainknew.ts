@@ -2,7 +2,7 @@
 // translated: what lets a translation bind a name-only owner, and the boot a name-only global ban (moderation.ts), to an account.
 // What main recorded (upstream main ccd5c53f), and what this reads:
 //   - WORLDS_DIR/.principals.json {sub: {name, kind: human|agent, first, last}}: every account a verified door saw, under the
-//     credential's name at its last sighting (server/access.ts notePrincipal; since 10-17). Main's own grant looked a name up
+//     credential's name at its last sighting (server/access.ts notePrincipal). Main's own grant looked a name up
 //     here, case-insensitively, and bound it only on ONE match (verbs.ts resolveName). Read, the same rule.
 //   - every other main-era log in WORLDS_DIR (log.jsonl, or log.original.jsonl once translated in place): the pairs main's
 //     server stamped itself (verbs.ts): a grant's or ban's {id, sub}, genesis roles' sub, a placer {id, sub}, a behaviour's bySub.

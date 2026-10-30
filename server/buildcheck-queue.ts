@@ -1,19 +1,11 @@
-// buildcheck-queue — the sequencer's side of the build check: one check at a
-// time, each in its own process (server/buildcheck-run.ts), cached by what
-// was checked.
+// buildcheck-queue — the sequencer's side of the build check: one check at a time, each in its own process
+// (server/buildcheck-run.ts), cached by what was checked.
 //
-// A check loads the collider module and can take seconds; the sequencer only
-// ever spawns it and reads the JSON back. Reports are cached in memory and on
-// disk (OPT_DIR/checks/), keyed by the model's BYTES (a digest), the scale it
-// was checked at and CHECK_VERSION — so a library file replaced in place is
-// checked again however its timestamps read, and a store upload (content-
-// addressed) is checked once. The digest itself is remembered per path
-// against size, mtime, ctime and inode, so an unchanged file isn't re-read on
-// every ask; restoring an mtime moves the ctime, so it can't fake that. The
-// worker checks a snapshot of the hashed bytes, never the path itself.
-// Concurrent asks for one check share the run.
+// Reports are cached in memory and on disk (OPT_DIR/checks/), keyed by the model's BYTES (a digest), the scale and
+// CHECK_VERSION. The digest is remembered per path against size, mtime, ctime and inode (restoring an mtime moves the
+// ctime, so it can't fake that). Concurrent asks for one check share the run.
 //
-// The door is public (GET /check), so everything it can grow is bounded (review r3 F1):
+// The door is public (GET /check), so everything it can grow is bounded:
 //   · new work is granted per address and for the whole process (server/ratewindow.ts, the heightmap
 //     export's gate) — a cached answer, or one already running, is never refused;
 //   · the queue holds at most checkConfig.queueMax waiting jobs (and queueBytes of snapshots); past that a
@@ -26,9 +18,8 @@
 // doorway against the body's width, a riser against its step), so a bucket would answer for a scale the
 // thing isn't placed at, and flip a verdict near its edge. The gate above bounds the cost instead.
 //
-// The worker is owned to the end: its output is drained (stdout up to a cap,
-// stderr's tail kept), it is asked to stop at the timeout and killed after a
-// grace, and the queue moves on even if it is never seen to exit.
+// The worker is owned to the end: output drained (stdout capped, stderr's tail kept), SIGTERM at the timeout, SIGKILL
+// after a grace, and the queue moves on even if it is never seen to exit.
 
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -103,15 +94,9 @@ export function checkScale(s: unknown): number {
 const sha256 = (bytes: Uint8Array) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 const statId = (file: string) => { const st = statSync(file); return `${st.size}|${st.mtimeMs}|${st.ctimeMs}|${st.ino}`; };
 
-/** The build check for the model at `file`, at `scale` — cached, else run
- *  (queued behind any check already running). Rejects when the model can't
- *  be checked. `bytes`: the file's contents when the caller already holds
- *  them (an upload), so they are not read again.
- *
- *  A report answers for exactly the bytes its key names: the worker never
- *  opens `file` — it checks a snapshot of the bytes that were hashed, so a
- *  file replaced while its check waits in the queue cannot have its report
- *  filed under the old digest. */
+/** The build check for the model at `file`, at `scale`: cached, else queued and run. Rejects when the model can't be
+ *  checked. `bytes`: the contents when the caller already holds them (an upload). The worker checks a snapshot of the
+ *  hashed bytes, never `file`, so a report always answers for exactly the bytes its key names. */
 export async function checkFile(file: string, scale = 1, bytes?: Uint8Array, opts: { address?: string } = {}): Promise<unknown> {
   const s = checkScale(scale);
   let id: string;
