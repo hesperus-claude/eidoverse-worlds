@@ -43,8 +43,8 @@ const check = (label: string, ok: boolean, detail?: string) => {
   console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${label}${!ok && detail ? `\n      ${detail}` : ''}`);
   if (!ok) failures++;
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const settle = async () => { for (let i = 0; i < 6; i++) await sleep(15); };
+// the realizer's work is microtasks (the scheduler pumps on queueMicrotask): a few loop turns, no timer
+const settle = async () => { for (let i = 0; i < 24; i++) await new Promise((r) => setImmediate(r)); };
 
 const lib = (id: string) => `eidoverse/assets/models/${id}.glb`;
 const GEOM = { bbox: { size: [1, 1, 1], center: [0, 0.5, 0] } };
@@ -87,7 +87,7 @@ console.log('\nrealized lifecycle — four registries, one id, every seam\n');
   stub.setHold(true);
   spawnAt('b', 5); await settle();
   check('mid-load: a placeholder stands, tracked holds it, no collider, no caster', held('b').entities === 'placeholder' && held('b').tracked === 'yes' && held('b').colliders === '-' && held('b').casters === '-', JSON.stringify(held('b')));
-  check('…and the load is held open', stub.held.some((h: any) => h.lib === lib('b')));
+  check('…and the load is held open', stub.held.some((h: any) => h.model === lib('b')));
   door('delete', { id: 'b' });
   check('remove lands mid-load: all four empty BEFORE the bytes land', gone('b'), JSON.stringify(held('b')));
   stub.setHold(false);
@@ -111,15 +111,15 @@ console.log('\nrealized lifecycle — four registries, one id, every seam\n');
 {
   stub.setHold(true);
   spawnAt('d', 5); await settle();
-  const oldHeld = stub.held.find((h: any) => h.lib === lib('d'));
+  const oldHeld = stub.held.find((h: any) => h.model === lib('d'));
   bus.emit('lib-geom', { [lib('d2')]: GEOM });
   door('set', { id: 'd', component: 'model', value: lib('d2') }); await settle();
   // the aborted old job still occupies the scheduler's net lane until its bytes land, so the new load waits behind it
   check('re-modelled mid-load: a new reservation stands; the old load is still held and the new one queued behind it',
-    held('d').entities === 'placeholder' && held('d').tracked === 'yes' && stub.held.length === 1 && oldHeld && !stub.loads.some((l: any) => l.lib === lib('d2')), JSON.stringify({ ...held('d'), held: stub.held.map((h: any) => h.lib) }));
+    held('d').entities === 'placeholder' && held('d').tracked === 'yes' && stub.held.length === 1 && oldHeld && !stub.loads.some((l: any) => l.model === lib('d2')), JSON.stringify({ ...held('d'), held: stub.held.map((h: any) => h.model) }));
   oldHeld.release(); await settle(); drain();
   check('the OLD bytes land: still a placeholder, for the NEW lib — the stale completion neither realized nor cleared the reservation; the new load is now held too',
-    held('d').entities === 'placeholder' && held('d').tracked === 'yes' && held('d').colliders === '-' && held('d').casters === '-' && stub.held.some((h: any) => h.lib === lib('d2')), JSON.stringify({ ...held('d'), held: stub.held.map((h: any) => h.lib) }));
+    held('d').entities === 'placeholder' && held('d').tracked === 'yes' && held('d').colliders === '-' && held('d').casters === '-' && stub.held.some((h: any) => h.model === lib('d2')), JSON.stringify({ ...held('d'), held: stub.held.map((h: any) => h.model) }));
   stub.setHold(false);
   await releaseAll(); drain();
   check('the NEW bytes land: all four hold it, wearing the new lib', full('d') && stub.entities.get('d').userData.lib === lib('d2'), JSON.stringify({ ...held('d'), lib: stub.entities.get('d')?.userData?.lib }));

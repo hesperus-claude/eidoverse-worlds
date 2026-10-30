@@ -16,9 +16,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COMPONENTS, materialize } from "../shared/protocol/componentspec.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) pass++; else fail++; console.log(`${ok ? "✓" : "✗"} ${name}${!ok && detail ? `  — ${detail}` : ""}`); };
+const S = suite("schema-layers");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const j = (x: any) => JSON.stringify(x);
 const ROOT = join(import.meta.dir, "..");
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
@@ -28,7 +29,7 @@ let D: any = null, C: any = null, E: any = null, W: any = null, loadErr = "";
 try { D = await import("../shared/protocol/descriptors.js"); C = await import("../shared/components.js"); E = await import("../shared/editschema.js"); W = await import("../shared/worldentity.js"); }
 catch (e: any) { loadErr = String(e?.message ?? e); }
 check("the derived layers (descriptors, components, editschema, worldentity) load against the registry", !!D && !!C && !!E && !!W, loadErr);
-if (!D || !C || !E || !W) { console.log(`\n${pass} passed, ${fail} failed`); process.exit(1); }
+if (!D || !C || !E || !W) { console.log(`\n${S.pass} passed, ${S.fail} failed`); process.exit(1); }
 const { DESCRIPTORS } = D; const { RECORDS } = C; const { inspectSchema, fieldAt, limitsOf } = E;
 
 // the registry's limits as a row carries them: min (or gt), max; units as strings (a per-type unit picked by the card)
@@ -105,7 +106,7 @@ const regUnit = (key: string, path: string, type?: string) => { const u = COMPON
   const rows: [any, string, string][] = [[fieldAt(mesh, "mesh.size.x"), "mesh", "size"], [fieldAt(s, "openable.slide|0"), "openable", "slide"], [fieldAt(s, "particles.at|1"), "particles", "at"]];
   const rbad = rows.filter(([f, k, p]) => !f || j({ min: f.min, max: f.max, unit: f.unit }) !== j({ ...regLimits(k, p), unit: regUnit(k, p) })).map(([, k, p]) => `${k}.${p}`);
   check("the hand cards' channel rows (mesh.size, openable.slide, particles.at) carry the registry's limits and unit", !rbad.length, rbad.join(", "));
-  check("limitsOf reads gt as the floor and skips text caps", j(limitsOf("light", "range")) === j({ min: 0, unit: "m" }) && j(limitsOf("story", "title")) === "{}" && j(limitsOf("sound", "radius")) === j({ min: 1, max: 100, unit: "m" }));
+  check("limitsOf reads gt as the floor and skips text caps (a sound reaches 200 m, R 10-28 item 18)", j(limitsOf("light", "range")) === j({ min: 0, unit: "m" }) && j(limitsOf("story", "title")) === "{}" && j(limitsOf("sound", "radius")) === j({ min: 1, max: 200, unit: "m" }));
   // physics as text rows: a refusal reads the registry's range words
   const r = E.editOps(every, "every", { "physics.mass": "2000000" });
   check("a physics number past the registry's range is refused in the registry's words", r.errors.length === 1 && /> 0 and ≤ 1000000/.test(r.errors[0]), j(r.errors));
@@ -137,5 +138,4 @@ const regUnit = (key: string, path: string, type?: string) => { const u = COMPON
   check("the inspector's Light card carries the registry's status (trial)", light?.status === "trial", j(light && { type: light.type, key: light.key, status: light.status }));
   check("the inspector says what trial means (editpanels shows sec.status in the card's hint)", /sec\.status/.test(src("client/lib/editpanels.js"))); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

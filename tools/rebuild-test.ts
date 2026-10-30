@@ -7,8 +7,9 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, chmodSync, statSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("rebuild");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const root = mkdtempSync(join(tmpdir(), "rebuild-"));
 const fake = join(root, "fake.sh"), receipts = join(root, "receipts.txt");
 writeFileSync(fake, `#!/bin/sh
@@ -226,12 +227,12 @@ const wrongTok = await call("path=store/abc123.glb", bearer("nope"));
 check("route: wrong key → 401", wrongTok.status === 401, wrongTok.status);
 const inUrl = await call("token=t0k&path=store/abc123.glb");
 check("route: the RIGHT key in the URL → 401 (it would land in access logs)", inUrl.status === 401, inUrl.status);
-const sid = "a".repeat(64); hnSessions.set(sid, { sub: "u_test", name: "tester", scopes: [], exp: Date.now() + 60_000 });
+const sid = "a".repeat(64); hnSessions.set(sid, { sub: "human:test:u_test", name: "tester", scopes: [], exp: Date.now() + 60_000 });   // a cookie session is a human's (auth.ts sessionFromCookie)
 const crossSite = await call("path=store/abc123.glb", { cookie: `ew_sess=${sid}`, "sec-fetch-site": "same-site" });
 check("route: a session cookie from ANOTHER origin (a sibling subdomain) → 401", crossSite.status === 401, crossSite.status);
 const viaSession = await call("path=store/abc123.glb", { cookie: `ew_sess=${sid}`, "sec-fetch-site": "same-origin", "x-real-ip": "7.7.7.7" }); await optIdle();
 check("route: a signed-in session with no door key → 200 (home-node sign-ins could not rebuild before)", viaSession.status === 200, viaSession.status);
-hnSessions.set(sid, { sub: "u_test", name: "tester", scopes: [], exp: Date.now() - 1 });
+hnSessions.set(sid, { sub: "human:test:u_test", name: "tester", scopes: [], exp: Date.now() - 1 });
 const expired = await call("path=store/abc123.glb", { cookie: `ew_sess=${sid}`, "sec-fetch-site": "same-origin" });
 check("route: an EXPIRED session → 401", expired.status === 401, expired.status);
 const badPath = await call("path=store/..%2F..%2Fx.glb", bearer("t0k"));
@@ -241,12 +242,14 @@ const j = good.status === 200 ? await good.json() : null;
 check("route: token + object → 200 naming the passes", j?.ok === true && j.queued.join() === "ktx2,lod", [good.status, j]);
 await optIdle();
 // rate limit: 4 per IP per minute, like /upload; the 5th is refused before anything is queued
-const fromIp = async () => await route(new Request("http://x/rebuild?path=store/abc123.glb", { method: "POST", headers: { "x-real-ip": "9.9.9.9", authorization: "Bearer t0k" } }), {} as any);
+// the window keys on the peer address (x-real-ip counts only from a trusted proxy: peer.ts clientAddress)
+const peer = (address: string) => ({ requestIP: () => ({ address }) }) as any;
+const fromIp = async () => await route(new Request("http://x/rebuild?path=store/abc123.glb", { method: "POST", headers: { authorization: "Bearer t0k" } }), peer("9.9.9.9"));
 const st: number[] = []; for (let i = 0; i < 4; i++) { st.push((await fromIp()).status); await optIdle(); }
 const runsBefore5th = runs().length;
 const fifth = await fromIp(); await optIdle();
 check("route: 4 rebuilds per IP per minute pass, the 5th → 429 and queues nothing", st.every((x) => x === 200) && fifth.status === 429 && runs().length === runsBefore5th, [st, fifth.status]);
-const other = await route(new Request("http://x/rebuild?path=store/abc123.glb", { method: "POST", headers: { "x-real-ip": "8.8.8.8", authorization: "Bearer t0k" } }), {} as any);
+const other = await route(new Request("http://x/rebuild?path=store/abc123.glb", { method: "POST", headers: { authorization: "Bearer t0k" } }), peer("8.8.8.8"));
 check("…and the window is per IP (another address still passes)", other.status === 200, other.status);
 await optIdle();
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();
