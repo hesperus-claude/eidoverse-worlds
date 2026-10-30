@@ -71,6 +71,8 @@ const downRefusal = (f: { phase: string; recoverAt?: number | null }) => f.phase
  *  flies it is a timer and runs late under load, so it allows half again, which covers a tick up to 50% late, and
  *  8 s beside for what the leg's rate leaves out, such as a climb's lift easing in. */
 const legWaitMs = (legS: number) => Math.round((legS * 1.5 + 8) * 1000);
+/** A glide arrives, in the air or touching down, within this many metres of its target (glideTo). */
+export const GLIDE_ARRIVE_M = 2.0;
 
 /** integrator yaw (atan2(dz,dx), forward = (cos,sin)) -> world yaw
  *  (atan2(dx,dz), which every renderer and walkTo already speak). */
@@ -3382,25 +3384,18 @@ export class WorldAgent {
     if (took?.takeClimb) { f.climbTo = null; this.climbCourse++; }
     f.airspeed = bestGlide(this.flightCfg).speed;
     f.yaw = Math.atan2(z - f.pos.z, x - f.pos.x);   // integrator convention
-    // ARRIVAL IS A MOMENT, AND IT HAS TO BE CAUGHT. Traced over a 148m glide:
-    // she passes within 0.2m of the target at t=23s and then flies on for
-    // another 16s, because a 1.5m radius tested at 10Hz -- ~0.6m per tick --
-    // is a window she can cross between samples once she is slightly off-axis.
-    //
-    // Two fixes, both about honesty rather than tolerance. RE-AIM each tick, so
-    // a long glide converges instead of committing to one heading and hoping;
-    // and call it arrived when the distance stops SHRINKING, which is what
-    // "closest approach" actually means and cannot be missed by a wide step.
+    // arrival is closest approach as well as GLIDE_ARRIVE_M: re-aim each tick, and arrive when the distance stops
+    // shrinking (a radius alone, tested at 10 Hz, can be stepped over)
     let closest = Infinity;
     const arrived = await this.flightAwait((s) => {
       // A cut in the air is the limp fall (LEAF); one on the ground, the ragdoll, or the sit-up after it.
       if (s.phase === "LEAF") return "cut mid-glide — you are falling";
       if (isDown(s.phase)) return "cut mid-glide — you are on the ground";
       const d = Math.hypot(x - s.pos.x, z - s.pos.z);
-      // Down within the arrival radius is down at the target, not short of it.
-      if (s.phase === "LANDED" || s.phase === "GROUND") return d < 2.0 ? "touched down" : "landed";
-      if (d < 2.0) return "arrived";
-      // Past the point of closest approach: she is flying away now.
+      // down within the arrival radius is down at the target, not short of it
+      if (s.phase === "LANDED" || s.phase === "GROUND") return d < GLIDE_ARRIVE_M ? "touched down" : "landed";
+      if (d < GLIDE_ARRIVE_M) return "arrived";
+      // past the point of closest approach: flying away now
       if (d > closest + 0.5 && closest < 12) return "arrived";
       if (d < closest) closest = d;
       // Re-aim. Cheap, and it makes the leg converge over long distances.
@@ -3576,9 +3571,8 @@ export class WorldAgent {
     // the answer says how far from it the body came down.
     const off = Math.hypot(x - this.pos.x, z - this.pos.z);
     const where = `${glide.text} — landed at ${at}, ${off.toFixed(1)}m from (${x.toFixed(1)}, ${z.toFixed(1)})`;
-    // Done when the glide's own answer was: it arrived (within 2 m, or at its
-    // closest approach under 12 m, as glideTo's rule has it) or touched down
-    // within 2 m, and the landing was deliberate. The distance says the rest.
+    // done when the glide's own answer was (within GLIDE_ARRIVE_M, or closest approach under 12 m, glideTo's rule) or it
+    // touched down within it, and the landing was deliberate; the distance says the rest
     return glide.ok ? done(where) : refused(where);
   }
 
