@@ -115,6 +115,9 @@ for (const v of ["SERVER_OPERATORS", "WORLD_ADMIN"]) { const s = await start({ [
   const said = r.stdout.toString() + r.stderr.toString(), disk = JSON.parse(fs.readFileSync(sf, "utf8"));
   ok(/1 session\(s\) refused .*kept on disk until it expires/.test(said) && disk[A]?.sub === "agent:token:x" && disk[H]?.sub === "human:test:h",
     "C3s a refused session's boot line is true: after a save it is still on disk (until it expires), proving nobody", { said: said.slice(-300), keys: Object.keys(disk).length }); }
+// C3n: an empty HN_NATIVE_ORIGIN is unset for the native pairing page too (auth.ts reads "" as unset; it was `??` there)
+{ const { nativeOriginOf } = await import("../../server/native-login.ts");
+  ok(nativeOriginOf("") === nativeOriginOf(undefined) && /^https:\/\//.test(nativeOriginOf("")) && nativeOriginOf("http://x.test") === "http://x.test", "C3n an empty HN_NATIVE_ORIGIN means the default origin, as auth.ts reads it", nativeOriginOf("")); }
 // C3m (R 10-27): SERVER_OPERATORS is the variable; WORLD_ADMIN is still read for one release, merged in, with one deprecation line
 { const ops = (e) => { const r = Bun.spawnSync(["bun", "-e", `const m = await import("./server/operators.ts"); console.log(JSON.stringify([...m.OPERATORS].sort()))`],
     { cwd: ENGINE, env: env(e) }); return { set: r.stdout.toString().trim().split("\n").pop(), err: r.stderr.toString() + r.stdout.toString() }; };

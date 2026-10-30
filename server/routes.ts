@@ -25,9 +25,9 @@ import { normalizeSnapFrame } from "../shared/snapframe.js";
 import { LOD_RECIPE, lodVariantPath, lodVerdictKind, lodVerdictFinal } from "./store-variants.ts";
 import { hnSessions, hnJti, sessionFromCookie, sessionIdOf, sessionOfRequest, crossSiteUpgrade, saveSessions, SESSION_TTL_MS, HN_ISSUER_KEY, HN_ISS, HN_AUD, HN_LOGIN_URL, HN_REQUIRE_LOGIN } from "./auth.ts";
 import { verifyToken } from "./aid1.ts";
-import { createNativeLogin } from "./native-login.ts";
+import { createNativeLogin, nativeOriginOf } from "./native-login.ts";
 const nativeLogin = createNativeLogin({
-  origin: process.env.HN_NATIVE_ORIGIN ?? "https://eidoverse.animalabs.ai",
+  origin: nativeOriginOf(),
   login: HN_LOGIN_URL, enabled: Boolean(HN_ISSUER_KEY), session: sessionFromCookie,
   issue: session => { const sid = randomBytes(32).toString("hex"); hnSessions.set(sid, session); saveSessions(); return sid; },
 });
