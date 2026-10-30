@@ -23,6 +23,7 @@ import { ENGINE, scratch } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -335,7 +336,7 @@ const cases: Case[] = [
   g.good = (o) => o.reg && !o.missing.length && !o.unused.length && !o.badRow.length && !o.dynUnknown.length && o.n >= 100 && !o.unseen.length;
 }
 
-let pass = 0, fail = 0;
+const SUITE = suite("scars-check", { cap: 900 });
 try { (globalThis as any).__REG = await import(TREE + "shared/protocol/refusalcodes.js"); } catch { /* G1 says so */ }
 (globalThis as any).__VS = await import(TREE + "shared/protocol/verbspec.js");
 (globalThis as any).__VC = await import(TREE + "shared/protocol/verbclasses.js");
@@ -343,8 +344,6 @@ for (const c of [...cases.filter((x) => x.id !== "G1"), ...cases.filter((x) => x
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[scars-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

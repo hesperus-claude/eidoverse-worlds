@@ -22,6 +22,7 @@ import { tryUntil } from "./wait.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -323,13 +324,11 @@ const cases: Case[] = [
     good: (o) => o.say && o.wire },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("parity-check", { cap: 900 });
 for (const c of cases) {
   if (!want([c.id])) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[parity-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
