@@ -13,7 +13,7 @@
 // tools/voice-wiring-test.ts — moving a body again means moving its patterns
 // with it.
 
-import { WORLDS_DIR } from "./config.ts";
+import { WORLDS_DIR, FRAME_SKIP_BUFFERED } from "./config.ts";
 import { LIMITS } from "./limits.ts";
 import { sanePose } from "./posecheck.ts";
 import { gateReach } from "./reachgate.ts";
@@ -80,6 +80,11 @@ export type MsgCtx = {
  *  page's length, so readHistory's ceiling would never stop it). */
 export const pageLimit = (v: unknown): number => { const n = Number(v ?? LIMITS.PAGE_DEFAULT); return Number.isInteger(n) && n >= 1 ? Math.min(LIMITS.PAGE_MAX, n) : LIMITS.PAGE_DEFAULT; };
 
+/** A moment, not a fact: a socket still holding a backlog skips it rather than queueing another 64 KB (security review M5). */
+export function relayLossy(w: Pick<World, "clients">, msg: unknown, except?: Client) {
+  const data = JSON.stringify(msg);
+  for (const t of w.clients) if (t !== except && (t.ws.getBufferedAmount?.() ?? 0) <= FRAME_SKIP_BUFFERED) t.ws.send(data);
+}
 export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
   "history": ({ c, ws, now, expel }, msg) => {
     // Speech is arrival-only (R 10-18): the log keeps every say, but a page holds only the lines said since this
@@ -146,9 +151,8 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       ws.send(JSON.stringify({ type: "error", error: "animation too large — keep custom clips small and sparse" }));
       return;
     }
-    // Legacy packets omit replace and replace the previous animation.
-    // Modern merge requests must carry an explicit false.
-    c.world.broadcast({ type: "anim", id: c.id, dur: msg.dur, tracks: msg.tracks, loop: !!msg.loop, replace: msg.replace !== false }, c);
+    // a packet without replace REPLACES the previous animation (legacy); a merge must say replace: false
+    relayLossy(c.world, { type: "anim", id: c.id, dur: msg.dur, tracks: msg.tracks, loop: !!msg.loop, replace: msg.replace !== false }, c);
   },
   "puppet": ({ c, ws, now, expel }, msg) => {
     // Ask another body to hold a pose or play an animation. Deliberately
