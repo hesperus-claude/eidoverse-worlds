@@ -92,6 +92,13 @@ export function motionType(m) {
   const t = m?.type;
   return typeof t === "string" && Object.hasOwn(OLD_MOTION_TYPES, t) ? OLD_MOTION_TYPES[t] : t;
 }
+/** A spin's or an orbit's rate in °/s: degPerSec, else 360 / period (seconds a turn), else an old rpm × 6, else `def`. */
+export function rateOf(m, def) {
+  if (Number.isFinite(m?.degPerSec)) return m.degPerSec;
+  if (Number.isFinite(m?.period) && m.period > 0) return 360 / m.period;
+  if (Number.isFinite(m?.rpm)) return m.rpm * 6;
+  return def;
+}
 
 /** @param {string} s @returns {string | null} the original name, or null when it was hashed (h--) */
 export function dec(s) {

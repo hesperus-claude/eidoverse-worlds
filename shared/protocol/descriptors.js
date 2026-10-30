@@ -33,6 +33,7 @@
 // regeneration, spec/registry-pin.json D8). See DECIDED below.
 
 import { COMPONENTS, materialize } from './componentspec.js';
+import { rateOf } from './names.js';
 
 export const AXES = Object.freeze({ x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], '-x': [-1, 0, 0], '-y': [0, -1, 0], '-z': [0, 0, -1] });
 /** A unit-axis vector's letter (x, -z), a letter as itself, anything else null. */
@@ -43,8 +44,6 @@ export function axisLetter(a) {
 }
 /** A letter's vector; a vector as itself; anything else null. */
 export const axisVector = (a) => (typeof a === 'string' ? (Object.hasOwn(AXES, a.toLowerCase()) ? AXES[a.toLowerCase()] : null) : Array.isArray(a) && a.length === 3 ? a : null);
-/** The editor's rate (°/s) of a motion bag: degPerSec, else 360 / period (seconds a turn), else an old rpm × 6. */
-export const rateOf = (m) => (Number.isFinite(m?.degPerSec) ? m.degPerSec : Number.isFinite(m?.period) && m.period > 0 ? 360 / m.period : Number.isFinite(m?.rpm) ? m.rpm * 6 : undefined);
 
 const AXIS = { to: (v) => axisVector(v) ?? v, from: (v) => axisLetter(v) ?? v };
 const RATE = { to: (v) => v, from: (_, m) => rateOf(m) };

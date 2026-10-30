@@ -5,7 +5,7 @@
 // Adding someone: a name is looked up only among the people this world has seen (whois); anyone else is added by their exact
 // identity (u-…, shown to each person on this panel). There is no search of everyone on the server.
 import { bus } from './base.js';
-import { net, sendRequest, replica, identities } from './net.js';
+import { net, sendRequest, replica, identities, presentName, personName } from './net.js';
 import { toast } from './ui.js';
 import { escapeHtml as esc } from './markup.js';
 import * as R from '../../shared/protocol/roles.js';
@@ -21,8 +21,7 @@ const mayGrant = () => isOwner() || me().permissions.includes('grantRoles');
 const rankOfId = (id) => R.effectiveOf(wc(), id).rank;
 // names of people not here, learned from the world's own lookup (whois answers by id for anyone the world knows)
 const named = new Map(), asked = new Set();
-const presentName = (id) => { for (const [n, v] of identities) if (v === id) return n; return null; };
-const nameOf = (id) => presentName(id) ?? named.get(id) ?? net.names?.[id] ?? replica.nameOf?.(id) ?? id;
+const whoName = (id) => presentName(id) ?? named.get(id) ?? personName(id);
 function learnName(id) {
   if (asked.has(id) || presentName(id) || named.has(id)) return; asked.add(id);
   sendRequest('whois', { id }).then((r) => { const p = r?.people?.find((x) => x.id === id); if (p?.name && p.name !== id) { named.set(id, p.name); repaint(); } });
@@ -47,12 +46,12 @@ async function send(verb, args, what) {
 function add(id) {
   const role = ui.role, span = Number(ui.span);
   const value = { role, ...(span > 0 ? { until: serverUntil(span) } : {}) };
-  return send('set', { id: '@world', component: `roles:${id}`, value, ...(wc()[`roles:${id}`] ? { merge: true } : {}) }, `add ${nameOf(id)} as ${role}`);
+  return send('set', { id: '@world', component: `roles:${id}`, value, ...(wc()[`roles:${id}`] ? { merge: true } : {}) }, `add ${whoName(id)} as ${role}`);
 }
 async function find() {
   const q = ui.q.trim(); ui.hits = null; ui.note = '';
   if (!q) return paintListed(box);
-  if (ID.test(q)) { ui.hits = [{ id: q, name: nameOf(q), by: 'by identity' }]; return paintListed(box); }
+  if (ID.test(q)) { ui.hits = [{ id: q, name: whoName(q), by: 'by identity' }]; return paintListed(box); }
   const r = await sendRequest('whois', { name: q });
   if (!r?.ok) ui.note = r?.refused?.reason ?? "couldn't look that up just now";
   else {
@@ -78,8 +77,8 @@ export function paintListed(b) {
     const ctl = grant && mayChange(r.id, r.role)
       ? sel('ap-role', opts.map((x) => [x.id, x.name]), r.role)
         + sel('ap-until', [['', 'ends ▸'], ...SPANS.map(([v, l]) => [v || 'never', l])], '')
-        + `<button type="button" class="rp-btn ap-rm" title="take ${esc(nameOf(r.id))} off the list">✕</button>` : '';
-    return `<div class="rp-row ap-row" data-who="${esc(r.id)}"><div class="rp-main"><b>${esc(nameOf(r.id))}</b> <span class="rp-dim">${esc(bits.join(' · '))}</span></div>${ctl}</div>`;
+        + `<button type="button" class="rp-btn ap-rm" title="take ${esc(whoName(r.id))} off the list">✕</button>` : '';
+    return `<div class="rp-row ap-row" data-who="${esc(r.id)}"><div class="rp-main"><b>${esc(whoName(r.id))}</b> <span class="rp-dim">${esc(bits.join(' · '))}</span></div>${ctl}</div>`;
   };
   const unlisted = [...new Set(identities.values())].filter((id) => id !== net.you && !listedIn(c, id, now));
   let html = `<p class="rp-dim ap-you">your identity here: <code>${esc(net.you ?? '…')}</code> (an owner can add you by it)</p>`
@@ -89,7 +88,7 @@ export function paintListed(b) {
       + `<label class="rp-field">as ${sel('ap-add-role', opts.map((r) => [r.id, r.name]), ui.role)}</label><label class="rp-field">for ${sel('ap-add-span', SPANS, ui.span)}</label>`
       + (ui.hits ?? []).map((h) => `<div class="rp-row ap-hit" data-who="${esc(h.id)}"><div class="rp-main"><b>${esc(h.name)}</b> <span class="rp-dim">${esc(h.by)}</span></div><button type="button" class="rp-btn">add</button></div>`).join('')
       + (ui.note ? `<p class="rp-note ap-note">${esc(ui.note)}</p>` : '')
-      + (unlisted.length ? `<h4 class="rp-h">Here now, not listed (${unlisted.length})</h4><div class="rp-actions ap-here">${unlisted.map((id) => `<button type="button" class="rp-btn" data-who="${esc(id)}">+ ${esc(nameOf(id))}</button>`).join('')}</div>` : '');
+      + (unlisted.length ? `<h4 class="rp-h">Here now, not listed (${unlisted.length})</h4><div class="rp-actions ap-here">${unlisted.map((id) => `<button type="button" class="rp-btn" data-who="${esc(id)}">+ ${esc(whoName(id))}</button>`).join('')}</div>` : '');
   }
   if (ui.refused) html += `<p class="rp-warn ap-refused">${esc(ui.refused)}</p>`;
   b.innerHTML = html;
@@ -102,9 +101,9 @@ export function paintListed(b) {
   b.querySelectorAll('.ap-hit button').forEach((x) => { x.onclick = () => { const id = x.closest('.ap-hit').dataset.who; ui.q = ''; ui.hits = null; ui.note = ''; add(id); }; });
   b.querySelectorAll('.ap-here button[data-who]').forEach((x) => { x.onclick = () => add(x.dataset.who); });
   b.querySelectorAll('.ap-row').forEach((r) => { const id = r.dataset.who;
-    r.querySelector('.ap-role')?.addEventListener('change', (e) => send('set', { id: '@world', component: `roles:${id}`, value: { role: e.target.value }, merge: true }, `make ${nameOf(id)} ${e.target.value}`));
+    r.querySelector('.ap-role')?.addEventListener('change', (e) => send('set', { id: '@world', component: `roles:${id}`, value: { role: e.target.value }, merge: true }, `make ${whoName(id)} ${e.target.value}`));
     r.querySelector('.ap-until')?.addEventListener('change', (e) => { const v = e.target.value; if (!v) return;   // only the end (merge; null removes it): never a role painted before someone changed it
-      send('set', { id: '@world', component: `roles:${id}`, value: { until: v === 'never' ? null : serverUntil(Number(v)) }, merge: true }, `${nameOf(id)}: ${v === 'never' ? 'no end' : SPANS.find(([s]) => s === v)?.[1]}`); });
-    r.querySelector('.ap-rm')?.addEventListener('click', () => send('delete', { id: '@world', component: `roles:${id}` }, `take ${nameOf(id)} off the list`)); });
+      send('set', { id: '@world', component: `roles:${id}`, value: { until: v === 'never' ? null : serverUntil(Number(v)) }, merge: true }, `${whoName(id)}: ${v === 'never' ? 'no end' : SPANS.find(([s]) => s === v)?.[1]}`); });
+    r.querySelector('.ap-rm')?.addEventListener('click', () => send('delete', { id: '@world', component: `roles:${id}` }, `take ${whoName(id)} off the list`)); });
 }
 export const _test = { paintListed, ui };
