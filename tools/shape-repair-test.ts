@@ -209,7 +209,7 @@ await tryRow('RP11', async () => {
   check('RP11 …but says the world needs repair, naming the command', out.some((x) => x.repairNeeded && /world\.ts repair/.test(x.repairNeeded.fix ?? '')), out);
   const wr = request(w, 'olive', 'create', { id: 'new1', model: 'crate', components: { transform: TF } }), rd = request(w, 'olive', 'look', {});
   check('RP11 …the world loads (folds ok) and reads, but every write is refused with repair-needed naming the command: the shape audit\'s old values (a sky in degrees, an address model) have no reader that serves them (lead 10-18: fail closed, never silently wrong)', w.state().status === 'ok' && rd.ok && !wr.ok && wr.refused.code === 'repair-needed' && /world\.ts repair/.test(wr.refused.fix) && /repair-shapes/.test(wr.refused.reason), [wr.refused, rd.ok]);
-  // …and the refusal says who can repair it, to an agent and to a person in the editor alike: only whoever runs the server
+  // …and the refusal says who can repair it, to an agent and to a human in the editor alike: only whoever runs the server
   // can, asking again won't help, reads still work. The person's words keep that remedy (plainRefusal drops a tool-syntax fix)
   const { plainRefusal } = await import('../shared/protocol/refusal.js');
   const pr = plainRefusal('make it', wr);

@@ -268,7 +268,7 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     console.log(`[world:${w.name}] copied → "${to}" by ${c.id} (${r.things} things, ${r.acts} acts${r.importedRoles ? `, ${r.importedRoles} role(s) held by imported identities an operator may still bind` : ""})`);
     ws.send(JSON.stringify({ type: "world-forked", from: w.name, to }));
   },
-  // Found a new, empty world that you own. Any signed-in account, person or agent: a guest has no account to own it.
+  // Found a new, empty world that you own. Any signed-in account, human or agent: a guest has no account to own it.
   "world-found": ({ c, ws }, msg) => {
     const err = (e: string) => ws.send(JSON.stringify({ type: "error", error: e, about: "world-found" }));
     if (!c.world) return err("join a world first");

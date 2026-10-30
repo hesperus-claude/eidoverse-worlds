@@ -341,7 +341,7 @@ export function inspectSchema(ent, id, live = {}) {
   const c = recordComponents(ent);
   const mounted = !!ent.parent;
   const locked = !!c.lock;
-  // a lock doesn't make the pose read-only here: the authority refuses the move, and a person (or agent) who may lift the lock
+  // a lock doesn't make the pose read-only here: the authority refuses the move, and anyone who may lift the lock
   // is asked "This is locked. Move anyway?" — or answers it with throughLock (PROTOCOL §5). Same for every surface.
   // the pose the channel box shows and edits: a child's is LOCAL to its parent
   // (design §3) — the mount's offset and relative q, as the renderer realizes

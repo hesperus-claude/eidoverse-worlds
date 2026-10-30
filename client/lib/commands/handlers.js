@@ -518,7 +518,7 @@ register('goto', (arg) => {
   const target = [...remotes.values()].find((r) =>
     r.id.toLowerCase() === (arg || '').trim().toLowerCase());
   if (!target?.avatar) return logChat('*', `no one here called "${arg}"`);
-  // walk-to is the agent verb; for a person it's a hint plus a marker
+  // walk-to is the agent verb; for a human it's a hint plus a marker
   const p = target.avatar.root.position;
   flashHint(`${target.id} is ${p.distanceTo(myState.pos).toFixed(0)}m away, bearing ${bearingTo(p)}`);
 });

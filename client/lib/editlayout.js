@@ -11,7 +11,7 @@
 //
 // The corner matches the HUD: the ∃ top-left with the mic / ear / goggles folded to its right (mictoggle.placeMic),
 // then the menus. The rail below holds the wrench (the way out — the one amber control on it) and the tools. Chat
-// stays: every edit is a logged sentence, so the chat pane is the edit history with the people (and agents) in it.
+// stays: every edit is a logged sentence, so the chat pane is the edit history with the people in it.
 // Every other window is one Panels ▾ click away, never gone.
 
 import { worldEdgeWanted, setWorldEdgeShown } from './edge.js';

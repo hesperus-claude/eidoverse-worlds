@@ -99,14 +99,14 @@ function literals(src: string) {   // string literals, comments skipped (a small
     i++; }
   return out;
 }
-await C("C1", "every § a person or agent reads names a section the spec has", () => {
+await C("C1", "every § a human or agent reads names a section the spec has", () => {
   const bad = [];
   for (const f of SAID) { if (!fs.existsSync(path.join(T, f))) continue;
     for (const s of literals(read(f))) for (const m of s.matchAll(/(PHYSICS )?§(\d+[a-z]?(?:\.\d+)?)/g))
       if (!(m[1] ? PHYS : HEAD).has(m[2])) bad.push(`${f}: ${m[0]} in "${s.slice(Math.max(0, m.index - 30), m.index + 30)}"`); }
   if (process.env.VERBOSE) for (const b of bad) console.log("    " + b);
   return [!bad.length, bad.slice(0, 8)]; });
-await C("C2", "no lab-era law names (L1–L7, R7, §3d…) in what a person or agent reads", () => {
+await C("C2", "no lab-era law names (L1–L7, R7, §3d…) in what a human or agent reads", () => {
   const bad = [];
   for (const f of SAID) { if (!fs.existsSync(path.join(T, f))) continue;
     for (const s of literals(read(f))) { const m = /\b(L[1-7]|R(?:7|8|9|10)|§3d)\b/.exec(s); if (m && /[a-z] /.test(s)) bad.push(`${f}: ${m[0]} in "${s.slice(Math.max(0, m.index - 30), m.index + 30)}"`); } }
