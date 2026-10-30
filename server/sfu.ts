@@ -272,8 +272,8 @@ export class Sfu {
   //
   // The settled architecture (#104) is relay-floor with P2P as deferred phase 2:
   // the SFU always works, and a pair that manages a direct connection stops
-  // paying for the relay hop. Basis has shipped exactly this; the pieces to
-  // steal, with file:line, are in notes/SFU-HANDOFF.md. The short version:
+  // paying for the relay hop. Basis has shipped exactly this
+  // (BasisServerHandleEvents.cs, BasisServerP2PBroker.cs). The short version:
   //
   //   • THE HOOK IS THIS LOOP. Basis checks `IsP2POffloaded(sender, client)` in
   //     its fanout (BasisServerHandleEvents.cs:995) and skips the send. Ours
@@ -397,7 +397,7 @@ export class Sfu {
     //
     // WebRTC has a first-class channel for this and we were not using it. msid
     // travels in the SDP and surfaces as e.streams[0].id in the browser.
-    // VERIFIED against real Chromium (tools/msid-probe.ts): werift derives msid
+    // VERIFIED against real Chromium: werift derives msid
     // from the SENDER's streamIds, which come from `streams` here — NOT from
     // fields on MediaStreamTrack. Setting streamId/id on the track produces NO
     // msid at all (measured: browser saw streamIds:["default"]).
@@ -539,8 +539,8 @@ export class Sfu {
       // 🔴 SUPPRESSION BELONGS IN THE SAME REPORT AS DELIVERY. These were public
       // fields that only sfuadapter reached into, so anything calling sfu.diag()
       // directly — tools/sfu-load.ts does — saw forwarded with no idea how many
-      // packets were deliberately dropped. Basis's lesson, recorded in
-      // SFU-HANDOFF: "a cheaper server that drops more is not healthier", and a
+      // packets were deliberately dropped. Basis's lesson:
+      // "a cheaper server that drops more is not healthier", and a
       // load harness that cannot see drops will report exactly that.
       suppressed: { gated: this.gated, capped: this.capped },
       muted: [...this.muted],
