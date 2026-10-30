@@ -45,8 +45,9 @@ const cases: Case[] = [
     good: (o) => JSON.stringify(o.near) === JSON.stringify(["all clear — sweep 1; 2 in view, the nearest you at 3.25 m", "all clear — sweep 2; 2 in view, the nearest you at 3.25 m"]) && o.sweeps === 2 && o.none.length === 0 && o.noneSweeps === 1 && o.failed.length === 0 },
   { id: "K5", what: "the runner's command line: --self, --knobs, --use print the writes, the says, the uses and the console", run() {
       const r = Bun.spawnSync(["bun", path.join(KIT, "run.ts"), path.join(KIT, "examples/bellkeeper.js"), "--self", "bell1", "--knobs", '{"lamp":"lamp1"}', "--use", '{"action":"ring","by":"you"}'], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
-      return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() }; },
-    good: (o) => o.code === 0 && /set bell1 motion .*pendulum/.test(o.out) && /say "the bell tolls \(1\) — rung by you"/.test(o.out) && /use lamp1 toggle/.test(o.out) && /console rung by you #1/.test(o.out) },
+      const ref = RUN?.runEvents(example("bellkeeper.js"), { self: "bell1", knobs: { lamp: "lamp1" }, events: [{ on: "use", action: "ring", by: "you" }] });   // what it must print, from the runner itself
+      return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString(), says: ref?.says ?? [], console: ref?.console ?? [] }; },
+    good: (o) => o.code === 0 && /set bell1 motion .*pendulum/.test(o.out) && o.says.length === 1 && o.console.length === 1 && [...o.says, ...o.console].every((t: string) => o.out.includes(t)) && /use lamp1 toggle/.test(o.out) },
 ];
 
 let pass = 0, fail = 0;

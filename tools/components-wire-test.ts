@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { COMPONENTS } from '../shared/protocol/componentspec.js';
+const LD = COMPONENTS.light.defaults;   // the registry's light defaults (spec/registry-pin.json pins the numbers)
 
 // the realizer's renderer/network cone, stubbed exactly as unknown-comp-test does
 // (tools/lod-client-stub.mjs records light requests and collider fits)
@@ -297,8 +299,8 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
     esch.sections.add.some((a: any) => a.name === 'Light' && !a.blocked) && !esch.sections.add.some((a: any) => a.name === 'Collider' && !a.blocked), JSON.stringify(esch.sections.add.map((a: any) => `${a.name}${a.blocked ? '(blocked)' : ''}`)));
   const al = door(empty, { 'add.Light': null });
   check('…add.Light writes set light with the fields spelled out (the log records the result, not a default)',
-    opsOf(al.r) === JSON.stringify([{ verb: 'set', args: { id: 'x', component: 'light', value: { color: 0xffd9a0, intensity: 25.93, range: 10 } } }]), opsOf(al.r));
-  check('…and through the door the Empty is a lamp with exactly those values', al.res.ok && al.after?.light?.color === 0xffd9a0 && al.after.light.intensity === 25.93 && al.after.light.range === 10 && al.after.model === undefined, JSON.stringify([al.res.refused, al.after]));
+    opsOf(al.r) === JSON.stringify([{ verb: 'set', args: { id: 'x', component: 'light', value: { color: LD.color, intensity: LD.intensity, range: LD.range } } }]), opsOf(al.r));
+  check('…and through the door the Empty is a lamp with exactly those values', al.res.ok && al.after?.light?.color === LD.color && al.after.light.intensity === LD.intensity && al.after.light.range === LD.range && al.after.model === undefined, JSON.stringify([al.res.refused, al.after]));
   check('…add.Collider is refused with a reason', (() => { const r = ed(empty, { 'add.Collider': null }); return r.ops.length === 0 && /needs a model/.test(r.errors[0] ?? ''); })());
   check('add.Light on a thing that already has a light is refused', (() => { const r = ed(lamp, { 'add.Light': null }); return r.ops.length === 0 && /already has a light/.test(r.errors[0] ?? ''); })());
 

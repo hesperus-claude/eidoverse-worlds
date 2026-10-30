@@ -20,7 +20,7 @@ import { emptyState, applyInPlace, opsOf } from '../shared/protocol/fold.js';
 import { v1FoldBuild } from './protocol/import-v1/build.ts';
 import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { registerDraft, trustedOf } from '../shared/drafts.js';
-import { materialize } from '../shared/protocol/componentspec.js';
+import { materialize, COMPONENTS } from '../shared/protocol/componentspec.js';
 import { pathList } from "./protocol/common.ts";
 
 let pass = 0, fail = 0;
@@ -163,9 +163,9 @@ check('add.Spin with a whole motion present → refused, says why', v({ 'add.Spi
   // step 2 (design §6, revised 10-11: one place per thing): a lamp is a Model with a Light CHILD, a metre up
   const L = through({ 'add.Light': null }, open);
   { const o: any = L.r.ops[0]; const cc = o?.args?.components ?? {};
-    check('add.Light on a model → ONE create: a child light a metre up, under c1, with its fields spelled out (write-new-on-edit)', L.r.ops.length === 1 && o.verb === 'create' && o.args.id === '$light' && cc.parent?.to === 'c1' && JSON.stringify(cc.transform?.pos) === '[0,1,0]' && JSON.stringify(cc.light) === JSON.stringify({ color: 0xffd9a0, intensity: 25.93, range: 10 }), JSON.stringify(L.r.ops)); }
+    check('add.Light on a model → ONE create: a child light a metre up, under c1, with its fields spelled out (write-new-on-edit)', L.r.ops.length === 1 && o.verb === 'create' && o.args.id === '$light' && cc.parent?.to === 'c1' && JSON.stringify(cc.transform?.pos) === '[0,1,0]' && JSON.stringify(cc.light) === JSON.stringify((({ color, intensity, range }) => ({ color, intensity, range }))(COMPONENTS.light.defaults)), JSON.stringify(L.r.ops)); }
   { const kid: any = Object.values(L.W.view().entities).find((e: any) => e?.parent?.to === 'c1' && e.light != null);   // the created child, in the door's view (the door fills the rest of light)
-    check('…through the door the child is lit with exactly those values, under c1 (c1 itself unlit)', L.res.ok && L.after?.light === undefined && !!kid && kid.parent.to === 'c1' && JSON.stringify(kid.pos) === '[0,1,0]' && Object.entries({ color: 0xffd9a0, intensity: 25.93, range: 10 }).every(([k, v]) => kid.light[k] === v), JSON.stringify([L.res.refused, kid])); }
+    check('…through the door the child is lit with exactly those values, under c1 (c1 itself unlit)', L.res.ok && L.after?.light === undefined && !!kid && kid.parent.to === 'c1' && JSON.stringify(kid.pos) === '[0,1,0]' && Object.entries((({ color, intensity, range }) => ({ color, intensity, range }))(COMPONENTS.light.defaults)).every(([k, v]) => kid.light[k] === v), JSON.stringify([L.res.refused, kid])); }
 }
 check('Add Component lists blocked entries with a reason; Light and Collider are no longer among them', (() => { const s = inspectSchema(crate, 'c1'); const st = s.sections.add.find((a: any) => a.name === 'Structure'); const ok = (n: string) => s.sections.add.some((a: any) => a.name === n && !a.blocked); return !!st?.blocked && ok('Particles') && ok('Light') && ok('Collider'); })());
 check('Add Component does not offer Guard as addable (merged into Lock)', (() => { const g = inspectSchema(crate, 'c1').sections.add.find((a: any) => a.name === 'Guard'); return !g || (!!g.blocked && /lock/i.test(g.blocked)); })(),

@@ -11,6 +11,7 @@ import { custodyAt } from "../../server/custody.ts";
 import { openLive } from "../../server/livehost.ts";
 import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.js";
 import { suite } from "./suite.ts";
+import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 
 const { ok, done } = suite("directory-check", { quiet: true, cap: 300 });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dir-check-"));
@@ -213,7 +214,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   ok(set("label", 42).refused?.code === "shape" && set("sockets", "nope").refused?.code === "shape" && set("model", { x: 1 }).refused?.code === "shape", "S5 label, sockets and model are typed");
   ok(set("placer", { id: "me" }).refused?.code === "derived", "S6 placer is derived (L2): refused");
   const lit: any = request(w, me, "create", { id: "lamp", components: { transform: { pos: [2, 1, 2] }, light: {} } });
-  ok(lit.ok && w.state().entities.lamp.c.light.intensity === 25.93 && w.state().entities.lamp.c.light.range === 10, "S7 an agent's light {} gets the renderer's defaults (25.93, 10), as the editor's does (R9)", w.state().entities.lamp?.c.light);
+  ok(lit.ok && w.state().entities.lamp.c.light.intensity === COMPONENTS.light.defaults.intensity && w.state().entities.lamp.c.light.range === COMPONENTS.light.defaults.range, "S7 an agent's light {} gets the registry's defaults, as the editor's does (R9)", w.state().entities.lamp?.c.light);
   ok(request(w, me, "set", { id: "@world", component: "sky", value: { hours: 9, rate: 1, weathr: "rain" } }).refused?.code === "schema", "S8 sky is registered: its fields are checked"); }
 
 // ---- U: undo across people (F2 decided 10-05; round-2 R10, R11; round-1 F3) ----
