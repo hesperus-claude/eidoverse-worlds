@@ -20,6 +20,7 @@ import { worlds } from "./world.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { ingestHeightmap } from "./heightmap.ts";
 import { checkFile } from "./buildcheck-queue.ts";
+import { envNumber } from "./limits.ts";
 
 /** What the handler needs from Bun's server object, structurally: the
  *  socket address behind the nginx front. */
@@ -120,12 +121,11 @@ export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: numbe
   const dests = store
     ? { "--ktx2": ktx2VariantPath(src), "--lod": lodVariantPath(src) }
     : { "--ktx2": join(OPT_DIR, ktx2VariantPath(rel)), "--lod": join(OPT_DIR, lodVariantPath(rel)) };
-  const cool = Number(process.env.REBUILD_COOLDOWN_MS ?? 600_000), last = lastRebuild.get(src) ?? -Infinity;
+  const cool = envNumber("REBUILD_COOLDOWN_MS", 600_000), last = lastRebuild.get(src) ?? -Infinity;
   if (cool > 0 && Date.now() - last < cool) return { queued: [], cooldownS: Math.ceil((cool - (Date.now() - last)) / 1000) };
-  // the cap bounds what WAITS after this ask, so count the forced passes it would add (Greptile #207: checking only the
-  // current count let 3 waiting + 2 new = 5 past a cap of 4). An ask never fits in part; an empty wait always takes one
-  // whole ask, so a cap below 2 can't lock a model's two passes out forever.
-  const cap = Number(process.env.REBUILD_WAIT_CAP ?? 4);
+  // the cap bounds what WAITS after this ask, its own passes counted. An ask never fits in part; an empty wait always
+  // takes one whole ask, so a cap below 2 can't lock a model's two passes out forever
+  const cap = envNumber("REBUILD_WAIT_CAP", 4);
   const waitingForced = optQueue.filter((q) => q.force).length;
   const adds = (Object.keys(dests) as NonNullable<OptItem["mode"]>[])
     .filter((mode) => !(mode === "--ktx2" && ktx2Skip) && !optQueue.some((q) => q.src === src && q.mode === mode && q.force)).length;

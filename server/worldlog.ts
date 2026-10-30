@@ -445,6 +445,7 @@ export class WorldLog {
 // ---- founding and translating (tools/protocol/world.ts is the command line) ----
 import { opsOf, DIALECT, VERSION } from "../shared/protocol/fold.js";
 import { isOwner } from "../shared/protocol/roles.js";
+import { envNumber } from "./limits.ts";
 
 /** Found a new world in `dir` (which must not hold a world): genesis + the founding act, through the authority. */
 export function foundWorld(dir: string, name: string, owner: string, title?: string, now?: () => number) {

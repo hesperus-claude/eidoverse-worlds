@@ -7,10 +7,10 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { totalmem } from "node:os";
+import { envNumber } from "./limits.ts";
 
-export const PORT = Number(process.env.PORT ?? 8940);
-/** Where the server listens. Default every interface, as always; HOST=127.0.0.1 keeps a test world on this machine
- *  only (research 44: R's first world is served locally, and exposed on the tailnet separately, after a check). */
+export const PORT = envNumber("PORT", 8940, (n) => Number.isInteger(n) && n >= 1 && n <= 65535);
+/** Default every interface; HOST=127.0.0.1 keeps a test world on this machine only (research 44). */
 export const HOST = process.env.HOST ?? "0.0.0.0";
 // Show-night door policy. Empty = open (dev on a tailnet). On a public box you
 // MUST set this — the boot log shouts if you forgot. Checked at join and upload.
@@ -23,14 +23,11 @@ export const JOIN_TOKEN = process.env.JOIN_TOKEN ?? "";
 // the door key + the flag must never be a key to a private world. Unset = no
 // renderer is trusted beyond what the world allows everyone.
 export const RENDERER_TOKEN = process.env.RENDERER_TOKEN ?? "";
-export const UPLOAD_CAP = Number(process.env.UPLOAD_CAP_MB ?? 20) * 1_000_000;
-// Pictures are textures, not models: a hung image is decoded into GPU memory
-// on every client that sees it, so the door is narrower than the model door.
-export const IMAGE_CAP = Number(process.env.IMAGE_CAP_MB ?? 8) * 1_000_000;
-// RECORD_FRAMES=1 appends every broadcast stage frame (plus roster deltas) to
-// worlds/<name>/frames-<bootTs>.jsonl. World log + frames file + asset store =
-// enough to re-render the whole performance offline, at production quality,
-// forever. Clients are told at join — recording is never invisible.
+export const UPLOAD_CAP = envNumber("UPLOAD_CAP_MB", 20, (n) => n > 0) * 1_000_000;
+// narrower than the model door: a hung image is decoded into GPU memory on every client that sees it
+export const IMAGE_CAP = envNumber("IMAGE_CAP_MB", 8, (n) => n > 0) * 1_000_000;
+// RECORD_FRAMES=1: stage frames + roster deltas to worlds/<name>/frames-<bootTs>.jsonl. Clients are told at join:
+// recording is never invisible.
 export const RECORD = process.env.RECORD_FRAMES === "1";
 // SKIP_OPT_SWEEP=1 skips both boot optimize sweeps (encode pump + ktx2/lod);
 // serving worlds must be startable without shouldering the optimizer.
@@ -51,16 +48,6 @@ export const TRUST_NAMES = process.env.TRUST_NAMES === "1";
 function usableMemory(): number {
   try { const m = Number(readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim()); if (m > 0) return Math.min(m, totalmem()); } catch { /* no cgroup v2 */ }
   return totalmem();
-}
-// Env values are VALIDATED: a budget that is not a finite number >= 0 ("banana", -1) falls back to the default
-// with a warning — NaN used to disable the cap silently and serialise as null; a negative one deferred everything.
-function envNumber(name: string, fallback: number, ok: (n: number) => boolean): number {
-  const raw = process.env[name]?.trim();   // " " is not a number either — Number(" ") is 0
-  if (raw === undefined || raw === "") return fallback;
-  const n = Number(raw);
-  if (Number.isFinite(n) && ok(n)) return n;
-  console.warn(`[config] ${name}=${JSON.stringify(raw)} is not valid — using ${fallback}`);
-  return fallback;
 }
 export const OPT_MEM_BUDGET_MB = envNumber("OPT_MEM_BUDGET_MB", Math.floor(usableMemory() / 2_000_000), (n) => n >= 0);
 // Peak RSS of an optimize pass as a multiple of the source bytes, for the
@@ -132,12 +119,12 @@ mkdirSync(WORLDS_DIR, { recursive: true });
 
 /** The fold cache (server/statecache.ts) is rewritten every this many entries; 0 = off. Server policy: resuming 1000 entries
  *  costs ~4 ms at boot (fold ≈ 4.3 µs/entry measured), and a rewrite every 1000 is noise on the write path. */
-export const STATE_CACHE_EVERY = Number(process.env.STATE_CACHE_EVERY ?? 1000);
+export const STATE_CACHE_EVERY = envNumber("STATE_CACHE_EVERY", 1000, (n) => n >= 0);
 /** A physics world writes a sim checkpoint once this many entries follow its last one (authority checkpointSim), so a boot
  *  replays at most this many into the engine; 0 = only after launches, as before. Server policy, measured on the gym-derived
  *  205k log (10-28): a checkpoint costs ~10 ms (cut + fsynced ~50 KB blob + its line), replay 1.2 µs/entry for label sets and
  *  56 µs for transform sets, so 1000 bounds a boot's engine tail at ~60 ms for ~10 µs/entry of writing. */
-export const SIM_CHECKPOINT_EVERY = Number(process.env.SIM_CHECKPOINT_EVERY ?? 1000);
+export const SIM_CHECKPOINT_EVERY = envNumber("SIM_CHECKPOINT_EVERY", 1000, (n) => n >= 0);
 // ---- server policy: every limit a server runner may set, in one place (an operator surface reads these: WISHLIST) ----
 /** One person's acts per window, logged entries (Matrix rc_message's shape; shared/protocol/authority/gate.js rateCheck). */
 export const ACT_RATE = envNumber("ACT_RATE", 60, (n) => n > 0);
@@ -158,7 +145,7 @@ export const FORK_PER_HOUR = envNumber("FORK_PER_HOUR", 5, (n) => n >= 0);
 // Founding a world: no limits (R 10-28, "no limits until we can study this properly"); server/worldlog.ts foundRefusal.
 /** All messages per client per second — 15Hz of pose plus verbs plus slack; a token bucket with two seconds of burst
  *  (server/msgrate.ts), so a backlog the server itself caused isn't charged to the client. */
-export const MSG_RATE = Number(process.env.MSG_RATE ?? 60);
+export const MSG_RATE = envNumber("MSG_RATE", 60, (n) => n > 0);
 
 export const FRAME_MS = 66;                 // ~15Hz, matches the client's send throttle
 // Bytes of unsent backlog before we drop frames to a client. Keep TIGHT: with

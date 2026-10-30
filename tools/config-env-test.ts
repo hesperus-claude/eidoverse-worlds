@@ -1,4 +1,4 @@
-// bun tools/config-env-test.ts — env numbers are validated (server/config.ts envNumber): unset → the fallback, silently;
+// bun tools/config-env-test.ts — env numbers are validated (server/limits.ts envNumber, config.ts and limits.ts read it): unset → the fallback, silently;
 // not a number or outside the variable's range → the fallback with a `NAME="v" is not valid` warning; in range → taken.
 // One generated table: each variable × [unset, "abc", "-1", its floor (and just under it), its cap and cap+1, a middle].
 import { spawnSync } from "node:child_process";
@@ -10,12 +10,17 @@ const VARS: [string, string, number | null, number, number, boolean, number | un
   ["SNAP_TIMEOUT_SEC", "s", 12, 1000, 0, false, 225, 60],
   ["SNAP_SWEEP_GRACE_SEC", "g", 30, 1000, 0, true, 600, 120],
   ["SNAP_SWEEP_EVERY_SEC", "e", 15, 1000, 1, true, 3600, 30],            // never 0: a busy-looping timer
+  ["PORT", "p", 8940, 1, 0, false, 65535, 8950],
+  ["UPLOAD_CAP_MB", "u", 20, 1_000_000, 0, false, undefined, 50],
+  ["IMAGE_CAP_MB", "i", 8, 1_000_000, 0, false, undefined, 4],
+  ["MSG_RATE", "m", 60, 1, 0, false, undefined, 120],                   // NaN refused every message
+  ["EW_ID_LEN", "l", 64, 1, 0, true, undefined, 32],                     // limits.ts's table: "" read as 0
 ];
 // [raw, taken?] per variable; "" is unset
 const cases = VARS.map(([, , , , min, minOk, max, mid]): [string, boolean][] => [["", false], ["abc", false], ["-1", false], [String(min), minOk],
   ...(minOk && min > 0 ? [[String(min - 1), false]] : []), ...(max !== undefined ? [[String(max), true], [String(max + 1), false]] : []), [String(mid), true]] as [string, boolean][]);
 const read = (env: Record<string, string>) => {
-  const r = spawnSync(process.execPath, ["-e", 'import { OPT_MEM_BUDGET_MB, OPT_COST_FACTOR, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS } from "./server/config.ts"; console.log(JSON.stringify({ b: OPT_MEM_BUDGET_MB, f: OPT_COST_FACTOR, s: SNAP_TIMEOUT_MS, g: SNAP_SWEEP_GRACE_MS, e: SNAP_SWEEP_EVERY_MS }))'],
+  const r = spawnSync(process.execPath, ["-e", 'import { OPT_MEM_BUDGET_MB, OPT_COST_FACTOR, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS, PORT, UPLOAD_CAP, IMAGE_CAP, MSG_RATE } from "./server/config.ts"; import { LIMITS } from "./server/limits.ts"; console.log(JSON.stringify({ b: OPT_MEM_BUDGET_MB, f: OPT_COST_FACTOR, s: SNAP_TIMEOUT_MS, g: SNAP_SWEEP_GRACE_MS, e: SNAP_SWEEP_EVERY_MS, p: PORT, u: UPLOAD_CAP, i: IMAGE_CAP, m: MSG_RATE, l: LIMITS.ID_LEN }))'],
     { env: { ...process.env, WORLDS_DIR: process.env.WORLDS_DIR ?? "/tmp/config-env-test-worlds", ...env }, encoding: "utf8", cwd: import.meta.dir + "/.." });
   return { v: JSON.parse(r.stdout.trim().split("\n").pop() ?? "") as Record<string, number>, warn: r.stderr + r.stdout };
 };
