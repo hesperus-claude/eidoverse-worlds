@@ -5,23 +5,16 @@
 // couldn't scroll the debug panel in a headset (09-27): the stick scrolled only while a button held the laser up.
 // Real client + IWER; the rays go through the same domQuadsPress/Drag/Release path xr.js drives from the trigger.
 //   bun tools/xr-panel-drag-probe.mjs
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
 const { check, done } = checker();
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
-await pg.addInitScript(IWER);
-await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-  window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } });
+await iwerInit(pg);
 const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
 try {
   await pg.goto(`${world.origin}/?world=staging&name=ringprobe&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 90000 });
-  await pg.evaluate(() => document.querySelector('#xrbtn').click());
-  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout: 30000, polling: 250 });
+  await visorShown(pg);
+  await enterVR(pg);
   await pg.waitForTimeout(1500);
   const r = await pg.evaluate(async () => {
     const xr = await import('./lib/xr.js'); const ui = await import('./lib/ui.js');
