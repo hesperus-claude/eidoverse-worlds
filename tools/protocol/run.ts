@@ -66,7 +66,7 @@ const EXPECT: Record<string, number> = {
   "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5, "flight": 0.5,
   "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "ragdoll-floor": 3.9, "reach": 0.2, "reachwire": 0.2, "glbperf-file": 0.3,
   "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2, "chat-resync-wire": 0.2, "components-inspector": 0.8,
-  "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2
+  "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2, "modserver-mutants-1": 360, "modserver-mutants-2": 360, "modserver-mutants-3": 360, "modserver-mutants-4": 360
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;

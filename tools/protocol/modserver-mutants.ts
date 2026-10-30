@@ -1,12 +1,12 @@
 // tools/protocol/modserver-mutants.ts — the server half of roles + moderation (research roles S4), proven by
 // mutation: each server-side gate is removed in a copy of the tree, identity-check runs there, and the RS case that
 // names the gate must go red (the rest must stay green: a mutant that breaks everything proves nothing). A no-op
-// control must leave every case green. Not covered here: releasing a gone person's SFU mute (server.ts sanctionSweep)
+// control must leave every case green; --group I/N runs every Nth mutant (and the control), the gate's pieces. Not covered here: releasing a gone person's SFU mute (server.ts sanctionSweep)
 // matters only while OTHER people's real voice legs keep the world's SFU state alive; these sockets hold no WebRTC leg.   usage: bun tools/protocol/modserver-mutants.ts [--only <substring>]
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { ENGINE, scratch } from "./common.ts";
+import { ENGINE, scratch, linkInto } from "./common.ts";
 
 const M: [string, string, string | string[][], string, string[]][] = [
   ["your-rights from the authority", "server/server.ts", "const e = w.log.rightsOf(c.actorId); const m =", "const e = { role: w.log.roleOf(c.actorId), name: \"\", rank: 0, permissions: [] as string[] }; const m =", ["RS1"]],
@@ -46,14 +46,17 @@ const M: [string, string, string | string[][], string, string[]][] = [
   ["CONTROL (no-op)", "server/access.ts", "export function visibleTo(door: Door | null, who: Who | null, now = Date.now()): boolean {", "export function visibleTo(door: Door | null, who: Who | null, now = Date.now()): boolean { void 0;", []],
 ];
 const only = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : null;
+const g = process.argv.includes("--group") ? /^(\d+)\/(\d+)$/.exec(process.argv[process.argv.indexOf("--group") + 1] ?? "") : null;
+if (process.argv.includes("--group") && !(g && +g[1] >= 1 && +g[1] <= +g[2])) { console.log("FAIL --group takes I/N, 1 ≤ I ≤ N"); process.exit(1); }
 let bad = 0;
-for (const [name, file, find, repl, want] of M) {
+for (const [k, [name, file, find, repl, want]] of M.entries()) {
   if (only && !name.includes(only)) continue;
+  if (g && want.length && k % +g[2] !== +g[1] - 1) continue;   // every piece runs the control
   const d = scratch("msmut");
   for (const sub of ["shared", "server", "tools", "defs", "client", "mcpl", "assets"]) if (fs.existsSync(path.join(ENGINE, sub)))
     fs.cpSync(path.join(ENGINE, sub), path.join(d, sub), { recursive: true, filter: (p) => !p.includes("node_modules") });
   for (const f of ["package.json", "tsconfig.json", "bunfig.toml"]) if (fs.existsSync(path.join(ENGINE, f))) fs.copyFileSync(path.join(ENGINE, f), path.join(d, f));
-  fs.symlinkSync(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
+  linkInto(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
   // a row's find may be a list of [find, repl] pairs, applied in order (one gate with two paths)
   const pairs = Array.isArray(find) ? find : [[find, repl]];
   const f = path.join(d, file); let src = fs.readFileSync(f, "utf8"), miss = "";
