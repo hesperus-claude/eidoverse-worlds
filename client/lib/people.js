@@ -146,9 +146,7 @@ function roleMenu(display, surface) {
 }
 
 // ---------------------------------------------------------------- my lists, per person
-// Always allow / Never allow / Default: this person is always yes or always no to everything done to my body,
-// whatever my switches say, or back to my switches. ✓ on the current one. consent.js keeps it (with the name, for the
-// list in Settings ▸ body) and consentsync sends it; the list is by identity, so a name passed on later isn't on it.
+// Always allow / Never allow / Default per person (by identity, ✓ on the current one) → consent.js lists; consentsync sends.
 const LIST_ITEMS = [['consent-allow', 'allow', 'Always allow'], ['consent-block', 'block', 'Never allow'], ['consent-default', null, 'Default']];
 export function consentItems(id) {
   const now = listOf(id);

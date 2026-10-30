@@ -17,16 +17,8 @@ const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return nu
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 const plainList = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([id, n]) => typeof id === 'string' && typeof n === 'string')) : {});
 
-/** What is stored: {move?, touch?, allow: {id: name}, block: {id: name}, queue: [{op, id, name, at, world, acked}]}; a gate
- *  absent = never chosen (the world's default answers, F2b). allow/block are my lists as last seen (the authority's is
- *  the source); `queue` is my own changes not yet landed, drained as they land (consentsync). A block follows me into
- *  every world for BLOCK_FOLLOW_MS (narrower); an allow or an unlist lands only in the world it was made in (wider).
- *  A setting kept under an older key is carried into the gates silently and written under KEY on first read. Never
- *  broader than main allowed: the body switch's refuse or ask → both off (F3), accept → move on, touch off; with no
- *  switch, main's ew-pushable → move ('0' off; only if present) and ew-posable → touch off if present. Main's posable
- *  '1' allowed posing only, and Touch me also opens touch and intimate, so it can't carry: Touch me stays off and
- *  `notice` is set, kept under KEY until takeNotice says it once (fixF). A stored list from before the queue: its
- *  blocks follow as queued blocks, its unlists follow too but only take someone off allow (never wider), its allows stay where they landed. */
+/** Stored: {move?, touch?, allow: {id: name}, block: {id: name}, queue: [{op, id, name, at, world, acked}]}; a gate absent = never chosen.
+ *  Older keys are carried in by readStored, never wider (Touch me stays off and `notice` is set when main's posable can't carry). */
 /** what a person whose old "allow posing" couldn't carry over is told, once (takeNotice) */
 export const TOUCH_NOTICE = "Your old \u201callow posing\u201d setting couldn't carry over: Touch me now covers being touched, intimate places included, as well as being posed, so it is off. To turn it on, open Settings ▸ body and tick Touch me.";
 export const BLOCK_FOLLOW_MS = 30 * 86_400_000;
