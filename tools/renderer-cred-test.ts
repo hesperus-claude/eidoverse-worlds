@@ -84,6 +84,11 @@ try {
   check(`(setup) the example file's key is "${EXAMPLE_KEY}", the registry is the scratch one`, !!EXAMPLE_KEY && EXAMPLE_KEY !== OWN_KEY);
   check("a key copied from the public example file is refused at an HTTP door (401)", ex.status === 401, String(ex.status));
   check("…where a private registry key passes the door (the world then answers as closed to it)", own.status !== 401, String(own.status));
+  // the auth scheme is case-insensitive (RFC 7235): `bearer` reads as `Bearer` at the read door and where a caller is named
+  const lower = { headers: { authorization: `bearer ${OWN_KEY}` } };
+  const gLow = await fetch(`${h.BASE}/geom?world=${W}`, lower), aLow = await fetch(`${h.BASE}/access?world=${W}`, lower);
+  check("a lowercase `bearer` key passes the read door as `Bearer` does", gLow.status === own.status, `${gLow.status} vs ${own.status}`);
+  check("…and names its caller at /access (not 401)", aLow.status !== 401, String(aLow.status));
 } finally {
   for (const s of socks) { try { s.close(); } catch {} }
 }

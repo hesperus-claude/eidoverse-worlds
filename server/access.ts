@@ -25,7 +25,7 @@ import { join } from "node:path";
 import { WORLDS_DIR, JOIN_TOKEN } from "./config.ts";
 import { globalBans, findBan } from "./moderation.ts";
 import { isOperator } from "./operators.ts";
-import { sessionOfRequest, accountOf } from "./auth.ts";
+import { sessionOfRequest, accountOf, bearerOf } from "./auth.ts";
 import { directoryFor } from "./directory.ts";
 import { accountAgeRefusal } from "./accountage.ts";
 import { effectiveOf, isOwner, MOD_POWERS } from "../shared/protocol/roles.js";
@@ -158,10 +158,9 @@ export function httpCaller(req: Request): Who | null {
   const s = sessionOfRequest(req);
   const dir = directoryFor(WORLDS_DIR);
   const who = (account: string): Who => ({ account, actorId: dir.idOfSub(account) });
-  if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return who(s.sub);   // one sign-in, every world (main #255: a session's old nativeWorld no longer narrows it)
-  const m = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "");
-  if (m) {
-    const tok = m[1]!;
+  if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return who(s.sub);   // one sign-in, every world (#255: a legacy nativeWorld no longer narrows it)
+  const tok = bearerOf(req);
+  if (tok) {
     if (JOIN_TOKEN && tok === JOIN_TOKEN) return null;
     const a = accountOf(tok);
     if (a && "account" in a) return who(a.account);

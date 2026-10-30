@@ -72,8 +72,7 @@ const knownWorld = (name: string) => {
  *  or the session cookie the join takes, never from another site's page (auth.ts sessionOfRequest). An open box is open. */
 function mayRead(req: Request): boolean {
   if (!JOIN_TOKEN) return true;
-  const auth = req.headers.get("authorization") ?? "";
-  const key = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const key = bearerOf(req);
   return !!(key && (key === JOIN_TOKEN || agentTokens().byToken.has(key) || aid1JoinIdentity(key)))
     || !!sessionOfRequest(req);
 }
@@ -84,7 +83,7 @@ const hasWorldLog = (name: string) => existsSync(join(WORLDS_DIR, name, "world.j
 const CLIENTLOG_UNKNOWN = "~unknown";   // '~' is outside the world-name alphabet, so no real world can share this file
 try { mkdirSync(CLIENTLOG_DIR, { recursive: true }); } catch (e) { console.warn(`[clientlog] cannot create ${CLIENTLOG_DIR}: ${(e as Error)?.message ?? e}`); }
 import { seatStore, announceProfileUpdate, MAX_PROPOSAL_BYTES } from "./seats.ts";
-import { agentTokens, aid1JoinIdentity } from "./auth.ts";
+import { agentTokens, aid1JoinIdentity, bearerOf } from "./auth.ts";
 import { httpCaller, visibleTo, doorFor, youAt } from "./access.ts";
 import { setupPage, setupClaim } from "./setup.ts";
 import { setupOpen } from "./operators.ts";
@@ -493,9 +492,7 @@ const ROUTES: Route[] = [
       // proxy/access diagnostics before (review of #172), and this route is called from every browser console.
       // A key in the query is refused outright so the old client shape cannot ship by accident.
       if (url.searchParams.has("key")) return new Response("key belongs in the Authorization header", { status: 400 });
-      const auth = req.headers.get("authorization") ?? "";
-      const key = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-      if (JOIN_TOKEN && key !== JOIN_TOKEN) return new Response("no", { status: 401 });   // the door is the first gate: no lookup for a stranger
+      if (JOIN_TOKEN && bearerOf(req) !== JOIN_TOKEN) return new Response("no", { status: 401 });   // the door is the first gate: no lookup for a stranger
       const world = label && knownWorld(label) ? label : CLIENTLOG_UNKNOWN;
       const cl = req.headers.get("content-length");
       if (cl === null) return new Response("length required", { status: 411 });   // a chunked body would be buffered whole before the slice
@@ -952,17 +949,9 @@ const ROUTES: Route[] = [
     // rebuilt in place). Gated on the /upload sign-ins + a session cookie (below); rate-limited; the queue dedups.
     match: (u, req) => u.pathname === "/rebuild" && req.method === "POST",
     handler: ({ req, url, srv }) => {
-      // Who may ask: the sign-ins /upload accepts (the authority key, an agent token, an aid1 credential) plus a signed-in
-      // session cookie — a person who came in through the home node carries no door key and got 401 here. The key rides
-      // `Authorization: Bearer`, never the URL (base.js: it would land in access logs). A key in ?token= is refused.
-      if (JOIN_TOKEN) {
-        const auth = req.headers.get("authorization") ?? "";
-        const key = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-        const ok = (key && (key === JOIN_TOKEN || agentTokens().byToken.has(key) || !!aid1JoinIdentity(key)))
-          // a cookie rides requests from sibling subdomains (SameSite=Lax is per-SITE): never from another site's page
-          || !!sessionOfRequest(req);
-        if (!ok) return new Response("sign in or send the authority key as a Bearer header", { status: 401 });
-      }
+      // the /upload sign-ins (authority key, agent token, aid1 credential) plus a signed-in session cookie. The key rides
+      // `Authorization: Bearer`, never the URL (it would land in access logs); a key in ?token= is refused.
+      if (!mayRead(req)) return new Response("sign in or send the authority key as a Bearer header", { status: 401 });
       // a forced rebuild skips the freshness check, so a POST loop could keep the one serial pump busy and starve uploads
       const ip = addressOf(req, srv);
       const w = rebuildWin.get(ip) ?? { t: 0, n: 0 };
@@ -982,9 +971,7 @@ const ROUTES: Route[] = [
       // The authority key rides `Authorization: Bearer`, never the URL (access logs; see /clientlog). The old ?token= shape
       // is refused outright so a stale client cannot keep leaking it.
       if (url.searchParams.has("token")) return new Response("key belongs in the Authorization header", { status: 400 });
-      const auth = req.headers.get("authorization") ?? "";
-      if (JOIN_TOKEN && (auth.startsWith("Bearer ") ? auth.slice(7).trim() : "") !== JOIN_TOKEN)
-        return new Response("token required", { status: 401 });
+      if (JOIN_TOKEN && bearerOf(req) !== JOIN_TOKEN) return new Response("token required", { status: 401 });
       const safe = (url.searchParams.get("name") ?? "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
       if (!safe) return new Response("name required", { status: 400 });
       const dir = join(OPT_DIR, "thumbs");
