@@ -11,8 +11,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}`); if (info !== undefined) console.log("     ", JSON.stringify(info)); } };
+const { check, done } = suite("procgroup-check", { cap: Infinity });
+import { suite } from "./suite.ts";
 const win = process.platform === "win32";
 
 // PG1: a detached child that starts a grandchild; both are found, then both are gone after killSuite
@@ -170,4 +170,4 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   check("PG20 scripts-check without isolation (EIDO_SANDBOX=inprocess) prints its I rows as OPTIONAL lines the gate's receipt keeps, not n/a",
     r.status === 0 && optional.some((l) => /OPTIONAL I1\b/.test(l)) && !/^n\/a/m.test(out), { status: r.status, optional, tail: out.slice(-300) }); }
 
-console.log(`[procgroup-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

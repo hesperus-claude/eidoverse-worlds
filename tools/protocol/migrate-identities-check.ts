@@ -21,10 +21,10 @@ import { ENGINE, scratch } from "./common.ts";
 import { openLive } from "../../server/livehost.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { readLog } from "../../shared/protocol/fold.js";
+import { suite } from "./suite.ts";
 
 const TOOL = process.env.MIGRATE_TOOL ?? path.join(ENGINE, "tools/protocol/migrate-identities.ts");
-let pass = 0, fail = 0;
-const ok = (c: any, what: string, info?: unknown) => { if (c) { pass++; console.log(`ok   ${what}`); } else { fail++; console.log(`FAIL ${what}${info === undefined ? "" : ` — ${JSON.stringify(info).slice(0, 600)}`}`); } };
+const { ok, done } = suite("migrate-identities-check", { cap: 600 });
 const minted = (s: unknown) => typeof s === "string" && /^u-[a-z2-7]{20}$/.test(s);
 
 /** An old world: founded by ann; bob a builder whose role carries his account; acts, a say to ann, a use with ann as the
@@ -135,4 +135,4 @@ fs.renameSync = (a, b) => { log("rename " + a + " " + b); return rn(a, b); };\n`
   const r = tool([d]);
   ok(r.code === 0 && /sequencer key/.test(r.o?.skipped ?? "") && !fs.existsSync(cf), "MI9 a dry run on a worlds dir with no custody file is skipped (no sequencer key here) and writes no custody file", { code: r.code, o: r.o, minted: fs.existsSync(cf) }); }
 
-console.log(`[migrate-identities-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();
