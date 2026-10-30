@@ -31,7 +31,7 @@ const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? a
 const MUTANTS: [string, string, string, string, string[]][] = [
   ["a refused request logs its values again", "protocol/authority.js", "const body = { args: names.known, refused: { code } };", "const body = { args: names.known, request: args, refused: { code } };", ["L1"]],
   ["argument names not filtered to the verb's own", "protocol/authority.js", "const known = spec ? keys.filter((k) => k in spec.args || UNIVERSAL_ARGS.has(k)) : [];", "const known = keys;", ["L2"]],
-  ["an invented verb's name is logged", "protocol/authority.js", "const asVerb = Object.hasOwn(VERBS, verb) || Object.hasOwn(RESERVED_VERBS, verb) ? verb : \"unknown-verb\";", "const asVerb = verb;", ["L4"]],
+  ["an invented verb's name is logged", "protocol/authority.js", "const asVerb = Object.hasOwn(VERBS, verb) || Object.hasOwn(RESERVED_VERBS, verb) || Object.hasOwn(REMOVED_VERBS, verb) ? verb : \"unknown-verb\";", "const asVerb = verb;", ["L4"]],
   ["presence verbs' refusals are logged", "protocol/authority.js", "    if (PRESENCE_VERBS.has(verb)) return;", "", ["L5"]],
   ["the refusal ring", "protocol/authority.js", "  ring.push(rec); if (ring.length > REFUSAL_RING) ring.splice(0, ring.length - REFUSAL_RING);", "", ["L3"]],
   ["look shows everyone's table", "protocol/authority/blueprints.js", "...(id === actor ? { shield: shieldOf(P, id) } : {}),", "shield: shieldOf(P, id),", ["K1"]],
@@ -40,7 +40,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["only the first occupant is let go", "protocol/authority/occupants.js", "for (const r of occupants) { if (out.has(r)) continue;", "for (const r of occupants) { if (out.size) break;", ["O7"]],
   ["the seat's own motion unseats", "protocol/authority/occupants.js", "      if (own && rootOf(s.to) === own && unchangedSinceSat(s.since)) continue;", "", ["O3"]],
   ["moving your own seat unseats you", "protocol/authority/occupants.js", "const occupants = Object.keys(w.presence.occupants ?? {}).filter((k) => k !== who.actor);", "const occupants = Object.keys(w.presence.occupants ?? {});", ["O4"]],
-  ["restamp reads a purged cause act", "protocol/authority/physics.js", "if (b === null) return true;   // a purged cause: unknown chooser, so never restamped", "if (b === null) return false;", ["Q1"]],
+  ["restamp reads a purged cause act", "protocol/authority/physics.js", "const b = readback(w, e.cause); if (b === null) return \"named\";", "const b = readback(w, e.cause); if (b === null) return \"stamped\";", ["Q1"]],
   ["entryBy reads a purged cause act", "protocol/authority/rights.js", "if (b === null) return { seq: e.seq, by, rights: null };", "if (b === null) return { seq: e.seq, by, rights: by };", ["Q2"]],
   ["readback ignores the purge index", "protocol/authority/storage.js", "if (purgedSeqs(w).has(seq)) return null;", "", ["Q3"]],
   ["an unregistered refusal code", "protocol/authority/scriptrun.js", "refuse(\"stale\", `${a.id}.${key}", "refuse(\"stale-x\", `${a.id}.${key}", ["G1"]],
@@ -53,7 +53,9 @@ async function runSelf(tree: string, only: string[] | null) {
   const r = Bun.spawnSync(args, { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 }
+// server/ too: L7 scans it for a consent write around bodyconsent.js
 function copyShared(tag: string) { const d = scratch(tag); fs.cpSync(path.join(ENGINE, "shared"), path.join(d, "shared"), { recursive: true });
+  fs.cpSync(path.join(ENGINE, "server"), path.join(d, "server"), { recursive: true, filter: (s) => !s.includes(`${path.sep}node_modules`) });
   fs.cpSync(path.join(ENGINE, "spec"), path.join(d, "spec"), { recursive: true }); fs.cpSync(path.join(ENGINE, "docs"), path.join(d, "docs"), { recursive: true }); return d; }
 if (argv.includes("--mutants")) {
   let bad = 0, ran = 0;
