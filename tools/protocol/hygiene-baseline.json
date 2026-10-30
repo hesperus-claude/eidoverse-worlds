@@ -8,6 +8,9 @@
  "tools/animnames-retry-test.ts": {
   "bare-wait": 1
  },
+ "tools/avatar-test.ts": {
+  "own-ok": 1
+ },
  "tools/build-gate-test.ts": {
   "own-ok": 1
  },
@@ -29,10 +32,11 @@
  "tools/colour-picker-bench.ts": {
   "bare-wait": 2
  },
- "tools/consent-replay-test.ts": {
-  "bare-wait": 2
+ "tools/consent-client-test.ts": {
+  "own-ok": 1
  },
- "tools/consent-switch-test.ts": {
+ "tools/consent-replay-test.ts": {
+  "bare-wait": 2,
   "own-ok": 1
  },
  "tools/csp-test.ts": {
@@ -65,6 +69,9 @@
  "tools/environment-realizer-test.ts": {
   "own-ok": 1
  },
+ "tools/event-wire-test.ts": {
+  "own-ok": 1
+ },
  "tools/first-name-account-test.ts": {
   "own-ok": 1
  },
@@ -92,6 +99,9 @@
  },
  "tools/knockdown-test.ts": {
   "bare-wait": 20,
+  "own-ok": 1
+ },
+ "tools/last-world-test.ts": {
   "own-ok": 1
  },
  "tools/latestread-test.ts": {
@@ -126,6 +136,12 @@
  "tools/particles-test.ts": {
   "own-ok": 1
  },
+ "tools/physconst-test.ts": {
+  "own-ok": 1
+ },
+ "tools/physics-off-test.ts": {
+  "own-ok": 1
+ },
  "tools/places-test.ts": {
   "bare-wait": 7
  },
@@ -156,14 +172,29 @@
  "tools/protocol/client-check.ts": {
   "bare-wait": 53
  },
+ "tools/protocol/climb-env-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/counter-check.ts": {
   "bare-wait": 1
  },
  "tools/protocol/describe-particles-check.ts": {
   "raw-symlink": 2
  },
+ "tools/protocol/drive-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/foldparity-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/force-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/fork-reset-check.ts": {
   "bare-wait": 2
+ },
+ "tools/protocol/gates-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/grab-check.ts": {
   "raw-symlink": 1
@@ -183,12 +214,18 @@
  "tools/protocol/names-check.ts": {
   "raw-symlink": 7
  },
+ "tools/protocol/owners-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/parity-check.ts": {
   "bare-wait": 5,
   "raw-symlink": 3
  },
  "tools/protocol/party-probe.ts": {
   "bare-wait": 32
+ },
+ "tools/protocol/physics-area-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/presence-check.ts": {
   "bare-wait": 10
@@ -214,11 +251,17 @@
  "tools/protocol/scale-check.ts": {
   "raw-symlink": 3
  },
+ "tools/protocol/scripting-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/scripts-check.ts": {
   "bare-wait": 15
  },
  "tools/protocol/server-check.ts": {
   "bare-wait": 28
+ },
+ "tools/protocol/setup-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/shiplist-check.ts": {
   "raw-symlink": 2
@@ -229,11 +272,26 @@
  "tools/protocol/shove-check.ts": {
   "raw-symlink": 2
  },
+ "tools/protocol/simckpt-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/statecache-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/translate-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/txn-check.ts": {
   "raw-symlink": 1
  },
+ "tools/protocol/upgrade-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/xss-probe.ts": {
   "bare-wait": 10
+ },
+ "tools/protocol/zone-water-check.ts": {
+  "own-ok": 1
  },
  "tools/reach-order-test.ts": {
   "bare-wait": 1
@@ -268,10 +326,20 @@
  "tools/shove-test.ts": {
   "own-ok": 1
  },
+ "tools/skypanel-state-test.ts": {
+  "bare-wait": 2,
+  "own-ok": 1
+ },
  "tools/skystamp-test.ts": {
   "own-ok": 1
  },
  "tools/sockets-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sound-editor-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sound-test.ts": {
   "own-ok": 1
  },
  "tools/support-swap-test.ts": {
@@ -283,6 +351,9 @@
  },
  "tools/unknown-comp-test.ts": {
   "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/water/import-golden-check.ts": {
   "own-ok": 1
  }
 }
