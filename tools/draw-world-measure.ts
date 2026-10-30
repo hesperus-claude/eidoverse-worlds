@@ -1,4 +1,5 @@
-// bun tools/draw-world-probe.ts — real asset loader + warm conductor + world
+// A tool, not a gate test: a draw-call measurement over the asset library (docs/draw-calls.md).
+// bun tools/draw-world-measure.ts — real asset loader + warm conductor + world
 // lifecycle on an OWNED scratch sequencer. Requires the usual asset library.
 import { chromium } from 'playwright';
 import { existsSync } from 'node:fs';

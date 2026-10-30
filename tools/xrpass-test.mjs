@@ -1,6 +1,6 @@
 // client/lib/xrpass.js: stereo cameras are routed to their own chain map ('xr', 'xr:backSide'), exactly once even
 // when three's own rebuild re-enters get() with the prefixed id; mono cameras and zero-eye array cameras are not.
-// tools/xr-switch-compile-probe.mjs is the real-three half (both variants live side by side; the switch builds nothing).
+// tools/xr-switch-compile-measure.mjs is the real-three half (both variants live side by side; the switch builds nothing).
 import * as THREE from '../client/node_modules/three/build/three.webgpu.js';
 import { separateXRPass, withXREyes } from '../client/lib/xrpass.js';
 let pass = 0, fail = 0;

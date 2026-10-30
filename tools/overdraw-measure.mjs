@@ -1,10 +1,11 @@
-// bun tools/overdraw-probe.mjs — EW.overdraw() counts what it claims to count.
+// A tool, not a gate test: a GPU overdraw measurement in Chromium.
+// bun tools/overdraw-measure.mjs — EW.overdraw() counts what it claims to count.
 //   calib  — two opaque planes filling the view at 2 m and 3 m: 'actual' = exactly 1 fragment per pixel (the far plane
 //            fails depth), 'raw' = exactly 2. A tool that dropped the materials' depth state reads 2 in 'actual'.
 //   grass  — the real Commons meadow in the live scene: in 'raw' mode the grass's covered-pixel count equals what a
 //            normal render of that grass covers. A clone that lost positionNode piles every tuft at its local origin.
 //   live   — a heat PNG + the by-category table for the staging view (written to the dir given in OUT).
-// Usage: OUT=<dir> bun tools/overdraw-probe.mjs   (run under a memory guard: headless Chromium renders on the CPU)
+// Usage: OUT=<dir> bun tools/overdraw-measure.mjs   (run under a memory guard: headless Chromium renders on the CPU)
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { writeFileSync } from 'node:fs';
 

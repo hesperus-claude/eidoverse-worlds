@@ -1,3 +1,4 @@
+// A tool, not a gate test: a werift↔Chromium library repro (docs/research/sfu-client-negotiation.md); no world code under test.
 // MINIMAL werift↔Chromium: does a browser answer sendonly to a server's
 // recvonly m-line when it has a track? Strips away every world concern.
 import { chromium } from 'playwright';
