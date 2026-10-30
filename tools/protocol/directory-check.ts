@@ -10,9 +10,9 @@ import { CUSTODY_FILE, DIRECTORY_FILE, OLD_NAMES, custodyFileIn } from "../../se
 import { custodyAt } from "../../server/custody.ts";
 import { openLive } from "../../server/livehost.ts";
 import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.js";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (c: unknown, what: string, why?: unknown) => { if (c) pass++; else { fail++; console.log(`  FAIL ${what}${why === undefined ? "" : ` — ${JSON.stringify(why).slice(0, 300)}`}`); } };
+const { ok, done } = suite("directory-check", { quiet: true, cap: 300 });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dir-check-"));
 const file = path.join(tmp, "worlds", ".directory.json");
 
@@ -656,5 +656,4 @@ fs.rmSync(tmp, { recursive: true, force: true });
   ok(isMinted("u-" + "a".repeat(20)) && !isMinted("w-" + "a".repeat(20)) && !isMinted("u-imported-" + "a".repeat(11)) && !isMinted("u-" + "a".repeat(21)),
     "D40b one id shape, u- and 20 base32 characters: nothing in it says a world, a name or a kind"); }
 
-console.log(`[directory-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

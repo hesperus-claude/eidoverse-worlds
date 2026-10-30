@@ -37,10 +37,10 @@ import crypto from "node:crypto";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
 import { freePort } from "../harness.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("access");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("access-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
@@ -673,5 +673,4 @@ const gonePid = await exitedPid();
   const s = await start(); const carl = await sock(s.port); const jc = await carl.join("lockt", "Carl");
   ok(!!jc.snapshot, "A13n …and with both files readable (absent) the stranger joins the open world", jc.errors);
   carl.close(); try { s.proc.kill(); await s.proc.exited; } catch {} }
-console.log(`[access-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
