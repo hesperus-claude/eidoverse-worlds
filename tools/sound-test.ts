@@ -2,7 +2,7 @@
 //
 //   bun tools/sound-test.ts
 //
-// Two legs, the picture-test shape:
+// Two legs:
 //   1. DECLARATION — the source allow-list (library-relative audio under
 //      eidoverse/assets/ or store/audio/, never a URL, never a path escape),
 //      defaults and bounds, the clock note, the description and its bound, and

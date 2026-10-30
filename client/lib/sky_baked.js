@@ -401,7 +401,7 @@ export function attachBakedDome(skyApi, opts = {}) {
   dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 24), mat);
   // AFTER the world's opaques: opaque, never writes depth, far behind everything, so at renderOrder 0.5 it follows every
   // world opaque and depth-rejects each covered pixel instead of shading a whole eye pair to be overdrawn. Overlays
-  // (>= 1) still draw after it (tools/dome-order-probe.mjs). Keep every no-depth-write opaque at renderOrder >= 1.
+  // (>= 1) still draw after it. Keep every no-depth-write opaque at renderOrder >= 1.
   dome.renderOrder = 0.5;
   dome.userData.odTag = 'sky';   // overdraw.js category
   dome.frustumCulled = false;
@@ -594,7 +594,7 @@ export function updateBakedDome(now = performance.now()) {
 let refreshHeldLogged = false;
 let refreshStats = { held: 0, bands: null };
 /** Harness: force the clear→cloudy graph refresh on the next cadence cycle (normally unreachable: sky.js pins the
- *  cloud graph at boot) and read what it did. tools/sky-refresh-probe.mjs. */
+ *  cloud graph at boot) and read what it did. */
 // ??= : a second instance of this module (a probe's own import at another URL) must not replace the live one's seam
 globalThis.__skyRefresh ??= {
   force: () => { pinnedCloudsOn = false; refreshStats = { held: 0, bands: null }; requestBake(); },

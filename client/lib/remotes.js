@@ -280,7 +280,7 @@ function planPoseBlend(r, pa, pb) {
 
 /** A remote's chosen size and plate lift (shared/presencewire.js bodyWire: clamped, absence = default). Written onto
  *  the record every sample and onto the Avatar — idempotent, and a body swap (a fresh Avatar at 1) picks it up on the
- *  very next sample. Exported for tools/bodyscale-test.ts (a stand-in avatar) and tools/bodyscale-probe.mjs (the real one). */
+ *  very next sample. Exported for tools/bodyscale-test.ts (a stand-in avatar). */
 export function applyRemoteBody(r, s) {
   applyBodyWire(r, s);
   r.avatar?.setUserScale?.(r.scale);

@@ -1,7 +1,6 @@
 // The XR pixel-ratio guard (client/lib/xrpixelratio.js, applied by core.js) — #32 split vision.
 // While presenting, setPixelRatio is DEFERRED (the renderer keeps the XR layer's 1); not presenting, it
-// applies untouched; the deferred value is handed back exactly once. tools/xr-eye-viewport-probe.mjs is
-// the real-three half: it shows the ratio moving the right eye's viewport, and the guard stopping it.
+// applies untouched; the deferred value is handed back exactly once.
 import { guardPixelRatioInXR } from '../client/lib/xrpixelratio.js';
 let pass = 0, fail = 0;
 const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };

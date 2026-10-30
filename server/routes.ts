@@ -309,7 +309,7 @@ type Route = {
 /** Which file a KTX2-negotiating client (the norm) gets for a library/store model at full detail — the ORDER the
  *  /library/ handler below serves in: a deliberate upstream patch (PATCH_DIR wins over everything), the KTX2 variant,
  *  then (store) store-min, then the optimized mirror, then the original. The catalog ranks this file ("perf if you
- *  load it"); tools/library-status-probe fetches /library/<rel>?ktx2 and checks the bytes are this file's. */
+ *  load it"). */
 function servedGlbPath(rel: string): { path: string; as: "patched copy" | "KTX2 variant" | "compressed copy" | "optimized copy" | "original" } {
   const pt = normalize(join(PATCH_DIR, rel));
   if (pt.startsWith(PATCH_DIR) && existsSync(pt)) return { path: pt, as: "patched copy" };

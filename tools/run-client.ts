@@ -41,8 +41,6 @@ const SLOW: Record<string, string> = {
   "object-lod-test.ts": "decimates real models",
   "seat-lifecycle-test.ts": "a real server, seat by seat",
   "support-lifecycle-test.ts": "a real server, support by support",
-  "lite-weight-test.mjs": "a headless browser bundle",
-  "transport-check.mjs": "real sockets, reconnect timers",
   "contact-mutation-test.ts": "nine mutations, each a full run of a reach/walk suite (~minutes)",
 };
 
