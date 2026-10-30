@@ -39,6 +39,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 // IM-I9's child: one translation under TRUST_NAMES=1 (read at import), printed as JSON
@@ -59,8 +60,7 @@ const { bindIdentity } = await import("../operator-bind.ts");
 const { HN_ISS } = await import("../../server/auth.ts");
 const { emptyState: v1Empty, foldEntry: v1Fold } = await import("./import-v1/fold.js");
 
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 600)}` : ""}`); } };
+const { ok, done } = suite("importer-check", { cap: 600 });
 const row = (what: string, fn: () => void) => { try { fn(); } catch (e) { ok(false, what, `threw: ${e?.stack ?? e}`); } };
 const root = scratch("importer");
 let n = 0;
@@ -532,5 +532,4 @@ row("IM-I45", () => {
     "IM-I45 (#369) Ann and ann, two unbound role holders: the report's bind advice for each, pasted as written, binds that one person (by id; by name it would be refused as ambiguous)", { advice, bound });
 });
 
-console.log(`[importer-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

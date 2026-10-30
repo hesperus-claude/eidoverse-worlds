@@ -99,10 +99,10 @@ import { approvalText, approvalProblem, makeApproval, translateV1World, NO_OWNER
 const operatorPub = () => JSON.parse(fs.readFileSync(path.join(W, ".custody.json"), "utf8")).operator?.pub as string;
 const verifies = (key: string, msg: string, sig: string) => { try { return crypto.verify(null, Buffer.from(msg), crypto.createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(key.slice(8), "base64url")]), format: "der", type: "spki" }), Buffer.from(sig, "base64url")); } catch { return false; } };
 import { readLog } from "../../shared/protocol/fold.js";
+import { suite } from "./suite.ts";
 
 const root = scratch("inplace");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 700)}` : ""}`); } };
+const { ok, done } = suite("inplace", { cap: 700 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "worlds"), OPT = path.join(root, "opt"); fs.mkdirSync(OPT, { recursive: true });
 const tool = (args: string[], env: Record<string, string> = {}) => { const r = Bun.spawnSync(["bun", "tools/protocol/world.ts", ...args], { cwd: ENGINE,
@@ -718,5 +718,4 @@ fs.rmSync = (p, x) => { log("rm " + p); return rm(p, x); };\n`);
 { const a = tool(["found", "casefold", "--owner", "Ann"]); const folds = fs.existsSync(path.join(W, "CASEFOLD")); const b = tool(["found", "CASEFOLD", "--owner", "Ann"]);
   ok(a.code === 0 && (folds ? b.code !== 0 && /another spelling of its case/.test(b.out) && same(fs.readdirSync(path.join(W, "casefold")), ["world.jsonl"]) : b.code === 0 && isWorldDir(path.join(W, "CASEFOLD"))),
     `IP43 found CASEFOLD after casefold: ${folds ? "refused, casefold/ untouched (this file system folds case)" : "a second world (this file system keeps case: the control)"}`, { a: a.code, b: b.code, out: b.out.slice(-200) }); }
-console.log(`inplace: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
