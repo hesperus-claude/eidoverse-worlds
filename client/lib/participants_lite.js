@@ -45,9 +45,8 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
   return row;
 }
 
-/** Generation-conditional like remotes.js (#95): a predecessor's late cleanup must
- *  not delete the successor that now owns the id. Cheaper here — there are no bones
- *  to dispose, but the identity rule is the same one. */
+/** Generation-conditional like remotes.js: a predecessor's late cleanup must
+ *  not delete the successor that now owns the id. */
 export function dropRemote(id, expected) {
   const r = remotes.get(id);
   if (!r) return null;

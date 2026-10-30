@@ -1,4 +1,4 @@
-// people.js — who someone is here and what you may do to them (research roles 10-06, S6; PLAN decisions 10-06).
+// people.js — who someone is here and what you may do to them.
 //
 // ONE function decides the menu: personActions(me, them) in shared/protocol/roles.js (pure, tested in tools/protocol/roles-check.ts
 // P1–P3). It shows only what you may do to that one person, so a member sees "Mention" and nothing else, and when rank
@@ -98,8 +98,8 @@ export function sheetFor(display) {
     b.onclick = () => { if (!sh.armed) return; if (!VERB[it.id] && it.id !== 'role') closeSheet(); act(it.id, display, 'sheet'); };
     sh.body.append(b);
   }
-  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger
-  // (the phone probe caught it choosing Ghost…). Rows act only after a fresh press that starts inside the sheet.
+  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger.
+  // Rows act only after a fresh press that starts inside the sheet.
   sh.armed = false;
   sh.root.hidden = false; requestAnimationFrame(() => sh.root.classList.add('open'));
   try { navigator.vibrate?.(15); } catch { /* no haptics */ }
@@ -134,7 +134,7 @@ export function closeSheet() { if (!sh) return; sh.root.classList.remove('open')
 function roleMenu(display, surface) {
   const me = myself(), them = personOf(display);
   const roles = R.grantableRoles(wc(), me).filter((r) => r.id !== 'none');
-  // merge when the entry exists: the role menu must not wipe the person's exceptions/note (review 10-14 K3)
+  // merge when the entry exists: the role menu must not wipe the person's exceptions/note
   const pick = (rid) => run('set', { id: '@world', component: `roles:${them.id}`, value: { role: rid }, ...(wc()[`roles:${them.id}`] ? { merge: true } : {}) }, `make ${display} ${rid}`);
   const items = [...roles.map((r) => ({ k: r.id, label: `${r.id === them.role ? '✓ ' : ''}${r.name}` })), ...(R.isOwner(me) || me.permissions.includes('grantRoles') ? [{ k: '::can', label: 'Exceptions…' }] : [])];
   const choose = (k) => (k === '::can' ? openCanForm(display, surface) : pick(k));
@@ -146,7 +146,7 @@ function roleMenu(display, surface) {
 }
 
 // ---------------------------------------------------------------- my lists, per person
-// Always allow / Never allow / Default (R 10-28): this person is always yes or always no to everything done to my body,
+// Always allow / Never allow / Default: this person is always yes or always no to everything done to my body,
 // whatever my switches say, or back to my switches. ✓ on the current one. consent.js keeps it (with the name, for the
 // list in Settings ▸ body) and consentsync sends it; the list is by identity, so a name passed on later isn't on it.
 const LIST_ITEMS = [['consent-allow', 'allow', 'Always allow'], ['consent-block', 'block', 'Never allow'], ['consent-default', null, 'Default']];
@@ -230,10 +230,9 @@ function openCanForm(display, surface) {
   }
   const b = document.createElement('button'); b.type = 'button'; b.className = 'pm-go'; b.textContent = 'Save';
   // an existing entry is patched (its note and legacy fields stay); someone on the default role gets an entry naming the
-  // role they have now (an exception needs an entry to live on; review 10-07)
+  // role they have now (an exception needs an entry to live on)
   const has = !!wc()[`roles:${them.id}`];
   // a merge keeps keys it isn't sent (RFC 7396): an exception set back to "as the role" goes as null, which removes it
-  // (review 10-07: clearing an exception did nothing)
   b.onclick = async () => { const cleared = Object.fromEntries(Object.keys(cur).filter((k) => !(k in st)).map((k) => [k, null]));
     const value = has ? { can: { ...st, ...cleared } } : { role: them.role, ...(Object.keys(st).length ? { can: st } : {}) };
     const r = await run('set', { id: '@world', component: `roles:${them.id}`, value, ...(has ? { merge: true } : {}) }, `${display}'s exceptions`); if (r?.ok) { closeCard(); closeSheet(); } };
@@ -243,8 +242,8 @@ function openCanForm(display, surface) {
   else { surface.strip.innerHTML = ''; surface.strip.append(host); }
 }
 
-// a warning is a notice you dismiss (research roles §5); the house centred card, kept until pressed
-// a DOM card isn't drawn in a headset (review 10-07 N6): in VR the same notice rides the XR quad (xrask.js), until pressed
+// a warning is a notice you dismiss; the house centred card, kept until pressed. A DOM card isn't drawn in a
+// headset: in VR the same notice rides the XR quad (xrask.js), until pressed
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
   ? chooseXR({ title: `${m.by} warned you`, body: String(m.reason ?? ''), choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
   : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: `${m.by} warned you`, body: String(m.reason ?? ''), ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });

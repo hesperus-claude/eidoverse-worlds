@@ -6,19 +6,19 @@
 // ~0.4° of text height and comfortable reading at 0.6–0.75°. So: up close the plate is a world object (s = 1 — it
 // doesn't balloon in your face); once its capitals would fall under 0.6° it holds 0.6° (grows with distance); past
 // MAX_GROW it lets perspective shrink it again, so a far crowd recedes instead of becoming a wall of equal labels.
-// OCCLUSION (owner, 09-30): a plate is hidden by scenery and by OTHER bodies, never by its owner's own — the sprite is
+// OCCLUSION: a plate is hidden by scenery and by OTHER bodies, never by its owner's own — the sprite is
 // depth-tested, but its depth is written as if it stood plateClear() metres nearer the eye than it is, and that
 // clearance is the farthest its own body reaches from the plate's anchor (ownClearance: measured once per body, so a
 // crown of tentacles through the plate doesn't cut it). The picture and its stereo depth stay where they are; only the
 // depth TEST moves. Distance still thins the crowd.
 //
-// HOLD-TO-REVEAL (owner, 09-30): while the reveal key is held, every plate in range comes forward — drawn through
+// HOLD-TO-REVEAL: while the reveal key is held, every plate in range comes forward — drawn through
 // everything (the clearance grows past the eye), at least the 0.6° size at any distance (no MAX_GROW shrink), and
 // faded out only past REVEAL_FULL–REVEAL_GONE. `k` is the eased reveal level, 0..1 (revealLevel), so press and
 // release both ease over REVEAL_EASE_MS instead of popping.
 
 export const PLATE_W = 0.9;            // metres: the label sprite's width at s = 1 (a 512 px wide canvas; its height is plateBox's)
-// Cap height of the 40 px name, MEASURED (canvas measureText + raster rows of 'H' in headless Chromium, 09-30: 30 px;
+// Cap height of the 40 px name, MEASURED (canvas measureText + raster rows of 'H' in headless Chromium: 30 px;
 // Segoe UI Semibold is ~28). The sprite is 0.9 m per 512 px whatever the canvas height, so 30 px is 30 × 0.9/512 m.
 export const PLATE_CAP_H = 30 * PLATE_W / 512;   // ≈ 0.0527 m
 export const TEXT_DEG = 0.6;           // the comfortable-reading angle the caps hold at range
@@ -75,7 +75,7 @@ export const revealEase = (r) => r * r * (3 - 2 * r);
 
 // ---- the plate's box ----------------------------------------------------------------------------------------
 // avatar.js bakes the name onto a pill on a 512 px wide canvas. The pill is sized from the glyphs' MEASURED ink
-// (canvas measureText actualBoundingBox*), not from the font size (owner, 10-01: descenders touched the pill's edge).
+// (canvas measureText actualBoundingBox*), not from the font size (descenders would touch the pill's edge).
 // Its height comes from the font's reference glyphs (a capital, the ascenders, the descenders), so "ggg" and "HHH" get
 // the same plate; a name whose own ink reaches further (Å, an emoji) grows its pill instead of touching the edge. Not
 // fontBoundingBox*: that box carries the font's line gap and sits well above the capitals, so the text would look low.

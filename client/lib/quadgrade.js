@@ -1,8 +1,8 @@
 // quadgrade — the VR panels' saturation/contrast grade as pure numbers (no three): the defaults, the ranges, the
 // persisted choice, and gradeSRGB, the JS twin of the shader grade in quadcolour.js. VR panels only: never the design
-// tokens, never the desktop (owner, 09-30: 'colours are generally less vibrant in VR' — a modest default boost).
+// tokens, never the desktop (colours read less vibrant in VR: a modest default boost).
 export const LUMA = [0.2126, 0.7152, 0.0722];   // Rec. 709, the weights the shader uses
-// VR panel grade: modest by default (owner asked for a modest default boost); the Settings › VR sliders drive these
+// VR panel grade: modest by default; the Settings › VR sliders drive these
 export const GRADE_DEFAULT = Object.freeze({ saturation: 1.15, contrast: 1.08 });
 export const GRADE_RANGE = Object.freeze({ saturation: [0.5, 2], contrast: [0.5, 1.8] });
 const LS = 'ew-xr-panel-grade';

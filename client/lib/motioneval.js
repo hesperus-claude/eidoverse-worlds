@@ -1,8 +1,7 @@
 // motioneval — the whole-entity motion closed forms, as pure math.
 //
-// Extracted from motion.js (#82 review): the browser render loop and the
-// agent's text-tier perception must agree on where a moving thing IS, and
-// the only way two runtimes agree forever is to evaluate the same file.
+// The browser render loop and the agent's text-tier perception must agree on
+// where a moving thing IS, so both evaluate this one file.
 // This module is deliberately dependency-free — no THREE, no DOM, no scene,
 // no clock (its imports are pure: names.js motionType, and shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
 // motion.js consumes it per frame; mcpl/agent.ts consumes it at read time.
@@ -11,7 +10,7 @@
 // refusal ({ok:false, why}) — never a partially-composed number. Unknown
 // motion types are a refusal here even though the renderer quietly shows
 // such things at rest: a renderer that draws stillness is visibly guessing,
-// but a printed coordinate claims to be truth (#82's whole disease).
+// but a printed coordinate claims to be truth.
 //
 // Part-frame motion (`motion:<slot> {node}` keys, or an old `motion` carrying `part`: shared/protocol/names.js motionNode)
 // does not displace the entity's ROOT transform at all — those stay in
@@ -42,7 +41,7 @@ const yawQuat = (yaw) => qAxisAngle([0, 1, 0], yaw ?? 0);
 // is tilted (PROTOCOL §9 amendment), else its yaw
 const baseQuat = (base) => (Array.isArray(base?.q) && base.q.length === 4 ? base.q : yawQuat(base?.yaw));
 
-// ---- the generous reader (verbatim from motion.js — see its history) -------
+// ---- the generous reader ---------------------------------------------------
 // Text-tier authors improvise dialect: `amplitude` for amp, `axis: "x"` for
 // [1,0,0], no t0 at all. Parsing is where generosity lives; the closed form
 // stays exact.
@@ -77,10 +76,8 @@ export const since = (m, nowMs) => {
 };
 
 /** A spin's or an orbit's rate in degrees a second: degPerSec, else a period
- *  (seconds a turn: 360 / period — review 10-07 N4: an orbit's period was
- *  ignored and it turned at the default), else an old world's rpm (× 6), else
- *  `def`. One reading for the renderer, the part path, the seat signals and
- *  the agent, so they can't disagree. */
+ *  (seconds a turn: 360 / period), else an old world's rpm (× 6), else `def`.
+ *  One reading for the renderer, the part path, the seat signals and the agent. */
 export function rateOf(m, def) {
   if (Number.isFinite(m.degPerSec)) return m.degPerSec;
   if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;
@@ -172,7 +169,7 @@ export function evalWholeMotion(base, m, nowMs) {
   switch (motionType(m)) {
     case 'pendulum':
       r = { ok: true, rot: true, yaw: null,
-        ...rotateAtPivot(base, axisOf(m, [1, 0, 0]), m.pivot ?? base.pivot ?? [0, 0, 0], pendulumTheta(m, t)) };   // base.pivot: the entity's pivot component (research 52); absent, its origin (shape audit 10-16: was [0, 2, 0], which a stored world's first load writes as its pivot)
+        ...rotateAtPivot(base, axisOf(m, [1, 0, 0]), m.pivot ?? base.pivot ?? [0, 0, 0], pendulumTheta(m, t)) };   // base.pivot: the entity's pivot component; absent, its origin (never a made-up default: a stored world's first load writes it as its pivot)
       break;
     case 'spin': {
       const rate = rateOf(m, 36);   // degPerSec, else 360 / period, else rpm × 6
@@ -213,7 +210,7 @@ export function evalWholeMotion(base, m, nowMs) {
   return r;
 }
 
-// ---- openable (R 10-07): a door, a gate, a lid — the pure halves of client/lib/openable.js ----------
+// ---- openable: a door, a gate, a lid — the pure halves of client/lib/openable.js ----------
 export const OPEN_DEFAULTS = Object.freeze({ angle: Math.PI / 2, time: 1 });   // a quarter turn; Roblox TweenInfo's 1 s
 
 /** How open (0 shut … 1 open) a tween {from, to, t0, dur} is at `now` (ms). Smoothstep: it starts and stops softly. */

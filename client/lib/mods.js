@@ -140,15 +140,12 @@ export default ({ EW, ui, onTick }) => {
 };
 `;
 
-/** The scriptable face of the mod system — same acts as the panel buttons.
- *  (Also what the e2e drives: UI and API share one implementation.)
+/** The scriptable face of the mod system — same acts as the panel buttons (the e2e drives this).
  *
- *  put and run need YOUR hand: a click or key press this moment (the browser's transient user activation). Installing
- *  or running code is a decision you make, and a mod you install can set itself to run on every arrival — so code that
- *  merely holds EW (a mod running on its own at load, or anything that found its way into the page) can't plant another
- *  that outlives it (the world-mod note, 09-28: one "run once" becoming permanent). Defence in depth, not a wall: code
- *  already in this page is same-origin and could reach the store another way; the walls are that nothing a world sends
- *  runs as code here (tools/protocol/modhole-check.ts) and the page's CSP. The 🧩 panel's own buttons are clicks. */
+ *  put and run need YOUR hand: transient user activation, so code that merely holds EW (a mod
+ *  autorunning at load, or anything injected into the page) can't plant another that outlives it.
+ *  Defence in depth, not a wall: the walls are that nothing a world sends runs as code here
+ *  (tools/protocol/modhole-check.ts) and the page's CSP. */
 const byHand = (what) => {
   if (globalThis.navigator?.userActivation && !navigator.userActivation.isActive) throw new Error(`EW.mods.${what} needs a click or key press from you (installing or running a mod is your decision)`);
 };
@@ -165,10 +162,7 @@ export function initMods() {
     let editing = null;      // name being edited, '' = new
     const render = async () => {
       const mine = await listScripts();
-      // THE LAYOUT (owner, 09-29: "the mod area was a bit of a hot mess"): every entry is one .mod-row —
-      // its name, a quiet line saying what it is, and its controls on the right (or under it, when a
-      // row carries more than one) — grouped under the pane's captions. No inline button runs in prose,
-      // no rules, no nested scroller.
+      // every entry is one .mod-row (name, a quiet note, controls), grouped under the pane's captions
       const rows = mine.map((s) => {
         const on = running.has(s.name);
         return `<div class="mod-row stacked">
@@ -204,19 +198,15 @@ export function initMods() {
         const b = e.target.closest('button');
         if (!b) return;
         const d = b.dataset;
-        // The built-in toggles answer BEFORE any await. listScripts() touches
-        // storage and the network, and this is an async handler with no catch:
-        // one rejection there killed every button in the panel silently,
-        // including the two that need nothing from it. The body-engine toggle
-        // then read as permanently stuck — the engine never changed because
-        // the click never arrived, not because the switch was wrong.
+        // The built-in toggles answer BEFORE any await: a listScripts() rejection
+        // in this uncaught async handler would otherwise kill them too.
         if (d.bodyeng) {
           const names = listBodyEngines();
           setBodyEngine(names[(names.indexOf(currentBodyEngine()) + 1) % names.length]);
           flashHint(`body engine: ${bodyEngine()} — takes effect on your next fall`);
           return render();
         }
-        if (d.corephys) {   // R 10-28 (item 33): thingphysics.js setPhysicsEnabled
+        if (d.corephys) {   // thingphysics.js setPhysicsEnabled
           setPhysicsEnabled(!physicsEnabled());
           flashHint(`object physics ${physicsEnabled() ? 'on' : 'off: things stand where the world last logged them'}`);
           return render();

@@ -1,6 +1,6 @@
 // matoverride — the reader for the DRAFT component `hesperus/material` (docs/COMPONENT-LADDER.md, rung 1).
 //
-// R, 10-10: Material as the ladder's first test. Absent, a thing shows its model's own materials. Present, the value
+// Absent, a thing shows its model's own materials. Present, the value
 // overrides fields of them: {color?, roughness?, metalness?, emissive?, emissiveStrength?, opacity?} (glTF PBR terms).
 // `hesperus/material` applies to every material slot; `hesperus/material:<slot>` to one (the slot is the model's
 // material name, slotKey'd). A field absent = the model's own value. A malformed value or field is ignored, never thrown.

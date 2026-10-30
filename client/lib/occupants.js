@@ -1,27 +1,23 @@
-// seats — the browser's seat-profile cache and gate assembly (#101).
+// occupants — the browser's seat-profile cache and gate assembly.
 //
 // One judge, three readers: this is reader one and two (the local body and
 // every remote both route through mountTransform, which asks here). The
 // cache holds SERVER-JUDGED verdicts from /avatars — never a rehashed file,
-// never a default — refreshed on connect and on the two update events, with
-// per-name fetch generations so a slow response from before an acceptance
-// can never roll the acceptance back (seatcore.makeGenerationGuard; the #95
-// lesson wearing seat-profile clothes).
+// never a default — with per-name fetch generations so a slow response from
+// before an acceptance can never roll it back (seatcore.makeGenerationGuard).
 //
-// The runtime gate (seatcore.seatGate) additionally needs two local truths
-// the server cannot know: which mixer slot is ACTUALLY playing on the occupant
-// (setClip's fallback walk must never let "sit" consume a chair profile),
-// and the digest of the clip bytes this page really loaded (assets.js
-// hashes them once at fetch — a filename is not an identity).
+// The runtime gate (seatcore.seatGate) also needs two local truths the server
+// can't know: which mixer slot is ACTUALLY playing on the occupant (setClip's
+// fallback walk must never let "sit" consume a chair profile), and the digest
+// of the clip bytes this page really loaded (a filename is not an identity).
 
 import { bus } from './base.js';
 import { vrmaShaLoaded } from './assets.js';
 import { makeVerdictCache, seatGate, occupantScalar, nameFromAvatarPath, SEAT_CLIP_FILE } from './seatcore.js';
 
-// The cache logic — epochs, pending demotion, event-rev floors — lives ONCE
-// in seatcore.makeVerdictCache, shared verbatim with the headless agent and
-// pinned by bun against the #105 review's four vectors. This module supplies
-// only the browser's transport and wiring.
+// The cache logic (epochs, pending demotion, event-rev floors) lives once in
+// seatcore.makeVerdictCache, shared with the headless agent; this module
+// supplies only the browser's transport and wiring.
 const cache = makeVerdictCache(async () => {
   const res = await fetch('/avatars', { cache: 'no-store' });
   if (!res.ok) throw new Error(`roster ${res.status}`);
