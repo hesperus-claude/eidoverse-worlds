@@ -5,8 +5,8 @@
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { spawnSync } from "node:child_process";
 import { jcs, readLog } from "../../shared/protocol/fold.js"; import { sha256, sha256Bytes, hexBytes } from "../../shared/protocol/hash.js";
 import { openLive } from "../../server/livehost.ts";
-const ENGINE = path.resolve(import.meta.dir, "../.."); let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}${info === undefined ? "" : " — " + JSON.stringify(info).slice(0, 300)}`); } };
+import { suite } from "./suite.ts";
+const ENGINE = path.resolve(import.meta.dir, "../.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
 const W = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "gov-"));
 const found = (name: string) => { const r = spawnSync(process.execPath, ["tools/protocol/world.ts", "found", name, "--owner", "u-aaaaaaaaaaaaaaaaaaaaaa", "--title", name], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W }, encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return path.join(W, name); };
 const step = (prev: string, e: Record<string, unknown>) => { const { head, sig, ...s } = e as any; const b = new Uint8Array(64); b.set(hexBytes(prev), 0); b.set(hexBytes(sha256(jcs(s))), 32); return sha256Bytes(b); };
@@ -25,4 +25,4 @@ try {
     /seq \d+/.test(err) && /governance/i.test(err) && /reserved/i.test(err) && /nothing (was|is) (changed|written)/i.test(err), { err });
   check("G4 …and the world's files are untouched", readLog(fs.readFileSync(log)).length === entries.length + 1);
 } finally { fs.rmSync(W, { recursive: true, force: true }); }
-console.log(`[gov-reserved-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

@@ -10,9 +10,9 @@ import { fold, readLog } from "../../shared/protocol/fold.js";
 import { simFold, restsOf, worldPose, ENGINES } from "../../shared/protocol/simlayer.js";
 import { scratch } from "./common.ts";
 import { labClock } from "./clock.ts";
+import { suite } from "./suite.ts";
 const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
+const { ok, done } = suite("eidosim-live-check", { quiet: true, cap: Infinity });
 const root = scratch("eidosim-live");
 const clock = labClock(); const at = (ms) => { clock.advance(ms); };
 const call = (w, a, v, args = {}, step = 100) => { at(step); return request(openWorld(root, w), a, v, args); };
@@ -133,4 +133,4 @@ function shoot(W, who = "vic", v = [0, -1, 6]) {   // a visitor throws crate-1 a
   c("rowan", "set", { id: "sh", component: "transform", value: { pos: [0, 3, 0], q, scale: [0.9, 0.9, 0.9] } });
   const L = c("rowan", "measure", { id: "sh" }).surfaces ?? [];
   ok(L.length > 1 && L.every((x, i) => i === 0 || x.y >= L[i - 1].y), "K10 measure's levels read bottom to top however they round (faces at one height share it)", L.map((x) => x.y)); }
-console.log(`eidosim-live-check: ${pass} passed, ${fail} failed`); if (fail) process.exit(1);
+done();
