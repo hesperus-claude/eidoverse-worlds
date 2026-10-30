@@ -63,7 +63,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the old tier is the tier", "shared/protocol/consent.js", "export const TIERS = [\"everyone\", \"friends\"];", "export const TIERS = [\"strangers\", \"friends\"];", ["C1"]],
   // "no old words on the wire" mutant RETIRED with C2 (recut A2; #260 375)
   ["drag is move again", "shared/protocol/consent.js", "drag: \"displace\", occupy: \"displace\", carry: \"displace\"", "drag: \"move\", occupy: \"displace\", carry: \"displace\"", ["C1"]],
-  // "a friend may close the table" mutant RETIRED with C3 (recut A2)
+  // the rows for C2, C3, C4, C6, C7 RETIRED with the cases (recut A2: tiers on the wire, delegates, the client table are gone)
   ["no presence migration at load", "shared/protocol/authority/storage.js", "if (migratePresence(w.presence)) w.presenceDirty = true;", "", ["C5"]],
   ["/worlds sorts by kind", "server/routes.ts", "people: present.map((c) => ({ id: c.id, ...(c.declares ? { declares: c.declares } : {}) })),", "people: present.filter((c) => c.declares !== \"agent\").map((c) => c.id), agents: present.filter((c) => c.declares === \"agent\").map((c) => c.id),", ["W1"]],
   ["the tool says (agent)", "mcpl/tools.ts", "p.declares ? `${p.id} (${p.declares})` : p.id", "p.declares === \"agent\" ? `${p.id} (agent)` : p.id", ["W2"]],
@@ -75,7 +75,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["light.noon again", "shared/protocol/descriptors.js", "daytime: { k: 'daytime', param: 'burnsAtNoon'", "daytime: { k: 'noon', param: 'burnsAtNoon'", ["S1"]],
   ["sky.clock again", "shared/worldentity.js", "    { t: 'text', k: 'tz', label: 'timezone', value: real ? (s.tz ?? DEFAULT_TZ) : '', ...ro,", "    { t: 'enum', k: 'clock', label: 'clock', value: real ? 'real' : 'authored', def: 'authored', options: [{ v: 'authored', label: 'authored' }, { v: 'real', label: 'real time' }] },\n    { t: 'text', k: 'tz', label: 'timezone', value: real ? (s.tz ?? DEFAULT_TZ) : '', ...ro,", ["S2"]],
   ["measure teaches set sockets", "mcpl/tools.ts", "a socket is a child entity, made with create {components: {parent: {to: id}", "act {verb: 'set', args: {id, component: 'sockets', value: {seat: {pos: [cx, y, cz], body: {pose: 'sitchair'}}}}} — or create {components: {parent: {to: id}", ["S3"]],
-  ["the history forgets", "spec/PROTOCOL.md", "the refusal codes `hold-limit`, `beneath`, `not-pushable`", "the refusal codes", ["X1"]],
+  ["the history forgets", "spec/history/PRE-RELEASE-RENAMES.md", "the refusal codes `hold-limit`, `beneath`, `not-pushable`", "the refusal codes", ["X1"]],
   ["the registry keeps pose", "shared/protocol/componentspec.js", "hold: \"string\", anim: \"string\", grips:", "hold: \"string\", pose: \"string\", grips:", ["A1"]],
   ["no door translation", "shared/protocol/authority/writes.js", "if (comp === \"grabbable\" || comp === \"station\") { const r = renameFields(comp, value);", "if (false) { const r = renameFields(comp, value);", ["A2"]],
   ["two-hand is a name", "shared/protocol/shaperepair.js", "if (comp === \"grabbable\" && p === \"two-hand\") {", "if (false) {", ["A2"]],
@@ -117,7 +117,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["an object may hold live", "shared/grab.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["a station may play live", "shared/sockbody.js", "  if (isReservedAnimName(v.anim)) return bad(", "  if (false) return bad(", ["K4"]],
   ["the tool forgets the rest", "mcpl/tools.ts", "and rests in your body-mode's own anim (stand: idle, sit: the sit loop, lie: lie, swim: tread, fly: soar) — never the bind pose; the body-mode is unchanged", "", ["K5"]],
-  ["the spec has no rest rule", "spec/PROTOCOL.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
+  ["the spec has no rest rule", "docs/pose-wire.md", "CURRENT body-mode's own anim (`stand`: idle; `sit`: its sit loop; `lie`;\n    `swim`: tread; `fly`: its hover), never the bind pose, and its", "CURRENT body-mode's own anim, and its", ["K5"]],
   ["sit asks for no body-mode", "mcpl/tools.ts", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = { sit: \"sit\", sitchair: \"sit\", lie: \"lie\", stand: \"stand\" };", "const ANIM_BODY: Record<string, \"stand\" | \"sit\" | \"lie\"> = {};", ["B1"]],
   ["an old sample's clip isn't read", "shared/bodymode.js", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : (typeof sample.clip === 'string' ? modeFromClip(sample.clip) : null);", "return isBodyMode(sample.bodyMode) ? sample.bodyMode : null;", ["B2"]],
   ["the fence takes any body-mode", "server/posecheck.ts", "if (\"bodyMode\" in p && !isBodyMode(p.bodyMode)) delete p.bodyMode;", "", ["B2"]],
@@ -146,7 +146,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["Add Component writes bob", "shared/editschema.js", "Oscillate: { type: 'oscillate', amp: 0.3, period: 4 }", "Oscillate: { type: 'bob', amp: 0.3, period: 4 }", ["OS5"]],
   ["the translator keeps bob", "tools/protocol/import-v1/translate-v1.js", "  const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };", "  const m = m0;", ["OS6"]],
   ["AGENTS.md says bob", "AGENTS.md", "`{type: pendulum\\|spin\\|orbit\\|oscillate\\|path, …}`", "`{type: pendulum\\|spin\\|orbit\\|bob\\|path, …}`", ["OS7"]],
-  ["the history forgets oscillate", "spec/PROTOCOL.md", "; and a motion's back-and-forth along an axis is `oscillate` (R 10-17 21:40; was `bob`:", "; and a motion's back-and-forth along an axis is the new word (R 10-17 21:40; was the old:", ["OS7"]],
+  ["the history forgets oscillate", "spec/history/PRE-RELEASE-RENAMES.md", "was `bob`: the door takes the old spelling", "was the old word: the door takes the old spelling", ["OS7"]],
   ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "export const MODES = [\"allow\", \"ask\", \"deny\"];", "export const MODES = [\"allow\", \"ask\",  \"deny\"];", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
