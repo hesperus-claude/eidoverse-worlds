@@ -14,18 +14,13 @@
 //              the late answer's tracks are stopped
 // Run one headless browser at a time; clouds are forced off before boot here.
 //   bun tools/vrmic-probe.mjs [--shots <dir>]      (SHOT_BASE=160 numbers the shots)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const { check, done } = checker();
 const shotDir = (() => { const i = process.argv.indexOf('--shots'); return i > 0 ? process.argv[i + 1] : null; })();
 let shotN = Number(process.env.SHOT_BASE ?? 160);
 if (shotDir) mkdirSync(shotDir, { recursive: true });
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const DEVICE_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-if (IWER_RAW.split(DEVICE_LOOP).length !== 2) throw new Error(`iwer build changed: expected exactly one '${DEVICE_LOOP}'`);
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` +
-  IWER_RAW.replace(DEVICE_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 
 const world = await ownedWorld({ env: { SKIP_OPT_SWEEP: '1', VOICE_TRANSPORT: 'sfu' } });   // a real SFU leg, so the ring's press reaches getUserMedia
 // mic: fake device + the context's permission granted, so a REAL getUserMedia succeeds; what the PAGE reads as the
@@ -38,16 +33,10 @@ const ev = (fn, arg) => Promise.race([pg.evaluate(fn, arg),
 const shot = async (name, opts = {}) => { if (!shotDir) return; const f = `${shotDir}/${shotN++}-${name}.png`; await pg.screenshot({ path: f, ...opts }); console.log(`  · shot ${f}`); };
 const saveUrl = (name, url) => { if (!shotDir || !url) return; const f = `${shotDir}/${shotN++}-${name}.png`; writeFileSync(f, Buffer.from(url.split(',')[1], 'base64')); console.log(`  · shot ${f}`); };
 
-await pg.addInitScript(() => { try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {} });   // THE SKY GUARD, before boot
-await pg.addInitScript(IWER);
+await iwerInit(pg, { cloud: 'off' });   // THE SKY GUARD, before boot
 await pg.addInitScript(() => {
   if (window.__probe) return;
-  const { XRDevice, metaQuest3 } = window.IWER ?? {};
-  if (!XRDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
-  const device = new XRDevice(metaQuest3);
-  device.installRuntime({ forceInstall: true });
-  window.__iwerDevice = device;
-  try { delete window.IWER; } catch { window.IWER = undefined; }
+  if (!window.__iwerDevice) { window.__probe = { fatal: 'IWER did not load' }; return; }
   const P = window.__probe = { grants: 0, perm: 'granted', gum: 0, hang: false, held: [], streams: [] };
   const real = navigator.xr.requestSession.bind(navigator.xr);
   navigator.xr.requestSession = async (...a) => { const s = await real(...a); P.grants++; return s; };

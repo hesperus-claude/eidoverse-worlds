@@ -2,24 +2,16 @@
 // locked and never change'). Real client + IWER: opens the debug quad from the ring and reads its frame-timing text
 // twice, a few seconds apart.
 //   bun tools/xr-debug-live-probe.mjs
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
 const { check, done } = checker();
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
-await pg.addInitScript(IWER);
-await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-  window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } });
-await pg.addInitScript(() => { try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {} });
+await iwerInit(pg, { cloud: 'off' });
 const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
 try {
   await pg.goto(`${world.origin}/?world=staging&name=dbglive&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 90000 });
-  await pg.evaluate(() => document.querySelector('#xrbtn').click());
-  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout: 30000, polling: 250 });
+  await visorShown(pg);
+  await enterVR(pg);
   await pg.waitForTimeout(3000);
   const open = await pg.evaluate(async () => {
     const dq = await import('./lib/domquad.js'), xp = await import('./lib/xrpanels.js');

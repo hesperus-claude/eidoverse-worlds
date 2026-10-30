@@ -4,12 +4,8 @@
 // Whether the runtime honours it is the runtime's (IWER sizes its layer from the canvas and ignores it; Chrome clamps to
 // 0.2–1.0) — a headset's "[xr] enter" line prints scale= and target=WxH. Empty world (no sky).
 //   bun tools/xr-res-probe.mjs   (with SKIP_OPT_SWEEP=1 its server starts no asset-optimizer jobs)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
-import { readFileSync } from 'node:fs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
 const { check, done } = checker();
-const IWER_RAW = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8');
-const LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
-const IWER = `globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n` + IWER_RAW.replace(LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser();
 const errs = [];
@@ -17,9 +13,7 @@ const errs = [];
 async function session(res) {
   const pg = await page();
   pg.on('pageerror', (e) => errs.push(`[${res}] ${e}`));
-  await pg.addInitScript(IWER);
-  await pg.addInitScript(() => { const { XRDevice, metaQuest3 } = window.IWER ?? {}; const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
-    window.__iwerDevice = d; try { delete window.IWER; } catch { window.IWER = undefined; } });
+  await iwerInit(pg);
   await pg.addInitScript(() => {
     window.__layerAsk = [];
     const L = window.XRWebGLLayer;
@@ -29,15 +23,14 @@ async function session(res) {
   });
   await pg.addInitScript((r) => { try { localStorage.setItem('ew-xr-prefs', JSON.stringify({ res: r })); } catch {} }, res);
   await pg.goto(`${world.origin}/?world=staging&name=resprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none'; }, null, { timeout: 120000 });
+  await visorShown(pg, { timeout: 120000 });
   // the settings row, as a person finds it
   const row = await pg.evaluate(async () => {
     document.querySelector('#sec-vr-tab')?.click(); await new Promise((r) => setTimeout(r, 400));
     const sel = [...document.querySelectorAll('#sec-vr select')].find((s) => [...s.options].some((o) => /headset asks/.test(o.textContent)));
     return sel ? { opts: [...sel.options].map((o) => o.value), value: sel.value } : null;
   });
-  await pg.evaluate(() => document.querySelector('#xrbtn').click());
-  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout: 30000, polling: 250 });
+  await enterVR(pg);
   await pg.waitForTimeout(1500);
   const r = await pg.evaluate(() => { const xr = globalThis.EW.renderer.xr; const t = xr._xrRenderTarget;
     return { scale: xr.getFramebufferScaleFactor(), asked: window.__layerAsk, w: t?.width ?? null, h: t?.height ?? null, proj: !!xr._glProjLayer }; });
