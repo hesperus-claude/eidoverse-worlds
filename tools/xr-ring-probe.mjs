@@ -1,10 +1,7 @@
 // xr-ring-probe — every slot on the VR ring draws its glyph (debug/world/chat drew blank discs: the ring read only
 // entry.icon, the rail also its id/emoji fallbacks), and the focus label draws over the slots, in the ring's centre.
-// (was: xr-panel-drag-probe — a trigger on EMPTY panel space is a press: drag it and the panel scrolls with the laser, release
-// without dragging and it clicks; a trigger on a control (a checkbox) still acts at once, exactly once. The owner
-// couldn't scroll the debug panel in a headset (09-27): the stick scrolled only while a button held the laser up.
-// Real client + IWER; the rays go through the same domQuadsPress/Drag/Release path xr.js drives from the trigger.
-//   bun tools/xr-panel-drag-probe.mjs
+// Every pinned panel's ring entry has an icon (dockPins, the rail's id/emoji fallbacks included). Real client + IWER.
+//   bun tools/xr-ring-probe.mjs
 import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({});
@@ -35,7 +32,8 @@ try {
   console.log('  ·', JSON.stringify(r));
   const blank = r.ink.filter((s) => s.n < 30).map((s) => s.label);
   check('every ring slot draws a glyph (no blank discs)', blank.length === 0, `blank: ${blank.join(', ') || 'none'}`);
-  for (const id of ['debug', 'world', 'chat']) { const p = r.pins.find((x) => x.id === id); if (p) check(`the ring's ${id} pin has an icon`, !!p.icon, JSON.stringify(p)); }
+  check('(setup) the ring has pins beyond debug/world/chat', r.pins.some((p) => !['debug', 'world', 'chat'].includes(p.id)), JSON.stringify(r.pins.map((p) => p.id)));
+  for (const p of r.pins) check(`the ring's ${p.id} pin has an icon`, !!p.icon, JSON.stringify(p));
   check('the focus label draws after every slot', r.labelOrder > r.maxSlot, `${r.labelOrder} vs ${r.maxSlot}`);
   check('…from the ring\'s centre, clear of the 6 o\'clock icon', Math.abs(r.labelPos[0]) < 1e-3 && Math.abs(r.labelPos[1]) < 1e-3, JSON.stringify(r.labelPos));
   check('no page errors', errs.length === 0, errs.slice(0, 3).join(' | '));
