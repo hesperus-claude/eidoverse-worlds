@@ -15,10 +15,10 @@
 // is that the PRODUCT'S install sequence runs. Removing the install turns this red.
 import { installFrameClock, installEntryClock, clockIsRestored } from '../client/lib/xr_frame_clock.js';
 import { readFileSync } from 'node:fs';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (n, ok, extra = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${n}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${n}${extra ? ` — ${extra}` : ''}`); } };
+const S = suite("xr-session-lifecycle");
+const check = (n, ok, extra) => S.check(n, ok, extra);
 
 // THE FAKE MUST BE AS FUSSY AS A BROWSER. A real window.requestAnimationFrame is a native method
 // that requires its receiver: calling it detached throws "Illegal invocation". An arrow-function
@@ -252,5 +252,4 @@ console.log('\n— the PRODUCT runs this sequence (the wiring the reviewer broke
     (xr.match(/nativeRAF/g) ?? []).length <= 4, `${(xr.match(/nativeRAF/g) ?? []).length} references`);
 }
 
-console.log(`\n${pass}/${pass + fail} passed`);
-process.exit(fail ? 1 : 0);
+S.done();

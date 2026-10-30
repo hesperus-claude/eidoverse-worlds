@@ -34,11 +34,12 @@ import { v1FoldBuild } from './protocol/import-v1/build.ts';
 import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { COMPONENTS as SPEC } from '../shared/protocol/componentspec.js';
 import { pinned } from "./protocol/clock.ts";
+import { suite } from "./protocol/suite.ts";
 const SKY_DEFAULTS = SPEC.sky.defaults;
 const hexInt = (x: any) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);   // a layer colour is stored as an int (shape audit 10-16)
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("worldentity");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const now = () => pinned(Date.now()) + 500;   // the authority's clock (scratchworld steps it per request)
 const ROOT = join(import.meta.dir, '..');
 const PRESETS = JSON.parse(readFileSync(join(ROOT, 'defs/sky/_presets.json'), 'utf8'));
@@ -304,5 +305,4 @@ console.log('\nI95. removing the Weather removes it, forecast and all:');
   check('with no forecast it is the clear weather it always was', canon(r2.ops) === canon([{ verb: 'weather', args: { weather: 'clear' } }]), JSON.stringify(r2));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();
