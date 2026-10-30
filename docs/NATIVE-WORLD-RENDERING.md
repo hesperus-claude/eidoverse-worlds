@@ -44,7 +44,7 @@ Unreal screenshot capabilities may identify `scene:"world-projection"` as well
 as `underwater-prototype`. Tool output labels the distinction and warns that
 unsupported components may be absent. Screenshot access/consent budgets are unchanged.
 
-Tests: `tools/render-scene-wire-test.ts` (`render-scene-test.ts` went with #248's deferred part), extended
+Tests: `tools/render-scene-import-test.ts` (gated), extended
 `tools/native-login-wire-test.ts`, existing login/broker/fold suites. Never run
 integration fixtures against inhabited worlds. Deployment requires a separately
 reviewed production-base patch and operator-approved restart; do not deploy the
@@ -97,8 +97,7 @@ are procedural approximations, not downloaded browser animation clips.
 Puppet and bodydrag requests are not accepted automatically; native ragdolls,
 mount/seating, force reactions and full streamed body-pose parity remain future work.
 
-Additional scratch checks: `tools/native-environment-control.ts` and
-`tools/native-interactions-fixture.ts` (`tools/leasetest.ts` went with leases).
+Additional scratch check: `tools/native-environment-control.ts`.
 
 ## Component data (water, air, environment, vehicles)
 

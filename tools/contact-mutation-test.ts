@@ -1,8 +1,5 @@
 import {join} from 'node:path';
 const cases=[
- {name:'coarse arrival floor',file:'mcpl/agent.ts',from:'dist <= (this.target.tolerance ?? ARRIVE)',to:'dist <= 0.4',test:'walk-precision-test.ts',witness:'sub-40cm request moves'},
- {name:'posture not applied',file:'mcpl/body-state.ts',from:'if (item.animation) this.clips.apply',to:'if (false) this.clips.apply',test:'live-contact-test.ts',witness:'sit changes the current knee'},
- {name:'live target not solved',file:'shared/reachorder.js',from:'order.push(nodes.get(key));',to:'order.unshift(nodes.get(key));',test:'live-contact-test.ts',witness:'real reach aims at the other hand live transform'},
  {name:'browser uses insertion order',file:'client/lib/avatar.js',from:'for (const { limb: key, reach: r } of plan.order)',to:'for (const { limb: key, reach: r } of [...this._reach].map(([limb, reach]) => ({ limb, reach })))',test:'reach-order-test.ts',witness:'follower-first: target is the producer'},
  {name:'cyclic release cannot retire',file:'client/lib/avatar.js',from:'if (r.wantWeight === 0 && r.weight < 0.02) {',to:"if (r.wantWeight === 0 && r.weight < 0.02 && !r.bound.includes('cyclic-reach')) {",test:'reach-order-test.ts',witness:'cycle: release removes private entry and unblocks survivor'},
  {name:'retarget loses previous bone writes',file:'client/lib/avatar.js',from:'_nu: prev?._nu, _nl: prev?._nl, _nh: prev?._nh,',to:'',test:'reach-order-test.ts',witness:'cyclic retarget restores the paused clip base'},

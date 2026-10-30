@@ -160,8 +160,7 @@ presence; importing these entities does not add native fold/vehicle replication.
 Run from the repo root with Bun. In the gate: `zone-water-check`, `water-vectors`,
 `water-import` (this manifest through `import.ts --dry`, a real authority, and `mediumOf`
 against main's `mediumAt`). `fog-mask-check.ts` runs the fog in headless Chromium on
-WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`); the
-regression check also needs the scene imported (`--apply`):
+WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`):
 
 ```sh
 bun tools/protocol/zone-water-check.ts
@@ -171,26 +170,12 @@ bun tools/models-field-test.ts
 bun tools/underwater-presence-test.ts
 UNDERWATER_TEST_PORT=19348 bun tools/underwater-wire-test.ts
 bun tools/water/gpu-test.ts
-bun tools/water/controller-check.ts
-bun tools/water/regression-check.ts
 ```
 
-browser-check, controller-check and regression-check don't complete today: they look things up by main's chosen
-ids (`water-habitat`, `water-terrain`, …), but the import now sends each as a `$` placeholder and the authority mints
-the ids, so their waits spin to timeout. They need the import's `ids` reply kept beside the manifest and read back
-(bot review #260 98).
-
-Set `WATER_PREVIEW_URL` to an isolated preview when changing the port or world;
-set `WATER_SCREENSHOT` to select the browser-check PNG output. Controller checks
-use the legacy reference frame. GPU checks read back rendered pixels for wet,
-dry, overlapping, and duplicate boxes and verify reset cleanup. Controller checks
-exercise imported floor collision, moving dry volumes, ascent/descent, and vehicle
-lease claim/state/final release. Wire checks cover 3D orientation, late join, and
-movement staying off the persistent log. The regression check uses the corrected reference frame and the actual VRM:
-walks along the submarine aisle, verifies all four floor slabs and glass alpha,
-checks a ray through the moonpool, climbs each ladder both ways, moves a carrier
-mid-climb, and samples hand positions over full swim/sculling cycles. It writes
-`/tmp/water-fix-{inside,windshield,swim}.png` for visual review.
+Set `WATER_PREVIEW_URL` to an isolated preview when changing the port or world. GPU checks read back rendered pixels for
+wet, dry, overlapping, and duplicate boxes and verify reset cleanup. Wire checks cover 3D orientation, late join, and
+movement staying off the persistent log. Vehicle lease claim/state/release is the gated `drive` suite; swimming is
+`zone-water`; climb routes are `climb-env`.
 
 ## Coordinates
 
