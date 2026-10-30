@@ -14,6 +14,7 @@ import { mkCheck, scratchSequencer } from "./harness.ts";
 import { makeReplica } from "../shared/protocol/replica.js";
 import { viewOf } from "../shared/protocol/view.js";
 import { idAliases } from "./protocol/idalias.ts";
+import { tryUntil } from "./protocol/wait.ts";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids
 
 const { check, tally } = mkCheck();
@@ -30,7 +31,7 @@ async function client(port: number, world: string, id: string) {
     if (m.type === "reply") { const f = waiters.get(m.id); if (f) { waiters.delete(m.id); f(m.reply); } } };
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   ws.send(J({ type: "join", world, id, avatar: "", replica: true }));
-  for (let i = 0; i < 60 && !msgs.some((m) => m.type === "snapshot" || m.type === "error"); i++) await new Promise((r) => setTimeout(r, 50));
+  await tryUntil("a snapshot or an error", () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 3000, step: 50 });
   const err = msgs.find((m) => m.type === "error"); if (err) throw new Error(`join ${id}@${world}: ${err.error}`);
   return {
     rep,
@@ -44,7 +45,7 @@ const port = seq.PORT;
 const ann = await client(port, "yard", "Ann");
 const made = await ann.req("create", { id: "crate", model: "test/crate.glb", components: { transform: { pos: [1, 0, 2], q: [0, 0, 0, 1], scale: [1, 2, 1] }, label: "tall crate", sockets: { top: { pos: [0, 1, 0] } } } });
 check("the owner makes a crate scaled [1,2,1]", made.ok === true, J(made.refused));
-await new Promise((r) => setTimeout(r, 300));
+await tryUntil("the crate reaches Ann's replica", () => ann.rep.st?.entities?.[IDS.of("crate")], { ms: 3000 });
 const cid = IDS.of("crate");   // the authority mints the id; "crate" rode as a placeholder
 const c = ann.rep.st?.entities?.[cid]?.c;
 check("…and this client's own fold has it", !!c && J(c.transform?.scale) === "[1,2,1]", J(c));

@@ -45,23 +45,16 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds } from "./harness.ts";
+import { foundWorlds, freePort } from "./harness.ts";
+import { until, tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
-// A free port unless PORT names one: on a fixed default, another server
-// already listening there would answer this test's joins.
-const PORT = Number(process.env.PORT ?? (() => {
-  const s = Bun.serve({ port: 0, fetch: () => new Response() });
-  const port = s.port;
-  s.stop(true);
-  return port;
-})());
+const PORT = Number(process.env.PORT ?? freePort(20000));   // a free port unless PORT names one
 const HTTP = `http://localhost:${PORT}`;
 const WS_URL = `ws://localhost:${PORT}/ws`;
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("server-clock");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const brief = (m: any) => JSON.stringify(m)?.slice(0, 100);
 
 type Sock = { ws: WebSocket; msgs: any[] };
@@ -81,12 +74,8 @@ async function joinWorld(s: Sock, msg: Record<string, unknown>) {
   const from = s.msgs.length;
   const sentAt = Date.now();
   s.ws.send(JSON.stringify({ type: "join", replica: true, ...msg }));   // a world talks only to clients that fold its log
-  for (let i = 0; i < 80; i++) {
-    const got = s.msgs.slice(from);
-    if (got.some((m) => m.type === "snapshot" || m.type === "error")) return { got, sentAt, snapAt: Date.now() };
-    await Bun.sleep(50);
-  }
-  throw new Error(`no snapshot in 4 s for ${JSON.stringify(msg)}`);
+  const got = await until(`a snapshot for ${JSON.stringify(msg)}`, () => { const g = s.msgs.slice(from); return g.some((m) => m.type === "snapshot" || m.type === "error") ? g : null; }, { ms: 4000, step: 50 });
+  return { got, sentAt, snapAt: Date.now() };
 }
 function checkJoin(label: string, r: { got: any[]; sentAt: number; snapAt: number }) {
   const i = r.got.findIndex((m) => m.type === "snapshot");
@@ -106,8 +95,7 @@ const proc = Bun.spawn([process.execPath, "run", join(import.meta.dir, "..", "se
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, OPT_DIR: optDir, JOIN_TOKEN: "", SKIP_OPT_SWEEP: "1" },
   stdout: "ignore", stderr: "inherit",
 });
-let up = false;
-for (let i = 0; i < 80 && !up; i++) { try { await fetch(`${HTTP}/`); up = true; } catch { await Bun.sleep(150); } }
+const up = !!(await tryUntil("the server answers", () => fetch(`${HTTP}/`).then(() => true, () => false), { ms: 12_000, step: 150 }));
 
 console.log(`\nserver clock — world "${WORLD}"\n`);
 try {
@@ -226,11 +214,10 @@ try {
   const seen = poser.msgs.length;
   poser.ws.send(JSON.stringify({ type: "pose", pose: { p: [1, 0, 1], yaw: 0 } }));
   let wire: any = null;
-  for (let i = 0; i < 200; i++) {   // up to 10 s, done once that frame is folded
+  await tryUntil("the poser's frame is folded", () => {   // done once that frame is folded
     wire ??= poser.msgs.slice(seen).find((m) => m.type === "frame" && m.poses && "poser" in m.poses) ?? null;
-    if (wire && folds.some((f) => f.t === wire.t)) break;
-    await Bun.sleep(50);
-  }
+    return !!wire && folds.some((f) => f.t === wire.t);
+  }, { ms: 10_000, step: 50 });
   delete agent.noteServerTime;
   const first = folds[0], own = wire && folds.find((f) => f.t === wire.t);
   check("an agent folds a frame's stamp into its estimate, as that frame's own sample",
@@ -539,5 +526,4 @@ console.log("\n— the browser takes the clock as its server clock —\n");
     lite.noteServerTime === sc.noteServerTime && lite.serverNow === sc.serverNow);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

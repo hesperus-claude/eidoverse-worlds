@@ -11,6 +11,7 @@
 // skins selects that land later inside chrome, and only inside chrome.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
 // happy-dom caches `selectedOptions` and does not refresh it after `sel.value = x` followed by
@@ -23,12 +24,9 @@ Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
 
 const { skinSelect, initDropdowns } = await import("../client/lib/dropdown.js");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const S = suite("dropdown");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+const tick = () => new Promise((r) => setImmediate(r));
 // the observer delivers on happy-dom's microtask queue, which under bun does not always drain before a
 // setTimeout(0) — so positive observer assertions wait for the DELIVERY (bounded), not for a guessed tick
 const settle = async (pred: () => boolean, ms = 250) => { const t0 = Date.now(); while (!pred() && Date.now() - t0 < ms) await tick(); return pred(); };
@@ -166,5 +164,4 @@ console.log("DROPDOWN — initDropdowns scope");
   check("a select added later OUTSIDE chrome stays native", !lateOut.dataset.skinned);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
