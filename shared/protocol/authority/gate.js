@@ -66,6 +66,7 @@ class Admitted { constructor(who, ops, after, notes = [], vacate = [], followUps
 // admit calls it for state writes, and every word that logs without a state write (say, grab's lift, throw, drop, a
 // teleport) calls it before appending. The lab has no agents (`for` is unwritten until keys, L4), so "that actor's
 // agents" is the actor alone here. A refused write's values aren't logged (its attempt is: authority.js logRefusal), so it costs the authority, not the log (authority practice).
+const rated = (cap) => !cap || cap.kind === "reaction" || cap.kind === "handle" || cap.kind === "caption";
 function rateCheck(w, actor, kind = "act", extra = 0) {
   if (w.leaving === actor) return; // a disconnect's settlement is the authority's duty, not the leaver's request: never rate-refused
   const RATE = w.rate ?? RATE_DEFAULT, r = rateOf(w, actor, RATE.ms); const cap = w.kindOf?.(actor) === "anon" ? RATE.anonBytes : RATE.bytes;
@@ -90,7 +91,7 @@ export const REPAIR_COMP = (c) => c === "access" || c === "default-role" || c ==
 const operatorRepairs = (who, op) => !!CTX.operator && CTX.operator === who.actor && !who.cap && op.id === "@world" && REPAIR_COMP(op.comp) && (op.verb === "set" || op.verb === "delete");
 function admit(w, st, who, ops) {
   const { actor, cap } = who;
-  if (!cap || cap.kind === "reaction" || cap.kind === "handle" || cap.kind === "caption") rateCheck(w, actor);
+  if (rated(cap)) rateCheck(w, actor);
   // preLifted: commit() lifted them already (so its reference clearing saw the lift's deletes), and passes the lift's notes
   const lifted = who.lifting ? { ops, notes: [] } : who.preLifted ? { ops, notes: who.preLifted } : liftOps(st, ops, w.everIds()); ops = lifted.ops;
   if (!ops.length) refuse("nothing", "that changes nothing", "");
@@ -400,4 +401,4 @@ function rolesCheck(st, s, ops) {
   if (bad) refuse(bad.code, `@world.role-defs: ${bad.reason}`, bad.fix, bad.didYouMean ? { didYouMean: bad.didYouMean } : undefined);
   // who fields that name a removed custom role read as owner (whoRank): nothing opens; nothing else to check here
 }
-export { Admitted, SAY_MAX, admit, lacks, lockCheck, needWords, rateCheck, spokenOf };
+export { Admitted, SAY_MAX, admit, lacks, lockCheck, needWords, rateCheck, rated, spokenOf };

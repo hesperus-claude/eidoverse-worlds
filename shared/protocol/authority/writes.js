@@ -26,7 +26,7 @@ import { buildEpoch, refuseForeign } from "./physics.js";
 import { stampHomes, stampResetHomes } from "./manipulate.js";
 import { outsideWorld } from "../../spawn.js";
 import { isLookAt } from "./checks.js";
-import { Admitted, admit, rateCheck } from "./gate.js";
+import { Admitted, admit, rateCheck, rated } from "./gate.js";
 import { applyResettle, clearRefsTo, lastTouch, planResettle, resettleEntries, stampMedia, stampModelHash, stampShapes, stripDry, touched, warnOrNot, warnings } from "./followups.js";
 import { renameFields } from "../shaperepair.js";
 import { ratedHoursAt } from "../../forecast.js";
@@ -116,8 +116,8 @@ function commit(w, actor, verb, args, build) {
   // actor, as a grab's own lift does, since orphanLifts reads the holder from it
   const lifts = liftsOf(w, ctx, plan);
   w.fits(actE, changeE, ...resettleEntries(w, settle, w.entries.length), ...wakes, ...lifts); // every line fits, or none is written
-  // the budget counts THIS write too, not only what came before it (review 10-14 C0: a 300 KiB batch in an empty window passed a 256 KiB cap)
-  if (!ctx.cap || ctx.cap.kind === "reaction" || ctx.cap.kind === "handle" || ctx.cap.kind === "caption") rateCheck(w, actor, "act", utf8Len(JSON.stringify(actE)) + utf8Len(JSON.stringify(changeE)));
+  // the budget counts THIS write too, not only what came before it
+  if (rated(ctx.cap)) rateCheck(w, actor, "act", utf8Len(JSON.stringify(actE)) + utf8Len(JSON.stringify(changeE)));
   const act = w.append(actE);
   const seq = changeEntry(w, plan, act);
   const after = w.state();
