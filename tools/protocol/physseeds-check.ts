@@ -19,12 +19,11 @@ import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil } from "./wait.ts";
 import { pin, LAB_EPOCH } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
-const only = (() => { const i = argv.indexOf("--only"); return i >= 0 ? argv[i + 1].split(",") : null; })();
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => { if (only && !only.includes(id)) return;
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); } else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const S = suite("physseeds", { cap: 500 }), { only } = S;
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 const imp = async (p: string) => await import(path.join(ENGINE, p)).catch((e) => ({ __missing: String(e) }));
 const H64 = "a".repeat(64);
 
@@ -213,5 +212,4 @@ if (!only || only.some((x) => x.startsWith("SV"))) {
   // the refusal is the no-type one (house 6340433633: any string passed, the missing-function fallback "no shapeError" too)
   ok("SG9", /^no shape type /.test(a) && /^no shape type /.test(b), "a shape type that is an inherited name (constructor) or not a string (['box']) is no shape type: refused in words, never thrown and never read as box", { a, b }); }
 
-console.log(`\nphysseeds: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();
