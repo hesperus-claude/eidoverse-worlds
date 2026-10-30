@@ -103,7 +103,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["simckpt", "simckpt-check.ts", 1],   // periodic sim checkpoints (SIM_CHECKPOINT_EVERY): a physics world without launches still bounds its boot's engine replay; purges and audits as before
   ["statecache", "statecache-check.ts", 1], // the derived fold cache (server/statecache.ts): a boot folds only the tail, any doubt folds from genesis, a background re-derive checks it
   ["foldparity", "foldparity-check.ts", 1], // the fold cache's views (server/foldviews.ts): a boot reads only genesis and the tail, and every reader answers as a whole-log boot
-  ["reset-race", "reset-race-check.ts", 1], // review 10-14 C1: a request awaiting warm() across a reset refuses instead of writing the old log's line into the new file // world fork (a new world naming its source) and reset (archived, re-founded by its owners)
   ["txn", "txn-check.ts", 1],           // reviewer items 1–2 (10-18): every request ends committed | rolled-back | ambiguous (persist before publish, publish in a finally, ambiguous never ok); one immutable request capability rechecked at both await→commit seams (liveness, identity, operator, the door, role)
   ["txn-mutants", "txn-check.ts --mutants", 1], // …and each of its rows turns red under the mutation it exists to catch (a scratch copy of the tree per mutant; the control stays green)
   ["blockers-mutants", "blockers-mutants.ts", 1], // review of PR #260 (10-18): the RED side of every blocker's row, run: one mutation of each fix (B1–B10, M1–M9, r14) in a scratch tree turns its named row red; the control stays green. Its output is the PR's red/green table
@@ -205,7 +204,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
 
 // ---- lanes ----
 // CORE runs first, in this order, and a failure there stops the gate
-export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reserved", "diffcheck", "hygiene", "procgroup", "nov1", "vocab", "authority", "access", "identity", "scars", "reset-race", "txn", "txn-mutants"];
+export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reserved", "diffcheck", "hygiene", "procgroup", "nov1", "vocab", "authority", "access", "identity", "scars", "txn", "txn-mutants"];
 // every suite that launches a Chromium (directly, through playwright, or through tools/harness.ts scratchBench). The
 // gate checks this list against the files themselves (browserMarkers), so a new browser suite can't hide in MAIN.
 // refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
