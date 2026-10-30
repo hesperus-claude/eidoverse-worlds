@@ -24,7 +24,7 @@
 //   HB  presence is keyed by identity, never a display name (pass 2 H-B): a second account asking to be "Marigold" is shown
 //       with a disambiguator (pass 3 H2), and doesn't get the first one's remembered pose; the real one does
 //   MA  a pose past the size cap isn't relayed or remembered; one websocket message past the cap closes the socket
-//   LC  on a box with a JOIN_TOKEN, /worlds, /snap and /geom?world need a key a join would take
+//   LC  on a box with a JOIN_TOKEN, /worlds, /snap, /geom?world and /relay-diag need a key a join would take
 //   RS  roles and moderation at the server (research roles S4): your-rights from the authority, voice-moderate as the authority's
 //       identity-keyed logged mute (surviving a reconnect), a kick that lets them straight back (R 10-28), warn and
 //       mute notices, access (listed / max with the moderator bypass); RS7 reset is the most senior owner's, forks meet the server's default gap;
@@ -720,10 +720,10 @@ const postAuth = (port, token) => fetch(`http://127.0.0.1:${port}/auth`, { metho
   SN.proc.kill(); }
 { const S4 = await start({ JOIN_TOKEN: "door-key" });
   const get = (p, key) => fetch(`http://127.0.0.1:${S4.port}${p}`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(3000) }).then((r) => r.status).catch(() => -1);
-  const noKey = [await get("/worlds"), await get("/geom?world=garden"), await get("/snap?world=garden&follow=x")];
-  const withKey = [await get("/worlds", "door-key"), await get("/geom?world=garden", "tok-rowan")];
+  const noKey = [await get("/worlds"), await get("/geom?world=garden"), await get("/snap?world=garden&follow=x"), await get("/relay-diag?world=garden")];
+  const withKey = [await get("/worlds", "door-key"), await get("/geom?world=garden", "tok-rowan"), await get("/relay-diag?world=garden", "door-key")];
   const snapKeyed = await get("/snap?world=garden&follow=x&budget=1000", "door-key");   // past the door: nobody has loaded garden on this server, so 404 (routes.ts /snap reads loaded worlds only), never 401
-  ok(noKey.every((c) => c === 401) && withKey.every((c) => c === 200) && snapKeyed === 404, "LC /worlds, /geom?world and /snap answer 401 without a key a join would take, 200 with the authority key or an agent token; keyed /snap is past the door (404: not loaded here)", [noKey, withKey, snapKeyed]);
+  ok(noKey.every((c) => c === 401) && withKey.every((c) => c === 200) && snapKeyed === 404, "LC /worlds, /geom?world, /snap and /relay-diag answer 401 without a key a join would take, 200 with the authority key or an agent token; keyed /snap is past the door (404: not loaded here)", [noKey, withKey, snapKeyed]);
   S4.proc.kill(); }
 
 S2.proc.kill(); srv.proc.kill();
