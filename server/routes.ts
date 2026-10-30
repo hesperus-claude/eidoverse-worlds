@@ -79,8 +79,8 @@ import { ClientLogRate, ClientLogStore, LIMITS as CLIENTLOG_LIMITS, scrub, holds
 import { readCapped } from "./reqbody.ts";
 
 import { recordComponents } from "../shared/protocol/view.js";
-/** What the routes need from Bun's server object, structurally: the WS
- *  upgrade and the socket address (X-Real-IP's fallback). */
+import { WORLD_NAME_RE } from "./limits.ts";
+/** What the routes need from Bun's server object: the WS upgrade and the socket address (X-Real-IP's fallback). */
 export type Srv = {
   upgrade(req: Request, opts?: { data?: unknown }): boolean;
   requestIP(req: Request): { address: string } | null;
@@ -592,10 +592,9 @@ const ROUTES: Route[] = [
         return sum ? j({ lib, ...sum }) : j({ error: "geometry parsing unavailable" }, 503);
       }
       if (!mayRead(req)) return unauthorized();
-      // read-only: answer for LOADED or on-disk worlds, never create one —
-      // and only for worlds this caller may see. A world closed to them reads
-      // exactly like one that does not exist (access.ts).
-      if (!/^[a-z0-9_-]{1,64}$/i.test(wname)
+      // read-only, LOADED or on-disk worlds, never creates one; a world closed to this caller reads exactly like one that
+      // does not exist (access.ts)
+      if (!WORLD_NAME_RE.test(wname)
         || (!worlds.has(wname) && !hasWorldLog(wname))) {
         return j({ error: "no such world" }, 404);
       }
@@ -704,7 +703,7 @@ const ROUTES: Route[] = [
     handler: ({ req, url, srv }) => {
       if (!mayRead(req)) return unauthorized();
       const name = url.searchParams.get("world") ?? "commons";
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return new Response("bad world name", { status: 400 });
+      if (!WORLD_NAME_RE.test(name)) return new Response("bad world name", { status: 400 });
       if (!worlds.has(name) && !hasWorldLog(name)) return new Response("no such world", { status: 404 });
       { const door = doorFor(name); if (!door || !visibleTo(door, httpVisitor(req, srv))) return new Response("no such world", { status: 404 }); }
       const t = getWorld(name).state.terrain;
@@ -738,7 +737,7 @@ const ROUTES: Route[] = [
       const names = new Set<string>(worlds.keys());
       try {
         for (const n of readdirSync(WORLDS_DIR)) {
-          if (/^[a-z0-9_-]{1,64}$/i.test(n) && existsSync(join(WORLDS_DIR, n, "world.jsonl"))) names.add(n);   // listed: its own case already
+          if (WORLD_NAME_RE.test(n) && existsSync(join(WORLDS_DIR, n, "world.jsonl"))) names.add(n);   // listed: its own case already
         }
       } catch { /* no worlds dir yet: only loaded worlds */ }
       // PER CALLER: a world closed to whoever is asking is not on their map at
@@ -782,7 +781,7 @@ const ROUTES: Route[] = [
       const caller = httpCaller(req);
       if (!caller) return j({ error: "sign in (cookie) or send Authorization: Bearer <your credential>" }, 401);
       const name = url.searchParams.get("world") ?? "";
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return j({ error: `"${name}" is not a world name` }, 400);
+      if (!WORLD_NAME_RE.test(name)) return j({ error: `"${name}" is not a world name` }, 400);
       const door = doorFor(name);
       // joining never founds a world here: `found` says so (a person founds with world-found; an operator for an agent)
       if (!door) return j({ world: name, exists: false, you: "none", found: { ok: false, why: `there's no world called "${name}" — joining never founds one here (any signed-in account founds a world with world-found)` } });

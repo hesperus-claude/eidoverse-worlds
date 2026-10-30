@@ -44,7 +44,7 @@ export function noFoldRefusal(world: string, native: boolean): string {
     : `"${world}" needs a client that folds its log, and this one doesn't — reload the page for the current client, or update the agent`;
 }
 
-const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/i;   // a letter or digit first: "-x" would read as a flag to the CLI
+const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/i;   // stricter than WORLD_NAME_RE: a letter or digit first ("-x" would read as a flag to the CLI)
 const TOOL = "bun tools/protocol/world.ts";
 export const HASH_PLACEHOLDER = "<the report hash the dry run printed>";
 /** Who claims a world with no owner (world.ts --claim): the operator running the commands, as the browser path's upgrader does. */
