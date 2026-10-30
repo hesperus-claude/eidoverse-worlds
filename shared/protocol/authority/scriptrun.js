@@ -1,9 +1,8 @@
 // shared/protocol/authority/scriptrun.js — scripts, the running half (activation): one activation (activate),
 // withAuthority, the server's settle/tick/checkpoint beat, orphan settlement, liftWorld (the load's report) and maintain (the maintenance command), the presence
 // and hand events and their drains, the status view, and the script verbs (upload, effect, adopt, scripts) as SCRIPT_VERBS,
-// which authority.js spreads into VERBS where they stood (refactor split, 2026-10-17; moved from authority.js's
-// "behaviours" section and the VERBS table unchanged; the standing half is authority/scripts.js). The gate, the engine's
-// settle and the returns home are above it, through UP.
+// which authority.js spreads into VERBS (the standing half is authority/scripts.js). The gate, the engine's settle and
+// the returns home are above it, through UP.
 import { grabOf } from "../../grab.js";
 import { isIdentity, PURGED } from "../fold.js";
 import { dec } from "../names.js";
@@ -43,9 +42,8 @@ const settleSim = (...a) => UP.settleSim(...a);
 // what an act records of its event: everything but what its trigger already holds (a say's text and `to`, a use's args),
 // so purging that say or that request purges it everywhere (an auditor reads it from the trigger: scriptaudit.js)
 const recorded = (ev) => { const { text, to, args, ...rest } = ev; return ev.seq !== undefined ? rest : ev; };
-// review r8 M4: an arrival or a departure is presence, and a signed, permanent act naming who came and went is an attendance
-// list the authority would keep for any script that listens. Its activation records no identity (no trigger actor, no
-// event.by); the script still hears `by` live, and what it writes itself is its own (and in its scope). The auditor re-runs
+// an arrival or a departure is presence (a signed act naming who came and went would be an attendance list): its
+// activation records no identity (no trigger actor, no event.by); the script still hears `by` live. The auditor re-runs
 // it with a stand-in arrival (scriptaudit.js)
 const ANON_EVENTS = new Set(["enter", "leave"]), GRIP_EVENTS = new Set(["grab", "release"]);
 const anonEvent = ({ by: _by, ...rest }) => rest;
@@ -120,7 +118,7 @@ function activate(w, id, name, ev) {
   const gates = [];
   for (const b of res.bodies) { const g = bodyGate(w, `script:${id}`, b.to, b.kind, { spec: b.spec, script: key, sponsor: sp.sponsor }); if (!g.ok) return mark(g.code, g.reason); gates.push({ ...b, consent: g.consent, deliver: g.deliver }); }
   // an arrival or departure, and a hand event whose own entry isn't on the record (an unlogged grab: presence), record no
-  // identity (review r9 claims O2): the log would otherwise hold who handled what only because a script listened. A hand
+  // identity: the log would otherwise hold who handled what only because a script listened. A hand
   // event with an act of its own (a grab the sim had to be told of, a release's settlement) already names its actor there,
   // so its activation keeps `trigger` (and the auditor its `by`)
   const anon = ANON_EVENTS.has(ev.on) || (GRIP_EVENTS.has(ev.on) && ev.seq === undefined);
@@ -128,7 +126,7 @@ function activate(w, id, name, ev) {
     body: { script: key, src: v.src, sponsor: sp.sponsor, sponsorAt: sp.sponsorAt, on: ev.on, ...(ev.by && !anon ? { trigger: { actor: ev.by, ...(ev.seq !== undefined ? { seq: ev.seq } : {}) } } : {}),
       event: anon ? anonEvent(recorded(event)) : recorded(event), head: actSeq - 1, seed, depth, engine: SR.ENGINE, api: SR.API, ...(res.reads ? { reads: res.reads } : {}),
       // a body effect is recorded as WHAT and ON WHOM, never which consent let it through: an allow list vs an open gate is a
-      // relationship fact, and consent is presence, never appended (consent gaps 6c, R 10-17 02:45)
+      // relationship fact, and consent is presence, never appended
       ...(gates.length ? { bodies: gates.map((g) => ({ kind: g.kind, to: `body:${g.to}` })) } : {}), ...(uses.length ? { uses } : {}) } };
   const sayE = (t, c) => ({ kind: "say", actor: `script:${id}`, cause: c, verb: "say", body: { text: t } });
   let act, state = null;
@@ -168,19 +166,16 @@ export function settle(w, { maxTicks = 8 } = {}) {
     const n0 = w.entries.length;
     CTX.work = { left: Infinity, until: Infinity, k: 0 };
     restampEngine(w); settleSim(w); returnDue(w); checkpointSim(w);
-    drainAll(w);   // what the beat logged reaches scripts, as a request's entries do (second review S2-2)
+    drainAll(w);   // what the beat logged reaches scripts, as a request's entries do
     return w.entries.length - n0;
   });
 }
-// A checkpoint is a persisted joiner cut (DESIGN-physics-responsiveness §2; STRIKES PH-S1-1: boot re-simulated every flight
-// the world ever had, 6.5 s for the gym's 94 launches and growing). At a quiet moment (nothing in flight, nothing waiting to
-// be logged) after launches have happened, the authority writes one `sim:checkpoint` entry whose body names a blob holding
-// the sim cut exactly as a joiner gets it (simCutOf), with the cut's engine and digest beside it. A host that carries the
-// engine opens the world from the last valid checkpoint and feeds only the entries after it; any other reader folds past
-// an unknown sim verb unchanged. The fold itself is never checkpointed: it is cheap and always exact from genesis.
-// A host may also bound the tail its boot replays (w.simCheckpointEvery, server policy: config SIM_CHECKPOINT_EVERY): one is
-// written once that many entries follow the last checkpoint (or a purge, which voids every earlier one) and something the sim
-// folds (a change or a sim intent) is among them; a tail of acts and says alone changes nothing a cut holds, so none is written.
+// A checkpoint is a persisted joiner cut, so a boot need not re-simulate every flight.
+// At a quiet moment (nothing in flight or waiting to be logged) after launches, the authority writes one `sim:checkpoint`
+// entry naming a blob that holds the sim cut as a joiner gets it (simCutOf), with its engine and digest. A host that
+// carries the engine boots from the last valid checkpoint; any other reader folds past an unknown sim verb. The fold
+// itself is never checkpointed. w.simCheckpointEvery (config SIM_CHECKPOINT_EVERY) also bounds the replayed tail: one is
+// written once that many entries, including something the sim folds, follow the last checkpoint (or a purge).
 const CHECKPOINT_QUIET_MS = 20000;
 /** checkpointSim's scan of the log, advanced to its end (a pure fold of kinds, verbs and ts; a host seeds w.ckptScan from its
  *  fold cache, server/foldviews.ts). `k`: advance this copy instead of w's own. */
@@ -196,7 +191,7 @@ export function ckptScanOf(w, k = (w.ckptScan ??= { to: -1, launches: 0, newest:
 }
 function checkpointSim(w, { every = w.simCheckpointEvery ?? 0 } = {}) {
   if (typeof w.putBlob !== "function" || !w.state().entities["@world"]?.c["physics-engine"]) return;
-  // incremental (second review S2-3: a whole-log scan every beat until the first checkpoint): what's been counted stays counted
+  // incremental (never a whole-log scan every beat): what's been counted stays counted
   const E = w.entries; const k = ckptScanOf(w);
   const afterLaunch = k.launches > 0 && w.now() - k.newest >= CHECKPOINT_QUIET_MS;
   const longTail = every > 0 && k.moved && E.length - 1 - k.base >= every;
@@ -234,7 +229,7 @@ export function tick(w) {
     return ran;
   });
 }
-/** TIMED GRANTS end (upstream #258, PROTOCOL §7 Roles): every roles:<id> whose `until` has passed by the authority's clock
+/** TIMED GRANTS end (PROTOCOL §7 Roles): every roles:<id> whose `until` has passed by the authority's clock
  *  is deleted, in one system act `expire-roles {ids}` and its change, so the end is in the log (a replay, a fork and an
  *  audit all see when someone's access ended). The host calls it about once a second; between `until` and that write the
  *  grant still stands. → the identities whose grant ended. */
@@ -260,7 +255,7 @@ export function expireRoles(w) {
  *  leave's refusal is: a return-held act (cause: the lift) writing where the log last had it, which seats it in the
  *  engine again, or, for a grabbable that returns, a return-home. `present` = identities connected now (none, at
  *  load). Returns what it settled. */
-// Bounded (security pass 2 M-C): it runs at world load on the thread every world shares, so at most ORPHANS.holders
+// Bounded: it runs at world load on the thread every world shares, so at most ORPHANS.holders
 // holders are settled as leave settles them and ORPHANS.lifts lifts returned; any holds past that simply end (presence),
 // and what the log still has lifted is settled at the next load. The result says how many waited ({deferred}).
 export const ORPHANS = { holders: 16, lifts: 64 };
@@ -275,7 +270,7 @@ export function settleOrphans(w, present = []) {
   for (const who of holders.slice(0, ORPHANS.holders)) {
     const r = request(w, who, "leave", {}); out.push({ holder: who, left: r.ok, dropped: r.dropped ?? [] });
     // a holder the authority won't take requests from now (banned since): the hold just ends (presence), and what the log
-    // lifted is settled below by the authority, as leave's own refusal is (review 10-06)
+    // lifted is settled below by the authority, as leave's own refusal is
     if (!r.ok) { for (const [id, h] of Object.entries(w.presence.holds)) if (h.by === who) delete w.presence.holds[id]; delete w.presence.bodies[who]; } }
   withAuthority(w, () => {
     // the holds end above (presence is this server's own); what the log lifted is settled by a server that can sign for the
@@ -297,7 +292,7 @@ export function settleOrphans(w, present = []) {
   if (out.length) w.savePresence();
   return out;
 }
-// ---------- maintenance (lead's ruling 2026-10-18: a LOAD NEVER WRITES TO THE LOG) ----------
+// ---------- maintenance (a LOAD NEVER WRITES TO THE LOG) ----------
 // Three rewrites of stored values exist, each a recorded system act: lift-sockets (a pre-socket world's `sockets` maps and
 // body blocks → socket children + stations), rename-components (names and fields renamed before release: shaperepair.js
 // RENAMED_COMPONENTS / RENAMED_FIELDS) and repair-shapes (the shape audit's one-way repair, marker-gated: shapesMarked). None
@@ -314,14 +309,11 @@ export function settleOrphans(w, present = []) {
 // the command (authority.js request). Never a silent wrong behaviour; never a write the operator didn't ask for.
 const needsCache = new WeakMap();
 const SERVED_RENAMES = (op) => !(op.comp === "grabbable" || op.comp.startsWith("grabbable:"));   // what no reader serves in the old spelling
-/** Why the record itself stops a write now, or null: its old shapes wait for the maintenance command (lead's ruling 10-18:
- *  a load never writes; a world whose old shapes no reader serves refuses every write until the command runs). Reads work
- *  either way. A log changed outside the purge rule does NOT stop writes (house markup, #260 10-20): the fold names each such
- *  line (commit-unpurged) and reads its value as unknown, which is §12's rule; refusing everyone's writes until an operator
- *  restores it was a policy no world asked for. One function, so a request (authority.js) and a script the host sets off
- *  (activate) meet the same gates. The system's own sweeps (settle's rests and returns, expireRoles, settleOrphans) don't:
- *  what they write is derived from the clock and the engine, not anyone's act, and gating them would keep a timed grant open
- *  past its until. → {code, reason, fix, extra?} */
+/** Why the record itself stops a write now, or null: a world whose old shapes no reader serves refuses every write until
+ *  the maintenance command runs. Reads work either way. A log changed outside the purge rule does NOT stop writes: the
+ *  fold names each such line (commit-unpurged) and reads its value as unknown (§12). A request (authority.js) and a
+ *  script the host sets off (activate) meet the same gates; the system's own sweeps (settle, expireRoles, settleOrphans)
+ *  don't, since gating them would keep a timed grant open past its until. → {code, reason, fix, extra?} */
 export function writeBlock(w) {
   const n = maintenanceNeeds(w);
   // the reader (an agent, a person in the editor) can't run the command, so the fix says who can and that asking again
@@ -347,7 +339,7 @@ export function maintenanceNeeds(w) {
   const st = w.state(); const lift = [];
   for (const h of legacyHosts(st, w.everIds())) { if (!st.entities[h]) continue; try { if (liftHostOps(st, w.everIds(), h).ops.length) lift.push(h); } catch { lift.push(h); } }
   // a stored format (a sockets map, a parent/home naming a slot, a body block) is stale and blocks; a host whose CATALOGUE
-  // model gained sockets since (modelSeatsDue) is a library update: optional, never blocking (lead 10-18). The new seats
+  // model gained sockets since (modelSeatsDue) is a library update: optional, never blocking. The new seats
   // simply aren't seatable until the command runs
   const stored = new Set(storedLegacyHosts(st)); const liftStored = lift.filter((h) => stored.has(h)), liftOptional = lift.filter((h) => !stored.has(h));
   const rename = renameOps(st, PURGED);
@@ -380,7 +372,7 @@ export function maintain(w, { by = null, operator = false, dryRun = false } = {}
   if (w.custody()?.sign && w.custody().sequencer() !== w.entries[0]?.body?.sequencer) return { refused: { code: "custody", reason: "this server doesn't hold the key that signs this world" } };
   const prov = { command: "repair", ...(typeof by === "string" && by ? { by } : {}), ...(operator ? { operator: true } : {}) };
   return withAuthority(w, () => { const steps = {};
-    // 1. lift-sockets: one host at a time, each on its own (review 10-12 S2-3)
+    // 1. lift-sockets: one host at a time, each on its own
     const lift = { made: [], failed: [] };
     for (const h of legacyHosts(w.state(), w.everIds())) {
       try { const st = w.state(); if (!st.entities[h]) continue;
@@ -390,10 +382,10 @@ export function maintain(w, { by = null, operator = false, dryRun = false } = {}
         const plan = admit(w, st, { actor: "system", cap: { kind: "system", ids, comps }, lifting: true }, ops);
         if (!dryRun) changeEntry(w, plan, w.append({ kind: "act", actor: "system", verb: "lift-sockets", body: { id: h, made, moved, ...(author ? { capability: { author } } : {}), ...prov } }));
         lift.made.push({ host: h, made, moved });
-      } catch (x) { if (!(x instanceof Refusal)) throw x;   // r14 H1 (10-18): a durable-write throw is the caller's ambiguous outcome, never a "refused" host
+      } catch (x) { if (!(x instanceof Refusal)) throw x;   // a durable-write throw is the caller's ambiguous outcome, never a "refused" host
         lift.failed.push({ host: h, code: x.code, reason: String(x.reason ?? "").slice(0, 300) }); } }
     steps.lift = lift;
-    // 2. rename-components: one system act, admitted PER THING (review r11 L3)
+    // 2. rename-components: one system act, admitted PER THING
     const rename = { renamed: [], failed: [] };
     try { const all = renameOps(w.state(), PURGED);
       if (all.length) { const st = w.state(); const byId = new Map(); for (const o of all) { if (!byId.has(o.id)) byId.set(o.id, []); byId.get(o.id).push(o); }
@@ -406,7 +398,7 @@ export function maintain(w, { by = null, operator = false, dryRun = false } = {}
         if (kept.length && !dryRun) { const ids = [...new Set(kept.map((o) => o.id))], comps = [...new Set(kept.map((o) => o.comp))];
           const plan = admit(w, w.state(), { actor: "system", cap: { kind: "system", ids, comps }, lifting: true }, kept.map(({ renamed: _r, ...o }) => o));
           changeEntry(w, plan, w.append({ kind: "act", actor: "system", verb: "rename-components", body: { renamed: rename.renamed, ...(rename.failed.length ? { failed: rename.failed } : {}), ...prov, why: "component names renamed before release (protocol minor 0): the value kept, under its new name" } })); } } }
-    catch (x) { if (!(x instanceof Refusal)) throw x;   // r14 H1: as above (repairShapesStep already rethrows)
+    catch (x) { if (!(x instanceof Refusal)) throw x;   // as above (repairShapesStep already rethrows)
       rename.failed.push({ id: null, code: x.code, reason: String(x.reason ?? "").slice(0, 300) }); }
     steps.rename = rename;
     // 3. repair-shapes: once per world (the act is the marker)
@@ -460,8 +452,7 @@ export function orphanScan(w, sc) {
       for (const o of ops) if (o.comp === "parent") parentOf.set(o.id, o.verb === "set" && typeof o.value?.to === "string" ? o.value.to : null);
       // the same lifecycle as the engine's (simlayer ends() and endsUnder(), read after the whole entry as the replay reads
       // them): what ends a hold is a write that moves it, re-parents it, switches it off or removes it, or switches off or
-      // removes a thing it hangs from; an engine change or an edit to its physics or model leaves it in the hand (review of
-      // 64d26822: the two disagreed, and a held thing came back into the engine as a ghost collider)
+      // removes a thing it hangs from; an engine change or an edit to its physics or model leaves it in the hand
       for (const o of ops) { if (o.verb === "create" || ends(o)) lifted.delete(o.id);
         if (endsUnder(o)) for (const k of [...lifted.keys()]) if (under(k, o.id)) lifted.delete(k); }
       for (const o of ops) if (o.verb === "delete" && o.comp === undefined) parentOf.delete(o.id); }
@@ -482,7 +473,7 @@ export function presenceEvent(w, kind, who) {
     return ran;
   });
 }
-// grab and release (grabbable; research grab §3): every script whose scope covers the thing and lists the event hears
+// grab and release (grabbable): every script whose scope covers the thing and lists the event hears
 // it, once. A grab is presence (unlogged unless the sim had to be told): its activation's cause is the grab's own act
 // when there is one, else the entry that made the script's sponsor, as enter/leave. A release is the settlement, which
 // is logged: its act is the cause. Fields: by, id, hand, grip? (grab); by, id, how (put | drop | throw | stay | return |
@@ -543,7 +534,7 @@ function scriptStatus(w, st, id, name, v) {
   if (!src) return { ...base, status: "failed", why: sourceWhy(src, unreadable, v.src) };
   if (!w.scripts) return { ...base, status: "unavailable", why: "this server has no script sandbox" };
   // a sandbox that's here but whose runtime didn't load says unavailable to every activation, so its status says so too, as
-  // scriptsOf's `sandbox` line does (review of #260, protocol core I59). Its own error stays in the server's log: it names
+  // scriptsOf's `sandbox` line does. Its own error stays in the server's log: it names
   // the host's files, and what a script's author needs is that only the operator can mend it
   if (sandboxUp(w) !== true) return { ...base, status: "unavailable", why: SANDBOX_DOWN };
   if (rt?.fails >= cfg.fails && rt.ver === lastTouch(w, id, key)?.seq) return { ...base, status: "paused", why: pausedWhy(rt) };
@@ -566,7 +557,7 @@ function importedBehaviours(w, st) {
     attach: b?.attach ?? null, src: b?.src ?? null, author: b?.author ?? null, status: "needs-reinstall", why: IMPORTED_WHY }));
 }
 const SCRIPT_VERBS = {
-  // ---- scripts (research 41) ----
+  // ---- scripts ----
   // a script's source is a blob (§2.2): stored once by its hash; not world state, so not logged. Hygiene and syntax are
   // checked here (to teach early) and again at install (what binds).
   upload(w, actor, a) {

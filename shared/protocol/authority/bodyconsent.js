@@ -1,7 +1,6 @@
 // shared/protocol/authority/bodyconsent.js — body consent: every act on another body is gated here, before delivery, and
-// the BODY_VERBS (consent, body, reach, inbox) answer for it (refactor split, 2026-10-17; moved from authority.js's "body
-// consent" section unchanged). Presence only: nothing here is ever appended. The body's own track (body, dist, gripPoint)
-// lives in the physics section above it, reached through UP.
+// the BODY_VERBS (consent, body, reach, inbox) answer for it. Presence only: nothing here is ever appended. The body's
+// own track (body, dist, gripPoint) lives in the physics section above it, reached through UP.
 import * as C from "../consent.js";
 import { REACH, BODY_REACH } from "../physconst.js";
 import { r3 } from "../round.js";
@@ -14,18 +13,18 @@ const body = (...a) => UP.body(...a);
 const dist = (...a) => UP.dist(...a);
 const gripPoint = (...a) => UP.gripPoint(...a);
 
-// ---------- body consent (PROTOCOL §5; R 10-28: two gates and two lists). Presence only: none of this is ever appended. ----------
+// ---------- body consent (PROTOCOL §5: two gates and two lists). Presence only: none of this is ever appended. ----------
 // The authority keeps every body's table (consent.js) beside `bodies` and `holds`, refuses BEFORE delivery, and keeps an
 // unlogged attempt ring. Delivery is the target's `inbox` (the server forwards it to their socket).
 const ringPush = (P, r) => { (P.ring ??= []).push(r); if (P.ring.length > 200) P.ring.shift(); };
-// bounded like ring (review 10-14 C2: browsers never drain it). Each message carries `n`, its person's own count, which
-// survives both the cap's trimming and `inbox` draining it: the server forwards by `n`, never by the array's length (holes
-// review 10-15 H1: a full queue stayed at 200, and its person heard nothing more)
+// bounded like ring (browsers never drain it). Each message carries `n`, its person's own count, which survives both the
+// cap's trimming and `inbox` draining it: the server forwards by `n`, never by the array's length (a full queue's length
+// stops changing)
 const inboxPush = (P, who, m) => { const n = ((P.inboxN ??= {})[who] ?? 0) + 1; P.inboxN[who] = n; const q = (P.inbox ??= {})[who] ??= []; q.push({ ...m, n }); if (q.length > 200) q.shift(); };
 const bodyRef = (x) => (typeof x === "string" ? x.replace(/^body:/, "") : x);
 // 42 §4.13 item 4: five refusals of one class from three distinct targets in 5 min puts the actor on a 10-minute
 // cool-down for that class, world-wide, written as an automatic action in the MODERATOR log. Never a ban.
-// `to` may be several bodies: one blast's refusals are ONE attempt (R 10-28), its people all counted as refusing
+// `to` may be several bodies: one blast's refusals are ONE attempt, its people all counted as refusing
 function noteRefusal(w, from, to, cls, now) { const P = w.presence; (P.refusals ??= []).push({ ts: now, from, to, cls }); P.refusals = P.refusals.filter((r) => now - r.ts < 300000);
   const mine = P.refusals.filter((r) => r.from === from && r.cls === cls), people = new Set(mine.flatMap((r) => [].concat(r.to))).size;
   if (mine.length >= 5 && people >= 3 && !(P.throttle?.[`${from}:${cls}`] > now)) {
@@ -56,12 +55,10 @@ function bodyGate(w, from, to, kind, extra = {}) { syncDefault(w);
     return { ok: false, code: "consent", class: cls, reason: C.refusalWords(to, cls), fix: C.REFUSAL_FIX }; }   // the why is the target's (ring) only
   return { ok: true, consent: "allowed", deliver: () => { ringPush(P, { ts: now, from, to, cls, verdict: "allowed" }); deliver(w, from, to, kind, cls, extra); } };
 }
-// The relay's question about a reach DESCRIPTOR (shared/reachwire.js: a hand streamed in a pose toward another body, design
-// review 10-15 item 1): may `from`'s hand rest on `to` as `cls` (touch | intimate) right now? Asked per presence packet, so it
-// is presence only: nothing is appended, and the refusal counter that leads to a moderator-log cool-down is NOT fed (a stream
-// of frames is one attempt, not fifty). Admitted when `to`'s table says allow; decided again at every packet, so a gate
-// closing or a block ends it. A refusal is said to the reacher in the body inbox, and to the target's attempt ring, once per
-// (from, to, cls) per C.REACH_NOTE_MS; `noted` says whether it was now. The target is told (tellTarget); `told` says whether now.
+// The relay's question about a reach DESCRIPTOR (shared/reachwire.js): may `from`'s hand rest on `to` as `cls` (touch |
+// intimate) right now? Asked per presence packet, so nothing is appended and the cool-down counter is NOT fed (a stream
+// is one attempt). Decided again at every packet, so a gate closing or a block ends it. A refusal is said to both sides
+// once per (from, to, cls) per C.REACH_NOTE_MS; `noted` / `told` say whether it was now.
 export function reachAdmits(w, from, to, cls, { point = null, limb = null, quiet = false } = {}) { syncDefault(w);
   const P = w.presence, now = w.now();
   if (from === to) return { ok: true, consent: "self" };
@@ -100,11 +97,11 @@ function decideAs(P, from, sponsor, to, cls) {
 function deliver(w, from, to, kind, cls, extra) {
   const P = w.presence, b = P.bodies[to];
   const sponsor = extra.sponsor ? { sponsor: extra.sponsor } : {};
-  // who posed you, never the pose: the pose travels on the presence plane from the poser's client; a copy here was never read (recut A4)
+  // who posed you, never the pose: the pose travels on the presence plane from the poser's client; a copy here was never read
   if (cls === "pose") { b.poseBy = from; if (extra.sponsor) b.poseSponsor = extra.sponsor; else delete b.poseSponsor; }
   if (cls === "displace") { b.draggedBy = from; if (extra.sponsor) b.dragSponsor = extra.sponsor; else delete b.dragSponsor; }
   if (cls === "shove") b.tumble = { by: from, ts: w.now() };
-  // a touch under way is recorded (touchedBy, revokeAfter); the relay decides it again at every packet (review of #260, house Q1)
+  // a touch under way is recorded (touchedBy, revokeAfter); the relay decides it again at every packet
   if (cls === "touch" || cls === "intimate") (P.reaches ??= {})[from] = { to, cls, point: extra.spec?.point ?? null, ...sponsor };
   inboxPush(P, to, { type: "body", from, kind, cls, consent: from === to ? "self" : "allowed", ...(extra.spec ? { spec: extra.spec } : {}) }); w.presenceDirty = true;
 }

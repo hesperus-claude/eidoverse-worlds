@@ -1,5 +1,5 @@
-// shared/protocol/kernelspec.js — the KERNEL's shapes, pinned (reviewer item 5, 2026-10-18: "trial-kernel… must be impossible
-// without same-commit translator + changelog + failing old-reader/new-reader vectors").
+// shared/protocol/kernelspec.js — the KERNEL's shapes, pinned: a kernel change is impossible without a same-commit
+// translator, changelog line and failing old-reader/new-reader vectors.
 //
 // The registry (componentspec.js) pins what each COMPONENT means, with statuses trial / reserved / stable. Below those sits
 // the kernel: what every reader of every log agrees on before a single component is read. PROTOCOL §1–§3, §9.3, §13:
@@ -9,10 +9,10 @@
 //   version    {dialect, v} and the minors this reader knows (§13; genesis's fields)
 //   transform  the one placement component (§9.3: glTF's rule)
 //   parent     the one attachment component (§9.3)
-//   model      what a thing shows (its library path; §9.3) — reviewer item 5 (10-18): "envelope/fold/identity/version/transform/parent/model/roles/access"
+//   model      what a thing shows (its library path; §9.3)
 //   roles      who may do what (§7): the component's shape. Its VOCABULARY (ranks, built-in ids, permissions, the custom-id
-//              pattern, reserved ids) is the registry's (componentspec roles.vocab), not the kernel's (recut C11: the kernel
-//              holds what the fold reads; the ladder is read by the authority, and a registry break still needs --ack)
+//              pattern, reserved ids) is the registry's (componentspec roles.vocab), not the kernel's (the kernel holds
+//              what the fold reads; the ladder is read by the authority, and a registry break still needs --ack)
 //   access     who may come in (§7, access.js): the component's shape (the four doors are client presets that write it)
 // Each has status `trial-kernel`: like trial it may still change during the alpha, but a change is never a re-pin with an
 // acknowledgement. spec/kernel-pin.json holds the pin; tools/protocol/kernel-check.ts (the gate's CORE lane) is red the moment
@@ -29,8 +29,8 @@ import { COMPONENTS, pinOf } from "./componentspec.js";
 
 export const TRIAL_KERNEL = "trial-kernel";
 /** The component names that belong to the kernel (their registry status is trial-kernel). */
-/** The component names that belong to the kernel: what every reader rests on (C11b, house plan #260 10-20: the kernel is what the
- *  fold reads; transform, parent and model left it, as the fold never reads them). */
+/** The component names that belong to the kernel: what every reader rests on (the kernel is what the fold reads;
+ *  transform, parent and model left it, as the fold never reads them). */
 export const KERNEL_COMPONENTS = Object.freeze(["roles", "access"]);
 /** The kernel's shapes that aren't components: the pin's other keys. */
 export const KERNEL_SHAPES = Object.freeze(["envelope", "fold", "identity", "version"]);
@@ -38,7 +38,7 @@ export const KERNEL_SHAPES = Object.freeze(["envelope", "fold", "identity", "ver
 /** The kernel's checkable shape, as the pin stores it. Deterministic (sorted where the source is a set). */
 export function kernelPinOf() {
   const reg = pinOf();
-  // a kernel component's FIELD shape only (C11b: "roles/access keep at most their component shape"): its ranges, enums, defaults,
+  // a kernel component's FIELD shape only: its ranges, enums, defaults,
   // meanings and vocabulary are the registry's, pinned there
   const comp = (name) => { const p = reg[name]; if (!p) return { missing: true }; return { status: COMPONENTS[name]?.status ?? p.status, fields: p.fields }; };
   return {
@@ -80,9 +80,9 @@ export function kernelVerdict(pin, now = kernelPinOf(), companions = null, date 
   const c = companions ?? {}; const missing = [];
   const ack = typeof c.ack === "string" ? c.ack.trim() : "";
   if (!ack) missing.push(`a changelog line: --ack "<why>" (written to spec/REGISTRY-CHANGELOG.md as "kernel: <why>")`);
-  // A SCOPE TRIM (recut C11, the mirror of the extension below; C11b): the whole diff is kernel components, or keys of them,
+  // A SCOPE TRIM (the mirror of the extension below): the whole diff is kernel components, or keys of them,
   // LEAVING the pin (a line "<name>[.<key>]: … → absent", <name> a component of the pinned kernel). A `grammar` leaving is
-  // accounted key by key (companions.trim.held[name] = its keys the registry's vocab keeps, as C11 recorded it); any other path
+  // accounted key by key (companions.trim.held[name] = its keys the registry's vocab keeps); any other path
   // is accounted whole (companions.trim.heldPaths: the registry pin keeps that path's value). Every one must be HELD or
   // DROPPED with a why (companions.trim.dropped["<path>"]). No stored byte changes meaning, so no translator or vectors could
   // exist; the ack is still required. Anything else in the diff is a kernel change: all three.
@@ -109,7 +109,7 @@ export function kernelVerdict(pin, now = kernelPinOf(), companions = null, date 
     const trim = { held: t.held ?? {}, ...(t.heldPaths?.length ? { heldPaths: t.heldPaths } : {}), dropped: t.dropped ?? {} };
     return { ok: true, diff, trimOnly: true, changelog: `- ${date}: kernel: ${ack}\n${lines.join("\n")}\n`, companions: { changelog: `${date}: kernel: ${ack}`, trim, translator: null, vectors: null } };
   }
-  // A SCOPE EXTENSION (reviewer item 5, 10-18: model, roles and access joined transform and parent): the whole diff is kernel
+  // A SCOPE EXTENSION: the whole diff is kernel
   // component(s) entering the pin, each with the shape the registry ALREADY pinned (the caller checks that against
   // spec/registry-pin.json and names them in companions.scope). No stored byte changes meaning, so no translator and no
   // vectors could exist for it (the old reader folds the same log the same way); a changelog line is still required, and the

@@ -1,7 +1,6 @@
 // shared/protocol/authority/use.js — use (interaction): what a thing offers (reactions, toggles, sockets a body may take,
 // the implicit open), buildUse that turns a use into ops or presence, and the use verb as USE_VERBS, which authority.js
-// spreads into VERBS where it stood (refactor split, 2026-10-17; moved from authority.js's "use (interaction)" section
-// and the VERBS table unchanged). The write path, scripts and seats it hands off to are above it, reached through UP.
+// spreads into VERBS. The write path, scripts and seats it hands off to are above it, reached through UP.
 import { bodyOf } from "../../components.js";
 import { inOccupyReach, OCCUPY_REACH } from "../../sockbody.js";
 import { grabOf } from "../../grab.js";
@@ -35,7 +34,7 @@ const vec3s = (...a) => UP.vec3s(...a);
 // ---------- use (interaction) ----------
 // A pendulum's pivot is a view: derived from what it hangs from, every time it's read (L2: never stored).
 function pivotOf(st, id) {
-  const pv = st.entities[id]?.c.pivot?.pos; if (Array.isArray(pv) && pv.length === 3) return pv.slice();   // the stored hinge (research 52)
+  const pv = st.entities[id]?.c.pivot?.pos; if (Array.isArray(pv) && pv.length === 3) return pv.slice();   // the stored hinge
   const t = worldT(st, id); const p = st.entities[id]?.c.parent?.to; const pb = p && aabb(st, p);
   return pb && pb.max[1] > t.pos[1] ? [0, r3((pb.max[1] - t.pos[1]) / t.scale[1]), 0] : null;
 }
@@ -44,7 +43,7 @@ function pivotOf(st, id) {
 function reactionCap(ctx, id, comp, action) {
   const implicit = !ctx.st.entities[id]?.c.reactions?.[action] && action === "open" && implicitOpens(ctx.st.entities[id]);
   const lt = lastTouch(ctx.w, id, implicit ? "openable" : "reactions", { editsOnly: implicit, authored: true }); if (!lt) refuse("no-handler", `nobody set up '${action}' on ${id}`, `inspect {id: '${id}'} shows what it offers; a builder can set up '${action}' in its reactions, and asking again won't change it until then`);
-  // a purge erased whose rights installed it: it acts for nobody, never as a newcomer would (house 6340433633 Q2)
+  // a purge erased whose rights installed it: it acts for nobody, never as a newcomer would
   if (lt.actor == null) refuse("rights", `a purge erased who set up '${action}' on ${id}, so it acts for nobody`, `someone who may change ${id}'s reactions can set it up again`);
   ctx.actExtra = { capability: { reaction: action, author: lt.actor, grantedAt: lt.seq } };
   ctx.cap = { kind: "reaction", ids: [id], comps: [comp], author: lt.actor, action };
@@ -54,7 +53,7 @@ function buildUse(ctx, a) {
   const e = ctx.st.entities[a.id]; if (!e) refuse("not-found", `no '${a.id}'`, "", { didYouMean: guess(a.id, Object.keys(ctx.st.entities)) });
   offRefuse(ctx.st, a.id, "used");
   const offers = actionsOf(ctx.st, a.id);
-  // no action named (Commons audit: "doesn't 'undefined'"): the thing's one action, or say what it offers
+  // no action named: the thing's one action, or say what it offers
   // "one action" means one this asker may do: an owner-only lock beside an open-to-all door isn't a choice for a visitor
   if (a.action == null && !offers.length) refuse("no-action", `${a.id} has nothing to use: it offers no actions`, "inspect shows what a thing offers; a builder gives it reactions, or a seat (a socket child carrying a station)");
   const mine = a.action == null ? offersFor(ctx.st, a.id, ctx.actor).canDo : offers;
@@ -74,7 +73,7 @@ function buildUse(ctx, a) {
     const taken = (x) => (ctx.w ? occupantOn(ctx.w, ctx.st, x.id, ctx.actor) : null);
     const pick = socket != null ? ok.find((x) => x.slot === socket) : ok.find((x) => !taken(x)) ?? ok[0];
     { const t = taken(pick); if (t) refuse("occupied", `${t.who ? said(t.who) : t.thing} ${t.who ? "sits" : "is"} in ${pick.host}'s ${pick.slot}${socket == null && ok.length > 1 ? `, and its other ${action} sockets are taken too` : ""}`, "one body per socket: wait till it's free, or pick another (args: {socket})", t.who ? { by: t.who } : { thing: t.thing }); }
-    // within reach (review r10 M1): leaving a seat restarts the authority's track of the body at it, so a sit from afar would be an
+    // within reach: leaving a seat restarts the authority's track of the body at it, so a sit from afar would be an
     // unlogged teleport past the spawn rule and any wall. Measured from the tracked body (or, moving straight from another seat,
     // from that seat); a body the authority doesn't track yet (not arrived) may sit, and its first move is an arrival as ever
     let near = false;
@@ -124,7 +123,7 @@ function buildUse(ctx, a) {
     if (mag > 0 && Math.abs(along) < 0.3 * mag) refuse("sideways", `${a.id} swings front-to-back; that push is mostly sideways`, `push along its front ${JSON.stringify(fwd.map(r3))} (or the opposite)`);
     // the first protocol's pendulum impulse: read angle and velocity AT the push instant, add the push,
     // re-express as (amp, phase, t0). No snap at the push; with the motion builds, against it damps. The client's
-    // pendulumTheta (client/lib/motioneval.js) evaluates the result: keep the two in sync (review 10-06 #5).
+    // pendulumTheta (client/lib/motioneval.js) evaluates the result: keep the two in sync.
     const now = ctx.w.now(), w0 = (2 * Math.PI) / (mo.period ?? 3.5), damp = mo.damp ?? 0;
     const t = mo.t0 != null ? Math.max(0, (now - mo.t0) / 1000) : 0;
     const a0 = (mo.amp ?? 0) * Math.exp(-damp * t), ph = w0 * t + (mo.phase ?? 0);
@@ -140,14 +139,13 @@ function buildUse(ctx, a) {
   // §5: a thing's gameplay state lives inside its own component (a door is `openable: {open, locked}`), never as a top-level
   // name beside the edit `lock`. A handler names its component and, for an object component, the field it changes.
   // a handler that changes a field inside a component needs that component (it was there when the handler was written;
-  // someone has removed it since): say so, rather than write a component nothing draws (review 10-07: a toggle on a crate
-  // wrote an invisible door {open: true})
+  // someone has removed it since): say so, rather than write a component nothing draws
   if ((h?.kind === "set" && h.field !== undefined) || (h?.kind === "toggle" && toggleOf(h).field !== undefined)) { const comp = h.kind === "set" ? h.component : toggleOf(h).comp;
     if (!(e.c[comp] && typeof e.c[comp] === "object" && !Array.isArray(e.c[comp]))) refuse("no-handler", `${a.id} has no ${comp} any more, so '${action}' has nothing to change`, "someone who may edit it can add it back, or set its reactions again"); }
   if (h?.kind === "set") { const comp = h.component; reactionCap(ctx, a.id, comp, action); ctx.refs.add(a.id);
     const v = h.field === undefined ? h.value : { ...objOf(e.c[comp]), [h.field]: h.value };
     return [setOp(a.id, comp, comp === "transform" ? unitTransform(v) : v)]; }   // a stored rotation is a unit one, as a request's is
-  // batch 2: play the thing's sound again from the top (a doorbell), playing or not; stampMedia sets t0 = now
+  // play the thing's sound again from the top (a doorbell), playing or not; stampMedia sets t0 = now
   if (h?.kind === "play") { const cur = e.c.sound;
     if (!cur || typeof cur !== "object" || Array.isArray(cur)) refuse("no-sound", `${a.id} has no sound to play`, `give it one: set {id: '${a.id}', component: 'sound', value: {src}}`);
     reactionCap(ctx, a.id, "sound", action); ctx.refs.add(a.id);
@@ -167,8 +165,7 @@ const barredBy = (e, h) => !!h?.unless && objOf(e.c[toggleOf(h).comp])[h.unless]
 // the sockets a person can attach to: a host's (socketsOf), or a socket's own when it is the one asked
 const bodySockets = (st, id) => { const e = st.entities[id]; const host = isSocketC(e?.c) ? e.c.parent?.to : id;
   return socketsOf(st, host).filter((x) => host === id || x.id === id).map((x) => ({ ...x, slot: x.name, body: bodyOf(x.station) })).filter((x) => x.body); };
-// an openable thing with nothing that opens it offers 'open' on its own: the implicit toggle of openable.open (R 10-11
-// 23:17: the gym door had only `openable`; clicking it did nothing, and inspect said "nothing here opens it"). It is barred
+// an openable thing with nothing that opens it offers 'open' on its own: the implicit toggle of openable.open. It is barred
 // while openable.locked is on, as the registry's `locked` reads: "bars opening while on (an open handler with unless: 'locked')"
 const IMPLICIT_OPEN = Object.freeze({ kind: "toggle", component: "openable", field: "open", unless: "locked" });
 // the barred implicit open's remedy, saying only what it can see: the reactions on the thing that unlock it (a toggle of
@@ -207,12 +204,12 @@ function offersFor(st, id, actor) {
 
 const USE_VERBS = {
   use(w, actor, a) {
-    // use while held (grabbable.use; research grab §3): the holder's use with no action fires the thing's own: its down,
+    // use while held (grabbable.use): the holder's use with no action fires the thing's own: its down,
     // or its up with args.phase 'up' (a hose turns on, then off: each one act). The request is logged as sent; the act
     // and the script's event say it was held, in which hand, and which phase. Rapid or continuous effects while pressed
     // (a muzzle flash, a spray) are presence, never a stream of acts: grabbable.fx, drawn by every client.
     const hold = w.presence.holds[a.id]; let held = null; const sent = a;
-    // review 10-06: the up of a press is taken from whoever pressed down, even when the thing has left their hand since
+    // the up of a press is taken from whoever pressed down, even when the thing has left their hand since
     // (taken by someone, dropped with the button still down): a hose that was turned on gets turned off. Once.
     const P = (w.presence.pressed ??= {}); const lateUp = a.args?.phase === "up" && P[a.id]?.by === actor && hold?.by !== actor;
     const holding = hold?.by === actor || lateUp;
@@ -232,7 +229,7 @@ const USE_VERBS = {
       if (probe.attach?.to && !a.dry) setOccupant(w, actor, probe.attach.to, probe.near);   // a dry use seats no one
       return { ok: true, recorded: false, ...(a.dry ? { dry: true } : {}), ...(probe.attach ? { attach: probe.attach } : {}), note: probe.note };   // attach: where your frames now say you are
     }
-    if (probe.script) { // L7 (41 §3.6): the visitor's use is ITS act, on its own rate; the behaviour runs with its sponsor's rights
+    if (probe.script) { // L7: the visitor's use is ITS act, on its own rate; the behaviour runs with its sponsor's rights
       const key = `script:${probe.script}`; const v = w.state().entities[a.id].c[key];
       if (!v || typeof v !== "object") { const wc = w.state().entities["@world"]?.c ?? {};
         // an imported world: the reaction names an old binding (@world imported-behavior:<name>), which the authority never runs

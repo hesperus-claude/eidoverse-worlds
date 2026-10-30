@@ -10,7 +10,7 @@
 // Godot's ParticleProcessMaterial's. What is ours, and why:
 //   - local coordinates only: a particles component hangs off its thing and rides it (the first protocol's contract), so
 //     the emission transform is the identity and every radial/tangential force is about the emitter's own origin;
-//   - gravity alone is WORLD-down (Unity's convention, lead 10-17): the document's gravity is a world-space vector, and
+//   - gravity alone is WORLD-down (Unity's convention): the document's gravity is a world-space vector, and
 //     the renderer turns it into the emitter's frame every frame (setGravity(localGravity(…)): the inverse of the
 //     emitter's world rotation, its world scale undone), so a tipped brazier's smoke still rises. Godot's local_coords
 //     turns gravity with the node; here only velocity, linear/radial/tangential and the shape stay in the emitter's
@@ -105,7 +105,7 @@ export function sampleRamp(g, x, out = [1, 1, 1, 1]) {
 
 export { qRotate };
 /**
- * The document's gravity (a WORLD vector, m/s², lead 10-17) in an emitter's own frame, given the emitter's world rotation
+ * The document's gravity (a WORLD vector, m/s²) in an emitter's own frame, given the emitter's world rotation
  * q [x, y, z, w] and world scale s [x, y, z] (three's matrixWorld.decompose). The emitter's frame is scaled with its thing
  * (`scale`: every length in the effect, accelerations too, × the thing's scale), so the gravity that lands in the world is
  * the document's × the thing's mean scale (∛|sx·sy·sz|), pointing exactly where the document says: v = S⁻¹ · R⁻¹ · (k·g).

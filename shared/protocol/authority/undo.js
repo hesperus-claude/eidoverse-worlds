@@ -1,7 +1,6 @@
 // shared/protocol/authority/undo.js — the act index (undo and wait without scanning the log) and undo by act, with the
-// sky, weather and sculpt builders that live beside it (refactor split, 2026-10-17; moved from authority.js's "the act
-// index" and "undo" sections unchanged). The inverse goes through admit like any write; the write path's helpers it
-// borrows (needThing, lastTouch, the reference clears) are above it, reached through UP.
+// sky, weather and sculpt builders that live beside it. The inverse goes through admit like any write; the write path's
+// helpers it borrows (needThing, lastTouch, the reference clears) are above it, reached through UP.
 import { fold, opsOf, isIdentity, jcs, PURGED } from "../fold.js";
 import { materialize, refsOf } from "../componentspec.js";
 import { foldSkyEntry } from "../../forecast.js";
@@ -22,7 +21,7 @@ const lastTouch = (...a) => UP.lastTouch(...a);
 const needThing = (...a) => UP.needThing(...a);
 const withoutRefs = (...a) => UP.withoutRefs(...a);
 
-// ---------- the act index (slice 3a): undo and wait without scanning the log ----------
+// ---------- the act index: undo and wait without scanning the log ----------
 // A view over the log (L2), built once per world object and advanced per appended entry, so a live world (server,
 // where `w` lives as long as the world is open) pays for each entry once. A purge is retroactive (L1), so a purge entry
 // throws the index away and rebuilds it, as livehost.ts refolds the state. What it holds:
@@ -57,7 +56,7 @@ function indexEntry(x, E, i) {
     if (e.actor === "system" && b && Number.isInteger(b.rest) && typeof b.id === "string" && !x.restAfter.has(`${b.rest}:${b.id}`)) x.restAfter.set(`${b.rest}:${b.id}`, i); }
   if (e.kind === "change") { x.changes.push(i);
     // what the sim writes (a rest) is physics, never an act's undoable result: live, a rest is caused by a launch entry;
-    // in an imported world (translate-v1@11) by the old punt's act, which must not make it undoable (review of b398d7e3 #2)
+    // in an imported world (translate-v1@11) by the old punt's act, which must not make it undoable
     if (Number.isInteger(e.cause) && e.actor !== "sim" && !x.resultOf.has(e.cause)) x.resultOf.set(e.cause, i);
     for (const id of new Set(opsQuiet(e).map((o) => o.id))) { let a = x.touch.get(id); if (!a) x.touch.set(id, (a = [])); a.push(i); }
     const c = E[e.cause]; if (isE(c) && c.kind === "sim" && c.verb === "launch") x.rests.push(i); }
@@ -103,7 +102,7 @@ function skyValue(prev, verb, args, now) {
   const out = clone(foldSkyEntry(prev, { verb, args: a, ts: Math.floor(now), seq: 0, actor: "system" }));
   delete out.seq; delete out.by;
   for (const k of ["forecast", "override"]) if (out[k] && typeof out[k] === "object") { delete out[k].seq; delete out[k].by; }
-  return materialize("sky", out).value;   // every parameter written down (shape audit 10-16: the sky's defaults are the registry's)
+  return materialize("sky", out).value;   // every parameter written down (the sky's defaults are the registry's)
 }
 function buildSky(ctx, a, w) { return [setOp("@world", "sky", skyValue(null, "sky", a, w.now()))]; }
 function buildWeather(ctx, a, w) { return [setOp("@world", "sky", skyValue(ctx.st.entities["@world"]?.c.sky ?? null, "weather", a, w.now()))]; }
@@ -125,7 +124,7 @@ function buildUndo(ctx, a, w) {
   const touchedBy = (id, comp) => { const h = X.touch.get(id) ?? []; for (let k = firstAfter(h, res.seq); k < h.length; k++) { const e = E[h[k]]; if (!others(h[k])) continue;
     for (const o of opsQuiet(e)) if (o.id === id && (comp === undefined || o.comp === comp || o.comp === undefined || o.verb === "create")) return e.actor; } return null; };
   const later = X.changes.slice(firstAfter(X.changes, res.seq)).filter(others).map((i) => E[i]);
-  // a host's seats after the cut are its socket children, and nobody writes its `sockets` key (review 10-12 S2-2): later
+  // a host's seats after the cut are its socket children, and nobody writes its `sockets` key: later
   // work by others on them (a socket made under it, or any write to one of its socket children, deleted ones included)
   // is a change to what a pre-cut `sockets` edit set, so undoing that edit skips, as it did before the cut
   // A socket made under it counts however its two halves were written: a change that sets either one counts when the
@@ -142,10 +141,10 @@ function buildUndo(ctx, a, w) {
   const groups = [], skipped = [];
   const keys = new Map();
   const madeHere = new Set(flat.filter((o) => o.verb === "create").map((o) => o.id)); // undone as one unit: the whole thing goes
-  // review r8 M1: what the act's delete cleared in others' things (clearRefsTo, the authority's follow-up) comes back as a
+  // what the act's delete cleared in others' things (clearRefsTo, the authority's follow-up) comes back as a
   // follow-up too: a value that named a thing this act removed, put back exactly as it was (touchedBy has already skipped
   // it if anyone changed it since), so the referrer's lock or key can't veto the undo any more than it could the delete
-  // Only an op the target entry itself marks as a follow-up (its `followUps`) is restored as one (review r9 holes L2): the
+  // Only an op the target entry itself marks as a follow-up (its `followUps`) is restored as one: the
   // asker's own write in the same batch is theirs, and putting it back meets their rights and the locks now, like any undo.
   const goneHere = new Set(flat.filter((o) => o.verb === "delete" && o.comp === undefined).map((o) => o.id));
   const fuHere = new Set([...followUpsOf(res)].map((k) => flat[k]).filter(Boolean));
@@ -156,7 +155,7 @@ function buildUndo(ctx, a, w) {
   const paired = new Set();
   for (const [, o] of [...keys].reverse()) {
     const { id, comp } = o; const whole = o.verb === "create" || (o.verb === "delete" && comp === undefined);
-    // where a thing sat on a socket before the cut, its transform was in the HOST's frame (review 10-12 S2-1): its parent
+    // where a thing sat on a socket before the cut, its transform was in the HOST's frame: its parent
     // and its transform go back as one group, so the door lifts the parent and re-expresses the pose in the socket child's
     // frame (liftOps' `via`); a bare transform would be read in the socket's frame and land it elsewhere
     const ob = !whole && (comp === "transform" || comp === "parent") ? before(id) : null;
@@ -170,7 +169,7 @@ function buildUndo(ctx, a, w) {
     // (undoing the create would delete a socket someone made on it since)
     const by = touchedBy(id, whole ? undefined : comp) ?? ((comp === "sockets" && !whole) || o.verb === "create" ? socketWorkBy(id) : null);
     if (by) { skipped.push({ id, component: comp, why: `${said(by)} changed it since`, by }); continue; }
-    // undoing a create: what others hung on it since is THEIR work. It stays, let go where it is (round-1 F3), never
+    // undoing a create: what others hung on it since is THEIR work. It stays, let go where it is, never
     // deleted with it and never left pointing at a thing that's gone
     if (o.verb === "create") { if (now.entities[id]) { const kidsOf = (p) => Object.keys(now.entities).filter((k) => now.entities[k].c.parent?.to === p && !madeHere.has(k));
         // its sockets are its parts (a lift made them): they go with it, and what others put in them is let go like the rest
@@ -183,8 +182,8 @@ function buildUndo(ctx, a, w) {
       if (old === undefined) { if (now.entities[id] && (comp in now.entities[id].c || (comp === "sockets" && socketsOf(now, id, { off: true }).some((x) => x.id)))) groups.push([delOp(id, comp)]); }
       else if (now.entities[id]) {
         if (!refRestore(o)) groups.push([setOp(id, comp, old)]);
-        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared (holes r10 L1:
-        // a second delete no longer refuses the whole undo)
+        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared (a
+        // second delete doesn't refuse the whole undo)
         else { const since = new Set(refsOf(comp, old).map((r) => r.id).filter((x) => !now.entities[x] && !goneHere.has(x)));
           const nv = since.size ? withoutRefs(id, comp, old, since) : old;
           if (since.size) (ctx.notes ??= []).push({ id, component: comp, kept: [...since], why: `${[...since].join(", ")} ${since.size > 1 ? "are" : "is"} gone since, so ${since.size > 1 ? "their references stay" : "its reference stays"} cleared` });
@@ -203,13 +202,12 @@ function buildUndo(ctx, a, w) {
   const pick = (pred) => { for (let k = mine.length - 1; k >= 0; k--) if (pred(mine[k])) return E[mine[k]]; return undefined; };
   // an undo's depth along its `undoes` chain: 0 = an ordinary act, 1 = an undo of one, 2 = a redo (an undo of an undo)…
   // A bare undo takes back my latest live act of EVEN depth: an ordinary act or a redo. Skipping only plain undos keeps
-  // Ctrl+Z walking back, while a redo is undone first (agent lab round 2, Hazel: a bare undo after a redo reached past
-  // it into older work).
+  // Ctrl+Z walking back, while a redo is undone first.
   // READBACK: the chain reads each undo's `undoes`; a purged undo is unknown, read as the index reads it (it undoes nothing
   // we can name: the chain ends there, and its target isn't counted undone)
   const depthOf = (seq) => { let d = 0, q = seq; while (q !== undefined && E[q]?.verb === "undo" && d < 64) { d++; q = bodyOf(q)?.undoes; } return d; };
   const undoneBy = (seq) => { for (let k = mine.length - 1; k >= 0; k--) if (E[mine[k]].verb === "undo" && bodyOf(mine[k])?.undoes === seq) return mine[k]; return undefined; };
-  // an owner's rollback (round-2 R11, CoreProtect's rollback by player and time): undo {actor, since} takes back every
+  // an owner's rollback (CoreProtect's rollback by player and time): undo {actor, since} takes back every
   // act that person made since a version, newest first, each inverse against what the previous ones left; later work by
   // anyone else still stands. It says how many acts it would take back, and above 20 it needs confirm: true.
   if (a.actor !== undefined || a.since !== undefined) {
@@ -227,11 +225,11 @@ function buildUndo(ctx, a, w) {
     ctx.actExtra = { rollback: { actor: a.actor, since: from, acts: done } };
     ctx.undid = { kind: "rollback", acts: done.length, of: said(a.actor) };
     return all; }
-  // F2 (decided 10-05): revert goes along rank, never upward. Someone else's act may be undone by a builder (a builder's
-  // or a visitor's) or an owner (anyone's, owners included: round-2 R11, owners revert owners). Roles as they are NOW.
+  // F2: revert goes along rank, never upward. Someone else's act may be undone by a builder (a builder's or a visitor's)
+  // or an owner (anyone's, owners included). Roles as they are NOW.
   const othersAct = (seq) => { const e = E[seq]; if (!(isE(e) && e.kind === "act")) return undefined;
     if (RESERVED.has(e.actor)) refuse("rank", `act ${seq} was the authority's own, not a person's`, "undo takes back people's acts");
-    // research S2: undoing another person's act needs editOthers, and still goes only along rank (custom roles included)
+    // undoing another person's act needs editOthers, and still goes only along rank (custom roles included)
     const me = rankOf(ctx.st, ctx.actor), them = rankOf(ctx.st, e.actor), eo = may(ctx.st, ctx.actor, "editOthers");
     if (!eo || me < them) refuse("rank", `act ${seq} was ${said(e.actor)}'s; ${!eo ? "undoing someone else's work needs a role that may edit others' work (by default, builder and above)" : `they're ${roleOf(ctx.st, e.actor)}, above you`}`, "revert goes along rank, never upward: ask an owner");
     return e; };
@@ -251,7 +249,7 @@ function buildUndo(ctx, a, w) {
   const { groups, skipped } = inverseOf(target, res, ctx.st);
   if (!groups.length) refuse("conflict", "everything that act touched has been changed by someone else since", "their later change stands (undo never writes over it); if you still want yours, make the change again yourself, and history shows who did what", { skipped });
   if (skipped.length) ctx.notes.push({ skipped });
-  // round-2 R11: a brake on revert wars (Wikipedia's 3RR): reverting someone else's work on a thing that has already been
+  // a brake on revert wars (Wikipedia's 3RR): reverting someone else's work on a thing that has already been
   // reverted across people twice within the hour is refused below owner rank: that's a dispute, and owners settle it
   if (target.actor !== ctx.actor && roleOf(ctx.st, ctx.actor) !== "owner") {
     const mine2 = new Set(groups.flat().map((o) => o.id)); const t0 = w.now() - 3600000; let n = 0;
@@ -260,7 +258,7 @@ function buildUndo(ctx, a, w) {
       const r = result(i); if (r && opsQuiet(r).some((o) => mine2.has(o.id))) n++; }
     if (n >= 2) refuse("revert-war", `${[...mine2].join(", ")} has been reverted across people ${n} times in the last hour`, "that's a disagreement, not a fix: ask an owner (owners may still revert), or talk it out"); }
   ctx.actExtra = { undoes: target.seq };
-  // round-2 R11: undoing my own `use` is admitted under the same reaction capability the use was (a visitor may open
+  // undoing my own `use` is admitted under the same reaction capability the use was (a visitor may open
   // a door through its handler, so they may close it again by undo), asked for again NOW: no handler, no undo
   const ureq = bodyOf(target.seq)?.request;
   const ucap = bodyOf(target.seq)?.capability;
@@ -270,7 +268,7 @@ function buildUndo(ctx, a, w) {
     const comps = [...new Set(groups.flat().map((o) => o.comp).filter(Boolean))];
     if (groups.flat().every((o) => o.id === ureq.id && o.comp !== undefined)) { reactionCap(ctx, ureq.id, comps[0], ucap.reaction); ctx.cap.comps = comps;
       ctx.actExtra = { undoes: target.seq, capability: ctx.actExtra.capability }; } }
-  // say what came back: which act, what it was, and whether this undoes it or redoes it (Hazel: the reply named nothing)
+  // say what came back: which act, what it was, and whether this undoes it or redoes it
   const req = bodyOf(target.seq)?.request ?? {}; const dz = depthOf(target.seq);
   const base = dz ? (() => { let q = target.seq; for (let i = 0; i < dz; i++) q = bodyOf(q)?.undoes; return E[q]; })() : target;
   const breq = base ? (bodyOf(base.seq)?.request ?? {}) : req;

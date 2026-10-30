@@ -1,6 +1,5 @@
-// shared/protocol/authority/spatial.js — the spatial index and the work budget (refactor C11, 2026-10-12; moved from
-// authority.js's "the spatial index" section unchanged). A leaf over math, the catalogue and storage: the budget refuses
-// through refuse.js, and the gate's enter() reads WORK_BUDGET/clockMs from here.
+// shared/protocol/authority/spatial.js — the spatial index and the work budget. A leaf over math, the catalogue and
+// storage: the budget refuses through refuse.js, and the gate's enter() reads WORK_BUDGET/clockMs from here.
 import { offChain, solidOff } from "../simlayer.js";
 import { CTX } from "./ctx.js";
 import { refuse } from "./refuse.js";
@@ -173,22 +172,17 @@ function hitsIx(st, box, id, eps, B = boxToObb(box)) {   // B: the box as an ori
 function familyOf(st, id) { const kids = kidsMap(st); const out = new Set([id]); const todo = [id];
   for (let n = 0; todo.length && n < 1e6; n++) { for (const k of kids.get(todo.pop()) ?? []) if (!out.has(k)) { out.add(k); todo.push(k); } } return out; }
 
-// THE GROUND (owner, 10-15 22:34): the authority stands things and bodies on the ground the walker walks on. @world's
-// terrain component through shared/terrainmath.js (terrainParams → makeHeightField: the sim's law, and the client's and the
-// agent's to ~1 ulp, features and heightmap included through terrainshape), and its water (terrainshape's waterParams, the
-// level the mover's water law reads). No terrain component: y 0 and no water, as every world stood before. The field is
-// built once per terrain VALUE (a write replaces the value, never changes it in place: the revision is the object), not
-// per call. A heightmap's grid comes through terrainshape's loader (the server's disk, server/heightmap.ts).
-// A heightmap whose grid isn't here yet (a world copied without its store/heightmaps file, a hash not uploaded, the loader's
-// miss window) is NOT READY (holes r3 F2/F3): the height law would fall back to the noise law, and nothing commits ground on
-// that (terrainshape's rule; the browser and the agent keep their last ground). Its ground is never cached, so it is built
-// the moment the grid lands, and any read of its height refuses with words: ground-seated placement, a walk, a put, a
-// set-down. Readers that only advise (warnings, the settle's rest-attach) ask groundReady first and skip.
+// THE GROUND: the authority stands things and bodies on the ground the walker walks on: @world's terrain through
+// shared/terrainmath.js (terrainParams → makeHeightField, the same law as the sim, client and agent) and its water
+// (terrainshape's waterParams). No terrain component: y 0 and no water. Built once per terrain VALUE (values are
+// replaced, never mutated). A heightmap whose grid isn't here yet is NOT READY: nothing commits ground on the noise
+// fallback, it is never cached, and any read of its height refuses with words; readers that only advise (warnings,
+// the settle's rest-attach) ask groundReady first and skip.
 const GROUND = new WeakMap();
 const FLAT = Object.freeze({ terrain: false, ready: true, height: () => 0, level: null });
 const loading = () => refuse("ground-loading", "this world's ground is still loading: its heightmap's grid isn't on this server yet, and the authority won't stand anything (or judge a step) on a guessed height",
   "try again in a moment; if it stays missing, an owner can upload the heightmap image again");
-// the water level is @world.water's (shape audit 10-16: its own component; an older terrain.water until the maintenance command moves it),
+// the water level is @world.water's (or an older terrain.water until the maintenance command moves it),
 // so a cached ground is rebuilt when either the terrain or the water changes
 function groundOf(st) {
   const wc = st.entities["@world"]?.c; const t = wc?.terrain; const w = worldWater(wc);
@@ -218,7 +212,7 @@ function supportBelow(st, x, z, y, ignore = new Set()) {
 }
 
 // Supported anywhere under its footprint (the engine's rule: a box rests on a top its footprint overlaps), not just
-// under its centre — so a thing physics left resting is never called floating by the authority (playtest 22, F5). On
+// under its centre — so a thing physics left resting is never called floating by the authority. On
 // terrain, the highest ground under the footprint (its corners, edges' middles and centre): a box on a slope rests on it.
 function supportUnder(st, b, ignore) {
   const G = groundOf(st); let gy = 0;
