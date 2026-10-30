@@ -8,8 +8,8 @@ import { processTable, parsePsTable, parseWinTable, suiteMembers, killSuite } fr
 import * as PG from "./procgroup.ts";
 import { tryUntil } from "./wait.ts";
 import fs from "node:fs";
-let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}`); if (info !== undefined) console.log("     ", JSON.stringify(info)); } };
+import { suite } from "./suite.ts";
+const { check, done } = suite("procgroup-check", { cap: Infinity });
 const win = process.platform === "win32";
 
 // PG1: a detached child that starts a grandchild; both are found, then both are gone after killSuite
@@ -108,4 +108,4 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   check("PG13 the gate keeps the evidence line under each FAIL / \u2717 (and not the next ok row or the tally)",
     kept.length === 4 && kept[1].includes('"ms":1400') && kept[3].includes("reading the log") && !kept.some((l) => /^ok|passed,/.test(l.trim())), kept); }
 
-console.log(`[procgroup-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();
