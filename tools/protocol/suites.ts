@@ -16,6 +16,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["gov-reserved", "gov-reserved-check.ts", 1], // reviewer item 8 (10-18): governance is RESERVED; the server refuses to serve a log holding a `sequencer` entry, truthfully
   ["diffcheck", "diffcheck.ts", 1],
   ["hygiene", "hygiene-check.ts", 1],       // patterns that broke the gate site by site (Windows paths, sh -c, symlinks, fixed sleeps), refused as a class; debt only goes down        // review #260 rereview (10-19) blocker 3: the range is clean under `git diff --check`; two documented exemptions only
+  ["body-state-bundle", "../body-state-bundle-test.ts", 1], // the built MCP entry points carry body_state and none of the test rig, corpus scanner or fixture paths
   ["procgroup", "procgroup-check.ts", 1],  // review #260 rereview (10-19) blocker 2: the gate finds and kills a suite's processes on Linux, macOS and Windows
   ["shard", "shard-check.ts", 1],        // CI's sharded gate: shards cover SUITES once whatever the timings; a merge passes only every shard, every suite, one head
   ["nov1", "nov1-check.ts", 1],         // R 10-06 "no more v1 anywhere": no runtime file loads the old-world importer or speaks v1
@@ -42,6 +43,19 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["level-dive", "../water/level-dive-check.ts", 1], // a real browser in the lake: C dives, looking down with W dives (R 10-28), surfacing hands back to the float
   ["toast-group", "toast-group-check.ts", 1],   // load failures of one kind are one toast counting the things; dismissed, that kind stays quiet (R 10-28)
   ["avatar", "../avatar-test.ts", 1], // the avatar rig: clip timing, seat-blend slot, a lowering clip under a limp body (upstream #282/#283)
+  ["reachwire", "../reachwire-test.ts", 1], // the reach descriptor grammar and its event edges
+  ["reach", "../reach-test.ts", 1], // two-bone IK geometry: no rig, no renderer, no server
+  ["ragdoll-floor", "../ragdoll-floor-test.ts", 1], // a body that goes limp inside a building lands on the floor it was on
+  ["posture-tiles", "../posture-tiles-test.ts", 1], // the action bar's posture tiles drive controller.js sitHere/standUp/getPosture
+  ["poseclip-parity", "../poseclip-parity-test.ts", 1], // headless pose-clip joints equal the browser mixer's on the committed fixture
+  ["pose-handler", "../pose-handler-test.ts", 1], // the pose fence is the real "pose" handler's: non-finite and oversized poses dropped
+  ["plateanchor", "../plateanchor-test.ts", 1], // where a nameplate hangs (plateanchor.js, as avatar.js calls it)
+  ["flight", "../flight-test.ts", 1], // flight T1–T8's physical portions and the determinism proof
+  ["firstperson-plate", "../firstperson-plate-test.ts", 1], // first person hides your own nameplate
+  ["bodyscale", "../bodyscale-test.ts", 1], // a body's chosen size and nameplate lift: the wire, receipt clamps, the server fence, the avatar's plate
+  ["avatar-perf", "../avatar-perf-test.ts", 1], // the avatar loupe rank's server half: POST /thumb?perf= validates, re-ranks, merges meta.json; the roster withholds a stale version
+  ["armsolve", "../armsolve-test.ts", 1], // the swivel arm solver (xrbody.js solveArm/relaxArm): continuity, torso clearance, twist split, legs
+  ["ammodoll", "../ammodoll-test.ts", 1], // the Bullet ragdoll keeps the Verlet one's lifecycle promises, with its anatomy
   ["remotes-limp-edge", "../remotes-limp-edge-test.ts", 1], // a remote going limp or getting up is drawn at the edge sample, not lerped through it (upstream #283)
   ["remotes-lifecycle", "../remotes-lifecycle-test.ts", 1], // #95: a departed participant dies whole; only arrive and the roster build a body, presence never
   ["colliders", "../collider-test.ts", 1], // the walker's reading of placed geometry, incl. things a tumbling engine laid on their sides (review of b398d7e3 #1)
@@ -165,6 +179,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
   ["agent-reads", "../../mcpl/agent-reads-test.ts", 1], // every read the agent makes of the world server has a deadline; a geometry read that timed out is asked again
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
+  ["selfpose", "../../mcpl/selfpose-test.ts", 1], // the pose/animate authoring surface: canonical bone names, suggestions, the walk-shed rule
   ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],
   ["headless-core", "../../mcpl/headless-core-test.ts", 0.3], // the agent's stand-in core exports each shared name as core.js does: a function where it is a function   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
   ["effective", "../effective-test.ts", 0.5],   // the same seen from a seated body (occupant size, seat correction)
@@ -201,6 +216,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
+  ["body-shadow-gate", "../body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["lod-policy", "../lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
