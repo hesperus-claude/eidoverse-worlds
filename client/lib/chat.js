@@ -26,6 +26,7 @@ import { requestHistory } from './net.js';
 import { COMMANDS, resolveCommand } from './commands/registry.js';
 import { register as registerAction } from './actions.js';
 import { escapeHtml as esc } from './markup.js';
+import { versionReady } from './version.js';
 
 const MAX_LINES = 400;
 const HISTORY = 'ew-chat-history';
@@ -672,15 +673,7 @@ function acceptAC() {
 // and a broken probe are otherwise indistinguishable and three diagnoses in
 // one morning chased the wrong one.
 let _build = 'unknown';
-fetch('/version').then((r) => r.json())
-  .then((v) => { _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; })
-  .catch(() => { /* stays 'unknown' — itself a diagnostic */ });
-
-/** What this device actually knows about its own audio, for a person with no
- *  console. Every line is READ LIVE at call time — a cached "we connected"
- *  claim is exactly what this exists to get past. Each probe is individually
- *  guarded: a missing subsystem must print "unknown", never take the report
- *  down with it (a diagnostic that throws is worse than none). */
+versionReady.then((v) => { if (v) _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; });   // null: 'unknown' is itself a diagnostic
 
 function audioReport() {
   const L = [];
