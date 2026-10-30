@@ -4,17 +4,13 @@
 // grabbed, punted or used, nor what hangs under it; it has no body in the engine; nothing stands on it; switched back on,
 // all of that returns. Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/disabled-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
+import { simFold } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
 import { suite } from "./suite.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
 const { ok, done } = suite("disabled-check", { cap: Infinity });
-const root = scratch("disabled"); const clock = labClock();
-const call = (w, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, w), a, v, args); };
+const { root, clock, call } = labWorld("disabled");
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
 const st = (W) => fold(openWorld(root, W).entries);
 const bodies = (W) => { const w = openWorld(root, W); const sf = simFold(w.entries, w.now()); return Object.keys({ ...(sf?.sim?.bodies ?? {}), ...(sf?.sim?.statics ?? {}) }); };
