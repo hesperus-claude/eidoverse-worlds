@@ -1,4 +1,4 @@
-// Incarnation and consent rules (#104 amendments 2, 3), pinned headless; the seven refusals (amendment 1) are one
+// Incarnation and consent rules (#104 amendments 2, 3), pinned headless; the eight refusal branches (amendment 1) are one
 // table in tools/sfu-adapter-test.ts. bun tools/relay-decision-test.ts
 import { relayIdentity, parseRelayIdentity, nextIncarnation,
   subscriptionActive, applyConsentUpdate,
@@ -11,7 +11,7 @@ const t = (name: string, got: unknown, want: unknown) => {
   console.log(`  ${okv ? "✅" : "❌"} ${name}${okv ? "" : ` — got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`);
 };
 
-// the seven refusals: one table through admitParticipant AND admitSfuLeg in tools/sfu-adapter-test.ts
+// the eight refusal branches: one table through admitParticipant AND admitSfuLeg in tools/sfu-adapter-test.ts
 
 // ── identity carries the generation ─────────────────────────────────────────
 t("relayIdentity embeds gen", relayIdentity("hesperus", 413), "hesperus#g413");
