@@ -21,6 +21,7 @@
 //
 // No imports beyond icons: the governor and capnotice post here, and this must not pull the engine in with it.
 import { rsvg } from './icons.js';
+import { bus } from './base.js';
 
 let strip = null, pop = null;
 let openId = null;
@@ -36,7 +37,7 @@ function ensure() {
   pop.setAttribute('role', 'dialog');
   document.body.append(strip, pop);
   addEventListener('resize', place);
-  addEventListener('dockmoved', place);
+  bus.on('dock-moved', place);
   // Esc folds an open popover and goes no further (preventDefault: nothing after it acts on this Esc)
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && openId) { e.preventDefault(); collapse(); } });
   // a click anywhere but the popover or its chip folds it

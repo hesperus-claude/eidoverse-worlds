@@ -65,6 +65,8 @@ const ROWS: Row[] = [
   { name: "the page's query is CONFIG.params (base.js), read once", owner: ["client/lib/base.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
     exempt: ["client/lib/boot.js", "client/lib/litechoice.js", "client/lib/gpulost.js", "client/lib/breadcrumbs.js", "client/lib/warmqueue.js"],
     forbidden: [/new URLSearchParams\((globalThis\.)?(win\.)?location\??\.search/] },
+  { name: "a client event rides the bus (base.js), never a window CustomEvent", owner: ["client/lib/base.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
+    forbidden: [/new CustomEvent\(/] },
 ];
 for (const row of ROWS) {
   const scan = (row.scope ?? files).filter((f) => !row.owner.includes(f) && !(row.exempt ?? []).includes(f));
