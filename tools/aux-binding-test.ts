@@ -9,6 +9,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
+import { suite } from "./protocol/suite.ts";
 
 const PORT = 8600 + (process.pid % 150);
 const worldsDir = mkdtempSync(join(tmpdir(), "eido-auxbind-"));
@@ -27,11 +28,8 @@ writeFileSync(tokensPath, JSON.stringify({
 }));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  [" + extra + "]"}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("aux-binding");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 const server = Bun.spawn(["bun", "server/server.ts"], {
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, JOIN_TOKEN: "", AGENT_TOKENS_PATH: tokensPath, SKIP_OPT_SWEEP: "1" },
@@ -107,7 +105,7 @@ try {
 
   for (const s of [rennet, agentPrimary, agentAux]) s.ws.close();
 } catch (e) {
-  fail++;
+  S.fail++;
   console.log(`\x1b[31mFATAL\x1b[0m ${(e as Error).message}`);
   for (const [label, stream] of [["out", server.stdout], ["err", server.stderr]] as const) {
     const text = await new Response(stream as ReadableStream).text().catch(() => "");
@@ -116,5 +114,4 @@ try {
 } finally {
   server.kill();
 }
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

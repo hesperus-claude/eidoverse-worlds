@@ -8,6 +8,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
+import { suite } from "./protocol/suite.ts";
 
 const WPORT = 8957, MPORT = 8958;
 // MISSES is overridable so the suite can prove this test has teeth: run it
@@ -20,11 +21,8 @@ foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
 const tokensPath = join(worldsDir, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({ "keepalive-labtok": { id: "claude", name: "Claude", world: "commons" } }));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("keepalive");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 // process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
 // whose pid dies immediately, orphaning both of these on their ports where
@@ -124,10 +122,9 @@ try {
     chatty.closedAt === 0, `died after ${((chatty.closedAt - chatty.openedAt) / 1000).toFixed(1)}s`);
   chatty.sock.destroy();
 } catch (e) {
-  fail++;
+  S.fail++;
   console.log(`\x1b[31mFATAL\x1b[0m ${(e as Error).message}\n${(e as Error).stack}`);
 } finally {
   world.kill(); mcpl.kill();
 }
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

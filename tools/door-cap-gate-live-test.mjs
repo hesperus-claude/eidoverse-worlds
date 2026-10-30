@@ -40,6 +40,7 @@ import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
+import { suite } from "./protocol/suite.ts";
 
 /** A port nothing is listening on RIGHT NOW: bind :0, read what the kernel
  *  gave us, release it. Racy in principle — which is why readiness below
@@ -74,11 +75,8 @@ const snapState = () => existsSync(REPO_STATE)
 const repoStateBefore = snapState();
 const BUN = process.execPath.includes("bun") ? process.execPath : "bun";
 
-let pass = 0, fail = 0;
-const check = (name, ok, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("door-cap-gate-live");
+const check = (name, ok, extra) => S.check(name, ok, extra);
 
 // Every child is registered before it can be lost; the exit hook is the
 // last-resort net (process.exit does not run finally blocks).
@@ -472,5 +470,4 @@ try {
   check("scratch directory cleaned", !existsSync(scratch));
 }
 
-console.log(`\n${fail === 0 ? "\x1b[32m" : "\x1b[31m"}${pass} passed, ${fail} failed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+S.done();
