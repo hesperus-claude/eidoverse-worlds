@@ -30,64 +30,26 @@
 // Synchronization is on the AUTHORITATIVE repaint, never a sleep: after C the
 // probe waits for the block that only exists once the comp is in the bag (it
 // carries `take down`), and after D it polls for the refusal text.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { pictureWorld, req, spawnConsole, state as stateOf, until as untilOf, settle } from './picture-probe-harness.ts';
 import { join } from 'node:path';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as OP from '../shared/protocol/requests.js';
-import { qFromYaw } from '../shared/rot.js';
 
-const LIB = 'eidoverse/assets/models/scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower.glb';
-const { check, done } = checker();
 const OPT = process.env.OPT_DIR ?? mkdtempSync(join(tmpdir(), 'picedit-opt-'));
-// founded, owned by the page's typed name (TRUST_NAMES), so its writes are admitted
-const world = await ownedWorld({ worlds: ['piceditprobe'], owner: 'editor', env: { TRUST_NAMES: '1', EIDOVERSE_DIR: process.env.EIDOVERSE_DIR ?? join(process.env.HOME!, 'origin/eidoverse-video'), OPT_DIR: OPT } });
-const { page, close } = await launchBrowser();
-const errs: string[] = [];
+const { check, done, errs, joinAs, close } = await pictureWorld('piceditprobe', 'editor', { OPT_DIR: OPT });
 // a 2×2 PNG, red — small enough to be a header test, real enough to decode
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR42mP4z8DwH4QZYAwAR8oH+Rq28akAAAAASUVORK5CYII=', 'base64');
 const pngFile = join(mkdtempSync(join(tmpdir(), 'picedit-')), 'red square.png');
 writeFileSync(pngFile, PNG);
 
-// writes go through net.sendRequest (net.sendVerb is gone; #260 house I479); the authority mints the console's id. A picture
-// is the thing's own quad now (shared/picture.js), so a hang is read off the quad; the part is only the model's readiness
-const req = async (pg: any, op: any) => {
-  const r = await pg.evaluate((op: any) => import('/lib/net.js').then((n: any) => n.sendRequest(op.verb, op.args)), op);
-  if (!r?.ok) throw new Error(`${op.verb} refused: ${JSON.stringify(r?.refused ?? r)}`);
-  return r;
-};
 let ID = '';
-const spawn = async (pg: any) => {
-  const r = await req(pg, OP.create('$console', { model: LIB, transform: { pos: [1.3, 0.5, -2.2], q: qFromYaw(0.6) } }));
-  ID = r.ids?.['$console']; if (!ID) throw new Error(`create named no id: ${JSON.stringify(r)}`);
-};
-const state = (pg: any) => pg.evaluate(async (id: string) => {
-  const { entities, findPart, bagOf } = await import('/lib/world.js');
-  const { _hung } = await import('/lib/pictures.js');
-  const root = entities.get(id); const part = root ? findPart(root, 'screenplane') : null;
-  const h = _hung.get(id);
-  let mat: any = null; h?.quad?.traverse((o: any) => { if (o.isMesh && !mat) mat = o.material; });
-  const block = document.querySelector('[data-pe-root]');
-  const opts = block ? [...block.querySelectorAll('[data-pe="part"] option')].map((o: any) => o.value) : null;
-  return {
-    entity: !!root, part: !!part, hung: !!h, mapW: mat?.map?.image?.width ?? 0,
-    block: !!block, parts: opts, src: (block?.querySelector('[data-pe="src"]') as any)?.value ?? null,
-    msg: block?.querySelector('[data-pe="msg"]')?.textContent ?? null,
-    down: !!block?.querySelector('[data-pe="down"]'),   // rendered only when the bag holds a picture: the repaint's receipt
-    comp: bagOf(id)?.picture ?? null,
-  };
-}, ID);
-const until = async (pg: any, pred: (s: any) => boolean, ms = 30000) => { const t0 = Date.now(); let s; while (Date.now() - t0 < ms) { s = await state(pg); if (pred(s)) return s; await new Promise((r) => setTimeout(r, 200)); } return s; };
+const spawn = async (pg: any) => { ID = await spawnConsole(pg); };
+const state = (pg: any) => stateOf(pg, ID);
+const until = (pg: any, pred: (s: any) => boolean, ms = 30000) => untilOf(pg, () => ID, pred, ms);
 
 try {
-  const pg = await page();
-  pg.on('pageerror', (e) => { errs.push(e.message); console.log('   pageerror:', e.message.slice(0, 300)); });
-  pg.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || /\[pictures\]|editor/.test(t)) console.log(`   console.${m.type()}:`, t.slice(0, 300)); });
-  pg.on('dialog', (d) => d.dismiss().catch(() => {}));
-  await pg.goto(`${world.origin}/?world=piceditprobe&key=${world.key}&name=editor`, { waitUntil: 'domcontentloaded' });
-  await pg.fill('#d-name', 'editor').catch(() => {});
-  await pg.click('#d-go').catch(() => {});
-  await pg.waitForSelector('#micbtn, #mictoggle', { timeout: 30000 });   // the mic badge: #micbtn since the desktop UI (#185); #mictoggle before it
+  const pg = await joinAs('editor', (m: any) => { const t = m.text(); if (m.type() === 'error' || /\[pictures\]|editor/.test(t)) console.log(`   console.${m.type()}:`, t.slice(0, 300)); });
   await spawn(pg);
   let s = await until(pg, (x) => x.part, 90_000);
   check('the model spawned and has a part named screenplane', s.part, JSON.stringify(s));
@@ -130,7 +92,7 @@ try {
   // and require the refusal AND the control to survive it. Without the
   // editor-local note this reads a blank message on a fresh block.
   await pg.evaluate((id: string) => import('/lib/base.js').then((m: any) => m.bus.emit('comp', { id, type: 'probe-repaint', data: true })), ID);
-  await new Promise((r) => setTimeout(r, 600));   // the repaint is queued 300ms out; this is a deliberate over-wait, not a sync
+  await settle(600);   // the repaint is queued 300ms out; this is a deliberate over-wait, not a sync
   s = await state(pg);
   check('D. …and the refusal outlives a scene-panel repaint, with take down still offered', /not an allowed picture source/.test(s.msg ?? '') && s.down && s.hung, JSON.stringify({ msg: s.msg, down: s.down }));
 
@@ -168,6 +130,6 @@ try {
   if (errs.length) console.log('page errors:', errs.join(' | '));
   check('the probe ran to the end', false, e?.message ?? String(e));
 } finally {
-  await close(); await world.close();
+  await close();
 }
 done();
