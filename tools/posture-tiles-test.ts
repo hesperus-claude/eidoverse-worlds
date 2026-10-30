@@ -23,6 +23,7 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub = await import('./posture-tiles-stub.mjs');
@@ -30,11 +31,8 @@ const ctl = await import('../client/lib/controller.js');
 const { sitHere, standUp, setPosture, setMountedHook, setOccupyHook, getPosture, myState, updateMe } = ctl;
 const { THREE, world } = stub;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("posture-tiles");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // the hook pair exactly as localbody.js registers them (initLocalBody): mounted → dismount and consume;
 // a declared seat in reach → mount and consume; otherwise fall through to the controller's own layers
@@ -117,5 +115,4 @@ setMountedHook(() => false);
 sitHere();
 check('...and answering not-mounted restores the ground sit', getPosture() === 'sit');
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

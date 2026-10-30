@@ -41,12 +41,10 @@ import { inspectBody, describeBody } from '../shared/flightbody.js';
 import { denyAllFlight, devFlightProvider, worldFlightProvider, resolveFlight, rigProfile, revoked }
   from '../shared/flightcap.js';
 import { readFileSync } from 'node:fs';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  ok    ${name}`); }
-  else { fail++; console.log(`  FAIL  ${name}${detail ? '  -- ' + detail : ''}`); }
-};
+const S = suite("flight");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 
 const DT = 1 / 120;
@@ -1294,5 +1292,4 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
   ag.flightEvent({ kind: 'ground.landed', impactV: 0.5 });
   check('flight telemetry never authors resident say', authored === 0, `authored=${authored}`);
 }
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

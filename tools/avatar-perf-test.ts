@@ -5,8 +5,9 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("avatar-perf");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const root = mkdtempSync(join(tmpdir(), "avperf-"));
 process.on("exit", () => rmSync(root, { recursive: true, force: true }));   // a throw mid-test too
 Object.assign(process.env, { SKIP_OPT_SWEEP: "1", WORLDS_DIR: join(root, "worlds"), OPT_DIR: join(root, "opt"), EIDOVERSE_DIR: join(root, "lib"), JOIN_TOKEN: "t0k", KTX2_TOKTX: "" });
@@ -53,4 +54,4 @@ const t1 = new Date(1_700_000_500_000); utimesSync(body, t1, t1);   // a re-expo
 check("roster: after a re-export the old stamp is withheld", entry()?.perf === null, entry()?.perf);
 await post({ perf: JSON.stringify({ ...good, tris: 20_000 }), v: vNow() });
 check("…and a fresh stamp for the new version shows", entry()?.perf?.tris === 20_000, entry()?.perf);
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();
