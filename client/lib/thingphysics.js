@@ -232,10 +232,8 @@ async function track(force = false, { noTeleport = false } = {}) {
     if (r?.ok) { trackedAt = r.at ?? step; return true; }
     if (r?.refused?.at) trackedAt = r.refused.at;
     stuck = { at: to, until: performance.now() + 2000 };
-    // the authority lost me (flew faster than a body walks, or through something it calls solid): re-arrive, an act on the
-    // record, which it refuses while I hold something (a teleport can't carry things)
-    // (at most once in 3 s: each is an act on the record, and flying fast would otherwise write one per step)
-    if (!noTeleport && ['too-fast', 'solid'].includes(r?.refused?.code) && !myHolds().length && (force || performance.now() - lastTeleport > 3000)) {
+    // the authority lost me: re-arrive (refused while holding: a teleport can't carry things); ≤ once in 3 s, forced or not: each is an act on the record
+    if (!noTeleport && ['too-fast', 'solid'].includes(r?.refused?.code) && !myHolds().length && performance.now() - lastTeleport > 3000) {
       lastTeleport = performance.now();
       r = await sendRequest('move', { to: to.map(r3), teleport: true }); lastMove = { teleport: true, ok: !!r?.ok, refused: r?.refused?.code, reason: r?.refused?.reason };
       if (r?.ok) { trackedAt = r.at ?? to; stuck = null; return true; }
