@@ -1,26 +1,13 @@
 /** The phonemizer, running where its loader is fast.
  *
- *  🔴 WHY THIS FILE EXISTS — measured 2026-08-09, same bytes, same code:
+ *  Why a Worker: the browser build loads espeak-ng's data with synchronous XHR
+ *  (`xhr.open("GET", url, false)`), which is the slow deprecated path on the main
+ *  thread and the legal fast path inside a Worker (guarded by
+ *  ENVIRONMENT_IS_WORKER). Measured: ~57 ms in Bun vs ~27.5 s on the main thread,
+ *  same bytes — so trimming the 17 MB data package would not have helped.
  *
- *      module build in Bun (native fs):       57 ms
- *      module build on the browser main thread:   27,551 ms      ← 480x
- *
- *  So the 17 MB espeak-ng data package is NOT the problem, and trimming it (the
- *  advice every search result gives) would not have helped. The gap is in HOW
- *  the browser path loads: piper-o91UDS6e.js contains two
- *
- *      xhr.open("GET", url, false)
- *
- *  — synchronous XHR — and its own comment concedes that browsers deprecated
- *  "synchronous binary XHRs outside webworkers in modern browsers". Those calls
- *  are guarded by ENVIRONMENT_IS_WORKER: inside a Worker the synchronous path is
- *  legal and fast, on the main thread it is the slow deprecated one.
- *
- *  Running here is therefore not a nicety about avoiding UI jank. It is what
- *  makes the load fast at all.
- *
- *  PROTOCOL — deliberately tiny, because the seam already existed in
- *  piperphon.js (phonemize / warmPhonemizer / phonReady):
+ *  PROTOCOL — deliberately tiny (the seam is piperphon.js's phonemize /
+ *  warmPhonemizer / phonReady):
  *      → { id, op: 'warm',      wasmPaths }         ← { id, ok }
  *      → { id, op: 'phonemize', text, voice, wasmPaths } ← { id, ok, ids }
  *      any failure                                   ← { id, ok: false, error }
@@ -31,9 +18,7 @@
 let _mod = null;
 let _building = null;
 // Where the CURRENT call wants stdout to go. Emscripten captures Module.print
-// ONCE at construction (piper-o91UDS6e.js:292 — `var out = Module["print"] ||
-// console.log`), so the handler must be permanent and the sink swappable.
-// Reassigning print per call silently sent every result to console.log.
+// ONCE at construction, so the handler is permanent and the sink swappable.
 let _sink = null, _errSink = null;
 
 async function build(wasmPaths) {
@@ -56,10 +41,9 @@ async function build(wasmPaths) {
 function run(mod, text, voice) {
   let ids = null;
   _sink = (data) => { try { ids = JSON.parse(data).phoneme_ids; } catch { /* not our line */ } };
-  // stderr is CHATTER until proven otherwise (r5 self-review): Emscripten's
-  // printErr carries espeak warnings and info lines, and throwing on any of
-  // them failed the whole phonemize call on output that wasn't an error.
-  // Collect; it becomes the diagnostic only if the run produces no ids.
+  // stderr is CHATTER until proven otherwise: Emscripten's printErr carries
+  // espeak warnings and info lines. Collect; it becomes the diagnostic only if
+  // the run produces no ids.
   const errLines = [];
   _errSink = (msg) => { errLines.push(String(msg)); };
   try {

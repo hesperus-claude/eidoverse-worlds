@@ -1,8 +1,6 @@
-// The VR pointer: porch-old's FADING beam (2026-07-14) — a subdivided line whose alpha ramps
-// from bright at the hand to nothing at the tip, so it dissolves into space instead of ending in a
-// hard dot. porch rode LineBasicMaterial.onBeforeCompile for the per-vertex alpha; node materials
-// have no onBeforeCompile, so the fade is an opacityNode read straight off the attribute.
-// Geometry runs 0 → -1 on z; the caller scales z to the hit distance (same convention as before).
+// The VR pointer: a FADING beam — a subdivided line whose alpha ramps from bright at the hand to nothing
+// at the tip, so it dissolves into space instead of ending in a hard dot. The fade is an opacityNode read
+// straight off a per-vertex attribute. Geometry runs 0 → -1 on z; the caller scales z to the hit distance.
 import * as THREE from 'three';
 import { attribute, color, uniform } from 'three/tsl';
 
@@ -22,13 +20,13 @@ export function makePointerLine({ segments = 24, tint = 0x8fb0d6, opacity = 0.85
   return line;
 }
 
-// THE SURFACE DOT (owner, 10-02): a small mark where the laser meets what it points at — a panel quad, a nameplate, a
+// THE SURFACE DOT: a small mark where the laser meets what it points at — a panel quad, a nameplate, a
 // world entity — lying ON the surface and facing out, so you can see exactly what a press would land on. Constant in
 // angular size (scaled by its distance from the eye each frame): readable at any distance, never a blob up close. It is
 // drawn whenever there is a target, whatever the pointer visibility setting says (in 'never' it is the only mark).
 // ONE place: xr.js only ever calls makeSurfaceDot / setSurfaceDotKind / placeSurfaceDot / hideSurfaceDot.
 //
-// THE CONTEXTUAL ICON (owner, 10-02): the dot becomes an icon for what a press would do there — click (a control), type
+// THE CONTEXTUAL ICON: the dot becomes an icon for what a press would do there — click (a control), type
 // (a text field), scroll (an area that scrolls), move (a panel's handle or background: grip takes it), resize (a corner
 // or an edge: grip resizes) — and stays a plain dot where nothing is actionable (a nameplate: resting there is the
 // action). Icons are icons.js glyphs (Lucide; Phosphor's arrows-out-cardinal for move) on a dark disc, drawn once per

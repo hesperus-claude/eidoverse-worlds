@@ -99,13 +99,10 @@ async function buildQueue() {
   const key = ktx2Capable() ? await ktx2KeyReady : null;
   const push = (path, size = 0) => {
     let url = path.startsWith('/') ? path : `/library/${path}`;
-    // Warm the SAME cache key demand fetches will use (§20c gate finding):
-    // capable clients fetch .glb/.vrm with ?ktx2=<key> — unflagged warmth lands
-    // in a different HTTP-cache entry and is pure waste for them. Loose
-    // images (§20d) negotiate too, but ONLY where the file layer does
-    // (primeFiles, i.e. the curated toolkit dirs) — catalog previews and
-    // other images are consumed unflagged, and flagging them here would be
-    // the same wasted-warmth bug in the other direction.
+    // Warm the SAME cache key demand fetches will use (§20c): capable clients
+    // fetch .glb/.vrm with ?ktx2=<key>, so unflagged warmth would land in a
+    // different HTTP-cache entry. Loose images (§20d) negotiate only where the
+    // file layer does (primeFiles); everything else is consumed unflagged.
     const bare = url.split('?')[0];
     if (key && (/\.(glb|vrm)$/.test(bare)
       || (/^\/library\/eidoverse\/assets\/(grass|sky|particle_textures)\//.test(bare) && /\.(png|jpe?g)$/i.test(bare)))) {
@@ -120,12 +117,10 @@ async function buildQueue() {
   const store = (await listLibrary('store')) ?? [];
   const glbs = [...store, ...models.filter((f) => f.path.endsWith('.glb'))]
     .sort((a, b) => a.size - b.size);
-  // Clips come from /animations, not the raw directory listing, for the same
-  // reason avatars come from /avatars: the roster's paths carry ?v=<mtime>,
-  // and warming a DIFFERENT url than the one vrmaBytes will request is warmth
-  // thrown away (and the bytes pulled twice) — the §20 wasted-warmth bug, in
-  // clip clothing. The roster also resolves upstream-patched over library, so
-  // this warms the fork rather than the original it shadows.
+  // Clips come from /animations, not the raw directory listing: the roster's
+  // paths carry ?v=<mtime>, and warming a different url than vrmaBytes will
+  // request is warmth thrown away (§20). The roster also resolves
+  // upstream-patched over library, so this warms the fork, not the original.
   const clips = await fetch('/animations').then((r) => r.json()).catch(() => []);
   for (const c of clips) push(c.path, c.size);
   for (const f of glbs) push(f.path, f.size);
@@ -139,12 +134,10 @@ export async function startPrefetch() {
   if (CONFIG.params.get('prefetch') === '0') return;  // escape hatch
   if (navigator.connection?.saveData) return;         // respect data saver
   await whenBooted();
-  // The storm's edge (§16.2.D): the roster pull used to start ~5s in — 45MB
-  // of speculative VRMs racing the boot storm's own compiles. Calm is the
-  // governor's word: 5 smooth seconds with no load work in flight. This
-  // gates only the SPECULATIVE stream — anything the world actually needs
-  // goes through fetchBytes directly and never waited on prefetch, and the
-  // 'demand' abort below still preempts us the instant a real load starts.
+  // The storm's edge (§16.2.D): wait for calm (the governor's word: 5 smooth
+  // seconds with no load work in flight) so speculative VRMs don't race the
+  // boot storm's compiles. Real loads never wait on this, and 'demand' still
+  // preempts us the instant one starts.
   await whenCalm();
   await quietWindow(); // let the join's own warm-fetches drain first
   const queue = await buildQueue().catch((e) => { report('prefetch', e); return []; });

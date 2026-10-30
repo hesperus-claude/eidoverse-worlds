@@ -1,15 +1,13 @@
-// namereveal — HOLD to see every name (owner, 09-30). While held, every nameplate in range draws through everything,
+// namereveal — HOLD to see every name. While held, every nameplate in range draws through everything,
 // at full legibility, out to ~60 m (platesize.js says how); release, and they ease back. Hold, not toggle: it is a
 // glance ("who is that, over there?"), and a toggle left on is a wall of labels you forgot you asked for.
 //
 // Sources are independent — the desktop key, the "always show names" setting, a timed pulse from the action list — and the reveal is on
 // while ANY of them is; the level ramps from wherever it was, so a quick tap-release-tap never snaps.
 //
-// THE KEY: N ("names"). Alt was the first wish and is taken three times over: walk slowly (controller.js creeping),
-// fine look in photo mode, and grabbing a panel from anywhere (ui.js altgrab) — and a bare Alt release focuses the
-// menu bar in Windows browsers. Tab is the panel set. N is bound nowhere in the client, is bare (no chord), and says
-// what it does. Ignored while typing (any text field or contenteditable) and on autorepeat; released on blur, since a
-// keyup never arrives when focus leaves with the key down (mictoggle.js's stuck-key class).
+// THE KEY: N ("names") — bare, bound nowhere else in the client (Alt is taken three times over, and a bare Alt
+// release focuses the menu bar in Windows browsers). Ignored while typing and on autorepeat; released on blur, since
+// a keyup never arrives when focus leaves with the key down (mictoggle.js's stuck-key class).
 import { revealRamp, revealEase } from './platesize.js';
 import { register } from './actions.js';
 
@@ -32,7 +30,7 @@ export const revealLevel = (now = nowMs()) => revealEase(rawAt(now));
 export const revealHeld = () => held;
 export const revealSources = () => [...sources];
 
-// ALWAYS SHOW NAMES (owner, 10-02): what holding B/Y did in VR, as a setting (Settings › style), default off. The
+// ALWAYS SHOW NAMES: what holding B/Y did in VR, as a setting (Settings › style), default off. The
 // controller's top face button follows VRChat's convention now (the menu: our panels' quick hide, xr.js). On, it is one
 // more source, so it composes with N and the pulse; persisted per browser.
 export const ALWAYS_LS = 'ew-names-always';

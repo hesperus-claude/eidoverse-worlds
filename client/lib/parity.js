@@ -2,8 +2,8 @@
 // of its own fold (state.js)? Run it in any live world, after any suspect sequence of edits. It compares the fold's
 // OWN outputs (entity ids, what each is, parents) and deliberately not realization (transforms mid-motion, loaded
 // meshes): those diverge by design while an object is in flight or riding a motion.
-// (compDiffs — the realizer's `comps` mirror against the view — is retired with the mirror, C7c: every reader holds the
-// fold's own record (world.js bagOf), so there is no second bag to drift. The key stays, always empty, for the benches.)
+// (compDiffs is retired: every reader holds the fold's own record (world.js bagOf), so there is no second bag to
+// drift. The key stays, always empty, for the benches.)
 
 import { state } from './state.js';
 import { entities, childrenOf, ancestorsOf } from './world.js';
@@ -43,10 +43,9 @@ export function foldParity() {
 
   // entity→entity mounts: the fold's parent record vs the scene's linkage —
   // AND, when linked, the child's parent-local transform vs the mount's own
-  // offset. The link can be right while the pose is wrong (a reconcile that
-  // re-applies an absolute pos in the parent's frame — review finding B1),
-  // so both are buckets. Part-socket mounts skip the pose check: attach
-  // bakes the part's live phase into the offset, honestly.
+  // offset (the link can be right while the pose is wrong), so both are
+  // buckets. Part-socket mounts skip the pose check: attach bakes the part's
+  // live phase into the offset.
   for (const id of shadowIds) {
     if (!legacyIds.has(id)) continue;
     const rel = shadow.entities[id].parent ?? null;

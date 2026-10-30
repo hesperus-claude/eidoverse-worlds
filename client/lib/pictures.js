@@ -1,5 +1,5 @@
 // pictures — the browser host for the `picture` component: a standalone image, a quad of its own (shared/picture.js says
-// what a bag means). An image on a named node of a model is the material component's host (materialcomp.js; R 10-27).
+// what a bag means). An image on a named node of a model is the material component's host (materialcomp.js).
 //
 // NEVER dispose a STORE file's texture: loadImageTexture caches by bytes and pins the texture for the session (assets.js
 // §16.2.B: `dispose` is a no-op on cached textures); the cache owns it, the picture borrows it. Same rule as emitter
@@ -18,15 +18,13 @@ import { clientMayFetch } from '../../shared/mediasrc.js';
 import { allowUntrusted, RIGHTS_WARNING } from './mediaprefs.js';
 import { escapeHtml as esc } from './markup.js';
 
-// Batch 2 (R 10-07):
-//   3. A QUAD of its own (Godot Sprite3D, a Resonite image import): `width` metres wide, its height from the
-//      image's aspect, standing on the thing's origin and facing its front (+Z), readable from behind too (a second
-//      plane turned π, so the back isn't mirrored). Until the image is decoded, a 1:1 plate at 30% stands in, so the
-//      editor's gizmo has something to grab. Cutout transparency (alphaTest 0.5: no sorting, fine in VR). Its world
-//      extent is held to 50 m whatever the transform's scale.
-//   4. Where the bytes come from (shared/mediasrc.js): a store file always; a trusted host's link always; any other
-//      link only if this viewer turned on "allow untrusted links" — otherwise nothing is fetched (a quad shows its empty
-//      plate). A link is fetched without credentials or a referrer, and stored as a texture at most 2048 px on its long side (the browser decodes the full image first).
+// THE QUAD (Godot Sprite3D, a Resonite image import): `width` metres wide, its height from the image's aspect,
+// standing on the thing's origin and facing its front (+Z), readable from behind too (a second plane turned π, so the
+// back isn't mirrored). Until the image is decoded, a 1:1 plate at 30% stands in, so the editor's gizmo has something
+// to grab. Cutout transparency (alphaTest 0.5: no sorting, fine in VR). Its world extent is held to 50 m.
+// THE BYTES (shared/mediasrc.js): a store file always; a trusted host's link always; any other link only if this
+// viewer turned on "allow untrusted links", else nothing is fetched (the quad shows its empty plate). A link is
+// fetched without credentials or a referrer, and decoded at most 2048 px on its long side.
 export const QUAD_MAX_EXTENT = 50;
 export const MAX_TEXTURE_PX = 2048;
 const blocked = new Map();   // id → why this browser didn't fetch it (probes)
@@ -63,14 +61,10 @@ function holdExtent(root, g, picture, aspect) {
 
 // id → { picture, quad, root, aspect } for every picture currently hung
 const hung = new Map();
-// id → revision of the CURRENT intent for that id. Every change of intent —
-// a new bag, a removal, a malformed bag, the entity leaving or being
-// re-realized, a world reset — bumps it, and an async hang installs only if
-// the revision it was issued under is still the current one. Without this a
-// held image load installed after `data: null`, and an older bag's load
-// finishing late overwrote a newer one (Mica, #186 review, blocker 1). The
-// bag in the fold is the authority; a load is a request to realize it, and a
-// request outlives its authority all the time.
+// id → revision of the CURRENT intent for that id. Every change of intent (a
+// new bag, a removal, the entity leaving or re-realized, a world reset) bumps
+// it, and an async hang installs only if its revision is still current: the
+// bag in the fold is the authority, and a load request can outlive it.
 const revision = new Map();
 const bump = (id) => { const r = (revision.get(id) ?? 0) + 1; revision.set(id, r); return r; };
 const current = (id, r) => revision.get(id) === r;
@@ -96,10 +90,8 @@ function takeDown(id) {
 
 async function hang(id, picture, rev) {
   // The bag is pending from the moment it is current until a hang INSTALLS
-  // it — including while a load is in flight with the entity present. A
-  // demote/promote during that load bumps the load stale, and the promote's
-  // spawn must still find the bag to rehang (Mica, #186 round 2): a picture
-  // that is still authored never silently stops being shown.
+  // it, so a demote/promote during an in-flight load still finds it to rehang:
+  // a picture that is still authored never silently stops being shown.
   pending.set(id, picture);
   const root = entities.get(id);
   if (!root) return;
@@ -143,16 +135,14 @@ bus.on('comp', ({ id, type, data }) => {
 
 bus.on('entity', ({ id, kind }) => {
   if (kind === 'remove' || kind === 'demote') {
-    // the subtree left the scene with our quad on it; forget the handle.
-    // A load in flight for the departed subtree must not install: bump.
-    // DEMOTE keeps the bag pending so the promote re-hangs it (the entity
-    // and its comp still exist in the fold); REMOVE clears it — the entity
-    // is gone, and a later spawn of the same id starts from its own comps.
+    // the subtree left the scene with our quad on it; forget the handle and
+    // bump any load in flight. DEMOTE keeps the bag pending so the promote
+    // re-hangs it; REMOVE clears it (a later spawn starts from its own comps).
     bump(id);
     const h = hung.get(id);
     if (h) { hung.delete(id); h.quad.userData.dispose?.(); if (kind === 'demote') pending.set(id, h.picture); }
     // the editor's status line is about THIS entity; a later spawn under the
-    // same id is another one and opens with no line (Mica, #191 round 2)
+    // same id is another one and opens with no line
     if (kind === 'remove') { pending.delete(id); notes.delete(id); }
   } else if (kind === 'spawn') {
     // a promote replaces the subtree: whatever we hung is on the old one,
@@ -168,27 +158,15 @@ bus.on('entity', ({ id, kind }) => {
   }
 });
 
-// The block's status line, per entity, kept OUTSIDE the DOM. The scene panel
-// rebuilds every editor on the echo of a committed verb (scenegraph.js
-// repaint, ~300ms after the comp lands), and a refusal is exactly the case
-// with no echo to wait for: the user pressed hang, the block said why not,
-// and the previous hang's echo then wiped the line under them (Mica, #191
-// round 1). The render reads this back, so a repaint carries the last word.
+// The block's status line, per entity, kept OUTSIDE the DOM: the scene panel
+// rebuilds every editor on a committed verb's echo, and a refusal has no echo,
+// so the previous hang's echo would wipe the line. The render reads it back.
 //
-// A line is about ONE state of ONE entity, though, and both can move under
-// it (Mica, round 2):
-//   · the entity can be removed and a new one spawned under the same id — a
-//     different thing that must not open with its predecessor's "taken
-//     down". The client's entity lifecycle names that case (`kind: 'remove'`,
-//     below); a demote/promote is the SAME entity leaving and re-entering
-//     residency, and keeps its line.
-//   · the bag can change by someone else's hand. Every line is stamped with
-//     the picture it was said ABOUT — for `hang` the bag it committed, for
-//     `take down` none, for a refusal or an upload note the bag as it stood —
-//     and a picture echo that disagrees with the stamp retires the line: a
-//     local status must never read as newer than the world. An echo that
-//     AGREES (the hang's own, or a late repeat of it) keeps it, which is the
-//     round-1 case and why this is a comparison, not a clear-on-every-echo.
+// A line is about ONE state of ONE entity. A remove (`kind: 'remove'`) clears
+// it: a new spawn under the same id is a different thing (a demote/promote is
+// the same entity and keeps it). Every line is also stamped with the picture it
+// was said ABOUT, and a picture echo that disagrees retires it (a local status
+// must never read as newer than the world); an echo that agrees keeps it.
 const notes = new Map();   // id → { text, warn, about }   (about = pictureKey of the bag the line describes)
 
 /** The four fields a picture IS, normalized, as one comparable string; `none`
@@ -355,8 +333,8 @@ registerHandler('comp', (id, _obj, k, _v, opts) => {
   if (k !== 'add:picture' || opts?.live) return false;
   uploadThenFace(id); return true;
 });
-// Add Component › Picture on a MODEL hangs it on the model's front face, as its own child (facemedia.js; review 10-07
-// S4: a quad on the model's origin drew inside the crate). On an empty it is that thing's own quad, as before.
+// Add Component › Picture on a MODEL hangs it on the model's front face, as its own child (facemedia.js), not on the
+// model's origin inside it. On an empty it is that thing's own quad, as before.
 async function uploadThenFace(id) {
   const fm = await import('./facemedia.js');
   if (!fm.frontOf(id)) return uploadThenSet(id, 'picture.src');

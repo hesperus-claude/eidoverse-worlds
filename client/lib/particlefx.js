@@ -8,9 +8,8 @@
 // pass (WebGL 2 has none), so headsets and desktops run the same path.
 //
 // Billboarding is in the mesh's own frame: the camera's right and up are carried into the emitter's local space each
-// frame, so a quad faces the viewer however its thing is turned, and grows with its thing's scale (the builder used the
-// world basis in the local frame, which tilted every quad on a turned thing). A headset's two eyes share the head's
-// basis, as they did.
+// frame, so a quad faces the viewer however its thing is turned, and grows with its thing's scale. A headset's two
+// eyes share the head's basis.
 //
 // Cost is bounded three ways: what an effect may hold (EFFECT_LIMITS, checked at the door), the viewer's tier (the perf
 // governor thins drawn particles, never the simulation's meaning), and distance (an emitter farther than FAR is neither
@@ -38,9 +37,8 @@ export function buildEmitter(em, { map = null, seed = 0, name = 'particles', bud
   const additive = em.render.blend === 'add';
   const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: !additive });
-  // no mrtNode: the builder set one (to keep quads out of an MRT pass's normals) only where its global THREE had mrt, which
-  // this client's never did; here a merged MRT output drew nothing at all on the WebGL 2 backend (measured 10-07: no
-  // mrtNode, the smoke is there; with it, an empty frame). The client renders no MRT pass for particles to smear.
+  // no mrtNode: a merged MRT output drew nothing at all on the WebGL 2 backend, and this client renders no MRT pass
+  // for particles to smear.
   const uRight = uniform(new THREE.Vector3(1, 0, 0)), uUp = uniform(new THREE.Vector3(0, 1, 0));
   const fb = em.render.flipbook, frames = fb.h * fb.v;
   mat.positionNode = Fn(() => {
@@ -80,8 +78,8 @@ export function buildEmitter(em, { map = null, seed = 0, name = 'particles', bud
     const cam = camera;
     if (!mesh.parent || _p.distanceTo(cam.getWorldPosition(_v)) > FAR) { mesh.visible = false; return; }
     mesh.visible = true;
-    // how the emitter stands in the world: its gravity is the document's WORLD-down vector turned into its frame (lead
-    // 10-17: a tipped brazier's smoke still rises), set before the step so the preprocess sees it too
+    // how the emitter stands in the world: its gravity is the document's WORLD-down vector turned into its frame (a
+    // tipped brazier's smoke still rises), set before the step so the preprocess sees it too
     mesh.matrixWorld.decompose(_p, _q, _s); _qi.copy(_q).invert();
     _qa[0] = _q.x; _qa[1] = _q.y; _qa[2] = _q.z; _qa[3] = _q.w; _sa[0] = _s.x; _sa[1] = _s.y; _sa[2] = _s.z;
     sim.setGravity(localGravity(em.forces.gravity, _qa, _sa, _ga));
