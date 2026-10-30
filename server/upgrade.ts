@@ -69,7 +69,7 @@ const RATE_N = 6, RATE_MS = 10 * 60_000;
 const running = new Set<string>(), recent = new Map<string, number[]>();
 
 /** The checks both requests share; a refusal is answered here and null returned. */
-async function admit({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [string, string] | null) {
+async function takeUpgrade({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [string, string] | null) {
   const id = msg.id ?? null;
   const refuse = (code: string, reason: string, fix?: string) => { ws.send(JSON.stringify({ type, id, ok: false, refused: { code, reason, ...(fix ? { fix } : {}) } })); return null; };
   const who = provenWho(c, msg), account = who?.account ?? null, operator = isOperator(account);
@@ -97,7 +97,7 @@ const claimEnv = (a: { account: string; name: string }) => ({ EIDO_UPGRADER_ACCO
 
 export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
   "world-upgrade-review": (ctx, msg) => {
-    const type = "world-upgrade-review"; void admit(ctx, msg, type).then((a) => { if (!a) return;
+    const type = "world-upgrade-review"; void takeUpgrade(ctx, msg, type).then((a) => { if (!a) return;
     void runCli(["translate", "--dry-run", "--no-founder-key", "--claim", "--json", "--", a.world], claimEnv(a)).then((r) => {
       const got = tagged(r.out, "report-json");
       if (!got) { a.refuse("failed", `the dry run didn't finish: ${(r.err || r.out).trim().slice(-1200)}`); return; }
@@ -110,7 +110,7 @@ export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     const type = "world-upgrade";
     const approved = String(msg.approved ?? "");
     const shape = (): [string, string] | null => /^[0-9a-f]{64}$/.test(approved) ? null : ["approved must be the reviewed report's hash (64 hex)", "review the upgrade first"];
-    void admit(ctx, msg, type, shape).then((a) => { if (!a) return;
+    void takeUpgrade(ctx, msg, type, shape).then((a) => { if (!a) return;
     void runCli(["translate", "--no-founder-key", "--operator-only-no-owner", "--claim", "--approved", approved, "--json", "--", a.world], claimEnv(a)).then((r) => {
       const got = r.code === 0 ? tagged(r.out, "result-json") : null;
       const said = `${r.err}\n${r.out}`.trim();

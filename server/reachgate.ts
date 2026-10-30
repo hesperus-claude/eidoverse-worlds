@@ -13,7 +13,7 @@ type Cls = "touch" | "intimate";
 type Hit = { tc: Client; cls: Cls; point: string | null };
 
 const fin3 = (p: unknown): p is number[] => Array.isArray(p) && p.length === 3 && p.every((n) => typeof n === "number" && Number.isFinite(n));
-const scaleOf = (pose: any) => (typeof pose?.scale === "number" && Number.isFinite(pose.scale) && pose.scale > 0 ? pose.scale : 1);
+const poseScale = (pose: any) => (typeof pose?.scale === "number" && Number.isFinite(pose.scale) && pose.scale > 0 ? pose.scale : 1);
 const bodyLeg = (o: Client) => !o.spectator && (o.surface ?? "world") === "world";
 const sameBody = (c: Client, o: Client) => o === c || (!!c.actorId && o.actorId === c.actorId);
 /** root frame → world, as root.localToWorld (the root never scales: a `space` point is metres at any size, docs/body-state.md):
@@ -45,7 +45,7 @@ function bodiesAt(c: Client, pt: number[]): Hit[] {
   const out: Hit[] = [];
   for (const o of c.world?.clients ?? []) {
     if (!bodyLeg(o) || sameBody(c, o) || !fin3(o.lastPose?.p)) continue;
-    const at = o.lastPose!.p!, s = scaleOf(o.lastPose);
+    const at = o.lastPose!.p!, s = poseScale(o.lastPose);
     const d = unturn(o.lastPose!.q, [pt[0] - at[0], pt[1] - at[1], pt[2] - at[2]]);   // into their frame: a turned body's capsule turns with it
     const cls = pointClass([0, 0, 0], [d[0] / s, d[1] / s, d[2] / s]) as Cls | null;
     if (cls) out.push({ tc: o, cls, point: null });
@@ -68,7 +68,7 @@ function touched(c: Client, pose: any, t: any): Hit[] | null {
   const tc = legNamed(c, t.space); if (!tc) return null;
   if (sameBody(c, tc)) return [];
   // held to every body it lands in (reachnet.js resolves it in their frame): a point in A's frame resting on B is B's to allow
-  const s = scaleOf(tc.lastPose);   // their capsule at their size, as bodiesAt scales it; the point stays metres
+  const s = poseScale(tc.lastPose);   // their capsule at their size, as bodiesAt scales it; the point stays metres
   const cls = pointClass([0, 0, 0], [t.p[0] / s, t.p[1] / s, t.p[2] / s]) as Cls | null;
   const own: Hit[] = cls ? [{ tc, cls, point: null }] : [];
   const at = frameToWorld(tc.lastPose, t.p);

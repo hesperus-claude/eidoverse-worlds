@@ -110,7 +110,7 @@ function buildWeather(ctx, a, w) { return [setOp("@world", "sky", skyValue(ctx.s
 function buildUndo(ctx, a, w) {
   const X = actIndexOf(w); const E = w.entries;
   const mine = X.actsOf.get(ctx.actor) ?? [];
-  const bodyOf = (seq) => readback(w, seq); // READBACK: a purged act's request can't be read, or matched by label (null: unknown)
+  const readBody = (seq) => readback(w, seq); // READBACK: a purged act's request can't be read, or matched by label (null: unknown)
   const result = (seq) => { const r = X.resultOf.get(seq); return r === undefined ? undefined : E[r]; };
   // the inverse of one act against `now`: what to write, and what to leave because someone changed it since. A function
   // so an owner's rollback can run it over many acts in a row, each against what the previous inverses left
@@ -221,8 +221,8 @@ function buildUndo(ctx, a, w) {
   // Ctrl+Z walking back, while a redo is undone first.
   // READBACK: the chain reads each undo's `undoes`; a purged undo is unknown, read as the index reads it (it undoes nothing
   // we can name: the chain ends there, and its target isn't counted undone)
-  const depthOf = (seq) => { let d = 0, q = seq; while (q !== undefined && E[q]?.verb === "undo" && d < 64) { d++; q = bodyOf(q)?.undoes; } return d; };
-  const undoneBy = (seq) => { for (let k = mine.length - 1; k >= 0; k--) if (E[mine[k]].verb === "undo" && bodyOf(mine[k])?.undoes === seq) return mine[k]; return undefined; };
+  const depthOf = (seq) => { let d = 0, q = seq; while (q !== undefined && E[q]?.verb === "undo" && d < 64) { d++; q = readBody(q)?.undoes; } return d; };
+  const undoneBy = (seq) => { for (let k = mine.length - 1; k >= 0; k--) if (E[mine[k]].verb === "undo" && readBody(mine[k])?.undoes === seq) return mine[k]; return undefined; };
   // an owner's rollback (CoreProtect's rollback by player and time): undo {actor, since} takes back every
   // act that person made since a version, newest first, each inverse against what the previous ones left; later work by
   // anyone else still stands. It says how many acts it would take back, and above 20 it needs confirm: true.
@@ -250,7 +250,7 @@ function buildUndo(ctx, a, w) {
     if (!eo || me < them) refuse("rank", `act ${seq} was ${said(e.actor)}'s; ${!eo ? "undoing someone else's work needs a role that may edit others' work (by default, builder and above)" : `they're ${roleOf(ctx.st, e.actor)}, above you`}`, "revert goes along rank, never upward: ask an owner");
     return e; };
   const target = a.act !== undefined ? (mine.includes(a.act) ? E[a.act] : othersAct(a.act))
-    : a.label ? pick((q) => bodyOf(q)?.request?.label === a.label && !X.undone.has(q) && X.resultOf.has(q))
+    : a.label ? pick((q) => readBody(q)?.request?.label === a.label && !X.undone.has(q) && X.resultOf.has(q))
     : pick((q) => E[q].verb !== "create-world" && depthOf(q) % 2 === 0 && !X.undone.has(q) && X.resultOf.has(q) && !changedNothing(q));
   if (!target) { const last = X.lastAct === null ? null : E[X.lastAct];
     refuse("nothing", "nothing of yours to undo" + (last && last.actor !== ctx.actor ? ` (the latest change was ${said(last.actor)}'s; bare undo takes your own; undo {act: <seq>} takes theirs if your rank allows)` : ""), "history shows who did what; to change someone else's work, edit it (they'll see it)"); }
@@ -261,7 +261,7 @@ function buildUndo(ctx, a, w) {
       live !== null ? `it's back in force through redo ${live}: undo {act: ${live}} (or a bare undo) takes it back` : "a bare undo takes back your latest change; history shows the chain"); }
   if (["throw", "drop", "leave"].includes(target.verb)) refuse("physical", `that was a ${target.verb}: what it changed is where things came to rest, which physics decided`, "put it back yourself: grab it, then put {id, pos}");
   const res = result(target.seq); if (!res || changedNothing(target.seq)) refuse("nothing", "that act changed nothing", "");
-  if (target.verb === "sculpt" && TR.ADDITIVE.has(bodyOf(target.seq)?.request?.brush) && bodyOf(target.seq)?.clamped !== true) { const inv = sculptInverse(w, ctx, target, res); if (inv) { ctx.actExtra = { undoes: target.seq, inverse: true }; return inv; } }
+  if (target.verb === "sculpt" && TR.ADDITIVE.has(readBody(target.seq)?.request?.brush) && readBody(target.seq)?.clamped !== true) { const inv = sculptInverse(w, ctx, target, res); if (inv) { ctx.actExtra = { undoes: target.seq, inverse: true }; return inv; } }
   const { groups, skipped } = inverseOf(target, res, ctx.st);
   if (!groups.length) refuse("conflict", "everything that act touched has been changed by someone else since", "their later change stands (undo never writes over it); if you still want yours, make the change again yourself, and history shows who did what", { skipped });
   if (skipped.length) ctx.notes.push({ skipped });
@@ -276,8 +276,8 @@ function buildUndo(ctx, a, w) {
   ctx.actExtra = { undoes: target.seq };
   // undoing my own `use` is admitted under the same reaction capability the use was (a visitor may open
   // a door through its handler, so they may close it again by undo), asked for again NOW: no handler, no undo
-  const ureq = bodyOf(target.seq)?.request;
-  const ucap = bodyOf(target.seq)?.capability;
+  const ureq = readBody(target.seq)?.request;
+  const ucap = readBody(target.seq)?.capability;
   // …and only while the handler's who still admits them, as a use is judged (a raised who stops future acts, undo included)
   const uh = ureq?.id ? ctx.st.entities[ureq.id]?.c.reactions?.[ucap?.reaction] : undefined;
   if (target.verb === "use" && target.actor === ctx.actor && ucap?.reaction && uh && (!uh.who || admits(ctx.st, ctx.actor, uh.who))) {
@@ -285,9 +285,9 @@ function buildUndo(ctx, a, w) {
     if (groups.flat().every((o) => o.id === ureq.id && o.comp !== undefined)) { reactionCap(ctx, ureq.id, comps[0], ucap.reaction); ctx.cap.comps = comps;
       ctx.actExtra = { undoes: target.seq, capability: ctx.actExtra.capability }; } }
   // say what came back: which act, what it was, and whether this undoes it or redoes it
-  const req = bodyOf(target.seq)?.request ?? {}; const dz = depthOf(target.seq);
-  const base = dz ? (() => { let q = target.seq; for (let i = 0; i < dz; i++) q = bodyOf(q)?.undoes; return E[q]; })() : target;
-  const breq = base ? (bodyOf(base.seq)?.request ?? {}) : req;
+  const req = readBody(target.seq)?.request ?? {}; const dz = depthOf(target.seq);
+  const base = dz ? (() => { let q = target.seq; for (let i = 0; i < dz; i++) q = readBody(q)?.undoes; return E[q]; })() : target;
+  const breq = base ? (readBody(base.seq)?.request ?? {}) : req;
   const what = `${base?.verb ?? target.verb}${breq.id ? ` ${breq.id}` : ""}${breq.component ? ` ${breq.component}` : ""}${breq.label ? ` "${breq.label}"` : ""}`;
   ctx.undid = { act: target.seq, kind: dz % 2 ? "redo" : "undo", what, ...(dz ? { of: base?.seq } : {}) };
   return groups.flat();

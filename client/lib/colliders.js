@@ -459,7 +459,7 @@ export function setColliderScope(s) { activeScope = s ?? null; }
 export const colliderScope = () => activeScope;
 const inScope = (e) => activeScope === null || e.scope == null || e.scope === activeScope;
 
-function* near(x, z) {
+function* cellsNear(x, z) {
   const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
@@ -629,7 +629,7 @@ export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = M
   const step = climbs ? MOVER.body.step * (tall / MOVER.body.height) : Math.min(MOVER.body.step, tall * 0.3);
   const probeY = Math.min(HIP, tall * 0.5);  // mid-body, not "hip"
   const spanY = Math.max(r, tall * 0.26);    // how far up/down a wall hit counts
-  for (const e0 of near(pos.x, pos.z)) {
+  for (const e0 of cellsNear(pos.x, pos.z)) {
     const { obj, mask, support } = e0; const { yaw, box, exact, pillar, grid } = frameOf(e0);
     if (mask) continue;   // a grass-mask footprint is not a solid (see fitStructureBoxes)
     if (support) {
