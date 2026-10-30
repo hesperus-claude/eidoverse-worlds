@@ -61,9 +61,7 @@ console.log('INVERSE ACES (the JS twin against three\'s forward)');
   const white = forward(acesFilmicInverseJS([1, 1, 1], 0.78), 0.78);
   check('white comes back white (within 1e-4, the constants\' 8 places)', white.every((v) => v > 1 - 1e-4), JSON.stringify(white));
   check('a saturated hue needs a negative linear input (why the shader does not clamp at 0)', acesFilmicInverseJS([eotf(0x8f / 255), eotf(0xe8 / 255), eotf(0xc8 / 255)], 0.78)[0] < 0);
-  const qc = readFileSync(new URL('../client/lib/quadcolour.js', import.meta.url), 'utf8');
-  check('the shader reads the same arrays (quadcolour.js: mat3(...ACES_OUT_INV), mat3(...ACES_IN_INV), no literals of its own)',
-    /mat3\(\.\.\.ACES_OUT_INV\)/.test(qc) && /mat3\(\.\.\.ACES_IN_INV\)/.test(qc) && !/1\.76474097|0\.64303825/.test(qc));
+  // the shader reads the same arrays, no literals of its own: tools/one-binding-test.ts
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -59,29 +59,30 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["migrate-identities", "migrate-identities-check.ts", 1],   // migrate-identities.ts: one id per person everywhere (actors, role keys, say.to, capability, sponsor, the moderator log), a gate that reads the two logs side by side, refused twice
   ["oldworlds", "../oldworlds-test.ts", 1], // owner 10-15: an old-format world is found and named at boot (the exact translate command), and a visitor is told in plain words             // the old-world importer (tools/protocol/import-v1/) on every local old world log + her dialect-3 goldens + pins
   ["browser", "browser-check.ts", 1],   // the shared core imported by headless Chromium, byte-for-byte with bun
-  ["descriptors", "../descriptor-defaults-test.ts", 1], // C5 (DEBT 10-12 #3a): every record and inspector default is the registry's, through the editor translation
-  ["light-readers", "../light-readers-test.ts", 1], // D2 (DEBT-2 #5): a light is found by kindOf and the rig's complight key, its gizmo is no box or material slot
-  ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // D1: every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
-  ["boot-init", "../boot-init-test.ts", 1], // D3: every client init* has a caller (initOccupants had none)
-  ["editor-range", "../editor-range-test.ts", 1], // D4a: the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
-  ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks; it sat outside the gate and a stale lock expectation hid there since recut B2 (found 10-21)
-  ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // house 6340433633: the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
-  ["role-grammar", "../role-grammar-test.ts", 1], // D7: one role-id grammar (grab, sockbody, rolespanels, commands)
-  ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation, and no host transcendental (R1: lyingFrame had three)
-  ["onepose", "onepose-check.ts", 1], // audit 10-22 #7: one worldPose (simlayer's and hierarchy's agree bit for bit) and one set of quaternion functions (shared/rot.js)
-  ["dismount-height", "../dismount-height-test.ts", 1], // review of PR #260 (localbody.js:151): standing up keeps the height I'm let go at (vacated.at, a socket exit, a leave clip's end)
-  ["latestread", "../latestread-test.ts", 1], // the panels' paced re-read and the History retry's back-off (latestread.js, backoff.js); it existed, but no lane ran it
-  ["csp", "../csp-test.ts", 0.5],          // the page's script-src hashes are the browser's: a CRLF copy of index.html still boots (CI windows 10-23)
-  ["build-gate", "../build-gate-test.ts", 1], // edit mode is gated at the chokepoint, never trapping a demoted builder (revived D6)
-  ["capsule-recovery", "../capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers (revived D6)
-  ["debug-tabs", "../debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups (revived D6)
-  ["governor-xr", "../governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio (revived D6)
-  ["unknown-comp", "../unknown-comp-test.ts", 1], // an unknown component blocks nothing, from the door to the realizer to the inspector (revived D6)
-  ["reach-order", "../reach-order-test.ts", 1], // reach chains solve in dependency order, cycles refuse and release cleanly (revived D6; needs the avatar corpus at assets/opt/eidoverse)
-  ["editcommit", "../editcommit-test.ts", 1], // inspect.js commitEdit against the real authority: a live call previews, the final one sends ONE request (revived by D2)
-  ["hierarchy-commit", "../hierarchy-commit-test.ts", 1], // a Hierarchy drag is ONE undo step, through commitEdit and the door, and Ctrl+Z takes it back (revived by D2)
-  ["verbclasses", "verbclasses-check.ts", 1], // one home for READ_ONLY/GHOST_OK/WIRE_READS/PERSON_ACTS (DEBT 10-12 #10); classes pinned as of 10-12
-  ["authority-layers", "authority-layers-check.ts", 1], // C11 (DEBT 10-12 #4b): the authority split is a DAG — a leaf under shared/protocol/authority/ never imports the gate or a leaf above it
+  ["descriptors", "../descriptor-defaults-test.ts", 1], // every record and inspector default is the registry's; every option the Inspector offers, and every axis word, is one the door takes
+  ["light-readers", "../light-readers-test.ts", 1], // a light is found by kindOf and the rig's complight key; its gizmo is no box or material slot
+  ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
+  ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
+  ["editor-range", "../editor-range-test.ts", 1], // the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
+  ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
+  ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
+  ["role-grammar", "../role-grammar-test.ts", 1], // one role-id grammar (grab, sockbody, rolespanels, commands)
+  ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation
+  ["one-binding", "../one-binding-test.ts", 1], // a shared constant, grammar or table has one binding: importers carry no copy (reaches, rounding, roles, rot numerics, names key)
+  ["onepose", "onepose-check.ts", 1], // one worldPose (simlayer's and hierarchy's agree bit for bit) and one set of quaternion functions (shared/rot.js)
+  ["dismount-height", "../dismount-height-test.ts", 1], // standing up keeps the height I'm let go at (vacated.at, a socket exit, a leave clip's end)
+  ["latestread", "../latestread-test.ts", 1], // the panels' paced re-read and the History retry's back-off (latestread.js, backoff.js)
+  ["csp", "../csp-test.ts", 0.5],          // the page's script-src hashes are the browser's: a CRLF copy of index.html still boots
+  ["build-gate", "../build-gate-test.ts", 1], // edit mode is gated at the chokepoint, never trapping a demoted builder
+  ["capsule-recovery", "../capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers
+  ["debug-tabs", "../debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups
+  ["governor-xr", "../governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio
+  ["unknown-comp", "../unknown-comp-test.ts", 1], // an unknown component blocks nothing, from the door to the realizer to the inspector
+  ["reach-order", "../reach-order-test.ts", 1], // reach chains solve in dependency order, cycles refuse and release cleanly (needs the avatar corpus at assets/opt/eidoverse)
+  ["editcommit", "../editcommit-test.ts", 1], // inspect.js commitEdit against the real authority: a live call previews, the final one sends ONE request
+  ["hierarchy-commit", "../hierarchy-commit-test.ts", 1], // a Hierarchy drag is ONE undo step, through commitEdit and the door, and Ctrl+Z takes it back
+  ["verbclasses", "verbclasses-check.ts", 1], // one home for READ_ONLY/GHOST_OK/WIRE_READS/PERSON_ACTS; the classes pinned
+  ["authority-layers", "authority-layers-check.ts", 1], // the authority split is a DAG: a leaf under shared/protocol/authority/ never imports the gate or a leaf above it
   ["authority", "authority-check.ts", 1],
   ["ids", "ids-check.ts", 1],
   ["scars", "scars-check.ts", 1],       // R 10-17 02:45 engine-scars + consent gaps: refused acts keep names + code, look's own table, an edit that moves a seat unseats its occupants (sitting is consent), READBACK vs purge, the refusal-code registry, a VERBSPEC row per verb, the spec pins           // R 10-17 ID HARDENING: opaque minting, writers never choose ids ($placeholders), delete clears refs, lint finds dangling ones
