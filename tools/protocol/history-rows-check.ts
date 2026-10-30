@@ -1,7 +1,8 @@
 // The editor's whole-world History must never show a refused attempt as something that happened (Commons parity audit:
 // "refused acts print as done"); the authority records a refused write as an act whose body carries refused {code}.
 import { worldHistoryRows, mergeHistory } from "../../client/lib/historyrows.js";
-let fails = 0; const ok = (c: boolean, n: string, d: any = "") => { console.log((c ? "ok   " : "FAIL ") + n + (c ? "" : "  " + JSON.stringify(d))); if (!c) fails++; };
+import { suite } from "./suite.ts";
+const SU = suite("history-rows-check", { cap: Infinity }), { ok } = SU;
 const nameOf = (id: string) => ({ "u-a": "Ann", "u-b": "Bob" } as any)[id] ?? id;
 const entries = [
   { seq: 7, kind: "act", actor: "u-a", verb: "set", ts: 1, body: { request: { id: "lamp", component: "light" } } },
@@ -45,4 +46,4 @@ ok(done && !done.refused && !/refused|tried/.test(done.text) && /Ann/.test(done.
     "H8 Older… reaches the motion acts, and a refresh landing after it keeps them (and the deeper cursor), no row lost or fused", [late.entries.length, late.next, st.next, late.entries.some((e: any) => /motion/.test(JSON.stringify(e.changed))), late.entries[0].seq === r3.entries[0].seq, chain(late.entries), late.entries.slice(0, 3).map((e: any) => e.diff)]);
   const fresh = mergeHistory({ entries: [], next: null, paged: false }, r3.entries, r3.next ?? null, false);
   ok(fresh.entries.length === 20 && fresh.next === r3.next, "H9 without an Older… read, a refresh is the newest page alone", fresh.entries.length); }
-console.log(`[history-rows-check] ${fails ? fails + " failed" : "all pass"}`); process.exit(fails ? 1 : 0);
+SU.done();
