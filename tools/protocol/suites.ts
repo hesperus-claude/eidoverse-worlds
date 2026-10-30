@@ -173,20 +173,19 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent-replay", "../consent-replay-test.ts", 0.1],   // an agent's gates and lists, replayed on arrival, are what it holds when the read returns (house 6340433633; R 10-28)
   ["history-request", "../history-request-test.ts", 1], // #267 (main): a history request with no answer rejects, so scrolling up can reach what a long disconnect missed
   ["named-pose", "../named-pose-test.ts", 1], // #159: every named pose rides the presence wire (absence is not release; survives late join, reconnect, swap)
-  ["skystamp", "../skystamp-test.ts", 1], // #260 r3 I286: the sky's seq/by come from the log entry that wrote it (the stored value has none)
-  ["grant-command", "../grant-command-test.ts", 1], // #260 house client I6/I42: /grant keeps exceptions and the end date unless it changes them
-  ["environment-realizer", "../environment-realizer-test.ts", 1], // #260 house client I8/I55: water on the flat floor; a rejoin clears gone terrain and grass
-  ["grant-until", "../grant-until-test.ts", 1], // house client I124: a timed grant's end is a whole millisecond (the authority refused every fractional one)
-  ["lite-graph", "../lite-graph-test.ts", 1], // house client I10 / config I1: the lite client never imports the WebGPU renderer
-  ["say-live", "../say-live-test.ts", 1], // house client I135/I217: a transcript is dropped offline, and its say carries spoken/utt/t0
-  ["presence-actor", "../presence-actor-test.ts", 1], // house client I197: puppet, bodydrag and typing go only with the target's identity
-  ["first-name-account", "../first-name-account-test.ts", 1], // house client I192: the first-run door's name becomes the account
-  ["retired-commands", "../retired-commands-test.ts", 1], // house config I19: a retired command says why it is gone
-  ["animnames-retry", "../animnames-retry-test.ts", 1], // house config I18: a failed defs fetch is retried with back-off
-  ["panels", "../panels-test.ts", 1], // house client I203/I198/I213: steppers per thing, focus keeps the panel, Tab adds to the hidden set
-  ["surface-hold", "../surface-hold-test.ts", 1], // house client I240: a voice-relay leg holds an actor's lines (repaired: it drove the wrong bus)
-  ["particles", "../particles-test.ts", 1], // house client I159: a play/stop change updates the registry key, no rebuild
-  ["shadow-fade", "../shadow-fade-test.mjs", 1], // house client I172: registered shadow casters start not casting
+  ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
+  ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
+  ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
+  ["grant-until", "../grant-until-test.ts", 1], // a timed grant's end is a whole millisecond (the authority refuses a fractional one)
+  ["lite-graph", "../lite-graph-test.ts", 1], // the lite client never imports the WebGPU renderer
+  ["net-send-shape", "../net-send-shape-test.ts", 1], // a message about a person carries their identity or is not sent; a spoken say carries spoken/utt/t0, a live one is refused offline
+  ["first-name-account", "../first-name-account-test.ts", 1], // the first-run door's name becomes the account
+  ["retired-commands", "../retired-commands-test.ts", 1], // a retired command says why it is gone
+  ["animnames-retry", "../animnames-retry-test.ts", 1], // a failed defs fetch is retried with back-off
+  ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
+  ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
+  ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
+  ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["translate", "translate-check.ts", 1], // R 10-28 translation rulings (22 rights, 17 particles, 24 name bans, 50 report, version) + SWEEP-3 + light parity
