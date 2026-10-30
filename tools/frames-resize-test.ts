@@ -180,11 +180,9 @@ const tiny = dragEast(-9999, "up");
 check("width clamps at minW", f.state.w >= 100, `w=${f.state.w} (delta ${tiny})`);
 
 // --- the south clamp budgets in BODY space, subtracts a VIEWPORT margin ---
-{ // windows.js:144 clamps state.h to `innerHeight - s0.y - 4`, then the frame
-  // renders `chrome` px taller — so a resize to the legal maximum ends past the
-  // bottom edge, unreachable under html,body{overflow:hidden}. fit() does not
-  // share the bug (it clamps against root.offsetHeight), but the resize
-  // finish() path never calls fit, so it persists until the next window resize.
+{ // a resize to the legal maximum must end inside the viewport:
+  // the frame renders `chrome` px taller than state.h, so the south clamp must subtract chrome or a max resize ends
+  // past the bottom edge (unreachable under overflow:hidden); finish() never calls fit() to repair it
   f.state.x = 100; f.state.y = 100; f.state.w = 300; f.state.h = 200;
   const sx = f.state.x + 40, sy = () => f.state.y + f.state.h - 1;   // inside the south band
   document.dispatchEvent(pd(sx, sy()));
