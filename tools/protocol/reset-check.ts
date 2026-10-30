@@ -3,18 +3,14 @@
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/reset-check.ts
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
-import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, simFold } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
+import { simFold } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
 import { suite } from "./suite.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
 const { ok, done } = suite("reset-check", { quiet: true, cap: Infinity });
-const root = scratch("reset"); const clock = labClock();
+const { root, clock, call } = labWorld("reset");
 const tick = (ms = 1500) => { clock.advance(ms); };
-const call = (w, a, v, args = {}) => { tick(); return request(openWorld(root, w), a, v, args); };
 const st = (W) => fold(openWorld(root, W).entries);
 const pos = (W, id) => st(W).entities[id]?.c.transform.pos;
 const code = (r) => (r.ok ? "ok" : r.refused?.code);
