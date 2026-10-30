@@ -4,7 +4,7 @@
 // the canvas, which hides that; this probe makes the mismatch a real headset has by calling three's own
 // _setXRLayerSize with a big layer after entry. Real client + IWER, empty world (no sky).
 //   bun tools/xr-mirror-probe.mjs [out.png]   (with SKIP_OPT_SWEEP=1 its server starts no asset-optimizer jobs)
-import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR, drawn } from './probe-harness.mjs';
 import { writeFileSync } from 'node:fs';
 const { check, done } = checker();
 const OUT = process.argv[2] ?? null;
@@ -20,7 +20,7 @@ async function run(mode, { hold = true, slowMs = 0 } = {}) {
   await pg.addInitScript((m) => { try { localStorage.setItem('ew-xr-prefs', JSON.stringify({ mirror: m })); } catch {} }, mode);
   await pg.goto(`${world.origin}/?world=staging&name=mirrorprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await visorShown(pg, { timeout: 120000 });
-  await pg.waitForTimeout(2000);
+  await drawn(pg, 60);
   // The killswitch (30 frames over 30 ms → off) is a separate property with its own run below. Held here so a slow
   // headless frame clock can't end the specimen before it's sampled (antra's #206 review: it did, on a slower host).
   await pg.waitForFunction(() => !!globalThis.__xrMirror, null, { timeout: 30000 });
@@ -47,8 +47,9 @@ async function run(mode, { hold = true, slowMs = 0 } = {}) {
       try { return orig(sc, cam); } finally { if (canvasPass) { const f = R._frameBufferTargets?.get(ct); seen.push({ fbt: f ? `${f.width}x${f.height}` : null }); } } };
     // the killswitch run waits for the TRIP (30 frames, however long they take on this host), capped at 90 s; the
     // visual runs sample for 4 s with the switch held
-    if (slowMs) { const t0 = performance.now(); while (!globalThis.__xrMirror?.killed && performance.now() - t0 < 90000) await new Promise((res) => setTimeout(res, 250)); await new Promise((res) => setTimeout(res, 1500)); }
-    else await new Promise((res) => setTimeout(res, 4000));
+    const elapse = (ms) => new Promise((go) => setTimeout(go, ms));   // in the page: the sampling window IS the run
+    if (slowMs) { const t0 = performance.now(); while (!globalThis.__xrMirror?.killed && performance.now() - t0 < 90000) await new Promise((f) => requestAnimationFrame(f)); await elapse(1500); }
+    else await elapse(4000);
     R.render = orig;
     return { seen: seen.slice(-3), n: seen.length, mirror: globalThis.__xrMirror ? { ...globalThis.__xrMirror } : null, between: `${ct._width * (ct._pixelRatio || 1)}x${ct._height * (ct._pixelRatio || 1)}`,
       canvas: `${R.domElement.width}x${R.domElement.height}`, presenting: R.xr.isPresenting };

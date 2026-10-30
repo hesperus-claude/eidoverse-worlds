@@ -194,7 +194,7 @@ function makePage(C, S, { targetId, browserContextId }) {
       until(`a ${ev}`, () => !handlers[ev].has(f), { ms: timeout }).catch((e) => { handlers[ev].delete(f); rej(e); });
     }),
     route: async (pattern, handler) => {
-      const test = typeof pattern === 'function' ? pattern : typeof pattern === 'string' ? ((re) => (u) => re.test(u))(new RegExp('^' + pattern.split('**').map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '[^/]*')).join('.*') + '$')) : (u) => pattern.test(u);
+      const test = typeof pattern === 'function' ? (u) => pattern(new URL(u)) : typeof pattern === 'string' ? ((re) => (u) => re.test(u))(new RegExp('^' + pattern.split('**').map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '[^/]*')).join('.*') + '$')) : (u) => pattern.test(u);
       routes.push({ test, handler });
       await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
     },

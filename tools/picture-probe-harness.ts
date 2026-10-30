@@ -4,6 +4,7 @@ import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
 import { join } from 'node:path';
 import * as OP from '../shared/protocol/requests.js';
 import { qFromYaw } from '../shared/rot.js';
+import { tryUntil, pause } from "./protocol/wait.ts";
 
 export const LIB = 'eidoverse/assets/models/scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower.glb';
 
@@ -68,12 +69,13 @@ export const state = (pg: any, id: string): Promise<PicState> => pg.evaluate(asy
 }, id);
 
 /** Polls state until pred holds or ms run out; returns the last state either way. */
-export const until = async (pg: any, id: () => string, pred: (s: PicState) => boolean, ms = 20000) => {
-  const t0 = Date.now(); let s!: PicState;
-  while (Date.now() - t0 < ms) { s = await state(pg, id()); if (pred(s)) return s; await settle(150); }
+export const reaches = async (pg: any, id: () => string, pred: (s: PicState) => boolean, ms = 20000) => {
+  let s!: PicState;
+  await tryUntil('the picture state', async () => pred(s = await state(pg, id())), { ms, step: 150 });
   return s;
 };
-export const settle = (ms = 1500) => new Promise((r) => setTimeout(r, ms));
+/** A deliberate over-wait for a queued repaint (the editor queues it ~300 ms out), never a sync point. */
+export const settle = (ms = 1500) => pause('a queued repaint lands', ms);
 
 /** Holds every library fetch for `src` until release() is called. */
 export async function hold(pg: any, src: string) {

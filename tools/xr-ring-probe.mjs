@@ -2,7 +2,7 @@
 // entry.icon, the rail also its id/emoji fallbacks), and the focus label draws over the slots, in the ring's centre.
 // Every pinned panel's ring entry has an icon (dockPins, the rail's id/emoji fallbacks included). Real client + IWER.
 //   bun tools/xr-ring-probe.mjs
-import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR, drawn } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
@@ -12,12 +12,13 @@ try {
   await pg.goto(`${world.origin}/?world=staging&name=ringprobe&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await visorShown(pg);
   await enterVR(pg);
-  await pg.waitForTimeout(1500);
+  await drawn(pg, 60);   // the panels' first frames in the headset
   const r = await pg.evaluate(async () => {
     const xr = await import('./lib/xr.js'); const ui = await import('./lib/ui.js');
     const pins = ui.dockPins().map((p) => ({ id: p.id, icon: p.icon ?? null }));
     const entries = xr.radialEntries(); const ring = xr.makeRadial(entries);
-    await new Promise((res) => setTimeout(res, 800));   // svg glyphs load async
+    await Promise.all(ring.slots.map((m) => m.material?.map?.ready ?? null));   // svg glyphs load async
+    for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r));
     // a slot "draws its glyph" when its canvas has ink INSIDE the disc beyond the plain panel fill: count pixels that
     // differ from the disc colour in the central 60x60 (the glyph box)
     const ink = ring.slots.map((m, i) => {

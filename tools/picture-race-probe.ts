@@ -19,7 +19,7 @@
 // Writes go through net.sendRequest (shared/protocol/requests.js); the authority mints ids, read from each create's
 // reply. A picture is the thing's own quad (shared/picture.js), judged by its texture; a held load shows the empty
 // plate (hung, no map) until it lands.
-import { pictureWorld, req, spawnConsole, state as stateOf, until as untilOf, settle, hold } from './picture-probe-harness.ts';
+import { pictureWorld, req, spawnConsole, state as stateOf, reaches as untilOf, settle, hold } from './picture-probe-harness.ts';
 import * as OP from '../shared/protocol/requests.js';
 
 // ONE UNPRIMED IMAGE PER HELD LEG: the host caches library bytes per session (assets.js primeFiles), so a reload never
@@ -44,12 +44,12 @@ const spawn = async (pg: any) => { ID = await spawnConsole(pg); };
 const remove = (pg: any) => req(pg, OP.remove(ID));
 const comp = (pg: any, src: string | null) => req(pg, src ? OP.set(ID, 'picture', { src, description: 'race', lit: 'self' }) : OP.unset(ID, 'picture'));
 const state = (pg: any) => stateOf(pg, ID);
-const until = (pg: any, pred: (s: any) => boolean, ms = 20000) => untilOf(pg, () => ID, pred, ms);
+const reach = (pg: any, pred: (s: any) => boolean, ms = 20000) => untilOf(pg, () => ID, pred, ms);
 
 try {
   const pg = await joinAs('raceprobe');
   await spawn(pg);
-  let s = await until(pg, (x) => x.entity);
+  let s = await reach(pg, (x) => x.entity);
   check('the console spawned', s.entity, JSON.stringify(s));
 
   // A. Mica's sequence: hold the fetch, author, remove, release.
@@ -57,7 +57,7 @@ try {
     const img = fresh();
     const h = await hold(pg, img);
     await comp(pg, img);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('A. the hold engaged (a real fetch is in flight)', h.heldCount() > 0);
     await comp(pg, null);
     await settle(300);
@@ -71,27 +71,27 @@ try {
     const imgA = fresh(), imgB = fresh();
     const h = await hold(pg, imgA);
     await comp(pg, imgA);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('B. the hold engaged', h.heldCount() > 0);
     await comp(pg, imgB);
-    s = await until(pg, (x) => x.hung && x.hasMap && x.mapSrc === imgB);
+    s = await reach(pg, (x) => x.hung && x.hasMap && x.mapSrc === imgB);
     check('B. the newer bag hangs while the older load is still held', s.hung && s.hasMap && s.mapSrc === imgB, JSON.stringify(s));
     await h.release();
     await settle();
     s = await state(pg);
     check('B. the older load, released late, does not overwrite the newer picture', s.hung && s.hasMap && s.mapSrc === imgB && s.count === 1, JSON.stringify(s));
     await comp(pg, null);
-    await until(pg, (x) => !x.hung);
+    await reach(pg, (x) => !x.hung);
   }
   // C. entity removed under a held load.
   {
     const img = fresh();
     const h = await hold(pg, img);
     await comp(pg, img);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('C. the hold engaged', h.heldCount() > 0);
     await remove(pg);
-    await until(pg, (x) => !x.entity);
+    await reach(pg, (x) => !x.entity);
     await h.release();
     await settle();
     s = await state(pg);
@@ -100,16 +100,16 @@ try {
   // D. remove + respawn (a new subtree) under a held load.
   {
     await spawn(pg);
-    await until(pg, (x) => x.entity);
+    await reach(pg, (x) => x.entity);
     const img = fresh();
     const h = await hold(pg, img);
     await comp(pg, img);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('D. the hold engaged', h.heldCount() > 0);
     await remove(pg);
-    await until(pg, (x) => !x.entity);
+    await reach(pg, (x) => !x.entity);
     await spawn(pg);
-    await until(pg, (x) => x.entity);
+    await reach(pg, (x) => x.entity);
     await h.release();
     await settle();
     s = await state(pg);
@@ -120,7 +120,7 @@ try {
     const img = fresh();
     const h = await hold(pg, img);
     await comp(pg, img);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('E. the hold engaged', h.heldCount() > 0);
     await pg.evaluate(() => import('/lib/base.js').then((b: any) => b.bus.emit('world-reset', {})));
     await settle(300);
@@ -132,26 +132,26 @@ try {
   // F. the gate refuses only STALE loads.
   {
     await spawn(pg);
-    await until(pg, (x) => x.entity);
+    await reach(pg, (x) => x.entity);
     const img = fresh();
     await comp(pg, img);
-    s = await until(pg, (x) => x.hung && x.hasMap);
+    s = await reach(pg, (x) => x.hung && x.hasMap);
     check('F. an unheld load still hangs (the happy path is untouched)', s.hung && s.hasMap && s.mapSrc === img, JSON.stringify(s));
   }
   // G. the entity is present when the load starts; a demote/promote cycle
   //    happens while the fetch is held.
   {
     await comp(pg, null);
-    await until(pg, (x) => !x.hung);
+    await reach(pg, (x) => !x.hung);
     const img = fresh();
     const h = await hold(pg, img);
     await comp(pg, img);
-    await until(pg, () => h.heldCount() > 0, 10000);
+    await reach(pg, () => h.heldCount() > 0, 10000);
     check('G. the hold engaged', h.heldCount() > 0);
     await pg.evaluate((id: string) => import('/lib/base.js').then((b: any) => { b.bus.emit('entity', { id, kind: 'demote' }); b.bus.emit('entity', { id, kind: 'spawn' }); }), ID);
     await settle(300);
     await h.release();
-    s = await until(pg, (x) => x.hung && x.hasMap);
+    s = await reach(pg, (x) => x.hung && x.hasMap);
     check('G. demote+promote during a held load: the still-authored picture rehangs', s.hung && s.hasMap && s.mapSrc === img && s.count === 1, JSON.stringify(s));
   }
   check('no page errors across the cycle', errs.length === 0, errs.join(' | '));
