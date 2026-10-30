@@ -4,6 +4,7 @@
 // Nothing here may import main.js.
 
 import { CONFIG, bus, report, tee } from './base.js';
+import { DEFAULT_BODY } from '../../shared/avatardefs.js';
 import { releaseBodyGate } from './bodygate.js';
 import { armFlight, folded } from './controller.js';
 import { makeAvatar, contributeThumbnail } from './avatar.js';
@@ -56,7 +57,7 @@ export async function resolveMyAvatarPath() {
     setTimeout(() => { off(); res(null); }, 8000);   // offline: default body
   });
   const list = net.avatars ?? await Promise.race([rosterEarly, fromBus]) ?? [];
-  myAvatarPath = (list ?? []).find((a) => a.name === want)?.path ?? 'eidoverse/assets/vrms/claude.vrm';
+  myAvatarPath = (list ?? []).find((a) => a.name === want)?.path ?? DEFAULT_BODY;
   try { localStorage.setItem('ew-avatar-path', JSON.stringify({ name: want, path: myAvatarPath })); } catch { /* private mode */ }
   setMyAvatarPath(myAvatarPath);
   return myAvatarPath;
