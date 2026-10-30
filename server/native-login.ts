@@ -4,8 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { HnSession } from "./auth.ts";
 import { readCapped } from "./reqbody.ts";
 
-// A session issued to a native client: `native`, or `nativeWorld` on one paired before native sessions became
-// ordinary ones (auth.ts). It may not approve another pairing. Kept here, so loading the handler runs nothing of auth.ts.
+// A session issued to a native client: `native`, or `nativeWorld` on an older pairing (auth.ts). It may not approve another pairing. Kept here, so loading the handler runs nothing of auth.ts.
 export const isNativeSession = (s: HnSession) => s.native === true || s.nativeWorld !== undefined;
 
 type Options = {

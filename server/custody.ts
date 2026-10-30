@@ -17,9 +17,8 @@ const mk = (): Key => {
   return { pub: "ed25519:" + (publicKey.export({ format: "jwk" }) as { x: string }).x, priv: privateKey.export({ format: "der", type: "pkcs8" }).toString("base64") };
 };
 
-/** One custody per keys file per process (review of #260, server I5): every world under a worlds root opens the same file,
- *  and separate handles, each with its own cache, each minting a missing key and writing its whole cache back, overwrote
- *  one another's keys. */
+/** One custody per keys file per process: every world under a worlds root opens the same file, and separate handles
+ *  (each caching, minting and writing its whole cache back) would overwrite one another's keys. */
 const byFile = new Map<string, ReturnType<typeof openCustody>>();
 /** Custody over the keys file at `file` (created on first use). */
 export function custodyAt(file: string) {
@@ -55,7 +54,7 @@ function openCustody(file: string) {
   return {
     sequencer(): string { minting(() => !c.sequencer, () => { c.sequencer = mk(); }); return c.sequencer!.pub; },
     /** The operator's GOVERNANCE key (tier 1 of the custodial default, §2.4): never the same key as the sequencer, so a
-     *  stolen writing key isn't also the only override (round-2 review R4). */
+     *  stolen writing key isn't also the only override. */
     operator(): string { minting(() => !c.operator, () => { c.operator = mk(); }); return c.operator!.pub; },
     /** The OPERATOR's signature over msg (base64url Ed25519 by the operator key above, never the sequencer's): the host's
      *  COUNTERSIGNATURE on a translation approval (tools/protocol/world.ts approvalFor; PROTOCOL §14). */
@@ -82,7 +81,7 @@ function openCustody(file: string) {
 
 /** A world's moderator log (§2.1: never in the world log): read it, and append one record per line. */
 export function modLogAt(file: string) {
-  // read as a reader; the first append repairs a torn tail first, as the log's writer (review of #260, server I127)
+  // read as a reader; the first append repairs a torn tail first, as the log's writer
   const mod = fs.existsSync(file) ? readLogBytes(file, { cut: false }).toString("utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
   let repaired = false;
   return { mod, appendMod: (r: object) => { if (!repaired) { readLogBytes(file); repaired = true; } appendDurable(file, JSON.stringify(r)); } };

@@ -52,8 +52,7 @@ export function projectEnvironment(state: any) {
   const p = terrainParams(state.terrain ?? { size: 200, amplitude: 0 });
   if (!(p.size > 0 && p.size <= 10000)) throw Error("terrain size unsupported");
   // The shaped ground (placed features, heightmaps) over the base law — what the browser and agents stand on.
-  // makeHeightField already applies terrainParams' shape: shaping it again doubled every feature (a −4 m pit
-  // projected at −8 m), so native clients got different ground and water than browsers.
+  // makeHeightField already applies terrainParams' shape: never shape it again (it would double every feature).
   const n = Math.min(128,Math.max(64,Math.round(Number(state.terrain?.segments)||64))), height = makeHeightField(p), heights: number[] = [];
   for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++)
     heights.push(height((x / n - .5) * p.size, (z / n - .5) * p.size));
@@ -68,7 +67,7 @@ export function projectEnvironment(state: any) {
 }
 
 // Renderer-facing component parameters (tools/water/README.md), in the shapes main's native renderer read, projected from
-// the components (translate-v1.js VOLUMES / CARRIED, inverted; review L24): zone+water (+ physics-area speed), zone+water-exclusion, drive, climb, collider.
+// the components (translate-v1.js VOLUMES / CARRIED, inverted): zone+water (+ physics-area speed), zone+water-exclusion, drive, climb, collider.
 const PASS_THROUGH = ["environment"] as const;
 const zoneBox = (z: any) => z?.shape === "box" && z.global !== true && Array.isArray(z.size) && z.size.length === 3 && z.size.every(Number.isFinite) ? z.size.map(Math.abs) : null;
 const num = (x: unknown, d: number) => (Number.isFinite(x) ? x as number : d);
@@ -129,10 +128,8 @@ export function projectEntity(id: string, e: any) {
   return { ...out, revision: hash(out) };
 }
 
-// Parameters for client-side evaluation, so native renderers animate at frame
-// rate from the same closed forms instead of polling sampled transforms.
-// A missing t0 is resolved to this process's anchor: every native client then
-// agrees with the server's own sampled transform.
+// Parameters for client-side evaluation, so native renderers animate at frame rate from the same closed forms. A
+// missing t0 resolves to this process's anchor, so every native client agrees with the server's sampled transform.
 export function localMotion(raw: any, nowMs: number, simBody: boolean) {
   const m = raw?.comp?.motion;
   if (raw?.parent || simBody || !m || typeof m.type !== "string" || typeof m.part === "string") return null;
@@ -182,10 +179,9 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
   // Rate-limit errors too. Commit delivered revisions only after size checks.
   old.at = now; clients.set(c, old);
   if (msg.version !== RENDER_VERSION) return { type: "render-scene", version: 1, world: w.name, error: "unsupported_version" };
-  // A saved heightmap whose grid has not loaded yet would project the noise fallback as the ground, and
-  // cache it as success (terrain, water and plant positions all wrong until some unrelated edit). Refuse
-  // until it is ready, caching nothing; `moving` keeps native clients polling at their usual interval.
-  // (the NORMALIZED shape: a malformed grid ref the height law ignores must not hold the scene forever)
+  // A saved heightmap whose grid hasn't loaded would project (and cache) the noise fallback as the ground: refuse
+  // until it is ready, caching nothing; `moving` keeps native clients polling. Read from the NORMALIZED shape, so a
+  // malformed grid ref the height law ignores can't hold the scene forever.
   if (!shapeReady(shapeParams(w.state.terrain ?? {})))
     return { type: "render-scene", version: 1, world: w.name, error: "terrain_pending", moving: true, updateIntervalMs: 300,
       detail: `heightmap grid ${String(w.state.terrain?.heightmap?.grid ?? "").slice(0, 120)} is not available yet` };
@@ -214,10 +210,8 @@ export function renderScene(c: Client, msg: any, now = Date.now()): object | nul
       });
       cached = { seq, entities, environment, signature: hash(environment), envSource }; worlds.set(w, cached);
     }
-    // Evaluate the SAME versioned physics law as the browser, at this render
-    // time. Never advance the authoritative sim as a side effect of a read.
-    // Snapshot fields alias the sim, so clone before advancing. Foreign epochs
-    // retain their barrier poses without pretending to know their physics.
+    // Evaluate the SAME versioned physics law as the browser, at this render time, never advancing the authoritative
+    // sim (snapshot fields alias it: clone first). Foreign epochs keep their barrier poses.
     const sim = w.sim?.epoch ? structuredClone(simSnapshot(w.sim)) : null;
     if (sim && !sim.epoch?.foreign) advanceSim(sim, tickOf(sim, now));
     const activeBodies = sim && !sim.epoch?.foreign ? Object.values(sim.bodies).filter(b => !b.resting).length : 0;

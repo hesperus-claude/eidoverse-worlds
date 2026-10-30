@@ -1,5 +1,5 @@
 // server/foldviews.ts — the authority's log views, carried in the fold cache at its covered line so a boot never reads the prefix
-// (R 10-28 parity with main's seek). Only for a log with no purge and only no-op diagnostics; the re-derive rebuilds them from genesis.
+// (parity with main's seek). Only for a log with no purge and only no-op diagnostics; the re-derive rebuilds them from genesis.
 import { fold, opsOf, Malformed, cloneState } from "../shared/protocol/fold.js";
 import { worldOf } from "../shared/protocol/authority.js";
 import { actIndexOf, seedActIndex } from "../shared/protocol/authority/undo.js";

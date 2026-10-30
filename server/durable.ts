@@ -1,4 +1,4 @@
-// server/durable.ts — the disk practice a sequencer owes its readers (platforms review 10-06, #5):
+// server/durable.ts — the disk practice a sequencer owes its readers:
 //  - a line is on disk (fsync) BEFORE anyone is told about it: otherwise a crash after a broadcast loses the tail, the
 //    restarted server re-issues the same seq with a different head, and every client holding (seq, head) holds "proof"
 //    the authority equivocated;
@@ -9,7 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { sha256 } from "../shared/protocol/hash.js";
 
-/** Does the file at `p` hold `needle`'s bytes? Read in 1 MiB chunks, never whole (the boot sweep's peek, review L18). */
+/** Does the file at `p` hold `needle`'s bytes? Read in 1 MiB chunks, never whole (the boot sweep's peek). */
 export function fileIncludes(p: string, needle: string): boolean {
   const n = Buffer.from(needle), b = Buffer.allocUnsafe((1 << 20) + n.length), fd = fs.openSync(p, "r");
   try { for (let pos = 0, keep = 0; ;) { const got = fs.readSync(fd, b, keep, b.length - keep, pos); if (got <= 0) return false;
@@ -19,8 +19,8 @@ export function fileIncludes(p: string, needle: string): boolean {
 }
 
 /** The log's bytes, with a torn tail (no final newline) cut off the file first. `cut: false` is a reader's: it leaves the
- *  file alone and only leaves the tail out, since a line without its newline may be one a writer is appending now (review
- *  of #260, server I127: a reader that cut it made the writer's line land broken). Only the log's writer cuts. */
+ *  file alone and only leaves the tail out, since a line without its newline may be one a writer is appending now. Only
+ *  the log's writer cuts. */
 export function readLogBytes(logPath: string, { cut = true } = {}): Buffer {
   if (!fs.existsSync(logPath)) return Buffer.alloc(0);
   const b = fs.readFileSync(logPath);
@@ -49,7 +49,7 @@ export function appendDurable(logPath: string, line: string) {
   const fresh = !fs.existsSync(logPath);
   const fd = fs.openSync(logPath, "a");
   try { writeAll(fd, Buffer.from(line + "\n", "utf8")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is (review of #260, server I17)
+  if (fresh) syncDir(path.dirname(logPath));   // a file's first line is durable only once its name is
 }
 /** fsync a directory, so a file just created or renamed into it survives a crash (POSIX: the entry lives in the directory,
  *  not the file). Windows can't open a directory for this, and NTFS journals names itself: skipped there. */
