@@ -50,14 +50,17 @@ function bodyRefusal(c: Client, tc: Client, cls: "shove" | "pose" | "displace"):
   if (c.actorId && c.actorId === tc.actorId) return null;            // your own body
   const live = c.world?.log?.live;
   if (!live || !c.actorId || !tc.actorId) return `${tc.id}'s body isn't taking ${cls} right now`;
+  // a range only where the world sets one (@world.body-default.range; R 10-28 13:44): m between the two bodies' last frames.
+  // Range before consent, so someone out of reach can't learn the target's gates (the door does the same)
+  const r = bodyRangeOf(live.state?.()?.entities?.["@world"]?.c?.["body-default"]);
+  if (r != null) {
+    const a = c.lastPose?.p, b = tc.lastPose?.p;
+    if (!Array.isArray(a) || !Array.isArray(b)) return `can't tell where you and ${tc.id} are yet — try again in a moment`;
+    const m = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    if (!(m <= r)) return `${tc.id} is ${m.toFixed(1)} m away (this world's range is ${r} m) — get closer`;
+  }
   const d = consentDecide(live.presence, c.actorId, tc.actorId, cls, liveBodyDefault(live));
   if (d.mode === "deny") { c.world.log?.noteRefused(c.actorId, tc.actorId, cls); return refusalWords(tc.id, cls); }   // one sentence whatever the cause (a closed gate, a block): the real cause is theirs, not yours; they are told (once per asker per cooldown)
-  // a range only where the world sets one (@world.body-default.range; R 10-28 13:44): m between the two bodies' last frames
-  const r = bodyRangeOf(live.state?.()?.entities?.["@world"]?.c?.["body-default"]); if (r == null) return null;
-  const a = c.lastPose?.p, b = tc.lastPose?.p;
-  if (!Array.isArray(a) || !Array.isArray(b)) return `can't tell where you and ${tc.id} are yet — try again in a moment`;
-  const m = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-  if (!(m <= r)) return `${tc.id} is ${m.toFixed(1)} m away (this world's range is ${r} m) — walk closer`;
   return null;
 }
 function presenceTarget(w: World, actor: unknown, name: string, embodied = true): { tc: Client | null; byActor: boolean; actor: string | null } {
