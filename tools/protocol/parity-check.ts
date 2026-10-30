@@ -58,7 +58,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["no read-both for an old presence file", "shared/protocol/authority/storage.js", "if (w.presence.seats && !w.presence.occupants) w.presence.occupants = w.presence.seats;", "", ["O2"]],
   ["body kind seat again", "shared/protocol/authority/bodyconsent.js", "\"drag\", \"occupy\", \"carry\"]", "\"drag\", \"seat\", \"carry\"]", ["O3"]],
   ["sockbody reads seat", "shared/sockbody.js", "typeof u.socket === 'string' && u.socket === mount.to", "typeof u.seat === 'string' && u.seat === mount.to", ["O4"]],
-  ["CONTROL (no-op: must stay green)", "server/server.ts", "/** A join's declared status (PROTOCOL §6a)", "/**  A join's declared status (PROTOCOL §6a)", []],
+  ["CONTROL (no-op: must stay green)", "server/server.ts", "import { requestHandler, actorOf as actorIdOf,", "import { requestHandler,  actorOf as actorIdOf,", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/parity-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
