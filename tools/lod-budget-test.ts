@@ -202,8 +202,6 @@ async function sphereGlb(unit: number, { seg = 48, ring = 32, png = null as Uint
   };
   const inBudget = await lodAtTestFloor(src, null, push(0.025));
   check("a 2.5 cm silhouette shift on a 0.5 m prop — over the old 1 cm gate, under the ~3.9 cm budget — is served", !!inBudget.out, { kind: inBudget.kind, verdict: inBudget.verdict });
-  const spike = await lodAtTestFloor(src, null, push(0.08));
-  check("an 8 cm shift, twice the budget, is still refused as a preservation failure", !spike.out && spike.kind === "preservation", { kind: spike.kind, verdict: spike.verdict });
   // the gate is WORLD space: the same sphere authored in centimetres under a 0.01 node, pushed 2.5 local units (2.5 cm)
   // — a raw-POSITION box reads 2.5 units against its 2% floor of 1 unit and refuses it
   const cm = await sphereGlb(100);
@@ -211,65 +209,78 @@ async function sphereGlb(unit: number, { seg = 48, ring = 32, png = null as Uint
   check("…and it is judged in WORLD space: the same 2.5 cm push on a model authored in cm under a 0.01 node is served", !!cmIn.out, { kind: cmIn.kind, verdict: cmIn.verdict });
   const cmOut = await lodAtTestFloor(cm, null, push(8));
   check("…as is its 8 cm refusal", !cmOut.out && cmOut.kind === "preservation", { kind: cmOut.kind });
-  check("…on EVERY axis: an 8 cm push along Y and along Z is refused too",
-    (await Promise.all([1, 2].map((ax) => lodAtTestFloor(src, null, push(0.08, ax))))).every((r) => !r.out && r.kind === "preservation"));
   // the budget is WORLD metres divided by the node's scale ONCE: a 10 m sphere (its facets near the ~6 cm budget, so
   // the ERROR binds, not meshopt's 25% ratio floor) authored in cm reduces like the one authored in metres
   const bigM = await lodAtTestFloor(await sphereGlb(1, { radius: 10 }), null), bigCm = await lodAtTestFloor(await sphereGlb(100, { radius: 10 }), null);
   check("a model authored in cm under a 0.01 node reduces like the same model in metres (within 5%), where the error budget binds",
     !!bigM.out && !!bigCm.out && bigM.after > 0.3 * bigM.before && Math.abs(bigM.after - bigCm.after) <= 0.05 * bigM.after, [bigM.before, bigM.after, bigCm.after]);
-  const mSph = await lodAtTestFloor(src, null);
-  check("a smooth, seam-free sphere reduces on the REGULAR pass — the Permissive retry is only for when that can't reach the bar",
-    !!mSph.out && mSph.permissive === false, mSph.permissive);
+  // every gate × whichever pass ran: the smooth sphere is served on the REGULAR pass, the 2 m faceted field only by the
+  // PERMISSIVE retry; a pass that breaks a gate is refused as a preservation failure, on either
+  type Mut = (spread: number) => (dd: Document) => void;
+  const GATES: [string, Mut][] = [
+    ["nothing broken", () => () => {}],
+    ["a node renamed", () => (dd) => { dd.getRoot().listNodes()[0].setName("renamed"); }],
+    ["a node moved", () => (dd) => { const n = dd.getRoot().listNodes()[0]; const t = n.getTranslation(); n.setTranslation([t[0] + 0.5, t[1], t[2]]); }],
+    ["a material swapped", () => (dd) => { dd.getRoot().listMeshes()[0].listPrimitives()[0].setMaterial(dd.createMaterial("other")); }],
+    ...[0, 1, 2].map((ax): [string, Mut] => [`the bounds pushed on axis ${ax}`, (spread) => push(spread, ax)]),
+  ];
+  const PASSES: [string, Uint8Array, boolean, number][] = [["regular", src, false, 0.08], ["permissive", await field(0, 2), true, 0.5]];
+  for (const [pass, bytes, wantPermissive, spread] of PASSES) for (const [gate, mut] of GATES) {
+    const r = await lodAtTestFloor(bytes, null, gate === "nothing broken" ? undefined : mut(spread));
+    const ok = gate === "nothing broken" ? !!r.out && r.permissive === wantPermissive : !r.out && r.kind === "preservation";
+    check(`${pass} pass, ${gate}: ${gate === "nothing broken" ? "served" : "refused (preservation)"}`, ok, { kind: r.kind, verdict: r.verdict, permissive: r.permissive });
+  }
 }
+// a faceted jagged field F metres square, n=40 (every vertex on a hard edge), optionally textured and with a smooth sphere
+async function field(texSize: number, F = 6, withSphere = false) {   // texSize 0: untextured; withSphere: + a smooth, reducible sphere
+  const n = 40; let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const grid: number[][] = [];
+  for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) grid.push([F * x / n, F * (rnd() - 0.5) * 1.6 / n, F * z / n]);
+  const P: number[] = [], N: number[] = [], T: number[] = [];
+  for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
+    const a = z * (n + 1) + x, b = a + n + 1;
+    for (const tri of [[a, b, a + 1], [a + 1, b, b + 1]]) {
+      const [p, q, r] = tri.map((i) => grid[i]);
+      const e1 = q.map((v, k) => v - p[k]), e2 = r.map((v, k) => v - p[k]);
+      const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...fn) || 1;
+      for (const i of tri) { P.push(...grid[i]); N.push(...fn.map((v) => -v / l)); T.push(grid[i][0] / F, grid[i][2] / F); }
+    }
+  }
+  const doc = new Document(); const buf = doc.createBuffer();
+  // noise, not a flat colour: prune() folds a solid-colour texture into its material factor and the map is gone
+  const m = doc.createMaterial("m");
+  if (texSize > 0) {
+    const px = new Uint8Array(texSize * texSize * 3).map(() => Math.floor(rnd() * 256));
+    const png = new Uint8Array(await sharp(px, { raw: { width: texSize, height: texSize, channels: 3 } }).png().toBuffer());
+    m.setBaseColorTexture(doc.createTexture("t").setImage(png).setMimeType("image/png"));
+  }
+  const prim = doc.createPrimitive().setMaterial(m)
+    .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(P)).setBuffer(buf))
+    .setAttribute("NORMAL", doc.createAccessor().setType("VEC3").setArray(new Float32Array(N)).setBuffer(buf))
+    .setAttribute("TEXCOORD_0", doc.createAccessor().setType("VEC2").setArray(new Float32Array(T)).setBuffer(buf))
+    .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(P.length / 3).map((_, i) => i)).setBuffer(buf));
+  doc.createScene().addChild(doc.createNode("f").setMesh(doc.createMesh("f").addPrimitive(prim)));
+  if (withSphere) {
+    // 221 vertices: few enough that the Permissive retry (the field alone reaches 0.65×) stays over the bar
+    const S: number[] = [], SI: number[] = [], seg = 16, ring = 12;
+    for (let r = 0; r <= ring; r++) for (let q = 0; q <= seg; q++) { const th = (r / ring) * Math.PI, ph = (q / seg) * Math.PI * 2;
+      // 10 cm, inside the field's own bounds: the budget (off the world diagonal) is the field's alone
+      S.push(F / 2 + 0.1 * Math.sin(th) * Math.cos(ph), 0.1 * Math.cos(th), F / 2 + 0.1 * Math.sin(th) * Math.sin(ph)); }
+    for (let r = 0; r < ring; r++) for (let q = 0; q < seg; q++) { const a = r * (seg + 1) + q, b = a + seg + 1; if (r > 0) SI.push(a, a + 1, b); if (r < ring - 1) SI.push(a + 1, b + 1, b); }
+    const sp = doc.createPrimitive().setMaterial(doc.createMaterial("s"))
+      .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(S)).setBuffer(buf))
+      .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(SI)).setBuffer(buf));
+    doc.getRoot().listScenes()[0].addChild(doc.createNode("s").setMesh(doc.createMesh("s").addPrimitive(sp)));
+  }
+  return new NodeIO().writeBinary(doc);
+}
+
 // texture-only: a faceted jagged 6 m field (every vertex on a hard edge — its vertices can't come under 0.6×) with a
 // base-colour map. 1024² over 6 m is ~170 texels/m flat — less on its steepest facets, which bind — against the ~37
 // its LOD distance resolves → 512², a quarter of the memory: served for its textures. The same field at 64² has nothing to give (the floor): refused as ineffective.
 {
   const enc = findKtx2Encoder();
   check("(setup) a KTX2 encoder on this host — the texture-only checks need the real encoder", !!enc, null);
-  async function field(texSize: number, F = 6, withSphere = false) {   // texSize 0: untextured; withSphere: + a smooth, reducible sphere
-    const n = 40; let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const grid: number[][] = [];
-    for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) grid.push([F * x / n, F * (rnd() - 0.5) * 1.6 / n, F * z / n]);
-    const P: number[] = [], N: number[] = [], T: number[] = [];
-    for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
-      const a = z * (n + 1) + x, b = a + n + 1;
-      for (const tri of [[a, b, a + 1], [a + 1, b, b + 1]]) {
-        const [p, q, r] = tri.map((i) => grid[i]);
-        const e1 = q.map((v, k) => v - p[k]), e2 = r.map((v, k) => v - p[k]);
-        const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; const l = Math.hypot(...fn) || 1;
-        for (const i of tri) { P.push(...grid[i]); N.push(...fn.map((v) => -v / l)); T.push(grid[i][0] / F, grid[i][2] / F); }
-      }
-    }
-    const doc = new Document(); const buf = doc.createBuffer();
-    // noise, not a flat colour: prune() folds a solid-colour texture into its material factor and the map is gone
-    const m = doc.createMaterial("m");
-    if (texSize > 0) {
-      const px = new Uint8Array(texSize * texSize * 3).map(() => Math.floor(rnd() * 256));
-      const png = new Uint8Array(await sharp(px, { raw: { width: texSize, height: texSize, channels: 3 } }).png().toBuffer());
-      m.setBaseColorTexture(doc.createTexture("t").setImage(png).setMimeType("image/png"));
-    }
-    const prim = doc.createPrimitive().setMaterial(m)
-      .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(P)).setBuffer(buf))
-      .setAttribute("NORMAL", doc.createAccessor().setType("VEC3").setArray(new Float32Array(N)).setBuffer(buf))
-      .setAttribute("TEXCOORD_0", doc.createAccessor().setType("VEC2").setArray(new Float32Array(T)).setBuffer(buf))
-      .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(P.length / 3).map((_, i) => i)).setBuffer(buf));
-    doc.createScene().addChild(doc.createNode("f").setMesh(doc.createMesh("f").addPrimitive(prim)));
-    if (withSphere) {
-      // 221 vertices: few enough that the Permissive retry (the field alone reaches 0.65×) stays over the bar
-      const S: number[] = [], SI: number[] = [], seg = 16, ring = 12;
-      for (let r = 0; r <= ring; r++) for (let q = 0; q <= seg; q++) { const th = (r / ring) * Math.PI, ph = (q / seg) * Math.PI * 2;
-        // 10 cm, inside the field's own bounds: the budget (off the world diagonal) is the field's alone
-        S.push(F / 2 + 0.1 * Math.sin(th) * Math.cos(ph), 0.1 * Math.cos(th), F / 2 + 0.1 * Math.sin(th) * Math.sin(ph)); }
-      for (let r = 0; r < ring; r++) for (let q = 0; q < seg; q++) { const a = r * (seg + 1) + q, b = a + seg + 1; if (r > 0) SI.push(a, a + 1, b); if (r < ring - 1) SI.push(a + 1, b + 1, b); }
-      const sp = doc.createPrimitive().setMaterial(doc.createMaterial("s"))
-        .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(new Float32Array(S)).setBuffer(buf))
-        .setIndices(doc.createAccessor().setType("SCALAR").setArray(new Uint32Array(SI)).setBuffer(buf));
-      doc.getRoot().listScenes()[0].addChild(doc.createNode("s").setMesh(doc.createMesh("s").addPrimitive(sp)));
-    }
-    return new NodeIO().writeBinary(doc);
-  }
   if (enc) {
     const big = await lodAtTestFloor(await field(1024), enc);
     check("a 1024²-textured field whose vertices stay over 0.6× is served as a TEXTURE-ONLY LOD", !!big.out && big.texOnly === true && big.after > big.before * 0.6 && (big.texRatio ?? 1) <= LOD_TEX_ONLY,
@@ -312,9 +323,6 @@ async function sphereGlb(unit: number, { seg = 48, ring = 32, png = null as Uint
     const permTex = await lodAtTestFloor(await field(1024, 2), enc);
     check("a Permissive geometry LOD carries CAPPED textures too (its own doc's caps reach the encoder)",
       !!permTex.out && permTex.permissive === true && dims(permTex.out)[0] < 1024, { permissive: permTex.permissive, dims: permTex.out ? dims(permTex.out) : null });
-    const permBroken = await lodAtTestFloor(await field(0, 2), null, (dd: Document) => { dd.getRoot().listNodes()[0].setName("renamed"); });
-    check("a Permissive retry that breaks a gate is refused — every gate applies to the retry, not only the regular pass",
-      !permBroken.out && permBroken.kind === "preservation", { kind: permBroken.kind, verdict: permBroken.verdict });
     // under the vertex floor: nothing is simplified, but a heavy map still earns a texture-only LOD
     const noise = async (n: number) => { let sd = 11; const rr = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
       return new Uint8Array(await sharp(new Uint8Array(n * n * 3).map(() => Math.floor(rr() * 256)), { raw: { width: n, height: n, channels: 3 } }).png().toBuffer()); };
