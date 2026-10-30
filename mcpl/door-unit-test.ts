@@ -139,6 +139,26 @@ for (const kind of ["track", "clip"]) {
     "say (ambient and addressed) and act from a declared agent carry chat:from-agent; \"ai\" or no word, none", { say, knock, act, plain });
   ok(JSON.stringify(MCPL_ADVERTISEMENT).includes("chat:from-agent"), "the advertisement lists chat:from-agent among the core tags it emits"); }
 
+// a ping's channel frame (ping-wire.ts): approach, reach and touch address you; depart is ambient and a system notice;
+// a mention rides the say event; and the pending_pings lines
+{ const { pingDelivery, pingLine } = await import("./ping-wire.ts"); const { CHAT, EIDO } = await import("./declaration.ts");
+  const P = (kind: string, text?: string) => ({ ts: 1, kind, who: "digi", ...(text != null ? { text } : {}) }) as any;
+  const a = pingDelivery(P("approach"), null)!;
+  ok(a.tags.includes(CHAT.addressed) && a.tags.includes(EIDO.approach) && a.mentioned === true && !a.tags.includes(CHAT.ambient) && !a.tags.includes(CHAT.system)
+    && a.text === "* digi walked up to you", "approach is addressed + mentioned, not ambient or system, worded 'walked up to you'", a);
+  const d = pingDelivery(P("depart", "walked away"), null)!, n = pingDelivery(P("depart", "is no longer nearby"), null)!;
+  ok(d.tags.includes(CHAT.ambient) && d.tags.includes(CHAT.system) && d.tags.includes(EIDO.depart) && !d.tags.includes(CHAT.addressed) && d.mentioned === undefined
+    && d.text === "* digi walked away" && n.text === "* digi is no longer nearby", "depart is ambient + system, never addressed or mentioned, in the agent's own who-moved words", [d, n]);
+  const r = pingDelivery(P("reach", "reaches toward your shoulder_l (right hand)"), null)!, t = pingDelivery(P("touch", "touches your head_top (left hand)"), "ai")!;
+  ok(r.tags.includes(CHAT.addressed) && r.tags.includes(EIDO.reach) && r.mentioned === true && r.text === "* digi reaches toward your shoulder_l (right hand)"
+    && t.tags.includes(CHAT.addressed) && t.tags.includes(EIDO.touch) && t.mentioned === true, "reach and touch are addressed + mentioned, worded by the agent", [r, t]);
+  ok(r.declares === undefined && ![...r.tags, ...t.tags].some((x: string) => /from-/.test(x)), "an undeclared sender carries no declares, and no from- tag is read from a word", [r, t]);
+  ok(pingDelivery(P("mention", "hi"), null) === null, "mention pings ride the say event, never this path");
+  const lines = [pingLine(P("mention", "come look at this")), pingLine(P("approach")), pingLine(P("depart", "walked away")), pingLine(P("depart", "is no longer nearby")),
+    pingLine(P("touch", "touches your head_top (left hand)"))];
+  ok(JSON.stringify(lines) === JSON.stringify(["@ digi: come look at this", "≈ digi walked up to you", "≈ digi walked away", "≈ digi is no longer nearby",
+    "≈ digi touches your head_top (left hand)"]), "the pending_pings lines: mention, approach, depart (both wordings), touch", lines); }
+
 // edit pins what its plan read, taken before the plan awaits anything, so a change that lands
 // meanwhile is refused as changed instead of overwritten
 { let comps: any = { label: "old" }; const sent: any[] = [];

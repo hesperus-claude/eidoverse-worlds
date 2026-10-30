@@ -1,12 +1,7 @@
 {
- "mcpl/denoise-test.ts": "passes; before it can be a row: 21 fixed waits onto wait.ts / suite.ts",
  "mcpl/reach-test.ts": "needs the host's optimized avatar store (assets/opt/eidoverse/assets/vrms); no committed rig-fixture fallback yet",
  "tools/actionbar-restore-test.ts": "MERGE into tools/actionbar-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/actionbar-test.ts": "passes; 6 fixed waits (a private _setInterval sleep among them) to move onto wait.ts before it can be a row",
- "tools/approach-dwell-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",
- "tools/approach-env-clamp-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",
- "tools/approach-seed-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",
- "tools/approach-wire-test.ts": "MERGE into mcpl/denoise-test.ts (disconnect rule) and mcpl/door-unit-test.ts:129 (the remaining pingDelivery/pingLine rows) pending (a duplicate or near-duplicate of its rows)",
  "tools/audio-upload-test.ts": "Chromium probe: 1 fixed waits to turn into conditions",
  "tools/aux-binding-test.ts": "passes; before it can be a row: 5 fixed waits onto wait.ts / suite.ts",
  "tools/avatar-perf-probe.mjs": "Chromium probe: 8 fixed waits to turn into conditions",
