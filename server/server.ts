@@ -52,6 +52,7 @@ import { onVoiceServiceChange, markVoiceDegraded, voiceServiceState } from "./sf
 import { isOwner } from "../shared/protocol/roles.js";
 import { newBucket, admitMessage } from "./msgrate.ts";
 import { mintSfuCredential, setSfuConsent, setSfuModeratorMute, revokeSfuLeg, sfuDiag,
+import { DEFAULT_BODY } from "../shared/avatardefs.js";
   sfuAcceptAnswer, sfuAcceptIce, sfuNegotiate, sfuSetPosition, registerSfuSender, admitSfuLeg, liveLegState, sfuLegAdmitted, markSfuLegAdmitted } from "./sfuadapter.ts";
 // 🔴 The incarnation is DURABLE (transport.ts): a restart strands every old credential. Scratch servers keep their
 // counter beside their own logs.
@@ -368,9 +369,9 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
     // snapshot carries — the client no longer round-trips /avatars
     // before joining, and everyone else still sees the right body
     const a = String(msg.avatar ?? "");
-    c.avatar = !a ? "eidoverse/assets/vrms/claude.vrm"
+    c.avatar = !a ? DEFAULT_BODY
       : a.includes("/") ? a
-      : (avatarRoster().find((r) => r.name === a)?.path ?? "eidoverse/assets/vrms/claude.vrm");
+      : (avatarRoster().find((r) => r.name === a)?.path ?? DEFAULT_BODY);
   }
     // Surface: which leg of this identity is arriving. Sanitized like a world name; unknown values are allowed, but
     // "world" alone gets a body. One that sanitizes to EMPTY is refused, never defaulted to "world" (the one value with

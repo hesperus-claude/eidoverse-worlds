@@ -125,6 +125,7 @@ import { recordComponents } from "../shared/protocol/view.js";
 import { modelWord } from "../shared/eido.js";
 import { handleOf, resolveThing } from "../shared/thingref.js";
 import { oldFormatWords } from "../shared/oldformat.js";
+import { DEFAULT_BODY } from "../shared/avatardefs.js";
 (globalThis as any).THREE = Object.assign({}, THREE_W, TSL);
 
 /** The body's clock: one stride of shared/mover.js (the one walker: the client's and the authority's too) per tick. */
@@ -749,7 +750,7 @@ export class WorldAgent {
     this.displayName = opts.displayName ?? process.env.AGENT_DISPLAY_NAME ?? "";
     this.dropMentionQualifiers = opts.dropMentionQualifiers ?? true;
     this.world = opts.world ?? process.env.WORLD_NAME ?? "commons";
-    this.avatar = opts.avatar ?? process.env.AGENT_AVATAR ?? "eidoverse/assets/vrms/claude.vrm";
+    this.avatar = opts.avatar ?? process.env.AGENT_AVATAR ?? DEFAULT_BODY;
     // The agent's own bearer (the one that opened the MCPL door). Forwarded at
     // join so the sequencer can verify the name — agent names are reserved.
     this.agentToken = opts.agentToken ?? process.env.AGENT_TOKEN ?? "";
@@ -4481,7 +4482,6 @@ export class WorldAgent {
   private static readonly LIMB_WORD: Record<string, string> = {
     leftHand: "left hand", rightHand: "right hand", leftFoot: "left foot", rightFoot: "right foot",
   };
-  private static readonly DEFAULT_BODY = "eidoverse/assets/vrms/claude.vrm";
 
   private reachBodyFor(path: string): Promise<ReachBody | null> {
     if (this.reachBodies.has(path)) return Promise.resolve(this.reachBodies.get(path) ?? null);
@@ -4513,7 +4513,7 @@ export class WorldAgent {
     const self = t.who === this.name;
     const person = self ? null : this.people.get(t.who!);
     if (!self && !person) return { err: `nobody called "${t.who}" is present` };
-    const path = self ? this.avatar : (person!.avatar || WorldAgent.DEFAULT_BODY);
+    const path = self ? this.avatar : (person!.avatar || DEFAULT_BODY);
     const body = this.reachBodySync(path);
     if (body === undefined) return undefined;
     // null: its model, or this door's skeleton solver, didn't load (ReachBody.create)
@@ -4582,7 +4582,7 @@ export class WorldAgent {
         const names = [...this.people.keys()].filter((n) => n !== this.name).slice(0, 12);
         return { ok: false, text: `nobody called "${t.who}" is here${names.length ? ` (present: ${names.join(", ")})` : ""}` };
       }
-      if (!this.joined) await this.reachBodyFor(person.avatar || WorldAgent.DEFAULT_BODY);
+      if (!this.joined) await this.reachBodyFor(person.avatar || DEFAULT_BODY);
     }
     const entry: { t: any; palm?: false; reached?: true } = { t, ...(opts.palm === false ? { palm: false as const } : {}) };
     const since = Date.now();
@@ -4656,7 +4656,7 @@ export class WorldAgent {
     for (const [limb, entry] of this.reaches) {
       const t = entry.t;
       if (t.who !== undefined) {
-        const path = t.who === this.name ? this.avatar : (this.people.get(t.who)?.avatar || WorldAgent.DEFAULT_BODY);
+        const path = t.who === this.name ? this.avatar : (this.people.get(t.who)?.avatar || DEFAULT_BODY);
         void this.reachBodyFor(path);
       }
       void this.reachBodyFor(this.avatar);

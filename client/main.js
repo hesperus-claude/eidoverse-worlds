@@ -138,6 +138,7 @@ import { initReachNet, setMyReach, clearMyReach } from './lib/reachnet.js';
 import { foldedIn } from '../shared/wingpresence.js';
 import { readBodyMode } from '../shared/bodymode.js';
 import { isOwner } from '../shared/protocol/roles.js';
+import { DEFAULT_BODY } from '../shared/avatardefs.js';
 
 // (Crash breadcrumbs live in lib/breadcrumbs.js now; the frame loop stamps each
 // system's name as it runs. avatar.js still reads globalThis.__ewBC.)
@@ -349,7 +350,6 @@ function start() {
   if (!isViewer) {
     // A body is never optional. If the chosen body fails to load, wear the default and SAY SO; the stale cache is
     // cleared so the next boot re-resolves. If the default fails too, wear the capsule (below).
-    const DEFAULT_BODY = 'eidoverse/assets/vrms/claude.vrm';
     // ?capsule=1: refuse every body load so the REAL fallback chain runs end to end
     const wear = (path) => CONFIG.params.has('capsule') ? Promise.reject(new Error('?capsule=1: body loads refused')) : makeAvatar(CONFIG.name, path, { urgent: true });   // your body skips the load queue
     resolveMyAvatarPath()

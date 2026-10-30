@@ -20,7 +20,6 @@ import { applyRemoteXR, resetFingers } from './xrbody.js';
 
 export const remotes = new Map(); // id -> RemoteBody
 
-const DEFAULT_AVATAR = 'eidoverse/assets/vrms/claude.vrm';
 // ?capsule=1: every remote arrives as the capsule too — the flag is about seeing the floor, not one body
 const loadBody = (id, path) => CONFIG.params.has('capsule') ? Promise.reject(new Error('?capsule=1: body loads refused')) : makeAvatar(id, path);
 // How far behind serverNow() each body is drawn: at least 110 ms, more on a slow link (interpdelay.js; I46).
@@ -32,6 +31,7 @@ const BUF_MAX = 12;
 export { noteServerTime, serverNow } from './serverclock.js';
 import { serverNow } from './serverclock.js';   // a re-export binds no local name: this module's own frame loop needs it too
 import { climbAt } from './climb.js';
+import { DEFAULT_BODY } from '../../shared/avatardefs.js';
 
 /** Per-identity generation counter: every AUTHORITATIVE (re)creation of an id
  *  bumps it, and async continuations validate record identity before touching
@@ -115,7 +115,7 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
         if (!fresh.avatar) {
           fresh.loading = true;
           try {
-            const av = await loadBody(id, fresh.avatarPath || DEFAULT_AVATAR).catch((e) => { report(`avatar ${id}`, e); fresh.capsuleFor = fresh.avatarPath || DEFAULT_AVATAR; return makeCapsuleAvatar(id); });   // the capsule floor
+            const av = await loadBody(id, fresh.avatarPath || DEFAULT_BODY).catch((e) => { report(`avatar ${id}`, e); fresh.capsuleFor = fresh.avatarPath || DEFAULT_BODY; return makeCapsuleAvatar(id); });   // the capsule floor
             if (remotes.get(id) !== fresh) { av.dispose(); return fresh; }
             fresh.avatar = av;
             if (fresh.buf.length) applyImmediate(fresh);
@@ -141,7 +141,7 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
   gens.set(id, r.gen);
   remotes.set(id, r);
   try {
-    r.avatar = await loadBody(id, avatarPath || DEFAULT_AVATAR).catch((e) => { report(`avatar ${id}`, e); r.capsuleFor = avatarPath || DEFAULT_AVATAR; return makeCapsuleAvatar(id); });   // the capsule floor
+    r.avatar = await loadBody(id, avatarPath || DEFAULT_BODY).catch((e) => { report(`avatar ${id}`, e); r.capsuleFor = avatarPath || DEFAULT_BODY; return makeCapsuleAvatar(id); });   // the capsule floor
     // Stale-load guard: they left OR switched bodies while this loaded.
     // Compare against OUR record, not key presence (a replacement re-occupies
     // the key, and the old avatar would load in as an undisposable ghost).
