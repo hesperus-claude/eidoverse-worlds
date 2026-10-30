@@ -19,7 +19,7 @@ const W = 0.58;                    // quad width, metres — an arm's-length rea
 
 const registry = [];               // [{id, title, fields, dispatch}]
 let panels = null;                 // live: [{mesh, canvas, tex, regions, def}]
-let shown = false;   // off by default in VR (live 09-06 12:49) — the ring's 'panels' slot shows them
+let shown = false;   // off by default in VR — the ring's 'panels' slot shows them
 const _rc = new THREE.Raycaster();
 const _m = new THREE.Matrix4();
 
@@ -69,21 +69,17 @@ function repaintAll() {
 }
 const showPanel = (p, on) => { if (on && p.stale) { p.stale = false; repaint(p); } p.mesh.visible = on; };
 
-// SOFT SWAP (Basis): the quads are built once and kept across sessions — only re-added to the rig and
-// repainted on show. A registry that changed since they were built rebuilds. Before this every entry made a
-// fresh canvas/texture/material/mesh per frame and every exit threw them away, leaking the materials. The
-// listeners were never removed either: the bus has no off() (`bus.off?.()` was a silent no-op; on() returns
-// the unsubscribe), so an 'xr:panels' toggle on the desktop still flipped `shown`.
+// SOFT SWAP (Basis): the quads are built once and kept across sessions — only re-added to the rig and repainted on
+// show; a registry that changed since they were built rebuilds. Listeners are subscribed once and unsubscribe through
+// what on() returns (the bus has no off()).
 let kept = null;                   // panels while not presenting
 let unsubs = [];
 const PANEL_EVENTS = [['entity', repaintAll], ['comp', repaintAll], ['presence', repaintAll], ['xr:panels', () => togglePanels()], ['xr:repaint', repaintAll]];
 const disposePanel = (p) => { p.mesh.removeFromParent(); p.tex.dispose(); p.mesh.geometry.dispose(); p.mesh.material.dispose(); };
 
 export function xrPanelsEnter(rig) {
-  // BOTH paths subscribe: the ring's 'panels' slot emits xr:panels, and this used to be registered only below
-  // the domquad return — so on the DEFAULT path nothing listened and the ring toggle did nothing
-  // (the domquad path needs only the toggle — its quads repaint themselves; the canvas repaint events would find
-  // `panels` null and return, but there is no reason to hold them)
+  // BOTH paths subscribe: the ring's 'panels' slot emits xr:panels, and the default (domquad) path needs the toggle
+  // too — its quads repaint themselves, so it needs nothing else.
   unsubs.forEach((u) => u());
   unsubs = (domQuadsEnabled() ? PANEL_EVENTS.filter(([ev]) => ev === 'xr:panels') : PANEL_EVENTS).map(([ev, fn]) => bus.on(ev, fn));
   if (domQuadsEnabled()) return domQuadsEnter(rig);
@@ -103,7 +99,6 @@ export function xrPanelsExit(rig) {
 
 function togglePanels() {
   // derive from what is actually on screen: a flag of our own drifted from the quads' real state
-  // (a phantom press flipped it while the quads didn't exist yet — live 09-06 11:35, 'can't close the menus')
   if (domQuadsEnabled()) { shown = !domQuadsShown(); return domQuadsSetShown(shown); }
   shown = !(panels ?? []).some((p) => p.mesh.visible);
   for (const p of panels ?? []) showPanel(p, shown);

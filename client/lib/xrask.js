@@ -1,10 +1,8 @@
 // xrask — the centre card's questions, inside a headset. confirmcenter.js is a DOM card, and a DOM card isn't drawn in
-// an immersive session: an edit to a locked thing waited on a question nobody could see, and editwrites's settled() then
-// made every later undo wait behind it (top-down review 10-06, S1-3). In VR the same question rides a quad: by default
-// a hidden xr-flagged DOM frame that domquad.js mirrors (as the VR keyboard does), or on the canvas path (?domquads=0) a
-// schema panel in xrpanels.js; showXRPanel picks whichever is live, and either's buttons answer it. Refusals, which are toasts
-// on the desk and therefore silent in a headset, show here too, with an OK.
-// R, 10-06 23:39: VR edit mode comes later, but nothing should be broken in principle there.
+// an immersive session, so a question nobody could see would hold every later undo (editwrites settled()). In VR the
+// same question rides a quad: by default a hidden xr-flagged DOM frame that domquad.js mirrors (as the VR keyboard
+// does), or on the canvas path (?domquads=0) a schema panel in xrpanels.js; showXRPanel picks whichever is live, and
+// either's buttons answer it. Refusals, which are toasts on the desk and therefore silent in a headset, show here too.
 import { renderer } from './core.js';
 import { bus } from './base.js';
 import { registerXRPanel, showXRPanel } from './xrpanels.js';
@@ -39,7 +37,7 @@ function settle(v) {
 function dispatch(action) { if (typeof action === 'string' && action.startsWith('c:')) settle(action.slice(2)); }
 registerXRPanel({ id: 'ask', title: 'question', fields, dispatch });   // the canvas-quad path (?domquads=0)
 // leaving the headset answers the open question with its cancel: nobody can see it now, and an unsettled ask holds every
-// later undo behind it (editwrites settled(); house review I19)
+// later undo behind it (editwrites settled())
 bus.on('xr:state', (on) => { if (!on && pending) settle(pending.cancel); });
 /** the default path's frame: hidden on the desk (the centre card asks there), a quad in a headset */
 export function initXRAsk() {
@@ -68,10 +66,9 @@ bus.on('edit-refused', ({ text }) => {
   chooseXR({ title: 'refused — nothing changed', body: text, choices: [{ v: 'ok', label: 'OK' }], cancel: 'ok' });
 });
 
-// a physics act refused (grab, put, drop, throw, punt, use, move): the desk says it in chat, which a headset doesn't show;
-// without this a refused throw in VR did nothing visible, and a bug looks like a rule (ship audit 10-09, blocker 5)
-// Play isn't a dialog (review of 5a978cc0): the card goes by itself after PLAY_CARD_MS; OK only puts it away sooner. A
-// request that timed out or went nowhere wasn't refused, and may yet land: it says so.
+// a physics act refused (grab, put, drop, throw, punt, use, move): the desk says it in chat, which a headset doesn't
+// show. Not a dialog: the card goes by itself after PLAY_CARD_MS; OK only puts it away sooner. A request that timed out
+// or went nowhere wasn't refused, and may yet land: it says so.
 const PLAY_CARD_MS = 4000;
 bus.on('thingphysics-refused', ({ text, refused: x }) => {
   if (!xrActive() || pending || !text) return;

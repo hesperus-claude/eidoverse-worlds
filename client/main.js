@@ -33,7 +33,7 @@ import { initCauses } from './lib/realize/livechat.js';
 // and entity buses on import (it has no boot step of its own)
 import './lib/emitters.js';
 import './lib/pictures.js';
-import './lib/materialcomp.js';   // the material component: an image on a named node of the model (R 10-27)
+import './lib/materialcomp.js';   // the material component: an image on a named node of the model
 import { tickSounds } from './lib/sounds.js';   // the sound comp: positional audio from an entity
 import { tickMotion } from './lib/motion.js';
 import { tickLookAt } from './lib/lookats.js';   // batch 2: look-at, after motion (a bob moves it, then it turns)
@@ -207,28 +207,15 @@ initDock([
   { id: 'world', label: '🧱' },
   { id: 'actions', label: '👋' },
   { id: 'debug', label: '🐞' },
-  // The wrench. It was declared here through the lab (edb63df, 27eae14) and
-  // did NOT survive the recut: DEFAULT_PINS still pinned 'edit', but nothing
-  // in the client declared an entry with that id, so it could never appear —
-  // and dock-test could not notice, because it supplies its own 'edit' entry.
-  // R, 2026-09-11: "when did Edit get dropped from the dock?? That's a
-  // regression for sure."
-  //
-  // `last: true` keeps it at the end of the rail: edit is a MODE, not a
-  // window, and it reads as one only when it sits apart (live, 09-05).
-  //
-  // The gate reads the SERVER's answer. c18ee3f moved it there because an
-  // operator is owner everywhere but never appears in the fold's roles map,
-  // so a local role lookup hid the wrench from R while every build verb was
-  // already being accepted (09-04). roleOf/worldHasOwner live further up the
-  // stack than this rung; net.myRights is what rung 3 has, and it is the
-  // authoritative half anyway.
+  // The wrench. `last: true` keeps it at the end of the rail: edit is a MODE, not a window, and it reads as one
+  // only when it sits apart. The gate reads the SERVER's answer (net.myRights): an operator is owner everywhere but
+  // never appears in the fold's roles map, so a local role lookup would hide the wrench while build verbs are accepted.
   { id: 'settings', label: '⚙️', icon: 'gear-six' },
   {
     id: 'edit', label: '🔧', icon: 'wrench', last: true,
     action: toggleEditMode,
     active: () => isEditing(),
-    // while editing, the wrench is THE way out — amber on purpose (R, 09-30), so its tooltip says so
+    // while editing, the wrench is THE way out — amber on purpose, so its tooltip says so
     title: (on) => (on ? 'leave builder mode (B)' : null),
     gate: () => editSurface() && mayBuildStrict(),   // no edit mode on a phone (build.js editSurface)
     deadWhy: () => (editSurface() ? null : ' — builder mode is for a desktop or tablet'),
@@ -259,9 +246,8 @@ wireNet({ capture });   // net_capture.js — the one part of the protocol that 
 // server (correctly) calls this person by their Discord name.
 await initIdentity();
 
-// The splash waits for the body to SETTLE — on screen, or failed — never for a body to exist: a failed
-// avatar load marked the phase done and then checkReady waited on getMe() until the 45 s ceiling
-// (review 2026-09-10 #2: 'stepping in' with no [boot] ready on an owned empty world).
+// The splash waits for the body to SETTLE — on screen, or failed — never for a body to exist: a failed avatar
+// load would otherwise hold checkReady on getMe() until the 45 s ceiling.
 let bodySettled = false;
 if (isViewer) releaseBodyGate('viewer — no body expected'); else armBodyGate();   // a body is coming: the world's parses wait for it (assets.js)
 if (isViewer) {
@@ -270,10 +256,8 @@ if (isViewer) {
   markPhase('body', 1);
   start();
 } else {
-  // The front door: ask once for a name and a body, remember, never ask again.
-  // A person handed a bare link used to become `guest-a1b2` in the default body
-  // with no way to change either and no idea what the keys were.
-  // ?door=1 re-opens it on demand (owner, 09-06 23:14: 'revoke my entry so I hit the step-in panel again')
+  // The front door: ask once for a name and a body, remember, never ask again (a bare link would otherwise make
+  // a `guest-a1b2` in the default body). ?door=1 re-opens it on demand.
   const firstRun = CONFIG.params.has('door') || (!CONFIG.params.has('name') && localStorage.getItem('ew-name-set') !== '1');
   if (firstRun) {
     // the door is already an interactive pause — its roster fetch is lazy,
@@ -291,9 +275,8 @@ if (isViewer) {
 }
 
 
-// ?sendlayout=1 — post this browser's saved panel layout (every ew-frame-* key + the viewport it
-// was arranged in) to the host tee, so a hand-arranged layout can be read off the log and baked in
-// as the default (owner, 09-06 23:16: 'copy my menu layout so we can propagate it as the default').
+// ?sendlayout=1 — post this browser's saved panel layout (every ew-frame-* key + the viewport it was arranged in)
+// to the host tee, so a hand-arranged layout can be read off the log and baked in as the default.
 if (CONFIG.params.has('sendlayout')) {
   bus.on('booted', () => setTimeout(() => {
     const frames = {};
@@ -308,7 +291,7 @@ if (CONFIG.params.has('sendlayout')) {
 
 // A desktop whose last full boot never came back is NOT demoted to lite (index.html
 // decideLite, 'retry'): it boots full again and says so, as a pill on the status strip
-// with the light version one press away. Never "type ?lite=1" (owner, 10-01).
+// with the light version one press away. Never "type ?lite=1".
 if (globalThis.__ewLiteWhy === 'retry') statusChip({
   id: 'lite-retry', level: 'attn', label: 'last load stalled',
   title: "This world didn't finish loading last time",
@@ -333,36 +316,17 @@ function start() {
   connect();
   initPalette();
   initConjure();   // the orrery panel — prompt → your pick of images → mesh → world
-  // 🔴 ONE TRANSPORT, EXACTLY ONE PLAYBACK OWNER (#104 amendment 6, the #132
-  // cutover). The P2P mesh is deleted; the in-process SFU is not a flag or a
-  // URL param, it is the only voice path the client has. That is deliberate —
-  // when transports selected by flag coexisted, a dropped ?sfu=1 served the
-  // mesh for an hour while every result was reported as "SFU",
-  // and amendment 6's "exactly one playback owner must be visible at all
-  // times" is only IMPOSSIBLE to violate when a second owner cannot
-  // initialise. The requirement is that the wrong path be impossible, not
-  // discouraged. If cutover acceptance fails, the remedy is deploying the
-  // previous release during the migration window (notes/CUTOVER-ROLLBACK.md),
-  // not a runtime branch back to a transport this bundle no longer contains.
+  // 🔴 ONE TRANSPORT, EXACTLY ONE PLAYBACK OWNER (#104 amendment 6). The in-process SFU is not a flag or a URL
+  // param, it is the only voice path the client has: "exactly one playback owner" is only impossible to violate when
+  // a second owner cannot initialise. If cutover acceptance fails, the remedy is deploying the previous release
+  // (notes/CUTOVER-ROLLBACK.md), not a runtime branch back to a transport this bundle no longer contains.
   window.__voiceTransport = 'pending:sfu';
   import('./lib/voicesfubridge.js').then((m) => { m.initVoiceSfu(CONFIG.name); window.__voiceTransport = 'sfu'; })
     .catch((e) => { window.__voiceTransport = 'failed:sfu'; window.__voiceTransportError = String(e); console.error('voice init failed', e); });
   initAudioPanel();   // 🔊 categories: voices / world / TTS + consent rows
-  // HEARING YOURSELF IS THE POINT. This hook — your own says going through the
-  // selected voice — used to be installed ONLY inside the `?tts=PORT` block, so
-  // it existed exclusively for bodies launched with a URL parameter. A human who
-  // picked a voice in the panel loaded a 63 MB model, saw "ready", typed, and
-  // heard nothing, because nothing was listening for their says (live, 2026-08-09:
-  // "I don't hear anything when I type into the chat box. Hearing yourself as a
-  // human using TTS is half the fun").
-  //
-  // It belongs at boot, with everyone: it is a no-op until a voice exists and
-  // the checkbox is on, and speakOwnSays() already gates on both.
-  // `actor` on the speech event is the world-log ID STRING (world.js:331), so
-  // the identity here must be CONFIG.name — not `me`, which is the avatar
-  // OBJECT and would never compare equal, leaving the hook installed and
-  // permanently silent. Exactly the failure shape that has cost hours today:
-  // a check that runs, reports success, and can only ever be false.
+  // Hearing yourself: your own says go through the selected voice, for every body, at boot (a no-op until a voice
+  // exists and the checkbox is on; speakOwnSays() gates on both). `actor` on the speech event is the world-log ID
+  // STRING, so the identity here is a name — never `me`, the avatar OBJECT, which would never compare equal.
   import('./lib/tts.js')
     // net.myId is what the SERVER settled on — it can differ from CONFIG.name
     // when an authenticated identity renames you, or when the server suffixes a
@@ -377,25 +341,21 @@ function start() {
   initGizmo();        // TransformControls on the selection while a transform tool is up
   initGripEdit();     // the grip editor: a ghost hand and its handles, opened from the grabbable card
   initMaterialOverrides();   // the draft hesperus/material reader (docs/COMPONENT-LADDER.md)
-  initWorldEdge();           // @world.bounds drawn as a fence (R 10-11)
+  initWorldEdge();           // @world.bounds drawn as a fence
   initEditLayout();   // the workspace: docks the frames while the mode is on (registered AFTER show, so it docks visible frames)
   // the boot hint ('WASD move · Enter chat · B build · ? help') merged into the lantern's resting line
   // (lib/commandbar.js), which owns bottom-centre; the hint bar now only borrows that spot for offers and flashes
 
   if (!isViewer) {
-    // A body is never optional (owner, in-headset 09-04: no avatar at all, on
-    // desktop too, and nothing said why). If the chosen body fails to load,
-    // wear the default and SAY SO; the stale cache is cleared so the next
-    // boot re-resolves instead of failing the same way forever. Only if the
-    // default fails too is there nothing to wear — that one is reported.
+    // A body is never optional. If the chosen body fails to load, wear the default and SAY SO; the stale cache is
+    // cleared so the next boot re-resolves. If the default fails too, wear the capsule (below).
     const DEFAULT_BODY = 'eidoverse/assets/vrms/claude.vrm';
-    // ?capsule=1: refuse every body load so the REAL fallback chain runs end to end (owner, 09-19: 'leave other avatars offline')
+    // ?capsule=1: refuse every body load so the REAL fallback chain runs end to end
     const wear = (path) => CONFIG.params.has('capsule') ? Promise.reject(new Error('?capsule=1: body loads refused')) : makeAvatar(CONFIG.name, path, { urgent: true });   // your body skips the load queue
     resolveMyAvatarPath()
       .then((path) => wear(path).then((av) => ({ av, path })).catch((e) => {
         report('avatar', e);
-        // the capsule is the floor: a body that needs no network (09-19: a flapping tunnel took BOTH the
-        // chosen body and the default, and the owner arrived as nothing)
+        // the capsule is the floor: a body that needs no network, for when the chosen body and the default both fail
         const capsule = () => { toast('no body would load — wearing the capsule until one does. Pick another in Profile.', 'warn', 12000); tee('[body] capsule stand-in (chosen + default failed)'); return { av: makeCapsuleAvatar(CONFIG.name), path: 'capsule' }; };
         if (String(path).startsWith(DEFAULT_BODY)) return capsule();
         try { localStorage.removeItem('ew-avatar-path'); } catch { /* private mode */ }
@@ -407,11 +367,9 @@ function start() {
         if (!av.isCapsule) announceWorn(path.split('/').pop().replace(/\.vrm.*$/, ''), path);   // the roster's name for this file, not a stale ew-avatar-name
         bodySettled = true;
         markPhase('body', 1);
-        // Contribute a portrait of this body so the next person picks from
-        // faces instead of filenames. Deferred behind the governor's calm
-        // signal — it costs an offscreen render-target compile burst, and the
-        // old t+4s wall clock dropped that into the middle of the boot storm
-        // (§16.1g). Calm = 5 smooth seconds with no load work in flight.
+        // Contribute a portrait of this body so the next person picks from faces instead of filenames. Deferred
+        // behind the governor's calm signal (5 smooth seconds with no load work in flight): it costs an offscreen
+        // render-target compile burst (§16.1g).
         if (!av.isCapsule) whenCalm().then(() => contributeThumbnail(getMyAvatarName(), av.vrm, CONFIG.token, { path: getMyAvatarPath() }));
       })
       .catch((e) => { bodySettled = true; markPhase('body', 1); report('avatar', e); releaseBodyGate('body failed — the world must not wait'); checkReady(); });
@@ -436,9 +394,7 @@ wireNet({
   me: () => getMe(),
   myVoice: () => ({ mic: micLive(), hear: earOn() }),   // rides presence: others' hover card + agents' look
   onRestore: (r) => {
-    // a remembered pose can carry null (JSON has no NaN — tonight's NaN body
-    // was stored as [null,0,null] and every rejoin put the owner back on it): only
-    // finite numbers are a place; anything else is the origin
+    // a remembered pose can carry null (JSON has no NaN): only finite numbers are a place; anything else is the origin
     const fin = (v, fb = 0) => (Number.isFinite(v) ? v : fb);
     restoredPosition = true;
     myState.q = r.q; myState.locomotion = r.locomotion;
@@ -452,7 +408,7 @@ wireNet({
     // wreckage, not authorship — wake standing instead of hung mid-tumble.
     if (r.clip === 'ragdoll') { myState.pos.y = 0; return; }
     if (r.pose) myState.pose = r.pose;
-    setFolded(foldedIn(r) === true);   // the named pose wings-folded (or, remembered before 10-17, wingsFolded)
+    setFolded(foldedIn(r) === true);   // the named pose wings-folded (or an older record's wingsFolded)
   },
   onSnapshotDone: () => {},
 });
@@ -516,7 +472,7 @@ const MAIN_KEYS = [
 // merge-into rows keep the dock's title/run (the same act) and only add the key; new rows register whole
 for (const { code, guard, prevent, plain, ...a } of MAIN_KEYS) registerAction(a.title ? a : { id: a.id, key: a.key });
 registerAction({ id: 'panel:chat', key: 'Enter' });
-// People Here is U (above), not Tab — Tab is the panel set's (windows.js, R 10-11 23:01), and a key with two meanings
+// People Here is U (above), not Tab — Tab is the panel set's (windows.js), and a key with two meanings
 // ran both (Tab hid the set, then this re-showed chat beside it)
 
 
@@ -555,11 +511,8 @@ function people() {
 }
 
 // ---------------------------------------------------------------- readiness
-// "Ready" is not "the page loaded" — it's the moment there is something to
-// stand in: your body exists, the log has been folded, and no heavy build
-// (terrain, grass, the sky's first bake) is still running. Dropping someone
-// into a dark grid the instant the socket opens is how the old boot felt
-// instantaneous and looked broken.
+// "Ready" is not "the page loaded" — it's the moment there is something to stand in: your body exists, the log has
+// been folded, and no heavy build (terrain, grass, the sky's first bake) is still running.
 
 let hydrated = false, propsWait = false;
 bus.on('hydrated', () => {
@@ -586,9 +539,9 @@ bus.on('build-queue', checkReady);
 function checkReady() {
   if (bootDone()) return;
   if (!bodySettled || !hydrated || buildsPending() > 0) return;
-  // …and every prop INSIDE residency radius has landed (owner, 09-07 23:18: 'it loads me in when most objects are
-  // still boxes — getting in early is what the go-in-anyway button is for'). Far entities never schedule a
-  // load (realize/models.js), so they cannot hold the door; the skip button (4 s) and the 45 s ceiling remain.
+  // …and every prop INSIDE residency radius has landed (getting in early is what the go-in-anyway button is for). Far
+  // entities never schedule a load (realize/models.js), so they cannot hold the door; the skip button (4 s) and the
+  // 45 s ceiling remain.
   if (pending(P.FAR) > 0) { if (!propsWait) { propsWait = true; onIdle(() => { propsWait = false; checkReady(); }, P.FAR); } return; }
   // one frame with everything in place before the curtain lifts
   requestAnimationFrame(() => requestAnimationFrame(() => finishBoot('ready')));
@@ -697,20 +650,10 @@ startPrefetch().catch((e) => report('prefetch', e));
 
 // ---------------------------------------------------------------- debug
 
-// setVoice(name) — POINT AT A MODEL ON DISK, at any time, same function a human's
-// picker uses.
-//
-// Why should an agent need a restart to change voice when a human doesn't?
-// The asymmetry was built in: a
-// URL param is a BOOT-TIME decision, so a human got a live control and an agent
-// got a restart. Restarting a body is also the single most expensive thing in
-// this system — it drops the door, and doing it has broken a live world twice.
-//
-// So this is a function, callable whenever, and ?voice= merely calls it once at
-// boot. The picker only produces File objects and a File is constructible from
-// any bytes, so an agent fetches the two files a human would have chosen and
-// hands them to the SAME loadFromFiles(). Inference runs in this browser; no
-// synth process in the lane, nothing to keep alive, nothing to restart.
+// setVoice(name) — point at a model on disk, at any time: the same loadFromFiles() a human's picker uses, so an
+// agent changes voice without a restart (restarting a body drops the door). ?voice= merely calls it once at boot.
+// A File is constructible from any bytes, so this fetches the two files a human would have chosen. Inference runs
+// in this browser; no synth process to keep alive.
 async function setVoice(name) {
   if (!name) {                       // setVoice(null) — go quiet, keep the lane
     const { setTtsSource, setTtsEnabled } = await import('./lib/tts.js');
@@ -752,20 +695,14 @@ if (typeof window !== 'undefined') window.setVoice = setVoice;
         console.log(ok ? `[voice] synthesized voice ready on :${port}`
                        : `[voice] no synthesizer on :${port} — falling back to browser speech`);
         if (!ok) {
-          // An unreachable TTS endpoint should fall back to the browser's own
-          // voice rather than produce beeping. An unreachable endpoint used to mean NO voice —
-          // the body joined, asked to speak, and produced nothing (or, with a
-          // tone generator installed, beeped). browservoice.js already existed
-          // and was never imported anywhere: the fallback was written and dead.
-          // Web Speech is worse than Piper and strictly better than silence.
+          // An unreachable TTS endpoint falls back to the browser's own voice: Web Speech is worse than Piper and
+          // strictly better than silence.
           try {
             const { speechSynthesis } = window;
             if (!speechSynthesis) { console.warn('[voice] no speechSynthesis — microphone only'); return; }
             const vs0 = await import('./lib/tts.js');
-            // Web Speech renders to the SPEAKERS, not to a PCM buffer we can put
-            // on the mic lane — so this is audible locally and NOT transmitted.
-            // Being honest about that is the point: silence used to be
-            // indistinguishable from a broken endpoint.
+            // Web Speech renders to the SPEAKERS, not to a PCM buffer we can put on the mic lane — so this is
+            // audible locally and NOT transmitted, and says so.
             vs0.setTtsSource(async (text) => {
               try { speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch {}
               return { pcm: new Int16Array(0), sampleRate: 22050, localOnly: true };
@@ -776,33 +713,15 @@ if (typeof window !== 'undefined') window.setVoice = setVoice;
           } catch (e) { console.warn('[voice] browser-speech fallback failed:', e); return; }
         }
         const vs = await import('./lib/tts.js');
-        // (own-say hook installed once at boot, line ~220, for every body —
-        // not here. Installing it again would speak each line twice, and this
-        // copy passed `me`, the avatar OBJECT, which never equals the actor
-        // string.)
-        // A body that registered a voice means to be heard: open the mic lane
-        // so the sender exists before the first utterance, rather than after.
-        // Install the seam BEFORE anything that can hang. toggleMic() awaits a
-        // source, and a wedged source blocks every line after it — which made
-        // the wiring look "never reached" when it had in fact reached and
-        // stalled. Observability must not sit downstream of the risky call.
+        // (The own-say hook is installed once at boot, in start(), for every body — not here: twice would speak
+        // each line twice.) A body that registered a voice means to be heard: open the mic lane so the sender
+        // exists before the first utterance. Install the probe seam BEFORE anything that can hang: toggleMic()
+        // awaits a source, and a wedged source blocks every line after it.
         globalThis.__voiceProbe = () => ({ ...vs.mouthInfo(), track: vs.genTrackInfo() });
         globalThis.__voiceSpeak = (t) => vs.speak(t);   // the APP's mouth, for probes
         const { toggleMic, micOn } = await import('./lib/micstate.js');
-        // 🔴 `me` IS NOT IN SCOPE HERE — it was a ReferenceError that threw
-        // before the mouth ever opened, so a body with ?tts= joined, logged
-        // "synthesized voice ready", and was mute. The comment six lines up
-        // already warned that an older copy "passed `me`, the avatar OBJECT";
-        // the fix deleted the definition and left the call. toggleMic wants the
-        // actor NAME, which is CONFIG.name — the same value every other caller
-        // passes.
-        // 🔴 OPEN THE LANE THE TRANSPORT ACTUALLY OWNS. This read
-        // the mesh's own mic-state getter and toggle unconditionally — so a
-        // ?tts= body on an SFU server opened the MESH mic lane, published to a
-        // transport nobody was on, and reported success. Same defect as the
-        // HUD mic button had, on the path a voiced agent body depends on, and
-        // it violates the "EXACTLY ONE PLAYBACK OWNER" invariant asserted at
-        // the top of start(). Ask the bridge first; fall back to the mesh.
+        // toggleMic wants the actor NAME (CONFIG.name), as every other caller passes. Open the lane the transport
+        // actually owns — the SFU bridge's when it is up — so EXACTLY ONE PLAYBACK OWNER holds (see start()).
         if (typeof window.__sfuMic === 'function') {
           if (!window.__sfuMicOn?.()) await window.__sfuMic();
         } else if (!micOn()) {
@@ -810,24 +729,16 @@ if (typeof window !== 'undefined') window.setVoice = setVoice;
         }
         console.log('[voice] TTS wiring complete');
       })
-      // 🔴 NEVER SWALLOW THIS. It was `.catch(() => {})`, so anything after the
-      // "voice ready" line could throw and vanish while the log still claimed
-      // success — the exact shape of a check that did not run.
+      // never swallowed: anything after the "voice ready" line must not throw and vanish
       .catch((e) => console.error('[voice] TTS wiring failed:', e?.message || e));
   }
 }
 
 globalThis.__ambientDebug = () => ambientDebug();
-// My own body, for console probes. Chasing "the hair boxes move but the hair
-// mesh does not" meant asking whether the bones the sim writes are the same
-// objects the SkinnedMesh is bound to — a question answerable in one line from
-// the console and in no lines at all without a handle on the avatar.
+// My own body, for console probes (e.g. are the bones the sim writes the ones the SkinnedMesh is bound to?).
 globalThis.__me = () => getMe();
-// EVERY body in the scene, mine and the remotes, for console probes. Added
-// because "which system is driving that body's hair right now" — the flap,
-// Bullet, or three-vrm's springbones — is answerable in one line and was
-// answerable in none: the avatars were reachable only through module-private
-// maps, so a question about someone ELSE's body had nowhere to start.
+// EVERY body in the scene, mine and the remotes, for console probes (e.g. which system drives that body's hair:
+// the flap, Bullet, or three-vrm's springbones) — the avatars are otherwise reachable only through private maps.
 globalThis.__bodies = () => [
   ...(getMe() ? [['me', getMe()]] : []),
   ...[...remotes.entries()].map(([id, r]) => [id, r.avatar]),
@@ -844,17 +755,10 @@ globalThis.__bodies = () => [
 // One command anyone can paste to answer "why is it silent?" from their console:
 // context state, how many sources exist, whether the gesture hook is waiting.
 globalThis.__audioState = () => audioState();
-// THE ISOLATION TEST, INSIDE THE WORLD PAGE. A separate probe page meant a new
-// URL to type, and the URL was its own obstacle course: /audio-probe 404s,
-// /audio-probe.html works, an extensionless copy downloads instead of
-// rendering. None of that is the bug we are chasing. This runs where the
-// person already is. Call it from the console; it needs a click first for the
-// context, which console interaction does not provide — so it reports the
-// context state rather than pretending.
+// THE ISOLATION TEST, inside the world page, from the console. It needs a click first for the context, which
+// console interaction does not provide — so it reports the context state rather than pretending.
 globalThis.testAudioLayers = async () => {
-  // Use the SHARED context. This used to make its own, which on a page already
-  // holding five was the sixth — i.e. the diagnostic itself could exhaust the
-  // budget and then report silence it had caused.
+  // Use the SHARED context: a diagnostic making its own could exhaust the context budget and report silence it caused.
   const { audioContext } = await import('./lib/audioctx.js');
   const ctx = audioContext();
   await ctx.resume().catch(() => {});
@@ -912,7 +816,7 @@ const EW = globalThis.EW = {
   // POSING from the console — the same verbs an agent's tools have:
   // EW.pose, EW.clearPose and EW.animate (client/lib/posecommands.js says how).
   ...poseCommands({ state: myState, sendPuppet, play: (a) => { getMe()?.playAnimation(a); sendAnim(a); } }),
-  // TERRAIN (owner): EW.terrain(patch) edits the world's CURRENT terrain bag rather than replacing it, so
+  // TERRAIN: EW.terrain(patch) edits the world's CURRENT terrain bag rather than replacing it, so
   //   EW.terrain({ features: [{ type: 'hill', x: 30, z: -20, radius: 18, height: 9 }] })
   // keeps the seed, size and tint. Feature types (shared/terrainshape.js): hill {x,z,radius,height} (negative
   // = pit), ridge {x1,z1,x2,z2,radius,height} (negative = valley), flatten {x,z,radius,height,edge?}.
@@ -928,26 +832,14 @@ const EW = globalThis.EW = {
   groundAt: (x, z) => heightAt(x, z), get hasTerrain() { return hasTerrain(); },
   get terrainPending() { return terrainPending(); },
   setPushable, get pushable() { return pushable(); }, dragState,
-  // reach: aim a hand at a world point, or at anything that moves. Pass a
-  // function and it re-solves every frame; `EW.reach('leftHand', () =>
-  // EW.remotes.get('mythos').avatar.root.position.toArray())` follows a body.
-  // reach: aim a hand at a world point, at a live function, or — simplest —
-  // at a NAMED contact point, in which case the surface normal comes with it
-  // and the palm turns to meet the surface:
+  // reach: aim a hand at a world point, a live function (re-solved every frame), or — best — a NAMED contact point,
+  // whose surface normal comes with it so the palm turns to meet the surface:
   //     EW.reach('rightHand', 'head_top')                 // your own head
   //     EW.reach('rightHand', ['mythos', 'shoulder_l'])   // someone else's
   //     EW.reach('rightHand', () => [x, y, z])            // a bare point
-  //
-  // The name form exists because the point form is a trap: EW.contactAt()
-  // returns a position and nothing else, so a reach built on it has no surface
-  // to face and the palm stays wherever the forearm left it. That is not
-  // visible as a bug — the hand still arrives — until you look at a headpat
-  // and find the palm pointing at the sky.
-  // Serializable targets (a name, [who, name], [x,y,z], or the wire forms
-  // {who, point} / {p, space}) go through reachnet: the descriptor rides the
-  // presence stream and EVERY client re-solves the same relation, so other
-  // people see the arm too. A function target stays local-only — it cannot
-  // travel, and this tab is the only one that can evaluate it.
+  // A bare point has no surface to face, so the palm stays wherever the forearm left it. Serializable targets (a
+  // name, [who, name], [x,y,z], or the wire forms {who, point} / {p, space}) go through reachnet: the descriptor rides
+  // the presence stream and EVERY client re-solves it, so others see the arm too. A function target stays local-only.
   reach: (key, target, opts) => {
     if (typeof target === 'function') return getMe()?.setReach(key, target, opts);
     const err = setMyReach(key, target, opts);
@@ -975,24 +867,15 @@ const EW = globalThis.EW = {
     const hit = e && landmarkWorld(e, standoff);
     return hit ? hit.pos.toArray() : null;
   },
-  // Which contact points can a hand ACTUALLY get to on this body? One solve
-  // per (point, hand) against the real derived landmarks — no frames needed,
-  // because the solve is a pure function of pose and target. Answers the
-  // question a demo cannot: not "does reaching work" but "what is in range".
-  // Bumped whenever the reach solver changes, so a diagnostic can prove which
-  // code produced its numbers. A stale tab is otherwise indistinguishable from
-  // a real disagreement about what the arm is doing.
+  // Which contact points can a hand ACTUALLY get to on this body? One solve per (point, hand) against the real
+  // derived landmarks — a pure function of pose and target, so no frames needed. reachVersion is bumped whenever
+  // the reach solver changes, so a diagnostic can prove which code produced its numbers.
   reachVersion: 'reach-6 contact-allowance 2026-08-20',
-  // Which body is being worn — vrm.scene.name is often blank, and "which rig"
-  // is the first question when one person's arm does something another's does
-  // not.
+  // Which body is being worn (vrm.scene.name is often blank).
   get avatarPath() { try { return getMyAvatarPath() || '(unknown)'; } catch { return '(unknown)'; } },
   reachAudit: (who, standoff = 0.02) => {
-    // Landmarks come from the body being TOUCHED; the chains doing the
-    // reaching are always mine. Using one avatar for both asks "can that body
-    // reach its own shoulder", which is a different and much harder question —
-    // and it returns identical numbers whoever you name, which is how this was
-    // caught.
+    // Landmarks come from the body being TOUCHED; the reaching chains are always mine (one avatar for both would
+    // ask "can that body reach its own shoulder", and return the same numbers whoever you name).
     const av = getMe();
     const subject = who ? remotes.get(who)?.avatar : av;
     if (!av || !subject) return null;
@@ -1032,12 +915,8 @@ const EW = globalThis.EW = {
     const hit = e && landmarkWorld(e, standoff);
     return hit ? { pos: hit.pos.toArray(), normal: hit.normal.toArray() } : null;
   },
-  // Paint the side of the hand the code believes is the PALM: a green disc
-  // sitting just off the skin, following the bone. If it ends up against
-  // whatever is being touched, the orientation is right and you are simply
-  // seeing the back of a hand from outside — which is what you see when a palm
-  // is on a hip. If it points away, the palm axis is wrong on that rig and I
-  // want to know.
+  // Paint the side of the hand the code believes is the PALM: a green disc just off the skin, following the bone.
+  // Against whatever is touched = the orientation is right; pointing away = the palm axis is wrong on that rig.
   showPalm: (on = true, key = 'rightHand') => {
     const me = getMe(); if (!me) return null;
     const ch = me._chains?.get(key);

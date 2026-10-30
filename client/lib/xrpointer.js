@@ -1,10 +1,9 @@
 // xrpointer — the VR laser's POLICY, in one place, as plain functions a test can run without a headset
 // (tools/xrpointer-test.mjs). xr.js owns the per-hand loop and the scene; this owns the decisions it makes there:
 //
-//   1. WHEN THE BEAM IS DRAWN — the owner's "pointer visibility" setting (Settings › VR, 10-02, after comparing with
-//      Resonite): always / never / contextual. Contextual is the behaviour before the setting existed: the beam shows
-//      while it rests on a panel or a nameplate, or while grip or trigger is held. Never hides the BEAM only: pointing,
-//      clicking, the stick scroll and nameplate hover all still work.
+//   1. WHEN THE BEAM IS DRAWN — the "pointer visibility" setting (Settings › VR): always / never / contextual.
+//      Contextual (the default): the beam shows while it rests on a panel or a nameplate, or while grip or trigger
+//      is held. Never hides the BEAM only: pointing, clicking, the stick scroll and nameplate hover all still work.
 //   2. HOW THE RAY FOLLOWS THE HAND — a short low-pass on the ray that is drawn AND picks with, so hand tremor does not
 //      shake the beam's far end (a 0.3° tremor is 1.5 cm at 3 m: a whole row of a panel). Frame-rate independent:
 //      alpha = 1 − exp(−dt/τ), the same smoothing at 72, 90 or 120 Hz. Done in the RIG's space (the tracking space),
@@ -26,7 +25,7 @@ export function pointerVisible(mode, { target = false, grip = false, trig = fals
   if (m === 'always') return true;
   return !!(target || grip || trig);
 }
-/** SURFACE DOT VISIBILITY (owner, 10-02): its own setting, beside pointer visibility, the same three words. 'never' on
+/** SURFACE DOT VISIBILITY: its own setting, beside pointer visibility, the same three words. 'never' on
  *  pointer visibility hides only the beam; the dot follows this. `target`: a panel, a nameplate or an interactable
  *  entity (what the contextual beam shows for); `surface`: anything at all under the laser (a plain wall too). */
 export function dotVisible(mode, { target = false, surface = false } = {}) {
@@ -39,11 +38,11 @@ export function dotVisible(mode, { target = false, surface = false } = {}) {
  *  button is held, or when the beam is always drawn: an idle hand in contextual or never mode must not reach out to
  *  every wall it hangs toward. An INTERACTABLE entity (below) is a target like a panel, button or not. */
 export const looksAtWorld = (mode, { grip = false, trig = false } = {}) => pointerVisibilityMode(mode) === 'always' || !!(grip || trig);
-/** INTERACTABLE: an entity that does something when you use it (owner, 10-02: "it does something when you trigger-click
- *  it"). The affordances look() reads out to agents (mcpl/agent.ts): its sockets (socket children: sit / mount; `sockets`
- *  is how many it has, world.js socketsOn) and reactions (use). The
- *  trigger on any entity also SELECTS it for editing (xr:select → the scene graph); that is an editor's act, not an
- *  affordance, so a plain wall is not a target. `comp`: the entity's component bag (world.js comps). */
+/** INTERACTABLE: an entity that does something when you trigger-click it — the affordances look() reads out to
+ *  agents (mcpl/agent.ts): its sockets (socket children: sit / mount; `sockets` is how many it has, world.js
+ *  socketsOn) and reactions (use). The trigger on any entity also SELECTS it for editing (xr:select → the scene
+ *  graph); that is an editor's act, not an affordance, so a plain wall is not a target. `comp`: the entity's
+ *  component bag (world.js comps). */
 export const interactable = (comp, sockets = 0) => !!comp && (sockets > 0 || (!!comp.reactions && typeof comp.reactions === 'object' && Object.keys(comp.reactions).length > 0));
 
 // ---- 2. smoothing ---------------------------------------------------------------------------------------------
@@ -69,13 +68,10 @@ export function smoothPose(out, to, dt, st, tau = POINTER_TAU) {
 
 // ---- 3. stickiness ----------------------------------------------------------------------------------------------
 // One table, both kinds of target. GET ON: a panel control needs the ray on it; a nameplate gets PLATE_GETON_RAD of
-// slack around its pill (platecard.platePick, which used to carry a flat 3 cm — generous up close and stingy far
-// away, where tremor is angular; 0.01 rad is that same 3 cm at 3 m). STAY ON: while held, the target keeps the ray
-// until it is STICK_STAY_RAD off the last point it had ON the target (the plate's slack included) — so the two do not
-// stack blindly: the slack decides getting on, the stay margin is measured from where you last were on.
-// YIELD: another control or plate under the ray takes over only past STICK_YIELD_RAD, so tremor on the seam between
-// two neighbouring buttons does not flicker between them, but moving on to the next button is never held back by
-// more than a fraction of a degree.
+// slack around its pill (angular, because tremor is: 0.01 rad is 3 cm at 3 m). STAY ON: while held, the target keeps
+// the ray until it is STICK_STAY_RAD off the last point it had ON the target (the plate's slack included), so the two
+// do not stack. YIELD: another control or plate under the ray takes over only past STICK_YIELD_RAD, so tremor on the
+// seam between two buttons does not flicker, but moving on is never held back by more than a fraction of a degree.
 export const PLATE_GETON_RAD = 0.01;      // ≈0.57°
 export const STICK_STAY_RAD = 0.025;      // ≈1.4° — 2 cm at arm's length (0.8 m), 7.5 cm at 3 m
 export const STICK_YIELD_RAD = 0.008;     // ≈0.46°

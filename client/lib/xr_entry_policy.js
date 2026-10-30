@@ -2,11 +2,10 @@
 // timers, reloads); this owns the decision. tools/xr-entry-policy-test.mjs drives every outcome.
 // No imports on purpose.
 //
-// The rules (#197 review B1):
+// The rules:
 //   busy (another page still holds the session) — retry ONCE, automatically, after BUSY_RETRY_MS.
 //     A SECOND busy failure on the same entry intent stops and waits for an explicit visor click.
-//     "Same intent" is the point: the previous shape reset its own flag inside the retry timer, so
-//     every failure looked like the first one and a busy session retried forever.
+//     "Same intent" is the point: a flag reset inside the retry timer makes every failure look like the first.
 //   no device / not supported — there is no headset: say so, mark it absent, do not retry.
 //   webgpu refused on a WebGPU backend — the browser cannot grant the 'webgpu' feature; reload onto
 //     WebGL, where three's classic path runs. Not a failure the user can act on.

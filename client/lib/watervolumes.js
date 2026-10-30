@@ -169,13 +169,11 @@ function makeSurface(w) {
   o.frustumCulled=false;scene.add(o);surfaces.push(o);return o;
 }
 // ---- under the world's water LEVEL (water.js: lakes, rivers, the sea) -------------------------------------
-// The level is not a volume here — its wading, floating and swimming are water.js's and the controller's — but
-// seen from under its surface it needs the same optics. While the camera is below the surface (the wave there,
-// over wet ground) it takes fog slot 0: a box across the terrain square from far down up to the surface at the
-// camera. Slot 0 is the lowest priority, so authored volumes and dry boxes inside it still win. Above the
-// surface nothing changes: the sheet's own depth shading is the look from above.
+// The level is not a volume here, but seen from under its surface it needs the same optics: while the camera is
+// below the surface it takes fog slot 0 (lowest priority, so volumes and dry boxes inside it still win), a box
+// from far down up to the surface at the camera. Above the surface nothing changes.
 // Per kind (shared/waterkind.js): visibility in metres (Koschmieder: σ = 3.9 / visibility, red absorbed most)
-// and a tint mixed into the world's water colour — still water green, rivers murky, the sea blue and furthest.
+// and a tint mixed into the world's water colour.
 const LEVEL_OPTICS = { still: { vis: 8, tint: [0.42, 0.6, 0.52] }, river: { vis: 3.5, tint: [0.4, 0.42, 0.28] }, ocean: { vis: 15, tint: [0.1, 0.36, 0.55] } };
 const _cam = new THREE.Vector3(), _lc = new THREE.Color();
 let underLevelNow = false;
@@ -192,16 +190,13 @@ function levelSlot() {
   const scatterRGB = [0, 1, 2].map((i) => (_lc.toArray()[i] * 0.5 + o.tint[i] * 0.5) * day * 0.9);
   return { min: [-half, top - 2000, -half], max: [half, top, half], absorption: [sigma * 1.5, sigma, sigma * 0.75], scatter: scatterRGB, day };
 }
-// The far water while under the level: the world sky draws unfogged (and after transparent objects), so under the
-// surface it is hidden and the scene BACKGROUND paints what the fog fades into — far water, brighter toward the
-// surface, glowing inside Snell's window (~48.6° from straight up) with the daylight coming through it. The
-// background sits at the far plane and occludes nothing: every object stays visible exactly as far as its own
-// water path allows (the fog pass decides), through the window or down a dry shaft alike.
+// The far water while under the level: the world sky draws unfogged, so under the surface it is hidden and the
+// scene BACKGROUND paints what the fog fades into — brighter toward the surface, glowing inside Snell's window.
+// It sits at the far plane and occludes nothing; the fog pass decides each object's visibility.
 const underColor = uniform(new THREE.Color(0, 0, 0)), underDay = uniform(0);
-// A dry pocket below the level (a shaft, a submerged room): the view out of it crosses water EXCEPT where it leaves
-// the pocket above the surface — there it is sky. Per direction: trace the view to where it leaves the dry box the
-// camera stands in; above the level's surface, sky (a daylight gradient — the baked environment can be unready and
-// black), below it, far water.
+// A dry pocket below the level (a shaft, a submerged room): per view direction, trace to where the view leaves the
+// camera's dry box; above the level's surface that is sky (a daylight gradient — the baked environment can be
+// unready), below it far water.
 const lvlTop = uniform(0), dryIdx = uniform(-1, 'int');
 // straight expressions (no Fn/If): a branch here dimmed the window's glow — keep the background a plain node graph
 const underBackground = (() => {

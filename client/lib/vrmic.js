@@ -1,5 +1,4 @@
-// vrmic — ask for the microphone BEFORE the headset goes on, so voice just works inside it (the owner, 09-30: the
-// first time a friend joins you in VR is when a missing mic is felt).
+// vrmic — ask for the microphone BEFORE the headset goes on, so voice just works inside it.
 //
 // A browser's permission prompt cannot be relied on to show during an immersive WebXR session — whether a given
 // headset's own browser can is unknown, so this is built for the case where it can't. Two halves:
@@ -96,9 +95,8 @@ export async function xrMicPress() {
     const v = inVrAfterTry({ micOn: M.micOn(), state: await micPermissionState() });
     rec = { how, verdict: v };
     if (v === 'ok') return true;
-    // Retract whether the try timed out OR settled without a mic: a press that landed before the voice lane had a
-    // connection is only an INTENT (voicesfu wantMic), and the bridge replays it when the credential arrives — which
-    // would be this same unanswerable request, made later, in the headset (probe 09-30: settled, wantMic still true).
+    // Retract whether the try timed out OR settled without a mic: an early press is only an INTENT (voicesfu wantMic),
+    // and the bridge would replay it when the credential arrives — the same unanswerable request, later, in the headset.
     await retract();
     if (v === 'blocked') { vrNote(`Microphone is blocked for this site — allow it in the browser's site settings${presenting ? ' after you leave VR' : ''}`); return false; }
     setPending(true);
@@ -109,8 +107,7 @@ export async function xrMicPress() {
     return false;
   } finally {
     trying = false;
-    // the harness window is written LAST, after every effect above has landed (a probe waiting on it saw the verdict
-    // before the flag and the note existed)
+    // the harness window is written LAST, after every effect above has landed
     if (rec) globalThis.__vrmic = { ...(globalThis.__vrmic ?? {}), lastTry: rec };
   }
 }

@@ -1,9 +1,9 @@
-// widgets — the ONE field → widget table every panel surface reads (C13, 2026-10-12; DEBT-SURVEY §2.12).
+// widgets — the ONE field → widget table every panel surface reads.
 //
 // A panel declares FIELDS (panels.js's schema) and never owns bespoke DOM or paint. Three surfaces draw a field:
 // the desktop frame (DOM), the legacy VR quad (a 2D canvas in the panels' skin) and edit mode's VR quad (the same
-// canvas under the VR floor edittheme.js sets). Before C13 each surface was its own switch over f.t, in two files;
-// a widget added to one could be missing from another with nothing to say so. Now every field type is ONE entry here:
+// canvas under the VR floor edittheme.js sets). Every field type is ONE entry here, so no surface can lack a widget
+// another has:
 //
 //   WIDGETS[t] = { dom(f, D), legacy(f, P), edit(f, P), editH?(f, S), row? }
 //
@@ -16,10 +16,9 @@
 // but takes no hits) and the lookup. A type dropped from this table is gone from every surface at once, which is what
 // tools/panels-schema-test.ts and tools/edittheme-test.ts go red on together.
 //
-// The widget bodies are the three renderers' cases moved here verbatim (REFACTOR-C13-2026-10-12.md lists where the
-// two canvas looks differ; those differences are kept, not reconciled). The facts a widget reads (step, dp, unit, deg,
-// min, max, options, def) are the descriptor's `ui` facts (shared/protocol/descriptors.js) as editschema's rowOf hands
-// them on; the shared readers of them are FACTS below.
+// The two canvas looks still differ in places (see layout() below); those differences are kept, not reconciled. The
+// facts a widget reads (step, dp, unit, deg, min, max, options, def) are the descriptor's `ui` facts
+// (shared/protocol/descriptors.js) as editschema's rowOf hands them on; the shared readers of them are FACTS below.
 
 import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from './icons.js';
 import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './edittheme.js';
@@ -104,7 +103,7 @@ const ROW = {
     g.fillStyle = r.active ? 'rgba(143,232,200,0.16)' : C.row;
     g.fillRect(pad, y + 2, width - pad * 2, rowH - 4);
     const lx = pad + 10 + ind + (tree ? 26 : 0);   // a tree row's name starts after its enabled column
-    // the text stops short of the row's right-hand targets (the eye and the lock), however deep or long (review 10-12 S3-4)
+    // the text stops short of the row's right-hand targets (the eye and the lock), however deep or long
     const stop = tree ? width - pad - 34 - (r.mine != null ? 40 : 0) - 8 : width - pad;
     const fit = (t, w) => { t = String(t); if (w <= 0) return ''; if (g.measureText(t).width <= w) return t; while (t.length && g.measureText(t + '…').width > w) t = t.slice(0, -1); return t ? t + '…' : ''; };
     font(15, r.active ? 600 : 400); g.fillStyle = r.off ? C.label : C.text;
@@ -211,7 +210,7 @@ export const WIDGETS = {
   info: {
     dom(f, D) { const { row, setLabel, ro, el, put } = D;
       const s = put(el('span', 'sp-info'), f.value, ro.icons);
-      // a long value is cut at the panel's edge: hover shows it whole, a click unfolds it in place (R 10-11: 'reads as')
+      // a long value is cut at the panel's edge: hover shows it whole, a click unfolds it in place
       // a short value carries no title of its own: an empty one would hide the row's hint (an element's title="" is 'no advice')
       const full = () => { const t = s.textContent ?? ''; if (t.length > 40) s.title = t; else s.removeAttribute('title'); s.classList.toggle('sp-info-long', t.length > 40); };
       full(); s.onclick = () => { if (s.classList.contains('sp-info-long')) s.classList.toggle('sp-info-open'); };
@@ -250,7 +249,7 @@ export const WIDGETS = {
     dom(f, D) { const { row, label, setLabel, edit, ro, el, stepper } = D;
       const st = stepper(f.value ?? 0, f, (v, o) => edit(f.k, v, null, o));
       // driven: the FIELD carries it (edit chrome) — a `~` inside its left end; the label keeps its axis colour
-      // …and it leads to its driver (Resonite's drive mark, Unity's animated tint; R 10-04: drivers are ordinary cards,
+      // …and it leads to its driver (Resonite's drive mark, Unity's animated tint; drivers are ordinary cards,
       // the field points at them — no second list to drift): click goes to the driver's card
       if (f.driven && ro.icons) { const d = el('span', 'sp-drv', '~'); d.title = `driven by ${f.drivenBy ? `its ${f.drivenBy} (${f.driven})` : f.driven} — click to go to its card`;
         d.style.cursor = 'pointer'; d.onpointerdown = (e) => e.stopPropagation(); d.onclick = (e) => { e.stopPropagation(); edit('goto', f.driven); }; st.prepend(d); }
@@ -261,7 +260,7 @@ export const WIDGETS = {
         // a scrub on a selected channel moves every selected channel by the same amount (Maya's channel box)
         st.key = f.k; st.commitRun = (pairs) => edit('__run', pairs);
         st.peers = () => (row.classList.contains('chan-sel') ? [...(row.parentElement?.querySelectorAll('.sp-row.chan-sel') ?? [])].map((r) => r._st).filter((x) => x && x !== st) : []);
-        // selecting channels, as in Maya's channel box (R 10-10 23:36): a click selects one; Ctrl toggles one; Shift selects
+        // selecting channels, as in Maya's channel box: a click selects one; Ctrl toggles one; Shift selects
         // the run from the last one clicked; dragging UP or DOWN the names selects the run under the pointer (sideways
         // is still the scrub)
         const chans = () => [...(row.parentElement?.children ?? [])].filter((r) => r.classList?.contains('sp-row') && r.querySelector('.sp-chan'));
@@ -400,7 +399,7 @@ export const WIDGETS = {
     },
   },
   color: {
-    // R 10-12: a colour field is a picker. The native <input type=color> opened nothing in a headset (the quad's click is
+    // A colour field is a picker. The native <input type=color> opened nothing in a headset (the quad's click is
     // synthetic and the dialog would be the desktop's), so the picker is made of what a quad draws and clicks: solid
     // cells. One swatch opens it in place; a cell, a recent or a typed hex commits once.
     dom(f, D) { const { row, setLabel, edit, el } = D;
@@ -460,16 +459,14 @@ export const WIDGETS = {
       inp.checked = !!f.value;
       inp.indeterminate = !!f.mixed;   // mixed: some of the selection are, some aren't (the box shows a dash)
       inp.disabled = !!f.disabled;
-      // R 10-10 23:48: in a busy world every frame repaints, and until the authority's answer folded in, each repaint put
-      // the box back to the old value: it looked unclicked, so she clicked again and sent it twice. A clicked box keeps what
-      // it was clicked to until the record agrees (or 3 s pass: then the record wins, e.g. a refusal).
-      // A field that bumps `settle` has had its answer (a refusal too): the record wins from then on, so a refused click
-      // can't leave the box lying (review 10-12 S2-1); so does the record once the 3 s are up, repaint or not.
+      // In a busy world every frame repaints, and until the authority's answer folds in each repaint would put the box
+      // back to the old value (inviting a second click). A clicked box keeps what it was clicked to until the record
+      // agrees, a field bumps `settle` (it has had its answer, a refusal too), or 3 s pass — then the record wins.
       let pending = null, rec = !!f.value, settle = f.settle;
       inp.onchange = () => { inp.indeterminate = false; pending = { v: inp.checked, until: performance.now() + 3000 }; edit(f.k, inp.checked);
         setTimeout(() => { if (pending && performance.now() >= pending.until) { pending = null; inp.checked = rec; } }, 3050); };
       // a mouse click must not leave focus here: a focused input holds the panel's repaint until blur, and the world's keys
-      // (WASD, B, Enter) stop (review 10-12 S2-3). Keyboard focus (Tab) still lands
+      // (WASD, B, Enter) stop. Keyboard focus (Tab) still lands
       inp.onmousedown = (e) => e.preventDefault();
       row.append(inp);
       row.update = (nf) => { setLabel(nf); const v = !!nf.value; rec = v;
@@ -655,7 +652,7 @@ export const WIDGETS = {
   },
   pop: {
     dom(f, D) { const { row, edit, el, openPop } = D;
-      // one button that opens a searchable list (Add Component, R 10-04): {label, items:[{k, label, category, hint,
+      // one button that opens a searchable list (Add Component): {label, items:[{k, label, category, hint,
       // disabled}], recentKey}. Typing filters on name and hint, Enter takes the first, Esc or a click outside closes.
       const b = el('button', `sp-btn sp-pop-btn${f.icon ? ' sp-btn-ico' : ''}`, f.label);
       if (f.icon) b.insertAdjacentHTML('afterbegin', iconSvg(f.icon, 14));
@@ -733,8 +730,8 @@ export const WIDGETS = {
   group: {
     dom(f, D) { const { row, edit, ro, el, put } = D;
       row.classList.add(f.open === false ? 'closed' : 'open');
-      // the card's title: the fold arrow, then its provenance pill at the FRONT (R 10-11: "move the draft/server-only
-      // component pill to the front of the label row… to make it look more important"), then the name
+      // the card's title: the fold arrow, then its provenance pill at the FRONT (it matters more
+      // than the name), then the name
       const DOT = { draft: ['draft', 'a draft component: not part of the engine yet (it can still change); unproven: this client reads it, the engine doesn\'t'], trusted: ['trusted here', 'not engine-official, but used and trusted in this world (the owner\'s word); the engine still doesn\'t read it'], foreign: ['unknown', 'a component this client has no reader for: kept and replayed, not drawn'] };
       const head = (hh, ff) => { hh.textContent = ''; hh.append(document.createTextNode(`${ff.open === false ? '▸' : '▾'} `));
         if (ff.dot && DOT[ff.dot]) { const d = el('span', `sp-pill sp-pill-${ff.dot}`, DOT[ff.dot][0]); d.title = DOT[ff.dot][1]; hh.append(d); }
@@ -744,8 +741,7 @@ export const WIDGETS = {
       const h = head(el('button', 'sp-group'), f);
       h.onclick = () => edit('fold', f.k);
       row.innerHTML = ''; row.append(h);
-      // a card's own actions on its title line, shown on hover (R 10-10: 'delete components right from the title line,
-      // like an x that shows up on the line when you hover over it'); the VR quad keeps its remove row instead
+      // a card's own actions on its title line, shown on hover; the VR quad keeps its remove row instead
       if (f.actions?.length) {
         const acts = el('span', 'sp-gacts');
         for (const a of f.actions) { const b = el('button', `sp-gact${a.danger ? ' danger' : ''}`); b.type = 'button'; b.title = a.title ?? a.label ?? ''; b.setAttribute('aria-label', b.title);
@@ -831,7 +827,7 @@ export const WIDGETS = {
         if (r.kids) disc.onclick = (e) => { e.stopPropagation(); edit('open', e.shiftKey || e.altKey ? { id: r.id, deep: true } : r.id); };   // keys: treeFold
         if (r.kids) disc.title = KEYHINTS.treeFold.before;
         line.append(disc);
-        // the row's columns, always in this order (R 10-12): [☑ enabled][name …][👁 only you][🔒]. A row without a box keeps
+        // the row's columns, always in this order: [☑ enabled][name …][👁 only you][🔒]. A row without a box keeps
         // its place, so every name starts at the same x for its depth
         if (r.enabled != null) {
           const on = el('input', 'sp-row-on'); on.type = 'checkbox'; on.checked = !!r.enabled; on.tabIndex = -1;
@@ -911,15 +907,14 @@ export const WIDGETS = {
         box.append(zone);
       }
       row.append(box);
-      // a changed tree is rebuilt (rows are shape), and a new box starts scrolled to the top: in a world where things
-      // move, that was every few frames, and the lower rows could not be reached (R 10-10: "entities ... I can't get
-      // to in the hierarchy"). The box keeps where it was scrolled to, by the field's key.
+      // a changed tree is rebuilt (rows are shape), and a new box starts scrolled to the top — every few frames in a
+      // world where things move. The box keeps where it was scrolled to, by the field's key.
       const tkey = f.k ?? 'tree';
       box.addEventListener('scroll', () => treeScroll.set(tkey, box.scrollTop), { passive: true });
       const back = () => { const y = treeScroll.get(tkey); if (y && box.isConnected) box.scrollTop = y; };
       queueMicrotask(back); requestAnimationFrame(back);
       // rows are shape: a changed tree repaints. A same-shape repaint (a refused switch leaves the rows as they were) still
-      // owes the boxes the record, past a click still waiting on its answer (review 10-12 S2-1)
+      // owes the boxes the record, past a click still waiting on its answer
       row.update = (nf) => { settle = nf.settle; for (const r of nf.rows ?? []) { const b = boxes.get(String(r.id)); if (!b || r.enabled == null) continue; b._rec = !!r.enabled;
         if (b._pend && b._pend.settle === nf.settle && performance.now() < b._pend.until) { b.checked = b._pend.v; continue; }
         b._pend = null; b.checked = !!r.enabled; } };

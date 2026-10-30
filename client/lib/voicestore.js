@@ -1,24 +1,12 @@
-// voicestore — REMEMBER A VOICE YOU PICKED FROM YOUR OWN DISK.
+// voicestore — remember a voice you picked from your own disk.
 //
-// R, 2026-08-09: "it doesn't seem to remember which model I selected locally but
-// maybe that's okay? There's also no way to *remove* models from the dropdown."
-// It was not okay: a catalog voice (a name we fetch) persisted fine, while a
-// file you chose vanished on reload — the same control forgetting one kind of
-// choice and not the other, for reasons entirely invisible from the UI.
+// A file path is useless (a page can never re-open a path by name), so we store
+// the FileSystemFileHandle itself, which is structured-cloneable → IndexedDB.
 //
-// WHY THIS NEEDS A MODULE AND NOT A localStorage KEY. A file path is useless: a
-// page cannot re-open `/home/you/glados.onnx` by name, and browsers will never
-// allow it — that would make any tab a file reader. What CAN be stored is the
-// FileSystemFileHandle itself, which is structured-cloneable and therefore
-// IndexedDB-storable. This is exactly how an editor's "recent files" works.
-//
-// 🔴 THE HANDLE IS NOT A PERMISSION. It survives a reload; the GRANT usually
-// does not. On restore you must call queryPermission() and be ready for
-// 'prompt' — meaning "I still know which file, but I may not read it until you
-// say so." Re-requesting needs a user gesture, so the honest UI shows the voice
-// greyed with a re-pick affordance rather than silently failing at load time.
-// A remembered voice that cannot be read yet is a REAL state, and pretending
-// otherwise is the display-vs-real-state bug that has cost the most time here.
+// 🔴 THE HANDLE IS NOT A PERMISSION. It survives a reload; the grant usually
+// does not. On restore call queryPermission() and expect 'prompt'; re-requesting
+// needs a user gesture, so the UI shows the voice greyed with a re-pick
+// affordance — a remembered-but-unreadable voice is a real state.
 
 const DB = 'eido.voices';
 const STORE = 'handles';
@@ -44,10 +32,8 @@ async function tx(mode, fn) {
       const store = t.objectStore(STORE);
       let out;
       try { out = fn(store); } catch (e) { return reject(e); }
-      // Resolve on COMPLETE, not on the request's success: a readwrite
-      // transaction can still abort after its request succeeded (quota, a
-      // concurrent close), and resolving early would report a save that did not
-      // durably happen.
+      // Resolve on COMPLETE, not on request success: a readwrite transaction can
+      // still abort afterwards (quota, concurrent close).
       t.oncomplete = () => resolve(out?.result !== undefined ? out.result : out);
       t.onerror = () => reject(t.error);
       t.onabort = () => reject(t.error || new Error('idb aborted'));
@@ -55,15 +41,10 @@ async function tx(mode, fn) {
   } finally { db.close(); }
 }
 
-/** Voice identity from the actual bytes (#91 B5): what the voice IS, not
- *  what its file happens to be called. A same-named different model pair is
- *  a different voice; digests make that structural. sha256 of a 60 MB model
- *  is a one-time ~0.5s at selection — cheap next to the copy it precedes.
- *  Reproducibility claim, scoped honestly: these digests identify the model
- *  and config exactly, so a session's INPUTS are reproducible; VITS
- *  inference is stochastic (noise_scale et al. draw randomness the runtime
- *  does not expose a seed for), so a given utterance's waveform is a
- *  performance, not a regenerable artifact. */
+/** Voice identity from the actual bytes, not the file name (sha256 of a 60 MB
+ *  model is ~0.5s, once at selection). Identifies a session's INPUTS exactly;
+ *  VITS inference is stochastic with no exposed seed, so a waveform is not
+ *  regenerable. */
 export async function voiceIdentity(onnxFile, cfgFile) {
   const sha = async (f) => Array.from(new Uint8Array(
     await crypto.subtle.digest('SHA-256', await f.arrayBuffer())))
@@ -76,9 +57,8 @@ export async function voiceIdentity(onnxFile, cfgFile) {
     params = cfg?.inference ?? null;   // noise_scale / length_scale / noise_w
   } catch { /* config unreadable: identity still stands on the digests */ }
   return {
-    // JOINT identity (r3 B1): same model with a different config — phoneme
-    // map, language, inference params — is a DIFFERENT voice. An id derived
-    // from the model alone collides them; both digests carry.
+    // JOINT identity: same model + different config (phoneme map, language,
+    // inference params) is a DIFFERENT voice, so both digests carry.
     id: `sha256:${modelSha256.slice(0, 16)}+${configSha256.slice(0, 16)}`,
     modelSha256, configSha256, sampleRate, params,
     engine: 'piper-tts-web', engineVersion: PIPER_WEB_VERSION,
