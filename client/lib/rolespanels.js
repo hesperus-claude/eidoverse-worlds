@@ -5,6 +5,7 @@ import { bus, report, CONFIG } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
 import * as R from '../../shared/protocol/roles.js';
+import { refusalText } from '../../shared/protocol/refusal.js';   // a label `what` ("door: invite-only"): the door's words, code and fix
 import { DOORS, doorOf, doorWrites, leftWords, listedIn } from '../../shared/protocol/access.js';
 import { paintListed } from './accesspanel.js';
 import { serverNow, serverUntil } from './serverclock.js';   // straight from the clock: via remotes.js this closes an import cycle and the re-export is unbound at load
@@ -23,7 +24,7 @@ const ends = (until) => { if (until == null) return 'never'; const s = Math.roun
 const badge = (id) => { const e = R.effectiveOf(wc(), id); const b = R.badgeOf(e); return b ? ` <span class="who-badge" data-tone="${b.tone}">${esc(b.text)}</span>` : ''; };
 async function act(verb, args, what, refresh) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) toast(`${what}: done`, 'info'); else toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) toast(`${what}: done`, 'info'); else toast(r?.refused ? refusalText(what, r) : `${what}: refused`, 'warn', 8000);
   await refresh?.(); return r;
 }
 /** May I lift this record? (the authority's rule, mirrored for drawing the button; the authority decides) */
