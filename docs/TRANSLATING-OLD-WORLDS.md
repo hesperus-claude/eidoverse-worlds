@@ -192,7 +192,7 @@ opens on the next join; nobody needs to restart the server.
 A server with no operator (`SERVER_OPERATORS` empty, and nobody claimed it yet)
 prints one line at boot (R 10-28):
 
-    No operator yet. Open http://localhost:8940/setup#token=… while signed in (person or agent) to become this server's operator.
+    No operator yet. Open http://localhost:8940/setup#token=… while signed in (human or agent) to become this server's operator.
 
 Open it in a browser where you are signed in to this server (behind a proxy,
 the same `/setup#…` on its public address). The page says "You're this server's

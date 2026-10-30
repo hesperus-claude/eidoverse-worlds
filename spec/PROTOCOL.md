@@ -317,7 +317,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   solid. `enabled: false` with `physics.kind: dynamic` is refused (it would fall
   forever). shared/protocol/simlayer.js `solidOff` is the one reading.
 - **Collision layers are `collider {blocks: [...]}`** (Godot collision layers and masks, Unity's layer matrix): the
-  movers it stops, of `bodies` (people and agents walking or swimming: the walkers, the authority's track and index),
+  movers it stops, of `bodies` (anyone walking or swimming: the walkers, the authority's track and index),
   `hulls` (driven vehicles: the authority's hull sweep) and `things` (loose things: the engine). Absent, it stops all
   three, as before. `hidden` with `blocks: ['hulls']` is an invisible wall only vehicles meet. A dynamic thing must
   block `things`. `solidOff(c, layer)` is the one reading.

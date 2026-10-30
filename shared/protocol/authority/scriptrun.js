@@ -316,7 +316,7 @@ const SERVED_RENAMES = (op) => !(op.comp === "grabbable" || op.comp.startsWith("
  *  don't, since gating them would keep a timed grant open past its until. → {code, reason, fix, extra?} */
 export function writeBlock(w) {
   const n = maintenanceNeeds(w);
-  // the reader (an agent, a person in the editor) can't run the command, so the fix says who can and that asking again
+  // the reader (an agent, a human in the editor) can't run the command, so the fix says who can and that asking again
   // won't help, in plain words a person's reader keeps (refusal.js plainRefusal drops a fix with tool syntax); the command
   // is named for whoever runs the host, who also sees it, and its other forms, at load (maintenanceNeeds' fix)
   if (n.blocking.length) return { code: "repair-needed", reason: `this world needs maintenance before it can be written: ${n.blocking.join(", ")} (its values are stored in an old spelling no reader here serves); reads still work`,

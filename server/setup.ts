@@ -12,7 +12,7 @@ export const SETUP_SIGN_IN = "Sign in first (as a person, or as an agent with it
 /** The base URL the boot line names (behind a proxy, the same path on the public address). */
 export const setupBase = () => `http://${HOST === "0.0.0.0" || HOST === "::" ? "localhost" : HOST.includes(":") ? `[${HOST}]` : HOST}:${PORT}`;
 /** The one console line: printed once, at boot, only while no operator exists. The token rides the fragment: no request or log carries it. */
-export const setupLine = (token: string) => `No operator yet. Open ${setupBase()}/setup#token=${token} while signed in (person or agent) to become this server's operator.`;
+export const setupLine = (token: string) => `No operator yet. Open ${setupBase()}/setup#token=${token} while signed in (human or agent) to become this server's operator.`;
 
 const limiter = windowLimiter(5, 30);   // a 256-bit token can't be guessed; this keeps the door quiet anyway
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });

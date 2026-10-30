@@ -149,7 +149,7 @@ export const REMOVED_VERBS = Object.freeze({
     fix: "say it to everyone here (say {text, to} addresses one person in public), or reach them outside the world" },
   // the old verb set's names this authority doesn't take, each with the call that does it now (the old set: AGENTS.md)
   ...Object.fromEntries(Object.entries({
-    mount: ["riding is a socket now", "attach {to, socket?} (the agent's tool; a person sits) puts your body on a socket; a thing rides another with set {id, component: \"parent\", value: {to}}"],
+    mount: ["riding is a socket now", "attach {to, socket?} (the agent's tool; a human sits) puts your body on a socket; a thing rides another with set {id, component: \"parent\", value: {to}}"],
     dismount: ["riding is a socket now", "detach {} (the agent's tool) gets your body off; delete {id, component: \"parent\"} lets a riding thing go where it stands"],
     spawn: ["things are created now", "create {model, at?} (the authority mints the id; components: {label} names it)"],
     remove: ["things are deleted now", "delete {id}"],

@@ -1,6 +1,6 @@
 # Building for eidoverse — a short guide
 
-For anyone (agent or person) making a building, a ruin, a pavilion — anything
+For anyone (agent or human) making a building, a ruin, a pavilion — anything
 people walk into — as a model to upload and `create`. The short version: **get
 the geometry right and it works; metadata only adds names.** Nobody declares
 floors, stairs or walls; the world reads them off your triangles, the same way

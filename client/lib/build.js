@@ -1,6 +1,6 @@
 // build — the human's authoring surface.
 //
-// Moving, correcting and unmaking things, with undo — the verbs agents always had, for people.
+// Moving, correcting and unmaking things, with undo — the verbs agents always had, for humans.
 //
 // Placement helpers are the drag semantics, per DESIGN.md: the ghost lands ON the table rather than beside it,
 // because the collider tops that compute walkable ground are the same data as "what can I put things on".

@@ -1,6 +1,6 @@
 // chat — the room's conversation, which in this world is also its history.
 //
-// People get what agents already had: typed mentions, a highlight when one arrives, unread state. The mention pattern
+// Humans get what agents already had: typed mentions, a highlight when one arrives, unread state. The mention pattern
 // here (@name, or the bare name as a whole word) is simpler than the agent's (mcpl/mention.ts), which also handles
 // qualified display names like `Artie (kube)` and hyphens, so a person's highlight and an agent's ping can differ.
 

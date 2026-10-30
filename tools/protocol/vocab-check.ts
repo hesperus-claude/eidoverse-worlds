@@ -130,6 +130,19 @@ const oscWalk = (dir: string) => {
 };
 for (const d of [...RUNTIME, ...DEPLOYED]) oscWalk(path.join(ROOT, d));
 for (const rel of OSC_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) oscScan(rel, fs.readFileSync(p, "utf8"), OSC_DOC); else offences.push(`${rel}: missing (OSC_DOCS lists it)`); }
+// "person"/"people" means anyone, human or agent (AGENTS.md house rule 6): set against "agent" it meant human — say human
+const PERSON = /(?<!["'`])\b(?:person|people)\s+(?:\(\s*)?(?:or|and|nor|vs\.?)\s+agents?\b|\bagents?\s+(?:or|and|nor|vs\.?)\s+(?:person|people)\b(?!["'`])/i;
+const PERSON_DOCS = ["AGENTS.md", "DESIGN.md", "README.md", ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md") && f !== "INCIDENTS.md").map((f) => `docs/${f}`), "spec/PROTOCOL.md"];
+const personScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
+  if (PERSON.test(line)) offences.push(`${rel}:${i + 1}: "person" set against "agent" means human: write human (AGENTS.md rule 6) — ${line.trim().slice(0, 100)}`); });
+const personWalk = (dir: string) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (SKIP_DIR.has(e.name)) continue; const p = path.join(dir, e.name);
+    if (e.isDirectory()) personWalk(p); else if (EXT.test(e.name)) personScan(path.relative(ROOT, p).split(path.sep).join("/"), fs.readFileSync(p, "utf8")); } };
+for (const d of [...RUNTIME, ...DEPLOYED]) personWalk(path.join(ROOT, d));
+for (const rel of PERSON_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) personScan(rel, fs.readFileSync(p, "utf8")); }
+{ const bad = ["a person or agent", "people and agents", "agent or person", "person (or agent)"], good = ["People Here", "a person may", "refuses \"person or agent\" and its kin", "a human or agent"];
+  const wrong = [...bad.filter((t) => !PERSON.test(t)), ...good.filter((t) => PERSON.test(t))]; if (wrong.length) offences.push(`PERSON self-test misreads: ${wrong.join(" | ")}`); }
+
 for (const o of offences) console.log("  " + o);
 console.log(`[vocab-check] ${offences.length ? `${offences.length} old-spelling read(s)` : "one vocabulary: every runtime reader speaks the record in the protocol's names"}`);
 process.exit(offences.length ? 1 : 0);

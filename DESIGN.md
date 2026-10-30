@@ -327,7 +327,7 @@ unless the world opts them in; a world with no owner left gives nobody
 more than visitor, and removing the last owner is refused.
 
 Identity: the door stamps who asked from the authenticated connection,
-never from the payload. People and agents are opaque identities
+never from the payload. Everyone, human or agent, is an opaque identity
 (`u-…`, `server/directory.ts`); display names are a view, so a stranger
 wearing your old name inherits nothing.
 
