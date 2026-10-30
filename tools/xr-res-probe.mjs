@@ -26,12 +26,14 @@ async function session(res) {
   await visorShown(pg, { timeout: 120000 });
   // the settings row, as a person finds it
   const row = await pg.evaluate(async () => {
-    document.querySelector('#sec-vr-tab')?.click(); await new Promise((r) => setTimeout(r, 400));
-    const sel = [...document.querySelectorAll('#sec-vr select')].find((s) => [...s.options].some((o) => /headset asks/.test(o.textContent)));
+    document.querySelector('#sec-vr-tab')?.click();
+    const pick = () => [...document.querySelectorAll('#sec-vr select')].find((s) => [...s.options].some((o) => /headset asks/.test(o.textContent)));
+    for (let i = 0; i < 300 && !pick(); i++) await new Promise((r) => requestAnimationFrame(r));   // the tab draws its rows
+    const sel = pick();
     return sel ? { opts: [...sel.options].map((o) => o.value), value: sel.value } : null;
   });
   await enterVR(pg);
-  await pg.waitForTimeout(1500);
+  await pg.waitForFunction(() => !!globalThis.EW.renderer.xr._xrRenderTarget?.width, null, { timeout: 30000 });
   const r = await pg.evaluate(async () => { const xr = globalThis.EW.renderer.xr; const t = xr._xrRenderTarget;
     return { scale: xr.getFramebufferScaleFactor(), asked: window.__layerAsk, w: t?.width ?? null, h: t?.height ?? null, proj: !!xr._glProjLayer,
       table: { ...(await import('./lib/xr.js')).XR_RES_SCALES } }; });

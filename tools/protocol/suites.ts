@@ -258,6 +258,13 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["eidomodel", "eidomodel-check.ts", 1], // review 10-07 H3: a translated world's models are eido:sha256 addresses; the index, /eido/, /library/eido/, the client's mapping
   ["party-probe", "party-probe.ts", 1], // the editor's party blockers (review 10-07 B1–B5, S1/S4/S5/S7, lock levels, moderation commands) with real mouse and keys
   ["colour-picker", "../colour-picker-bench.ts", 1], // the Inspector's colour field is a picker of solid cells a headset quad can click (R 10-12), in headless Chromium (one browser, guarded)
+  ["xr-lifecycle", "../xr-lifecycle-probe.mjs", 1], // the shipping XR delegation in a real client + IWER: the visor drives enterVR to a granted session, the entry clock shims rAF, the frame loop runs, a busy retry gives up
+  ["xr-res", "../xr-res-probe.mjs", 1], // Settings › VR › resolution reaches the session layer (one IWER session per XR_RES_SCALES choice)
+  ["xr-debug-live", "../xr-debug-live-probe.mjs", 1], // the Debug pane opened in VR keeps its numbers live
+  ["xr-eye-binding", "../xr-eye-binding-probe.mjs", 1], // in real three, each eye renders with its own matrices after a pre-warm (r186's shared camera uniform array)
+  ["htmlmesh-pick", "../htmlmesh-pick-probe.mjs", 1], // a VR panel click picks what a browser's hit test would (vendor/htmlmesh.js), in the real client
+  ["vrmic-exec", "../vrmic-exec-test.mjs", 1], // vrmic.js's effects on a fake clock: the mic ask never blocks entering VR; a promise made in VR is kept after it
+  ["xr-nullfb", "../xr-nullfb-test.mjs", 1], // xr_nullfb.js on a fake renderer: installs only for a null-framebuffer (emulated) session, once, never on hardware
   ["alias", "../../mcpl/alias-test.ts", 1], // old tool names AND their old argument shapes run the new tool (10-15)
   ["tool-replies", "../../mcpl/tool-replies-test.ts", 1], // what the agent's tools and body say and send (pure; #53 waits out the 8 s timeout)
   // socketteer's pathfinding stack (#235/#236/#239/#241, merged into the protocol 10-15): its own suites, as it ships them
@@ -390,7 +397,7 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
 // at a time) once
 // sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
-export const BROWSER = ["browser", "comps-parity", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "client-tools"];
+export const BROWSER = ["browser", "comps-parity", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "client-tools"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 // the order the gate runs them: core (in CORE's order), then main, then browser
 export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];
