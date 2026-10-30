@@ -9,7 +9,7 @@ const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite)
 const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 
 /** The slack the authority gives a streamed step: a fraction over the spec's rates, plus a fixed allowance (m, rad) that is a
- *  budget refilling over refillS (per message it compounded: 60 msg/s turned 4 m/s into ~19; review L26). */
+ *  budget refilling over refillS (per message it would compound: 60 msg/s would turn 4 m/s into ~19). */
 export const SLACK = Object.freeze({ rate: 0.25, metres: 0.25, radians: 0.05, maxDt: 1, refillS: 1 / 15 });
 /** A lease with no accepted step for this long has lost its driver (ms); a held lease commits at least this often (ms). */
 export const LEASE = Object.freeze({ heartbeatMs: 3000, commitMs: 5000 });

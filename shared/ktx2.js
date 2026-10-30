@@ -11,26 +11,9 @@
 // is a fresh cache entry everywhere at once; the old one simply stops being
 // asked for.
 //
-// WHO READS IT is the second half of the contract, learned on rollout day.
-// The sequencer imports this file at boot. The browser used to import it too
-// — off the sequencer's DISK — and in the window between `git pull` and the
-// restart the old process was serving the new file: a client read key 2 off
-// disk and asked a server that had never heard of it, which answered as if
-// unflagged (webp, immutable), and nginx pinned that under ?ktx2=2. The =2
-// generation was retired within minutes of being born. So the browser no
-// longer reads the key from any file: it asks the RUNNING process (/version
-// carries `ktx2Key`, no-store, resolved at that process's boot) and uses
-// exactly what it was handed. No key handed — an older sequencer, a failed
-// fetch — means NO negotiation: an unflagged fetch is always the right answer
-// for its URL, so nothing can be pinned wrong, on any deploy, in any order.
-//
-// Generations: 1 — the §20 launch key (2026-08-10), retired 2026-08-24 because
-// provisional fall-throughs had been served immutable under it. 2 — the PR #142
-// rollout key, retired immediately when an already-poisoned nginx cache entry was
-// observed during rollout. 3 — the clean post-rollout generation, retired 2026-09-25: built variants were served
-// immutable under it, and a variant can now be rebuilt in place (↻, the transfer-function and texel-cap fixes), so
-// every browser that fetched one under 3 would hold the old bytes for a year. 4 — variants are served short-lived +
-// revalidating from here on (routes.ts VARIANT_CC), so no future rebuild needs another generation.
+// WHO READS IT: the sequencer imports this file; a browser never does. It uses only the key the RUNNING process
+// handed it on /version (`ktx2Key`), and no key means no negotiation. Why, and the retired generations:
+// docs/research/ktx2-key-generations.md.
 export const KTX2_KEY = '4';
 export const KTX2_QUERY = `ktx2=${KTX2_KEY}`;
 
@@ -58,21 +41,18 @@ export function negotiate(url, key) {
 }
 
 /** The LOD recipe the running sequencer published on /version, or null when
- *  it published none — an older sequencer, and the client must not ask for a
- *  tier it never heard of (the same split-brain that poisoned ?ktx2=2: an
- *  unknown param falls through to the original, served immutable under the
- *  flagged URL). Same doctrine as keyFromVersion: never a default. */
+ *  it published none: a client must not ask for a tier the server never heard
+ *  of (an unknown param falls through to the original, served immutable under
+ *  the flagged URL). Same rule as keyFromVersion: never a default. */
 export function lodFromVersion(json) {
   const l = json && typeof json === 'object' ? json.lodRecipe : undefined;
   return typeof l === 'string' && l.length > 0 && l.length <= 64 ? l : null;
 }
 
 /** Append the LOD tier request — the RECIPE the running sequencer published,
- *  never a bare boolean (review of #156, point 1: `lod=1` under two recipes
- *  is one immutable URL for two different byte-streams — the ?ktx2=2
- *  split-brain, one level down). No recipe → the URL untouched. Only
- *  meaningful alongside the ktx2 negotiation (a LOD variant carries KTX2
- *  textures). */
+ *  never a bare boolean (`lod=1` under two recipes would be one immutable URL
+ *  for two byte-streams). No recipe → the URL untouched. Only meaningful
+ *  alongside the ktx2 negotiation (a LOD variant carries KTX2 textures). */
 export function withLod(url, recipe) {
   if (!recipe) return url;
   return url + (url.includes('?') ? '&' : '?') + `lod=${encodeURIComponent(recipe)}`;

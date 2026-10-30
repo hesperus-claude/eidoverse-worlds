@@ -2,7 +2,7 @@
 // The upgrade is a server operator's or the world's owner's (docs/TRANSLATING-OLD-WORLDS.md, "Upgrading from the browser").
 export const OLD_FORMAT_DOC = "docs/TRANSLATING-OLD-WORLDS.md";
 export const OLD_FORMAT_SPLASH = "This world was saved by an older version of the engine. It needs a one-time upgrade before anyone can enter.";
-/** For someone who may not upgrade it (R 10-28): the server's runner has a way in (server/setup.ts), everyone else asks. */
+/** For someone who may not upgrade it: the server's runner has a way in (server/setup.ts), everyone else asks. */
 export const IF_YOU_RUN_IT = "If you run this server, open the setup link printed in its console (or add your account to SERVER_OPERATORS). Otherwise ask whoever runs it.";
 
 /** An agent's words for a refused old-format join (`refused` as the join's error carries it). */

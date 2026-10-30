@@ -1,4 +1,4 @@
-// libcredits — who made a shipped library asset, and its licence (batch 2, R 10-07: "library per-asset credits now").
+// libcredits — who made a shipped library asset, and its licence.
 // The table is defs/library/credits.json, written from the library's own attribution file (eidoverse-video/CREDITS.md)
 // and nothing else: where that file doesn't say, the entry says so (`gap`) rather than guess. Pure: the server's
 // /library-models rows and the door's inspect read the same answer.

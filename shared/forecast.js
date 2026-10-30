@@ -48,7 +48,7 @@ function tzFormatter(tz) {
  *  keeps a weather verb from snapping the day (see foldSkyEntry). No ambient
  *  Date.now() even in clock mode: the wall hour is derived from the caller's
  *  tMs, so tests can freeze time and every plane derives identically. */
-// A tz present is the wall clock (shape audit 10-16: clock and dormantRated are gone from the stored sky; hours, rate and ts
+// A tz present is the wall clock (clock and dormantRated are gone from the stored sky; hours, rate and ts
 // stay put as the rated fallback). An older value said so with clock: 'real' (tz absent = Los Angeles), and parked its
 // rated clock under dormantRated: both still read.
 export const isRealClock = (sky) => !!sky && (typeof sky.tz === 'string' || sky.clock === 'real');
@@ -121,7 +121,7 @@ export function normalizePolicy(f) {
     if (WEATHERS.includes(name) && weight > 0) states.push({ state: name, weight });
   }
   if (!states.length) return null;
-  // dwell and transition (shape audit 10-16: no unit in a name); an older policy's dwellSec / transitionSec read too
+  // dwell and transition (no unit in a name); an older policy's dwellSec / transitionSec read too
   const dw = Array.isArray(f.dwell) ? f.dwell : f.dwellSec;
   const d = Array.isArray(dw) ? dw : [600, 1800];
   const dwellMin = clamp(d[0], DWELL_FLOOR_S, DWELL_CAP_S);
@@ -218,7 +218,7 @@ export function effectiveSky(sky, nowMs, cursor = null) {
 
 // ---------------------------------------------------------------- fold
 
-// ---------------------------------------------------------------- spelling (shape audit 10-16)
+// ---------------------------------------------------------------- spelling
 // What a sky or weather act may still SAY the old way, stored the one way: clock 'real' is a tz (the old default zone when
 // none was named); any other clock is a rated sky (no tz); weatherSeconds is transition; a forecast's dwellSec and
 // transitionSec are dwell and transition; a re-issued dormantRated {hours, rate, ts} (the old park) is the rated clock,
@@ -241,23 +241,19 @@ export function skySpelling(args, ts) {
   return out;
 }
 
-/** Fold a `sky` or `weather` log entry onto the standing sky state. The
- *  sequencer, the live browser client, and the embodied agent all fold
- *  through here — one code path, three planes, no drift.
+/** Fold a `sky` or `weather` log entry onto the standing sky state: the one
+ *  code path the sequencer, the live browser client and the embodied agent share.
  *
- *  Server-owned stamps: `forecast.{epoch,seq,by}`, the whole `override` bag,
- *  and the top-level `seq`/`by` (which sky entry authored this bag — the
- *  effective clock's provenance, issue #65) come from the ENTRY, never from
- *  the authored args — a policy bag cannot spoof its own provenance. The one
- *  exception is synthetic pre-history replay (negative seqs: a snapshot re-read as entries):
- *  those args ARE the already-stamped fold, so stamps pass through untouched —
- *  restamping them with the synthetic entry would re-epoch the forecast on
- *  every late join.
+ *  Server-owned stamps (`forecast.{epoch,seq,by}`, the whole `override` bag,
+ *  and the top-level `seq`/`by`: the effective clock's provenance, issue #65)
+ *  come from the ENTRY, never from the authored args, so a policy bag cannot
+ *  spoof its own provenance. Exception: synthetic pre-history replay (negative
+ *  seqs, a snapshot re-read as entries) passes stamps through untouched, or
+ *  every late join would re-epoch the forecast.
  *
  *  A weather verb under a rated sky also REBASES `hours` to the hour the old
- *  epoch implies at the entry's ts. Without this the merge re-epochs t0 while
- *  `hours` stays at the authored value, and the sun snaps back to it on every
- *  weather change — on both planes, live and fold. */
+ *  epoch implies at the entry's ts, so the sun doesn't snap back on every
+ *  weather change. */
 export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
   const synthetic = (seq ?? 0) < 0;
   args = skySpelling(args, ts);
@@ -272,7 +268,7 @@ export function foldSkyEntry(prev, { verb, args = {}, ts, seq, actor }) {
       }
       out.seq = seq; out.by = actor;
     }
-    // no parking (shape audit 10-16): under a tz, hours and rate stay put as the rated fallback
+    // no parking: under a tz, hours and rate stay put as the rated fallback
     return out;
   }
   // weather — merges onto the standing sky (DESIGN.md: a thing that HAPPENS,

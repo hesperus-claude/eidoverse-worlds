@@ -2,7 +2,7 @@
 // Essentials (the built-in effects, by name), its params, and how an older value reads. Pure: the authority, every
 // client, mcpl and the translator import it, so they can't disagree about what an effect says or whether it's allowed.
 //
-// The instance is tiny (R 10-07, the Niagara / Godot / bevy_hanabi convergence): `particles {effect, part?, at?, seed?,
+// The instance is tiny (the Niagara / Godot / bevy_hanabi convergence): `particles {effect, part?, at?, seed?,
 // playing?, scale?, params?}`. `effect` names a document: an Essentials name ("fire") or a content address of one stored
 // in the world ("sha256:<64 hex>", or the same bytes as "eido:sha256/<64 hex>": spec/EIDO-URIS.md; a document is stored
 // as its JCS bytes, so the two spellings name the same document). The document describes emitters as modules, in Godot's
@@ -30,7 +30,7 @@
 //
 // FRAMES (PROTOCOL §9.2: every vector names its frame). The emitter's frame is its thing's own (moved to `at`, hung on
 // `part`), scaled by the thing's scale × the instance's `scale`:
-//   forces.gravity     the WORLD frame (Unity's convention, lead 10-17): down stays down on a tipped or spinning thing, so a
+//   forces.gravity     the WORLD frame (Unity's convention): down stays down on a tipped or spinning thing, so a
 //                      knocked-over brazier's smoke still rises; the renderer turns it into the emitter's frame every step
 //                      (particlesim localGravity), and a scaled thing's gravity scales with it as every length does
 //   velocity.direction the emitter's frame
@@ -41,11 +41,11 @@
 //   forces.radial      from the emitter's origin, in the emitter's frame
 //   forces.tangential  about the document's gravity axis as written, read in the emitter's frame (it does not turn with
 //                      the world: a spiral stays a spiral about the thing's own up)
-// UNITS: metres, seconds, and RADIANS for every angle (PROTOCOL §9.2, lead 10-17): velocity.spread (0..π), shape.cone
+// UNITS: metres, seconds, and RADIANS for every angle (PROTOCOL §9.2): velocity.spread (0..π), shape.cone
 // (0..π/2), rotation.angle, rotation.velocity (rad/s); drift/swirl/flicker rates are rad/s. color.hue is in turns of the
 // colour wheel (a hue rotation, not a direction).
 //
-// UNKNOWN FIELDS (lead 10-17): a reader (every renderer, the inspector) SKIPS an optional field, module, param field or
+// UNKNOWN FIELDS: a reader (every renderer, the inspector) SKIPS an optional field, module, param field or
 // binding it doesn't know and draws what it understands (readableEffect); the authority's validator (effectProblem) stays
 // strict at upload, so what a world stores is always what its authority knew. An unknown value of a known field (a new
 // shape type) is not skipped: that document isn't readable here.
@@ -96,7 +96,7 @@ const FLIPBOOK_FIELDS = ['h', 'v', 'speed', 'offset', 'loop'];
 const PARAM_FIELDS = ['type', 'default', 'min', 'max', 'values', 'help', 'to'];
 const BINDING_FIELDS = ['path', 'op', 'times', 'map', 'round'];
 const BINDING_PATH = /^emitters\.(\*|[0-3])\.[a-z]+\.[a-zA-Z]+$/;
-// RESERVED (lead 10-17, REVIEW-particles-shape §5): names held for what the effect document is expected to grow, so nobody
+// RESERVED (REVIEW-particles-shape §5): names held for what the effect document is expected to grow, so nobody
 // spends them on something else. Refused at upload ("reserved: not built yet"); a reader skips them as it skips any field
 // it doesn't know. The instance's t0 is held in the registry (componentspec particles.reservedFields).
 export const RESERVED_EMITTER = Object.freeze({
@@ -247,7 +247,7 @@ export function effectProblem(doc) {
 // ---- the reader: skip what this build doesn't know ---------------------------------------------------------------------
 const pick = (o, keys, at, skipped) => { const out = {}; for (const [k, x] of Object.entries(o)) { if (keys.includes(k)) out[k] = x; else skipped.push(`${at}${k}`); } return out; };
 /**
- * UNKNOWN-FIELD POLICY (lead 10-17): a renderer draws what it understands. The document with every field, module, param
+ * UNKNOWN-FIELD POLICY: a renderer draws what it understands. The document with every field, module, param
  * field and binding this build doesn't know left out (their paths pushed onto `skipped`), if what remains is an effect this
  * protocol runs; else null. A document a newer authority stored, using an addition this client predates (a trail, a noise
  * module), still draws its known parts here, instead of nothing. The authority's validator (effectProblem, at upload)
@@ -382,7 +382,7 @@ function builderEffect(name, P) {
     ...(P.swirl ? { swirl: { radius: r4(P.swirl * 0.15), rate: P.swirl } } : {}),
     ...(P.converge ? { converge: { amount: P.converge } } : {}),
     ...(P.twinkle ? { flicker: { amount: P.twinkle, rate: 7 } } : {}),
-    ...(P.rotate ? { rotation: { angle: [0, TAU4], velocity: [-P.rotate, P.rotate] } } : {}),   // radians (PROTOCOL §9.2; lead 10-17): the builder's own rad/s
+    ...(P.rotate ? { rotation: { angle: [0, TAU4], velocity: [-P.rotate, P.rotate] } } : {}),   // radians (PROTOCOL §9.2): the builder's own rad/s
     render: { blend: P.blend },
   };
   return { kind: EFFECT_KIND, v: 1, name, reads: P.reads, emitters: [e], params: LEGACY_PARAMS(P) };
@@ -407,7 +407,7 @@ export const derivedEffect = (name, over = {}) => (Object.hasOwn(BUILDER, name) 
 export const ESSENTIAL_NAMES = Object.freeze(Object.keys(ESSENTIALS));
 /** An Essential's content address: the same document stored in a world has this name. */
 export const effectAddress = (doc) => `sha256:${sha256(jcs(doc))}`;
-// The address each Essential is STORED as (shape audit 10-16, render-media-env §4): the door takes a name and writes this, so
+// The address each Essential is STORED as (render-media-env §4): the door takes a name and writes this, so
 // a stored fire names one frozen document, never whatever ESSENTIALS.fire says in a later build (Resonite's PhotonDust
 // lesson: meaning held in code migrates every world when the code changes). Pinned here as literals, and
 // tools/shape-render-test PT2 holds each to its document's hash: a retuned Essential turns that row red. To change one,
@@ -421,11 +421,11 @@ export const ESSENTIAL_ADDRESSES = Object.freeze({
   magic: 'eido:sha256/0e413aa3b23d404a07d1d4736c9f23987e22cda1ab1b438df394712179dc384f',
   stars: 'eido:sha256/29d12840afa1437819259ba3026da37c083e10530e18c2d6b33708322386658f',
   muzzle: 'eido:sha256/aa2a6de4ec06157679bb1dd85219680f05bf661101297efbdf2f0a9ac5f90b84',
-  fire: 'eido:sha256/f7c0ed62fd9e23b4c179dbbf3e75103d26601bce2b47277a1bd0bee0ac5b8a94',   // its angles became radians (lead 10-17)
+  fire: 'eido:sha256/f7c0ed62fd9e23b4c179dbbf3e75103d26601bce2b47277a1bd0bee0ac5b8a94',   // its angles became radians
 });
 // An Essential's address from before a retune, still read as that Essential (a stored reference is read forever, PROTOCOL
-// §4). fire's degree-scale document (rotation.angle [0, 360], velocity ±20.05 °/s) was stored by this branch's door for a
-// day (10-16 → 10-17) before R's ruling stored Essentials by name; its look is unchanged by the move to radians.
+// §4): fire's degree-scale document (rotation.angle [0, 360], velocity ±20.05 °/s), stored briefly before Essentials
+// were stored by name; its look is unchanged by the move to radians.
 export const ESSENTIAL_FORMER_ADDRESSES = Object.freeze({
   fire: 'eido:sha256/1ca045801dca39db0ff6da4b5d7270836fecbd8578a25692a3d180829013132c',
 });

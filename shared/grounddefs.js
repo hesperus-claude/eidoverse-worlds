@@ -1,4 +1,4 @@
-// grounddefs — the ground-palette contract (charter §3, defs round two).
+// grounddefs — the ground-palette contract (charter §3).
 //
 // Same law as the sky presets: everything here is an AUTHORING convenience.
 // The ground panel applies a choice as a concrete terrain/grass verb on a

@@ -325,10 +325,10 @@ const DEFAULT_KEY = {
   Sockets: 'sockets', Reactions: 'reactions', Structure: 'structure', Captions: 'captions',
   LookAt: 'look', Stage: 'stage', Particles: 'particles', Picture: 'picture', Sound: 'sound',
 };
-const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: the stored word before 10-16 (the door stores mesh)
+const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: an older stored word (the door stores mesh)
 
-/** A node's components in the spelling every NEW write uses (owner,
- *  2026-10-02: "everything should go out under the new comp system"):
+/** A node's components in the spelling every NEW write uses (every write goes
+ *  out under the comp system):
  *  - a keyless Light (the legacy `kind:"light"` entity) becomes the Light
  *    component `comp.light` — unless the part also holds one, when the two
  *    spellings would collide (placeRefusal names it);

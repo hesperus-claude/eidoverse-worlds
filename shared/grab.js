@@ -52,16 +52,16 @@ export const HOLD_POSES = ['hand', 'carry', 'torch', 'pistol', 'shoulder'];
 export const ANIM_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 export const HANDS = ['left', 'right', 'either'];
 export const ROLES = ['primary', 'secondary'];
-/** A grip's grasp (R 10-17: was fingers; the XR-hands / robotics word): how the hand closes on it. */
+/** A grip's grasp (the XR-hands / robotics word): how the hand closes on it. */
 export const GRASPS = ['fist', 'pinch', 'point', 'flat', 'open', 'trigger'];
 export const RELEASES = COMPONENTS.grabbable.enums.release; // drop, stay, return
 export const KEYS = Object.keys(COMPONENTS.grabbable.fields);
 export const RESERVED_KEYS = COMPONENTS.grabbable.reservedFields;   // fx
 export const GRIP_KEYS = ['pos', 'q', 'hand', 'role', 'grasp', 'part'];
 // Who may carry or punt a thing that doesn't say (grabbable.who, physics.who absent): ONE value, read by the hand here and by
-// the authority's punt (review 10-06 finding 5: the old protocol let visitors punt and carry, rank 0; the grabbable migration chose builder).
+// the authority's punt.
 // Flipping it to 'member' is this one line plus the cases that pin builder today: grab-check M2, G6, I1 and phys-check F.
-export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'member' (R 10-07: "I vote for visitors being able to grab and throw"; a world narrows it per thing with who)
+export const DEFAULT_WHO = materialize('grabbable', {}).value.who;   // 'member' (a world narrows it per thing with who)
 // the written defaults are the registry's (componentspec.js grabbable.defaults: what the authority writes into a bare
 // {grabbable: {}}); the rest is what a reader fills in for a field the authority leaves absent
 export const DEFAULTS = Object.freeze({ ...materialize('grabbable', {}).value, anim: null, grips: Object.freeze({}), home: null, fits: Object.freeze([]), use: null, prompt: null, fx: null });
@@ -89,7 +89,7 @@ const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3
 export function gripOf(g) {
   if (!isObj(g) || !nums(g.pos, 3)) return null;
   return { pos: g.pos, q: unitQ(g.q) ? g.q : [0, 0, 0, 1], hand: HANDS.includes(g.hand) ? g.hand : 'either', role: ROLES.includes(g.role) ? g.role : 'primary',
-    grasp: GRASPS.includes(g.grasp) ? g.grasp : GRASPS.includes(g.fingers) ? g.fingers : 'fist', hold: {},   // fingers: its spelling before 10-17 (a stored grip the maintenance command hasn't renamed yet); a grip's bone overrides are cut (shape audit 10-16)
+    grasp: GRASPS.includes(g.grasp) ? g.grasp : GRASPS.includes(g.fingers) ? g.fingers : 'fist', hold: {},   // fingers: its older spelling (a stored grip the maintenance command hasn't renamed yet); a grip's bone overrides are cut
     part: typeof g.part === 'string' && g.part ? g.part : null };
 }
 
@@ -109,7 +109,7 @@ export function grabOf(c) {
   if (v === undefined && isObj(c.physics) && c.physics.kind === 'dynamic') return fill({ who: isWho(c.physics.who) ? c.physics.who : DEFAULT_WHO }, 'physics', c.home);
   return null;
 }
-/** A `home` component, read with its defaults ({pos, q, parent?, scale?}), or null. The one home (shape audit 10-16). */
+/** A `home` component, read with its defaults ({pos, q, parent?, scale?}), or null. The one home. */
 export function homeOf(h) {
   return isObj(h) && nums(h.pos, 3, 1e5) ? { pos: h.pos, q: unitQ(h.q) ? h.q : [0, 0, 0, 1], ...(isObj(h.parent) && typeof h.parent.to === 'string' ? { parent: { to: h.parent.to } } : {}), ...(h.scale !== undefined ? { scale: h.scale } : {}) } : null;
 }
@@ -121,7 +121,7 @@ function fill(v, source, home) {
   g.range = num(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
   g.priority = Number.isInteger(v.priority) ? Math.max(-10, Math.min(10, v.priority)) : 0;
   g.hold = HOLDS.includes(v.hold) ? v.hold : 'auto';
-  // anim: any name (the body resolves it; unknown → its default hold). pose: the spelling before 10-17, a stored value not yet renamed
+  // anim: any name (the body resolves it; unknown → its default hold). pose: the older spelling, a stored value not yet renamed
   const anim = v.anim !== undefined ? v.anim : v.pose === 'two-hand' ? undefined : v.pose;
   g.anim = typeof anim === 'string' && ANIM_RE.test(anim) ? anim : null;
   g.grips = isObj(v.grips) ? Object.fromEntries(Object.entries(v.grips).map(([k, x]) => [k, gripOf(x)]).filter(([k, x]) => x && NAME_RE.test(k))) : {};
@@ -134,7 +134,7 @@ function fill(v, source, home) {
   g.fits = Array.isArray(v.fits) ? v.fits.filter((x) => typeof x === 'string' && WORD_RE.test(x)).map((x) => x.toLowerCase()) : [];
   g.use = useOf(v.use);
   g.prompt = typeof v.prompt === 'string' && v.prompt ? v.prompt.slice(0, 40) : null;
-  g.fx = null;   // reserved (shape audit 10-16)
+  g.fx = null;   // reserved
   return g;
 }
 /** `use` as {down, up} (either may be null): a bare action name is its down. */

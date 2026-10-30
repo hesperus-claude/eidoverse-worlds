@@ -1,8 +1,7 @@
-// mediasrc — where a picture's or a sound's bytes may come from, and whose browser may fetch them (batch 2, R 10-07).
+// mediasrc — where a picture's or a sound's bytes may come from, and whose browser may fetch them.
 //
-// THE HOLE THIS CLOSES. A link in the world is a fetch every visitor's browser makes: whoever runs the far server sees
-// each visitor's IP address, when they came, and what browser they use. Before this, the authority took any src (an https
-// link included) into the log; only the browser's own allow-list kept it from being fetched.
+// WHY: a link in the world is a fetch every visitor's browser makes: whoever runs the far server sees each visitor's IP
+// address, when they came, and what browser they use.
 //
 // THE RULE (VRChat's convention: creators.vrchat.com/worlds/udon/video-players/www-whitelist, image-loading):
 //   store   this server's own files (store/…, eidoverse/assets/…): every viewer, always. Nothing leaves the server.
@@ -20,12 +19,12 @@
 // browser can't, and the official players are cross-origin frames whose sound can't reach Web Audio (so they can't be
 // positional). For now a link plays when it IS media (an .mp3, an .ogg, a radio stream, a VRCDN or Vimeo progressive file):
 // a page link is admitted (it's on the allowlist) and the browser says it can't play pages yet. Resolving pages is a
-// server-side resolver plus a proxy (Mozilla Hubs' reticulum media_resolver + CORS proxy), which R decides on.
+// server-side resolver plus a proxy (Mozilla Hubs' reticulum media_resolver + CORS proxy), not decided yet.
 import { allowedPictureSrc } from './picture.js';
 import { allowedSoundSrc } from './sound.js';
 
 // VRChat's video-player allowlist (2026-10), for sound; its image-loading allowlist, for pictures. Plus archive.org
-// (public-domain audio and film, CORS-enabled: proposed, R decides). `*.x` matches x itself and every subdomain.
+// (public-domain audio and film, CORS-enabled: proposed, not decided). `*.x` matches x itself and every subdomain.
 export const MEDIA_HOSTS = Object.freeze({
   audio: Object.freeze(['vod-progressive.akamaized.net', '*.facebook.com', '*.fbcdn.net', '*.googlevideo.com', '*.hyperbeam.com', '*.hyperbeam.dev',
     '*.mixcloud.com', '*.nicovideo.jp', 'soundcloud.com', '*.sndcdn.com', '*.topaz.chat', '*.twitch.tv', '*.ttvnw.net', '*.twitchcdn.net',
