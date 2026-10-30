@@ -24,7 +24,7 @@ Each is red on anima/main as it stands:
 4. **The typing suite can never pass against the hardened token registry.**
    The registry rejects any key that appears in the tracked example file,
    and `dev-token` is in the example. Ours uses a scratch registry
-   (tools/typing-mcpl.test.ts writes its own tokens.json).
+   (tools/typing-mcpl-test.ts writes its own tokens.json).
 5. **`tools/avatar-test.ts` is red at HEAD**: the reach integration calls
    `avatar._reachOwned()` on the test's stand-in avatar, which doesn't
    define it. The stand-in needs the method (or the call needs a `?.`).
