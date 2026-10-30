@@ -15,6 +15,7 @@
 //
 // Run: node tools/xr-eye-binding-probe.mjs   (~30 s; run it under a memory guard)
 import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
+import { suite } from './protocol/suite.ts';
 
 const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">
@@ -75,8 +76,8 @@ try {
     res.push(r);
   }
   if (errors.length) console.log('page errors:', errors.slice(0, 4));
-  let pass = 0, fail = 0;
-  const check = (n, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}${note ? `  -- ${note}` : ''}`); } };
+  const S = suite("xr-eye-binding");
+  const check = (n, ok, note) => S.check(n, ok, note);
   if (res.error) check('probe ran', false, res.error);
   else {
     for (const r of res) console.log(`  ${r.mode.padEnd(18)} eyes see ${r.leftEye}/${r.rightEye}  entry pipelines +${r.enterPipelines} ${JSON.stringify(r.enterBuilt)}  xr camera eyes after warm: ${r.warmedEyes}`);
@@ -90,7 +91,7 @@ try {
     check('withXREyes: three\'s XR camera is handed back with ZERO eyes (as before a session)', by['withXREyes warm'].warmedEyes === 0, JSON.stringify(by['withXREyes warm']));
     check('dual warm at load (xrwarm.js): the eyes see what they face (green)', green(by['dual warm at load']), JSON.stringify(by['dual warm at load']));
   }
-  console.log(`\n${pass} passed, ${fail} failed`);
-  code = fail ? 1 : 0;
+  console.log(`\n${S.pass} passed, ${S.fail} failed`);
+  code = S.fail ? 1 : 0;
 } finally { await R.close(); }
 process.exit(code);
