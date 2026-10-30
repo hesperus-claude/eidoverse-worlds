@@ -163,21 +163,21 @@ export const SHAPES_VERSION = 2;
  *  by translate-v1@12 or later (which writes the repaired spelling). A pure view over the log, so every replica and every server answers the same. */
 // The marker is the system's repair-shapes act, read by verb and actor only (they stay in a purged entry's
 // skeleton). A founding writes one beside it, and translate-v1 one beside its `translated`. The two older markers (a
-// founding's `shapes`, a translation's translator) are read through `bodyOf`: the authority passes readback, so a purged
+// founding's `shapes`, a translation's translator) are read through `readBody`: the authority passes readback, so a purged
 // body is unknown, and unknown is MARKED. Never re-running a one-way rewrite on values written in today's spelling is the safe
 // side; the cost is an old world whose founding was purged before its repair, which keeps its old values unrepaired.
-export function shapesMarked(entries, bodyOf = (i) => entries?.[i]?.body ?? null) { return shapesScan(entries, bodyOf).marked; }
+export function shapesMarked(entries, readBody = (i) => entries?.[i]?.body ?? null) { return shapesScan(entries, readBody).marked; }
 /** shapesMarked as a scan that resumes: `s` ({n, founded, marked}) from an earlier call over a prefix of the same log, whose
  *  bodies read the same since (no purge between: the authority rescans from genesis when there is one). */
-export function shapesScan(entries, bodyOf = (i) => entries?.[i]?.body ?? null, s = { n: 0, founded: false, marked: false }) {
+export function shapesScan(entries, readBody = (i) => entries?.[i]?.body ?? null, s = { n: 0, founded: false, marked: false }) {
   const L = entries ?? [];
   for (; !s.marked && s.n < L.length; s.n++) { const i = s.n, e = L[i];
     if (!e || e.kind !== "act") continue;
     if (e.verb === "repair-shapes" && e.actor === "system") { s.marked = true; break; }
     // only the founding counts: the first create-world act. A later one is a refused attempt the log keeps (a
     // visitor's create-world on a world that exists), whose purge must never read as "marked"
-    if (e.verb === "create-world" && !s.founded) { s.founded = true; const b = bodyOf(i); if (b === null || (b && typeof b === "object" && Number.isInteger(b.shapes))) { s.marked = true; break; } }
-    if (e.verb === "translated" && e.actor === "system") { const b = bodyOf(i); const m = /@(\d+)$/.exec(String(b?.from?.translator ?? "")); if (b === null || (m && +m[1] >= 12)) { s.marked = true; break; } } }
+    if (e.verb === "create-world" && !s.founded) { s.founded = true; const b = readBody(i); if (b === null || (b && typeof b === "object" && Number.isInteger(b.shapes))) { s.marked = true; break; } }
+    if (e.verb === "translated" && e.actor === "system") { const b = readBody(i); const m = /@(\d+)$/.exec(String(b?.from?.translator ?? "")); if (b === null || (m && +m[1] >= 12)) { s.marked = true; break; } } }
   return s;
 }
 

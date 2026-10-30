@@ -267,7 +267,7 @@ function groundContact(height, b, dt) {
 export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 0.6, density = 1, contactHertz = CONTACT_HERTZ, ground = null } = {}, from = null) {
   const bodies = [], joints = [];
   const WORLD = { index: -1, static: true, invMass: 0, invIl: [0, 0, 0], iw: [0, 0, 0, 0, 0, 0, 0, 0, 0], p: [0, 0, 0], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0], awake: false, dR: [1, 0, 0, 0, 1, 0, 0, 0, 1] };
-  const bodyOf = (i) => (i < 0 ? WORLD : bodies[i]);
+  const simBody = (i) => (i < 0 ? WORLD : bodies[i]);
   // ground: a height function y = height(x, z) (exact ops, so every runtime agrees), a static collider under everything.
   // Not part of exportState: whoever restores a world passes the same function again.
   const GROUND = ground ? { uid: -2, index: -2, shape: "field", height: ground.height, static: true, rolling: ground.rollingResistance ?? 0, invMass: 0, invIl: [0, 0, 0], iw: [0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -280,14 +280,14 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
     applyImpulse(i, P, at) { const b = bodies[i]; if (!b.invMass) return; updateInertia(b); b.v = add(b.v, scl(P, b.invMass)); b.w = add(b.w, invI(b, crs(sub(at, b.p), P))); b.sleepTime = 0; b.awake = true; },
     // joints: type "point" | "hinge" (axis) | "fixed"; anchor `at` and `axis` in world space at creation; a or b < 0 = the world
     addJoint({ type, a, b, at, axis }) {
-      const A = bodyOf(a), B = bodyOf(b);
+      const A = simBody(a), B = simBody(b);
       const j = { type, a, b, alive: true, lA: qrot(qconj(A.q), sub(at, A.p)), lB: qrot(qconj(B.q), sub(at, B.p)), lin: [0, 0, 0], ang: [0, 0, 0] };
       if (type === "hinge") { const ax = scl(axis, 1 / len(axis)); j.axA = qrot(qconj(A.q), ax); j.axB = qrot(qconj(B.q), ax); }
       if (type === "fixed") j.rel0 = qmul(qconj(A.q), B.q);   // B's orientation in A's frame at creation
       joints.push(j); for (const x of [A, B]) if (!x.static) { x.awake = true; x.sleepTime = 0; }
       return joints.length - 1;
     },
-    removeJoint(k) { const j = joints[k]; if (!j || !j.alive) return; j.alive = false; for (const x of [bodyOf(j.a), bodyOf(j.b)]) if (!x.static) { x.awake = true; x.sleepTime = 0; } },
+    removeJoint(k) { const j = joints[k]; if (!j || !j.alive) return; j.alive = false; for (const x of [simBody(j.a), simBody(j.b)]) if (!x.static) { x.awake = true; x.sleepTime = 0; } },
     step(dt) { stepWorld(dt); },
     state() { return bodies.map((b) => [...b.p, ...b.q, ...b.v]); },
     asleep() { return bodies.map((b) => b.static || !b.awake); },
@@ -439,17 +439,17 @@ export function createWorld({ gravity = [0, -9.81, 0], substeps = 4, friction = 
 
     // ---- joints (Box3D spherical/revolute/weld pattern: soft in the biased pass, rigid in relax; anchors ride dR) ----
     const jsoft = softness(Math.min(JOINT_HERTZ, 0.25 * substeps / dt), JOINT_ZETA, h);
-    const jact = joints.filter((j) => j.alive && (live(bodyOf(j.a)) || live(bodyOf(j.b))));
-    for (const j of jact) { const A = bodyOf(j.a), B = bodyOf(j.b); j.rA0 = qrot(A.q, j.lA); j.rB0 = qrot(B.q, j.lB); }
+    const jact = joints.filter((j) => j.alive && (live(simBody(j.a)) || live(simBody(j.b))));
+    for (const j of jact) { const A = simBody(j.a), B = simBody(j.b); j.rA0 = qrot(A.q, j.lA); j.rB0 = qrot(B.q, j.lB); }
     const angImp = (A, B, L) => { applyAng(A, scl(L, -1)); applyAng(B, L); };
     const linImp = (A, B, P, rA, rB) => { const l = Math.sqrt(dot(P, P)); if (l > 0) { const u = scl(P, 1 / l); imp(A, -1, l, u, rA); imp(B, 1, l, u, rB); } };
-    const warmJoint = (j) => { const A = bodyOf(j.a), B = bodyOf(j.b);
+    const warmJoint = (j) => { const A = simBody(j.a), B = simBody(j.b);
       // a hinge's angular impulse lives in the plane ⟂ its axis; as A turns, drop what now lies ALONG the axis, or the warm
       // start drives the free DOF like a motor (Box3D stores 2 scalars on rebuilt axes, revolute_joint.c:248)
       if (j.type === "hinge") { const aA = qrot(A.q, j.axA); j.ang = sub(j.ang, scl(aA, dot(j.ang, aA))); }
       linImp(A, B, j.lin, mv(A.dR, j.rA0), mv(B.dR, j.rB0)); angImp(A, B, j.ang); };
     function solveJoint(j, useBias) {
-      const A = bodyOf(j.a), B = bodyOf(j.b), bs = useBias ? jsoft : { biasRate: 0, massScale: 1, impulseScale: 0 };
+      const A = simBody(j.a), B = simBody(j.b), bs = useBias ? jsoft : { biasRate: 0, massScale: 1, impulseScale: 0 };
       const IAB = A.iw.map((x, k) => x + B.iw[k]);
       if (j.type === "hinge") {   // keep the two hinge axes parallel: 2 angular rows ⟂ A's axis
         const aA = qrot(A.q, j.axA), aB = qrot(B.q, j.axB), [p1, p2] = perp(aA), e = crs(aA, aB), dw = sub(B.w, A.w);

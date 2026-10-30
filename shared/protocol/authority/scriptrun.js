@@ -329,9 +329,9 @@ export function writeBlock(w) {
 /** shapesMarked over w's log, resumed from where it last stopped while the log holds no purge (a purge can change what an
  *  earlier body reads back: then from genesis, as before). A host seeds w.__shapes from its fold cache (server/foldviews.ts). */
 export function shapesOf(w) {
-  const bodyOf = (q) => readback(w, q);
-  if (purgedSeqs(w).size) { delete w.__shapes; return shapesMarked(w.entries, bodyOf); }
-  return shapesScan(w.entries, bodyOf, (w.__shapes ??= { n: 0, founded: false, marked: false })).marked;
+  const readBody = (q) => readback(w, q);
+  if (purgedSeqs(w).size) { delete w.__shapes; return shapesMarked(w.entries, readBody); }
+  return shapesScan(w.entries, readBody, (w.__shapes ??= { n: 0, founded: false, marked: false })).marked;
 }
 export function maintenanceNeeds(w) {
   if (!w.exists || w.state().status !== "ok") return { steps: [], blocking: [], lift: [], rename: [], repair: false };

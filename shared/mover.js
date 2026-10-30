@@ -84,21 +84,21 @@ export const TRACK = Object.freeze({
 // ---------------------------------------------------------------- the body
 /** A size multiplier's clamp, as shared/presencewire.js keeps it (0.5–2; a non-number is 1). Re-stated here rather
  *  than imported so this file stays leaf-level, as flight.js is. */
-const scaleOf = (u) => (typeof u === "number" && Number.isFinite(u) ? Math.min(2, Math.max(0.5, u)) : 1);
+const clampScale = (u) => (typeof u === "number" && Number.isFinite(u) ? Math.min(2, Math.max(0.5, u)) : 1);
 /** A body's size as every caller of this file reads it (0.5-2, the size slider's range; anything else is 1): the authority
  *  bounds a size a body claims with this, so it never judges a body this file wouldn't walk. */
-export const bodyScale = scaleOf;
+export const bodyScale = clampScale;
 
 /** Walking speed for the flags a caller holds: run outranks creep; the stride grows with the body. */
 export function walkSpeed({ run = false, creep = false, scale = 1 } = {}) {
   const w = MOVER.walk;
-  return (run ? w.run : creep ? w.creep : w.speed) * scaleOf(scale);
+  return (run ? w.run : creep ? w.creep : w.speed) * clampScale(scale);
 }
 
 /** The VR stick's speed: half deflection is a walk, full is a run, ramping between. */
 export function stickSpeed(mag, scale = 1) {
   const m = Math.min(1, Math.max(0, mag)), w = MOVER.walk;
-  return (m <= 0.5 ? w.speed * (m / 0.5) : w.speed + (w.run - w.speed) * ((m - 0.5) / 0.5)) * scaleOf(scale);
+  return (m <= 0.5 ? w.speed * (m / 0.5) : w.speed + (w.run - w.speed) * ((m - 0.5) / 0.5)) * clampScale(scale);
 }
 
 /** A client's speed easing toward `target` over `dt` (the walk→idle coast and the start-up ramp). */
@@ -114,22 +114,22 @@ export function easeSpeed(prev, target, dt) {
  *  out onto anything up to `climb` above the surface, so its box is the box of a body standing `step` below that line —
  *  what it can haul onto is exactly what a walker there steps onto, and a quay higher than `climb` is a wall. */
 export function bodyBox(p, scale = 1, level = null) {
-  const s = scaleOf(scale), r = MOVER.body.radius * s;
+  const s = clampScale(scale), r = MOVER.body.radius * s;
   const feet = level != null && Number.isFinite(level) ? level + (MOVER.swim.climb - MOVER.body.step) * s : p[1];
   return { min: [p[0] - r, feet + MOVER.body.step * s, p[2] - r], max: [p[0] + r, feet + MOVER.body.height * s, p[2] + r] };
 }
 /** The body's capsule for a client's collider pass: radius and height for its size. */
 export function capsule(scale = 1) {
-  const s = scaleOf(scale);
+  const s = clampScale(scale);
   return { r: MOVER.body.radius * s, tall: MOVER.body.height * s, step: MOVER.body.step * s };
 }
 
 /** The floor rule, one line, every caller: a floor at `top` is walked onto when it is no more than a step above the
  *  feet at y (any floor below is stepped down onto). */
-export const floorOk = (y, top, scale = 1) => top <= y + MOVER.body.step * scaleOf(scale) + 1e-9;
+export const floorOk = (y, top, scale = 1) => top <= y + MOVER.body.step * clampScale(scale) + 1e-9;
 
 /** A ledge a body can climb onto with a mantle (the client's jump-at-a-wall): above a step, up to its height. */
-export const canMantle = (reach, scale = 1) => { const s = scaleOf(scale); return reach > MOVER.body.step * s && reach <= MOVER.body.height * s; };
+export const canMantle = (reach, scale = 1) => { const s = clampScale(scale); return reach > MOVER.body.step * s && reach <= MOVER.body.height * s; };
 
 // ---------------------------------------------------------------- arrival
 /** This close to the target (in the ground plane) is arrived. */
@@ -224,7 +224,7 @@ export function waterCost(level, ground, height = MOVER.body.height) {
  *      floats above it), higher is a wall (judged from the surface, not the chest, or every dug pool traps swimmers);
  *    on its feet: a floor up to a step above them (floorOk). */
 export function floorStep({ y, ground0 = y, level0 = undefined, f, level1 = level0, height = undefined, scale = 1 }) {
-  const s = scaleOf(scale), H = typeof height === "number" && height > 0 ? height : MOVER.body.height * s;
+  const s = clampScale(scale), H = typeof height === "number" && height > 0 ? height : MOVER.body.height * s;
   // a stance is reported wherever the caller has a water law at all (level null there: dry), as stepWalk always did
   const st0 = level0 !== undefined ? waterStance(level0, ground0, H) : null, st = level1 !== undefined ? waterStance(level1, f, H) : null;
   if (st?.swimming) return { y: st.y, stance: st, swim: true, blocked: null, level: level1 };
@@ -248,13 +248,13 @@ export function stepWalk({ pos, dir, dt, run = false, creep = false, scale = 1, 
   const len = Math.hypot(dir[0], dir[1]);
   if (!(len > 0) || !(dt > 0) || !(gain > 0)) return { pos: here, moved: 0, blocked: null, stance: null };
   // the stance is judged where the body IS (the step's speed), and re-judged where it lands (its y)
-  const H = typeof height === "number" && height > 0 ? height : MOVER.body.height * scaleOf(scale);
+  const H = typeof height === "number" && height > 0 ? height : MOVER.body.height * clampScale(scale);
   const ground0 = env.floorAt ? env.floorAt(pos[0], pos[2], pos[1]) : NaN, g0 = Number.isFinite(ground0) ? ground0 : pos[1];
   const level0 = env.waterAt ? env.waterAt(pos[0], pos[2]) : undefined;
   const st0 = env.waterAt ? waterStance(level0, g0, H) : null;
   // swimming: the dry speed asked for (keys, stick, run flag, gain) maps onto the stroke, so a stick ramp never goes
   // backwards at the run threshold: below a walk, a fraction of the stroke; walk→run, stroke→hard
-  const s = scaleOf(scale), dry = walkSpeed({ run, creep, scale }) * gain;
+  const s = clampScale(scale), dry = walkSpeed({ run, creep, scale }) * gain;
   const stroke = (q) => (q <= MOVER.walk.speed ? MOVER.swim.speed * (q / MOVER.walk.speed) : MOVER.swim.speed + (MOVER.swim.run - MOVER.swim.speed) * Math.min(1, (q - MOVER.walk.speed) / (MOVER.walk.run - MOVER.walk.speed)));
   const k = env.speedAt ? areaFactor(env.speedAt(pos)) : 1;   // a physics-area {kind: speed} here (zone.js speedFactorAt)
   const d = Math.min(cap, (st0?.swimming ? stroke(dry / s) * s : dry * (st0?.speedFactor ?? 1)) * k * dt);
