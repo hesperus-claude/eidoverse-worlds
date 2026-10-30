@@ -13,6 +13,7 @@
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
+import { pause } from "./protocol/wait.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
 // The bus is the REAL one (base.js), deliberately: micstate subscribes to
@@ -121,9 +122,8 @@ t('mode exit closes the gate', gate(0));
 //
 // The machine ticks on a real 20ms interval with a ~1s learn-before-judge
 // window, so these cases wait it out rather than poking its internals.
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const speak = async () => { room = 0.5; await sleep(2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
-const hush  = async () => { room = 0;   await sleep(900);  };   // past the 700ms hang-time
+const speak = async () => { room = 0.5; await pause('settle + 60 ms, past the 1.5 s rate limit the last press left', 2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
+const hush  = async () => { room = 0;   await pause('past the 700 ms hang time', 900);  };   // past the 700ms hang-time
 // Re-arm the lane so the machine restarts its learn window on a quiet room.
 ms.gateRelease(); room = 0; ms.gateFor(stream);
 vc.setPttMode(true);

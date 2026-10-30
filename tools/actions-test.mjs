@@ -8,13 +8,11 @@
 // registration of an id MERGES (the key table adds a key to the dock's entry), and that grouping keeps
 // the best row first.
 import * as A from '../client/lib/actions.js';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name, ok, extra = '') => {
-  console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${name}${ok ? '' : '  ' + extra}`);
-  ok ? pass++ : fail++;
-};
-const done = () => { console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); };
+const S = suite("actions");
+const check = (name, ok, extra) => S.check(name, ok, extra);
+const done = () => { S.done(); };
 const noop = () => {};
 const ids = (q) => A.list(q).map((r) => r.action.id);
 

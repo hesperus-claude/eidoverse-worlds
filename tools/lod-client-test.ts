@@ -21,7 +21,7 @@
 // authored `recipe` extra — reading the served tier with the same tierOf the
 // loader uses. The PRODUCTION-LOADER part (round three of the review) then
 // runs the real, unmodified client/lib/assets.js against that same child
-// (tools/lod-loader-probe.ts: only a renderer that never draws and the frame
+// (tools/lod-loader-child.ts: only a renderer that never draws and the frame
 // conductors injected below it, its relative fetches resolved to the child),
 // once per /version shape — the real one, one with no recipe, one with no
 // key — and asserts the URL it fetched, the cache key it chose and the
@@ -75,20 +75,16 @@ const { makeModelQuality, askFor, tierOf } = await import('../client/lib/lod_pol
 const { keyFromVersion, lodFromVersion, negotiate, withLod } = await import('../shared/ktx2.js');
 const { LOD_RECIPE } = await import('../server/store-variants.ts');
 const rig: any = await import('./rig-load.mjs');
+const { freePort } = await import('./harness.ts');
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
   console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${label}${!ok && detail ? `\n      ${detail}` : ''}`);
   if (!ok) failures++;
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Let the scheduler's microtask pump and the stub loader run out. */
-const settle = async () => { for (let i = 0; i < 6; i++) await sleep(15); };
-const until = async (pred: () => boolean, ms: number) => {
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) { if (pred()) return true; await sleep(250); }
-  return pred();
-};
+/** Let the scheduler's microtask pump and the stub loader run out (both are microtasks: a few loop turns, no timer). */
+const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+const { tryUntil } = await import('./protocol/wait.ts');
 
 // ============================================================================
 console.log('\nlod-client — the realizer half (real models.js over a held loader)\n');
@@ -229,7 +225,7 @@ const sinceMark = (mark: number, id: string) => stub.colliderLog.slice(mark).fil
 const deps: [string, (id: string) => void][] = [
   ['a body sits on it (avatarMounts)', (id) => stub.avatarMounts.set(`occupant-of-${id}`, { to: id })],
   ['cargo is parented to it (parent.to)', (id) => { spawnAt(`cargo-${id}`, 10); door('set', { id: `cargo-${id}`, component: 'parent', value: { to: id } }); }],
-  ['a part motion arrives (comp.motion.part)', (id) => door('set', { id, component: 'motion', value: { type: 'pendulum', part: 'Door', axis: [0, 1, 0], amp: 0.3, period: 2 } })],   // a swinging door is a pendulum now
+  ['a part motion arrives (motion:<slot> {node})', (id) => door('set', { id, component: 'motion:door', value: { node: 'Door', type: 'pendulum', axis: [0, 1, 0], amp: 0.3, period: 2 } })],
   ['an edit hold begins (editHolds)', (id) => stub.editHolds.add(id)],
 ];
 let k = 0;
@@ -292,7 +288,7 @@ console.log('\n  entry points — the governor lever and the dial callback\n');
 console.log('\nlod-client — the wire half (an OWNED sequencer answers the loader\'s exact URLs)\n');
 
 const ROOT = resolve(import.meta.dir, '..');
-const OPT = join(ROOT, 'assets', 'opt');
+const OPT = mkdtempSync(join(tmpdir(), 'ew-lodc-opt-'));   // the child's OPT_DIR: its boot sweep bakes here, never into the checkout
 const NOWHERE = mkdtempSync(join(tmpdir(), 'ew-lodc-nowhere-'));   // no encoder anywhere: an untextured fixture reduces without one
 const LIB = mkdtempSync(join(tmpdir(), 'ew-lodc-lib-'));
 mkdirSync(join(LIB, 'eidoverse', 'assets', 'models'), { recursive: true });
@@ -303,7 +299,7 @@ let child: ChildProcess | null = null;
 const cleanup = () => {
   try { child?.kill(); } catch { /* gone */ }
   for (const rel of mine) try { rmSync(join(OPT, rel), { force: true }); } catch { /* best effort */ }
-  for (const d of [LIB, NOWHERE]) try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+  for (const d of [LIB, NOWHERE, OPT]) try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
 };
 process.on('exit', cleanup);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { cleanup(); process.exit(1); });
@@ -337,19 +333,12 @@ async function gridGlb(tag: string, cells: number, extras: object | null): Promi
   return new NodeIO().writeBinary(doc);
 }
 
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); } catch { return cand; }
-  }
-  throw new Error('no free port in 20 tries');
-}
 /** Process-owned, as object-lod-test spawns it: the per-run nonce goes INTO
  *  the child and must come back on /version before anything counts as up. */
 async function startServer() {
-  const PORT = await freePort();
+  const PORT = freePort(20000);
   const nonce = crypto.randomUUID();
-  const env: Record<string, string | undefined> = { ...process.env, PORT: String(PORT), JOIN_TOKEN: 'test-door',
+  const env: Record<string, string | undefined> = { ...process.env, SKIP_OPT_SWEEP: undefined, OPT_DIR: OPT, PORT: String(PORT), JOIN_TOKEN: 'test-door',
     WORLD_INSTANCE_NONCE: nonce, WORLDS_DIR: mkdtempSync(join(tmpdir(), 'ew-lodc-w-')), EIDOVERSE_DIR: LIB,
     KTX2_TOKTX: join(NOWHERE, 'no-such'), PATH: NOWHERE, HOME: NOWHERE, USERPROFILE: NOWHERE };
   const proc = spawnProc(process.execPath, [join(ROOT, 'server', 'server.ts')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -357,19 +346,15 @@ async function startServer() {
   let log = '';
   proc.stdout!.on('data', (d) => { log += d; });
   proc.stderr!.on('data', (d) => { log += d; });
-  let up = false, version: any = null;
-  for (let i = 0; i < 120 && !up; i++) {
-    if (proc.exitCode != null) break;
-    try {
-      version = await fetch(`http://127.0.0.1:${PORT}/version`).then((r) => r.json());
-      if (version && typeof version === 'object' && version.instance === nonce) up = true;
-      else break;   // someone else answers here — refuse, never test into their world
-    } catch { await sleep(250); }
-  }
+  let version: any = null;
+  // an answer that isn't ours ends the wait too: refuse, never test into someone else's world
+  await tryUntil('the child answers /version', async () => proc.exitCode != null
+    || (version = await fetch(`http://127.0.0.1:${PORT}/version`).then((r) => r.json()).catch(() => null)) != null, { ms: 30_000, step: 250 });
+  const up = !!version && typeof version === 'object' && version.instance === nonce;
   if (!up) console.log(`      child did not come up OWNED — log tail:\n      ${log.split('\n').slice(-6).join('\n      ')}`);
   const base = `http://127.0.0.1:${PORT}`;
   return { up, base, key: keyFromVersion(version), lod: lodFromVersion(version), log: () => log,
-    stop: async () => { try { proc.kill(); } catch { /* gone */ } child = null; await sleep(300); } };
+    stop: async () => { try { proc.kill(); } catch { /* gone */ } child = null; await tryUntil('the child exits', () => proc.exitCode != null || proc.signalCode != null, { ms: 5000 }); } };
 }
 
 writeFileSync(join(LIB, HEAVY), await gridGlb('heavy', 160, null));
@@ -382,7 +367,7 @@ try {
     check('it published a key and the recipe this client was built against', !!key && recipe === LOD_RECIPE, `${key} / ${recipe}`);
     const variant = join(OPT, `${HEAVY}.lod.${recipe}.glb`);
     const fresh = () => existsSync(variant) && statSync(variant).mtimeMs > statSync(join(LIB, HEAVY)).mtimeMs;
-    const landed = await until(fresh, 60_000);
+    const landed = !!(await tryUntil('the boot sweep bakes the heavy fixture', fresh, { ms: 60_000, step: 250 }));
     check('the boot sweep baked the heavy fixture\'s LOD (untextured: no encoder needed)', landed,
       C.log().split('\n').filter((l) => l.includes('lod')).slice(-3).join(' | '));
     const served = async (url: string) => {
@@ -404,7 +389,7 @@ try {
     check('a WRONG-GENERATION ask answers provisionally (no-cache) and the loader reads it as full',
       c.status === 200 && c.cc === 'no-cache' && c.tier === 'full', `cc=${c.cc}`);
     const authored = askFor({ libPath: AUTHORED, key, capable: true, recipe, tier: 'lod' });
-    const refused = await until(() => existsSync(join(OPT, `${AUTHORED}.lod.${recipe}.glb.failed`)), 30_000);
+    const refused = !!(await tryUntil('the sweep refuses the authored fixture', () => existsSync(join(OPT, `${AUTHORED}.lod.${recipe}.glb.failed`)), { ms: 30_000, step: 250 }));
     const d = await served(authored.url);
     check('an authored `recipe` extra EQUAL to the running recipe, through the lod door: the sweep refused it typed (already light), the original answers, the loader reads FULL',
       refused && d.status === 200 && d.json.asset?.extras?.recipe === recipe && !d.json.asset?.extras?.lodOf && d.tier === 'full',
@@ -415,7 +400,7 @@ try {
     // owned child. A mutation at the decision seam (tier / url / glbKey / the stamps) fails here.
     console.log('\n  the production loader — real assets.js against the owned child\n');
     const probe = async (strip: string) => {
-      const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-probe.ts')], {
+      const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-child.ts')], {
         env: { ...process.env, LODC_BASE: C.base, LODC_STRIP: strip, LODC_HEAVY: HEAVY, LODC_AUTHORED: AUTHORED },
         stdout: 'pipe', stderr: 'pipe',
       });

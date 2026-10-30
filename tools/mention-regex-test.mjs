@@ -4,8 +4,9 @@
 // heard its own name again, for the life of the process, with a single log
 // line and no other symptom.
 import { mentionRegexFor } from '../mcpl/mention.ts';
-let pass = 0, fail = 0;
-const check = (n, c) => { c ? (pass++, console.log(`ok   ${n}`)) : (fail++, console.log(`FAIL ${n}`)); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("mention-regex");
+const check = (n, c) => S.check(n, c);
 
 // 1. Normal ids still match the way they always did.
 check('plain name matches @mention', mentionRegexFor(['hesperus']).test('hey @hesperus hi'));
@@ -111,5 +112,4 @@ for (const [label, id] of [['undefined', undefined], ['null', null],
   check(`${label} id returns null (degraded, not a bogus regex)`, !threw && out === null);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

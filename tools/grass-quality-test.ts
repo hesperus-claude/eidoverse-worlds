@@ -28,6 +28,7 @@
 
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
+import { suite } from "./protocol/suite.ts";
 // URL.pathname yields "/D:/…" on Windows, which nothing can open —
 // fileURLToPath is the portable spelling
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
@@ -48,11 +49,8 @@ const store = new Map<string, string>();
 store.set("ew-grass-quality", "low");
 (globalThis as any)._autoParticleSystems = [];
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("grass-quality");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
 // ---- behavioral delta — runs on BOTH trees -------------------------------
@@ -76,7 +74,7 @@ console.log("\nflora's shipped density dial (source-extracted, both trees)");
 }
 
 if (!gqMod) {
-  console.log(`\n${pass} passed, ${fail} failed — client/lib/grass_quality.js absent` +
+  console.log(`\n${S.pass} passed, ${S.fail} failed — client/lib/grass_quality.js absent` +
     ` (expected on main; that absence is novelty, the dial assertion above is the behavior)`);
   process.exit(1);
 }
@@ -315,10 +313,10 @@ console.log("\nthe applied report through terrain (getGrassApplied)");
 
 console.log("\none report for every surface (source-level)");
 {
-  const bsrc = await Bun.file(here("../client/lib/build.js")).text();
+  const bsrc = await Bun.file(here("../client/lib/skypanel.js")).text();   // the grass⚙ row lives in the sky panel now
   check("the browser grass⚙ row reads the SAME report (getGrassApplied) as code does",
     /getGrassApplied\(\)/.test(bsrc),
-    "build.js renders dial state from policy arithmetic only");
+    "skypanel.js renders dial state from policy arithmetic only");
 }
 
 console.log("\nnever a verb (source-level)");
@@ -331,5 +329,4 @@ console.log("\nnever a verb (source-level)");
     !gq.includes("import "));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+S.done();

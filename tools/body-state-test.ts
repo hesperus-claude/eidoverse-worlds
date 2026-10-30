@@ -8,7 +8,7 @@ const { handleTool, TOOLS } = await import("../mcpl/tools.ts");
 const { BodyStateReader } = await import("../mcpl/body-state.ts");
 const { bodyWire } = await import("../shared/presencewire.js");
 const { until: waitUntil, tryUntil } = await import("./protocol/wait.ts");
-const { scratchSequencer, mkCheck, sleep } = await import("./harness.ts");
+const { scratchSequencer, mkCheck } = await import("./harness.ts");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
@@ -37,10 +37,6 @@ async function read(a: any, args: any = {}) {
   const r = await handleTool({ agent: a, canPush: () => false, heldActivity: [], cursor: { caughtUpTo: null } }, "body_state", args);
   return { wire: r, ...JSON.parse(r.content[0].text) };
 }
-async function until(fn: () => boolean) {
-  const end = Date.now() + 4000;
-  while (!fn()) { if (Date.now() > end) throw new Error("presence condition timed out"); await sleep(20); }
-}
 const eq = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
 const near = (a: number[], b: number[]) => !!a && !!b && a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 1e-6);
 try {
@@ -49,7 +45,7 @@ try {
   const bones = Object.fromEntries(["spine", "chest", "neck", "head", "leftUpperArm", "leftLowerArm", "rightUpperArm", "rightLowerArm"]
     .map((n, i) => [n, [0, 0, Math.sin((i + 1) / 40), Math.cos((i + 1) / 40)]]));
   owner.setPose(bones); owner.wingsFolded = true; owner.tick();
-  await until(() => eq(peer.people.get(owner.name)?.pose?.pose, bones));
+  await waitUntil("the peer's sample", () => eq(peer.people.get(owner.name)?.pose?.pose, bones));
   const self = await read(owner, { detail: "all", points: ["chest_front", "hand_l"] });
   const other = await read(peer, { who: owner.name, detail: "all", points: ["chest_front", "hand_l"] });
   check("eight exact quaternions round-trip owner -> server -> peer -> tool", self.ok && other.ok && eq(self.publishedRotations, bones) && eq(other.publishedRotations, bones), JSON.stringify(other.geometry));
@@ -62,11 +58,11 @@ try {
   const joined = await read(late, { who: owner.name, detail: "bones" });
   check("late join snapshot reaches the real read tool", joined.ok && eq(joined.publishedRotations, bones));
   owner.setPose(null); owner.tick();
-  await until(() => !peer.people.get(owner.name)?.pose?.pose);
+  await waitUntil("the peer's sample", () => !peer.people.get(owner.name)?.pose?.pose);
   check("clear removes overrides, not the skeleton", (await read(peer, { who: owner.name })).overrides.state === "none");
   for (const clip of ["unrecognized-clip"]) {
     owner.clip = clip; owner.setPose(bones); owner.tick();
-    await until(() => peer.people.get(owner.name)?.pose?.clip === clip);
+    await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === clip);
     const seated = await read(owner, { detail: "all", points: ["knee_r"] });
     const seen = await read(peer, { who: owner.name, detail: "contacts", points: ["knee_r"] });
     check(`${clip}: current-body geometry is withheld on the real self/peer tool path`,
@@ -74,14 +70,14 @@ try {
       && !seated.joints && !seated.contacts && !seen.contacts && seen.clip === clip && eq(seated.publishedRotations, bones));
   }
   owner.clip = "idle"; owner.setPose(null); owner.tick();
-  await until(() => peer.people.get(owner.name)?.pose?.clip === "idle");
+  await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "idle");
   check("standing again restores contact estimates", (await read(peer, { who: owner.name, detail: "contacts", points: ["knee_r"] })).contacts?.knee_r?.quality === "anatomical_estimate");
   // Every channel of a held pose, through owner -> server -> peer -> tool. The
   // pose tool's own kneeling example used to refuse the whole body.
   const standing = await read(peer, { who: owner.name, detail: "bones" });
   const kneel = { hips: { t: [0, -0.5, 0] } };   // the pose tool's own example (mcpl/tools.ts)
   owner.setPose(kneel as any); owner.tick();
-  await until(() => eq(peer.people.get(owner.name)?.pose?.pose, kneel));
+  await waitUntil("the peer's sample", () => eq(peer.people.get(owner.name)?.pose?.pose, kneel));
   const knelt = await read(peer, { who: owner.name, detail: "bones" });
   check("the pose tool's kneeling example is read, not refused", knelt.ok && eq(knelt.publishedRotations, kneel) && eq(knelt.unreadableBones, []), knelt.error);
   const standingJoints = Object.entries(standing.joints ?? {});
@@ -93,7 +89,7 @@ try {
   const turned = [0, 0, 0.2, Math.sqrt(0.96)];
   const mixed = { leftUpperArm: turned, rightUpperArm: { q: [0, 0] }, spine: [0, 0, 0, 0], leftLowerArm: { s: [1, 0, 1] }, rightLowerArm: { q: turned, s: [1, -1, 1] } };
   owner.setPose(mixed as any); owner.tick();
-  await until(() => eq(peer.people.get(owner.name)?.pose?.pose, mixed));
+  await waitUntil("the peer's sample", () => eq(peer.people.get(owner.name)?.pose?.pose, mixed));
   const partial = await read(peer, { who: owner.name, detail: "bones" });
   check("a bone with nothing usable is named, and the rest of the pose is read", partial.ok
     && eq(partial.unreadableBones, ["rightUpperArm"]) && near(partial.joints?.leftUpperArm?.rotation, turned)
@@ -106,23 +102,23 @@ try {
   // named in the bones detail's unmappedBones, and the rest of the pose is read.
   const odd = { leftUpperArm: turned, tailTip: turned, constructor: turned };
   owner.setPose(odd as any); owner.tick();
-  await until(() => eq(peer.people.get(owner.name)?.pose?.pose, odd));
+  await waitUntil("the peer's sample", () => eq(peer.people.get(owner.name)?.pose?.pose, odd));
   const unmapped = await read(peer, { who: owner.name, detail: "bones" });
   check("a bone the stand-in lacks and an inherited name are named in unmappedBones, and the rest of the pose is read", unmapped.ok
     && eq([...(unmapped.unmappedBones ?? [])].sort(), ["constructor", "tailTip"]) && near(unmapped.joints?.leftUpperArm?.rotation, turned),
     JSON.stringify({ ok: unmapped.ok, error: unmapped.error, unmapped: unmapped.unmappedBones }));
   owner.setPose(null); owner.tick();
-  await until(() => !peer.people.get(owner.name)?.pose?.pose);
+  await waitUntil("the peer's sample", () => !peer.people.get(owner.name)?.pose?.pose);
   for (const clip of ["swim", "tread"]) {
     owner.clip = clip; owner.tick();
-    await until(() => peer.people.get(owner.name)?.pose?.clip === clip);
+    await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === clip);
     const seen = await read(peer, { who: owner.name, detail: "all", points: ["knee_r"] });
     check(`${clip}: a swimmer's body is read (the procedural stroke over idle), not withheld`,
       seen.ok && seen.contacts?.knee_r?.quality === "anatomical_estimate" && seen.poseEvaluation?.source === "procedural_swim", JSON.stringify(seen.geometry ?? seen.error));
   }
-  owner.clip = "tread"; owner.tick(); await until(() => peer.people.get(owner.name)?.pose?.clip === "tread");
+  owner.clip = "tread"; owner.tick(); await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "tread");
   const tread = await read(peer, { who: owner.name, detail: "bones" });
-  owner.clip = "idle"; owner.tick(); await until(() => peer.people.get(owner.name)?.pose?.clip === "idle");
+  owner.clip = "idle"; owner.tick(); await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "idle");
   const stand = await read(peer, { who: owner.name, detail: "bones" });
   check("...and treading moves the feet off where standing puts them", tread.joints?.rightLowerLeg && stand.joints?.rightLowerLeg
     && Math.hypot(...tread.joints.rightFoot.position.map((v: number, i: number) => v - stand.joints.rightFoot.position[i])) > 0.05, JSON.stringify([tread.joints?.rightFoot?.position, stand.joints?.rightFoot?.position]));
@@ -131,7 +127,7 @@ try {
   // the bones the pose leaves.
   const heldArm = { leftUpperArm: turned };
   owner.clip = "tread"; owner.setPose(heldArm as any); owner.tick();
-  await until(() => peer.people.get(owner.name)?.pose?.clip === "tread" && eq(peer.people.get(owner.name)?.pose?.pose, heldArm));
+  await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "tread" && eq(peer.people.get(owner.name)?.pose?.pose, heldArm));
   const posedSwimmer = await read(peer, { who: owner.name, detail: "bones" });
   check("a treading body's held pose wins the bone it names, and the stroke still moves the others", posedSwimmer.ok
     && near(posedSwimmer.joints?.leftUpperArm?.rotation, turned)
@@ -139,9 +135,9 @@ try {
     && !near(posedSwimmer.joints.rightUpperArm.rotation, stand.joints.rightUpperArm.rotation),
     JSON.stringify([posedSwimmer.joints?.leftUpperArm?.rotation, posedSwimmer.joints?.rightUpperArm?.rotation, stand.joints?.rightUpperArm?.rotation]));
   owner.clip = "idle"; owner.setPose(null); owner.tick();
-  await until(() => peer.people.get(owner.name)?.pose?.clip === "idle" && !peer.people.get(owner.name)?.pose?.pose);
+  await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "idle" && !peer.people.get(owner.name)?.pose?.pose);
   peer.clip = "sit"; peer.tick();
-  await until(() => owner.people.get(peer.name)?.pose?.clip === "sit");
+  await waitUntil("the peer's sample", () => owner.people.get(peer.name)?.pose?.clip === "sit");
   owner.reaches.set("rightHand", { t: { who: peer.name, point: "knee_r" } });
   const targetSeated = await read(owner, { detail: "all", points: ["hand_r"] });
   check("a reach toward an unevaluated seated body does not claim arrival or return usable targets",
@@ -153,7 +149,7 @@ try {
   owner.heldPose = bones; owner.heldPoseAuthored = false; owner.clip = "idle";
   check("internal retired physics does not leak into self readback", (await read(owner)).overrides.state === "none");
   owner.clip = "ragdoll"; owner.tick();
-  await until(() => peer.people.get(owner.name)?.pose?.clip === "ragdoll");
+  await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "ragdoll");
   check("physics is separate from authored holding", (await read(owner)).overrides.source === "physics" && (await read(peer, { who: owner.name })).overrides.source === "physics");
   owner.setPose(null); owner.tick();
 
@@ -188,20 +184,20 @@ try {
 
   const generation = (await read(owner)).bodyGeneration.value;
   owner.setAvatar("fixtures/large-body.vrm");
-  await until(() => peer.people.get(owner.name)?.avatar === "fixtures/large-body.vrm");
+  await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.avatar === "fixtures/large-body.vrm");
   const big = await read(owner, { detail: "bones" });
   check("body replacement invalidates geometry, including scale", big.bodyGeneration.value !== generation && Math.abs(big.joints?.head?.selfPosition[1] - 3.6) < 1e-6, JSON.stringify(big.geometry));
   const old = await agent("body-vrm0", "fixtures/old-body.vrm");
   const v0 = await read(old, { detail: "bones" });
   check("VRM0 half-turn is preserved", near(v0.joints?.leftHand?.selfPosition, [-.8, 1.5, 0]));
   owner.close();
-  await until(() => !peer.people.has(owner.name));
+  await waitUntil("the peer's sample", () => !peer.people.has(owner.name));
   peer.notePose(owner.name, { p: [1, 0, 1], yaw: 0, speed: 0, clip: "idle" });
   check("a late frame cannot resurrect a departed body", !peer.people.has(owner.name));
   check("leave removes the public body", (await read(peer, { who: owner.name })).wire.isError === true);
   check("disconnected self is explicitly stale", (await read(owner)).freshness.status === "stale");
   const replacement = await agent("body-owner", "fixtures/test-body.vrm");
-  await until(() => !!peer.people.get(replacement.name)?.pose);
+  await waitUntil("the peer's sample", () => !!peer.people.get(replacement.name)?.pose);
   check("same-name rejoin gets a new observer generation", (await read(peer, { who: replacement.name })).bodyGeneration.value !== other.bodyGeneration.value);
   const p = peer.people.get(replacement.name)!;
   const receipt = p.observedAt; p.observedAt = Date.now() - 6000;
@@ -264,6 +260,11 @@ try {
       ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot") { clearTimeout(t); res(); } };
       ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: "body-test", id: OWNER, avatar: AVATAR, replica: true }));
     });
+    // a reach onto another body is behind its touch gate, off by default (R 10-28): the owner opens it, as a browser would
+    let touchOn: any = null; const prev = ws.onmessage;
+    ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "reply" && m.id === "touch-on") touchOn = m; prev?.call(ws, ev); };
+    ws.send(JSON.stringify({ type: "request", id: "touch-on", verb: "consent", args: { touch: true } }));
+    check("(setup) the owner opens its touch gate", (await tryUntil("the consent reply", () => touchOn, { ms: 5000 }))?.ok === true, show(touchOn));
     /** client/lib/net.js sendPose's packet, field for field; body fields ONLY through the real bodyWire, unless `raw`. */
     function ownerPacket(scale: unknown, extra: Record<string, unknown> = {}, raw = false) {
       const pose: Record<string, unknown> = { p: ROOT, yaw: YAW, speed: 0, clip: "idle", pitch: 0 };

@@ -3,12 +3,10 @@
 // Absence is denial (declaration.ts §5.4); a peer with no declaration at all keeps everything.
 
 import { capabilityMatches, CAP } from '../mcpl/declaration.ts';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (name, cond, detail = '') => {
-  if (cond) { pass++; console.log(`ok   ${name}`); }
-  else { fail++; console.log(`FAIL ${name}${detail ? ' — ' + detail : ''}`); }
-};
+const S = suite("channel-cap-gate");
+const ok = (name, cond, detail) => S.check(name, cond, detail);
 
 // the gate, extracted as net-server implements it (the wiring check at the bottom is the real assertion):
 // plain-MCP hosts get no channel verbs, and a 0.5+ host is denied until its first featureSets/update (§5.3)
@@ -60,5 +58,4 @@ ok('0.5 host whose featureSets/update OMITS effectiveCapabilities stays denied (
      Object.values(FEATURE_SETS).every((fs) => !fs.uses.includes('channels.streaming')));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

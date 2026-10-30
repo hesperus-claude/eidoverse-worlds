@@ -3,6 +3,7 @@
 // body the latest `start` named. The wire is typing-mcpl-test.ts. Waits poll with a deadline, never a fixed sleep.
 
 import { TypingRelay, TYPING_REASSERT_MS, TYPING_OVERDUE_MS } from "../mcpl/typing-relay.ts";
+import { suite } from "./protocol/suite.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const waitUntil = async (pred: () => boolean, ms: number) => {
@@ -10,11 +11,8 @@ const waitUntil = async (pred: () => boolean, ms: number) => {
   while (Date.now() < until) { if (pred()) return true; await sleep(5); }
   return pred();
 };
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("typing-relay");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 const REASSERT = 40, OVERDUE = 200, DEADLINE = 2000;
 const body = () => { const b = { signals: 0, typing() { b.signals++; } }; return b; };
@@ -116,5 +114,4 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -5,6 +5,7 @@ import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
 import { drive as finish, valid } from "./structure-oracle.ts";
+import { pause } from "./protocol/wait.ts";
 let checks=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);checks++;console.log("✓ "+label);};
 const agents:WorldAgent[]=[];
@@ -17,7 +18,7 @@ const ent=(id:string,structure:any)=>({id,model:"",pos:[0,0,0],yaw:0,scale:1,str
 // within this bound came from its own branch (stop, replacement, refusal,
 // close), not from the walk's timer.
 const SETTLE_MS=50;
-const settled=(p:Promise<boolean>)=>Promise.race([p,Bun.sleep(SETTLE_MS).then(()=>"pending" as const)]);
+const settled=(p:Promise<boolean>)=>Promise.race([p,pause("a walk still pending stays pending",SETTLE_MS).then(()=>"pending" as const)]);
 const LONG=60_000;
 // A wall the walk from (0.5,0.5) to (2.5,0.5) must go around, through the
 // house's doors: its route has legs to spare at any point before arrival.
@@ -87,7 +88,7 @@ try{
  const old=e.walkTo(2.5,.5,true,20,0);
  const newer=e.walkTo(2.5,.5,true,LONG,0);
  const target=JSON.stringify((e as any).target);
- await Bun.sleep(60);
+ await pause("the superseded walk's 20 ms timer fires",60);
  check(await settled(old)===false&&await settled(newer)==="pending"&&JSON.stringify((e as any).target)===target&&(e as any).walkHeightAt!==null,
   "a superseded walk's timer leaves its replacement's target and basis in place");
  e.stop();

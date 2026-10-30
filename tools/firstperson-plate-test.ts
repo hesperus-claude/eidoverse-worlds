@@ -20,6 +20,7 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 globalThis.fetch = (() => new Promise(() => {})) as any;   // avatar.js's gesture defs ask the server; there is none here
 
@@ -28,11 +29,8 @@ const ctl: any = await import('../client/lib/controller.js');
 const { Avatar } = await import('../client/lib/avatar.js');
 const { THREE, canvas } = stub;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("firstperson-plate");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // a body with the real Avatar's ownPlateHidden, and just enough of the rest for updateMe
 const me: any = Object.assign(Object.create(Avatar.prototype), {
@@ -55,5 +53,4 @@ check('wheel back out → third person: it shows again', ctl.firstPerson === fal
 me.hideLabel = true; tick();
 check('presenting in VR (xr.js hideLabel) still hides it in third person', me.ownPlateHidden === true);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

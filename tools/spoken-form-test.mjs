@@ -1,11 +1,8 @@
 // spoken-form — what the larynx gets. Table-driven, executable.
 import { spokenForm, ttsChunks } from '../client/lib/tts-chunk.js';
-let pass = 0, fail = 0;
-const t = (name, got, want) => {
-  const ok = got === want;
-  ok ? pass++ : fail++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : `\n      got:  ${JSON.stringify(got)}\n      want: ${JSON.stringify(want)}`}`);
-};
+import { suite } from './protocol/suite.ts';
+const S = suite('spoken-form');
+const t = (name, got, want) => S.check(name, got === want, `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 t('fenced code never speaks', spokenForm('before ```js\nconst x = 1;\n``` after'), 'before after');
 t('unterminated fence drops to end', spokenForm('look: ```raw dump of everything'), 'look:');
 t('bare URL becomes link', spokenForm('grab https://a-b.trycloudflare.com/?k=v&x=1 now'), 'grab link now');
@@ -18,5 +15,4 @@ t('emphasis + emoji still stripped', spokenForm('*hello* 🌒 **there**'), 'hell
 t('spaced colon untouched (prosodic already)', spokenForm('one thing: the gate'), 'one thing: the gate');
 // end-to-end: chunks of a fenced-only message = nothing to say
 t('fence-only utterance is silent', JSON.stringify(ttsChunks('```\nlogs\n```')), '[]');
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

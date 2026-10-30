@@ -16,7 +16,7 @@
 //   in VR    three swapped in the XR camera, so the call built the XR variant → also compile with the main camera
 //            into a 1×1 twin of the desktop framebuffer target (same attachment key, so the same render context
 //            the desktop frames use; binding it is also what keeps three from swapping the XR camera back in)
-// tools/xr-dual-warm-probe.mjs measures it: enter and exit build nothing for content that arrived in the other mode.
+// tools/xr-dual-warm-measure.mjs measures it: enter and exit build nothing for content that arrived in the other mode.
 import { withXREyes } from './xrpass.js';
 
 export function installDualWarm({ THREE, renderer, camera, presenting }) {
@@ -55,7 +55,7 @@ export function installDualWarm({ THREE, renderer, camera, presenting }) {
   // `_renderTarget === null`) would compile STRAIGHT INTO the eye buffer — a render context the headset's frames
   // never use, so they rebuilt every render object at draw time (pipelines are shared: keyed on formats). A bound
   // target that is just the leaked output target is treated as unbound for the compile's synchronous pass
-  // (tools/xr-dual-warm-probe.mjs).
+  // (tools/xr-dual-warm-measure.mjs).
   const compileAsRendered = (obj, cam, target, onProgress) => {
     const rt = renderer.getRenderTarget(), out = renderer.getOutputRenderTarget();
     if (rt === null || rt !== out) return compile(obj, cam, target, onProgress);

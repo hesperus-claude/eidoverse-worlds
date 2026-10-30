@@ -13,12 +13,10 @@
 import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { APPROACH_DWELL_MS } from "../mcpl/denoise.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("approach-seed");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const pose = (x: number, z: number, clip = "idle", extra: Record<string, unknown> = {}) =>
   ({ p: [x, 0, z], yaw: 0, speed: 0, clip, ...extra });
@@ -85,5 +83,4 @@ function rig() {
     pings().length === 0 && acts.length === 0, JSON.stringify(acts));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -7,6 +7,7 @@
 // → ?webgl=1) isn't bound here: ?xr=1 without XRGPUBinding boots WebGL (backend_choice.js decideBackend).
 // Usage: bun tools/xr-lifecycle-probe.mjs [origin]
 import { launchBrowser, ownedWorld, checker, iwerInit, enterVR } from './probe-harness.mjs';
+import { pause } from './protocol/wait.ts';
 
 const { check, done } = checker();
 // IWER's device loop rides the NATIVE clock, as a headset runtime does (probe-harness iwerSource). Both clocks run at
@@ -162,7 +163,7 @@ check('clicking the visor drove the real enterVR to a granted session',
 check('installEntryClock SHIMMED window.requestAnimationFrame on the NON-EMULATED product path',
   afterEnter.rafIsNative === false,
   `window.rAF is still native — the install was bypassed (IWER visible to the product? ${await ev(() => !!globalThis.IWER)})`);
-await pg.waitForTimeout(600);
+await pause('the session frame loop runs for 600 ms', 600);
 const sf = await ev(() => window.__probe.sessionFrames);
 check('the XR frame loop is DRIVEN: session callbacks fired after the grant', sf > 5, `sessionFrames=${sf} in 600 ms`);
 
@@ -206,7 +207,7 @@ await ev(() => { window.__probe.failNext = 2; window.__probe.requests = 0; windo
 await clickVisor();
 // two requests must happen (click + one retry); then one more full retry window must pass with NO third
 await pg.waitForFunction(() => window.__probe.requests >= 2, null, { timeout: 15000 }).catch(() => {});
-await pg.waitForTimeout(2500);   // > BUSY_RETRY_MS (1500): a third request would have landed by now
+await pause('> BUSY_RETRY_MS (1500): a third request would have landed by now', 2500);
 const afterGiveUp = await ev(() => ({ requests: window.__probe.requests, grants: window.__probe.grants }));
 check('a SECOND busy failure gives up rather than retrying forever',
   afterGiveUp.requests === 2 && afterGiveUp.grants === 0,

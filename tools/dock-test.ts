@@ -22,6 +22,8 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
 // the chrome ui.js reaches for at import (index.html's ids)
@@ -48,12 +50,9 @@ localStorage.setItem(`ew-frame-${OLD}`, RENAMED_FRAME);
 const ui = await import("../client/lib/ui.js");
 const { initDock, registerPanel, dockPins, toggleEMenu, makeSection, settingsFrame, paintPresence } = ui;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const S = suite("dock");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+const tick = () => new Promise((r) => setImmediate(r));
 {
   // R, gym 10-17 20:00: the bar sat "closer to the dock than it used to" — its saved place was under the old id
   const p = JSON.parse(localStorage.getItem("ew-dock-pins") ?? "null");
@@ -502,7 +501,7 @@ console.log("DOCK — the waterfall: its top level (owner, 10-01)");
 console.log("DOCK — the waterfall: what dismisses it, and what does not");
 { const pd = (t: EventTarget, o: PointerEventInit = {}) => t.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, ...o }));
   const pm = (t: EventTarget, type = "mouse") => t.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: type }));
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms: number) => pause("the waterfall's dismiss windows are what is tested", ms);
   openPanels();
   row("chat")!.click(); row("chat")!.click();
   pin("world")!.click(); pin("world")!.click();
@@ -695,5 +694,4 @@ console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePe
 
   outer.remove(); }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -7,8 +7,9 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/quadcolour-test.mjs
 import { gradeSRGB, GRADE_DEFAULT, GRADE_RANGE, loadGrade, LUMA, acesFilmicInverseJS } from '../client/lib/quadgrade.js';
 import { readFileSync } from 'node:fs';
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("quadcolour");
+const check = (name, ok, note) => S.check(name, ok, note);
 const near = (a, b, e = 1e-9) => a.every((v, i) => Math.abs(v - b[i]) <= e);
 const luma = (c) => c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
 const brand = [0x8f / 255, 0xe8 / 255, 0xc8 / 255], panel = [5 / 255, 20 / 255, 20 / 255], grey = [0.3, 0.3, 0.3];
@@ -64,5 +65,4 @@ console.log('INVERSE ACES (the JS twin against three\'s forward)');
   // the shader reads the same arrays, no literals of its own: tools/one-binding-test.ts
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

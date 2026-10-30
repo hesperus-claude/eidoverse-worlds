@@ -9,14 +9,12 @@
 // no network, no real OPFS/worker — each fault is injected, not awaited.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const S = suite("tts-fault");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // ---- module substitution (same doctrine as tts-test.ts) --------------------
 const stubs = await import("./voice-stubs.mjs");
@@ -140,14 +138,14 @@ console.log("\n— phonemizer worker: death rejects pending; recovery works —"
   const inflight = phon.phonemize("hello", { }, wasmPaths);
   let rejected = "";
   inflight.catch((e: unknown) => { rejected = String(e); });
-  await sleep(20);
+  await pause("a call to a hung worker stays pending", 20);
   check("call against the hung worker is pending (precondition)", rejected === "");
   // the worker dies — every in-flight call must fail LOUDLY, now. The fake
   // registers every instance, so the harness reaches the same onerror hook the
   // browser would fire.
   check("(harness) worker instance constructed", instance >= 1, `${instance}`);
   _workers[0].onerror?.({ message: "wasm OOM" });
-  await sleep(20);
+  await tryUntil("the pending call rejects", () => rejected, { ms: 2000 });
   check("worker death rejects the pending call with the cause", /died|OOM/i.test(rejected), rejected.slice(0, 60));
   check("phonReady() is false after a death (no ghost readiness)", phon.phonReady() === false);
   // recovery: next call constructs a fresh worker (instance 2 answers)
@@ -187,14 +185,14 @@ console.log("\n— endpoint voice: socket death settles synthesis; queue never w
   const a = await tts.speak("answered");
   check("an answered synthesis speaks", a === true);
   const orphan = tts.speak("orphaned");        // in flight, never answered
-  await sleep(10);
+  await pause("the orphan's request leaves before its synthesizer goes", 10);
   sockets[0].close();                          // the synthesizer goes away
-  const o = await Promise.race([orphan, sleep(3000).then(() => "HUNG")]);
+  const o = await Promise.race([orphan, pause("an orphan must fail, not hang", 3000).then(() => "HUNG")]);
   check("socket close settles the in-flight synthesis (no hang)", o !== "HUNG", String(o));
   check("a dead endpoint yields a refusal, not fake audio", o === false);
   // and the queue is not wedged: nothing further can synth (socket dead), but
   // speak() must still return promptly with a refusal
-  const after = await Promise.race([tts.speak("after death"), sleep(3000).then(() => "HUNG")]);
+  const after = await Promise.race([tts.speak("after death"), pause("a speak after death must answer, not hang", 3000).then(() => "HUNG")]);
   check("speak() after endpoint death returns promptly", after !== "HUNG", String(after));
 }
 
@@ -219,5 +217,4 @@ console.log("\n— panel honesty: the row's state matches the provider's —");
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

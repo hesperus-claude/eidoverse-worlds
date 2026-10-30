@@ -5,6 +5,7 @@
 // so this can't show the program-cache hit itself (that needs the cloud march): it checks the retention the hit rests on.
 //   bun tools/sky-bakegraph-probe.mjs
 import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
+import { tryUntil } from './protocol/wait.ts';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'bakegraph', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser(); const pg = await page();
@@ -12,7 +13,7 @@ const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
 const lines = []; pg.on('console', (m) => lines.push(m.text()));
 try {
   await skyBoot(pg, world, 'bakegraph', { sky: { hours: 12, rate: 0, clouds: 'clear', weather: 'clear' } });
-  for (let i = 0; i < 180 && !lines.some((l) => /the real sky is up/.test(l)); i++) await pg.waitForTimeout(500);
+  await tryUntil('the real sky is up', () => lines.some((l) => /the real sky is up/.test(l)), { ms: 90_000, step: 500 });
   const r = await pg.evaluate(async () => {
     const { api, sys } = (await import('./lib/sky.js')).skyForProbe();
     const ev = []; const seen = new Map(); let n = 0;

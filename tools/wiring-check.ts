@@ -5,15 +5,13 @@
 // (the door-media-whitelist idiom). A row with a `not` needs a positive sibling: an absent subject is not clean.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const read = (f: string) => readFileSync(join(ROOT, f), "utf8");
 const walkJs = (d: string): string[] => readdirSync(join(ROOT, d)).flatMap((f) => { const p = `${d}/${f}`; return statSync(join(ROOT, p)).isDirectory() ? walkJs(p) : p.endsWith(".js") ? [p] : []; });
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("wiring");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 type Row = { name: string; file: string; scope?: (s: string) => string; must?: RegExp[]; not?: [RegExp, string][]; count?: [RegExp, number]; before?: [string, string] };
 const fnBody = (sig: string) => (s: string) => { const a = s.indexOf(sig); return a < 0 ? "" : s.slice(a, s.indexOf("\n}", a) + 2); };
@@ -104,5 +102,4 @@ for (const r of ROWS) {
   }
 }
 
-console.log(`\nwiring: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

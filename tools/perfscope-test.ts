@@ -16,6 +16,7 @@ plugin({ name: 'perfscope-stubs', setup(b) {
   b.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('./loadwork-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub = await import('./perfscope-stub.mjs');
@@ -23,12 +24,9 @@ const { THREE, scene, entities, entityMeta, renders } = stub;
 const ps = await import('../client/lib/perfscope.js');
 const render = await import('../client/lib/render.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const S = suite("perfscope");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+const tick = () => new Promise((r) => setImmediate(r));
 
 // ---- the fixture: three entities, a person, two fabric meshes, an instanced crowd, a hidden LOD
 const box = () => new THREE.BoxGeometry(1, 1, 1);                       // 12 tris
@@ -233,5 +231,4 @@ console.log('PERFSCOPE — a tier threshold is CROSSED, not reached (tierOf: v >
   check('5100 tris is tier 1', hex(veilOf(overMesh)!.material) === T[1], hex(veilOf(overMesh)!.material));
   ps.setMode('off'); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

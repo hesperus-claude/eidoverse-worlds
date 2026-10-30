@@ -359,7 +359,7 @@ async function sfuPublish() {
     micStream = s;
     // addTrack PICKS A TRANSCEIVER FOR YOU, AND WITH 2+ PEOPLE IT PICKS A SPEAKER
     // ROUTE, so the server never subscribes. Put the track on the one the SERVER
-    // offered for it, the floor (docs/research/sfu-client-negotiation.md; repro: tools/mini-sfu-test.mjs).
+    // offered for it, the floor (docs/research/sfu-client-negotiation.md; repro: tools/mini-sfu-repro.mjs).
     const track = s.getTracks()[0];
     // Order: the sender we already own (a SWAP: replaceTrack, no renegotiation)
     // → the inactive floor (first publish) → bare addTrack only when neither

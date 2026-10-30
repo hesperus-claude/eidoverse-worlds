@@ -11,13 +11,11 @@
 // invisible to the bundler, in exactly the recovery this suite pins.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("tts");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- fakes ----------------------------------------------------------------
@@ -349,5 +347,4 @@ console.log("\n— negative control: a disconnected feature must FAIL this suite
   tts.setTtsSource(engine, "fake-engine"); tts.setTtsEnabled(true);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

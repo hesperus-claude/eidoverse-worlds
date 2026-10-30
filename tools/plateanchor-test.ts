@@ -18,6 +18,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'client-stubs',
@@ -31,11 +32,8 @@ plugin({
 const PA: any = await import('../client/lib/plateanchor.js');
 const { crownEstimate, plateGap, plateAnchor, lieAmount, smoothY, TAU, DEAD } = PA;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("plateanchor");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
 const J = (x: any) => JSON.stringify(x, (_k, v) => typeof v === 'number' ? +v.toFixed(4) : v);
 
@@ -379,5 +377,4 @@ console.log('avatar.js:');
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

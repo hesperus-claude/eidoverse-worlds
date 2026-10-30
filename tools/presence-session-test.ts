@@ -6,7 +6,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { scratchSequencer, mkCheck, sleep } from './harness.ts';
+import { scratchSequencer, mkCheck } from './harness.ts';
+import { until as waitUntil } from './protocol/wait.ts';
 const { check, tally } = mkCheck();
 const data = mkdtempSync(join(tmpdir(), 'presence-data-'));
 // (ported 10-17: the world is founded first — joining never founds one — and joins fold the log, replica: true)
@@ -18,27 +19,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const open: WebSocket[] = [];
 let completed = false;
 
-async function until(test: () => boolean, timeout = 8000) {
-  const end = Date.now() + timeout;
-  while (!test()) {
-    if (Date.now() > end) throw new Error('timed out waiting for wire event');
-    await sleep(25);
-  }
-}
+const seen = (test: () => boolean, ms = 8000) => waitUntil('the wire event', test, { ms, step: 25 });
 /** Join as `id`, with `session` in the join when given; resolves after the snapshot. */
 async function join_(id: string, session?: unknown) {
   const ws = new WebSocket(h.BASE.replace('http', 'ws') + '/ws');
   const got: any[] = [];
   ws.onmessage = e => got.push(JSON.parse(String(e.data)));
-  await until(() => ws.readyState === 1);
+  await seen(() => ws.readyState === 1);
   ws.send(JSON.stringify({ type: 'join', token: 'test-door', world: 'presence', id, replica: true, ...(session === undefined ? {} : { session }) }));
-  await until(() => got.some(m => m.type === 'snapshot'));
+  await seen(() => got.some(m => m.type === 'snapshot'));
   open.push(ws);
   return { ws, got };
 }
 async function closeLeg(ws: WebSocket) {
   ws.close();
-  await until(() => ws.readyState === 3);
+  await seen(() => ws.readyState === 3);
 }
 
 try {
@@ -47,14 +42,14 @@ try {
 
   const page = 'page-0123456789abcdef';
   let speaker = await join_('speaker', page);
-  await until(() => arrivals().length === 1);
+  await seen(() => arrivals().length === 1);
   check("a page's id is its session", arrivals()[0].session === page, JSON.stringify(arrivals()[0]));
 
   // The same page reconnects: same id, same session, so a listener keeps the
   // speaker's utterance memory (its counter goes on).
   await closeLeg(speaker.ws);
   speaker = await join_('speaker', page);
-  await until(() => arrivals().length === 2);
+  await seen(() => arrivals().length === 2);
   check('a reconnect of the same page keeps its session', arrivals()[1].session === page);
 
   const fresh = await join_('fresh-listener');
@@ -64,12 +59,12 @@ try {
   // A join without an id (an agent, an older client) gets a token for its leg.
   await closeLeg(speaker.ws);
   speaker = await join_('speaker');
-  await until(() => arrivals().length === 3);
+  await seen(() => arrivals().length === 3);
   const token = arrivals()[2].session;
   check('a join without a session id gets a fresh per-leg token', typeof token === 'string' && UUID.test(token), token);
   await closeLeg(speaker.ws);
   speaker = await join_('speaker');
-  await until(() => arrivals().length === 4);
+  await seen(() => arrivals().length === 4);
   check('each such leg gets its own token', UUID.test(arrivals()[3].session) && arrivals()[3].session !== token);
   // A snapshot repeats the token its leg's arrive carried, so a listener
   // doesn't read it as a new sender.
@@ -82,7 +77,7 @@ try {
     await closeLeg(speaker.ws);
     const before = arrivals().length;
     speaker = await join_('speaker', ok);
-    await until(() => arrivals().length === before + 1);
+    await seen(() => arrivals().length === before + 1);
     check(`a ${ok.length}-character session id is relayed`, arrivals()[before].session === ok, arrivals()[before].session);
   }
 
@@ -91,7 +86,7 @@ try {
     await closeLeg(speaker.ws);
     const before = arrivals().length;
     speaker = await join_('speaker', bad);
-    await until(() => arrivals().length === before + 1);
+    await seen(() => arrivals().length === before + 1);
     const got = arrivals()[before].session;
     check(`an unusable session id (${JSON.stringify(bad).slice(0, 20)}) is replaced by a token`, UUID.test(got), got);
   }

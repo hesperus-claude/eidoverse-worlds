@@ -1,4 +1,5 @@
-// bun tools/glbperf-parity-probe.mjs — the library card's rank (server/glbperf.ts, read from the GLB) equals the
+// A tool, not a gate test: needs the host library originals (LIB) and Chromium; the server half is glbperf-file-test.
+// bun tools/glbperf-parity.mjs — the library card's rank (server/glbperf.ts, read from the GLB) equals the
 // loupe's (client perfscope.statsOf on the model the CLIENT's own loader builds from the same bytes). Ten library
 // originals chosen for spread: the Commons palm (alpha), the excavator (tris), a crate (textures), and sizes across the
 // range. Per model: tris, draws, mats, alpha, bones exact; texMB within 1%; rank and worst category equal.

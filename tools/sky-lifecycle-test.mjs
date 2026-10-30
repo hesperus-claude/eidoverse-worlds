@@ -23,16 +23,18 @@
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { mock } from 'bun:test';
+import { pause, tryUntil } from './protocol/wait.ts';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ url: 'http://localhost/?world=t&name=p' });
 
 const TS = 50;
 const realST = globalThis.setTimeout.bind(globalThis), realCT = globalThis.clearTimeout.bind(globalThis);
 globalThis.setTimeout = (fn, ms = 0, ...a) => realST(fn, Math.max(0, ms / TS), ...a);
 globalThis.clearTimeout = (h) => realCT(h);
-const sleep = (ms) => new Promise((r) => realST(r, ms / TS));   // in SCALED ms, like the product's own timers
+const elapse = (why, ms) => pause(why, ms);   // SCALED ms (the patched setTimeout above scales it), like the product's own timers: elapsed time is what's tested
 
-let pass = 0, fail = 0;
-const check = (n, ok, d = '') => { ok ? pass++ : fail++; console.log(`  ${ok ? '\x1b[32m✓' : '\x1b[31m✗'}\x1b[0m ${n}${ok ? '' : `  ${typeof d === 'string' ? d : JSON.stringify(d)}`}`); };
+const S = suite("sky-lifecycle");
+const check = (n, ok, d) => S.check(n, ok, d);
 
 const THREE = await import('three');
 const lib = (f) => fileURLToPath(new URL(`../client/lib/${f}`, import.meta.url));
@@ -151,8 +153,8 @@ const liveInHeadset = () => frames.filter((f) => f.xr && f.live && !f.baked);
 const enter = () => { renderer.xr.isPresenting = true; bus.emit('xr:state', true); };
 const leave = () => { renderer.xr.isPresenting = false; bus.emit('xr:state', false); };
 const curtain = () => bus.emit('xr:curtain-shown');
-const until = async (p, ms = 60000) => { const t0 = Date.now(); while (!p()) { if (Date.now() - t0 > ms / TS) return false; await sleep(10); } return true; };
-const settle = () => sleep(3000);   // a few scaled seconds: finishSky's 1 s settle, swaps, bakes
+const reached = async (p, ms = 60000) => !!(await tryUntil('the sky condition', p, { ms: ms / TS, step: 10 }));
+const settle = () => elapse("finishSky's 1 s settle, swaps, bakes", 3000);   // a few scaled seconds
 const bakesSince = (i) => BAKE.runs.slice(i);
 let T = 0;
 const ARGS = { system: 'eidoverse', world: 'earth', clouds: 'cumulus', weather: 'clear' };
@@ -182,7 +184,7 @@ try {
     await freshSky('low');
     await sky.setCloudQuality('off'); await settle();          // arrive fresh: an off → low rebuild, caught mid-arrival
     const p = sky.setCloudQuality('low');                       // rebuild starts; the sky is ARRIVING (gradient up)
-    await sleep(20);
+    await elapse("the product's scaled timers run", 20);
     const arriving = interim;
     await sky.setCloudQuality('high');                          // queued: pendingTier = high
     startFrames();
@@ -206,16 +208,16 @@ try {
     await freshSky('high');
     // (a) exit before the cap's deferred flip fires: the first session's timer must not apply later
     enter(); leave();
-    await sleep(6000);                                          // past the 4 s fallback timer
+    await elapse("past the 4 s fallback timer", 6000);                                          // past the 4 s fallback timer
     check('quick exit: the first session\'s cap timer never applies (desktop stays high)',
       sky.getCloudQuality() === 'high' && !sky.cloudCap(), { q: sky.getCloudQuality(), cap: sky.cloudCap() });
     // (a2) exit and re-enter INSIDE the first timer's window, no curtain yet: at the moment the FIRST session's 4 s timer
     //      would fire, the second session must still be waiting on its own curtain (review 10b L1: the old timer applied
     //      the cap early, its bake taking the GPU before the headset's first frames)
-    enter(); await sleep(2500); leave(); enter();
-    await sleep(2000);                                          // 4.5 s after the FIRST entry, 2 s after the second
+    enter(); await elapse("the product's scaled timers run", 2500); leave(); enter();
+    await elapse("4.5 s after the FIRST entry, 2 s after the second", 2000);                                          // 4.5 s after the FIRST entry, 2 s after the second
     const early = sky.getCloudQuality();
-    await sleep(3000); await settle();                          // the second session's own fallback timer
+    await elapse("the second session's own fallback timer", 3000); await settle();                          // the second session's own fallback timer
     const own = sky.getCloudQuality();
     check('re-entry inside the first timer\'s window: the stale timer doesn\'t flip the cap early', early === 'high', early);
     check('…the second session\'s own timer does (medium)', own === 'medium' && !!sky.cloudCap(), own);
@@ -225,10 +227,10 @@ try {
     const r0 = BAKE.runs.length;
     let open; BAKE.gate = new Promise((r) => { open = r; });
     startFrames();
-    enter(); curtain(); await sleep(300);                       // the cap's swap is baking (gated)
+    enter(); curtain(); await elapse("the cap's swap is baking (gated)", 300);                       // the cap's swap is baking (gated)
     const bakingInFirst = bakesSince(r0).length > 0;
-    leave(); await sleep(300);
-    enter(); curtain(); await sleep(300);
+    leave(); await elapse("the product's scaled timers run", 300);
+    enter(); curtain(); await elapse("the product's scaled timers run", 300);
     open(); BAKE.gate = null;
     await settle();
     stopFrames();
@@ -250,9 +252,9 @@ try {
     const r0 = BAKE.runs.length, a0 = SB.attaches.length;
     BAKE.fail = 1;
     const flip = sky.setCloudQuality('low');                    // medium → low: a baked → baked swap, a new bake
-    await sleep(200);
+    await elapse("the product's scaled timers run", 200);
     const afterFail = { live: domes().some((d) => d.parent), baked: !!SB.baked, runs: bakesSince(r0).map((r) => r.ok) };
-    await flip; await sleep(15000); await settle();              // past the 10 s retry
+    await flip; await elapse("past the 10 s retry", 15000); await settle();              // past the 10 s retry
     const runs = bakesSince(r0).map((r) => r.ok);
     check('failed bake: no dome attaches over the undrawn target; the live clouds are on screen instead',
       afterFail.runs[0] === false && !afterFail.baked && afterFail.live, afterFail);
@@ -263,7 +265,7 @@ try {
     const r1 = BAKE.runs.length, a1 = SB.attaches.length;
     BAKE.fail = 2;
     await sky.setCloudQuality('low');
-    await sleep(30000); await settle();
+    await elapse("the product's scaled timers run", 30000); await settle();
     const runs2 = bakesSince(r1).map((r) => r.ok);
     check('two failures: exactly one retry (two bakes, not three), no dome attached, the live clouds stay',
       JSON.stringify(runs2) === '[false,false]' && SB.attaches.length === a1 && !SB.baked && domes().some((d) => d.parent),
@@ -273,15 +275,15 @@ try {
     enter(); await settle();
     BAKE.fail = 1;
     leave(); await sky.setCloudQuality('low'); enter();        // (a swap only runs outside a session: set it up, re-enter)
-    await sleep(200);
+    await elapse("the product's scaled timers run", 200);
     const inXR = { live: domes().some((d) => d.parent), baked: !!SB.baked, interim };
     await sky.applySky({ ...ARGS, ts: T });                     // the product's periodic re-apply (holdLiveInHeadset runs)
-    await sleep(50);
+    await elapse("the product's scaled timers run", 50);
     check('in a headset, a failed bake puts the live clouds back rather than leave the sky black',
       inXR.live && !inXR.baked, inXR);
     check('…and a re-apply does not hold them out again (attachFailedFor)', domes().some((d) => d.parent) || !!SB.baked,
       { live: domes().some((d) => d.parent), baked: !!SB.baked });
-    await sleep(15000); await settle();
+    await elapse("the product's scaled timers run", 15000); await settle();
     leave(); await settle();
   }
 
@@ -382,6 +384,26 @@ try {
   check('no reported errors', reports.length === 0, reports.slice(0, 3));
 } catch (e) { check('ran', false, e?.stack ?? String(e)); }
 
-if (fail) { console.log('\n  last sky lines:'); for (const l of log.slice(-25)) console.log(`    ${l.slice(0, 170)}`); }
-console.log(`${fail ? '\x1b[31m' : '\x1b[32m'}${pass} passed, ${fail} failed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+// the baked sky's strips (sky_bands.js bandCuts): every band has width, bands cut on texel rows, cover [0,1] in order,
+// cost about the same
+{
+  const { bandCuts } = await import('../client/lib/sky_bands.js');
+  // the same row weight bandCuts uses (the march's chord estimate), to measure each band's cost
+  const weight = (v) => { const lat = (0.5 - v) * Math.PI; return 0.05 + (lat <= 0 ? 0.05 : Math.min(1 / Math.max(Math.sin(lat), 0.03), 30)); };
+  for (const [W, H, P, B] of [[4096, 2048, 8, 0.4e6], [2048, 1024, 8, 0.4e6], [1024, 512, 4, 0.4e6], [4096, 2048, 8, 1.5e6], [64, 8, 8, 1]]) {
+    const tag = `bands ${W}x${H}x${P}@${B}`;
+    const cuts = bandCuts(W, H, P, B);
+    check(`${tag}: starts at 0, ends at 1`, cuts[0] === 0 && cuts.at(-1) === 1);
+    check(`${tag}: strictly increasing (no zero-width band)`, cuts.every((v, i) => i === 0 || v > cuts[i - 1]), JSON.stringify(cuts.slice(0, 12)));
+    check(`${tag}: every edge on a texel row`, cuts.every((v) => Math.abs(v * H - Math.round(v * H)) < 1e-6));
+    check(`${tag}: no more bands than rows`, cuts.length - 1 <= H);
+    const costs = [];
+    for (let i = 0; i < cuts.length - 1; i++) { let c = 0; for (let r = Math.round(cuts[i] * H); r < Math.round(cuts[i + 1] * H); r++) c += weight((r + 0.5) / H); costs.push(c); }
+    const mean = costs.reduce((a, b) => a + b, 0) / costs.length;
+    if (H >= 512) check(`${tag}: the heaviest band ≤ 1.6× the mean (one horizon row is the floor)`, Math.max(...costs) / mean <= 1.6, (Math.max(...costs) / mean).toFixed(2));
+    if (H >= 512) check(`${tag}: at least 90% of the bands asked for`, cuts.length - 1 >= 0.9 * Math.min(H, Math.ceil(W * H * P / B)), `${cuts.length - 1}`);
+  }
+}
+
+if (S.fail) { console.log('\n  last sky lines:'); for (const l of log.slice(-25)) console.log(`    ${l.slice(0, 170)}`); }
+S.done();

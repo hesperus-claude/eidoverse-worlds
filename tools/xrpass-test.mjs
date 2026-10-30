@@ -1,10 +1,11 @@
 // client/lib/xrpass.js: stereo cameras are routed to their own chain map ('xr', 'xr:backSide'), exactly once even
 // when three's own rebuild re-enters get() with the prefixed id; mono cameras and zero-eye array cameras are not.
-// tools/xr-switch-compile-probe.mjs is the real-three half (both variants live side by side; the switch builds nothing).
+// tools/xr-switch-compile-measure.mjs is the real-three half (both variants live side by side; the switch builds nothing).
 import * as THREE from '../client/node_modules/three/build/three.webgpu.js';
 import { separateXRPass, withXREyes } from '../client/lib/xrpass.js';
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("xrpass");
+const check = (name, ok, note) => S.check(name, ok, note);
 class FakeObjects { constructor() { this.seen = []; } get(o, m, s, cam, l, rc, cc, passId) { this.seen.push(passId); if (o === 'rebuild' && this.seen.length === 1) return this.get('again', m, s, cam, l, rc, cc, passId); return passId; } }
 console.log('XR PASS SPLIT');
 const objs = new FakeObjects(), r = { _objects: objs };
@@ -42,4 +43,4 @@ check('withXREyes: hands the camera back with zero eyes (as before a session)', 
   check('withXREyes: …and the last one out hands the camera back with zero eyes', xrCam.cameras.length === 0, xrCam.cameras.length); }
 { let err = null; try { await withXREyes({ xr: { getCamera: () => xrCam, _cameras: [] } }, async () => {}); } catch (e) { err = e; } check('withXREyes: a three without the persistent eyes FAILS LOUDLY (no silent look-alike)', /persistent eyes/.test(err?.message ?? ''), String(err)); }
 { let err = null; try { await withXREyes(fakeXR.renderer, async () => { throw new Error('boom'); }); } catch (e) { err = e; } check('withXREyes: a throwing warm still hands the camera back and propagates', err?.message === 'boom' && xrCam.cameras.length === 0); }
-console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

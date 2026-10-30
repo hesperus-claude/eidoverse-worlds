@@ -1,3 +1,4 @@
+// A tool, not a gate test: a compile-cost measurement in real three + Chromium; the module rules are xrpass-test.
 // VR enter/exit cost (notes: vr-exit-hang-commons.md — "why is entering and leaving VR such a heavy cost?"),
 // measured in REAL three (r186, WebGL backend) in real Chromium, no headset.
 //
@@ -12,7 +13,7 @@
 // pre-warm through a two-eye stand-in camera (xr.getCamera() has ZERO eyes before a session — the old warm
 // compiled the mono variant under a stereo name).
 //
-// Run: node tools/xr-switch-compile-probe.mjs   (~30 s; run it under a memory guard)
+// Run: node tools/xr-switch-compile-measure.mjs   (~30 s; run it under a memory guard)
 import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
 
 const N = Number(process.env.N ?? 60);

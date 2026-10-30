@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { suite } from "./protocol/suite.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(ROOT, 'client/index.html'), 'utf8');
@@ -35,8 +36,8 @@ new Function('globalThis', 'navigator', 'location', 'localStorage', 'document', 
 const decide = g.__ewDecideLite;
 if (typeof decide !== 'function') { console.log('FAIL  decideLite was not exposed'); process.exit(1); }
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("lite-choice");
+const check = (name, ok, note) => S.check(name, ok, note);
 const d = (q, o = {}) => decide({
   params: new URLSearchParams(q), stored: null, lastBootDied: false,
   deviceMemory: 8, gpuApi: true, mobile: true, ...o,
@@ -189,5 +190,5 @@ const bootAt = (search, nav, seed = []) => runPage({ search, nav, st: new Map(se
   check('page: …while a person in the same world still arms it', person.keys.includes('ew-boot-attempt:roam-lobby-1'), JSON.stringify(person));
 }
 
-console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} ok, ${fail} failed`);
-process.exit(fail === 0 ? 0 : 1);
+console.log(`\n${S.fail === 0 ? 'PASS' : 'FAIL'} — ${S.pass} ok, ${S.fail} failed`);
+process.exit(S.fail === 0 ? 0 : 1);

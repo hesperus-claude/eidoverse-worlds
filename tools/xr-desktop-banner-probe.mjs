@@ -3,6 +3,7 @@
 // client + IWER: the desktop view's own killswitch (30 frames over 30 ms) trips on headless frames once released.
 //   bun tools/xr-desktop-banner-probe.mjs
 import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
+import { pause } from './protocol/wait.ts';
 const { check, done } = checker();
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();
@@ -35,7 +36,7 @@ try {
   const box = await ev(() => { const b = document.querySelector('.xr-mirror-off'); if (!b) return null; const r = b.getBoundingClientRect();
     return { cx: Math.round(r.left + r.width / 2 - innerWidth / 2), cy: Math.round(r.top + r.height / 2 - innerHeight / 2), z: getComputedStyle(b).zIndex }; });
   check('…centred on the desktop, over the frames', box && Math.abs(box.cx) <= 2 && Math.abs(box.cy) <= 2 && Number(box.z) > 60, JSON.stringify(box));
-  await pg.waitForTimeout(3000);
+  await pause('3 s: a toast would be gone by now', 3000);
   row('…3 s later (not a toast)', await text(), KILLED);
   row('killed, pref → off', await pref('off'), KILLED);
   row('killed, pref → first', await pref('first'), KILLED);

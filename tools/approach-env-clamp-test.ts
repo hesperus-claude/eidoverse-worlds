@@ -15,12 +15,10 @@
 
 import { noWorldUrl } from "./no-world.ts";
 import { spawnSync } from "node:child_process";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("approach-env-clamp");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const mode = process.argv[2];
 
@@ -42,8 +40,7 @@ if (!mode) {
     check(`under ${name} the clamp held`, r.status === 0, (r.stderr || "").slice(-200));
   }
 
-  console.log(`\n${pass} passed, ${fail} failed`);
-  process.exit(fail ? 1 : 0);
+  S.done();
 }
 
 // ---- child: one hostile env, the same straight pass-through --------------
@@ -78,5 +75,4 @@ check("(vacuity guard) the path really entered arm's reach", inside > 0);
 check("a straight pass-through is not announced, whatever the knobs say",
   pings.filter((p) => p.kind === "approach").length === 0, JSON.stringify(pings));
 
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

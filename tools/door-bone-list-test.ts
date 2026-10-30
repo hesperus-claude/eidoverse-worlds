@@ -13,12 +13,10 @@ import { noWorldUrl } from './no-world.ts';
 import { WorldAgent } from '../mcpl/agent.ts';
 import { devFlightProvider } from '../shared/flightcap.js';
 import { rigBonesFor, bodyHeightFor } from '../mcpl/rigbones.ts';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) { pass++; console.log(`  ok    ${name}`); }
-  else { fail++; console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ''}`); }
-}
+const S = suite("door-bone-list");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const text = (r: unknown) => (typeof r === 'string' ? r : String((r as any)?.text ?? ''));
 
 /** A GLB whose JSON chunk names these nodes: all loadBodyBones reads. */
@@ -161,5 +159,4 @@ console.log('\nEVERY READER OF A BODY FILE: a failed read is never remembered, a
 }
 
 console.warn = realWarn;
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

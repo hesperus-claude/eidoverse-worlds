@@ -1,10 +1,13 @@
 // probe-harness: the owned foundations every browser probe shares (#131).
-// 1. Browser: `SFU_TEST_CHROME` override (as the sfu mini-smoke) ▸ else Playwright's MANAGED browser for the pinned
-//    version (`bunx playwright install chromium` fetches it per platform). Never a hardcoded Linux path.
+// 1. Browser: chrome.ts findChrome (CHROME, else playwright's managed build, else the OS's), driven over raw CDP by
+//    cdp-pw.mjs: the gate never runs playwright (chrome.ts cdpPage says why). Never a hardcoded Linux path.
 // 2. `ownedWorld()` spawns a child bound to a per-run nonce in scratch state and REFUSES to proceed unless the responder
 //    proves it is ours (as boot-check), never an ambient fixed port. A LIVE deployment is explicit: pass its origin,
 //    identity checks skipped.
-import { chromium } from 'playwright';
+import { launchCdp } from './cdp-pw.mjs';
+import { freePort } from './harness.ts';
+import { suite } from './protocol/suite.ts';
+import { until, tryUntil, pause } from './protocol/wait.ts';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,28 +17,17 @@ import { randomUUID } from 'node:crypto';
 
 // vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) would stop every visor-clicking probe, so contexts start as a
 // browser that answered "not now"; tools/vrmic-probe.mjs passes null to drive it
-/** SFU_TEST_CHROME override ▸ managed browser. `mic: true` adds the fake-media flags (and mic permission). */
+/** One Chromium (chrome.ts findChrome). `mic: true` adds the fake-media flags (and mic permission). */
 export async function launchBrowser({ mic = false, vrMicChoice = 'later', args: extra = [] } = {}) {
-  const exe = process.env.SFU_TEST_CHROME;
   const args = [...(mic ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
     '--autoplay-policy=no-user-gesture-required'] : []), ...extra];
-  const b = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args });
-  // BOOT_CHECK_VIEWPORT=390x844 drives a probe at any viewport; without it Playwright's default hides layouts that only
-  // fit the authoring viewport
+  const b = await launchCdp({ args });
+  // BOOT_CHECK_VIEWPORT=390x844 drives a probe at any viewport (default 1280x720, the authoring viewport)
   const vp = (process.env.BOOT_CHECK_VIEWPORT || '').match(/^(\d+)x(\d+)$/);
   const viewport = vp ? { width: +vp[1], height: +vp[2] } : null;
-  const page = async () => {
-    // touch is a precondition: the dock leaves the left edge only when body has class 'touch', so without it the landscape
-    // dock/action-bar overlap is invisible. BOOT_CHECK_TOUCH=1 turns it on.
-    const touch = process.env.BOOT_CHECK_TOUCH === '1';
-    const ctx = await b.newContext({
-      ...(mic ? { permissions: ['microphone'] } : {}),
-      ...(viewport ? { viewport } : {}),
-      ...(touch ? { hasTouch: true, isMobile: true } : {}),
-    });
-    if (vrMicChoice) await ctx.addInitScript((v) => { try { if (!localStorage.getItem('ew-vr-mic-choice')) localStorage.setItem('ew-vr-mic-choice', v); } catch { /* opaque origin */ } }, vrMicChoice);
-    return ctx.newPage();
-  };
+  // touch is a precondition: the dock leaves the left edge only when body has class 'touch'. BOOT_CHECK_TOUCH=1 turns it on.
+  const page = () => b.page({ viewport, touch: process.env.BOOT_CHECK_TOUCH === '1', permissions: mic ? ['microphone'] : [],
+    initScripts: vrMicChoice ? [[(v) => { try { if (!localStorage.getItem('ew-vr-mic-choice')) localStorage.setItem('ew-vr-mic-choice', v); } catch { /* opaque origin */ } }, vrMicChoice]] : [] });
   return { browser: b, page, close: () => b.close() };
 }
 
@@ -63,8 +55,7 @@ function armSignals() {
 // refused), so a page reaching ?world=<name> needs it founded; staging and commons always are. `owner` founds them.
 export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'dev', env: extraEnv = {}, worlds = [], owner = 'owner' } = {}) {
   if (live) return { origin: live, key, owned: false, close: async () => {} };
-  // a wide range makes collisions rare; the nonce echo is what rejects another run's server
-  const PORT = 8981 + Math.floor(Math.random() * 800);
+  const PORT = freePort(8981);   // the nonce echo is what rejects another run's server
   const scratch = mkdtempSync(join(tmpdir(), 'probe-'));
   const NONCE = randomUUID();
   // process.execPath only works under bun (node can't run TS): an absolute bun serves both; BUN_PATH overrides
@@ -103,32 +94,24 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
  *  up, else a reason string. Resolves { ours, reason }. */
 export async function proveOwned(origin, nonce, { attempts = 60, alive = () => true } = {}) {
   let ours = false, reason = 'never answered';
-  for (let i = 0; i < attempts && !ours; i++) {
+  await tryUntil('the server proves it is ours', async () => {
     const a = alive();
-    if (a !== true) { reason = String(a); break; }
+    if (a !== true) { reason = String(a); return true; }
     try {
       const v = await (await fetch(`${origin}/version`, { signal: AbortSignal.timeout(1000) })).json();
-      if (v.nonce === undefined) { reason = 'responder has no nonce field (stale pre-nonce listener)'; break; }
+      if (v.nonce === undefined) { reason = 'responder has no nonce field (stale pre-nonce listener)'; return true; }
       ours = v.nonce === nonce;
-      if (!ours) { reason = 'wrong nonce (not our child)'; break; }
-    } catch { /* not up yet */ }
-    if (!ours) await new Promise((r) => setTimeout(r, 250));
-  }
+      if (!ours) reason = 'wrong nonce (not our child)';
+      return true;
+    } catch { return false; /* not up yet */ }
+  }, { ms: attempts * 250, step: 250 });
   return { ours, reason };
 }
 
 /** Uniform pass/fail counting with a nonzero exit: a probe that can't fail is a console.log, not a receipt. */
 export function checker() {
-  let pass = 0, fail = 0;
-  const check = (name, ok, extra = '') => {
-    console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${name}${ok ? '' : '  ' + extra}`);
-    ok ? pass++ : fail++;
-  };
-  const done = () => {
-    console.log(`\n${fail === 0 ? '\x1b[32m' : '\x1b[31m'}${pass} passed, ${fail} failed\x1b[0m`);
-    process.exit(fail ? 1 : 0);
-  };
-  return { check, done };
+  const S = suite('probe');
+  return { check: (name, ok, extra = '') => S.check(name, ok, extra), done: () => S.done() };
 }
 
 // IWER under the real client: its device loop pinned to a native rAF, refused unless the pattern matched exactly once
@@ -156,6 +139,9 @@ export async function iwerInit(pg, { cloud = null } = {}) {
   });
 }
 
+/** Wait until the page has drawn `n` more animation frames: a wait on the render loop's progress, not on the clock. */
+export const drawn = (pg, n) => pg.evaluate((k) => new Promise((res) => { let i = 0; const f = () => (++i >= k ? res(true) : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+
 /** The visor the product shows (#xrbtn displayed). `me`: also wait for a joined avatar. */
 export async function visorShown(pg, { timeout = 90000, me = false } = {}) {
   await pg.waitForFunction((m) => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none' && (!m || !!globalThis.EW?.me?.()); }, me, { timeout });
@@ -181,7 +167,7 @@ export async function skyBoot(pg, world, name, { sky = null, baked = false, quer
   await pg.goto(`${world.origin}/?world=staging&name=${name}&key=${world.key}${query}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(ready, null, { timeout: 120000 });
   if (sky) await pg.evaluate(async (v) => { const { sendRequest } = await import('./lib/net.js'); const r = await sendRequest('set', { id: '@world', component: 'sky', value: v, merge: true }); if (!r.ok) throw new Error(`sky refused: ${JSON.stringify(r.refused)}`); }, sky);
-  if (baked) for (let i = 0; i < 90 && !(await pg.evaluate(async () => (await import('./lib/sky_baked.js')).bakedActive())); i++) await pg.waitForTimeout(1000);
+  if (baked) await tryUntil('the baked sky is active', () => pg.evaluate(async () => (await import('./lib/sky_baked.js')).bakedActive()), { ms: 90_000, step: 1000 });
 }
 
 // RAW3: a page of real three + client/lib modules, served from client/ by route (no world server), on SwiftShader
@@ -205,7 +191,10 @@ export async function raw3Page(html) {
   const result = async (ms, q = '') => {
     if (q) await pg.goto('about:blank');
     await pg.goto(`http://probe.local/${q ? `?${q}` : ''}`);
-    return Promise.race([pg.evaluate(() => window.__probe), new Promise((r) => setTimeout(() => r({ error: `probe timed out (${ms / 1000} s)` }), ms))]);
+    // the page's module sets window.__probe (a value or a promise) once it runs: wait for it, then for its answer
+    const got = await tryUntil('the page sets window.__probe', () => pg.evaluate(() => window.__probe !== undefined), { ms, step: 50 });
+    if (!got) return { error: `probe timed out (${ms / 1000} s)` };
+    return Promise.race([pg.evaluate(() => window.__probe), pause('the probe\'s deadline', ms).then(() => ({ error: `probe timed out (${ms / 1000} s)` }))]);
   };
   return { browser, page: pg, errors, result, close: () => browser.close() };
 }

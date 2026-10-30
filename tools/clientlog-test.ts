@@ -4,6 +4,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, chmodSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pause } from "./protocol/wait.ts";
 const wd = mkdtempSync(join(tmpdir(), "clientlog-worlds-")); const ld = join(wd, ".clientlogs");
 process.env.WORLDS_DIR = wd; process.env.CLIENTLOG_DIR = ld; process.env.JOIN_TOKEN = "test-door";
 const { foundWorlds } = await import("./harness.ts");
@@ -25,7 +26,7 @@ ok(existsSync(join(ld, "clientlog-known.log")), "known world gets its own file")
 ok(await st(post("world=madeup-9x", "from nowhere")) === 200, "unknown label → accepted");
 ok(!existsSync(join(ld, "clientlog-madeup-9x.log")) && existsSync(join(ld, "clientlog-~unknown.log")), "unknown label shares the '~unknown' file, never its own");
 ok(await st(post("world=KNOWN", "case variant")) === 200 && readFileSync(join(ld, "clientlog-~unknown.log"), "utf8").includes("case variant") && !readFileSync(join(ld, "clientlog-known.log"), "utf8").includes("case variant"), "a case variant of a real world routes to ~unknown, not the known stream (asserted on content — path case aliases on macOS)");
-const long = "w".repeat(50); foundWorlds(wd, [long]); await new Promise((r) => setTimeout(r, 1100));   // past the miss-relist rate limit
+const long = "w".repeat(50); foundWorlds(wd, [long]); await pause("past the miss-relist rate limit", 1100);   // past the miss-relist rate limit
 ok(await st(post(`world=${long}`, "long name")) === 200 && existsSync(join(ld, `clientlog-${long}.log`)), "a 50-char world name (under the 64 limit) keeps its own file");
 ok(readFileSync(join(ld, "clientlog-~unknown.log"), "utf8").includes("from nowhere") && !readFileSync(join(ld, "clientlog-~unknown.log"), "utf8").includes('"ip"'), "line written, no address recorded");
 for (let i = 0; i < 64; i++) await post(`world=label${i}`, "z");
@@ -34,7 +35,7 @@ let last = 200; for (let i = 0; i < 700; i++) last = await st(post("world=known"
 ok(last === 429, "per-world minute bucket → 429 after 600");
 if (process.getuid?.() !== 0) {
   foundWorlds(wd, ["fresh"]);   // a known world with NO client-log file yet
-  await new Promise((r) => setTimeout(r, 1100));                                                          // past the miss-relist rate limit
+  await pause("past the miss-relist rate limit", 1100);                                                          // past the miss-relist rate limit
   chmodSync(ld, 0o500);                                                                                  // a read-only dir blocks creating one
   try { ok(await st(post("world=fresh", "into a wall")) === 500, "unwritable log dir → 500, not a false ok"); }
   finally { chmodSync(ld, 0o700); }   // a failure here once left the dir read-only, and the gate's cleanup crashed on it

@@ -30,7 +30,7 @@
 // Synchronization is on the AUTHORITATIVE repaint, never a sleep: after C the
 // probe waits for the block that only exists once the comp is in the bag (it
 // carries `take down`), and after D it polls for the refusal text.
-import { pictureWorld, req, spawnConsole, state as stateOf, until as untilOf, settle } from './picture-probe-harness.ts';
+import { pictureWorld, req, spawnConsole, state as stateOf, reaches as untilOf, settle } from './picture-probe-harness.ts';
 import { join } from 'node:path';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,23 +46,23 @@ writeFileSync(pngFile, PNG);
 let ID = '';
 const spawn = async (pg: any) => { ID = await spawnConsole(pg); };
 const state = (pg: any) => stateOf(pg, ID);
-const until = (pg: any, pred: (s: any) => boolean, ms = 30000) => untilOf(pg, () => ID, pred, ms);
+const reach = (pg: any, pred: (s: any) => boolean, ms = 30000) => untilOf(pg, () => ID, pred, ms);
 
 try {
   const pg = await joinAs('editor', (m: any) => { const t = m.text(); if (m.type() === 'error' || /\[pictures\]|editor/.test(t)) console.log(`   console.${m.type()}:`, t.slice(0, 300)); });
   await spawn(pg);
-  let s = await until(pg, (x) => x.part, 90_000);
+  let s = await reach(pg, (x) => x.part, 90_000);
   check('the model spawned and has a part named screenplane', s.part, JSON.stringify(s));
 
   // A. select it in the scene panel — the block lists the model's parts
   await pg.evaluate((id: string) => import('/lib/scenegraph.js').then((m: any) => m.sceneSelect(id)), ID);
-  s = await until(pg, (x) => x.block);
+  s = await reach(pg, (x) => x.block);
   check('A. the picture block appears for the selected model', s.block, JSON.stringify(s));
   check('A. …listing its named parts, screenplane among them', Array.isArray(s.parts) && s.parts.includes('screenplane') && s.parts.length > 1, JSON.stringify(s.parts));
 
   // B. the upload door fills src with the store path
   await pg.setInputFiles('[data-pe="file"]', pngFile);
-  s = await until(pg, (x) => typeof x.src === 'string' && x.src.startsWith('store/images/'));
+  s = await reach(pg, (x) => typeof x.src === 'string' && x.src.startsWith('store/images/'));
   check('B. upload… lands the PNG in the store and fills src with its path', /^store\/images\/[a-f0-9]{16}\.png$/.test(s.src ?? ''), JSON.stringify({ src: s.src, msg: s.msg }));
   const uploaded = s.src;
 
@@ -74,7 +74,7 @@ try {
   // the comp landing (hung) and the panel's repaint of it (down) are two
   // events ~300ms apart; D must start after the second or it types into a
   // block about to be replaced
-  s = await until(pg, (x) => x.hung && x.mapW > 0 && x.down);
+  s = await reach(pg, (x) => x.hung && x.mapW > 0 && x.down);
   check('C. hang commits the comp — the picture hangs with the uploaded image', s.hung && s.mapW === 2, JSON.stringify(s));
   // the hang's own echo agrees with what the line said, so the repaint it
   // queued (the one that produced `down`) carried the line through
@@ -85,7 +85,7 @@ try {
   const seqBefore = await pg.evaluate((id: string) => import('/lib/world.js').then((m: any) => JSON.stringify(m.bagOf(id)?.picture)), ID);
   await pg.fill('[data-pe="src"]', 'https://example.com/trollface.png');
   await pg.click('[data-pe="hang"]');
-  s = await until(pg, (x) => /not an allowed picture source/.test(x.msg ?? ''), 5000);
+  s = await reach(pg, (x) => /not an allowed picture source/.test(x.msg ?? ''), 5000);
   const seqAfter = await pg.evaluate((id: string) => import('/lib/world.js').then((m: any) => JSON.stringify(m.bagOf(id)?.picture)), ID);
   check('D. a URL source is refused in the block, naming the rule, and nothing was sent', /not an allowed picture source/.test(s.msg ?? '') && seqBefore === seqAfter && s.hung, JSON.stringify({ msg: s.msg, same: seqBefore === seqAfter }));
   // D2. force the repaint a late echo would cause (any comp event queues one)
@@ -98,30 +98,30 @@ try {
 
   // E. take down restores the material
   await pg.click('[data-pe="down"]');
-  s = await until(pg, (x) => !x.hung);
+  s = await reach(pg, (x) => !x.hung);
   check('E. take down commits null — nothing hung, comp gone', !s.hung && s.comp == null, JSON.stringify(s));
   // the null echo's repaint removes the control; the line it agrees with stays
-  s = await until(pg, (x) => x.block && !x.down);
+  s = await reach(pg, (x) => x.block && !x.down);
   check('E. …and "taken down" outlives the echo\'s repaint', s.msg === 'taken down' && !s.down, JSON.stringify({ msg: s.msg, down: s.down }));
 
   // F. another entity opens with NO line (ids are minted now, so the successor has its own id; the note must still not carry over)
   await req(pg, OP.remove(ID));
-  s = await until(pg, (x) => !x.entity);
+  s = await reach(pg, (x) => !x.entity);
   check('F. the console is removed', !s.entity, JSON.stringify({ entity: s.entity }));
   await spawn(pg);
-  s = await until(pg, (x) => x.part, 90_000);
+  s = await reach(pg, (x) => x.part, 90_000);
   await pg.evaluate((id: string) => import('/lib/scenegraph.js').then((m: any) => m.sceneSelect(id)), ID);
-  s = await until(pg, (x) => x.block);
+  s = await reach(pg, (x) => x.block);
   check('F. a new console under the same id opens with no inherited line', s.block && (s.msg ?? '') === '' && !s.down && !s.hung, JSON.stringify({ msg: s.msg, down: s.down, hung: s.hung }));
 
   // G. a line about one bag retires when someone else changes the bag
   await pg.fill('[data-pe="src"]', 'https://example.com/trollface.png');
   await pg.click('[data-pe="hang"]');
-  s = await until(pg, (x) => /not an allowed picture source/.test(x.msg ?? ''), 5000);
+  s = await reach(pg, (x) => /not an allowed picture source/.test(x.msg ?? ''), 5000);
   check('G. a refusal is in the block again', /not an allowed picture source/.test(s.msg ?? ''), JSON.stringify({ msg: s.msg }));
   // not through the block: a request, as another actor's hand would be
   await req(pg, OP.set(ID, 'picture', { src: uploaded, description: 'hung by someone else' }));
-  s = await until(pg, (x) => x.hung && x.down);
+  s = await reach(pg, (x) => x.hung && x.down);
   check('G. …the outside hang lands and the block repaints with take down', s.hung && s.down && s.comp?.description === 'hung by someone else', JSON.stringify({ hung: s.hung, down: s.down, comp: s.comp }));
   check('G. …and the refusal line is gone: it was about a bag the world moved past', (s.msg ?? '') === '', JSON.stringify({ msg: s.msg }));
   check('no page errors across the cycle', errs.length === 0, errs.join(' | '));

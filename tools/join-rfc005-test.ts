@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
 import { createServer } from "node:net";
+import { suite } from "./protocol/suite.ts";
 
 /** A port nothing is listening on RIGHT NOW: bind :0, read what the kernel
  *  gave us, release it. Racy in principle (someone could take it in the gap)
@@ -60,11 +61,8 @@ writeFileSync(tokensPath, JSON.stringify({
   "free-token":    { id: "free",    name: "Free",    world: "commons" },
 }));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("join-rfc005");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 // A nonce this run owns, echoed by the door's /healthz.
 const NONCE = `t${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1044,5 +1042,4 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
 
   try { rmSync(worldsDir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

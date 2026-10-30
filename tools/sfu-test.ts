@@ -7,6 +7,7 @@
 import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, RtpHeader } from "werift";
 import { Sfu } from "../server/sfu.ts";
 import { installSfuTransportGuard } from "../server/sfuguard.ts";
+import { suite } from "./protocol/suite.ts";
 
 // Run the ENTIRE suite guarded (review 2026-08-18): the negotiation vectors
 // below are the receipt that the ownership patch is transparent under real
@@ -16,11 +17,8 @@ installSfuTransportGuard();
 
 const CODEC = new RTCRtpCodecParameters({ mimeType: "audio/opus", clockRate: 48000, channels: 2, payloadType: 111 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { console.log(`  \x1b[32m✓\x1b[0m ${name}`); pass++; }
-  else { console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? "  " + detail : ""}`); fail++; }
-};
+const S = suite("sfu");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 /** A stand-in browser: publishes a mic, counts what it hears. */
 class FakePeer {
@@ -683,5 +681,5 @@ const d = sfu.diag();
 check("diag reports live legs", Array.isArray(d.legs) && typeof d.forwarded === "number");
 
 sfu.closeAll();
-console.log(`\n${fail === 0 ? "\x1b[32m" : "\x1b[31m"}${pass} passed, ${fail} failed\x1b[0m\n`);
-process.exit(fail === 0 ? 0 : 1);
+console.log(`\n${S.fail === 0 ? "\x1b[32m" : "\x1b[31m"}${S.pass} passed, ${S.fail} failed\x1b[0m\n`);
+process.exit(S.fail === 0 ? 0 : 1);

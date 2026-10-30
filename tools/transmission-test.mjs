@@ -44,6 +44,7 @@ HTMLCanvasElement.prototype.getContext = function () {
 };
 
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 // import.meta.dir is a plain filesystem path; a `file:` URL string reaches
 // readFile as a literal name and ENOENTs on a stub that is right there. This
 // showed up only on a COLD module cache (i.e. right after editing a client
@@ -82,11 +83,8 @@ const { Avatar } = await import('../client/lib/avatar.js');
 const { requestLight, releaseOwner, updateRequest, rigDebug, updateRig }
   = await import('../client/lib/lightrig.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => {
-  if (ok) { pass++; console.log(`  ok    ${name}`); }
-  else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); }
-};
+const S = suite("transmission");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 /** A mesh wearing one material, run through the real factory. */
 function prepared(mat) {
@@ -314,5 +312,4 @@ console.log('\nLAMP LIFECYCLE -- the rig\'s own contract');
   releaseOwner('probe');
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

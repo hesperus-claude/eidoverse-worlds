@@ -9,6 +9,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT, foundWorlds, freePort, sleep, saysIn } from "./harness.ts";
+import { suite } from "./protocol/suite.ts";
 
 const BRIDGE = process.env.CHATBRIDGE ?? "tools/chatbridge/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-chatbridge-"));
@@ -30,8 +31,8 @@ const join_ = (id: string) => new Promise<{ ws: WebSocket; msgs: any[] }>((res, 
 });
 const say = (c: { ws: WebSocket }, text: string) => c.ws.send(JSON.stringify({ type: "request", id: `t-${Math.random()}`, verb: "say", args: { text } }));
 
-let pass = 0, fail = 0;
-const check = (what: string, c: boolean, detail = "") => { if (c) pass++; else fail++; console.log(`  ${c ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${what}${!c && detail ? `  — ${detail}` : ""}`); };
+const S = suite("chatbridge");
+const check = (what: string, c: unknown, detail?: unknown) => S.check(what, c, detail);
 
 const alice = await join_("alice");
 say(alice, "before the bridge (history: must not be mirrored)");
@@ -62,5 +63,5 @@ const landed = () => saysIn(alice.msgs).filter((x) => x.actor === "discord" && /
 for (let i = 0; i < 400 && landed().length < N; i++) await sleep(100);
 check(`a burst of ${N} Discord lines all enter the world, in order`, JSON.stringify(landed()) === JSON.stringify(burst), `${landed().length} landed: ${landed().slice(-3).join(" | ")}`);
 check("…none of them refused on the way", !/refused/.test(out), out.split("\n").filter((l) => /refused/.test(l)).slice(0, 3).join(" | "));
-console.log(`\n${pass} passed, ${fail} failed`);
-done(fail ? 1 : 0);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+done(S.fail ? 1 : 0);

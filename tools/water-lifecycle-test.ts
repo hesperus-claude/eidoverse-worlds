@@ -1,3 +1,4 @@
+import { tryUntil, pause } from "./protocol/wait.ts";
 // water lifecycle — an agent's stature and its float belong to the CURRENT body and the CURRENT water.
 // A body swap re-measures (and a late answer for the old body cannot land); draining, refilling or moving
 // the water ends the float, so no position or velocity crosses from one water to the next.
@@ -11,7 +12,6 @@ const check = (label: string, ok: boolean, detail = "") => {
   console.log(ok ? `  \x1b[32m✓\x1b[0m ${label}` : `  \x1b[31m✗ ${label}${detail ? ` — ${detail}` : ""}\x1b[0m`);
   if (!ok) failures++;
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // a GLB holding only the JSON a stature read needs: hips, and a head (stature = head + 0.13 m)
 function bodyGlb(stature: number) {
@@ -34,7 +34,7 @@ const files: Record<string, { glb: Uint8Array; delay: number }> = {
 const srv = Bun.serve({ port: 0, async fetch(req) {
   const f = files[new URL(req.url).pathname.replace(/^\/library\//, "")];
   if (!f) return new Response("no", { status: 404 });
-  await sleep(f.delay);
+  await pause("the fixture library's answer latency", f.delay);
   const m = /bytes=(\d+)-(\d+)/.exec(req.headers.get("range") ?? "");
   return m ? new Response(f.glb.slice(+m[1], +m[2] + 1), { status: 206 }) : new Response(f.glb);
 } });
@@ -46,7 +46,7 @@ a.terrainSrc = "stub";
 (globalThis as any).makeTerrain = () => ({ heightAt: () => -1.6 });
 a.joined = true;
 const WET = { size: 40, water: { level: 0 } };
-const settle = async () => { for (let i = 0; i < 50 && a.bodyH == null; i++) await sleep(10); };
+const settle = () => tryUntil("the body height is read", () => a.bodyH != null, { ms: 500, step: 10 });
 const tickN = (n: number) => { for (let i = 0; i < n; i++) a.tick(); };
 
 console.log("\nstature follows the body");
@@ -63,7 +63,7 @@ console.log("\nstature follows the body");
   check("...and wades where the short one swam", !a.float.on && /standing/.test(a.waterHere(0, 0, a.pos.y)) && Math.abs(a.pos.y + 1.6) < 1e-6, a.waterHere(0, 0, a.pos.y));
   a.setAvatar("fix/slow.vrm");
   a.setAvatar("fix/short.vrm");
-  await settle(); await sleep(1100);   // long past the slow body's answer (two 400 ms reads)
+  await settle(); await pause("long past the slow body's answer (two 400 ms reads)", 1100);
   check("a late answer for a replaced body does not overwrite the current one", Math.abs(a.bodyH - SHORT) < 0.01, `${a.bodyH}`);
 }
 

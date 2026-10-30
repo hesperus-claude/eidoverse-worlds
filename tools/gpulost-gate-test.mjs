@@ -7,6 +7,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -24,8 +25,8 @@ const { renderWorld, renderAside } = await import('../client/lib/render.js');
 renderer.domElement = { toDataURL: () => { n.read++; return 'data:image/png;base64,' + 'A'.repeat(4000); } }; n.read = 0;
 const { captureFrame } = await import('../client/lib/capture.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("gpulost-gate");
+const check = (name, ok, note) => S.check(name, ok, note);
 const zero = () => { for (const k in n) n[k] = 0; n.read = 0; };
 // every GPU entry point, each the same three steps; a snapshot after a handled loss refuses (throws) rather than read the
 // stale canvas (round 3)
@@ -55,5 +56,4 @@ for (const [name, leg] of Object.entries(legs)) {
 }
 delete globalThis.__gpuLost;
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

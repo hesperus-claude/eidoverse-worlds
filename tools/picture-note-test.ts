@@ -19,11 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
-let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("picture-note");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 plugin({ name: 'picture-note-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'world', 'inspect', 'ui', 'net'])
@@ -31,6 +28,7 @@ plugin({ name: 'picture-note-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub: any = await import('./guard-label-stub.mjs');
@@ -52,17 +50,18 @@ const paint = () => { const r = editor(ctx()); host.innerHTML = r.html; r.wire(h
 const q = (k: string) => host.querySelector(`[data-pe="${k}"]`) as any;
 /** the world moving: comps first, then the echo, as world.js does */
 const echo = (data: unknown) => { const bag = stub.bagOf('console'); if (data == null) delete bag.picture; else bag.picture = data; stub.bus.emit('comp', { id: 'console', type: 'picture', data }); };
-const refuse = () => { q('src').value = 'https://example.com/x.png'; q('hang').click(); return q('msg').textContent; };
+const refuse = () => { q('src').value = 'http://example.com/x.png'; q('hang').click(); return q('msg').textContent; };   // http is refused (only https plays)
+const REFUSED = /http:\/\/ links aren't played/;
 
 console.log('\n1. a line survives a repaint');
 paint();
-check('a URL is refused in the block', /not an allowed picture source/.test(refuse()));
-check('…and the line is still there after a repaint', /not an allowed picture source/.test(paint()));
+check('an http URL is refused in the block', REFUSED.test(refuse()));
+check('…and the line is still there after a repaint', REFUSED.test(paint()));
 
 console.log('\n2. …and a demote/promote (same entity)');
 stub.bus.emit('entity', { id: 'console', kind: 'demote' });
 stub.bus.emit('entity', { id: 'console', kind: 'spawn' });
-check('after demote + promote the line is still there', /not an allowed picture source/.test(paint()));
+check('after demote + promote the line is still there', REFUSED.test(paint()));
 
 console.log('\n3. …but not a remove');
 stub.bus.emit('entity', { id: 'console', kind: 'remove' });
@@ -70,27 +69,26 @@ check('after a remove the next block has no line', paint() === '', JSON.stringif
 
 console.log('\n4. a disagreeing echo retires the line');
 paint(); refuse();
-check('the refusal is back (about: no picture)', /not an allowed/.test(paint()));
-echo({ src: 'store/images/0123456789abcdef.png', part: 'screenplane', description: 'someone else hung this' });
+check('the refusal is back (about: no picture)', REFUSED.test(paint()));
+echo({ src: 'store/images/0123456789abcdef.png', description: 'someone else hung this' });
 check('someone else hangs a picture: the line is gone', paint() === '', JSON.stringify(paint()));
 
 console.log('\n5. an agreeing echo keeps it');
 committed.length = 0;
 q('src').value = 'store/images/fedcba9876543210.png'; q('description').value = 'mine'; q('hang').click();
-check('hang commits one comp and says so', committed.length === 1 && committed[0][0] === 'comp' && /hung on screenplane/.test(q('msg').textContent), JSON.stringify(committed));
-const mine = committed[0][1].data;
+check('hang commits one picture and says so', committed.length === 1 && committed[0][0] === 'picture' && /^hung$/.test(q('msg').textContent), JSON.stringify(committed));
+const mine = committed[0][1];
 echo({ ...mine });
-check('the hang\'s own echo keeps "hung on screenplane" through the repaint', /hung on screenplane/.test(paint()));
-echo({ ...mine, flip: false, lit: 'scene' });
-check('…a repeat with server-side defaults spelled out still agrees', /hung on screenplane/.test(paint()));
+check('the hang\'s own echo keeps "hung" through the repaint', /^hung$/.test(paint()));
+echo({ ...mine, width: 1, lit: 'scene' });
+check('…a repeat with server-side defaults spelled out still agrees', /^hung$/.test(paint()));
 echo({ ...mine, description: 'changed by another hand' });
 check('…an echo that changed the description retires it', paint() === '', JSON.stringify(paint()));
 q('down').click();
 check('take down says so', /taken down/.test(q('msg').textContent));
 echo(null);
 check('the null echo agrees: "taken down" survives the repaint', /taken down/.test(paint()));
-echo({ src: 'store/images/0123456789abcdef.png', part: 'screenplane' });
+echo({ src: 'store/images/0123456789abcdef.png' });
 check('a later hang by someone else retires "taken down"', paint() === '', JSON.stringify(paint()));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

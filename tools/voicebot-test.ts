@@ -6,7 +6,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ROOT, foundWorlds, freePort, sleep } from "./harness.ts";
+import { ROOT, foundWorlds, freePort } from "./harness.ts";
+import { tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
 const BOT = process.env.VOICEBOT ?? "tools/voicebot/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-voicebot-"));
@@ -17,8 +19,8 @@ const srv = Bun.spawn([process.execPath, "server/server.ts"], { cwd: ROOT,
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: W, JOIN_TOKEN: "", SKIP_OPT_SWEEP: "1" }, stdout: "ignore", stderr: "ignore" });
 let bot: Bun.Subprocess | null = null;
 const done = (code: number) => { try { bot?.kill(); } catch {} try { srv.kill(); } catch {} rmSync(W, { recursive: true, force: true }); process.exit(code); };
-let up = false;
-for (let i = 0; i < 80 && !up; i++) { try { up = (await fetch(`http://127.0.0.1:${PORT}/worlds`)).status < 500   /* up = the door answers; with JOIN_TOKEN /worlds is 401 (public reads gated 10-14) */; } catch {} if (!up) await sleep(150); }
+// up = the door answers; with JOIN_TOKEN /worlds is 401 (public reads gated 10-14)
+const up = !!(await tryUntil("the scratch server answers", () => fetch(`http://127.0.0.1:${PORT}/worlds`).then((r) => r.status < 500, () => false), { ms: 12_000, step: 150 }));
 if (!up) { console.error("scratch server never came up"); done(2); }
 
 const join_ = (id: string) => new Promise<WebSocket>((res, rej) => {
@@ -29,27 +31,27 @@ const join_ = (id: string) => new Promise<WebSocket>((res, rej) => {
 });
 const say = (ws: WebSocket, text: string) => ws.send(JSON.stringify({ type: "request", id: `t-${Math.random()}`, verb: "say", args: { text } }));
 
-let pass = 0, fail = 0;
-const check = (what: string, c: boolean, detail = "") => { if (c) pass++; else fail++; console.log(`  ${c ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${what}${!c && detail ? `  — ${detail}` : ""}`); };
+const S = suite("voicebot");
+const check = (what: string, c: unknown, detail?: unknown) => S.check(what, c, detail);
 
 const alice = await join_("alice"), bob = await join_("bob");
 say(alice, "said before the bot came (history)");
-await sleep(300);
+await pause("the history line is logged before the bot joins", 300);
 bot = Bun.spawn([process.execPath, BOT], { cwd: ROOT,
   env: { ...process.env, DRY_RUN: "1", WORLD_URL: `ws://127.0.0.1:${PORT}/ws`, WORLD_NAME: "commons", SPEAKERS: "alice", VOICES_FILE: voices, ELEVEN_KEY: "", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" },
   stdout: "pipe", stderr: "pipe" });
 let out = "";
 (async () => { for await (const c of (bot as any).stdout) out += Buffer.from(c).toString(); })();
-for (let i = 0; i < 40 && !/watching world/.test(out); i++) await sleep(100);
+await tryUntil("the bot is watching", () => /watching world/.test(out), { ms: 4000, step: 100 });
 say(bob, "bob is not a configured speaker");
 say(alice, "alice is");
-for (let i = 0; i < 40 && !/no voice for "alice"/.test(out); i++) await sleep(100);
-await sleep(400);
+await tryUntil("alice's line reaches the synth step", () => /no voice for "alice"/.test(out), { ms: 4000, step: 100 });
+await pause("a window for bob's line to (wrongly) reach it too", 400);
 
 console.log("\nvoicebot — hearing a world (DRY_RUN)\n");
 check("the bot joins as a spectator that folds the log", /watching world "commons" as spectator/.test(out), out.slice(-300));
 check("a configured speaker's live line reaches the synth step, by display name", (out.match(/no voice for "alice"/g) ?? []).length === 1, out.slice(-400));
 check("history from before the join is not voiced", !/history/.test(out));
 check("a speaker not in SPEAKERS is not voiced", !/"bob"/.test(out));
-console.log(`\n${pass} passed, ${fail} failed`);
-done(fail ? 1 : 0);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+done(S.fail ? 1 : 0);

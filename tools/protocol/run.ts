@@ -61,7 +61,29 @@ const EXPECT: Record<string, number> = {
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
   "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "alias": 0.4, "navgrid": 64,
   "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3
+  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
+  "remotes-lifecycle": 1, "bodygate": 0.5, "anim-wire": 6, "lod-policy": 0.3, "lod-client": 20, "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5, "selfpose": 0.2,
+  "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5, "flight": 0.5,
+  "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "reach": 0.2, "reachwire": 0.2, "glbperf-file": 0.3,
+  "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2, "chat-resync-wire": 0.2, "components-inspector": 0.8,
+  "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2,
+  "body-state": 8, "kind": 2, "replica-freeze": 0.5, "transmission": 0.5, "actions": 0.2, "audioctx": 0.2, "author-wire": 0.2, "backend-choice": 0.2, "blank-part-uvs": 0.3,
+  "blueprint": 1.2, "buoyancy": 0.2, "bus-events": 0.2, "component-needs": 0.6, "components-corpus": 0.2, "config-env": 0.2, "door-bone-list": 0.3, "door-media-whitelist": 0.2,
+  "drag-q": 0.2, "dwell": 0.2, "fetchbytes": 0.5, "finger-curl": 0.2, "flora": 0.2, "fp-view": 0.2, "frames-resize": 0.2, "full-detail": 0.2, "headset-seen": 0.2,
+  "heightmap-route": 1.2, "icons": 0.2, "idle-stall": 22.8, "lamp-skin": 0.3, "lamp-slot-policy": 0.5, "library-decode": 2.6, "lite-choice": 0.2, "locomotion-clip": 0.2,
+  "look": 0.2, "mention-regex": 0.2, "mkconfig": 0.3, "motioneval": 0.2, "namereveal": 0.2, "native-login": 0.2, "particles-host": 0.2, "parts": 0.2, "put-settle": 0.2,
+  "quadcolour": 1.1, "render-aside": 0.3, "render-health": 0.2, "renderer-join": 0.2, "selection": 0.2, "server-clock-readers": 0.2, "splash-lifecycle": 0.5, "structure-collider": 0.2,
+  "structure-edit": 0.2, "structure-field": 0.2, "structure-route": 0.3, "structure-threshold": 0.3, "support": 0.3, "supportclass": 0.2, "terrainshape": 0.2, "token-registry": 0.2,
+  "track-teleport": 0.2, "underwater-presence": 0.2, "sfu-adapter": 0.5, "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3,
+  "seatcore": 0.3, "sfu-mic-intent-race": 0.3, "dock": 2.5, "dropdown": 0.3, "settings-panels": 0.5, "bodies-wear": 1, "clickuse": 0.3, "perfscope": 0.5, "served-routes": 2.5,
+  "tick": 1, "framebudget": 1, "draw-batches": 0.3, "bodysim": 0.5, "ttsrow": 0.5, "scheduler": 0.3, "server-clock": 1.5, "route-shape": 1.2, "clientlog": 3.5, "lantern": 1,
+  "gputime": 2.6, "mic-ptt": 7.2, "euler": 0.3, "layers": 0.2, "relay-decision": 0.2, "spoken-form": 0.2, "other-body-pose": 6, "voice-wire": 2, "presence-session": 1.5,
+  "chat-scrollback": 10.5, "sky-lifecycle": 5.2, "xr-entry-effects": 0.2, "xr-session-lifecycle": 0.2, "xrpanels": 0.3, "xrpass": 0.3, "xrpixelratio": 0.2, "xrpointer": 0.2,
+  "xrshadow": 0.2, "voice-wire-mutation": 10.5, "voicesource-real": 0.2, "vrmheight": 0.6, "waterkind": 0.5, "wiring": 0.2, "worldentity": 1.4, "manifest": 0.2, "hierarchy": 17,
+  "worn-name": 0.1, "voicebot": 3, "water-lifecycle": 1.8, "walk-support-lifecycle": 0.8, "worlds-route": 2.8, "xr-lifecycle": 60, "xr-res": 70, "xr-debug-live": 60,
+  "xr-eye-binding": 10, "htmlmesh-pick": 6, "vrmic-exec": 0.5, "xr-nullfb": 0.3, "reexport-binding": 0.3, "schema-layers": 0.3, "picture-note": 0.3, "realized-lifecycle": 0.7,
+  "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1, "skywatch": 1.3, "stdio-door": 14, "xr-desktop-banner": 80, "sky-bake-time": 75, "sky-bakegraph": 95,
+  "micstate-exec": 0.2, "micstate-release": 0.2, "micstate-single-transport": 0.2, "panels-schema": 0.3, "xr-quad-softswap": 60
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;

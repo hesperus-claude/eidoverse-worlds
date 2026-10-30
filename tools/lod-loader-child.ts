@@ -1,4 +1,4 @@
-// lod-loader-probe — runs the PRODUCTION loader (client/lib/assets.js,
+// lod-loader-child — runs the PRODUCTION loader (client/lib/assets.js,
 // unmodified) against an owned sequencer and reports what it did.
 //
 // Spawned by tools/lod-client-test.ts, once per /version shape:

@@ -11,10 +11,10 @@
 import { makeEntryEffects, handleEntryFailure } from '../client/lib/xr_entry_effects.js';
 import { decideEntryFailure, BUSY_RETRY_MS } from '../client/lib/xr_entry_policy.js';
 import { readFileSync } from 'node:fs';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (n, ok, extra = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${n}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${n}${extra ? ` — ${extra}` : ''}`); } };
+const S = suite("xr-entry-effects");
+const check = (n, ok, extra) => S.check(n, ok, extra);
 
 // a fake clock: timers fire only when we say so, so "1.5 s later" is a function call
 function rig() {
@@ -214,5 +214,4 @@ console.log('\n— 5. the PRODUCT uses this owner (the wiring the reviewer broke
     xr.indexOf('entryEffects.hasPending') < xr.indexOf("if (!session) { tee(`[xr] leave"));
 }
 
-console.log(`\n${pass}/${pass + fail} passed`);
-process.exit(fail ? 1 : 0);
+S.done();

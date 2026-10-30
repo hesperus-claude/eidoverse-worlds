@@ -9,6 +9,8 @@
 //   bodies.js: flushBodyPrefs drops the captured name (`setMyBodyPref(p.patch)`)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
 
 // the body state the Profile reads: `me` is what's ACTUALLY on screen; `name` is what we intended
@@ -36,11 +38,8 @@ plugin({
 
 const { bodiesFields } = await import('../client/lib/bodies.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("bodies-wear");
+const check = (name, ok, detail) => S.check(name, ok, detail);
 const rowsOf = (f) => f.find((x) => x.t === 'list')?.rows ?? [];
 const wearing = (f) => f.find((x) => x.label === 'wearing')?.value;
 const hasWear = (row) => (row?.actions ?? []).some((a) => a.k === 'wear');
@@ -96,7 +95,7 @@ for (let v = 1; v <= 30; v++) bodiesDispatch('plate-y', v);
 check('mid-drag the worn body follows every tick (percent → ×, cm → m)', state.me.userScale === 1.5 && state.me.plateY === 0.3, JSON.stringify(state.me));
 check('...and the store is not written per tick', state.writes === 0, `${state.writes} writes during an 80-tick drag`);
 check('...and the section reads the body, not the store, mid-drag', byK(bodiesFields(), 'body-scale')?.value === 150, JSON.stringify(byK(bodiesFields(), 'body-scale')));
-await new Promise((r) => setTimeout(r, 300));
+await pause('the slider saves after it rests (SAVE_MS)', 300);
 check('once the value rests, the sliders write through to the worn body\'s prefs, once', state.prefs.scale === 1.5 && state.prefs.plateY === 0.3 && state.writes === 1, `${JSON.stringify(state.prefs)} in ${state.writes} writes`);
 f = bodiesFields();
 check('...the height reads 2.40 m (1.60 m at 100%)', f.some((x) => x.label === 'height' && /^2\.40 m \(1\.60 m at 100%\)/.test(x.value)), JSON.stringify(f.find((x) => x.label === 'height')));
@@ -110,7 +109,7 @@ check('size reset → 100 %', state.prefs.scale === 1, JSON.stringify(state.pref
 state.name = 'claude'; state.me = body(); state.prefs = { scale: 1, plateY: 0 }; state.writes = 0; state.writeNames = [];
 bodiesDispatch('body-scale', 140);
 state.name = 'other'; state.me = body();   // the switch, 0 ms later
-await new Promise((r) => setTimeout(r, 300));
+await pause('a VR slider saves after SAVE_MS', 300);
 check('a pending slider value is saved under the body it was dragged on, not the one worn since', state.writes === 1 && state.writeNames[0] === 'claude', `${state.writes} writes under ${JSON.stringify(state.writeNames)}`);
 state.name = 'claude';
 state.me = { isCapsule: true };
@@ -118,5 +117,4 @@ check('no section for the capsule (there is no body to size)', !byK(bodiesFields
 state.me = null;
 check('no section with no body', !byK(bodiesFields(), 'body-scale'));
 
-console.log(`\n${pass}/${pass + fail} passed`);
-process.exit(fail ? 1 : 0);
+S.done();

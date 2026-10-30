@@ -9,13 +9,11 @@
 //   headset_seen.js: an unmigrated legacy '1' reads as recent again (the permanence defect)
 //   (core.js, videopanel.js and xr.js mutations go red in tools/wiring-check.ts)
 import { headsetSeenAt, migrateHeadsetSeen, headsetSeenRecently, HEADSET_SEEN_TTL_MS } from '../client/lib/headset_seen.js';
+import { suite } from "./protocol/suite.ts";
 
 
-let pass = 0, fail = 0;
-const check = (name, ok, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("headset-seen");
+const check = (name, ok, detail) => S.check(name, ok, detail);
 
 const NOW = 1_800_000_000_000;
 
@@ -63,5 +61,4 @@ check("'0' and undefined read as never-seen", headsetSeenAt('0') === null && hea
 
 // the copy and the wiring (the panel's words, the predicate's callers, the time stamp's writers): tools/wiring-check.ts
 
-console.log(`\n${pass}/${pass + fail} passed`);
-process.exit(fail ? 1 : 0);
+S.done();

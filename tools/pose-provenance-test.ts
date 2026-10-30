@@ -20,12 +20,9 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function ok(cond: unknown, label: string) {
-  if (cond) { pass++; console.log(`  ✓ ${label}`); }
-  else { fail++; console.log(`  ✗ ${label}`); }
-}
+const { ok, done } = suite("pose-provenance");
 
 const BAG = { hips: [-0.6186, 0.2801, 0.3753, 0.6308] } as Record<string, number[]>;
 
@@ -95,5 +92,4 @@ console.log("wire + call-site invariants (asserted against the source):");
      "a restored pose (post-settledPose server memory) counts as authored");
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
