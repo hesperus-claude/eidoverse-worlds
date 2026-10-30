@@ -17,25 +17,13 @@ import { fileURLToPath } from "node:url";
 import { mkdtempSync, writeFileSync, existsSync, rmSync, statSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds } from "./harness.ts";
-import { createServer } from "node:net";
+import { foundWorlds, freePort } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
+import { until, tryUntil, pause } from "./protocol/wait.ts";
 
-/** A port nothing is listening on RIGHT NOW: bind :0, read what the kernel
- *  gave us, release it. Racy in principle (someone could take it in the gap)
- *  — which is why readiness below verifies ownership rather than trusting
- *  that whatever answers is ours. */
-async function freePort(): Promise<number> {
-  return await new Promise((res, rej) => {
-    const s = createServer();
-    s.once("error", rej);
-    s.listen(0, "127.0.0.1", () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => res(p));
-    });
-  });
-}
-const WPORT = await freePort(), MPORT = await freePort();
+// probe-then-release is racy, which is why readiness below verifies ownership rather than trusting whatever answers
+const WPORT = freePort(8950);
+const MPORT = freePort(WPORT + 2000);
 const worldsDir = mkdtempSync(join(tmpdir(), "eido-join-"));
 const tokensPath = join(worldsDir, "tokens.json");
 // the worlds an agent may join exist before the run (joining never founds one; a world is founded by its operator)
@@ -60,7 +48,6 @@ writeFileSync(tokensPath, JSON.stringify({
   "roamer2-token": { id: "roamer2", name: "Roamer2", world: "commons", worlds: ["annex"] },
   "free-token":    { id: "free",    name: "Free",    world: "commons" },
 }));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const S = suite("join-rfc005");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
@@ -104,9 +91,9 @@ let mcpl = spawnChild([process.execPath, "mcpl/net-server.ts"], doorEnv);
  *  until the new process proves it is ours. (§4l: what a door restart keeps.) */
 async function restartDoor() {
   try { mcpl.kill(); } catch { /* already gone */ }
-  await Promise.race([(mcpl as unknown as { exited: Promise<unknown> }).exited, sleep(5000)]);
+  await tryUntil("the old door exits", () => mcpl.exitCode !== null || mcpl.signalCode !== null, { ms: 5000 });
   mcpl = spawnChild([process.execPath, "mcpl/net-server.ts"], doorEnv);
-  await waitFor("restarted door /healthz echoes our nonce", async () => {
+  await ready("restarted door /healthz echoes our nonce", async () => {
     const r = await fetch(`http://127.0.0.1:${MPORT}/healthz`);
     return r.ok && (await r.text()).trim() === `ok ${NONCE}`;
   });
@@ -159,20 +146,15 @@ function descendantsOf(root: number): number[] {
   return out;
 }
 
-/** Poll until `probe()` returns true, or throw. Replaces the fixed startup
- *  sleep: a sleep encodes a GUESS about startup time and fails in both
- *  directions — slow when it over-waits, flaky when it under-waits. Also fails
- *  FAST if either child dies, which is how a squatted port surfaces. */
-async function waitFor(what: string, probe: () => Promise<boolean>, ms = 20_000) {
-  const deadline = Date.now() + ms;
-  let lastErr = "";
-  while (Date.now() < deadline) {
-    if (world.exitCode !== null) throw new Error(`${what}: world child exited early (code ${world.exitCode})`);
-    if (mcpl.exitCode !== null) throw new Error(`${what}: door child exited early (code ${mcpl.exitCode})`);
-    try { if (await probe()) return; } catch (e) { lastErr = (e as Error).message; }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error(`${what}: not ready within ${ms}ms${lastErr ? ` (last: ${lastErr})` : ""}`);
+/** until() on a readiness probe, failing FAST (not at the deadline) when a child dies or the probe names a stale
+ *  listener: the probe returns true when ready, a string when it never will be. */
+async function ready(what: string, probe: () => Promise<boolean | string>, ms = 20_000) {
+  const r = await until(what, async () => {
+    if (world.exitCode !== null) return `world child exited early (code ${world.exitCode})`;
+    if (mcpl.exitCode !== null) return `door child exited early (code ${mcpl.exitCode})`;
+    return await probe();
+  }, { ms });
+  if (r !== true) throw new Error(`${what}: ${r}`);
 }
 
 /** The port must be held by the child we spawned (or a descendant). This is
@@ -206,7 +188,7 @@ function ownsPort(name: string, port: number, child: { pid: number }) {
     // the `pids === null` early return above.
     const foreign = pids.filter((p) => !ours.has(p));
     if (foreign.length) {
-      throw new Error(`${name} port ${port} held by pid(s) ${foreign.join(",")}, not our child ${child.pid} — stale listener`);
+      return `${name} port ${port} held by pid(s) ${foreign.join(",")}, not our child ${child.pid} — stale listener`;
     }
     return true;
   };
@@ -229,30 +211,30 @@ async function osOwnershipAvailable(): Promise<boolean> {
 // outside it.
 let osOwnership = false;
 try {
-await waitFor("world /version echoes our nonce", async () => {
+await ready("world /version echoes our nonce", async () => {
   const r = await fetch(`http://127.0.0.1:${WPORT}/version`);
   if (!r.ok) return false;
   const body = await r.json().catch(() => null) as { instance?: string } | null;
   // A world answering WITHOUT our instance field is a stale listener, not a
   // slow start — say so rather than spinning until the deadline.
   if (body && !("instance" in body)) {
-    throw new Error("a world answered but WITHOUT our nonce — stale listener on this port");
+    return "a world answered but WITHOUT our nonce — stale listener on this port";
   }
   return body?.instance === NONCE;
 });
-await waitFor("world port is owned by OUR child", ownsPort("world", WPORT, world));
+await ready("world port is owned by OUR child", ownsPort("world", WPORT, world));
 // Two independent proofs for the door: it echoes a nonce only we set, AND the
 // OS says the port is our child's. The nonce is the PORTABLE one; the OS check
 // is a stricter second opinion, and is skipped (loudly, below) where the
 // platform cannot answer.
-await waitFor("door /healthz echoes our nonce", async () => {
+await ready("door /healthz echoes our nonce", async () => {
   const r = await fetch(`http://127.0.0.1:${MPORT}/healthz`);
   if (!r.ok) return false;
   const body = (await r.text()).trim();
-  if (body === "ok") throw new Error("a door answered but WITHOUT our nonce — stale listener on this port");
+  if (body === "ok") return "a door answered but WITHOUT our nonce — stale listener on this port";
   return body === `ok ${NONCE}`;
 });
-await waitFor("door port is owned by OUR child", ownsPort("door", MPORT, mcpl));
+await ready("door port is owned by OUR child", ownsPort("door", MPORT, mcpl));
 
 // Say which proofs this run actually obtained. A receipt that cannot be read
 // as "nonce only" vs "nonce + OS" invites the reader to assume the stronger
@@ -367,6 +349,11 @@ async function watchWorld(w: string, id: string) {
 }
 
 const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
+/** Close a host connection and wait for the close to complete, so the next dial on the credential starts clean. */
+async function shut(h: { ws: WebSocket }) {
+  h.ws.close();
+  await tryUntil("the host socket closes", () => h.ws.readyState === WebSocket.CLOSED, { ms: 5000 });
+}
 
   // (no startup sleep: readiness above already proved both children are up AND
   // are the processes we spawned. The `try` that guards teardown opens further
@@ -376,7 +363,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // Driven through the TOOL now: the channels/open sibling-join lane was
   // removed (antra #4), so the tool is the only lane and must carry the proof.
   const bound = await connectHost("bound-token");
-  await sleep(1200);
   const denied = await bound.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("a credential limited to commons is refused elsewhere", denied.result?.isError === true && /outside the worlds this credential is limited to/.test(denied.result?.content?.[0]?.text ?? ""), JSON.stringify(denied.result));
   const still = await bound.request("channels/list", {});
@@ -396,10 +382,10 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // ── 2. worlds:["*"] → travel granted, and the host is told ───────────────
   const commonsWatch = await watchWorld("commons", "watcher");
   const roamer = await connectHost("roamer-token");
-  await sleep(1200);
   const joined = await roamer.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("policied travel arrives", !joined.result?.isError && /(Arrived in|Founded and entered) "annex"/.test(txt(joined)), txt(joined));
-  await sleep(800);
+  await tryUntil("the host hears the commit (removed: world:commons)", () =>
+    roamer.inbound.some((m) => m.method === "channels/changed" && m.params?.removed?.includes("world:commons")));
   // On a SUCCESSFUL travel the host learns both halves — but in two frames now,
   // not one: the prepare asks (`added` only, so a question asserts nothing), and
   // the commit states the departure once it is a fact. The old single-frame
@@ -419,14 +405,14 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   const reopen = await roamer.request("channels/open", { type: "world", address: { world: "annex" }, history: { limit: 5 } });
   check("current-channel open still plain-opens (with history)", reopen.result?.channel?.id === "world:annex", JSON.stringify(reopen));
   // atomicity, world-side: the commons watcher saw the body actually LEAVE
-  await sleep(600);
-  const left = commonsWatch.events.some((m) => (m.type === "leave" || m.type === "part" || m.type === "left") && (m.id === "roamer" || m.who === "roamer"));
+  const leftEv = (m: any) => (m.type === "leave" || m.type === "part" || m.type === "left") && (m.id === "roamer" || m.who === "roamer");
+  await tryUntil("the commons watcher sees roamer leave", () => commonsWatch.events.some(leftEv));
+  const left = commonsWatch.events.some(leftEv);
   const ghost = commonsWatch.events.filter((m) => m.type === "say" && m.id === "roamer").length;
   check("old world saw the body leave (no dual presence)", left, "leave-ish events: " + JSON.stringify(commonsWatch.events.map((m) => m.type).slice(-12)) + ` ghost says: ${ghost}`);
   commonsWatch.ws.close();
   // in-session denial for a LISTED credential asking outside its list
   const roamer2 = await connectHost("roamer2-token");
-  await sleep(1200);
   const outside = await roamer2.request("tools/call", { name: "travel", arguments: { world: "elsewhere" } });
   check("worlds:[annex] credential denied for other worlds",
     outside.result?.isError === true && /^travel refused, so you're still in "commons": world "elsewhere" is outside the worlds this credential is limited to/.test(txt(outside)), txt(outside));
@@ -434,7 +420,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
 
   // ── 4. dial-time ?world= under the same policy ────────────────────────────
   const dialed = await connectHost("roamer2-token", "&world=annex");
-  await sleep(1200);
   const dl = await dialed.request("channels/list", {});
   check("?world= honored for a policied credential", dl.result?.channels?.[0]?.id === "world:annex", JSON.stringify(dl.result));
   dialed.ws.close();
@@ -485,15 +470,10 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
 
   // ── 4b. §3.2.7 founding is not joining ───────────────────────────────────
   const nofound = await connectHost("nofound-token");
-  await sleep(1200);
   const wouldFound = await nofound.request("tools/call", { name: "travel", arguments: { world: "brand-new-place" } });
   check("create:false CANNOT found a world",
     wouldFound.result?.isError === true && /^travel refused, so you're still in "commons": no world named "brand-new-place" exists, and this credential may not found one/.test(txt(wouldFound)), txt(wouldFound));
-  // act forwards any verb; the world's authority, not the door, refuses one it doesn't take (ported: act is the
-  // general request tool, and its answer is the authority's own)
-  const unknownVerb = await nofound.request("tools/call", { name: "act", arguments: { verb: "fly_away", args: {} } });
-  check("an unknown verb goes to the world, which refuses it",
-    unknownVerb.result?.isError === true && /"ok": false/.test(txt(unknownVerb)) && /fly_away|unknown/.test(txt(unknownVerb)), txt(unknownVerb).slice(0, 600));
+  // (act forwarding an unknown verb to the authority: door-wording-test "act passes a verb…", directory-check B5)
   // …and prove it wasn't created as a side effect anyway (review F)
   // 🔴 PAIRED WITH ITS POSITIVE CONTROL (adversarial review, 2026-08-17).
   // `!existsSync(...)` alone passes for a build where founding writes NOTHING
@@ -505,7 +485,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   check("refused founding left NOTHING on disk", !existsSync(join(worldsDir, "brand-new-place")));
   nofound.ws.close();
   const founder = await connectHost("roamer-token");
-  await sleep(1200);
   // (ported 10-17) joining never founds a world on this server, whatever the credential: the door asks the world
   // (/access) and refuses before anything moves, saying so
   const founded = await founder.request("tools/call", { name: "travel", arguments: { world: "founded-place" } });
@@ -523,7 +502,7 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // put it beside the negative check twenty lines earlier and asserted the
   // directory existed before anything had created it. The control was itself
   // wrong in the direction that would have looked like a product bug.
-  await sleep(400);              // the sequencer writes the log dir on join
+  await tryUntil("annex's world dir is on disk", () => existsSync(join(worldsDir, "annex")));
   check("…and the CONTROL: a world that WAS founded IS on disk at that path",
     existsSync(join(worldsDir, "annex")), `worldsDir=${worldsDir}`);
   // (ported) the first transition is a travel to an existing world, the second back
@@ -532,13 +511,13 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // The epoch is read from the channels/changed descriptor the server pushes
   // to the HOST — which is where §3.2.3d says a client learns it, and the only
   // place it appears now that the sibling-open lane is gone.
-  await sleep(600);
   const epochOf = (c: any) => c.inbound.filter((m: any) => m.method === "channels/changed")
     .map((m: any) => m.params?.added?.[0]?.metadata?.epoch).filter((e: any) => typeof e === "number");
+  await tryUntil("the host hears an epoch", () => epochOf(founder).length > 0);
   const e1s = epochOf(founder);
   check("a transition announced an epoch to the host", e1s.length > 0, JSON.stringify(e1s));
   await founder.request("tools/call", { name: "travel", arguments: { world: "commons" } });
-  await sleep(600);
+  await tryUntil("the host hears a second epoch", () => epochOf(founder).length > e1s.length);
   const e2s = epochOf(founder);
   check("epoch increments across transitions", e2s.length > e1s.length && e2s[e2s.length - 1] > e1s[e1s.length - 1],
     `epochs=${JSON.stringify(e2s)}`);
@@ -560,7 +539,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // v3 gated `auth.world` whenever ?world= was present at all, so naming your
   // own home refused where omitting it admitted — bricking fresh deployments.
   const ownWorld = await connectHost("bound-token", "&world=commons");
-  await sleep(1200);
   const ow = await ownWorld.request("channels/list", {});
   check("dialing your OWN minted world is not 'founding'", ow.result?.channels?.[0]?.id === "world:commons", JSON.stringify(ow.result));
   ownWorld.ws.close();
@@ -569,9 +547,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // It is the client's ONLY epoch source; v3 dropped the field and froze every
   // client at 0 while the server advanced.
   const eh = await connectHost("roamer-token");
-  await sleep(1200);
   await eh.request("tools/call", { name: "travel", arguments: { world: "annex" } });
-  await sleep(600);
+  await tryUntil("the host hears channels/changed", () => eh.inbound.some((m) => m.method === "channels/changed"));
   const ch = eh.inbound.find((m) => m.method === "channels/changed");
   check("channels/changed descriptor carries metadata.epoch (§3.2.3d)",
     typeof ch?.params?.added?.[0]?.metadata?.epoch === "number", JSON.stringify(ch?.params?.added?.[0]?.metadata));
@@ -579,7 +556,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
 
   // ── 4f. prepare/commit REFUSAL — the path the suite never exercised ───────
   const decliner = await connectHost("roamer-token", "", "decline");
-  await sleep(1200);
   const declined = await decliner.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("host decline aborts the join (refusal, nothing moved)",
     declined.result?.isError === true && /your host declined the move/.test(txt(declined))
@@ -603,7 +579,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   decliner.ws.close();
 
   const mute = await connectHost("roamer-token", "", "mute");
-  await sleep(1200);
   const timedOut = await mute.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("mute host is treated as declining (fail-closed)",
     timedOut.result?.isError === true && /didn't confirm the move to "annex" within 5 seconds, so trying again may work/.test(txt(timedOut)), txt(timedOut));
@@ -612,7 +587,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // A host that answers the move with an error refuses it too, and only the
   // timeout above suggests trying again.
   const erring = await connectHost("roamer-token", "", "error");
-  await sleep(1200);
   const errored = await erring.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("an error answer is a refusal in the host's words, without its JSON-RPC code or a retry hint",
     errored.result?.isError === true
@@ -624,7 +598,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // Same mechanism as channels/open, reachable by a plain-MCP client that has
   // never heard of MCPL channels. Both lanes MUST share one policy.
   const tv = await connectHost("roamer-token");
-  await sleep(1200);
   const listed = await tv.request("tools/list", {});
   check("travel is advertised as a tool", listed.result?.tools?.some((t: any) => t.name === "travel"), "no travel tool");
 
@@ -658,7 +631,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // half is a tautology — kept only to pin that the lane stays shut, not as
   // evidence about policy. The policy claim rests on the tool assertion above.
   const bound2 = await connectHost("bound-token");   // worlds: ["commons"] → may not roam
-  await sleep(1200);
   const toolRefusal = await bound2.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("travel tool honours join policy", toolRefusal.result?.isError === true, JSON.stringify(toolRefusal.result));
   const boundMap = txt(await bound2.request("tools/call", { name: "worlds", arguments: {} }));
@@ -684,7 +656,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // These vectors are what makes the advertised lane real.
   {
     const plain = await connectPlain("roamer-token");     // NO experimental.mcpl
-    await sleep(1200);
     const tools = await plain.request("tools/list", {});
     check("plain-MCP host is offered the travel tool",
       (tools.result?.tools ?? []).some((t: any) => t.name === "travel"), "travel not listed");
@@ -696,7 +667,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     // …and the credential still gates it. Authority moved from a capability
     // plain MCP cannot hold to the credential it does hold — it did not vanish.
     const plainBound = await connectPlain("bound-token");  // worlds: ["commons"]
-    await sleep(1200);
     const refused = await plainBound.request("tools/call", { name: "travel", arguments: { world: "annex" } });
     check("plain-MCP travel still obeys the join policy",
       refused.result?.isError === true && /^travel refused, so you're still in "commons": world "annex" is outside the worlds this credential is limited to/.test(txt(refused)), txt(refused));
@@ -712,7 +682,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // world refuses it BEFORE anything moves; a grant from inside lets it in.
   {
     const free = await connectHost("free-token");          // no `worlds`, no `create`
-    await sleep(1200);
     // (ported 10-17: no founding by travel; an owner changes who may come in with ordinary requests on @world —
     // access, roles:<id> — the tool is act; whois finds the identity a role names)
     const fm = txt(await free.request("tools/call", { name: "travel", arguments: { world: "free-place" } }));
@@ -720,12 +689,11 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     const there = txt(await free.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
     check("…and travels to an open world it was never listed for", /Arrived in "keep"/.test(there), there);
     // says hello while there: a world's lookup (whois) knows the people it has seen act or be remembered, never everyone
-    await free.request("tools/call", { name: "say", arguments: { text: "hello, keep" } }); await sleep(300);
+    await free.request("tools/call", { name: "say", arguments: { text: "hello, keep" } });
     const home = txt(await free.request("tools/call", { name: "travel", arguments: { world: "commons" } }));
     check("…and back", /Arrived in "commons"/.test(home), home);
 
     const owner = await connectHost("roamer-token");       // keep was founded for the roamer agent, so it owns it
-    await sleep(1200);
     const ot = txt(await owner.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
     check("the owner goes to its world", /Arrived in "keep"|Already in/.test(ot), ot);
     const closed = await owner.request("tools/call", { name: "act", arguments: { verb: "set", args: { id: "@world", component: "access", value: { join: "listed" } } } });
@@ -737,7 +705,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     check("…and nothing moved", still.result?.channels?.[0]?.id === "world:commons", JSON.stringify(still.result));
     const fmap = txt(await free.request("tools/call", { name: "worlds", arguments: {} }));
     check("the closed world is not on the outsider's map", !/^- keep/m.test(fmap), fmap);
-    const whoText = txt(await owner.request("tools/call", { name: "whois", arguments: { name: "free" } }));
+    const whois = async () => txt(await owner.request("tools/call", { name: "whois", arguments: { name: "free" } }));
+    const whoText = (await tryUntil("keep's whois knows free (it said hello there)", async () => { const t = await whois(); return /u-[a-z2-7]{20}/.test(t) && t; })) ?? await whois();
     const freeId = (whoText.match(/u-[a-z2-7]{20}/) ?? [])[0];
     const granted = await owner.request("tools/call", { name: "act", arguments: { verb: "set", args: { id: "@world", component: `roles:${freeId}`, value: { role: "member" } } } });
     check("the owner lets it in from inside the world (roles:<its identity>, found by whois)", !!freeId && !granted.result?.isError, `${whoText.slice(0, 200)} / ${txt(granted).slice(0, 300)}`);
@@ -746,9 +715,10 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     // a member reads the closed world's geometry AS ITSELF (Greptile #258: measure
     // fetched /geom anonymously, and a closed world answers that as nonexistent)
     const made = txt(await owner.request("tools/call", { name: "create", arguments: { model: "eidoverse/assets/models/crate_large_red.glb", at: [2, 2], components: { label: "accbox" } } }));
-    await sleep(600);
-    const meas = txt(await free.request("tools/call", { name: "measure", arguments: { id: "accbox" } }));
-    check("measure works for a member of a closed world", !/no such world/.test(meas) && /accbox|geometry|bbox|crate/.test(meas), `${made.slice(0, 120)} / ${meas.slice(0, 300)}`);
+    const measure = async () => txt(await free.request("tools/call", { name: "measure", arguments: { id: "accbox" } }));
+    const measured = (t: string) => !/no such world/.test(t) && /accbox|geometry|bbox|crate/.test(t);
+    const meas = (await tryUntil("free can measure accbox", async () => { const t = await measure(); return measured(t) && t; })) || await measure();
+    check("measure works for a member of a closed world", measured(meas), `${made.slice(0, 120)} / ${meas.slice(0, 300)}`);
     const reopened = await owner.request("tools/call", { name: "act", arguments: { verb: "delete", args: { id: "@world", component: "access" } } });
     check("the owner opens it again", !reopened.result?.isError, txt(reopened));
     free.ws.close(); owner.ws.close();
@@ -761,78 +731,66 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   {
     const where = async (h: any) => (await h.request("channels/list", {})).result?.channels?.[0]?.id;
     const a1 = await connectHost("nofound-token");           // home commons, worlds ["*"]
-    await sleep(1200);
     const t1 = txt(await a1.request("tools/call", { name: "travel", arguments: { world: "annex" } }));
     check("an agent travels to annex", /Arrived in "annex"/.test(t1), t1);
-    a1.ws.close(); await sleep(600);
+    await shut(a1);
     const a2 = await connectHost("nofound-token", RESUME);
-    await sleep(1200);
     check("reconnecting with no world asked for resumes in annex", (await where(a2)) === "world:annex", String(await where(a2)));
-    a2.ws.close(); await sleep(600);
+    await shut(a2);
     const a3 = await connectHost("nofound-token", "&world=commons");
-    await sleep(1200);
     check("an explicit ?world= still wins", (await where(a3)) === "world:commons", String(await where(a3)));
-    a3.ws.close(); await sleep(600);
+    await shut(a3);
     const a4 = await connectHost("nofound-token", RESUME);
-    await sleep(1200);
     check("…and is remembered: the next plain reconnect starts there (commons)", (await where(a4)) === "world:commons", String(await where(a4)));
     // (ported: the world it leaves is `keep`, the one the roamer agent owns, and its owner closes it with this
     // protocol's ordinary request on @world, as THE WORLD DECIDES above does; upstream used annex and world_access)
     const t4 = txt(await a4.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
     check("on to keep", /Arrived in "keep"/.test(t4), t4);
-    a4.ws.close(); await sleep(600);
+    await shut(a4);
     // the world it left no longer lets it in → home, not a refusal
     const owner = await connectHost("roamer-token", "&world=keep");
-    await sleep(1200);
     const closedKeep = await owner.request("tools/call", { name: "act", arguments: { verb: "set", args: { id: "@world", component: "access", value: { join: "listed" } } } });
     check("the owner closes keep (set @world.access {join: listed})", !closedKeep.result?.isError, txt(closedKeep));
     const a5 = await connectHost("nofound-token", RESUME);
-    await sleep(1200);
     check("an agent whose last world is now closed to it wakes up at home", (await where(a5)) === "world:commons", String(await where(a5)));
     a5.ws.close();
     const reopenedKeep = await owner.request("tools/call", { name: "act", arguments: { verb: "delete", args: { id: "@world", component: "access" } } });
     check("the owner reopens keep", !reopenedKeep.result?.isError, txt(reopenedKeep));
-    owner.ws.close(); await sleep(600);
+    await shut(owner);
     // an operator who changes the agent's HOME has said where it lives now
     const a6 = await connectHost("nofound-token");
-    await sleep(1200);
     const t6 = txt(await a6.request("tools/call", { name: "travel", arguments: { world: "annex" } }));
     check("annex once more", /Arrived in "annex"/.test(t6), t6);
-    a6.ws.close(); await sleep(600);
+    await shut(a6);
     const reg = JSON.parse(readFileSync(tokensPath, "utf8"));
     // (ported: the new home is `keep`, a world that exists; joining never founds one here, and upstream's free-place
     // must stay unfounded for THE WORLD DECIDES above)
     reg["nofound-token"].world = "keep";
     writeFileSync(tokensPath, JSON.stringify(reg));
     const a7 = await connectHost("nofound-token", RESUME);
-    await sleep(1200);
     check("after its home claim changes, it starts at the new home, not the old memory", (await where(a7)) === "world:keep", String(await where(a7)));
     a7.ws.close();
     reg["nofound-token"].world = "commons";
-    writeFileSync(tokensPath, JSON.stringify(reg));
-    await sleep(300);
+    writeFileSync(tokensPath, JSON.stringify(reg));   // read per connection attempt: the next dial sees it
     // the trip HOME stays allowed after a resume: roamer2 is limited to
     // ["annex"] with home commons, and its home must not be read from where it
     // resumed (Greptile #261)
     const b1 = await connectHost("roamer2-token");
-    await sleep(1200);
     const tb1 = txt(await b1.request("tools/call", { name: "travel", arguments: { world: "annex" } }));
     check("roamer2 (limited to annex) travels to annex", /Arrived in "annex"/.test(tb1), tb1);
-    b1.ws.close(); await sleep(600);
+    await shut(b1);
     const b2 = await connectHost("roamer2-token", RESUME);
-    await sleep(1200);
     check("roamer2 resumes in annex", (await where(b2)) === "world:annex", String(await where(b2)));
     const homeTrip = txt(await b2.request("tools/call", { name: "travel", arguments: { world: "commons" } }));
     check("…and may still travel home (its credential's home, not where it resumed)", /Arrived in "commons"/.test(homeTrip), homeTrip);
     const backTrip = txt(await b2.request("tools/call", { name: "travel", arguments: { world: "annex" } }));
     check("…and back to annex", /Arrived in "annex"/.test(backTrip), backTrip);
-    b2.ws.close(); await sleep(600);
+    await shut(b2);
     // a DOOR RESTART: the memory is on disk, so it outlives the process
     await restartDoor();
     const b3 = await connectHost("roamer2-token", RESUME);
-    await sleep(1200);
     check("after the door itself restarts, roamer2 resumes in annex", (await where(b3)) === "world:annex", String(await where(b3)));
-    b3.ws.close(); await sleep(600);
+    await shut(b3);
   }
 
   // ── 4j. THE FIX FOR #1 MUST NOT WIDEN MCPL AUTHORITY ─────────────────────
@@ -842,7 +800,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // habit that shipped the original bug, so: prove it.
   {
     const stingy = await connectHost("roamer-token");
-    await sleep(1200);
     // Re-declare an effective capability set WITHOUT channels.lifecycle.
     await stingy.request("featureSets/update", {
       effectiveCapabilities: ["tools", "channels.register", "channels.publish", "channels.incoming"],
@@ -860,7 +817,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     // credential, declared as PLAIN MCP, must SUCCEED — capability-denied is a
     // property of the host class, not of the token.
     const samecred = await connectPlain("roamer-token");
-    await sleep(1200);
     const plainOk = await samecred.request("tools/call", { name: "travel", arguments: { world: "annex" } });
     check("…while the SAME credential as plain-MCP travels fine (the mcplClient conjunct is load-bearing)",
       !plainOk.result?.isError && /(Arrived in|Founded and entered) "annex"/.test(txt(plainOk)), txt(plainOk));
@@ -884,7 +840,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     // hole is moving that assignment out of the prelude. If someone does, this
     // fails instead of shipping.
     const escapee = await connectHost("roamer-token");
-    await sleep(1200);
     await escapee.request("featureSets/update", {
       effectiveCapabilities: ["tools", "channels.register", "channels.publish", "channels.incoming"],
     });
@@ -910,7 +865,6 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // reconciled them. Per-world state, like the chat cursor.
   {
     const shutter = await connectHost("roamer-token");
-    await sleep(1200);
     await shutter.request("channels/close", { channelId: "world:commons" });
     const moved2 = await shutter.request("tools/call", { name: "travel", arguments: { world: "annex" } });
     check("travel after closing the door still arrives", !moved2.result?.isError, txt(moved2));
@@ -944,9 +898,8 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // ── 5. attach failure → -32024 and the connection surfaces CLOSED ─────────
   // (last: it kills the sequencer)
   const victim = await connectHost("roamer-token");
-  await sleep(1200);
   world.kill();                        // the sequencer goes away mid-session
-  await sleep(500);
+  await until("the world server exits", () => world.exitCode !== null || world.signalCode !== null, { ms: 5000 });
   const failed = await victim.request("tools/call", { name: "travel", arguments: { world: "annex" } });  // exists, so this tests ATTACH failure
   // The TOOL lane reports failure as isError + text (the MCP contract), not as
   // a JSON-RPC error code — but it must say plainly that the seat is gone, or
@@ -961,18 +914,23 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
     && /didn't say whether you may go to "annex", so nothing moved/.test(txt(failed)), txt(failed));
   // nothing detached, so the host's connection to the door is still there —
   // the opposite of the old post-detach outcome, and the better one
-  await sleep(500);
+  await pause("a teardown would follow the refusal at once; the connection must still be open after it", 500);
   check("…and the host's connection to the door was not torn down", victim.ws.readyState === WebSocket.OPEN, `readyState=${victim.ws.readyState}`);
   // a reconnect while the world server is DOWN must not move the memory: the
   // resume check cannot run and nothing joins, so where the agent was is kept
   // for when the server is back (Greptile #261)
   {
     const before = JSON.parse(readFileSync(statePath, "utf8")).__world?.roamer2?.world;
-    const c5 = await Promise.race([connectHost("roamer2-token", RESUME), sleep(8000).then(() => null)]);
-    await sleep(3000);
+    // dial raw: the session can't embody (agent.connect fails), so the door ends it; a memory write would precede that
+    const c5 = new WebSocket(`ws://127.0.0.1:${MPORT}/?token=roamer2-token`);
+    c5.onopen = () => {
+      c5.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "down", version: "0" } } }));
+      c5.send(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+    };
+    const ended = await tryUntil("the door ends the session it can't embody", () => c5.readyState === WebSocket.CLOSED, { ms: 20_000 });
     const after = JSON.parse(readFileSync(statePath, "utf8")).__world?.roamer2?.world;
-    check("a reconnect while the world server is down keeps where the agent was", before === "annex" && after === "annex", `${before} → ${after}`);
-    try { (c5 as any)?.ws?.close(); } catch { /* gone */ }
+    check("a reconnect while the world server is down keeps where the agent was", !!ended && before === "annex" && after === "annex", `${before} → ${after}, session ended=${!!ended}`);
+    try { c5.close(); } catch { /* gone */ }
   }
 } finally {
   // Verified termination: kill(), then AWAIT the exit. `kill()` alone returns
@@ -981,13 +939,10 @@ const txt = (r:any) => r.result?.content?.[0]?.text ?? "";
   // survived a run. Escalate to SIGKILL rather than hang the suite.
   for (const [name, child] of [["world", world], ["door", mcpl]] as const) {
     try { child.kill(); } catch { /* already gone */ }
-    const outcome = await Promise.race([
-      child.exited,
-      new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 5000)),
-    ]);
-    if (outcome === "timeout") {
+    const gone = () => child.exitCode !== null || child.signalCode !== null;
+    if (!(await tryUntil(`${name} child exits on SIGTERM`, gone, { ms: 5000 }))) {
       try { child.kill("SIGKILL"); } catch { /* already gone */ }
-      await Promise.race([child.exited, new Promise((r) => setTimeout(r, 2000))]);
+      await tryUntil(`${name} child exits on SIGKILL`, gone, { ms: 2000 });
     }
     check(`${name} child terminated`, child.exitCode !== null || child.signalCode !== null,
       "still running after SIGTERM+SIGKILL");
