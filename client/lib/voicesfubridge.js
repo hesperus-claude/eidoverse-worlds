@@ -9,7 +9,7 @@
 // smoke asserts against. The names date from when two transports competed and
 // one smoke drove both; the shape survives because the instruments do.
 import { bus, CONFIG } from './base.js';
-import { net, sendRelayCredRequest, sendVoiceConsent } from './net.js';
+import { net, sendRelayCredRequest, sendVoiceConsent, sendJoined } from './net.js';
 import { sfuConnect, sfuOnOffer, sfuOnIce, sfuMic, sfuPeerLevels, sfuMyLevel,
   sfuDiagClient, sfuClose, sfuActive, sfuSpeakerEntries, sfuInboundStats, sfuMicOn,
   sfuMicWanted, sfuDropSpeaker } from './voicesfu.js';
@@ -18,7 +18,7 @@ import { myState } from './controller.js';
 import { isHushed, volumeFor, receivingVoice, VOICE_FULL_M, VOICE_SILENT_M } from './voiceconsent.js';
 import { setGeneratorRebuildHook, synthProvider } from './voicesource.js';
 
-const send = (o) => { if (net.ws?.readyState === 1) net.ws.send(JSON.stringify(o)); };
+const send = (o) => { sendJoined(o); };
 
 // 🔴 ADOPT THE SYNTH LANE — the SFU never registered this hook (R, 2026-08-16;
 // found because /audio reported `source: never published`).
