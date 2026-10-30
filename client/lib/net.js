@@ -123,7 +123,7 @@ export const identityOf = (name) => (name === CONFIG.name ? net.you ?? null : id
 const sayQueue = [];   // {args, resolve}: says typed while reconnecting, sent in order on the next snapshot
 const SAY_QUEUE_MAX = 20;
 const excerpt = (t) => { const s = String(t ?? '').replace(/\s+/g, ' ').trim(); return `“${s.length > 40 ? `${s.slice(0, 39)}…` : s}”`; };
-export function sayRefusalWords(r, text) {
+function sayRefusalWords(r, text) {
   const x = r?.refused ?? {}; const q = excerpt(text);
   switch (x.code) {
     case 'rate': return `slow down — you've said a lot in the last few seconds, so ${q} wasn't sent. Try again in a moment.`;
@@ -573,7 +573,7 @@ async function fetchIdentity() {
  *  visitors (CONFIG.token) are never bounced, and one bounce per minute is
  *  the cap: if the identity node is down we fall through to the authority (which
  *  offers the same link) instead of redirect-looping. */
-export function bounceToLogin() {
+function bounceToLogin() {
   if (identity || !authCfg?.login || CONFIG.token) return false;
   if (localStorage.getItem('ew-authed') !== '1') return false;
   const last = Number(sessionStorage.getItem('ew-login-bounce') ?? 0);

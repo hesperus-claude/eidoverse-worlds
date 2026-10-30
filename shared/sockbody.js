@@ -49,11 +49,11 @@ import { isNum, isObj } from './protocol/is.js';
 
 // surface: the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
 export const ANCHORS = COMPONENTS.station.enums.anchor;   // hips, feet, head, root, surface
-export const LEAVE_BY = COMPONENTS.station.enums.leaveBy;  // jump, menu, script
+const LEAVE_BY = COMPONENTS.station.enums.leaveBy;  // jump, menu, script
 export const MOVES = ['none', 'drive', 'walk'];
 export const LOOKS = ['free', 'aim', 'locked'];
-export const UPS = ['world', 'socket'];
-export const VR_POLICIES = ['snap', 'track', 'near'];
+const UPS = ['world', 'socket'];
+const VR_POLICIES = ['snap', 'track', 'near'];
 export const TIMES = ['loop', 'phase'];
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
@@ -64,22 +64,22 @@ const isWho = isWhoValue;   // a role id, {permission} or {roles}
 export const SIGNALS = ['speed', 'turn', 'phase', 'swing', 'throttle', 'steer', 'aimYaw', 'aimPitch'];
 export const BODY_KEYS = ['action', 'anchor', 'pose', 'poses', 'sync', 'approach', 'enter', 'leave', 'exit', 'reach', 'hold', 'look', 'input', 'leaveBy', 'fromSeat', 'who'];
 // accepts/radius (shared/grab.js): a free socket takes a released thing whose grabbable.fits shares a keyword, within radius
-export const SOCKET_KEYS = ['pos', 'q', 'part', 'body', 'accepts', 'radius'];
+const SOCKET_KEYS = ['pos', 'q', 'part', 'body', 'accepts', 'radius'];
 // a socket entity's own component: its pose is the entity's transform, so pos and q aren't here
-export const SOCKET_ENTITY_KEYS = Object.keys(COMPONENTS.socket.fields);   // name, part, accepts, radius
+const SOCKET_ENTITY_KEYS = Object.keys(COMPONENTS.socket.fields);   // name, part, accepts, radius
 /** The station's registered keys, and the researched ones the alpha holds back (refused as reserved, names kept). */
 export const STATION_KEYS = Object.keys(COMPONENTS.station.fields);
 export const STATION_RESERVED = COMPONENTS.station.reservedFields;
-export const REACH_KEYS = ['at', 'q', 'part', 'hint', 'vr'];
-export const LOOK_KEYS = ['yaw', 'pitch', 'up'];
-export const INPUT_KEYS = ['move', 'look'];
-export const POSE_KEYS = ['clip', 'time', 'offset', 'by', 'clips'];
+const REACH_KEYS = ['at', 'q', 'part', 'hint', 'vr'];
+const LOOK_KEYS = ['yaw', 'pitch', 'up'];
+const INPUT_KEYS = ['move', 'look'];
+const POSE_KEYS = ['clip', 'time', 'offset', 'by', 'clips'];
 /** A clip is named the way the animation library names its files (sitting_normal_chair) or a presence slot (sitchair) */
 export const CLIP_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 export const ACTION_RE = /^[a-z][a-z0-9-]{0,31}$/;
 export const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
 const PARAM_RE = /^param\.[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
-export const isSignal = (s) => typeof s === 'string' && (SIGNALS.includes(s) || PARAM_RE.test(s));
+const isSignal = (s) => typeof s === 'string' && (SIGNALS.includes(s) || PARAM_RE.test(s));
 const MAX_BLEND = 16, MAX_POSES = 16, LIM = 1e4;
 
 /** What an action means when the station says nothing more: the pose it holds. The registry's (componentspec.js station:
@@ -98,7 +98,7 @@ const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3
 
 /** The clip a pose spec stands for when one name is wanted (a menu label, the agent's description, a fallback):
  *  a clip's own name, a blend's first clip. */
-export function poseClip(spec) {
+function poseClip(spec) {
   if (typeof spec === 'string') return spec;
   if (isObj(spec) && typeof spec.clip === 'string') return spec.clip;
   if (isObj(spec) && Array.isArray(spec.clips) && Array.isArray(spec.clips[0])) return String(spec.clips[0][1]);

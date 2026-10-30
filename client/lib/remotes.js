@@ -38,7 +38,6 @@ import { climbAt } from './climb.js';
  *  the scene, so a departed generation can neither delete nor repopulate its
  *  successor. Session-lifetime, monotonic. */
 const gens = new Map();
-export const remoteGen = (id) => gens.get(id) ?? 0;
 
 /** The capsule is a FLOOR, not a verdict (tools/capsule-recovery-test.mjs): a
  *  body that failed to load once must be retryable. A record wearing the
@@ -494,7 +493,3 @@ export function updateGaze(myPos, myAvatar, myName, now = performance.now()) {
   }
 }
 
-export function clearRemotes() {
-  for (const r of remotes.values()) r.avatar?.dispose();
-  remotes.clear();
-}

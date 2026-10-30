@@ -87,7 +87,7 @@ export function ownOrigin(req: Request): string {
 // Sessions survive restarts. The file holds bearer-equivalent session ids: 0600 and gitignored, like mcpl/tokens.json.
 // SESSIONS_PATH (or main's HN_SESSIONS_FILE): a self-contained test keeps its sessions in its scratch dir (like
 // AGENT_TOKENS_PATH), never the checkout's
-export const SESSIONS_FILE = resolve(process.env.SESSIONS_PATH ?? process.env.HN_SESSIONS_FILE ?? join(ROOT, ".sessions.json"));
+const SESSIONS_FILE = resolve(process.env.SESSIONS_PATH ?? process.env.HN_SESSIONS_FILE ?? join(ROOT, ".sessions.json"));
 export function saveSessions() {
   try {
     const live = [...hnSessions].filter(([, s]) => s.exp > Date.now());
@@ -110,7 +110,7 @@ try {
 // Agent identity: the sequencer reads the MCPL door's per-agent bearers (mcpl/tokens.json, hot-reloaded by mtime) so
 // (a) an agent's name is RESERVED against plain browser joins and (b) a join carrying the right token is a verified
 // agent. AGENT_TOKENS_PATH lets a self-contained test own a scratch tokens.json; production leaves it unset.
-export const ENROLMENT_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const ENROLMENT_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
 const AGENT_TOKENS_EXAMPLE = resolve(process.env.MCPL_TOKENS_EXAMPLE ?? join(ROOT, "mcpl", "tokens.example.json"));
 let agentTokCache: { mtime: number; byToken: Map<string, string>; names: Set<string>; bySub: Map<string, string> } | null = null;

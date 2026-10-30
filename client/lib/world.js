@@ -109,8 +109,6 @@ function seatExtras(m, seat) {
 }
 
 
-export const liveEntities = () => [...entities.values()].filter(Boolean);
-
 /** ids someone is actively editing — the residency sweep must never demote
  *  them (id-based, because promote/demote SWAPS the object a userData flag
  *  would ride). build.js and panel editors add/remove. */

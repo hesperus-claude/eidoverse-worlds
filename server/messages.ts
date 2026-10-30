@@ -61,7 +61,7 @@ export type MsgCtx = {
 
 /** A page size asked for on the wire: a whole number from 1 to PAGE_MAX, else the default (NaN or 1.5 never equals a
  *  page's length, so readHistory's ceiling would never stop it). */
-export const pageLimit = (v: unknown): number => { const n = Number(v ?? LIMITS.PAGE_DEFAULT); return Number.isInteger(n) && n >= 1 ? Math.min(LIMITS.PAGE_MAX, n) : LIMITS.PAGE_DEFAULT; };
+const pageLimit = (v: unknown): number => { const n = Number(v ?? LIMITS.PAGE_DEFAULT); return Number.isInteger(n) && n >= 1 ? Math.min(LIMITS.PAGE_MAX, n) : LIMITS.PAGE_DEFAULT; };
 
 /** A moment, not a fact: a socket still holding a backlog skips it rather than queueing another 64 KB (security review M5). */
 export function relayLossy(w: Pick<World, "clients">, msg: unknown, except?: Client) {
