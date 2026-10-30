@@ -32,7 +32,7 @@
 // look() carries. Nothing about the waveform is ever claimed.
 
 import { mediaTier } from './mediasrc.js';
-import { graphemes, graphemeList, quoted } from './text.js';
+import { graphemes, quoted } from './text.js';
 
 export const SOUND_DIR = 'eidoverse/assets/';
 export const SOUND_STORE = 'store/audio/';
@@ -114,8 +114,8 @@ export function normalizeSound(data) {
   } else if (sound.playing) notes.push('no t0 — the authority stamps one when it starts; without it each client starts from the top');
   if (data.description != null) {
     const d = String(data.description).replace(/\s+/g, ' ').trim();
-    if (graphemes(d) > SOUND_DESCRIPTION_MAX) { notes.push(`description clipped to ${SOUND_DESCRIPTION_MAX} characters`); sound.description = graphemeList(d).slice(0, SOUND_DESCRIPTION_MAX).join(''); }
-    else if (d) sound.description = d;
+    if (graphemes(d) > SOUND_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters; it must be ≤ ${SOUND_DESCRIPTION_MAX}` };   // the door's bound and words (checks.js maxLen)
+    if (d) sound.description = d;
   }
   if (!sound.description) notes.push('no description — anyone who can\'t hear it (or reads the world as text) gets only the file name; say what is playing');
   return { ok: true, sound, tier, notes };
