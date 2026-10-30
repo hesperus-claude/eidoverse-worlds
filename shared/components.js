@@ -514,11 +514,6 @@ export function colliderOf(ent) {
  *  carries) — no model, no light, no mesh. A pivot, a group parent, a target. */
 export const isEmpty = (ent) => !!ent && typeof ent === 'object' && kindOf(ent) === 'empty';
 
-/** Why a `comp` of type light/collider would be refused, or null. The authority
- *  (server/verbs.ts vComp) and the inspector ask the same question, so a
- *  refusal reads the same from either. `data: null` (removal) is always fine.
- *  Keys a record does not name are allowed, as in every bag (annotations
- *  ride along); the ones it names must have their type. */
 /** One place per thing (R 10-11): the refusal's words, the same from the authority and the Inspector. `has` is what the thing
  *  already is (model | light | mesh), `wants` what was asked for. */
 export const ONE_PLACE = {
@@ -533,6 +528,8 @@ export const ONE_PLACE = {
   },
 };
 export const MESH_SHAPES = COMPONENTS.mesh.enums.shape;
+/** Why a comp of type mesh/light/collider would be refused, or null; the inspector and blueprints ask here, so a
+ *  refusal reads the same. `data: null` (removal) is always fine; keys a record does not name are allowed. */
 export function compRefusal(type, data, ent = null) {
   if (data == null) return null;
   if (type === 'mesh') {
