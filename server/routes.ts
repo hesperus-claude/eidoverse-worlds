@@ -342,41 +342,20 @@ function serveFrom(base: string, rel: string, cache = false, req?: Request, immu
   const headers: Record<string, string> = { "content-type": contentType(path), ...(opts.headers ?? {}) };
   // a page carries its Content-Security-Policy, its own inline scripts hashed in (server/csp.ts; security pass 3 N3)
   if (headers["content-type"].startsWith("text/html")) headers["content-security-policy"] = cspForFile(path, f.lastModified, () => readFileSync(path, "utf8"));
-  // ETag from size+mtime: makes no-cache revalidation a 304, not a re-download
-  // (an 11MB avatar re-pulled per reload is invisible on localhost and rude
-  // over tailnet).
-  if (f.size > 0) {
-    const etag = `"${f.size}-${f.lastModified}"`;
-    headers["etag"] = etag;
-    if (req?.headers.get("if-none-match") === etag) {
-      // cache-control must ride along on the 304 (it refreshes the stored response's lifetime)
-      headers["cache-control"] = provisional ? "no-cache"
-        : variant ? VARIANT_CC
-        : immutable ? "public, max-age=31536000, immutable"
-        : cache && hardCacheable(path) ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
-      return new Response(null, { status: 304, headers });
-    }
-  }
-  // client code must never be heuristically cached (stale main.js = ghost bugs);
-  // library assets cache hard — EXCEPT avatars: .vrm files get iterated on
-  // (rig fixes, re-exports) and a 24h-stale avatar is a debugging nightmare
-  // (2026-07-22: "sydney's arms are swapped" was three of us looking at three
-  // different cached rigs). no-cache = revalidate each load, still cheap.
-  const hard = cache && hardCacheable(path);
+  // client code is never heuristically cached; library assets cache hard except hardCacheable's exclusions
   headers["cache-control"] = provisional ? "no-cache"
     : variant ? VARIANT_CC
     : immutable ? "public, max-age=31536000, immutable"
-    : hard ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
-  // gzip the JS modules: three.webgpu.js is 2.1MB raw / ~500KB gzipped, and
-  // over a DERP-relayed tailnet link that difference is seconds.
-  //
-  // .vrma and .vrm are here too, and the old comment claiming "binary assets
-  // are already compressed" was only half right. Measured 2026-07-26: GLB
-  // models compress to 0.99 (already Draco/webp packed inside — genuinely
-  // pointless), but VRM bodies hit 0.50 and the VRMA animation clips 0.44,
-  // because their float animation tracks and mesh data are stored raw. Seven
-  // clips at ~1.9MB each was the second-largest slice of a cold boot; half of
-  // it was air.
+    : cache && hardCacheable(path) ? "public, max-age=86400" : cache ? "no-cache" : "no-store";
+  // ETag from size+mtime: no-cache revalidation is a 304, not a re-download (an 11MB avatar per reload); the 304 carries
+  // cache-control too (it refreshes the stored response's lifetime)
+  if (f.size > 0) {
+    const etag = `"${f.size}-${f.lastModified}"`;
+    headers["etag"] = etag;
+    if (req?.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
+  }
+  // gzip text and uncompressed binaries (three.webgpu.js 2.1MB → ~500KB; VRMs ~0.50, VRMA ~0.44); GLBs (~0.99, already
+  // packed) are left out
   if (/\.(m?js|json|css|html|vrma|vrm|wasm)$/.test(path) && req?.headers.get("accept-encoding")?.includes("gzip") && f.size > 10_000) {
     let entry = gzCache.get(path);
     if (!entry || entry.mtime !== f.lastModified) {
