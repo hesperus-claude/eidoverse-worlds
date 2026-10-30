@@ -4,7 +4,7 @@
 // default scene into ONE Mesh (EXT_mesh_gpu_instancing → an InstancedMesh of `count`), and perfscope's accumulate()
 // bills per Mesh: tris = index (or position) count / 3 × instances, one draw, its material into a unique set, one
 // alpha tick per BLEND material occurrence; textures once per unique texture, w×h×4 bytes (×4/3 with mips); bones =
-// the largest skin a skinned mesh in the ranked scene uses. The rule and thresholds are shared/perfrank.js — the loupe's own. tools/glbperf-parity-probe
+// the largest skin a skinned mesh in the ranked scene uses. The rule and thresholds are shared/perfrank.js — the loupe's own. tools/glbperf-parity
 // loads real library models through the client's loader and checks these numbers against perfscope.statsOf().
 //
 // Known approximations, disclosed on the card: KTX2/basis images are billed at 1 byte/texel — the desktop worst case

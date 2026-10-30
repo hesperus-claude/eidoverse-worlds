@@ -1,4 +1,5 @@
-// image-container-check — every embedded image in every GLB/VRM under the
+// A tool, not a gate test: a sweep of the host's serving roots, not of the repo.
+// image-container-sweep — every embedded image in every GLB/VRM under the
 // serving roots, checked against its own declared mimeType.
 //
 // The optimizer now refuses to WRITE a file whose images are not images
@@ -7,9 +8,9 @@
 // else in the tree ever looks at them again. One sweep says whether the
 // library is clean.
 //
-//   bun run tools/image-container-check.ts              # OPT_DIR + LIBRARY_DIR
-//   bun run tools/image-container-check.ts <dir|file>…  # explicit roots
-//   bun run tools/image-container-check.ts --host https://…  # a live server
+//   bun run tools/image-container-sweep.ts              # OPT_DIR + LIBRARY_DIR
+//   bun run tools/image-container-sweep.ts <dir|file>…  # explicit roots
+//   bun run tools/image-container-sweep.ts --host https://…  # a live server
 //
 // Exit 0 clean, 1 if anything lies about its own bytes. The --host form reads
 // /library-list and fetches each entry with ?ktx2=1, which is the shape a

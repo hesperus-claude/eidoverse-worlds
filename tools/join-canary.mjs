@@ -1,4 +1,5 @@
-// join-probe — does the SERVER admit this key? Protocol level, no browser.
+// A tool, not a gate test: an operator canary against a live deploy (notes/CUTOVER-*.md, SFU-OPERATOR.md).
+// join-canary — does the SERVER admit this key? Protocol level, no browser.
 //
 // 🔴 Written 2026-08-15 after a browser harness told me a wrong key was being
 // ADMITTED — reported to R as a possible auth bypass. It was not. The client
@@ -13,7 +14,7 @@
 // The server was correct the whole time. When a browser check and a protocol
 // check disagree, the protocol check is the evidence.
 //
-//   node tools/join-probe.mjs <http(s)-url> <key>
+//   node tools/join-canary.mjs <http(s)-url> <key>
 // Talk to the world server DIRECTLY over ws — no client code, no localStorage.
 const [,, URL, KEY] = process.argv;
 const ws = new WebSocket(`${URL.replace(/^http/,'ws')}/ws`);

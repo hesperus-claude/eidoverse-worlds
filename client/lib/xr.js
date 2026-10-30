@@ -1243,7 +1243,7 @@ function warmXRPipelines() {
   if (xrWarmed || !(XR_BOOT || headsetHere) || presenting || !getSelf()?.vrm) return;   // any boot with a headset present warms, not only ?xr=1
   xrWarmed = true;
   warm('xr pipelines', async () => {
-    // One compile through a two-eye stand-in, no target bound (tools/xr-dual-warm-probe.mjs): it lands in the render
+    // One compile through a two-eye stand-in, no target bound (tools/xr-dual-warm-measure.mjs): it lands in the render
     // context the headset uses. Not xr.getCamera() (zero eyes before a session) nor a hand-built target (wrong context).
     const t0 = performance.now();
     try { await withXREyes(renderer, (eyes) => compileEverything(eyes)); }

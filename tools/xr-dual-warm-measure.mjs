@@ -1,3 +1,4 @@
+// A tool, not a gate test: a compile-cost measurement in real three + Chromium; the module rules are xrpass-test.
 // Content that loads in ONE mode must not compile when you switch to the OTHER (client/lib/xrwarm.js; the pattern
 // is BasisVR's warm-at-load — see that file's header). REAL three r186, WebGL backend, MSAA on like the client.
 //
@@ -14,7 +15,7 @@
 // Render-object births are counted per pass / camera / render context, which is what exposed three's post-frame
 // target leak (xrwarm.js: an in-VR compileAsync built into a context the headset's frames never use).
 //
-// Run: node tools/xr-dual-warm-probe.mjs   (~40 s; run it under a memory guard)
+// Run: node tools/xr-dual-warm-measure.mjs   (~40 s; run it under a memory guard)
 import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
 
 const N = 30, M = 20;
