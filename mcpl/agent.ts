@@ -1221,7 +1221,7 @@ export class WorldAgent {
               // was taking it: displaced downwind, then the slump.
               this.knockDown(msg.by,
                 (msg.ragdoll as { lean?: number[] })?.lean ?? null,
-                `(${msg.by} knocks you over)`);
+                "knocks you over");
             }
             // posed BY someone = authored. merge: only the bones sent, over an
             // authored held pose (null releases one); otherwise the pose is
@@ -1246,8 +1246,7 @@ export class WorldAgent {
               }
               this.ws?.send(JSON.stringify({ type: "anim", ...anim }));
             }
-            if (posed || msg.anim) this.onEvent?.({ ts: Date.now(), kind: "say", who: msg.by,
-              text: `(${posed ?? "posed you"}${msg.anim ? `${posed ? "," : ""} with an animation` : ""})` } as any);
+            if (posed || msg.anim) this.bodyNotice(msg.by, `${posed ?? "posed you"}${msg.anim ? `${posed ? "," : ""} with an animation` : ""}`);
             break;
           case "bodydrag":
             // A renderer-backed dragger runs the physics this headless body
@@ -1265,8 +1264,7 @@ export class WorldAgent {
               ++this.bodyEpoch;                    // a hand outranks any tumble still loading
               this.body?.stop(); this.stopSim();   // the dragger's sim owns the tumble now
               this.clip = "ragdoll";
-              this.onEvent?.({ ts: Date.now(), kind: "say", who: msg.by,
-                text: "(takes hold of your limp body and starts dragging you)" } as any);
+              this.bodyNotice(msg.by, "takes hold of your limp body and starts dragging you");
               break;
             }
             if (msg.unpin != null) {
@@ -1299,10 +1297,8 @@ export class WorldAgent {
                 if (pa?.joint && Array.isArray(pa.at) && pa.at.length === 3 && this.pins.size < 8) {
                   this.pins.set(String(pa.joint), pa.at.map(Number));
                 }
-                this.onEvent?.({ ts: Date.now(), kind: "say", who: msg.by,
-                  text: pa ? "(nails part of you in place and steps back)" : "(lets go of you)" } as any);
-                // then MY OWN sim takes the body back: it falls from wherever
-                // the hand let go and settles — or hangs, if nails hold it
+                this.bodyNotice(msg.by, pa ? "nails part of you in place and steps back" : "lets go of you");
+                // then MY OWN sim takes the body back: it falls from where the hand let go and settles, or hangs if nails hold it
                 void this.settleFromDrag(releasePose, msg.sim ?? null);
               }
               break;
@@ -2840,12 +2836,12 @@ export class WorldAgent {
     this.pendingAnim = null; // one-shot: rides exactly one packet
   }
 
-  /** Being pushed. Consent first; then the REAL tumble — this body runs the
-   *  same Verlet the browsers run, on its own skeleton (parsed once from its
-   *  VRM), and streams the resulting pose like anyone else falling over. The
-   *  slump-with-displacement survives only as the fallback for a process or a
-   *  VRM the sim cannot serve. Either way the event lands: being knocked over
-   *  is something that happens TO this body, not just to its pixels. */
+  /** Consent first, then the real tumble (the browsers' Verlet on this body's own VRM skeleton), the slump only when
+   *  the sim can't serve. Either way the event lands. */
+  /** Another body did something to mine: an act from them, in the inbox and to the host (`* who text`), never their speech. */
+  private bodyNotice(who: string, text: string) {
+    const ts = Date.now(); this.inbox.push({ ts, kind: "act", who, text }); this.onEvent?.({ ts, kind: "act", who, text });
+  }
   knockDown(by: string, lean: number[] | null, notice: string) {
     if (this.draggedBy) return;   // consent is the authority's: a shove my table refuses never reaches me (it sends the table on join)
     // knocked over standing, the root is at the feet's height until something
@@ -2869,8 +2865,8 @@ export class WorldAgent {
     const held = this.heldPose;
     this.clip = "ragdoll";
     this.heldPose ??= DOWNED_POSE;
-    this.reaches.clear();   // a knocked-over body's reach is gone — the arms are the ragdoll's now
-    this.onEvent?.({ ts: Date.now(), kind: "say", who: by, text: notice } as any);
+    this.reaches.clear();   // a knocked-over body's reach is gone: the arms are the ragdoll's now
+    this.bodyNotice(by, notice);
     void this.tumble(lean, held);
   }
 
