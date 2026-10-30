@@ -59,7 +59,7 @@ globalThis.AudioContext = class {
 };
 
 const mod = await import('../client/lib/voicesource.js');
-const { voiceSource, setSynthProvider } = mod;
+const { voiceSource, setSynthProvider, setGeneratorRebuildHook, notifySynthTrackChanged } = mod;
 if (typeof setSynthProvider !== "function") { console.log("FAIL — setSynthProvider not exported; test would pass vacuously"); process.exit(1); }
 
 let pass = 0, fail = 0;
@@ -79,17 +79,8 @@ check('mic available and wanted → microphone', s.kind === 'microphone' && gumC
 setSynthProvider({ available: () => true, start: () => ({ kind: 'audio', stop() {} }) });
 gumCalls = 0;
 s = await voiceSource({ micWanted: false });
-// 🔴 ASSERT THE POSITIVE. This read `s.kind !== 'microphone'` — a NEGATIVE, so
-// a stream that is neither a mic nor marked synthetic sailed through. An
-// adversarial mutation (strip `.synthetic = true` from synthStream()) left this
-// file 6/6 GREEN. That flag drives five live branches — voicesfu.js:290,294,300
-// (the mic-resume-after-synth guard) and voice.js:614 (whether the WebAudio
-// gate wraps the stream at all) — so a source that loses it is silently treated
-// as a microphone by every consumer.
-//
-// This is the same class of error the transcription version made, one level
-// down: I fixed the invented INTERFACE and kept asserting the absence of the
-// wrong thing instead of the presence of the right one.
+// 🔴 ASSERT THE POSITIVE (.synthetic === true), not "not a microphone": voicesfu.js's re-acquire-after-synth guard
+// branches on the flag
 check('mic OFF + provider → synthetic source', !!s && s.synthetic === true);
 check('mic OFF source is NOT a microphone', s.kind !== 'microphone');
 check('mic OFF does not call getUserMedia', gumCalls === 0);
@@ -127,6 +118,21 @@ setSynthProvider({ available: () => false, start: () => { throw new Error('must 
 let threw = false;
 try { await voiceSource(); } catch { threw = true; }
 check('no provider + no mic → throws (does not fake a source)', threw);
+
+// 6. mic OFF + no provider publishes nothing and never opens the device
+gumBehaviour = 'ok'; gumCalls = 0;
+let offThrew = false;
+try { await voiceSource({ micWanted: false }); } catch { offThrew = true; }
+check('mic OFF + no provider → throws, getUserMedia untouched', offThrew && gumCalls === 0);
+
+// 7. two transports register the rebuild hook: both fire, a thrower does not silence the rest, and unsubscribe works
+const fired = [];
+const offs = [() => fired.push('mesh'), () => { throw new Error('sfu blew up'); }, () => fired.push('sfu-later')].map(setGeneratorRebuildHook);
+notifySynthTrackChanged({ kind: 'audio' });
+check('every rebuild hook fires; a throwing one does not silence the rest', fired.join() === 'mesh,sfu-later');
+offs.forEach((off) => off());
+notifySynthTrackChanged({ kind: 'audio' });
+check('…and an unsubscribed hook no longer fires', fired.length === 2);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

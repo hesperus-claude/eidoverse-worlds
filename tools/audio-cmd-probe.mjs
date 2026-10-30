@@ -1,11 +1,5 @@
-// audio-cmd-probe — EXECUTE /audio in a real browser against a live world.
-//
-// audio-report-test.mjs re-implements the report to test its shape; this
-// drives the shipped one through the real chat input (Escape first — the
-// leading / opens command autocomplete, and Enter with it open feeds acceptAC,
-// not submit). First run caught a missing import that left two probes
-// "unreadable" while every node-side test stayed green.
-//
+// audio-cmd-probe: EXECUTE /audio in a real browser against a live world (chat-log-test.ts holds the report's shape
+// headless; this drives the shipped one through the real chat input).
 //   node tools/audio-cmd-probe.mjs   (world on :8960; JOIN_KEY env for the key)
 import { chromium } from 'playwright';
 const ORIGIN = process.argv[2] || 'http://127.0.0.1:8960';
