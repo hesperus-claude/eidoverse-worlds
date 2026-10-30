@@ -75,7 +75,6 @@
  "tools/reach-continuity-test.ts": "needs the host's optimized avatar store; MERGE into reachlive pending",
  "tools/reachlive-test.ts": "needs the host's optimized avatar store (assets/opt/…/vrms); no rig-fixture fallback yet",
  "tools/reachrig-test.ts": "needs the host's optimized avatar store (assets/opt/…/vrms); MERGE into reachlive pending",
- "tools/readhistory-test.ts": "stale: WorldLog moved to server/worldlog.ts and lost append/fold; needs a rewrite against the current log",
  "tools/roaming-renderer-check.ts": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first",
  "tools/route-preparation-test.ts": "MERGE into tools/structure-threshold-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/screenshots-wire-test.ts": "MERGE into tools/snapframe-test.ts pending (a duplicate or near-duplicate of its rows)",
