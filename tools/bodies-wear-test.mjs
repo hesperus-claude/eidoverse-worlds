@@ -1,30 +1,20 @@
-// bodies-wear-test — the Profile must offer a way BACK to a body that failed to load (#196 review B1).
-//
-// `getMyAvatarName()` is INTENT and survives a failed load, so gating the row's `wear` action on it
-// left the body that just failed marked active with no action — the one body a first-time user owns.
-// This drives the REAL client/lib/bodies.js `fields()`.
-//
+// bodies-wear-test: the Profile offers a way BACK to a body that failed to load (#196).
+// `getMyAvatarName()` is INTENT and survives a failed load, so gating the row's `wear` on it strands the one body a
+// first-time user owns. Drives the REAL client/lib/bodies.js `fields()`.
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/bodies-wear-test.mjs
-//
 // Mutations that must turn a named check red:
 //   bodies.js: `const onMe = n === cur && !!getMe() && !getMe()?.isCapsule;` → `n === cur`
 //   bodies.js: drop the `!getMe()?.isCapsule` clause
-//   mybody.js: restore the unconditional same-path early return in wireAvatarSwitch
+//   mybody.js: restore the unconditional same-path early return in wireAvatarSwitch (red in tools/wiring-check.ts)
 //   bodies.js: flushBodyPrefs drops the captured name (`setMyBodyPref(p.patch)`)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
-const dir = dirname(fileURLToPath(import.meta.url));
 
-// The body state the Profile reads. `me` is what is ACTUALLY on screen; `name` is what we intended.
+// the body state the Profile reads: `me` is what's ACTUALLY on screen; `name` is what we intended
 const state = (globalThis.__bodyState ||= { me: null, name: null });
 
-// bodies.js reads the worn list from localStorage AT IMPORT, so it must exist before the dynamic
-// import below — otherwise `mine` is empty, every row is undefined, and the checks below would be
-// asserting over absent rows (a green from an empty measurement is the failure this repo keeps
-// scarring on). A real browser has this key the moment you have ever worn anything.
+// bodies.js reads the worn list from localStorage AT IMPORT: seed it first, or the checks pass over absent rows
 const store = new Map([['ew-worn', JSON.stringify(['claude'])]]);
 globalThis.localStorage = {
   getItem: (k) => store.get(k) ?? null,
@@ -60,15 +50,14 @@ state.name = 'claude';
 state.me = { isCapsule: false };
 let f = bodiesFields();
 let row = rowsOf(f).find((r) => r.id === 'claude');
-// Guard the SUBJECT before asserting about it: with no row, every `row?.active !== true` below is
-// vacuously true and the suite reports green over nothing.
+// guard the SUBJECT first: with no row, every `row?.active !== true` is vacuously true
 check('the list actually contains the body under test (not an empty measurement)', !!row);
 check('the worn body is marked active', row?.active === true);
 check('the worn body offers no redundant wear action', !hasWear(row));
 check('the wearing row names it', wearing(f) === 'claude');
 
 // ---------------------------------------------------------------- the body FAILED: capsule on screen
-state.me = { isCapsule: true };          // intent unchanged: `name` is still 'claude'
+state.me = { isCapsule: true };  // intent unchanged: `name` is still 'claude'
 f = bodiesFields();
 row = rowsOf(f).find((r) => r.id === 'claude');
 check('the wearing row tells the truth when the capsule is on screen',
@@ -86,16 +75,11 @@ check('with no body, nothing is active', row?.active !== true);
 check('with no body, the row is still wearable', hasWear(row));
 
 // ---------------------------------------------------------------- the switch must not no-op
-// The last link: even with the button restored, switchAvatar's same-path early return would make
-// clicking it do nothing. A button that no-ops is worse than no button.
-const mybody = readFileSync(join(dir, '../client/lib/mybody.js'), 'utf8');
-check('the same-path early return exempts the capsule',
-  /if \(path === myAvatarPath && !me\?\.isCapsule\) return;/.test(mybody),
-  'clicking wear on the failed body would silently do nothing');
+// switchAvatar's same-path early return exempts the capsule (else the restored button is a no-op): tools/wiring-check.ts
 
-// ---------------------------------------------------------------- THIS BODY: size and nameplate (R, 2026-09-30)
-// The worn body's own section: fields (so the profile quad renders the same sliders in VR), shown only for a real
-// body, writing through mybody's setMyBodyPref, with a reset only when there is something to reset.
+// ---------------------------------------------------------------- THIS BODY: size and nameplate
+// the worn body's section: fields (so the VR profile quad renders the same sliders), shown only for a real body, writing
+// through mybody's setMyBodyPref, with a reset only when there is something to reset
 const { bodiesDispatch } = await import('../client/lib/bodies.js');
 const byK = (f, k) => f.find((x) => x.k === k);
 const body = () => ({ isCapsule: false, userScale: 1, plateY: 0, setUserScale(u) { this.userScale = u; }, setPlateY(y) { this.plateY = y; } });
@@ -106,8 +90,7 @@ check('this body: a size slider, 50–200 %', size?.t === 'range' && size.min ==
 check('this body: a nameplate slider, −30…+80 cm', plate?.t === 'range' && plate.min === -30 && plate.max === 80 && plate.value === 0, JSON.stringify(plate));
 check('this body: the resulting height in m (roster 1.60 m at 100%)', f.some((x) => x.label === 'height' && /^1\.60 m/.test(x.value)), JSON.stringify(f.find((x) => x.label === 'height')));
 check('this body: at default, no reset buttons', !byK(f, 'body-scale-reset') && !byK(f, 'plate-y-reset'));
-// a drag: one `input` per step. The body follows each one; the store is written once, after the value rests
-// (review 09-30 S6: a JSON rewrite of every body's prefs on every pixel of a drag)
+// a drag: one `input` per step; the body follows each, the store is written once after the value rests (not every pixel)
 for (let v = 101; v <= 150; v++) bodiesDispatch('body-scale', v);
 for (let v = 1; v <= 30; v++) bodiesDispatch('plate-y', v);
 check('mid-drag the worn body follows every tick (percent → ×, cm → m)', state.me.userScale === 1.5 && state.me.plateY === 0.3, JSON.stringify(state.me));
@@ -122,8 +105,8 @@ bodiesDispatch('plate-y-reset');
 check('nameplate reset → auto (0), size kept', state.prefs.plateY === 0 && state.prefs.scale === 1.5, JSON.stringify(state.prefs));
 bodiesDispatch('body-scale-reset');
 check('size reset → 100 %', state.prefs.scale === 1, JSON.stringify(state.prefs));
-// a VR slider has no release, so its save waits SAVE_MS — wearing another body inside that window must not file the
-// first body's value under the second's name (Greptile, #212)
+// a VR slider has no release, so its save waits SAVE_MS: wearing another body in that window must not file the first
+// body's value under the second's name (#212)
 state.name = 'claude'; state.me = body(); state.prefs = { scale: 1, plateY: 0 }; state.writes = 0; state.writeNames = [];
 bodiesDispatch('body-scale', 140);
 state.name = 'other'; state.me = body();   // the switch, 0 ms later
