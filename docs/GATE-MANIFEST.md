@@ -335,7 +335,7 @@ time.
 | 165 | first-name-account | main | `tools/first-name-account-test.ts` | bun | 1 s | 180 s |
 | 166 | retired-commands | main | `tools/retired-commands-test.ts` | bun | 1 s | 180 s |
 | 167 | animnames-retry | main | `tools/animnames-retry-test.ts` | bun | 2.5 s | 180 s |
-| 168 | snapshots | main | `tools/bun-test.ts tools/snapshots-test.ts` | bun | 9 s | 180 s |
+| 168 | screenshots | main | `tools/bun-test.ts tools/screenshots-test.ts` | bun | 9 s | 180 s |
 | 169 | snapframe-render | main | `tools/snapframe-render-test.ts` | bun | 0.1 s | 180 s |
 | 170 | anim-backpressure | main | `tools/anim-backpressure-test.ts` | bun | 0.3 s | 180 s |
 | 171 | panels | main | `tools/panels-test.ts` | bun | 1 s | 180 s |
