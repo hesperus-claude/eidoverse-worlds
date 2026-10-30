@@ -19,6 +19,7 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 // emojiRenders paints on a scratch canvas: coloured pixels = a real glyph
@@ -37,11 +38,8 @@ const stub = await import('./actionbar-stub.mjs');
 const { initActionBar, ringActionEntries } = await import('../client/lib/actionbar.js');
 const { ANIM_ORDER, myState, postureCalls, busLog, played, xrPanels, bus } = stub;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("actionbar");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const sleep = (ms: number) => new Promise((r) => _setInterval(r, ms));   // one-shot: never cleared, harmless
 // the same column math the bar uses (a mirror, so the expectations are numbers not calls)
 const TILE = 32, GAP = 6, PAD = 7, ROW_H = 32;
@@ -392,5 +390,4 @@ console.log('ACTIONBAR — a defs push rebuilds the lantern\'s gesture actions, 
   ANIM_ORDER.splice(0, ANIM_ORDER.length, ...saved); bus.emit('animnames-updated');
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

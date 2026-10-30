@@ -18,16 +18,14 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ width: 1024, height: 768 });
 HTMLCanvasElement.prototype.getContext = function () {
   return { fillText() {}, getImageData: () => ({ data: new Uint8ClampedArray(24 * 24 * 4).fill(200) }) } as any;
 };
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("actionbar-restore");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const TILE = 32, GAP = 6, PAD = 7;
 const widthFor = (c: number) => c * TILE + (c - 1) * GAP + PAD * 2 + 2;
 
@@ -56,5 +54,4 @@ f.hide(); f.show();
 const shown = [f._state.x, f._state.w, f._state.h];
 check('…exactly as show() lays it out, rows included (x, w, h)', restored.join() === shown.join(), `restore ${restored} vs show ${shown}`);
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

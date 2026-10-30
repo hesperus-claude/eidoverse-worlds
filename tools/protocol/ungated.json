@@ -3,7 +3,7 @@
  "mcpl/manifest-test.ts": "passes; hygiene to pay before it can be a row (own-ok1): fixed waits onto wait.ts, rows onto suite.ts",
  "mcpl/reach-test.ts": "needs the host's optimized avatar store (assets/opt/eidoverse/assets/vrms); no committed rig-fixture fallback yet",
  "tools/actionbar-restore-test.ts": "MERGE into tools/actionbar-test.ts pending (a duplicate or near-duplicate of its rows)",
- "tools/actionbar-test.ts": "passes; hygiene to pay before it can be a row (bare-wait6, own-ok1): fixed waits onto wait.ts, rows onto suite.ts",
+ "tools/actionbar-test.ts": "passes; 6 fixed waits (a private _setInterval sleep among them) to move onto wait.ts before it can be a row",
  "tools/approach-dwell-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/approach-env-clamp-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/approach-seed-test.ts": "MERGE into mcpl/denoise-test.ts pending (a duplicate or near-duplicate of its rows)",

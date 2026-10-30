@@ -14,12 +14,13 @@ import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
 import { optimizeGlbLod } from "../server/optimize.ts";
+import { suite } from "./protocol/suite.ts";
 // these tests exercise the REDUCER's mechanics on fixtures sized around a 1,000-vertex floor; the production floor
 // (LOD_MIN_VERTS, a policy) is pinned in store-variants-test
 const lodAtTestFloor = (b: Uint8Array, e: string | null, m?: (d: any) => void) => optimizeGlbLod(b, e, m, { minVerts: 1_000 });
 
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+const S = suite("lod-normals");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 
 function sphere(seg: number, ring: number) {
   const pos: number[][] = [], uv: number[][] = [];
@@ -103,4 +104,4 @@ const sOff = s.out ? await offShading(s.out) : 1;
 console.log(`  · smooth:  ${s.out ? `LOD ${s.before}→${s.after}${s.permissive ? " (permissive)" : ""}, off-shaded ${(100 * sOff).toFixed(1)}%` : `refused ${s.kind}: ${s.verdict}`}`);
 check("smooth UV sphere: still reduced to ≤ 40% of its vertices", !!s.out && s.after <= s.before * 0.4, { before: s.before, after: s.after, kind: s.kind });
 check("…and it shades like its surface", sOff <= 0.05, sOff);
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();

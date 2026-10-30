@@ -11,12 +11,10 @@
 // capture.js, world.js) stubbed and the readiness probe scripted: the world becomes ready after `readyAt` ms.
 
 import { join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("snap-settle");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 const ROOT = join(import.meta.dir, "..");
 
 /** Ask the real capture() for a frame: the world is ready after `readyAt` ms (never, if null); `wait` is the
@@ -72,5 +70,4 @@ console.log("settleBudget");
   check("a negative wait is ignored (the old 20 s)", snapCase(0, -5).budget === 20_000);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

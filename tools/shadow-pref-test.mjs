@@ -21,6 +21,7 @@
 // to check every control still kills the test (that is the guard against this
 // file joining the suite as decoration).
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 
@@ -165,8 +166,8 @@ if (CASE) {
 
 // ---- the parent: run the cases, check the invariants -----------------------
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("shadow-pref");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 async function runCase(name, mutate = null) {
   const args = [process.execPath, import.meta.path, '--case', name];
@@ -320,5 +321,4 @@ if (ARGV.includes('--mutants')) {
   biasChecks(await runCase('bias'));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();
