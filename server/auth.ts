@@ -59,12 +59,14 @@ export function accountOf(tok: string): { account: string; name: string } | { re
 export type HnSession = { sub: string; name: string; scopes: string[]; claims?: Record<string, unknown>; exp: number; native?: true; nativeWorld?: string };
 export const hnSessions = new Map<string, HnSession>();
 export const hnJti = new JtiCache();
+/** The session id an `ew_sess` cookie carries, or null. */
+export const sessionIdOf = (cookie: string | null): string | null => /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(cookie ?? "")?.[1] ?? null;
 export function sessionFromCookie(cookie: string | null): HnSession | null {
-  const m = /(?:^|;\s*)ew_sess=([a-f0-9]{64})/.exec(cookie ?? "");
-  if (!m) return null;
-  const s = hnSessions.get(m[1]!);
+  const sid = sessionIdOf(cookie);
+  if (!sid) return null;
+  const s = hnSessions.get(sid);
   if (!s) return null;
-  if (s.exp < Date.now()) { hnSessions.delete(m[1]!); return null; }
+  if (s.exp < Date.now()) { hnSessions.delete(sid); return null; }
   return s.sub.startsWith("human:") ? s : null;   // a cookie session is a human's: anything else proves nobody (/auth refuses to make one)
 }
 
