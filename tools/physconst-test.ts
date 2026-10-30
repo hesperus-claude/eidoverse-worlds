@@ -9,12 +9,13 @@
 // @ts-nocheck
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
+import path from "node:path";
 import { request } from "../shared/protocol/authority.js";
 import { openWorld } from "../server/filehost.ts";
 import { ENGINES } from "../shared/protocol/simlayer.js";
 import { grabOf } from "../shared/grab.js";
 import { planLaunch } from "../shared/protocol/launchplan.js";
-import { scratch } from "./protocol/common.ts";
+import { ENGINE, scratch } from "./protocol/common.ts";
 import { labClock } from "./protocol/clock.ts";
 
 let fails = 0, passes = 0;
@@ -94,6 +95,7 @@ const ENG = "eidosim@1.0.0";
   ok(bytes(R.unNegZero({ a: [-0, { b: -0 }], c: -0 })) === bytes({ a: [0, { b: 0 }], c: 0 }), "B unNegZero scrubs nested", R.unNegZero({ a: [-0] }));
 }
 
+const src = (f: string) => fs.readFileSync(path.join(ENGINE, f), "utf8");
 // R 10-28: a punt's reach lives in KICK alone: no runtime file, help or agent description writes a punt / kick distance of its own
 { const walk = (d: string): string[] => fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }).flatMap((e) => e.name === "node_modules" || e.name === "vendor" ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : /\.(m?js|ts|json)$/.test(e.name) && !/-test\.|-check\./.test(e.name) ? [path.join(d, e.name)] : []);
   const hits = ["client", "shared", "mcpl", "server", "defs/ui"].flatMap(walk).filter((f) => f !== path.join("shared", "protocol", "physconst.js"))
