@@ -2,7 +2,7 @@
 // world-upgrade-review {id, world} → {type, id, ok, world, report, hash, warning?}: the CLI's dry run (nothing written).
 // world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place translation, bound to
 // that hash (a verified backup first: server/backups.ts). Both run tools/protocol/world.ts itself: the translation has one code path.
-// A server operator (SERVER_OPERATORS) or the world's owner, by a proven account (R 10-28): an owner main's records bind to
+// A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
 // that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional): world.ts
 // owner-of. An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
 // recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/TRANSLATING-OLD-WORLDS.md).
@@ -47,7 +47,7 @@ const tagged = (out: string, tag: string): Any => { const l = out.split("\n").fi
 
 type Owner = { recognised: "bound" | "name" | null; owner?: string; ownerless: boolean; why?: string };
 const OWNER_MS = 30_000, ownerSeen = new Map<string, { at: number; p: Promise<Owner | null> }>();
-/** At most this many owner checks (CLI runs) at once for joins (review full-260 L2): a burst of refused joins can't fork the server. */
+/** At most this many owner checks (CLI runs) at once for joins: a burst of refused joins can't fork the server. */
 export const JOIN_CHECKS = 2; let joinChecks = 0;
 /** world.ts owner-of: is this proven account an owner of the old world? Cached briefly per (world, account, name, log); null when
  *  the check didn't run. `join`: a refused join's check, skipped (null) while JOIN_CHECKS are already running. */
@@ -80,7 +80,7 @@ async function admit({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [stri
   if (!old) return refuse("not-old", `there is no world saved in an older format called "${world.slice(0, 64)}" here`);   // to anyone: a join says as much
   if (!account) return rights("not signed in");
   const bad = shape?.(); if (bad) return refuse("shape", bad[0], bad[1]);   // before the rate slot: a malformed request runs nothing
-  // the rate next (review full-260 L2): an owner check runs the CLI (a read and fold of the old log), so it is spent on the slot
+  // the rate next: an owner check runs the CLI (a read and fold of the old log), so it is spent on the slot
   const now = Date.now(), mine = (recent.get(account) ?? []).filter((t) => now - t < RATE_MS);
   if (mine.length >= RATE_N) return refuse("rate", `at most ${RATE_N} upgrade requests in ${RATE_MS / 60_000} minutes`, "try again later");
   recent.set(account, [...mine, now]);   // taken in the same turn as the check, before the await below

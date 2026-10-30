@@ -191,7 +191,7 @@ export function revokeSfuLeg(world: string, id: string) {
   return leg;
 }
 
-/** Merged into /relay-diag. DELIVERED and SUPPRESSED are separate (#104 measurement hygiene): a cheaper server that drops more is not healthier. */
+/** Merged into /relay-diag. DELIVERED and SUPPRESSED are separate: a cheaper server that drops more is not healthier. */
 export function sfuDiag(world: string) {
   const s = worlds.get(world);
   if (!s) return { transport: "sfu", active: false };
