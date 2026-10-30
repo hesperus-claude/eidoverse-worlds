@@ -69,6 +69,9 @@ const ROWS: Row[] = [
   // exempt: breadcrumbs is a boot trace, sent before the join on purpose
   { name: "the world socket is written by net.js's senders (sendJoined), never raw", owner: ["client/lib/net.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
     exempt: ["client/lib/breadcrumbs.js"], forbidden: [/\bnet\.ws\??\.send\(/] },
+  // the world-name grammar: one regex for every server door, the agent door's included (it once lacked the sequencer's /i)
+  { name: "the world-name grammar is limits.ts's WORLD_NAME_RE", owner: ["server/limits.ts"], scope: files.filter((f) => /^(server|mcpl)\//.test(f)), forbidden: [(l) => l.includes("[a-z0-9_-]{1,64}")],
+    requires: [["mcpl/net-server.ts", /WORLD_NAME_RE\.test\(/], ["server/world.ts", /WORLD_NAME_RE\.test\(/], ["server/routes.ts", /WORLD_NAME_RE\.test\(/]] },
 ];
 for (const row of ROWS) {
   const scan = (row.scope ?? files).filter((f) => !row.owner.includes(f) && !(row.exempt ?? []).includes(f));

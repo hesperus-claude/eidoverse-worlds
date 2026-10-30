@@ -16,6 +16,7 @@ import { WorldScripts, type ScriptHost } from "./scripts.ts";
 import type { HnSession } from "./auth.ts";
 import { isOperator } from "./operators.ts";
 import { gateReach } from "./reachgate.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 
 // The settle rule — what a pose looks like TO SOMEONE ELSE — is pinned to
 // server.ts by source-text gates (§15.1: settled-pose-test regexes the file
@@ -240,12 +241,12 @@ export const worlds = new Map<string, World>();
  *  found and wrong for everyone else (RFC-005 §3.2.7: founding is not joining).
  *  Same test forkWorld uses to refuse an occupied name. */
 export function worldExists(name: string): boolean {
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return false;
+  if (!WORLD_NAME_RE.test(name)) return false;
   return worlds.has(name) || existsSync(join(WORLDS_DIR, name));
 }
 
 export function getWorld(name: string): World {
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) throw new Error(`bad world name: ${name}`);
+  if (!WORLD_NAME_RE.test(name)) throw new Error(`bad world name: ${name}`);
   let w = worlds.get(name);
   if (!w) { w = new World(name); worlds.set(name, w); }
   return w;

@@ -44,7 +44,7 @@ import { route, avatarRoster } from "./routes.ts";
 import { screenshots } from "./screenshots.ts";
 import { registerSystem, startTick } from "./tick.ts";
 import { MESSAGES } from "./messages.ts";
-import { LIMITS, envNumber } from "./limits.ts";
+import { LIMITS, envNumber, WORLD_NAME_RE } from "./limits.ts";
 import { defsFingerprint } from "./defs.ts";
 // Seat profiles (#101, upstream; write-half ported §24r): the store, its
 // external-change poll, the verdict lane on /avatars and the POST
@@ -294,7 +294,7 @@ try {
   let woken = 0;
   for (const name of readdirSync(WORLDS_DIR)) {
     try {
-      if (!/^[a-z0-9_-]{1,64}$/i.test(name) || !isWorldSaved(name)) continue;
+      if (!WORLD_NAME_RE.test(name) || !isWorldSaved(name)) continue;
       if (fileIncludes(join(WORLDS_DIR, name, "world.jsonl"), '"script:')) { getWorld(name); woken++; }
     } catch (err) { console.error(`[boot] world ${name} peek failed`, err); }
   }
@@ -376,7 +376,7 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
     // with an explanation and a close code the client knows not to retry
     // (retrying a name that can never exist is just a polite DoS).
     const wname = String(msg.world ?? "commons");
-    if (!/^[a-z0-9_-]{1,64}$/i.test(wname)) {
+    if (!WORLD_NAME_RE.test(wname)) {
       ws.send(JSON.stringify({ type: "error", error: `"${wname}" is not a world name — check the link that brought you here` }));
       c.ws.close?.(4005, "bad world name");
       return null;

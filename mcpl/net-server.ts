@@ -35,6 +35,7 @@ import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
 import { atomicWrite } from "../server/fsutil.ts";
 import { displayNameIndex, lookupToken, readTokenRegistry, wireAuthors, type TokenAuth } from "./token-registry.ts";
+import { WORLD_NAME_RE } from "../server/limits.ts";
 
 const PORT = Number(process.env.MCPL_PORT ?? 8941);
 // archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
@@ -898,8 +899,7 @@ async function accessProbe(name: string, token: string): Promise<AccessAnswer | 
 }
 
 /** RFC-005 join policy for both lanes: the credential can only narrow (no list = no narrowing; the world
- *  decides via accessProbe, docs/DESIGN-world-access.md). The name shape mirrors the sequencer's join check. */
-const WORLD_NAME_RE = /^[a-z0-9_-]{1,64}$/;
+ *  decides via accessProbe, docs/DESIGN-world-access.md). The name shape is the sequencer's (server/limits.ts). */
 function joinAllowed(auth: Auth, world: string, home = auth.world ?? "commons"): boolean {
   if (!WORLD_NAME_RE.test(world)) return false;
   if (!auth.worlds) return true;
