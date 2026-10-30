@@ -18,10 +18,8 @@ import { isOperator } from "./operators.ts";
 import { gateReach } from "./reachgate.ts";
 import { WORLD_NAME_RE } from "./limits.ts";
 
-// The settle rule — what a pose looks like TO SOMEONE ELSE — is pinned to
-// server.ts by source-text gates (§15.1: settled-pose-test regexes the file
-// itself). The log needs it for rememberPose, so it arrives by injection at
-// boot: one implementation, two planes.
+// The settle rule (what a pose looks like TO SOMEONE ELSE) lives in server.ts, where source-text gates pin it (§15.1);
+// the log needs it for rememberPose, so it arrives by injection at boot.
 let settle: (pose: unknown) => Record<string, unknown> | null = () => {
   throw new Error("settledPose not wired — server.ts wires it at boot");
 };
@@ -39,10 +37,7 @@ export type Client = {
   id: string;          // participant's display name in this world (their identity is actorId, from the authority directory)
   ws: { send(data: string): void; close?(code?: number, reason?: string): void; getBufferedAmount?(): number; readyState?: number };
   world: World | null;
-  /** latest pose, forwarded to late joiners so they see everyone immediately.
-   *  Minimal structure over an open record: the presence checks (scripts'
-   *  world.near, the authority's held-thing reach) dereference `.p`, everything
-   *  else rides opaque. */
+  /** latest pose, forwarded to late joiners. Only `.p` is dereferenced (world.near, held-thing reach); the rest rides opaque. */
   lastPose: ({ p?: [number, number, number] } & Record<string, unknown>) | null | undefined;
   avatar: string;      // VRM library path chosen at join
   spectator: boolean;  // retina/observer connections: receive everything, appear as nothing
@@ -55,18 +50,13 @@ export type Client = {
   tokenVerified?: boolean; // this leg presented the identity's own bearer at join
   trustedRenderer?: boolean; // a renderer that presented RENDERER_TOKEN: may watch any world (access.ts)
   auxBound?: boolean;  // this aux leg is bound to the primary's identity authority (token bearer OR matching login sub) — the B1 admission result, reused by the B3 attest gate
-  gen?: number;        // surfaceSession (#57 B2): server-issued transport epoch for THIS leg.
+  gen?: number;        // surfaceSession: server-issued transport epoch for THIS leg, monotonic, never reused; a superseded gen's rtc/attestation messages are refused (takeover retires the GENERATION, not just the socket)
   legGen?: number;     // this leg's WORLD-scoped generation (World.legGen): survives sequencer restarts, rides caption entries
-                       // Monotonic, never reused. Every rtc/attestation message is stamped with
-                       // it, and a superseded generation's messages are refused structurally —
-                       // takeover retires the GENERATION, not just the socket.
-                       // Deferred authored verbs capture it and recheck before committing.
   presenceSession?: string; // `session` on arrive and snapshot.present: the joining page's id, else a token for this leg (server.ts presenceSession)
   surface?: string;    // (name, surface) session model: "world" = the embodied primary (default);
                        // anything else = an auxiliary media leg (voice, vr-hands, …) — invisible,
                        // poseless, log-mute, rtc-capable, and REAPED when its primary dies.
-                       // Per-surface last-writer-wins replaces the flat one-body rule (2026-08-07;
-                       // prior art: Discord voice legs keyed to gateway sessions, XMPP resources).
+                       // Per-surface last-writer-wins (prior art: Discord voice legs, XMPP resources).
   renderer?: boolean;  // an invisible browser renderer (legacy): donates rendering for its world
   roam?: boolean;      // a renderer the screenshot broker may send to any world that has none (screenshots.ts)
   capture?: import("./screenshots.ts").CaptureCapability; // opt-in embodied/native donor
@@ -81,7 +71,7 @@ export type Client = {
   /** this connection's requests, one at a time in the order sent (server/requestwire.ts) */
   verbQueue?: Promise<void>;
   /** the log head when this connection arrived in its world (server.ts join, beside the snapshot's cut). Speech is
-   *  arrival-only (R 10-18): a say at or below it is never sent back to this connection unless it is an admin's. */
+   *  arrival-only: a say at or below it is never sent back to this connection unless it is an admin's. */
   arrivedSeq?: number;
 };
 
@@ -90,14 +80,8 @@ export type Client = {
 /** One world: its log and the embodied plane in flight. */
 export class World {
   name: string;
-  /** The runtime's flight recorder — the "why didn't it work" surface.
-   *
-   *  The world log holds what HAPPENED; this ring holds what DIDN'T and why:
-   *  requests the authority refused, rate limits, script events. In-memory only,
-   *  capped, never persisted — it is diagnosis, not history. Readable by
-   *  anyone in the world (ws `debug`, `/debug` in the client, `world_debug`
-   *  over MCPL): the log is public, so the reasons things bounced off it are
-   *  public too. */
+  /** The flight recorder: the log holds what HAPPENED, this ring what DIDN'T and why (refusals, rate limits, script
+   *  events). In-memory, capped, never persisted; readable by anyone in the world (ws `debug`, `/debug`, `world_debug`). */
   debugLog: Record<string, unknown>[] = [];
   debug(kind: string, detail: Record<string, unknown>): void {
     this.debugLog.push({ ts: Date.now(), kind, ...detail });
@@ -115,13 +99,9 @@ export class World {
   recPath: string | null = null; // frames archive, created lazily on first recorded frame
   lastRoster = "";               // last written roster line — deltas only
 
-  /** The log position this sequencer opened the world at, and the legs admitted
-   *  since. A leg's GENERATION is `openSeq × 1e6 + count`: server-issued,
-   *  strictly increasing within an opening, and never lower than any
-   *  generation a previous opening issued (every say a leg made advanced the
-   *  log past the opening that issued it). A million admissions per opening is
-   *  the bound; past it the opening refuses further legs a generation rather
-   *  than issuing an ambiguous one. */
+  /** The log position this world was opened at, and the legs admitted since. A leg's GENERATION is
+   *  `openSeq × 1e6 + count`: strictly increasing, and never lower than a previous opening's (each advanced the log).
+   *  Past a million admissions per opening, legs are refused a generation rather than issued an ambiguous one. */
   readonly openSeq: number;
   private legCount = 0;
   legGen(): number {
@@ -131,7 +111,7 @@ export class World {
 
   modStateKey?: string;   // the last mod-state (muted badges) the sweep sent
   sfuMutedIds?: Set<string>;   // display ids the sweep has muted at the SFU (released when that connection is gone)
-  /** Hold every standing pose that carries a reach to the tables as they are now (review of #260): after each
+  /** Hold every standing pose that carries a reach to the tables as they are now: after each
    *  request, and on the sanctions tick, since a timed allow can end with no request at all. Quiet: no attempt recorded,
    *  nothing said to a reacher for a packet they didn't send. */
   regateReaches(): void {
@@ -142,7 +122,7 @@ export class World {
       c.lastPose = p as Client["lastPose"]; this.dirty.set(c.id, p);   // the next frame carries the pose without the hand
     }
   }
-  /** Speech is arrival-only (R 10-18): the world's log keeps every say, people receive speech only for the time they were
+  /** Speech is arrival-only: the world's log keeps every say, people receive speech only for the time they were
    *  present, and only an ADMIN reads the master log's speech back: this world's owner, or a server operator (SERVER_OPERATORS). */
   /** who reads speech back past their own arrival: a server operator, or whoever holds the readChat permission (owners hold every one) */
   isAdmin(c: Client): boolean { return isOperator(c.account) || (!!c.actorId && this.log.may(c.actorId, "readChat")); }
@@ -170,7 +150,7 @@ export class World {
         return n > 0; },
       sayFloor: (actor: string) => this.sayFloor(actor),
       regateReaches: () => this.regateReaches(),
-      resync: (why: string) => { for (const c of this.clients) try { c.ws.close?.(1012, why); } catch { /* gone */ } },   // 1012: they redial and rejoin (review L21)
+      resync: (why: string) => { for (const c of this.clients) try { c.ws.close?.(1012, why); } catch { /* gone */ } },   // 1012: they redial and rejoin
     };
   }
 
@@ -210,7 +190,7 @@ export class World {
    *  the fresh log replaces this one in place, so the people present rejoin the new world on their reload. Returns
    *  the archive directory. */
   resetWorld(): string {
-    // a failure after the old log was moved aside retires this log (house 6340433633): it would write a new world.jsonl
+    // a failure after the old log was moved aside retires this log: it would write a new world.jsonl
     // holding only what came after. A second reset is safe: it finishes the erase from the in-memory state, and the old
     // log stays in the first attempt's archive
     let arch: string;
@@ -233,13 +213,9 @@ export class World {
 
 export const worlds = new Map<string, World>();
 
-// A function DECLARATION on purpose (§15.1): hoisting is load-bearing for
-// module-scope callers — the unsplit boot sweep called it above its
-// definition, and keeping the declaration form keeps that shape legal.
-/** Does this world already exist — in memory or on disk — WITHOUT creating it?
- *  getWorld() founds on miss, which is right for a join by someone entitled to
- *  found and wrong for everyone else (RFC-005 §3.2.7: founding is not joining).
- *  Same test forkWorld uses to refuse an occupied name. */
+// a function DECLARATION on purpose (§15.1): module-scope callers rely on hoisting
+/** Does this world exist (in memory or on disk) WITHOUT creating it? getWorld() founds on miss; founding is not joining
+ *  (RFC-005 §3.2.7). The same test forkWorld uses to refuse an occupied name. */
 export function worldExists(name: string): boolean {
   if (!WORLD_NAME_RE.test(name)) return false;
   return worlds.has(name) || existsSync(join(WORLDS_DIR, name));

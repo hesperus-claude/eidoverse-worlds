@@ -1,17 +1,7 @@
-// vrmheight — a body's stature read from its VRM file, so every body whose
-// file has a humanoid head has a height on the roster before anyone has worn
-// it.
-//
-// The rule is shared/rig.js's stature(): the humanoid head joint at rest plus
-// a forehead, the rule the browser's portrait pass and the door's
-// bodyHeightFor also use (the file's bind pose reads about a centimetre above
-// the browser's posed head). The bounding box is no substitute, since it
-// counts hair, ears and tails: the default claude.vrm boxes at about 2.2 m
-// around a 1.5 m body, its crown of tentacles weighted to the Head bone itself.
-//
-// Only the GLB header and JSON chunk are read, a few milliseconds a body, so a
-// result is kept in memory for the file's version (its mtime, as the roster
-// stamps it) and nothing is written. Read-only on the VRM.
+// vrmheight — a body's stature read from its VRM file, so a body has a height on the roster before anyone has worn it.
+// The rule is shared/rig.js's stature() (head joint at rest plus a forehead), the one the browser and the door use; the
+// bounding box is no substitute (it counts hair, ears and tails). Only the GLB header and JSON chunk are read, memoised
+// per file version (mtime); read-only on the VRM.
 import * as THREE from "three";
 import { closeSync, openSync, readSync } from "node:fs";
 import { glbJson, rigMath } from "../shared/rig.js";

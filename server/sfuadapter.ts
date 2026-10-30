@@ -191,7 +191,7 @@ export function revokeSfuLeg(world: string, id: string) {
   return leg;
 }
 
-/** Merged into /relay-diag. DELIVERED and SUPPRESSED are separate (#104 measurement hygiene): a cheaper server that drops more is not healthier. */
+/** Merged into /relay-diag. DELIVERED and SUPPRESSED are separate: a cheaper server that drops more is not healthier. */
 export function sfuDiag(world: string) {
   const s = worlds.get(world);
   if (!s) return { transport: "sfu", active: false };
@@ -228,7 +228,7 @@ export async function sfuNegotiate(world: string, legId: string,
     for (const speakerId of s.sfu.routesFor(legId)) send({ type: "sfu-route", speaker: speakerId });
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    // ask for in-band FEC explicitly (#104 §8 item 4): a default is not a contract; the client measures fecPacketsReceived
+    // ask for in-band FEC explicitly: a default is not a contract; the client measures fecPacketsReceived
     send({ type: "sfu-offer", sdp: withOpusFec(pc.localDescription!.sdp) });
     const sdp = await new Promise<string>((resolve, reject) => {
       const k = wkey(world, legId);

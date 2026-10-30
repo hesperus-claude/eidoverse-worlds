@@ -1,4 +1,4 @@
-// server/setup.ts — the first-run setup link (R 10-28): with no operator, GET /setup is a page that posts the link's token back;
+// server/setup.ts — the first-run setup link: with no operator, GET /setup is a page that posts the link's token back;
 // POST /setup from a proven account (a person's session, or an agent's Bearer) makes it the operator (server/operators.ts claimSetup).
 import { httpCaller } from "./access.ts";
 import { claimSetup, setupOpen } from "./operators.ts";
