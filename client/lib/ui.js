@@ -38,6 +38,7 @@ import { makeFrame, getFrame, isLocked, setLocked, resetLayout, escapeHid } from
 import { defsRegistry } from './defs.js';
 import { register as registerAction, get as getAction } from './actions.js';
 import { openLantern, closeLantern, isLanternOpen, CHORD, pillPinned, setPillPinned, setPillQuiet, resetPillPlace } from './commandbar.js';
+import { escapeHtml } from './markup.js';
 
 const $ = (id) => document.getElementById(id);
 export const el = {
@@ -481,9 +482,8 @@ export function collapseAll() {
 
 // ============================================================ who's here
 
-// (the roster frame is gone — 'present' lives in Chat's side pane)
-export const escapeHtml = (v) => String(v).replace(/[&<>"]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// 'present' lives in Chat's side pane
+export { escapeHtml };   // markup.js's, the one escaper (it escapes ' too)
 
 // ============================================================ dock
 // A closed frame has to be findable again. One row of toggles, plus the
