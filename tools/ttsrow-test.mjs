@@ -9,7 +9,7 @@ const M = (p) => fileURLToPath(new URL(`../client/lib/${p}`, import.meta.url));
 
 let ok = 0, bad = 0;
 const t = (n, cond, detail = '') => { cond ? ok++ : bad++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${n}${cond || !detail ? '' : ` — ${detail}`}`); };
-const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0)); };
+const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
 
 // the remembered voices; a load parks on `gate` when set, and fails when `loadFails`

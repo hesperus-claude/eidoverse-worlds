@@ -3,9 +3,11 @@
 import { admitParticipant } from "../server/relaydecision.ts";
 import { mintSfuCredential, admitSfuLeg, setSfuConsent, setSfuModeratorMute,
   revokeSfuLeg, sfuDiag, sfuState, registerSfuSender } from "../server/sfuadapter.ts";
+import { tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (n: string, c: boolean, d = "") => { console.log(`  ${c ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${n}${d ? "  " + d : ""}`); c ? pass++ : fail++; };
+const S = suite("sfu-adapter");
+const check = (n: string, c: unknown, d?: unknown) => S.check(n, c, d);
 
 // one refusal table, two columns: the decision layer and the adapter must agree row for row (reuse, not a re-telling)
 const W = "spike";
@@ -126,7 +128,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   registerSfuSender(WB, "dupL", (p) => wsB.push(p));  // bare keying: clobbers wsA…
   revokeSfuLeg(WB, "dupL");                           // …and this then deletes it
   setSfuConsent(WA, "dupL", 4, true);                 // negotiation fires in world A
-  for (let i = 0; i < 100 && !wsA.length; i++) await new Promise((r) => setTimeout(r, 20));   // A's offer landed, then B is read
+  await tryUntil("world A's offer", () => wsA.length > 0, { ms: 3000 });
   check("world A's offer reaches world A's socket despite world B's register+revoke",
     wsA.length > 0, `wsA=${wsA.length}`);
   check("…and nothing leaks into world B's socket", wsB.length === 0, `wsB=${wsB.length}`);
@@ -217,7 +219,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   markVoiceDegraded("fault-2");                            // repeat, mid-degraded
   check("repeat fault UPDATES the reason (latest fault is what an operator needs)",
     voiceServiceState().state === "degraded" && voiceServiceState().reason === "fault-2");
-  await new Promise((r) => setTimeout(r, 50));
+  await pause("degraded must not age into live", 50);
   check("degraded stays degraded with no receipt (50 ms; a timer longer than that is not this row's)",
     voiceServiceState().state === "degraded");
   markVoiceLive("negotiation completed for test-leg");
@@ -253,5 +255,5 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
     sent.some((p) => p.type === "sfu-route") && !sent.some((p) => p.type === "sfu-offer"), `sent=${JSON.stringify(sent.map((p) => p.type))}`);
 }
 
-console.log(fail === 0 ? `\n\x1b[32m✅ sfu-adapter: ${pass} passed\x1b[0m` : `\n\x1b[31m❌ ${fail} failed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+console.log(S.fail === 0 ? `\n\x1b[32m✅ sfu-adapter: ${S.pass} passed\x1b[0m` : `\n\x1b[31m❌ ${S.fail} failed\x1b[0m`);
+S.done();

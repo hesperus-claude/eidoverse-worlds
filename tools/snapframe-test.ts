@@ -17,12 +17,12 @@ import * as fp from "../client/lib/fp_view.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { freePort } from "./harness.ts";
+import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("snapframe");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
@@ -62,7 +62,7 @@ check("pitch keeps the heading (yaw 0 → +z, no x drift)", near(up.dx, 0) && ne
 
 // ---- 3. the wire ------------------------------------------------------------
 console.log("wire (scratch sequencer + fake renderer + plain-door agent)");
-const PORT = 8000 + Math.floor(Math.random() * 900), WORLD = "framing", TOKEN = "snapframe-test";
+const PORT = freePort(8000), WORLD = "framing", TOKEN = "snapframe-test";
 // (ported 10-17: the world is founded first — joining never founds one — joins fold the log (replica: true), the broker
 // speaks capture / capture-result, the agent's tool is screenshot, and a box with a door key keeps /worlds and /snap
 // behind it)
@@ -76,8 +76,7 @@ const seq = Bun.spawn(["bun", "server/server.ts"], {
 });
 let mcp: ReturnType<typeof Bun.spawn> | null = null;
 process.on("exit", () => { try { mcp?.kill(); } catch {} seq.kill(); });
-let up2 = false;
-for (let i = 0; i < 60 && !up2; i++) { try { await fetch(`http://127.0.0.1:${PORT}/worlds`, KEY); up2 = true; } catch { await Bun.sleep(200); } }
+const up2 = !!(await tryUntil("the scratch sequencer answers", () => fetch(`http://127.0.0.1:${PORT}/worlds`, KEY).then(() => true, () => false), { ms: 12_000, step: 200 }));
 if (!up2) { console.error("FATAL: scratch sequencer never came up (bun install in the repo root?)"); process.exit(2); }
 
 // fake renderer legs: each answers every snap with a 1×1 PNG. They record each
@@ -130,9 +129,7 @@ const rpc = (method: string, params?: unknown) => new Promise<any>((res, rej) =>
   stdin.write(JSON.stringify({ jsonrpc: "2.0", id: i, method, ...(params !== undefined ? { params } : {}) }) + "\n"); stdin.flush(); });
 await rpc("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "snapframe-test", version: "0" } });
 stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n"); stdin.flush();
-let joined = false;
-for (let i = 0; i < 50; i++) { const r = await fetch(`http://127.0.0.1:${PORT}/worlds`, KEY).then((r) => r.json()).catch(() => null);
-  if (JSON.stringify(r ?? "").includes("framer")) { joined = true; break; } await Bun.sleep(200); }
+const joined = !!(await tryUntil("the door's agent shows in /worlds", async () => JSON.stringify(await fetch(`http://127.0.0.1:${PORT}/worlds`, KEY).then((r) => r.json()).catch(() => null) ?? "").includes("framer"), { ms: 10_000, step: 200 }));
 check("the door's agent joined the world", joined);
 
 const schema = (await rpc("tools/list")).result.tools.find((t: any) => t.name === "screenshot")?.inputSchema?.properties ?? {};
@@ -173,5 +170,4 @@ check("an unkeyed /worlds is refused", bare.status === 401 || bare.status === 40
 const bareSnap = await fetch(`http://127.0.0.1:${PORT}/snap?world=${WORLD}&follow=framer&view=third`);
 check("an unkeyed /snap is refused, and dispatches no capture", (bareSnap.status === 401 || bareSnap.status === 403) && asked.length === nAsked, `${bareSnap.status}, ${asked.length - nAsked} dispatched`);
 for (const ws of renderers) ws.close();
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();
