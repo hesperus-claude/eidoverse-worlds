@@ -20,11 +20,8 @@ import { fileURLToPath } from "node:url";
 import { mock } from "bun:test";
 import * as THREE from "three";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const { mkCheck } = await import("./harness.ts");
+const { check, tally } = mkCheck();
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const near = (a: THREE.Vector3, b: THREE.Vector3, eps = 1e-9) => a.distanceTo(b) < eps;
 const fmt = (v: THREE.Vector3) => `[${v.toArray().map((n) => n.toFixed(3)).join(", ")}]`;
@@ -138,5 +135,5 @@ for (const view of Object.keys(DEFAULT)) for (const [field, v] of [["pitch", 20]
       t.ok && isDefault !== honoured, t.shot ? `${fmt(t.shot.eye)} → ${fmt(t.shot.at)}` : JSON.stringify(composed.at(-1)?.pitch));
   }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`${tally.passed} passed, ${tally.failed} failed`);
+process.exit(tally.failed ? 1 : 0);
