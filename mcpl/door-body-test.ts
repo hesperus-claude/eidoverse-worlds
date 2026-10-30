@@ -9,7 +9,7 @@
  * rejoin is the agent's own: its snapshot resumes the walk.
  */
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { pointClass } from "../shared/protocol/consent.js";
 import { wireState } from "../shared/protocol/replica.js";
 import { emptyState } from "../shared/protocol/fold.js";

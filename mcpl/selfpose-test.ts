@@ -17,7 +17,7 @@ import {
   canonicalBone, suggestBone, validatePose, validateTracks, tracksSpan, poseReport, poseChannels, mergePose,
 } from "../shared/humanoid.js";
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { rigFromGltf } from "./rigbones.ts";
 
 let failures = 0;
