@@ -101,8 +101,8 @@ for (const row of ROWS) {
     ["shared/protocol/descriptors.js", (l) => lit.test(l) && !/const lim = |\.\.\.lim|unit \}|\{ min: r\.min \}|\{ min: r\.gt \}|\{ max: r\.max \}/.test(l)],
     ["shared/components.js", (l) => lit.test(l) && !/p\.min = |p\.max = |p\.unit = |max: COMPONENTS\./.test(l)],
     ["shared/worldentity.js", (l) => /k: '(amplitude|size|segments|flatRadius|density|height|width|depth)'/.test(l) && /\b(min|max|unit):/.test(l)],
-    // editschema's own literals are the Transform channels', a socket body's look limits and the draft Material's
-    ["shared/editschema.js", (l) => /\b(min|max):\s*-?\d/.test(l) && !/scale|quat|look|roughness|metalness|emissive|opacity|yaw|pitch|readLine/.test(l)],
+    // editschema's own literals are the Transform channels', a socket body's look limits, the draft Material's and the light's sliders (their max grows with the value)
+    ["shared/editschema.js", (l) => /\b(min|max):\s*-?\d/.test(l) && !/scale|quat|look|roughness|metalness|emissive|opacity|yaw|pitch|readLine|Math\.max\(\d+, src\./.test(l)],
   ];
   for (const [f, bad] of LIMITS) { const hit = lines(f).filter(bad); check(`${f} declares no field limit or unit of its own (the registry's)`, !hit.length, hit.slice(0, 4).join(" | ")); }
 }

@@ -7,8 +7,8 @@ import crypto from "node:crypto";
 import { BACKUPS_DIR } from "./config.ts";
 import { isCacheFile } from "./statecache.ts";
 import { mkdirDurable, syncDir, syncTree } from "./durable.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 
-const NAME = /^[a-z0-9_-]{1,64}$/i;
 export const SUMS = "SHA256SUMS";
 export type Backup = { dir: string; files: number; bytes: number };
 
@@ -46,7 +46,7 @@ function filesUnder(d: string, at = ""): string[] {
  *  (the copy against the original, and the original against what was copied). Throws, in words, on any copy error or
  *  mismatch, removing the incomplete copy (it never became a backup). `afterCopy`: tests only, runs before the verify. */
 export function backupWorld(worldsDir: string, name: string, { backupsDir = BACKUPS_DIR, now = new Date(), afterCopy }: { backupsDir?: string; now?: Date; afterCopy?: (dir: string) => void } = {}): Backup {
-  if (!NAME.test(name)) throw new Error(`"${name}" is not a world name`);
+  if (!WORLD_NAME_RE.test(name)) throw new Error(`"${name}" is not a world name`);
   const bad = backupsDirProblem(worldsDir, backupsDir); if (bad) throw new Error(bad);
   const src = path.join(worldsDir, name);
   if (!fs.statSync(src, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`there is no world directory ${src} to back up`);
