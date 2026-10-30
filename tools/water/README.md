@@ -167,12 +167,10 @@ regression check also needs the scene imported (`--apply`):
 bun tools/protocol/zone-water-check.ts
 bun tools/water/import-golden-check.ts
 bun tools/water/fog-mask-check.ts
-bun tools/water/math-test.ts
 bun tools/models-field-test.ts
 bun tools/underwater-presence-test.ts
 UNDERWATER_TEST_PORT=19348 bun tools/underwater-wire-test.ts
 bun tools/water/gpu-test.ts
-bun tools/water/browser-check.ts
 bun tools/water/controller-check.ts
 bun tools/water/regression-check.ts
 ```
