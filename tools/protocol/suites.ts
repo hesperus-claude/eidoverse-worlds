@@ -215,6 +215,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
+  ["lod-policy", "../lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
+  ["lod-client", "../lod-client-test.ts", 1], // #170: the dial, the residency sweep, the loader's wire, an owned sequencer's answer, the in-place swap and the collider agree
   ["translate", "translate-check.ts", 1], // R 10-28 translation rulings (22 rights, 17 particles, 24 name bans, 50 report, version) + SWEEP-3 + light parity
   ["owners", "owners-check.ts", 1], // R 10-28: a translated world's owners are bound to the accounts main recorded for them; the rest listed, bindable (operator-repair bind)
   ["setup", "setup-check.ts", 1], // R 10-28: the first-run setup link: no operator → one boot line; a signed-in person or agent claims it once, stored, live; guests, other sites, wrong tokens refused
