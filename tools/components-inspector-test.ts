@@ -7,9 +7,8 @@
 // lower to door requests, checked through the real door.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-inspector-test.ts
 //
-// the protocol port (2026-10-06): the corpus is the spec fixtures (and COMPONENTS_CORPUS) TRANSLATED
-// (shared/protocol/translate-v1.js, as a world is migrated) and read as the view (shared/protocol/view.js) — the records an
-// inspector sees. Light-verb lights and guard are gone (a translated light is a thing with a light component).
+// the corpus is the spec fixtures (and COMPONENTS_CORPUS) translated (tools/protocol/import-v1/translate-v1.js) and
+// read as the view (shared/protocol/view.js); a translated light is a thing with a light component.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { inspectSchema, fieldAt, editOps, partLabel, libLabel } from '../shared/editschema.js';

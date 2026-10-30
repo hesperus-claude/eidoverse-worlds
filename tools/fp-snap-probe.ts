@@ -3,12 +3,9 @@
 //   bun tools/fp-snap-probe.ts                # spawns its own scratch sequencer
 //   PORT=8987 RECEIPTS=/tmp/fp75 bun tools/fp-snap-probe.ts
 //
-// Run it on this branch and on a throwaway main worktree: the MOUNTED
-// first-person cases fail on main (the fixed root+1.52 snap camera sits
-// inside the big-head rig's own mesh and nothing hides it), and pass here.
-// That pixel difference — a marker the eye can or cannot see — is the
-// fail-on-main evidence for #75; tools/fp-view-test.ts pins the unit
-// contract but is link-novelty on main.
+// The MOUNTED first-person cases failed before the fix (a fixed root+1.52
+// camera sat inside the big-head rig's mesh); they must pass.
+// tools/fp-view-test.ts pins the unit contract.
 //
 // What it does:
 //   1. builds the head-volume test rig (claude.vrm with its head bone ×5 —

@@ -10,10 +10,8 @@
 //    (tools/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
 // 7. the agent's blueprints / blueprint_place / look() over the library, its door the scratch door
 //
-// Sections 1–3 are pure functions of shared/blueprint.js and stay as they were (NOTE: expand/overridesOf/rebase have
-// no runtime caller today). The v1 sections went with the v1 runtime (protocol v1 removed, 2026-10-07): 4 (the v1
-// fold's state.blueprints store and its stateToEntries snapshot), 5 (server/verbs.ts's blueprint verb) and 8
-// (shared/pace.js against a model of the v1 door's 12-per-4-s verb window; pace.js has no runtime caller now).
+// Sections 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet);
+// the v1 sections (4, 5, 8) went with protocol v1.
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

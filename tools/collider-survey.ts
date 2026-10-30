@@ -2,12 +2,10 @@
 //
 //   bun tools/collider-survey.ts <dir-or-glb> [<dir-or-glb> ...]
 //
-// colliders.js decide() classifies by SIZE alone: room-scale (>=16m² and
-// >=2.2m) collides against real triangles, tall-and-thin becomes a pillar,
-// everything else becomes ONE box whose top face is the only ground it can
-// report. For a blanket with cushions on it that top face sits at the highest
-// cushion, so the whole 5.4m² reads as walkable at cushion height and you
-// stand 27cm above the cloth.
+// colliders.js decide(): room-scale (>=16m² and >=2.2m) collides against real
+// triangles, tall-and-thin becomes a pillar, a floor-shaped thing whose box top
+// lies (this survey's rule) goes exact, and everything else is ONE box whose top
+// face is the only ground it can report.
 //
 // Before changing that rule, this measures the thing the rule should be asking
 // about — "is the top of the bounding box where a body would actually stand?"
