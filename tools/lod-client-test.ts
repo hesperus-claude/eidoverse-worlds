@@ -82,14 +82,9 @@ const check = (label: string, ok: boolean, detail?: string) => {
   console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${label}${!ok && detail ? `\n      ${detail}` : ''}`);
   if (!ok) failures++;
 };
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Let the scheduler's microtask pump and the stub loader run out. */
-const settle = async () => { for (let i = 0; i < 6; i++) await sleep(15); };
-const until = async (pred: () => boolean, ms: number) => {
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) { if (pred()) return true; await sleep(250); }
-  return pred();
-};
+/** Let the scheduler's microtask pump and the stub loader run out (both are microtasks: a few loop turns, no timer). */
+const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+const { tryUntil } = await import('./protocol/wait.ts');
 
 // ============================================================================
 console.log('\nlod-client — the realizer half (real models.js over a held loader)\n');
@@ -351,19 +346,15 @@ async function startServer() {
   let log = '';
   proc.stdout!.on('data', (d) => { log += d; });
   proc.stderr!.on('data', (d) => { log += d; });
-  let up = false, version: any = null;
-  for (let i = 0; i < 120 && !up; i++) {
-    if (proc.exitCode != null) break;
-    try {
-      version = await fetch(`http://127.0.0.1:${PORT}/version`).then((r) => r.json());
-      if (version && typeof version === 'object' && version.instance === nonce) up = true;
-      else break;   // someone else answers here — refuse, never test into their world
-    } catch { await sleep(250); }
-  }
+  let version: any = null;
+  // an answer that isn't ours ends the wait too: refuse, never test into someone else's world
+  await tryUntil('the child answers /version', async () => proc.exitCode != null
+    || (version = await fetch(`http://127.0.0.1:${PORT}/version`).then((r) => r.json()).catch(() => null)) != null, { ms: 30_000, step: 250 });
+  const up = !!version && typeof version === 'object' && version.instance === nonce;
   if (!up) console.log(`      child did not come up OWNED — log tail:\n      ${log.split('\n').slice(-6).join('\n      ')}`);
   const base = `http://127.0.0.1:${PORT}`;
   return { up, base, key: keyFromVersion(version), lod: lodFromVersion(version), log: () => log,
-    stop: async () => { try { proc.kill(); } catch { /* gone */ } child = null; await sleep(300); } };
+    stop: async () => { try { proc.kill(); } catch { /* gone */ } child = null; await tryUntil('the child exits', () => proc.exitCode != null || proc.signalCode != null, { ms: 5000 }); } };
 }
 
 writeFileSync(join(LIB, HEAVY), await gridGlb('heavy', 160, null));
@@ -376,7 +367,7 @@ try {
     check('it published a key and the recipe this client was built against', !!key && recipe === LOD_RECIPE, `${key} / ${recipe}`);
     const variant = join(OPT, `${HEAVY}.lod.${recipe}.glb`);
     const fresh = () => existsSync(variant) && statSync(variant).mtimeMs > statSync(join(LIB, HEAVY)).mtimeMs;
-    const landed = await until(fresh, 60_000);
+    const landed = !!(await tryUntil('the boot sweep bakes the heavy fixture', fresh, { ms: 60_000, step: 250 }));
     check('the boot sweep baked the heavy fixture\'s LOD (untextured: no encoder needed)', landed,
       C.log().split('\n').filter((l) => l.includes('lod')).slice(-3).join(' | '));
     const served = async (url: string) => {
@@ -398,7 +389,7 @@ try {
     check('a WRONG-GENERATION ask answers provisionally (no-cache) and the loader reads it as full',
       c.status === 200 && c.cc === 'no-cache' && c.tier === 'full', `cc=${c.cc}`);
     const authored = askFor({ libPath: AUTHORED, key, capable: true, recipe, tier: 'lod' });
-    const refused = await until(() => existsSync(join(OPT, `${AUTHORED}.lod.${recipe}.glb.failed`)), 30_000);
+    const refused = !!(await tryUntil('the sweep refuses the authored fixture', () => existsSync(join(OPT, `${AUTHORED}.lod.${recipe}.glb.failed`)), { ms: 30_000, step: 250 }));
     const d = await served(authored.url);
     check('an authored `recipe` extra EQUAL to the running recipe, through the lod door: the sweep refused it typed (already light), the original answers, the loader reads FULL',
       refused && d.status === 200 && d.json.asset?.extras?.recipe === recipe && !d.json.asset?.extras?.lodOf && d.tier === 'full',
