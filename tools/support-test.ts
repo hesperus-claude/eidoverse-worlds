@@ -16,6 +16,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 
 // Bun 1.3.x caches transpiled module graphs globally by content. A failed
 // plugin-resolved path can therefore survive into a later checkout and bypass
@@ -50,11 +51,8 @@ const { setTerrain, heightAt } = await import('../client/lib/terrain.js');
 const { colliders, fitSupportBox, removeCollider } = await import('../client/lib/colliders.js');
 const { makeAvatar } = await import('./rig-load.mjs');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("support");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // the known body ragdoll-test uses — the invariants here are about GROUND,
 // not any particular rig
@@ -189,5 +187,4 @@ check('data boxes never claim exact/interior (no triangles to read)',
   colliders.get('post')?.exact === null && colliders.get('crate')?.interior === false);
 clean();
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

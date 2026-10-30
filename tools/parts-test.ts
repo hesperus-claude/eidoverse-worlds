@@ -11,6 +11,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 
 // Bun 1.3.x caches transpiled module graphs globally by content. A failed
 // plugin-resolved path can therefore survive into a later checkout and bypass
@@ -59,11 +60,8 @@ const { THREE } = await import('./core-stub.mjs');
 const { entities, comps } = await import('./parts-stub.mjs');
 const { tickMotion } = await import('../client/lib/motion.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("parts");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const v = (...a: number[]) => new THREE.Vector3(...a);
 
 // A swing the shape Orrery ships: a scaled wrapper, a frame, a seat.
@@ -179,5 +177,5 @@ console.log('\n━━ a parented thing keeps its own motion, in its parent\'s fr
   comps.delete('lid'); entities.delete('lid');
 }
 
-console.log(fail ? `\n\x1b[31m${fail} failure(s)\x1b[0m` : `\n\x1b[32mall ${pass} checks passed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+console.log(S.fail ? `\n\x1b[31m${S.fail} failure(s)\x1b[0m` : `\n\x1b[32mall ${S.pass} checks passed\x1b[0m`);
+S.done();

@@ -17,6 +17,7 @@ plugin({ name: 'selection-test-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();   // structure_ui's init adds window listeners
 
 const { bus } = await import('../client/lib/base.js');
@@ -24,11 +25,8 @@ const Sel = await import('../client/lib/edit/selection.js');
 const { state } = await import('../client/lib/state.js');
 const SU = await import('../client/lib/structure_ui.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail?: string) => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("selection");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const J = (v: unknown) => JSON.stringify(v);
 
 const events: any[] = [];
@@ -152,5 +150,4 @@ Sel.clear();
 check('clear → null', SU.structureSelection() === null);
 drain();
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

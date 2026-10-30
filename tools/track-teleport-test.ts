@@ -4,6 +4,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/track-teleport-test.ts
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('./put-settle-stub.mjs');
 plugin({
@@ -15,11 +16,8 @@ plugin({
   },
 });
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const SU = suite("track-teleport");
+const check = (name: string, ok: unknown, detail?: unknown) => SU.check(name, ok, detail);
 const S: any = await import('./put-settle-stub.mjs');
 const { THREE } = await import('./core-stub.mjs');
 let T = 0;
@@ -47,5 +45,4 @@ me.root.position.set(3, 0, 0);
 T = 13_200; await tp.physicsApi.track();
 check('past 3 s since the last, a forced track teleports again', teleports() === 2, `${teleports()} teleports`);
 
-console.log(`\ntrack-teleport: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SU.done();

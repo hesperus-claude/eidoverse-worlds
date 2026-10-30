@@ -17,12 +17,10 @@ import {
   edgeCells, edgeBetween, edgeKey, cellKey, APERTURES, GRID_DEFAULTS,
   describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, routeCells, routeLocal, passable, makeShader,
 } from "../shared/structure.js";
+import { suite } from "./protocol/suite.ts";
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("structure-field");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 console.log(`\nstructure_field — the griddled-building planner\n`);
 
@@ -1036,5 +1034,5 @@ const HOUSE = {
   check("no swept piece reaches past the shell", esc.length === 0, esc.join(" | "));
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-if (failed) process.exit(1);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

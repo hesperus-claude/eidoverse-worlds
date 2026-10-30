@@ -20,12 +20,10 @@ import { mapGrassArgs, presetStrokes, hexToMultiplier, isLegacyArgs } from "../c
 import { composeField, retireField } from "../client/lib/flora_field.js";
 import { bladeLodIndex, bladeCoarseIndex, BLADE_VERTS, BLADE_INDICES,
   BLADE_COARSE_INDICES } from "../client/lib/flora_lod.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("flora");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
 
 console.log("\nlegacy grass bags (world logs replay forever)");
@@ -287,5 +285,4 @@ console.log("\nfield lifecycle (grow → replace → mow)");
   check("its bare update is unhooked too", autos.length === 0);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

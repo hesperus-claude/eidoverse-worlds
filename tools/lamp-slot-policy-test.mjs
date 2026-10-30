@@ -21,6 +21,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -31,8 +32,8 @@ plugin({ name: 'core-stub', setup(build) {
 const { THREE, camera } = await import('./core-stub.mjs');
 const rig = await import('../client/lib/lightrig.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("lamp-slot-policy");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 // An emissive thing attachLamps will find: glow must clear its 0.5 threshold.
 function glowing(name, pos, glow = 3) {
@@ -119,5 +120,4 @@ check('...but it is still a working light',
   check('an emissive map driven above strength 1 gets a lamp', rig.attachLamps(hot, 'body:hot:1').length === 1, 'strength 2');
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

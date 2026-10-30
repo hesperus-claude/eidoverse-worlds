@@ -9,6 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 const RAYS0 = process.env.SPLASH_RAYS0 === '1';
 GlobalRegistrator.register({ url: RAYS0 ? 'http://localhost/?rays=0' : 'http://localhost/' });
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -36,16 +37,15 @@ globalThis.removeEventListener = (t, fn, o) => { if (t === 'resize') resizeListe
 
 const { initBoot, finishBoot, bootDone, startRays, stopRays, raysActive } = await import('../client/lib/boot.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("splash-lifecycle");
+const check = (name, ok, note) => S.check(name, ok, note);
 const stops = (w) => w.msgs.filter((m) => m.type === 'stop').length;
 
 if (RAYS0) {
   console.log('SPLASH — ?rays=0 (child process)');
   startRays(splash);
   check('the A/B flag starts no worker', workers.length === 0 && resizeListeners.size === 0 && raysActive() === false && !globalThis.__raysWorker);
-  console.log(`\n${pass} passed, ${fail} failed`);
-  process.exit(fail ? 1 : 0);
+  S.done();
 }
 
 console.log('SPLASH — normal boot');
@@ -130,5 +130,4 @@ console.log('SPLASH — ?rays=0');
   const out = new TextDecoder().decode(r.stdout);
   check('the A/B flag starts no worker (child at ?rays=0)', r.exitCode === 0 && /1 passed, 0 failed/.test(out), out.trim().split('\n').slice(-3).join(' | ')); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -20,6 +20,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 
 // Same Bun transpiler-cache guard as the rest of the suite (see support-test).
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
@@ -44,11 +45,8 @@ const {
 } = await import('../client/lib/colliders.js');
 const { planStructure } = await import('../shared/structure.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("structure-collider");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const clean = () => { for (const id of [...colliders.keys()]) removeCollider(id); };
 const flat = () => 0;
 
@@ -215,5 +213,5 @@ const WALK = PLAN.levels[0].y;
   check('and none of them registered anything', structureBoxIds('bad').length === 0);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

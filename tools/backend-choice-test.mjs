@@ -1,9 +1,10 @@
 // Renderer selection is a pure function (client/lib/backend_choice.js) so the matrix core.js acts on at
 // import can be checked without a GPU. Review 2026-09-10 #6: `?xr=0` used to boot XR (presence-only flag).
 import { decideBackend } from '../client/lib/backend_choice.js';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("backend-choice");
+const check = (name, ok, note) => S.check(name, ok, note);
 const d = (q, o = {}) => decideBackend({ params: new URLSearchParams(q), backendPref: null, headsetSeen: false, webgpuXR: false, ...o });
 
 console.log('BACKEND CHOICE');
@@ -26,5 +27,4 @@ check('explicit webgpu + XR boot + no flags forces WebGL (XR cannot ride WebGPU 
 check('tolerant render list does NOT install for a headset-seen desktop boot', d('', { headsetSeen: true }).installTolerance === false && d('', { headsetSeen: true, webgpuXR: true }).installTolerance === false);
 check('explicit webgl + XR boot with flags still forces WebGL', d('xr=1&webgl=1', { webgpuXR: true }).forceWebGL === true && d('xr=1&webgl=1', { webgpuXR: true }).xrOnWebGPU === false);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -14,9 +14,10 @@
 import { Document, NodeIO } from "@gltf-transform/core";
 import { PNG } from "pngjs";
 import { optimizeGlb } from "../server/optimize.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { ok ? pass++ : fail++; console.log(`${ok ? "  ok" : "FAIL"}  ${name}${ok || !detail ? "" : ` — ${detail}`}`); };
+const S = suite("blank-part-uvs");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 function pngBytes(size = 64): Uint8Array {
   const png = new PNG({ width: size, height: size });
@@ -51,5 +52,4 @@ check("the blank material survives (the comp will clone it)", back.getRoot().lis
 check("prune still prunes: the unreferenced material is gone", !back.getRoot().listMaterials().some((m) => m.getName() === "orphan"), back.getRoot().listMaterials().map((m) => m.getName()).join(","));
 check("both named nodes survive", ["frame", "picture"].every((n) => back.getRoot().listNodes().some((x) => x.getName() === n)));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

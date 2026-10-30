@@ -25,6 +25,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["hostile", "hostile-check.ts", 2],   // PROTOCOL §6 proof 1: hostile logs against the strict fold
   ["attack", "attack-check.ts", 2],     // §6 proofs 2–3: 25d H1/H2/H4 attacks through the authority (admit, L7)
   ["libfile", "libfile-check.ts", 2],  // #213 port: the resolver walks /library's own ladder and answers what the route serves
+  ["library-decode", "../library-decode-test.ts", 1], // /library/ percent-decoding: spaces resolve, a literal %xx file is found
+  ["idle-stall", "../idle-stall-test.ts", 1], // a download whose reader stalls past Bun's idle timeout still arrives whole
+  ["fetchbytes", "../fetchbytes-test.mjs", 1], // fetchBytes retries 5xx and network failures, never a 4xx, and evicts a failure
   ["variant-status", "../variant-status-test.ts", 1], // store-variants variantStatus/classifyVariant: every optimization's state for a model
   ["optimize-pump", "../optimize-pump-test.ts", 1], // the optimizer pump with a fake child: estimate, defer, queue
   ["ktx2-tf-purge", "../ktx2-tf-purge-test.ts", 1], // the KTX2 purge tool's two detectors on synthetic headers
@@ -35,11 +38,14 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["physlive", "physlive-check.ts", 1],
   ["phystick", "phystick-check.ts", 1],
   ["sclock", "sclock-check.ts", 1],     // the client's server clock slews toward a new estimate instead of stepping  // the engine's heartbeat: rests log on the server beat, requests stay cheap, passes are bounded // design 20 as the running server holds it (shapes, punt, release pose, one clock) and as a client folds it
+  ["server-clock-readers", "../server-clock-readers-test.ts", 1], // a server stamp (a sky's ts, a role's until) is read on the authority's clock
   ["physseeds", "physseeds-check.ts", 1], // research physics-seeds 10-07: shape grammar, physical properties, spin on release, the state sample, one clock (a real server whose log is ahead of wall time)
   ["eidosim", "eidosim-check.ts", 1], // eidosim's adapter: any schedule reaching tick T gives the same bits; spin capped like v; a mirror is the same box
   ["eidosim-live", "eidosim-live-check.ts", 1], // eidosim at the authority: locks (own, ancestor, descendant) hold against knocks; knocked children rest on the record; spheres on the live host
   ["mover", "mover-check.ts", 1],       // ONE walker (shared/mover.js) for the agent, the client and the authority: no caller's own numbers; floor rule, walls, arrival; agreement with the real authority
   ["zone-water", "zone-water-check.ts", 1], // zone + water (either side) + water-exclusion: the door, shared/zone.js's bodies (the combine law), the client's rebuild rule
+  ["underwater-presence", "../underwater-presence-test.ts", 1], // underwater presence validation (3D orientation, bad q dropped)
+  ["buoyancy", "../buoyancy-test.ts", 1], // a floating column on the water surface, and the clock the surface runs on
   ["climb-env", "climb-env-check.ts", 1], // collider.enabled (collision off), climb routes (shared/climb.js), arrivals and KillZ (shared/spawn.js), the sky gradient and the directional sun
   ["drive", "drive-check.ts", 1], // a hull driven from its helm: drive + station.input at the door, one driver, plausibility, the hull's own collision, the lease's commits and end (shared/drive.js, authority/drive.js)
   ["physics-area", "physics-area-check.ts", 1], // physics-area {kind: speed} on a zone (R 10-28 item 50): the door, shared/zone.js's reader, the one mover (walk, wade, swim, 3D stroke), the authority's track agreeing with it
@@ -48,6 +54,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["level-dive", "../water/level-dive-check.ts", 1], // a real browser in the lake: C dives, looking down with W dives (R 10-28), surfacing hands back to the float
   ["toast-group", "toast-group-check.ts", 1],   // load failures of one kind are one toast counting the things; dismissed, that kind stays quiet (R 10-28)
   ["avatar", "../avatar-test.ts", 1], // the avatar rig: clip timing, seat-blend slot, a lowering clip under a limp body (upstream #282/#283)
+  ["locomotion-clip", "../locomotion-clip-test.mjs", 1], // the controller's clip-selection policy (#196), on the real module
+  ["fp-view", "../fp-view-test.ts", 1], // the first-person eye and exclusion contract (#75)
   ["reachwire", "../reachwire-test.ts", 1], // the reach descriptor grammar and its event edges
   ["reach", "../reach-test.ts", 1], // two-bone IK geometry: no rig, no renderer, no server
   ["ragdoll-floor", "../ragdoll-floor-test.ts", 1], // a body that goes limp inside a building lands on the floor it was on
@@ -64,6 +72,11 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["remotes-limp-edge", "../remotes-limp-edge-test.ts", 1], // a remote going limp or getting up is drawn at the edge sample, not lerped through it (upstream #283)
   ["remotes-lifecycle", "../remotes-lifecycle-test.ts", 1], // #95: a departed participant dies whole; only arrive and the roster build a body, presence never
   ["colliders", "../collider-test.ts", 1], // the walker's reading of placed geometry, incl. things a tumbling engine laid on their sides (review of b398d7e3 #1)
+  ["supportclass", "../supportclass-test.ts", 1], // the one support classifier both runtimes consume (#84)
+  ["support", "../support-test.ts", 1], // a settling body rests on what actually holds it up (#17)
+  ["structure-field", "../structure-field-test.ts", 1], // shared/structure.js: the griddled-building planner
+  ["structure-edit", "../structure-edit-test.ts", 1], // shared/structure_edit.js: the structure editor's pure half
+  ["structure-collider", "../structure-collider-test.ts", 1], // declared structure colliders (fitStructureBoxes)
   ["lying-support", "../lying-support-test.ts", 1], // an agent's support for a thing lying down: its true top, no phantom deck at its origin (review of b398d7e3 #1)
   ["support-swap", "../support-swap-test.ts", 1], // #260 I81: a model changed while its geometry is in flight registers nothing from the old fetch (syncSupport's re-check)
   ["knockdown", "../knockdown-test.ts", 1], // #260 I8/I147/I148: a headless body takes a shove from a body beside it, refuses one with its move gate off (the relay answers), hangs from a nail
@@ -73,6 +86,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["shape-render", "../shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the load's repairs; ran only as an import before
   ["originof", "../originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:
   ["renderer-cred", "../renderer-cred-test.ts", 1], // #260 I143/I144: the renderers' credential (flag + key) watches an invite-only world; a stranger's /snap and /heightmap of it are 404
+  ["renderer-join", "../renderer-join-test.ts", 1], // a page claims to be a renderer only when it can render
+  ["render-health", "../render-health-test.ts", 1], // the watchdog's verdict on a renderer page
   ["replay", "replay-check.ts", 1],     // L1: the fold alone, self-agreement, the lab's digest
   ["replica-freeze", "../replica-freeze-test.ts", 1], // the client's fold is frozen in dev: a reader writing into a record throws, and later entries still apply (C7a)
   ["conformance", "compare.ts", 3],     // the JS fold vs the Python reference reader (+ its own tests)
@@ -88,9 +103,16 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["kind", "../kind-test.ts", 1], // one kindOf: a light component is a light, a bare thing an Empty, a model a model; the route and the agent's inspect head agree
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
+  ["splash-lifecycle", "../splash-lifecycle-test.mjs", 1], // the splash rays worker: Worker, window listener and canvas end together
   ["bodygate", "../bodygate-test.mjs", 1], // the body-first gate: armed, held, released once, capped; and at loadGLB's boundary the parse waits in body-first
   ["editor-range", "../editor-range-test.ts", 1], // the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
   ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
+  ["selection", "../selection-test.ts", 1], // one selection store (edit/selection.js) and its listener
+  ["parts", "../parts-test.ts", 1], // sub-object motion: motion.js's part tier
+  ["motioneval", "../motioneval-test.ts", 1], // motion.js's evaluator matches its parity fixture (#92 B3)
+  ["drag-q", "../drag-q-test.ts", 1], // the rotate gizmo's live drag carries the full orientation
+  ["components-corpus", "../components-corpus-test.ts", 1], // the component view is lossless on every committed world
+  ["component-needs", "../component-needs-test.ts", 1], // Add Component brings its needs; Remove names its dependants
   ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
   ["role-grammar", "../role-grammar-test.ts", 1], // one role-id grammar (grab, sockbody, rolespanels, commands)
   ["rot", "../rot-test.ts", 1], // shared/rot.js: quaternion orientation
@@ -103,6 +125,12 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["capsule-recovery", "../capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers
   ["debug-tabs", "../debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups
   ["governor-xr", "../governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio
+  ["render-aside", "../render-aside-test.mjs", 1], // renderAside: an off-eye render while presenting leaves the XR state as it was
+  ["quadcolour", "../quadcolour-test.mjs", 1], // the VR panel grade (quadgrade.js) as numbers: the JS twin of the shader
+  ["headset-seen", "../headset-seen-test.mjs", 1], // the stored headset bit is history, and says so (#197)
+  ["full-detail", "../full-detail-test.ts", 1], // "keep full detail" (governor.js setFullDetail) pins every placement full
+  ["finger-curl", "../finger-curl-test.mjs", 1], // the analog finger-curl filter (xr.js sampleFingerCurl)
+  ["backend-choice", "../backend-choice-test.mjs", 1], // the renderer choice (backend_choice.js) as a pure matrix; ?xr=0 is not an XR boot
   ["unknown-comp", "../unknown-comp-test.ts", 1], // an unknown component blocks nothing, from the door to the realizer to the inspector
   ["reach-order", "../reach-order-test.ts", 1], // reach chains solve in dependency order, cycles refuse and release cleanly (needs the avatar corpus at assets/opt/eidoverse)
   ["editcommit", "../editcommit-test.ts", 1], // inspect.js commitEdit against the real authority: a live call previews, the final one sends ONE request
@@ -124,6 +152,10 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["upgrade", "upgrade-check.ts", 1], // an old-format world: the verified backup (CLI and server), the structured join refusal, the operator-only upgrade through the CLI
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
+  ["native-login", "../native-login-test.ts", 1], // the native login HTTP handler, isolated
+  ["mkconfig", "../mkconfig-test.ts", 1], // deploy/projector/mkconfig.sh renders mediamtx.template.yml
+  ["heightmap-route", "../heightmap-route-test.ts", 1], // GET /heightmap: the export door's budget gates before the work
+  ["config-env", "../config-env-test.ts", 1], // env numbers are validated (limits.ts envNumber): unset, junk and out-of-range fall back
   ["identity", "identity-check.ts", 1], // who a joiner is: C1-C3, H1, H3-H5 (security review 10-06), one identity per account
   ["fork-reset", "fork-reset-check.ts", 1],
   ["simckpt", "simckpt-check.ts", 1],   // periodic sim checkpoints (SIM_CHECKPOINT_EVERY): a physics world without launches still bounds its boot's engine replay; purges and audits as before
@@ -148,6 +180,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["physconst", "../physconst-test.ts", 1], // one binding for reach and hand numbers (the authority's, the client's); R 10-28: the punt's reach is KICK's alone       // R 10-28 item 4: force {at, radius, power} (/boom): bodies through their consent, loose things through the punt
   ["agentshove", "agentshove-check.ts", 1], // …an agent's walk shoves too, through the same punt (a real WorldAgent on a real server)
   ["hands", "hands-check.ts", 1],       // what is in a hand and where a put lands: held things are not ground, no perching, an edit takes it from the hand, two hands
+  ["track-teleport", "../track-teleport-test.ts", 1], // a forced track re-arrives by teleport at most once in 3 s
+  ["put-settle", "../put-settle-test.ts", 1], // a thing leaving a hand eases from where it was drawn to where the fold puts it
   ["reset", "reset-check.ts", 1],       // a reset button: reactions kind reset, the home component
   ["settle", "settle-check.ts", 1],
   ["disabled", "disabled-check.ts", 1],   // a switched-off thing (R 10-11): no handling, no body, nothing stands on it; back on, all returns     // what a thing at rest is attached to
@@ -166,16 +200,19 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["access-panel", "access-panel-probe.ts", 1], // World Settings › Who may come in › Listed here in headless Chromium: listed rows, add by a name seen here or an exact identity, the authority's refusal in words (R 10-27)
   ["build", "build-check.ts", 1],       // ship-list group B (10-07): building walls at the authority, nested blueprints, the editor's new script
   ["counter", "counter-check.ts", 1],   // PR #208 review's twelve-line list, as a counter button: publish/attach (§4.1), a script on sponsor rights (§8), the algebra (§7a) — C1…C12; blueprint-test.ts (tools/, run-client) is the pure half it leans on
+  ["blueprint", "../blueprint-test.ts", 1], // blueprints: the record, its hash, refusals, expand/overrides/rebase, publish and create {from}
   ["build-client", "build-probe.ts", 1], // …and in a real browser: a building edit and its undo, turn/size before placing, the new-script card (one browser, guarded)
   ["shiplist", "shiplist-check.ts", 1], // ship list group A (audit 10-07): openable, reactions checked at write, motion fields, help text, people's words
   ["shiplist-probe", "shiplist-probe.ts", 1], // …in headless Chromium: E opens a door and it swings; a person's refusal and warning; a moderator's warning in VR
   ["agenttools", "agenttools-check.ts", 1], // the agent's tools on a real server (tools audit 10-07): move walks the authority's body (walls), create {from}, a refused shove is an error, MCP annotations, look points at real tools
+  ["look", "../look-test.ts", 1], // look says which way each person faces, from pose.yaw (#225)
   ["presence", "presence-check.ts", 1], // security pass 3 H2: no one shows under another account's name; puppet/bodydrag/typing reach the identity named; a whisper reaches nobody (removed)
   ["modhole", "modhole-check.ts", 1],   // security pass 3: nothing a world sends runs as code in a visitor's browser; EW.mods.put/run need your hand
   ["xss-probe", "xss-probe.ts", 1],     // security pass 3 H1 in headless Chromium: a hostile display name is text everywhere; the page's CSP refuses inline script and lets the client run
   ["pretrans", "pretrans-check.ts", 1], // review 10-07 "protocol shape": the edges the Commons translation makes permanent (names, defaults, ids, refs, governance, models, privacy)
   ["soundclock", "soundclock-check.ts", 1],
   ["sound", "../sound-test.ts", 1],     // the sound component's meaning and look() line; R 10-28 item 18: 200 m, still silent at radius
+  ["audioctx", "../audioctx-test.ts", 1], // one AudioContext per page
   ["sound-editor", "../sound-editor-test.ts", 1], // the sound editor block (its clock, t0, no guard); R 10-28 item 18: 32 world sounds at once, the radius field to 200 m
   ["skypanel", "../skypanel-state-test.ts", 1], // the sky panel's state lines; R 10-28: every shared select commits what it shows (the world select saved nothing)
   ["forecast", "../forecast-test.ts", 1], // the deterministic weather forecast: late joiner, override, provenance
@@ -187,11 +224,18 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   // socketteer's pathfinding stack (#235/#236/#239/#241, merged into the protocol 10-15): its own suites, as it ships them
   ["agent-mesh-collision", "../agent-mesh-collision-test.ts", 1], // #235: an agent's body collides with placed models (the support barrier, the 3-at-once governor)
   ["navgrid", "../navgrid-test.ts", 1],  // #236: move routes through placed models (round furniture, through doors, up stairs; y picks the floor)
+  ["structure-threshold", "../structure-threshold-test.ts", 1], // the agent half of structure routing: WorldAgent ticks and the move tool over a structure
+  ["structure-route", "../structure-route-test.ts", 1], // routing over a griddled structure (structure-route.js)
   ["navgrid-rows", "../navgrid-rows-test.ts", 1], // a route on built boxes ends where a body stands or says why; a scaled thing scales its places, never the body's tolerances
   ["places", "../places-test.ts", 1],    // #239: named places (move {to: "thing/place"}, which room you're in, name_place), look's places in sight, "?"
+  ["blank-part-uvs", "../blank-part-uvs-test.ts", 1], // a named blank part keeps its UVs through the store's optimize pass
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
   ["agent-reads", "../../mcpl/agent-reads-test.ts", 1], // every read the agent makes of the world server has a deadline; a geometry read that timed out is asked again
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
+  ["token-registry", "../token-registry-test.ts", 1], // the agent token registry fails closed: missing or malformed files authorize nobody, the tracked example credential is refused, no prototype keys
+  ["door-media-whitelist", "../door-media-whitelist-test.mjs", 1], // the door's media lane to a voice sidecar is a whitelist (sfu-answer, sfu-ice, …), never a pipe (#100)
+  ["door-bone-list", "../door-bone-list-test.ts", 1], // the door's list of the worn body's bones
+  ["author-wire", "../author-wire-test.mjs", 1], // "who said this" on the wire: an admitted name wins over the token registry's
   ["selfpose", "../../mcpl/selfpose-test.ts", 1], // the pose/animate authoring surface: canonical bone names, suggestions, the walk-shed rule
   ["effective-mcpl", "../../mcpl/effective-test.ts", 0.3],
   ["headless-core", "../../mcpl/headless-core-test.ts", 0.3], // the agent's stand-in core exports each shared name as core.js does: a function where it is a function   // the agent's composed transforms (mounts, stretch, shear, stored rotation)
@@ -216,8 +260,11 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
   ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
+  ["terrainshape", "../terrainshape-test.ts", 1], // placed features and heightmaps over the terrain noise (shared/terrainshape.js)
+  ["flora", "../flora.test.ts", 1], // the grass verb's translation and a field's retirement (every hook drained)
   ["grant-until", "../grant-until-test.ts", 1], // a timed grant's end is a whole millisecond (the authority refuses a fractional one)
   ["lite-graph", "../lite-graph-test.ts", 1], // the lite client never imports the WebGPU renderer
+  ["lite-choice", "../lite-choice-test.mjs", 1], // the lite/full decision inline in client/index.html, as a pure function
   ["net-send-shape", "../net-send-shape-test.ts", 1], // a message about a person carries their identity or is not sent; a spoken say carries spoken/utt/t0, a live one is refused offline
   ["first-name-account", "../first-name-account-test.ts", 1], // the first-run door's name becomes the account
   ["retired-commands", "../retired-commands-test.ts", 1], // a retired command says why it is gone
@@ -227,6 +274,12 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
+  ["namereveal", "../namereveal-test.mjs", 1], // hold-to-reveal's input side (namereveal.js)
+  ["mention-regex", "../mention-regex-test.mjs", 1], // the mention pattern built from a body's id and display name
+  ["icons", "../icons-test.ts", 1], // the attention glyphs are real, distinct path data
+  ["dwell", "../dwell-test.mjs", 1], // one dwell mechanism for the nameplate card, VR tooltips and VR handles
+  ["bus-events", "../bus-events-test.ts", 1], // the dock's move, the lantern's open/close and a gesture's key hint ride the module bus
+  ["actions", "../actions-test.mjs", 1], // the action registry's ranking tiers and merge on re-register
   ["edittheme", "../edittheme-test.ts", 1], // edit mode's look keeps its design-spec promises
   ["components-inspector", "../components-inspector-test.ts", 1], // the Inspector's component cards (schema.sections) over the real corpus
   ["chat-resync-wire", "../chat-resync-wire-test.ts", 1], // a re-join asks chat for what it missed, through the real net.js
@@ -235,10 +288,14 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
   ["captions", "../captions-test.ts", 1], // shared/captions.js: the caption bag a reader sees and the request's rules
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
+  ["particles-host", "../particles-host-test.ts", 1], // the browser particle host (emitters.js) over a stand-in GPU half
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
+  ["lamp-slot-policy", "../lamp-slot-policy-test.mjs", 1], // who may claim the one casting slot (lightrig.js attachLamps)
+  ["lamp-skin", "../lamp-skin-test.mjs", 1], // a lamp inside a skinned body is located through the skeleton
   ["transmission", "../transmission-test.mjs", 1], // a transmissive glTF material becomes a node material with its transmission, ior and thickness; nothing else is upgraded
   ["body-shadow-gate", "../body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
+  ["frames-resize", "../frames-resize-test.ts", 1], // the frames' resize drag finish path
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["lod-policy", "../lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
   ["lod-client", "../lod-client-test.ts", 1], // #170: the dial, the residency sweep, the loader's wire, an owned sequencer's answer, the in-place swap and the collider agree

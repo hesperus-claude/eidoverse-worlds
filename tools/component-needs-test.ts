@@ -16,9 +16,10 @@ import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-1
 import { inspectSchema, editOps, addOps, removeOps, needMet } from '../shared/editschema.js';
 import { RECORDS, addable, componentsOf } from '../shared/components.js';
 import { scratchWorld, flat } from './protocol/scratchworld.ts';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("component-needs");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const J = JSON.stringify;
 const LIB = 'eidoverse/assets/models/swing.glb';
 const set = (comp: string, value: any) => ({ verb: 'set', args: { id: 's', component: comp, value } });
@@ -84,5 +85,4 @@ console.log('removing something another component needs names the dependant and 
   check('remove.model on a thing without a collider: one delete model', J(removeOps((({ collider: _c, ...rest }) => rest)(lamp), 's', 'model').ops) === J([del('model')]));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

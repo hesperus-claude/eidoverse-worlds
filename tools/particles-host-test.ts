@@ -17,12 +17,10 @@
 import { mock } from 'bun:test';
 // three by explicit client path (tools/core-stub.mjs's convention): the SAME module instance the client modules resolve.
 import * as THREE from '../client/node_modules/three/build/three.module.js';
+import { suite } from "./protocol/suite.ts";
 
-let passed = 0, failed = 0;
-function check(name: string, ok: unknown, detail = '') {
-  if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ''}`); }
-}
+const S = suite("particles-host");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const handlers = new Map<string, Function[]>();
 const bus = { on(k: string, f: Function) { handlers.set(k, [...(handlers.get(k) ?? []), f]); } };
@@ -130,5 +128,4 @@ check('world teardown takes every emitter and every hook back', emitterCount() =
   && hooks.length === 0 && groups(hearth).length + groups(candle).length + groups(lantern).length === 0, `${emitterCount()} ${hooks.length}`);
 check('...disposing what each built', disposed === built.length, `${disposed} disposed of ${built.length} built`);
 
-console.log(`\n${passed} passed, ${failed} failed\n`);
-process.exit(failed ? 1 : 0);
+S.done();
