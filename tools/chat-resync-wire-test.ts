@@ -9,13 +9,11 @@
 // Same stub set as remotes-lifecycle-test; snapshots go in through _dispatch.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("chat-resync-wire");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const stubs: any = await import("./remotes-stubs.mjs");
 const { mock } = await import("bun:test");
@@ -41,5 +39,4 @@ check("…from the last seq the old socket had (in the chat's numbering, unscale
 await _dispatch(snapshot(140, []));
 check("a third resyncs from the second's", stubs.resyncCalls[1] === 130, JSON.stringify(stubs.resyncCalls));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

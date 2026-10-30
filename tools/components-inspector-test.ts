@@ -22,9 +22,10 @@ import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { registerDraft, trustedOf } from '../shared/drafts.js';
 import { materialize, COMPONENTS } from '../shared/protocol/componentspec.js';
 import { pathList } from "./protocol/common.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("components-inspector");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const logs: string[] = [];
 const walk = (d: string, depth = 0) => {
@@ -191,5 +192,4 @@ check('Add Component does not offer Guard as addable (merged into Lock)', (() =>
   check('TE5 "stop trusting" (the last one) deletes the component; the chip is amber again', W.sendAll(back.ops).ok && W.state().entities['@world'].c['trusted-components'] === undefined && chip(liveAt(true))?.chip === 'amber', JSON.stringify([back.ops, W.state().entities['@world']?.c['trusted-components']]));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

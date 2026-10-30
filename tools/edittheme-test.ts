@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
 import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "edittheme-stubs",
@@ -59,11 +60,8 @@ let REC: Rec = { texts: [], strokes: [], hairlines: [] };
 const { EDIT, EDIT_VR, cssVar } = await import("../client/lib/edittheme.js");
 const { renderCanvas } = await import("../client/lib/panels.js");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("edittheme");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const PICTO = /\p{Extended_Pictographic}/u;
 
 console.log("\nA. one source of tokens (index.html's --e-* block ≡ edittheme.js):");
@@ -231,5 +229,4 @@ console.log("\nF. text on its surface meets 4.5:1:");
   check(`${pairs.length} text/surface pairs >= 4.5:1`, bad.length === 0, bad.map(([f, b, r]) => `${f} on ${b} = ${r.toFixed(2)}`).join(" · "));
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
