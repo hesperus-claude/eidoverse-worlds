@@ -4,18 +4,13 @@
 // time uniform at each, across a few cadence cycles. The sun check binds: after each strip the probe nudges the LIVE sun
 // (in a microtask, i.e. after the draw's snapshot restore), so a strip that isn't drawn from the snapshot records it.
 //   bun tools/sky-bake-time-probe.mjs
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'baketime', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser(); const pg = await page();
 const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
 try {
-  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded' });
-  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
-  await pg.goto(`${world.origin}/?world=staging&name=baketime&key=${world.key}&lite=0`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => globalThis.__ewEngineUp, null, { timeout: 120000 });
-  await pg.evaluate(async () => { const { sendRequest } = await import('./lib/net.js'); const r = await sendRequest('set', { id: '@world', component: 'sky', value: { hours: 9, rate: 60, clouds: 'clear', weather: 'clear' }, merge: true }); if (!r.ok) throw new Error(`sky refused: ${JSON.stringify(r.refused)}`); /* a fast day: the sun moves between strips */ });
-  for (let i = 0; i < 90 && !(await pg.evaluate(async () => (await import('./lib/sky_baked.js')).bakedActive())); i++) await pg.waitForTimeout(1000);
+  await skyBoot(pg, world, 'baketime', { sky: { hours: 9, rate: 60, clouds: 'clear', weather: 'clear' }, baked: true });   // a fast day: the sun moves between strips
   await pg.evaluate(async () => {
     const { sys } = (await import('./lib/sky.js')).skyForProbe(); const r = globalThis.EW.renderer;
     const W = sys._envTarget?.width; globalThis.__bt = [];

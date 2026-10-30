@@ -1,17 +1,14 @@
 // bun tools/sky-state-probe.mjs — World › sky says what the LOG has ("world: …") and, only while this client shows
 // something else, what and why ("you: previewing / loading… / no clouds (your clouds⚙ is off)"). Cloud quality is set
 // to off BEFORE load: a software-rendered cloud bake can exhaust a machine. Run one headless browser at a time.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'skystate', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser();
 try {
   const pg = await page();
   const errs = []; pg.on('pageerror', (e) => errs.push(String(e)));
-  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
-  await pg.goto(`${world.origin}/?world=staging&name=skystate&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await pg.waitForFunction(() => globalThis.__ewEngineUp && document.querySelector('#sec-sky-tab'), null, { timeout: 90000 });
+  await skyBoot(pg, world, 'skystate', { query: '', ready: () => globalThis.__ewEngineUp && document.querySelector('#sec-sky-tab') });
   await pg.evaluate(() => document.querySelector('#sec-sky-tab').click());
   await pg.waitForFunction(() => document.querySelector('#sec-sky .sky-state'), null, { timeout: 20000 });
   const read = () => pg.evaluate(() => {
