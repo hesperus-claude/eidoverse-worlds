@@ -14,7 +14,7 @@
  * height.
  */
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { tryUntil, pause } from "../tools/protocol/wait.ts";
 import { describeHere, planStructure } from "../shared/structure.js";
 import { NAV_STEP } from "./navgrid.ts";

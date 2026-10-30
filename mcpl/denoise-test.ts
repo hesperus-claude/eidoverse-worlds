@@ -21,7 +21,7 @@ process.env.EW_ACTIVITY_REFRESH_SEC = "0.35";
 
 const { NoiseGate } = await import("./denoise.ts");
 const { WorldAgent } = await import("./agent.ts");
-const { noWorldUrl } = await import("./no-world-test-helper.ts");
+const { noWorldUrl } = await import("../tools/no-world.ts");
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {

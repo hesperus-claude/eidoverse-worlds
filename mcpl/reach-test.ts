@@ -10,7 +10,7 @@
  * own arm, attesting `reached`, and hearing about other people's hands.
  */
 import { WorldAgent } from "./agent.ts";
-import { noWorldUrl } from "./no-world-test-helper.ts";
+import { noWorldUrl } from "../tools/no-world.ts";
 import { ReachBody } from "./physics.ts";
 import { normalizeReachBag } from "../shared/reachwire.js";
 
