@@ -98,9 +98,8 @@ player viewport.
 
 ```sh
 bun test ./tools/screenshots-test.ts          # the broker: queue, deadlines, retryable failures, roamers, the sweep
-bun tools/screenshots-wire-test.ts            # the real route and sockets, a throwaway sequencer
+bun tools/screenshots-wire-test.ts            # the real route and sockets, a throwaway sequencer; each outcome's status and log line, SNAP_TIMEOUT_SEC
 bun tools/snap-settle-test.ts               # the renderer waits for the world as long as `wait` says
-bun tools/snap-timeout-test.ts              # SNAP_TIMEOUT_SEC against the HTTP and broker timeouts
 bun tools/door-wording-test.ts              # the MCPL screenshot tool: its words and its retries
 bun tools/roaming-renderer-check.ts       # end to end in a real browser, its own scratch server
 ```
