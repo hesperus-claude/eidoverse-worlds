@@ -17,6 +17,7 @@ import { actorName as actorLabel } from '../../../shared/protocol/names.js';
 const worldComponents = () => replica.st?.entities?.['@world']?.c ?? {};
 import { captureFrame } from '../capture.js';
 import { register, dispatch } from './registry.js';
+import { plain } from '../plainwords.js';
 import { entities, worldHasOwner, bagOf } from '../world.js';
 import { resolveThing, handleOf } from '../../../shared/thingref.js';
 // a thing by what a person types (R 10-17: ids are minted and opaque): its id, its label, or a unique id prefix of 4+.
@@ -279,7 +280,7 @@ register('unban', (arg) => {
 // (audit 10-07). Moderators may ask; the authority says so to anyone else.
 register('bans', async () => {
   const r = await sendRequest('bans', {});
-  if (!r?.ok) return logChat('*', r?.refused?.reason ?? "couldn't read what's in force here");
+  if (!r?.ok) return logChat('*', r?.refused ? plain("read what's in force here", r) : "couldn't read what's in force here");
   const now = r.now ?? [];
   const until = (t) => (Number.isFinite(t) ? `until ${new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : 'until lifted');
   const why = (x) => (x?.reason ? ` — ${x.reason}` : '');
