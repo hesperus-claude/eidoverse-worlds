@@ -1,9 +1,7 @@
 // shared/protocol/authority/occupants.js — who occupies what (presence, never logged): a body occupying a station (sitting,
 // today), setting and clearing it, vacating it when what it occupies is moved or let go, and the occupant rule that keeps a
-// thing someone occupies from being punted, pushed, grabbed or thrown out from under them (refactor split, 2026-10-17, under
-// the old seat word; occupants.js since R 10-17 13:46: occupy is the one word family; moved from
-// authority.js's "physics" section unchanged; occupyRights, a socket joining a host, from its gate section). lastTouch,
-// lacks, lockCheck and needWords (the write path's and the gate's) are above it, reached through UP.
+// thing someone occupies from being punted, pushed, grabbed or thrown out from under them, and occupyRights (a socket
+// joining a host). lastTouch, lacks, lockCheck and needWords (the write path's and the gate's) are above it, through UP.
 import { TRACK } from "../../mover.js";
 import { baseOf } from "../componentspec.js";
 import { offChain } from "../simlayer.js";
@@ -21,24 +19,21 @@ const lastTouch = (...a) => UP.lastTouch(...a);
 const lockCheck = (...a) => UP.lockCheck(...a);
 const needWords = (...a) => UP.needWords(...a);
 
-// A seated body's first step stands it up, accepted or not (bodyverbs clears the occupant before judging the step; a seated client sends no steps)
-// Who sits where (presence, never logged: review 10-12 S1-1): {to: <socket id>}. A seat whose socket is gone or switched
+// A body that walks more than a metre from its seat has stood up (a seated client sends no steps; standing, it walks)
+// Who sits where (presence, never logged): {to: <socket id>}. A seat whose socket is gone or switched
 // off is no seat (its occupant was let go by every client), so a reader never sees one.
 function occupantOf(w, st, who) { const s = w.presence.occupants?.[who];
   return s && typeof s.to === "string" && isSocketC(st.entities[s.to]?.c) && !offChain(st, s.to) ? s : null; }
-// `since`: the log's length when they sat (review r9 M1): what was written from then on isn't part of the seat's own motion they consented to
-// `near`: the body was tracked within sitting reach when it sat (review r10 M1): only then does leaving re-anchor the track at the seat
+// `since`: the log's length when they sat: what was written from then on isn't part of the seat's own motion they consented to
+// `near`: the body was tracked within sitting reach when it sat: only then does leaving re-anchor the track at the seat
 // `t`: when they sat, on the speed track's clock (a helm's lease is paced from it: shared/protocol/authority/drive.js)
 const setOccupant = (w, who, to, near = false) => { (w.presence.occupants ??= {})[who] = { to, since: w.entries.length, t: w.pace ? w.pace() : w.now(), ...(near ? { near: true } : {}) }; w.presenceDirty = true; };
 const clearOccupant = (w, who) => { if (w.presence.occupants?.[who]) { delete w.presence.occupants[who]; w.presenceDirty = true; } };
-// Leaving a seat is presence, like arriving (scars r9 M2): a seated client sends no steps, so the authority's track of the
-// body is where it boarded. When the seat lets them go (vacated, the socket removed or switched off, or their own first
-// step off it), the track starts again from the seat's world pose with a full speed budget, writing nothing to the log: the
-// next step is measured from where they really are, never refused too-fast from the boarding point (which, in a world with
-// a spawn, a non-builder couldn't teleport out of). The seat's logged pose (a motion's swing isn't evaluated here: the full
-// budget covers it). Returns where, or null (no body tracked).
-// Only for a body that boarded within reach (`near`, review r10 M1); otherwise the track stays where it was (a presence file from
-// before r10 has no `near`: its occupants keep their old track, the safe direction).
+// Leaving a seat is presence, like arriving: a seated client sends no steps, so the authority's track of the body is
+// where it boarded. When the seat lets them go, the track restarts from the seat's logged world pose with a full speed
+// budget, writing nothing, so the next step is never refused too-fast from the boarding point. Returns where, or null (no
+// body tracked). Only for a body that boarded within reach (`near`); otherwise (incl. an older presence file without
+// `near`) the track stays where it was.
 function vacateAt(w, st, who, seat) {
   const b = w.presence.bodies?.[who]; if (!b || !st?.entities[seat] || w.presence.occupants?.[who]?.near !== true) return null;
   const at = worldT(st, seat).pos.map(r3); if (!at.every(Number.isFinite)) return null;
@@ -55,8 +50,8 @@ function leftOccupied(w, st, actor, to) {
   if (Math.hypot(to[0] - p[0], to[2] - p[2]) > 1) clearOccupant(w, actor);
 }
 // Who a hand or a foot acting on `id` would move with it: another present body seated on it or on anything carried by it, or
-// standing on it or on anything carried by it (review 10-12 S1-1/S1-2: a punt, a contact push, a grab or a throw went round body
-// consent through the chair). Bodies are presence and never things, so this is the only way one is moved by moving a thing.
+// standing on it or on anything carried by it (so a punt, push, grab or throw can't go round body consent through a
+// chair). Bodies are presence and never things, so this is the only way one is moved by moving a thing.
 function occupant(w, st, id, actor) {
   const fam = new Set([id, ...descendants(st, id)]);
   for (const who of Object.keys(w.presence.occupants ?? {})) { const s = occupantOf(w, st, who); if (who !== actor && s && fam.has(s.to)) return { who, how: "sits on" }; }
@@ -64,7 +59,7 @@ function occupant(w, st, id, actor) {
   for (const [who, b] of Object.entries(w.presence.bodies)) if (who !== actor && Array.isArray(b?.at) && boxes.some((x) => feetOn(x, b.at))) return { who, how: "is standing on" };
   return null;
 }
-// Occupants (scars r8 M1 / holes M2; replaces consent gaps 1's occupant check on edits): sitting is consent, standing up is the
+// Occupants: sitting is consent, standing up is the
 // exit (Second Life's sit, VRChat's station). A seat carries its occupant through whatever moves it, and an edit never waits on
 // or is refused for a body on it:
 //   - an edit by anyone but the occupant that would move a seat someone sits on (transform, parent or motion of the seat or of
@@ -84,11 +79,11 @@ function vacatesFor(w, st, who, norm) {
   const rootOf = (id) => { const a = ancestors(st, id); return a.length ? a[a.length - 1] : id; };
   const from = cap?.kind === "reaction" ? cap.ids[0] : cap?.kind === "script" ? cap.id : null;   // the thing whose own behaviour this is
   const own = from && st.entities[from] ? rootOf(from) : null;
-  // the exemption covers the assembly as it was when they sat (review r9 M1): the handler or script doing it, and every parent link from
+  // the exemption covers the assembly as it was when they sat: the handler or script doing it, and every parent link from
   // its host up to the root, were last written before the occupant sat. A reaction added to the chair after you sat, or a thing
   // hung under it since, is someone's edit, not the seat's own motion (a builder can't move an occupied seat in two steps)
   const key = cap?.kind === "reaction" ? "reactions" : cap?.kind === "script" ? cap.key : null;
-  // (the authority's follow-ups aren't edits: a reference cleared on the seat since is skipped, claims r10 O3, as §5 says)
+  // (the authority's follow-ups aren't edits: a reference cleared on the seat since is skipped, as §5 says)
   const unchangedSinceSat = (since) => Number.isInteger(since) && [from, ...ancestors(st, from)].every((id, k) =>
     (lastTouch(w, id, "parent", { authored: true })?.seq ?? -1) < since && (k > 0 || (lastTouch(w, from, key, { authored: true })?.seq ?? Infinity) < since));
   const out = new Map();
@@ -105,12 +100,9 @@ function occupiedRefuse(w, st, id, actor, what) {
   const o = occupant(w, st, id, actor);
   if (o) refuse("occupied", `${said(o.who)} ${o.how} ${id} (or something on it), so it can't be ${what}`, "wait till they get up or step off", { by: o.who });
 }
-// A socket is part of its host (review 10-12 S1-1): before the cut a seat was the host's own `sockets` component, so
-// adding one to someone else's thing needed editOthers on it and an owner-level lock refused it. Now it's a child entity,
-// and a create needs only build, and a lock check reads the op's own id. So a socket JOINING a host (made under it,
-// re-parented onto it, or a thing under it made a socket) needs the host's rights (as `set <host>.sockets`), and every
-// write touching a socket child (those, and any set or delete on one) meets the locks over its host's chain, the host it
-// had and the host it ends on.
+// A socket is part of its host, though it is a child entity: a socket JOINING a host (made under it, re-parented onto
+// it, or a thing under it made a socket) needs the host's rights (as `set <host>.sockets`), and every write touching a
+// socket child meets the locks over its host's chain, the host it had and the host it ends on.
 // The legacy map's lifted creates are in `norm`, so both spellings meet the same rule. A host made in this same write is
 // the asker's own. The authority's follow-ups (rest, system: the maintenance command's lift) and a hand carry no seat edits.
 function occupyRights(w, st, s, who, role, norm, made) {

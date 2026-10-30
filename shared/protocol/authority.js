@@ -1,12 +1,11 @@
-// The authority (from the protocol lab's authority). Every request is resolved here once; the log receives the request as sent (an `act` entry) and
+// The authority. Every request is resolved here once; the log receives the request as sent (an `act` entry) and
 // the plain results it produced (one `state` entry, `cause` = the act's seq). Replay never runs this file.
 // PROTOCOL L7: every state write, from every path (requests, use handlers, undo, put, create-from, rests, the authority's
 // own follow-ups), is admitted by ONE function, `admit`, keyed on who asks, which components change (old and new),
 // locks, where it lands, sanity and rate. Tool checks may only add to it. The only code that appends a change entry is
 // `changeEntry`, and it takes only what `admit` returned.
-// Ported from the protocol lab (the protocol lab's authority.js @ 11db981). Engine change: storage is injected. The lab's openWorld
-// read and wrote files here; that part is server/filehost.ts now, so this module has no node: imports and no
-// process/Date of its own (callers pass the clock). Everything from `w.worldId` down is the lab's code unchanged.
+// Storage is injected (server/filehost.ts opens worlds), so this module has no node: imports and no process/Date of its
+// own (callers pass the clock).
 import { bodyOf, socketQ, ONE_PLACE } from "../components.js";
 import { MOVER, TRACK, bodyBox, bodyScale, floorStep, sweep, tokensAfter } from "../mover.js";
 import { checkSockets, checkSocket, checkStation, inOccupyReach, OCCUPY_REACH } from "../sockbody.js";
@@ -98,12 +97,10 @@ function wire(args) {
   return out;
 }
 
-// The authority's per-call state: CTX (authority/ctx.js: the catalogue, throughLock, nameOf, isAnon, knownId, the mint's world,
-// the work budget, forking) and the world's per-call queues and clock. ONE save/restore for every entry point (request, withAuthority):
-// review 10-06 S3 found two hand-written copies that already disagreed, and a nested call (leave → request(drop), or a
-// host callback re-entering the authority) reset the outer call's queues under it. enter() saves everything, sets this call's,
-// and returns the restore; `actor` is the asker a request names (the directory may not know a founder yet), null for
-// the authority's own work.
+// The authority's per-call state: CTX (authority/ctx.js) and the world's per-call queues and clock, with ONE save/restore
+// for every entry point so a nested call (leave → request(drop), a host callback) never resets the outer call's queues.
+// enter() saves everything, sets this call's, and returns the restore; `actor` is the asker a request names (the
+// directory may not know a founder yet), null for the authority's own work.
 function enter(w, actor) {
   const outer = { ...CTX }, wq = { changedQ: w.changedQ, sayQ: w.sayQ, heldQ: w.heldQ, now: w.now, pinTs: w.pinTs };
   CTX.cat = w.catalogue ?? LAB_CATALOGUE; CTX.through = false; CTX.nameOf = w.nameOf ?? null; CTX.mintW = w; CTX.work = { left: WORK_BUDGET.units, until: clockMs() + WORK_BUDGET.ms, k: 0 };
@@ -118,7 +115,7 @@ export function request(w, actor, verb, args = {}) {
   const clock = w.now; const t0 = clock(); w.now = () => t0;
   try {
     if (!isIdentity(actor) || RESERVED.has(actor)) refuse("identity", `'${actor}' isn't an identity the authority can stamp`, "identities are a–z, 0–9 and '-', up to 64 (§3.1); system, sim and world are the authority's own");
-    const h = Object.hasOwn(VERBS, verb) ? VERBS[verb] : undefined;   // never a prototype key (review r9 L1: `constructor`, `__proto__`)
+    const h = Object.hasOwn(VERBS, verb) ? VERBS[verb] : undefined;   // never a prototype key (`constructor`, `__proto__`)
     if (h && !w.exists && !["create-world", "help"].includes(verb)) refuse("no-world", `there is no world called '${w.name}' yet`, `create-world {title: '…'} founds it (you become its owner); or pick a world that exists`);
     // §2.4: chain points are signed by the key genesis names (or the latest handoff). An authority holding another key would
     // write lines its own verifier calls forged (a moved dir, a lost or swapped custody file): it refuses instead (R5).
@@ -131,8 +128,8 @@ export function request(w, actor, verb, args = {}) {
     if (!h && Object.hasOwn(REMOVED_VERBS, verb)) refuse("removed", `'${verb}' was removed: ${REMOVED_VERBS[verb].why}`, REMOVED_VERBS[verb].fix);
     if (!h && Object.hasOwn(RESERVED_VERBS, verb)) refuse("reserved", `'${verb}' is a reserved request: ${RESERVED_VERBS[verb].why}`, "help lists every verb");
     if (!h) refuse("unknown-verb", `there is no '${verb}'`, "help lists every verb", { didYouMean: guess(verb, Object.keys(VERBS)) });
-    // `leave` passes: it settles their own presence (the server sends it when it removes them; review 10-07: a kicked
-    // body and what it held were never released)
+    // `leave` passes: it settles their own presence (the server sends it when it removes them, so a kicked body and what
+    // it held are released)
     // an operator's recorded repair (operatorRepair) is not the person's own request: their sanctions and role here don't gate it
     if (w.exists && verb !== "help" && verb !== "leave" && CTX.operator !== actor && isBanned(w, actor)) refuse("banned", `${said(actor)} is banned from this world`, "the moderator log says so; ask a moderator");
     w.changedQ = []; w.sayQ = []; w.heldQ = [];
@@ -165,7 +162,7 @@ export function request(w, actor, verb, args = {}) {
     throw e;
   } finally { exit(); }
 }
-// The refusal-code registry (refusalcodes.js; engine-scars 3.1): a code is one-way (it is written into signed entries), so
+// The refusal-code registry (refusalcodes.js): a code is one-way (it is written into signed entries), so
 // every code a reply carries must be registered. One the registry doesn't have is noted here (never refused: the asker gets
 // the refusal as given) and scars-check G1 fails on any it met.
 const UNSEEN_CODES = new Set();
@@ -173,14 +170,11 @@ const noteCode = (c) => { if (!isRefusalCode(c)) UNSEEN_CODES.add(String(c)); };
 /** Refusal codes a reply carried that the registry doesn't list (tests read it; empty when the registry is whole). */
 export function unregisteredCodes() { return [...UNSEEN_CODES]; }
 // ---- ids: writers never choose them ----
-// The authority mints every id (shared/protocol/ids.js: 26 base32, no slug). A writer that needs to name a thing it is
-// making — to parent something to it, place something on it, point at it — in the same request writes a request-local
-// placeholder ('$table', JSON:API's lid) as the create's id and wherever it refers to it; the authority mints an id for
-// each before the request is checked, writes the minted id everywhere the placeholder stood, and the reply maps them
-// ({ids: {"$table": "<minted>"}}). The act is the request with the minted ids in it: a placeholder never reaches the log.
-// A chosen id on a create (create, create {from}, a batch's create) is refused, with the fix. System acts that must
-// keep ids (a fork's copy: forkCopy) keep copying them verbatim; so do tests' fixtures, through fixtureIds() (in-process
-// only: no request word reaches it, and ids-check G1 holds every runtime file to never calling it).
+// The authority mints every id (shared/protocol/ids.js). A writer naming a thing it is making in the same request uses
+// a request-local placeholder ('$table', JSON:API's lid); the authority mints an id for each before the request is
+// checked, substitutes it everywhere, and the reply maps them ({ids: {"$table": "<minted>"}}). A placeholder never
+// reaches the log. A chosen id on a create is refused; only a fork's copy (forkCopy) and tests' fixtureIds() keep ids
+// (ids-check G1 holds every runtime file to never calling fixtureIds).
 let FIXTURE_IDS = false;
 /** Tests' fixtures seed known ids the way a fork's copy does (in-process only; never called by a runtime file). */
 export function fixtureIds(on = true) { FIXTURE_IDS = !!on; }
@@ -213,15 +207,11 @@ function placeholders(w, verb, args) {
 }
 
 // R7: a refused write is part of the record (what someone TRIED, in true order): an act whose body is {args, refused: {code}}
-// inside the actor's byte budget. The engine-scars review (6a, R 10-17 02:45) cut what it keeps to the verb (the act's own
-// `verb`), the argument NAMES the verb takes (its VERBSPEC row, plus the flags every request may carry), and the code: never
-// a value. A visitor could otherwise write any text into a permanent, signed, forkable record by sending refused requests
-// (and a name the verb doesn't take is text too: it is counted as `unknownArgs`, never written). The values go to the
-// authority's in-memory ring (refusalRing: never persisted, capped, like the server's world_debug flight recorder).
-// Never logged: reads, dry runs, and the refusals that ARE the budget or the authority's own state (rate, identity,
-// no-world, custody, unreadable, and the sanctions banned and kicked): logging those would be the flood. Past the
-// budget, the authority counts what it didn't write, and the next refusal it does write says how many (`unrecorded`).
-// "muted": its refusal would put the muted words in the public log (review 10-07)
+// inside the actor's byte budget, keeping only the verb, the argument NAMES it takes (VERBSPEC, plus the universal flags)
+// and the code — never a value, or a visitor could write any text into a signed, forkable record (an unknown name is
+// counted as `unknownArgs`). Values go to the in-memory refusalRing only. Never logged: reads, dry runs, and refusals
+// that ARE the budget or the authority's own state (UNLOGGED); past the budget the next written refusal says how many
+// it skipped (`unrecorded`). "muted": its refusal would put the muted words in the public log.
 const UNLOGGED = new Set(["rate", "identity", "no-world", "custody", "unreadable", "banned", "muted"]);
 const UNIVERSAL_ARGS = new Set(["dry", "throughLock", "expect"]);   // flags any request may carry (§3a, §5)
 const PRESENCE_VERBS = new Set(["move", "drive", "body", "reach", "consent", "inbox", "wait", "leave"]);   // a refusal of these is never logged
@@ -247,24 +237,22 @@ function logRefusal(w, actor, verb, args, code) {
     if (w.exists) ringRefusal(w, actor, verb, args, code);
     // a verb the authority doesn't have is recorded too (an agent's invented verb is part of what it tried), when it's a name
     if (!w.exists || !(Object.hasOwn(VERBS, verb) || /^[a-z][a-z0-9-]{0,31}$/.test(String(verb))) || READ_ONLY.has(verb) || args?.dry === true || !isIdentity(actor) || RESERVED.has(actor)) return;
-    // a body's track is presence: a refused move (a step, an arrival or a teleport) is never recorded. A person's client
-    // keeps the track current several times a second and answers a refused step with a teleport; a person indoors, flying
-    // or seated wrote a permanent, broadcast refusal every few seconds (review 10-06 S0-3). An ACCEPTED teleport is an act.
+    // a body's track is presence: a refused move is never recorded (a client retries several times a second, so it
+    // would flood the log). An ACCEPTED teleport is an act.
     if (verb === "move") return;
-    // …and so is everything else a body does or says about itself (scars r8 M3): a refused touch, pose or reach, a refused
-    // consent write, an inbox or wait. Consent is presence, never appended: "A tried to touch B, was refused, kept trying"
-    // written into a signed, forkable log is exactly what consent.js promises never happens
+    // …and so is everything else a body does or says about itself (touch, pose, reach, consent, inbox, wait): consent is
+    // presence, never appended — "A tried to touch B, was refused" must never reach a signed log (consent.js)
     if (PRESENCE_VERBS.has(verb)) return;
     if (verb === "grab" && String(args?.id ?? "").startsWith("body:")) return;   // grab {id: "body:X"} is a drag (bodyverbs.js): presence too
     if (code === "rate") { const m = (w.unrecorded ??= new Map()); m.set(actor, (m.get(actor) ?? 0) + 1); return; } // an attempt all the same: counted, not written
-    // a refused contact push is a walk that met something, not a request anyone made in words (review 10-12 S2-4): counted,
-    // not written (`shove: true` is its old spelling)
+    // a refused contact push is a walk that met something, not a request anyone made in words: counted, not written
+    // (`shove: true` is its old spelling)
     if (verb === "punt" && (args?.contact === true || args?.shove === true)) { const m = (w.unrecorded ??= new Map()); m.set(actor, (m.get(actor) ?? 0) + 1); return; }
     if (UNLOGGED.has(code)) return;
     const names = argNames(verb, args);
     const body = { args: names.known, refused: { code } }; if (names.unknown) body.unknownArgs = names.unknown;
     // a verb the authority doesn't have is recorded as `unknown-verb`: its name is the visitor's text (32 characters of it,
-    // in a permanent, forkable record), so it goes to the ring only, as argument values do (scars r8 M3)
+    // in a permanent, forkable record), so it goes to the ring only, as argument values do
     const asVerb = Object.hasOwn(VERBS, verb) || Object.hasOwn(RESERVED_VERBS, verb) || Object.hasOwn(REMOVED_VERBS, verb) ? verb : "unknown-verb";
     const miss = (w.unrecorded ??= new Map()); const n = miss.get(actor) ?? 0; if (n) body.unrecorded = n;
     try { rateCheck(w, actor, "act", jcs(body).length + 256); } catch (x) { if (x instanceof Refusal) { miss.set(actor, n + 1); return; } throw x; }
@@ -287,11 +275,8 @@ function expectCheck(w, list) {
     if (same) continue;
     const lt = lastTouch(w, x.id, x.component);
     const why = !e ? `${x.id} is gone` : lt ? `${said(lt.actor)} changed it at ${lt.seq}` : "it isn't what you started from";
-    // The refusal says THAT it changed, never WHAT it is now: expect is checked before the handler, so before
-    // admit/rights/lacks/lockCheck, and a dry request is never logged (logRefusal) — a value echoed here would be
-    // readable by anyone, about any component of anything, without a trace (review 10-13, attack-check H5a).
-    // `expected` was the asker's own input, so it told them nothing either. The client needs only the signal:
-    // editwrites.js reverts and shows the reason; nothing reads a value back.
+    // The refusal says THAT it changed, never WHAT it is now: expect runs before any rights check and a dry request is
+    // never logged, so an echoed value would be a traceless read of anything (attack-check H5a).
     refuse("changed", `${x.id}.${x.component} changed since you started: ${why}`, "look again and redo it (nothing was written); or send it without expect to overwrite what's there",
       { id: x.id, component: x.component, ...(lt ? { by: lt.actor, at: lt.seq } : {}) });
   }
@@ -347,16 +332,13 @@ const VERBS = {
 /** Every verb the authority answers (VERBSPEC must have a row for each: scars-check's verb-row check). */
 export const VERB_NAMES = Object.freeze(Object.keys(VERBS));
 export function forkCopy(w, actor, args) { CTX.forking = true; try { return request(w, actor, "fork-copy", args); } finally { CTX.forking = false; } }
-/** A server operator's recorded repair (review of PR #260, server.ts:742: a server operator entered every world but could mend
- *  nothing in it). NARROW: set / delete of @world's door components (roles:<id>, access, default-role, role-defs) and unban
- *  (which lifts a ban or a kick); everything else is refused here, before the authority is entered. RECORDED: the act is the
- *  operator's own identity's, its body carries `operator: true` (an unban's moderator-log record likewise), so history and
- *  modlog say who mended what and by what right. Not god mode: shape, value, roles and last-owner checks all still apply,
- *  and no other component, thing or verb is opened. Only the server reaches it (a server operator account's operator-repair
- *  message); no request word does. */
+/** A server operator's recorded repair. NARROW: set / delete of @world's door components (roles:<id>, access,
+ *  default-role, role-defs), unban, and the shape repair; everything else is refused before the authority is entered.
+ *  RECORDED: the act is the operator's own, its body carries `operator: true`. Not god mode: shape, value, roles and
+ *  last-owner checks still apply. Only the server reaches it (operator-repair message); no request word does. */
 export function operatorRepair(w, actor, verb, args = {}) {
   const door = (verb === "set" || verb === "delete") && args && args.id === "@world" && REPAIR_COMP(args.component);
-  // reviewer item 9 (10-18): the shape repair is a maintenance command, never the load's; an operator runs it here, recorded
+  // the shape repair is a maintenance command, never the load's; an operator runs it here, recorded
   // with the operator's id (the act's `by`, operator: true). Not a request word: it has no verb at the door
   if (verb === "repair" || verb === "repair-shapes") { const r = maintain(w, { by: actor, operator: true, dryRun: args?.dryRun === true });
     return r.refused ? { ok: false, refused: r.refused } : { ok: true, ...r }; }

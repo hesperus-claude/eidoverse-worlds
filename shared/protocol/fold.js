@@ -2,9 +2,8 @@
 // replaces component values, deletes components and entities. It reads only the entry: never a blob, never the authority.
 // It is total: a malformed entry shapes nothing and is named in diagnostics, never in the world. A version it
 // doesn't implement gives "unknown version" and no world.
-// Ported from the protocol lab (the protocol lab's fold.js @ 11db981). Engine changes: sha256 comes from ./hash.js (sync, no
-// node: imports) so the browser imports this file as-is. Nothing else differs; the conformance suite (Python
-// reference reader vs this file) is tools/protocol/compare.ts.
+// sha256 comes from ./hash.js (sync, no node: imports) so the browser imports this file as-is. The conformance suite
+// (Python reference reader vs this file) is tools/protocol/compare.ts.
 import { sha256 } from "./hash.js";
 
 // §2.4: genesis says which log this is and which protocol reads it, in upstream's established shape: {dialect:
@@ -207,7 +206,7 @@ export function opsOf(e) {
   }
   return [shapeOne(verb, body, false, "")];
 }
-// `followUps` (review r9 H1 / scars M3): the indices of the ops in this batch that the AUTHORITY wrote as a consequence of the
+// `followUps`: the indices of the ops in this batch that the AUTHORITY wrote as a consequence of the
 // asker's own ops (clearing the references to a thing the batch deleted; an undo putting such a reference back). The fold
 // applies them like any op; readers that derive authorship from the log (who set up a handler, who created a key) skip
 // them, so a follow-up never makes the asker the author of someone else's value. Strictly ascending, in range, non-empty.
@@ -221,7 +220,7 @@ export function followUpsOf(e) {
   return new Set(Array.isArray(f) ? f.filter(Number.isInteger) : []);
 }
 export function shapeOne(verb, b, inner, where) {
-  const allowed = Object.hasOwn(OP_FIELDS, verb) ? OP_FIELDS[verb] : null; if (!allowed) bad("verb", `${where} ${JSON.stringify(verb)}`);   // never an inherited name (`constructor`): review of #260, I118
+  const allowed = Object.hasOwn(OP_FIELDS, verb) ? OP_FIELDS[verb] : null; if (!allowed) bad("verb", `${where} ${JSON.stringify(verb)}`);   // never an inherited name (`constructor`)
   const extra = Object.keys(b).filter((k) => !(inner && k === "verb") && !allowed.includes(k));
   if (extra.length) bad("op-field", `${where} ${extra.sort().join(",")}`);
   if (!isEntityId(b.id)) bad("entity-id", `${where} ${JSON.stringify(b.id)}`);
@@ -336,7 +335,7 @@ function settledEntries(ok, worldId, d) {
 // §12: a set written as {commit} with no value is a purge's work. One no purge names (none does, or the purge naming it is
 // one the fold refuses, as any aimed at a roles: value) was changed outside the one rule that changes the record. It folds
 // as absent(purged), unknown as every reader takes a purged value (§1), never as the value before it, and the diagnostic
-// says so (commit-unpurged: the line still shapes, so not malformed:). Said, not enforced: writes go on (house markup, #260 10-20).
+// says so (commit-unpurged: the line still shapes, so not malformed:). Said, not enforced: writes go on.
 function unnamedStubs(ok, purged, d) {
   ok.forEach((e, seq) => { if (!e || e.kind !== "change") return;
     let ops; try { ops = opsOf(e); } catch (x) { if (x instanceof Malformed) return; throw x; }
@@ -363,7 +362,7 @@ function purgesOf(ok, d) {
   });
   return out;
 }
-// PURGED is kept as itself: wireState and the digest tell a purged value from a value by identity (review of #260, I117)
+// PURGED is kept as itself: wireState and the digest tell a purged value from a value by identity
 const clone = (v) => (v === null || typeof v !== "object" || v === PURGED ? v : JSON.parse(JSON.stringify(v)));
 function applyOp(st, seq, op, purgedBy, d) {
   const w = st.entities, { verb, id, comp } = op;

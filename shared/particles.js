@@ -1,13 +1,7 @@
 // particles — how a `particles` component READS: the one prose line a text-tier resident gets for an emitter, and the
-// begin / change / end narration of a live change. What a value MEANS (its effect document, params, limits, the older
-// spelling) is shared/particle_effects.js; the simulation is shared/particlesim.js. Pure; imported by
-//
-//   mcpl/agent.ts            text-tier perception: look() + the live percept
-//   shared/a11y.js           the authority's and the inspector's reading (name, description, what it can do, its state)
-//
-// so a renderer client, a late joiner, and a resident who perceives by reading cannot disagree about what is burning.
-//
-// Unit-tested in tools/particles-test.ts.
+// begin / change / end narration of a live change. What a value MEANS is shared/particle_effects.js; the simulation is
+// shared/particlesim.js. Pure; shared by mcpl/agent.ts and shared/a11y.js so every reader agrees on what is burning.
+// Tests: tools/particles-test.ts.
 import { ESSENTIALS, ESSENTIAL_NAMES, instanceOf, effectBlobName, effectFor, hashSeed, QUALITY_TIERS, essentialNameOf } from './particle_effects.js';
 import { quoted } from './text.js';
 
@@ -32,7 +26,7 @@ export function mulberry32(seed) {
 export function emitterSeed(entityId, data) {
   const inst = instanceOf(data) ?? {};
   if (typeof inst.seed === 'number' && Number.isFinite(inst.seed)) return Math.floor(inst.seed) >>> 0;
-  return hashSeed(`${entityId}:${essentialNameOf(inst.effect) ?? inst.effect ?? ''}`);   // an Essential's name (or the address one was stored as before 10-17)
+  return hashSeed(`${entityId}:${essentialNameOf(inst.effect) ?? inst.effect ?? ''}`);   // an Essential's name (or the address an older value was stored as)
 }
 /** Particles one viewer draws of `amount`: the effect's own ratio (an older value's quality) and the viewer's tier,
  *  whichever asks for less. The only number allowed to differ between two clients looking at the same fire. */
@@ -54,10 +48,8 @@ function readsAs(effect, lookup) {
 }
 
 /**
- * How an emitter reads in prose, from the RAW component value (either spelling). Tolerant: an effect this reader doesn't
- * know still reads as an emitter rather than disappearing. Names the semantic thing on the owning entity — never a
- * sprite count, never a bare `components: particles`. Heat, light, sound and contact are NOT claimed: separate
- * authored components provide those, and a resident who reads "warm" acts on it.
+ * How an emitter reads in prose, from the RAW component value (either spelling); an unknown effect still reads as an
+ * emitter. Never a sprite count. Heat, light, sound and contact are NOT claimed: separate components provide those.
  */
 export function describeParticles(data, { lookup = () => null } = {}) {
   const inst = instanceOf(data);
@@ -67,7 +59,7 @@ export function describeParticles(data, { lookup = () => null } = {}) {
   const o = Array.isArray(inst.at) && inst.at.length === 3 && inst.at.every((n) => typeof n === 'number' && Number.isFinite(n)) ? inst.at : null;
   bits.push(`local origin [${(o ?? [0, 0, 0]).join(', ')}]`);
   if (typeof inst.part === 'string') bits.push(`on its ${quoted(inst.part, 64)}`);
-  // size is a shared fact a resident can act on (a candle flame is not a bonfire: upstream #256), so a scaled emitter
+  // size is a shared fact a resident can act on (a candle flame is not a bonfire), so a scaled emitter
   // says so; at its own size (absent, or 1) nothing is claimed
   if (typeof inst.scale === 'number' && Number.isFinite(inst.scale) && inst.scale !== 1) bits.push(`scale ${+inst.scale.toPrecision(3)}`);
   if (!known && !effectBlobName(inst.effect)) bits.push('effect unknown to this client');

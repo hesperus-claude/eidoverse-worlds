@@ -1,10 +1,7 @@
-// shared/protocol/assetref.js — what the write door does to a reference by name (shape audit 10-16; R 10-17, binding: "definitely
-// serve path again alongside hash"). A reference is stored AS WRITTEN: a model's library path, a particle Essential's name, a
-// grass preset's name. Those are the portable references: a world loads anywhere the library (or the code that ships the
-// Essentials and the presets) exists. What its bytes were rides beside it, never instead: a model's content hash is the
-// model-hash component the authority stamps when its catalogue already knows it (authority.js stampModelHash), and a world
-// loses nothing when it is absent. Readers still take a content address stored before 10-17 (shared/eido.js,
-// particle_effects.js essentialNameOf).
+// shared/protocol/assetref.js — what the write door does to a reference by name. A reference is stored AS WRITTEN (a
+// model's library path, a particle Essential's name, a grass preset's name): the portable form. Its bytes' identity
+// rides beside it, never instead (the model-hash component, stamped by authority/followups.js stampModelHash when known). Readers
+// still accept an older stored content address (shared/eido.js, particle_effects.js essentialNameOf).
 //
 //   atWrite(comp, value) → {value, notes: [{field?, sent, kept, why}]}
 //

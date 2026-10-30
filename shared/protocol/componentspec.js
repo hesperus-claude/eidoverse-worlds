@@ -1,13 +1,13 @@
 // shared/protocol/componentspec.js — the component types a builder can discover: their fields, defaults, ranges and help.
 // The lab's hand-written models are shared/protocol/labmodels.js.
 //
-// Every parameter is written down (PROTOCOL §4; review 10-07 H2, R: "the parameter is the parameter"). The authority writes a
+// Every parameter is written down (PROTOCOL §4). The authority writes a
 // component's defaults into the stored value when it's created or set (materialize, below): `defaults` always, and each
 // `when` rule ({if: {field: value}, absent: [fields], set: {…}}) when it holds. So a renderer never supplies a number the
 // log doesn't hold for a value written since 10-16 (an older light reads 16 / 1.7 until repair-shapes writes them: components.js), and changing a default here never changes an old world. A default that lives only in help text or a
 // renderer is a bug (pretrans-check D7); a changed default, type or enum is a changed meaning (spec/registry-pin.json, D8).
 //
-// ONE description, derived readers (review 10-14 §3.4, R: "fix"): a field's type (`fields`), default (`defaults`/`when`),
+// ONE description, derived readers: a field's type (`fields`), default (`defaults`/`when`),
 // limits (`ranges`), unit (`units`) and one-line doc (`docs`) are written HERE and nowhere else. shared/protocol/descriptors.js
 // derives the inspector's rows from them (keeping only widget facts: step, decimals, soft maxima, which rows a card shows),
 // shared/components.js derives its records' params, shared/editschema.js and shared/worldentity.js read limits from here, and
@@ -20,18 +20,17 @@ import { RANK, BUILTIN_IDS, PERMISSION_NAMES, CUSTOM_ID, RESERVED_IDS } from "./
 import { BODY_RANGE, bodyRangeWords } from "./physconst.js";
 export const COMBINE = ["average", "min", "multiply", "max"];
 export const COMPONENTS = {
-  // glTF's node TRS (shape audit 10-16, physics-motion §1): local matrix = T · R · S, world = parent's world × local, down the
+  // glTF's node TRS: local matrix = T · R · S, world = parent's world × local, down the
   // tree (PROTOCOL §9.3 writes the rule down). The door's limits, pinned: pos within ±1e5 m, each scale within ±1e3 and at
   // least 1e-4 from zero (a negative one mirrors; physics reads |scale|, KHR_physics_rigid_bodies' rule)
   transform: { status: "trial", on: "thing", fields: { pos: "vec3", q: "array", scale: "vec3" }, defaults: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, units: { pos: "m", scale: "×" },
     ranges: { pos: { min: -1e5, max: 1e5 }, scale: { min: -1e3, max: 1e3 } },
     docs: { pos: "where it stands, [x, y, z] in metres, in its parent's frame (the world's when it has no parent)", q: "its orientation, a unit quaternion [x, y, z, w] (glTF order), in its parent's frame; normalized on write", scale: "its size per axis, [x, y, z] (1 = as made), each within ±1000 and never within 1e-4 of zero; a negative one mirrors (physics reads its size, |scale|)" },
     help: "where it is, glTF's node TRS: pos (m), q (unit quaternion [x, y, z, w]), scale [x, y, z], all in its parent's frame. Composed as glTF composes a node: local = T · R · S, world = parent's world × local (PROTOCOL §9.3)" },
-  // R 10-17 (binding: "definitely serve path again alongside hash"): a model is its LIBRARY PATH, stored as written: the
-  // portable reference (a world loads anywhere the library exists, as on anima/main). What its bytes were rides beside it,
-  // optionally, as model-hash (below), never instead. A content address stored before 10-17 (eido:sha256/<64 hex>: translate-v1
-  // @8–@11, and this branch's door for a day) still loads where this host's index knows it, and the maintenance command's repair writes its path
-  // back (shaperepair.js); one no file here names reads as "thing"
+  // a model is its LIBRARY PATH, stored as written: the portable reference (a world loads anywhere the library exists).
+  // Its bytes' identity rides beside it, optionally, as model-hash (below), never instead. An older stored content address
+  // (eido:sha256/<64 hex>) still loads where this host's index knows it, and the maintenance command's repair writes its
+  // path back (shaperepair.js); one no file here names reads as "thing"
   model:     { status: "trial", on: "thing", type: "string", help: "which model it shows: its library path (eidoverse/assets/models/…glb, store/<hash>.glb; a name from find {kind: 'model'} gives one), stored as written. The server stamps model-hash beside it when it knows the file's bytes. An older eido:sha256/<64 hex> address still loads where this host can find its bytes" },
   // the bytes a model's path named when it was written: Godot's ext_resource {path, uid}, an npm lock's {resolved, integrity},
   // a web page's <script src integrity>. Optional (a host that can't hash, or hasn't yet, writes none; nothing breaks without
@@ -40,18 +39,17 @@ export const COMPONENTS = {
   "model-hash": { on: "thing", type: "sha256", writtenBy: "server",
                help: "set by the server beside model (never by hand below owner): sha256:<64 hex> of the original bytes its library path named when it was written (the file in the library, never an optimized copy). An integrity and version fact only: readers load the path; absent, nothing is lost" },
   label:     { on: "thing", type: "string", maxLen: 80, help: "its display name, a short string (its name to every reader: the accessible name; description says what it is)" },
-  // R 10-07 (our answer to upstream PR #168's label {name, description, visibility, offset}): the accessibility model's
-  // name / description / role+state. label stays the name; description is how the thing is described to any text-based
+  // the accessibility model's name / description / role+state. label stays the name; description is how the thing is
+  // described to any text-based
   // reader, one plain string, like label and picture.description; what it can do and its state are GENERATED from its
   // components (shared/a11y.js), so a description never restates them; why it's here, as a titled placard with marks, is
   // story's (the long-form details beside the short description). A visible nameplate is a child thing with text.
   description: { on: "thing", type: "string", maxLen: 500, cleanAs: "lines",
                help: "how it is described to anyone who reads rather than sees it, a sentence or two of plain text (≤ 500): what it is and what it looks like. Its name is label. What it can do and its state (it opens, it's locked, it can be picked up or sat on, it's playing…) are read out from its components, so don't restate them here; why it is here, as a titled placard, is story. A visible nameplate isn't a component: it's a child thing (parent {to: this}) with text {text, billboard: 'yaw'}" },
-  // every client honours it (the editor's Hide; shared/editschema.js flags); registered 10-07 when bare names became the
-  // registry's (PROTOCOL §4), with the meaning it already had
+  // every client honours it (the editor's Hide; shared/editschema.js flags); registered with the meaning it already had
   // the collision shape every client and the authority's solids honour (shared/editschema.js Collider): its triangles or
-  // its box; and the caption bot's speaker mark (shared/components.js Stage). Registered 10-07 with the meanings they had
-  // two readers, one vocabulary (shape audit 10-16, physics-motion §7): `mesh` is shapes.js's word, KHR's geometry.mesh, Unity's
+  // its box; and the caption bot's speaker mark (shared/components.js Stage). Registered with the meanings they had
+  // two readers, one vocabulary: `mesh` is shapes.js's word, KHR's geometry.mesh, Unity's
   // MeshCollider, Godot's trimesh (it was `exact`; the door takes that and stores mesh). The physics stamp (authority
   // shapeFor) and the walker (client/lib/colliders.js decide) read it, and its absence, differently: both written down
   // enabled: collision off is its own axis, apart from how it moves (Godot CollisionShape3D.disabled, Unity Collider.enabled,
@@ -77,7 +75,7 @@ export const COMPONENTS = {
   hidden:    { on: "thing", type: "bool", help: "true: not drawn by any client (it's still there: it collides, look and inspect list it). Delete it to show the thing again; false reads the same as absent" },
   clickthrough: { on: "thing", type: "bool", help: "true: a pointer click passes through it to whatever is behind (it is still drawn, collides, and can be grabbed by a hand or a tool; the editor still selects it). Delete it to make it a click target again; false reads the same as absent" },
   disabled:  { on: "thing", type: "bool", help: "true: switched off. It stays in the record and the Hierarchy, but no client loads or draws it, it has no collider and no physics, and nothing may grab, punt, use or sit on it; what hangs under it is switched off with it. Delete it to switch the thing back on; false reads the same as absent" },
-  // the one hinge (shape audit 10-16, physics-motion §3): a whole thing's motion, openable, the gizmo all turn about it; a part's
+  // the one hinge: a whole thing's motion, openable, the gizmo all turn about it; a part's
   // motion carries its own (motion:<part>.pivot, in the part's frame), since a part can't carry components
   pivot:     { on: "thing", fields: { pos: "vec3" }, required: ["pos"], units: { pos: "m" }, ranges: { pos: { min: -1e4, max: 1e4 } },
     docs: { pos: "the point it turns and scales about, [x, y, z] metres in its own frame before scale" },
@@ -85,15 +83,14 @@ export const COMPONENTS = {
     help: "{pos: [x,y,z]}: where it turns and scales from, in its own frame before scale ([0,0,0] = its origin). Never moves it or changes how it draws. A whole thing's motion and openable turn about it; absent, about its origin" },
   // attaching to a NAMED point on the parent is general (Unreal AttachToComponent's SocketName, Roblox Attachment,
   // Godot BoneAttachment3D): socket names one of the parent's sockets
-  // shape audit 10-16 (physics-motion §2): `order` is gone. Its materialized "a0" ordered nothing (every child tied; no reader
-  // sorted by it); a sibling order comes back as an addition (a fractional index) when a reader needs one. The door takes a
-  // written order and drops it; a stored one is read by nothing (and dropped at its next write)
+  // `order` is gone (no reader sorted by it; a sibling order comes back as an addition when one needs it). The door takes
+  // a written order and drops it; a stored one is read by nothing (and dropped at its next write)
   parent:    { status: "trial", on: "thing", fields: { to: "ref", socket: "string" }, required: ["to"], legacy: ["socket"], dropped: { order: "sibling order: read by nothing (every stored value was \"a0\")" },
     docs: { to: "the thing it rides: its transform becomes local to this parent", socket: "the old spelling of a socket attachment: parent to the socket child instead" }, help: "{to: id}; its transform becomes local to the parent. To attach at a socket, parent to the socket (a child entity of its host). socket: the old spelling, read in old logs and lifted at the door" },
   // the punctual light every engine shares (glTF KHR_lights_punctual, Godot OmniLight3D/SpotLight3D, Unity Light,
   // three.js): kind, color, intensity, range; a spot adds its cone as HALF-angles in radians (glTF outer/innerConeAngle,
   // Godot spot_angle, three.js angle/penumbra) and shines along the thing's local -Z (glTF, Godot)
-  // shape audit 10-16 (render-media-env §3): the falloff law is part of the value (decay, glTF's and Godot's exponent: 2 =
+  // the falloff law is part of the value (decay, glTF's and Godot's exponent: 2 =
   // inverse square, so intensity is candela as in KHR_lights_punctual); a light stored before it was written fell off as
   // three.js decay 1.7 (the rig's constant), and the maintenance command's repair writes 1.7 on it so it keeps its look. shadows was read by
   // nothing (it returns, absent = false, when the rig reads it); day (a double negative) is daytime: dim | full
@@ -110,13 +107,13 @@ export const COMPONENTS = {
     docs: { kind: "point (shines every way), spot (a cone along its -Z) or directional (a sun: parallel light along its -Z everywhere, KHR_lights_punctual's; range and decay unread; the first by id is the renderer's sun)", color: "its colour, 0xRRGGBB, sRGB", intensity: "how bright it is: candela at decay 2 (KHR_lights_punctual); three.js units under this light's decay otherwise. Default 25.93: main's default light's brightness at 5 m", range: "a hard cutoff, metres: nothing beyond it is lit", angle: "a spot's cone half-angle, radians",
       inner: "where a spot's edge starts to soften, radians", decay: "how it falls off with distance, an exponent: 2 = inverse square (physical, glTF), 0 = not at all", important: "first claim on a light slot, never governor-shed (more important lights than slots: the nearest cast)", daytime: "dim (it dims by day, follows the day cycle) | full (it burns at noon too)" },
     help: "a light on this thing: {kind: point|spot|directional, color (0xRRGGBB, sRGB), intensity (candela at decay 2), range (m, a hard cutoff), decay (falloff exponent, default 2 = inverse square), important, daytime: dim|full}; a spot shines along the thing's -Z with angle (its cone's half-angle, rad, default π/4) and inner (where the edge starts to soften, rad, default 0); a directional light is a sun shining along the thing's -Z everywhere (intensity in lux, as KHR_lights_punctual; the first by id lights the world, in place of the sky's own sun). day (true/false) is taken and stored as daytime" },
-  // a parametric body on a model-less thing (R 10-12: Create ▸ Box/Sphere/…, as Create ▸ Light is an Empty with a light).
+  // a parametric body on a model-less thing (Create ▸ Box/Sphere/…, as Create ▸ Light is an Empty with a light).
   // Base-centred like a measured model (boxOfM): y runs 0..size[1], so a mesh thing stands on its own origin. Registered
   // bare at once (ladder rung 3): the authority needs its size to place it, stack on it and stamp its physics shape. No
   // colour: its one material slot is 'surface', and hesperus/material colours it as it colours a model's.
   mesh:      { on: "thing", fields: { shape: "string", size: "vec3" }, defaults: { shape: "box", size: [1, 1, 1] }, enums: { shape: ["box", "sphere", "cylinder", "plane", "capsule"] },
     ranges: { size: { min: 0.05, max: 200 } },   // a vec3's range holds for each element (valueCheck)
-    // pinned facts (shape audit 10-16): where it stands on its origin, and what a primitive does with the axes it ignores
+    // pinned facts: where it stands on its origin, and what a primitive does with the axes it ignores
     absentMeans: { origin: "the centre of its base: it stands on its own origin (every referent centres primitives; ours stands, as a model does)", ignored: "a sphere ignores size[1] and size[2], a cylinder and a capsule size[2], a plane size[1]" },
     units: { size: "m" }, docs: { shape: "box, sphere, cylinder, plane (flat on the ground, drawn on both sides) or capsule; it stands on its own origin", size: "its size [x, y, z] in metres; a sphere reads x as its diameter, a cylinder or capsule x as diameter and y as height, a plane x × z" },
     help: "a parametric body drawn without a model: {shape: box|sphere|cylinder|plane|capsule, size: [x, y, z] (m, each 0.05..200)}. Its origin is the centre of its base (it stands on its own pos, as a model does). A sphere reads size[0] as its diameter; a cylinder and a capsule read size[0] as diameter and size[1] as height (a capsule is at least its diameter tall); a plane is size[0] × size[2] on the ground plane, 0.05 thick (it collides as a thin slab; things rest on it at 0.05), drawn on both sides. Never on a thing with a model or a light (one place per thing: give it a child). Its one material slot is 'surface' (hesperus/material:surface)" },
@@ -124,8 +121,8 @@ export const COMPONENTS = {
   // RotatingMovementComponent RotationRate, Unity's Rotate) or a period in seconds; a path is control points with a speed
   // or a duration and a loop mode (Unreal's InterpToMovementComponent: ControlPoints, Duration, OneShot/Loop/PingPong)
   // the per-type defaults are motioneval.js's readings, written down (a spin with no rate turned at 36°/s in every renderer)
-  // shape audit 10-16 (physics-motion §4): amplitude (the first protocol's amp) and a whole motion's `part` field are gone (a node's
-  // motion is motion:<slot> {node}: the node's name is DATA from the model file, any characters, never part of a key; review r7 F1),
+  // amplitude (the first protocol's amp) and a whole motion's `part` field are gone (a node's
+  // motion is motion:<slot> {node}: the node's name is DATA from the model file, any characters, never part of a key),
   // refused at write, and repaired in a stored world by its maintenance command (shaperepair.js) and by translate-v1@12; an
   // axis is stored as a vector (x|y|z|-x|-y|-z taken at write); `pivot` is a PART motion's hinge only (a whole thing turns
   // about its pivot component). The readings that lived only in motioneval.js are here, as absentMeans
@@ -150,13 +147,13 @@ export const COMPONENTS = {
                  pivot: "a part turns about its own origin; a whole thing (which never holds one) about its pivot component, else its origin [0, 0, 0]", phase: "0", maxAmp: "1.1 rad (an old value's reading, the first protocol's push cap; the default is 0.9 rad)", degPerSec: "spin 36°/s, orbit 12°/s (when no period either)", radius: "3 m",
                  center: "where it stands", face: "true", speed: "1 m/s (when no duration either)", duration: "speed decides", loop: "loop", t0: "the reader's own first look (a value from before t0 was stamped)", node: "a keyed motion: the node its key's tag names (the reading before 10-16, when the key was the node's name); the door writes that down. A whole motion never has one", points: "fewer than 2 points: it stands still" },
                help: "{type, …} (the authority stamps t0, epoch ms): pendulum {axis [x,y,z] (own frame), amp (rad), period (s), damp (1/s), maxAmp, phase} swings about its pivot component (absent: its origin); spin {axis, degPerSec (degrees a second) or period (s a turn), phase} turns steadily about its pivot; orbit {radius (m), center? [x,y,z] (in its parent's frame; default where it stands), period (s a lap) or degPerSec, face? (false: keeps its own heading), phase} circles in its parent's XZ plane about +Y; oscillate {axis, amp (m), period (s), phase} moves back and forth along its axis (a sine: amp each way, one period a cycle; the default axis is up, a float); path {points [[x,y,z], …] (2–64, in its parent's frame), speed (m/s) or duration (s), loop?: loop|pingpong|once, face?} follows its points. A node of its model moves instead as motion:<slot> {node: <the node's name, as the file spells it>, …}, whose pivot? [x,y,z] (the part's own frame) is its hinge; <slot> is any short tag [a-z0-9-] (the editors write the name itself when it is one, else a sanitized form with a hash: tripo_part_3 → tripo-part-3-c9dc783a)" },
-  // the first spelling of attachment points: a map on the host. Reserved and lift-only (shape audit 10-16): nothing stores it;
+  // the first spelling of attachment points: a map on the host. Reserved and lift-only: nothing stores it;
   // the door lifts a write of it into socket children (each body block a station on its child), and the maintenance command
   // lifts a stored world's. The name is held so it can't come back meaning something else.
   sockets:   { status: "reserved", on: "thing", map: "object", lifted: "socket children + their stations (lifted at the door)", instead: "socket children: create {components: {parent: {to: <host>}, transform, socket: {name, accepts?, radius?, part?}, station?: {action, anim, anchor, exit?, leaveBy?, who?}}}", help: "reserved, lift-only: the old spelling of sockets (socket children now: the door lifts a write of it into socket children, each body block a station on its child, and the maintenance command lifts a world stored with it): {<name>: {pos: [x,y,z] (its own frame), q? [x,y,z,w] (its rotation: a rocket seat lies on its back), part? (a model node it rides), accepts? [keywords] + radius? (m, default 0.15): a thing released within radius whose grabbable.fits shares a keyword snaps in (a key on its hook, a sword in its rack), body?: what a person's body does there: {action ('sit'; what 'use' calls it), anchor (root, the default | hips | feet | head: the body point on the socket), pose (a clip; {clip, time: 'phase'}; or a blend {by: 'speed'|'steer'|…|'param.<name>', clips: [[0,'idle'],[2,'walk']]}), poses {<name>: pose} + sync, approach [x,y,z,yaw], enter/leave (clips), exit [x,y,z], reach {leftHand: {at, q?, part?, hint?, vr: snap|track|near}}, hold {<bone>: q}, look {yaw: [min,max]°, pitch, up: world|socket}, input {move: none|drive|walk, look: free|aim|locked} (one drive per thing), leaveBy (jump|menu|script), fromSeat, who (builder|owner)}}}" },
   // an attachment point as an entity of its own (Godot's Marker3D under its node, Unity's child Transform, Unreal's socket):
-  // a child of the thing it belongs to, its pose its own transform (scale 1). Shape audit 10-16 (R: "a socket is just
-  // anything where something may attach something else"): ONLY the attach point. What a person's body does there is the
+  // a child of the thing it belongs to, its pose its own transform (scale 1). ONLY the attach point. What a person's
+  // body does there is the
   // sibling `station` on the same entity (Resonite AvatarAnchor ≠ SnapTarget; VRChat Station ≠ Pickup). Seat if it has a
   // station, snap point if accepts, else attach point (read, never stored).
   socket:    { on: "thing", fields: { name: "string", part: "string", accepts: "array", radius: "number" }, required: ["name"],
@@ -165,11 +162,11 @@ export const COMPONENTS = {
                docs: { name: "letters, digits, - and _ (≤ 32), unique among its host's sockets: what use {args: {socket}} names", part: "a node of its host's model it rides", accepts: "keywords (≤ 8): a released thing whose grabbable.fits shares one snaps in",
                  radius: "how near a released thing must be to snap in, metres", occupancy: "it holds one thing or one body at a time", attach: "who may attach: a thing, whoever may edit that thing's parent, or whoever releases a fitting grabbable within radius; a person, by using its station (station.who)" },
                help: "an attachment point on its parent (its host): {name (letters, digits, - and _, unique among the host's sockets; what use {args: {socket}} names), part? (a node of the host's model it rides), accepts? [keywords, ≤ 8] + radius? (m; absent, 0.15): a thing released within radius whose grabbable.fits shares a keyword snaps in}. Its pose is its transform (local to the host; scale 1). It holds one thing or one body at a time. A person attaches by using it when the same entity has a station. It carries nothing else but station, label, description, disabled, lock and motion. Things attach with parent {to: <its id>}" },
-  // what a person's body does at a socket (shape audit 10-16; research RESEARCH-socket-body-2026-10-06; VRChat Station,
-  // Resonite AvatarAnchor, Roblox Seat), on the socket entity beside `socket`. The alpha registers the core only; the rest of
+  // what a person's body does at a socket (VRChat Station, Resonite AvatarAnchor, Roblox Seat), on the socket entity
+  // beside `socket`. The alpha registers the core only; the rest of
   // the researched shape is reserved (refused, names held: STATION_RESERVED below; docs/COMPONENT-LADDER.md) and comes back
   // as additions. Materialized on write: the action table fills anim, so editing the table never re-poses a stored seat.
-  // anim (R 10-17 15:09/15:11; was pose): an OPEN name, of a pose (one frame) or a clip (more than one key): a built-in
+  // anim (was pose): an OPEN name, of a pose (one frame) or a clip (more than one key): a built-in
   // name today, a world's anim-pose/anim-clip later; one the body doesn't know is its default, never a refusal.
   station:   { on: "thing", fields: { action: "string", anim: "any", anchor: "string", exit: "array", leaveBy: "string", who: "any", input: "object" },
                defaults: { action: "sit", anchor: "root" },
@@ -183,31 +180,31 @@ export const COMPONENTS = {
                  input: "{move: 'drive'}: this seat's occupant drives its host (the host's drive); only on a drive station, one per host" },
                reservedFields: ["poses", "sync", "approach", "enter", "leave", "reach", "look", "fromSeat"],
                help: "what a person's body does at this socket (only on a socket entity): {action (default sit: what use calls it), anim (a pose or clip by name, open: one the body doesn't know is its default; {clip, time?, offset?}; or a blend {by, clips}; absent, picked from the action at write: sit/ride/drive sitchair, lie lie, kneel sit, stand idle, else sitchair), anchor (root, the default | hips | feet | head | surface), exit? [x, y, z(, yaw)] (its host's frame), leaveBy? (jump | menu | script; absent, any way; script makes leaving deliberate, never impossible: holding X ~1.5 s, a second get-up, or an agent's detach {escape: true} always gets the occupant up), who? (a role id: this rank or above)}. input? {move: 'drive'} (this seat drives its host's drive: the helm). Reserved for later (refused now): poses, sync, approach, enter, leave, reach, look, fromSeat" },
-  // the numbers a thing exposes to the bodies on it, the ONE signal store (shape audit 10-16: no `param.*` keys in other
-  // components): a seat pose blends by the signal param.<name>; scripts write them with world.param(id, name, n)
-  // where a thing goes back to (R 10-10): {pos, q?, scale?, parent?: {to}} in its home parent's frame. The ONE home (shape
-  // audit 10-16: grabbable.home is gone): a reset, a grabbable's release: return and its returnAfter all read this.
+  // the numbers a thing exposes to the bodies on it, the ONE signal store (no `param.*` keys in other components): a
+  // seat pose blends by the signal param.<name>; scripts write them with world.param(id, name, n)
+  // where a thing goes back to: {pos, q?, scale?, parent?: {to}} in its home parent's frame. The ONE home
+  // (grabbable.home is gone): a reset, a grabbable's release: return and its returnAfter all read this.
   home:      { on: "thing", refPaths: { "parent.to": "ref" }, fields: { pos: "vec3", q: "array", scale: "vec3", parent: "object" }, required: ["pos"],
                absentMeans: { scale: "its size in the world is kept as it is when it goes home", q: "no turn: [0, 0, 0, 1]", parent: "goes home under no parent (the world root)" }, units: { pos: "m" },
                docs: { pos: "where it goes back to, [x, y, z] in its home parent's frame", q: "which way it faces at home, [x, y, z, w]", scale: "its size at home, [x, y, z] (1 is the model as made); a number is taken and stored as one", parent: "what it hangs under at home: {to}" }, help: "where it goes back to when a reset sends it home, or a grabbable returns: {pos: [x,y,z], q?: [x,y,z,w], scale? [x,y,z] (else its size in the world is kept), parent?: {to}} (its home parent's frame). Stamped where it stands when a reset handler naming it, or a returning grabbable, is written without one" },
-  // named places to walk to (shape audit 10-16): a closed entry, checked at the door; `kind` is gone (a seat is a station,
+  // named places to walk to: a closed entry, checked at the door; `kind` is gone (a seat is a station,
   // a door a reading of the model). Frame: the thing's full transform (pos, q, scale); on @world, world coordinates.
   places:    { map: "any", keyPattern: "^[A-Za-z0-9_][A-Za-z0-9_ .:'-]{0,47}$", units: { at: "m", min: "m", max: "m" },
                docs: { at: "a spot to stand, [x, y, z] in the thing's own frame (its y the floor there)", min: "a room's low corner (its y the floor)", max: "a room's high corner", label: "how it reads, ≤ 80 characters" },
                help: "{<name>: {at: [x, y, z]} | {min: [x, y, z], max: [x, y, z]} | null}, each with label? (how it reads, ≤ 80); nothing else: named places to walk to (move {to: '<thing>/<name>'}, or the name alone), in the thing's own frame so they move with it (on @world: world coordinates, places that belong to no thing). at is a spot to stand (its y the floor there); min/max a room (its min y its floor; look says which room you're in); null hides a place the model's own file declares (its glTF extras `building`). name_place {name} names the spot where you stand" },
   params:    { on: "thing", map: "number", keyPattern: "^[a-z][a-zA-Z0-9_-]{0,31}$", maxKeys: 64, help: "{<name>: number}: up to 64 named numbers this thing exposes (a name: a lowercase letter, then letters, digits, _ or -, up to 32). A socket's pose blends by one as the signal param.<name>; a script writes one with world.param(id, name, number)" },
-  // shape audit 10-16: the handler kinds are FROZEN (VRChat SDK2's lesson: an action set that grows without end, then a hard
-  // break) and pinned with their args; anything new goes to the script handler. `impulse` was reserved, and is open again
-  // (Mica 10-31, decision row 19: main's script-free swing push; use.js runs it). One action namespace
+  // the handler kinds are FROZEN (VRChat SDK2's lesson: an action set that grows without end, then a hard
+  // break) and pinned with their args; anything new goes to the script handler. `impulse` is reserved: it had a general name
+  // and a pendulum-only meaning, and comes back with its general one when an engine carries impulses. One action namespace
   // per thing: a reaction key never equals a station action of its own sockets (the door refuses the clash).
   reactions: { refPaths: { "*.targets": "refs" }, help: "{<action>: handler}: what happens when someone uses it. Each handler may add who: a role id (who may use it: that rank or above) and fix: text (shown on refusal). The kinds are fixed: toggle, set, script, play, reset, impulse (a push that swings a pendulum; anything else is a script). An action never shares its name with a station action of the thing's own sockets.",
     handlers: {
       toggle: { args: { component: "the component to flip (default 'openable')", field: "the true/false field inside it to flip (default 'open' for openable; leave both out for an openable). A named component with no field flips its whole value. The component must be on the thing when the handler is written", unless: "a field of the same component that, when true, bars it (e.g. 'locked')" }, example: { open: { kind: "toggle", component: "openable", field: "open", unless: "locked" } } },
       set: { args: { component: "which component", field: "optional: the field inside it to set (the component must then be on the thing)", value: "the value it gets (checked when the handler is written, as the authority would check that write)" }, example: { bolt: { kind: "set", component: "openable", field: "locked", value: true, who: "builder" } } },
-      // research 41 §3.1: the join between the two tiers. The action list, its `who` gate and its `fix` stay data; only
+      // the join between the two tiers. The action list, its `who` gate and its `fix` stay data; only
       // the effect is computed, by the script:<name> on the same thing, with its sponsor's rights narrowed to its scope
       script: { args: { script: "the name of a script on this same thing (its component is script:<name>)" }, example: { ring: { kind: "script", script: "bell" } } },
-      // batch 2: a doorbell plays its sound again from the top, whether or not it's playing (set can't restart it, toggle
+      // a doorbell plays its sound again from the top, whether or not it's playing (set can't restart it, toggle
       // would stop it): the authority writes sound {…, playing: true, t0: now}
       play: { args: {}, example: { ring: { kind: "play" } } },
       // main's script-free swing (Mica 10-31, decision row 19): use pushes a pendulum (motion pendulum; absent, the default one)
@@ -218,7 +215,7 @@ export const COMPONENTS = {
     },
     reservedKinds: {},
     common: { kind: "the handler kind", who: "who may use it: a role id (builtin or this world's own), that rank or above; absent, anyone who may use the thing", fix: "text shown on refusal" } },
-  // R 10-07: the behaviour is `openable` (a door, a gate, a lid, a hatch, a cabinet), not the asset. The conventional shape
+  // the behaviour is `openable` (a door, a gate, a lid, a hatch, a cabinet), not the asset. The conventional shape
   // (Unity/Godot/Roblox door recipes, Unreal's door timeline): a turn about a hinge (angle about axis, through the thing's
   // pivot) or a slide, tweened over a time (Roblox TweenInfo's default 1 s). `open` is the state; every client animates to it
   openable:  { on: "thing", fields: { open: "bool", locked: "bool", angle: "number", axis: "axis", slide: "vec3", time: "number", part: "string" },
@@ -229,14 +226,11 @@ export const COMPONENTS = {
                  angle: "how far it turns when open, radians; negative turns the other way", axis: "the hinge axis in its own frame: y an upright hinge (a door), x a lid or a hatch", slide: "how far it moves when open, [x, y, z] metres in its own frame (instead of turning)",
                  time: "seconds to open or close", part: "a node of its model that moves instead of the whole thing" },
                help: "it opens and closes when someone uses it: a door, a gate, a lid, a hatch. {open: true/false (its state), locked? (true bars an open handler with unless: 'locked'; the edit lock is the separate `lock`), angle? (rad it turns when open, default π/2; negative turns the other way), axis? (its own frame, default [0,1,0]: an upright hinge), slide? [x,y,z] (m it moves in its own frame when open, instead of turning), time? (s to open or close, 0–10, default 1), part? (a node of its model that moves instead of the whole thing)}. It turns about its pivot (pivot {pos}: put it on the hinge edge). Usable with reactions {open: {kind: 'toggle', unless: 'locked'}} (toggle's default flips openable.open)" },
-  // spec/PHYSICS.md §3.1–§3.2 (research physics-seeds 10-07, seeds 3–4): shape has a grammar (shared/protocol/shapes.js).
-  // Shape audit 10-16 (physics-motion §5): kind is REQUIRED (no default: a bare {} was "dynamic" while the component's
-  // absence means static or nothing, the trap PROTOCOL §9.2's last rule names); the eight physical properties nothing here
-  // reads are RESERVED fields (mass and density stay open: the body shove reads them) (named, unit-ed and their absence written down, so the first engine that reads them can't
-  // invent either; refused until one does, so nobody tunes numbers nothing honours); layers, mask and ccd are cut (filters
-  // come back as named groups, KHR's collisionSystems; ccd is a solver knob no format maps). `material` is renamed
-  // `surface` (it names a surface:<name>; `material` means appearance). Angular velocity everywhere (acts, launches, state
-  // samples) is w: [x, y, z] rad/s in the world frame.
+  // spec/PHYSICS.md §3.1–§3.2: shape has a grammar (shared/protocol/shapes.js). kind is REQUIRED (no default: the trap
+  // PROTOCOL §9.2's last rule names). The eight physical properties nothing reads are RESERVED fields (named, unit-ed and
+  // refused until an engine reads them); mass and density stay open (the body shove reads them). `material` is renamed
+  // `surface` (it names a surface:<name>; `material` means appearance). Angular velocity everywhere (acts, launches,
+  // state samples) is w: [x, y, z] rad/s in the world frame.
   physics:   { on: "thing", fields: { kind: "string", who: "any", shape: "any", mass: "number", density: "number" }, required: ["kind"],
     grammar: { shape: "shape" },   // `any` is the pinned type of every value ever stored; the grammar narrows what may be written
     enums: { kind: ["dynamic", "static", "none", "kinematic"] },
@@ -263,16 +257,16 @@ export const COMPONENTS = {
       angularDamping: "1/s; absent, the engine's own law (eidosim: none; it doesn't spin)",
       centerOfMass: "[x, y, z] m in its own frame before scale; absent, the centroid of its stamped shape" },
     help: "how it takes part in physics: {kind (required): dynamic (it flies when thrown, dropped or punted; with no grabbable it can also be picked up) | static (a collider; what anything with a model becomes when the world runs physics) | kinematic (a collider moved only by edits and motion, never by the engine; it is never launched; what a thing with motion or openable is stamped) | none (not simulated: the engine never moves it; still solid: collision off is collider {enabled: false}), who: who may punt it (and pick it up, when it has no grabbable; default member), shape: stamped by the authority (its measured box; you never send it)}. mass (kg; absent: density × its box's volume) and density (kg/m³; absent 1000), which a body's shove reads. Reserved until an engine reads them (refused now): surface (a surface:<name> on @world), friction, restitution (0..1), frictionCombine, restitutionCombine (average|min|multiply|max), linearDamping, angularDamping (1/s), centerOfMass [x,y,z]. Grabbable makes a thing carryable; physics makes it fall. With eidosim (gravity [0, −9.81, 0] m/s²): a thrown thing flies, tumbles, rolls if it's a sphere, and comes to rest; it knocks over dynamic things it hits unless a lock holds them (their own, or one on what they're under or what they hold)" },
-  // what a hand may do with it (research RESEARCH-grab-2026-10-06; shared/grab.js holds the shape, the defaults and the
+  // what a hand may do with it (shared/grab.js holds the shape, the defaults and the
   // check). Its own component, apart from dynamics: a lantern, a key, a book can be carried in a world with no physics.
   // shared/grab.js DEFAULTS, written down: the ones absent by meaning (no grips, no home, no use, a size-chosen pose)
   // stay absent. grab-check pins that these equal grab.js's own.
   grabbable: { on: "thing", fields: { enabled: "bool", who: "any", steal: "bool", range: "number", priority: "int", hold: "string", anim: "string", grips: "object", twoHanded: "bool", carries: "bool",
                  throw: "number", release: "string", returnAfter: "number", fits: "array", use: "any", prompt: "string" },
-    // shape audit 10-16: the shape lives here now (grab.js derives its enums from these). Gone: home (the home component is
+    // the shape lives here (grab.js derives its enums from these). Gone: home (the home component is
     // the one home), a grip's bone overrides (hold). Reserved: fx (refused; presence-only particles while use is held)
     enums: { hold: ["auto", "press", "toggle"], release: ["drop", "stay", "return"] },
-    // anim (R 10-17 15:09/15:11; was pose, a closed enum): an OPEN name of a pose or a clip. Built in today: hand, carry,
+    // anim (was pose, a closed enum): an OPEN name of a pose or a clip. Built in today: hand, carry,
     // torch, pistol, shoulder (grab.js HOLD_POSES); a world's anim-pose/anim-clip later; one the body doesn't know is the
     // body's default hold (by size), never a refusal. two-hand is gone: twoHanded says it.
     dropped: { pose: "renamed anim (R 10-17): a write of pose is taken and stored as anim (two-hand as twoHanded: true); a stored one is renamed by the world's maintenance command" },
@@ -290,10 +284,10 @@ export const COMPONENTS = {
       twoHanded: "on: both hands may hold it at once (a rifle, a broom): the first carries, the second aims", throw: "how hard it flies when thrown: 1 is normal, 2 twice as fast, 0 can only be dropped", release: "drop (it falls or is set down) | stay (where you let go) | return (it goes home)",
       returnAfter: "left unheld this many seconds it goes home; 0 never" },
     help: "it can be picked up and carried (grab, put, drop, throw; a VR hand's grip; desktop T): {who?: a role id (default member), enabled? (false: not now), steal? (false: nobody takes it from a hand; owners may), range? (m from the hand, 0.1..10, default 1.5; past 1.5 it flies to you), priority? (-10..10: wins when several are in reach), hold?: auto|press|toggle, anim? (how a body without tracked hands holds it: a pose or clip by name; built in: hand, carry, torch, pistol, shoulder; one the body doesn't know, or none, is held by size), grips? {<name>: {pos, q?, hand?: left|right|either, role?: primary|secondary, grasp?: fist|pinch|point|flat|open|trigger, part?}} (where the palm goes, in its own frame; none: held where grabbed), twoHanded?, throw? (0..3, ×the release velocity; 0: drop only), release?: drop|stay|return, returnAfter? (s unheld, then it goes home), fits? [keywords] (snaps into a socket whose accepts shares one), use? (a reactions action, or {down, up}: what the use button fires while held), prompt? (hover text, ≤ 40)}; where it goes home to is its home component (stamped when a returning grabbable has none); fx is reserved. Grabbable makes it carryable; physics {kind: 'dynamic'} makes it fall. A dynamic thing with no grabbable is carryable by physics.who (the rule: absent grabbable, a dynamic thing reads as {who: physics.who})" },
-  // shape audit 10-16 (physics-motion §6): tickMs's default lives here (the authority read a literal 33); its range is the
+  // tickMs's default lives here; its range is the
   // engine's (eidosim TICK_MS; tools/shape-physics-test holds them equal); build is the authority's stamp, a string. Gravity
   // is the engine's own, not in the log (eidosim: [0, −9.81, 0] m/s²): a field is an addition once an engine reads one
-  // recut B3 (house 22:03Z: "starter config, switched on"): two world settings the authority reads at decision time.
+  // two world settings the authority reads at decision time.
   "body-default": { on: "world", fields: { move: "bool", touch: "bool", range: "number" }, ranges: { range: { min: 0.5, max: 10000 } }, units: { range: "m" },
     absentMeans: { move: "true: an untouched body may be moved (shoved, dragged, carried, seated)", touch: "false: an untouched body may not be touched or posed", range: `no limit: the server forwards a puppet or a grab ${bodyRangeWords(BODY_RANGE)}` },
     docs: { move: "the move gate an untouched body has here: being shoved (a /boom's force too), dragged, carried, seated or occupied", touch: "the touch gate an untouched body has here: being touched (intimate points too) and posed", range: "how near (m, between the two bodies) someone must be for the server to forward their knock-over, pose or grab of another body; consent still decides" },
@@ -306,41 +300,40 @@ export const COMPONENTS = {
     help: "on @world only (owner): the physics engine this world runs: {engine: 'eidosim' or 'eidosim@1.0.0', tickMs? (ms a step, default 33)}. Name no version and the authority stamps the one it carries. Gravity is the engine's own (eidosim: [0, −9.81, 0] m/s²). Delete it to turn physics off (refused while things are in flight)" },
   // spec/PHYSICS.md §3.2: a world's named surface materials (Marrow's Surface Data Cards: one name bundles a surface's
   // physical numbers; SLZ's format names materials, not raw per-object numbers). physics.surface names one. Reserved with
-  // physics' reserved fields (shape audit 10-16): no engine reads either, so neither is written yet; both open together.
+  // physics' reserved fields: no engine reads either, so neither is written yet; both open together.
   // The combine modes and their order are PhysX's, Unity's and Rapier's (COMBINE, above); KHR_physics_rigid_bodies names the
   // same four (minimum, maximum) but resolves a mismatch the other way round (average first), so an importer resolves per
   // pair, never per mode
   surface:   { status: "reserved", instead: "nothing yet: no engine here reads surfaces (eidosim's friction and bounce are its own constants)", on: "world", keyed: true, key: "instance",
                help: "reserved (refused until an engine reads surfaces): on @world, keyed by name, a surface material things name with physics.surface; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
   // spec/PHYSICS.md §3.3: the constraint between two bodies is `physics-joint` (OMI_physics_joint; it sits beside physics and
-  // physics-engine). R 15:04: `joint` is the skeleton node (Maya, glTF, VRM: an avatar's entity tree), below. Both reserved:
+  // physics-engine). `joint` is the skeleton node (Maya, glTF, VRM: an avatar's entity tree), below. Both reserved:
   // one anchor can't carry the two frames every engine and glTF/OMI use, so no fields are pinned (the target shape is
   // sketched in PHYSICS §3.3, not here). parent is a rigid attachment, never a solver joint; openable is kinematic animation
   "physics-joint": { status: "reserved", instead: "parent {to} attaches rigidly; openable animates a door, lid or gate; motion swings a pendulum (PHYSICS §3.3)", on: "thing", keyed: true, key: "instance",
                help: "reserved (refused until this world's engine carries joints): keyed by name, a physical constraint between this thing and another (OMI_physics_joint: two frames, one on each body, with limits and drives; PHYSICS §3.3 sketches the shape)" },
   joint:     { status: "reserved", instead: "nothing yet: a skeleton's nodes come with avatar entity trees", on: "thing",
                help: "reserved: a skeleton node (Maya's joint, glTF's skin joint, a VRM humanoid bone): an entity that is one bone of an articulated body, for avatar entity trees. Not the physics constraint (that is physics-joint)" },
-  // server-written (shape audit 10-16): a hand set below owner is refused (a forged copy-of mis-routes a rebase)
+  // server-written: a hand set below owner is refused (a forged copy-of mis-routes a rebase)
   "copy-of": { on: "thing", fields: { from: "string", key: "string" }, required: ["from", "key"], grammar: { from: "sha256" }, writtenBy: "server",
                docs: { from: "the blueprint record it was copied from, sha256:<64 hex>", key: "which part of that record it is" }, help: "set by the server on copies (never by hand below owner): {from: the record's hash sha256:<64 hex>, key: its part key in that record}" },
-  // a sound a thing plays (shared/sound.js; batch 2, 10-07): silent AT radius (a true taper to zero, not Web Audio's clamp,
-  // which leaked about −21 dB across the whole world), cap 200 m (R 10-28; = shared/sound.js SOUND_MAX_RADIUS), near ≤ radius (valueCheck), the authority stamps t0 when it
-  // starts. src: this server's store, an allowlisted host's https link (everyone hears it), or another https link (only
+  // a sound a thing plays (shared/sound.js): silent AT radius (a true taper to zero, not Web Audio's clamp), cap 200 m
+  // (= shared/sound.js SOUND_MAX_RADIUS), near ≤ radius (valueCheck), the authority stamps t0 when it starts. src:
+  // this server's store, an allowlisted host's https link (everyone hears it), or another https link (only
   // viewers who allow untrusted links hear it; shared/mediasrc.js). Registered so it isn't refused as a near-miss of bounds
   sound:      { on: "thing", fields: { src: "string", playing: "bool", loop: "bool", volume: "number", pitch: "number", near: "number", radius: "number", spatial: "bool", t0: "number", description: "string" },
                 defaults: { playing: true, loop: true, volume: 0.8, pitch: 1, near: 1.5, radius: 12, spatial: true }, required: ["src"],
                 ranges: { volume: { min: 0, max: 1 }, pitch: { min: 0.5, max: 2 }, near: { gt: 0, max: 200 }, radius: { min: 1, max: 200 }, src: { maxLen: 2048 }, description: { maxLen: 200 } }, clean: { description: "line" },
                 units: { near: "m", radius: "m", t0: "ms" },
-                // pinned (shape audit 10-16, render-media-env §6): the distance law every client hears (shared/sound.js gainAt);
+                // pinned: the distance law every client hears (shared/sound.js gainAt);
                 // a future curve choice is an addition (rolloff, absent = this law)
                 absentMeans: { description: "no description: a reader gets the file name", law: "gain = min(1, near / distance) (inverse distance, full volume inside near), then a (1−t)² taper over the last 5% of radius to exactly 0 at radius: shared/sound.js gainAt" },
                 docs: { src: "the sound file: store/audio/…, eidoverse/assets/…, or an https link", playing: "it plays now (false: paused)", loop: "plays again when it ends", volume: "linear amplitude gain (not dB): 0 silent to 1 full", pitch: "playback rate: 2 = an octave up and twice as fast",
                   near: "full volume within this many metres", radius: "silent at and beyond this many metres: nobody further hears it at all", spatial: "positional; off: heard evenly everywhere inside its radius (room tone, music in a hall)", t0: "when it started, epoch ms (the authority stamps it)",
                   description: "what is playing, in words: for people who can't hear it and for agents" },
                 help: "a sound this thing plays: {src (store/audio/…, eidoverse/assets/…, or an https link: an allowlisted host's plays for everyone, any other only for viewers who allow untrusted links), playing? (default true), loop?, volume? 0..1, pitch? 0.5..2 (playback rate), near? m (full volume inside it), radius? m (≤ 200: silent at and beyond it; inverse distance from near, a (1−t)² taper over the last 5% to 0 at radius), spatial? (false: heard evenly inside radius, no panning), t0? (stamped by the authority when it starts), description? (what is playing, in words: what agents and people who can't hear it read)}. A reaction {kind: 'play'} plays it again from the top" },
-  // an image on a thing (shared/picture.js; batch 2): a framed quad of its own (width m, height from the image's aspect,
-  // facing +Z on its origin). src as sound's, for images. Shape audit 10-16 (render-media-env §5): texturing one node of a
-  // model (part, flip) is the `material` component's, not a picture of its own: both are cut (0 stored)
+  // an image on a thing (shared/picture.js): a framed quad of its own (width m, height from the image's aspect, facing +Z
+  // on its origin). src as sound's, for images. Texturing one node of a model is the `material` component's
   picture:    { on: "thing", fields: { src: "string", width: "number", description: "string", lit: "string" },
                 defaults: { lit: "scene", width: 1 }, required: ["src"], enums: { lit: ["scene", "self"] },
                 dropped: { part: "an image on a node of a model is the material component's (a picture is a quad of its own)", flip: "a node's image is the material component's, with its node" },
@@ -349,7 +342,7 @@ export const COMPONENTS = {
                 docs: { src: "the image: store/images/…, eidoverse/assets/…, or an https link", width: "the quad's width, metres; its height follows the image", description: "what it shows, in words: for people who can't see it and for agents",
                   lit: "scene (takes the scene's light) | self (a screen, unlit)" },
                 help: "an image on this thing: {src (store/images/…, eidoverse/assets/…, or an https link: see sound), width? m (the quad's, facing +Z on its origin; its height follows the image), description? (what it shows, in words: for people who can't see it and for agents), lit?: scene|self (self = a screen, unlit)}. To put an image on a node of its model: the material component" },
-  // an image on a NAMED node of its model (R 10-27; shared/material.js): glTF's baseColorTexture on that node's material,
+  // an image on a NAMED node of its model (shared/material.js): glTF's baseColorTexture on that node's material,
   // Godot's surface_material_override. The host wears a clone and restores the original on removal (client/lib/materialcomp.js)
   material:   { on: "thing", fields: { node: "string", texture: "string", description: "string", lit: "string" },
                 defaults: { lit: "scene" }, required: ["node", "texture"], enums: { lit: ["scene", "self"] },
@@ -358,13 +351,13 @@ export const COMPONENTS = {
                 docs: { node: "the node of its model the image goes on, its name as the file spells it (measure lists them)", texture: "the image: store/images/…, eidoverse/assets/…, or an https link (as a picture's src)",
                   description: "what it shows, in words: for people who can't see it and for agents", lit: "scene (takes the scene's light) | self (a screen, unlit)" },
                 help: "an image on one node of this thing's model (a screen, a canvas, a poster frame): {node (its name, as the model file spells it: measure lists them), texture (store/images/…, eidoverse/assets/…, or an https link: see picture), description? (what it shows, in words: for people who can't see it and for agents), lit?: scene|self (self = a screen, unlit)}. The node's own material comes back when it is removed. A standalone image is a picture" },
-  // why a thing is here (batch 2; R: {title, text, marks?}): a museum label's title and text. Who wrote it is a view over
+  // why a thing is here ({title, text, marks?}): a museum label's title and text. Who wrote it is a view over
   // the log (History), never stored. The world's own blurb is @world.about
   story:      { on: "thing", fields: { title: "string", text: "string", marks: "refs" }, required: ["title", "text"],
                 ranges: { title: { maxLen: 80 }, text: { maxLen: 1000 }, marks: { maxItems: 8 } }, clean: { title: "line", text: "lines" },
                 docs: { title: "its headline, ≤ 80 characters", text: "why it is here, ≤ 1000 characters of plain text, a blank line between paragraphs", marks: "what it marks or commemorates: up to 8 things' ids" },
                 help: "why this thing is here, a museum label: {title (≤ 80), text (≤ 1000; plain text, a blank line between paragraphs), marks? [ids] (≤ 8: what it marks or commemorates)}. Shown on Inspect and in look" },
-  // words in the world (batch 2): signage, on the canvas text path (a browser font stack: CJK, RTL and emoji). Long-form
+  // words in the world: signage, on the canvas text path (a browser font stack: CJK, RTL and emoji). Long-form
   // text (a book, a library) will be its own component; this one stays a sign
   text:       { on: "thing", fields: { text: "string", size: "number", width: "number", align: "string", color: "int", outline: "bool", outlineColor: "int", background: "int", billboard: "string", lit: "string" },
                 absentMeans: { outlineColor: "the edge takes the colour that contrasts with the text colour: black behind light text, white behind dark",
@@ -376,9 +369,9 @@ export const COMPONENTS = {
                 docs: { text: "what it says, ≤ 400 characters and ≤ 16 lines", size: "the height of a line, metres", width: "where lines wrap, metres", align: "left | center | right", color: "the letters' colour, 0xRRGGBB", outline: "an edge around the letters, so they read on any background",
                   outlineColor: "the edge's colour, 0xRRGGBB; left alone, the one that contrasts with the text colour", background: "a plate behind the words, 0xRRGGBB; absent: none", billboard: "off (flat, readable from both sides) | yaw (turns to face each viewer) | full (always faces each viewer)", lit: "self (glows, unlit) | scene (takes the scene's light)" },
                 help: "a sign: {text (≤ 400 characters, ≤ 16 lines), size? (line height, m; 0.02..2), width? (wrap width, m; 0.1..10), align?: left|center|right, color? 0xRRGGBB, outline? (a contrasting edge), background? 0xRRGGBB (a plate behind it; absent = none), billboard?: off (flat, facing +Z, readable from both sides) | yaw (turns about up toward each viewer) | full (faces each viewer, kept upright), lit?: self|scene}" },
-  // a thing (or one part, look-at:<part>) turns to face something (batch 2; Unity AimConstraint, Blender Locked/Damped
+  // a thing (or one part, look-at:<part>) turns to face something (Unity AimConstraint, Blender Locked/Damped
   // Track, Resonite LookAt). State is logged; the turn is a view each client computes, like motion
-  // shape audit 10-16: radians (PROTOCOL §9.2) and axes stored as vectors (a letter is taken at write and stored as its
+  // radians (PROTOCOL §9.2) and axes stored as vectors (a letter is taken at write and stored as its
   // vector); offset is gone (speculative, unused)
   "look-at":  { on: "thing", keyed: "optional", fields: { target: "target", mode: "string", forward: "axis", up: "axis", yaw: "array", pitch: "array", speed: "number", range: "number" },
                 defaults: { mode: "yaw", forward: [0, 0, 1], up: [0, 1, 0], speed: 240 * Math.PI / 180, range: 12 }, required: ["target"], enums: { mode: ["yaw", "aim"] },
@@ -396,12 +389,10 @@ export const COMPONENTS = {
                 docs: { session: "the captioning session's id", n: "the line's number in its session", gen: "the generation of the feed", title: "what is playing", line: "the line on screen now: {t0, t1 (seconds of media time), text (≤ 240), speaker? (≤ 48)}" },
                 help: "a screen's captions, written by the caption request only: {session, n, gen, title?, line: {t0, t1, text, speaker?}} (the current line; earlier ones are the earlier captions changes)" },
   captioners: { on: "thing", fields: { ids: "people" }, docs: { ids: "the identities who may caption this screen, beside anyone who may edit it" }, help: "who may caption this screen with the caption request: {ids: [<identity u-…>]}; anyone who may edit the screen may caption it too" },
-  // round-2 review R8 (2026-10-05): names the engine reads, carried by imported worlds, registered with their old
-  // meaning so it's fixed (L5). Fields from every old world log on Burrow, translated. A name not here is a world's own
-  // invention (heart, inscription…): admitted, unless it's a near-miss of one of these (ligth).
-  // shape audit 10-16 (render-media-env §13): 19 fields → 14. clock and dormantRated (fold bookkeeping) are gone: a tz present
-  // means the wall clock governs, and hours/rate/ts stay as the rated fallback; world (never stored) and
-  // weatherSeconds (now transition: no unit in a name) are gone; azimuth is radians. ts, override and a forecast's epoch
+  // R8: names the engine reads, carried by imported worlds, registered with their old meaning so it's fixed (L5). A name
+  // not here is a world's own invention (heart, inscription…): admitted, unless it's a near-miss of one of these (ligth).
+  // the sky: a tz present means the wall clock governs, and hours/rate/ts stay as the rated fallback; azimuth is
+  // radians; transition is seconds. ts, override and a forecast's epoch
   // are stamped by the authority's sky and weather acts, never taken from a writer (stamped). The forecast's segment law is
   // forecast@1: shared/forecast.js's draw order (dwell, then state, then intensity) at this commit; a changed law is a new name
   sky:       { on: "world", fields: { hours: "number", rate: "number", ts: "number", tz: "string", clouds: "string", weather: "string", weatherK: "number", transition: "number", azimuth: "number", fog: "number", exposure: "number", ambient: "number", sun: "number", fill: "number", forecast: "object", override: "object", gradient: "object", system: "string", colors: "object", audio: "bool" },
@@ -435,7 +426,7 @@ export const COMPONENTS = {
                docs: { species: "what grows (a flora def: grass, corn, sunflower, galleta_dry…)", width: "the field's width, metres", depth: "the field's depth, metres", size: "width and depth when they aren't given, metres", center: "[x, z] of the field's middle, metres", height: "plant height, metres", density: "how thickly it grows (0..4)", wind: "how much it sways (×)", color: "a palette name (defs/flora/_colors.json) or a multiplier [r, g, b]", seed: "the planting's random seed",
                  rows: "a crop's rows {spacing, plant, stride?, phase?}", corn: "corn's own knobs {peel?, peelChance?}", heading: "the way sunflowers face, radians", preset: "a named planting (defs/flora/_presets.json: mojave, …), stored by its name and composed into strokes by the reader; an unknown name is refused", strokes: "the plantings this field is made of: [{species, width, depth, center, seed, density, variant?, footprint?}] (they win over a preset)" },
                help: "a grass or crop field {species, width, depth (or size), center, height, density, wind, color, seed} or {width, depth, seed, strokes: […]}; a preset ({preset: 'mojave'}) is stored by its name and composed by the reader, and the first protocol's knobs (bladeHeight, spacing, perCell, colorTip) are taken and stored in this spelling" },
-  // carried from the first protocol, with real readers (shared/structure.js; shape audit 10-16, physics-motion §9): its grid numbers and its nested
+  // carried from the first protocol, with real readers (shared/structure.js): its grid numbers and its nested
   // grammar were only in structure.js (GRID_DEFAULTS, APERTURES, normalize), "a CONTRACT". Pinned here; tools/shape-physics-test
   // holds them equal to structure.js. A level entry a reader can't parse reads as absent (normalize skips it)
   structure: { on: "thing", fields: { tile: "number", wallH: "number", wallT: "number", slabT: "number", labels: "object", levels: "array" },
@@ -446,18 +437,13 @@ export const COMPONENTS = {
     nestedEnums: { "levels[].apertures[][3]": ["door", "window", "arch"], "levels[].walls[][0]": [0, 1, 2, 3], "levels[].apertures[][0]": [0, 1, 2, 3], "levels[].tiles[][3]": ["A", "B"] },
     docs: { tile: "metres a cell", wallH: "wall height, floor to floor, metres", wallT: "wall thickness, metres", slabT: "floor slab thickness, metres (its top at the level's y)", labels: "room names by cell", levels: "the storeys: tiles, walls on cell edges, apertures (door, window, arch) in walls" },
     help: "a built structure's plan (The Sims' grid: walls on cell edges) {tile (m, default 1), wallH (m, default 2.8), wallT (m, default 0.15), slabT? (m; absent 0.10), levels: [{y, tiles: [[x, z, mat?, half?]], walls: [[axis 0..3, x, z, mat?]], apertures: [[axis, x, z, door|window|arch]]}], labels: {<cell>: name}}" },
-  // R 10-07: "not the kitchen sink style for particles". The instance is tiny and names an effect document (the
-  // Niagara / Godot / bevy_hanabi shape; shared/particle_effects.js): an Essentials name or a stored document's content
-  // address, with the document's own params. The first protocol's bag (preset, origin, count, quality, size, area,
-  // texture, speed, opacity, lifetime) stays here because a stored value is read forever (PROTOCOL §4): it reads as
-  // {effect: preset, at: origin, params: {count, …}} (instanceOf), and the authority no longer takes it in a write
-  // R 10-17: an Essential is stored by its NAME, as written (the code that ships it resolves it everywhere, as a library path
-  // does a model). An Essential's pinned address (shared/particle_effects.js ESSENTIAL_ADDRESSES), stored for a day by this
-  // branch's door, still reads as that Essential. The first protocol's ten fields are gone from
-  // the registry: no current value holds them; a first-protocol bag is read (instanceOf) only by the translator
+  // The instance is tiny and names an effect document (the Niagara / Godot / bevy_hanabi shape;
+  // shared/particle_effects.js): an Essential's NAME (as written) or a stored document's content address, with the
+  // document's own params. An Essential's pinned address (ESSENTIAL_ADDRESSES) still reads as that Essential. The first
+  // protocol's bag is gone from the registry; it is read (instanceOf) only by the translator
   particles: { on: "thing", fields: { effect: "string", part: "string", at: "vec3", seed: "number", playing: "bool", scale: "number", params: "object" },
                defaults: { playing: true, scale: 1 }, required: ["effect"],
-               // lead 10-17: held for a synced start instant (as sound.t0), so every viewer fires a one-shot or a burst together
+               // held for a synced start instant (as sound.t0), so every viewer fires a one-shot or a burst together
                reservedFields: ["t0"],
                reservedWhy: { t0: "a synced start instant (epoch ms, as sound.t0) so every viewer fires a one-shot or a burst together" },
                ranges: { scale: { min: 0.01, max: 100 }, part: { maxLen: 64 }, effect: { maxLen: 80 }, at: { min: -8, max: 8 } },
@@ -477,27 +463,27 @@ export const COMPONENTS = {
   imported:  { keyed: true, key: "instance", help: "keyed: a field an imported world's translation had no mapping for, carried as it was" },
   "imported-roles": { on: "world", keyed: true, key: "instance", help: "on @world, keyed by identity: an imported grant this protocol has no rung for (spectator or none: R 10-21, nothing below member), carried as it was; the person holds the world's newcomer role" },
   "imported-bans": { on: "world", keyed: true, key: "instance", help: "on @world, keyed by identity: a ban an imported world carried, as it was (live bans are the moderator log's)" },
-  // research roles 10-06 (shared/protocol/roles.js): ranked membership (member 0, builder 100, moderator 200, owner 255,
+  // shared/protocol/roles.js: ranked membership (member 0, builder 100, moderator 200, owner 255,
   // custom roles between) and a closed list of permissions. Banned is a state in the moderator log, never a role.
-  // no `sub` (shape audit 10-16): an account subject is person data, never a value (PROTOCOL §9.2); the translator strips it
+  // no `sub`: an account subject is person data, never a value (PROTOCOL §9.2); the translator strips it
   roles:     { status: "trial-kernel", on: "world", keyed: true, key: "instance", fields: { role: "string", can: "object", note: "string", until: "int" },
-    // the ladder's vocabulary (recut C11: out of the kernel pin, which holds what the fold reads): a grant names one of these ids, a
+    // the ladder's vocabulary (not in the kernel pin, which holds what the fold reads): a grant names one of these ids, a
     // role-def keys on these permissions, so any change is a break needing --ack (pinBreakList `vocab`), an addition too
     vocab: { rank: { ...RANK }, builtin: [...BUILTIN_IDS], permissions: [...PERMISSION_NAMES], customId: CUSTOM_ID.source, reserved: [...RESERVED_IDS].sort() },
     absentMeans: { until: "the grant has no end: it stands until someone with the right changes or removes it (every role written before 10-17)" }, docs: { role: "the role this person holds: a built-in (member, builder, moderator, owner) or one the world defines", can: "{<permission>: true|false}: exceptions on top of the role, for this person", note: "a note on the grant (≤ 80)", until: "when the grant ends, epoch ms; never on owner" }, help: "on @world, keyed by identity: {role: member|builder|moderator|owner|<a custom role>, can?: {<permission>: true|false} (exceptions on top of the role), note? (≤ 80), until? (epoch ms: when the grant ends; the authority ends it then, warning the holder 5 min before; never on owner)}. A grantRoles holder may give roles ranked below their own, with only permissions they hold" },
-  // guests isn't written down: absent means member whatever the newcomer role (roles.js guestRoleOf, R 10-21: guests start
+  // guests isn't written down: absent means member whatever the newcomer role (roles.js guestRoleOf: guests start
   // as members even where newcomers build). Pinned as a known gap (pretrans D7)
   "default-role": { on: "world", fields: { role: "string", can: "object", guests: "string" }, docs: { role: "the newcomer role: what anyone without their own grant holds; never owner", can: "{<permission>: true|false} on top of that role, for everyone holding it this way (not guests)", guests: "the role people without an account start as; never above role" }, help: "on @world (owner): the NEWCOMER role: what anyone without roles:<id> holds (absent = member; a world founded since R 10-21 starts with builder): any role but owner; can? {<permission>: true|false} on top of that role for everyone who holds it this way (not guests); guests (people without an account) get guests (default member), never above role" },
   "role-defs": { on: "world", help: "on @world (owner): {<role id>: {name, rank (custom: 1–254, unique), can: {<permission>: true|false}, note?}}. Built-ins member, builder, moderator may be renamed and their permissions edited (rank fixed); owner holds every permission and isn't listed. Permissions: build, editOthers, editWorld, generate, fly, scripts, pauseScripts, mute, kick, ban, grantRoles" },
   access:    { status: "trial-kernel", on: "world", fields: { join: "string", watch: "string", max: "int", soft: "int", minAccountDays: "int" }, enums: { join: ["anyone", "signed-in", "listed"], watch: ["anyone"] },
     absentMeans: { watch: "watching follows join: whoever join turns away can't watch either, and a world that admits only people listed is invisible to everyone else (what every access before 10-17 meant)" }, ranges: { max: { min: 1, max: 200 }, soft: { min: 1, max: 200 }, minAccountDays: { min: 0, max: 365 } }, docs: { join: "who may come in: anyone, signed-in, or listed (people the world has granted a role, unexpired)", watch: "anyone: whoever join turns away may still watch, with no body", max: "most bodies at once (1–200)", soft: "the recommended capacity (≤ max)", minAccountDays: "an account must be at least this many days old to come in (0–365; 0 is off)" }, help: "on @world (owner): who may come in {join: anyone|signed-in|listed (only people the world has granted a role, unexpired; a listed-only world is invisible to everyone else), watch? (anyone: whoever join turns away may still watch, with no body), max? (1–200 at once), soft? (≤ max: the recommended capacity), minAccountDays? (0–365: a person's account must be at least this many days old; a guest is then refused, an enrolled agent is exempt; 0 or absent = off)}; moderators and owners always get in" },
   about:     { on: "world", fields: { name: "string", text: "string" }, ranges: { name: { maxLen: 80 }, text: { maxLen: 2000 } }, docs: { name: "the world's name, ≤ 80 characters", text: "its blurb, ≤ 2000 characters" }, help: "on @world: the world's name (≤ 80) and blurb (≤ 2000)" },
-  // the component ladder's second rung (docs/COMPONENT-LADDER.md; R 10-12): the drafts this world's owner trusts here.
+  // the component ladder's second rung (docs/COMPONENT-LADDER.md): the drafts this world's owner trusts here.
   // A fact about the world, not the engine: the authority still doesn't read a trusted draft. Owner-gated like the rest of @world.
   "trusted-components": { on: "world", fields: { components: "array" }, ranges: { components: { maxItems: 64 } }, docs: { components: "the namespaced draft component names trusted in this world (≤ 64, each once)" }, help: "on @world (owner): {components: [<namespaced draft names>]} — the draft COMPONENTS used and trusted in this world (never a list of people; was `trusted`, renamed by the world's maintenance command) (a blue chip in the Inspector, offered in the main Add Component list); never a bare name (that is the engine's or nothing); ≤ 64, each once. Trust ≠ engine understanding: the authority doesn't read them" },
   bounds:    { on: "world", fields: { min: "vec3", max: "vec3" }, required: ["min", "max"], units: { min: "m", max: "m" }, docs: { min: "the box's low corner [x, y, z], world metres", max: "its high corner [x, y, z], world metres" },
                help: "on @world: the box the world lives in, {min: [x, y, z], max: [x, y, z]} in world metres, min < max on every axis. Absent (no bounds component), anywhere is in the world" },
-  // shape audit 10-16: units, a range, and the absent radius written down (shared/mover.js TRACK.spawnR; tools/shape-attach-test pins they agree)
+  // units, a range, and the absent radius written down (shared/mover.js TRACK.spawnR; tools/shape-attach-test pins they agree)
   // yaw: which way an arrival faces (OMI_spawn_point's facing, on @world's own spawn); more spawns are spawn-point things (shared/spawn.js)
   spawn:     { on: "world", fields: { pos: "vec3", radius: "number", yaw: "number" }, required: ["pos"], units: { pos: "m", radius: "m", yaw: "rad" }, ranges: { radius: { min: 0, max: 100 }, yaw: { min: -2 * Math.PI, max: 2 * Math.PI } },
                absentMeans: { radius: "2 m", yaw: "0: facing the world's +z" }, docs: { pos: "where visitors arrive, [x, y, z] world metres", radius: "a visitor's arrival must lie within this many metres of pos (the client chooses where inside)", yaw: "which way an arrival faces, radians about +y (0: the world's +z)" },
@@ -508,7 +494,7 @@ export const COMPONENTS = {
                docs: { title: "its name, as a menu lists it (≤ 80)", team: "the team that arrives here (≤ 80; OMI_spawn_point team)", group: "a group of spawn points chosen among together (≤ 80; OMI_spawn_point group)" },
                help: "a place visitors may arrive, on a thing: {title?, team?, group?} (OMI_spawn_point). They arrive at its origin (within 2 m), facing its rotation. With @world.spawn present that is the default arrival; without it, the spawn-point whose id sorts first (among those of the team or group asked for) is" },
   // a climb route (a ladder, a rope), one per thing: linear between points (Godot Path3D + PathFollow3D); a climber's presence is
-  // {host, progress} along it, resolved through the host's live pose (shared/climb.js; upstream main #248 traversal)
+  // {host, progress} along it, resolved through the host's live pose (shared/climb.js)
   climb:     { on: "thing", fields: { points: "array", reach: "number", speed: "number", face: "vec3", ends: "string" }, required: ["points"],
                enums: { ends: ["both", "start", "end"] },
                ranges: { points: { maxItems: 16 }, reach: { min: 0.3, max: 3 }, speed: { min: 0.3, max: 4 }, face: { min: -1e4, max: 1e4 } },
@@ -517,7 +503,7 @@ export const COMPONENTS = {
                docs: { points: "2–16 points [x, y, z] in the thing's own frame (metres before its scale), climbed in straight lines between them", reach: "how near an end a body must stand to board it, metres", speed: "how fast a climber moves along it, metres a second in its own frame",
                  face: "which way a climber faces, a direction [x, y, z] in the thing's frame (its ground-plane part is used)", ends: "which ends it may be boarded at: both, start (the first point) or end (the last)" },
                help: "a climb route on a thing (one per thing; a ladder, a rope, a hatch): {points: [[x, y, z], …] (2–16, its own frame), reach? m (0.3..3, absent 1.4: how near an end to board), speed? m/s (0.3..4, absent 1.3), face? [x, y, z] (which way the climber faces; absent, along the route's run, or the thing's +z when it runs straight up), ends?: both|start|end}. Its name is the thing's label. A climber rides it as {host, progress}: a moving host carries them" },
-  // a hull driven from its helm (shared/drive.js; OMI_vehicle_body's names where it has one, the rest ours; upstream main #248 vehicle)
+  // a hull driven from its helm (shared/drive.js; OMI_vehicle_body's names where it has one, the rest ours)
   drive:     { on: "thing", fields: { maxSpeed: "number", turnRate: "number", climbRate: "number", response: "number", throttle: "bool" }, required: ["maxSpeed", "turnRate"],
                ranges: { maxSpeed: { min: 0.1, max: 50 }, turnRate: { min: 0.1, max: 4 }, climbRate: { min: 0, max: 50 }, response: { min: 0.05, max: 10 } },
                units: { maxSpeed: "m/s", turnRate: "rad/s", climbRate: "m/s", response: "s" },
@@ -525,19 +511,19 @@ export const COMPONENTS = {
                docs: { maxSpeed: "its top speed in the ground plane, m/s (OMI_vehicle_body maxSpeed)", turnRate: "how fast it turns about its up axis, rad/s (ours; Roblox VehicleSeat TurnSpeed)", climbRate: "how fast it rises or sinks, m/s (ours)",
                  response: "how fast its velocity eases to the driver's ask: the time constant, s (ours)", throttle: "true: thrust is a level the driver sets and leaves (OMI_vehicle_body useThrottle)" },
                help: "a hull driven from its helm (a socket child with station {action: 'drive', input: {move: 'drive'}}): {maxSpeed m/s (0.1..50), turnRate rad/s (0.1..4), climbRate? m/s (0..50; absent 0, it holds its height), response? s (0.05..10; absent 1/1.5), throttle?: bool}. Forward is its +Z. The driver's client moves it; the authority checks each step and commits the last accepted pose" },
-  // research 40 §6.1, trimmed by the shape audit 10-16 (render-media-env §15): the noise ground. Its defaults ARE the sim's law
+  // the noise ground. Its defaults ARE the sim's law
   // (shared/terrainmath.js terrainParams, held by eidosim's conformance digests (engine-check)), written into every stored value, so the sim, the mesh and
   // the inspector read one ground. raster had no reader anywhere: reserved (refused) until one exists, its fields
   // unregistered. Layer colours are ints (sRGB), like every colour here ("#rrggbb" is taken at write). Water is its own
   // component (everyone separates water from ground): terrain.water is refused with where it went
   terrain:   { on: "world", fields: { kind: "string", seed: "int", size: "number", amplitude: "number", octaves: "int", frequency: "number", flatRadius: "number", flatHeight: "number",
-                         segments: "int", layers: "array", features: "array", heightmap: "object", height: "number" },   // upstream #237/#242 (merged 10-15): shared/terrainshape.js reads and bounds them
+                         segments: "int", layers: "array", features: "array", heightmap: "object", height: "number" },   // shared/terrainshape.js reads and bounds them
                defaults: { kind: "noise" },
                when: [{ if: { kind: "noise" }, set: { seed: 1, size: 80, amplitude: 3, octaves: 4, frequency: 2.5, flatRadius: 0, flatHeight: 0 } }, { if: { kind: "flat" }, set: { height: 0 } }],
                enums: { kind: ["noise", "flat"] },
                reservedKinds: { raster: "an imported height raster {blob, w, h, spacing, origin, format: 'i32-mm-le'}: no reader draws or walks it yet" },
                dropped: { water: "water is its own component on @world: set {id: '@world', component: 'water', value: {level, color?, opacity?, kind?, flow?}}" },
-               // what every visitor's client can build: past these a single write freezes or breaks everyone (review T0)
+               // what every visitor's client can build: past these a single write freezes or breaks everyone
                ranges: { size: { gt: 0, max: 4096 }, segments: { min: 2, max: 512 }, octaves: { min: 1, max: 8 }, frequency: { gt: 0, max: 64 },
                          amplitude: { min: -500, max: 500 }, flatRadius: { min: 0, max: 4096 }, features: { maxItems: 64 }, layers: { maxItems: 8 }, height: { min: -10000, max: 10000 } },
                nullable: ["features", "heightmap"],   // null = removed (a merge patch can take one away)
@@ -546,7 +532,7 @@ export const COMPONENTS = {
                units: { size: "m", amplitude: "m", flatRadius: "m", flatHeight: "m", height: "m" },
                docs: { kind: "the base's kind: noise, or flat (level ground at height; a raster kind is reserved)", height: "a flat ground's height, metres (kind flat only)", seed: "the noise seed", size: "the ground's size, metres", amplitude: "its relief: how high the ground rises, metres", segments: "samples per side (the drawn mesh's resolution)", flatRadius: "flat within this many metres of the centre", flatHeight: "the height of that flat centre, metres", octaves: "noise octaves (1–8)", frequency: "noise frequency", layers: "its colour layers, at most 8: [{color: 0xRRGGBB (sRGB), repeat: tiles across its size}]", features: "placed shapes over the base, in order (at most 64): {type: hill|ridge|flatten, …} (shared/terrainshape.js)", heightmap: "an uploaded grayscale grid as the base: {grid: 'store/heightmaps/<hash>.json', min, max} (m)" },
                help: "the ground's base: {kind: 'flat', height (m)} (level everywhere; nothing else), or {kind: 'noise', seed, size, amplitude, octaves, frequency, flatRadius, flatHeight, segments, layers? [{color: 0xRRGGBB, repeat}], features?, heightmap?} (absent numbers are the sim's: seed 1, size 80 m, amplitude 3 m, octaves 4, frequency 2.5, flat radius 0); a raster kind is reserved; water is its own component" },
-  // split out of terrain (shape audit 10-16, render-media-env §15): on @world the world's one level (SL's per-region water); on a
+  // split out of terrain: on @world the world's one level (SL's per-region water); on a
   // thing a water body filling its sibling zone (Unity WaterSurface, Unreal WaterBody; optics named as KHR_materials_volume's).
   // shared/terrainshape.js waterParams reads the level (an older terrain.water too); shared/zone.js reads the bodies
   water:     { fields: { level: "number", color: "int", opacity: "number", kind: "string", flow: "array", waves: "array", attenuationColor: "vec3", attenuationDistance: "number", scatterColor: "vec3", density: "number" },
@@ -592,8 +578,8 @@ export const COMPONENTS = {
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1)}. Where speed areas overlap the zone's priority decides" },
   "terrain-grid": { status: "reserved", on: "world", help: "reserved: the sculpt grid; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
   "terrain-tile": { status: "reserved", on: "world", keyed: true, key: "partition", help: "reserved: a sculpted tile, keyed <i>-<j>; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
-  // research 41 §3.2: a behaviour. Keyed, so §5's creator rule decides who may change it and who its SPONSOR is.
-  // the lists the install check reads are here, so the pin sees them (shape audit 10-16): each item of `on` is one of
+  // a behaviour. Keyed, so §5's creator rule decides who may change it and who its SPONSOR is.
+  // the lists the install check reads are here, so the pin sees them: each item of `on` is one of
   // itemEnums.on ('changed:*' = changed:<a component name>), each of scope.bodies one of itemEnums["scope.bodies"]; scope's
   // own keys are scopeFields (launch is gone: always refused, so never more than speculative surface)
   script:    { keyed: true, key: "instance", fields: { src: "string", scope: "object", on: "array", every: "number", always: "bool", knobs: "object", paused: "bool" },
@@ -601,15 +587,15 @@ export const COMPONENTS = {
                itemEnums: { on: ["use", "say", "enter", "leave", "grab", "release", "changed:*"], "scope.bodies": ["shove", "pose"] },
                scopeFields: { ids: "scope", comps: "array", create: "bool", say: "bool", bodies: "array" },
                docs: { src: "the source blob's name", scope: "what it may touch: {ids, comps, create?, say?, bodies?}", on: "the events that wake it (use, say, enter, leave, grab, release, changed:<comp>)", every: "seconds between ticks (≥ 5)", always: "true: it runs with nobody present (owner)", knobs: "its settings (≤ 4 KiB)", paused: "true: it doesn't run" }, help: "keyed <name>: a script (JavaScript; docs/SCRIPTS.md). {src: the source blob's name (upload {text} gives it), scope: {ids: 'self'|'subtree'|[ids], comps: [names, 'name:*'], create?, say?, bodies?: ['shove'|'pose']}, on: ['use', 'say', 'enter', 'leave', 'grab', 'release', 'changed:<comp>'], every?: s (>= 5; it gets tick, and wake after sleeping), always?: bool (run with nobody present; owner), knobs?: {…} (<= 4 KiB), paused?}. It acts with its sponsor's rights now, never beyond its scope; a `use` reaches it through a reactions handler {kind: 'script', script: <name>}" },
-  // §5 (23:40): keyed names say which kind of key they are. instance: the creator rule; partition: one shared surface
-  // reserved (shape audit 10-16): no format for a "written definition" exists yet and nothing writes one, so the name is held
+  // §5: keyed names say which kind of key they are. instance: the creator rule; partition: one shared surface
+  // reserved: no format for a "written definition" exists yet and nothing writes one, so the name is held
   // until one does (it may then be a set-once string sha256:<64 hex>)
   schemas:   { status: "reserved", instead: "nothing yet: the pinned registry (spec/registry-pin.json) carries a name's meaning; schemas:<name> waits for a definition document format", on: "world", keyed: true, key: "instance", help: "reserved: on @world, keyed by component name, for the content hash of that name's written definition once a format for one exists. Not written yet (PROTOCOL §4)" },
   blueprints: { on: "world", keyed: true, key: "instance", help: "on @world, keyed by a blueprint's hash: {name, …} (publish writes it)" },
   "terrain-paint": { status: "reserved", on: "world", keyed: true, key: "partition", help: "keyed <i>-<j>: paint channels for one tile (research 40 §3; not built in the lab)" },
-  // capacity: R's 10-14 14:13 call (VRChat/Resonite scale: gates against a world nobody can load, not targets), cut to ONE
-  // entity budget by R 10-15 22:48 (a socket is a child entity, so it counts like any other). A POLICY number (PROTOCOL
-  // §9.2; shape audit 10-16): no pinned default. Absent, a field is this server's current default (authority CAPACITY, which
+  // capacity: gates against a world nobody can load, not targets; ONE entity budget (a socket is a child entity, so it
+  // counts like any other). A POLICY number (PROTOCOL §9.2): no pinned default. Absent, a field is this server's
+  // current default (authority CAPACITY, which
   // `schema` reports and which may change); the ceiling an owner may set is the server's (CAPACITY_CEILING), not a range
   // here. A field the owner writes is stored as written, even at today's default, and nothing is written whole.
   capacity:  { on: "world",
@@ -623,7 +609,7 @@ export const COMPONENTS = {
                        guestEntities: "all account-less people's entities together: what people without an account made that still stands here, sockets included (absent: this server's default)",
                        avatar: "one worn avatar's entity tree, at most: the largest one avatar may be, checked when it's worn and not counted in entities (absent: this server's default); not enforced yet: no avatar trees exist" },
                help: "on @world (owner): how much this world holds: {entities (the whole world's entities, every one but @world, sockets included), guestEntities (all account-less people's entities together), avatar (one worn avatar's entity tree at most, checked when worn, not counted in entities; not enforced yet)}. Each is optional: absent, it is this server's current default, and no field may go above the server's ceiling (schema reports both). One thing holds at most 64 sockets. A gate against a world nobody can load, not a target: a create past entities or guestEntities is refused (full)" },
-  // script-settings (shape audit 10-16, trimmed): the owner's two decisions (scripts on or off, how many) and the two budgets an
+  // script-settings: the owner's two decisions (scripts on or off, how many) and the two budgets an
   // owner may TIGHTEN. A policy number like capacity: absent is this server's current default (authority scriptDefaults(),
   // reported by schema), never above the server's ceiling (scriptCeiling()). Who may install is the role's `scripts`
   // permission (role-defs), not a setting here. Rate, cascade depth, failures before a pause and runs per minute are the
@@ -637,14 +623,14 @@ export const COMPONENTS = {
                help: "on @world (owner): {run? (false stops every script), max? (how many scripts), budget? (script entries per hour; each sponsor gets a fair share), cpu? (ms of the authority's time per sponsor per minute; the world 3×)}. Each absent field is this server's current default, and none may go above the server's ceiling (schema reports both). Who may install a script is the role's scripts permission (role-defs)" },
 };
 
-// ---- status (shape audit 10-16, R: "all components trial for the alpha"; PROTOCOL §4 Status, docs/COMPONENT-LADDER.md) ----
+// ---- status (PROTOCOL §4 Status, docs/COMPONENT-LADDER.md) ----
 // Every registered name has one. trial: admitted and written, but its shape may still change during the alpha (about a
 // year); where it changes we translate or repair stored values where we can. reserved: the name is held (nobody else may
 // take it) but the authority refuses every write of it, with one wording (authority.js, the write door); `instead` says
 // what to use meanwhile. stable: promised, additions only (none yet). A namespaced DRAFT (a name the authority
 // doesn't know) has no status here: admitted and kept as someone's own (checks.js), never judged. The pin records each status (spec/registry-pin.json); a
 // change to a trial or reserved entry is allowed only with an acknowledgement (pretrans --pin --ack), a stable one never.
-// held names (R 15:16, shape audit 10-16; research reserved-names.md): registered reserved, so no write can squat a name the
+// held names: registered reserved, so no write can squat a name the
 // alpha means to give a settled shape. No fields: each says what it is held for. `joint` (the skeleton node) and
 // `physics-joint` (the constraint) are registered above, with physics.
 for (const [name, what] of Object.entries({
@@ -657,7 +643,7 @@ for (const [name, what] of Object.entries({
   link: "a link a thing opens (a portal, a page)",
   tags: "labels a thing carries for search and rules",
 })) COMPONENTS[name] = { status: "reserved", instead: "nothing yet: the name is held for a shape that isn't settled. A namespaced name of your own (such as example.org/<name>) is kept and shown, though nothing here acts on it", help: `reserved: ${what}. Not written yet` };
-// the avatar guard rails (PROTOCOL §7a, normative before avatar entity trees ship; R 10-17 02:45): the names are held now so
+// the avatar guard rails (PROTOCOL §7a, normative before avatar entity trees ship): the names are held now so
 // nobody squats them under the must-ignore escape hatch before the shapes land. A body's owner is a PERMISSION RULE
 // stamped by the authority at wear, never a component anyone writes (body ownership is a rule, not a component).
 COMPONENTS["body-owner"] = { status: "reserved", on: "thing", instead: "nothing yet: avatar entity trees aren't built",
@@ -677,7 +663,7 @@ for (const d of Object.values(COMPONENTS)) d.status ??= "trial";
 /** A name's status (trial | reserved | stable), or null for a name the registry doesn't know. */
 export const statusOf = (comp) => { const d = defOf(comp); return d ? d.status ?? "trial" : null; };
 
-// ---- names (PROTOCOL §4, review 10-07 H1 + M7, R's ruling) ----
+// ---- names (PROTOCOL §4) ----
 // A component name is [<namespace>/]<name>[@<n>][:<key>]. A BARE name (no '/') is the registry's: it is one of COMPONENTS
 // or the authority refuses it. Anyone else's carries a namespace: a domain they control or a handle (`example.org/heart`,
 // `mica/heart`). The registry never uses '/', the way HTML's own elements never have a hyphen (custom elements must): the
@@ -712,7 +698,7 @@ export function resolveVersioned(c, base) {
   const newest = versions[versions.length - 1]; return { name: newest, value: null, def: COMPONENTS[newest] };
 }
 
-// ---- references (PROTOCOL §4, "References are typed"; review 10-07 H5) ----
+// ---- references (PROTOCOL §4, "References are typed") ----
 // A field that names another thing or a person says so in its type, so copy, publish and a merge can find every
 // reference without knowing the component: ref (one entity id), refs (a list of them), person (an identity), people (a
 // list), target (a ref, a person, or an @word such as @viewer), scope (a script's 'self' | 'subtree' | [refs]). A nested
@@ -832,12 +818,12 @@ export function pinOf() {
     if (d.vocab) p.vocab = copy(d.vocab);
     if (d.keyed !== undefined) p.keyed = d.keyed;
     if (d.on) p.on = d.on;
-    // reactions' handler kinds and their args are part of its meaning (shape audit 10-16: the kinds are frozen)
+    // reactions' handler kinds and their args are part of its meaning (the kinds are frozen)
     if (d.handlers) p.handlers = Object.fromEntries(Object.entries(d.handlers).map(([k, h]) => [k, Object.keys(h.args ?? {})]));
     if (d.reservedKinds) p.reservedKinds = Object.keys(d.reservedKinds);
     if (d.reservedFields) p.reservedFields = [...d.reservedFields];
     // what a reserved field will mean when it opens (physics: units, limits, enums), held as the absentMeans are
-    // a nested grammar's closed vocabularies (structure's aperture kinds and wall axes: shape audit 10-16)
+    // a nested grammar's closed vocabularies (structure's aperture kinds and wall axes)
     if (d.nestedEnums) p.nestedEnums = copy(d.nestedEnums);
     out[name] = p;
   }
@@ -864,7 +850,7 @@ export function pinBreakList(pin, now = pinOf()) {
     for (const [f, v] of Object.entries(p.defaults ?? {})) if (j(n.defaults?.[f]) !== j(v)) push(`${name}.${f}: default ${j(v)} → ${j(n.defaults?.[f]) ?? "gone"}`);
     for (const r of p.when ?? []) if (!(n.when ?? []).some((q) => j(q.if) === j(r.if) && j(q.absent) === j(r.absent) && Object.entries(r.set).every(([f, v]) => j(q.set?.[f]) === j(v)))) push(`${name}: a conditional default changed: ${j(r)}`);
     for (const [f, vals] of Object.entries(p.enums ?? {})) for (const x of vals) if (!(n.enums?.[f] ?? []).includes(x)) push(`${name}.${f}: ${j(x)} is no longer allowed`);
-    // ranges, maxLen and required entered the pin with status (10-16): a pin from before holds none of them, so none is judged
+    // ranges, maxLen and required entered the pin with status: a pin from before holds none of them, so none is judged
     if (p.status !== undefined) for (const f of new Set([...Object.keys(p.ranges ?? {}), ...Object.keys(n.ranges ?? {})])) { const why = narrows(p.ranges?.[f], n.ranges?.[f]);
       if (why && Object.hasOwn(p.fields ?? {}, f)) push(`${name}.${f}: its range narrowed (${why}): ${j(p.ranges?.[f] ?? {})} → ${j(n.ranges?.[f])}`); }
     if (p.status !== undefined && n.maxLen !== undefined && (p.maxLen === undefined || n.maxLen < p.maxLen)) push(`${name}: maxLen ${p.maxLen ?? "none"} → ${n.maxLen}`);

@@ -76,7 +76,7 @@ function commitLease(w, st, host, why, free = true) {
   L.committed = paceOf(w);
   if (edited(w, st, host, L)) { L.fails = 0; return false; }
   const t = { ...(e.c.transform ?? {}), pos: L.pose.pos.map(r3), q: qr3(L.pose.q) };
-  if (JSON.stringify(t.pos) === JSON.stringify(e.c.transform?.pos) && JSON.stringify(t.q) === JSON.stringify(e.c.transform?.q)) { L.fails = 0; return false; }   // nothing to write is not a failure (review delta2 L2-B)
+  if (JSON.stringify(t.pos) === JSON.stringify(e.c.transform?.pos) && JSON.stringify(t.q) === JSON.stringify(e.c.transform?.q)) { L.fails = 0; return false; }   // nothing to write is not a failure
   try { const plan = admit(w, st, { actor: "system", cap: { kind: "system", ids: [host], comps: ["transform"] } }, [setOp(host, "transform", t)]);
     changeEntry(w, plan, w.append(actEntry(w, "system", "drive-commit", { id: host, driver: L.by, carried: carriedBy(w, st, host, L.by), why })));
     L.logged = loggedKey(w.state(), host); }
@@ -95,7 +95,7 @@ function dropLease(w, st, host, free = true) {
 /** End the lease: commit, then free the helm (its driver let go); passengers keep their seats. */
 function endLease(w, st, host, why, free = true) {
   const L = leases(w)[host]; if (!L) return;
-  commitLease(w, st, host, why, free);   // a throw keeps the lease and the helm: the pose is retried up to COMMIT_TRIES times, then the lease is dropped with a console warning (review L27)
+  commitLease(w, st, host, why, free);   // a throw keeps the lease and the helm: the pose is retried, never dropped for the log's
   dropLease(w, st, host, free);
 }
 /** `who` stood up or left: a driver's lease ends and commits; a passenger's hull commits (why alight), so their step off is
@@ -104,7 +104,7 @@ export function endDrivesBy(w, st, who) {
   const seat = occupantOf(w, st, who)?.to;
   for (const [host, L] of Object.entries(leases(w))) {
     if (L.by === who) endLease(w, st, host, "exit", false);
-    else if (seat && familyOf(st, host).has(seat)) { commitLease(w, st, host, "alight", false); st = w.state(); } }   // a passenger stepping off never unseats the driver (delta2 L2-A)
+    else if (seat && familyOf(st, host).has(seat)) { commitLease(w, st, host, "alight", false); st = w.state(); } }   // a passenger stepping off never unseats the driver
 }
 
 /** The beat (server: the physics heartbeat): a lease whose stream stopped ends; a held one commits every LEASE.commitMs. */
@@ -137,7 +137,7 @@ const DRIVE_VERBS = {
     const hit = hullHit(st, a.id, next, L.pose);
     if (hit) refuse("solid", `${a.id} would run into ${hit === "ground" ? "the ground" : hit}`, "steer around it", { ...stands, blocker: hit });
     L.slack = slackAfter(slack, L.pose, next, dt, spec); L.pose = { pos: next.pos.slice(), q: next.q.slice() }; L.at = now; w.presenceDirty = true;
-    const recorded = now - L.committed >= LEASE.commitMs && commitLease(w, st, a.id, "periodic", false);   // the driver keeps the helm; the reply says the lease went (delta2 L2-A)
+    const recorded = now - L.committed >= LEASE.commitMs && commitLease(w, st, a.id, "periodic", false);   // the driver keeps the helm; the reply says the lease went
     return { ok: true, recorded, pose: L.pose, driver: said(actor), ...(leases(w)[a.id] ? {} : { dropped: true }) };
   },
 };

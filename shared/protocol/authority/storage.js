@@ -1,8 +1,7 @@
-// shared/protocol/authority/storage.js — a world over injected storage, the chain, ops and previews (refactor C11,
-// 2026-10-12; moved from authority.js's "storage" section unchanged). A leaf below math and the spatial index (qr3 is the
-// rotation a log takes; scratch is the preview the index files). Two lines ride along from elsewhere because this is where
-// they are read: VOLATILE (the spatial section's "indexed whole" mark, which scratch propagates) and opsQuiet (the rights
-// section's quiet opsOf, which worldOf's presence fold uses).
+// shared/protocol/authority/storage.js — a world over injected storage, the chain, ops and previews. A leaf below math
+// and the spatial index (qr3 is the rotation a log takes; scratch is the preview the index files). VOLATILE (the
+// spatial index's "indexed whole" mark) and opsQuiet (the rights views' quiet opsOf) live here because this is where
+// they are read.
 import { readLog, fold, opsOf, followUpsOf, applyInPlace, cloneState, cowState, applyCow, checkEntry, jcs, sha256, utf8Len, worldIdOf, Malformed, PURGED } from "../fold.js";
 import { sha256Bytes, hexBytes } from "../hash.js";
 import * as R from "../roles.js";
@@ -37,21 +36,21 @@ export function worldOf(io) {
   w.rate = io.rate ?? null; // the act rate (gate.js rateCheck): a server's policy, injected; null = gate.js RATE_DEFAULT
   // presence pacing (the speed track): a clock of elapsed ms that no wall-clock step moves; null = pace by w.now
   w.pace = io.pace ?? null;
-  // scripts (research 41): the sandbox is injected ({run, checkSyntax, available}: shared/protocol/sandbox.js), never imported
+  // scripts: the sandbox is injected ({run, checkSyntax, available}: shared/protocol/sandbox.js), never imported
   // here (browsers import this file). No sandbox: scripts install, and every activation says "unavailable".
   w.scripts = io.scripts ?? null;
   // who is present beyond the authority's own bodies (a server's connected people): () => [{id, at: [x,y,z] | null}]
   w.present = io.present ?? null;
-  // speech is arrival-only (R 10-18): the newest seq at or below which this asker may NOT read a say's body, from the host
+  // speech is arrival-only: the newest seq at or below which this asker may NOT read a say's body, from the host
   // (a server knows when each person arrived and who its admins are): () => number | null. null = no floor (an admin, or a
   // host with no presence of its own: a lab, a replay). The log keeps every say; this only gates who READS one back.
   w.sayFloor = io.sayFloor ?? null;
   // the presence plane: bodies and holds. Transient, never logged (P1, P2)
   w.presence = io.presence ?? { bodies: {}, holds: {} };
-  // a presence file written before R 10-17 13:46 named who occupies what `seats`: read it as `occupants`, keep only the new key
+  // an older presence file named who occupies what `seats`: read it as `occupants`, keep only the new key
   if (w.presence.seats && !w.presence.occupants) w.presence.occupants = w.presence.seats;
   delete w.presence.seats;
-  // …and consent tables in an older shape (cells per tier to 10-20, one switch to 10-28): read them, rewrite them as two
+  // …and consent tables in an older shape (cells per tier, or one switch): read them, rewrite them as two
   // gates and two lists (consent.js migratePresence: once, marked in the plane)
   if (migratePresence(w.presence)) w.presenceDirty = true;
   w.savePresence = () => io.savePresence?.(w.presence);
@@ -110,7 +109,7 @@ export function worldOf(io) {
     const obj = { ...(e.kind === "genesis" ? {} : { world: w.worldId }), ...e, ts: w.pinTs ?? w.nextTs() };
     // §2.4: the chain commits an act/say/sim body as sha256(body.salt ‖ JCS(rest)). Unsalted, a purged chat line (most of
     // the personal data a world holds) can be recovered by guessing it against the commit. So in a chained log every such
-    // body carries 16 random bytes (round-2 review R3). Readers take bodies by field, so the salt is invisible to them.
+    // body carries 16 random bytes. Readers take bodies by field, so the salt is invisible to them.
     if (io.custody?.sign && ["act", "say", "sim"].includes(e.kind) && obj.body && typeof obj.body === "object" && !Array.isArray(obj.body) && !("salt" in obj.body))
       obj.body = { ...obj.body, salt: nonce16(w) };
     if (chained && e.kind !== "genesis" && io.custody?.sign && w.worldId) {
@@ -143,7 +142,7 @@ export function worldOf(io) {
   };
   return w;
 }
-// The transaction outcome (PROTOCOL §7, "Every request ends in one of three outcomes"; reviewer item 1, 10-18). A request
+// The transaction outcome (PROTOCOL §7, "Every request ends in one of three outcomes"). A request
 // ends in exactly one of:
 //   {outcome: "committed", from, to}       it was answered ok and every line it asked for is durable and in entries
 //                                          (to = the last seq + 1; a read writes nothing, from = to)
@@ -157,8 +156,8 @@ export function worldOf(io) {
 //                                          (they were durable and are published); from `from` on, history says what holds.
 // An ambiguous request is never reported as ok, nor as a plain failure. `wedgedBefore`: wedgedOf(w) when the request began,
 // which files were already wedged. A throw that wedged no new file is the old wedge's refusal, before any write: rolled
-// back; one that wedged a file not wedged before is ambiguous, whichever file was wedged first. The MODERATOR log counts too (review r14 M2, 10-18): a ban, mute or kick writes world.mod.jsonl only, so a throw
-// from that durable write is as ambiguous as one from the world log's (its bytes may be on disk; the file is wedged).
+// back; one that wedged a file not wedged before is ambiguous, whichever file was wedged first. The MODERATOR log counts
+// too: a ban, mute or kick writes world.mod.jsonl only, and a throw there is as ambiguous as one from the world log's.
 /** whether this authority may write this world: it holds the sequencer key genesis names (or can't sign at all) */
 export const holdsCustody = (w) => !w.custody?.()?.sign || w.custody().sequencer() === w.entries[0]?.body?.sequencer;
 export const anyWedged = (w) => !!(w.wedged?.log || w.wedged?.["moderator log"]);
@@ -186,7 +185,7 @@ export function txnRefusal(o) {
   if (o.wedged) return { ok: false, txn: "rolled-back", refused: { code: "server-error", reason: `nothing it asked for was written: an earlier write to this world's ${o.file ?? "log"} failed, so what is on disk is unknown, and the world refuses ${o.file ? "moderation writes" : "writes"} until it is reopened from disk (reads still work)`, fix: REOPEN_FIX } };
   return { ok: false, txn: "rolled-back", refused: { code: "server-error", reason: "the server failed while handling the request; nothing it asked for was written", fix: "send it again; if it keeps failing, whoever runs this server can find why in its log" } };
 }
-// READBACK (verbclasses.js; engine-scars 4/6c, R 10-17 02:45): the act fields the authority reads back for meaning (an
+// READBACK (verbclasses.js): the act fields the authority reads back for meaning (an
 // undo's chain, a use's capability, a script's sponsor, a sculpt's brush, the request that named an engine build…). §12
 // lets the WHOLE body of an act, say or sim entry be purged, so every such read goes through readback(): the body, or
 // null when it is purged — named by a purge entry later in the log (the authority's in-memory entry still holds it), or
@@ -226,7 +225,7 @@ function skeleton(e) {
 }
 const chainStep = (prevHex, e) => { const b = new Uint8Array(64); b.set(hexBytes(prevHex), 0); b.set(hexBytes(sha256(jcs(skeleton(e)))), 32); return sha256Bytes(b); };
 /** Seal a whole log the authority didn't write line by line (a translation): the same salts and chain points render gives
- *  each line it appends (§2.4; round-2 review R3). entries[0] is genesis (never a chain point: the world id is its
+ *  each line it appends (§2.4). entries[0] is genesis (never a chain point: the world id is its
  *  hash); every later entry gets a salt on each set and on its act/say/sim body, then {head, sig}. Returns new objects;
  *  `sign(msg)` is the sequencer key's, `random(n)` optional. */
 export function seal(entries, { sign, random } = {}) {
@@ -258,27 +257,25 @@ function versionSeq(w, v, what) {
 const versionOf = (w, seq) => (seq === undefined || seq === null ? null : { seq, head: w.headAt(seq) });
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 // PROTOCOL §5 (locks: decided): `lock` keeps the first protocol's meaning, so an imported log's locks carry over
-// untranslated. A lock is on when its value is truthy; the authority stores `true` (recut B2: an old log's {rank} still
-// reads as on, its rank ignored: strength is the setter's rank, gate.js).
+// untranslated. A lock is on when its value is truthy; the authority stores `true` (an old log's {rank} still reads as
+// on, its rank ignored: strength is the setter's rank, gate.js).
 // A purged value is absent(purged), not a lock. The lab's `pinned` and top-level `locked` are retired.
 const lockedC = (c) => { const v = c?.lock; return v !== undefined && v !== PURGED && !!v; };
 // a rotation written to the log: rounded like a position, then made unit again (0.707 per axis is not a unit quaternion,
-// and a reader composing it through a parent drifts off unit: review of b398d7e3 #1)
+// and a reader composing it through a parent drifts off unit)
 const qr3 = (q) => { const r = q.map(r3); const n = Math.hypot(r[0], r[1], r[2], r[3]); return n > 0 ? r.map((v) => v / n) : [0, 0, 0, 1]; };
 const setOp = (id, comp, value) => ({ verb: "set", id, comp, value });
-const IMPORTED_ONLY = (comp) => typeof comp === "string" && /^imported(?:-(?:behavior|bans))?(?::|$)/.test(comp);   // imported-epoch is imported:epoch (10-16); imported-guard was never registered
+const IMPORTED_ONLY = (comp) => typeof comp === "string" && /^imported(?:-(?:behavior|bans))?(?::|$)/.test(comp);   // imported-epoch is imported:epoch; imported-guard was never registered
 const delOp = (id, comp) => (comp === undefined ? { verb: "delete", id } : { verb: "delete", id, comp });
 const createOps = (id, comps) => [{ verb: "create", id }, ...Object.entries(comps).map(([k, v]) => setOp(id, k, v))];
 // a preview of ops on st: copy-on-write (the same state applyOps gives, sharing every entity the ops don't touch; values
-// are never mutated in place, as a live world's states already share them). A deep copy per preview made a batch of 50
-// creates copy a 2 000-thing world 100 times (review 10-06 S0-2).
+// are never mutated in place, as a live world's states already share them), never a deep copy per preview.
 const scratch = (st, ops) => { const s = applyCow(cowState(st), ops); if (VOLATILE.has(st.entities)) VOLATILE.add(s.entities); return s; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "thing";
 
 const opsQuiet = (e) => { try { return opsOf(e); } catch { return []; } };
-// (refactor split, 2026-10-17: moved here from authority.js's gate section, beside CHANGE: the gate admits these ops, the
-// write path and undo mark them, and a leaf can't reach the gate)
-// The authority's own follow-up ops inside a person's write (review r8 M1 / scars M5): clearing the references to what a
+// (here beside CHANGE: the gate admits these ops, the write path and undo mark them, and a leaf can't reach the gate)
+// The authority's own follow-up ops inside a person's write: clearing the references to what a
 // delete removed, and an undo putting back the references that delete cleared. Marked on the op object (a request's JSON
 // can't carry a symbol), and admitted like the authority's other follow-ups (rest, system): no rights, key, seniority,
 // lock or in-flight check, and no capability scope, so a third party's keyed reference or lock can't veto your delete or
