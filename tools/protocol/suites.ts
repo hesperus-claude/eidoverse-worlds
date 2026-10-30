@@ -65,6 +65,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["light-readers", "../light-readers-test.ts", 1], // a light is found by kindOf and the rig's complight key; its gizmo is no box or material slot
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
+  ["bodygate", "../bodygate-test.mjs", 1], // the body-first gate: armed, held, released once, capped; and at loadGLB's boundary the parse waits in body-first
   ["editor-range", "../editor-range-test.ts", 1], // the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
   ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
   ["scriptnew-expect", "../scriptnew-expect-test.ts", 1], // the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
