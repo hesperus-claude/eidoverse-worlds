@@ -66,25 +66,19 @@ without retaining the entire field. Unsupported/oversized fields warn explicitly
 
 Entity `interact` metadata exposes declared reaction action names, sockets and
 locked/mounted/moving flags. Revisions track changes to component values, not
-just their names. Transforms include the live lease state when available, so a
+just their names. Transforms are the projected poses, so a
 late join or scene refresh cannot rewind an object to its resting log position.
 
 Replies additionally carry `simulation:{enabled,foreign,activeBodies}` and
-`updateIntervalMs` (66 while bodies move, otherwise 300). Epoch worlds project
+`updateIntervalMs` (66 while bodies move, otherwise 300). The projection carries
 the canonical sim poses, including settled bodies and mounted children, by
 cloning the server cut and advancing the shared versioned law to render time.
-Projection never mutates the canonical sim or writes placements. Foreign epochs
-retain their barrier poses without recomputation. Live leases still take priority.
+Projection never mutates the canonical sim or writes placements.
 This is canonical root-pose parity, not the browser's cosmetic tumble/slope tilt.
 
-Unreal sends ordinary `use`/`punt` verbs (including explicit kick direction).
-In epoch worlds it consumes projected physics poses and never volunteers a
-competing lease simulation. In pre-epoch worlds it simulates only after receiving
-a physics lease grant. State streams, loss/takeover, release and disconnect use the
-existing lease contract; that legacy simulation is a bounded native swept-volume
-plugin, not the browser integrator. Causes in snapshot
-history are never replayed. Receivers apply other holders' streams even when
-local simulation is disabled. No new server authority or log verbs were added.
+Unreal sends ordinary `use`/`punt` requests (including explicit kick direction) and
+consumes the projected physics poses; it never runs a competing simulation (the first
+protocol's lease contract is gone; history: spec/history/). No new server authority or log verbs were added.
 
 Avatar reaches use existing `pose.reach` relations; native two-bone IK renders
 hands/feet aimed at world/self/participant coordinates and anatomical bone seeds
@@ -97,7 +91,6 @@ are procedural approximations, not downloaded browser animation clips.
 Puppet and bodydrag requests are not accepted automatically; native ragdolls,
 mount/seating, force reactions and full streamed body-pose parity remain future work.
 
-Additional scratch check: `tools/native-environment-control.ts`.
 
 ## Component data (water, air, environment, vehicles)
 
@@ -123,7 +116,7 @@ its name. The `water` world is an ordinary world imported by `tools/water/import
 Transforms remain the sampled truth, but may also carry what a renderer needs to
 animate at frame rate without polling:
 
-- `motion: {base:{pos,yaw}, m}` for unmounted, unleased, non-simulated entities
+- `motion: {base:{pos,yaw}, m}` for unmounted, non-simulated entities
   with whole-entity motion. Evaluate `client/lib/motioneval.js` `evalWholeMotion`
   at the server clock (`render-scene.time` + elapsed). `m.t0` is always present:
   a missing authored t0 is resolved to the server's anchor.
