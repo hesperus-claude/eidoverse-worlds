@@ -28,10 +28,10 @@ const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? a
 const BASE = "bbc9ac22";
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-// Each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red. Applied as an exact text
-// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list).
-const MUTANTS: [string, string, string, string[]][] = [
-  // [name, file, find, replace, cases]
+// each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red, as an exact text
+// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list)
+const MUTANTS: [string, string, string | [string, string, string?][], string, string[]][] = [
+  // [name, file, find, replace, cases]; find may be [find, replace, file?][] for a gate held in two places
   ["install: scope within installer's rights", "authority/scripts.js", "if (need) refuse(\"rights\", `${at}'s scope reaches", "if (false) refuse(\"rights\", `${at}'s scope reaches", ["B1"]],
   ["sponsor's role NOW", "authority/scripts.js", "const need = lacks(w, st, cap.sponsor, op,", "const need = null && lacks(w, st, cap.sponsor, op,", ["B2", "B3", "B24"]],
   ["scope narrowing", "authority/scripts.js", "if (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp))", "if (false && (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp)))", ["B4"]],
@@ -45,7 +45,7 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["the excess taken from both places", "authority/scripts.js", "if (!ways.length) ways.push(", "if (false) ways.push(", ["Q1d"]],
   ["cascade depth", "authority/scriptrun.js", "if (depth > cfg.depth) return out(\"refused\"", "if (false) return out(\"refused\"", ["B8"]],
   ["locks bind scripts", "authority/gate.js", "if (k) lockCheck(w, st, who, role, k, op, at); }", "if (k && !cap) lockCheck(w, st, who, role, k, op, at); }", ["B9"]],
-  ["in flight binds scripts", "authority/gate.js", "if (inFlight(op.id) && !fu) refuse(\"in-flight\"", "if (inFlight(op.id) && !fu && cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
+  ["in flight binds scripts", "authority/gate.js", "if (inFlight(op.id) && !fu) refuse(\"in-flight\"", "if (inFlight(op.id) && !fu && who.cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
   ["hygiene at install", "authority/scripts.js", "const dirty = SR.hygiene(blob.text); if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", "const dirty = null; if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", ["H2"]],
   ["hygiene at upload", "authority/scriptrun.js", "const dirty = SR.hygiene(a.text); if (dirty) refuse(dirty.code, dirty.reason", "const dirty = null; if (dirty) refuse(dirty.code, dirty.reason", ["H1"]],
   ["scope names checked for typos at install", "authority/scripts.js", "if (near.length) refuse(\"schema\", `${at}.scope.comps:", "if (false) refuse(\"schema\", `${at}.scope.comps:", ["H4"]],
@@ -113,8 +113,8 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["admit copies one entity per op, not the world", "authority/gate.js", "    applyCow(s, [op]); norm.push(op);", "    s = applyOps(s, [op]); norm.push(op);", ["I5"]],
   ["elision copies one entity per op, not the world", "scriptrules.js", "out.push(o); try { applyCow(s, [o]); }", "out.push(o); try { JSON.parse(JSON.stringify(s.entities)); applyCow(s, [o]); }", ["I5"]],
   ["read-your-writes without copying the world", "sandbox.js", "const writable = (id) => { if (ov.has(id)) return ov.get(id); const b = base[id]; if (!b) return null; const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", "const writable = (id) => { const b = ov.has(id) ? ov.get(id) : base[id]; if (!b) return null; for (const k of Object.keys(base)) JSON.parse(JSON.stringify(base[k])); const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", ["I5"]],
-  // (not a mutation: the check between host answers is defence in depth. A process can't send its next call before its
-  // answer arrives, so the authority always finds the pipe empty first and its ordinary deadline check fires: measured, I9)
+  // (not a mutation: the check between host answers is defence in depth; a process can't send its next call before its
+  // answer arrives, so the authority finds the pipe empty first and its ordinary deadline check fires, as I9 measures)
   ["time spent answering isn't the process's starvation", "sandbox.js", "used !== null ? own > 0.5 * wall && used < STARVED * own :", "used !== null ? used < STARVED * wall :", ["I9"]],
   ["a starved process isn't the script's failure", "sandbox.js", "export const STARVED = 0.3;", "export const STARVED = 0;", ["I8"]],
   ["end of file means the process died", "sandbox.js", "if ((n === 0 && c.opened) || c.proc.exitCode !== null", "if (c.proc.exitCode !== null", ["I6"]],
@@ -147,9 +147,11 @@ if (argv.includes("--mutants")) {
   const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
     if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
-    ran++; const d = copyShared("mut"); const f = path.join(d, "shared/protocol", file); const src = fs.readFileSync(f, "utf8");
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    ran++; const d = copyShared("mut");
+    const edits: [string, string, string][] = (Array.isArray(find) ? find : [[find, repl]]).map(([a, b, g]) => [path.join(d, "shared/protocol", g ?? file), a, b]);
+    const miss = edits.find(([f, a]) => fs.readFileSync(f, "utf8").split(a).length !== 2);
+    if (miss) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${path.relative(path.join(d, "shared/protocol"), miss[0])} (the gate moved?)`); continue; }
+    for (const [f, a, b] of edits) fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(a, () => b));
     const r = await runSelf(d, cases.length ? cases : null);
     const redIds = [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => redIds.includes(c)) : r.code === 0;
