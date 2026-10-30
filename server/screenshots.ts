@@ -58,7 +58,7 @@ export function pngFromDataURL(value: unknown): Buffer | null {
 // refused. The renderer is told how long it may spend loading the world (the snap's `wait`), so it does not give up
 // while the asker would still wait. And worlds an agent is in are kept served (sweep), so the first screenshot there
 // rarely needs a roamer to travel and load at all.
-export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, maxPending = 16, now = Date.now,
+export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, maxPending = 16, now = () => performance.now(),   // intervals only: monotonic
   travelMs = 25_000, arrivalTimeoutMs = 40_000, pollMs = 200, recentMs = 5 * 60_000,
   queueMs = 20_000, maxQueued = 16, maxQueuedTotal = 64, budgetMs = 55_000, settleMarginMs = 2_000, pinnedGraceMs = 120_000, sweepAfterMs = 30_000,
   sweepBackoffMs = 15_000, sweepBackoffMaxMs = 10 * 60_000,
