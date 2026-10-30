@@ -1,4 +1,4 @@
-// shove — walking into a loose thing pushes it (R's queue: "body shove"). The walker's side: one body (mine, never a remote's;
+// shove — walking into a loose thing pushes it. The walker's side: one body (mine, never a remote's;
 // an agent's process runs its own) finds the loose things its walking capsule is against and says which to punt, and how
 // hard. The punt itself is the authority's (punt {id, v, contact: true}: shoveGate in authority.js, its limits SHOVE in
 // physconst.js); nothing here writes anything.
@@ -7,8 +7,8 @@
 // the body's radius + `slack` of the feet, the thing neither under the feet nor over the head (its axis-aligned box). The
 // push: the body's WALKING INTENT (speed along its heading: what the keys or walk_to ask for), not its motion, which the
 // collider has already stopped at the thing's face; only the part along the contact normal counts (and only when the walk
-// heads into it, within 60°: brushing a corner on the way past is no push). How hard is momentum (R 10-12, "avatars need a
-// presumptive mass, like presumptive reach"): a body of BODY_MASS walking at u gives a thing of mass m an elastic
+// heads into it, within 60°: brushing a corner on the way past is no push). How hard is momentum (a
+// presumptive mass, like presumptive reach): a body of BODY_MASS walking at u gives a thing of mass m an elastic
 // 2·BODY_MASS/(BODY_MASS + m) · u, under the flat ceiling SHOVE.maxV, and keeps (BODY_MASS − m)/(BODY_MASS + m) · u itself
 // (a heavy crate stops you, a ball barely does). Lifted a little so it slides rather than grinds. Standing still sends
 // nothing. Never a shove that would move a body: not a thing someone sits on or stands on (or anything carrying it), not one
@@ -95,7 +95,7 @@ export function massOf(st, id) {
   const e = st?.entities?.[id]; const ph = e?.c.physics; if (!ph) return null;
   if (Number.isFinite(ph.mass) && ph.mass > 0) return ph.mass;
   const v = shapeVolume(ph.shape); if (!Number.isFinite(v)) return null;
-  const sname = typeof ph.surface === "string" ? ph.surface : ph.material;   // physics.surface (reserved; `material` before 10-16): carried values only
+  const sname = typeof ph.surface === "string" ? ph.surface : ph.material;   // physics.surface (reserved; formerly `material`): carried values only
   const mat = typeof sname === "string" ? st.entities["@world"]?.c?.[sname.startsWith("surface:") ? sname : `surface:${sname}`] : null;
   const rho = Number.isFinite(ph.density) && ph.density > 0 ? ph.density : Number.isFinite(mat?.density) && mat.density > 0 ? mat.density : 1000;
   const sc = worldPose(st, id)?.scale ?? [1, 1, 1];

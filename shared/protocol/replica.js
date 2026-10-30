@@ -1,4 +1,4 @@
-// shared/protocol/replica.js — a world as a CLIENT holds it (slice 3b). Pure; the browser (client/lib/net.js) and the
+// shared/protocol/replica.js — a world as a CLIENT holds it. Pure; the browser (client/lib/net.js) and the
 // suites (tools/protocol/authority-check.ts) run the same code.
 //
 // The client folds the log itself, from the server's own log stream:
@@ -9,7 +9,7 @@
 //                      (opsOf + applyInPlace, the strict reader's code). A gap, a purge (retroactive by law, L1) or a
 //                      genesis means this client can't continue its cut: it asks for a fresh snapshot (`resync`).
 //
-// What the renderer reads (slice 3c): the VIEW of this fold (view.js viewState), recomputed from the fold itself,
+// What the renderer reads: the VIEW of this fold (view.js viewState), recomputed from the fold itself,
 // so there's nothing held beside it to drift; client/lib/state.js diffs successive views and tells the realizers
 // what changed, in the protocol's terms. `say` entries come back as chat lines ({seq, ts, actor, text,
 // to?}): chat isn't world state, it's the log's own kind.
@@ -41,8 +41,8 @@ export function stateFromWire(wire) {
 }
 
 /** Freeze one entity's record in place: its bag and every value under it. The fold never mutates a value (a set
- *  replaces one), so a frozen record only ever stops a READER's stray write — which, with the realizer's clone gone
- *  (C7), would otherwise corrupt the fold this client holds. */
+ *  replaces one), so a frozen record only ever stops a READER's stray write, which would otherwise corrupt this
+ *  client's fold. */
 function freezeRecord(e) {
   if (!e || Object.isFrozen(e.c)) return;
   const deep = (x) => { if (x && typeof x === "object" && !Object.isFrozen(x)) { Object.freeze(x); for (const k of Object.keys(x)) deep(x[k]); } };
@@ -59,9 +59,8 @@ export function makeReplica({ freeze = true } = {}) {
   const freezeAll = () => { if (freeze && v.st) for (const id of Object.keys(v.st.entities)) freezeRecord(v.st.entities[id]); };
   // The tree's edges, indexed from the records' own `parent` fields (ids as the fold spells them): rebuilt at adopt,
   // kept at every ingest from the ops' ids (an op names the one record it touched; a parent edge lives on the child).
-  // One index for every reader — the realizer's carrier checks, the sockets re-seat, the Hierarchy — in place of
-  // the maps each kept by hand beside the fold (C12b, survey #11). A carrier that is gone while a child still names
-  // it keeps that child listed: the index answers what the records say, exactly as a scan would.
+  // One index for every reader (carrier checks, socket re-seat, the Hierarchy). A carrier that is gone while a child
+  // still names it keeps that child listed: the index answers what the records say, exactly as a scan would.
   const kids = new Map(), par = new Map();
   const link = (id, to) => { let s = kids.get(to); if (!s) kids.set(to, (s = new Set())); s.add(id); par.set(id, to); };
   const unlink = (id) => { const was = par.get(id); if (was === undefined) return; const s = kids.get(was); if (s) { s.delete(id); if (!s.size) kids.delete(was); } par.delete(id); };
@@ -75,7 +74,7 @@ export function makeReplica({ freeze = true } = {}) {
   // actors are opaque ids (u-…); their display names come from the authority's directory, never from the log (§2.3)
   const learn = (names) => { if (names && typeof names === "object") { learnNames(names); for (const [k, n] of Object.entries(names)) if (typeof n === "string") v.names[k] = n; } };
   v.nameOf = (id) => actorName(id);
-  // The sim layer beside the fold (design 20 on the client): the SAME simFolder the authority runs, fed the same entries, with
+  // The sim layer beside the fold: the SAME simFolder the authority runs, fed the same entries, with
   // no catalogue of its own (geometry is the log's physics.shape, as on the server). Canonical: it advances only by the
   // entries' own ts, never by this machine's clock (a fast clock would otherwise apply a later entry at the wrong tick).
   // What the screen shows is a COPY of it advanced to display time (simAt / simClone): a flight on screen is the
@@ -85,9 +84,8 @@ export function makeReplica({ freeze = true } = {}) {
   const startSim = (snap) => {
     E = []; const cut = snap.sim ?? null;
     for (const [q, e] of Object.entries(cut?.launches ?? {})) E[Number(q)] = e;
-    // a joiner decides for itself whether it carries the cut's engine build (audit FIX-2): the sender's word isn't evidence
-    // …and a cut with no engine state (its sender doesn't carry the build) can't be flown here either: mid-epoch, a sim
-    // is only ever started from a cut (review of 8377ec52 #10)
+    // a joiner decides for itself whether it carries the cut's engine build (the sender's word isn't evidence), and a
+    // cut with no engine state can't be flown here: mid-epoch, a sim is only ever started from a cut
     const spec = cut?.spec ?? null, foreign = !!spec && (!carried(spec) || !cut?.sim);
     folder = simFolder(E, { models: {}, from: { st: stateFromWire(snap.state), clock: cut?.clock ?? 0, spec, foreign, sim: foreign ? null : cut?.sim ?? null, launched: cut?.launched ?? {}, lifted: cut?.lifted ?? [], unknownEpoch: !!cut?.unknownEpoch, unknownHold: !!cut?.unknownHold } });
     v.sim = folder.view(); v.simVersion++;
@@ -127,7 +125,7 @@ export function makeReplica({ freeze = true } = {}) {
         try {
           const ops = opsOf(e);
           if (freeze) for (const o of ops) { const ent = typeof o?.id === "string" ? v.st.entities[o.id] : undefined; if (ent && Object.isFrozen(ent.c)) v.st.entities[o.id] = thawed(ent); }
-          // the sky's provenance (#260 I286): a stored sky carries no seq/by (the log does), so the entry that wrote it names them
+          // the sky's provenance: a stored sky carries no seq/by (the log does), so the entry that wrote it names them
           if (ops.some(({ id, comp } = {}) => id === "@world" && comp === "sky"))   /* an op's comp field, not a record's bag */ sky = { seq, by: lastAct ?? v.nameOf(e.actor) };
           try { applyInPlace(v.st, ops, seq); changed = true; }
           finally { for (const o of ops) if (typeof o?.id === "string") { if (freeze) freezeRecord(v.st.entities[o.id]); reindex(o.id); } }

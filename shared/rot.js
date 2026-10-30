@@ -13,8 +13,8 @@ import { sinT, cosT, atan2T, PI } from './simmath.js';
 export function qNorm(q) {
   if (!Array.isArray(q) || q.length !== 4 || !q.every(Number.isFinite)) return null;
   const n2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
-  // already unit (to a few ulps): returned as it is, so a quaternion that needs nothing is never moved by one ulp, which
-  // happened differently per platform (Windows rounded a unit q's re-normalisation the other way: channelbox, 10-22)
+  // already unit (to a few ulps): returned as it is, so a quaternion that needs nothing is never moved by one ulp (the
+  // re-normalisation rounds differently per platform)
   if (Math.abs(n2 - 1) <= 8 * Number.EPSILON) return [q[0], q[1], q[2], q[3]];
   const n = Math.sqrt(n2);
   if (!(n > 1e-9)) return null;
@@ -61,10 +61,9 @@ export function qAxisAngle(axis, angle) {
  *  not a matrix, so it is exact for the position (parent pos + R·(S·pos)) and exact for q and scale whenever every
  *  ancestor's scale is uniform; under a non-uniformly scaled ancestor a rotated child's true world transform shears (no
  *  TRS holds it), and here its q is the plain product and its scale the component-wise product (Unity's lossyScale).
- *  The stored data had 0 such cases at the shape audit (10-16).
  *  The authority compares this as JSON text with the engine's rests (authority/checks.js) and the engine's conformance
  *  digests start from it, so its float order is pinned: no renormalization between links. */
-// TODO(shape audit 10-16): return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
+// TODO: return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
 export function composePose(chain) {
   let acc = chain[0];
   for (let i = 1; i < chain.length; i++) {

@@ -27,7 +27,7 @@
 // A limb entry wraps a target with its flags:
 //   { t: <target>, palm?: false, reached?: true }
 // `palm: false` opts out of turning the palm to meet the surface (name-form
-// targets orient the palm by default — see EW.reach's history for why).
+// targets orient the palm by default).
 // `reached` is set by the REACHER's own solve when the hand arrives; the
 // rising edge is what a touch event fires on. It is an attestation, not a
 // measurement made by anyone else — same trust level as the pose stream that
@@ -39,10 +39,9 @@ import { canonicalPoint } from './contact.js';
 export const REACH_LIMBS = ['leftHand', 'rightHand', 'leftFoot', 'rightFoot'];
 
 /** A hand "has arrived" when its solve leaves this little gap or less. The
- *  target already stands off the skin, so 0 is the ideal; the slack absorbs
- *  breathing, interpolation, and the retreat search settling nearby. One
- *  constant for every attester — browser and agent must agree on what a
- *  touch is, or the same hand touches in one process and hovers in another. */
+ *  target already stands off the skin; the slack absorbs breathing, interpolation
+ *  and the retreat search. One constant for every attester, so browser and agent
+ *  agree on what a touch is. */
 export const TOUCH_GAP = 0.05;
 
 /** Tolerant limb naming: 'right', 'right hand', 'right_hand' → 'rightHand'. */

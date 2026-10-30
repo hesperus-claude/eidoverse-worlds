@@ -1,5 +1,5 @@
-// sockbody — what a person's body does at a socket: the `station` component on a socket entity (shape audit 10-16; it
-// was the `body` block of `socket` / `sockets.<name>`, still read here as the old spelling the door lifts), as data.
+// sockbody — what a person's body does at a socket: the `station` component on a socket entity (formerly the `body`
+// block of `socket` / `sockets.<name>`, still read here as the old spelling the door lifts), as data.
 //
 // The alpha registers the station's core only (shared/protocol/componentspec.js station: action, pose, anchor, exit,
 // leaveBy, who). The rest of the researched shape below is RESERVED: the door refuses it (STATION_RESERVED), its names are
@@ -45,7 +45,7 @@ import { BUILTIN_IDS, isWhoValue, whoWords } from './protocol/roles.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
 import { isPurged } from './protocol/fold.js';
 
-// surface (D14, R 10-12): the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
+// surface: the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
 export const ANCHORS = COMPONENTS.station.enums.anchor;   // hips, feet, head, root, surface
 export const LEAVE_BY = COMPONENTS.station.enums.leaveBy;  // jump, menu, script
 export const MOVES = ['none', 'drive', 'walk'];
@@ -55,7 +55,7 @@ export const VR_POLICIES = ['snap', 'track', 'near'];
 export const TIMES = ['loop', 'phase'];
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
-const isWho = isWhoValue;   // a role id, {permission} or {roles} (recut item 8)
+const isWho = isWhoValue;   // a role id, {permission} or {roles}
 /** The closed set of signals a pose may blend by. Every client computes each one the same way: speed/turn/phase/swing
  *  from the thing's motion component (closed forms, client/lib/socksignals.js), throttle/steer/aimYaw/aimPitch from the
  *  occupant's input (riding their presence), and param.<name> from the thing's `params` component (scripts write it). */
@@ -107,7 +107,7 @@ export function poseClip(spec) {
 
 /** A socket's station (or a legacy body block: the same shape), read generously with its defaults (shared by the
  *  authority, the client and the agent). Null when there is none: an attachment point for things only. `pose` is the
- *  spec as written (the station's `anim`, R 10-17: a pose or clip name, or an object; a legacy body block's or an older
+ *  spec as written (the station's `anim`: a pose or clip name, or an object; a legacy body block's or an older
  *  station's `pose`); `clip` is the one name it stands for (a name the body doesn't know plays its default). Absent leaveBy is 'any' (moving,
  *  jumping or getting up all leave: what every seat did before leaveBy existed). The reserved keys read as absent
  *  unless an older value holds them. */
@@ -134,7 +134,7 @@ export function bodyOf(station) {
     leave: typeof b.leave === 'string' && b.leave ? b.leave : null,
     exit: nums(b.exit, 3) || nums(b.exit, 4) ? b.exit : null,
     reach,
-    hold: {},   // cut (shape audit 10-16): no bone overrides over the pose; the key stays for the readers that merge it
+    hold: {},   // cut: no bone overrides over the pose; the key stays for the readers that merge it
     look: { yaw: range(lk.yaw, -180, 180), pitch: range(lk.pitch, -90, 90), up: UPS.includes(lk.up) ? lk.up : 'world', limited: nums(lk.yaw, 2, 360) || nums(lk.pitch, 2, 360) },
     input: { move: MOVES.includes(inp.move) ? inp.move : 'none', look: LOOKS.includes(inp.look) ? inp.look : 'free' },
     leaveBy: LEAVE_BY.includes(b.leaveBy) ? b.leaveBy : 'any',
@@ -155,19 +155,19 @@ export function choosePose(body, choices = []) {
 /** Is a leave request of this kind allowed by the socket? kind: 'move' (a movement key), 'jump', 'menu' (the explicit
  *  get-up: X, the stand tile, /stand, the radial menu), 'script', 'escape'. A seat whose input takes the movement keys
  *  (drive, walk) never treats them as "get off".
- *  'escape' is the occupant's one exit no seat can take away (review r9 scars M1; VRChat's respawn and menu, SL's stand):
+ *  'escape' is the occupant's one exit no seat can take away (cf. VRChat's respawn and menu, SL's stand):
  *  holding X (or the stand tile) for ESCAPE_HOLD_S, pressing the get-up again within ESCAPE_REPEAT_S of a refusal, or an
  *  agent's detach {escape: true}. A seat may make leaving deliberate, never impossible. */
 export const ESCAPE_HOLD_S = 1.5, ESCAPE_REPEAT_S = 2;
 /** Does the authority's `vacated` inbox message name the socket I occupy now (`mount` = {to: <socket id>}, mine or null)? A
- *  late message (after a reconnect) never stands anyone up from a seat taken since (review r9 L4, M3: client and agent). */
+ *  late message (after a reconnect) never stands anyone up from a seat taken since (client and agent). */
 export const vacatedFromMine = (u, mount) => !!(u && mount && typeof u.socket === 'string' && u.socket === mount.to);
 /** Where the authority let me go (`vacated {at}`, its track of my body restarts there): [x, y, z] or null. The browser and the
- *  agent both stand there (claims r10 O1), so the body and the authority's track start together. */
+ *  agent both stand there, so the body and the authority's track start together. */
 export const vacatedAt = (u) => (Array.isArray(u?.at) && u.at.length === 3 && u.at.every((n) => typeof n === 'number' && Number.isFinite(n)) ? u.at.slice() : null);
-/** How near a body must be to sit (review r10 M1: a sit is presence, and leaving the seat restarts the authority's track at
+/** How near a body must be to sit (a sit is presence, and leaving the seat restarts the authority's track at
  *  it, so a sit from afar would be an unlogged teleport). The client's plain X offers a seat within `r` m on the ground and
- *  within `up`/`down` m of the feet (localbody.js nearestSeat: R 10-11 00:47, a seat 3 m up isn't near); the authority
+ *  within `up`/`down` m of the feet (localbody.js nearestSeat: a seat 3 m up isn't near); the authority
  *  allows `lag` more on each, because its track of a walking body trails the client by one tracked step (thingphysics.js
  *  sends at most 5 a second: 0.2 s at a 4 m/s run is 0.8 m). */
 export const OCCUPY_REACH = Object.freeze({ r: 3.5, up: 1.6, down: 1.0, lag: 1.0 });
@@ -276,7 +276,7 @@ export function checkStation(v, at = 'station') {
   const held = Object.keys(v).find((k) => STATION_RESERVED.includes(k));
   if (held) return bad('reserved', `${at}.${held} is reserved: the alpha holds the station's core only (${STATION_KEYS.join(', ')}); ${held} comes back later as an addition`, `leave ${held} out; reserved for later: ${STATION_RESERVED.join(', ')}`);
   let r = keys(at, v, STATION_KEYS, 'a station'); if (r) return r;
-  // anim (R 10-17: was pose): a pose or clip by name, or {clip, …} / a blend: the body grammar's own check, under its name
+  // anim (formerly pose): a pose or clip by name, or {clip, …} / a blend: the body grammar's own check, under its name
   if (v.anim !== undefined && (r = checkPose(v.anim, `${at}.anim`))) return r;
   if (isReservedAnimName(v.anim)) return bad('shape', `${at}.anim "${v.anim}" is reserved: it names ad-libbed anims, never a pose or clip`, 'name the pose or clip');
   // input (opened for the helm): {move: 'drive'} on a drive station only (componentspec station.input; shared/drive.js)
@@ -430,7 +430,7 @@ export function socketMapIn(entities, host) {
 
 /** One line saying what a body does at a socket, for anyone reading it as text (the agent process's look, the sit reply).
  *  door: the agents' door reads it, so the way off is the door's own (detach, or a move; detach {escape: true} past a
- *  seat that holds you), not a person's controls (it named X, get up and jump, which no agent has). */
+ *  seat that holds you), not a person's controls (X, get up, jump: no agent has them). */
 export function describeBody(slot, b, { door = false } = {}) {
   if (!b) return `${slot}: an attach point (things only)`;
   const pose = typeof b.pose === 'string' ? `holds ${b.pose}`

@@ -10,18 +10,13 @@
 //
 //   - Math.pow(0.5, octaves) → the same value accumulated by halving (for
 //     the integer octaves in use the results are bit-identical);
-//   - Math.hypot(x, z) → Math.sqrt(x*x + z*z) (hypot is implementation-
-//     approximated and historically differs across engines; sqrt is the
-//     blessed op; at world scale the overflow guard hypot exists for is
-//     irrelevant, and the ~1-ulp difference in the flat-radius blend is
-//     nanometres of ground).
+//   - Math.hypot(x, z) → Math.sqrt(x*x + z*z) (hypot differs across engines;
+//     the ~1-ulp difference in the flat-radius blend is nanometres of ground).
 //
-// One consequence stated honestly: the CLIENT's rendered mesh and walking
-// heightAt still come from the toolkit's own function (vendored, eval-
-// loaded); this module is the SIM's ground truth. The two agree to ~1 ulp
-// everywhere, which is nanometres — but the
-// covenant identity that matters (server sim ≡ client shadow sim ≡ any
-// replay, bit for bit) holds because ALL sim consumers use THIS law.
+// The CLIENT's rendered mesh and walking heightAt still come from the toolkit's
+// own function; this module is the SIM's ground truth. They agree to ~1 ulp;
+// the identity that matters (server sim ≡ client shadow sim ≡ any replay, bit
+// for bit) holds because ALL sim consumers use THIS law.
 //
 // THE CONSTANTS AND THE EVALUATION ORDER ARE THE VERSION (Covenant II):
 // this law is held by eidosim's conformance digests (engine-check: the onto-hills scenario): editing anything here that
