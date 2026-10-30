@@ -342,34 +342,35 @@ time.
 | 171 | screenshots | main | `tools/bun-test.ts tools/screenshots-test.ts` | bun | 9 s | 180 s |
 | 172 | snapframe-render | main | `tools/snapframe-render-test.ts` | bun | 0.1 s | 180 s |
 | 173 | anim-backpressure | main | `tools/anim-backpressure-test.ts` | bun | 0.3 s | 180 s |
-| 174 | panels | main | `tools/panels-test.ts` | bun | 1 s | 180 s |
-| 175 | surface-hold | main | `tools/surface-hold-test.ts` | bun | 19 s | 180 s |
-| 176 | particles | main | `tools/particles-test.ts` | bun | 1 s | 180 s |
-| 177 | shadow-fade | main | `tools/shadow-fade-test.mjs` | bun | 1 s | 180 s |
-| 178 | frames-layout | main | `tools/frames-layout-test.ts` | bun | 1 s | 180 s |
-| 179 | models-field | main | `tools/models-field-test.ts` | bun | 1 s | 180 s |
-| 180 | translate | main | `tools/protocol/translate-check.ts` | bun | 6 s | 180 s |
-| 181 | owners | main | `tools/protocol/owners-check.ts` | bun | ? | 300 s |
-| 182 | setup | main | `tools/protocol/setup-check.ts` | bun | 3 s | 180 s |
-| 183 | importer | main | `tools/protocol/importer-check.ts` | bun | 1.2 s | 180 s |
-| 184 | eidosim-v1 | main | `tools/protocol/import-v1/eidosim-v1-test.ts` | bun | 0.2 s | 180 s |
-| 185 | render-scene-import | main | `tools/render-scene-import-test.ts` | bun | ? | 300 s |
-| 186 | channelbox | main | `tools/channelbox-test.ts` | bun | ? | 300 s |
-| 187 | last-world | main | `tools/last-world-test.ts` | bun | 0.6 s | 180 s |
-| 188 | event-wire | main | `tools/event-wire-test.ts` | bun | 0.1 s | 180 s |
-| 189 | level-dive | browser | `tools/water/level-dive-check.ts` | Chromium | ? | 300 s |
-| 190 | toast-group | browser | `tools/protocol/toast-group-check.ts` | Chromium | ? | 300 s |
-| 191 | browser | browser | `tools/protocol/browser-check.ts` | Chromium | 1.5 s | 180 s |
-| 192 | client | browser | `tools/protocol/client-check.ts` | Chromium | 60 s | 300 s |
-| 193 | refusedjoin | browser | `tools/protocol/refusedjoin-check.ts` | Chromium | 150 s | 750 s |
-| 194 | client-b2 | browser | `tools/protocol/batch2-probe.ts` | Chromium | 19 s | 180 s |
-| 195 | access-panel | browser | `tools/protocol/access-panel-probe.ts` | Chromium | ? | 300 s |
-| 196 | build-client | browser | `tools/protocol/build-probe.ts` | Chromium | 8.1 s | 180 s |
-| 197 | shiplist-probe | browser | `tools/protocol/shiplist-probe.ts` | Chromium | 197 s | 985 s |
-| 198 | xss-probe | browser | `tools/protocol/xss-probe.ts` | Chromium | 15 s | 180 s |
-| 199 | party-probe | browser | `tools/protocol/party-probe.ts` | Chromium | 486 s | 2430 s |
-| 200 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
-| 201 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
+| 174 | anim-wire | main | `tools/anim-wire-test.ts` | bun | 6 s | 180 s |
+| 175 | panels | main | `tools/panels-test.ts` | bun | 1 s | 180 s |
+| 176 | surface-hold | main | `tools/surface-hold-test.ts` | bun | 19 s | 180 s |
+| 177 | particles | main | `tools/particles-test.ts` | bun | 1 s | 180 s |
+| 178 | shadow-fade | main | `tools/shadow-fade-test.mjs` | bun | 1 s | 180 s |
+| 179 | frames-layout | main | `tools/frames-layout-test.ts` | bun | 1 s | 180 s |
+| 180 | models-field | main | `tools/models-field-test.ts` | bun | 1 s | 180 s |
+| 181 | translate | main | `tools/protocol/translate-check.ts` | bun | 6 s | 180 s |
+| 182 | owners | main | `tools/protocol/owners-check.ts` | bun | ? | 300 s |
+| 183 | setup | main | `tools/protocol/setup-check.ts` | bun | 3 s | 180 s |
+| 184 | importer | main | `tools/protocol/importer-check.ts` | bun | 1.2 s | 180 s |
+| 185 | eidosim-v1 | main | `tools/protocol/import-v1/eidosim-v1-test.ts` | bun | 0.2 s | 180 s |
+| 186 | render-scene-import | main | `tools/render-scene-import-test.ts` | bun | ? | 300 s |
+| 187 | channelbox | main | `tools/channelbox-test.ts` | bun | ? | 300 s |
+| 188 | last-world | main | `tools/last-world-test.ts` | bun | 0.6 s | 180 s |
+| 189 | event-wire | main | `tools/event-wire-test.ts` | bun | 0.1 s | 180 s |
+| 190 | level-dive | browser | `tools/water/level-dive-check.ts` | Chromium | ? | 300 s |
+| 191 | toast-group | browser | `tools/protocol/toast-group-check.ts` | Chromium | ? | 300 s |
+| 192 | browser | browser | `tools/protocol/browser-check.ts` | Chromium | 1.5 s | 180 s |
+| 193 | client | browser | `tools/protocol/client-check.ts` | Chromium | 60 s | 300 s |
+| 194 | refusedjoin | browser | `tools/protocol/refusedjoin-check.ts` | Chromium | 150 s | 750 s |
+| 195 | client-b2 | browser | `tools/protocol/batch2-probe.ts` | Chromium | 19 s | 180 s |
+| 196 | access-panel | browser | `tools/protocol/access-panel-probe.ts` | Chromium | ? | 300 s |
+| 197 | build-client | browser | `tools/protocol/build-probe.ts` | Chromium | 8.1 s | 180 s |
+| 198 | shiplist-probe | browser | `tools/protocol/shiplist-probe.ts` | Chromium | 197 s | 985 s |
+| 199 | xss-probe | browser | `tools/protocol/xss-probe.ts` | Chromium | 15 s | 180 s |
+| 200 | party-probe | browser | `tools/protocol/party-probe.ts` | Chromium | 486 s | 2430 s |
+| 201 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
+| 202 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
 
-Lanes: core 17 suites (~78 s), main 171 (~1508 s), browser 13 (~1147 s); 201 suites in all.
+Lanes: core 17 suites (~78 s), main 172 (~1514 s), browser 13 (~1147 s); 202 suites in all.
 <!-- END GENERATED -->

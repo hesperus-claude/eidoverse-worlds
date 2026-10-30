@@ -193,6 +193,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["screenshots", "../bun-test.ts tools/screenshots-test.ts", 1], // the screenshot broker: selection, cooldown, journeys, timeouts
   ["snapframe-render", "../snapframe-render-test.ts", 1], // where the renderer leg puts the camera
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
+  ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild

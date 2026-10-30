@@ -4,7 +4,8 @@ process.env.AGENT_BODY_ENGINE = 'verlet';
 process.env.WORLD_TOKEN = '';
 const { WorldAgent } = await import('../mcpl/agent.ts');
 const { handleTool } = await import('../mcpl/tools.ts');
-const { scratchSequencer, mkCheck, sleep } = await import('./harness.ts');
+const { scratchSequencer, mkCheck } = await import('./harness.ts');
+const { until } = await import('./protocol/wait.ts');
 const { check, tally } = mkCheck();
 const h = await scratchSequencer('anim-wire', { worlds: ['anim-test'], serverEnv: { SKIP_OPT_SWEEP: '1' }, portFrom: 9350 });
 const agents: any[] = [];
@@ -15,17 +16,13 @@ async function agent(name: string) {
   agents.push(a); await a.connect(); return a;
 }
 async function next(messages: any[], type: string, from: string) {
-  const end = Date.now() + 3000;
-  while (Date.now() < end) {
-    const i = messages.findIndex(m => m.type === type && (m.id ?? m.by) === from);
-    if (i >= 0) return messages.splice(i, 1)[0];
-    await sleep(10);
-  }
-  throw new Error(`timed out waiting for ${type} from ${from}`);
+  const at = await until(`${type} from ${from}`, () => messages.findIndex(m => m.type === type && (m.id ?? m.by) === from) + 1, { ms: 3000 });
+  return messages.splice(at - 1, 1)[0];
 }
 try {
   const sender = await agent('sender'), target = await agent('target'), observer = await agent('observer');
   const seen: any[] = [], puppets: any[] = [];
+  check('(setup) the target opens its touch gate (a pose is behind it, off by default)', (await target.request('consent', { touch: true }))?.ok === true);
   observer.ws.addEventListener('message', (e: any) => seen.push(JSON.parse(String(e.data))));
   target.ws.addEventListener('message', (e: any) => puppets.push(JSON.parse(String(e.data))));
   for (const [label, flags, expected] of [
