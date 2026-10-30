@@ -38,7 +38,7 @@ run sfu-verb-gate-test.mjs
 run sfu-loss-test.mjs
 run mic-gate-wired-test.mjs
 run audio-unlock-test.mjs
-run join-rfc005.test.ts
+run join-rfc005-test.ts
 echo "── owned live-door ──"
 run door-cap-gate-live-test.mjs
 echo "── owned real-browser ──"
