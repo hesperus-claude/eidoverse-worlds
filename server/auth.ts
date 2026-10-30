@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { JtiCache, verifyToken, aid1Slug, type Aid1Payload } from "./aid1.ts";
 import { ROOT } from "./config.ts";
 import { writePrivate } from "./fsutil.ts";
+import { readTokenRegistry } from "../mcpl/token-registry.ts";
 
 // ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
 // The second door, alongside JOIN_TOKEN: humans log in with Discord at the
@@ -125,6 +126,7 @@ try {
 // as WORLDS_DIR. Production leaves it unset and reads the real mcpl/tokens.json.
 export const ENROLMENT_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
+const AGENT_TOKENS_EXAMPLE = resolve(process.env.MCPL_TOKENS_EXAMPLE ?? join(ROOT, "mcpl", "tokens.example.json"));
 let agentTokCache: { mtime: number; byToken: Map<string, string>; names: Set<string>; bySub: Map<string, string> } | null = null;
 export function agentTokens() {
   try {
@@ -137,6 +139,8 @@ export function agentTokens() {
       // display name that happens to slug the same)
       const bySub = new Map<string, string>();
       if (mtime) {
+        // the MCPL door's reader (mcpl/token-registry.ts): a key copied from the public example proves nobody here either
+        const accepted = readTokenRegistry(AGENT_TOKENS_PATH, AGENT_TOKENS_EXAMPLE);
         const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { id?: string; subs?: string[] }>;
         const entries = Object.entries(raw).filter(([, v]) => typeof v?.id === "string" && v.id);
         const count = new Map<string, number>(); for (const [, v] of entries) count.set(v.id!.toLowerCase(), (count.get(v.id!.toLowerCase()) ?? 0) + 1);
@@ -144,6 +148,7 @@ export function agentTokens() {
         const refused: string[] = [];
         for (const [tok, v] of entries) {
           const id = v.id!; names.add(id.toLowerCase());
+          if (!Object.hasOwn(accepted, tok)) continue;
           if (!ENROLMENT_ID.test(id.toLowerCase()) || count.get(id.toLowerCase())! > 1) { refused.push(id); continue; }
           byToken.set(tok, id);
           for (const s of v.subs ?? []) if (typeof s === "string") bySub.set(s, id);
