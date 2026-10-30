@@ -27,16 +27,14 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const { logChat, initChat, chat } = await import("../client/lib/chat.js");
 const { frameStub } = await import("./chat-frames-stub.mjs");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("chat-log");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // A self row + two others: the self row exercises the "not yourself" skip of the
 // People Here double-click (a mention now; it opened a DM tab until whisper was removed, R 10-18).
@@ -302,5 +300,4 @@ console.log("\nCHAT — a mod's markup carrying the public classes is never mist
   delete w.__voiceTransport;
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

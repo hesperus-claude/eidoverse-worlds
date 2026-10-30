@@ -5,9 +5,10 @@
 // filename, so an older generation's marker is simply never looked up here; there is no per-kind re-opening any more.
 import { classifyVariant, variantStatus, lodVariantPath, ktx2VariantPath, lodRecipeFor, LOD_RECIPE, LOD_MIN_VERTS, KTX2_RECIPE, recipeStamp, sourceSidecar, sourceToken, freshOver, variantSource, verdictMarker, verdictLine, readVerdict, lodVerdictKind, lodVerdictFinal, verdictStands } from "../server/store-variants.ts";
 import { toolsStamp, toolsDigest, toolVersions } from "../server/tools-stamp.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, got: unknown) => { if (ok) pass++; else fail++; console.log(`  ${ok ? "✓" : "✗"} ${name}${ok ? "" : `  got ${JSON.stringify(got)}`}`); };
+const T = suite("variant-status");
+const check = (name: string, ok: unknown, got?: unknown) => T.check(name, ok, got);
 const fs = (files: Record<string, string>) => ({ exists: (p: string) => p in files, read: (p: string) => files[p] ?? "" });
 
 const O = "/opt/store/abc.glb", L = lodVariantPath(O), K = ktx2VariantPath(O);
@@ -192,5 +193,5 @@ for (const [name, files, state, reason] of cases) {
   const plain = variantStatus(O, "/opt/min", { exists, read, simplifyOf: () => null });
   check("…an ordinary LOD reads built with no reason", plain.lod.state === "built" && plain.lod.reason === null, plain.lod);
 }
-console.log(`${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+console.log(`${T.pass} passed, ${T.fail} failed`);
+if (T.fail) process.exit(1);

@@ -25,6 +25,11 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["hostile", "hostile-check.ts", 2],   // PROTOCOL §6 proof 1: hostile logs against the strict fold
   ["attack", "attack-check.ts", 2],     // §6 proofs 2–3: 25d H1/H2/H4 attacks through the authority (admit, L7)
   ["libfile", "libfile-check.ts", 2],  // #213 port: the resolver walks /library's own ladder and answers what the route serves
+  ["variant-status", "../variant-status-test.ts", 1], // store-variants variantStatus/classifyVariant: every optimization's state for a model
+  ["optimize-pump", "../optimize-pump-test.ts", 1], // the optimizer pump with a fake child: estimate, defer, queue
+  ["ktx2-tf-purge", "../ktx2-tf-purge-test.ts", 1], // the KTX2 purge tool's two detectors on synthetic headers
+  ["image-lie", "../image-lie-test.ts", 1], // the optimizer's output check (findImageLies) catches an image that is not what its mimeType says
+  ["glbperf-file", "../glbperf-file-test.ts", 1], // glbPerfOfFile ranks a GLB on disk from its header, JSON chunk and image heads
   ["gaps", "gaps-check.ts", 2],         // research 34: creator rights, presence track, rate, two hands
   ["phys", "phys-check.ts", 1],         // design 20: launches, rests by cause, carriers
   ["physlive", "physlive-check.ts", 1],
@@ -63,6 +68,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["support-swap", "../support-swap-test.ts", 1], // #260 I81: a model changed while its geometry is in flight registers nothing from the old fetch (syncSupport's re-check)
   ["knockdown", "../knockdown-test.ts", 1], // #260 I8/I147/I148: a headless body takes a shove from a body beside it, refuses one with its move gate off (the relay answers), hangs from a nail
   ["sockets", "../sockets-test.ts", 1],
+  ["seats-store", "../seats-store-test.ts", 1], // the rights-bearing seats store (#105 B2/B3)
   ["msgrate", "../msgrate-test.ts", 1], // server/msgrate.ts: the message cap is a token bucket (a server stall is not the client's flood) // #260 I454: sockets as entities (resolveSeat, the seat views); ran only as an import before
   ["shape-render", "../shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the load's repairs; ran only as an import before
   ["originof", "../originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:
@@ -166,6 +172,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["sound", "../sound-test.ts", 1],     // the sound component's meaning and look() line; R 10-28 item 18: 200 m, still silent at radius
   ["sound-editor", "../sound-editor-test.ts", 1], // the sound editor block (its clock, t0, no guard); R 10-28 item 18: 32 world sounds at once, the radius field to 200 m
   ["skypanel", "../skypanel-state-test.ts", 1], // the sky panel's state lines; R 10-28: every shared select commits what it shows (the world select saved nothing)
+  ["forecast", "../forecast-test.ts", 1], // the deterministic weather forecast: late joiner, override, provenance
   ["physics-off", "../physics-off-test.ts", 1], // R 10-28 item 33: the per-client object-physics switch: off, no flights folded or drawn, committed poses // a sound's shared playhead is on the server's clock (serverNow), never Date.now
   ["eidomodel", "eidomodel-check.ts", 1], // review 10-07 H3: a translated world's models are eido:sha256 addresses; the index, /eido/, /library/eido/, the client's mapping
   ["party-probe", "party-probe.ts", 1], // the editor's party blockers (review 10-07 B1–B5, S1/S4/S5/S7, lock levels, moderation commands) with real mouse and keys
@@ -213,7 +220,13 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
+  ["edittheme", "../edittheme-test.ts", 1], // edit mode's look keeps its design-spec promises
+  ["components-inspector", "../components-inspector-test.ts", 1], // the Inspector's component cards (schema.sections) over the real corpus
+  ["chat-resync-wire", "../chat-resync-wire-test.ts", 1], // a re-join asks chat for what it missed, through the real net.js
+  ["chat-log", "../chat-log-test.ts", 1], // the chat log: the spoken-utterance merge and unread accounting
+  ["attention", "../attention-test.ts", 1], // the attention gate (attention-policy.js) and the real chat.js attention prefs
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
+  ["captions", "../captions-test.ts", 1], // shared/captions.js: the caption bag a reader sees and the request's rules
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
   ["body-shadow-gate", "../body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts

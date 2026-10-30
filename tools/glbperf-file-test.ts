@@ -5,9 +5,10 @@
 import { mkdtempSync, writeFileSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 const { glbPerf, glbPerfOfFile, glbPerfIo } = await import("../server/glbperf.ts");
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+const S = suite("glbperf-file");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const pad4 = (b: Uint8Array, fill = 0) => { const o = new Uint8Array((b.length + 3) & ~3).fill(fill); o.set(b); return o; };
 function glb(image: Uint8Array, mime: string, filler: number) {
   const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
@@ -83,4 +84,4 @@ check("a truncated file is unreadable (null), not a partial rank", glbPerfOfFile
   check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs]);
   check("a same-size replacement with its mtime restored is re-ranked (not the cached rank of the old bytes)",
     JSON.stringify(after) === JSON.stringify(fresh) && JSON.stringify(after) !== JSON.stringify(before), [before, after]); }
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();
