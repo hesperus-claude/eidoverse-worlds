@@ -90,7 +90,6 @@
  "tools/sky-band-probe.mjs": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first",
  "tools/sky-interim-probe.mjs": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first; then MERGE into tools/sky-band-probe.mjs",
  "tools/sky-prebuild-probe.mjs": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first; then MERGE into tools/sky-band-probe.mjs",
- "tools/skywatch-test.ts": "red: two #65 rows expect seq/by on look()'s effectiveClock; the door rig's sky carries no provenance (product or rig: open)",
  "tools/snap-at-probe.mjs": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first; then MERGE into tools/snapframe-test.ts",
  "tools/snap-settle-test.ts": "MERGE into tools/snapframe-render-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/sound-probe.ts": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first",
