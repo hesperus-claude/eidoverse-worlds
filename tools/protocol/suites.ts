@@ -16,6 +16,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["diffcheck", "diffcheck.ts", 1],
   ["hygiene", "hygiene-check.ts", 1],       // patterns that broke the gate site by site (Windows paths, sh -c, symlinks, fixed sleeps), refused as a class; debt only goes down        // review #260 rereview (10-19) blocker 3: the range is clean under `git diff --check`; two documented exemptions only
   ["procgroup", "procgroup-check.ts", 1],  // review #260 rereview (10-19) blocker 2: the gate finds and kills a suite's processes on Linux, macOS and Windows
+  ["shard", "shard-check.ts", 1],        // CI's sharded gate: shards cover SUITES once whatever the timings; a merge passes only every shard, every suite, one head
   ["nov1", "nov1-check.ts", 1],         // R 10-06 "no more v1 anywhere": no runtime file loads the old-world importer or speaks v1
   ["vocab", "vocab-check.ts", 1],       // R 10-14 one vocabulary: a record is read in the protocol's names (model, flat components), never lib / comp
   ["nonumber", "nonumber-check.ts", 1], // R 10-07 "a version number isn't a name": the protocol's number lives only in genesis {dialect, v}
@@ -218,6 +219,8 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
 export const BROWSER = ["browser", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "client-tools"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
+// the order the gate runs them: core (in CORE's order), then main, then browser
+export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];
 
 /** The local files `f` imports, transitively, itself included (tools/ only; harness.ts is a door, not the suite's code).
  *  Separators are matched either way: on Windows a resolved path uses `\\`, and a `/`-only test stopped the walk there. */
