@@ -80,6 +80,7 @@ const EXPECT: Record<string, number> = {
   "stdio-door": 14,
   "xr-desktop-banner": 80, "sky-bake-time": 75, "sky-bakegraph": 95, "micstate-exec": 0.2, "micstate-release": 0.2, "micstate-single-transport": 0.2, "panels-schema": 0.3,
   "xr-quad-softswap": 60,
+  "join-rfc005": 20,
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
