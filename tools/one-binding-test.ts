@@ -59,6 +59,8 @@ const ROWS: Row[] = [
   // a sky's ts, a role's until, an access list's end are the authority's stamps (tools/server-clock-readers-test.ts runs inspect.js's)
   { name: "a server stamp is read on serverNow, never this machine's Date.now()", owner: ["client/lib/serverclock.js"],
     scope: ["client/lib/sky.js", "client/lib/skypanel.js", "client/lib/materials.js", "client/lib/rolespanels.js", "client/lib/editpanels.js", "client/lib/inspect.js"], forbidden: [/\bDate\.now\(\)/] },
+  { name: "an HTML escaper is markup.js's escapeHtml (it escapes ')", owner: ["client/lib/markup.js"], scope: walk("client").filter((f) => /\.(js|mjs)$/.test(f)),
+    forbidden: [/\.replace\(\/\[&<>"'?\]\/g/] },
 ];
 for (const row of ROWS) {
   const scan = (row.scope ?? files).filter((f) => !row.owner.includes(f) && !(row.exempt ?? []).includes(f));

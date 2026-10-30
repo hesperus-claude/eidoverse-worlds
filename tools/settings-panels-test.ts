@@ -44,6 +44,10 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
+
+console.log("ESCAPER — ui.js's escapeHtml is markup.js's, the one that escapes ' (a single-quoted attribute)");
+{ const m = await import('../client/lib/markup.js'); const said = ui.escapeHtml("O'Neil <b>");
+  check("ui.escapeHtml escapes ' and < (markup.js's)", said === "O&#39;Neil &lt;b&gt;" && ui.escapeHtml === m.escapeHtml, said); }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const root = () => document.documentElement.style;
 const computed = (k: string) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
