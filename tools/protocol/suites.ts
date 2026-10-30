@@ -105,7 +105,10 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["foldparity", "foldparity-check.ts", 1], // the fold cache's views (server/foldviews.ts): a boot reads only genesis and the tail, and every reader answers as a whole-log boot
   ["txn", "txn-check.ts", 1],           // reviewer items 1–2 (10-18): every request ends committed | rolled-back | ambiguous (persist before publish, publish in a finally, ambiguous never ok); one immutable request capability rechecked at both await→commit seams (liveness, identity, operator, the door, role)
   ["txn-mutants", "txn-check.ts --mutants", 1], // …and each of its rows turns red under the mutation it exists to catch (a scratch copy of the tree per mutant; the control stays green)
-  ["blockers-mutants", "blockers-mutants.ts", 1], // review of PR #260 (10-18): the RED side of every blocker's row, run: one mutation of each fix (B1–B10, M1–M9, r14) in a scratch tree turns its named row red; the control stays green. Its output is the PR's red/green table
+  ["blockers-mutants-a", "blockers-mutants.ts --group a", 1], // the RED side of every blocker's row: one mutation of each fix (B1–B10, M1–M9, r14) in a scratch tree turns its named row red; the control stays green; one of four pieces (GROUPS there)
+  ["blockers-mutants-b", "blockers-mutants.ts --group b", 1], // blockers-mutants' piece b
+  ["blockers-mutants-c", "blockers-mutants.ts --group c", 1], // blockers-mutants' piece c
+  ["blockers-mutants-d", "blockers-mutants.ts --group d", 1], // blockers-mutants' piece d
   ["scripts", "scripts-check.ts", 1],   // research 41: scripts in QuickJS on sponsor rights; use → script; a timer through a real server
   ["scripting", "scripting-check.ts", 1], // the script kit (scripting/): world.d.ts = the sandbox's API; each example through the local runner
   ["grab", "grab-check.ts", 1],         // grabbable (research grab 10-06): the gate, release modes, the hold record, use while held

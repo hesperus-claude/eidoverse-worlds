@@ -52,14 +52,14 @@ const EXPECT: Record<string, number> = {
   "editcommit": 0.8, "hierarchy-commit": 0.6, "verbclasses": 0.0, "authority-layers": 0.0, "authority": 9.0,
   "ids": 1.4, "scars": 1.0, "r8": 0.9, "r9": 1.5, "r10": 1.7, "r11": 0.6, "names": 2.1, "parity": 5.4,
   "directory": 13, "keyhints": 0.0, "client": 60, "refusedjoin": 150, "upgrade": 70, "server": 40, "identity": 42,
-  "fork-reset": 6.0, "txn": 0.8, "txn-mutants": 11, "blockers-mutants": 420, "scripts": 48, "scripting": 2, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
+  "fork-reset": 6.0, "txn": 0.8, "txn-mutants": 11, "scripts": 48, "scripting": 2, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
   "agentshove": 165, "hands": 1.2, "reset": 1.7, "settle": 5.4, "disabled": 1.2, "histdiff": 0.3, "reachgate": 22,
   "consent": 0.0, "gates": 0.1, "consent-client": 0.2, "history-rows": 0.6, "scale": 125, "roles": 3.1, "access": 8.3, "batch2": 1.9,
   "describe-particles": 1.1, "client-b2": 19, "build": 1.5, "counter": 2.2, "build-client": 8.1, "shiplist": 1.7,
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
   "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "alias": 0.4, "navgrid": 64,
   "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3
+  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
