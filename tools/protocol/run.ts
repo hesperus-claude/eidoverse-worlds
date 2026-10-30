@@ -66,6 +66,7 @@ const EXPECT: Record<string, number> = {
   "bodygate": 0.5,
   "anim-wire": 6,
   "lod-policy": 0.3, "lod-client": 20,
+  "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5,
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
