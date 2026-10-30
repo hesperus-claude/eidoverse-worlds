@@ -1,20 +1,14 @@
 // conjure — the Orrery panel: prompt → image candidates (you pick one) →
 // 3D mesh → into the world, with the queue and progress visible in-world.
 //
-// Orrery (orrery.animalabs.ai) is the multistage 3D prompting service:
-// gpt-image turnarounds → Tripo mesh → texture/rig, stored as a version
-// tree. This panel drives its API directly, cross-origin with credentials
-// (Orrery ships CORS + a SameSite=None session for exactly this — including on
-// the asset endpoint, checked 2026-08-16). The heavy
-// bytes NEVER pass through this client: Orrery pushes finished GLBs to the
-// sequencer's /upload itself, and what we place is the returned store path.
+// Orrery (orrery.animalabs.ai) is the multistage 3D prompting service (gpt-image turnarounds → Tripo mesh →
+// texture/rig, stored as a version tree). This panel drives its API directly, cross-origin with credentials (Orrery
+// ships CORS + a SameSite=None session for this, asset endpoint included). The heavy bytes NEVER pass through this
+// client: Orrery pushes finished GLBs to the sequencer's /upload, and we place the returned store path.
 //
-// The spend shape mirrors the permission model: generating needs your
-// Orrery identity (archipelago login, its own allowance metering), and
-// bringing the RESULT into the world is a set of @world `assets:<path>`, which
-// the authority admits only with the generate permission (gate.js). The image-approval stage is Orrery's chain pause
-// (select: "starred"): candidates render as thumbnails, clicking one stars
-// it, the chain resumes into mesh generation.
+// Generating needs your Orrery identity (its own allowance metering); bringing the RESULT into the world is a set of
+// @world `assets:<path>`, which the authority admits only with the generate permission (gate.js). Image approval is
+// Orrery's chain pause (select: "starred"): clicking a thumbnail stars it and the chain resumes into mesh generation.
 //
 // ?orrery=<http(s) base: origin + path> (or localStorage ew-orrery-url) overrides the service for
 // dev — a MOCK_APIS Orrery instance makes the whole flow testable offline.
@@ -30,11 +24,10 @@ import { holdGhost } from './build.js';
 import { logChat } from './chat.js';
 import { escapeHtml as esc } from './markup.js';
 
-// A self-hosted Orrery may be named by ?orrery= (remembered). Only an http(s) BASE is taken — origin plus path, as the
-// URL parser re-serialises them (a path of plain segments only; no query, hash or credentials): the value is interpolated into this
-// panel's markup and into fetches, and a link someone sends you must not be able to smuggle markup or a javascript:
-// URL in through it (it was a reflected XSS that also persisted via localStorage). An Orrery served under a path
-// (https://host/orrery) keeps its path (review of 4098ff7, Oscar-1808 #4).
+// A self-hosted Orrery may be named by ?orrery= (remembered). Only an http(s) BASE is taken — origin plus a path of
+// plain segments, as the URL parser re-serialises them (no query, hash or credentials): the value is interpolated into
+// this panel's markup and into fetches, and a link someone sends you must not smuggle markup or a javascript: URL in
+// (a reflected XSS that would also persist via localStorage).
 export const originOf = (v) => {
   try { const u = new URL(String(v ?? '')); if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
     const path = u.pathname.replace(/\/$/, ''); return /^(\/[A-Za-z0-9._-]+)*$/.test(path) ? u.origin + path : u.origin; }   // a path of plain segments rides; anything else is dropped to the origin
@@ -126,21 +119,10 @@ function progressOf(j) {
 }
 
 function imageCandidates(j) {
-  // the chain's first group = the image_gen siblings; thumbnails are their
-  // image assets, fetched straight from Orrery.
-  //
-  // 🔴 NOT a plain <img> any more (2026-08-16). A bare <img> is a NO-CORS
-  // subresource, and under COEP `credentialless` — which this server now sends
-  // so wasm gets its threads — no-cors requests are sent WITHOUT credentials.
-  // These are private per-user assets, so they would have 404'd/403'd and the
-  // pick stage would have shown broken thumbnails with no explanation.
-  //
-  // crossorigin="use-credentials" moves them to CORS mode, which COEP does not
-  // touch. VERIFIED against the live service rather than assumed: the asset
-  // endpoint answers an eidoverse Origin with
-  //   access-control-allow-credentials: true
-  //   access-control-allow-origin: https://eidoverse.animalabs.ai
-  // (non-wildcard, as credentialed CORS requires).
+  // the chain's first group = the image_gen siblings; thumbnails are their image assets, fetched from Orrery.
+  // Not a plain <img>: under COEP `credentialless` a no-cors subresource is sent without credentials, and these are
+  // private per-user assets. crossorigin="use-credentials" makes them CORS requests (the asset endpoint answers our
+  // Origin with allow-credentials and a non-wildcard allow-origin).
   return (j.nodes ?? [])
     .filter((n) => n.op_type === 'image_gen' && n.status === 'completed')
     .map((n) => ({
@@ -170,26 +152,11 @@ async function paint(body) {
         const cfg = await api('/api/auth/config');
         if (!isHttpUrl(cfg.login_url)) throw new Error('orrery sent a login link that is not http(s)');
         const w = window.open(cfg.login_url, 'orrery-auth', 'width=520,height=680');
-        // 🔴 DO NOT DEPEND ON postMessage FROM THE POPUP (2026-08-16). Under
-        // COOP `same-origin` — which cross-origin isolation requires, and which
-        // this server now sends so wasm gets its threads — a cross-origin popup
-        // lands in a different browsing-context group: its `window.opener` is
-        // null, so it CANNOT message us back, and our handle `w` is a severed
-        // proxy whose close() is a no-op. Sign-in would hang forever with no
-        // error anywhere.
-        //
-        // So: keep the message path (it still works when isolation is off, and
-        // it is instant), but treat it as an optimisation over POLLING, which
-        // needs no opener relationship at all. /api/auth/me is a CORS fetch —
-        // credentialless does not touch cors-mode requests, only no-cors
-        // subresources (MDN: "requests made in cors mode won't be blocked by
-        // COEP"), so the session cookie still rides.
+        // Do not depend on postMessage from the popup: under COOP `same-origin` (needed for cross-origin isolation) a
+        // cross-origin popup has a null opener and `w` is a severed proxy. The message path stays as an optimisation;
+        // POLLING /api/auth/me (a CORS fetch, which credentialless leaves alone) is what completes sign-in.
         let done = false;
-        // ONE teardown, idempotent, shared by every exit (review on the
-        // isolation PR: the timeout branch used to clear only the interval —
-        // the message listener stayed installed and accumulated across retry
-        // attempts, `done` stayed false, and the abandoned flow had no
-        // visible completion or retry state).
+        // ONE idempotent teardown shared by every exit (success, timeout, abandon)
         const cleanup = () => {
           if (done) return false;
           done = true;
@@ -210,10 +177,7 @@ async function paint(body) {
           paint(body).catch((e) => report('conjure', e));
         };
         const onMsg = (ev) => {
-          // The message path is an optimisation retained for non-isolated
-          // browsers — but the data string alone is not identity: any window
-          // that can obtain a reference could post it. Origin must match the
-          // configured Orrery.
+          // the data string alone is not identity (any window with a reference could post it): origin must match
           if (ev.origin !== new URL(ORRERY).origin) return;
           if (ev.data === 'orrery:signed-in') finish();
         };

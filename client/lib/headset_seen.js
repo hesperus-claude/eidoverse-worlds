@@ -1,11 +1,10 @@
 // What "a headset was seen here" actually means, as pure functions. core.js owns the storage read;
 // this owns the meaning. tools/headset-seen-test.mjs drives it directly. No imports on purpose.
 //
-// The stored value is HISTORY, not presence (#197 review B3). Nothing can clear it when a headset is
-// unplugged, and a live re-probe is no better: `isSessionSupported` stays optimistic after a headset
-// is switched off (mictoggle.js:91). So it keeps its job — letting the next boot pick WebGL up front
-// so the visor ENTERS instead of RELOADING — but it carries WHEN, and it expires, so a machine that
-// has not seen a headset in a month stops choosing a backend for one it may no longer have.
+// The stored value is HISTORY, not presence: nothing clears it when a headset is unplugged, and
+// `isSessionSupported` stays optimistic after one is switched off. It lets the next boot pick WebGL up
+// front so the visor ENTERS instead of RELOADING, and it carries WHEN and expires, so a machine stops
+// choosing a backend for a headset it may no longer have.
 export const HEADSET_SEEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;   // 30 days
 
 /** When a headset was last actually used here, or null if never.
@@ -17,13 +16,8 @@ export function headsetSeenAt(raw) {
   return Number.isFinite(t) && t > 0 ? t : null;
 }
 
-/** The legacy marker is MIGRATED ON FIRST OBSERVATION, not honoured forever (#197 round-two review
- *  B3). Previously '1' mapped to 0 and 0 returned true unconditionally, so exactly the users carrying
- *  the old marker — the population the original defect created — stayed "headset-capable" forever,
- *  even with the headset gone or the machine replaced. Automatic backend choice never expired.
- *
- *  Stamping it with the time we FIRST SAW it under this build is the honest reading of what the
- *  marker says: "a headset was used here at some unknown time before now". That starts the same
+/** The legacy marker is MIGRATED ON FIRST OBSERVATION, not honoured forever: stamped with the time
+ *  we first saw it ("a headset was used here at some unknown time before now"), it starts the same
  *  30-day clock every real timestamp gets, and one granted session re-stamps it properly.
  *
  *  Returns the value to persist, or null if nothing needs writing. The caller owns storage. */

@@ -1,4 +1,4 @@
-// edittheme — the ONE source of build mode's look (DESIGN-SPEC 2026-09-30, "Build mode: the look").
+// edittheme — the ONE source of build mode's look (DESIGN-SPEC "Build mode: the look").
 //
 // Build mode is a dark-grey utilitarian editor (Blender / Godot / Resonite / Maya family): the chrome
 // is grey and the WORLD is the only colour. Colour in the chrome means exactly one of: selection /
@@ -27,7 +27,7 @@ export const EDIT = Object.freeze({
   danger: '#e07a72',     // destructive actions (quiet style)
   driven: '#c9a24a',     // a value a motion comp drives (the rest pose is shown): the ~ marker
   drivenEdge: 'rgba(201,162,74,.45)',   // …and the driven FIELD's edge — toned, so three driven axes don't out-shout their x/y/z labels
-  mine: '#b08ad8',       // "only you": a view switch nobody else sees (the eye), never a shared state (research 10-12 R7)
+  mine: '#b08ad8',       // "only you": a view switch nobody else sees (the eye), never a shared state
 });
 
 /** The CSS custom property a token is written to: accentBg → --e-accent-bg. */
@@ -43,10 +43,8 @@ export const EDIT_VR = Object.freeze({
   labelFrac: 0.38, labelMin: 72, labelMax: 170, gutter: 8,
 });
 
-/** Pictographs that edit chrome strings still carry (badges, a guard line from shared/editschema)
- *  → the icons.js glyph drawn in their place. The canvas emoji trap (a missing glyph paints
- *  NOTHING, silently, on the viewer's machine) makes this mandatory on the painter, and the DOM
- *  wears the same glyphs so the two surfaces agree. */
+/** Pictographs in edit chrome strings → the icons.js glyph drawn in their place. A canvas emoji with
+ *  no font glyph paints nothing, silently; the DOM wears the same glyphs so the surfaces agree. */
 export const PICTO_ICON = Object.freeze({
   '🔒': 'lock', '🔓': 'lockOpen', '🛡': 'shield', '📜': 'scrollText', '🧍': 'personStanding',
   '🚪': 'doorOpen', '🪟': 'appWindow',

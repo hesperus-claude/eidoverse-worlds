@@ -116,7 +116,7 @@ export const mayTrust = () => (net.myRights?.role === undefined ? undefined : is
 // state.sky/terrain/grass, edited through the sky/weather/terrain/grass verbs.
 // Those are owner-rank: false = this viewer is known not to be the owner
 // (server operators fold to owner), undefined = not known yet.
-// shaping the world's look is the editWorld switch (research roles S2); the owner's on an older server
+// shaping the world's look is the editWorld switch; the owner's on an older server
 export const mayShape = () => { const r = net.myRights; if (Array.isArray(r?.permissions)) return r.permissions.includes('editWorld'); return r?.role === undefined ? undefined : isOwner(r); };
 export const worldLive = () => ({ now: serverNow(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
 export function schemaFor(id) {
@@ -177,7 +177,7 @@ export function commitEdit(id, key, value, opts = {}) {
   const baseComps = gesture?.id === id ? gesture.comps : null;   // the components before the drag began
   gesture = null;
   // planEdit holds the two seam rules: the panel's steppers speak WIRE units (a deg field commits radians) while
-  // editOps' contract — a model's — is the FACE, converted once there (review B1: amp/phase/socket yaw landed at 1/57th);
+  // editOps' contract — a model's — is the FACE, converted once there (else degrees land as radians);
   // and a raw-JSON box cleared and blurred must not delete the component — 'remove <type>' (null) is the deliberate act.
   const { ops, errors, euler, asks, rotOrder } = planEdit(id, key, value);
   keepView(id, { rotOrder });
@@ -192,7 +192,7 @@ export function commitEdit(id, key, value, opts = {}) {
  *  for rotate), as editOps takes them. The transform's reset keys use it. */
 // `id` may be an array (a multi-select: each thing edited from its own record) or WORLD_ID (worldEditOps over every field
 // at once, so two fields of one component are one write, not two that each set the whole of it): a scrubbed run of
-// channels edits whatever the Inspector shows (house review I23). Either way ONE request, one Ctrl+Z.
+// channels edits whatever the Inspector shows. Either way ONE request, one Ctrl+Z.
 export function commitMany(id, edits, what) {
   if (id === WORLD_ID) {
     const { ops, errors } = worldEditOps(state.st, edits, worldLive());
