@@ -11,6 +11,7 @@
 // this (tools/tts-fault-test.ts, tools/chat-log-test.ts).
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=test&name=probe" });
 
 // voicesource.js needs exactly ONE thing from core.js — `report` — but core.js
@@ -62,9 +63,8 @@ const mod = await import('../client/lib/voicesource.js');
 const { voiceSource, setSynthProvider, setGeneratorRebuildHook, notifySynthTrackChanged } = mod;
 if (typeof setSynthProvider !== "function") { console.log("FAIL — setSynthProvider not exported; test would pass vacuously"); process.exit(1); }
 
-let pass = 0, fail = 0;
-const check = (name, cond) => { cond ? (pass++, console.log(`ok   ${name}`))
-                                     : (fail++, console.log(`FAIL ${name}`)); };
+const S = suite("voicesource-real");
+const check = (name, cond) => S.check(name, cond);
 
 // 1. No provider, mic works → the microphone.
 gumCalls = 0; gumBehaviour = 'ok';
@@ -134,5 +134,4 @@ offs.forEach((off) => off());
 notifySynthTrackChanged({ kind: 'audio' });
 check('…and an unsubscribed hook no longer fires', fired.length === 2);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

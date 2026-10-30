@@ -4,8 +4,9 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xrpointer-test.mjs
 import * as P from '../client/lib/xrpointer.js';
 import * as THREE from 'three';
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("xrpointer");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 console.log('POINTER LASER SETTING');
 check('three modes, contextual the default', P.POINTER_VIS_MODES.join() === 'always,never,contextual' && P.POINTER_VIS_DEFAULT === 'contextual');
@@ -75,5 +76,4 @@ const dv = (m) => [{}, { surface: true }, { target: true }, { target: true, surf
 check('dot contextual: only on a target (panel, name, interactable entity), not a plain surface', dv('contextual') === '0011', dv('contextual'));
 check('dot always: on any surface; never: nowhere; an unknown mode is contextual', dv('always') === '0111' && dv('never') === '0000' && dv('bogus') === dv('contextual'), `${dv('always')} ${dv('never')}`);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

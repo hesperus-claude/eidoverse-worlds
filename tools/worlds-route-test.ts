@@ -11,6 +11,7 @@
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { mkCheck, scratchSequencer } from "./harness.ts";
+import { tryUntil, pause } from "./protocol/wait.ts";
 
 const { check, tally } = mkCheck();
 const seq = await scratchSequencer("worlds-route", { serverEnv: { SKIP_OPT_SWEEP: "1" }, worlds: ["commons", "annex"],   // two worlds (a world.jsonl whose line 0 is a genesis)
@@ -64,14 +65,14 @@ console.log("\n— B. presence —");
   const alice = await joinBody(port, "annex", "alice");
   const bot = await joinBody(port, "annex", "bot", { declares: "agent" });
   const ghost = await joinBody(port, "commons", "ghost", { spectate: true });
-  await new Promise((r) => setTimeout(r, 200));
+  await tryUntil("the three joins show in /worlds", async () => byName((await fetchWorlds(port)).rows).annex?.people.length === 2, { ms: 5000 });
   const m = byName((await fetchWorlds(port)).rows);
   check("annex now loaded", m.annex?.loaded === true, JSON.stringify(m.annex));
   check("a participant who declared nothing lists under people, untagged", m.annex?.people.some((p) => p.id === "alice" && !("declares" in p)), JSON.stringify(m.annex));
   check("a participant who declared agent lists in the SAME people list, tagged with the word (R 10-17: one list)", m.annex?.people.some((p) => p.id === "bot" && p.declares === "agent") && m.annex?.agents === undefined && m.annex?.people.length === 2, JSON.stringify(m.annex));
   check("a spectator appears as nothing", m.commons?.people.length === 0, JSON.stringify(m.commons));
   alice.close(); bot.close(); ghost.close();
-  await new Promise((r) => setTimeout(r, 300));
+  await tryUntil("the leaves empty the row", async () => byName((await fetchWorlds(port)).rows).annex?.people.length === 0, { ms: 5000 });
   const after = byName((await fetchWorlds(port)).rows);
   check("leaving empties the row (still loaded)", after.annex?.loaded === true && after.annex?.people.length === 0, JSON.stringify(after.annex));
 }
@@ -81,7 +82,7 @@ console.log("\n— C. a join never founds —");
   // joining a world nobody founded is refused (security review 10-06 H3): nothing loads, nothing lands on disk
   const before = readdirSync(worldsDir).sort();
   const refused = await joinBody(port, "fresh", "founder").then(() => null, (e) => String(e.message));
-  await new Promise((r) => setTimeout(r, 200));
+  await pause("a refused join has its window to found something (it must not)", 200);
   const m = byName((await fetchWorlds(port)).rows);
   check("a join to a world that doesn't exist is refused, and says so", /no world called "fresh"/.test(refused ?? ""), String(refused));
   check("…and founds nothing: not listed, nothing on disk", !m.fresh && JSON.stringify(readdirSync(worldsDir).sort()) === JSON.stringify(before), Object.keys(m).join(","));
