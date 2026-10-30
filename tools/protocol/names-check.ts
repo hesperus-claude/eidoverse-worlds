@@ -61,10 +61,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the registry says trusted", "shared/protocol/componentspec.js", "  \"trusted-components\": { on: \"world\",", "  trusted: { on: \"world\",", ["T1"]],
   ["no rename at load", "shared/protocol/shaperepair.js", "export const RENAMED_COMPONENTS = Object.freeze({ \"@world\": Object.freeze({ trusted: \"trusted-components\" }) });", "export const RENAMED_COMPONENTS = Object.freeze({});", ["T2"]],
   ["drafts reads only the new key", "shared/drafts.js", "(worldC?.[TRUSTED] ?? worldC?.[OLD_TRUSTED])?.components", "worldC?.[TRUSTED]?.components", ["T3"]],
-  ["the old tier is the tier", "shared/protocol/consent.js", "export const TIERS = [\"everyone\", \"friends\"];", "export const TIERS = [\"strangers\", \"friends\"];", ["C1"]],
-  // "no old words on the wire" mutant RETIRED with C2 (recut A2; #260 375)
   ["drag is move again", "shared/protocol/consent.js", "drag: \"displace\", occupy: \"displace\", carry: \"displace\"", "drag: \"move\", occupy: \"displace\", carry: \"displace\"", ["C1"]],
-  // the rows for C2, C3, C4, C6, C7 RETIRED with the cases (recut A2: tiers on the wire, delegates, the client table are gone)
   ["no presence migration at load", "shared/protocol/authority/storage.js", "if (migratePresence(w.presence)) w.presenceDirty = true;", "", ["C5"]],
   ["/worlds sorts by kind", "server/routes.ts", "people: present.map((c) => ({ id: c.id, ...(c.declares ? { declares: c.declares } : {}) })),", "people: present.filter((c) => c.declares !== \"agent\").map((c) => c.id), agents: present.filter((c) => c.declares === \"agent\").map((c) => c.id),", ["W1"]],
   ["the tool says (agent)", "mcpl/tools.ts", "p.declares ? `${p.id} (${p.declares})` : p.id", "p.declares === \"agent\" ? `${p.id} (agent)` : p.id", ["W2"]],
@@ -148,7 +145,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the translator keeps bob", "tools/protocol/import-v1/translate-v1.js", "  const m = motionType(m0) === m0.type ? m0 : { ...m0, type: motionType(m0) };", "  const m = m0;", ["OS6"]],
   ["AGENTS.md says bob", "AGENTS.md", "`{type: pendulum\\|spin\\|orbit\\|oscillate\\|path, …}`", "`{type: pendulum\\|spin\\|orbit\\|bob\\|path, …}`", ["OS7"]],
   ["the history forgets oscillate", "spec/history/PRE-RELEASE-RENAMES.md", "was `bob`: the door takes the old spelling", "was the old word: the door takes the old spelling", ["OS7"]],
-  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "export const MODES = [\"allow\", \"ask\", \"deny\"];", "export const MODES = [\"allow\", \"ask\",  \"deny\"];", []],
+  ["CONTROL (no-op: must stay green)", "shared/protocol/consent.js", "export const GATES = [\"move\", \"touch\"];", "export const GATES = [\"move\",  \"touch\"];", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
   const args = ["bun", path.join(ENGINE, "tools/protocol/names-check.ts"), "--tree", tree, ...(only ? ["--only", only.join(",")] : [])];
@@ -330,12 +327,9 @@ const cases: Case[] = [
       return { k: DR.TRUSTED, nw: DR.trustedOf({ "trusted-components": { components: ["a/b"] } }), old: DR.trustedOf({ trusted: { components: ["a/c"] } }) }; },
     good: (o) => o.k === "trusted-components" && JSON.stringify(o.nw) === '["a/b"]' && JSON.stringify(o.old) === '["a/c"]' },
   // ---------------- C: consent ----------------
-  { id: "C1", what: "(R 14:41) the table's words: tiers everyone/friends, cells allow/ask/deny, class displace (no move), drag/occupy/carry → displace; every preset in those words", run() {
-      const words = (p: any) => Object.keys(p).sort().join() === "everyone,friends" && Object.values(p).every((row: any) => Object.keys(row).every((c) => C.CLASSES.includes(c)) && Object.values(row).every((m) => ["allow", "ask", "deny"].includes(m as string)));
-      return { tiers: C.TIERS ?? null, modes: C.MODES ?? null, cls: C.CLASSES, kinds: [C.KIND_CLASS.drag, C.KIND_CLASS.occupy, C.KIND_CLASS.carry], presets: Object.values(C.PRESETS).every(words) }; },
-    good: (o) => JSON.stringify(o.tiers) === '["everyone","friends"]' && JSON.stringify(o.modes) === '["allow","ask","deny"]' && o.cls.includes("displace") && !o.cls.includes("move") && o.kinds.every((k: string) => k === "displace") && o.presets },
-  // C2, C4, C6, C7 RETIRED (recut A2, 10-20): tiers, cells, the client table and delegates are gone; r11 C4 pins the
-  // migration. C1 holds the words a stored table is READ in (migratePresence), never written.
+  { id: "C1", what: "(R 14:41) class displace (no move): drag/occupy/carry → displace", run() {
+      return { cls: C.CLASSES, kinds: [C.KIND_CLASS.drag, C.KIND_CLASS.occupy, C.KIND_CLASS.carry] }; },
+    good: (o) => o.cls.includes("displace") && !o.cls.includes("move") && o.kinds.every((k: string) => k === "displace") },
   { id: "C5", what: "…the authority's load (worldOf) reads a presence file in the old shape and holds today's: two gates, narrowed", run(s) {
       s.call("olive", "create-world", { title: s.name });
       const w = s.reopen({ bodies: {}, holds: {}, consent: { "u-a": { cells: { strangers: { pose: "everyone" } }, friends: ["u-f"] } } });
