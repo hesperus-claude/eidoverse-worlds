@@ -5003,7 +5003,7 @@ export class WorldAgent {
         // the one canonical clock object: machine consumers read THIS,
         // not rate/hours precedence folklore — the folded fields alongside are
         // active state only (a real-clock fold carries no top-level rate)
-        effectiveClock: { ...ck, hour: Number(ck.hour.toFixed(2)) },
+        effectiveClock: { ...ck, ...(ck.seq == null && this.skyStamp ? { seq: this.skyStamp.seq, by: this.skyStamp.by } : {}), hour: Number(ck.hour.toFixed(2)) },   // the log names who set it (skyStamp)
         description: describeSky(this.skyState, now),
       };
     }

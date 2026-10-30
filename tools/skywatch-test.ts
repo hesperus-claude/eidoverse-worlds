@@ -9,12 +9,10 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../shared/forecast.js";
 import { agentOnDoor } from "./agent-scratch.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("skywatch");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const T0 = 1_754_000_000_000;
 const MIN = 60e3, HOUR = 3600e3;
@@ -170,7 +168,7 @@ for (const src of SOURCES) {
   check("#65 look(): canonical effectiveClock rides alongside",
     sky.effectiveClock?.mode === "real" && sky.effectiveClock?.tz === "America/Los_Angeles"
       && typeof sky.effectiveClock?.hour === "number"
-      && Number.isInteger(sky.effectiveClock?.seq) && sky.effectiveClock?.by === "antra",
+      && Number.isInteger(sky.effectiveClock?.seq) && sky.effectiveClock?.by === "olive",   // the actor the door logged (the rig's who is display only)
     JSON.stringify(sky.effectiveClock));
   check("#65 look(): narration says real time, never ×24",
     sky.description.includes("real time, America/Los_Angeles") && !sky.description.includes("advancing"),
@@ -186,5 +184,4 @@ for (const src of SOURCES) {
     JSON.stringify({ rate: back.rate, dormant: back.dormantRated, ck: back.effectiveClock }));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -314,6 +314,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["settled-pose", "../settled-pose-test.ts", 1], // #61: a body looks the same to a joiner as to itself (settledPose strips ragdoll frames on every hand-off)
   ["pose-provenance", "../pose-provenance-test.ts", 1], // #61's agent half: a physics pose leaves the agent only labelled ragdoll; a decision to move sheds the held pose
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
+  ["skywatch", "../skywatch-test.ts", 1], // the ambient sky percept: one event per meaningful boundary, deduped; look()'s effectiveClock names who set the sky (#65)
   ["grant-command", "../grant-command-test.ts", 1], // /grant keeps exceptions and the end date unless it changes them
   ["environment-realizer", "../environment-realizer-test.ts", 1], // water on the flat floor; a rejoin clears gone terrain and grass
   ["grass-quality", "../grass-quality-test.ts", 1], // the resident's local grass cap (#60): density, the governor's shed, one applied report the grass⚙ row reads
