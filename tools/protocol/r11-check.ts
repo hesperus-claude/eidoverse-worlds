@@ -1,5 +1,5 @@
 // tools/protocol/r11-check.ts — review round 11 (REVIEW-stern-r11, REVIEW-claims-r11 repo items, 2026-10-17): the
-// fixes, each row red first (against 00a5e276) and most held by a mutation below (C5 has none).
+// fixes, each row red first (against 00a5e276) and held by a mutation below.
 //   bun tools/protocol/r11-check.ts                 every row
 //   bun tools/protocol/r11-check.ts --only C4,X1    just those
 //   bun tools/protocol/r11-check.ts --tree <dir>    against another checkout's shared/ + mcpl/ + client/ (a mutant)
@@ -30,6 +30,7 @@ const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? a
 // [name, file under the tree, find, replace, rows]
 const MUTANTS: [string, string, string, string, string[]][] = [
   // C1–C3, C6's mutants RETIRED with their rows (recut A2; #260 390); C4 is held by this one
+  ["the door doesn't take the retired words", "shared/protocol/verbspec.js", ", delegate: { type: \"any\", doc: \"retired (recut A2)\" }", ", delegateX: { type: \"any\", doc: \"retired (recut A2)\" }", ["C5"]],
   ["a stored pause doesn't close the gates", "shared/protocol/consent.js", "if (sw === \"refuse\" || sw === \"ask\") { t.move = false; t.touch = false; }", "if (sw === \"refuse\" || sw === \"ask\") { t.move = true; t.touch = true; }", ["C4"]],
   ["§7 forgets rename-components", "spec/PROTOCOL.md", "\n| components and fields renamed before release (§4), by the explicit `repair` command (never at load) | its own act `rename-components {renamed, why, failed?}` and its change | `system` | the system's capability, per thing | the actor |", "", ["X1"]],
   ["§4 forgets the rename", "spec/PROTOCOL.md", "**A pure rename is the command's second step, idempotent.**", "**A pure rename runs.**", ["X1"]],
