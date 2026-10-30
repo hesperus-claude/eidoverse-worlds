@@ -1,24 +1,7 @@
-// rolespanels.js — the two dock panels of roles and moderation (research roles 10-06, S7 and S8; PLAN decisions 10-06).
-// Each thing lives in exactly one place (research §7):
-//   MODERATION (dock: a shield; shown only while you hold mute, kick, ban or pauseScripts — it follows your-rights)
-//     Bans     bans in force, then mutes, each with its lift where you may; ended bans
-//              collapsed. Lifting follows the authority's rule (an owner, the author, or someone who outranks the author).
-//     Log      the moderator log, newest first, with role changes merged in; a person filter and verb chips; older.
-//     Scripts  every script here: thing, name, sponsor, status, who paused it, Pause / Resume where you may.
-//   WORLD SETTINGS (dock: a flag; everyone reads, owners edit; editWorld holders edit Card and Places)
-//     Roles    the grid: permissions down, roles across (owner first, locked); dependencies grey a cell with the reason;
-//              place a role above another; holders under it; + Role; delete a held role by moving its people (one batch).
-//              Narrow (a phone, or the panel squeezed): one role at a time.
-//     Access   who can come in, what arrivals and guests are, how many at once; a warning when the default role holds
-//              moderation powers or generate; then who is listed, and adding someone (accesspanel.js).
-//     World    capacity (entities, guests' entities together, largest avatar), physics on/off (R 10-14 14:13:
-//              "not being able to edit these things would annoy people"). Opening it writes NOTHING: the effective value
-//              (what is written, else this server's default as schema reports it) is shown grey; an edit sends ONLY the
-//              field that changed (a policy number's absence is the server's default, PROTOCOL §9.2).
-//     Card     the world's name and blurb (@world.about).   Places  spawn and bounds.   Old world  what translation carried.
-// Rows here are DOM like every panel; in a headset they are the same frame as a quad (domquad.js XR_FRAMES), rows stay
-// rows, and every control is a button or a select (no hover, no long-press).
-import { bus, report } from './base.js';
+// rolespanels — the Moderation (only while you hold a moderation right) and World Settings (everyone reads, owners
+// edit) dock panels. Writes only the field that changed, never on open (absence = the server's default, PROTOCOL
+// §9.2). In a headset these are quads: every control is a button or select (no hover, no long-press).
+import { bus, report, CONFIG } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
 import * as R from '../../shared/protocol/roles.js';
@@ -297,7 +280,7 @@ function paintCard(body) {
   const ab = wc().about ?? {}; const edit = has('editWorld');
   body.innerHTML = `<label class="rp-field">Name <input data-k="name" maxlength="80" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
     + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" maxlength="2000" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
-    + `<p class="rp-dim">address: <code>${esc(new URLSearchParams(location.search).get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
+    + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
 }

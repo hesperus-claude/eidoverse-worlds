@@ -876,11 +876,9 @@ function trackShadowFar(pl) {
   pl.shadow.camera.updateProjectionMatrix();
 }
 
-// ---- the spot pool -------------------------------------------------------------
-// A spot (kind: 'spot' — glTF KHR_lights_punctual, Godot SpotLight3D) is its own light type in the renderer, so it gets
-// its own small fixed pool, born at boot like the point slots (a pool change is a recompile; a slot's values aren't).
-// Same ranking as the point pool (keep, authored, nearest); no shadows (the one casting slot is a point light).
-const _spotRaw = new URLSearchParams(globalThis.location?.search ?? '').get('spots');   // null when absent: Number(null) is 0
+// ---- the spot pool: a spot is its own light type, so it gets its own fixed pool born at boot (a pool change is a
+// recompile). Same ranking as the point pool; no shadows (the one casting slot is a point light).
+const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
 const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
 const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
 const spotSlots = [];
