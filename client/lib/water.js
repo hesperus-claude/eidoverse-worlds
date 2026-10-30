@@ -172,12 +172,9 @@ export function applyWater(args, heightAt) {
   mat.normalNode = transformNormalToView(normalize(vec3(nx, float(1), nz)));
 
   // ---- foam: made by water MOVING at the edge ---------------------------------------------------------
-  // `wet` is the depth of water actually standing here this instant (the bed depth plus the wave), so the
-  // edge — and the foam riding it — moves up and down the beach with every wave. Foam is the UPRUSH: the
-  // speed the waterline is being driven up the beach (the surface's rise ∂h/∂t over the ground's slope,
-  // m/s), weighted by how big the wave is, in a band at the moving edge. A pond's millimetre ripple moves
-  // its waterline at nothing, so its edge stays clean; the sea's swash runs metres a second up a gentle
-  // beach and throws surf on every crest's arrival.
+  // `wet` = water actually standing here this instant (bed depth + wave), so the edge and its foam move with
+  // every wave. Foam is the UPRUSH: the waterline's speed up the beach (rise ∂h/∂t over the ground's slope,
+  // m/s) weighted by wave size — a pond's edge stays clean, the sea's swash throws surf.
   const wet = d.add(disp);
   const band = float(1).sub(smoothstep(0.0, 0.3, wet));
   const lineSpeed = max(rise, float(0)).div(max(S.z, float(0.04)));
@@ -208,9 +205,7 @@ export function applyWater(args, heightAt) {
   const belowCol = mix(deepCol.mul(0.35), base.mul(1.15).add(vec3(0.08, 0.1, 0.1)), snell);
   const belowOpacity = mix(float(0.92), float(0.5), snell).mul(smoothstep(-0.02, 0.04, wet));   // the window still tints the sky
   // front (from above) = 1, back (from below) = 0, as plain arithmetic: a select() here typed the colour as a vec3
-  // while generating a vec4 variable, and the weather system's wetness wrap — vec4(colorNode).rgb … .a — then
-  // produced invalid WGSL (`vec4(<vec4>, 1.0)`) on worlds with the full sky: the sheet's pipeline failed and no
-  // water drew at all. The colour stays a vec3, as upstream's always was.
+  // while generating a vec4, and the weather wetness wrap then emitted invalid WGSL. Keep the colour a vec3.
   const front = faceDirection.mul(0.5).add(0.5);
   mat.colorNode = mix(belowCol, aboveCol, front);
   // no water across the mouth of a dry shaft or room that reaches up through the surface

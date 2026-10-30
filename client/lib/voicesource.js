@@ -1,25 +1,15 @@
-// voicesource — WHERE YOUR VOICE COMES FROM.
+// voicesource — where your voice comes from.
 //
 // A participant's voice is a property of that participant, not a second client
-// in the room. Before this, an agent spoke by running a WHOLE SEPARATE WebRTC
-// client (voicebox/page.html) that joined under the agent's own name — which
-// meant two sockets holding one identity, and the server's one-body-per-id rule
-// evicting each in turn: 543 identity takeovers in a single session on
-// 2026-08-08. Renaming that client is not the fix; not being a client is.
+// in the room (one body per id). voice.js asks THIS module for a MediaStream
+// instead of calling getUserMedia; everything downstream (sender, falloff,
+// volumeFor, consent, mute) only sees a MediaStream.
 //
-// So: voice.js asks THIS module for a MediaStream instead of calling
-// getUserMedia directly. Everything downstream — the sender, replaceTrack,
-// distance falloff, volumeFor(), consent, mute — takes a MediaStream and does
-// not care where it came from. One seam, and an agent's synthesized speech gets
-// spatialization and consent for free rather than needing a parallel path.
-//
-//   humans → getUserMedia (unchanged; the browser/OS default device)
+//   humans → getUserMedia (the browser/OS default device)
 //   agents → a SYNTH PROVIDER, registered by whatever is driving the body
 //
-// This module deliberately contains NO synthesizer (#90 review, 2026-08-11):
-// it is the seam, not the mouth. A provider hands over a finished
-// MediaStreamTrack — how the samples are made (generator, pacer, TTS engine,
-// test stub) is entirely the provider's business, and lives in its own module.
+// No synthesizer lives here: a provider hands over a finished MediaStreamTrack,
+// and how its samples are made is the provider's business.
 
 import { report } from './base.js';
 
@@ -40,21 +30,10 @@ export function setSynthProvider(p) {
 export const synthProvider = () => provider;
 
 // ── track-change notification ────────────────────────────────────────────────
-// If a provider must rebuild its track (its generator died, its engine
-// restarted), it calls notifySynthTrackChanged(newTrack); voice.js re-binds
-// every sender. The hook survives from the pre-split module under its old
-// name so the call site's diff stays honest.
-// 🔴 A LIST, NOT A SLOT (2026-08-16). This was `onRebuild = fn`, a single
-// assignment — and once the SFU needed the hook too, TWO modules registered:
-// voice.js:1204 for the mesh and voicesfubridge for the SFU. Whichever module
-// evaluated last silently won and the other's hook never fired again, with no
-// error and no way to see it. That is a transport-dependent, load-order-
-// dependent failure in the one path that gives a synthesized voice its lane.
-//
-// The mesh is deleted now, but the broadcast stays: a slot invites exactly this
-// silent last-writer-wins bug back the moment a second consumer exists (a test
-// harness, a diagnostics tap), and handlers must stay independent — one
-// throwing must not deny the others their notification.
+// A provider that rebuilds its track calls notifySynthTrackChanged(newTrack).
+// A Set, not a single slot: with one slot the last module to register silently
+// won and the other's hook never fired. Handlers are isolated — one throwing
+// must not deny the others.
 const rebuildHooks = new Set();
 export const setGeneratorRebuildHook = (fn) => { rebuildHooks.add(fn); return () => rebuildHooks.delete(fn); };
 export const notifySynthTrackChanged = (track) => {
@@ -65,30 +44,13 @@ export const notifySynthTrackChanged = (track) => {
 
 // ── the source ───────────────────────────────────────────────────────────────
 export async function voiceSource({ micWanted = true } = {}) {
-  // A body has ONE mic, and a LIVE MIC WINS OUTRIGHT (R, 2026-08-09): mic on
-  // means your own voice, full stop; mic off drops back to the synth provider
-  // with nothing to re-enable, because the provider's enablement is left
-  // STANDING rather than cleared — a priority, not a toggle.
-  //
-  // 🔴 "MIC OFF" AND "NO MIC" ARE DIFFERENT STATES (R, 2026-08-16: "I just want
-  // to verify that TTS can ship over the voice lane even if mic is toggled
-  // off"). This function only ever reached the synth provider when
-  // getUserMedia THREW — no device, or permission refused. Someone with a
-  // working microphone who has simply switched it off still got the
-  // microphone back, so their TTS had no route to a sender and nobody heard
-  // their typed lines. The doctrine above is right and was only half
-  // implemented: a live mic wins, but a mic the user turned OFF is not a live
-  // mic.
-  //
-  // micWanted:false is that state, and it takes the synth path directly rather
-  // than opening a device the caller has already declined. Default true keeps
-  // every existing call site behaving exactly as before.
+  // A body has ONE mic, and a LIVE MIC WINS OUTRIGHT; mic off drops back to the
+  // synth provider (its enablement is left standing — a priority, not a toggle).
+  // "Mic off" is not "no mic": micWanted:false takes the synth path directly
+  // rather than opening a device the caller declined. Default true.
   if (!micWanted) {
-    // 🔴 NO PROVIDER IS NOT PERMISSION (review agent, 2026-08-17). Falling
-    // through to getUserMedia here opened the device the caller had just
-    // DECLINED — OS recording light on, "mic off" promise broken — whenever no
-    // synth provider happened to be registered. A declined mic with nothing to
-    // replace it is "nothing to publish", which is an answer, not a fallback.
+    // No provider is not permission: falling through to getUserMedia would open
+    // the declined device. Nothing to publish is an answer, not a fallback.
     if (provider?.available?.()) return synthStream();
     throw new Error('mic declined and no synth provider registered — nothing to publish');
   }
@@ -112,10 +74,8 @@ export async function voiceSource({ micWanted = true } = {}) {
 function synthStream() {
   const track = provider.start();
   const ms = new MediaStream([track]);
-  // Mark it: this is a SYNTHETIC source, not a device. The caller must not
-  // wrap it in the WebAudio gate — a synth has no room noise to gate, and
-  // the gate graph hangs off an AudioContext whose clock is DEAD in every
-  // headless body (field-measured 2026-08-10: 'running', +0.000s/2s).
+  // Mark it SYNTHETIC: the caller must not wrap it in the WebAudio gate (no room
+  // noise to gate, and the gate's AudioContext clock is dead in headless bodies).
   ms.synthetic = true;
   return ms;
 }

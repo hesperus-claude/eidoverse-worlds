@@ -3,8 +3,7 @@
 // minting, same undo entry), and preview the sky presets through the SAME
 // previewSky the desk's preset buttons call. The desk's 'log to world' for
 // the sky lives in a closure with the clock rules (skypanel gather()) — not
-// duplicated here; the quad says 'preview' and the desk commits. owner, 09-04
-// 22:02: every slot opens that frame's quad; this is the world frame's.
+// duplicated here; the quad says 'preview' and the desk commits.
 import * as OP from '../../shared/protocol/requests.js';
 import { sendOps } from './editwrites.js';
 import { bus } from './base.js';
@@ -33,7 +32,7 @@ function fields() {
 export function spawnAhead(lib) {
   const yaw = myState.yaw ?? 0;
   const p = [myState.pos.x + Math.sin(yaw) * 1.5, myState.pos.y, myState.pos.z + Math.cos(yaw) * 1.5];
-  // the authority mints its id (R 10-17: writers never choose ids); resolves with the id it became
+  // the authority mints its id (writers never choose ids); resolves with the id it became
   return sendOps([OP.create('$thing', { model: lib, transform: { pos: [+p[0].toFixed(2), +p[1].toFixed(2), +p[2].toFixed(2)], q: [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)] } })], { what: 'place it ahead', expect: false }).then((r) => r?.ids?.$thing ?? null);
 }
 function dispatch(k, id) {
