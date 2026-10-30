@@ -5,14 +5,10 @@
 import { ownHook, releaseHook } from './autohooks.js';
 import { densityCount } from './grass_quality.js';
 
-// ---- applied truth (#74) ---------------------------------------------------
-// The density dial can silently no-op: wireDensityDial returns early when a
-// stroke's expected instanced attributes are absent (vegetation.js version
-// skew), leaving the stroke without setDensity, and the composed dial
-// optional-chains every child. Policy arithmetic then reports a density the
-// renderer never applied. These reports read the LIVE draw state — the
-// instanced mesh's actual count — never the arithmetic, so a resident-facing
-// surface can say when the cap did not take.
+// ---- applied truth ----------------------------------------------------------
+// The density dial can silently no-op (a stroke missing its instanced attributes gets no setDensity, and the composed
+// dial optional-chains it). These reports read the LIVE draw count, never the arithmetic, so a surface can say when
+// the cap did not take.
 
 /** One stroke's draw truth for a requested density factor. */
 export function strokeApplied(f, eff, i = 0) {
@@ -76,13 +72,9 @@ export function composeField({ group, fields, mask }) {
     update: fields[0]?.update,
     setPushers: (list) => { for (const f of fields) f.setPushers?.(list); },
     setDensity: (k) => { for (const f of fields) f.setDensity?.(k); },
-    /** live draw truth for a requested factor (#74) — group.visible read at
-     *  call time so `off` reports what the scene actually shows */
+        /** live draw truth for a requested factor; group.visible is read at call time so `off` reports the scene */
     applied: (eff) => fieldApplied({ fields, groupVisible: group.visible }, eff),
-    // The engine registered these itself; marking them says the meadow retires
-    // them, so no subsystem that claims per-frame hooks by diffing the global
-    // array may adopt one that appeared while ITS own async build was in
-    // flight (see autohooks.js).
+    // marked as the meadow's, so no subsystem that diffs the global hook array adopts them (see autohooks.js)
     autoHooks: fields.map((f) => ownHook(f.update)).filter(Boolean),
     dispose: () => {
       for (const f of fields) f.dispose?.();

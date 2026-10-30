@@ -1,18 +1,9 @@
-// emitter_field — the `particles` component's LIFECYCLE, DOM-free and
-// THREE-free so it can be unit-tested without a browser (tools/particles-test.ts).
+// emitter_field — the `particles` component's lifecycle, DOM- and THREE-free (tools/particles-test.ts).
 //
-// The upstream builder (`eidoverse/particles.js`) is a one-way door: it makes a
-// mesh, adds it to a scene, pushes its billboard `update` into the global
-// `_autoParticleSystems` array, and hands back no way to undo any of that.
-// Flora taught the same lesson and got `dispose()` upstream; until particles
-// does, THIS is where the undo lives — one registry that owns every emitter in
-// the world, so "replace the fire with smoke" retires the fire instead of
-// stacking a second system and a second per-frame hook on top of it.
-//
-// Everything here is idempotent by construction: applying the same state twice
-// is a no-op, removing something that is already gone is a no-op, and a build
-// that finishes AFTER its own entity was replaced or removed retires itself on
-// arrival rather than leaking into the scene.
+// The upstream builder (`eidoverse/particles.js`) adds a mesh to the scene and a hook to the global
+// `_autoParticleSystems` array with no way to undo either; this registry owns every emitter so a
+// replacement retires the old one instead of stacking a second system. Everything is idempotent: the same
+// state twice is a no-op, and a build that finishes after its entity was replaced retires itself.
 
 import { releaseHook } from './autohooks.js';
 
@@ -35,18 +26,9 @@ export function retireEmitter(handle, autos) {
 }
 
 /**
- * Give back a RAW upstream system — one that `makeParticles()` has already
- * allocated but that no handle owns yet.
- *
- * This is the window the adapter promised to close and initially did not: the
- * moment the builder returns, its mesh is in the scene and its update is in
- * the global hook array. If any host step after that point throws (parenting,
- * marking, tier), `build()` rejects before a handle exists and the registry's
- * catch has nothing to retire. Every one of those steps therefore runs inside
- * `adoptSystem`, and this is what it unwinds to.
- *
- * Disposes what the SYSTEM owns — geometry and material — and never the
- * texture, which is cached and shared (see emitters.js).
+ * Give back a RAW upstream system: allocated by `makeParticles()` (mesh in the scene, hook registered) but
+ * not yet owned by a handle — what `adoptSystem` unwinds to when an attach step throws.
+ * Disposes geometry and material, never the texture (cached and shared, see emitters.js).
  */
 export function retireRawSystem(sys, autos) {
   if (!sys || sys.__retired) return;
@@ -62,12 +44,7 @@ export function retireRawSystem(sys, autos) {
   } catch { /* a failed teardown must not mask the error that caused it */ }
 }
 
-/**
- * Run the host's own attach steps over a freshly-built upstream system, and
- * unwind the raw allocation if any of them throws. The handle it returns is
- * the first moment anything else can retire this system, so everything before
- * it belongs here.
- */
+/** Run the host's attach steps over a fresh upstream system; unwind the raw allocation if one throws. */
 export function adoptSystem(sys, autos, attach) {
   try {
     return attach(sys);
@@ -97,15 +74,11 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
   async function apply(id, emitter) {
     const key = keyOf(emitter);
     const cur = live.get(id);
-    // Idempotence: re-authoring the identical bag (a replay of the same entry,
-    // a snapshot that repeats what the log already said) must not rebuild the
-    // fire — a rebuilt emitter re-rolls nothing (the seed is stable) but it
-    // does churn GPU resources and re-registers a hook.
+    // Idempotence: the identical bag (a replay, a snapshot) must not churn GPU resources or re-register a hook.
     if (cur && cur.key === key) return cur.handle;
 
     const mine = ++gen;
-    // Retire the old one FIRST. Replacement is not two emitters overlapping
-    // for the duration of an await: the world says one thing is burning there.
+    // Retire the old one FIRST: never two emitters overlapping across the await.
     if (cur) {
       retireEmitter(cur.handle, autos);
       live.delete(id);
@@ -122,9 +95,7 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
       onError?.(e, id);
       return null;
     }
-    // The entity was replaced, removed, or the world was cleared while the
-    // texture downloaded. Whatever we just built belongs to nobody: retire it
-    // here or it is a mesh in the scene with no entry to reach it by.
+    // Replaced, removed or cleared while building: retire it, or it is a mesh with no entry to reach it by.
     if (live.get(id) !== slot) {
       retireEmitter(handle, autos);
       return null;

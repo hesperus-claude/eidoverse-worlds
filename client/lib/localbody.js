@@ -66,12 +66,9 @@ export function goLimp(lean = null) {
   const me = getMe();
   if (!me || downed) return;
   downed = true;
-  // Park the undriven bones and stop the clip BEFORE constructing the sim.
-  // Both of the sim's reference skeletons are read in here — the neutral rest
-  // it measures its limits against, and the live pose the tumble starts from —
-  // and neither may still have the walk cycle in it. A sit/lie clip's hips drop
-  // moves onto the root as it parks (#282): the root everyone sees is measured
-  // from rest hips, as an agent's is.
+  // Park the undriven bones and stop the clip BEFORE constructing the sim: both its reference skeletons (the neutral
+  // rest and the live start pose) are read here, and neither may still have the walk cycle in it. A sit/lie clip's
+  // hips drop moves onto the root as it parks, so the root is measured from rest hips, as an agent's is.
   me.setLimp(true, { bake: true });
   clearMyReach();   // a knocked-over body's reach is gone — descriptor AND arm (mirrors agent.ts knockDown)
   ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
@@ -92,12 +89,9 @@ export function getUp() {
   myState.pos.y = 0;
 }
 // ---------------------------------------------------------------- mounted
-// While I occupy a seat, my body is DERIVED from the parent entity's live
-// transform + socket (same math remotes use for me: occupybody.js) — so I visibly
-// swing on the swing I'm sitting on. Getting off is the socket's to allow
-// (body.leaveBy, shared/sockbody.js mayLeave): moving, jumping, the explicit
-// get-up (X, the stand tile, the radial menu), or only a script. Getting off
-// emits no verb — my next frame simply carries no seat — and stamps where I land.
+// While I occupy a seat, my body is DERIVED from the parent entity's live transform + socket (the same math remotes
+// use: occupybody.js). Getting off is the socket's to allow (shared/sockbody.js mayLeave): moving, jumping, the
+// explicit get-up, or only a script. It emits no verb: my next frame simply carries no seat.
 const _seatP = new THREE.Vector3();
 let leaving = null;            // {from, to, yaw, clip, t0, dur}: carried off the seat while a leave clip plays
 export const seatLeaving = () => !!leaving;
@@ -108,11 +102,11 @@ export function occupiedBody() {
 }
 /** Get off my seat, if the socket lets this kind of leaving through ('move' | 'jump' | 'menu' | 'script'). True when
  *  I'm off (or on my way off, with a leave clip). */
-// The escape (review r9 scars M1): a seat that lets you go only when the world does still can't hold you. The explicit
+// The escape: a seat that lets you go only when the world does still can't hold you. The explicit
 // get-up pressed again within ESCAPE_REPEAT_S of its refusal, or X held for ESCAPE_HOLD_S, always gets you up.
 let escapeArmedAt = -Infinity, escapeHeld = 0, escapeTile = false;
 bus.on('escape-hold', (on) => { escapeTile = !!on; });   // the stand tile pressed and held (actionbar.js), as X held
-// at: where the authority let me go ([x, y, z], its `vacated.at`: claims r10 O1): I stand there, so my body and its track start together
+// at: where the authority let me go ([x, y, z], its `vacated.at`): I stand there, so my body and its track start together
 export function dismountMe(kind = 'menu', at = null) {
   const m = avatarMounts.get(CONFIG.name);
   if (!m) return false;
@@ -150,7 +144,7 @@ export function dismountMe(kind = 'menu', at = null) {
     myState.clip = leaveClip;
   } else {
     me?.root.rotation.set(0, exitYaw, 0);  // stand upright again (a rocket seat may have had me on my back)
-    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the height I'm let go at: a seat upstairs stands me upstairs (review of PR #260)
+    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the height I'm let go at: a seat upstairs stands me upstairs
     setPosture('stand');
   }
   return true;
@@ -214,10 +208,8 @@ export function updateMountedMe(dt) {
   me.root.quaternion.copy(r.q);   // the socket's whole rotation: upright on a chair, on your back in a rocket
   // look locked: the view faces the way the seat does (the camera sits behind it)
   if (body.input.look === 'locked') setCamYaw(r.yaw + Math.PI);
-  // The camera lives in updateMe, which we skip while seated — so drive it
-  // here too (the ragdoll path learned this the same way), or it freezes on
-  // the frame you sat down and never rides the seat (#75). First person keeps
-  // its own-mesh exclusion; both modes follow the socket, moving or not.
+  // The camera lives in updateMe, which we skip while seated, so drive it here or it freezes on the frame you sat
+  // down. First person keeps its own-mesh exclusion; both modes follow the socket.
   updateFollowCamera(dt, me);
   // look.up 'socket': the view rolls with the thing (a rocket, a loop-the-loop); 'world' keeps the horizon level
   if (body.look.up === 'socket') {
@@ -238,17 +230,12 @@ export function updateMountedMe(dt) {
   else escapeHeld = 0;
 }
 
-/** Nearest declared seat: distance to the SOCKET's world point, not the
- *  entity's origin — a swing's pivot frame is not where you sit, and on a
- *  ferry the helm can be a deck-length from the hull's center. Every slot
- *  competes, not just the first. `arg` narrows to one entity by id prefix
- *  (case-insensitive), so `/sit 34` reaches 3485c78e without the full hash.
- *  A seat someone is already on is taken (one occupant per socket); the seat
- *  I'm on doesn't count. */
+/** Nearest declared seat: distance to the SOCKET's world point, not the entity's origin (a ferry's helm can be a
+ *  deck-length from the hull's centre). Every slot competes. `arg` narrows to one entity by id prefix
+ *  (case-insensitive: `/sit 34` reaches 3485c78e). A taken seat is skipped; the seat I'm on doesn't count. */
 const _sitV = new THREE.Vector3();
-// R 10-11 00:47: X near the crates lifted her ~5 m: a seat declared on a sign 3 m up counted as 'near' (only the ground
-// distance was read). A plain X offers only a seat you could climb onto; naming one (/sit <name>) still reaches any.
-// (one source with the authority's sit check, shared/sockbody.js OCCUPY_REACH: review r10 M1)
+// A plain X offers only a seat you could climb onto (height counts, not just ground distance); naming one
+// (/sit <name>) still reaches any. One source with the authority's sit check: shared/sockbody.js OCCUPY_REACH.
 const SEAT_RISE = { up: OCCUPY_REACH.up, down: OCCUPY_REACH.down };
 function nearestSeat(arg, reach) {
   const want = arg ? String(arg).toLowerCase() : null;
@@ -275,11 +262,8 @@ function nearestSeat(arg, reach) {
   return best;
 }
 
-/** Sit ON something: nearest socket within arm's reach (or a named entity
- *  from anywhere). When nothing is in reach but a seat exists further out,
- *  SAY so — the silent ground-sit fallback read as "sitting is broken" to
- *  anyone standing four meters from a swing they could name but not see.
- *  In a world the authority is asked first (`use {id, action, args: {slot}}`):
+/** Sit ON something: nearest socket within arm's reach (or a named entity from anywhere). When nothing is in reach
+ *  but a seat exists further out, SAY so (a silent ground-sit reads as "sitting is broken"). In a world the authority is asked first (`use {id, action, args: {slot}}`):
  *  it checks who may and answers with what the body does; nothing is logged.
  *  Already seated, I may move straight to a socket that allows it (fromSeat). */
 let sitTicket = 0;   // the latest sit ask; getting up (or asking again) makes every earlier answer stale
@@ -309,13 +293,10 @@ export function trySitOn(arg, slot = null) {
   return true;
 }
 
-// "I'm working on this" (R, 10-10): while my camera is free of my body in edit mode, the body holds a working pose, so
-// the people around it can see I've stepped out: forearms raised as at a console, head bent to it. Mine to give up: it
-// ends when the camera comes back (the Body switch, or B), and any pose I held before is not restored (moving ends a
-// pose anyway).
-// R, 10-10, on seeing it: "extend the arms out further in front of the body and rotate the hands palm out, kind of like a
-// mage casting magic". Arms forward and a little down (Y −80°, Z −15°), elbows barely bent, wrists back 80° so the palms face out.
-// R 10-10 23:33: 'relax the elbows and spread the arms apart like 15 degrees' (7.5° each arm, elbows 15° → 35°)
+// "I'm working on this": while my camera is free of my body in edit mode, the body holds a working pose so the people
+// around can see I've stepped out. It ends when the camera comes back (the Body switch, or B); a pose held before is
+// not restored. Arms forward and a little down, spread 7.5° each, elbows 35°, wrists back 80° so the palms face out
+// (like a mage casting); head bent.
 const WORKING_POSE = { leftUpperArm: [0.0772, -0.5863, -0.1053, 0.7995], rightUpperArm: [0.0772, 0.5863, 0.1053, 0.7995], leftLowerArm: [0, -0.3007, 0, 0.9537], rightLowerArm: [0, 0.3007, 0, 0.9537],
   leftHand: [0, 0, 0.6428, 0.766], rightHand: [0, 0, -0.6428, 0.766], head: [0.0872, 0, 0, 0.9962] };
 let working = false;
@@ -325,12 +306,11 @@ bus.on('edit-freecam', (on) => {
   else if (!on && working) { working = false; if (myState.pose === WORKING_POSE) { myState.pose = null; me.clearPose(); } }
 });
 
-// The world's standing offer, kept current at a walk: when a declared seat
-// is within reach the hint bar says so — an affordance nobody can discover
-// is indistinguishable from one that doesn't exist. Checked ~2×/s.
+// The world's standing offer: when a declared seat is within reach the hint bar says so (an affordance nobody can
+// discover may as well not exist). Checked ~2×/s.
 let _hintAcc = 0;
 // builder mode has its own keys (build.js: X and Del remove, E rotates): the world's play offers ("X — sit", "E open")
-// would advertise a delete key as a seat (review 10-07 B5). The bar carries the builder's hints there instead.
+// would advertise a delete key as a seat. The bar carries the builder's hints there instead.
 let _building = false;
 bus.on('edit-mode', (on) => { _building = !!on; _hintAcc = 1; });
 export function updateSeatHint(dt) {
@@ -358,8 +338,7 @@ export function stepRagdoll(dt) {
     myState.pos.copy(me.root.position);          // streamed root tracks the sim
     if (ragdoll.done) { myState.pose = ragdoll.finalPose; ragdoll = null; }
   }
-  // The camera lives in updateMe, which we skip while limp — so drive it here
-  // too, or it freezes on the frame you fell (which is what it did).
+  // The camera lives in updateMe, which we skip while limp: drive it here too, or it freezes on the frame you fell.
   if (me) updateFollowCamera(dt, me);
 }
 
@@ -445,11 +424,8 @@ function syncPins() {
 }
 function applyMyPins() {
   if (!ragdoll) return;
-  // §24k R0: everything in myPins is a NAIL (placed on release / pulled on
-  // request), so it takes the nail's firm tuning — the dragger's takeover
-  // sim already passed firm=true (bodydrag.js), while the owner's own
-  // re-apply here didn't: the same nail held with different physics
-  // depending on whose machine was simulating.
+  // §24k R0: everything in myPins is a NAIL, so it takes the nail's firm tuning, as the dragger's takeover sim does
+  // (bodydrag.js): the same nail must hold the same on whichever machine simulates.
   for (const [j, at] of myPins) ragdoll.setPin(j, _pinV.set(at[0], at[1], at[2]), true);
 }
 function addPin(j, at) {
@@ -531,13 +507,13 @@ export function initLocalBody({ logChat: logChatFn }) {
   // up; a declared seat in reach → mount it; anything else falls through to
   // the controller's own layers (geometry seat pans, then the ground sit).
   setMountedHook(() => avatarMounts.has(CONFIG.name));
-  // sitting is consent, standing up is the exit (scars r8 M1): someone else's edit moved the seat I sat on, and the
+  // sitting is consent, standing up is the exit (someone else's edit moved the seat I sat on, and the
   // authority let me go (its `vacated` inbox message, authority/occupants.js vacatesFor). Get off as when the world lets go.
   bus.on('body-inbox', (msg) => {
-    // only from the seat I'm on now (review r9 L4): a late message (after a reconnect) never stands me up from a seat taken since
+    // only from the seat I'm on now: a late message (after a reconnect) never stands me up from a seat taken since
     const u = Array.isArray(msg?.messages) ? msg.messages.find((m) => m?.type === 'vacated') : null;
     if (u && vacatedFromMine(u, avatarMounts.get(CONFIG.name)) && dismountMe('script', vacatedAt(u))) toast(`${typeof u.by === 'string' ? u.by : 'someone'} moved what you were occupying, so you stood up`, 'info', 5000);
-    // an act the authority delivered (an ask I said yes to: house review of #260, client/lib I1) is applied as a puppet is
+    // an act the authority delivered (an ask I said yes to) is applied as a puppet is
     const nameOf = (a) => (typeof a === 'string' ? ([...identities].find(([, id]) => id === a)?.[0] ?? a) : null);
     for (const m of Array.isArray(msg?.messages) ? msg.messages : []) {
       // someone tried, and my consent turned it away: said quietly, once per person per minute (the authority's TRIED_NOTE_MS)
@@ -578,10 +554,8 @@ function applyPuppet({ by, pose, merge, anim, ragdoll: rag }) {
     applyShove(l, by);
     return;
   }
-  // merge: only the bones they sent (null releases one); otherwise their
-  // pose replaces mine whole — and an EMPTY one is a release. It used to
-  // become an empty held pose, which setPose ignores: `clear_pose target`
-  // never let a human go.
+  // merge: only the bones they sent (null releases one); otherwise their pose replaces mine whole, and an EMPTY one is
+  // a release (an empty held pose would be ignored by setPose and never let a human go).
   if (pose) {
     myState.pose = merge ? mergePose(myState.pose, pose) : (Object.keys(pose).length ? pose : null);
     flashHint(myState.pose ? `${by} posed you` : `${by} released your pose`);

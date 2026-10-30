@@ -1,10 +1,8 @@
 // emitters — the browser host for the `particles` component.
 //
-// Owns the THREE/DOM-bound half: resolving a stored value into its effect (shared/particle_effects.js: an Essential, or
-// a document stored in the world, fetched once with the `effect` request), priming and caching sprite textures, building
-// each emitter (client/lib/particlefx.js: shared/particlesim.js, Godot's CPUParticles3D ported, drawn as instanced
-// quads) with a DETERMINISTIC random stream from its seed, parenting it to the thing (or the model part) that owns it, and
-// handing the handle to the registry that knows how to take it back out again.
+// Owns the THREE/DOM-bound half: resolving a stored value into its effect (shared/particle_effects.js), caching sprite
+// textures, building each emitter (particlefx.js) with a deterministic stream from its seed, parenting it to its owner,
+// and handing the handle to the registry.
 //
 // The split mirrors flora:
 //   particle_effects.js — what a `particles` value MEANS (shared with the authority and the mcpl agent)
@@ -27,11 +25,8 @@ import { autoHooks as autos, ownHook } from './autohooks.js';
 import { sendRequest } from './net.js';
 
 // ---- textures --------------------------------------------------------------
-// Sprite textures are SHARED, immutable, and small; one flame_05 serves every
-// hearth in the world. They are therefore cached per path and deliberately NOT
-// disposed when an emitter retires — texture ownership is explicit (#25 item
-// 3): the cache owns them, the emitter borrows. Disposing a borrowed texture
-// is how you blank every other fire in the world by putting one out.
+// Sprite textures are shared and cached per path, and NOT disposed when an emitter retires: the cache owns them, the
+// emitter borrows (disposing one blanks every other fire using it).
 const textureCache = new Map();
 
 async function spriteTexture(path) {
@@ -42,9 +37,7 @@ async function spriteTexture(path) {
       const bytes = globalThis.Deno.readFileSync(path);
       return globalThis.loadImageTexture(bytes, { srgb: true });
     })().catch((e) => {
-      // A missing sprite is not a missing emitter: the builder's procedural
-      // dot always works, and a hearth that reads as fire in text but shows a
-      // soft glow beats a hearth that shows nothing.
+      // A missing sprite is not a missing emitter: the builder's procedural dot always works.
       console.warn(`[emitters] sprite ${path} unavailable — using the preset's own look`, e);
       textureCache.delete(path);
       return null;
@@ -54,10 +47,8 @@ async function spriteTexture(path) {
 }
 
 // ---- quality ---------------------------------------------------------------
-// One world-wide tier, lowered by the perf governor. It scales DRAWN sprites
-// and nothing else: preset, state, seed and provenance stay identical on every
-// machine, which is what makes two people talking about the same fire be
-// talking about the same fire.
+// One world-wide tier, lowered by the perf governor. It scales DRAWN sprites only: preset, state and seed stay
+// identical on every machine, so everyone is looking at the same fire.
 let tier = 'auto';
 const handles = new Set();
 
@@ -83,8 +74,7 @@ function fetchEffect(name, id) {
   (waiting.get(name) ?? waiting.set(name, new Set()).get(name)).add(id);
   if (stored.has(name)) return;
   stored.set(name, sendRequest('effect', { name }).then((r) => {
-    // the unknown-field policy (lead 10-17): keep the parts this build knows (readableEffect), so a document using an
-    // addition this client predates draws what it can instead of nothing
+    // keep the parts this build knows (readableEffect): a document with newer additions draws what it can
     const doc = r?.ok && r.effect ? readableEffect(r.effect) : null;
     if (!doc) console.warn(`[emitters] effect ${name}: ${r?.refused?.reason ?? (r?.effect ? effectProblem(r.effect) : 'not stored here')}`);
     stored.set(name, doc);
@@ -103,8 +93,8 @@ const budget = () => QUALITY_TIERS[tier] ?? 1;
 
 async function build(resolved, { id }) {
   const ent = entities.get(id);
-  // `null` is a spawn reservation whose GLB is still downloading, and an absent id is an entity that was removed under
-  // us. Either way there is nothing to hang a local origin off, and a world-origin emitter is drift (#25 requirement 2).
+  // `null` is a spawn reservation whose GLB is still downloading; absent is removed. Either way there is no local
+  // origin to hang off, and a world-origin emitter drifts.
   if (!ent) throw new Error(`entity ${id} is not in the scene`);
   // a part (picture.part, openable.part): its node, once the model has it; until then the thing itself, re-hung below
   const host = (resolved.part && findPart(ent, resolved.part)) || ent;
@@ -152,9 +142,7 @@ const registry = makeEmitterRegistry({
 });
 
 // ---- wiring ----------------------------------------------------------------
-// Deferred attach: a `comp` can (and on replay usually does) arrive before the
-// entity's GLB has landed. The bag is already folded — perception is correct
-// the whole time — so the emitter just waits for something to hang off.
+// Deferred attach: a `comp` often arrives before the entity's GLB has landed; the emitter waits for it.
 const pending = new Map();
 
 const sansPlaying = (r) => (r ? JSON.stringify({ ...r, playing: undefined, notes: undefined }) : null);
@@ -165,8 +153,7 @@ function applyFrom(id, data) {
   if (!norm.ok) {
     const name = effectBlobName(data?.effect);
     if (norm.pending && name) { fetchEffect(name, id); return; }   // it builds when the document lands
-    // Legible, and only once per authoring: the component still folds, still persists, and still reads as an emitter
-    // in every text-tier look().
+    // the component still folds and still reads as an emitter in look(); only the drawing is skipped
     console.warn(`[emitters] ${id}: ${norm.why}`);
     void registry.apply(id, null);
     return;
@@ -188,18 +175,13 @@ bus.on('comp', ({ id, type, data }) => {
 
 bus.on('entity', ({ id, kind }) => {
   if (kind === 'remove' || kind === 'demote') {
-    // demote (residency §13.3): the entity's subtree left the scene with the
-    // emitter mesh inside it — retire the handle or its per-frame hook keeps
-    // ticking against a detached group. Promotion re-announces the comp bag
-    // and the emitter re-attaches through the ordinary pending path.
+    // demote (residency §13.3): the subtree left the scene with the emitter in it; retire the handle or its hook keeps
+    // ticking. Promotion re-announces the comp bag.
     pending.delete(id);
     registry.retire(id);
   } else if (kind === 'spawn') {
-    // a promote replaces the placeholder SUBTREE — an emitter attached to the
-    // stand would survive as a live hook on a detached mesh, and the comp
-    // re-announcement would hit the registry's same-key idempotence guard and
-    // keep the stale handle (review B2). Retire first (no-op when none), so
-    // the re-announced bag rebuilds on the real object.
+    // a promote replaces the placeholder SUBTREE: retire first, or the re-announced bag hits the same-key guard and
+    // keeps the stale handle on a detached mesh.
     registry.retire(id);
     if (pending.has(id)) {
       const emitter = pending.get(id);

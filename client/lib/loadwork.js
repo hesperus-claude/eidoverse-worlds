@@ -1,18 +1,10 @@
 // loadwork — where load-time CPU goes, measured and spread.
 //
-// "The client freezes for seconds when things load into the world." Two causes,
-// two jobs here:
+//   MEASURE — every heavy materialization (a body, a spawned model) runs as a labelled work record with phases;
+//   the browser's long-task entries are attributed to whatever work was active, so a freeze names its culprit.
 //
-//   MEASURE — every heavy materialization (a body, a spawned model) runs as a
-//   labelled work record with phases. The browser's own long-task entries are
-//   attributed to whatever work was active when they happened, so a freeze
-//   names its culprit in the console instead of being a vibe.
-//
-//   SPREAD + SERIALIZE — heavy main-thread work yields to the frame loop on a
-//   per-frame budget, and at most ONE materialization finalizes at a time.
-//   Three bodies arriving together used to stack their parse/compile bursts
-//   into the same frames; now they queue, and the queue wait is visible as its
-//   own phase rather than masquerading as parse time.
+//   SPREAD + SERIALIZE — heavy main-thread work yields to the frame loop on a per-frame budget, and materializations
+//   queue in lanes (the queue wait is its own phase, not masquerading as parse time).
 //
 // ⚠️ INVARIANT: serialize() is for LEAF operations only (one parse, one
 // compile). Never call serialize() from inside a serialized function and never
@@ -117,10 +109,8 @@ export function beginWork(label) {
   return rec;
 }
 
-/** Record a one-line load fact outside any work record. beginWork only logs
- *  work over 120ms — the right filter for stalls, the wrong one for wins: a
- *  VRM pool hit (§19b) finishes in ~0ms and is exactly the line that proves
- *  the cache worked. Same console tag, same automation mirror, same cap. */
+/** Record a one-line load fact outside any work record (beginWork only logs work over 120ms; a VRM pool hit, §19b,
+ *  finishes in ~0ms and is the line that proves the cache worked). Same tag, mirror and cap. */
 export function loadNote(line) {
   console.log(`[load] ${line}`);
   if (loadLog.length < 300) loadLog.push(line);
@@ -128,26 +118,13 @@ export function loadNote(line) {
 
 // ---- serialization ----------------------------------------------------------
 
-/** Queue heavy leaf work. LEAF OPERATIONS ONLY — see the invariant at the top
- *  of this file. Errors reach the caller; the lanes themselves never break.
- *
- *  Two lanes, because two different resources are being protected:
- *    cpu — parses and skeleton passes: genuinely synchronous main-thread work.
- *          Strictly one at a time; two of these in the same frames is the
- *          stall this module exists to prevent.
- *    gpu — pipeline compiles: internally frame-yielding codegen followed by
- *          seconds of WAITING on driver-side pipeline creation. Serializing
- *          that wall time was a mistake this trace paid for: a body queued
- *          19s behind crates whose "work" was mostly idle await. Two in
- *          flight overlaps the waits; the codegen slices still interleave
- *          through the frame loop.
- *
- *  Priority: 2 = your own body, 1 = anyone's body, 0 = objects. People
- *  materialize before furniture, always. Reorders WAITING work only. */
-// cpu at 2: a parse's WALL time is dominated by draco workers and image
-// decode — awaits, not main-thread work (one conjured model held the serial
-// lane 18s on Safari while its webp decoded). Two in flight overlap the
-// waits; the genuinely-synchronous chunks still interleave through frames.
+/** Queue heavy leaf work. LEAF OPERATIONS ONLY — see the invariant at the top of this file. Errors reach the caller;
+ *  the lanes never break. Two lanes, two resources:
+ *    cpu — parses and skeleton passes (main-thread work).
+ *    gpu — pipeline compiles: frame-yielding codegen, then seconds of WAITING on the driver. Two in flight overlap
+ *          the waits; the codegen slices still interleave through the frame loop.
+ *  Priority: 2 = your own body, 1 = anyone's body, 0 = objects. Reorders WAITING work only. */
+// cpu at 2 as well: a parse's WALL time is mostly draco workers and image decode (awaits), so two overlap the waits.
 const lanes = {
   cpu: { jobs: [], running: 0, max: 2 },
   gpu: { jobs: [], running: 0, max: 2 },
@@ -162,10 +139,6 @@ export function enqueue(fn, { lane = 'cpu', priority = 0 } = {}) {
     reportLanes();
   });
 }
-// (holdObjectCompiles lived here — object compiles paused while a sky was
-// building, because the sky's wraps rewrote every graph after the fact. The
-// material factory ended that: materials are born with their final shape,
-// so there is no wrong moment to compile one. TEL0S_NOTES §12.7.)
 function pumpLane(l) {
   while (l.running < l.max && l.jobs.length) {
     const job = l.jobs.shift();
@@ -177,10 +150,7 @@ function pumpLane(l) {
     })();
   }
 }
-/** Whether any lane holds running or queued work — the same truth checkIdle()
- *  gates on, exposed as a predicate for the governor's loading grace
- *  (§16.2.D): storm fps under live lane work is loading, not a performance
- *  regime. */
+/** Whether any lane holds running or queued work: the governor's loading grace reads it (§16.2.D). */
 export const laneBusy = () => Boolean(
   lanes.cpu.running || lanes.gpu.running
   || lanes.cpu.jobs.length || lanes.gpu.jobs.length);
@@ -191,9 +161,7 @@ export const laneStats = () => ({
   cpu: { running: lanes.cpu.running, queued: lanes.cpu.jobs.length, max: lanes.cpu.max },
   gpu: { running: lanes.gpu.running, queued: lanes.gpu.jobs.length, max: lanes.gpu.max },
 });
-// 'lanes-idle' fires when every queued load has finished. (Its one historic
-// consumer — the deferred shadow drain — is gone; the event stays as the
-// generic "all loadwork settled" signal.)
+// 'lanes-idle' fires when every queued load has finished (the generic "all loadwork settled" signal).
 function checkIdle() {
   if (!lanes.cpu.jobs.length && !lanes.gpu.jobs.length
     && !lanes.cpu.running && !lanes.gpu.running) {
@@ -205,16 +173,9 @@ export function serialize(fn, { urgent = false, lane = 'cpu', priority } = {}) {
   return enqueue(fn, { lane, priority: priority ?? (urgent ? 2 : 0) });
 }
 
-// (holdFrames lived here — presentation paused for one bounded beat while a
-// whole-scene recompile settled behind it. Nothing invalidates the whole
-// scene anymore — the factory fixes graph shapes at birth, the light rig
-// freezes topology at boot, the env texture is persistent — so there is
-// nothing left to hold for. TEL0S_NOTES §12.7.)
 
 // ---- long-task attribution --------------------------------------------------
-// The browser already measures every main-thread stall over 50ms; all that was
-// missing is knowing WHOSE stall it was. Anything unattributed logs as such —
-// an honest "the freeze came from somewhere we are not measuring yet".
+// The browser measures every main-thread stall over 50ms; this says WHOSE it was (or "(unattributed)").
 
 const activeLabels = () => [...active]
   .map((w) => w.phaseName ? `${w.label}[${w.phaseName}]` : w.label)
@@ -229,19 +190,12 @@ try {
   }).observe({ type: 'longtask', buffered: true });
 } catch { /* not supported — the frame-gap watchdog below still measures */ }
 
-// Frame-gap watchdog — Safari has no longtask observer, so frame gaps are the
-// portable truth about felt freezes. Anything that holds a frame >150ms logs
-// with the same attribution.
+// Frame-gap watchdog (bottom of the file): Safari has no longtask observer, so frame gaps >150ms are the portable
+// truth about felt freezes, with the same attribution. Its rAF ticks double as an fps estimator.
 // ---- perf beacon ------------------------------------------------------------
-// Safari's console can't be read over WebDriver and most visitors never open
-// one — so the profile phones home instead: one small POST per session at
-// 40s (the load window) and one at 120s (the Safari compile tail), to the
-// sequencer's /perflog. That is how WebKit performance gets diagnosed from
-// real visits instead of asked-for console screenshots.
-// Steady-state smoothness never shows in the jank lines — a constant 25fps
-// has no >150ms gaps (exactly how Safari's grass cost stayed invisible). The
-// watchdog's own rAF ticks double as an fps estimator; the beacon carries a
-// recent-median so per-browser render cost is visible from real visits.
+// Safari's console can't be read over WebDriver and most visitors never open one, so the profile phones home: one
+// POST at 40s (the load window) and one at 120s (the compile tail) to the sequencer's /perflog, with a recent fps
+// median (a constant 25fps has no >150ms gaps).
 const fpsWindow = [];
 let fpsTick = 0;
 setInterval(() => {
