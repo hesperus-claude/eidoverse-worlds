@@ -74,6 +74,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["originof", "../originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:
   ["renderer-cred", "../renderer-cred-test.ts", 1], // #260 I143/I144: the renderers' credential (flag + key) watches an invite-only world; a stranger's /snap and /heightmap of it are 404
   ["replay", "replay-check.ts", 1],     // L1: the fold alone, self-agreement, the lab's digest
+  ["replica-freeze", "../replica-freeze-test.ts", 1], // the client's fold is frozen in dev: a reader writing into a record throws, and later entries still apply (C7a)
   ["conformance", "compare.ts", 3],     // the JS fold vs the Python reference reader (+ its own tests)
   ["sweep", "sweep.ts", 4],
   ["oracle", "import-v1/snapshot-oracle.ts", 2], // owner 10-15: the translator against the OLD ENGINE — every old world whose snapshot.json is a complete fold of its log, compared with its translation (and the server's lifted load)
@@ -84,6 +85,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["browser", "browser-check.ts", 1],   // the shared core imported by headless Chromium, byte-for-byte with bun
   ["descriptors", "../descriptor-defaults-test.ts", 1], // every record and inspector default is the registry's; every option the Inspector offers, and every axis word, is one the door takes
   ["light-readers", "../light-readers-test.ts", 1], // a light is found by kindOf and the rig's complight key; its gizmo is no box or material slot
+  ["kind", "../kind-test.ts", 1], // one kindOf: a light component is a light, a bare thing an Empty, a model a model; the route and the agent's inspect head agree
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
   ["bodygate", "../bodygate-test.mjs", 1], // the body-first gate: armed, held, released once, capped; and at loadGLB's boundary the parse waits in body-first
@@ -197,6 +199,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["stretched-support", "../../mcpl/stretched-support-test.ts", 1], // a stretched thing's support (box, heightfield, triangles, lying down) holds a body where it's drawn
   ["stretched-places", "../../mcpl/stretched-places-test.ts", 1], // a named place on a stretched thing is stretched with it; a region's floor slack stays 0.1 m
   ["door-body", "../../mcpl/door-body-test.ts", 1], // the door's own body state on a bare agent: a tracks loop, a reach held to several bodies, a walk across a rejoin
+  ["body-state", "../body-state-test.ts", 1], // body_state geometry on an owned sequencer: FK round trip, contacts, kneel, seated geometry withheld, a swimmer's stroke, body size end to end
   ["shape-attach", "../shape-attach-test.ts", 1], // shape audit 10-16 wave 2: socket/station, one action namespace, one home, grabbable registered, reactions frozen, look-at radians, places closed, spawn, lock, reserved names
   ["shape-physics", "../shape-physics-test.ts", 1], // shape audit 10-16 wave 2: transform pinned (glTF rule), parent −order, pivot {pos}, motion trims + repair, physics kind/reserved/kinematic, physics-engine, collider mesh, physics-joint + joint, structure, surface, stage
   ["shape-repair", "../shape-repair-test.ts", 1], // review r7 (10-16): the load's repair once per world (a marker in the log), per thing, a node's name as data (motion:<slot> {node}); no empty stations by default
@@ -233,6 +236,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["captions", "../captions-test.ts", 1], // shared/captions.js: the caption bag a reader sees and the request's rules
   ["particles", "../particles-test.ts", 1], // a play/stop change updates the registry key, no rebuild
   ["shadow-fade", "../shadow-fade-test.mjs", 1], // registered shadow casters start not casting
+  ["transmission", "../transmission-test.mjs", 1], // a transmissive glTF material becomes a node material with its transmission, ior and thickness; nothing else is upgraded
   ["body-shadow-gate", "../body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once

@@ -17,7 +17,9 @@ class MeshPhysicalNodeMaterial extends THREE_RAW.MeshPhysicalMaterial {
 // warmqueue's depth pre-warm builds a NodeMaterial (WebGPU only); a plain Material lets the caster budget run headless
 // (tools/shadow-follow-test.mjs); nothing compiles a shader
 class NodeMaterial extends THREE_RAW.Material { constructor(p) { super(); this.isNodeMaterial = true; if (p) this.setValues(p); } }
-export const THREE = Object.freeze({ ...THREE_RAW, MeshPhysicalNodeMaterial, NodeMaterial });
+// avatar.js's nameplate is a SpriteNodeMaterial (WebGPU only); the plain sprite material stands in
+class SpriteNodeMaterial extends THREE_RAW.SpriteMaterial { constructor(p) { super(p); this.isNodeMaterial = true; } }
+export const THREE = Object.freeze({ ...THREE_RAW, MeshPhysicalNodeMaterial, NodeMaterial, SpriteNodeMaterial });
 export const scene = { add() {}, remove() {} };
 export const ground = null;
 export const grid = null;

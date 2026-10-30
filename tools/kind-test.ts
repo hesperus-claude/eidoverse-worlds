@@ -1,6 +1,6 @@
 // kind-test — "is this a light / an Empty / a model" is decided ONCE (shared/protocol/kind.js kindOf), and every surface that
 // says a thing's kind agrees with it: the realizer's planner (models_field), the hierarchy row hint, GET /geom?world's `kind`,
-// and the mcpl inspect head. Five fixtures: a native light (comp.light, no model), a bare Empty, a model, a model with a
+// and the mcpl inspect head. Five fixtures: a native light (a light component, no model), a bare Empty, a model, a model with a
 // child light, and a thing carrying a `mesh` component (a sibling branch's kind; not built here, only named).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/kind-test.ts
@@ -12,6 +12,7 @@
 process.env.WORLD_TOKEN = "";
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { kindOf as plannerKindOf } from "../client/lib/realize/models_field.js";
+import { modelWord } from "../shared/eido.js";
 import { kindHint } from "../shared/hierarchy.js";
 import { viewOf, viewState } from "../shared/protocol/view.js";
 import { project as projectV1 } from "./protocol/import-v1/translate-v1.js";
@@ -28,17 +29,16 @@ check("shared/protocol/kind.js exports kindOf (until it does, the planner's rule
 const TABLE = "eidoverse/assets/models/table_oak_round.glb";
 const LIGHT = { color: 0xffd9a0, intensity: 8, range: 4 };
 const SEED = {
-  bulb: { pos: [0, 2, 0], comp: { light: LIGHT } },
+  bulb: { pos: [0, 2, 0], light: LIGHT },
   marker: { pos: [3, 0, 0] },
-  table: { lib: TABLE, pos: [6, 0, 0] },
-  "table-light": { pos: [0, 1, 0], parent: { to: "table", offset: [0, 1, 0] }, comp: { light: LIGHT } },
+  table: { model: TABLE, pos: [6, 0, 0] },
+  "table-light": { pos: [0, 1, 0], parent: { to: "table", offset: [0, 1, 0] }, light: LIGHT },
 };
 const WANT: Record<string, string> = { bulb: "light", marker: "empty", table: "model", "table-light": "light" };
-const MESH_VIEW = { pos: [9, 0, 0], yaw: 0, q: [0, 0, 0, 1], scale: 1, comp: { mesh: { shape: "box", size: [1, 1, 1] } } };
+const MESH_VIEW = { pos: [9, 0, 0], yaw: 0, q: [0, 0, 0, 1], scale: 1, mesh: { shape: "box", size: [1, 1, 1] } };
 const MESH_REC = { c: { transform: { pos: [9, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, mesh: { shape: "box", size: [1, 1, 1] } } };
-const stem = (lib: string) => String(lib).split("/").pop()!;
-// the mcpl inspect head's own word for a thing: `[id] light|empty|<file>`
-const headKind = (text: string, id: string) => { const m = new RegExp(`^\\[${id}\\] (\\S+)`).exec(text); return m ? (m[1] === stem(TABLE) ? "model" : m[1]) : `?(${text.split("\n")[0]})`; };
+// the mcpl inspect head's own word for a thing: `[id] light|empty|<the model's word>` (shared/eido.js modelWord)
+const headKind = (text: string, id: string) => { const m = new RegExp(`^\\[${id}\\] (\\S+)`).exec(text); return m ? (m[1] === modelWord(TABLE) ? "model" : m[1]) : `?(${text.split("\n")[0]})`; };
 const routeKind = (k: string) => k;
 
 console.log("1. one answer per fixture, headless");
@@ -54,12 +54,12 @@ console.log("1. one answer per fixture, headless");
     const hint = kindHint(v);
     check(`kindHint ${id} says ${want}`, want === "model" ? hint === "table oak round" : hint === want, hint);
   }
-  check("a model with a light component (an imported lamp) is a model; the view-side rule agrees", kindOf({ c: { model: TABLE, light: LIGHT } }) === "model" && kindOf({ lib: TABLE, comp: { light: LIGHT } }) === "model");
+  check("a model with a light component (an imported lamp) is a model; the view-side rule agrees", kindOf({ c: { model: TABLE, light: LIGHT } }) === "model" && kindOf({ model: TABLE, light: LIGHT }) === "model");
   check("kindOf({c}) mesh = mesh", kindOf(MESH_REC) === "mesh", kindOf(MESH_REC));
   check("kindOf(view) mesh = mesh", kindOf(MESH_VIEW) === "mesh", kindOf(MESH_VIEW));
   check("kindHint mesh says its shape", kindHint(MESH_VIEW) === "box", kindHint(MESH_VIEW));
-  check("a light that is not an object is not a light", kindOf({ c: { light: true } }) === "empty" && kindOf({ comp: { light: 3 } }) === "empty");
-  check("a socket is decided first: kindOf({c}) and kindOf(view) say socket, whatever else it carries", kindOf({ c: { socket: { name: "seat" }, model: TABLE, light: LIGHT } }) === "socket" && kindOf({ lib: TABLE, comp: { socket: { name: "seat" } } }) === "socket" && kindOf({ c: { socket: "seat" } }) === "empty");
+  check("a light that is not an object is not a light", kindOf({ c: { light: true } }) === "empty" && kindOf({ light: 3 }) === "empty");
+  check("a socket is decided first: kindOf({c}) and kindOf(view) say socket, whatever else it carries", kindOf({ c: { socket: { name: "seat" }, model: TABLE, light: LIGHT } }) === "socket" && kindOf({ model: TABLE, socket: { name: "seat" } }) === "socket" && kindOf({ c: { socket: "seat" } }) === "empty");
   check("nothing is an Empty", kindOf(null) === "empty" && kindOf({}) === "empty" && kindOf({ c: {} }) === "empty");
   check("viewOf of each fixture's record is the same kind as the record", Object.keys(WANT).every((id) => kindOf(viewOf(id, S[id].c)) === kindOf(S[id])));
 }
