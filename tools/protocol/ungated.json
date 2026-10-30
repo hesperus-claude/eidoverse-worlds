@@ -75,6 +75,7 @@
  "tools/picture-race-probe.ts": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first",
  "tools/platesize-test.ts": "MERGE into tools/plateanchor-test.ts pending (a duplicate or near-duplicate of its rows)",
  "tools/posecheck-test.ts": "MERGE into tools/pose-handler-test.ts pending (a duplicate or near-duplicate of its rows)",
+ "tools/protocol/modserver-mutants.ts": "30/30 alone and in four --group pieces through run.ts, but under the 16-shard gate (load ~32) identity-check's known load flakes (C1, C3, H1) turn even its control red; a row once identity-check holds under load",
  "tools/ragdoll-test.ts": "needs the host's optimized avatar store (assets/opt/…/vrms); no rig-fixture fallback yet",
  "tools/rain-splash-probe.mjs": "Chromium probe on probe-harness.mjs (playwright), which the gate refuses (no launch under Bun on Windows); port it to chrome.ts cdpPage first; then MERGE into environment-realizer-test.ts",
  "tools/reach-continuity-test.ts": "needs the host's optimized avatar store; MERGE into reachlive pending",

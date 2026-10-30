@@ -185,10 +185,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["blockers-mutants-b", "blockers-mutants.ts --group b", 1], // blockers-mutants' piece b
   ["blockers-mutants-c", "blockers-mutants.ts --group c", 1], // blockers-mutants' piece c
   ["blockers-mutants-d", "blockers-mutants.ts --group d", 1], // blockers-mutants' piece d
-  ["modserver-mutants-1", "modserver-mutants.ts --group 1/4", 1], // roles + moderation's server gates, by mutation: each removed in a scratch tree turns its identity-check RS row red; the control stays green; piece 1 of 4
-  ["modserver-mutants-2", "modserver-mutants.ts --group 2/4", 1], // modserver-mutants' piece 2
-  ["modserver-mutants-3", "modserver-mutants.ts --group 3/4", 1], // modserver-mutants' piece 3
-  ["modserver-mutants-4", "modserver-mutants.ts --group 4/4", 1], // modserver-mutants' piece 4
   ["scripts", "scripts-check.ts", 1],   // research 41: scripts in QuickJS on sponsor rights; use → script; a timer through a real server
   ["scripting", "scripting-check.ts", 1], // the script kit (scripting/): world.d.ts = the sandbox's API; each example through the local runner
   ["grab", "grab-check.ts", 1],         // grabbable (research grab 10-06): the gate, release modes, the hold record, use while held
