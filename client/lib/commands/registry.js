@@ -9,7 +9,7 @@
 
 export const COMMANDS = [
   // RETIRED: kept unlisted so a typed name is told why (chat.js says `retired`) instead of "unknown command" or silence.
-  // whisper was removed; /emote became /anim; ghost was removed
+  // whisper was removed (R 10-18); /emote became /anim; ghost was removed (2dc8932f, R 10-20)
   { name: 'w', aliases: ['whisper', 'r', 'reply'], listed: false, help: 'whisper was removed — world chat is public', retired: 'whisper was removed — world chat is public' },
   { name: 'emote', listed: false, help: '/emote is /anim now', retired: '/emote is /anim now: /anim <name> plays one of the action bar\'s anims (🎭, or number keys)' },
   { name: 'ghost', aliases: ['unghost'], listed: false, help: 'ghost was removed', retired: 'ghost was removed: there is no hidden presence in a world' },

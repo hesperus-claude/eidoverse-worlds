@@ -193,7 +193,7 @@ export const RENAMED_COMPONENTS = Object.freeze({ "@world": Object.freeze({ trus
  *  already spelled today is returned as the same object; an old field stored as null is removed, never renamed to a null
  *  (to: null in its note). {value, renamed: [{field, from, to}]} */
 export const RENAMED_FIELDS = Object.freeze({ grabbable: Object.freeze({ pose: "anim", "grips.*.fingers": "grasp" }), station: Object.freeze({ pose: "anim" }),
-  // a VALUE renamed: a motion's old type `bob` is oscillate, on a whole motion and on every motion:<slot>
+  // a VALUE renamed: a motion's old type bob is oscillate, on a whole motion and on every motion:<slot>
   motion: Object.freeze({ "type=bob": "type=oscillate" }),
   // a picture's and a sound's describing text is description (a stored alt, or the look before it); no live read alias
   picture: Object.freeze({ alt: "description", look: "description" }), sound: Object.freeze({ alt: "description", look: "description" }) });
