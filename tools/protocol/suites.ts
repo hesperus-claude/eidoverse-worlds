@@ -202,7 +202,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["first-name-account", "../first-name-account-test.ts", 1], // the first-run door's name becomes the account
   ["retired-commands", "../retired-commands-test.ts", 1], // a retired command says why it is gone
   ["animnames-retry", "../animnames-retry-test.ts", 1], // a failed defs fetch is retried with back-off
-  ["screenshots", "../bun-test.ts tools/screenshots-test.ts", 1], // the capture broker: selection, cooldown, journeys, timeouts
+  ["screenshots", "../bun-test.ts tools/screenshots-test.ts", 1], // the screenshot broker: selection, cooldown, journeys, timeouts
   ["snapframe-render", "../snapframe-render-test.ts", 1], // where the renderer leg puts the camera
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
