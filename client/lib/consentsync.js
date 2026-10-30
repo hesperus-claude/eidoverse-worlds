@@ -1,16 +1,17 @@
-// My body's consent (consent.js: two gates and two lists), as the authority takes it: each sync reads what the authority
-// holds for me (consent {}) and sends only what differs, in order on one socket — the gates I chose in one request, then
-// one allow / block per person, and an unlist only for someone I took off a list here (mcpl replayConsent's model). The
-// server checks it before it forwards anyone's knock-over, pose, grab or touch, so a
-// table that never lands leaves me on the world's defaults while my switches say otherwise — and the server answers in my
-// name. Only my own changes are sent (consent.js's queue), never my whole list over the world's (L9). The sync runs on every arrival (a world's presence plane is its own) and every change; a refusal is said once
-// and the table is sent again on a timer and on the next arrival.
+// My body's consent (consent.js: two gates and two lists), as the authority takes it: each sync reads what the
+// authority holds for me (consent {}) and sends only what differs, in order on one socket — the gates I chose in one
+// request, then one allow / block per person, and an unlist only for someone I took off a list here (mcpl
+// replayConsent's model). The server checks it before it forwards anyone's knock-over, pose, grab or touch, so a table
+// that never lands leaves me on the world's defaults while my switches say otherwise — and the server answers in my
+// name. Only my own changes are sent (consent.js's queue), never my whole list over the world's. The sync runs on
+// every arrival (a world's presence plane is its own) and every change; a refusal is said once and the table is sent
+// again on a timer and on the next arrival.
 // A leaf like consent.js — everything it touches comes in, so tools/consent-client-test.ts can drive it.
 export const RETRY_MS = 5000;
 export function makeConsentSync({ table, send, toast, on, later = (fn) => setTimeout(fn, RETRY_MS), enabled = () => true, held = () => {}, gone = () => {}, landed = () => {} }) {
   let failing = false, retryArmed = false;
   // ONE sync in flight: changes made while it runs collapse into a single follow-up that reads the latest table, so a
-  // burst of changes stays under the server's per-connection message cap (10-19), which would refuse some sets.
+  // burst of changes stays under the server's per-connection message cap, which would refuse some sets.
   let running = null, again = false;
   function sync() {
     if (running) { again = true; return running; }
@@ -30,7 +31,7 @@ export function makeConsentSync({ table, send, toast, on, later = (fn) => setTim
       for (const g of ['move', 'touch']) if (typeof want[g] === 'boolean' && authority[g] !== want[g]) gates[g] = want[g];   // never chosen: the world's default stands (F2b)
       if (Object.keys(gates).length) results.push([Object.entries(gates).map(([g, v]) => `${g} ${v ? 'on' : 'off'}`).join(', '), await send('consent', gates).then((r) => r, failed)]);
       const has = (list, id) => Array.isArray(authority[list]) && authority[list].includes(id);
-      // each of my changes not yet landed here, then marked landed (consent.js drains it: review full-260 L9)
+      // each of my changes not yet landed here, then marked landed (consent.js drains it)
       const mark = (op, id) => { try { landed(op, id); } catch { /* the store's, never the sync's */ } };
       for (const list of ['allow', 'block']) for (const id of want[list]) { if (has(list, id)) { mark(list, id); continue; }
         const r = await send('consent', { [list]: id }).then((r) => r, failed);

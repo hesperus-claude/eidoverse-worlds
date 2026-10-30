@@ -1,22 +1,15 @@
-// The command registry — a PURE table. It imports NOTHING, and must stay
-// that way: chat.js derives its autocomplete from this table, and the moment
-// this file grows a dependency the cycle chat → commands → net → chat closes
-// (§14.2). Handlers live in handlers.js and register themselves here at boot;
-// this file only holds the names, the help lines, and the dispatch map.
+// The command registry — a PURE table. It imports NOTHING, and must stay that way: chat.js derives its autocomplete
+// from this table, and one dependency here closes the cycle chat → commands → net → chat (§14.2). Handlers live in
+// handlers.js and register themselves here at boot.
 //
-// The table below is the WHOLE command surface now (§24l R1, survey §1):
-// names, aliases, help — the one source chat.js resolves dispatch through
-// AND derives autocomplete from. The first extraction moved only
-// autocomplete, which left chat.js's switch as a second, drifting alias
-// table (each copy carried aliases the other lacked). `listed: false`
-// keeps a command dispatchable but out of autocomplete (listing is
-// presentation, registration is behavior — unchanged doctrine);
-// `aliasAsAction` is /use's trick: typing the alias IS the action
-// (/pull lever1 → use "lever1 pull").
+// The table below is the WHOLE command surface (§24l R1): names, aliases, help — the one source chat.js resolves
+// dispatch through AND derives autocomplete from. `listed: false` keeps a command dispatchable but out of
+// autocomplete (listing is presentation, registration is behavior); `aliasAsAction` is /use's trick: typing the
+// alias IS the action (/pull lever1 → use "lever1 pull").
 
 export const COMMANDS = [
   // RETIRED: kept unlisted so a typed name is told why (chat.js says `retired`) instead of "unknown command" or silence.
-  // whisper was removed (R 10-18); /emote became /anim; ghost was removed (2dc8932f, R 10-20)
+  // whisper was removed; /emote became /anim; ghost was removed
   { name: 'w', aliases: ['whisper', 'r', 'reply'], listed: false, help: 'whisper was removed — world chat is public', retired: 'whisper was removed — world chat is public' },
   { name: 'emote', listed: false, help: '/emote is /anim now', retired: '/emote is /anim now: /anim <name> plays one of the action bar\'s anims (🎭, or number keys)' },
   { name: 'ghost', aliases: ['unghost'], listed: false, help: 'ghost was removed', retired: 'ghost was removed: there is no hidden presence in a world' },
@@ -39,10 +32,7 @@ export const COMMANDS = [
   { name: 'epoch', aliases: ['physics'], help: '/epoch [tickMs] | off — owner: run physics in this world (throws and punts fly; the log records where they rest)' },
   { name: 'who', help: 'list everyone present' },
   { name: 'panels', help: '/panels <0.3–1> — desktop panel opacity, for when glass fails over a bright scene' },
-  // Registered so it is DISCOVERABLE. It was added on 2026-08-16 to debug voice
-  // on a phone with no console, and stayed unregistered for the rest of that
-  // session — a diagnostic nobody can find is one nobody uses, and the next
-  // person with a silent mic is exactly who needs it.
+  // registered so it is DISCOVERABLE: a diagnostic nobody can find is one nobody uses
   { name: 'audio', help: '/audio [stt|say] — why voice or captions are not working; `say` posts it to the room' },
   { name: 'role', help: 'what you may do here (or /role <name>: anyone this world has seen)' },
   { name: 'grant', help: '/grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever] — owner (or grantRoles, below your rank); /grant * builder|member sets the newcomer role for everyone signed in, /grant * +gen|-gen|+fly|-fly what they may do' },
@@ -52,8 +42,7 @@ export const COMMANDS = [
   { name: 'ban', help: '/ban <name> [reason] — ban someone from this world, here or not (owner)' },
   { name: 'unban', help: '/unban <name> — lift a ban here (owner)' },
   { name: 'bans', help: 'who is banned or muted here right now (moderators)' },
-  // the moderation handlers (handlers.js moderate) were registered with no row here, so chat answered "unknown command"
-  // (audit 10-07): a handler with no row is unreachable — the table is the dispatch
+  // the table is the dispatch: a handler with no row here is unreachable ("unknown command")
   { name: 'mute', help: '/mute <name> [minutes, default 60] [voice|chat] [reason] — quiet someone ranked below you' },
   { name: 'unmute', help: '/unmute <name> — lift a mute' },
   { name: 'warn', help: '/warn <name> <reason> — a warning they see, kept in the moderation log' },

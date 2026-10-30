@@ -9,13 +9,10 @@
 //   ↖✥↻⤢   │ ───split───      │       viewport             │
 //   tools  │ Chat             │                            │
 //
-// The corner matches the HUD: the ∃ in the top-left, the mic / ear / goggles
-// folded to its right exactly as mictoggle.placeMic lays them out beside the
-// ∃ everywhere else (grey-on-grey here), then the menus. The rail below holds
-// the wrench (the way out — amber, the one amber control on it) and the tools.
-// Chat stays: every edit is a logged sentence, so the chat pane is the edit
-// history with the people (and agents) in it. Every other window is one
-// Panels ▾ click away, never gone.
+// The corner matches the HUD: the ∃ top-left with the mic / ear / goggles folded to its right (mictoggle.placeMic),
+// then the menus. The rail below holds the wrench (the way out — the one amber control on it) and the tools. Chat
+// stays: every edit is a logged sentence, so the chat pane is the edit history with the people (and agents) in it.
+// Every other window is one Panels ▾ click away, never gone.
 
 import { worldEdgeWanted, setWorldEdgeShown } from './edge.js';
 import { register } from './actions.js';
@@ -98,7 +95,7 @@ function build() {
   // ---- tools column
   for (const t of TOOLS) {
     const b = el('button', 'edit-tool');
-    b.innerHTML = iconSvg(t.icon, 21);   // R 10-11: 'they look so small in their buttons'   // one glyph set (icons.js) — the rail's old ↖ ✥ ↻ ⤢ ⊙ were four fonts' worth of shapes
+    b.innerHTML = iconSvg(t.icon, 21);   // one glyph set (icons.js) — the rail's old ↖ ✥ ↻ ⤢ ⊙ were four fonts' worth of shapes
     if (t.key) b.append(el('kbd', 'edit-tool-key', t.key));   // the letter, so hands learn it
     b.dataset.tool = t.id; b.disabled = !!t.disabled;
     // the tool's hidden keys, in its tooltip (keyhints.js): the gizmo's Ctrl-snap, select's Ctrl/Shift-click, all the letters
@@ -132,18 +129,16 @@ function build() {
       { label: 'redo\tCtrl+Shift+Z', run: () => Edits.redo(), title: KEYHINTS.undo.before },
       { label: 'deselect\tEsc', run: deselectAll },
       { label: 'delete\tDel', run: removeKeyTargets },
-      // a reset button (R, 10-10): select the button FIRST, then what it sends home (Ctrl/Shift-click)
+      // a reset button: select the button FIRST, then what it sends home (Ctrl/Shift-click)
       { label: 'make reset button (first selected resets the rest)', run: () => { const sel = selection(); if (sel.length < 2) return flashHint('select the button first, then Ctrl- or Shift-click what it should send home', 4200, 'attn'); void Edits.makeResetButton(sel[0], sel.slice(1)); },
         title: 'The first thing you selected becomes a button. Using it (click, or E) puts every other selected thing back where it stands right now.' },
       { label: 'set home here', run: () => { const sel = selection(); if (!sel.length) return flashHint('select something first', 3000, 'attn'); void Edits.setHomeHere(sel); },
         title: 'Where a reset button sends the selected things back to: where they stand now.' },
       { label: 'leave builder mode\tB', run: () => setEditMode(false) },
     ]),
-    // CREATE (R 10-11: "a Create panel on the top line… to the RIGHT of Edit. Same as Maya. File, then Edit, then Create…
-    // empty entity, model primitives, lights, blueprints, whatever we want to call the sky/ground/grass/weather stuff since
-    // that seems to be all one suite"). Every item opens a path that already exists: the ghost in hand (build.js
-    // holdGhost), the Build tab's library and blueprints, the World's cards and presets. The suite is Environment (Godot's
-    // WorldEnvironment; SkyeSharkie's "environment… sky system").
+    // CREATE (Maya's order: File, Edit, Create): empty entity, model primitives, lights, blueprints, the environment
+    // suite. Every item opens a path that already exists: the ghost in hand (build.js holdGhost), the Build tab's
+    // library and blueprints, the World's cards and presets. The suite is Environment (Godot's WorldEnvironment).
     menu('Create', () => [
       { label: 'Empty', run: () => holdGhost('@empty', 'empty'), title: 'a bare entity: a place to parent things under (Unity\'s Create Empty)' },
       { label: 'Light', run: () => holdGhost('@light', 'light'), title: 'a point light, placed where you click' },
@@ -157,12 +152,12 @@ function build() {
       ...[['sky', 'Sky'], ['weather', 'Weather'], ['terrain', 'Terrain'], ['grass', 'Grass']].map(([k, lab]) => ({ label: `   ${lab}`, run: () => { L = useTab(L, 'build'); save(); apply(); openWorldCard(k); },
         title: `the world's ${lab.toLowerCase()}: its card in the Inspector, its presets in Build ▸ World` })),
     ]),
-    menu('Layout', () => [   // was 'View' (R, 10-10: say what it holds: the workspace's own arrangement)
+    menu('Layout', () => [   // says what it holds: the workspace's own arrangement
       { label: 'reset workspace layout', run: () => { L = { ...DEF }; save(); apply(); } },
       { label: `${getFrame('chat')?.visible ? 'hide' : 'show'} chat`, run: () => { getFrame('chat')?.toggle(); apply(); } },
       { label: `${getFrame('console')?.visible ? 'hide' : 'show'} console (scripts)`, run: () => getFrame('console')?.toggle() },
     ]),
-    // every HUD panel, the dock's fallback (R 10-04): the rail folds what doesn't fit under ⋯, this always has them all.
+    // every HUD panel, the dock's fallback: the rail folds what doesn't fit under ⋯, this always has them all.
     // A floating frame renders under the columns, so one opened from here comes up over them.
     menu('HUD Panels', () => allFrames().filter((f) => !f.docked && !f.el.classList.contains('edit')).map((f) => ({
       label: `${f.visible ? '● ' : '○ '}${panelName(f.id)}`, run: () => { f.toggle(); if (f.visible) f.el.style.zIndex = '30'; },
@@ -171,8 +166,7 @@ function build() {
   const undoBtn = el('button', 'edit-btn'); undoBtn.innerHTML = `${iconSvg('undo2', 14)}<span>undo</span>`; undoBtn.title = 'Ctrl+Z'; undoBtn.onclick = undo;
   // viewport buttons: what the render does, not what the world is
   const view = el('div', 'edit-viewbtns');
-  // VIEWPORT menu (R, 10-10: "start a 'viewport options' menu ... isolate selected ... wireframe (probably also
-  // 'wireframe on shaded' and 'flat shaded')"). What MY render shows; nothing in the world changes, all of it off on exit.
+  // VIEWPORT menu: what MY render shows; nothing in the world changes, all of it off on exit.
   const tick = (on) => (on ? '✓ ' : '   ');   // a plain check mark: ☑ draws as a colour emoji on some systems
   const vmenu = menu('Viewport', () => [
     { label: `${tick(isolating())}isolate selected`, title: 'show only what is selected (with what it rides and what rides it), in your view only', run: () => toggleIsolate() },
@@ -182,7 +176,7 @@ function build() {
     { label: `${tick(worldEdgeWanted())}world edge`, title: 'draw the world\'s bounds as a fence (things are kept in either way)', run: () => setWorldEdgeShown(!worldEdgeWanted()) },
   ]);
   vmenu.dataset.menu = 'viewport';
-  // SELECT menu (R 10-11: selection layers): which kinds of thing MY viewport clicks can land on. Per viewer; the
+  // SELECT menu (selection layers): which kinds of thing MY viewport clicks can land on. Per viewer; the
   // Hierarchy still selects anything. Each thing's layer is its Layer row in Attributes (or a default by kind).
   const smenu = menu('Select', () => LAYERS.map((ly) => ({ label: `${tick(layerOn(ly))}${ly}`, title: `${LAYER_HINT[ly]}: click to ${layerOn(ly) ? 'stop clicks landing on' : 'let clicks land on'} these (in your view only)`, run: () => setLayerOn(ly, !layerOn(ly)) })));
   smenu.dataset.menu = 'select';
@@ -201,11 +195,10 @@ function build() {
   }
   const paintCam = () => { for (const b of camSw.children) b.classList.toggle('on', (b.dataset.cam === 'free') === freeCamState().on); };
   bus.on('edit-freecam', paintCam); paintCam();
-  // the VIEWPORT BAR (R, 10-10: "move the Body/Free, Viewport, and wireframe button onto a new panel line between the
-  // Hierarchy and the Inspector ... free-floating like Blender"): what pertains to the view sits ON the view, a small
-  // floating bar at its top-left. Full screen stays in the top bar (it is the window's, not the viewport's).
+  // the VIEWPORT BAR: what pertains to the view sits ON the view, a small floating bar at its top-left (Blender's
+  // way). Full screen stays in the top bar (it is the window's, not the viewport's).
   const vbar = el('div', 'edit-viewbar'); vbar.hidden = true; document.body.append(vbar);
-  vbar.append(vmenu, camSw, wire, smenu);   // 'Viewport ▾' first, almost a title (R 10-10 23:32)
+  vbar.append(vmenu, camSw, wire, smenu);   // 'Viewport ▾' first, almost a title
   view.append(full);
   const mode = el('span', 'edit-mode-label');
   // the corner: ∃ + mic / ear / goggles. They are fixed elements their own modules place (ui.js's
@@ -284,15 +277,15 @@ function toggleIsolate() {
   flashHint(`isolated: ${n} thing${n === 1 ? '' : 's'} shown, in your view only — Viewport ▸ isolate selected again shows the rest`, 4000);
 }
 
-/** full screen, on or off: the viewport bar's ⛶, F11, and the ∃ menu's "full screen" (R 10-11 22:58: "I want to take a
- *  video and it's dicey trying to hide all my identifying browser details"). Esc leaves it (the browser's own rule). */
+/** full screen, on or off: the viewport bar's ⛶, F11, and the ∃ menu's "full screen" (a clean frame for recording).
+ *  Esc leaves it (the browser's own rule). */
 export function toggleFullscreen() { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.(); }
 register({ id: 'view:fullscreen', title: 'full screen', key: 'F11', group: 'view',
   keywords: ['fullscreen', 'full screen', 'video', 'record', 'hide browser', 'kiosk'],
   detail: 'the whole screen, no browser chrome: F11 or the button toggles it; Esc leaves it', run: toggleFullscreen });
-// F11 is taken here, not left to the browser (R 10-15 23:09: "esc doesn't take you back out of fullscreen mode (f11)"): the
-// browser's own F11 full screen sets no fullscreenElement and only F11 leaves it, so Esc did nothing the page could see.
-// The page's full screen is the Fullscreen API's, which the browser's Esc leaves. Always taken, even in a field (F11 types nothing).
+// F11 is taken here, not left to the browser: the browser's own F11 full screen sets no fullscreenElement and only F11
+// leaves it, so Esc did nothing the page could see. The page's is the Fullscreen API's, which Esc leaves. Always
+// taken, even in a field (F11 types nothing).
 addEventListener('keydown', (e) => {
   if (e.key !== 'F11' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;   // keys: fullscreen (a modified F11 is the browser's, not ours)
   e.preventDefault();
@@ -348,11 +341,9 @@ function paintTools() {
   for (const b of els.tools.querySelectorAll('.edit-tool')) b.classList.toggle('on', b.dataset.tool === getTool());
 }
 
-/** The dock in builder mode (R, 10-10: "a collapsible dock in Edit mode with a special '...' icon that you could click
- *  to expand into the full dock, and click again to shrink to just E and the wrench"). Folded (the default): the ∃,
- *  the ⋯ and the wrench. Open: every pinned panel button; if the column would still push the tools off the screen
- *  (a 1366×768 laptop leaves ~650 px) the trailing ones stay hidden, and HUD Panels ▾ in the bar has them all.
- *  Returns the dock's bottom edge. */
+/** The dock in builder mode: folded (the default) it shows the ∃, the ⋯ and the wrench; open, every pinned panel
+ *  button — if the column would still push the tools off the screen (a 1366×768 laptop leaves ~650 px) the trailing
+ *  ones stay hidden, and HUD Panels ▾ in the bar has them all. Returns the dock's bottom edge. */
 const TOOLS_H = () => TOOLS.length * 36 + 16;
 let dockOpen = false;
 try { dockOpen = localStorage.getItem('ew.edit.dock') === 'open'; } catch { /* no storage: folded */ }
@@ -361,7 +352,7 @@ function fitDock(TOP) {
   const wrench = dock.querySelector('button[data-toggles="edit"]');
   let more = dock.querySelector('.dock-more');
   if (!more) {
-    // three real dots, drawn (R 10-11: "make these ellipses dots bigger and more graphic"): a glyph's ⋯ was a few pixels tall
+    // three real dots, drawn: a glyph's ⋯ was a few pixels tall
     more = document.createElement('button'); more.className = 'dock-more'; more.title = 'more panels';
     more.innerHTML = '<svg width="20" height="6" viewBox="0 0 20 6" aria-hidden="true"><circle cx="3" cy="3" r="2.4" fill="currentColor"/><circle cx="10" cy="3" r="2.4" fill="currentColor"/><circle cx="17" cy="3" r="2.4" fill="currentColor"/></svg>';
     more.onclick = (e) => { e.stopPropagation(); dockOpen = !dockOpen; try { localStorage.setItem('ew.edit.dock', dockOpen ? 'open' : 'folded'); } catch { /* no storage */ } apply(); };
@@ -395,9 +386,8 @@ function apply() {
   for (const b of rtabs.children) b.classList.toggle('on', b.dataset.tab === rtab);
   for (const [id] of RTABS) { const f = getFrame(id); if (f) f.el.style.flex = id === rtab ? '1 1 0' : ''; }
   const TOP = 40, RAIL = 48;
-  // the bar runs the full width: the ∃ sits in its left end (the corner) with the mic / ear /
-  // goggles beside it, as on the HUD (R, 09-30). The rail starts under it: the wrench, then the
-  // tools — no gaps between bar, rail and columns (R, 09-13).
+  // the bar runs the full width: the ∃ sits in its left end (the corner) with the mic / ear / goggles beside it, as on
+  // the HUD. The rail starts under it: the wrench, then the tools — no gaps between bar, rail and columns.
   top.style.cssText = `left:0; right:0; top:0; height:${TOP}px`;
   // the tools start under the dock, which now carries every panel button: fold what doesn't fit first, then measure
   const dockBottom = fitDock(TOP);
@@ -449,9 +439,8 @@ function enter() {
   i?.dock(right); at?.dock(right); hs?.dock(right);
   right.prepend(rtabs, ...[i?.el, at?.el, hs?.el].filter(Boolean));   // tabs, then the pages
   if (c) { prevChat = c.visible; c.dock(left); if (!c.visible) c.show(); }
-  // each mode keeps its own open panels (R, 10-10: "collapse all other HUD panels" on entering; Blender's workspaces):
-  // play's are put away and remembered, edit's last set comes back (none, the first time). What you open in edit mode
-  // is edit mode's from then on.
+  // each mode keeps its own open panels (Blender's workspaces): play's are put away and remembered, edit's last set
+  // comes back (none, the first time). What you open in edit mode is edit mode's from then on.
   playPanels = loosePanels().filter((f) => f.visible).map((f) => f.id);
   for (const f of loosePanels()) if (f.visible) f.hide();
   for (const id of readPanels()) getFrame(id)?.show();

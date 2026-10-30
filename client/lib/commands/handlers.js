@@ -1,12 +1,7 @@
-// The behavior behind /commands — every branch of main.js's old
-// bus.on('command') if-chain, registered into the pure registry (§14 6c).
-// Each handler imports its own deps; chat.js never imports THIS file (only
-// registry.js), or the cycle chat→handlers→net→chat closes.
-//
-// The kick and push disambiguators are each ONE handler doing its own
-// entities/remotes checks — the old if-chain's fallthrough ORDER was
-// semantic (things win the name lookup because they were here first), and
-// it is preserved inside the handler bodies rather than across them.
+// The behavior behind /commands, registered into the pure registry (§14 6c). Each handler imports its own deps;
+// chat.js never imports THIS file (only registry.js), or the cycle chat→handlers→net→chat closes.
+// The kick and push disambiguators are each ONE handler: things win the name lookup over people (they were here
+// first), and that order lives inside the handler bodies.
 
 import { CONFIG, bus, report } from '../base.js';
 import { SHOVE_REACH } from '../../../shared/protocol/physconst.js';
@@ -20,7 +15,7 @@ import { register, dispatch } from './registry.js';
 import { plain } from '../plainwords.js';
 import { entities, worldHasOwner, bagOf } from '../world.js';
 import { resolveThing, handleOf } from '../../../shared/thingref.js';
-// a thing by what a person types (R 10-17: ids are minted and opaque): its id, its label, or a unique id prefix of 4+.
+// a thing by what a person types (ids are minted and opaque): its id, its label, or a unique id prefix of 4+.
 // A label two things share is refused with their handles, never resolved by picking one. {id} | {err} | null (nothing)
 function thingNamed(word) {
   if (!word) return null;
@@ -57,9 +52,8 @@ register('help', () => toggleHelp());
 // the console probe.
 register('flight', () => { for (const line of flightReport().split('\n')) logChat('*', line); });
 
-// Panel opacity — the glass escape hatch. Adaptive translucency fails over
-// bright scenes (Apple shipped "Tinted" after the Liquid Glass backlash);
-// this is our version of that lesson, one number, user-owned, persisted.
+// Panel opacity — the glass escape hatch for when adaptive translucency fails over bright scenes: one number,
+// user-owned, persisted.
 register('panels', (arg) => {
   const v = parseFloat(arg);
   if (!(v >= 0.3 && v <= 1)) return logChat('*', `usage: /panels <0.3–1> — desktop panel opacity (current ${panelAlpha().toFixed(2)})`);
@@ -67,10 +61,8 @@ register('panels', (arg) => {
   logChat('*', `panels at ${Math.round(v * 100)}% opacity`);
 });
 
-// Eyelids are BONES on rigs that have them (L_/R_Eyelid_Upper) — most VRMs
-// blink with a blendshape instead and have none, so this says so plainly
-// rather than appearing to work. Local: your eyes are yours to close, and
-// nothing about them is on the wire yet.
+// Eyelids are BONES on rigs that have them (L_/R_Eyelid_Upper); most VRMs blink with a blendshape and have none, so
+// this says so plainly. Local: nothing about your eyes is on the wire yet.
 register('eyes', (arg) => {
   const me = getMe();
   const want = /^(close|closed|shut)$/i.test((arg || '').trim()) ? true
@@ -89,7 +81,7 @@ export async function lookupPerson(name) {
   const r = await sendRequest('whois', { name: id ?? name });
   return r?.ok ? r.people ?? [] : null;
 }
-// +gen / +fly (SWEEP-3 N6): the generate and fly permissions someone holds here, as /grant writes them
+// +gen / +fly: the generate and fly permissions someone holds here, as /grant writes them
 const extras = (has) => [['generate', '+gen'], ['fly', '+fly']].filter(([k]) => has(k)).map(([, w]) => ` ${w}`).join('');
 const personLine = (p) => `${p.name}: ${p.role}${extras((k) => effectiveOf(worldComponents(), p.id, { anon: !!p.guest }).can[k])}${p.guest ? ' (a guest)' : ''}${typeof p.declares === 'string' ? ` (declares ${p.declares})` : ''}${p.here ? '' : ', not here now'}${p.banned ? ', banned' : ''}`;
 /** One identity for a typed name, or a chat line saying why not (nobody / several). */
@@ -121,10 +113,10 @@ register('role', (arg) => {
 
 register('grant', (arg) => {
   // /grant <name> <role> [+gen|-gen] [+fly|-fly] [for 2h|forever] — a role is any role this world has (member, builder,
-  // moderator, owner, or one its owner defined); +gen/+fly are per-person exceptions (roles:<id>.can.generate / .fly,
-  // research roles S5); `for <duration>` ends the grant then (roles:<id>.until; 30m, 2h, 1d, 1w), `forever` clears an end
-  // (upstream #258). The authority decides: owners grant anything, a grantRoles holder only roles ranked below their own,
-  // with permissions they hold; ownership never ends by itself.
+  // moderator, owner, or one its owner defined); +gen/+fly are per-person exceptions (roles:<id>.can.generate / .fly);
+  // `for <duration>` ends the grant then (roles:<id>.until; 30m, 2h, 1d, 1w), `forever` clears an end. The authority
+  // decides: owners grant anything, a grantRoles holder only roles ranked below their own, with permissions they hold;
+  // ownership never ends by itself.
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const id = parts[0];
   const forAt = parts.findIndex((p, i) => i > 0 && p.toLowerCase() === 'for');
@@ -144,7 +136,7 @@ register('grant', (arg) => {
   if (id === '*') {
     if (isOwner({ role })) return logChat('*', 'everyone can\'t be an owner — /grant * builder or /grant * member');
     if (dur || forever) return logChat('*', 'the world\'s default role never expires — /access invite-only|watch closes a world instead');
-    // merge: the default role also carries the world's guest opt-in (guests); ±gen/±fly join its can (SWEEP-3 N5: roles.js effectiveOf)
+    // merge: the default role also carries the world's guest opt-in (guests); ±gen/±fly join its can (roles.js effectiveOf)
     const dr = worldComponents()['default-role'];
     const value = { ...(role ? { role } : {}), ...(can ? { can: { ...(dr?.can && typeof dr.can === 'object' ? dr.can : {}), ...can } } : {}) };
     send({ verb: 'set', args: { id: '@world', component: 'default-role', value, merge: true } }, { what: role ? `make everyone ${role}` : `change what everyone may do (${Object.entries(can).map(([k, v]) => `${v ? '+' : '-'}${k === 'generate' ? 'gen' : k}`).join(' ')})`, record: false });
@@ -155,9 +147,9 @@ register('grant', (arg) => {
     const cur = worldComponents()[`roles:${who}`];
     // a time or exceptions alone change a grant, so there must be one: a role-less record is refused by the authority (I42)
     if (!role && !cur) return logChat('*', `${id} holds no role here to ${dur || forever ? 'time' : 'add exceptions to'} — /grant ${id} <role>${dur ? ` for ${durWord}` : ''}`);
-    // the whole grant, changed only where the command says (house review I6: a new role kept neither the person's
-    // exceptions nor their end): a new duration replaces the end, forever drops it (a set, not a merge: a merge can't
-    // remove a field), and new exceptions join the old ones
+    // the whole grant, changed only where the command says (I6: a new role keeps the person's exceptions and end): a
+    // new duration replaces the end, forever drops it (a set, not a merge: a merge can't remove a field), and new
+    // exceptions join the old ones
     // an owner's grant never ends: the authority refuses an owner with an end, so none is kept or sent
     if (isOwner(role) && dur) return logChat('*', `ownership never expires — /grant ${id} owner, without a time`);
     const { until: was, ...rest } = cur ?? {};
@@ -227,11 +219,7 @@ for (const verb of ['unmute']) register(verb, (arg) => { const id = (arg || '').
   if (!id) return logChat('*', `usage: /${verb} <name>`);
   onePerson(id, verb).then((who) => { if (who) send({ verb: verb, args: { who } }, { what: `${verb} ${id}`, record: false }); }); });
 
-// /kick is MODERATION, solidly (tel0s ruling, playtest 2026-08-31). The old
-// one-word-two-acts overload sent a typo'd object name into the moderation
-// path and made "kick the barrel" and "kick the visitor" the same word for
-// two very different acts. /punt owns the physics wholly now — and gained
-// the fun half: punting a PERSON is the consented ragdoll shove (their
+// /kick is MODERATION only. /punt owns the physics — and punting a PERSON is the consented ragdoll shove (their
 // client owns their body and decides, exactly as /push).
 register('kick', (arg) => moderate('kick', arg));
 register('punt', (arg) => {
@@ -253,11 +241,11 @@ register('drop', (arg) => drop((arg || '').trim() || undefined));
 register('throw', (arg) => throwHeld(arg));
 register('ban', (arg) => moderate('ban', arg));
 
-// /epoch [tickMs] (/physics) — run physics in this world: set @world.physics-engine (design 20 P4). Owner-ranked: the authority
+// /epoch [tickMs] (/physics) — run physics in this world: set @world.physics-engine. Owner-ranked: the authority
 // refuses below owner and refuses an engine this server doesn't carry; it stamps the build and every thing's shape.
 register('epoch', (arg) => {
   const a = (arg || '').trim();
-  // /epoch off — stop physics (explicit, never a toggle): the authority refuses while anything is in flight (P6: a cut
+  // /epoch off — stop physics (explicit, never a toggle): the authority refuses while anything is in flight (a cut
   // waits for rests). Owners only; the world refuses or announces.
   if (/^(off|leave|exit|none)$/i.test(a)) {
     send(OP.unset('@world', 'physics-engine'), { what: 'leave the physics epoch' });
@@ -275,9 +263,8 @@ register('unban', (arg) => {
   onePerson(id, 'unban').then((who) => { if (who) send({ verb: 'unban', args: { who } }, { what: `unban ${id}`, record: false }); });
 });
 
-// /bans: what is in force here now — bans and mutes — from the authority's `bans` (the
-// Moderation panel's source). The legacy world-bans message listed bans only, so a mute in force read "nobody is banned"
-// (audit 10-07). Moderators may ask; the authority says so to anyone else.
+// /bans: what is in force here now — bans and mutes — from the authority's `bans` (the Moderation panel's source).
+// Moderators may ask; the authority says so to anyone else.
 register('bans', async () => {
   const r = await sendRequest('bans', {});
   if (!r?.ok) return logChat('*', r?.refused ? plain("read what's in force here", r) : "couldn't read what's in force here");
@@ -304,7 +291,7 @@ register('gban', (arg) => moderateGlobal('gban', arg));
 register('gunban', (arg) => moderateGlobal('gunban', arg));
 register('gbans', () => sendMod('global-bans'));
 
-// /boom [power] [radius] (/blast) — a blast at my feet (R 10-28): the authority shoves each body by its own consent and punts each
+// /boom [power] [radius] (/blast) — a blast at my feet: the authority shoves each body by its own consent and punts each
 // loose thing; builders and up. shared/protocol/authority/bodyverbs.js force
 register('boom', async (arg) => {
   const nums = (arg || '').trim().split(/\s+/).map(Number).filter(Number.isFinite);
@@ -313,10 +300,8 @@ register('boom', async (arg) => {
 });
 
 register('push', (arg) => {
-  // /push [name] [power] — a REQUEST to the target's client, which owns the
-  // body and decides (pushable). Range-gated here out of honesty, not
-  // security: a shove is an arm's reach, and the receiver caps magnitude
-  // anyway. No name = the nearest person within reach.
+  // /push [name] [power] — a REQUEST to the target's client, which owns the body and decides (pushable). Range-gated
+  // here out of honesty, not security (the receiver caps magnitude). No name = the nearest person within reach.
   const REACH = SHOVE_REACH;
   const parts = (arg || '').trim().split(/\s+/).filter(Boolean);
   const named = parts.find((p) => !/^[\d.]+$/.test(p));
@@ -452,7 +437,7 @@ register('fork', (arg) => {
 });
 
 register('newworld', (arg) => {
-  // /newworld <name> [title…] — found a new, empty world that you own (a signed-in account; no quotas, R 10-28).
+  // /newworld <name> [title…] — found a new, empty world that you own (a signed-in account; no quotas).
   // The reply arrives as world-founded, with the link.
   const [name, ...rest] = (arg || '').trim().split(/\s+/);
   if (!name) return logChat('*', 'usage: /newworld <name> [title] — founds a new, empty world that you own');
@@ -516,7 +501,7 @@ register('use', (arg) => {
 register('sit', (arg) => {
   // /sit [thing] [slot] — a declared seat nearby wins; otherwise sit on the ground
   const [word, slot] = (arg || '').trim().split(/\s+/);
-  const t = thingNamed(word); if (t?.err) return logChat('*', t.err);   // by id, label or handle (R 10-17)
+  const t = thingNamed(word); if (t?.err) return logChat('*', t.err);   // by id, label or handle
   if (!trySitOn(t?.id ?? (word || null), slot || null)) setPosture('sit');
 });
 
@@ -539,9 +524,7 @@ register('goto', (arg) => {
 });
 
 register('rename', () => {
-  // chat.js emitted this command for years with nobody subscribed (§14.1
-  // found bug) — a silently dead command. Until mid-session renames exist,
-  // say so instead of saying nothing.
+  // until mid-session renames exist, say so instead of saying nothing
   logChat('*', "renaming mid-session isn't supported yet — set your name at the authority (clear ew-name in devtools to re-open it)");
 });
 
@@ -579,11 +562,8 @@ export function initCommands() {
 
   bus.on('command', ({ cmd, arg }) => dispatch(cmd, arg));
 
-  // Hands aimed at YOUR body (reachnet's bus edges) become chat lines — the
-  // human ear for the same events an agent hears through its door. Reach and
-  // touch carry a per-(person, hand) quiet window because a hand trembling
-  // across the touch threshold re-fires the edge; a release only happens on
-  // purpose, so it always speaks.
+  // Hands aimed at YOUR body (reachnet's bus edges) become chat lines — the human ear for what an agent hears. Reach
+  // and touch carry a per-(person, hand) quiet window (a trembling hand re-fires the edge); a release always speaks.
   const recentReach = new Map();
   const narrate = (type, { who, limb, point }) => {
     const lw = LIMB_WORD[limb] ?? limb;

@@ -1,17 +1,7 @@
-// capture — the one framebuffer-readback primitive (RENDERER-SEAM move 1).
-//
-// "Render the world and hand me the pixels" existed as private copies in
-// the wire protocol (net.js snap requests) and the command dispatcher
-// (screenshots) — a protocol file and a chat file each owning a renderer
-// call. This is the only module outside the designated presentation layer
-// allowed to say `renderer.render`; when the renderer is ever swapped,
-// frame capture is one function, not a grep.
-//
-// Deliberately NOT unified here: avatar.js's portrait pipeline. It is an
-// offscreen-SUBJECT renderer (its own RenderTarget + isolated Scene +
-// async pixel reads, transparent background), not a capture of the live
-// frame — one primitive with five booleans would be worse than two honest
-// ones (the R2 ladder lesson).
+// capture — the one framebuffer-readback primitive (RENDERER-SEAM move 1): the only module outside the presentation
+// layer allowed to say `renderer.render`, so swapping the renderer leaves frame capture as one function.
+// Deliberately NOT unified here: avatar.js's portrait pipeline, an offscreen-SUBJECT renderer (own RenderTarget,
+// isolated Scene, async reads, transparent background) rather than a capture of the live frame.
 
 import { THREE, renderer, scene, camera } from './core.js';
 import { renderWorld } from './render.js';
@@ -20,8 +10,7 @@ import { renderWorld } from './render.js';
  *  as a PNG data URL. Throws on an empty readback (a context that has not
  *  produced a frame yet answers with a blank canvas, silently). */
 export function captureFrame() {
-  // a handled GPU loss: renderWorld draws nothing, so the canvas still holds the LAST frame and a readback would hand
-  // that back as if it were now (#228 review round 3). Say the GPU is gone instead, as the dead device used to by throwing.
+  // a handled GPU loss: the canvas still holds the LAST frame, and a readback would pass it off as now
   if (globalThis.__gpuLost?.fired) throw new Error('GPU lost: no frame to capture');
   renderWorld();   // completed frame, then read it
   const url = renderer.domElement.toDataURL('image/png');

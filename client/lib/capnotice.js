@@ -1,10 +1,7 @@
 // capnotice — the notices that are true of this whole visit (a reduced backend, a GPU that reset under us, a sky that
 // had to simplify) as CHIPS on the status strip (statuschips.js) beside the ∃'s mic/ear glyphs, not a card over the
 // world. A chip stays for the visit; a click opens its full text with "got it" (folds it) and "don't show again"
-// (gone for good, remembered under the same key the card used).
-//
-// It was a 340px card, top-centre over everything for 30 s (INVENTORY §2: at z 60 it covered the ∃ menu and the help
-// sheet). A chip needs no auto-dismiss: at rest it covers nothing.
+// (gone for good). At rest a chip covers nothing, so it needs no auto-dismiss.
 import { backendName } from './core.js';
 import { bus } from './base.js';
 import { takeGpuRecovered, recentGpuLosses } from './gpulost.js';
@@ -20,7 +17,7 @@ export const WEBGL = {
 
 function dismissed() { try { return new Set(JSON.parse(localStorage.getItem(LS) || '[]')); } catch { return new Set(); } }
 
-// the one notice that can't be silenced for good (review 12a L1): the page stopped reloading and draws nothing, so a
+// the one notice that can't be silenced for good: the page stopped reloading and draws nothing, so a
 // remembered 'don't show again' would leave it black and unexplained. It also opens itself, for the same reason.
 const ESSENTIAL = new Set(['gpu-stop']);
 
