@@ -1,11 +1,8 @@
-// panels (client/lib/panels.js) — one schema, two renderers. renderDOM builds the desktop rows and wires
-// each control to edit(k, payload); renderCanvas paints the VR quad and returns hit REGIONS carrying the
-// same (action, payload); hitRegion turns a laser UV into one of them, snapping a slider to its step.
-// Drives the REAL module under happy-dom with a recording 2D context.
-//
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/panels-schema-test.ts
-//
-// Each block names the product line that would silence it:
+// panels (client/lib/panels.js): one schema, two renderers. renderDOM builds the desktop rows and wires each control to
+// edit(k, payload); renderCanvas paints the VR quad and returns hit REGIONS carrying the same (action, payload);
+// hitRegion turns a laser UV into one of them, snapping a slider to its step. The REAL module under happy-dom with a
+// recording 2D context. `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/panels-schema-test.ts`
+// The product lines that would silence each block:
 //   hitRegion returning the unsnapped slider value   → "slider hit snaps to step" goes red
 //   check region payload no longer !value            → "check region payload is the flipped value" goes red
 import { fileURLToPath } from "node:url";
@@ -17,6 +14,7 @@ plugin({
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
+(globalThis as any).Path2D ??= class Path2D { constructor(public d?: string) {} };   // the edit painter strokes icons
 
 // a 2D context that records what was painted and accepts every property write
 const paintLog: string[] = [];
@@ -36,8 +34,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const edits: any[][] = [];
 const edit = (...a: any[]) => { edits.push(a); };
-// panels' dispatcher is edit(k, value, field?, opts?) — field = Godot's axis index, opts.live = a preview.
-// Trailing empty args are not part of what a case asserts; a meaningful one (an axis, {live}) still is.
+// edit(k, value, field?, opts?): field = Godot's axis index, opts.live = a preview. Trailing empty args aren't asserted;
+// a meaningful one (an axis, {live}) is
 const last = () => { const a = [...(edits.at(-1) ?? [])]; while (a.length && a.at(-1) == null) a.pop(); return JSON.stringify(a); };
 const FIELDS = [
   { t: 'info', label: 'world', value: 'garden' },
@@ -66,12 +64,11 @@ check('info shows the value as text', rows[0].querySelector('.sp-info')?.textCon
   plus.onclick!(new Event('click'));
   check('+ steps by step and clamps to max: edit("h", 2)', last() === '["h",2]', last());
   minus.onclick!(new Event('click'));
-  // the stepper shows what it just set (p1 edit mode): + then − returns to the start, 1.5 — the old face stayed
-  // at 1.5 after a + and stepped to 1, i.e. two clicks that should cancel moved the value
+  // the stepper shows what it just set: + then − returns to the start, 1.5 (two clicks that should cancel must not move it)
   check('− steps down from the SHOWN value (+ then − cancel): edit("h", 1.5)', last() === '["h",1.5]', last());
   num.value = '-4'; num.onchange!(new Event('change'));
-  // refused, never clamped (D4a; review 10-12): the row's min is the slider's; the editor's own check refuses what the door
-  // would and says why, so the stepper hands on what was typed
+  // refused, never clamped (D4a): the row's min is the slider's; the editor refuses what the door would and says why, so
+  // the stepper hands on what was typed
   check('a typed value is handed on as typed, not clamped to min: edit("h", -4)', last() === '["h",-4]', last());
   num.value = 'nope'; const n = edits.length; num.onchange!(new Event('change'));
   check('a non-number is ignored', edits.length === n); }
@@ -120,7 +117,7 @@ console.log('PANELS — renderCanvas: regions carry the same action/payload');
 const cv = document.createElement('canvas');
 const W = 512, ROW = 44, PAD = 12;
 const regions = renderCanvas(cv, FIELDS, { width: W, rowH: ROW, pad: PAD, title: 'lamp' });
-const rowsPainted = FIELDS.length + 1;   // + one list row
+const rowsPainted = FIELDS.length + 1;  // + one list row
 check('canvas sized to header + rows + padding', cv.width === W && cv.height === 30 + rowsPainted * ROW + PAD * 2, `${cv.width}×${cv.height}`);
 check('title painted upper-cased', paintLog.some((l) => l.startsWith('fillText("LAMP"')));
 const byAction = (a: string) => regions.filter((r: any) => r.action === a);
@@ -135,33 +132,38 @@ const slider = byAction('vol')[0];
 check('range: ONE track region carrying {lo,hi,st}', byAction('vol').length === 1 && JSON.stringify(slider.slider) === '{"lo":0,"hi":1,"st":0.05}', JSON.stringify(slider?.slider));
 check('rows stack: every region lies inside the canvas', regions.every((r: any) => r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= cv.height));
 
-// C13: every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads. Mutation: delete
-// one entry (say `check`) → this goes red for the DOM and the legacy quad; tools/edittheme-test.ts C for the edit quad.
-console.log('PANELS — every field type draws on both surfaces (widgets.js WIDGETS, one table)');
+// every field type is ONE entry in widgets.js's WIDGETS table, read by the desktop and both quads: one row per entry
+console.log('PANELS — every WIDGETS entry draws on every surface: the desktop, the legacy quad, the edit quad');
 {
   (globalThis as any).Option ??= function (text: string, value: string) { const o = document.createElement('option'); o.textContent = text; o.value = value; return o; };
-  const ALL = [
-    { t: 'info', k: 'i', label: 'i', value: 'v' }, { t: 'log', k: 'lg', lines: ['a'] }, { t: 'num', k: 'n', label: 'n', value: 1 },
-    { t: 'range', k: 'rg', label: 'r', value: 0.5 }, { t: 'vec3', k: 'v3', label: 'v', value: [1, 2, 3] },
-    { t: 'enum', k: 'en', label: 'e', value: 'a', options: [{ v: 'a', label: 'a' }, { v: 'b', label: 'b' }] },
-    { t: 'color', k: 'co', label: 'c', value: 0xff0000 }, { t: 'check', k: 'ck', label: 'c', value: true },
-    { t: 'text', k: 'tx', label: 't', value: 'x' }, { t: 'json', k: 'js', label: 'j', value: '{}' }, { t: 'ref', k: 'rf', label: 'r', value: 'id1' },
-    { t: 'btn', k: 'bt', label: 'b' }, { t: 'pop', k: 'pp', label: 'p', items: [] },
-    { t: 'tiles', k: 'tl', value: 'a', options: [{ v: 'a', label: 'a' }] },
-    { t: 'group', k: 'gp', label: 'g', open: true },
-    { t: 'list', k: 'ls', label: 'l', rows: [{ id: 'r1', label: 'r', actions: [{ k: 'la', label: 'a' }] }] },
-    { t: 'tree', k: 'tr', rows: [{ id: 't1', label: 't', depth: 0, kids: 1, locked: false }] },
-  ];
+  const { WIDGETS } = await import('../client/lib/widgets.js');
+  // a sample per type, and the action(s) its quad target dispatches ([]: painted, takes no hit)
+  const SAMPLE: Record<string, [any, string[]]> = {
+    info: [{ t: 'info', k: 'i', label: 'i', value: 'v' }, []], log: [{ t: 'log', k: 'lg', lines: ['a'] }, []],
+    num: [{ t: 'num', k: 'n', label: 'n', value: 1 }, ['n']], range: [{ t: 'range', k: 'rg', label: 'r', value: 0.5 }, ['rg']],
+    vec3: [{ t: 'vec3', k: 'v3', label: 'v', value: [1, 2, 3] }, ['v3']],
+    enum: [{ t: 'enum', k: 'en', label: 'e', value: 'a', options: [{ v: 'a', label: 'a' }, { v: 'b', label: 'b' }] }, ['en']],
+    color: [{ t: 'color', k: 'co', label: 'c', value: 0xff0000 }, ['co']], check: [{ t: 'check', k: 'ck', label: 'c', value: true }, ['ck']],
+    text: [{ t: 'text', k: 'tx', label: 't', value: 'x' }, []], json: [{ t: 'json', k: 'js', label: 'j', value: '{}' }, []],
+    ref: [{ t: 'ref', k: 'rf', label: 'r', value: 'id1' }, ['rf']], btn: [{ t: 'btn', k: 'bt', label: 'b' }, ['bt']],
+    pop: [{ t: 'pop', k: 'pp', label: 'p', items: [] }, []], tiles: [{ t: 'tiles', k: 'tl', value: 'a', options: [{ v: 'a', label: 'a' }] }, ['tl']],
+    group: [{ t: 'group', k: 'gp', label: 'g', open: true }, ['fold']],
+    list: [{ t: 'list', k: 'ls', label: 'l', rows: [{ id: 'r1', label: 'r', actions: [{ k: 'la', label: 'a' }] }] }, ['la']],
+    tree: [{ t: 'tree', k: 'tr', rows: [{ id: 't1', label: 't', depth: 0, kids: 1, locked: false }] }, ['open', 'lock']],
+  };
+  const types = Object.keys(WIDGETS), missing = types.filter((t) => !SAMPLE[t]), stale = Object.keys(SAMPLE).filter((t) => !(t in WIDGETS));
+  check(`every one of the ${types.length} WIDGETS entries has a sample row here, and no row names a type that's gone`, missing.length === 0 && stale.length === 0, `missing ${missing} stale ${stale}`);
+  const ALL = types.filter((t) => SAMPLE[t]).map((t) => SAMPLE[t]![0]);
   const b2 = document.createElement('div'); document.body.append(b2);
   renderDOM(b2, ALL, edit);
   const CHROME = new Set(['sp-label', 'sp-ctxbtn', 'sp-revert']);
   const bare = ALL.filter((f, i) => ![...(b2.children[i]?.children ?? [])].some((c: any) => ![...c.classList].some((x) => CHROME.has(x))));
   check(`DOM: every one of the ${ALL.length} field types builds a control in its row`, bare.length === 0, bare.map((f) => f.t).join(','));
-  const R = renderCanvas(document.createElement('canvas'), ALL, { width: W, rowH: ROW, pad: PAD });
-  const has = (a: string) => R.some((r: any) => r.action === a);
-  const want: [string, string][] = [['num', 'n'], ['range', 'rg'], ['vec3', 'v3'], ['enum', 'en'], ['color', 'co'], ['check', 'ck'], ['ref', 'rf'], ['btn', 'bt'], ['tiles', 'tl'], ['group', 'fold'], ['list', 'la'], ['tree', 'open'], ['tree', 'lock']];
-  const lost = want.filter(([, a]) => !has(a));
-  check(`legacy quad: every interactive type paints its target (${want.length} actions)`, lost.length === 0, lost.map(([t, a]) => `${t}:${a}`).join(','));
+  for (const theme of [null, 'edit']) {
+    const R = renderCanvas(document.createElement('canvas'), ALL, { width: W, rowH: ROW, pad: PAD, ...(theme ? { theme } : {}) });
+    const lost = types.flatMap((t) => (SAMPLE[t]?.[1] ?? []).filter((a) => !R.some((r: any) => r.action === a)).map((a) => `${t}:${a}`));
+    check(`${theme ?? 'legacy'} quad: every interactive type paints its target`, lost.length === 0, lost.join(','));
+  }
 }
 
 console.log('PANELS — hitRegion: UV → region; a slider hit is its snapped value');
@@ -171,12 +173,8 @@ const uvAt = (r: any, fx = 0.5, fy = 0.5) => [(r.x + r.w * fx) / cv.width, (r.y 
 check('a UV in the padding resolves to null', hitRegion(regions, cv, 0.5, 0.001) === null);
 { const [u, v] = uvAt(byAction('dim')[0]);
   check('a check hit hands back the flipped payload', hitRegion(regions, cv, u, v)?.payload === true); }
-// the track proper is the region inset 6px each side; frac is measured along it
-// DERIVED, not restated: renderCanvas lays the value column at `vx = width * 0.34`
-// (panels.js:228) and pushes the region out from it by the inset on each side
-// (`x: vx - 6, w: tw + 12`, panels.js:265). So the inset the product actually
-// used is recoverable from the emitted geometry — and asserting it pins the
-// number. A test-side literal would move WITH a mutation and hide the drift.
+// the track proper is the region inset 6px each side, frac measured along it; the inset is DERIVED from the emitted
+// geometry (value column at width * 0.34), so a mutation can't move with the test
 const VX = W * 0.34;                       // the product's own value-column origin
 const INSET = VX - slider.x;               // what renderCanvas actually inset by
 check('the slider region is inset by exactly 6px each side (derived from the emitted region, not restated)', INSET === 6, `derived inset=${INSET} (x=${slider.x}, vx=${VX})`);
