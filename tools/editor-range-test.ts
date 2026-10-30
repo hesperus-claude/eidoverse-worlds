@@ -115,8 +115,8 @@ console.log(`  ${rows} num rows; ${typedRed.size} write something other than a v
 {
   const TEXT: Record<string, [string, any][]> = { ...FIXTURE, Story: [["story", { story: { title: "t", text: "s" } }]],
     Label: [["flags", { label: "x" }]], Description: [["flags", { description: "y" }]] };
-  // the editor clamps an alt to its cap instead of refusing it: kept as rows that say so, until the editor refuses
-  const CLAMPS = new Set(["picture.alt", "sound.alt"]);
+  // the editor clamps a description to its cap instead of refusing it: kept as rows that say so, until the editor refuses
+  const CLAMPS = new Set(["picture.description", "sound.description"]);
   let capped = 0;
   for (const [card, d] of Object.entries(DESCRIPTORS) as [string, any][]) for (const fd of d.fields) {
     const spec = COMPONENTS[d.key]; const cap = fd.path == null ? spec?.maxLen : spec?.ranges?.[fd.path]?.maxLen;
