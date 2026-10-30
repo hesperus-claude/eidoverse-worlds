@@ -16,24 +16,22 @@ export const GATES = ["move", "touch"];
 export const GATE_OF = Object.freeze({ shove: "move", displace: "move", touch: "touch", intimate: "touch", pose: "touch" });
 export const DEFAULT_GATES = Object.freeze({ move: true, touch: false });
 export const KIND_CLASS = { pose: "pose", anim: "pose", shove: "shove", drag: "displace", occupy: "displace", carry: "displace", touch: "touch" };
-// ---- an older stored table's words (tiers of cells, presets), read by migratePresence only; never written ----
-export const TIERS = ["everyone", "friends"];
-export const MODES = ["allow", "ask", "deny"];
+// ---- an older stored table's words (cells per tier, presets), read by migratePresence only; never written ----
 /** Older words, read in a stored table; never written. */
-export const LEGACY_TIER = Object.freeze({ strangers: "everyone" });
-export const LEGACY_MODE = Object.freeze({ everyone: "allow", nobody: "deny" });
-export const LEGACY_CLASS = Object.freeze({ move: "displace" });
-const tierOf = (t) => (Object.hasOwn(LEGACY_TIER, t) ? LEGACY_TIER[t] : t);
+const LEGACY_TIER = Object.freeze({ strangers: "everyone" });
+const LEGACY_MODE = Object.freeze({ everyone: "allow", nobody: "deny" });
+const LEGACY_CLASS = Object.freeze({ move: "displace" });
+const legacyTier = (t) => (Object.hasOwn(LEGACY_TIER, t) ? LEGACY_TIER[t] : t);
 const modeOf = (m) => (Object.hasOwn(LEGACY_MODE, m) ? LEGACY_MODE[m] : m);
 const classOf = (c) => (Object.hasOwn(LEGACY_CLASS, c) ? LEGACY_CLASS[c] : c);
 const NORMAL_FRIENDS = { near: "allow", follow: "allow", touch: "allow", intimate: "ask", pose: "ask", shove: "allow", displace: "ask", voice: "allow" };
-export const PRESETS = {
+const PRESETS = {
   normal: { everyone: { near: "ask", follow: "ask", touch: "ask", intimate: "deny", pose: "deny", shove: "deny", displace: "deny", voice: "ask" }, friends: NORMAL_FRIENDS },
   open: { everyone: { near: "allow", follow: "ask", touch: "allow", intimate: "deny", pose: "ask", shove: "ask", displace: "ask", voice: "allow" }, friends: NORMAL_FRIENDS },
   "friends-only": { everyone: Object.fromEntries(CLASSES.map((c) => [c, "deny"])), friends: NORMAL_FRIENDS },
   performer: { everyone: { near: "allow", follow: "ask", touch: "allow", intimate: "deny", pose: "allow", shove: "allow", displace: "ask", voice: "allow" }, friends: NORMAL_FRIENDS },
 };
-export const DEFAULT_PRESET = "normal";
+const DEFAULT_PRESET = "normal";
 // a reach descriptor the relay strips (server/reachgate.ts → bodyconsent.js reachAdmits) is said to the reacher once per
 // (reacher, target, class) per this long: a stream of frames is one attempt, never one message a frame
 export const REACH_NOTE_MS = 15000;
@@ -43,7 +41,7 @@ export const TRIED_NOTE_MS = 60000;
 // Touch is judged by where a hand is, not how it was aimed (42 P8): a named point is intimate if it is one of these, and
 // touch if it is any other contact point (shared/contact.js). ONE classifier, namedPointClass, for the relay
 // (server/reachgate.ts), the authority's reach verb and the agent. Both classes are behind the touch gate.
-export const INTIMATE_POINTS = new Set(["chest_front", "waist_l", "waist_r", "hip_l", "hip_r"]);
+const INTIMATE_POINTS = new Set(["chest_front", "waist_l", "waist_r", "hip_l", "hip_r"]);
 export const REACH_POINTS = Object.keys(CONTACT_POINTS);
 /** a named contact point (any spelling canonicalPoint takes) → { point (canonical), cls: touch | intimate }; null if not a point */
 export function namedPointClass(name) { const point = canonicalPoint(name); return point ? { point, cls: INTIMATE_POINTS.has(point) ? "intimate" : "touch" } : null; }
@@ -88,7 +86,7 @@ export function decide(P, from, to, cls, worldDefault) {
 // never reach Object.prototype).
 const BAD_KEY = new Set(["__proto__", "constructor", "prototype"]);
 const isWho = (w) => typeof w === "string" && /^[A-Za-z0-9_.:@+-]{1,64}$/.test(w) && !BAD_KEY.has(w);
-const bag = () => Object.create(null);
+const dict = () => Object.create(null);
 /** An identity that will never return (a guest who left: their id is per connection): its table and every list naming it go (L8). */
 export function forgetIdentity(P, who) { if (!P?.consent) return; delete P.consent[who]; for (const t of Object.values(P.consent)) { if (t?.allow) delete t.allow[who]; if (t?.block) delete t.block[who]; } }
 export const PERSON_OPS = ["allow", "block", "unlist"];
@@ -105,24 +103,19 @@ export function setConsent(P, actor, a) {
   if (ops.length > 1) return { ok: false, code: "shape", reason: `one of ${PERSON_OPS.join(", ")} at a time, got ${ops.join(" and ")}`, fix: CONSENT_FIX };
   const op = ops[0], who = op ? a[op] : undefined;
   if (op && !isWho(who)) return { ok: false, code: "shape", reason: `${op}: an identity`, fix: CONSENT_FIX };
-  const t = ((P.consent ??= bag())[actor] ??= bag());
+  const t = ((P.consent ??= dict())[actor] ??= dict());
   for (const g of GATES) if (a[g] !== undefined) t[g] = a[g];
   if (op) { if (t.allow) delete t.allow[who]; if (t.block) delete t.block[who];
-    if (op !== "unlist") (t[op] ??= bag())[who] = true; }
+    if (op !== "unlist") (t[op] ??= dict())[who] = true; }
   return { ok: true, target: actor };
 }
-/** The presence plane's consent tables in today's shape (CONSENT_SHAPE), only ever NARROWER than they were. A switch:
- *  refuse or ask → both gates off (ask was no until yes); accept → move on, touch left to the world's default. A table
- *  before the switch (preset, cells, pause, friends) is read as the switch it became: paused or any enforced class
- *  closed for everyone → refuse, else any ask → ask, else accept. Per-person answers become the lists: any class denied
- *  or asked → block; else every enforced class allowed with no end → allow (anything less is dropped: the gates
- *  answer). Asks, their cool-downs and rate are dropped silently. Returns how many tables changed. In place; idempotent. */
+// migratePresence: an older stored table read as today's gates + lists, never wider; in place, idempotent (docs/CONSENT-TABLE-RECORD.md)
 export const CONSENT_SHAPE = 4;
 function switchOf(t) {
   if (typeof t.switch === "string") return t.switch;
   if (t.preset === undefined && t.cells === undefined && !t.paused) return undefined;
   const row = { ...(PRESETS[t.preset] ?? PRESETS[DEFAULT_PRESET]).everyone };
-  for (const [tier, r] of Object.entries(t.cells ?? {})) if (tierOf(tier) === "everyone" && r && typeof r === "object") for (const [c, m] of Object.entries(r)) row[classOf(c)] = modeOf(m);
+  for (const [tier, r] of Object.entries(t.cells ?? {})) if (legacyTier(tier) === "everyone" && r && typeof r === "object") for (const [c, m] of Object.entries(r)) row[classOf(c)] = modeOf(m);
   const modes = ENFORCED.map((c) => row[c]);
   return t.paused || modes.includes("deny") ? "refuse" : modes.includes("ask") ? "ask" : "accept";
 }
@@ -135,8 +128,8 @@ export function migratePresence(P) {
     if (sw === "refuse" || sw === "ask") { t.move = false; t.touch = false; } else if (sw === "accept") t.move = true;   // F3: ask was no until yes
     for (const [who, row] of Object.entries(t.over ?? {})) { if (!isWho(who) || !row || typeof row !== "object") continue;
       const cells = Object.entries(row).filter(([, c]) => c && typeof c === "object"), yes = new Set(cells.filter(([, c]) => c.mode === "allow" && c.until === undefined).map(([k]) => classOf(k)));
-      if (cells.some(([, c]) => c.mode === "deny" || c.mode === "ask")) (t.block ??= bag())[who] = true;   // ask was no until yes (L14, as F3)
-      else if (ENFORCED.every((c) => yes.has(c))) (t.allow ??= bag())[who] = true; }   // allow grants every class: only a row that already did (F1)
+      if (cells.some(([, c]) => c.mode === "deny" || c.mode === "ask")) (t.block ??= dict())[who] = true;   // ask was no until yes (L14, as F3)
+      else if (ENFORCED.every((c) => yes.has(c))) (t.allow ??= dict())[who] = true; }   // allow grants every class: only a row that already did (F1)
     for (const k of old) delete t[k]; n++; }
   for (const k of ["asks", "asked", "askSeq", "cool"]) if (Object.hasOwn(P, k)) { delete P[k]; n++; }
   for (const r of P.ring ?? []) if (r && Object.hasOwn(LEGACY_CLASS, r.cls)) r.cls = classOf(r.cls);
