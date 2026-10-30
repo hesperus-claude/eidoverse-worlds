@@ -339,7 +339,7 @@ const file = path.join(tmp, "worlds", ".directory.json");
 // eidosim@0.5.0 from seq 15641; translate-v1@9 kept each punt as an `imported` record and left the punted thing where it
 // was punted FROM, reporting "0 divergences" because it compared only against the instant fold (her sim rests it
 // elsewhere). The importer refused such logs until translate-v1@10 ran her sim beside the v1 fold. Each case goes
-// through the real importer (translateV1World, in a child with a scratch library: epoch-probe.ts), tier 0 empty (a translation names no founder),
+// through the real importer (translateV1World, in a child with a scratch library: epoch-child.ts), tier 0 empty (a translation names no founder),
 // directory identities and content addresses, and is compared with HER sim (shared/sim.js beside the v1 fold, as sweep §3).
 { const { emptyState: v1Empty, foldEntry } = await import("./import-v1/fold.js");
   const eidosim = await import("./import-v1/eidosim-v1.js");   // HER engine: what the v1 log means
@@ -361,7 +361,7 @@ const file = path.join(tmp, "worlds", ".directory.json");
     fs.mkdirSync(path.join(W, "worlds", "old"), { recursive: true }); fs.mkdirSync(OPT, { recursive: true });
     for (const [p, b] of Object.entries(lib)) { fs.mkdirSync(path.dirname(path.join(LIB, p)), { recursive: true }); fs.writeFileSync(path.join(LIB, p), b); }
     fs.writeFileSync(path.join(W, "worlds", "old", "log.jsonl"), L.map((e) => JSON.stringify(e)).join("\n") + "\n");
-    const run = Bun.spawnSync(["bun", path.join(import.meta.dir, "epoch-probe.ts"), path.join(W, "worlds", "old"), path.join(W, "worlds", "new")],
+    const run = Bun.spawnSync(["bun", path.join(import.meta.dir, "epoch-child.ts"), path.join(W, "worlds", "old"), path.join(W, "worlds", "new")],
       { env: { ...process.env, OPT_DIR: OPT, EIDOVERSE_DIR: LIB, TRUST_NAMES: "" }, stdout: "pipe", stderr: "pipe" });
     const line = run.stdout.toString().trim().split("\n").pop() ?? ""; let res: any; try { res = JSON.parse(line); } catch { res = { ok: false, err: `probe printed ${JSON.stringify(line.slice(0, 200))}; stderr ${run.stderr.toString().slice(-400)}` }; }
     const file = path.join(W, "worlds", "new", "world.jsonl");

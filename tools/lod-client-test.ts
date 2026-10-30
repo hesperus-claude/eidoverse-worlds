@@ -21,7 +21,7 @@
 // authored `recipe` extra — reading the served tier with the same tierOf the
 // loader uses. The PRODUCTION-LOADER part (round three of the review) then
 // runs the real, unmodified client/lib/assets.js against that same child
-// (tools/lod-loader-probe.ts: only a renderer that never draws and the frame
+// (tools/lod-loader-child.ts: only a renderer that never draws and the frame
 // conductors injected below it, its relative fetches resolved to the child),
 // once per /version shape — the real one, one with no recipe, one with no
 // key — and asserts the URL it fetched, the cache key it chose and the
@@ -400,7 +400,7 @@ try {
     // owned child. A mutation at the decision seam (tier / url / glbKey / the stamps) fails here.
     console.log('\n  the production loader — real assets.js against the owned child\n');
     const probe = async (strip: string) => {
-      const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-probe.ts')], {
+      const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-child.ts')], {
         env: { ...process.env, LODC_BASE: C.base, LODC_STRIP: strip, LODC_HEAVY: HEAVY, LODC_AUTHORED: AUTHORED },
         stdout: 'pipe', stderr: 'pipe',
       });

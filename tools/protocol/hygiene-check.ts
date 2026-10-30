@@ -28,6 +28,9 @@
 //                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: tools/no-world.ts noWorldUrl().
 //                 Checked over tools/ only.
 //   own-ok        a suite counting its own rows (`let pass = 0, fail = 0`) instead of importing suite.ts.
+//   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, tools/protocol/, tools/water/,
+//                 mcpl/) that no SUITES row runs or imports: every test is in the gate or gone (R 10-29). The ones still out
+//                 are listed in tools/protocol/ungated.json with one line why; that list only shrinks.
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE } from "./common.ts";
@@ -116,6 +119,21 @@ export function measure(): Record<string, Record<string, number>> {
 }
 
 const BASE = path.join(ENGINE, "tools/protocol/hygiene-baseline.json");
+
+/** Test-named files no SUITES row reaches (ungated.json lists the ones still out, each with its reason). */
+export const TEST_NAME = /(?:-test|-check|-probe|\.test|-bench|-mutants)\.(?:ts|mjs|js)$/;
+const UNGATED = path.join(ENGINE, "tools/protocol/ungated.json");
+export function ungatedTests(): string[] {
+  const gated = new Set<string>();
+  for (const [, file] of SUITES) {
+    for (const f of localImports(suitePath(file))) gated.add(rel(f));
+    for (const a of file.split(" ").slice(1)) if (/\.(?:ts|mjs|js)$/.test(a)) for (const f of localImports(path.join(ENGINE, a))) gated.add(rel(f));   // a runner's file argument (bun-test.ts tools/x-test.ts)
+  }
+  const out: string[] = [];
+  for (const d of ["tools", "tools/protocol", "tools/water", "mcpl"]) for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }))
+    if (e.isFile() && TEST_NAME.test(e.name) && !gated.has(`${d}/${e.name}`)) out.push(`${d}/${e.name}`);
+  return out.sort();
+}
 export function compare(now: Record<string, Record<string, number>>, base: Record<string, Record<string, number>>) {
   const over: string[] = [], under: string[] = [];
   for (const f of new Set([...Object.keys(now), ...Object.keys(base)])) for (const k of Object.keys(RULES)) {
@@ -164,6 +182,15 @@ if (import.meta.main) {
   check(`H${i++} mcpl-state: caught in its known-bad form, and not with the override`, spawnsMcplStateless('Bun.spawn(["bun", "mcpl/net-server.ts"], { env: { MCPL_TOKENS: t } })') && !spawnsMcplStateless('Bun.spawn(["bun", "mcpl/net-server.ts"], { env: { MCPL_STATE: s } })'), "pattern");
   const mcplHits = mcplStatelessHits();
   check(`H${i++} mcpl-state: no test spawns the mcpl server without MCPL_STATE`, mcplHits.length === 0, mcplHits.join("\n      "));
+
+  // every test is in the gate or gone (R 10-29): a test-named file no suite reaches is listed in ungated.json with its reason
+  const listed: Record<string, string> = fs.existsSync(UNGATED) ? JSON.parse(fs.readFileSync(UNGATED, "utf8")) : {};
+  const out = ungatedTests();
+  const unlisted = out.filter((f) => !listed[f]?.trim());
+  check(`H${i++} ungated: every test-named file runs in the gate, or ungated.json says in one line why not`, unlisted.length === 0, unlisted.join("\n      "));
+  const stale = Object.keys(listed).filter((f) => !out.includes(f));
+  check(`H${i++} ungated: ungated.json names only files that exist and are still out of the gate (a gated or deleted one comes off)`, stale.length === 0, stale.join("\n      "));
+  console.log(`[hygiene] tests still out of the gate: ${out.length}`);
 
   // then the gate's code against the baseline (may only go down)
   const now = measure();

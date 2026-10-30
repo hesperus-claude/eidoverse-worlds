@@ -162,7 +162,7 @@ lodRecipeReady.then((r) => { lodRecipe = r; }).catch(() => {});
 export const negotiationReady = Promise.all([ktx2KeyReady, lodRecipeReady]).then(() => {}, () => {});
 /** Can a lod ask cross the wire now (#170;transcoder, running key AND recipe, bare .glb)? Nothing is reported asked that couldn't be. */
 export const lodNegotiable = (libPath) => resolveLoadRequest(libPath, 'lod').tier === 'lod';
-/** THE decision seam of a tiered load (#170): tier wish -> URL, asked tier, cache key. tools/lod-loader-probe.ts gates it. */
+/** THE decision seam of a tiered load (#170): tier wish -> URL, asked tier, cache key. tools/lod-loader-child.ts gates it. */
 export function resolveLoadRequest(libPath, tier = 'full') {
   // an eido:sha256/… model fetches /library/eido/sha256/<hex>.glb; the cache keys stay the model value itself
   const ask = askFor({ libPath: libRelOf(libPath), key: ktx2Key, capable: !!ktx2.workerConfig, recipe: lodRecipe, tier });
