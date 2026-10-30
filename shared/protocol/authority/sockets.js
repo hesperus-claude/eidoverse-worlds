@@ -13,8 +13,8 @@ import { worldT, qrot, qinv, qmul } from "./math.js";
 import { setOp, delOp } from "./storage.js";
 import { refuse } from "./refuse.js";
 
-const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v !== PURGED;
-export const isSocketC = (c) => bag(c?.socket);
+const liveObj = (v) => !!v && typeof v === "object" && !Array.isArray(v) && v !== PURGED;
+export const isSocketC = (c) => liveObj(c?.socket);
 export { socketRole } from "../../sockbody.js";
 // what a socket may carry besides its pose and its name: what reads it (label, description), what switches or freezes it
 // (disabled, lock, hidden), a motion of its own, and the blueprint mark every placed part carries
@@ -31,7 +31,7 @@ export function socketRules(s, ids) {
   const kidsOf = (p) => { if (!kids) { kids = new Map(); for (const [k, e] of Object.entries(s.entities)) { const to = e.c.parent?.to; if (to) { let a = kids.get(to); if (!a) kids.set(to, (a = [])); a.push(k); } } } return kids.get(p) ?? []; };
   const hosts = new Set();
   for (const id of ids) { const e = s.entities[id]; if (!e) continue;
-    if (!isSocketC(e.c)) { if (bag(e.c.station)) return { code: "shape", reason: `${id} has a station but no socket: a station is what a body does at a socket`, fix: `give it a socket {name} (a child of the thing it belongs to), or delete station` }; continue; }
+    if (!isSocketC(e.c)) { if (liveObj(e.c.station)) return { code: "shape", reason: `${id} has a station but no socket: a station is what a body does at a socket`, fix: `give it a socket {name} (a child of the thing it belongs to), or delete station` }; continue; }
     const host = e.c.parent?.to;
     if (!host) return { code: "shape", reason: `${id} is a socket, and a socket needs a host`, fix: `give it parent {to: <the thing it belongs to>}, or delete it` };
     if (isSocketC(s.entities[host]?.c)) return { code: "shape", reason: `${id} is a socket, and ${host} is a socket too: a socket hangs on a thing, never on another socket`, fix: `parent it to ${s.entities[host].c.parent?.to ?? "the thing it belongs to"}` };
@@ -45,7 +45,7 @@ export function socketRules(s, ids) {
   const helmHosts = new Set(hosts); for (const id of ids) if (s.entities[id] && !isSocketC(s.entities[id].c)) helmHosts.add(id);
   for (const h of helmHosts) { const helms = kidsOf(h).filter((k) => isSocketC(s.entities[k].c) && s.entities[k].c.station?.input?.move === "drive");
     if (helms.length > 1) return { code: "shape", reason: `${h} has ${helms.length} helms (${helms.join(", ")}): one seat drives a thing`, fix: "keep input {move: 'drive'} on one; passengers' seats leave it out" };
-    if (helms.length && !bag(s.entities[h]?.c.drive)) return { code: "shape", reason: `${helms[0]} is a helm, but ${h} has no drive to steer`, fix: `set {id: '${h}', component: 'drive', value: {maxSpeed, turnRate}}, or take input off the station` }; }
+    if (helms.length && !liveObj(s.entities[h]?.c.drive)) return { code: "shape", reason: `${helms[0]} is a helm, but ${h} has no drive to steer`, fix: `set {id: '${h}', component: 'drive', value: {maxSpeed, turnRate}}, or take input off the station` }; }
   for (const h of hosts) { const socks = kidsOf(h).filter((k) => isSocketC(s.entities[k].c)); const byName = new Map();
     for (const k of socks) { const v = s.entities[k].c.socket; const n = v.name;
       if (byName.has(n)) return { code: "name-taken", reason: `${h} already has a socket called '${v.name}' (${byName.get(n)})`, fix: "a socket's name is unique among its host's sockets: give it another", taken: byName.get(n) };
@@ -66,18 +66,18 @@ export function actionRules(s, ids) {
   for (const id of ids) { const e = s.entities[id]; if (!e) continue; if (isSocketC(e.c) && e.c.parent?.to) hosts.add(e.c.parent.to); else hosts.add(id); }
   let kids = null;   // the children index, built once and only if a touched host could clash
   for (const h of hosts) { const c = s.entities[h]?.c; if (!c) continue;
-    if (!bag(c.reactions) && !bag(c.grabbable) && !bag(c.openable)) continue;
-    if (!kids) { kids = new Map(); for (const [k, e] of Object.entries(s.entities)) { const to = e.c.parent?.to; if (to && isSocketC(e.c) && bag(e.c.station)) { let a = kids.get(to); if (!a) kids.set(to, (a = [])); a.push(k); } } }
+    if (!liveObj(c.reactions) && !liveObj(c.grabbable) && !liveObj(c.openable)) continue;
+    if (!kids) { kids = new Map(); for (const [k, e] of Object.entries(s.entities)) { const to = e.c.parent?.to; if (to && isSocketC(e.c) && liveObj(e.c.station)) { let a = kids.get(to); if (!a) kids.set(to, (a = [])); a.push(k); } } }
     const seats = new Map();
     for (const k of kids.get(h) ?? []) seats.set(s.entities[k].c.station.action ?? "sit", k);
     if (!seats.size) continue;
-    for (const act of bag(c.reactions) ? Object.keys(c.reactions) : []) if (seats.has(act))
+    for (const act of liveObj(c.reactions) ? Object.keys(c.reactions) : []) if (seats.has(act))
       return { code: "action-taken", reason: `${h}: '${act}' is both a reaction and what its socket ${seats.get(act)}'s station does: use {id, action: '${act}'} would mean two things`, fix: `name the reaction something else, or give the station another action`, taken: seats.get(act) };
     // an openable host that answers 'open' itself (implicitOpens), so a station can't take that name either
     if (seats.has("open") && implicitOpens(s.entities[h]))
       return { code: "action-taken", reason: `${h} is openable, so 'open' opens and shuts it, and its socket ${seats.get("open")}'s station does 'open' too: use {id, action: 'open'} would mean two things`, fix: "give the station another action", taken: seats.get("open") };
-    const u = bag(c.grabbable) ? c.grabbable.use : undefined;
-    for (const act of typeof u === "string" ? [u] : bag(u) ? [u.down, u.up].filter((x) => typeof x === "string") : []) if (seats.has(act))
+    const u = liveObj(c.grabbable) ? c.grabbable.use : undefined;
+    for (const act of typeof u === "string" ? [u] : liveObj(u) ? [u.down, u.up].filter((x) => typeof x === "string") : []) if (seats.has(act))
       return { code: "action-taken", reason: `${h}.grabbable.use names '${act}', which is what its socket ${seats.get(act)}'s station does: use while held fires a reaction`, fix: `name a reaction of ${h} (its reactions keys), not a station's action`, taken: seats.get(act) }; }
   return null;
 }
@@ -87,19 +87,19 @@ export function actionRules(s, ids) {
 export function socketsOf(st, host, { off = false } = {}) {   // off: switched-off ones too (they're still its sockets to delete or undo)
   if (!st.entities[host]) return [];
   const out = [];
-  for (const k of kidsMap(st).get(host) ?? []) { const c = st.entities[k]?.c; if (isSocketC(c) && (off || c.disabled !== true)) out.push({ id: k, name: c.socket.name, sock: c.socket, station: bag(c.station) ? c.station : null, host }); }
+  for (const k of kidsMap(st).get(host) ?? []) { const c = st.entities[k]?.c; if (isSocketC(c) && (off || c.disabled !== true)) out.push({ id: k, name: c.socket.name, sock: c.socket, station: liveObj(c.station) ? c.station : null, host }); }
   return out;
 }
 /** Every socket in the world, as socketsOf lists them. */
 export function allSockets(st) {
   const out = [];
-  for (const [k, e] of Object.entries(st.entities)) if (isSocketC(e.c) && e.c.disabled !== true && e.c.parent?.to) out.push({ id: k, name: e.c.socket.name, sock: e.c.socket, station: bag(e.c.station) ? e.c.station : null, host: e.c.parent.to });
+  for (const [k, e] of Object.entries(st.entities)) if (isSocketC(e.c) && e.c.disabled !== true && e.c.parent?.to) out.push({ id: k, name: e.c.socket.name, sock: e.c.socket, station: liveObj(e.c.station) ? e.c.station : null, host: e.c.parent.to });
   return out;
 }
 /** Where a socket is in the world. */
 export const socketPoint = (st, x) => worldT(st, x.id).pos;
 /** The names of the seats a catalogue entry declares (find's answer; they're made as children when the model is). */
-export const modelSocketNames = (m) => (bag(m?.sockets) ? Object.keys(m.sockets) : null);
+export const modelSocketNames = (m) => (liveObj(m?.sockets) ? Object.keys(m.sockets) : null);
 
 // ---------- the old spelling, lifted at the door ----------
 // Every write enters through admit, so admit is where `sockets` maps and parent {to, socket} edges become socket
@@ -118,7 +118,7 @@ const socketOfSlot = (name, sk) => ({ name, ...Object.fromEntries(SOCK_FIELDS.fi
 // uses are dropped); a request's own body keeps them, and the door refuses them in the station's words
 const STATION_KEYS = Object.keys(COMPONENTS.station.fields);
 // A body block's `pose` is the station's `anim` (the map's body block keeps its old spelling).
-export const stationOfBody = (b0, { stored = false } = {}) => { if (!bag(b0)) return null;
+export const stationOfBody = (b0, { stored = false } = {}) => { if (!liveObj(b0)) return null;
   const b = "pose" in b0 && !("anim" in b0) ? (({ pose, ...r }) => ({ ...r, anim: pose }))(b0) : b0;
   const v = stored ? Object.fromEntries(Object.entries(b).filter(([k]) => STATION_KEYS.includes(k))) : { ...b };
   return materialize("station", v).value; };
@@ -135,16 +135,16 @@ function overSocket(st, host, sockT, t) {
   const d = qrot(sockT.q, t.pos.map((v, i) => v * hs[i])).map((v, i) => v / hs[i] + sockT.pos[i]);
   return { ...t, pos: d, ...(t.q ? { q: qmul(sockT.q, t.q) } : {}) };
 }
-const legacyParent = (v) => bag(v) && typeof v.to === "string" && typeof v.socket === "string";
+const legacyParent = (v) => liveObj(v) && typeof v.to === "string" && typeof v.socket === "string";
 /** Is this a parent in the old spelling ({to, socket})? Undo reads it from before the cut, to put back a parent and a
  *  transform written in the host's frame as one group (the door then re-expresses the pose in the socket child's). */
 export const isLegacyParent = legacyParent;
-const legacyHome = (v) => bag(v) && legacyParent(v.parent);
+const legacyHome = (v) => liveObj(v) && legacyParent(v.parent);
 
 /** Does this write carry the old spelling anywhere? (The common write doesn't, and costs one pass.) */
 export function carriesLegacy(ops) {
   return ops.some((o) => o.comp === "sockets" || (o.verb === "set" && ((o.comp === "parent" && legacyParent(o.value)) || (o.comp === "home" && legacyHome(o.value))
-    || (o.comp === "socket" && bag(o.value) && o.value.body !== undefined) || (o.comp === "model" && typeof o.value === "string" && bag(modelOf(o.value)?.sockets)))));
+    || (o.comp === "socket" && liveObj(o.value) && o.value.body !== undefined) || (o.comp === "model" && typeof o.value === "string" && liveObj(modelOf(o.value)?.sockets)))));
 }
 
 /** The write in the new spelling: {ops, notes}. `ever` is every id the world has made (a lifted id is never a reused one). */
@@ -159,12 +159,12 @@ function lifter(st, ever) {
     emit({ verb: "create", id }); emit(setOp(id, "parent", { to: h }));
     emit(setOp(id, "transform", { pos: Array.isArray(sk.pos) ? sk.pos.slice() : [0, 0, 0], q: socketQ(sk), scale: [1, 1, 1] }));
     emit(setOp(id, "socket", socketOfSlot(name, sk)));
-    if (bag(sk.body)) emit(setOp(id, "station", stationOfBody(sk.body, { stored: storedBodies })));
+    if (liveObj(sk.body)) emit(setOp(id, "station", stationOfBody(sk.body, { stored: storedBodies })));
     return id; };
   let storedBodies = false;
   // a socket child that still holds the old body block (a log stored before station): the block becomes its station
   const liftBodies = (h) => { for (const k of kidsOf(h)) { const c = s.entities[k].c; if (!isSocketC(c) || c.socket.body === undefined) continue;
-    const { body, ...rest } = c.socket; emit(setOp(k, "socket", rest)); if (bag(body) && !bag(c.station)) emit(setOp(k, "station", stationOfBody(body, { stored: true }))); } };
+    const { body, ...rest } = c.socket; emit(setOp(k, "socket", rest)); if (liveObj(body) && !liveObj(c.station)) emit(setOp(k, "station", stationOfBody(body, { stored: true }))); } };
   // a home naming a legacy socket: in that socket child's frame
   const homeLifted = (hv, made) => { const p = hv.parent; const id = made?.[p.socket] ?? childNamed(p.to, p.socket);
     if (!id) { const { socket, ...rest } = p; return { ...hv, parent: rest }; }
@@ -172,7 +172,7 @@ function lifter(st, ever) {
     return { ...hv, pos: T.pos, ...(T.q ? { q: T.q } : {}), parent: { to: id } }; };
   // a host's stored map (or its model's seats) becomes its socket children; what sat at a slot sits in its child, where it was
   const liftHost = (h, map, { stored }) => { const made = {};
-    for (const [name, sk] of Object.entries(map)) if (bag(sk)) made[name] = childNamed(h, name) ?? make(h, name, sk);
+    for (const [name, sk] of Object.entries(map)) if (liveObj(sk)) made[name] = childNamed(h, name) ?? make(h, name, sk);
     if (stored) emit(delOp(h, "sockets"));
     for (const k of Object.keys(s.entities)) { const c = s.entities[k].c;
       if (c.parent?.to === h && typeof c.parent.socket === "string") { const id = made[c.parent.socket] ?? childNamed(h, c.parent.socket); const { socket, ...rest } = c.parent;
@@ -180,7 +180,7 @@ function lifter(st, ever) {
         emit(setOp(k, "parent", { ...rest, to: id })); emit(setOp(k, "transform", underSocket(s, h, tfOf(s.entities[id].c), tfOf(c)))); }
       if (legacyHome(c.home) && c.home.parent.to === h) emit(setOp(k, "home", homeLifted(c.home, made))); }
     return made; };
-  const liftStored = (h) => (bag(s.entities[h]?.c.sockets) ? liftHost(h, s.entities[h].c.sockets, { stored: true }) : {});
+  const liftStored = (h) => (liveObj(s.entities[h]?.c.sockets) ? liftHost(h, s.entities[h].c.sockets, { stored: true }) : {});
   return { s, out, emit, make, kidsOf, childNamed, homeLifted, liftHost, liftStored, liftBodies, stored: (x) => { storedBodies = x; } }; }
 
 export function liftOps(st, ops, ever = new Set()) {
@@ -209,7 +209,7 @@ export function liftOps(st, ops, ever = new Set()) {
         if (JSON.stringify(c.transform) !== JSON.stringify(t)) emit(setOp(id, "transform", t));
         if (JSON.stringify(c.socket) !== JSON.stringify(v)) emit(setOp(id, "socket", v));
         // the slot's body is the child's station: a body written sets it, none takes it away
-        if (bag(sk.body)) { const st2 = stationOfBody(sk.body); if (JSON.stringify(c.station) !== JSON.stringify(st2)) emit(setOp(id, "station", st2)); }
+        if (liveObj(sk.body)) { const st2 = stationOfBody(sk.body); if (JSON.stringify(c.station) !== JSON.stringify(st2)) emit(setOp(id, "station", st2)); }
         else if (c.station !== undefined) emit(delOp(id, "station")); }
       notes.push({ legacy: "sockets", id: o.id, wrote, why: "sockets are child entities now: each slot is a socket child (parent {to: <its id>} attaches to it)" });
       continue;
@@ -225,12 +225,12 @@ export function liftOps(st, ops, ever = new Set()) {
       notes.push({ legacy: "parent.socket", id: o.id, wrote: { parent: { to: id } }, why: `${h}'s '${socket}' socket is the entity ${id}` });
       continue;
     }
-    if (o.verb === "set" && o.comp === "transform" && via.has(o.id) && bag(o.value) && Array.isArray(o.value.pos)) { const { h, id } = via.get(o.id);
+    if (o.verb === "set" && o.comp === "transform" && via.has(o.id) && liveObj(o.value) && Array.isArray(o.value.pos)) { const { h, id } = via.get(o.id);
       emit(setOp(o.id, "transform", underSocket(s, h, tfOf(s.entities[id].c), o.value))); continue; }
     if (o.comp === "parent") via.delete(o.id);
     if (o.verb === "set" && o.comp === "home" && legacyHome(o.value)) { liftStored(o.value.parent.to); emit(setOp(o.id, "home", homeLifted(o.value))); continue; }
     // a socket written with the old body block: the socket without it, and the block as the station beside it
-    if (o.verb === "set" && o.comp === "socket" && bag(o.value) && bag(o.value.body)) { const { body, ...rest } = o.value;
+    if (o.verb === "set" && o.comp === "socket" && liveObj(o.value) && liveObj(o.value.body)) { const { body, ...rest } = o.value;
       emit(setOp(o.id, "socket", rest)); emit(setOp(o.id, "station", stationOfBody(body)));
       notes.push({ legacy: "socket.body", id: o.id, wrote: { station: true }, why: "what a person's body does at a socket is its station now" }); continue; }
     if (o.verb === "set" && o.comp === "model") models.add(o.id);
@@ -239,14 +239,14 @@ export function liftOps(st, ops, ever = new Set()) {
   // a catalogue model that declares seats: they are made as children ("the log holds every number"), once
   for (const h of models) { const e = s.entities[h]; const ms = modelOf(e?.c.model)?.sockets;
     // never one of its seats made before: a seat someone deleted stays deleted, as the maintenance command's lift (modelSeatsDue) reads it
-    if (!bag(ms) || bag(e.c.sockets) || kidsOf(h).some((k) => isSocketC(s.entities[k].c)) || Object.keys(ms).some((n) => ever.has(socketId(h, n)))) continue;
+    if (!liveObj(ms) || liveObj(e.c.sockets) || kidsOf(h).some((k) => isSocketC(s.entities[k].c)) || Object.keys(ms).some((n) => ever.has(socketId(h, n)))) continue;
     L.stored(true); const made = liftHost(h, ms, { stored: false }); L.stored(false); notes.push({ legacy: "model sockets", id: h, wrote: made, why: `its model declares ${Object.keys(made).join(", ")}: made as socket children` }); }
   return { ops: out, notes };
 }
 
 // ---------- the old spelling, lifted by the maintenance command (lift-sockets) ----------
 const modelSeatsDue = (st, ever, k) => { const c = st.entities[k].c; const ms = modelOf(c.model)?.sockets;
-  return bag(ms) && !bag(c.sockets) && !Object.keys(ms).some((n) => ever.has(socketId(k, n))) && !Object.keys(st.entities).some((x) => st.entities[x].c.parent?.to === k && isSocketC(st.entities[x].c)); };
+  return liveObj(ms) && !liveObj(c.sockets) && !Object.keys(ms).some((n) => ever.has(socketId(k, n))) && !Object.keys(st.entities).some((x) => st.entities[x].c.parent?.to === k && isSocketC(st.entities[x].c)); };
 /** The hosts a stored world still holds in the old spelling, in id order: one that stores a map; one a parent or a home
  *  names a slot of; one whose model declares seats it was never given (none of their ids was ever made, so a seat
  *  someone deleted stays deleted). */
@@ -256,7 +256,7 @@ const modelSeatsDue = (st, ever, k) => { const c = st.entities[k].c; const ms = 
 export function storedLegacyHosts(st) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;
-    if (bag(c.sockets)) hosts.add(k);
+    if (liveObj(c.sockets)) hosts.add(k);
     if (legacyParent(c.parent) && st.entities[c.parent.to]) hosts.add(c.parent.to);
     if (legacyHome(c.home) && st.entities[c.home.parent.to]) hosts.add(c.home.parent.to);
     if (isSocketC(c) && c.socket.body !== undefined && st.entities[c.parent?.to]) hosts.add(c.parent.to); }
@@ -265,7 +265,7 @@ export function storedLegacyHosts(st) {
 export function legacyHosts(st, ever = new Set()) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;
-    if (bag(c.sockets)) hosts.add(k);
+    if (liveObj(c.sockets)) hosts.add(k);
     if (legacyParent(c.parent) && st.entities[c.parent.to]) hosts.add(c.parent.to);
     if (legacyHome(c.home) && st.entities[c.home.parent.to]) hosts.add(c.home.parent.to);
     if (isSocketC(c) && c.socket.body !== undefined && st.entities[c.parent?.to]) hosts.add(c.parent.to);
@@ -275,7 +275,7 @@ export function legacyHosts(st, ever = new Set()) {
 /** One host's lift: the ops (the system's own), the children it made by slot, and the things it moved. */
 export function liftHostOps(st, ever, h) {
   const L = lifter(st, ever); const c = L.s.entities[h].c; L.stored(true);   // what a log or a catalogue holds is re-spelled, not judged anew
-  const made = bag(c.sockets) ? L.liftStored(h) : modelSeatsDue(L.s, ever, h) ? L.liftHost(h, modelOf(c.model).sockets, { stored: false }) : L.liftHost(h, {}, { stored: false });
+  const made = liveObj(c.sockets) ? L.liftStored(h) : modelSeatsDue(L.s, ever, h) ? L.liftHost(h, modelOf(c.model).sockets, { stored: false }) : L.liftHost(h, {}, { stored: false });
   L.liftBodies(h);
   const mine = new Set([h, ...Object.values(made)]);
   return { ops: L.out, made, moved: [...new Set(L.out.map((o) => o.id).filter((id) => !mine.has(id)))] };

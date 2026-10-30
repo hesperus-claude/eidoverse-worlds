@@ -6,6 +6,7 @@ import { MODELS } from "../labmodels.js";
 import { COMPONENTS } from "../componentspec.js";
 import { collisionBoxes } from "../../structure.js";
 import { CTX } from "./ctx.js";
+import { isNum } from "../is.js";
 // ---------- the model catalogue ----------
 // The engine's models are library paths measured from their GLBs (server/modelcatalogue.ts; else LAB_CATALOGUE),
 // so the catalogue is injected: io.catalogue = { get(name) → entry | undefined,
@@ -52,7 +53,6 @@ function structGeom(v) {
 // model, so boxOfM's default box is its box; a sphere and a capsule are `round` (they offer no face when tipped). Cached per
 // VALUE, as structGeom
 const r4 = (n) => Math.round(n * 1e4) / 1e4;
-const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 export const MESH_SIZE = COMPONENTS.mesh.ranges.size;
 const MESHGEO = new WeakMap();
 const meshOk = (v) => v && typeof v === "object" && !Array.isArray(v) && v !== PURGED && COMPONENTS.mesh.enums.shape.includes(v.shape)

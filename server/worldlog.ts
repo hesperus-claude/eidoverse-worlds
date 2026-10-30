@@ -20,10 +20,9 @@ import { forkCopy, operatorRepair as authorityOperatorRepair, request as authori
 import { authorityTime } from "./readmeter.ts";
 import { txnOutcome, txnRefusal, wedgedOf } from "../shared/protocol/authority/storage.js";
 import { clientCutOf, spokenOf } from "../shared/protocol/replica.js";
-import { viewState } from "../shared/protocol/view.js";
+import { viewState, idOut } from "../shared/protocol/view.js";
 import { holdWire } from "../shared/grab.js";
 import { hear } from "../shared/chatwindow.js";
-import { dec } from "../shared/protocol/names.js";
 import { openLive, isWorldDir, isPreNamesDir, isSwapUnfinished } from "./livehost.ts";
 import { dropCache } from "./statecache.ts";
 import { ENGINE_CATALOGUE, warm, modelsIn } from "./modelcatalogue.ts";
@@ -35,7 +34,6 @@ type Any = any;
 export type ChatLine = { seq: number; ts: number; actor: string; verb: "say"; args: { text: string; to?: string; spoken?: boolean; utt?: number; t0?: number } };
 /** The view of the fold (shared/protocol/view.js viewState) plus the chat window. */
 export type WorldView = { entities: Record<string, Any>; terrain: Any; grass: Any; sky: Any; assets: Any[]; recentChat: Any[]; chatTotal: number; roles: Record<string, Any>; bans: Record<string, Any> };
-const idOut = (s: string) => dec(s) ?? s;
 
 /** An entry as clients are sent it: without the chain fields (world, head, sig) and an act/say body's salt. Clients
  *  adopt a cut at join and fold ops; nothing reads those fields, and on a two-character say they were 380 of its 488

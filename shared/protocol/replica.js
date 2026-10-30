@@ -15,10 +15,9 @@
 // to?}): chat isn't world state, it's the log's own kind.
 import { opsOf, applyInPlace, emptyState, PURGED, Malformed } from "./fold.js";
 import { simFolder, simCutOf, advanceSim, tickOf, carried } from "./simlayer.js";
-import { viewState } from "./view.js";
-import { dec, learnNames, actorName } from "./names.js";
+import { viewState, idOut } from "./view.js";
+import { learnNames, actorName } from "./names.js";
 
-const idOut = (s) => dec(s) ?? s;
 /** A say's spoken trio (the authority validated it at admission; this is a reader's own guard): display metadata only. */
 export const spokenOf = (b) => (b?.spoken === true && Number.isSafeInteger(b.utt) ? { spoken: true, utt: b.utt, ...(Number.isFinite(b.t0) ? { t0: b.t0 } : {}) } : {});
 

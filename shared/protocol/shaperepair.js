@@ -36,7 +36,7 @@ import { grassAtWrite } from "./assetref.js";
 import { eidoHex } from "../eido.js";
 import { COMPONENTS, materialize } from "./componentspec.js";
 import { partSlot, motionType } from "./names.js";
-const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+import { isObj } from "./is.js";
 /** The light rig's falloff before a light said its own (client/lib/lightrig.js, three.js decay). */
 export const OLD_LIGHT_DECAY = 1.7;
 /** …and its intensity when a light wrote none (lightrig.js requestLight; not the registry's default). */
@@ -49,7 +49,7 @@ const isMotionKey = (k) => k === "motion" || k.startsWith("motion:");
 
 /** One motion value in today's spelling (or the same object when nothing changes). */
 export function repairMotion(m) {
-  if (!bag(m)) return m;
+  if (!isObj(m)) return m;
   let out = m; const edit = () => (out === m ? (out = { ...m }) : out);
   // amp as the old reader read it, Number(m.amp ?? m.amplitude): a numeric string was that number, null was 0, and an amp
   // of null gave way to the amplitude (not dropped to today's default)
@@ -67,34 +67,34 @@ export function repairMotion(m) {
  *  removed]}. Only this family's names are touched; everything else is passed through as it is. `pathOf(address)` → the
  *  library path an old content address names on this host, or null (absent: models are left as they are). */
 export function repairComps(c0, { pathOf = null } = {}) {
-  if (!bag(c0)) return { c: c0, set: [], del: [] };
+  if (!isObj(c0)) return { c: c0, set: [], del: [] };
   const c = { ...c0 }; const set = new Set(), del = new Set();
   const put = (k, v) => { c[k] = v; set.add(k); del.delete(k); };
   const drop = (k) => { delete c[k]; del.add(k); set.delete(k); };
   // a keyed motion stored before the node was data: its key's tag was the node's name (motion.js read key.slice(7))
-  for (const k of Object.keys(c)) if (k.startsWith("motion:") && bag(c[k]) && !(typeof c[k].node === "string" && c[k].node)) put(k, { ...c[k], node: k.slice(7) });
+  for (const k of Object.keys(c)) if (k.startsWith("motion:") && isObj(c[k]) && !(typeof c[k].node === "string" && c[k].node)) put(k, { ...c[k], node: k.slice(7) });
   // a bare motion naming a part is that node's motion: motion:<slot> {node: <the file's name, as it was>}. The slot is a
   // pure function of the name (partSlot), so every server writes the same key; a motion already on that node wins
-  if (bag(c.motion) && typeof c.motion.part === "string" && c.motion.part) {
+  if (isObj(c.motion) && typeof c.motion.part === "string" && c.motion.part) {
     const { part, ...rest } = c.motion; const key = `motion:${partSlot(part)}`;
-    const onIt = Object.keys(c).some((k) => k.startsWith("motion:") && bag(c[k]) && c[k].node === part);
-    if (!onIt && !bag(c[key])) put(key, { ...rest, node: part });
+    const onIt = Object.keys(c).some((k) => k.startsWith("motion:") && isObj(c[k]) && c[k].node === part);
+    if (!onIt && !isObj(c[key])) put(key, { ...rest, node: part });
     drop("motion");
-  } else if (bag(c.motion) && "part" in c.motion) { const { part: _p, ...rest } = c.motion; put("motion", rest); }   // a part that names nothing
-  for (const k of Object.keys(c)) if (isMotionKey(k) && bag(c[k])) { const r = repairMotion(c[k]); if (r !== c[k]) put(k, r); }
+  } else if (isObj(c.motion) && "part" in c.motion) { const { part: _p, ...rest } = c.motion; put("motion", rest); }   // a part that names nothing
+  for (const k of Object.keys(c)) if (isMotionKey(k) && isObj(c[k])) { const r = repairMotion(c[k]); if (r !== c[k]) put(k, r); }
   // a whole motion's hinge is the thing's pivot component
-  if (bag(c.motion) && "pivot" in c.motion) {
+  if (isObj(c.motion) && "pivot" in c.motion) {
     const { pivot, ...rest } = c.motion; put("motion", rest);
-    if (!bag(c.pivot) && Array.isArray(pivot) && pivot.length === 3 && pivot.every(Number.isFinite)) put("pivot", { pos: pivot.slice() });
+    if (!isObj(c.pivot) && Array.isArray(pivot) && pivot.length === 3 && pivot.every(Number.isFinite)) put("pivot", { pos: pivot.slice() });
   }
-  if (bag(c.motion) && c.motion.type === "pendulum" && !bag(c.pivot)) put("pivot", { pos: OLD_READINGS.wholePendulumPivot.slice() });
-  if (bag(c.collider) && c.collider.shape === "exact") put("collider", { ...c.collider, shape: "mesh" });
-  if (bag(c.physics)) { let p = c.physics; const edit = () => (p === c.physics ? (p = { ...c.physics }) : p);
+  if (isObj(c.motion) && c.motion.type === "pendulum" && !isObj(c.pivot)) put("pivot", { pos: OLD_READINGS.wholePendulumPivot.slice() });
+  if (isObj(c.collider) && c.collider.shape === "exact") put("collider", { ...c.collider, shape: "mesh" });
+  if (isObj(c.physics)) { let p = c.physics; const edit = () => (p === c.physics ? (p = { ...c.physics }) : p);
     if (p.kind === undefined) { edit(); p.kind = "dynamic"; }
     if ("material" in p) { edit(); if (p.surface === undefined) p.surface = p.material; delete p.material; }
     for (const k of ["layers", "mask", "ccd"]) if (k in p) { edit(); delete p[k]; }
     if (p !== c.physics) put("physics", p); }
-  if (bag(c.light)) { let L = c.light; const edit = () => (L === c.light ? (L = { ...c.light }) : L);
+  if (isObj(c.light)) { let L = c.light; const edit = () => (L === c.light ? (L = { ...c.light }) : L);
     if (L.decay === undefined) { edit(); L.decay = OLD_LIGHT_DECAY; if (L.intensity === undefined) L.intensity = OLD_LIGHT_INTENSITY; }
     if ("day" in L) { edit(); if (L.daytime === undefined && typeof L.day === "boolean") L.daytime = L.day ? "dim" : "full"; delete L.day; }
     if (L.daytime === undefined) { edit(); L.daytime = "dim"; }
@@ -111,11 +111,11 @@ const HEXC = /^#[0-9a-f]{6}$/i;
 const hexInt = (x) => (typeof x === "string" && HEXC.test(x) ? parseInt(x.slice(1), 16) : x);
 /** One stored sky in today's spelling (or the same object). */
 export function repairSky(sky) {
-  if (!bag(sky)) return sky;
+  if (!isObj(sky)) return sky;
   let out = sky; const edit = () => (out === sky ? (out = { ...sky }) : out);
   if ("clock" in out || "dormantRated" in out) { edit();
     if (out.clock === "real") { if (typeof out.tz !== "string" || !out.tz) out.tz = "America/Los_Angeles";
-      const d = out.dormantRated; if (bag(d)) { if (Number.isFinite(d.hours)) out.hours = d.hours; if (Number.isFinite(d.rate)) out.rate = d.rate; if (Number.isFinite(d.ts)) out.ts = d.ts; } }
+      const d = out.dormantRated; if (isObj(d)) { if (Number.isFinite(d.hours)) out.hours = d.hours; if (Number.isFinite(d.rate)) out.rate = d.rate; if (Number.isFinite(d.ts)) out.ts = d.ts; } }
     else delete out.tz;   // a clock other than real: the rated clock governs
     delete out.clock; delete out.dormantRated; }
   // a tz with no clock is today's spelling (it governs): kept
@@ -125,7 +125,7 @@ export function repairSky(sky) {
   // weatherSeconds → transition; a value today's range can't hold (0, or more than 600 s) is dropped: absent, the
   // renderer's own ease
   if ("weatherSeconds" in out) { edit(); const ws = out.weatherSeconds; if (out.transition === undefined && Number.isFinite(ws) && ws > 0 && ws <= 600) out.transition = ws; delete out.weatherSeconds; }
-  if (bag(out.forecast) && ("dwellSec" in out.forecast || "transitionSec" in out.forecast)) { edit(); const f = { ...out.forecast };
+  if (isObj(out.forecast) && ("dwellSec" in out.forecast || "transitionSec" in out.forecast)) { edit(); const f = { ...out.forecast };
     if ("dwellSec" in f) { if (f.dwell === undefined) f.dwell = f.dwellSec; delete f.dwellSec; }
     if ("transitionSec" in f) { if (f.transition === undefined) f.transition = f.transitionSec; delete f.transitionSec; }
     out.forecast = f; }
@@ -137,17 +137,17 @@ export function repairSky(sky) {
  *  repair command runs once per world (repairShapes: the log's marker, shapesMarked), translate-v1@12 once per translation
  *  (and its output carries the marker), the oracle once per projection. */
 export function repairWorld(c0) {
-  if (!bag(c0)) return { c: c0, set: [], del: [] };
+  if (!isObj(c0)) return { c: c0, set: [], del: [] };
   const c = { ...c0 }; const set = new Set(), del = new Set();
   const put = (k, v) => { c[k] = v; set.add(k); del.delete(k); };
-  if (bag(c.sky)) { const sky = withSkyDefaults(repairSky(c.sky)); if (JSON.stringify(sky) !== JSON.stringify(c.sky)) put("sky", sky); }   // the old readers' readings of absence ARE the registry's defaults (hours 12, azimuth 180° = π, …)
-  if (bag(c.terrain)) { let t = c.terrain; const edit = () => (t === c.terrain ? (t = { ...c.terrain }) : t);
-    if (Array.isArray(t.layers) && t.layers.some((l) => bag(l) && typeof l.color === "string" && HEXC.test(l.color))) { edit(); t.layers = t.layers.map((l) => (bag(l) ? { ...l, color: hexInt(l.color) } : l)); }
+  if (isObj(c.sky)) { const sky = withSkyDefaults(repairSky(c.sky)); if (JSON.stringify(sky) !== JSON.stringify(c.sky)) put("sky", sky); }   // the old readers' readings of absence ARE the registry's defaults (hours 12, azimuth 180° = π, …)
+  if (isObj(c.terrain)) { let t = c.terrain; const edit = () => (t === c.terrain ? (t = { ...c.terrain }) : t);
+    if (Array.isArray(t.layers) && t.layers.some((l) => isObj(l) && typeof l.color === "string" && HEXC.test(l.color))) { edit(); t.layers = t.layers.map((l) => (isObj(l) ? { ...l, color: hexInt(l.color) } : l)); }
     if (t.kind === undefined || t.kind === "noise") for (const [k, v] of Object.entries(materialize("terrain", { kind: "noise" }).value)) if (t[k] === undefined) { edit(); t[k] = v; }
     if ("water" in t) { edit(); const w = t.water; delete t.water;
-      if (bag(w) && !bag(c.water)) put("water", Object.fromEntries(Object.entries(w).map(([k, v]) => [k, k === "color" ? hexInt(v) : v]))); }
+      if (isObj(w) && !isObj(c.water)) put("water", Object.fromEntries(Object.entries(w).map(([k, v]) => [k, k === "color" ? hexInt(v) : v]))); }
     if (t !== c.terrain) put("terrain", t); }
-  if (bag(c.grass)) { let g = c.grass; try { g = grassAtWrite(c.grass).value; } catch { g = c.grass; }   // an unknown preset stays as it was (its readers say so)
+  if (isObj(c.grass)) { let g = c.grass; try { g = grassAtWrite(c.grass).value; } catch { g = c.grass; }   // an unknown preset stays as it was (its readers say so)
     if (g !== c.grass) put("grass", g); }
   return set.size || del.size ? { c, set: [...set], del: [...del] } : { c: c0, set: [], del: [] };
 }
@@ -201,7 +201,7 @@ export const RENAMED_FIELDS = Object.freeze({ grabbable: Object.freeze({ pose: "
 export const renamedFieldsKey = (comp) => (typeof comp === "string" && comp.startsWith("motion:") ? "motion" : comp);
 export function renameFields(comp0, v) {
   const comp = renamedFieldsKey(comp0);
-  if (!bag(v) || !Object.hasOwn(RENAMED_FIELDS, comp)) return { value: v, renamed: [] };
+  if (!isObj(v) || !Object.hasOwn(RENAMED_FIELDS, comp)) return { value: v, renamed: [] };
   if (comp === "motion") { const t = motionType(v); return t === v.type ? { value: v, renamed: [] } : { value: { ...v, type: t }, renamed: [{ field: "type", from: v.type, to: t }] }; }
   let out = v; const renamed = []; const edit = () => (out === v ? (out = { ...v }) : out);
   if (comp === "picture" || comp === "sound") for (const f of ["alt", "look"]) if (f in out) { edit(); const a = out[f]; delete out[f];
@@ -210,8 +210,8 @@ export function renameFields(comp0, v) {
     if (comp === "grabbable" && p === "two-hand") { if (out.twoHanded === undefined) out.twoHanded = true; renamed.push({ field: "pose", from: p, to: { twoHanded: out.twoHanded } }); }
     else if (p === null) renamed.push({ field: "pose", to: null });   // a stored null is a removal (anim is never null)
     else { if (out.anim === undefined) out.anim = p; renamed.push({ field: "pose", to: "anim" }); } }
-  if (comp === "grabbable" && bag(out.grips) && Object.values(out.grips).some((g) => bag(g) && "fingers" in g)) { edit();
-    out.grips = Object.fromEntries(Object.entries(out.grips).map(([k, g]) => { if (!bag(g) || !("fingers" in g)) return [k, g];
+  if (comp === "grabbable" && isObj(out.grips) && Object.values(out.grips).some((g) => isObj(g) && "fingers" in g)) { edit();
+    out.grips = Object.fromEntries(Object.entries(out.grips).map(([k, g]) => { if (!isObj(g) || !("fingers" in g)) return [k, g];
       const { fingers, ...r } = g; renamed.push({ field: `grips.${k}.fingers`, to: fingers === null ? null : "grasp" });
       return [k, { ...r, ...(r.grasp === undefined && fingers !== null ? { grasp: fingers } : {}) }]; })); }
   return { value: out, renamed };
@@ -220,11 +220,11 @@ export function renameFields(comp0, v) {
  *  when nothing needs it. */
 export function renameOps(st, purged = null) {
   const ops = [];
-  for (const [id, map] of Object.entries(RENAMED_COMPONENTS)) { const c = st?.entities?.[id]?.c; if (!bag(c)) continue;
+  for (const [id, map] of Object.entries(RENAMED_COMPONENTS)) { const c = st?.entities?.[id]?.c; if (!isObj(c)) continue;
     for (const [from, to] of Object.entries(map)) { if (!(from in c) || c[from] === purged) continue;
       ops.push({ verb: "delete", id, comp: from }); if (!(to in c)) ops.push({ verb: "set", id, comp: to, value: c[from] }); } }
-  for (const id of Object.keys(st?.entities ?? {}).sort()) { const c = st.entities[id].c; if (!bag(c)) continue;
-    for (const comp of Object.keys(c).filter((k) => Object.hasOwn(RENAMED_FIELDS, renamedFieldsKey(k))).sort()) { if (!bag(c[comp]) || c[comp] === purged) continue;
+  for (const id of Object.keys(st?.entities ?? {}).sort()) { const c = st.entities[id].c; if (!isObj(c)) continue;
+    for (const comp of Object.keys(c).filter((k) => Object.hasOwn(RENAMED_FIELDS, renamedFieldsKey(k))).sort()) { if (!isObj(c[comp]) || c[comp] === purged) continue;
       const r = renameFields(comp, c[comp]); if (r.renamed.length) ops.push({ verb: "set", id, comp, value: r.value, renamed: r.renamed }); } }
   return ops;
 }

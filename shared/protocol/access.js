@@ -18,6 +18,7 @@
 // below-visitor rungs (none, spectator) map onto these components exactly (DOORS below).
 
 import * as R from "./roles.js";
+import { isObj } from "./is.js";
 /** The four doors an owner picks between (upstream's World › access buttons), in this protocol's components. */
 export const DOORS = Object.freeze({
   open:          "anyone may come in, and build (newcomers are builders)",
@@ -27,7 +28,6 @@ export const DOORS = Object.freeze({
 });
 export const ACCESS_WARN_MS = 5 * 60_000;   // a timed grant's holder is told this long before it ends
 
-const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 const accessOf = (wc) => (isObj(wc?.access) ? wc.access : null);
 
 /** Is `actor` LISTED here: a live roles:<actor> grant whose `until`, if any,

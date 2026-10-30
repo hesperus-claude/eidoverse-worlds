@@ -16,7 +16,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { custodyFileIn } from "./keyfiles.ts";
-import { readLog, fold, opsOf, applyInPlace, purgesIn, jcs, sha256, Malformed, DIALECT, VERSION } from "../shared/protocol/fold.js";
+import { readLog, fold, opsOf, applyInPlace, purgesIn, jcs, sha256, DIALECT, VERSION, isE, opsQuiet } from "../shared/protocol/fold.js";
 import { worldOf, posAt } from "../shared/protocol/authority.js";
 import { simFolder, carried, digestOf } from "../shared/protocol/simlayer.js";
 import { readLogBytes, appendDurable, putBlobFile } from "./durable.ts";
@@ -31,8 +31,6 @@ import { seedPurgedSeqs } from "../shared/protocol/authority/storage.js";
 
 type Any = any; // the authority is JSDoc-typed JS; the server holds it structurally
 
-const isE = (e: Any) => e && !(e instanceof Malformed) && typeof e === "object";
-const opsQuiet = (e: Any) => { try { return opsOf(e); } catch { return []; } };
 
 /** Apply one change entry's ops to a COPY of st that shares every entity the entry doesn't touch. */
 export function applyShared(st: Any, ops: Any[], seq: number) {

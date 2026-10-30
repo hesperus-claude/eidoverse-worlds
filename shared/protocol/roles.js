@@ -12,6 +12,7 @@
 // holds it: reason, by, until), and the timed ones (muted, kicked). A state is never compared as a rank, and a rank can't
 // express a state: that is why banned is not "rank -5". There is no rung below member (a ban or a mute does that job),
 // so no gate can meet a sub-floor role.
+import { isObj } from "./is.js";
 
 // ---------------- five open defaults (one value each: flip it here) ----------------
 /** Q1: caption is a property of the SCREEN it captions, not a role switch (true = off the role list). */
@@ -83,7 +84,6 @@ export const BUILTIN = Object.freeze({
   owner:     Object.freeze({ name: "Owner",     rank: RANK.owner,     can: Object.freeze(Object.fromEntries(PERMISSION_NAMES.map((k) => [k, k === "fly" ? OWNERS_FLY : true]))) }),
 });
 
-const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 export const CUSTOM_ID = /^[a-z][a-z0-9-]{0,23}$/;
 // The list is the registry's (roles.vocab): a change to it is a trial break needing --ack.
 export const RESERVED_IDS = Object.freeze(new Set(["owner", "banned"]));

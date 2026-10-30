@@ -6,9 +6,8 @@
 // that can't happen: presets live strictly on the authoring side.
 
 import { DEF_NAME_RE } from './floradefs.js';
+import { isNum, isStr } from './protocol/is.js';
 
-const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-const isStr = (v) => typeof v === 'string' && v.length > 0;
 
 const NUMERIC = ['hours', 'rate', 'azimuth', 'sun', 'ambient', 'fill', 'exposure', 'fog'];
 const STRINGY = ['clouds', 'weather'];

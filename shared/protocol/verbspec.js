@@ -4,6 +4,7 @@
 // list is refused `unknown-arg`, so tightening after ship would break every client that sends extras. Where a handler checks
 // a value itself (with its own words and code), the row's type is `any`: the row names the argument, the handler judges it.
 import { COMPONENTS } from "./componentspec.js";
+import { isNum } from "./is.js";
 const xz = { type: "xz", doc: "[x, z] in metres (ground position; y comes from what's below)" };
 const ref = (doc) => ({ type: "id", doc });
 const target = (doc) => ({ type: "id|xz", doc });
@@ -170,7 +171,6 @@ function skyArgs() {
   return { ...f, clock: { type: "any", doc: "old spelling: a tz present means the wall clock governs" }, weatherSeconds: { type: "any", doc: "old spelling of transition" },
     dormantRated: { type: "any", doc: "old fold bookkeeping (read as hours/rate)" }, keepSky: { type: "any", doc: "weather: false discards the standing sky" }, dry: { type: "bool" } };
 }
-const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const okType = (spec, v) => {
   switch (spec.type) {
     case "xz": return Array.isArray(v) && v.length === 2 && v.every(isNum);

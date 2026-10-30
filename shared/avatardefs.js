@@ -11,14 +11,13 @@
 //     would not find — a store upload, a subdirectory, a repointed name.
 //     Declared beats discovered: a def's `vrm` wins over a same-named scan.
 // Unknown keys are preserved (`doc` is the notes field), same rule as flora.
+import { isNum, isStr } from "./protocol/is.js";
 
 /** Avatar names come from .vrm filenames, which predate any naming rule —
  *  so the def rule is permissive where flora's is strict: printable, no
  *  path separators or control characters, ≤64 chars. */
 export const AVATAR_NAME_RE = /^[^/\\\x00-\x1f]{1,64}$/;
 
-const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-const isStr = (v) => typeof v === 'string' && v.length > 0;
 
 /** Validate one avatar def. Empty list = servable.
  *  @param {string} name @param {unknown} def @returns {string[]} */

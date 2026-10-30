@@ -4,10 +4,8 @@
 // The ground panel applies a choice as a concrete terrain/grass verb on a
 // deliberate click, so the log never stores one of these names — a mutable
 // def file can restyle the panel, never rewrite logged meaning.
+import { isNum, isObj, isStr } from "./protocol/is.js";
 
-const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-const isStr = (v) => typeof v === 'string' && v.length > 0;
-const isObj = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 // panel labels, not def files — spaces allowed ("mojave desert"), still bounded
 const LABEL_RE = /^[a-z][a-z0-9 _-]{0,32}$/;
 

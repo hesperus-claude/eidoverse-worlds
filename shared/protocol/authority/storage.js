@@ -2,7 +2,7 @@
 // and the spatial index (qr3 is the rotation a log takes; scratch is the preview the index files). VOLATILE (the
 // spatial index's "indexed whole" mark) and opsQuiet (the rights views' quiet opsOf) live here because this is where
 // they are read.
-import { readLog, fold, opsOf, followUpsOf, applyInPlace, cloneState, cowState, applyCow, checkEntry, jcs, sha256, utf8Len, worldIdOf, Malformed, PURGED } from "../fold.js";
+import { readLog, fold, opsOf, followUpsOf, applyInPlace, cloneState, cowState, applyCow, checkEntry, jcs, sha256, utf8Len, worldIdOf, Malformed, PURGED, isE, opsQuiet } from "../fold.js";
 import { sha256Bytes, hexBytes } from "../hash.js";
 import * as R from "../roles.js";
 import { simFold } from "../simlayer.js";
@@ -211,7 +211,6 @@ export function readback(w, seq) {
 // 16 random bytes as base64url (a genesis nonce, a set's salt). io.random(n) → Uint8Array may be injected (a test that
 // compares two runs byte for byte seeds both alike); otherwise Web Crypto, in bun and browsers alike.
 const nonce16 = (w) => { const b = w?.random ? w.random(16) : globalThis.crypto.getRandomValues(new Uint8Array(16)); let s = ""; for (const x of b) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
-const isE = (e) => e && !(e instanceof Malformed) && typeof e === "object";
 // §2.4 "The chain": the skeleton keeps each set's value and salt only as commit = sha256(salt ‖ JCS(value)), and an
 // act/say/sim body only as {commit}; a body or op already {commit} is purged and stays as it is.
 const opCommit = (o) => ("commit" in o && !("value" in o) ? o.commit : sha256((o.salt ?? "") + jcs(o.value)));
@@ -273,7 +272,6 @@ const createOps = (id, comps) => [{ verb: "create", id }, ...Object.entries(comp
 const scratch = (st, ops) => { const s = applyCow(cowState(st), ops); if (VOLATILE.has(st.entities)) VOLATILE.add(s.entities); return s; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "thing";
 
-const opsQuiet = (e) => { try { return opsOf(e); } catch { return []; } };
 // (here beside CHANGE: the gate admits these ops, the write path and undo mark them, and a leaf can't reach the gate)
 // The authority's own follow-up ops inside a person's write: clearing the references to what a
 // delete removed, and an undo putting back the references that delete cleared. Marked on the op object (a request's JSON

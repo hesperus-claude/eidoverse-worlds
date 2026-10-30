@@ -23,6 +23,7 @@ import { ancestors } from "./math.js";
 import { toggleOf } from "./use.js";
 import { scriptCeiling } from "./scripts.js";
 import { CAPACITY_CEILING } from "./capacity.js";
+import { isNum } from "../is.js";
 // the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
 // authority.js binds at load
 const guess = (...a) => UP.guess(...a);
@@ -233,7 +234,6 @@ function mediaCheck(s, id, comp, v, at, obj) {
 // L7: values are checked against their schema at admit. A KNOWN name with an unknown key is refused with a "did you
 // mean" (terrain {amp: 0} vs the engine's `amplitude`). Unknown NAMES are still kept (L5): this binds only names the
 // catalogue defines.
-const isNum = (x) => typeof x === "number" && Number.isFinite(x);
 const AXIS_LETTERS = ["x", "y", "z", "-x", "-y", "-z"];
 const TYPES = { number: isNum, int: Number.isInteger, string: (x) => typeof x === "string", bool: (x) => typeof x === "boolean", any: () => true,
   sha256: (x) => typeof x === "string" && /^sha256:[0-9a-f]{64}$/.test(x),   // a content hash (model-hash; the one spelling, as copy-of.from's)

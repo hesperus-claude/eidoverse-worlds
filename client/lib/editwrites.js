@@ -17,7 +17,8 @@ import { bus } from './base.js';
 import { net, sendRequest, replica, replicaActive, sendDrag } from './net.js';
 import { entities } from './world.js';
 import * as OP from '../../shared/protocol/requests.js';
-import { enc, dec, actorName } from '../../shared/protocol/names.js';
+import { enc, actorName } from '../../shared/protocol/names.js';
+import { idOut } from '../../shared/protocol/view.js';
 import { refusalText, lockVerb, lockQuestion, lockChoices, lockBody } from '../../shared/protocol/refusal.js';
 import { plain, warnPlain, nameOf as thingName } from './plainwords.js';
 import { chooseCenter } from './confirmcenter.js';
@@ -28,7 +29,7 @@ import { isOwner } from '../../shared/protocol/roles.js';
 export { replicaActive };
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 const idIn = (id) => enc(String(id));
-export const idOut = (id) => dec(id) ?? id;
+export { idOut };   // shared/protocol/view.js
 /** a person's display name for an actor id (the authority directory's, via names.js; never the log's) */
 export const nameOf = (id) => actorName(id);
 
