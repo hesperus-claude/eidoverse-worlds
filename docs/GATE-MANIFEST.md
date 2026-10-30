@@ -321,7 +321,7 @@ time.
 | 151 | buildcheck | main | `tools/buildcheck-test.ts` | bun | 18 s | 180 s |
 | 152 | buildcheck-queue | main | `tools/buildcheck-queue-test.ts` | bun | 7.4 s | 180 s |
 | 153 | buildcheck-route | main | `tools/buildcheck-route-test.ts` | bun | 22 s | 180 s |
-| 154 | door-is-error | main | `tools/door-is-error-test.ts` | bun | 280 s | 1400 s |
+| 154 | door-is-error | main | `tools/door-is-error-test.ts` | bun | 11 s | 180 s |
 | 155 | door-wording | main | `tools/door-wording-test.ts` | bun | ? | 300 s |
 | 156 | consent-replay | main | `tools/consent-replay-test.ts` | bun | ? | 300 s |
 | 157 | history-request | main | `tools/history-request-test.ts` | bun | 0.3 s | 180 s |
@@ -364,5 +364,5 @@ time.
 | 194 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
 | 195 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
 
-Lanes: core 17 suites (~78 s), main 165 (~1780 s), browser 13 (~1147 s); 195 suites in all.
+Lanes: core 17 suites (~78 s), main 165 (~1511 s), browser 13 (~1147 s); 195 suites in all.
 <!-- END GENERATED -->
