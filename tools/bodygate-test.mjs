@@ -7,6 +7,7 @@ GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
 import { tryUntil } from './protocol/wait.ts';
+import { suite } from './protocol/suite.ts';
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -24,8 +25,7 @@ const { armBodyGate, bodyGateArmed, releaseBodyGate, bodyGateOpen, awaitBodyGate
 const { loadGLB } = await import('../client/lib/assets.js');
 // a wait that never resolves is the failure this file exists to catch: it must go RED, not hang
 setTimeout(() => { console.log('  FAIL  a gate wait or a load hung past 8 s\n\nHUNG'); process.exit(1); }, 8000).unref?.();
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const { check, done } = suite('bodygate');
 const timed = async (p) => { const t = performance.now(); const v = await p; return { v, ms: performance.now() - t }; };
 const phasesOf = (name) => works.find((w) => w.label === `glb ${name}`)?.phases ?? [];   // the label is the model's word (assets.js modelName)
 
@@ -57,5 +57,4 @@ releaseBodyGate('again'); check('a second release is a no-op', bodyGateOpen());
 { const scene = await loadGLB('eidoverse/assets/models/open.glb');
   check('an open gate is not waited on', !!scene?.isObject3D && !phasesOf('open').includes('body-first'), phasesOf('open').join('>')); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

@@ -26,7 +26,7 @@ const check = (label: string, ok: boolean, detail?: string) => {
   console.log(ok ? `  \x1b[32m✓\x1b[0m ${label}` : `  \x1b[31m✗ ${label}${detail ? ` — ${detail}` : ""}\x1b[0m`);
   if (!ok) failures++;
 };
-const settle = () => new Promise((r) => setTimeout(r, 10));
+const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };   // the dispatch's loads are microtasks: a few loop turns, no timer
 
 const stubs = await import("./remotes-stubs.mjs");
 const { mock } = await import("bun:test");
