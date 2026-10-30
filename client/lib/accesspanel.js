@@ -7,6 +7,7 @@
 import { bus } from './base.js';
 import { net, sendRequest, replica, identities } from './net.js';
 import { toast } from './ui.js';
+import { escapeHtml as esc } from './markup.js';
 import * as R from '../../shared/protocol/roles.js';
 import { listedIn, leftWords } from '../../shared/protocol/access.js';
 import { serverNow, serverUntil } from './serverclock.js';
