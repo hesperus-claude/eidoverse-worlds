@@ -1,4 +1,4 @@
-// sound-clock-test substitutes this for the seams sounds.js imports that the
+// sound-editor-test substitutes this for the seams sounds.js imports that the
 // guard-label stub (main's) does not cover. Unlike sound-guard-stub, this one
 // BUILDS a graph: the playhead test needs a real applyFrom → seekTo pass, so
 // the audio context is a connectable fake, and the clock is a dial the test

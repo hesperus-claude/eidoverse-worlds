@@ -295,7 +295,7 @@ time.
 | 125 | pretrans | main | `tools/protocol/pretrans-check.ts` | bun | 2.8 s | 180 s |
 | 126 | soundclock | main | `tools/protocol/soundclock-check.ts` | bun | 0.2 s | 180 s |
 | 127 | sound | main | `tools/sound-test.ts` | bun | ? | 300 s |
-| 128 | sound-editor | main | `tools/sound-guard-test.ts` | bun | ? | 300 s |
+| 128 | sound-editor | main | `tools/sound-editor-test.ts` | bun | ? | 300 s |
 | 129 | skypanel | main | `tools/skypanel-state-test.ts` | bun | ? | 300 s |
 | 130 | physics-off | main | `tools/physics-off-test.ts` | bun | ? | 300 s |
 | 131 | eidomodel | main | `tools/protocol/eidomodel-check.ts` | bun | 0.7 s | 180 s |

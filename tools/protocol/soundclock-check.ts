@@ -10,7 +10,7 @@ import { ENGINE } from "./common.ts";
 let pass = 0, fail = 0;
 const ok = (id: string, cond: any, what: string, detail?: any) => {
   if (cond) { pass++; console.log(`  ok ${id} ${what}`); } else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ""}`); } };
-plugin({ name: "soundclock-stubs", setup(b) {   // sound-guard-test's stubs: sounds.js loads with its DOM and audio seams faked
+plugin({ name: "soundclock-stubs", setup(b) {   // sound-guard-stub: sounds.js loads with its DOM and audio seams faked
   for (const m of ["core", "base", "world", "net"]) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: path.join(ENGINE, "tools/guard-label-stub.mjs") }));
   for (const m of ["inspect", "ui", "audioctx", "audiounlock", "voiceconsent"]) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: path.join(ENGINE, "tools/sound-guard-stub.mjs") }));
 } });
