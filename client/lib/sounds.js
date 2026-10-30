@@ -19,41 +19,28 @@
 //   3. The clock is the SERVER's: with `t0` every client seeks to the same
 //      playhead ((serverNow - t0) mod duration when looping), so a late joiner hears
 //      the same bar as everyone else. Without it, the top of the track.
-//      `t0` is the authority's stamp on its own clock, and serverNow() is this
-//      client's estimate of that clock (client/lib/serverclock.js): round trips
-//      once they land, and before the first, the `t` of the clock message the
-//      server sends just before the snapshot to a join that asks (net.js) and
-//      of each frame.
+//      serverNow() is this client's estimate of the authority's clock
+//      (client/lib/serverclock.js).
 //   4. Replace (same id, new bag): same src → adjust in place (volume, loop,
 //      playing, re-seek on a new t0); new src → tear down and rebuild. A
 //      sound whose entity left the scene keeps its graph but is silenced
 //      (gain 0) until the entity is back — the bag is still authored.
 //   5. The listener has the last word on loudness. Every graph ends in ONE
 //      world bus whose gain is the audio panel's `world volume`
-//      (voiceconsent.js volumeFor('world'), live on 'audio:volume'), so the
-//      slider that has promised "ambience and place-sound" since 2026-08-16
-//      controls the first placed sound the day it exists. The authored
-//      volume stays its own node: what the author said is preserved, what
-//      you hear is authored × yours (Mica, #192 review, blocker 1).
-//
-// Batch 2 (R 10-07):
+//      (voiceconsent.js volumeFor('world'), live on 'audio:volume'). The
+//      authored volume stays its own node: what you hear is authored × yours.
 //   6. Silent at radius. The distance gain is shared/sound.js gainAt (BasisVR's natural curve: inverse inside, a
 //      (1-t)² taper over the last 5% to exactly 0), applied on the sound's own gain node in the tick. The panner only
-//      places it (HRTF direction, rolloff 0): Web Audio's `inverse` model clamps at maxDistance instead, and a 12 m
-//      radio was heard at −21 dB everywhere past 12 m.
-//   7. At most VOICES (32; R 10-28, was 8) world sounds are heard at once, the loudest by what each would be heard at; the rest are
-//      paused (their playhead is found again on the shared clock when they come back). A wall of stacked loops is 32.
+//      places it (HRTF direction, rolloff 0): Web Audio's `inverse` model clamps at maxDistance instead of reaching 0.
+//   7. At most VOICES (32) world sounds are heard at once, the loudest by what each would be heard at; the rest are
+//      paused (their playhead is found again on the shared clock when they come back).
 //   8. A limiter (DynamicsCompressor, −6 dB, 20:1, 3 ms) sits between the world bus and the speakers: a clipped upload
 //      can't go past full scale.
 //   9. Where the bytes come from (shared/mediasrc.js): a store file always; a trusted host's link always; any other
-//      link ONLY if this viewer turned on "allow untrusted links" (mediaprefs.js). Otherwise no element is made and
-//      nothing is fetched. A link is fetched with no Referer: an <audio> element takes no referrerPolicy of its
-//      own, so the page's (index.html's <meta name="referrer">) is what keeps it. A sound through Web Audio, like a
-//      picture, is a CORS request (crossOrigin), and a CORS request names the page's origin (its server, never the
-//      world's name) in its Origin header, and every link is tried that way first, so its host sees that Origin even
-//      when the sound then plays plain (a plain element alone sends neither). A link whose host sends no CORS headers can't go
-//      through Web Audio (it'd be silence); it plays from a plain element instead, its volume set by the same
-//      distance curve (no HRTF panning, no limiter: said once in the console).
+//      link ONLY if this viewer turned on "allow untrusted links" (mediaprefs.js); otherwise nothing is fetched. Links
+//      go with no Referer (the page's <meta name="referrer">). Every link is tried as a CORS request first (Web Audio
+//      needs it; its host sees the page's Origin); a host without CORS headers plays from a plain element instead,
+//      volume by the same distance curve (no HRTF, no limiter: said once in the console).
 //  10. Mute for me (mediaprefs.js): a muted thing's sound is gain 0, never logged.
 import { THREE, camera } from './core.js';
 import { bus, CONFIG } from './base.js';
@@ -302,7 +289,7 @@ registerEditor(({ id, obj, meta, bag, commit }) => {
 });
 
 // ---- the edit-mode inspector's gestures (fields: the schema's `sound` group).
-// A new sound plays (R 10-07: no start-paused); the authority stamps its t0. Before the file picker: whose it is to upload.
+// A new sound plays (no start-paused); the authority stamps its t0. Before the file picker: whose it is to upload.
 function pickFile(accept) {
   return new Promise((resolve) => {
     const inp = Object.assign(document.createElement('input'), { type: 'file', accept });

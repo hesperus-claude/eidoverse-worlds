@@ -22,13 +22,10 @@ const batches = new DrawBatches({ warm: async (mesh, live) => {
 batches.enabled = CONFIG.params.get('batching') !== '0';
 let lastRender = {};
 
-/** Render something that is NOT the world's eye pass — a sky bake, a thumbnail, a snapshot, the
- *  desktop mirror — without disturbing WebXR. three's XRManager.updateCamera(cam) runs inside EVERY
- *  renderer.render() while presenting and rewrites the SHARED stereo camera from `cam.parent`; a
- *  parentless bake/thumbnail camera leaves the eyes at the playspace origin for the frame (R's Steam
- *  Frame, 2026-09-05 21:45–23:30: 'I pop to the origin' — per-eye cameras at (0, 1.6, 0) while the
- *  base camera sat on the rig; sky_baked.js:351 had met the same class once). Pattern from porch-old
- *  :11176–11179: XR off around the pass, render target saved and restored. */
+/** Render something that is NOT the world's eye pass (a sky bake, a thumbnail, a snapshot, the desktop mirror)
+ *  without disturbing WebXR: three's XRManager.updateCamera(cam) runs inside EVERY renderer.render() while presenting
+ *  and rewrites the SHARED stereo camera from `cam.parent`, so a parentless camera would pop the eyes to the playspace
+ *  origin. XR off around the pass, render target saved and restored. */
 export function renderAside(sc, cam, target = null) {
   const xr = renderer.xr;
   if (!xr?.isPresenting) { const rt = renderer.getRenderTarget(); renderer.setRenderTarget(target); try { return renderer.render(sc, cam); } finally { renderer.setRenderTarget(rt); } }
@@ -38,10 +35,9 @@ export function renderAside(sc, cam, target = null) {
   finally { renderer.setRenderTarget(rt); xr.enabled = was; if (xr.isPresenting) xr.updateCamera(camera); }   // the eyes are rebuilt from the RIG before anything else renders
 }
 
-// RENDER CENSUS (owner, 09-06 12:22: per-eye fisheye + right eye bleeding into the left, spontaneous, mirror OFF):
-// count every renderer.render() per animation frame while presenting and remember the last one that was
-// NOT the main pass — camera type/fov/parent and whether it targeted a render target. A second render
-// into the eye framebuffer with a non-XR camera is exactly a wide frame stamped across both eyes.
+// RENDER CENSUS: count every renderer.render() per animation frame while presenting and remember the last one that
+// was NOT the main pass (camera type/fov/parent, target). A second render into the eye framebuffer with a non-XR
+// camera is exactly a wide frame stamped across both eyes.
 export const renderCensus = { perFrame: 0, maxPerFrame: 0, foreign: null, frames: 0 };
 let mainPassCam = null;
 if (typeof renderer.render === 'function') { const orig = renderer.render.bind(renderer);   // node-side suites mock core.js with a renderer that has no render (wing-owner-wire-test)
@@ -75,9 +71,8 @@ export function setXRCurtain(on) {
     curtain = new THREE.Scene();
     const shell = new THREE.Mesh(new THREE.SphereGeometry(4, 24, 16), new THREE.MeshBasicNodeMaterial({ color: 0x0b0f12, side: THREE.BackSide, depthTest: false, depthWrite: false }));
     shell.frustumCulled = false; shell.renderOrder = 0; curtain.add(shell); curtain.userData.shell = shell;
-    // THE SPLASH, head-locked 1.6 m out (owner, 09-19: 'still just plain white Entering VR with no logo or name'):
-    // the mark (its paths read from #splash so there is one drawing of it), eidoverse / worlds, and
-    // 'entering VR' with the dots breathing — repainted on the texture 3×/s while the curtain is up.
+    // THE SPLASH, head-locked 1.6 m out: the mark (its paths read from #splash so there is one drawing of it),
+    // eidoverse / worlds, and 'entering VR' with the dots breathing — repainted 3×/s while the curtain is up.
     const c = document.createElement('canvas'); c.width = 1024; c.height = 1024; const g = c.getContext('2d');
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     const logo = document.querySelector('#splash .sp-logo');
@@ -111,10 +106,9 @@ export function renderWorld() {
   if (worldHold) return;
   if (globalThis.__gpuLost?.fired) return;   // a lost GPU draws nothing (see renderer.render above); skip the rest of renderWorld too
   mainPassCam = camera;
-  // SELF-HEAL (09-07 00:30, the black desktop's second half): three captures `outputRenderTarget = _renderTarget || …`
-  // at the top of every render. A frame that aborts between binding its frame-buffer target and restoring leaves
-  // that target bound; every later frame then renders INTO it and blits it onto ITSELF — the canvas never sees a
-  // pixel again, with no further errors. Off-XR, a bound target at the top of the main pass can only be that.
+  // SELF-HEAL: a frame that aborts between binding its frame-buffer target and restoring leaves that target bound,
+  // and every later frame renders INTO it and blits it onto itself (a black canvas, no errors). Off-XR, a bound
+  // target at the top of the main pass can only be that.
   if (!renderer.xr?.isPresenting && renderer.getRenderTarget() !== null) {
     const rt = renderer.getRenderTarget(); renderer.setRenderTarget(null);
     if (healed++ < 3) tee(`[render] unbound a stale target at frame start (${rt.constructor.name} ${rt.width}x${rt.height}) — an earlier frame aborted mid-render`);
@@ -122,7 +116,7 @@ export function renderWorld() {
   if (curtainOn && renderer.xr?.isPresenting) {
     renderer.xr.updateCamera(camera);
     const xc = renderer.xr.getCamera(); const e = xc.matrixWorld.elements; curtain.userData.shell.position.set(e[12], e[13], e[14]);
-    { const t = curtain.userData.text; if (t) { const yaw = Math.atan2(e[8], e[10]); t.quaternion.setFromAxisAngle(_yAxis, yaw); t.position.set(e[12] - Math.sin(yaw) * 1.6, e[13], e[14] - Math.cos(yaw) * 1.6); } }   // LEVEL with the horizon (owner, 09-19): yaw follows the head, pitch/roll do not
+    { const t = curtain.userData.text; if (t) { const yaw = Math.atan2(e[8], e[10]); t.quaternion.setFromAxisAngle(_yAxis, yaw); t.position.set(e[12] - Math.sin(yaw) * 1.6, e[13], e[14] - Math.cos(yaw) * 1.6); } }   // LEVEL with the horizon: yaw follows the head, pitch/roll do not
     { const d = Math.floor(performance.now() / 300) % 4; if (d !== curtain.userData.lastDots) { curtain.userData.lastDots = d; curtain.userData.paint?.(d); const t = curtain.userData.text; if (t?.material?.map) t.material.map.needsUpdate = true; } }
     renderer.render(curtain, camera);
     return;
