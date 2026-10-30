@@ -492,4 +492,3 @@ export function updateGaze(myPos, myAvatar, myName, now = performance.now()) {
     myAvatar.setGazeTarget(f);
   }
 }
-
