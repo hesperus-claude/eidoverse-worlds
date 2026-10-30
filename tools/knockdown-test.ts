@@ -100,7 +100,7 @@ check("...and the agent PERCEIVED it", events.some((t) => t.includes("knocks you
 await ag.walkTo(ag.pos.x + 1, ag.pos.z, false, 10_000);
 check("walking sheds the slump", ag.clip !== "ragdoll" && ag.heldPose == null, `clip=${ag.clip}`);
 
-// 2b. (R 10-28) a shove the AUTHORITY delivered — a blast (force) or an ask's yes — arrives in the body inbox, not as a puppet:
+// 2b. (R 10-28) a shove the AUTHORITY delivered — a blast (force) or an admitted shove — arrives in the body inbox, not as a puppet:
 // it floors the agent along its lean the same way
 { const b = { x: ag.pos.x, z: ag.pos.z };
   ag.bodyInbox([{ type: "body", from: "shover", kind: "shove", cls: "shove", consent: "standing", spec: { lean: [-3, 0, 0] } }]);

@@ -1498,9 +1498,7 @@ export class Avatar {
    *  stopAllAction() would deactivate them for good, leave the head pitch (`+=`) integrating, and
    *  snap the skeleton to its bind pose (which the Ragdoll would then measure).
    *
-   *  `bake` is for YOUR OWN body only: the drop a lowering clip put on the hips
-   *  moves onto the root before the hips are parked (bakeHipsIntoRoot). A
-   *  remote's root comes off the wire every frame, already carrying its drop. */
+   *  `bake`: your own body only (a remote's root arrives carrying its drop; bakeHipsIntoRoot). */
   setLimp(on, { bake = false } = {}) {
     on = !!on;
     if (on === this._limp) return;

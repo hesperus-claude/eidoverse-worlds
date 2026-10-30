@@ -377,7 +377,7 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const visBans = gv.msgs.slice(kb).find((m) => m.type === "error")?.error ?? "";   // a refusal, not a mod result (review of #260, server I33)
     const kk = await own.req("kick", { who: you(jg) }); await sleep(300);
     const g2 = await sock(S4.port); const jg2 = await g2.join("heath", "visitor-y");
-    const bb = await own.req("ban", { who: you(jg2), days: 0.0004 }); await sleep(300);   // ~35 s: what the old 30 s kick held
+    const bb = await own.req("ban", { who: you(jg2), days: 1 }); await sleep(300);
     const g3 = await sock(S4.port); const jg3 = await g3.join("heath", "visitor-z");
     ok(/moderation power/.test(visBans) && kk.ok && !!jg2.snapshot && bb.ok && !jg3.snapshot && /banned/.test(jg3.errors.join(" ")),
       "RS9 the ban list is for moderators; after a guest's kick a fresh guest from the address gets in, after a guest's ban it doesn't", [visBans.slice(0, 60), kk.ok, jg2.errors, bb.refused, jg3.errors]);
