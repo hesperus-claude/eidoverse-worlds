@@ -122,21 +122,7 @@ const regUnit = (key: string, path: string, type?: string) => { const u = COMPON
   check("@world's terrain and grass rows carry the registry's limits and units", !bad.length, bad.join(" | "));
 }
 
-// 6. no file but the registry declares a field's limits or unit (the grep-shaped pin): the descriptor and record tables carry
-//    no `min:` / `max:` / `unit:` literal, and worldentity's terrain/grass rows none; editschema's own literal limits are
-//    the Transform channels' (not a component field), a socket body's look limits (sockbody's shape) and the draft Material's
-{
-  const code = (p: string) => src(p).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).map((l) => l.replace(/\/\/.*$/, ""));
-  const lit = /\b(min|max|unit):\s*(?!(?:undefined|null)\b)[-'"\w.]/;
-  const d = code("shared/protocol/descriptors.js").filter((l) => lit.test(l) && !/const lim = |\.\.\.lim|unit \}|\{ min: r\.min \}|\{ min: r\.gt \}|\{ max: r\.max \}/.test(l));
-  check("shared/protocol/descriptors.js declares no field limit or unit of its own (min:, max:, unit:)", !d.length, d.slice(0, 4).join(" | "));
-  const c = code("shared/components.js").filter((l) => lit.test(l) && !/p\.min = |p\.max = |p\.unit = |max: COMPONENTS\./.test(l));
-  check("shared/components.js declares no field limit or unit of its own", !c.length, c.slice(0, 4).join(" | "));
-  const w = code("shared/worldentity.js").filter((l) => /k: '(amplitude|size|segments|flatRadius|density|height|width|depth)'/.test(l) && /\b(min|max|unit):/.test(l));
-  check("shared/worldentity.js's terrain and grass rows state no limit or unit of their own", !w.length, w.slice(0, 4).join(" | "));
-  const e = code("shared/editschema.js").filter((l) => /\b(min|max):\s*-?\d/.test(l) && !/scale|quat|look|roughness|metalness|emissive|opacity|yaw|pitch|readLine/.test(l));
-  check("shared/editschema.js states no numeric field limit of its own outside the Transform, socket-look and Material rows", !e.length, e.slice(0, 4).join(" | "));
-}
+// 6. no file but the registry declares a field's limits or unit: tools/one-binding-test.ts's scan
 
 // 7. the agent's schema is the registry: every registered component with a card has docs for every field its card shows
 {
