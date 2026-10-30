@@ -8,6 +8,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, saysIn } from "./harness.ts";
+import { suite } from "./protocol/suite.ts";
 
 // Owned ports: derived from pid so parallel CI runs don't collide; ownership is
 // verified by the world's own snapshot handshake below (a foreign listener would
@@ -20,11 +21,8 @@ foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
 const tokensPath = join(worldsDir, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({ "spokensay-labtok": { id: "claude", name: "Claude", world: "commons" } }));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  [" + extra + "]"}`);
-  ok ? pass++ : fail++;
-};
+const S = suite("spoken-say-door");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 // Child diagnostics preserved: piped, tails printed on any fatal.
 const world = Bun.spawn(["bun", "server/server.ts"], {
@@ -215,12 +213,11 @@ try {
 
   watcher.close(); host.close();
 } catch (e) {
-  fail++;
+  S.fail++;
   console.log(`\x1b[31mFATAL\x1b[0m ${(e as Error).message}\n${(e as Error).stack}`);
   world.kill(); mcpl.kill();
   await drain(world, "world"); await drain(mcpl, "mcpl");
 } finally {
   world.kill(); mcpl.kill();
 }
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

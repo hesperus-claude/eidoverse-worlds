@@ -12,16 +12,14 @@
 // agent.ts reads the coalescing window from env at module load, set SHORT (folding is under test, not duration):
 // the import must come AFTER this line, which a hoisted static import wouldn't
 import { noWorldUrl } from "./no-world.ts";
+import { suite } from "./protocol/suite.ts";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const WINDOW = 250;
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { agentOnDoor } = await import("./agent-scratch.ts");
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("emitter-percept");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const T0 = 1_754_000_000_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -219,5 +217,4 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
   await sleep(WINDOW + 80);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);   // (the agents keep timers alive: leave explicitly)
+S.done();   // (the agents keep timers alive: leave explicitly)
