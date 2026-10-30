@@ -262,11 +262,11 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
 
 // a world server that takes the request and never answers: the door's read is bounded (tools.ts HTTP_READ_MS), and the
 // tool answers as a failed call instead of hanging the agent's turn
-{ const { HTTP_READ_MS } = await import("./tools.ts");
+{ const { HTTP_READ_MS } = await import("./tools.ts"); const { pause } = await import("../tools/protocol/wait.ts");
   const hung = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) });
   const ag: any = { httpBase: `http://127.0.0.1:${hung.port}`, readHeaders: {} };
   const t0 = Date.now();
-  const out: any = await Promise.race([handleTool({ agent: ag } as any, "set_avatar", { avatar: "x" }), Bun.sleep(HTTP_READ_MS + 5_000).then(() => "hung")]);
+  const out: any = await Promise.race([handleTool({ agent: ag } as any, "set_avatar", { avatar: "x" }), pause("the hang guard: past the read bound and its slack, the tool hung", HTTP_READ_MS + 5_000).then(() => "hung")]);
   ok(Number.isFinite(HTTP_READ_MS) && out !== "hung" && out.isError && Date.now() - t0 < HTTP_READ_MS + 5_000, "a world server that never answers: set_avatar fails within the read bound, it doesn't hang", out);
   hung.stop(true); }
 
