@@ -6,16 +6,15 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/lantern-test.ts
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const A = await import('../client/lib/actions.js');
 const L = await import('../client/lib/commandbar.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("lantern");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const said: string[] = [];
 const ran: string[] = [];
@@ -114,18 +113,18 @@ console.log('LANTERN — a slow click on a toggle closes it (the rail\'s search,
   document.body.append(tog);
   L.openLantern('');
   tog.focus();                                   // what the mousedown does
-  await new Promise((r) => setTimeout(r, 200));  // a held click
+  await pause("a held click", 200);  // a held click
   tog.click();
   check('a toggle clicked after a 200 ms hold closes the lantern (the blur leaves it to the click)', !L.isLanternOpen());
-  await new Promise((r) => setTimeout(r, 200));
+  await pause("a held click", 200);
   check('…and it stays closed', !L.isLanternOpen());
   L.openLantern('');
   tog.focus(); tog.click();
-  await new Promise((r) => setTimeout(r, 200));
+  await pause("a held click", 200);
   check('a quick click closes it too, and nothing reopens it', !L.isLanternOpen());
   const plain = document.createElement('button'); document.body.append(plain);
   L.openLantern(''); plain.focus();
-  await new Promise((r) => setTimeout(r, 200));
+  await pause("a held click", 200);
   check('focus moving to anything that is not a toggle still closes it', !L.isLanternOpen());
   check('the resting pill is a toggle', document.getElementById('lantern-pill')!.hasAttribute('data-lantern-toggle'));
   tog.remove(); plain.remove();
@@ -222,5 +221,4 @@ console.log('LANTERN — the resting line moves in HUD layout mode (owner, 10-01
   check('after a reload the pill comes back where it was moved', parseFloat(v('--ln-x')) === innerWidth / 2 - 150 && v('--ln-b') === '64px', `${v('--ln-x')} ${v('--ln-b')}`);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

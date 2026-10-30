@@ -16,6 +16,7 @@ plugin({ name: 'settings-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 // happy-dom's global registrar ships no `Option`; videopanel builds its selects with `new Option(text, value)`
 (globalThis as any).Option = function (text: string, value?: string) { const o = document.createElement('option'); o.text = text; if (value !== undefined) o.value = value; return o; };
@@ -39,16 +40,13 @@ const profile = await import('../client/lib/profile.js');
 const mybody = await import('../client/lib/mybody.js');
 const presence = await import('../client/lib/presence.js');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("settings-panels");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 console.log("ESCAPER — ui.js's escapeHtml is markup.js's, the one that escapes ' (a single-quoted attribute)");
 { const m = await import('../client/lib/markup.js'); const said = ui.escapeHtml("O'Neil <b>");
   check("ui.escapeHtml escapes ' and < (markup.js's)", said === "O&#39;Neil &lt;b&gt;" && ui.escapeHtml === m.escapeHtml, said); }
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const tick = () => new Promise((r) => setImmediate(r));
 const root = () => document.documentElement.style;
 const computed = (k: string) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const tokens = () => JSON.parse(localStorage.getItem('ew-style-tokens') || '{}');
@@ -340,5 +338,4 @@ console.log('WORLD — a viewport restore opens a tab, like show() does');
   check('…with its remembered (or first) tab open, not an empty pane', sec.isOpen, JSON.stringify(w.sections.map((x: any) => [x.key, x.isOpen])));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

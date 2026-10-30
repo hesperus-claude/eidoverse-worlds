@@ -74,7 +74,11 @@ const EXPECT: Record<string, number> = {
   "look": 0.2, "mention-regex": 0.2, "mkconfig": 0.3, "motioneval": 0.2, "namereveal": 0.2, "native-login": 0.2, "particles-host": 0.2, "parts": 0.2, "put-settle": 0.2,
   "quadcolour": 1.1, "render-aside": 0.3, "render-health": 0.2, "renderer-join": 0.2, "selection": 0.2, "server-clock-readers": 0.2, "splash-lifecycle": 0.5, "structure-collider": 0.2,
   "structure-edit": 0.2, "structure-field": 0.2, "structure-route": 0.3, "structure-threshold": 0.3, "support": 0.3, "supportclass": 0.2, "terrainshape": 0.2, "token-registry": 0.2,
-  "track-teleport": 0.2, "underwater-presence": 0.2, "sfu-adapter": 0.5, "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3, "sfu-mic-intent-race": 0.3, "ttsrow": 0.5, "mic-ptt": 7.2, "relay-decision": 0.2, "spoken-form": 0.2, "voice-wire": 2, "sky-lifecycle": 5.2
+  "track-teleport": 0.2, "underwater-presence": 0.2, "sfu-adapter": 0.5, "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3,
+  "seatcore": 0.3, "sfu-mic-intent-race": 0.3, "dock": 2.5, "dropdown": 0.3, "settings-panels": 0.5, "bodies-wear": 1, "clickuse": 0.3, "perfscope": 0.5, "served-routes": 2.5,
+  "tick": 1, "framebudget": 1, "draw-batches": 0.3, "bodysim": 0.5, "ttsrow": 0.5, "scheduler": 0.3, "server-clock": 1.5, "route-shape": 1.2, "clientlog": 3.5, "lantern": 1,
+  "gputime": 2.6, "mic-ptt": 7.2, "euler": 0.3, "layers": 0.2, "relay-decision": 0.2, "spoken-form": 0.2, "other-body-pose": 6, "voice-wire": 2, "presence-session": 1.5,
+  "chat-scrollback": 10.5, "sky-lifecycle": 5.2
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;

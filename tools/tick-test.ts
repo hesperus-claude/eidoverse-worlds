@@ -8,13 +8,11 @@
 //               serves exactly tickStats()).
 
 import { registerSystem, startTick, tickStats } from "../server/tick.ts";
+import { pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, extra = "") => {
-  console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${name}${ok ? "" : "  " + extra}`);
-  ok ? pass++ : fail++;
-};
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const S = suite("tick");
+const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
 let fast = 0, slow = 0, after = 0;
 registerSystem({ name: "fast", everyMs: 20, fn: () => { fast++; } });
@@ -23,7 +21,7 @@ registerSystem({ name: "after-bomb", everyMs: 20, fn: () => { after++; } });
 registerSystem({ name: "slow", everyMs: 150, fn: () => { slow++; } });
 startTick(20);
 
-await sleep(400);
+await pause("400 ms of heartbeat: the systems' run counts are what is tested", 400);
 const st = tickStats();
 const by = Object.fromEntries(st.systems.map((s) => [s.name, s]));
 
@@ -38,5 +36,4 @@ check("healthy systems carry no lastError", by.fast.lastError === null);
 check("gauges measure", by.fast.runs === fast && by.fast.worstMs >= 0, JSON.stringify(by.fast));
 check("double start refuses", (() => { try { startTick(20); return false; } catch { return true; } })());
 
-console.log(`\n${fail ? "\x1b[31mRED\x1b[0m" : "\x1b[32mGREEN\x1b[0m"} — ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

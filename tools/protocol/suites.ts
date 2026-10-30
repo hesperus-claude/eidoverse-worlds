@@ -38,6 +38,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["physlive", "physlive-check.ts", 1],
   ["phystick", "phystick-check.ts", 1],
   ["sclock", "sclock-check.ts", 1],     // the client's server clock slews toward a new estimate instead of stepping  // the engine's heartbeat: rests log on the server beat, requests stay cheap, passes are bounded // design 20 as the running server holds it (shapes, punt, release pose, one clock) and as a client folds it
+  ["server-clock", "../server-clock-test.ts", 1], // the server sends its time and the client's clock follows it through the real net.js and remotes.js
+  ["tick", "../tick-test.ts", 1], // the server heartbeat (tick.ts): systems run on their period, one that throws never stops the others
   ["server-clock-readers", "../server-clock-readers-test.ts", 1], // a server stamp (a sky's ts, a role's until) is read on the authority's clock
   ["physseeds", "physseeds-check.ts", 1], // research physics-seeds 10-07: shape grammar, physical properties, spin on release, the state sample, one clock (a real server whose log is ahead of wall time)
   ["eidosim", "eidosim-check.ts", 1], // eidosim's adapter: any schedule reaching tick T gives the same bits; spin capped like v; a mirror is the same box
@@ -69,6 +71,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["avatar-perf", "../avatar-perf-test.ts", 1], // the avatar loupe rank's server half: POST /thumb?perf= validates, re-ranks, merges meta.json; the roster withholds a stale version
   ["armsolve", "../armsolve-test.ts", 1], // the swivel arm solver (xrbody.js solveArm/relaxArm): continuity, torso clearance, twist split, legs
   ["ammodoll", "../ammodoll-test.ts", 1], // the Bullet ragdoll keeps the Verlet one's lifecycle promises, with its anatomy
+  ["bodysim", "../bodysim-test.ts", 1], // the body-engine selection seam: ammo by default, the verlet floor while it warms, one interface across the seam
   ["remotes-limp-edge", "../remotes-limp-edge-test.ts", 1], // a remote going limp or getting up is drawn at the edge sample, not lerped through it (upstream #283)
   ["remotes-lifecycle", "../remotes-lifecycle-test.ts", 1], // #95: a departed participant dies whole; only arrive and the roster build a body, presence never
   ["colliders", "../collider-test.ts", 1], // the walker's reading of placed geometry, incl. things a tumbling engine laid on their sides (review of b398d7e3 #1)
@@ -82,6 +85,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["knockdown", "../knockdown-test.ts", 1], // #260 I8/I147/I148: a headless body takes a shove from a body beside it, refuses one with its move gate off (the relay answers), hangs from a nail
   ["sockets", "../sockets-test.ts", 1],
   ["seats-store", "../seats-store-test.ts", 1], // the rights-bearing seats store (#105 B2/B3)
+  ["seatcore", "../seatcore-test.ts", 1], // the seat-profile contract as hand math (#101 B): schema, contact height, the verdict cache
   ["msgrate", "../msgrate-test.ts", 1], // server/msgrate.ts: the message cap is a token bucket (a server stall is not the client's flood) // #260 I454: sockets as entities (resolveSeat, the seat views); ran only as an import before
   ["shape-render", "../shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the load's repairs; ran only as an import before
   ["originof", "../originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:
@@ -105,8 +109,10 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["boot-init", "../boot-init-test.ts", 1], // every client init* has a caller
   ["splash-lifecycle", "../splash-lifecycle-test.mjs", 1], // the splash rays worker: Worker, window listener and canvas end together
   ["bodygate", "../bodygate-test.mjs", 1], // the body-first gate: armed, held, released once, capped; and at loadGLB's boundary the parse waits in body-first
+  ["scheduler", "../scheduler-test.ts", 1], // the one loader (scheduler.js): lanes, priorities, a slow cosmetic job never blocks the rest
   ["editor-range", "../editor-range-test.ts", 1], // the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
   ["editschema", "../editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks
+  ["layers", "../layers-test.ts", 1], // a thing's selection layer (shared/layers.js), by default and by a builder's word
   ["selection", "../selection-test.ts", 1], // one selection store (edit/selection.js) and its listener
   ["parts", "../parts-test.ts", 1], // sub-object motion: motion.js's part tier
   ["motioneval", "../motioneval-test.ts", 1], // motion.js's evaluator matches its parity fixture (#92 B3)
@@ -125,6 +131,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["capsule-recovery", "../capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers
   ["debug-tabs", "../debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups
   ["governor-xr", "../governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio
+  ["framebudget", "../framebudget-test.mjs", 1], // framebudget's rules: one budget per frame, first grant carried as debt, a starved lane granted, one GPU unit per frame
+  ["gputime", "../gputime-test.ts", 1], // gputime's shadow A/B gives the shadow maps back however it ends; a new A/B inside a settle survives
+  ["draw-batches", "../draw-batches-test.ts", 1], // scene ownership and batching eligibility: a recursive shadow render never re-collects the hidden scene
   ["gpulost", "../gpulost-test.mjs", 1], // after a lost GPU the page reloads once, never loops, and drops the XR boot flag (gpulost.js)
   ["render-aside", "../render-aside-test.mjs", 1], // renderAside: an off-eye render while presenting leaves the XR state as it was
   ["quadcolour", "../quadcolour-test.mjs", 1], // the VR panel grade (quadgrade.js) as numbers: the JS twin of the shader
@@ -153,6 +162,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["upgrade", "upgrade-check.ts", 1], // an old-format world: the verified backup (CLI and server), the structured join refusal, the operator-only upgrade through the CLI
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
+  ["clientlog", "../clientlog-test.ts", 1], // the /clientlog tee through the real route(): auth, length gates, a known world, the miss-relist rate limit
+  ["served-routes", "../served-routes-test.ts", 1], // every route the client needs, really served, every response isolated (COOP/COEP)
   ["native-login", "../native-login-test.ts", 1], // the native login HTTP handler, isolated
   ["mkconfig", "../mkconfig-test.ts", 1], // deploy/projector/mkconfig.sh renders mediamtx.template.yml
   ["heightmap-route", "../heightmap-route-test.ts", 1], // GET /heightmap: the export door's budget gates before the work
@@ -235,6 +246,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["blank-part-uvs", "../blank-part-uvs-test.ts", 1], // a named blank part keeps its UVs through the store's optimize pass
   ["storey-walk", "../../mcpl/storey-walk-test.ts", 1], // #140/#200: the storey a body stands on is the one its walk, its feet, its flights and look reason about; a walk from a floor stays on it
   ["agent-reads", "../../mcpl/agent-reads-test.ts", 1], // every read the agent makes of the world server has a deadline; a geometry read that timed out is asked again
+  ["route-shape", "../route-shape-test.ts", 1], // GET /geom ships the view record (viewOf) verbatim (C7a)
   ["door-unit", "../../mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
   ["token-registry", "../token-registry-test.ts", 1], // the agent token registry fails closed: missing or malformed files authorize nobody, the tracked example credential is refused, no prototype keys
   ["door-media-whitelist", "../door-media-whitelist-test.mjs", 1], // the door's media lane to a voice sidecar is a whitelist (sfu-answer, sfu-ice, …), never a pipe (#100)
@@ -259,6 +271,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent-replay", "../consent-replay-test.ts", 0.1],   // an agent's gates and lists, replayed on arrival, are what it holds when the read returns (house 6340433633; R 10-28)
   ["history-request", "../history-request-test.ts", 1], // #267 (main): a history request with no answer rejects, so scrolling up can reach what a long disconnect missed
   ["named-pose", "../named-pose-test.ts", 1], // #159: every named pose rides the presence wire (absence is not release; survives late join, reconnect, swap)
+  ["presence-session", "../presence-session-test.ts", 1], // the presence session on arrive and snapshot.present over raw sockets: a page's id outlives a reconnect
+  ["other-body-pose", "../other-body-pose-test.ts", 1], // posing someone else and letting them go, from an agent's tools and the console's EW.pose/clearPose, on the other body's path
   ["settled-pose", "../settled-pose-test.ts", 1], // #61: a body looks the same to a joiner as to itself (settledPose strips ragdoll frames on every hand-off)
   ["pose-provenance", "../pose-provenance-test.ts", 1], // #61's agent half: a physics pose leaves the agent only labelled ragdoll; a decision to move sheds the held pose
   ["skystamp", "../skystamp-test.ts", 1], // the sky's seq/by come from the log entry that wrote it (the stored value has none)
@@ -279,6 +293,12 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["anim-backpressure", "../anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "../anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "../panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
+  ["dock", "../dock-test.ts", 1], // ui.js on the real module: the dock rail, the menu, pins, the waterfall's dismiss rules, the registerPanel seam
+  ["perfscope", "../perfscope-test.ts", 1], // the viewer-local cost overlay (perfscope.js) with real three: modes, solid vs overlay, hull and veil
+  ["clickuse", "../clickuse-test.ts", 1], // the mouse on things while holding one: the held thing offers put down, not pick up; a surface offers put here
+  ["bodies-wear", "../bodies-wear-test.mjs", 1], // the Profile's body rows: a failed body keeps its wear action; the size and nameplate sliders write once, at rest, under the body dragged (#196, #212)
+  ["settings-panels", "../settings-panels-test.ts", 1], // the settings panels (style, video, profile, bodies) through the real modules, only the renderer edge stubbed
+  ["dropdown", "../dropdown-test.ts", 1], // the house select skin (dropdown.js) on the real module
   ["namereveal", "../namereveal-test.mjs", 1], // hold-to-reveal's input side (namereveal.js)
   ["mention-regex", "../mention-regex-test.mjs", 1], // the mention pattern built from a body's id and display name
   ["icons", "../icons-test.ts", 1], // the attention glyphs are real, distinct path data
@@ -289,6 +309,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["components-inspector", "../components-inspector-test.ts", 1], // the Inspector's component cards (schema.sections) over the real corpus
   ["chat-resync-wire", "../chat-resync-wire-test.ts", 1], // a re-join asks chat for what it missed, through the real net.js
   ["chat-log", "../chat-log-test.ts", 1], // the chat log: the spoken-utterance merge and unread accounting
+  ["chat-scrollback", "../chat-scrollback-test.ts", 1], // scrolling up through chat history: pages in world order, every line once, a re-join's hole caught up, the 1,000-line cap
   ["attention", "../attention-test.ts", 1], // the attention gate (attention-policy.js) and the real chat.js attention prefs
   ["surface-hold", "../surface-hold-test.ts", 1], // a voice-relay leg holds an actor's lines
   ["sfu-adapter", "../sfu-adapter-test.ts", 1], // admitParticipant's refusal branches through the decision layer and the in-process SFU adapter, one table; legs keyed per world
@@ -308,6 +329,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["transmission", "../transmission-test.mjs", 1], // a transmissive glTF material becomes a node material with its transmission, ior and thickness; nothing else is upgraded
   ["body-shadow-gate", "../body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts
   ["frames-layout", "../frames-layout-test.ts", 1], // the frames and panels layout
+  ["lantern", "../lantern-test.ts", 1], // the lantern (commandbar.js): the keys' contract on the real module and the real action registry
   ["frames-resize", "../frames-resize-test.ts", 1], // the frames' resize drag finish path
   ["models-field", "../models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["lod-policy", "../lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
@@ -319,6 +341,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["eidosim-v1", "import-v1/eidosim-v1-test.ts", 1], // the first eidosim's covenant tests, on the copy the importer keeps (house #260, importer I8)
   ["render-scene-import", "../render-scene-import-test.ts", 1], // #260 I464: server/render-scene.ts links (nothing serves it), and particles project through resolveParticles
   ["channelbox", "../channelbox-test.ts", 1], // #260 I242: the channel box through the real door; the rotate order is the viewer's (PROTOCOL §9.1), never sent
+  ["euler", "../euler-test.ts", 1], // the channel box's rotate math (shared/euler.js): a property sweep over all six orders against three.js
   ["last-world", "../last-world-test.ts", 1], // #281 (main, merged 10-27): a bare link goes back to the last world you were in; the real net.js writes it at the door's yes and forgets a refused or empty world
   ["event-wire", "../event-wire-test.ts", 1], // MCPL RFC-001 rev 3 (main, merged 10-27): a world event's tags follow its kind facet; a notice is chat:system, speech never
   ["client-tools", "../run-client.ts --import-only --skip-suites", 14], // refactor plan 2 D5: every tools/*-{test,check} loads (a stub missing an export, a moved module); the full run is `bun tools/run-client.ts`

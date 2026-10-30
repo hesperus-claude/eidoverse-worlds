@@ -8,24 +8,15 @@ import { join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
+import { freePort } from "./harness.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("served-routes");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
-// a fixed port can be squatted: a random high port whose preflight fetch must FAIL, then the child's per-run nonce on
-// /version (EIDO_BOOT_NONCE) before any vector and again after them
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); }
-    catch { return cand; }
-  }
-  throw new Error("no free port found in 20 tries");
-}
-const PORT = await freePort();
+// the child's per-run nonce on /version (EIDO_BOOT_NONCE) is checked before any vector and again after them
+const PORT = freePort(20000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const NONCE = randomUUID();
 const scratch = mkdtempSync(join(tmpdir(), "served-routes-"));
@@ -42,7 +33,7 @@ process.on("exit", () => {
 });
 
 let up = false;
-for (let i = 0; i < 60 && childAlive() && !up; i++) { up = await ours(); if (!up) await new Promise((r) => setTimeout(r, 250)); }
+up = !!(await tryUntil("the child answers as ours", async () => !childAlive() || await ours(), { ms: 15_000, step: 250 })) && childAlive() && await ours();
 check("listener on a verified-free port is OUR child (nonce round-trip)", up, `:${PORT} child ${childAlive() ? "alive" : `exited ${server.exitCode}`}`);
 if (!up) { console.log("\n  refusing to test an unowned server\n"); process.exit(1); }
 
@@ -107,5 +98,4 @@ check("websocket upgrade still succeeds under isolate()", wsOk);
 // bind the whole run to the child once more: a mid-run crash + stale listener would pass every row above
 check("child is still alive and still OURS after the vectors", childAlive() && await ours(), `exitCode=${server.exitCode}`);
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();
