@@ -603,7 +603,7 @@ const ROUTES: Route[] = [
       // Raw bytes stay at GET /library/<lib> for local processing; this is
       // the parsed tier. Same trust level as the world log: public reads.
       const j = (o: unknown, status = 200) =>
-        new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+        new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
       const wname = url.searchParams.get("world");
       if (!wname) {
         const lib = url.searchParams.get("lib") ?? "";
