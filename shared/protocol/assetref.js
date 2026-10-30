@@ -11,12 +11,12 @@
 //          would throw in every reader too), and the caller refuses it
 import { isLegacyArgs, mapGrassArgs, presetStrokes } from "../flora_args.js";
 import { FLORA_PRESETS } from "../flora_presets.js";
+import { isObj } from "./is.js";
 
-const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 
 /** A grass value in its one stored spelling (and the note for what was rewritten). Throws on an unknown preset. */
 export function grassAtWrite(v) {
-  if (!bag(v)) return { value: v, notes: [] };
+  if (!isObj(v)) return { value: v, notes: [] };
   const notes = []; let out = v;
   if (isLegacyArgs(out)) { const m = mapGrassArgs(out); notes.push({ sent: "bladeHeight/spacing/perCell/colorTip/an int colour", kept: "the flora spelling", why: "the first protocol's makeGrass knobs, mapped once (flora_args mapGrassArgs)" });
     // anything the mapping doesn't name (preset, rows, strokes, heading…) rides along

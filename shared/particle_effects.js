@@ -58,6 +58,7 @@
 // Every number is bounded (EFFECT_LIMITS): a document is authored by anyone who may build, and it runs on every visitor's
 // machine, so "how much may one effect cost" is part of what it means, checked at the door, not left to one client.
 import { sha256 } from './protocol/hash.js';
+import { isNum, isObj } from './protocol/is.js';
 
 export const EFFECT_KIND = 'particle-effect';
 export const TEXTURE_DIR = 'eidoverse/assets/particle_textures/';
@@ -75,8 +76,6 @@ export const EFFECT_LIMITS = Object.freeze({
 const L = EFFECT_LIMITS;
 
 // ---- the shape check ---------------------------------------------------------------------------------------------
-const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
-const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 const isVec = (v) => Array.isArray(v) && v.length === 3 && v.every(isNum);
 const isRange = (v) => isNum(v) || (Array.isArray(v) && v.length === 2 && v.every(isNum) && v[0] <= v[1]);
 const range = (v, d) => (v === undefined ? d : isNum(v) ? [v, v] : [v[0], v[1]]);

@@ -10,18 +10,18 @@
 // A view record never carries `kind` (the old-world importer rewrites an old light to c.light and drops the field; viewOf emits none):
 // readers that branch on `ent.kind === 'light'` are reading a field that is never there.
 import { COMPONENTS } from "./componentspec.js";
-const bag = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+import { isObj } from "./is.js";
 /** A `mesh` component a reader may draw: a bag whose shape the registry names. */
-export const isMeshBag = (m) => bag(m) && COMPONENTS.mesh.enums.shape.includes(m.shape);
+export const isMeshBag = (m) => isObj(m) && COMPONENTS.mesh.enums.shape.includes(m.shape);
 
 export const KINDS = Object.freeze(["socket", "model", "mesh", "light", "empty"]);
 
 export function kindOf(x) {
   if (!x || typeof x !== "object") return "empty";
-  const c = bag(x.c) ? x.c : x;   // the authority's record ({c}), or the view's: its components flat, in the same names
-  if (bag(c.socket)) return "socket";
+  const c = isObj(x.c) ? x.c : x;   // the authority's record ({c}), or the view's: its components flat, in the same names
+  if (isObj(c.socket)) return "socket";
   if (typeof c.model === "string") return "model";
   if (isMeshBag(c.mesh)) return "mesh";
-  if (bag(c.light)) return "light";
+  if (isObj(c.light)) return "light";
   return "empty";
 }

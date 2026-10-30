@@ -5,10 +5,10 @@ import { describePicture } from './picture.js';
 import { describeMaterial } from './material.js';
 import { describeSound } from './sound.js';
 import { quoted } from './text.js';
+import { isObj } from './protocol/is.js';
 
 export const STORY_LOOK_MAX = 160;   // the story's text in look; inspect has all of it
 export const SIGN_LOOK_MAX = 200;
-const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
 /** story {title, text, marks?} → `story «title»: «text…» (marks: …)` */
 export function describeStory(v, nameOf = (id) => id) {

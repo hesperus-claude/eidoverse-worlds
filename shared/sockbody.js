@@ -45,6 +45,7 @@ import { isReservedAnimName } from './animdefs.js';
 import { BUILTIN_IDS, isWhoValue, whoWords } from './protocol/roles.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
 import { isPurged } from './protocol/fold.js';
+import { isNum, isObj } from './protocol/is.js';
 
 // surface: the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
 export const ANCHORS = COMPONENTS.station.enums.anchor;   // hips, feet, head, root, surface
@@ -90,9 +91,7 @@ export const ACTION_DEFAULTS = Object.fromEntries(['sit', 'ride', 'drive', 'lie'
   const v = materialize('station', { action }).value; return [action, { pose: v.anim, anchor: v.anchor }]; }));
 const defaultsFor = (action) => ACTION_DEFAULTS[action] ?? ACTION_DEFAULTS.sit;
 
-const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
-const num = (x) => typeof x === 'number' && Number.isFinite(x);
-const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => num(x) && Math.abs(x) <= lim);
+const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => isNum(x) && Math.abs(x) <= lim);
 const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
 
 // ---------------------------------------------------------------- reading
@@ -200,7 +199,7 @@ export function evalPose(spec, sig = {}) {
   if (typeof spec.clip === 'string') return { clips: [[spec.clip, 1]], time, offset };
   const rows = Array.isArray(spec.clips) ? spec.clips : [];
   if (!rows.length) return { clips: [], time, offset };
-  const val = (s) => (num(sig[s]) ? sig[s] : 0);
+  const val = (s) => (isNum(sig[s]) ? sig[s] : 0);
   if (!Array.isArray(spec.by)) {
     const x = val(spec.by);
     const keys = rows.map((r) => r[0]);
@@ -360,7 +359,7 @@ function checkPose(p, at) {
   for (const row of p.clips) {
     if (!Array.isArray(row) || row.length !== 2 || typeof row[1] !== 'string' || !CLIP_RE.test(row[1])) return bad('shape', `${at}.clips rows are [key, clip name]`);
     if (two) { if (!nums(row[0], 2)) return bad('shape', `${at}.clips keys are [a, b] for a two-signal blend`); }
-    else { if (!num(row[0]) || Math.abs(row[0]) > LIM) return bad('shape', `${at}.clips keys are numbers`); if (row[0] <= last) return bad('shape', `${at}.clips keys rise strictly ([0, 'idle'], [2, 'walk'], …)`); last = row[0]; }
+    else { if (!isNum(row[0]) || Math.abs(row[0]) > LIM) return bad('shape', `${at}.clips keys are numbers`); if (row[0] <= last) return bad('shape', `${at}.clips keys rise strictly ([0, 'idle'], [2, 'walk'], …)`); last = row[0]; }
   }
   return null;
 }

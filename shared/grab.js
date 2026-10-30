@@ -40,6 +40,7 @@ import { materialize, COMPONENTS } from './protocol/componentspec.js';
 import { BUILTIN_IDS, isWhoValue, isBase, whoWords } from './protocol/roles.js';
 import { isReservedAnimName } from './animdefs.js';
 import { isPurged } from './protocol/fold.js';
+import { isNum, isObj } from './protocol/is.js';
 
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
@@ -78,9 +79,7 @@ const ACTION_RE = /^[a-z][a-z0-9_-]{0,31}$/i;
 const WORD_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
 const MAX_GRIPS = 8, MAX_FITS = 8, LIM = 1e4;
 
-const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
-const num = (x) => typeof x === 'number' && Number.isFinite(x);
-const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => num(x) && Math.abs(x) <= lim);
+const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => isNum(x) && Math.abs(x) <= lim);
 const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
 
 // ---------------------------------------------------------------- reading
@@ -118,7 +117,7 @@ function fill(v, source, home) {
   g.enabled = v.enabled !== false;
   g.who = isWho(v.who) ? v.who : DEFAULTS.who;
   g.steal = v.steal !== false;
-  g.range = num(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
+  g.range = isNum(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
   g.priority = Number.isInteger(v.priority) ? Math.max(-10, Math.min(10, v.priority)) : 0;
   g.hold = HOLDS.includes(v.hold) ? v.hold : 'auto';
   // anim: any name (the body resolves it; unknown → its default hold). pose: the older spelling, a stored value not yet renamed
@@ -127,9 +126,9 @@ function fill(v, source, home) {
   g.grips = isObj(v.grips) ? Object.fromEntries(Object.entries(v.grips).map(([k, x]) => [k, gripOf(x)]).filter(([k, x]) => x && NAME_RE.test(k))) : {};
   g.twoHanded = v.twoHanded === true || (v.anim === undefined && v.pose === 'two-hand');
   g.carries = v.carries === true;
-  g.throw = num(v.throw) ? Math.min(3, Math.max(0, v.throw)) : 1;
+  g.throw = isNum(v.throw) ? Math.min(3, Math.max(0, v.throw)) : 1;
   g.release = RELEASES.includes(v.release) ? v.release : 'drop';
-  g.returnAfter = num(v.returnAfter) ? Math.min(3600, Math.max(0, v.returnAfter)) : 0;
+  g.returnAfter = isNum(v.returnAfter) ? Math.min(3600, Math.max(0, v.returnAfter)) : 0;
   g.home = homeOf(home);   // the thing's home component (grabbable.home is gone)
   g.fits = Array.isArray(v.fits) ? v.fits.filter((x) => typeof x === 'string' && WORD_RE.test(x)).map((x) => x.toLowerCase()) : [];
   g.use = useOf(v.use);
@@ -144,7 +143,7 @@ export function useOf(u) {
   return null;
 }
 /** The returning modes need a home: stamped by the authority when one is wanted and none is set. */
-export const wantsHome = (v) => isObj(v) && (v.release === 'return' || (num(v.returnAfter) && v.returnAfter > 0));
+export const wantsHome = (v) => isObj(v) && (v.release === 'return' || (isNum(v.returnAfter) && v.returnAfter > 0));
 
 /** The hold pose a body without tracked hands takes for this thing: the named one when the body knows it (HOLD_POSES
  *  today; a world's anim-pose later), else its default: by size (one hand under HAND_SIZE, both arms at or above it; a
@@ -172,7 +171,7 @@ export function fitsSocket(g, sock) {
   const acc = Array.isArray(sock?.accepts) ? sock.accepts.map((x) => String(x).toLowerCase()) : [];
   return !!g && acc.length > 0 && g.fits.some((k) => acc.includes(k));
 }
-export const socketRadius = (sock) => (num(sock?.radius) ? sock.radius : SOCKET_RADIUS);
+export const socketRadius = (sock) => (isNum(sock?.radius) ? sock.radius : SOCKET_RADIUS);
 
 /** What every client is told of a hold (the authority's presence plane, sent whenever it changes and in every join cut):
  *  who holds it, with which hand, by which grip or at which offset, and the second hand. Never logged. */
@@ -270,7 +269,7 @@ export function checkGrabbable(v, at = 'grabbable') {
   if (isReservedAnimName(v.anim)) return bad('shape', `${at}.anim "${v.anim}" is reserved: it names ad-libbed anims, never a pose or clip`, 'name the pose or clip');
   if (v.release !== undefined && !RELEASES.includes(v.release)) return bad('shape', `${at}.release is ${RELEASES.join(', ')}`);
   for (const [k, lo, hi, what] of [['range', 0.1, 10, 'm from the hand'], ['throw', 0, 3, 'a multiplier on the release velocity'], ['returnAfter', 0, 3600, 's unheld before it goes home']])
-    if (v[k] !== undefined && !(num(v[k]) && v[k] >= lo && v[k] <= hi)) return bad(num(v[k]) ? 'bounds' : 'shape', `${at}.${k} is ${v[k]}; it is ${lo}..${hi} (${what})`);
+    if (v[k] !== undefined && !(isNum(v[k]) && v[k] >= lo && v[k] <= hi)) return bad(isNum(v[k]) ? 'bounds' : 'shape', `${at}.${k} is ${v[k]}; it is ${lo}..${hi} (${what})`);
   if (v.priority !== undefined && !(Number.isInteger(v.priority) && v.priority >= -10 && v.priority <= 10)) return bad('shape', `${at}.priority is a whole number -10..10 (higher wins when several things are in reach)`);
   if (v.grips !== undefined) {
     if (!isObj(v.grips)) return bad('shape', `${at}.grips must be {<name>: {pos, q?, hand?, role?, grasp?, part?}}`);
@@ -298,7 +297,7 @@ export function checkGrabbable(v, at = 'grabbable') {
 export function checkAccepts(sk, sat) {
   if (sk.accepts !== undefined && !(Array.isArray(sk.accepts) && sk.accepts.length >= 1 && sk.accepts.length <= MAX_FITS && sk.accepts.every((x) => typeof x === 'string' && WORD_RE.test(x))))
     return bad('shape', `${sat}.accepts is 1 to ${MAX_FITS} keywords: a released thing whose grabbable.fits shares one snaps in`);
-  if (sk.radius !== undefined && !(num(sk.radius) && sk.radius >= 0.02 && sk.radius <= 1)) return bad('shape', `${sat}.radius is 0.02..1 m (how near a release must be to snap in; default ${SOCKET_RADIUS})`);
+  if (sk.radius !== undefined && !(isNum(sk.radius) && sk.radius >= 0.02 && sk.radius <= 1)) return bad('shape', `${sat}.radius is 0.02..1 m (how near a release must be to snap in; default ${SOCKET_RADIUS})`);
   return null;
 }
 

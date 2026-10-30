@@ -206,6 +206,9 @@ export function opsOf(e) {
   }
   return [shapeOne(verb, body, false, "")];
 }
+/** A line that read as an entry (not a Malformed stand-in); its ops, or none when it has none to give. */
+export const isE = (e) => e && !(e instanceof Malformed) && typeof e === "object";
+export const opsQuiet = (e) => { try { return opsOf(e); } catch { return []; } };
 // `followUps`: the indices of the ops in this batch that the AUTHORITY wrote as a consequence of the
 // asker's own ops (clearing the references to a thing the batch deleted; an undo putting such a reference back). The fold
 // applies them like any op; readers that derive authorship from the log (who set up a handler, who created a key) skip

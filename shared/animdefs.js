@@ -9,6 +9,7 @@
 // Unknown keys are preserved. Same constraints as everything in shared/.
 
 import { AVATAR_NAME_RE } from './avatardefs.js';
+import { isStr } from './protocol/is.js';
 
 /** Clip names come from .vrma filenames — same permissive rule as avatars. */
 export const ANIM_NAME_RE = AVATAR_NAME_RE;
@@ -19,7 +20,6 @@ export const ANIM_NAME_RE = AVATAR_NAME_RE;
 export const RESERVED_ANIM_NAMES = Object.freeze(['live']);
 export const isReservedAnimName = (n) => typeof n === 'string' && RESERVED_ANIM_NAMES.includes(n);
 
-const isStr = (v) => typeof v === 'string' && v.length > 0;
 
 /** Validate the action bar's sidecar (defs/animations/_actionbar.json): each entry
  *  {clip (required), icon?, listed?}. Key order is bar order — normative.
