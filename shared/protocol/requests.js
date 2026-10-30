@@ -25,12 +25,11 @@ export const remove = (id) => ({ verb: "delete", args: { id: E(id) } });
  *  a thing that offers 'push' doesn't 'use'). */
 export const use = (id, action = null, args = null) => ({ verb: "use", args: { id: E(id), ...(action != null ? { action: String(action) } : {}), ...(args ? { args } : {}) } });
 /** make a thing. components: {name: value}; the transform is whole (missing parts default). The authority mints its id
- *  (R 10-17: writers never choose ids): pass null, or a placeholder ('$lamp') when the same request (a batch) refers to it
+ *  (writers never choose ids): pass null, or a placeholder ('$lamp') when the same request (a batch) refers to it
  *  or the reply's ids map should say what it became. */
 export function create(id, { model = null, transform = {}, components = {}, from = null } = {}) {
-  // a transform passed among the components joins the transform argument, so what is written is still whole. What's absent
-  // defaults; what's malformed (not an object, or a field that isn't one) is passed on as it is, for the authority to refuse
-  // with its reason: never turned into a valid transform at the origin (house 6340433633)
+  // a transform among the components joins the transform argument. Absent parts default; a malformed one is passed on
+  // for the authority to refuse with its reason, never turned into a valid transform here
   const bad = (v) => v != null && (typeof v !== "object" || Array.isArray(v));   // null/undefined: absent, so defaulted
   const comps = {}; let t = transform == null || bad(transform) ? {} : transform, raw = bad(transform) ? transform : undefined;
   for (const [k, v] of Object.entries(components)) { if (encName(k) === "transform") { if (bad(v)) raw = v; else if (v != null) t = { ...t, ...v }; } else comps[encName(k)] = v; }

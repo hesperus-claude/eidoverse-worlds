@@ -1,6 +1,6 @@
 // Every request verb declares its arguments: type, which modes they apply to, and an example. The authority validates every
-// request against this BEFORE doing anything, and `help {verb}` is generated from it (fresh-builder findings W1–W3).
-// EVERY verb the authority answers has a row (engine-scars 3.3, R 10-17 02:45; scars-check's verb-row check): an argument a verb doesn't
+// request against this BEFORE doing anything, and `help {verb}` is generated from it.
+// EVERY verb the authority answers has a row (scars-check's verb-row check): an argument a verb doesn't
 // list is refused `unknown-arg`, so tightening after ship would break every client that sends extras. Where a handler checks
 // a value itself (with its own words and code), the row's type is `any`: the row names the argument, the handler judges it.
 import { COMPONENTS } from "./componentspec.js";
@@ -36,7 +36,7 @@ export const VERBSPEC = {
       dry: { type: "bool", doc: "preview only" },
     },
   },
-  // round-2 R10: a typo'd undo argument used to undo your latest act silently (undo {acts: 9}); now it's refused
+  // a typo'd undo argument (undo {acts: 9}) is refused, never read as "undo your latest act"
   undo: { doc: "take back an act: your latest (bare), one by its act number, or one you tagged with label. You may undo your own acts, a builder's or visitor's if you're a builder, anyone's if you're an owner; never someone above you",
     args: { act: { type: "int", doc: "the act's number (history and inspect show them); someone else's needs the rank to revert it" }, label: { type: "string", doc: "the label you gave a batch" },
       actor: { type: "string", doc: "owners: roll back everything this person did since `since` (their identity; history shows it)" }, since: { type: "any", doc: "with actor: a version {seq, head} (history gives them)" },
@@ -75,7 +75,7 @@ export const VERBSPEC = {
     example: { id: "ball-1", power: 6 } },
   force: { doc: "a blast (/boom): from at, every body within radius is knocked over through its own consent (as body {kind: 'shove'}), and every loose thing (physics {kind: 'dynamic'}, in a world running physics) is punted outward through the punt's own gates; linear falloff to the rim. Builders and up. Bodies are presence: the reply counts them", args: { at: { type: "any", doc: "[x, y, z]: the blast's centre" }, radius: { type: "number", doc: "m, 0.5–30 (default 4)" }, power: { type: "number", doc: "m/s at the centre, 0.2–12 (default 3)" } }, required: ["at"],
     example: { at: [0, 0, 0], radius: 4, power: 3 } },
-  // people (research roles 10-06): every act names an identity (whois {name} finds it) ranked below you
+  // people: every act names an identity (whois {name} finds it) ranked below you
   warn: { doc: "warn someone: a record in the moderator log, and a notice they must dismiss. Needs mute, kick or ban; they must rank below you", args: { who: { type: "string", doc: "their identity (u-…)" }, reason: { type: "string", doc: "why (they see it)" } }, required: ["who", "reason"], example: { who: "u-…", reason: "please keep it friendly" } },
   mute: { doc: "mute someone's voice and/or chat for everyone, for a while (at most 7 days). Needs mute; they must rank below you", args: { who: { type: "string", doc: "their identity" }, minutes: { type: "number", doc: "how long: 5, 60, 1440…" }, channels: { type: "any", doc: "['voice'], ['chat'] or both (default both)" }, reason: { type: "string" } }, required: ["who", "minutes"], example: { who: "u-…", minutes: 60, channels: ["voice"], reason: "spam" } },
   unmute: { doc: "end a mute early (its author, an owner, or someone who outranks its author)", args: { who: { type: "string" } }, required: ["who"] },
@@ -84,7 +84,7 @@ export const VERBSPEC = {
   unban: { doc: "lift a ban: its author, an owner, or a ban holder who outranks its author", args: { who: { type: "string" } }, required: ["who"] },
   modlog: { doc: "the moderation log, newest first, with role changes merged in (needs a moderation power)", args: { who: { type: "string", doc: "only this person" }, before: { type: "number", doc: "older than this ts (the reply's next)" }, limit: { type: "int" } } },
   bans: { doc: "who is banned or muted now, and bans that ended (needs a moderation power)", args: {} },
-  // ---- the rest of the authority's verbs (rows added 10-17: names and types; each handler still judges its values) ----
+  // ---- the rest of the authority's verbs (names and types; each handler still judges its values) ----
   leave: { doc: "leave the world: whatever you hold is dropped (the server sends this when you disconnect)", args: {} },
   wait: { doc: "what physics did lately: things in flight, things that came to rest in the last minute, and any not yet on the record", args: {} },
   consent: { doc: "your body's consent (presence: never logged). Bare: read it (your two gates, your allow and block lists, this world's defaults for the gates) and the last attempts on you. move and touch each turn a gate on or off; allow, block and unlist put one person on a list or take them off. A listed person's answer is always theirs: allow is yes and block is no, whatever the gates say (block wins). Only you change yours", args: {
@@ -146,7 +146,7 @@ export const RESERVED_VERBS = Object.freeze({
 export const REMOVED_VERBS = Object.freeze({
   whisper: { why: "speech in a world is public and arrival-only (R 10-18): everyone present hears a say, the world's log keeps it, and only the world's admins read it back. Direct messages will live at the identity level (client and profile), not in world chat",
     fix: "say it to everyone here (say {text, to} addresses one person in public), or reach them outside the world" },
-  // the old verb set's names this authority doesn't take, each with the call that does it now (R 10-27; the old set: AGENTS.md)
+  // the old verb set's names this authority doesn't take, each with the call that does it now (the old set: AGENTS.md)
   ...Object.fromEntries(Object.entries({
     mount: ["riding is a socket now", "attach {to, socket?} (the agent's tool; a person sits) puts your body on a socket; a thing rides another with set {id, component: \"parent\", value: {to}}"],
     dismount: ["riding is a socket now", "detach {} (the agent's tool) gets your body off; delete {id, component: \"parent\"} lets a riding thing go where it stands"],

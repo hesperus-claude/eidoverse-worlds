@@ -1,6 +1,5 @@
 // eidosim's adapter: the engine (./eidosim.js) behind the sim API the protocol's sim layer drives (emptySim, tickOf,
-// simEntry, advanceSim, simSnapshot, simPose). It replaced the first eidosim here (R 2026-10-09: "stomp the existing
-// eidosim engine"; "eidosim is eidosim").
+// simEntry, advanceSim, simSnapshot, simPose).
 //
 // What a body is here: a LAUNCHED thing flies; a dynamic thing at rest that no lock holds is a sleeping body, woken when
 // a moving body touches it, and flies under the launch that touched it (PHYSICS.md §1's widened rest rule); every other
@@ -28,7 +27,7 @@ const SUBSTEPS = 4, DENSITY = 1000, FRICTION = 0.6, GRAVITY = [0, -9.81, 0];
 const ROLLING = 0.05;
 const MAX_SPEED = 20;
 // the law caps spin as the authority caps v: a corner may not move faster than MAX_SPEED (|w|·|half| ≤ 20 m/s), else a
-// spun throw rolls off at any speed (review of 49d4fb0d #2: w 1000 rad/s sent a crate 330 m at 54 m/s). + − × ÷ √ only.
+// spun throw rolls off at any speed. + − × ÷ √ only.
 function spinCap(w, half) {
   const r = Math.sqrt(half[0] * half[0] + half[1] * half[1] + half[2] * half[2]), m = Math.sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
   if (!(r > 0) || m * r <= MAX_SPEED) return w;
@@ -64,8 +63,8 @@ function geometry(box, scale) {
 function collider(sim, ent) {
   const sc = scale3(ent.scale3 ?? ent.scale), sh = ent.shape;
   if (sh && sh.type === 'sphere' && Number.isFinite(sh.radius) && sh.radius > 0) {
-    // a sphere scales as a sphere: radius and centre both by its largest |scale| (a squashed ball isn't a sphere; per-axis
-    // centre with a max radius floated or buried it, review of 8377ec52 #8)
+    // a sphere scales as a sphere: radius and centre both by its largest |scale| (a per-axis centre with a max radius
+    // would float or bury it)
     const k = Math.max(sc[0], sc[1], sc[2]), r = sh.radius * k, at = vec3ok(sh.pos) ? sh.pos : [0, 0, 0];
     return { shape: 'sphere', radius: r, half: [r, r, r], off: [at[0] * k, at[1] * k, at[2] * k] };
   }
@@ -185,9 +184,9 @@ export function advanceSim(sim, toTick) {
   if (!live().length) { if (toTick > sim.tick) sim.tick = toTick; return sim; }
   // the live world is exactly what hydrate(sim) would build, so long as nothing rests: a rest turns a body into a
   // static in the JSON, so the world is rebuilt from the JSON before the next tick (else one jump would solve it as
-  // the sleeping dynamic body it was, and differ from tick-by-tick; review of 49d4fb0d #1)
-  // Each tick the world holds only the statics a flyer could reach in that tick (review of 49d4fb0d #4: hydrating
-  // every static cost 20 ms/tick at 3000). Exact by construction: contact pairs are found from the bodies' boxes at
+  // the sleeping dynamic body it was, and differ from tick-by-tick)
+  // Each tick the world holds only the statics a flyer could reach in that tick (hydrating every static is too slow
+  // in a big world). Exact by construction: contact pairs are found from the bodies' boxes at
   // the start of the step, and the swept (continuous) test only looks inside each flyer's start→end box; after the
   // step, if any static left out touches a flyer's swept box, the tick is redone with every static.
   const dt = sim.epoch.tickMs / 1000; let W, ids, index;
@@ -214,8 +213,7 @@ export function advanceSim(sim, toTick) {
         woke.length = 0; for (const id of Object.keys(sim.statics)) if (sim.statics[id].dyn && W.bodies[index.get(sim.statics[id].uid)].awake) woke.push(id); }
     }
     // woken: it flies now, under the launch whose flight woke it — the engine names the awake body that started the
-    // cascade (wokeBy), and that body's launch is the cause (PHYSICS §1: through contact). Review of 8377ec52 #7: the
-    // newest launch anywhere was blamed for a crate 40 m away.
+    // cascade (wokeBy), and that body's launch is the cause (PHYSICS §1: through contact), never the newest launch anywhere
     const seqOfUid = new Map(Object.values(sim.bodies).filter((b) => !b.resting).map((b) => [b.uid, b.seq]));
     const latest = Math.max(...flyers.map((b) => b.seq));
     sim.tick++;

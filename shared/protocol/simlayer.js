@@ -1,4 +1,4 @@
-// The sim layer (design 20, P4–P7): a second fold beside the blind one. It reads the log's change entries (through
+// The sim layer (P4–P7): a second fold beside the blind one. It reads the log's change entries (through
 // fold.js, untouched) and its `sim` entries (intents that start motion), and runs the engine @world.physics-engine names.
 // It never writes the log. Determinism is local: it holds only for a carried engine build, inside one epoch.
 //
@@ -9,9 +9,9 @@
 // The engine is eidosim (shared/sim.js, its adapter, over shared/eidosim.js, its core): rigid bodies that tumble and
 // roll, soft contacts after Box3D, swept against what rests, on terrain; things at rest that are dynamic and free can be
 // knocked. It is named name@version; a version is carried when this server reproduces its conformance digests
-// (spec/conformance/physics/, engine-check), and a change meant to alter results is a new version (Covenant II). The first eidosim (eidosim@0.1.0–0.5.0, PROTOCOL_v2 dialect 3) is no longer
-// carried at runtime (R 2026-10-09: "stomp the existing eidosim engine"); the old-world importer keeps its own copy, to
-// say where old punts came to rest, and writes those rests as plain changes.
+// (spec/conformance/physics/, engine-check), and a change meant to alter results is a new version (Covenant II). The first
+// eidosim (0.1.0–0.5.0) is not carried at runtime; the old-world importer keeps its own copy, to say where old punts came
+// to rest, and writes those rests as plain changes.
 import { sha256 } from "./hash.js";
 import { fold, opsOf, applyOps, applyInPlace, emptyState, Malformed, PURGED, purgesIn } from "./fold.js";
 import { MODELS } from "./labmodels.js";
@@ -21,9 +21,7 @@ import { r3, r2 } from "./round.js";
 import { composePose } from "../rot.js";
 import { scale3 } from "../scale3.js";
 
-// An engine is named by its VERSION (house answer, #260 10-21): a server carries a version when its implementation reproduces
-// that version's conformance digests (spec/conformance/physics/, held by engine-check). A change that still reproduces them
-// is the same version; a change meant to alter results is a new version with its own digests.
+// An engine is named by its VERSION: carried when this server reproduces its conformance digests (above).
 export const ENGINES = { [eidosim.SIM_ID]: { module: eidosim, rotates: true, maxSpeed: 20,
   about: "eidosim: rigid boxes and spheres that tumble and roll, soft contacts (after Box3D), swept against what rests, terrain; free dynamic things at rest can be knocked" } };
 export const DEFAULT_ENGINE = eidosim.SIM_ID;
@@ -106,7 +104,7 @@ export function lostPlace(st, id) {
   return false;
 }
 // a body this layer's engine lacks only because a purge took what it is read from (purgedPhysical, lostPlace): the engine
-// that wrote the log had it, so what this one computes beside it is unknown (review of #260). A thing that would be no
+// that wrote the log had it, so what this one computes beside it is unknown. A thing that would be no
 // body either way (collision off, switched off, a model that isn't a collider) is no loss
 function lostBody(st, id, models) {
   const e = st.entities[id], c = e?.c; if (!c || !(purgedPhysical(c) || lostPlace(st, id))) return false;
@@ -144,8 +142,7 @@ const bodyIn = (entries, purged, seq) => { const e = entries[seq]; if (!isEntry(
   return purged?.has(`${seq}:-`) || isCommitStub(e.body) ? null : e.body; };
 
 // Fold the whole log: the blind state, plus the sim epoch's live bodies and what came to rest (not yet logged).
-// (Engine, slice 2: this is now simFolder fed every valid entry, then viewed at `now` — the same code the server runs
-// incrementally, so every suite that calls simFold exercises the incremental path.)
+// simFolder fed every valid entry, then viewed at `now`: the server's incremental path, so every suite exercises it.
 export function simFold(entries, now, opts = {}) {
   const blind = fold(entries); // the strict fold decides which entries count; this layer replays the same ones
   const bad = new Set(blind.diagnostics.filter(([, c]) => c.startsWith("malformed")).map(([q]) => q));
@@ -153,7 +150,7 @@ export function simFold(entries, now, opts = {}) {
   if (blind.status === "ok") for (let s = 0; s < entries.length; s++) if (isEntry(entries[s]) && !bad.has(s)) f.feed(s);
   return f.view(now);
 }
-// The sim layer as a running fold (engine, slice 2; the lab re-folded the whole log on every call, O(n) per request).
+// The sim layer as a running fold.
 // feed(seq) takes the next VALID entry (the caller decides validity: the strict fold on load, the authority's own re-read
 // on append), in log order; view(now) advances the engine to `now` and returns what simFold returned. `now` must not
 // run backwards relative to later entries' ts (the server's clock is monotonic and every ts it writes is ≥ it), so
@@ -172,7 +169,6 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     unknownEpoch: !!from?.unknownEpoch, unknownHold: !!from?.unknownHold };
   const E = () => eidosim;
   // every engine write counts (out.rev): a client re-copies its presentation sim only when this moved, not on every entry
-  // (STRIKES PH-S2: ~100 JSON copies of the whole sim during a cascade, one per chat line too)
   out.rev = from?.rev ?? 0; const SE = (...args) => { out.rev++; return eidosim.simEntry(...args); };
   const tickOf = (ts) => (out.sim ? E().tickOf(out.sim, ts) : 0);
   const advance = (ts) => {
@@ -184,7 +180,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
       if (!flying.length) { E().advanceSim(out.sim, target); break; }
       E().advanceSim(out.sim, out.sim.tick + 1);
       for (const id of flying) if (out.sim.bodies[id]?.resting && out.launched[id]) out.launched[id].restTick ??= out.sim.tick;
-      for (const [id, l] of Object.entries(out.launched)) if (l.restTick !== undefined && out.sim.bodies[id] && !out.sim.bodies[id].resting) delete l.restTick;   // woken again before its rest was logged (review #9)
+      for (const [id, l] of Object.entries(out.launched)) if (l.restTick !== undefined && out.sim.bodies[id] && !out.sim.bodies[id].resting) delete l.restTick;   // woken again before its rest was logged
       // a body a flight woke is that launch's to rest (PHYSICS §1): it rests and is logged under the launch the engine names
       for (const [id, b] of Object.entries(out.sim.bodies)) if (b.woken && !b.resting && out.launched[id]?.seq !== b.seq) {
         const src = Object.values(out.launched).find((l) => l.seq === b.seq);
@@ -205,7 +201,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
   // a value reads PURGED only where the feed's purge map names it (without one, applyInPlace refuses a stripped value) or in
   // the state a cut starts from, so with neither the lost-body scan below is skipped
   const mayLose = (purged?.size ?? 0) > 0 || (!!from?.st && Object.values(from.st.entities).some((e) => Object.values(e.c).some((v) => v === PURGED)));
-  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it (review 64d26822 #3)
+  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it
   const engineView = (s) => { const v = engineViewM(s, models); for (const id of out.lifted) delete v.entities[id];
     if (mayLose && !out.unknownEpoch && Object.keys(s.entities).some((id) => !v.entities[id] && !out.lifted.has(id) && lostBody(s, id, models))) out.unknownEpoch = true;
     return v; }, boxesFor = (s) => boxesForM(s, models);
@@ -262,7 +258,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
       let relock = false;
       for (const o of ops) { // P7, keyed by component
         if (o.id === "@world") { // the ground itself changed: re-ground, release every body, rebuild colliders (her law)
-          if (o.comp === "terrain") { SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "terrain", args: st.entities["@world"].c.terrain ?? { amplitude: 0 } }, engineView(st)); out.launched = {}; }   // removed: flat y = 0, as at boot (line 80), never the toolkit's default hills
+          if (o.comp === "terrain") { SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "terrain", args: st.entities["@world"].c.terrain ?? { amplitude: 0 } }, engineView(st)); out.launched = {}; }   // removed: flat y = 0, as at boot, never the toolkit's default hills
           continue; }
         const shape = engineBox(st.entities[o.id]?.c.physics), model = libOf(st.entities[o.id]);
         if (shape && out.sim.boxes && typeof model === "string") out.sim.boxes[model] ??= shape;
@@ -270,17 +266,16 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
         if (o.comp === "lock" || o.comp === "parent" || whole) relock = true;   // a thing made or deleted changes what's under a lock
         if (!whole && !PHYSICAL.has(o.comp)) continue;
         // a write that ends a hold (the authority's commit(): transform, parent, disabled, or the whole thing) puts it back in the
-        // world; any other physical write to a held thing (its physics, its model) leaves it in the hand (review 64d26822 #1–#2)
+        // world; any other physical write to a held thing (its physics, its model) leaves it in the hand
         if (out.lifted.has(o.id)) continue;   // still in the hand: a hold's end was read above
         const ids = [o.id, ...Object.keys(st.entities).filter((k) => isUnder(st, k, o.id))];
-        const view = engineView(st);   // one view per op (review 10-14 C4: it was rebuilt per affected id — 51 views for a shelf of 50)
+        const view = engineView(st);   // one view per op, never one per affected id
         for (const id of ids) {
           // in someone's hand (lifted or caught, not yet put down or thrown): its record still stands where it was taken, under
-          // whatever it rested on, and a move of that thing must not put a body back there (R 10-11: a crate she caught was
-          // re-placed under the crate below it, rested there, and she held a thing that lay on the floor)
+          // whatever it rested on, and a move of that thing must not put a body back there
           if (id !== o.id && out.lifted.has(id)) continue;
           // a thing under it that a launch set moving is the engine's until its own rest is LOGGED (L6), flying or come to
-          // rest unlogged: its parent's rest or a write to its parent doesn't cancel it (review of 8377ec52 #6)
+          // rest unlogged: its parent's rest or a write to its parent doesn't cancel it
           if (id !== o.id && out.launched[id] && out.sim.bodies[id]) continue;
           const gone = !view.entities[id];
           SE(out.sim, { seq, ts: clock, actor: e.actor, verb: gone ? "remove" : "place", args: { id } }, view);
@@ -288,7 +283,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
         }
       }
       // a lock or a parent changed: what may be knocked changes for the thing, what's under it and what it's under.
-      // Re-seat every thing at rest whose knockability no longer matches (review of 8377ec52 #3–#5)
+      // Re-seat every thing at rest whose knockability no longer matches
       if (relock) { const view = engineView(st);
         for (const id of Object.keys(out.sim.statics ?? {})) if (!!out.sim.statics[id].dyn !== (view.entities[id]?.kind === "dynamic"))
           SE(out.sim, { seq, ts: clock, actor: e.actor, verb: view.entities[id] ? "place" : "remove", args: { id } }, view); }
@@ -319,7 +314,7 @@ export function simFolder(entries, { models = MODELS, from = null, purged = null
     out.clock = clock;
     out.rested = [];
     // a flying body that has crossed the world's edge is lost THERE: it rests on the record where it is now, and the
-    // authority sends it home (attack-physics P1: a ball flew 300 m out for a minute, untouchable, simulated every pass)
+    // authority sends it home (never simulated out there, untouchable)
     const B = boundsIn(st);
     if (out.sim) for (const [id, l] of Object.entries(out.launched)) {
       const b = out.sim.bodies[id]; if (!b) continue;

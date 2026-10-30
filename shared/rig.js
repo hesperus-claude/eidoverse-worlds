@@ -74,15 +74,8 @@ export function rigMath(THREE) {
     const parent = new Map();
     g.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => parent.set(c, i)));
     const memo = new Map();
-    // Full matrices, because SCALE is load-bearing here. Composing only
-    // translation and rotation (and reading a matrix node's translation column
-    // while dropping its basis) silently drops any scale on an ancestor — and
-    // glb2vrm bakes a uniform scale on the Armature to bring a ~1m Tripo export
-    // to human height, so mythospaint's armature carries 1.651. The headless
-    // skeleton came out 0.86m tall while the browser rendered her at 1.65m.
-    // Bone quaternions are scale-free, so limbs still looked right and nothing
-    // complained; only the streamed ROOT was in the small frame, which put her
-    // ~0.46m — a foot and a half — above the floor for everyone watching.
+    // Full matrices, because SCALE is load-bearing: translation + rotation alone drops an ancestor's scale (glb2vrm
+    // bakes one on the Armature to bring a ~1 m export to human height), and the root then streams in a shrunken frame.
     const localMatrix = (n) => (n.matrix
       ? new THREE.Matrix4().fromArray(n.matrix)
       : new THREE.Matrix4().compose(
@@ -106,8 +99,7 @@ export function rigMath(THREE) {
     const root = new THREE.Object3D();
     // three-vrm's half-turn for VRM0, reproduced as a pivot the bones hang from,
     // so every normalized bone reads a 180° world rotation against the root
-    // exactly as it does in the browser. Without it the harness silently models
-    // a VRM1 body and any frame error on the other six goes unseen.
+    // exactly as it does in the browser (else a frame error goes unseen).
     const pivot = new THREE.Object3D();
     if (vrm0) pivot.rotation.y = Math.PI;
     root.add(pivot);

@@ -1,4 +1,4 @@
-// shared/protocol/refusalcodes.js — every code the authority refuses with, registered (engine-scars 3.1, R 10-17 02:45).
+// shared/protocol/refusalcodes.js — every code the authority refuses with, registered.
 // Pure data, no imports. A code is written into signed log entries (a refused write's act carries `refused: {code}`), so a
 // code is one-way: clients branch on it, old logs hold it forever. Like HTTP's status codes or gRPC's closed `Code` enum:
 // a fixed, registered set, with free-text `reason` and `fix` beside it. A new code is a new row here, with what it means
@@ -6,7 +6,7 @@
 // a row names a code nothing gives (unless it is `reserved`), and if a request in that suite met an unregistered code.
 //
 // Each row: { meaning, when, reserved? }. `meaning` is what the asker should understand; `when` is what triggers it.
-// Synonyms merged 10-17: `no-such` (the caption request's not-found) is `not-found`. Kept apart on purpose: `gone` (a
+// Kept apart on purpose: `gone` (a
 // thing you were holding was deleted), `not-here` (a body isn't in the world), `not-a-thing` (a socket isn't a thing).
 export const REFUSAL_CODES = Object.freeze({
   // ---- who is asking (identity, membership, sanctions) ----
@@ -144,7 +144,7 @@ export const REFUSAL_SOURCES = Object.freeze(["shared/protocol/verbspec.js", "sh
 export const DYNAMIC_REFUSALS = Object.freeze(["code", "bad.code", "e.code", "dirty.code", "r.code", "g.code", "b.code"]);   // b.code: writeBlock's (scriptrun.js), whose codes are literals there
 /** `code:` literals in the scanned files that aren't refusal codes (none today; a status code that isn't a refusal goes here). */
 export const NOT_REFUSALS = Object.freeze([]);
-/** Codes renamed before release (protocol minor 0, R 10-17: no body plan in a name). A log written before the rename may
+/** Codes renamed before release (protocol minor 0: no body plan in a name). A log written before the rename may
  *  carry the old word in a refused act; the fold never judges a code, so it reads either, and a reader that branches on
  *  one maps it through here. The authority never refuses with an old word. */
 export const RENAMED_CODES = Object.freeze({ "hands-full": "hold-limit", "underfoot": "beneath", "no-body": "not-pushable", "no-such": "not-found" });
