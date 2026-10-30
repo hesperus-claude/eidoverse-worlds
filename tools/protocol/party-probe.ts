@@ -289,9 +289,10 @@ try {
     const vic = guest("vicky"); await vic.join(); await sleep(800);
     const say = async (s: string) => { await clickEl(`document.getElementById('chatline')`); await evalJson(`(() => { const t = document.getElementById('chatline'); t.value = ''; t.focus(); return true; })()`); await type(s); await press("Enter"); await sleep(700); };
     const log = () => evalJson(`document.querySelector('[data-frame="chat"]')?.textContent ?? ''`);
-    for (const c of ["/mute vicky 5 chat too loud", "/warn vicky please", "/unmute vicky"]) {
-      const t0 = await log(), before = t0.split("unknown command").length;
-      await say(c); await tryUntil(`a reply to ${c}`, async () => (await log()) !== t0, { ms: 5000 });   // judged on the reply, not on a moment
+    // each is confirmed to its moderator in chat (the moderated line): waited for, never a moment
+    for (const [c, line] of [["/mute vicky 5 chat too loud", /\bmuted\b/g], ["/warn vicky please", /\bwarned\b/g], ["/unmute vicky", /\bunmuted\b/g]] as const) {
+      const t0 = await log(), before = t0.split("unknown command").length, n = (t: string) => (t.match(line) ?? []).length, n0 = n(t0);
+      await say(c); await until(`the moderator's confirmation of ${c}`, async () => n(await log()) > n0, { ms: 5000 });
       check(`M1 ${c.split(" ")[0]} is a command (not "unknown command")`, (await log()).split("unknown command").length === before, (await log()).slice(-300));
     }
     const t1 = await log(); await say("/mute vicky 5 chat again"); await tryUntil("the second mute is answered", async () => (await log()) !== t1, { ms: 5000 });
