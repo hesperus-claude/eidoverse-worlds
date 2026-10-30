@@ -28,6 +28,7 @@ import { entities } from './world.js';
 import { boxOf, previewMesh, previewLight } from './realize/models.js';
 import { state } from './state.js';
 import { net, sendDrag, replica } from './net.js';
+import { serverNow } from './serverclock.js';   // the sky's and roles' stamps are the authority's
 import { trustedOf } from '../../shared/drafts.js';
 import { enc } from '../../shared/protocol/names.js';
 import { THREE } from './core.js';
@@ -117,7 +118,7 @@ export const mayTrust = () => (net.myRights?.role === undefined ? undefined : is
 // (server operators fold to owner), undefined = not known yet.
 // shaping the world's look is the editWorld switch (research roles S2); the owner's on an older server
 export const mayShape = () => { const r = net.myRights; if (Array.isArray(r?.permissions)) return r.permissions.includes('editWorld'); return r?.role === undefined ? undefined : isOwner(r); };
-export const worldLive = () => ({ now: Date.now(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
+export const worldLive = () => ({ now: serverNow(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
 export function schemaFor(id) {
   if (id === WORLD_ID) return worldSchema(state.st, worldLive());
   const rec = recordFor(id); if (!rec) return { id, groups: [] };
