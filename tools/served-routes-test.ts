@@ -84,6 +84,17 @@ for (const [path, status, minBytes] of ROUTES) {
   } catch (e) { check(path, false, String(e).slice(0, 60)); }
 }
 
+// the client tree is served as /shared/ is (the control): gzipped on request, and an ETag revalidation is a 304
+for (const path of ["/", "/lib/core.js", "/shared/components.js"]) {
+  try {
+    const res = await fetch(`${BASE}${path}`, { headers: { "accept-encoding": "gzip" } }); await res.arrayBuffer();
+    const etag = res.headers.get("etag");
+    const again = etag ? await fetch(`${BASE}${path}`, { headers: { "if-none-match": etag } }) : null;
+    check(`${path}: gzipped on request and revalidated to a 304 by its ETag`, res.status === 200 && res.headers.get("content-encoding") === "gzip" && again?.status === 304,
+      `status=${res.status} encoding=${res.headers.get("content-encoding")} etag=${etag} again=${again?.status}`);
+  } catch (e) { check(path, false, String(e).slice(0, 60)); }
+}
+
 // the websocket upgrade must be untouched: a 101 never reaches fetch(), so the observable is that the socket still opens
 const wsOk = await new Promise<boolean>((resolve) => {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
