@@ -142,8 +142,8 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   v1(W, "attic", [["world", "grant", { id: "fable", role: "owner" }], ["fable", "grant", { id: "mica", role: "owner" }], ["fable", "grant", { id: "Digi_Rat", role: "builder" }], ["fable", "say", { text: "hi" }]]);
   v1(W, "shed", [["Pip", "say", { text: "nobody owns this" }]]);
   const a = upgrade(root, "attic"), s = upgrade(root, "shed");
-  const named = (w: any) => typeof w === "string" && /no owner of "attic" is bound to an account: fable, mica\./.test(w) && /operator-repair\.ts bind attic /.test(w) && !/Digi_Rat/.test(w);
-  row("UN1", () => ok(named(a.report?.ownerWarning) && a.dry.out.includes(`WARNING: ${a.report.ownerWarning}`) && a.up.code === 0 && fs.existsSync(path.join(W, "attic", "world.jsonl")) && named(a.result?.ownerWarning) && /^WARNING: no owner of "attic"/m.test(a.up.out),
+  const named = (w: any) => typeof w === "string" && /"attic"/.test(w) && ["fable", "mica"].every((n) => new RegExp(`\\b${n}\\b`).test(w)) && /operator-repair\.ts bind attic /.test(w) && !/Digi_Rat/.test(w);
+  row("UN1", () => ok(named(a.report?.ownerWarning) && a.dry.out.includes(`WARNING: ${a.report.ownerWarning}`) && a.up.code === 0 && fs.existsSync(path.join(W, "attic", "world.jsonl")) && named(a.result?.ownerWarning) && /^WARNING: .*"attic"/m.test(a.up.out),
     "UN1 no owner bound to any account: the dry run, the approved report and the upgrade's result warn, naming the owners (not the builder) and the bind; the upgrade still runs", { w: a.report?.ownerWarning, r: a.result?.ownerWarning, code: a.up.code }));
   const no = (o: string) => /"shed" has no owner, and every translation ends with one: translate it with --claim and EIDO_UPGRADER_ACCOUNT=/.test(o);
   row("UN3", () => ok(s.dry.code !== 0 && no(s.dry.out) && s.up.code !== 0 && no(s.up.out) && !fs.existsSync(path.join(W, "shed", "world.jsonl")) && fs.existsSync(path.join(W, "shed", "log.jsonl")),

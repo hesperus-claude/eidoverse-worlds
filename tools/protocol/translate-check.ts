@@ -269,7 +269,7 @@ row("S3-RP", () => { const root = scratch("translate-rp"), d = path.join(root, "
   ok(report.adjusted?.some((x) => x.component === "light") && report.effects?.length === 1 && report.rights?.newcomers === "builder" && report.mapped?.some((x) => x.component === "particles"),
     "S3-RP the dry-run report (what the operator approves) carries the adjustments, the derived effects, the rights and the particle mapping", { keys: Object.keys(report) }); });
 row("S3-LP", () => { const { r, E } = tr([OWNER, ["olga", "light", { id: "l", intensity: 16, range: 10 }], ["olga", "light", { id: "k", intensity: 4, range: 2 }]]);
-  ok(E.l.light.decay === 2 && E.l.light.intensity === +(16 * 5 ** 0.3).toPrecision(4) && E.k.light.intensity === 4 && r.stats.adjusted?.some((x) => x.id === "l" && x.field === "intensity" && /half its range/.test(x.why)),
+  ok(E.l.light.decay === 2 && E.l.light.intensity === TV1.parityIntensity(16, 10) && E.k.light.intensity === 4 && r.stats.adjusted?.some((x) => x.id === "l" && x.field === "intensity" && /half its range/.test(x.why)),
     "S3-LP a translated light falls off at decay 2 and is brightened once to main's brightness at half its range (× (range/2)^0.3), listed", { l: E.l.light, k: E.k.light }); });
 
 row("S3-SA", () => { const { r, W } = tr([OWNER, ["olga", "sky", { world: "earth", audio: true }]]), b = tr([OWNER, ["olga", "sky", { world: "earth", audio: 1 }]]).W;
