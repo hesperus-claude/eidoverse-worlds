@@ -17,7 +17,8 @@ try {
     const orig = r.render.bind(r);
     r.render = (sc, cam) => { const t = r.getRenderTarget(); if (t && t.width === W && sc?.children?.[0]?.material === sys._envBake?.scene?.children?.[0]?.material) { const d = sys.uniforms.sunDir.value; globalThis.__bt.push([performance.now(), sys.uniforms.time.value, `${d.x.toFixed(5)},${d.y.toFixed(5)}`]); queueMicrotask(() => { sys.uniforms.sunDir.value.x += 0.001; }); } return orig(sc, cam); };
   });
-  await pg.waitForTimeout(40000);
+  // until two multi-strip bakes are recorded (cadence bakes; the probe's verdicts read the same cycles)
+  await pg.waitForFunction(() => { let n = 0, cur = null; for (const [ms] of globalThis.__bt) { if (!cur || ms - cur.last > 1500) { if (cur && cur.n > 1 && cur.last - cur.first > 20) n++; cur = { n: 0, first: ms, last: ms }; } cur.n++; cur.last = ms; } return n >= 2; }, null, { timeout: 120000, polling: 1000 }).catch(() => {});
   const r = await pg.evaluate(() => {
     const v = globalThis.__bt; const cycles = []; let cur = null;
     for (const [ms, t, sd] of v) { if (!cur || ms - cur.last > 1500) { cur = { times: new Set(), suns: new Set(), n: 0, first: ms, last: ms }; cycles.push(cur); } cur.times.add(t.toFixed(4)); cur.suns.add(sd); cur.n++; cur.last = ms; }
