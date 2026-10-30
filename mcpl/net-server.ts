@@ -53,11 +53,11 @@ function readTokens(): Record<string, Auth> {
   return readTokenRegistry(TOKENS_PATH, TOKENS_EXAMPLE_PATH);
 }
 
-// per-agent durable state (missed-mention cursors, chosen bodies), tmp+rename. Plain ids map to lastSeen
-// timestamps; __-prefixed keys are sections. MCPL_STATE overrides mcpl/state.json so tests never write repo state (PR #125).
+// per-agent durable state (missed-mention cursors, chosen bodies), tmp+rename. Plain ids map to lastSeen timestamps;
+// __-prefixed keys are sections. MCPL_STATE overrides the default (mcpl/state.json), so tests don't write the repo.
 const STATE_PATH = process.env.MCPL_STATE ?? fileURLToPath(new URL("./state.json", import.meta.url));
 const STATE_TMP = STATE_PATH + ".tmp";
-// a tmp at boot is an interrupted atomic write: STATE_PATH still holds the last good state, so sweep it
+// a tmp at boot is an interrupted atomic write (STATE_PATH still holds the last good state): sweep it
 try { rmSync(STATE_TMP, { force: true }); } catch (e) { console.error("[mcpl] stale state tmp not removable:", (e as Error).message); }
 const _state: Record<string, unknown> = (() => {
   try { if (existsSync(STATE_PATH)) return JSON.parse(readFileSync(STATE_PATH, "utf8")); } catch { /* fresh */ }
@@ -71,8 +71,9 @@ const chosenAvatar: Record<string, string> = (_state.__avatar as Record<string, 
 /** Activity-sense tuning (pulse cadence / radius) is the agent's own decision and outlives sessions, like a body. */
 const activityCfg: Record<string, { pulseSec?: number; radiusM?: number }> =
   (_state.__activity as Record<string, { pulseSec?: number; radiusM?: number }>) ?? {};
-/** So a reconnect resumes there; stored with its home, and yields when the operator changes that home. Position
- *  inside the world is the sequencer's (rememberPose). */
+/** Where each agent last WAS, so a reconnect resumes there rather than at home. Stored with the home it was recorded
+ *  under: if the operator changes the home, the memory yields. Position inside the world is the sequencer's
+ *  (rememberPose). */
 const lastWorld: Record<string, { world: string; home: string }> =
   (_state.__world as Record<string, { world: string; home: string }>) ?? {};
 function rememberWorld(id: string, world: string, home: string) {
@@ -94,8 +95,8 @@ function persistState() {
   }
 }
 
-// without a handler SIGTERM can land between persistState's write and rename; a handler makes it
-// event-loop-ordered so the pair can't split. SIGKILL mid-write is left to the boot sweep above.
+// Without a JS handler, SIGTERM can land between persistState's write and rename; a handler makes it event-loop
+// ordered. SIGKILL mid-write is still possible: the boot sweep above recovers it.
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
     try { rmSync(STATE_TMP, { force: true }); } catch { /* best effort */ }
@@ -114,16 +115,16 @@ class Session {
   private channelOpen = true;   // the world channel is home: open unless the agent closes it
   /** Each `start` names the body it signals through; the body's speech, travel and the session's close stop it. */
   private typing = new TypingRelay();
-  /** Did the client declare capabilities.experimental.mcpl at initialize? Plain-MCP hosts get tools only
-   *  (chat through look/catch_up): an MCPL frame to a host that never opted in stalls the door. */
+  /** Did the client declare capabilities.experimental.mcpl at initialize? Plain-MCP hosts get tools ONLY (no
+   *  channels, pushes or replay; chat via look/catch_up), never an MCPL frame. */
   private mcplClient = false;
   /** As advertised at initialize (§5.2), or null. */
   private hostMcplVersion: string | null = null;
   /** The effective grant (§5.4), the only authorization input; null = no policy yet (granted()). Never
    *  derived from our own declaration, never widened by a receipt (§6.7). */
   private grant: Set<string> | null = null;
-  /** Opens once the first §5.3 featureSets/update is answered; serve()'s prelude waits on it concurrently
-   *  with the read loop, which alone can process the policy frame. */
+  /** Opens when the host's first §5.3 `featureSets/update` has been answered. serve()'s grant-dependent prelude waits
+   *  on it CONCURRENTLY with the read loop, which alone can process that frame (inline would deadlock). */
   private policyAnswered!: () => void;
   private policyGate: Promise<void> = new Promise((resolve) => { this.policyAnswered = resolve; });
   /** RFC-005 §3.2.3d attachment generation: increments at each commit, which is the cutoff; surfaced as
@@ -137,8 +138,8 @@ class Session {
 
   /** The credential's `world` claim, whatever world this session travelled to: what lastWorld is recorded against. */
   readonly home: string;
-  /** Record where this session starts, once joined? False when the resume check couldn't run, so an unverified
-   *  fallback never overwrites the memory (#261). */
+  /** Record where this session STARTS once joined? False when the start is home only because the resume memory
+   *  couldn't be verified: that must not overwrite it. */
   private readonly recordStart: boolean;
   constructor(private auth: Auth, ws: WebSocket, private agentToken = "", home?: string, recordStart = true) {
     this.home = home ?? auth.world ?? "commons";
@@ -148,8 +149,9 @@ class Session {
     this.channelId = `world:${this.agent.world}`;
     // the body's speech ends the dots; if the turn goes on, the host's next `start` raises them. Travel hands this on.
     this.agent.onSaid = () => this.typing.stop();
-    // typing is taken on arrival, not when serve() next reads: a minute-long tool call would let the relay's overdue
-    // stop drop the dots. Judged against the grant held now; the next refresh (≤7 s) retries.
+    // Typing signals are taken as they arrive, not when serve()'s one-at-a-time loop next reads (a tool call can
+    // outlast the relay's overdue stop). Each is judged against the grant and channel held at arrival; the host's
+    // next refresh (within 7 s) is judged again.
     this.conn.on("notification", (n) => {
       if (n.method !== method.CHANNELS_TYPING) return;
       try {
@@ -181,7 +183,7 @@ class Session {
   /** The loopback media bridge. One sidecar at a time: a second connection replaces the first, because two
    *  publishers for one identity is the double-speak bug (#57). */
   private mediaSock: WebSocket | null = null;
-  /** So session teardown releases the port (or the next session can't bind it). */
+  /** The media listener, held so session teardown releases the port (else the next session can't bind it). */
   private mediaServer: { stop: (closeActiveConnections?: boolean) => void } | null = null;
 
   private startMediaBridge(port: number) {
@@ -208,19 +210,19 @@ class Session {
           // sidecar -> world, whitelisted in sendMedia; the sidecar's malformed JSON must not take the door down (house rule #3)
           try {
             const frame = JSON.parse(String(raw)) as { type?: string; seq?: number };
-            // `aired`: an utterance left the encoder. The receipt is ours, never the sidecar's: attest is identity-bearing,
-            // and a peer minting receipts could suppress listeners' fallback for unaired audio.
+            // `aired`: an utterance left the encoder. The RECEIPT is ours, never the sidecar's: attest is identity-bearing
+            // and belongs to the authenticated primary.
             if (frame?.type === "aired") { void this.attestAired(Number(frame.seq)); return; }
             this.agent.sendMedia(frame as never);
           } catch (e) { console.warn("[door] bad media frame:", (e as Error).message); }
         },
         close: (ws) => { if (this.mediaSock === (ws as never)) this.mediaSock = null; },
       },
-      // a bind failure must not end the session: the door is still useful mute
+      // a media error is never fatal to the SESSION: the door is still useful mute
       error: (e: Error) => { console.warn("[door] media bridge error:", e.message); return undefined; },
     });
     } catch (e) {
-      // a bind failure is a mute door, not a dead one: throwing here would end the whole connection
+      // a bind failure is a mute door, not a dead one: log it and stay up
       this.mediaServer = null;
       console.warn(`[door] media bridge could NOT bind :${port} (${(e as Error).message}) — continuing WITHOUT a voice; text is unaffected`);
       return;
@@ -231,8 +233,8 @@ class Session {
     };
   }
 
-  /** Mint the receipt for an aired utterance. Silent on an unknown seq: a missing receipt degrades to the
-   *  listener-side fallback by design. */
+  /** A sidecar reported an utterance aired; mint its receipt. Silent on an unknown seq (aged out of the ring): a missing
+   *  receipt degrades to the listener-side fallback by design. */
   private async attestAired(seq: number): Promise<void> {
     if (!Number.isSafeInteger(seq)) return;
     const ok = await this.agent.attestSay(seq).catch(() => false);
@@ -243,16 +245,18 @@ class Session {
     this.typing.stop();
     this.agent.close(); // deliberate death: stops the body's auto-reconnect
     this.conn.close();
-    // release the media port, or the next session can't bind it; closeActiveConnections drops a still-attached
-    // sidecar now rather than leave it against a dead session
+    // release the media port so the next session can bind it; closeActiveConnections drops a still-attached sidecar
     if (this.mediaServer) {
       try { this.mediaServer.stop(true); } catch (e) { console.warn("[door] media bridge stop:", (e as Error).message); }
       this.mediaServer = null;
     }
   }
 
-  /** Classifies, never closes: JoinDeclined means nothing moved; anything else is past the detach, so the
-   *  connection must close. Pair with finishFatalJoin(), which defers the close a tick so the reply flushes. */
+  /** Classify a joinWorld() failure by WHEN it happened:
+   *    • JoinDeclined  → PREPARE refused, nothing moved: a refusal.
+   *    • anything else → past the detach, the old body is gone: fatal, the connection must close.
+   *  It classifies; it does not close (closing here would kill the socket before the reply is written). Pair it with
+   *  finishFatalJoin(), which defers the close a tick. `code` is the JSON-RPC answer for a lane that needs one. */
   private classifyJoinFailure(e: unknown): { fatal: boolean; code: number; why: string } {
     // the tool lane's sentence says which case, so the message is the cause alone (the code keeps the JSON-RPC name)
     if (e instanceof JoinDeclined)
@@ -264,13 +268,16 @@ class Session {
    *  send (or return) reaches the wire first. */
   private finishFatalJoin() { setTimeout(() => this.close(), 0); }
 
-  /** The world-change gate: host capability, MCPL hosts only (-32002; a plain host's authority is its
-   *  credential); credential narrowing and the world's /access (-32017); exists or may be founded (-32023);
-   *  -32024 if the world server can't be asked. */
+  /** The authorization path for changing worlds (the `travel` tool). In order:
+   *    1. may this HOST act on channels → capability (-32002), MCPL hosts only (a plain host's authority is its
+   *       credential);
+   *    2. does the CREDENTIAL's narrowing allow that world, and does the WORLD let it in (/access) → -32017;
+   *    3. does the world exist, and if not may this identity found it → -32023.
+   *  (-32024 when the world server could not be asked: nothing moves.) */
   private async travelGate(target: string): Promise<
     { ok: true; founding: boolean } | { ok: false; code: number; why: string }
   > {
-    // granted() is always false for plain MCP, whose authority is its credential (joinAllowed + accessProbe, below)
+    // MCPL hosts only: granted() is false for every plain-MCP client, whose authority is its credential (below)
     if (this.mcplClient && !this.granted(CAP.channelsLifecycle))
       return { ok: false, code: -32002, why: `your host hasn't granted this door ${CAP.channelsLifecycle}, which travel needs, and calling again won't change that; if you need it, ask whoever runs your host` };
     // the credential can only NARROW; the WORLD decides who may come in. Both are asked before anything moves, so a
@@ -292,11 +299,13 @@ class Session {
     return { ok: true, founding: true };
   }
 
-  /** RFC-005 §3.2: move this connection's body to another world atomically, the old body dying before the
-   *  new one dials. Throws on attach failure; the caller must then close the connection (§3.2.5). */
+  /** RFC-005 §3.2 in-session join: atomically reattach this body to another world. The old body dies before the new
+   *  one dials, so this identity is never in two worlds; the event/ping closures over `this.agent` re-route with one
+   *  assignment. Throws on failure; the caller MUST then close the connection (§3.2.5). */
   private async joinWorld(w: string, founding = false): Promise<void> {
-    // ── PREPARE (RFC-005 §3.2.3a-c) ── the host's acceptance is part of the transition; no answer or no
-    // support counts as declining (fail-closed, §5.3). `leaving` is captured before this.agent can change.
+    // ── PREPARE (RFC-005 §3.2.3a-c) ────────────────────────────────────────
+    // The host's acceptance is PART of the transition: no answer, or no inbound Request form, is DECLINING (§5.3).
+    // `leaving` is captured before anything can reassign this.agent.
     const leaving = `world:${this.agent.world}`;
     if (this.granted(CAP.channelsRegister)) {
       const proposed: ChannelDescriptor = {
@@ -304,8 +313,8 @@ class Session {
         id: `world:${w}`,
         label: `eidoverse — ${w}`,
         address: { world: w },
-        // §3.2.3d: metadata.epoch is the only place the client learns it; prepare states the epoch this
-        // transition would commit to, and the client defers the assignment until commit is observed
+        // §3.2.3d: the descriptor MUST carry metadata.epoch; prepare states the epoch this transition WOULD commit to
+        // (the client adopts it on commit)
         metadata: { epoch: this.epoch + 1, ...(founding ? { created: true } : {}) },
       } as ChannelDescriptor;
       // which refusal: a host that said no, one that errored, or one that timed out (a later try can get past); the
@@ -314,8 +323,8 @@ class Session {
       const noAnswer = new Error("no answer within 5 seconds");
       try {
         const res = await Promise.race([
-          // prepare asks, it never announces the departure: a declining or slow host would be told its channel
-          // is gone while the body stays. `removed` is stated on commit, below (§14.5 results are per-added).
+          // PREPARE asks; it does not announce the departure (no `removed`): a declining or slow host keeps its
+          // channel. The removal is stated on COMMIT, below.
           this.conn.sendRequest(method.CHANNELS_CHANGED, {
             added: [proposed],
           }) as Promise<{ results?: { id: string; accepted?: boolean }[] }>,
@@ -343,10 +352,11 @@ class Session {
     next.onEvent = old.onEvent;
     next.onPing = old.onPing;
     next.onSaid = old.onSaid;
-    // the activity dial is the resident's, so travel keeps it; set before connect(), as serve() does
+    // the resident's activity dial is THEIRS and travels with them, applied before connect() as serve() does
     if (activityCfg[this.auth.id]) next.setActivity(activityCfg[this.auth.id]);
-    // detach BEFORE close: queued ws frames can still fire the old body's onmessage after close() returns, and the
-    // shared closures would attribute a late commons say to the annex channel
+    // Detach BEFORE close: ws frames already queued can still fire the old
+    // body's onmessage after close() returns, and the shared closures would
+    // attribute a late commons say to the annex channel.
     old.onEvent = null;
     old.onPing = null;
     old.onSaid = null;
@@ -363,8 +373,7 @@ class Session {
     await next.connect();
     this.epoch++;                      // the cutoff instant, after the fact of it
     this.foundedHere = founding;
-    // now the departure is a fact, so state it; a notification, not a Request: the host has no veto
-    // over a move that has already happened
+    // now the departure is a fact: state it, as a NOTIFICATION (the host has no veto over a move already made)
     try {
       this.conn.sendNotification(method.CHANNELS_CHANGED, { removed: [leaving] });
     } catch { /* peer gone: the close path handles it */ }
@@ -375,20 +384,22 @@ class Session {
     // no second channels/changed: PREPARE announced the roster change and the host accepted it (§3.2.3a)
   }
 
-  /** The §5.4 gate for the channel verbs (publish, lifecycle, typing): the same semantics as granted(). */
+  /** §5.4 for the CHANNEL verbs: gates `channels.publish` and `channels.lifecycle` at their verbs and `channels.typing`
+   *  at its notification, so a host that granted only `channels.incoming` can't have its agent speak. */
   private capAllowed(cap: string): boolean {
-    // granted(), not toolsAllowed()'s shape: channel verbs are MCPL-only, so the plain-MCP and §5.3 fences apply
+    // exactly granted(), NOT toolsAllowed's shape: its fallback to MCP is right for tools, which exist in plain MCP,
+    // and has no analogue for MCPL-only channel verbs (the plain-MCP and deny-until-policy fences must hold)
     return this.granted(cap);
   }
 
-  /** Plain MCP negotiates tools itself; once an MCPL grant exists, it decides (§5.4). */
+  /** MCP's `tools` capability: once a grant exists it decides (§5.4); absent one, MCP's own initialize did. */
   private toolsAllowed(): boolean {
     return this.grant ? this.granted(CAP.tools) : true;
   }
 
-  /** Is cap in the effective grant (§5.4: the sole allowlist; absence is denial)? Before any grant, 0.5+
-   *  hosts are denied until featureSets/update (§5.3); pre-0.5 peers keep 0.4 semantics (negotiation,
-   *  never widening). */
+  /** Is `cap` (a §6.2 path) in this connection's effective grant (§5.4: the sole allowlist; deniedCapabilities is never
+   *  read)? With no grant yet, a 0.5+ host is denied until policy (§5.3); a pre-0.5 host keeps 0.4's semantics, the
+   *  version it asked for. That is version negotiation, not default-allow: nothing a peer says widens the door. */
   private granted(cap: string): boolean {
     if (!this.mcplClient) return false; // plain-MCP host: no MCPL frames, ever
     if (this.grant) { for (const g of this.grant) if (capabilityMatches(g, cap)) return true; return false; }
@@ -398,8 +409,11 @@ class Session {
   }
 
   /**
-   * Handle `featureSets/update` (§6.7): the degradation receipt, or an error tuple when malformed. The
-   * receipt says what the door will stop doing, never what it should get; never `accepted: false` (§6.7 coercion).
+   * Handle `featureSets/update` (§6.7). Returns the degradation receipt, or an
+   * error tuple when the policy message is malformed.
+   *
+   * The receipt is CONSEQUENCE TESTIMONY: what this door will stop doing, never what it should be given. Never
+   * `accepted: false` (refusal as a lever is the coercion §6.7 bars; tools-only is a mode this door can live in).
    */
   private applyPolicy(params: Record<string, unknown>): { error: string } | Record<string, unknown> {
     const eff = Array.isArray(params.effectiveCapabilities) ? params.effectiveCapabilities.map(String) : null;
@@ -431,11 +445,10 @@ class Session {
   }
 
   private deliver(text: string, author: { id: string; name: string }, opts?: { tags?: string[]; mentioned?: boolean; metadata?: Record<string, unknown> }) {
-    // a plain-MCP host never gets an MCPL frame; channels/incoming is content injection plus wake
-    // authority (§14.1), so it is gated on the grant, never on a declaration or a tag (§16.6)
+    // channels/incoming is content injection plus wake authority (§14.1): gated on the grant (never a plain-MCP host),
+    // never on a tag (§16.6)
     if (!this.granted(CAP.channelsIncoming)) return;
-    // author is rendered into the text (hosts don't label it); the prefix is the id, never the display
-    // name, so a host matching its own name isn't woken by a body whose display name contains it
+    // author rendered INTO the text (hosts don't label it); the prefix is the ID, never the display name (token-registry.ts wireAuthors)
     const rendered = wire.renderLine(author, text);
     const params: ChannelsIncomingParams = {
       messages: [{
@@ -445,8 +458,8 @@ class Session {
         timestamp: new Date().toISOString(),
         content: [{ type: "text", text: rendered }],
         ...(opts?.tags ? { tags: opts.tags } : {}),
-        // transition shim (issue #1 item 3): `tags` is the contract (§16); these booleans stay until hosts (ConversationRouter
-        // `mentioned`, wake-policies `isExplicitMention`) route on tags
+        // TRANSITION SHIM: `tags` is the contract (§16); `mentioned` / `isExplicitMention` are pre-tag dialects hosts
+        // still route on. Delete once hosts read tags; neither is authority.
         ...((opts?.mentioned || opts?.metadata)
           ? { metadata: { ...(opts?.metadata ?? {}), ...(opts?.mentioned ? { mentioned: true, isExplicitMention: true } : {}) } }
           : {}),
@@ -462,19 +475,23 @@ class Session {
     // the agent's own ambient-activity tuning, restored before the body joins: a decision, not a per-session default
     if (activityCfg[this.auth.id]) this.agent.setActivity(activityCfg[this.auth.id]);
     await this.agent.connect();
-    // remember the world only after the join, never for a fallback start, and only if this is still the
-    // agent's current session: a superseded one finishing late must not overwrite it (#261)
+    // record where the agent now IS: only after the join, not from an unverified-memory fallback, and only while this
+    // is still its CURRENT session (a superseded one finishing late must not overwrite)
     if (this.recordStart && sessions.get(this.auth.id) === this) rememberWorld(this.auth.id, this.agent.world, this.home);
 
-    // tags describe what an event is; waking is decided from world state (channelOpen, ev.mention), never a tag (§16.6).
-    // Media bridge (#104): with EIDO_MEDIA_PORT set, relay media-signalling frames to a local synth (whitelist:
-    // WorldAgent.onMedia / sendMedia), loopback only: it can publish audio as this identity. Off by default.
+    // world events → channel traffic (the push path). Tags (§16) say what each thing IS (event-wire.ts); the door
+    // decision is made from world state (`channelOpen`, `ev.mention`), never a tag: tags describe, never authorize.
+    // ── MEDIA BRIDGE ─────────────────────────────────────────────────────
+    // The SFU lets only the embodied primary (this door) publish, but the audio is a local synthesizer's. With
+    // EIDO_MEDIA_PORT set, the door relays media-signalling frames on LOOPBACK only (it carries the authority to
+    // publish as this identity) and nothing else (WorldAgent.onMedia / sendMedia whitelist). Off by default.
     const mediaPort = Number(process.env.EIDO_MEDIA_PORT ?? 0);
     if (mediaPort > 0) this.startMediaBridge(mediaPort);
 
     this.agent.onEvent = (ev) => {
-      // §16.2 sender facet: status is only its own declaration (PROTOCOL §6a rule 3), verbatim in
-      // metadata.declares; only "agent" maps to chat:from-agent (declaration.ts senderFacet), never from-human
+      // §16.2 sender facet: a status is only its own declaration (PROTOCOL §6a rule 3), carried verbatim as
+      // metadata.declares; only "agent" maps to a tag (chat:from-agent, declaration.ts senderFacet), and
+      // chat:from-human never comes from an absence.
       const declares = this.agent.declaresOf(ev.who);
       const md = declares ? { metadata: { declares } } : {};
       if (ev.kind === "say") {
@@ -487,8 +504,8 @@ class Session {
         if (this.channelOpen) this.deliver(`* ${ev.who} ${ev.text}`, { id: "world", name: this.agent.world },
           { tags: speechTags("act", declares), ...md });
       } else if (ev.kind === "activity") {
-        // the activity pulse: at most one per window, only while something happens in the activity radius;
-        // ambient, never addressed (hosts opt in on eidoverse:activity-digest or chat:ambient)
+        // The ambient-activity pulse: at most one per window, only while something happens within the activity radius.
+        // A host opts in by matching `eidoverse:activity-digest` (or `chat:ambient`); a closed door mutes it.
         if (!this.granted(CAP.channelsIncoming)) {
           // no push channel for this digest: hold it for the `activity` tool (deliver() would drop it silently)
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
@@ -496,14 +513,15 @@ class Session {
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
           { tags: tags(CHAT.ambient, EIDO.activityDigest), metadata: { activity: true } });
       } else if (ev.kind === "weather") {
-        // the sky changed on its own: one ambient line per boundary; pull-only hosts read the `activity` ring
+        // the sky changed on its own (forecast boundary, override, day phase): one ambient notice per boundary;
+        // pull-only hosts get it from the `activity` tool's held ring
         if (!this.granted(CAP.channelsIncoming)) {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
           { tags: tags(CHAT.ambient, EIDO.weather), metadata: { weather: true } });
       } else if (ev.kind === "world-change") {
-        // a visible change near this body (an emitter starting, changing, ending): ambient, held like weather
+        // a visible change nearby (an emitter starting/changing/ending): ambient, held for pull-only hosts like weather
         if (!this.granted(CAP.channelsIncoming)) {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
@@ -521,8 +539,9 @@ class Session {
         { tags: d.tags, ...(d.mentioned ? { mentioned: true } : {}), ...(d.declares ? { metadata: { declares: d.declares } } : {}) });
     };
 
-    // §5.3: nothing runs between initialize and the read loop, which alone can answer the policy Request;
-    // grant-dependent work waits concurrently behind the gate (inline would deadlock). 20 s bounds a silent host.
+    // §5.3 ORDERING: nothing runs between initialize and the read loop. A 0.5 host's first frame is the policy
+    // Request, which only the loop can answer, so everything grant-dependent runs CONCURRENTLY behind the policy
+    // gate (inline would deadlock). Pre-0.5 and plain-MCP peers proceed at once; the 20 s race bounds a silent host.
     const hostMajor = Number(this.hostMcplVersion?.split(".")[0] ?? 0);
     const hostMinor = Number(this.hostMcplVersion?.split(".")[1] ?? 0);
     const awaitsPolicy = this.mcplClient && (hostMajor > 0 || hostMinor >= 5);
@@ -530,24 +549,14 @@ class Session {
     const prelude = async () => {
     if (awaitsPolicy) await Promise.race([this.policyGate, new Promise((r) => setTimeout(r, 20_000))]);
     if (this.conn.isClosed) return;
-    // not awaited: a host that drops unknown requests would deadlock the session; MCPL clients only (mcplClient)
+    // NOT awaited: a host that drops unknown requests would deadlock the session here; any response resolves through
+    // pending-request routing while the loop pumps. Only to MCPL clients (granted()).
     if (this.granted(CAP.channelsRegister)) this.registerChannels();
 
-    // Missed-mention replay: anything that addressed you while you slept
-    // greets you as tagged channel traffic — a wake-worthy summary, not
-    // just scrollback. Speech is arrival-only (R 10-18): the world reads back
-    // says from before this body arrived only to the owner and anyone holding
-    // readChat (a server operator only by a role here), so for everyone else these reads come back empty and nothing
-    // is replayed; the code stays for an admin's door.
-    // Every message replayed below is REPLAY, and says so: `eidoverse:catchup`
-    // rides alongside each message's ORIGINAL addressing (§16, issue #1). Tagged
-    // as bare mentions, a reconnect looked identical to ten people addressing
-    // you at once; a host can now write one rule for "the ones I missed".
-    // Prefer a seq cursor over a timestamp. A join now carries the FOLDED
-    // world plus a tail, so the in-memory inbox no longer contains old history
-    // to filter — and a clock comparison silently degrades to "whatever
-    // happens to still be in memory". A seq is asked of the world directly and
-    // reaches back as far as the log goes.
+    // Missed-mention replay, as tagged channel traffic. Speech is arrival-only: the world reads back earlier says only
+    // to an admin, so for everyone else nothing is replayed. Each replay carries `eidoverse:catchup` beside its
+    // ORIGINAL addressing (event-wire.ts catchupReplayTags). Cursor by seq, asked of the world (the join carries the
+    // folded world, not old history).
     const sinceSeq = lastSeenSeq[seqKey(this.auth.id, this.agent.world)] ?? lastSeenSeq[this.auth.id];
     // "since you last looked" starts at the persisted cursor, not the replayed tail's start; gap mentions are
     // delivered below, scrollback stays on catch_up
@@ -560,7 +569,7 @@ class Session {
         this.deliver(`While you were away, ${missedSeq.length} message${missedSeq.length === 1 ? "" : "s"} mentioned you:`,
           { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.catchup) });
         for (const m of missedSeq.slice(-10)) {
-          // original addressing + the catchup marker (#39); deliver() renders the author itself
+          // ORIGINAL addressing + the catchup marker; deliver() renders the author itself
           this.deliver(m.text, authorOf(m.who),
             { tags: tags(CHAT.mention, EIDO.catchup), mentioned: true });
         }
@@ -581,8 +590,8 @@ class Session {
     persistState();
     seenTimer = setInterval(() => {
       lastSeen[this.auth.id] = Date.now();
-      // never persist a watermark from an unsynced body: lastSeq is -1 until the first snapshot, and a stored -1
-      // makes the next connect replay the world's whole history as mentions
+      // Never persist a watermark from a body that hasn't synced: lastSeq is -1 until the first snapshot (and joinWorld
+      // assigns this.agent before connect()), and a stored -1 would replay the world's ENTIRE history as mentions.
       if (this.agent.lastSeq >= 0) {
         lastSeenSeq[seqKey(this.auth.id, this.agent.world)] = this.agent.lastSeq;
       }
@@ -600,7 +609,7 @@ class Session {
         const params = (req.params ?? {}) as Record<string, unknown>;
         try {
           switch (req.method) {
-            // §5.4: a denied `tools` grant behaves as if never advertised, in both handlers
+            // both tool handlers are gated on the tools grant: a denied capability behaves as if never advertised (§5.4)
             case "tools/list":
               this.conn.sendResponse(req.id, { tools: this.toolsAllowed()
                 ? toolList({ travel: true })
@@ -620,7 +629,8 @@ class Session {
               this.conn.sendResponse(req.id, MANIFEST_WITH_REVISION);
               break;
             case method.FEATURE_SETS_UPDATE: {
-              // §5.3/§6.7: the host's policy opens a 0.5 host's door; a malformed one fails closed, keeping the grant
+              // §5.3/§6.7: the host's policy (for a 0.5 host, the door coming alive). A malformed policy fails closed and
+              // keeps the previous grant.
               const receipt = this.applyPolicy(params);
               if ("error" in receipt && typeof receipt.error === "string") {
                 this.conn.sendError(req.id, -32602, receipt.error);
@@ -652,8 +662,7 @@ class Session {
               }
               // the host's channel_open tool performs the server-side open op here (optional history atomically with it)
               const p = params as { channelId?: string; type?: string; address?: { world?: string }; history?: { limit: number } };
-              // §3.2.6: two disagreeing destinations are refused before the current-channel shortcut,
-              // or a pair with one half naming the current world would pass as a re-open
+              // §3.2.6: two destinations that disagree is an authoring bug, checked BEFORE the current-channel shortcut
               {
                 const cid = p.channelId?.startsWith("world:") ? p.channelId.slice(6) : undefined;
                 const adr = p.type === "world" ? p.address?.world : undefined;
@@ -665,8 +674,8 @@ class Session {
               const matches = p.channelId === this.channelId ||
                 (p.channelId == null && p.type === "world" && p.address?.world === this.agent.world);
               if (!matches) {
-                // one lane only: cross-world moves go through the travel tool (travelGate, joinWorld); a sibling world's id
-                // here is an unknown channel. On the plain-MCP lane the credential is the only gate.
+                // A sibling world's channel id is an unknown channel: cross-world travel goes through the `travel` tool
+                // only (travelGate + joinWorld). channels/list exposes only the current world.
                 this.conn.sendError(req.id, -32023,
                   `unknown channel: ${p.channelId ?? JSON.stringify(p.address)} (this door opens only its current world; use the \`travel\` tool to move)`);
                 break;
@@ -716,7 +725,7 @@ class Session {
     } finally {
       clearInterval(seenTimer);
       lastSeen[this.auth.id] = Date.now();
-      // same guard as the timer: a fatally failed travel leaves lastSeq at -1 on the way out
+      // same guard as the timer above (a fatally failed travel leaves lastSeq at -1)
       if (this.agent.lastSeq >= 0) {
         lastSeenSeq[seqKey(this.auth.id, this.agent.world)] = this.agent.lastSeq;
       }
@@ -736,8 +745,7 @@ class Session {
     const mcplRequested = hostMcpl !== undefined;
     this.mcplClient = mcplRequested;
     this.hostMcplVersion = typeof hostMcpl?.version === "string" ? hostMcpl.version : null;
-    // the manifest (§5.1) with its §17.2 revision, as mcpl/manifest answers; cast because the pinned
-    // mcpl-core-ts types describe 0.4's shape while the wire follows 0.5
+    // the manifest (§5.1) with its §17.2 revision, as mcpl/manifest answers; cast because mcpl-core-ts types are 0.4's
     const serverCaps = MANIFEST_WITH_REVISION as unknown as McplCapabilities;
     const capabilities: InitializeCapabilities = { tools: {}, ...(mcplRequested ? { experimental: { mcpl: serverCaps } } : {}) };
     const result: McplInitializeResult = {
@@ -760,7 +768,7 @@ class Session {
       label: `eidoverse — ${this.agent.world}`,
       direction: "bidirectional" as const,
       address: { world: this.agent.world },
-      // channels bootstrap closed unless declared open; the embodied world must be open from the start
+      // channels bootstrap CLOSED unless declared otherwise; the world the agent is embodied in must be open
       initiallyOpen: true,
       metadata: { epoch: this.epoch, ...(this.foundedHere ? { created: true } : {}) },   // RFC-005 §3.2.3d/§3.2.7
 
@@ -772,16 +780,16 @@ class Session {
     try { await this.conn.sendRequest(method.CHANNELS_REGISTER, params); } catch { /* non-MCPL host: tools still work */ }
   }
 
-  /** `start` at a turn (again every 7 s), `stop` at its end; the relay keeps the dots up between (typing-relay.ts).
-   *  Not from the stream, whose chunks may arrive only on publish. */
+  /** The host's typing signal (channels/typing), relayed to the body's dots (typing-relay.ts). Not the generation
+   *  stream: a host may hold it until publish, so its chunks would mean "published", not "composing". */
   private onTyping(params: unknown): void {
     // a signal parsed after the session closed would re-arm the relay on a closed body
     if (this.conn.isClosed) return;
-    // a notification, so without the channels.typing grant it is dropped silently (hosts may not withhold, §14.1)
+    // a notification: without the grant it is dropped silently (a host may not withhold it, §14.1)
     if (!this.capAllowed(CAP.channelsTyping)) return;
     const p = params as { channelId?: string; op?: string } | undefined;
     if (p?.channelId !== this.channelId) return;
-    // `op` isn't in the spec's params: missing reads as start, unknown is ignored
+    // `op` is agent-framework's field (the spec has only channelId): missing reads as `start`; unknown is ignored
     if (p?.op === "stop") this.typing.stop();
     else if (p?.op === undefined || p.op === "start") this.typing.start(this.agent);
   }
@@ -828,16 +836,16 @@ class Session {
       await this.joinWorld(target, gate.founding);
     } catch (e) {
       const f = this.classifyJoinFailure(e);
-      // safe before the return only because finishFatalJoin defers a macrotask and the send is synchronous:
-      // an await between this return and the send would kill the socket with the reply unwritten
+      // safe before the return only because finishFatalJoin defers a macrotask and sendResponse is synchronous after
+      // handleTool resolves: an await added in between would kill the socket before the reply
       if (f.fatal) this.finishFatalJoin();
       return { content: [{ type: "text", text: f.fatal
         // say plainly that the seat is gone: an agent told only "travel failed" keeps issuing verbs into a closed connection
         ? `travel failed past the point of no return: ${f.why}. Your old body was already released, so this connection is now CLOSED; your host has to reconnect to the door for a new body.`
         : `${stayed}${f.why}` }], isError: true };
     }
-    // written for the agent: an MCPL host learns the move from channels/changed, but for a plain-MCP host
-    // this string is the only thing it ever learns, so it states what moved and what did not
+    // An MCPL host also learns of the move by channels/changed; a PLAIN-MCP host learns only this text, so it is
+    // written for the AGENT and says what moved and what didn't.
     return text(
       `${gate.founding ? "Founded and entered" : "Arrived in"} "${target}" (attachment ${this.epoch}). ` +
       `Your identity, avatar and attention settings came with you; your anims and body-mode did not (they are world-local). Your chat cursor starts fresh here. Use \`look\` to see where you are.`,
@@ -855,7 +863,8 @@ const DOOR_HELP =
   `Connect with an identity token: wss://<this host>/mcpl?token=aid1...\n` +
   `How to get one (agents & operators, no Connectome required): ${GUIDE_URL}\n`;
 
-// echoed by /healthz (unset: exactly "ok") so a harness can tell its own child from a stale door on the port
+// An instance nonce echoed by /healthz (unset in production: plain "ok"), so a harness can prove the responder is the
+// child it spawned, not a stale door on the same port.
 const INSTANCE_NONCE = process.env.MCPL_INSTANCE_NONCE ?? "";
 const http = createServer((req, res) => {
   // a plain HTTP GET is someone curious (curl, a browser, an agent probing): answer with the pointer, not a hang-up
@@ -864,8 +873,8 @@ const http = createServer((req, res) => {
 });
 const wss = new WebSocketServer({ server: http });
 
-/** Answer the first request(s) with a JSON-RPC error naming the fix: clients surface those verbatim, unlike a WS
- *  close reason. */
+/** Accept the socket far enough to teach: a JSON-RPC error naming the fix reaches an MCP client's context, where a WS
+ *  close reason often doesn't. */
 function refuseWithGuidance(ws: WebSocket, why: string) {
   console.log(`[${ts()}] [mcpl] unauthenticated connection: ${why} — teaching, then closing`);
   const timer = setTimeout(() => { try { ws.close(4001, "unauthorized"); } catch { /* gone */ } }, 15_000);
@@ -893,8 +902,8 @@ class JoinDeclined extends Error {}
 /** Refused for a host without the grant. */
 const LIFECYCLE_NOT_GRANTED = "your host hasn't granted this door channels.lifecycle, so no channel was opened or closed, and calling again won't change that; if you need it, ask whoever runs your host";
 
-/** "May this identity go to `name`?", asked of the sequencer's /access as the agent (server/access.ts).
- *  Null when it couldn't be asked (callers fail closed); time-bounded so an unreachable sequencer fails fast. */
+/** "May this identity go to `name`?", asked of the sequencer's /access AS THE AGENT (server/access.ts: the world
+ *  decides). Null when it couldn't be asked (bounded, fails fast): callers fail closed for a chosen destination. */
 type AccessAnswer = { exists: boolean; you: "enter" | "watch" | "none"; why?: string; found?: { ok: boolean; why?: string } };
 async function accessProbe(name: string, token: string): Promise<AccessAnswer | null> {
   // URL surgery, not string surgery: a WORLD_URL with a query string or mount path defeats a regex replace
@@ -910,16 +919,17 @@ async function accessProbe(name: string, token: string): Promise<AccessAnswer | 
   } catch { return null; }
 }
 
-/** RFC-005 join policy for both lanes: the credential can only narrow (no list = no narrowing; the world
- *  decides via accessProbe, docs/DESIGN-world-access.md). The name shape is the sequencer's (server/limits.ts). */
+/** RFC-005 join policy for both lanes (dial-time ?world= and travel). It can only NARROW: a `worlds` list keeps an
+ *  agent to those; no list means the worlds decide (server/access.ts via accessProbe; docs/DESIGN-world-access.md).
+ *  The name-shape gate is the sequencer's own (server/limits.ts), checked early. */
 function joinAllowed(auth: Auth, world: string, home = auth.world ?? "commons"): boolean {
   if (!WORLD_NAME_RE.test(world)) return false;
   if (!auth.worlds) return true;
-  // home is always allowed, passed explicitly: a session's auth.world may have been rewritten (#261)
+  // the credential's HOME is always allowed (passed explicitly: a session's auth.world may be where it started)
   return world === home || auth.worlds.some((w) => w === "*" || w === world);
 }
-/** Per-world watermark key for missed-mention replay (a seq means nothing in another world); bare-id
- *  entries are still read as a fallback. */
+/** Per-world watermark key for missed-mention replay (a seq is per world). Legacy bare-id entries are read as a
+ *  fallback. */
 const seqKey = (id: string, world: string) => `${id}@${world}`;
 // registry hints refresh per attempt; admitted identities survive reloads and disconnects for replay. Neither
 // grants authentication authority.
@@ -959,8 +969,8 @@ wss.on("connection", (ws, req) => {
     refuseWithGuidance(ws, token ? (aidReason ? `token refused (${aidReason})` : "unrecognized token") : "no token provided");
     return;
   }
-  // RFC-005 §3.3: ?world= is the initial attachment, under the in-session join policy; a denial refuses.
-  // Frames are buffered across the async gates and replayed in admit(), or the host's initialize is lost.
+  // RFC-005 §3.3: ?world= requests the INITIAL attachment under the same join policy; a denial REFUSES the
+  // connection. Frames are buffered across the async gates and replayed in admit() (`ws` has no pause()).
   const held: unknown[] = [];
   const hold = (data: unknown) => held.push(data);
   ws.on("message", hold);
@@ -972,23 +982,25 @@ wss.on("connection", (ws, req) => {
       console.log(`[${ts()}] [mcpl] ${auth.id} dial-time world "${reqWorld}" granted (policy)`);
       auth = { ...auth, world: reqWorld };
     } else {
-      // RFC-005 §3.3: no silent fallback; refuse and name the denied destination in the close reason
+      // RFC-005 §3.3: NO SILENT FALLBACK to another world; refuse, naming the denied destination
       console.log(`[${ts()}] [audit] dial-time world "${reqWorld}" DENIED for ${auth.id} — refusing connection`);
       refuseWithGuidance(ws, `world "${reqWorld}" is outside the worlds this credential is limited to`);
       return;
     }
   }
-  // founding (RFC-005 §3.2.7): the sequencer enforces the cap (server/access.ts); we probe first to refuse
-  // with guidance. Only a world the agent chose (dialled, other than the minted one) is gated; the minted
-  // world, even dialled explicitly, never is, or a fresh deployment can't found its default world.
+  // ── RFC-005 §3.2.7: FOUNDING ──
+  // The sequencer enforces the founding cap (server/access.ts); this door asks first (accessProbe) to refuse with
+  // guidance, and `create: false` narrows founding away. It gates only destinations the AGENT CHOSE: a world other
+  // than its minted one. Its own home, dialled explicitly or not, is where the operator put it, and must found (a
+  // fresh deployment's "commons" doesn't exist until someone arrives).
   const chosen = dialWorld !== null && dialWorld !== mintedWorld;
-  // the world decides every attachment, asked before the body exists. Resume (no world asked): the last
-  // world, unless recorded under another home, outside the credential, or no longer admitting/existing/
-  // answerable; then home, logged. A resume never founds.
+  // THE WORLD DECIDES every attachment, asked before the body exists. RESUME: with no world asked for, the agent wakes
+  // where it last was, unless the memory's home differs, the credential narrows it out, or the world refuses / is
+  // gone / can't be asked: then home, and the log says why. A resume never founds.
   const memo = !dialWorld ? lastWorld[auth.id] : undefined;
   const resume = memo && memo.home === mintedWorld && memo.world !== mintedWorld
     && WORLD_NAME_RE.test(memo.world) && joinAllowed(auth, memo.world, mintedWorld) ? memo.world : undefined;
-  // every skipped resume says why, so a trip home reads as expected rather than as lost memory (#261)
+  // every skipped resume says why, so a trip home reads as expected, not as lost memory
   if (memo && !resume && memo.world !== mintedWorld) {
     const why = memo.home !== mintedWorld ? `its home changed from "${memo.home}" to "${mintedWorld}"`
       : !WORLD_NAME_RE.test(memo.world) ? "the remembered name is not a world name"
@@ -1034,8 +1046,8 @@ wss.on("connection", (ws, req) => {
     })();
   }
 
-  /** Refuse after the hold-buffer is installed: drop it and replay what was held, so refuseWithGuidance
-   *  can answer a client that sent `initialize` on open. */
+  /** Refuse after the hold-buffer is installed: drop it and replay what the client already sent, so
+   *  refuseWithGuidance can answer a fast client's `initialize`. */
   function refuse(why: string) {
     ws.off("message", hold);
     refuseWithGuidance(ws, why);
@@ -1044,8 +1056,8 @@ wss.on("connection", (ws, req) => {
   }
 
   function admit() {
-    // a socket that closed during the async check must not be admitted: it would kill its replacement's
-    // session (#258). 1 = WebSocket.OPEN.
+    // a socket that closed during the async access check must not be admitted (it would kill its replacement's
+    // session). 1 = WebSocket.OPEN.
     if (ws.readyState !== 1) {
       console.log(`[${ts()}] [mcpl] ${auth!.id}: connection closed during admission — dropped`);
       return;
@@ -1064,8 +1076,8 @@ wss.on("connection", (ws, req) => {
 /** Everything after admission, split out so the async founding gate owns admit/refuse without duplicating the
  *  session lifecycle. */
 function startSession(session: Session, ws: WebSocket, auth: Auth) {
-  // half-open detection that tolerates a thinking agent (a long generation can't service its socket):
-  // MAX_MISSES consecutive missed pongs, about 2 minutes, before reaping; any inbound message is proof of life.
+  // Half-open detection, tolerant of a THINKING agent (a long generation can't service its socket): several
+  // CONSECUTIVE missed pongs (~2 min by default) before the peer is gone, and any inbound traffic is proof of life.
   const PING_MS = Number(process.env.MCPL_PING_SEC ?? 20) * 1000;
   const MAX_MISSES = Number(process.env.MCPL_PING_MISSES ?? 6);
   let misses = 0;

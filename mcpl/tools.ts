@@ -1,13 +1,7 @@
-// mcpl/tools.ts — the agent tool surface, ONE table and ONE dispatcher
-// (survey §B3/§C, ruled §24r: "unify stdio door", the stdio MCP server).
+// mcpl/tools.ts — the agent tool surface, ONE table and ONE dispatcher.
 //
-// Two MCP servers front the same embodied agent: the MCPL server (net-server.ts,
-// sessions + channels + capabilities) and the plain-MCP stdio server
-// (server.ts). The stdio server used to carry a hand-copied 16-tool subset of
-// this table — drifted descriptions, a stale searchLibrary with the
-// hardcoded-Mac-path bug R0 fixed on only one side, and a "shared schema"
-// comment that had stopped being true. Now both servers register from TOOLS
-// and dispatch through handleTool; what differs between hosts rides ToolCtx:
+// Both MCP servers (net-server.ts, MCPL; server.ts, plain-MCP stdio) register from TOOLS and dispatch through
+// handleTool; what differs between hosts rides ToolCtx:
 //
 //   - rememberAvatar / rememberActivity — per-identity persistence (the WS
 //     server writes state.json; the stdio server, one agent per process, may
@@ -18,8 +12,7 @@
 //   - travel — session machinery (channel epochs, join gates); a door
 //     without the hook does not list the tool.
 //
-// Everything else in here talks only to the WorldAgent and the sequencer's
-// HTTP surface, which is exactly what makes it transport-agnostic.
+// Everything else talks only to the WorldAgent and the sequencer's HTTP surface: transport-agnostic.
 
 import { bodyOf } from "../shared/components.js";
 import { kindOf } from "../shared/protocol/kind.js";
@@ -52,9 +45,8 @@ import type { Destination } from "./places.ts";
 import { normalizeSnapFrame } from "../shared/snapframe.js";
 import { shown } from "../shared/shown.js";
 import { partHint } from "./effective.ts";
-/** A world's read door refusing this body (house 6340433633: 401 and 403 both said it "didn't take this body's read key"):
- *  401, it didn't take the key (none, or not one it knows: the host's operator issues it); 403, it read the key and doesn't
- *  let this body in (the world's owners decide that). Either way calling again won't change it. */
+/** A world's read door refusing this body: 401, it didn't take the key (the host's operator issues it); 403, it read
+ *  the key and doesn't let this body in (the world's owners decide). Either way calling again won't change it. */
 const keyRefused = (status: number) => status === 403
   ? "this world shows its state only to the people it lets in; it read this body's key and doesn't let this body in (403). Calling again won't change that: the world's owners decide who comes in"
   : "this world shows its state only to the people it lets in, and it didn't take this body's read key (401). Calling again won't change that: the host's operator issues this body's key, and the world's owners decide who comes in";
@@ -78,25 +70,18 @@ export type ToolCtx = {
   rememberActivity?: (cfg: { pulseSec?: number; radiusM?: number }) => void;
   /** session-machinery travel; absent = the authority does not offer it */
   travel?: (world: string) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>;
-  /** the authority's RFC-005 join policy for THIS credential, so `worlds` can say
-   *  which of the listed worlds the agent may actually travel to — the same
-   *  gate travel itself applies, asked before the move instead of after.
-   *  Absent = the authority has no policy vocabulary (stdio fronts one world). */
+  /** the authority's RFC-005 join policy for THIS credential (travel's own gate), so `worlds` can say where the
+   *  agent may go. Absent = no policy vocabulary (stdio fronts one world). */
   worldPolicy?: { canJoin: (world: string) => boolean; canFound: boolean };
 };
 
 // ---- tools (shared schema with the stdio server, minus retina by default) --
 
-// THE SURFACE (REPOINT-PLAN 2026-10-14 §4; R's standard, 09:47): an engine tool must pass BOTH tests — its name is
-// intuitive to everyone who might use the action, AND the action is useful in general situations — or it is an alias,
-// not an engine tool. So the table holds GENERAL SHAPES (act, create, edit, inspect, move, anim, reach, library…) whose
-// modes carry what used to be bespoke verbs: the flight nine are move {mode: "fly"} + act land (and body_state says
-// where the sky left you); fold/unfold wings and clear_pose are anim's (R 10-17 15:31: pose, animate, posture and the action bar's old tool are anim too);
-// clear_reach is reach {release}; ragdoll is anim {ragdoll} (and the push on someone else is act shove); kick/ban/unban/list_bans are act's; three library tools are one; light is create
-// {components: {light}}, remove is act delete, blueprint_place is create {from}. The old names still answer, teaching
-// where they went (TOOL_FOLDS). High-volume social/perception sugar (look, say, face, stop…) stays on the
-// MUD argument. The flight REHEARSAL hooks (trusted DOWN/RECOVER seams) are no longer tools at all: a bench calls
-// the agent's flightBodyDown / flightBodyRecovered directly (tools/flight-test.ts).
+// THE SURFACE: a tool's name must be intuitive to anyone who'd use the action AND the action generally useful, else it
+// is an alias. So the table holds GENERAL SHAPES (act, create, edit, inspect, move, anim, reach, library…) whose modes
+// carry the old bespoke verbs (flight is move {mode: "fly"} + act land; poses and wings are anim; kick/ban are act);
+// the old names answer by teaching where they went (TOOL_FOLDS). High-volume sugar (look, say, face, stop…) stays.
+// Flight rehearsal hooks are not tools: a bench calls flightBodyDown / flightBodyRecovered (tools/flight-test.ts).
 
 const TOOL_ROWS = [
   { name: "body_state", description: "Perceive your body or another present participant (who; omitted or 'self' means you). Default summary reports body-mode, the clip playing, the named poses held (wings-folded), position, held poses/reaches and freshness; for yourself it also carries flight: where the sky has left you (altitude, heading, airspeed, stamina, how far your best glide reaches, which layer is flying) — or that you are on the ground. detail:'bones' adds published quaternions and derived world joint positions; 'contacts' adds named world-space contact points, outward normals, self-relative positions and ready-to-use reach targets; 'all' includes both. Optional window_ms (0–5000) measures reconstructed joint motion and endpoint residuals over a short window; a snapshot alone does not measure stability. Optional points filters contacts, e.g. ['chest_front','hand_l','hand_r']. Geometry evaluates the shared VRMA posture clips, published bone rotations and dependent limb reaches. Missing clips or unresolved/cyclic reach dependencies return incomplete geometry. Contacts are bone-bound anatomical estimates; full renderer blending, gestures and springbones are not reproduced. Reading never moves or touches anyone. Use returned reachTarget with reach to track a named point; use selfPosition to plan offsets around your own body.", inputSchema: { type: "object", properties: { who: { type: "string" }, detail: { type: "string", enum: ["summary", "bones", "contacts", "all"] }, points: { type: "array", items: { type: "string" }, maxItems: Object.keys(CONTACT_POINTS).length }, window_ms: { type: "integer", minimum: 0, maximum: 5000 } } } },
@@ -137,8 +122,7 @@ const TOOL_ROWS = [
   { name: "whois", description: "Who goes by a name here: their identity (u-…, what roles and bans name), the word they declare for themselves if they declared one while here (nothing is inferred), whether they are a guest (no account), their role in this world, whether they're here now and whether they're banned. Only people this world has seen (present, in its log, its roles or its moderator record), never the whole server. An identity (u-…) works as the name too.", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
 ];
 
-// ---- MCP annotations (spec 2025-06-18 ToolAnnotations; tools audit 10-07 §3: none were set, so every tool read as
-// "destructive, open-world" to a host). [title, readOnly, destructive, idempotent, openWorld], said honestly:
+// ---- MCP annotations (spec 2025-06-18 ToolAnnotations): [title, readOnly, destructive, idempotent, openWorld]:
 //   readOnly: it changes nothing in the world or in anyone's body (a read may still advance this session's own cursor:
 //     look and catch_up mark chat as seen);
 //   destructive: it can remove or overwrite something someone made, or remove a person (edit overwrites values in place
@@ -194,14 +178,8 @@ import { BODY_MODES, isBodyMode } from "../shared/bodymode.js";
 import { bodyRangeWords } from "../shared/protocol/physconst.js";
 import { durationMs } from "../shared/protocol/access.js";
 import { isReservedAnimName } from "../shared/animdefs.js";
-// §24k R0 (survey A5): this fallback used to be a hardcoded developer home
-// directory — the SAME bug mcpl/server.ts:120 fixed with an incident note
-// ("hardcoded Mac path threw for everyone else"); this copy never got the
-// fix, and its readdirSync sat OUTSIDE the try, so any box without
-// EIDOVERSE_DIR where the route failed threw ENOENT with someone else's
-// $HOME in the message. Local scan only when a checkout is actually named;
-// otherwise the sequencer's catalog is the one source of truth and its
-// unreachability is a soft, honest miss.
+// Local scan only when a checkout is named (EIDOVERSE_DIR); otherwise the sequencer's catalog is the one source, and
+// its unreachability is a soft miss.
 const MODELS_DIR = process.env.EIDOVERSE_DIR
   ? `${process.env.EIDOVERSE_DIR}/eidoverse/assets/models`
   : null;
@@ -227,10 +205,7 @@ async function searchLibrary(httpBase: string, query: string): Promise<{ path: s
 }
 
 // ---- contact sheets ---------------------------------------------------------
-// The library's previews and the roster's portraits, composed into ONE grid
-// image per page — an agent flipping through a catalog, not drowning in a
-// dozen separate image blocks. Layout is SVG (labels for free), sharp
-// rasterizes it.
+// Library previews and roster portraits composed into ONE grid image per page (SVG layout, rasterized by sharp).
 
 const SHEET = { tile: 200, label: 26, cols: 4, perPage: 12 };
 
@@ -261,17 +236,14 @@ async function contactSheet(tiles: { name: string; data: ArrayBuffer | null; mim
 
 
 /** The tool list an MCP server should advertise: travel only exists where the host wired the session machinery for it.
- *  (No whisper: removed with world chat's private channel, R 10-18.) */
+ *  (No whisper: removed with world chat's private channel.) */
 export function toolList({ travel = false }: { travel?: boolean } = {}) {
   return TOOLS.filter((t) => travel || t.name !== "travel");
 }
 
-/** How long one snapshot call may take in all, retries included: SNAP_CALL_BUDGET_MS on the door's own service, 57 s
- *  by default (under a Connectome host's 60 s per-call deadline, over the world server's own 55 s request deadline);
- *  0 asks once. The tool sends what is left of it with each ask (?budget=), and the world server never holds an ask
- *  longer, so its frame window (SNAP_TIMEOUT_SEC, a setting of the world server's service) is honoured within this
- *  budget. An operator who wants longer calls for a slow renderer raises this too. A bad value is said once and
- *  ignored. */
+/** Total time for one snapshot call, retries included: SNAP_CALL_BUDGET_MS, default 57 s (under a 60 s host per-call
+ *  deadline, over the world server's 55 s); 0 asks once. Each ask sends what's left (?budget=), so the server's
+ *  SNAP_TIMEOUT_SEC fits inside it. A bad value is said once and ignored. */
 let warnedSnapBudget = false;
 export const snapCallBudgetMs = () => {
   const raw = process.env.SNAP_CALL_BUDGET_MS;
@@ -281,15 +253,9 @@ export const snapCallBudgetMs = () => {
   if (!warnedSnapBudget) { warnedSnapBudget = true; console.warn(`[snapshot] SNAP_CALL_BUDGET_MS=${JSON.stringify(raw).slice(0, 40)} is not a number of ms from 0 to 600000; using 57000`); }
   return 57_000;
 };
-// A FIRST CALL SHOULD COME BACK WITH A PICTURE (owner, 2026-10-24). The world server marks the refusals that pass in
-// seconds with Retry-After: the renderer still loading the world, renderers busy, a frame that did not come in time, a
-// renderer gone mid-shot (server/screenshots.ts retryAfter). The tool asks again exactly then, after that many seconds,
-// within one budget, and tells the server what is left of it (?budget=), so no try outlasts the call. A refusal without
-// Retry-After (no renderer and no roamer to send, invite-only, an Unreal-only ask with none serving, a bad argument)
-// is answered at once. A world server that cannot be reached, or a proxy in front answering 502 for it with its own
-// HTML page (both are what a restarting server looks like), is tried once more and then answered: a server that is
-// down should not hold an agent for a minute. The world server's own 502 (a renderer that sent no valid image)
-// carries no Retry-After and is not asked again.
+// A first call should come back with a picture: refusals the server marks Retry-After (server/screenshots.ts
+// retryAfter: loading, busy, late frame) are retried then, within one budget. Others are answered at once. An
+// unreachable server or a proxy's own 502 page (a restart) is tried once more; the world server's own 502 is not.
 const SNAP_UNREACHABLE_RETRY_MS = 2_000, SNAP_MIN_TRY_MS = 5_000;
 // The fetch is not cut at the budget: the server's own deadline (sent with ?budget=, which it answers half a second
 // inside) ends a try. This backstop only catches a server that never answers at all, and says so, rather than calling
@@ -370,11 +336,8 @@ async function screenshotOnce(ag: ToolAgent, view: string, at: string | undefine
 }
 
 // ---- the dispatcher --------------------------------------------------------
-// One handler per tool, keyed to TOOLS by NAME — the verbs.ts/messages.ts
-// treatment (survey §B3, deferred until the table had one home): bodies moved
-// VERBATIM from the 26-case switch. The load-time assertion below makes
-// advertise/handle drift a boot failure on BOTH servers instead of an
-// "Unknown tool" a caller meets at runtime.
+// One handler per tool, keyed to TOOLS by NAME. The load-time assertion below makes advertise/handle drift a boot
+// failure on both servers, not a runtime "Unknown tool".
 
 const text = (t: string) => ({ content: [{ type: "text", text: t }] });
 /** A call that didn't do what it was asked: a host shows the result as failed. */
@@ -406,7 +369,7 @@ const notANumber = (v: unknown) => typeof v === "number" ? !Number.isFinite(v)
 // the same words a person in build mode sees for the same refusal (shared/protocol/refusal.js)
 /** One line of a world's history, as an agent reads it: who did what, with what arguments. An entry imported from an
  *  old log (an act `imported`) shows the verb and args it was written with, not `imported {}`; a refused request says it
- *  was refused, and never reads as a thing that happened (Commons audit, agents #3). */
+ *  was refused, and never reads as a thing that happened. */
 export function historyLine(e: any): string {
   const who = actorName(String(e.actor)); const when = e.ts ? `${new Date(e.ts).toISOString()} ` : "";
   const args = (v: any) => { const j = JSON.stringify(v ?? {}); return j.length > 300 ? `${j.slice(0, 300)}…` : j; };
@@ -431,10 +394,8 @@ async function presenceRefusal(ag: ToolAgent, t0: number, target: string, ms = 7
 // (refused, failed, unavailable, paused, stopped, suspended, not-installed) means it didn't
 const SCRIPT_RAN = new Set(["ran", "nothing", "would-run"]);
 const refusedBy = (r: any, what: string) => ({ content: [{ type: "text", text: refusalText(what, r) }], isError: true });
-// R 10-17 (ID HARDENING (5)): every tool argument that names a thing takes its id, its label or a unique id prefix (4+,
-// git-style; look prints each thing's short handle). A label two things share is refused with the candidates — never
-// resolved by picking one. One resolver (WorldAgent.thingRef; destination() asks it too); a name that matches nothing is
-// passed on as typed, for the authority's own not-found words.
+// Every argument naming a thing takes its id, label or unique id prefix (4+, git-style). A shared label is refused with
+// the candidates, never picked. One resolver (WorldAgent.thingRef); no match passes on as typed for the authority.
 const THING_KEYS = ["id", "on", "beside", "hang", "against", "near", "facing", "from", "copy", "to", "target"];
 function namedThings(ag: any, a: Record<string, any>, keys: string[] = THING_KEYS): { args: Record<string, any> } | { err: any } {
   const out: Record<string, any> = { ...a };
@@ -446,10 +407,8 @@ function namedThings(ag: any, a: Record<string, any>, keys: string[] = THING_KEY
 /** Is this body in the air? (the flight integrator's phases; GROUND/LANDED are feet on the ground, and so are RAGDOLL and
  *  RECOVER, a body down on the ground after a cut, which a fly-mode move launches afresh, as the agent's down refusals say) */
 const airborne = (ag: ToolAgent) => !!ag.flight && !["GROUND", "LANDED", "RAGDOLL", "RECOVER"].includes(ag.flight.phase);
-/** A name move {to} takes that destination() doesn't: a place in the older upstream shape (`places:<name>` on @world or
- *  a thing's `places` entry given as a bare [x, y, z] / {pos}, world coordinates). Things, labels, people and places in the
- *  current shape are destination()'s alone (review r5 F3: one resolver, so a person never captures a walk here and of
- *  several things the nearest is taken). */
+/** A name move {to} takes that destination() doesn't: a place in the older upstream shape (`places:<name>` on @world
+ *  or a bare [x, y, z] / {pos} entry, world coordinates). Everything else is destination()'s alone (one resolver). */
 function legacyPlace(ag: ToolAgent, name: string): { x: number; z: number; what: string } | null {
   const st: any = ag.replica?.st ?? {};
   const places: Record<string, any> = { ...(st.places ?? {}), ...(st.entities?.[WORLD_ID]?.c?.places ?? {}) };
@@ -481,10 +440,8 @@ type ToolHandler = (ag: WorldAgent, a: Record<string, any>, ctx: ToolCtx, name: 
 // Verbs `act` answers before the authority: the body's own (land, shove — presence, like a person's /push) and
 // moderation by NAME (kick/ban/unban resolve a name to an identity through whois, then ask the authority; bans
 // reads what's in force). Each answers in act's shape: {ok, text} as text, isError on a refusal.
-// One answer to "who": a person's identity (u-…) as given, a present person's by the name they arrived with, anyone the
-// world has seen by name through the directory (whois) — so an absent person can be banned, unbanned or warned. Every
-// verb that takes a `who` resolves through here (the kick family and `act`), so there is one way to say who, not two.
-// Returns {who} or {err: <tool result>}; `verb` only shapes the words (a kick needs them here).
+// One answer to "who" for every verb that takes one: an identity (u-…) as given, else a name via the directory
+// (whois), so an absent person can be banned too. Returns {who} or {err: <tool result>}; `verb` only shapes words.
 async function resolveWho(ag: any, raw: unknown, verb: string): Promise<{ who: string } | { err: any }> {
   const id = String(raw ?? "").trim();
   if (!id) return { err: fail(`${verb} needs who — their name or identity (u-…)`) };
@@ -562,7 +519,7 @@ const BODY_VERBS: Record<string, ToolHandler> = {
         return text(answer);
       }
       // this world: the authority's `bans` (what the Moderation panel reads): bans and mutes in force.
-      // The legacy world-bans message listed bans only, so a mute in force read "nobody is banned" (audit 10-07)
+      // The legacy world-bans message listed bans only, so a mute in force read "nobody is banned"
       const r: any = await ag.request("bans", {});
       if (!r?.ok) return { content: [{ type: "text", text: r?.refused?.reason ?? "couldn't read what's in force here" }], isError: true };
       const until = (t: any) => (Number.isFinite(t) ? `until ${new Date(t).toISOString()}` : "until lifted");
@@ -606,11 +563,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   },
   attach: async (ag, a) => {
-      // a body on a seat is PRESENCE (bodies aren't entities; nothing is logged): my frames carry {to: <socket id>} while
-      // I sit. A seat is a socket child with a body block (PLAN-sockets-entities; shared/sockbody.js). `to` is the thing
-      // (pick by `socket` name or by `action`), or a socket's own id. The authority is asked first (use {id: <socket>,
-      // action}): it checks who may, and that nobody sits there. The seat's leaveBy decides how I get off, and fromSeat
-      // whether I may move to it without standing.
+      // sitting is PRESENCE (frames carry {to: <socket id>}; nothing logged). `to`: the thing (pick by `socket` or
+      // `action`) or a socket id. The authority is asked first (use), and checks who may and that the seat is free.
       let want = String(a.to ?? "").trim();
       if (want && !ag.socketRec(want)) { const t = ag.thingRef(want); if ("refusal" in t) return { content: [{ type: "text", text: `attach: ${t.refusal}` }], isError: true }; if ("id" in t) want = t.id; }
       const mine = ag.myOccupancy;
@@ -633,13 +587,13 @@ export const HANDLERS: Record<string, ToolHandler> = {
       }
       { const r = await ag.request("use", { id: sid, action: body.action });
         if (!r?.ok) return { content: [{ type: "text", text: `attach: the authority refused (${r?.refused?.code}): ${r?.refused?.reason ?? ""}${r?.refused?.fix ? ` — ${r.refused.fix}` : ""}` }], isError: true }; }
-      ag.setOccupant({ to: sid });   // (no pose menu: a station's poses are reserved in the alpha, review r11 claims R4)
+      ag.setOccupant({ to: sid });   // (no pose menu: a station's poses are reserved in the alpha)
       return text(`you ${body.action} on ${on} — ${describeBody(slot, body, { door: true })}`);
   },
   detach: async (ag, a) => {
       const mine = ag.myOccupancy;
       if (!mine) return text("you're not attached to anything");
-      // the escape (review r9 scars M1): a seat may make leaving deliberate, never impossible
+      // the escape: a seat may make leaving deliberate, never impossible
       if (!ag.mayVacate(a?.escape === true ? "escape" : "menu")) return { content: [{ type: "text", text: `${ag.socketName(mine.to)} lets you go when the world does (a script, or the seat being taken away); detach {escape: true} gets you up anyway` }], isError: true };
       ag.setOccupant(null); return text(a?.escape === true ? "you get up (the escape: no seat can hold you)" : "you get off");
   },
@@ -657,13 +611,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
         if (!want.includes("/") && !/\.(glb|jpg)$/i.test(want)) tries.push(`${ag.httpBase}/thumb/${encodeURIComponent(want)}.png`);
         const stem = (want.includes("/") ? want : `eidoverse/assets/models/${want}`).replace(/(_preview\.jpg|\.jpg|\.glb)$/i, "");
         tries.push(`${ag.httpBase}/library/${stem}_preview.jpg`);
-        // Only a 404 is the sequencer's answer that a candidate has no preview.
-        // A fetch that throws, any other status that isn't ok, or a body that
-        // can't be read never got that answer, so "no preview" is said only
-        // when every candidate answered 404. Calling again may work after a
-        // failed fetch, a 408, a 429, a 5xx or a preview that couldn't be read,
-        // at any candidate. Each reason is named once, so two candidates that
-        // failed alike read as one.
+        // "no preview" only when every candidate answered 404; any other failure is named (once per reason) as
+        // possibly worth a retry
         const whys: string[] = [];
         let retry = false;
         const miss = (reason: string, mayRetry: boolean) => { if (!whys.includes(reason)) whys.push(reason); retry ||= mayRetry; };
@@ -728,7 +677,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       // NAME: a named place (#239: "thing/place", a place's name or label, a thing's entrance), a thing, a person
       let x: number, z: number, y: number | undefined, what = "", label: string | null = null;
       let near: { reach?: number; above?: number; below?: number; inside?: (x: number, z: number) => boolean; bodyAt?: { x: number; z: number } } = {};
-      let orBeside: Destination | undefined;   // a thing on another's top: the spot beside what holds it up (review r6 L1)
+      let orBeside: Destination | undefined;   // a thing on another's top: the spot beside what holds it up
       const tolerance = a.tolerance ?? 0.01;
       if (typeof a.to === "string") {
         const q = a.to.trim();
@@ -754,7 +703,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       if (((a.to != null || mode === "walk") && ![x, z].every(Number.isFinite)) || !Number.isFinite(tolerance) || tolerance < 0 || tolerance > 0.4)
         return { content: [{ type: "text", text: WALK_ARGS_REASON }], isError: true };
       if (mode === "fly") {
-        // FLIGHT (upstream's flight arc, merged 2026-09-02; behind the world's `fly` grant). The integrator is the agent's
+        // FLIGHT (behind the world's `fly` grant). The integrator is the agent's
         // (shared/flight.js); this is only its door: take off if on the ground, climb if asked, glide if sent somewhere.
         const L: string[] = [];
         // the arguments are checked before the launch, so a refusal moves nothing
@@ -787,10 +736,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
         return ok;
       };
       let arrived = await attempt();
-      // refused before a step, and the thing stands on another's top (a cup on a table, a walk that can't climb onto it):
-      // beside what holds it up instead, on its floor; the first refusal is the one said if none of them is walked
-      // A walk stopped or replaced while it waited for geometry (agent.ts walkTo's receipt) isn't a route refused: the
-      // fallback would start the walk that was just cancelled, so it ends the tries and is the one said
+      // refused before a step on another thing's top (a cup on a table): try beside what holds it up; the first refusal
+      // is said if none is walked. A superseded walk (agent.ts walkTo's receipt) ends the tries.
       const superseded = () => /^superseded by a newer walk or a stop/.test(receipt.refusal ?? "");
       const firstRefusal = receipt.refusal;
       for (let alt = orBeside; !arrived && receipt.refusal && !superseded() && alt; alt = alt.orBeside) {
@@ -843,57 +790,23 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   },
   stop: async (ag, a, ctx, name) => { ag.stop(); return text("stopped"); },
-  // say args ride through whole (spoken-say protocol: a voice aux leg
-  // performs says marked spoken:true; utt/t0 are author-controlled
-  // display/continuation metadata — NOT proof of performance, which only
-  // the attest/performed receipt path establishes). ag.say rebuilt {text}
-  // bare and silently stripped them —
-  // which forced voice agents onto a raw world-ws side door (2026-08-10).
+  // say forwards the spoken-say keys (spoken/utt/t0: author-controlled metadata, NOT proof of performance; only the
+  // attest/performed receipt path establishes that)
   say: async (ag, a, ctx, name) => {
-      // Spoken-say protocol keys ride through; anything else stays at the
-      // door. The server validates these (bounded utt window, clamped t0)
-      // and strips them from ordinary says — the authority's job is to forward
-      // the protocol, not arbitrary metadata.
-      // THE TRIO IS A UNIT (r3 review). The world server deletes all three
-      // keys unless spoken===true AND utt is a safe non-negative integer —
-      // so forwarding keys independently let a spoken:true say with a bad
-      // utt ride to the server and silently degrade to ordinary chat, the
-      // voice agent none the wiser. Validate the same unit here and refuse
-      // LOUDLY: a door that must drop the protocol should say so, not shrug
-      // the say into text. (r5 tightened this to TYPE-EXACT rather than the
-      // server's Number() coercion — see the next block: the authority refuses
-      // null/bool/"5" outright so a coerced value can never be laundered into
-      // a fabricated utterance.)
-      // text is REQUIRED and must be a real string (Opus-5 review): the schema
-      // says required:["text"], but a schema is not a boundary here (same
-      // reason "5" is refused for utt) — so validate it, or a call with the
-      // trio but no text lands a FABRICATED spoken say whose body is the
-      // literal "undefined"/"[object Object]".
+      // Only the spoken-say keys ride through. THE TRIO IS A UNIT: the world server drops all three unless spoken===true
+      // and utt is a safe non-negative integer, so validate the same unit here and refuse LOUDLY rather than let a
+      // spoken say silently degrade to chat. text must be a real string (a schema is not a boundary).
       if (typeof a.text !== "string" || a.text.length === 0) {
         return { content: [{ type: "text", text: `say refused: \`text\` is required and must be a non-empty string, so nothing was said; you sent ${shown(a.text)}` }], isError: true };
       }
-      // "Wants spoken" means the caller is ASSERTING a performance: spoken:true,
-      // or a trio partner (utt/t0) present. An explicit spoken:false (or spoken
-      // absent) is an ordinary say — degrade to plain chat exactly as the world
-      // server does, never an error (Opus-5 review: refusing spoken:false muted
-      // a voice leg doing the natural `spoken: leg.isActive`).
+      // "wants spoken": spoken:true or utt/t0 present. spoken:false is an ordinary say, never an error.
       const wantsSpoken = a.spoken === true || a.utt !== undefined || a.t0 !== undefined;
-      // TYPE-EXACT, not coerced (adversarial review): Number(null)===0 and
-      // Number(true)===1 let a null/boolean utt or a null t0 pass the old
-      // guard and forward a FABRICATED value — violating this server's own
-      // "malformed refuses, never silently drops" invariant. The schema
-      // declares utt:integer>=0 and t0:number; require exactly those raw
-      // JSON types. (The world server tolerates numeric strings elsewhere;
-      // the authority does not launder them into the protocol.)
+      // TYPE-EXACT, not coerced (Number(null)===0 would forward a fabricated utt): utt integer >= 0, t0 a finite number
       const uttOk = typeof a.utt === "number" && Number.isSafeInteger(a.utt) && a.utt >= 0;
       const t0Ok = a.t0 === undefined || (typeof a.t0 === "number" && Number.isFinite(a.t0));
       const trioOk = a.spoken === true && uttOk && t0Ok;
       if (wantsSpoken && !trioOk) {
-        // Machine-legible failure (r6 review): the same {content, isError:true}
-        // contract every malformed tool call returns. A prose-only refusal let a
-        // schema client that inspects result.isError read this as a successful
-        // say — the authority must mark the refusal as an error, not just describe
-        // one in text.
+        // isError, so a client reading result.isError doesn't take this for a successful say
         return { content: [{ type: "text", text: `spoken-say refused, so nothing was said: a spoken line needs spoken: true and utt a non-negative integer, and t0, if given, a finite number (you sent spoken ${shown(a.spoken)}, utt ${shown(a.utt)}, t0 ${shown(a.t0)}). Sent as plain text it would lose its performance link. For an ordinary say, send only text.` }], isError: true };
       }
       const extra = trioOk
@@ -936,7 +849,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
         ag.setPosture(clip);
         return text(kind === "stand" ? "you stand up" : `you ${kind === "lie" ? "lie down" : "sit down"} — walking stands you back up`);
       }
-      // a pose by name (R 10-17 15:09): one frame the body holds by name. The one every winged rig knows is wings-folded;
+      // a pose by name: one frame the body holds by name. The one every winged rig knows is wings-folded;
       // a name the body doesn't know leaves it as it is (its default), said, never an error
       if (a.name != null) {
         if (a.bones != null) return { content: [{ type: "text", text: "pose: a name OR bones, not both" }], isError: true };
@@ -949,13 +862,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
         if (w !== "fold" && w !== "open") return { content: [{ type: "text", text: `pose: wings is "fold" or "open"` }], isError: true };
         return act(await ag.foldWings(w === "fold"));
       }
-      // Validate and SAY what happened. A pose is authored blind — the only
-      // other feedback is a snapshot through a GPU host — so a bone name that
-      // does not exist, a three-component quaternion, or two names folding
-      // onto one bone must come back as words, not as a body that silently
-      // did not move. (See shared/humanoid.js.) Checked against the rig of
-      // the body being posed: arbitrary bones exist only on the rigs that
-      // have them.
+      // Validate and SAY what happened: a pose is authored blind, so an unknown bone, a bad quaternion or two names
+      // folding onto one bone come back as words (shared/humanoid.js), checked against the posed body's own rig.
       const target = a.target ? String(a.target) : null;
       const avatar = target ? ag.people.get(target)?.avatar : ag.avatar;
       const rig = avatar ? await rigBonesFor(ag.httpBase, avatar) : null;
@@ -1027,7 +935,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   },
   animate: async (ag, a, ctx, name) => {
-      // a clip by name (R 10-17 15:09): once rides the presence one-shot every receiver already plays; looped holds the clip
+      // a clip by name: once rides the presence one-shot every receiver already plays; looped holds the clip
       // (it loops until another action replaces it: a walk, a posture, another animation). A name the body doesn't know
       // plays the body's default on every receiver, never an error here.
       const looped = a.looped === true || a.loop === true;
@@ -1075,12 +983,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       if (opts.pulseSec != null || opts.radiusM != null) {
         ctx.rememberActivity?.(cur); // what was APPLIED, not what was asked
       }
-      // A push-less host cannot receive the stream — saying "delivered on
-      // the world channel" to a session with no channels would set an agent
-      // waiting forever for pushes that structurally cannot arrive
-      // (external integrator find #5b, digi/FC). Tell the truth, and hand
-      // over whatever digests accumulated since the last call: the same
-      // sense, in the polling model this host lives in anyway.
+      // a push-less host can't receive the stream: say so, and hand over the digests held since the last call
       if (!ctx.canPush()) {
         const held = ctx.heldActivity.splice(0);
         const status = cur.pulseSec === 0
@@ -1110,8 +1013,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
   create: async (ag, a, ctx, name) => {
       // the authority's create, its args as they are; one default: with nowhere said, 2 m in front of you, on the ground
       // (a light — no model — at eye height, since it has no size for place to solve)
-      // #216: an id, when given, is a non-empty string; null/omitted means a minted one. The wire doesn't refuse a bad id —
-      // it ESCAPES it (x--…), so "" and {} used to mint junk with no word said.
+      // an id, when given, is a non-empty string (null/omitted mints one): the wire would ESCAPE a bad one into junk
       if (a.id !== undefined && a.id !== null && (typeof a.id !== "string" || !a.id.trim()))
         return { content: [{ type: "text", text: "create's id, when given, is a placeholder ('$lamp'); omit it (or pass null) and the authority mints one" }], isError: true };
       const args: Record<string, unknown> = { ...a }; if (a.id == null) delete args.id;
@@ -1151,10 +1053,9 @@ export const HANDLERS: Record<string, ToolHandler> = {
           if (!hits.length) return { content: [{ type: "text", text: `create: no blueprint here whose hash starts "${want}" (the blueprints tool lists them)` }], isError: true };
           if (hits.length > 1) return { content: [{ type: "text", text: `create: "${want}" matches ${hits.length} blueprints — give more of the hash` }], isError: true };
           args.from = `sha256:${hits[0]}`; }
-        // create {from}'s `at` is the authority's {pos, yaw|q} (verbspec create.at). The tool also takes a point, [x, z] or
-        // [x, y, z] (audit 10-07: it sent [x, z] and every duplicate was refused `shape`). A duplicate stays a sibling of its
-        // source, so its point is in the source's parent's frame when it has one; [x, z] keeps the source's height. With no
-        // at, a duplicate goes where the authority puts it (beside its source), a blueprint copy 2 m in front of you.
+        // create {from}'s `at` is the authority's {pos, yaw|q} (verbspec create.at); the tool also takes [x, z] or
+        // [x, y, z], in the source's parent's frame (a duplicate is its sibling; [x, z] keeps its height). No at: a
+        // duplicate goes beside its source, a blueprint copy 2 m in front of you.
         const blueprint = String(a.from).startsWith("sha256:");
         const src: any = blueprint ? null : ag.foldRecord(String(a.from));
         const pt = Array.isArray(a.at) ? a.at.map(Number) : null;
@@ -1169,7 +1070,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       const made = (r.notes ?? []).find((n: any) => n?.copied)?.as ?? r.refs?.[0]?.id ?? (r.would ?? []).find((o: any) => o?.verb === "create")?.id ?? Object.keys(r.after ?? {})[0];
       const id = (typeof a.id === "string" ? r.ids?.[a.id] : null) ?? made ?? "?";
       const pos = r.after?.[id]?.transform?.pos;
-      // its handle (the short id look prints: tools take it, or its label), and its full id once (R 10-17)
+      // its handle (the short id look prints: tools take it, or its label), and its full id once
       return text(`${a.dry ? "would create" : "created"} [${a.dry ? id : ag.handle(id)}]${a.model ? ` ${modelWord(a.model)}` : ""}${Array.isArray(pos) ? ` at (${pos.map((v: number) => (+v).toFixed(2)).join(", ")})` : ""} — id ${id}${r.notes?.length ? `\nnotes: ${JSON.stringify(r.notes).slice(0, 600)}` : ""}`);
 
   },
@@ -1199,19 +1100,13 @@ export const HANDLERS: Record<string, ToolHandler> = {
       return { content: [{ type: "text", text: JSON.stringify(reply, null, 1) }], ...(reply.ok && !scriptFell ? {} : { isError: true }) };
   },
   travel: async (ag, a, ctx, name) => {
-      // Travel is SESSION machinery — channel epochs, join gates, the
-      // fatal-join teardown — so the shared table hands it to the host
-      // through the ctx hook. A server with no hook (stdio fronts exactly one
-      // WORLD_URL) does not list the tool; answering anyway teaches.
+      // session machinery, through the ctx hook; a server without one doesn't list the tool, and answering teaches
       if (!ctx.travel) return { content: [{ type: "text", text: "travel isn't available on this server: it fronts a single world, so you stayed where you are; its operator chooses that world (WORLD_NAME)" }], isError: true };
       return await ctx.travel(String(a.world ?? "").trim());
 
   },
   worlds: async (ag, a, ctx, name) => {
-      // Discovery only — this reads the sequencer's /worlds and never moves
-      // the body. The policy column is the authority's own joinAllowed, asked
-      // here so an agent learns "may I?" from the map rather than from a
-      // refused travel.
+      // discovery only (never moves the body); the policy column is the authority's own joinAllowed
       let r: Response;
       // AS THIS IDENTITY (readHeaders): the map is per caller — a world that admits only people listed is invisible to
       // everyone it doesn't list, so an anonymous ask would hide the private worlds this agent belongs to
@@ -1243,18 +1138,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
   measure: async (ag, a, ctx, name) => {
       { const t = namedThings(ag, a, ["id"]); if ("err" in t) return t.err; a = t.args; }
       if (a.check === true) return CHECK_MODEL(ag, a);
-      // 🔴 USE THE AGENT'S OWN httpBase (2026-08-16). This re-derived the HTTP
-      // base by string surgery on WORLD_URL — the exact form agent.ts:297
-      // replaced with real URL parsing, for a reason its comment records: a
-      // WORLD_URL carrying a query string (…/ws?token=…) defeats the `/\/ws$/`
-      // replace and produces a malformed URL (reported by digi/FC). The bug was
-      // fixed in one place and left standing in the other, which is what a
-      // duplicated derivation always eventually does.
-      //
-      // It also ignored the authority's actual connection: WORLD_URL is the boot
-      // env, but `connect()` re-reads its target on every dial, so after a
-      // travel this could point at the world we LEFT and measure a different
-      // world's geometry than the one the agent is standing in.
+      // the agent's own httpBase: never re-derive it from WORLD_URL (a query string breaks that, and after travel it
+      // names the world we left)
       const base = ag.httpBase;
       const q = a.id
         ? `world=${encodeURIComponent(ag.world)}&id=${encodeURIComponent(String(a.id))}`
@@ -1484,9 +1369,9 @@ export const HANDLERS: Record<string, ToolHandler> = {
 };
 
 
-// ---------------- anim (R 10-17 15:31/15:32): ONE tool for a pose or a clip, by name or live ----------------
+// ---------------- anim: ONE tool for a pose or a clip, by name or live ----------------
 // The old pose / animate handlers are its live and by-name halves now (LEGACY below): they keep their words, and the old
-// tool names are refused naming anim until TOOL_RENAMED's date (R 10-28).
+// tool names are refused naming anim until TOOL_RENAMED's date.
 const LEGACY: Record<string, ToolHandler> = { pose: HANDLERS.pose, animate: HANDLERS.animate };
 delete HANDLERS.pose; delete HANDLERS.animate;
 /** Each built-in anim's own mode (R 15:32): what plays when the call says none. A one-frame pose holds. A name not
@@ -1541,7 +1426,7 @@ HANDLERS.anim = async (ag, a, ctx, name) => {
     // alone, it rests the body in the new mode's own anim (declaring stand stands you up, R 16:26), unless a clip anim plays
     // or a walk is under way (the walk's clip is the mover's)
     if (a.name == null && a.joints == null && a.tracks == null && (a.stop == null || a.stop === false) && a.ragdoll !== true && !ag.target && ag.clip !== "ragdoll" && !ag.anims.some((x: any) => x.kind === "clip")) { const rest = ag.restClip(ag.bodyModeNow()); if (rest) ag.clip = rest; }
-    // on a seat (review r11 L1): body-mode grants nothing, so a declaration never moves you off it; the reply says how
+    // on a seat: body-mode grants nothing, so a declaration never moves you off it; the reply says how
     const seated = ag.myOccupancy ? `; you're still attached to ${ag.socketName?.(ag.myOccupancy.to) ?? "your seat"}, and rest in its anim — detach to get off` : "";
     // with stop or ragdoll beside it, that runs too, in the mode just declared (the declaration returned first)
     if (a.name == null && a.joints == null && a.tracks == null && (a.stop == null || a.stop === false) && a.ragdoll !== true) return text(`${JSON.stringify({ bodyMode: String(a.bodyMode) })} — declared, for looks: it holds until a real transition (water, a take-off, a fall, a landing) or your next declaration, and grants nothing${seated}`); }
@@ -1643,7 +1528,7 @@ function describeCheck(what: string, r: any, named: number, id?: string, collide
   return L.join("\n");
 }
 
-// R 10-28 ("drop and educate the new aliases for one release, and then drop the education"): an old name runs nothing; it
+// Old names (for one release): an old name runs nothing; it
 // is refused naming the tool that does it now, until `until`, then its entry goes. Names only (alias-test holds it so).
 export const TOOL_RENAMED_UNTIL = "2026-12-01";
 export const TOOL_RENAMED: Record<string, { to: string; until: string }> = Object.fromEntries(Object.entries({
@@ -1666,7 +1551,7 @@ export const TOOL_FOLDS: Record<string, string> = {
 /** Main's tools that left with what they did, and why: refused with a pointer, never "no such tool" (#260 r3 I3; whisper
  *  fell through to a did-you-mean of whois). */
 export const TOOL_REMOVED: Record<string, string> = {
-  // its verb set was main's: act {verb, args} takes this authority's, and refuses an old one by name (R 10-27)
+  // its verb set was main's: act {verb, args} takes this authority's, and refuses an old one by name
   world_verb: "act {verb, args} sends a verb to the world's authority (help lists them); an old verb is refused with the call that does it now",
   whisper: "world chat has no private channel (the maintainers' speech ruling: speech is logged, whisper stays disabled); say speaks aloud to everyone here",
 };
