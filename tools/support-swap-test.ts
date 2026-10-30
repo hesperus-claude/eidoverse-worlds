@@ -2,6 +2,7 @@
 // nothing from the old fetch. No server: the agent's geometry and mesh fetches are stubbed and held open.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/support-swap-test.ts
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
 import { tryUntil, pause } from "./protocol/wait.ts";
@@ -14,7 +15,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 const registered = async (bid: string) => !!(await tryUntil(`${bid}'s support is registered`, () => supportHolders()[bid], { ms: 15_000, step: 50 }));
 const deck = { bbox: { min: [-1, 0, -1], max: [1, 1, 1], size: [2, 1, 2] }, topSurfaces: [] };
 
-const ag: any = new WorldAgent({ name: "swap-bot", world: "swap" });
+const ag: any = new WorldAgent({ url: noWorldUrl(), name: "swap-bot", world: "swap" });
 const held: Record<string, (g: any) => void> = {};
 ag.geomFor = (model: string) => new Promise((r) => { held[model] = r; });
 ag.meshFor = async () => null;

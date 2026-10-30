@@ -1,6 +1,7 @@
 // bun tools/structure-route-support-test.ts — real WorldAgent bodies over transformed (translated, rotated, scaled)
 // structures: the support mode, the band and the crossing height in world metres; no server or renderer, legs drive the
 // real tick (tools/structure-oracle.ts). The planner's rows for the same rules are tools/structure-route-test.ts's.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { localizePoint } from "../shared/structure.js";
 import { walk } from "./structure-oracle.ts";
@@ -14,7 +15,7 @@ const wall={levels:[{y:0,tiles:[],walls:[[1,1,0]],apertures:[]}]};
 
 const agents:WorldAgent[]=[];
 function body(entity:any,height:(x:number,z:number)=>number,from:[number,number]) {
- const a=new WorldAgent({name:"walker",avatar:"",world:"support-test"});agents.push(a);a.joined=true;
+ const a=new WorldAgent({ url: noWorldUrl(), name:"walker",avatar:"",world:"support-test"});agents.push(a);a.joined=true;
  a.entities.set(entity.id,entity);(a as any).terrain={heightAt:height};
  a.pos={x:from[0],y:height(...from),z:from[1]};return a;
 }

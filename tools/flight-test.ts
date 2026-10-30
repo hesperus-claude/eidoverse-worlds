@@ -29,6 +29,7 @@
 //                               integrator; wing-idle and stamina-tick RENDER
 //                               periods are not, and T8 asks about the render.
 
+import { noWorldUrl } from './no-world.ts';
 import {
   makeConfig, initialState, step, bodyDown, bodyRecovered,
   leafAt, beatRemaining, sinkRate, glideRatio, glideRange,
@@ -1263,7 +1264,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 {
   const live = { type: 'your-rights', rights: { role: 'builder', gen: false, fly: false } };
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'rights-bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'rights-bench' });
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
     'L_Wing_Lower', 'R_Wing_Lower'];
@@ -1285,7 +1286,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 // On ccb065c this deliberately fails: flightEvent() called verb("say", ...) (today it would be door/say).
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'bench' });
   let authored = 0;
   // every way an agent writes: the door (requests, say included) and its say helper
   ag.door = async () => { authored++; return { ok: true }; };

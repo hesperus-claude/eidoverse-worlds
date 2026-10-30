@@ -11,6 +11,7 @@
 //      appears on the owning entity, tracks a replace, and is gone on removal;
 //      other component types still read as they did.
 // Every check fails on main by construction: `picture` did not exist.
+import { noWorldUrl } from "./no-world.ts";
 import { normalizePicture, describePicture, allowedPictureSrc, PICTURE_DESCRIPTION_MAX } from "../shared/picture.js";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const { WorldAgent } = await import("../mcpl/agent.ts");
@@ -80,7 +81,7 @@ check("describe never mentions pixels/colours (it carries the author's claim onl
 console.log("— 2. perception —");
 // the agent's protocol path: a scratch authority, its cut adopted, and the next view taken after every write (tools/agent-scratch.ts)
 const { agentOnDoor } = await import("./agent-scratch.ts");
-const ag = new WorldAgent({ name: "reader" });
+const ag = new WorldAgent({ url: noWorldUrl(), name: "reader" });
 const { seed, act } = agentOnDoor(ag, "picture");
 await seed({ console: { model: "scif_cyberpunk_crt_retro_computer_monitor_screen_keyboard_tower.glb", pos: [1, 0, 1] } });
 const r1 = await act("set", { id: "console", component: "picture", value: { src: GOOD, description: "a print of the hearth at dusk" } }, { who: "antra" });

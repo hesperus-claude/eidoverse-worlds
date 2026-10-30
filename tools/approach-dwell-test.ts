@@ -19,6 +19,7 @@
 //
 // Run: bun tools/approach-dwell-test.ts
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { APPROACH_DWELL_MS, APPROACH_MAX_WAIT_MS, APPROACH_RADIUS, REARM_RADIUS } from "../mcpl/denoise.ts";
 
@@ -34,7 +35,7 @@ const pose = (x: number, z: number, clip = "walk", speed = 0) =>
   ({ p: [x, 0, z], yaw: 0, speed, clip });
 
 function rig() {
-  const ag = new WorldAgent({ name: "dwelltest" }) as any;
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "dwelltest" }) as any;
   ag.pos = { x: 0, y: 0, z: 0 };
   // A real epoch, not 0: `cooled` measures against a last-approach time that
   // defaults to 0, so a clock starting near zero reads as "approached a moment

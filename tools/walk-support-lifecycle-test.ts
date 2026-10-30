@@ -1,6 +1,7 @@
 // bun tools/walk-support-lifecycle-test.ts — a walk's support, from planning
 // through its last tick, and how a walk ends: arrival, stop, replacement,
 // refusal, timeout and close.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
 import { drive as finish, valid } from "./structure-oracle.ts";
@@ -8,7 +9,7 @@ let checks=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);checks++;console.log("✓ "+label);};
 const agents:WorldAgent[]=[];
 const make=(heightAt:(x:number,z:number)=>number=()=>0)=>{
- const a=new WorldAgent({name:"walker",world:"support",avatar:""});
+ const a=new WorldAgent({ url: noWorldUrl(), name:"walker",world:"support",avatar:""});
  agents.push(a);a.joined=true;(a as any).terrain={heightAt};return a;
 };
 const ent=(id:string,structure:any)=>({id,model:"",pos:[0,0,0],yaw:0,scale:1,structure} as any);

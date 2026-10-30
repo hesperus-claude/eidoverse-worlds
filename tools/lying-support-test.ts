@@ -9,6 +9,7 @@
 // b398d7e3 #1). This drives the agent's own syncSupport (no server: its
 // geometry fetch is stubbed) and asks the same colliders the body settles on.
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
 // registration is detached and waits for the sim to load (seconds, the first time): wait for the box itself
@@ -20,7 +21,7 @@ const check = (name: string, ok: boolean, detail = "") => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
 };
 
-const ag: any = new WorldAgent({ name: "lying-bot", world: "lying" });
+const ag: any = new WorldAgent({ url: noWorldUrl(), name: "lying-bot", world: "lying" });
 ag.geomFor = async () => ({ bbox: { min: [-0.5, 0, -0.25], max: [0.5, 2, 0.25], size: [1, 2, 0.5] }, topSurfaces: [] });
 const s2 = Math.SQRT1_2;
 // local +y → world -x: it lies along x in [18, 20], 1 m tall (y 0..1), z in [-0.25, 0.25]
