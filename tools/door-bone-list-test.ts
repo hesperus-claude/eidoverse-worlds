@@ -9,6 +9,7 @@
 // flight act was refused for a skeleton the body has, and fold_wings said it
 // had no wings.
 
+import { noWorldUrl } from './no-world.ts';
 import { WorldAgent } from '../mcpl/agent.ts';
 import { devFlightProvider } from '../shared/flightcap.js';
 import { rigBonesFor, bodyHeightFor } from '../mcpl/rigbones.ts';
@@ -37,7 +38,7 @@ let fetches = 0;
 (globalThis as any).fetch = async () => { fetches++; return serve(); };
 const DOWN = async () => new Response('down', { status: 503 });
 
-const ag: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 ag.avatar = 'mythos-wings.vrm';
 ag.myRights = { role: 'builder', fly: true };
 const realWarn = console.warn; const warned: string[] = [];
@@ -64,7 +65,7 @@ await ag.loadBodyBones();
 check('a successful read is kept: the next act reads no model', fetches === before, `${fetches - before} more`);
 
 console.log('\nA BODY THAT REALLY HAS NO BONES');
-const bare: any = new WorldAgent({ name: 'statue', world: 'bone-bench' });
+const bare: any = new WorldAgent({ url: noWorldUrl(), name: 'statue', world: 'bone-bench' });
 bare.avatar = 'statue.vrm';
 bare.myRights = { role: 'builder', fly: true };
 serve = async () => new Response(glb([]));
@@ -75,7 +76,7 @@ r = await bare.foldWings(true);
 check('fold_wings on a body read as empty says it has no wings', text(r) === 'this body has no animatable wings to fold', text(r));
 
 console.log('\nA FOLDED BODY CAN ALWAYS UNFOLD');
-const vigil: any = new WorldAgent({ name: 'vigil', world: 'bone-bench' });
+const vigil: any = new WorldAgent({ url: noWorldUrl(), name: 'vigil', world: 'bone-bench' });
 vigil.avatar = 'vigil.vrm';
 vigil.wingsFolded = true;   // folded before its model became unreadable
 serve = DOWN;
@@ -84,7 +85,7 @@ check('unfold_wings releases a folded posture while the bones are unknown',
   vigil.wingsFolded === false && /^folded-wing posture released — this body's bones aren't known/.test(text(r)), text(r));
 
 console.log('\nA BENCH RIG ISN\'T THE WORN BODY');
-const bench: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const bench: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 bench.avatar = 'unread.vrm';
 bench.flightCap = devFlightProvider({ allow: ['mythos'], bones: WINGED });
 r = await bench.takeOff();
@@ -92,7 +93,7 @@ check("a bench provider doesn't fly an unread body on its constructor's rig",
   !/took off/.test(text(r)) && /bones aren't known/.test(text(r)), text(r));
 
 console.log('\nAN AVATAR CHANGE');
-const worn: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const worn: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 worn.avatar = 'mythos-wings.vrm';
 worn.myRights = { role: 'builder', fly: true };
 serve = async () => new Response(glb(WINGED));
@@ -113,7 +114,7 @@ await late;
 check("a read that finishes after a swap isn't kept as the new body's bones", worn.bodyBoneNames === null);
 
 console.log('\nTWO READS AT ONCE');
-const two: any = new WorldAgent({ name: 'mythos', world: 'bone-bench' });
+const two: any = new WorldAgent({ url: noWorldUrl(), name: 'mythos', world: 'bone-bench' });
 two.avatar = 'mythos-wings.vrm';
 let failLate: () => void = () => {};
 serve = () => new Promise<Response>((done) => { failLate = () => done(new Response('down', { status: 503 })); });
@@ -139,7 +140,7 @@ console.log('\nEVERY READER OF A BODY FILE: a failed read is never remembered, a
   };
   let n = 0; const bodies = new Map<string, any>();
   const READERS: Record<string, (path: string) => Promise<unknown>> = {
-    loadBodyBones: (path) => { let a: any = bodies.get(path); if (!a) bodies.set(path, a = new WorldAgent({ name: 'reader', world: 'bone-bench' })); a.avatar = path; return a.loadBodyBones(); },
+    loadBodyBones: (path) => { let a: any = bodies.get(path); if (!a) bodies.set(path, a = new WorldAgent({ url: noWorldUrl(), name: 'reader', world: 'bone-bench' })); a.avatar = path; return a.loadBodyBones(); },
     rigBonesFor: (path) => rigBonesFor('http://lib', path),
     bodyHeightFor: (path) => bodyHeightFor('http://lib', path),
   };

@@ -1,6 +1,7 @@
 // bun tools/route-preparation-test.ts: the authored-plan cache's boundaries, through real editor operations and the
 // received-entry fold; unrelated geometry I/O is disabled so this suite cannot fetch assets from a running sequencer.
 // The cap rows (16384 admitted, 16385 refused, the worst case's time) are tools/structure-route-test.ts's.
+import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { prepareRouteLocal } from "../shared/structure.js";
@@ -12,7 +13,7 @@ let count=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);count++;console.log("✓ "+label);};
 const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
 const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
-const agent=new WorldAgent({name:"cache-test",avatar:"",world:"cache-test"});
+const agent=new WorldAgent({ url: noWorldUrl(), name:"cache-test",avatar:"",world:"cache-test"});
 (agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test
 // the agent folds the authority's log itself, so each old hand-written entry is the current write doing the same (spawn →
 // create, comp → set/delete a component, place → set transform) through the real door (tools/agent-scratch.ts agentOnDoor)

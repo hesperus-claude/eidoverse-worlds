@@ -207,7 +207,7 @@ time.
 | 37 | avatar | main | `tools/avatar-test.ts` | bun | 1 s | 180 s |
 | 38 | remotes-limp-edge | main | `tools/remotes-limp-edge-test.ts` | bun | 0.5 s | 180 s |
 | 39 | colliders | main | `tools/collider-test.ts` | bun | 0.2 s | 180 s |
-| 40 | lying-support | main | `tools/lying-support-test.ts` | bun | 16 s | 180 s |
+| 40 | lying-support | main | `tools/lying-support-test.ts` | bun | 1.5 s | 180 s |
 | 41 | support-swap | main | `tools/support-swap-test.ts` | bun | ? | 300 s |
 | 42 | knockdown | main | `tools/knockdown-test.ts` | bun | ? | 300 s |
 | 43 | sockets | main | `tools/sockets-test.ts` | bun | ? | 300 s |
@@ -364,5 +364,5 @@ time.
 | 194 | colour-picker | browser | `tools/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
 | 195 | client-tools | browser | `tools/run-client.ts --import-only --skip-suites` | Chromium | 202 s | 1010 s |
 
-Lanes: core 17 suites (~78 s), main 165 (~1511 s), browser 13 (~1147 s); 195 suites in all.
+Lanes: core 17 suites (~78 s), main 165 (~1497 s), browser 13 (~1147 s); 195 suites in all.
 <!-- END GENERATED -->
