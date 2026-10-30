@@ -9,12 +9,10 @@ import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-1
 import { scratchWorld } from "./protocol/scratchworld.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
 import { digest } from "../shared/protocol/fold.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("replica-freeze");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const throws = (f: () => void) => { try { f(); return false; } catch { return true; } };
 
 const W = scratchWorld("freeze").seed({ crate: { model: "crate.glb", pos: [1, 0, 2], yaw: 0, label: "crate", "example.org/rack": { top: { pos: [0, 1, 0] } } } });   // flat records (scratchworld seed)
@@ -50,5 +48,4 @@ console.log("\noff by choice (a visitor's browser):");
   check("the replica says which it is", r.frozen === false && makeReplica().frozen === true);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();
