@@ -11,6 +11,7 @@
 
 import { WorldAgent } from '../mcpl/agent.ts';
 import { devFlightProvider } from '../shared/flightcap.js';
+import { rigBonesFor, bodyHeightFor } from '../mcpl/rigbones.ts';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -123,6 +124,40 @@ failLate();
 await slow;
 check("a failed read doesn't clear the list another read just stored",
   Array.isArray(two.bodyBoneNames) && two.bodyBoneNames.length === WINGED.length);
+
+console.log('\nEVERY READER OF A BODY FILE: a failed read is never remembered, a good one is');
+{
+  // one humanoid body all three read: loadBodyBones its node names, rigBonesFor its bones, bodyHeightFor its stature
+  const humanoid = (magic = 0x46546c67) => {
+    const json = new TextEncoder().encode(JSON.stringify({ asset: { version: '2.0' }, scenes: [{ nodes: [0] }],
+      nodes: [{ name: 'Hips', translation: [0, 0.9, 0], children: [1] }, { name: 'Head', translation: [0, 0.47, 0] }],
+      extensionsUsed: ['VRMC_vrm'], extensions: { VRMC_vrm: { specVersion: '1.0', humanoid: { humanBones: { hips: { node: 0 }, head: { node: 1 } } } } } }));
+    const out = new Uint8Array(20 + json.length), dv = new DataView(out.buffer);
+    dv.setUint32(0, magic, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+    dv.setUint32(12, json.length, true); dv.setUint32(16, 0x4e4f534a, true); out.set(json, 20);
+    return out.buffer;
+  };
+  let n = 0; const bodies = new Map<string, any>();
+  const READERS: Record<string, (path: string) => Promise<unknown>> = {
+    loadBodyBones: (path) => { let a: any = bodies.get(path); if (!a) bodies.set(path, a = new WorldAgent({ name: 'reader', world: 'bone-bench' })); a.avatar = path; return a.loadBodyBones(); },
+    rigBonesFor: (path) => rigBonesFor('http://lib', path),
+    bodyHeightFor: (path) => bodyHeightFor('http://lib', path),
+  };
+  const good = async () => new Response(humanoid());
+  for (const [reader, read] of Object.entries(READERS)) {
+    const path = () => `reader-${reader}-${++n}.vrm`;
+    let p = path(); serve = DOWN;
+    const failed = await read(p); serve = good;
+    const then = await read(p);
+    check(`${reader}: a failed read gives none, and the next read of the same file reads it`, failed == null && then != null, JSON.stringify({ failed, then }));
+    p = path(); serve = good; const first = await read(p); serve = DOWN; const before = fetches;
+    const again = await read(p);
+    check(`${reader}: a good read is remembered: the next asks nothing of the server`, first != null && JSON.stringify(again) === JSON.stringify(first) && fetches === before, `${fetches - before} fetches`);
+    // loadBodyBones never checks the glTF magic (agent.ts): a bad-magic row for it would be red today
+    if (reader !== 'loadBodyBones') { p = path(); serve = async () => new Response(humanoid(0x12345678));
+      check(`${reader}: a file whose header isn't glTF's gives none`, (await read(p)) == null); }
+  }
+}
 
 console.warn = realWarn;
 console.log(`\n${pass} passed, ${fail} failed`);
