@@ -93,8 +93,6 @@ console.log("wire + call-site invariants (asserted against the source):");
   ok(leaves.length >= 2, "walking AND standing both leave the seat (found " + leaves.length + " call sites)");
   ok(/msg\.restore\.pose && msg\.restore\.clip !== "ragdoll"\) \{ this\.heldPose = msg\.restore\.pose; this\.heldPoseAuthored = true/.test(src),
      "a restored pose (post-settledPose server memory) counts as authored");
-  // (gone with v1: "stateToEntries replays folded mounts — a rejoined agent knows it is seated". A seat is presence
-  //  and isn't in the log or the cut, so a rejoin starts standing; there is no folded mount to replay.)
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

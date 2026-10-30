@@ -13,12 +13,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
 import { playwrightArgs } from './protocol/chrome.ts';
+import { requester } from './harness.ts';
 const base = process.argv[2];
 // a manual check against a running server: without one, say so before a browser is launched
 if (!base) { console.log('usage: bun tools/roaming-renderer-check.ts http://127.0.0.1:<port> (needs a running server)'); process.exit(0); }
 const shot = process.env.SHOT;
 const world = `roam-build-${Date.now().toString(36)}`, lobby = `roam-lobby-${Date.now().toString(36)}`;
-const crates = ['blue', 'green', 'red', 'yellow'].map((c, i) => ({ verb: 'spawn', args: { id: `crate-${c}`, lib: `eidoverse/assets/models/crate_large_${c}.glb`, pos: [Math.cos(i * 1.57) * 4, 0, 6 + Math.sin(i * 1.57) * 4], yaw: 0 } }));
+const crates = ['blue', 'green', 'red', 'yellow'].map((c, i) => ({ id: `crate-${c}`, model: `eidoverse/assets/models/crate_large_${c}.glb`, components: { transform: { pos: [Math.cos(i * 1.57) * 4, 0, 6 + Math.sin(i * 1.57) * 4] } } }));
 let ws: WebSocket | null = null, keepPose: ReturnType<typeof setInterval> | undefined;
 // A devtools port, so the watchdog's own check (deploy/render-health.ts health) can judge the roamer below. Chrome
 // picks it (port 0) and writes it to DevToolsActivePort in its profile, so no other process can take it between the
@@ -32,10 +33,8 @@ try {
     try { dbg = Number(readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]) || 0; } catch { await Bun.sleep(100); }
   }
   assert.ok(dbg > 0, `Chrome wrote no DevToolsActivePort in ${profile}`);
-  // The lobby must exist before the renderer comes: a renderer is a spectator, and there is nothing to watch in a world
-  // nobody has founded (server.ts, 4011, retried forever). Production's lobbies were founded once; found this one.
-  // A refusal (a sequencer that wants JOIN_TOKEN, a founding cap) fails the check with the server's reason, and so
-  // does silence: this must never hang with the browser above left open.
+  // The lobby must already be founded on that server (world.ts found: joining never founds one); a refusal or silence
+  // fails the check with the server's reason, never hangs with the browser above left open.
   {
     const f = new WebSocket(base.replace('http', 'ws') + '/ws');
     try {
@@ -49,7 +48,7 @@ try {
           if (m.type === 'snapshot') settle();
           else if (m.type === 'error') settle(new Error(`founding the lobby "${lobby}" was refused: ${m.error}`));
         };
-        f.onopen = () => f.send(JSON.stringify({ type: 'join', world: lobby, id: 'lobby-founder', agent: true, avatar: 'eidoverse/assets/vrms/shino.vrm' }));
+        f.onopen = () => f.send(JSON.stringify({ type: 'join', world: lobby, id: 'lobby-founder', agent: true, replica: true, avatar: 'eidoverse/assets/vrms/shino.vrm' }));
       });
     } finally { f.onclose = null; f.close(); }
   }
@@ -74,9 +73,10 @@ try {
   const sock = ws;
   await new Promise<void>((res, rej) => { sock.onopen = () => res(); sock.onerror = () => rej(new Error('cannot connect')); });
   const joined = new Promise<void>((res) => { sock.onmessage = (e) => { if (JSON.parse(String(e.data)).type === 'snapshot') res(); }; });
-  sock.send(JSON.stringify({ type: 'join', world, id: 'builder-agent', agent: true, avatar: 'eidoverse/assets/vrms/shino.vrm' }));
+  sock.send(JSON.stringify({ type: 'join', world, id: 'builder-agent', agent: true, replica: true, avatar: 'eidoverse/assets/vrms/shino.vrm' }));
   await joined;
-  for (const v of crates) { sock.send(JSON.stringify({ type: 'verb', ...v })); await Bun.sleep(300); }
+  const rq = requester(sock);
+  for (const c of crates) { const r = await rq.request('create', c); assert.ok(r?.ok, `${c.id} was made: ${JSON.stringify(r)}`); }
   const pose = () => sock.send(JSON.stringify({ type: 'pose', pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: 'idle' } }));
   pose(); keepPose = setInterval(pose, 200);
   // PRE-WARM: the agent's arrival alone sends the roaming renderer to its world, before any screenshot is asked

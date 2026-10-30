@@ -8,18 +8,22 @@
 // must not see the crate (control); `at: crate` must put it in the middle of the frame. Before the change the
 // `at` parameter is ignored, the frame is first person, and the middle is not red: watched failing.
 import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { requester } from './harness.ts';
 const { check, done } = checker();
-const world = await ownedWorld({});
 const W = `snapat-${Math.random().toString(36).slice(2, 7)}`;
+const world = await ownedWorld({ worlds: [W], owner: 'agent', env: { TRUST_NAMES: '1' } });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const ws = new WebSocket(world.origin.replace('http', 'ws') + '/ws');
 await new Promise((r) => (ws.onopen = r));
-ws.send(JSON.stringify({ type: 'join', world: W, id: 'agent', token: world.key }));
+ws.send(JSON.stringify({ type: 'join', world: W, id: 'agent', token: world.key, replica: true }));
 await sleep(800);
 ws.send(JSON.stringify({ type: 'pose', pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: 'idle' } }));
-ws.send(JSON.stringify({ type: 'verb', verb: 'spawn', args: { id: 'crate1', lib: 'eidoverse/assets/models/crate_large_red.glb', pos: [0, 0, -6], yaw: 0 } }));
-await sleep(500);
+const rq = requester(ws);
+const made = await rq.request('create', { id: 'crate1', model: 'eidoverse/assets/models/crate_large_red.glb', components: { transform: { pos: [0, 0, -6] } } });
+if (!made?.ok) throw new Error(`the crate wasn't made: ${JSON.stringify(made)}`);
+const CRATE = rq.ids.of('crate1');
+const AUTH = { headers: { authorization: `Bearer ${world.key}` } };   // /snap reads with the door's key (server/routes.ts mayRead)
 
 const { browser, page } = await launchBrowser();
 try {
@@ -30,7 +34,7 @@ try {
   const keep = setInterval(() => ws.send(JSON.stringify({ type: 'pose', pose: { p: [0, 0, 0], yaw: 0, speed: 0, clip: 'idle' } })), 500);
   const redMiddle = async (q) => {
     for (let i = 0; i < 40; i++) {
-      const r = await fetch(`${world.origin}/snap?world=${W}&follow=agent${q}`);
+      const r = await fetch(`${world.origin}/snap?world=${W}&follow=agent${q}`, AUTH);
       if (r.ok) {
         const png = Buffer.from(await r.arrayBuffer());
         if (process.env.SNAP_DUMP) await Bun.write(`${process.env.SNAP_DUMP}/snap${q.replace(/[^a-z0-9]/gi, '_')}.png`, png);
@@ -50,8 +54,8 @@ try {
   };
   await sleep(8000);
   const first = await redMiddle('&view=first');
-  const at = await redMiddle('&at=crate1');
-  const missing = await fetch(`${world.origin}/snap?world=${W}&follow=agent&at=nope`);
+  const at = await redMiddle(`&at=${CRATE}`);
+  const missing = await fetch(`${world.origin}/snap?world=${W}&follow=agent&at=nope`, AUTH);
   clearInterval(keep);
   check('control: the first-person snap does not see the crate behind the agent', first >= 0 && first < 0.02, `red=${first}`);
   check('snapshot at: crate1 puts the red crate in the middle third of the frame', at > 0.25, `red=${at}`);

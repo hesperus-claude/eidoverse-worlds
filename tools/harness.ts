@@ -4,6 +4,7 @@ import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
 import { MOVER, TRACK } from "../shared/mover.js";
+import { idAliases } from "./protocol/idalias.ts";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..");
@@ -61,6 +62,17 @@ export function saysIn(msgs: any[]) {
     });
   }
   return out;
+}
+
+/** Requests over a raw world socket: {type: "request", id, verb, args} → the reply (server/requestwire.ts), with the
+ *  suite's names as placeholders and minted ids (idalias.ts). `ids.of(name)` reads a name as its id; ms: give up (null). */
+export function requester(ws: WebSocket, ms = 8000) {
+  const ids = idAliases(), waiting = new Map<string, (r: any) => void>(); let n = 0;
+  ws.addEventListener("message", (ev: MessageEvent) => { let m: any; try { m = JSON.parse(String(ev.data)); } catch { return; }
+    if (m?.type === "reply" && waiting.has(m.id)) { const done = waiting.get(m.id)!; waiting.delete(m.id); done(ids.back(m.reply)); } });
+  return { ids, request(verb: string, args: any = {}): Promise<any> {
+    const id = `rq${++n}`; ws.send(JSON.stringify({ type: "request", id, verb, args: ids.out(verb, args) }));
+    return new Promise((res) => { waiting.set(id, res); setTimeout(() => { if (waiting.delete(id)) res(null); }, ms); }); } };
 }
 
 let failedChecks = 0;
