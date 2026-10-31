@@ -12,6 +12,7 @@
 // name (the function's own checks would not notice). That section also pins
 // what the fix leaves for a name poisoned before it, on each kind of load.
 
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LIMITS } from "../server/limits.ts";
 
@@ -53,9 +54,12 @@ for (const [mode, prefix] of [["renderer", "renderer-"], ["spectate", "retina-"]
 // joining under it on their next visit as a person) or a renderer that
 // reconnects without reloading from joining as "renderer-renderer-helen".
 // Real net.js + base.js, fresh process per page load; only the DOM-touching UI
-// modules are stubbed.
+// modules are stubbed, each export by name read from the module itself (a hand list went stale: refuseBoot, 10-30).
 console.log("net.js onSnapshot");
 type Step = { ack: string; sub?: string } | "join";
+const exportsOf = (file: string) => [...readFileSync(join(ROOT, "client/lib", file), "utf8")
+  .matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]!);
+const STUBBED = Object.fromEntries(["presence.js", "chat.js", "boot.js"].map((f) => [f, exportsOf(f)]));
 function pageLoad(search: string, stored: string, steps: Step[]) {
   const L = join(ROOT, "client/lib") + "/";
   const code = `
@@ -64,9 +68,9 @@ function pageLoad(search: string, stored: string, steps: Step[]) {
     globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
     const { mock } = await import("bun:test");
     const L = ${JSON.stringify(L)};
-    mock.module(L + "presence.js", () => ({ presence: {} }));
-    mock.module(L + "chat.js", () => ({ logChat() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {} }));
-    mock.module(L + "boot.js", () => ({ markPhase() {} }));
+    // a stub that is every value at once: callable, and each property another stub
+    const stub = new Proxy(function () {}, { get: (_, k) => (k === "then" || typeof k === "symbol" ? undefined : stub), apply: () => undefined });
+    for (const [file, names] of Object.entries(${JSON.stringify(STUBBED)})) mock.module(L + file, () => Object.fromEntries(names.map((n) => [n, stub])));
     const net = await import(L + "net.js");
     const { CONFIG } = await import(L + "base.js");
     const joins = [];
@@ -76,7 +80,7 @@ function pageLoad(search: string, stored: string, steps: Step[]) {
       else await net._dispatch({ type: "snapshot", you: s.ack, yourSub: s.sub, present: [], entries: [], state: {} });
     }
     console.log(JSON.stringify({ name: CONFIG.name, stored: mem.get("ew-name"), joins }));`;
-  const r = Bun.spawnSync(["bun", "-e", code], { stdout: "pipe", stderr: "pipe" });
+  const r = Bun.spawnSync([process.execPath, "-e", code], { stdout: "pipe", stderr: "pipe", timeout: 20_000 });
   try { return JSON.parse(r.stdout.toString().trim().split("\n").pop()!) as { name: string; stored: string; joins: string[] }; }
   catch { return { name: `ERROR ${r.stderr.toString().slice(0, 300)}`, stored: "", joins: [] as string[] }; }
 }

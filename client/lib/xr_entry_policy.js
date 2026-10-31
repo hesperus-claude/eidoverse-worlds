@@ -1,5 +1,5 @@
 // What a failed immersive-session request MEANS, as a pure function. xr.js owns the effects (toasts,
-// timers, reloads); this owns the decision. tools/xr-entry-policy-test.mjs drives every outcome.
+// timers, reloads); this owns the decision. tools/xr-entry-effects-test.mjs drives every outcome.
 // No imports on purpose.
 //
 // The rules:

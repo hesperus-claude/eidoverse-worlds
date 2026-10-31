@@ -12,11 +12,11 @@
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { suite } from "./protocol/suite.ts";
+import { until, tryUntil, pause } from "./protocol/wait.ts";
 GlobalRegistrator.register();
 
 const S = suite("tts");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- fakes ----------------------------------------------------------------
 // AudioData frames written to the generator, the harness's "wire": the pacer writes CONTINUOUSLY (silence between
@@ -93,14 +93,22 @@ class FakePC {
 // engine: a deterministic "synthesizer" — 1000 samples of known pcm per call,
 // with controllable latency and failure.
 let synthCalls: string[] = [];
+let micAsks = 0;   // how often the code under test asked the stub transport "is the mic live?": a decision was made
 let synthDelay = 5;
 let synthFail = false;
 const engine = async (text: string) => {
   synthCalls.push(text);
-  await sleep(synthDelay);
+  await pause("the fake engine's synthesis latency", synthDelay);
   if (synthFail) throw new Error("engine exploded");
   return { pcm: new Int16Array(1000).fill(7), sampleRate: 22050 };
 };
+
+// the queue is empty and speech reached the wire since `written` was last cleared: one utterance has played out
+const drained = () => tts.mouthInfo().queued === 0 && speechFrames() > 0;
+let ONE = 0;
+const onlyOne = () => ONE > 0 && Math.abs(speechSum() - ONE) < 1e-6 * ONE;
+/** Speak a marker after a stale-drop and let it play out: anything stale would have reached the wire ahead of it. */
+const fenceSpeak = async () => { written.length = 0; await tts.speak("fence"); await tryUntil("the fence line played out", drained); };
 
 // ---- module substitution (voice-lifecycle doctrine): core.js constructs a
 // WebGPU renderer at import; swap the non-audio siblings for the stubs.
@@ -130,7 +138,8 @@ console.log("\n— speak: canonical own say → one performance —");
   written.length = 0; synthCalls = [];
   tts.startPacer();
   const ok = await tts.speak("hello world");
-  await sleep(120);                       // let the pacer drain the queue
+  await tryUntil("the pacer drained the utterance onto the wire", drained);
+  ONE = speechSum();                      // one utterance's wire sum: the fence for "nothing else was heard" below
   check("speak() returns true on success", ok === true);
   check("engine called exactly once", synthCalls.length === 1, `${synthCalls.length}`);
   check("pcm reached the generator writer", written.length > 0, `${written.length} writes`);
@@ -143,11 +152,10 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   tts.speakOwnSays(bus, () => "me");
   synthCalls = [];
   bus.emit("speech", { actor: "someone-else", text: "not mine" });
-  await sleep(30);
-  check("someone else's say is never synthesized", synthCalls.length === 0);
-  bus.emit("speech", { actor: "me", text: "my own words" });
-  await sleep(60);
-  check("own say queues exactly one performance", synthCalls.length === 1, `${synthCalls.length}`);
+  bus.emit("speech", { actor: "me", text: "my own words" });   // the fence: someone else's would have reached the engine first
+  await tryUntil("the own say reached the engine", () => synthCalls.length > 0);
+  check("someone else's say is never synthesized", !synthCalls.includes("not mine"), JSON.stringify(synthCalls));
+  check("own say queues exactly one performance", synthCalls.length === 1 && synthCalls[0] === "my own words", JSON.stringify(synthCalls));
 
   // mic beats TTS: with the mic live, typed says are DISCARDED (declared policy).
   // Post-cutover the transport is the SFU bridge; the policy code asks
@@ -156,7 +164,7 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
   // and reports honestly. micstate.toggleMic routes through the hook.
   const voice = await import("../client/lib/micstate.js");
   let stubMicOn = false;
-  (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMicOn = () => stubMicOn;
+  (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMicOn = () => { micAsks++; return stubMicOn; };
   (globalThis as unknown as { window: Record<string, unknown> }).window.__sfuMic = async () => {
     stubMicOn = !stubMicOn;
     // The real transport routes the device through micstate's gate and reports
@@ -171,10 +179,10 @@ console.log("\n— speakOwnSays: the bridge, and the mic-live discard policy —
     (window as unknown as { __sfuMicOn(): boolean }).__sfuMicOn() === true);
   synthCalls = [];
   bus.emit("speech", { actor: "me", text: "typed while talking" });
-  await sleep(60);
-  check("typed say while mic live is DISCARDED, not queued", synthCalls.length === 0, `${synthCalls.length}`);
-  await voice.toggleMic();                // mic off again for later blocks
-  await sleep(30);
+  await voice.toggleMic();                // mic off again; the next say is the fence a queued one would have played before
+  bus.emit("speech", { actor: "me", text: "after the mic dropped" });
+  await tryUntil("the say after the mic dropped reached the engine", () => synthCalls.includes("after the mic dropped"));
+  check("typed say while mic live is DISCARDED, not queued", !synthCalls.includes("typed while talking"), JSON.stringify(synthCalls));
 }
 
 // one producer on the wire across mic/TTS handoffs: also tools/voicesource-real-test.mjs, sfu-mic-intent-race-test.mjs
@@ -184,11 +192,12 @@ console.log("\n— mic priority: both orderings, repeated cycles, no dual produc
 {
   const voice = await import("../client/lib/micstate.js");
   // ordering A: TTS enabled while mic OFF → generator on senders
-  tts.setTtsEnabled(false); tts.setTtsEnabled(true);
-  await sleep(30);
+  // an enable flip decides after a dynamic import (tts.js setTtsEnabled): it is decided once it has asked the transport
+  const decided = (from: number, n = 1) => until("the enable flip asked the transport", () => micAsks >= from + n);
+  let a = micAsks; tts.setTtsEnabled(false); tts.setTtsEnabled(true);
+  await decided(a, 2);
   const gen = tts.ensureGenerator();
   vsrc.notifySynthTrackChanged(gen);      // what enabling does via the hook
-  await sleep(20);
   // ordering B: mic ON — the mic wins. (The pacer-stop on a LIVE mic takeover
   // is the TRANSPORT's move — voicesfu's source swap calls the provider's
   // stop() — so asserting it here against the stub hook would test the stub.
@@ -197,17 +206,16 @@ console.log("\n— mic priority: both orderings, repeated cycles, no dual produc
   // own enable-path gate: enabling TTS while the mic is live must NOT start
   // the pacer — mic beats TTS at the enable door, tts.js:110's !micLive.)
   await voice.toggleMic();
-  await sleep(50);
   check("mic ON while TTS enabled: mic wins (micOn true)", voice.micOn() === true);
-  tts.setTtsEnabled(false); await sleep(30);   // pacer stilled by disable
-  tts.setTtsEnabled(true); await sleep(50);    // re-enable WITH the mic live
+  a = micAsks; tts.setTtsEnabled(false); await decided(a);   // pacer stilled by disable
+  a = micAsks; tts.setTtsEnabled(true); await decided(a);    // re-enable WITH the mic live
   const pacingEnabledOverLiveMic = tts.mouthInfo().pacing;
   check("enabling TTS over a LIVE mic does not start the pacer (mic beats TTS at the enable door)",
     pacingEnabledOverLiveMic === false, `pacing=${pacingEnabledOverLiveMic}`);
   // mic OFF → the armed enablement engages: the pacer runs
   await voice.toggleMic();
-  await sleep(50);
-  tts.setTtsEnabled(false); tts.setTtsEnabled(true); await sleep(50);
+  tts.setTtsEnabled(false); tts.setTtsEnabled(true);
+  await tryUntil("the pacer runs again", () => tts.mouthInfo().pacing);
   check("mic OFF with TTS armed: provider re-engaged (pacer running)", tts.mouthInfo().pacing === true);
 }
 
@@ -216,9 +224,9 @@ console.log("\n— disable / replace: stale async can never become current —")
   synthCalls = []; written.length = 0;
   synthDelay = 80;                        // in-flight synthesis outlives the disable
   const p = tts.speak("slow utterance");
-  await sleep(10);
+  await until("the slow synthesis is in flight", () => synthCalls.includes("slow utterance"));
   tts.setTtsEnabled(false);               // user disables mid-synthesis
-  await p; await sleep(150);
+  await p; await until("the disable stilled the pacer", () => !tts.mouthInfo().pacing);
   check("synthesis completing after disable writes NO SPEECH", speechFrames() === 0, `${speechFrames()} frames`);
   // THE STALE-BECOMES-CURRENT HOLE (review B2, named explicitly): the disable
   // cleared the queue, but the in-flight synthesis completed AFTER the clear
@@ -228,23 +236,29 @@ console.log("\n— disable / replace: stale async can never become current —")
     tts.mouthInfo().queued === 0, `queued=${tts.mouthInfo().queued}`);
   synthDelay = 5;
   tts.setTtsEnabled(true);
-  await sleep(30);
-  written.length = 0;
-  await sleep(120);
-  check("re-enable after stale-drop plays nothing old (silence only)", speechFrames() === 0, `${speechFrames()}`);
-  // r5 self-review: the RESAMPLE seam. speak()'s epoch check runs before
-  // enqueue, but the resample callback is one more async hop — a disable
-  // landing inside it re-pushed the dead audio until the push itself became
-  // epoch-guarded. Fire without awaiting so the disable races the pipeline.
-  written.length = 0;
-  void tts.speak("assassinated mid-pipeline");
-  tts.setTtsEnabled(false);              // same tick: epoch bumps under the resample
-  await sleep(80);
+  await fenceSpeak();
+  check("re-enable after stale-drop plays nothing old (only the next line is heard)", onlyOne(), `${speechSum()} vs one line ${ONE}`);
+  // r5 self-review: the RESAMPLE seam. speak()'s epoch check runs before enqueue, but the resample (tts.js toOutRate)
+  // is one more async hop: a held offline render lets the disable land exactly inside it.
+  const win = (globalThis as unknown as { window: Record<string, unknown> }).window;
+  let rendering = 0, release = () => {};
+  win.OfflineAudioContext = class {
+    n: number; d = new Float32Array(0); destination = {};
+    constructor(_c: number, n: number) { this.n = n; }
+    createBuffer(_c: number, n: number) { this.d = new Float32Array(n); return { getChannelData: () => this.d }; }
+    createBufferSource() { return { connect() {}, start() {} }; }
+    startRendering() { rendering++; return new Promise((r) => { release = () => { const o = new Float32Array(this.n); o.set(this.d.subarray(0, this.n)); r({ getChannelData: () => o }); }; }); }
+  };
+  await tts.speak("assassinated mid-pipeline");
+  await until("the resample is in flight", () => rendering > 0);
+  tts.setTtsEnabled(false);
+  await until("the disable stilled the pacer", () => !tts.mouthInfo().pacing);
+  release(); delete win.OfflineAudioContext;
   tts.setTtsEnabled(true);
-  await sleep(150);
+  await fenceSpeak();
   check("disable racing the resample: stale audio dies at EVERY seam",
-    speechFrames() === 0 && tts.mouthInfo().queued === 0,
-    `speech=${speechFrames()} queued=${tts.mouthInfo().queued}`);
+    onlyOne() && tts.mouthInfo().queued === 0,
+    `speech=${speechSum()} vs one line ${ONE}, queued=${tts.mouthInfo().queued}`);
 }
 
 console.log("\n— dead generator: rebuilt once, senders re-bound, no SDP churn —");
@@ -267,19 +281,23 @@ console.log("\n— engine failure: page survives, refusal says why —");
   const ok = await tts.speak("doomed");
   check("engine explosion → speak returns false, no throw", ok === false);
   synthFail = false;
+  written.length = 0;
   const ok2 = await tts.speak("recovered");
   check("next utterance after failure succeeds (no wedged state)", ok2 === true);
-  await sleep(80);
+  await tryUntil("the recovered line played out", drained);
 }
 
 console.log("\n— queue bounds: backpressure does not grow without limit —");
 {
   synthDelay = 30;
-  for (let i = 0; i < 12; i++) void tts.speak(`line ${i}`);
-  await sleep(60);
+  written.length = 0;
+  const lines = Array.from({ length: 12 }, (_, i) => tts.speak(`line ${i}`));
+  await until("the burst is under way", () => synthCalls.includes("line 1"));
   const q = tts.mouthInfo().queued;
   check("queue is bounded (or draining), not runaway", q < 1000, `queued=${q}`);
-  await sleep(600);
+  await Promise.all(lines);
+  await tryUntil("the burst played out", () => tts.mouthInfo().queued === 0 && speechSum() >= 12 * ONE * (1 - 1e-6));
+  check("…and drains: all 12 lines reach the wire", Math.abs(speechSum() - 12 * ONE) < 1e-5 * ONE, `${speechSum()} vs 12 × ${ONE}`);
   synthDelay = 5;
 }
 
@@ -314,8 +332,8 @@ console.log("\n— sidetone: the tts slider moves only what you hear of yourself
   const vc = await import("../client/lib/voiceconsent.js");
   tts.sidetone(true);
   const run = async (v: number) => {
-    vc.setVolume("tts", v); await sleep(30); written.length = 0; monitored.length = 0;
-    await tts.speak("sidetone row"); await sleep(150);
+    vc.setVolume("tts", v); written.length = 0; monitored.length = 0;
+    await tts.speak("sidetone row"); await tryUntil("the sidetone row played out", drained);
     return { wire: speechSum(), heard: [...monitored] };
   };
   const full = await run(1), half = await run(0.5), none = await run(0);
@@ -337,7 +355,7 @@ console.log("\n— negative control: a disconnected feature must FAIL this suite
   written.length = 0;
   const before = written.length;
   await tts.speak("control");
-  await sleep(80);
+  await tryUntil("the control line played out", drained);
   void before;
   check("control: harness observes real SPEECH on the real wire", speechFrames() > 0, `${speechFrames()}`);
   const spGone = vsrc.setSynthProvider(null);

@@ -347,9 +347,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["relay-decision", "../relay-decision-test.ts", 1], // relay incarnation and consent rules (#104 amendments 2, 3)
   ["sfu-mic-intent-race", "../sfu-mic-intent-race-test.mjs", 1], // the SFU transport executed: mic intent that changes while an acquisition is in flight ends where the latest intent says (#148)
   ["mic-ptt", "../mic-ptt-test.mjs", 1], // push-to-talk: the gate decision executed under both regimes, the hang time and the rate limit
-  ["micstate-exec", "../micstate-exec-test.mjs", 1], // every micstate export executed, not source-grepped
-  ["micstate-release", "../micstate-release-test.mjs", 1], // releaseMicrophone keeps the lanes it should (#131 review finding 2)
-  ["micstate-single-transport", "../micstate-single-transport-test.mjs", 1], // the SFU hook is the one mic transport: no hook gives an honest hint, the hook is called and audio:mic emitted, no relay says so
+  ["micstate", "../micstate-test.mjs", 1], // every micstate export executed; releaseMicrophone keeps its lanes; the SFU hook is the one mic transport
   ["voice-wire", "../voice-wire-test.ts", 1], // voice state (mic, hear) on the pose wire, shared with everyone in the world per the owner's ruling; a late joiner sees it
   ["voice-wire-mutation", "../voice-wire-mutation-test.ts", 1], // every seam of the voice-state wire contract is load-bearing: each broken in place turns its row red
   ["voicesource-real", "../voicesource-real-test.mjs", 1], // voiceSource() on the shipped module (voicesource.js)

@@ -694,4 +694,51 @@ console.log("DOCK — Tab OPENS the people pane, never closes it (ui.js togglePe
 
   outer.remove(); }
 
+// ============================================================ the wrench's auto-pin across a RELOAD (from dock-boot-test)
+// the session above cannot see a boot: the edit gate's first rights report is where you START, not a grant/revoke edge
+{
+bus.emit("your-rights");   // settle the session's ui.js instance on its current gate, so its own edge never writes the shared pins key below
+const saved = () => JSON.parse(localStorage.getItem("ew-dock-pins") ?? "null");
+const CHROME = `<button id="hud" class="emark">∃</button><div id="dock" class="panel"></div><div id="emenu" class="panel" hidden></div>
+  <div id="loading" class="panel"></div><div id="toasts"></div><div id="hintbar" class="panel"></div><div id="touch"></div>
+  <div id="door" class="scrim"><div class="sheet panel"></div></div><div id="help" class="scrim"><div class="sheet panel"></div></div>`;
+
+// one "page load": a fresh ui.js instance (the query string makes Bun evaluate it again) over the same localStorage
+let boots = 0;
+async function boot(gate: { open: boolean }) {
+  document.body.innerHTML = CHROME;
+  const fresh = await import(`../client/lib/ui.js?boot=${++boots}`);
+  fresh.initDock([{ id: "edit", label: "🔧", icon: "wrench", last: true, action: () => {}, active: () => false, gate: () => gate.open }]);
+  await tick();
+  const btn = () => document.querySelector('#dock button[data-toggles="edit"]') as HTMLButtonElement;
+  return { btn };
+}
+
+console.log("DOCK BOOT — a builder's unpinned wrench stays unpinned across a reload");
+{
+  localStorage.setItem("ew-dock-pins", JSON.stringify(["chat"]));   // the builder unpinned the wrench last session
+  const gate = { open: false };                                     // rights not in yet
+  const { btn } = await boot(gate);
+  gate.open = true; bus.emit("your-rights");                        // the snapshot's rights: builder, as before
+  check("the snapshot's rights are where you start, not a grant: the wrench stays unpinned", !saved().includes("edit") && btn().hidden === true,
+    `saved=${JSON.stringify(saved())} hidden=${btn().hidden}`);
+  gate.open = false; bus.emit("your-rights");
+  gate.open = true; bus.emit("your-rights");
+  check("…a real grant later in the session still pins it", saved().includes("edit") && btn().hidden === false, JSON.stringify(saved()));
+}
+console.log("DOCK BOOT — a visitor's first report is a level too");
+{
+  localStorage.setItem("ew-dock-pins", JSON.stringify(["chat", "edit"]));   // pinned (a builder somewhere, once)
+  const gate = { open: false };
+  const { btn } = await boot(gate);
+  bus.emit("your-rights");                                          // arrives: still no rights here
+  check("arriving without rights leaves the pin set alone (the wrench shows dead, as before)", saved().includes("edit") && btn().hidden === false && btn().disabled,
+    `saved=${JSON.stringify(saved())} hidden=${btn().hidden} disabled=${btn().disabled}`);
+  gate.open = true; bus.emit("your-rights");
+  gate.open = false; bus.emit("your-rights");
+  check("…a real revoke later still unpins it", !saved().includes("edit") && btn().hidden === true, JSON.stringify(saved()));
+}
+
+}
+
 S.done();

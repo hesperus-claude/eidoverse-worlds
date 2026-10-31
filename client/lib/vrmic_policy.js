@@ -1,6 +1,6 @@
 // vrmic_policy — WHEN to ask for the microphone around VR, as pure functions. vrmic.js owns the effects (the 2D step,
 // getUserMedia, the in-headset message); this file owns the decisions, so a suite can drive every state × choice
-// without a browser (tools/vrmic-policy-test.mjs).
+// without a browser (tools/vrmic-exec-test.mjs).
 //
 // Why: a browser's permission prompt cannot be relied on to show DURING an immersive session, so the question is asked
 // on the flat page before the headset goes on — once per browser, and only when the answer is actually unknown.

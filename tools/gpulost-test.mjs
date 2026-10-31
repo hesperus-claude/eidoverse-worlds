@@ -1,4 +1,7 @@
-// gpulost's decisions, headless: reload once, never loop; the XR boot flag is dropped. `node tools/gpulost-test.mjs`
+// gpulost's decisions, headless: reload once, never loop; the XR boot flag is dropped. Then render.js's lost-GPU gates:
+// once a loss is handled (globalThis.__gpuLost.fired) every GPU entry point reaches nothing, and reads the flag (no latch).
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { plugin } from 'bun';
 import { gpuLostAction, recoveryUrl, recentGpuLosses, installGpuLostRecovery, GPU_LOST_KEY, GPU_LOST_WINDOW_MS, GPU_LOST_LONG_MS } from '../client/lib/gpulost.js';
 import { suite } from "./protocol/suite.ts";
 const S = suite("gpulost");
@@ -37,4 +40,46 @@ ok('recovery drops ?xr and ?why, keeps world/name/key', recoveryUrl('https://h:1
   const d3 = { lost: Promise.resolve({ reason: 'unknown', message: 'GPU process crashed' }) }; const r3 = installGpuLostRecovery({ renderer: { backend: { device: d3 } }, win: fakeWin() });
   await new Promise((r) => setImmediate(r));
   ok("control: reason 'unknown' still fires", r3.fired === true); }
+
+// ── the lost-GPU gates (client/lib/render.js), driven against a counting renderer: flag down → entered, up → not, down → again
+GlobalRegistrator.register();
+const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
+plugin({ name: 'core-stub', setup(build) {
+  build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
+  build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
+  build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('./loadwork-stub.mjs') }));
+} });
+{ const { renderer, scene, camera } = await import('./core-stub.mjs');
+  // installed BEFORE render.js imports: render.js binds renderer.render / compileAsync at module scope
+  const n = { render: 0, compile: 0, target: 0, read: 0 };
+  const stubRender = () => { n.render++; }, stubCompile = async () => { n.compile++; };
+  renderer.render = stubRender; renderer.compileAsync = stubCompile;
+  renderer.getRenderTarget = () => { n.target++; return null; };
+  const { renderWorld, renderAside } = await import('../client/lib/render.js');
+  renderer.domElement = { toDataURL: () => { n.read++; return 'data:image/png;base64,' + 'A'.repeat(4000); } };
+  const { captureFrame } = await import('../client/lib/capture.js');
+  const zero = () => { for (const k in n) n[k] = 0; };
+  // a snapshot after a handled loss refuses (throws) rather than read the stale canvas
+  let threw = null;
+  const legs = {
+    'renderer.render': async () => { renderer.render(scene, camera); return n.render; },
+    'renderer.compileAsync': async () => { await renderer.compileAsync(scene, camera, scene); return n.compile; },
+    'renderWorld()': async () => { renderWorld(); return n.render + n.target; },
+    'renderAside()': async () => { renderAside(scene, camera); return n.render; },
+    'captureFrame()': async () => { threw = null; let url = null; try { url = captureFrame(); } catch (e) { threw = e; } return typeof url === 'string' ? n.read + n.render : 0; },
+  };
+  ok('render.js wrapped both methods (the test drives the shipping wrappers)', renderer.render !== stubRender && renderer.compileAsync !== stubCompile);
+  for (const [name, leg] of Object.entries(legs)) {
+    globalThis.__gpuLost = { fired: false }; zero();
+    const down = await leg();
+    ok(`flag down: ${name} reaches the renderer`, down > 0, `entries ${down}`);
+    globalThis.__gpuLost = { fired: true }; zero();
+    const up = await leg();
+    ok(`loss handled: ${name} reaches nothing`, up === 0 && n.read === 0 && n.render === 0, `entries ${up}`);
+    if (name === 'captureFrame()') ok('…and says why: GPU lost', /GPU lost/.test(String(threw?.message)), String(threw?.message));
+    globalThis.__gpuLost = { fired: false }; zero();
+    const again = await leg();
+    ok(`flag down again: ${name} reaches the renderer again`, again > 0, `entries ${again}`);
+  }
+  delete globalThis.__gpuLost; }
 S.done();

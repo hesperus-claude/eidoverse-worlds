@@ -24,45 +24,28 @@
  * approximation nor the corrected height — every section below fails by name.
  *
  * Run: bun run tools/seat-lifecycle-test.ts
- * (owns its scratch WORLDS_DIR; backs up and restores assets/opt/seats and
- *  mcpl/tokens.json; removes the seatprobe overlay avatar it uploads —
- *  nothing durable is touched)
+ * (scratch WORLDS_DIR, OPT_DIR and AGENT_TOKENS_PATH in one tmpdir: nothing in the repo is touched)
  */
 
-import { mkdtempSync, existsSync, renameSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
-import { createServer } from "node:net";
+import { mkdtempSync, existsSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { SeatStore } from "../server/seats.ts";
 import { HANDLERS } from "../mcpl/tools.ts";
-import { foundWorlds } from "./harness.ts";
+import { foundWorlds, freePort } from "./harness.ts";
+import { suite } from "./protocol/suite.ts";
+import { until, tryUntil } from "./protocol/wait.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = resolve(process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video"));
 const DOOR = "test-door";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗ ${name}${detail ? ` — ${detail}` : ""}\x1b[0m`); }
-};
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const { check, done } = suite("seat-lifecycle");
 const sha = async (path: string) => new Bun.CryptoHasher("sha256").update(await Bun.file(path).arrayBuffer()).digest("hex");
-async function until<T>(fn: () => T | Promise<T>, ms = 9000, step = 250): Promise<T> {
-  const end = Date.now() + ms;
-  let v = await fn();
-  while (!v && Date.now() < end) { await sleep(step); v = await fn(); }
-  return v;
-}
-
 // ---- the door is OURS or the test is over -----------------------------------
-const PORT = await new Promise<number>((res, rej) => {
-  const s = createServer();
-  s.on("error", rej);
-  s.listen(0, "127.0.0.1", () => { const p = (s.address() as any).port; s.close(() => res(p)); });
-});
+const PORT = freePort(21000);
 const BASE = `http://127.0.0.1:${PORT}`;
 try { await fetch(`${BASE}/avatars`); throw new Error(`port ${PORT} answered before our child started — refusing to run`); }
 catch (e: any) {
@@ -70,31 +53,23 @@ catch (e: any) {
   if (!/fetch failed|refused|unable to connect|ECONN/i.test(s)) throw e;
 }
 
-// ---- hygiene: nothing durable is touched ------------------------------------
-const SEATS_DIR = join(ROOT, "assets", "opt", "seats");
-const SEATS_BAK = `${SEATS_DIR}.bak-lifecycle`;
-const TOKENS = join(ROOT, "mcpl", "tokens.json");
-const SEATPROBE_VRM = join(ROOT, "assets", "opt", "eidoverse", "assets", "vrms", "seatprobe.vrm");
-let seatsBacked = false, tokensCreated = false;
-if (existsSync(SEATS_DIR)) { renameSync(SEATS_DIR, SEATS_BAK); seatsBacked = true; }
-let namedToken: string | null = null;
-if (!existsSync(TOKENS)) {
-  namedToken = "seat-lifecycle-test-bearer";
-  writeFileSync(TOKENS, JSON.stringify({ [namedToken]: { id: "seatbot" } }));
-  tokensCreated = true;
-} else console.log("  (mcpl/tokens.json exists — HTTP named-actor leg will be skipped, operator-import covers propose)");
-
-const WORLDS = mkdtempSync(join(tmpdir(), "seatlife-"));
-// the world exists before anyone joins (joining never founds one), founded by seatbot: its enrolment when this run
-// minted one, else (TRUST_NAMES) the local account its typed name is — so seatbot builds the crate as the owner
-foundWorlds(WORLDS, ["seatlab"], namedToken ? "agent:token:seatbot" : "seatbot");
-const CHILD_LOG = join(WORLDS, "server-output.txt");
+// ---- everything this run writes lives in one scratch dir ---------------------
+const SCRATCH = mkdtempSync(join(process.env.PROTOCOL_SCRATCH ?? tmpdir(), "seatlife-"));
+const WORLDS = join(SCRATCH, "worlds"), OPT = join(SCRATCH, "opt"), TOKENS = join(SCRATCH, "tokens.json");
+const PATCH = join(ROOT, "patched");
+const SEATPROBE_VRM = join(OPT, "eidoverse", "assets", "vrms", "seatprobe.vrm");
+const namedToken = "seat-lifecycle-test-bearer";
+writeFileSync(TOKENS, JSON.stringify({ [namedToken]: { id: "seatbot" } }));
+const opStore = () => new SeatStore(OPT, LIB, {}, { patchDir: PATCH });   // the operator's hand on the server's store
+// the world exists before anyone joins (joining never founds one), founded by seatbot's enrolment: it builds the crate as the owner
+foundWorlds(WORLDS, ["seatlab"], "agent:token:seatbot");
+const CHILD_LOG = join(SCRATCH, "server-output.txt");
 // process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
 // whose pid dies immediately, orphaning the real sequencer on this port where
 // it poisons the next run.
 const server = Bun.spawn([process.execPath, "run", "server/server.ts"], {
   cwd: ROOT,
-  env: { ...process.env, WORLDS_DIR: WORLDS, JOIN_TOKEN: DOOR, PORT: String(PORT), EIDOVERSE_DIR: LIB, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" },
+  env: { ...process.env, WORLDS_DIR: WORLDS, JOIN_TOKEN: DOOR, PORT: String(PORT), EIDOVERSE_DIR: LIB, OPT_DIR: OPT, PATCH_DIR: PATCH, AGENT_TOKENS_PATH: TOKENS, TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" },
   stdout: "pipe", stderr: "pipe",
 });
 // preserve the child's own words — a startup crash must be readable, not mute
@@ -104,6 +79,7 @@ for (const [stream, tag] of [[server.stdout, "out"], [server.stderr, "err"]] as 
 const bail = (why: string): never => {
   console.error(`\nFATAL: ${why}\n--- child output ---`);
   try { console.error(Bun.file(CHILD_LOG).size ? require("node:fs").readFileSync(CHILD_LOG, "utf8").slice(-3000) : "(none)"); } catch { /* none */ }
+  server.kill(); rmSync(SCRATCH, { recursive: true, force: true });
   process.exit(2);
 };
 
@@ -113,11 +89,7 @@ let watcher: WebSocket | null = null;
 const watcherEvents: any[] = [];
 
 try {
-  {
-    let ok = false;
-    for (let i = 0; i < 60 && !ok; i++) { try { ok = (await fetch(`${BASE}/avatars`)).ok; } catch { await sleep(250); } }
-    if (!ok) bail("scratch server never came up");
-  }
+  if (!await tryUntil("the scratch server answers /avatars", async () => (await fetch(`${BASE}/avatars`)).ok, { ms: 30_000 })) bail("scratch server never came up");
 
   console.log("serve-time verdicts");
   {
@@ -139,7 +111,7 @@ try {
     watcher!.onerror = () => rej(new Error("watcher ws failed"));
   });
   watcher.onmessage = (ev) => { try { const m = JSON.parse(String(ev.data)); if (m.type === "avatar-profile-updated") watcherEvents.push(m); } catch { /* not ours */ } };
-  const owned = await until(() => existsSync(join(WORLDS, "seatlab")), 6000);
+  const owned = await tryUntil("our scratch world dir is written", () => existsSync(join(WORLDS, "seatlab")), { ms: 6000 });
   if (!owned) bail(`the listener on :${PORT} did not write our scratch WORLDS_DIR — wrong door`);
   check("door ownership: the responder writes THIS run's scratch worlds dir", true);
 
@@ -151,7 +123,7 @@ try {
   // grew a patched sitting clip: every verdict read "stale (clip bytes
   // changed)" against bytes no client animates from.
   const clipRel = "eidoverse/assets/animations/sitting_normal_chair.vrma";
-  const clipFile = [join(ROOT, "patched"), join(ROOT, "assets", "opt"), LIB]
+  const clipFile = [PATCH, OPT, LIB]
     .map((d) => join(d, clipRel)).find((p) => existsSync(p))!;
   const clipSha = await sha(clipFile);
   const mkProfile = (avatar: string, avatarSha256: string, extra: Record<string, unknown> = {}) => ({
@@ -169,7 +141,7 @@ try {
     const none = await fetch(`${BASE}/seat-profile`, { method: "POST", body: JSON.stringify(goodProfile) });
     check("no token cannot propose (401)", none.status === 401, `${none.status}`);
   }
-  if (namedToken) {
+  {
     const revBefore = (await fetch(`${BASE}/avatars`)).headers.get("x-profiles-rev");
     for (const badName of ["__proto__", "constructor", "prototype"]) {
       const r = await fetch(`${BASE}/seat-profile?token=${namedToken}`, { method: "POST", body: JSON.stringify(mkProfile(badName, claudeSha)) });
@@ -184,7 +156,7 @@ try {
   }
 
   console.log("proposal");
-  if (namedToken) {
+  {
     const bad = await fetch(`${BASE}/seat-profile?token=${namedToken}`, { method: "POST", body: JSON.stringify({ nonsense: true }) });
     check("a malformed proposal is refused with a named reason (422)", bad.status === 422, `${bad.status}: ${await bad.text()}`);
     const sneaky = await fetch(`${BASE}/seat-profile?token=${namedToken}`,
@@ -193,14 +165,8 @@ try {
     const ok = await fetch(`${BASE}/seat-profile?token=${namedToken}`, { method: "POST", body: JSON.stringify(goodProfile) });
     const body = await ok.json().catch(() => null);
     check("a named actor's valid proposal lands", ok.status === 200 && body?.status === "proposed", `${ok.status} ${JSON.stringify(body)}`);
-    const ev = await until(() => watcherEvents.find((e) => e.name === "claude"));
+    const ev = await tryUntil("the claude profile broadcast", () => watcherEvents.find((e) => e.name === "claude"));
     check("avatar-profile-updated broadcast reaches connected clients, rev-bearing", !!ev && Number.isFinite(ev.rev), JSON.stringify(watcherEvents));
-  } else {
-    const store2 = new SeatStore(join(ROOT, "assets", "opt"), LIB);
-    const r = store2.importProposal(goodProfile, "lifecycle-test");
-    check("operator import proposes", r.ok === true, JSON.stringify(r));
-    const ev = await until(() => watcherEvents.find((e) => e.name === "claude"), 12000);
-    check("external write announced by the mtime watch", !!ev, JSON.stringify(watcherEvents));
   }
   {
     const roster = await (await fetch(`${BASE}/avatars`)).json() as any[];
@@ -212,7 +178,7 @@ try {
   console.log("the headless consumer, end to end");
   process.env.WORLD_TOKEN = DOOR;   // the agent's door key rides the join message, from env
   ag = new WorldAgent({ url: `ws://127.0.0.1:${PORT}/ws`, name: "seatbot", world: "seatlab",
-    avatar: "eidoverse/assets/vrms/claude.vrm", agentToken: namedToken ?? "" });
+    avatar: "eidoverse/assets/vrms/claude.vrm", agentToken: namedToken });
   await ag.connect();
   // R 10-17: the suite's names ride as placeholders (and the crate is labelled crate1: the tools take a label as an id)
   const { idAliases } = await import("./protocol/idalias.ts"); const IDS = idAliases();
@@ -231,37 +197,39 @@ try {
   const seatS = { pos: [0, 1, 0], body: { action: "sit", pose: "sitchair", anchor: "surface" } };
   const surface = await areq("set", { id: "crate1", component: "sockets", value: { seatL, seatS, seatS2: seatS } });
   check("…and a seat that authors its support plane (body.anchor: surface)", surface?.ok === true, JSON.stringify(surface?.refused ?? surface));
-  await sleep(600);
+  // the agent attaches by what it sees: wait until its view of crate1 carries all three sockets
+  const seesSeats = (a: WorldAgent) => [...a.entities.entries()].some(([id, e]: [string, any]) => e.label === "crate1" && a.socketsOf(id).length === 3);
+  await until("seatbot sees crate1's three seats", () => seesSeats(ag!));
 
   await HANDLERS.attach(ag as any, { to: "crate1", socket: "seatL" }, {} as any, "attach");
   {
-    const line = await until(() => { const l = ag!.look(); return /seated on crate1/.test(l) ? l : null; });
+    const line = await tryUntil("seatbot seated on crate1", () => { const l = ag!.look(); return /seated on crate1/.test(l) ? l : null; });
     check("legacy socket: seated, byte-identical composition (y = socket)", !!line && /ground height 1\.00m/.test(line ?? ""), line?.split("\n")[0]);
     check("legacy socket: declared, never silent", /seat approximate: legacy socket/.test(line ?? ""), line?.split("\n")[0]);
   }
 
   await HANDLERS.detach(ag as any, {}, {} as any, "detach");   // get off
-  await sleep(400);
+  await until("seatbot off the legacy seat", () => !/seated on/.test(ag!.look().split("\n")[0]));
   await HANDLERS.attach(ag as any, { to: "crate1", socket: "seatS" }, {} as any, "attach");
   {
-    const line = await until(() => { const l = ag!.look(); return /seated on crate1/.test(l) ? l : null; });
+    const line = await tryUntil("seatbot seated on crate1", () => { const l = ag!.look(); return /seated on crate1/.test(l) ? l : null; });
     check("surface socket + proposed profile: still approximate, reason names the countersign",
       /seat approximate: profile proposed — not countersigned/.test(line ?? ""), line?.split("\n")[0]);
   }
 
   console.log("countersign (operator-only, no HTTP path, reviewed revision)");
   {
-    const store2 = new SeatStore(join(ROOT, "assets", "opt"), LIB);
+    const store2 = opStore();
     const wrongRev = store2.accept("claude", "sitchair", "receipt", "op", store2.rev + 7);
     check("countersign against an unreviewed revision refuses", wrongRev.ok === false && /re-list/.test((wrongRev as any).why));
     const r = store2.accept("claude", "sitchair", "https://github.com/anima-research/eidoverse-worlds/issues/101#lifecycle", "lifecycle-test", store2.rev);
     check("operator accept at the reviewed revision succeeds", r.ok === true, JSON.stringify(r));
     const evs = watcherEvents.length;
-    const line = await until(() => { const l = ag!.look(); return /ground height 0\.79m/.test(l) ? l : null; }, 12000);
+    const line = await tryUntil("seatbot's seat corrects to 0.79", () => { const l = ag!.look(); return /ground height 0\.79m/.test(l) ? l : null; }, { ms: 12000 });
     check("the agent's seat corrects IN PLACE on the push — contact plane onto the socket plane (1 − 0.2055 → 0.79)",
       !!line, ag!.look().split("\n")[0]);
     check("…and the approximation is gone from the line", !!line && !/seat approximate/.test(line ?? ""), line?.split("\n")[0]);
-    const ev = await until(() => watcherEvents.length > evs);
+    const ev = await tryUntil("the acceptance broadcast", () => watcherEvents.length > evs);
     check("acceptance announced to every connected client", !!ev, `events=${watcherEvents.length}`);
     const roster = await (await fetch(`${BASE}/avatars`)).json() as any[];
     const claude = roster.find((e) => e.name === "claude");
@@ -277,7 +245,7 @@ try {
     const claudeBytes = new Uint8Array(await Bun.file(join(LIB, "eidoverse/assets/vrms/claude.vrm")).arrayBuffer());
     const up = await fetch(`${BASE}/upload?as=avatar&name=seatprobe&token=${DOOR}`, { method: "POST", body: claudeBytes });
     check("seatprobe avatar uploaded to the scratch overlay", up.status === 200, `${up.status}`);
-    const store2 = new SeatStore(join(ROOT, "assets", "opt"), LIB);
+    const store2 = opStore();
     const probeSha = await sha(SEATPROBE_VRM);
     const pr = store2.importProposal(mkProfile("seatprobe", probeSha), "lifecycle-test");
     const ac = pr.ok ? store2.accept("seatprobe", "sitchair", "receipt", "lifecycle-test", store2.rev) : pr;
@@ -286,9 +254,9 @@ try {
     probeAg = new WorldAgent({ url: `ws://127.0.0.1:${PORT}/ws`, name: "probebot", world: "seatlab",
       avatar: "eidoverse/assets/vrms/seatprobe.vrm" });
     await probeAg.connect();
-    await sleep(400);
+    await until("probebot sees crate1's three seats", () => seesSeats(probeAg!));
     await HANDLERS.attach(probeAg as any, { to: "crate1", socket: "seatS2" }, {} as any, "attach");
-    const seated = await until(() => { const l = probeAg!.look(); return /ground height 0\.79m/.test(l) ? l : null; }, 12000);
+    const seated = await tryUntil("probebot seated at 0.79", () => { const l = probeAg!.look(); return /ground height 0\.79m/.test(l) ? l : null; }, { ms: 12000 });
     check("probebot seats corrected under its accepted profile", !!seated, probeAg.look().split("\n")[0]);
 
     // now the bytes change: valid GLB magic, different sha
@@ -296,7 +264,7 @@ try {
     mutated.set(claudeBytes); mutated[claudeBytes.length] = 0x00;
     const re = await fetch(`${BASE}/upload?as=avatar&name=seatprobe&token=${DOOR}`, { method: "POST", body: mutated });
     check("seatprobe bytes re-uploaded (avatar-updated fires)", re.status === 200, `${re.status}`);
-    const line = await until(() => { const l = probeAg!.look(); return /seat approximate: profile (update pending|stale \(avatar bytes changed\))/.test(l) ? l : null; }, 12000);
+    const line = await tryUntil("probebot's correction stops", () => { const l = probeAg!.look(); return /seat approximate: profile (update pending|stale \(avatar bytes changed\))/.test(l) ? l : null; }, { ms: 12000 });
     check("the correction STOPS when the event lands — pending, then stale, never the old value",
       !!line, probeAg.look().split("\n")[0]);
     const roster = await (await fetch(`${BASE}/avatars`)).json() as any[];
@@ -306,7 +274,7 @@ try {
 
   console.log("stale and unsupported are verdicts, not silence");
   {
-    const store2 = new SeatStore(join(ROOT, "assets", "opt"), LIB);
+    const store2 = opStore();
     // aletheia's profile deliberately carries CLAUDE's avatar hash: judged
     // against aletheia's actual bytes it must serve stale — an accepted
     // record can never outlive its bytes.
@@ -315,10 +283,10 @@ try {
     const p2 = store2.importProposal({ avatar: "aporia", avatarSha256: await sha(join(LIB, "eidoverse/assets/vrms/aporia.vrm")),
       pose: "sitchair", unsupported: { refusal: "no humanoid mapping — no seat landmark derivable" }, review: { status: "proposed" } }, "lifecycle-test");
     check("stale/unsupported fixtures installed", p1.ok === true && a1.ok === true && p2.ok === true, JSON.stringify({ p1, a1, p2 }));
-    const roster = await until(async () => {
+    const roster = await tryUntil("aletheia serves stale", async () => {
       const r = await (await fetch(`${BASE}/avatars`)).json() as any[];
       return r.find((e) => e.name === "aletheia")?.seat?.status === "stale" ? r : null;
-    }, 12000) as any[] | null;
+    }, { ms: 12000 }) as any[] | undefined;
     const aletheia = roster?.find((e) => e.name === "aletheia");
     const aporia = roster?.find((e) => e.name === "aporia");
     check("accepted-but-bytes-changed serves stale, naming which bytes", aletheia?.seat?.status === "stale" && aletheia?.seat?.which === "avatar", JSON.stringify(aletheia?.seat));
@@ -326,13 +294,13 @@ try {
     check("an unsupported rig serves its refusal", aporia?.seat?.status === "unsupported" && /humanoid/.test(aporia?.seat?.refusal ?? ""), JSON.stringify(aporia?.seat));
   }
 
-  console.log("dismount stamping unchanged (#18/#98 neighborhood)");
+  console.log("dismount: a detach of my own (the authority's let-go, vacated.at, is r10-check's)");
   {
     await HANDLERS.detach(ag as any, {}, {} as any, "detach");
     // the check reads the HEADER line only: probebot is still seated nearby,
     // legitimately declaring its stale seat in the People section
-    const header = await until(() => { const h = ag!.look().split("\n")[0]; return !/seated on/.test(h) ? h : null; });
-    check("dismount clears the seat and the controller's own truth returns, exactly as on main",
+    const header = await tryUntil("seatbot off its seat", () => { const h = ag!.look().split("\n")[0]; return !/seated on/.test(h) ? h : null; });
+    check("dismount clears the seat and its correction: the header is my own track again (no `at` moved me)",
       !!header && /at \(0\.0, 0\.0\), ground height 0\.00m/.test(header ?? "") && !/seat approximate/.test(header ?? ""), header ?? "");
   }
 
@@ -341,13 +309,8 @@ try {
   try { probeAg?.close(); } catch { /* teardown */ }
   try { watcher?.close(); } catch { /* teardown */ }
   server.kill();
-  await sleep(300);
-  rmSync(SEATS_DIR, { recursive: true, force: true });
-  if (seatsBacked) renameSync(SEATS_BAK, SEATS_DIR);
-  if (tokensCreated) rmSync(TOKENS, { force: true });
-  rmSync(SEATPROBE_VRM, { force: true });
-  rmSync(WORLDS, { recursive: true, force: true });
+  await server.exited;
+  rmSync(SCRATCH, { recursive: true, force: true });
 }
 
-console.log(fail ? `\n\x1b[31m${fail} failure(s), ${pass} passed\x1b[0m` : `\n\x1b[32mall ${pass} checks passed\x1b[0m`);
-process.exit(fail ? 1 : 0);
+done();

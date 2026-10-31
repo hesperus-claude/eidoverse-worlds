@@ -1,15 +1,20 @@
 // bun tools/structure-threshold-test.ts — the agent half of structure routing: WorldAgent ticks and the move tool over
 // real plans, renderer/server-free. The planner's own rows are tools/structure-route-test.ts's table; walks are checked
-// against the oracle in tools/structure-oracle.ts.
+// against the oracle in tools/structure-oracle.ts. Also (merged): the authored-plan cache through the agent's fold
+// (from route-preparation-test) and real bodies over transformed structures' support (from structure-route-support-test).
 import { noWorldUrl } from "./no-world.ts";
-import { strict as assert } from "node:assert";
-import { planStructure, localizePoint } from "../shared/structure.js";
+import { planStructure, localizePoint, prepareRouteLocal } from "../shared/structure.js";
+import { routeGeometryFor } from "../shared/structure-route.js";
+import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../shared/structure_edit.js";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
 import { handleTool } from "../mcpl/tools.ts";
 import { valid, walk, type P } from "./structure-oracle.ts";
+import { agentOnDoor } from "./agent-scratch.ts";
+import { qFromYaw } from "../shared/rot.js";
+import { suite } from "./protocol/suite.ts";
 process.env.AGENT_BODY_ENGINE = "verlet";
-let checks = 0;
-function check(ok: unknown, name: string) { assert.ok(ok, name); checks++; console.log("✓ " + name); }
+const S = suite("structure-threshold");
+const check = (ok: unknown, name: string, detail?: unknown) => S.check(name, ok, detail);
 const house = { levels: [{ y: 0,
   tiles: Array.from({ length: 8 }, (_, i) => [i % 4, Math.floor(i / 4)]),
   walls: [...Array.from({ length: 4 }, (_, x) => [0,x,0]), ...Array.from({ length: 4 }, (_, x) => [0,x,2]),
@@ -38,6 +43,185 @@ function standOn(a: WorldAgent, entity: string, level: number, height: number) {
   (a as any).walkSupport=()=>({kind:"floor",height,entity,level});
 }
 try {
+  // these run FIRST: after the foreign-wall block below, process-wide headless state turns two of their rows red (undiagnosed)
+  // ============================================================ the authored-plan cache (from route-preparation-test)
+  // its boundaries through real editor operations and the received-entry fold; the cap rows are tools/structure-route-test.ts's
+  console.log("\nSTRUCTURE — the authored-plan cache through the agent's fold");
+  {
+const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
+const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
+const agent=new WorldAgent({ url: noWorldUrl(), name:"cache-test",avatar:"",world:"cache-test"}); agents.push(agent);
+(agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test
+// the agent folds the authority's log itself, so each old hand-written entry is the current write doing the same (spawn →
+// create, comp → set/delete a component, place → set transform) through the real door (tools/agent-scratch.ts agentOnDoor)
+const door=agentOnDoor(agent,"route-prep");
+async function receive(verb:string,args:any) {
+ const a=JSON.parse(JSON.stringify(args));
+ const now=agent.entities.get(a.id) as any;
+ const tf=(r:any)=>{const s=r.scale??now?.scale??1;return {pos:r.pos??now?.pos??[0,0,0],q:qFromYaw(r.yaw??now?.yaw??0),scale:[s,s,s]};};
+ let r:any;
+ if(verb==="spawn"){
+  if(now){
+   // the authority never reuses an id: the old thing is deleted and the door refuses the id's return ("reused"), structure or not
+   const gone=await door.act("delete",{id:a.id});
+   if(!gone.ok) throw new Error("delete refused: "+JSON.stringify(gone.refused));
+   r=door.call("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
+   if(r.ok||r.refused?.code!=="reused") throw new Error("the authority let an id be reused: "+JSON.stringify(r));
+   return {verb,args:a};
+  }
+  r=await door.act("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
+ } else if(verb==="comp") r=await door.act(a.data===null?"delete":"set",a.data===null?{id:a.id,component:a.type}:{id:a.id,component:a.type,value:a.data});
+ else if(verb==="place") r=await door.act("set",{id:a.id,component:"transform",value:tf(a)});
+ else throw new Error("no current write for old "+verb);
+ if(!r.ok) throw new Error(verb+" refused: "+JSON.stringify(r.refused));
+ return {verb,args:a};
+}
+/** The same value: the fold hands the agent a copy of what was written, never the writer's object. */
+const same=(x:any,y:any)=>JSON.stringify(x)===JSON.stringify(y);
+const data=()=>agent.entities.get("house")?.structure;
+const cached=(d:any)=>(agent as any).planOf(d);
+async function planned(target:[number,number]) {
+ const promise=agent.walkTo(...target,true,1000,0);
+ const result={refusal:agent.walkRefusal,legs:(agent as any).legs.length,target:(agent as any).target};
+ agent.stop();await promise;return result;
+}
+/** An accepted straight walk: no refusal, no legs, and the destination as its target. */
+const straight=(r:any,[x,z]:[number,number])=>r.refusal===null&&r.legs===0&&r.target?.x===x&&r.target?.z===z;
+/** An accepted detour: no refusal, and waypoints before the destination. */
+const detour=(r:any)=>r.refusal===null&&r.legs>0&&!!r.target;
+{
+
+ await receive("spawn",{id:"house",lib:"fixture.glb",pos:[0,0,0],yaw:0});
+ await receive("comp",{id:"house",type:"structure",data:base});
+ const original=data(), initial=cached(original), originalJSON=JSON.stringify(original);
+ check(cached(original)===initial,"same received component identity reuses its pure local plan");
+ const geometry=routeGeometryFor(initial);
+ check(routeGeometryFor(initial)===geometry,"same immutable plan reuses wall spans and terrain topology");
+ const low=prepareRouteLocal(initial,terrain(0)), high=prepareRouteLocal(initial,terrain(4));
+ check(low!==high&&!low.clear(.5,.5,1.5,.5)&&high.clear(.5,.5,1.5,.5),"same cached geometry gets fresh terrain/support checkers");
+
+ const edge={axis:1,x:1,z:0}, cell={x:0,z:0};
+ const edits:[string,(d:any)=>any][]=[
+  ["add wall",d=>addWall(d,{axis:0,x:0,z:0})],
+  ["remove wall",d=>removeWall(d,edge)],
+  ["door",d=>setAperture(d,edge,"door")],
+  ["window",d=>setAperture(d,edge,"window")],
+  ["clear aperture",d=>setAperture(setAperture(d,edge,"door"),edge,null)],
+  ["tile/half",d=>setTile(d,cell,"floor","A")],
+  ["remove tile",d=>removeTile(d,cell)],
+  ["draw room",d=>drawRoom(d,cell,{x:1,z:1})],
+  ["erase room",d=>eraseRoom(d,cell,cell)],
+  ["label",d=>labelCell(d,cell,"kitchen")],
+ ];
+ for(const [name,edit] of edits){
+  const next=edit(original);
+  check(next!==original&&JSON.stringify(original)===originalJSON,name+": editor returns new identity and preserves the old value");
+  const previous=data();
+  const packet=await receive("comp",{id:"house",type:"structure",data:next});
+  check(data()!==previous&&same(data(),packet.args.data),name+": received comp replaces data identity in the actual agent fold");
+  check(cached(data())!==initial,name+": changed component gets a different plan");
+ }
+ const door=setAperture(base,edge,"door");
+ await receive("comp",{id:"house",type:"structure",data:door});
+ const doorPlan=cached(data());
+ check(prepareRouteLocal(doorPlan,terrain()).clear(.5,.5,1.5,.5),"replacement opening invalidates old blocking geometry");
+ // the editor clearing that door: the wall it leaves blocks again
+ await receive("comp",{id:"house",type:"structure",data:setAperture(door,edge,null)});
+ const clearedPlan=cached(data());
+ check(clearedPlan!==doorPlan&&!prepareRouteLocal(clearedPlan,terrain()).clear(.5,.5,1.5,.5),"clearing an existing door through the editor closes the opening");
+ await receive("comp",{id:"house",type:"structure",data:door});
+ await receive("comp",{id:"house",type:"structure",data:base}); // UI undo: send the previous value through comp
+ const undone=data(), undonePlan=cached(undone);
+ check(undonePlan!==doorPlan&&!prepareRouteLocal(undonePlan,terrain()).clear(.5,.5,1.5,.5),"undo restores the prior wall without reusing the changed geometry");
+
+ agent.pos={x:.5,y:0,z:.5};
+ check(detour(await planned([1.5,.5])),"cached wall produces a real walk detour");
+ await receive("place",{id:"house",pos:[10,0,0]});
+ check(same(data(),undone)&&cached(data())===undonePlan,"entity translation preserves authored-cache identity");
+ check(straight(await planned([1.5,.5]),[1.5,.5]),"new walk uses fresh translation rather than an old transformed checker");
+ await receive("place",{id:"house",pos:[10,1,-5],yaw:Math.PI/2,scale:2});
+ (agent as any).terrain={heightAt:()=>1};agent.pos={x:11,y:1,z:-6};
+ check(cached(data())===undonePlan&&detour(await planned([11,-8])),"same geometry uses fresh rotation, scale and terrain origin");
+ (agent as any).terrain={heightAt:()=>8};
+ check(straight(await planned([11,-8]),[11,-8]),"later walk uses changed terrain height with the same authored plan");
+ // walkTo plans each received revision once: a second walk over the same component reads none of its data again
+ let reads=0;
+ const counted={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}]};
+ const watched={get levels(){reads++;return counted.levels;}};
+ agent.entities.set("watched",{id:"watched",model:"",pos:[20,0,0],yaw:0,scale:1,structure:watched} as any);
+ (agent as any).terrain={heightAt:()=>1};agent.pos={x:20.5,y:1,z:.5};
+ check(detour(await planned([21.5,.5]))&&reads>0,"a walk past a new revision plans it");
+ const readsAfterFirst=reads;
+ check(detour(await planned([21.5,.5]))&&reads===readsAfterFirst,"a second walk over the same revision reads none of it again");
+ agent.entities.delete("watched");
+ await receive("comp",{id:"house",type:"structure",data:null});
+ agent.pos={x:11,y:1,z:-6};
+ { const r=await planned([11,-8]); check(data()===undefined&&straight(r,[11,-8]),"component removal drops the obstacle rather than reviving cached data",{data:data(),...r}); }
+ await receive("comp",{id:"house",type:"structure",data:base});
+ check(data()!==undone&&cached(data())!==undonePlan,"re-attach creates its own received revision");
+ for(const primitive of ["junk",true,7,null]){
+  const first=cached(primitive);
+  check(first.levels.length===0&&cached(primitive)!==first,"malformed primitive "+JSON.stringify(primitive)+" plans empty, afresh each time (uncached)");
+ }
+ await receive("spawn",{id:"house",lib:"fixture.glb",pos:[0,0,0]});
+ check(data()===undefined,"same-id spawn replacement does not inherit cached structure data");
+ }
+  }
+
+  // ============================================================ real bodies over transformed structures' support (from structure-route-support-test)
+  // the support mode, the band and the crossing height in world metres; legs drive the real tick
+  console.log("\nSTRUCTURE — real bodies over transformed structures");
+  {
+const upper={y:3,tiles:[[0,0],[2,0]],walls:[],apertures:[]};
+const ground={y:0,tiles:[[0,0],[1,0],[2,0]],walls:[[1,1,0]],apertures:[[1,1,0,"door"]]};
+const basement={y:-3,tiles:[[0,0]],walls:[],apertures:[]};
+const wall={levels:[{y:0,tiles:[],walls:[[1,1,0]],apertures:[]}]};
+
+function bodyS(entity:any,height:(x:number,z:number)=>number,from:[number,number]) {
+ const a=new WorldAgent({ url: noWorldUrl(), name:"walker",avatar:"",world:"support-test"});agents.push(a);a.joined=true;
+ a.entities.set(entity.id,entity);(a as any).terrain={heightAt:height};
+ a.pos={x:from[0],y:height(...from),z:from[1]};return a;
+}
+function transformS(e:any,x:number,z:number):[number,number] {
+ const c=Math.cos(e.yaw),s=Math.sin(e.yaw);
+ return [e.pos[0]+(x*c+z*s)*e.scale,e.pos[2]+(-x*s+z*c)*e.scale];
+}
+{
+
+ for(const e of [
+  {id:"world",pos:[0,0,0],yaw:0,scale:1,structure:{levels:[basement,ground]}},
+  {id:"shift",pos:[10,2,-5],yaw:Math.PI/3,scale:2,structure:{levels:[ground,basement]}},
+ ]) {
+  const a=bodyS(e,()=>e.pos[1],transformS(e,.5,.5));
+  const r=await walk(a,transformS(e,3.5,.5));
+  check(r.arrived&&r.points.every(p=>p.y===e.pos[1]),"real terrain-mode body exits ground above basement with translated/scaled frame");
+ }
+ const e={id:"overhead",pos:[10,1,-5],yaw:.6,scale:2,structure:{levels:[upper]}};
+ const a=bodyS(e,()=>1,transformS(e,.5,.5));
+ check((await walk(a,transformS(e,2.5,.5))).arrived,"real ground body walks beneath translated/scaled overhead floor without confinement");
+
+ // the obstruction band is 0.5 WORLD metres: at scale 2, y 0.4 the wall's base is 0.6 m up, above the band
+ const raised={id:"band",pos:[0,.4,0],yaw:0,scale:2,structure:wall};
+ const b=bodyS(raised,()=>0,[0,1]);
+ const r=await walk(b,[4,1]);
+ check(r.arrived&&r.points.every(p=>Math.abs(p.z-1)<1e-10),"world-scaled step band leaves a 0.6m raised wall above a terrain walk");
+
+ const sole={id:"sole",pos:[0,0,0],yaw:0,scale:1,structure:{levels:[upper]}};
+ const soleBody=bodyS(sole,()=>0,[.5,.5]);soleBody.pos.y=3.1;
+ const soleWalk=await walk(soleBody,[2.5,.5]);
+ check(!soleWalk.arrived && /no path across this floor connects the start to the destination/.test(String((soleBody as any).walkRefusal)) && soleBody.pos.y===3.1,"a body on a sole raised floor stands on it, and a walk across the floor's gap is refused rather than taken on the terrain, for its own reason: the hole divides the floor");
+ const slope={id:"slope",pos:[10,2,-5],yaw:Math.PI/2,scale:2,structure:wall};
+ const highAtCross=(wx:number,wz:number)=>{const [lx]=localizePoint(slope,wx,0,wz);return 2+8*lx;};
+ const c=bodyS(slope,highAtCross,transformS(slope,0,.5));
+ // walked, not run: shared/mover.js refuses a stride rising over a step (0.8 m); a run's stride here rises 1.6 m, a walk's 0.62 m
+ const high=await walk(c,transformS(slope,2,.5),{run:false});
+ check(high.arrived&&high.points.every(p=>Math.abs(localizePoint(slope,p.x,p.y,p.z)[2]-.5)<1e-8),
+   "transformed real body uses terrain at wall crossing rather than origin height",{arrived:high.arrived,refusal:(c as any).walkRefusal});
+ }
+  }
+
+  // ============================================================ WorldAgent ticks and the move tool over real plans
+  console.log("\nSTRUCTURE — the agent half of routing");
   for (const [label, e] of [["base",entity()],["transformed",entity(house,"house",[10,0,-5],Math.PI/3,2)]] as const) {
     const a=agent(); a.entities.set(e.id,e);
     const from=worldPoint(e,[3.5,3]), to=worldPoint(e,[3.5,.5]); a.pos.x=from[0]; a.pos.z=from[1];
@@ -198,6 +382,6 @@ try {
   check(!nowhere.arrived && stuck.walkRefusal!.startsWith("the body stands in a wall, and from beside it:\n") && stuck.walkRefusal!.includes("[vault]")
     && stuck.walkRefusal!.includes("\nfrom another side: "),
     "a body in a wall with no route from either side gives each side's reason, each on its own line: "+stuck.walkRefusal);
-  console.log("PASS " + checks + " threshold routing checks");
+
 } finally { for (const a of agents) a.close(); }
-process.exit(0);
+S.done();

@@ -8,8 +8,9 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ROOT, foundWorlds, freePort, sleep, saysIn } from "./harness.ts";
+import { ROOT, foundWorlds, freePort, saysIn } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
+import { tryUntil } from "./protocol/wait.ts";
 
 const BRIDGE = process.env.CHATBRIDGE ?? "tools/chatbridge/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-chatbridge-"));
@@ -18,10 +19,11 @@ const PORT = freePort(9720);
 const srv = Bun.spawn([process.execPath, "server/server.ts"], { cwd: ROOT,
   env: { ...process.env, PORT: String(PORT), WORLDS_DIR: W, JOIN_TOKEN: "", SKIP_OPT_SWEEP: "1" }, stdout: "ignore", stderr: "ignore" });
 let bridge: Bun.Subprocess<"pipe", "pipe", "pipe"> | null = null;
-const done = (code: number) => { try { bridge?.kill(); } catch {} try { srv.kill(); } catch {} rmSync(W, { recursive: true, force: true }); process.exit(code); };
-let up = false;
-for (let i = 0; i < 80 && !up; i++) { try { up = (await fetch(`http://127.0.0.1:${PORT}/worlds`)).status < 500   /* up = the door answers; with JOIN_TOKEN /worlds is 401 (public reads gated 10-14) */; } catch {} if (!up) await sleep(150); }
-if (!up) { console.error("scratch server never came up"); done(2); }
+const cleanup = () => { try { bridge?.kill(); } catch {} try { srv.kill(); } catch {} rmSync(W, { recursive: true, force: true }); };
+// up = the door answers; with JOIN_TOKEN /worlds is 401 (public reads gated 10-14)
+if (!await tryUntil("the scratch server answers", async () => (await fetch(`http://127.0.0.1:${PORT}/worlds`)).status < 500, { ms: 20_000 })) {
+  console.error("scratch server never came up"); cleanup(); process.exit(2);
+}
 
 const join_ = (id: string) => new Promise<{ ws: WebSocket; msgs: any[] }>((res, rej) => {
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`); const msgs: any[] = [];
@@ -36,17 +38,19 @@ const check = (what: string, c: unknown, detail?: unknown) => S.check(what, c, d
 
 const alice = await join_("alice");
 say(alice, "before the bridge (history: must not be mirrored)");
-await sleep(300);
+await tryUntil("the history line is in the log", () => saysIn(alice.msgs).some((x) => /before the bridge/.test(x.text)));
 bridge = Bun.spawn([process.execPath, BRIDGE], { cwd: ROOT,
   env: { ...process.env, DRY_RUN: "1", WORLD_URL: `ws://127.0.0.1:${PORT}/ws`, WORLD_NAME: "commons", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" },
   stdin: "pipe", stdout: "pipe", stderr: "pipe" });
 let out = "";
 (async () => { for await (const c of bridge!.stdout) out += Buffer.from(c).toString(); })();
-for (let i = 0; i < 40 && !/joined "commons"/.test(out); i++) await sleep(100);
+await tryUntil("the bridge joins", () => /joined "commons"/.test(out));
 say(alice, "hello from the world");
 bridge.stdin.write("Ann: hi from discord\n"); bridge.stdin.flush();
-for (let i = 0; i < 40 && !(/→ discord \[alice\]/.test(out) && saysIn(alice.msgs).some((x) => x.actor === "discord")); i++) await sleep(100);
-await sleep(500);   // room for a wrongly echoed line to show up
+await tryUntil("both directions crossed", () => /→ discord \[alice\]/.test(out) && saysIn(alice.msgs).some((x) => x.actor === "discord"));
+// the fence: the bridge mirrors the log in order, so a wrongly echoed own say would print before this line does
+say(alice, "fence after the discord line");
+await tryUntil("the fence line reaches Discord", () => /→ discord \[alice\]: fence after the discord line/.test(out));
 
 console.log("\nchatbridge — world ⇄ Discord (DRY_RUN) on a world\n");
 check('the bridge joins (replica) embodied, as "discord"', /joined "commons" as discord/.test(out), out.slice(-300));
@@ -60,8 +64,8 @@ check("nothing was refused", !/refused/.test(out), out.slice(-300));
 const N = 25, burst = Array.from({ length: N }, (_, i) => `Bo: burst ${i}`);
 bridge.stdin.write(burst.join("\n") + "\n"); bridge.stdin.flush();
 const landed = () => saysIn(alice.msgs).filter((x) => x.actor === "discord" && /^Bo: burst \d+$/.test(x.text)).map((x) => x.text);
-for (let i = 0; i < 400 && landed().length < N; i++) await sleep(100);
+await tryUntil("the whole burst lands", () => landed().length >= N, { ms: 40_000 });
 check(`a burst of ${N} Discord lines all enter the world, in order`, JSON.stringify(landed()) === JSON.stringify(burst), `${landed().length} landed: ${landed().slice(-3).join(" | ")}`);
 check("…none of them refused on the way", !/refused/.test(out), out.split("\n").filter((l) => /refused/.test(l)).slice(0, 3).join(" | "));
-console.log(`\n${S.pass} passed, ${S.fail} failed`);
-done(S.fail ? 1 : 0);
+cleanup();
+S.done();

@@ -8,6 +8,8 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scratchSequencer, freePort, ROOT } from "./harness.ts";
+import { until } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
 const pair = generateKeyPairSync("ed25519");
 const publicKey = pair.publicKey.export({ type: "spki", format: "der" });
@@ -22,7 +24,8 @@ const visitorToken = `aid1.${payload}.${sign(null, Buffer.from(`aid1.${payload}`
 const registry = {
   "artie-token": { id: "artie-kube", name: "Artie (kube)", worlds: ["*"], create: true },
   "listener-token": { id: "listener", name: "Listener", worlds: ["*"], create: true },
-  "other-artie-token": { id: "artie-kube", name: "Other credential" },
+  // a case-duplicate id proves nobody, at the world and so at the door (server/auth.ts, 10-28)
+  "dup-token": { id: "Twin", name: "Twin" }, "dup-token-2": { id: "twin", name: "Other twin" },
 };
 const authEnv = { HN_ISSUER_KEY: issuer, HN_ISS: "issuer.example", HN_AUD: "eidoverse", HN_REQUIRE_LOGIN: "0" };
 const serverEnv: Record<string, string> = { ...authEnv, SKIP_OPT_SWEEP: "1" };
@@ -50,20 +53,8 @@ const door = h.track(Bun.spawn([process.execPath, "mcpl/net-server.ts"], {
     MCPL_TOKENS: tokenPath, MCPL_TOKENS_EXAMPLE: examplePath, MCPL_STATE: statePath },
   stdout: Bun.file(join(h.SCRATCH, "door.log")), stderr: Bun.file(join(h.SCRATCH, "door.stderr.log")),
 }));
-let passed = 0;
-function check(name: string, ok: unknown) {
-  if (!ok) throw new Error(`FAIL: ${name}`);
-  console.log(`PASS ${name}`); passed++;
-}
-async function until(name: string, probe: () => unknown | Promise<unknown>) {
-  const deadline = Date.now() + 8000;
-  while (Date.now() < deadline) {
-    if (door.exitCode !== null) throw new Error(`door exited ${door.exitCode}`);
-    if (await probe()) return;
-    await h.sleep(20);
-  }
-  throw new Error(`timeout: ${name}`);
-}
+const S = suite("mention-delivery"), { ok, done } = S;
+const check = (name: string, cond: unknown, detail?: unknown) => ok(cond, name, detail);
 const hosts: Host[] = [];
 class Host {
   ws: WebSocket;
@@ -83,6 +74,8 @@ class Host {
         } });
       }
     };
+    // a closed socket answers every request still waiting, so a session the door ended fails fast, not at its timeout
+    this.ws.onclose = () => { for (const [, answer] of this.pending) answer({ error: { closed: true } }); this.pending.clear(); };
   }
   send(body: any) { this.ws.send(JSON.stringify({ jsonrpc: "2.0", ...body }) + "\n"); }
   request(method: string, params: any = {}): Promise<any> {
@@ -94,7 +87,7 @@ class Host {
     });
   }
   async init() {
-    await until("host socket open", () => this.ws.readyState === WebSocket.OPEN);
+    await until("host socket open", () => this.ws.readyState === WebSocket.OPEN, { ms: 8000 });
     await this.request("initialize", { protocolVersion: "2024-11-05", clientInfo: { name: "mention-test", version: "1" },
       capabilities: { experimental: { mcpl: { version: "0.5" } } } });
     this.send({ method: "notifications/initialized" });
@@ -102,7 +95,7 @@ class Host {
     return this;
   }
   find(text: string) { return this.incoming.find((m) => m.content.some((c: any) => c.text?.includes(text))); }
-  async message(text: string) { await until(text, () => this.find(text)); return this.find(text); }
+  message(text: string) { return until(text, () => this.find(text), { ms: 8000 }); }
   async tool(name: string, args: any) {
     const result = await this.request("tools/call", { name, arguments: args });
     if (result.isError) throw new Error(JSON.stringify(result));
@@ -111,7 +104,7 @@ class Host {
   say(text: string) { return this.tool("say", { text }); }
   async close() {
     this.ws.close();
-    await until("host socket closed", () => this.ws.readyState === WebSocket.CLOSED);
+    await until("host socket closed", () => this.ws.readyState === WebSocket.CLOSED, { ms: 8000 });
   }
 }
 
@@ -119,12 +112,15 @@ try {
   await until("owned door ready", async () => {
     try { return (await (await fetch(`http://127.0.0.1:${port}/healthz`)).text()).trim() === `ok ${h.NONCE}`; }
     catch { return false; }
-  });
+  }, { ms: 8000 });
   let listener = await new Host("listener-token").init();
   const artie = await new Host("artie-token").init();
+  let twinSaid = "";
+  try { await new Host("dup-token").init(); twinSaid = "admitted"; } catch (error) { twinSaid = String(error); }
+  check("a case-duplicate enrolment id proves nobody at the door: its session is refused or closed", /-32001|"closed":true/.test(twinSaid), twinSaid);
   await artie.say("legacy-name-marker");
   const legacy = await listener.message("legacy-name-marker");
-  check("speech uses the admitted credential despite a duplicate registry id", legacy.author.name === "Artie (kube)");
+  check("speech carries the admitted credential's display name", legacy.author.name === "Artie (kube)");
   check("rendered speech retains the id prefix", legacy.content[0].text === "artie-kube: legacy-name-marker");
 
   await listener.say("@Visitor timestamp-short-marker");
@@ -176,21 +172,20 @@ try {
 
   writeFileSync(tokenPath, "{");
   const refused = new Host("artie-token");
-  await until("refused socket open", () => refused.ws.readyState === WebSocket.OPEN);
+  await until("refused socket open", () => refused.ws.readyState === WebSocket.OPEN, { ms: 8000 });
   let refusal = "";
   try { await refused.request("initialize", { capabilities: {}, clientInfo: { name: "refused-test", version: "1" } }); }
   catch (error) { refusal = String(error); }
   check("malformed registry still refuses legacy authentication", refusal.includes('"code":-32001'));
   await artie.say("after-failed-reload-marker");
   check("refused reload cannot erase an active author's name", (await listener.message("after-failed-reload-marker")).author.name === "Artie (kube)");
-  console.log(`\n${passed} display-name delivery checks passed`);
 } catch (error) {
+  check("the sequence ran to its end", false, String(error));
   console.error(readFileSync(join(h.SCRATCH, "door.stderr.log"), "utf8"));
   console.error(readFileSync(join(h.SCRATCH, "door.log"), "utf8"));
   h.record("failure.jsonl", { error: String(error) });
-  process.exitCode = 1;
-  throw error;
 } finally {
   for (const host of hosts) host.ws.close();
-  await h.cleanup();
 }
+await h.cleanup(S.fail ? 1 : 0);
+done();

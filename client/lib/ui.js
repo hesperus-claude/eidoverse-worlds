@@ -655,7 +655,7 @@ export function initDock(entries) {
   // AUTO-PIN ON THE GRANT, only on the closed->open edge, so a manual unpin still
   // wins. A builder who was ALREADY one at boot is not re-pinned: rights ride the
   // snapshot, which lands later, so the FIRST report is the starting level, not
-  // an edge (tools/dock-boot-test.ts).
+  // an edge (tools/dock-test.ts).
   bus.on('your-rights', () => {
     for (const e of dockEntries) {
       if (!e.action || !e.gate) continue;

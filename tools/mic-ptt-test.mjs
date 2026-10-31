@@ -1,7 +1,7 @@
 // Push-to-talk: EXECUTE the gate decision under both regimes. Not a source
 // grep — the stubs stop at the browser boundary (AudioContext, bus, net) and
 // the code under test is the shipped code, same doctrine as
-// micstate-exec-test.mjs and for the same reason: every prior mic defect in
+// micstate-test.mjs and for the same reason: every prior mic defect in
 // this repo passed source-level checks and failed only when run.
 //
 // The observable is micgate's gateOpenness() — the gate's INTENT, the same
@@ -25,7 +25,7 @@ mock.module(fileURLToPath(new URL('../client/lib/net.js', import.meta.url)), () 
   sendTyping: () => { typed++; },
   say: () => {}, sendRequest: async () => ({ ok: true }), net: {},   // for mictoggle.js's graph (the stuck-key rows run it)
 }));
-// Full enough for the gate GRAPH to build (micstate-exec-test's stub lacks
+// Full enough for the gate GRAPH to build (micstate-test.mjs's "none" context lacks
 // createGain/createMediaStreamDestination, so its gate is always unavailable
 // — fine for its questions, blinding for these: an unbuilt gate reports
 // openness 0 forever and every assertion below would vacuously pass).

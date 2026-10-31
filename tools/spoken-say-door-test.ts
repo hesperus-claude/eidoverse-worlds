@@ -7,20 +7,17 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds, saysIn } from "./harness.ts";
+import { foundWorlds, freePort, saysIn } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
+import { until } from "./protocol/wait.ts";
 
-// Owned ports: derived from pid so parallel CI runs don't collide; ownership is
-// verified by the world's own snapshot handshake below (a foreign listener would
-// not speak the join protocol).
-const WPORT = 8800 + (process.pid % 150);
-const MPORT = WPORT + 150;
+const WPORT = freePort(8800), MPORT = freePort(11800);
+const NONCE = `spokensay-${process.pid}-${Date.now()}`;   // the door's /healthz echoes it: the responder is our child
 const worldsDir = mkdtempSync(join(tmpdir(), "eido-spokensay-"));
 foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
 // a scratch enrolment both doors honour ("dev-token" is in the tracked example, which the registry refuses anywhere)
 const tokensPath = join(worldsDir, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({ "spokensay-labtok": { id: "claude", name: "Claude", world: "commons" } }));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const S = suite("spoken-say-door");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
@@ -30,7 +27,7 @@ const world = Bun.spawn(["bun", "server/server.ts"], {
   stdout: "pipe", stderr: "pipe",
 });
 const mcpl = Bun.spawn(["bun", "mcpl/net-server.ts"], {
-  env: { ...process.env, MCPL_PORT: String(MPORT), WORLD_URL: `ws://127.0.0.1:${WPORT}/ws`, MCPL_TOKENS: tokensPath, MCPL_STATE: tokensPath + ".state.json" },
+  env: { ...process.env, MCPL_PORT: String(MPORT), WORLD_URL: `ws://127.0.0.1:${WPORT}/ws`, MCPL_TOKENS: tokensPath, MCPL_STATE: tokensPath + ".state.json", MCPL_INSTANCE_NONCE: NONCE },
   stdout: "pipe", stderr: "pipe",
 });
 const drain = async (p: ReturnType<typeof Bun.spawn>, name: string) => {
@@ -41,7 +38,8 @@ const drain = async (p: ReturnType<typeof Bun.spawn>, name: string) => {
 };
 
 try {
-  await sleep(2500);
+  await until("the owned world answers", async () => (await fetch(`http://127.0.0.1:${WPORT}/worlds`)).status < 500, { ms: 20_000 });
+  await until("the owned door answers /healthz with our nonce", async () => (await (await fetch(`http://127.0.0.1:${MPORT}/healthz`)).text()).includes(NONCE), { ms: 20_000 });
 
   // World-side watcher: the ground truth for what reached the log.
   const seen: any[] = [];
@@ -59,20 +57,24 @@ try {
   let rpcId = 10;
   const rpc = (obj: any) => host.send(JSON.stringify(obj));
   host.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.id != null) replies.set(m.id, m); };
-  await new Promise<void>((res, rej) => {
-    const t = setTimeout(() => rej(new Error("mcpl init timeout")), 8000);
-    host.onopen = () => rpc({ jsonrpc: "2.0", id: 1, method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: { experimental: { mcpl: {} } }, clientInfo: { name: "spokensay-test", version: "0" } } });
-    const iv = setInterval(() => { if (replies.has(1)) { clearInterval(iv); clearTimeout(t);
-      rpc({ jsonrpc: "2.0", method: "notifications/initialized" }); res(); } }, 50);
-  });
-  await sleep(1500);
+  host.onopen = () => rpc({ jsonrpc: "2.0", id: 1, method: "initialize",
+    params: { protocolVersion: "2024-11-05", capabilities: { experimental: { mcpl: {} } }, clientInfo: { name: "spokensay-test", version: "0" } } });
+  await until("mcpl answers initialize", () => replies.has(1));
+  rpc({ jsonrpc: "2.0", method: "notifications/initialized" });   // the door joins the world next; requests queue behind the join
 
   const call = async (args: Record<string, unknown>) => {
     const id = ++rpcId;
     rpc({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "say", arguments: args } });
-    for (let i = 0; i < 80 && !replies.has(id); i++) await sleep(100);
-    return replies.get(id);
+    return until(`the door answers tools/call ${id}`, () => replies.get(id));
+  };
+  // A plain say through the same door after the calls under test: the sequencer orders one actor's says, so once it
+  // lands, anything those calls put in the log is in `seen`. Returns the says before it.
+  let fences = 0;
+  const landed = async () => {
+    const tag = `fence ${++fences}`;
+    await call({ text: tag });
+    await until(`the fence say "${tag}" lands`, () => saysSeen().some((x) => x.args?.text === tag));
+    return saysSeen().filter((x) => !/^fence \d+$/.test(String(x.args?.text)));
   };
   // what reached the log: the `say` entries of the log stream ({actor: display name, args: the say body})
   const saysSeen = () => saysIn(seen).map((x) => ({ actor: x.actor, seq: x.seq, args: x.body }));
@@ -81,8 +83,7 @@ try {
   {
     const id = ++rpcId;
     rpc({ jsonrpc: "2.0", id, method: "tools/list", params: {} });
-    for (let i = 0; i < 60 && !replies.has(id); i++) await sleep(100);
-    const say = replies.get(id)?.result?.tools?.find((t: any) => t.name === "say");
+    const say = (await until("the door answers tools/list", () => replies.get(id)))?.result?.tools?.find((t: any) => t.name === "say");
     const props = say?.inputSchema?.properties ?? {};
     check("advertised say schema declares the optional trio (discoverable, not accidental)",
       "spoken" in props && "utt" in props && "t0" in props && !(say.inputSchema.required ?? []).includes("spoken"),
@@ -102,9 +103,8 @@ try {
     const sentT0 = 1754980000000;
     const before = Date.now();
     const r = await call({ text: "performed line", spoken: true, utt: 3, t0: sentT0 });
-    await sleep(700);
+    const says = await landed();
     const after = Date.now();
-    const says = saysSeen();
     check("valid trio: exactly one durable say lands", says.length === 1, `${says.length} says`);
     const a = (says[0]?.args ?? {}) as Record<string, unknown>;
     check("valid trio: spoken/utt survive the door to the log (fail-on-main vector)",
@@ -125,8 +125,7 @@ try {
   {
     seen.length = 0;
     await call({ text: "just words" });
-    await sleep(700);
-    const says = saysSeen();
+    const says = await landed();
     const a = (says[0]?.args ?? {}) as Record<string, unknown>;
     check("plain say: lands once, no trio keys", says.length === 1 && !("spoken" in a) && !("utt" in a) && !("t0" in a), JSON.stringify(a));
   }
@@ -135,41 +134,42 @@ try {
   {
     seen.length = 0;
     const r = await call({ text: "should not land", spoken: true, utt: "nope" });
-    await sleep(700);
+    const rp = await call({ text: "partial should not land", utt: 5 });   // partner without spoken
+    const says = await landed();
     check("malformed trio: loud refusal in the tool result",
       /refused|trio/i.test(JSON.stringify(r?.result ?? {})), JSON.stringify(r?.result)?.slice(0, 120));
     // machine-legible failure (item 1, r6): a schema client that inspects
     // result.isError must see the refusal AS an error, not a successful say.
     check("malformed trio: result.isError === true (not just failure-shaped prose)",
       r?.result?.isError === true, JSON.stringify(r?.result)?.slice(0, 120));
-    check("malformed trio: zero say entries created", saysSeen().length === 0, `${saysSeen().length} says`);
-    seen.length = 0;
-    const rp = await call({ text: "partial should not land", utt: 5 });   // partner without spoken
-    await sleep(700);
-    check("partial trio (utt without spoken): refused, zero says", saysSeen().length === 0, `${saysSeen().length}`);
+    check("malformed trio: zero say entries created", !says.some((x) => x.args?.text === "should not land"), JSON.stringify(says));
+    check("partial trio (utt without spoken): refused, zero says", !says.some((x) => x.args?.text === "partial should not land"), JSON.stringify(says));
     check("partial trio: result.isError === true",
       rp?.result?.isError === true, JSON.stringify(rp?.result)?.slice(0, 120));
     // COERCION vectors (adversarial review): Number(null)===0, Number(true)===1
     // used to SNEAK a fabricated utt/t0 past the guard. Type-exact validation
     // must refuse these outright — a fabricated utterance is worse than a
     // refused one.
-    for (const bad of [
+    const bads = [
       { text: "utt null", spoken: true, utt: null },
       { text: "utt bool", spoken: true, utt: true },
       { text: "utt string", spoken: true, utt: "5" },
       { text: "t0 null", spoken: true, utt: 1, t0: null },
       { text: "utt negative", spoken: true, utt: -1 },
       { text: "t0 infinite", spoken: true, utt: 1, t0: Infinity },
-    ]) {
-      seen.length = 0;
-      const rr = await call(bad as Record<string, unknown>);
-      await sleep(400);
+    ];
+    seen.length = 0;
+    const replied = [];
+    for (const bad of bads) replied.push(await call(bad as Record<string, unknown>));
+    const coerced = await landed();
+    for (const [i, bad] of bads.entries()) {
+      const rr = replied[i], n = coerced.filter((x) => x.args?.text === bad.text).length;
       // The security-relevant assertion: a coerced value must NEVER become a
       // durable say. (Number(null)===0 / Number(true)===1 used to fabricate
       // an utterance; type-exact validation refuses instead.)
       check(`coercion: ${bad.text} → refused loudly (isError), ZERO fabricated says`,
-        rr?.result?.isError === true && saysSeen().length === 0,
-        `says=${saysSeen().length} isError=${rr?.result?.isError} reply=${JSON.stringify(rr?.result)?.slice(0, 80)}`);
+        rr?.result?.isError === true && n === 0,
+        `says=${n} isError=${rr?.result?.isError} reply=${JSON.stringify(rr?.result)?.slice(0, 80)}`);
     }
   }
 
@@ -177,8 +177,7 @@ try {
   {
     seen.length = 0;
     await call({ text: "clean", glitter: "maximal", spoken: true, utt: 9 });
-    await sleep(700);
-    const a = (saysSeen()[0]?.args ?? {}) as Record<string, unknown>;
+    const a = ((await landed())[0]?.args ?? {}) as Record<string, unknown>;
     check("unrelated extra key stays at the door", !("glitter" in a) && a.utt === 9, JSON.stringify(a));
   }
 
@@ -187,8 +186,7 @@ try {
   {
     seen.length = 0;
     const r = await call({ text: "not performed this time", spoken: false });
-    await sleep(700);
-    const says = saysSeen();
+    const says = await landed();
     const a = (says[0]?.args ?? {}) as Record<string, unknown>;
     check("spoken:false → ordinary say lands (not refused)",
       says.length === 1 && a.text === "not performed this time" && !("spoken" in a) && !r?.result?.isError,
@@ -200,15 +198,13 @@ try {
   {
     seen.length = 0;
     const r = await call({ spoken: true, utt: 7, t0: Date.now() } as Record<string, unknown>);
-    await sleep(700);
-    check("missing text with a valid trio → isError, zero says (no 'undefined' body)",
-      r?.result?.isError === true && saysSeen().length === 0,
-      `says=${saysSeen().length} isError=${r?.result?.isError}`);
-    seen.length = 0;
     const r2 = await call({ text: "" });
-    await sleep(500);
+    const says = await landed();
+    check("missing text with a valid trio → isError, zero says (no 'undefined' body)",
+      r?.result?.isError === true && says.length === 0,
+      `says=${JSON.stringify(says)} isError=${r?.result?.isError}`);
     check("empty text → isError, zero says",
-      r2?.result?.isError === true && saysSeen().length === 0, `says=${saysSeen().length}`);
+      r2?.result?.isError === true && says.length === 0, `says=${JSON.stringify(says)}`);
   }
 
   watcher.close(); host.close();

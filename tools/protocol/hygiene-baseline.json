@@ -308,9 +308,6 @@
  "tools/scriptnew-expect-test.ts": {
   "own-ok": 1
  },
- "tools/shadow-fade-test.mjs": {
-  "own-ok": 1
- },
  "tools/shape-attach-test.ts": {
   "own-ok": 1
  },

@@ -1,16 +1,12 @@
 // The door's typing relay (mcpl/typing-relay.ts) on a short clock: signals at `start`, keeps on while the host re-says
 // `start`, stops at `stop` or when the refresh is overdue (a lost `stop` can't leave the dots up), and only through the
-// body the latest `start` named. The wire is typing-mcpl-test.ts. Waits poll with a deadline, never a fixed sleep.
+// body the latest `start` named. The wire is typing-mcpl-test.ts. Waits: tools/protocol/wait.ts.
 
 import { TypingRelay, TYPING_REASSERT_MS, TYPING_OVERDUE_MS } from "../mcpl/typing-relay.ts";
 import { suite } from "./protocol/suite.ts";
+import { tryUntil, pause } from "./protocol/wait.ts";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const waitUntil = async (pred: () => boolean, ms: number) => {
-  const until = Date.now() + ms;
-  while (Date.now() < until) { if (pred()) return true; await sleep(5); }
-  return pred();
-};
+const came = async (what: string, pred: () => boolean, ms: number) => (await tryUntil(what, pred, { ms, step: 5 })) !== undefined;
 const S = suite("typing-relay");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
@@ -27,10 +23,10 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   const r = relay(), b = body();
   r.start(b);
   check("start signals at once", b.signals === 1, `signals=${b.signals}`);
-  check("it keeps signalling while the host's start is fresh", await waitUntil(() => b.signals >= 3, DEADLINE), `signals=${b.signals}`);
+  check("it keeps signalling while the host's start is fresh", await came("three signals", () => b.signals >= 3, DEADLINE), `signals=${b.signals}`);
   r.stop();
   const atStop = b.signals;
-  await sleep(REASSERT * 3);
+  await pause("no signal may come for three re-asserts after stop", REASSERT * 3);
   check("stop ends the signals", b.signals === atStop && !r.active, `signals ${atStop} -> ${b.signals}`);
 }
 
@@ -38,13 +34,13 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   const r = relay(), b = body();
   const t0 = performance.now();
   r.start(b);
-  check("with no refresh, it stops by itself once the refresh is overdue", await waitUntil(() => !r.active, DEADLINE));
+  check("with no refresh, it stops by itself once the refresh is overdue", await came("the overdue stop", () => !r.active, DEADLINE));
   const took = performance.now() - t0;
   check("no sooner than the overdue window", took >= OVERDUE, `stopped after ${took.toFixed(0)} ms`);
   // the stop comes at the first re-assert past the window (a loaded machine only lowers the count)
   check("at the first re-assert past the window", b.signals <= OVERDUE / REASSERT + 1, `signals=${b.signals}`);
   const after = b.signals;
-  await sleep(REASSERT * 3);
+  await pause("no signal may come for three re-asserts after the overdue stop", REASSERT * 3);
   check("and signals no more", b.signals === after, `signals ${after} -> ${b.signals}`);
 }
 
@@ -55,7 +51,7 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   try {
     r.start(b);
     Date.now = () => wall() - 3_600_000;
-    check("a wall clock stepped back doesn't hold off the overdue stop", await waitUntil(() => !r.active, DEADLINE));
+    check("a wall clock stepped back doesn't hold off the overdue stop", await came("the overdue stop", () => !r.active, DEADLINE));
   } finally {
     Date.now = wall;
     r.stop();
@@ -68,9 +64,9 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   const r = new TypingRelay(REASSERT, WIDE), b = body();
   r.start(b);
   let lapsed = false;
-  const until = performance.now() + WIDE * 1.5;
-  while (performance.now() < until) {
-    await sleep(REFRESH);
+  const end = performance.now() + WIDE * 1.5;
+  while (performance.now() < end) {
+    await pause("the host's refresh interval", REFRESH);
     if (!r.active) lapsed = true;
     r.start(b);
   }
@@ -88,7 +84,7 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
   r.start(a);
   r.start(b);
   const aAt = a.signals;
-  check("after a start for a new body, the signals go to it", await waitUntil(() => b.signals >= 3, DEADLINE), `new body signals=${b.signals}`);
+  check("after a start for a new body, the signals go to it", await came("three signals to the new body", () => b.signals >= 3, DEADLINE), `new body signals=${b.signals}`);
   check("and the old body gets none", a.signals === aAt, `old body ${aAt} -> ${a.signals}`);
   r.stop();
 }
@@ -106,7 +102,7 @@ check("and leaves a re-assert's worth of margin over it", TYPING_OVERDUE_MS - 70
     Date.now = () => wall() - 3_600_000;
     ag.typing();
     check("the body sends at most one typing signal a second", sent === 1, `sent=${sent}`);
-    await sleep(1100);
+    await pause("past the body's one-a-second throttle", 1100);
     ag.typing();
     check("a wall clock stepped back doesn't hold the body's next signal", sent === 2, `sent=${sent}`);
   } finally {
