@@ -45,7 +45,7 @@ as `underwater-prototype`. Tool output labels the distinction and warns that
 unsupported components may be absent. Screenshot access/consent budgets are unchanged.
 
 Tests: `tools/render-scene-import-test.ts` (gated), extended
-`tools/native-login-wire-test.ts`, existing login/broker/fold suites. Never run
+`tools/native-login-test.ts`, existing login/broker/fold suites. Never run
 integration fixtures against inhabited worlds. Deployment requires a separately
 reviewed production-base patch and operator-approved restart; do not deploy the
 entire dirty development worktree.

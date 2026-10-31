@@ -13,8 +13,8 @@
 // the import must come AFTER this line, which a hoisted static import wouldn't
 import { noWorldUrl } from "./no-world.ts";
 import { suite } from "./protocol/suite.ts";
+import { until, tryUntil } from "./protocol/wait.ts";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
-const WINDOW = 250;
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { agentOnDoor } = await import("./agent-scratch.ts");
 
@@ -22,7 +22,9 @@ const S = suite("emitter-percept");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const T0 = 1_754_000_000_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// a coalescing window is open while the agent holds a slot for the entity (mcpl/agent.ts openEmitterWindow)
+const closed = (A: any, id: string) => until(`${id}'s coalescing window closes`, () => !A.emitterNarration.has(id), { ms: 5000 });
+const heard = (events: any[], n: number) => tryUntil(`${n} world-change events`, () => events.length >= n, { ms: 5000 });
 
 // The world is a scratch authority (tools/agent-scratch.ts), every write a door request at door time T0 (the coalescing
 // window is the agent's, not the door's); the agent takes the next view of its own fold after each, live or not.
@@ -79,7 +81,7 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
 
 // ---------------------------------------------------------------- B: live change perception
 {
-  const { events, spawn, comp } = await rig();
+  const { A, events, spawn, comp } = await rig();
   await spawn("hearth", [2, 0, 0]);
 
   await comp("hearth", FIRE);
@@ -88,38 +90,39 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
     events[0].who === "antra" && events[0].text.includes("[hearth]") && events[0].text.includes("fire"));
   check("...as a world-change, not a mention", events[0].kind === "world-change" && !events[0].mention);
 
-  await sleep(WINDOW * 2);
+  await closed(A, "hearth");
   await comp("hearth", SMOKE);
   check("replacing it with smoke is heard once more", events.length === 2, `got ${events.length}`);
   check("...and says what it became", events[1].text.includes("smoke"));
 
-  await sleep(WINDOW * 2);
+  await closed(A, "hearth");
   await comp("hearth", null);
   check("putting it out is heard", events.length === 3 && events[2].text.includes("puts out"));
 }
 
 // ---------------------------------------------------------------- C: coalescing a tuning burst
 {
-  const { events, spawn, comp } = await rig();
+  const { A, events, spawn, comp } = await rig();
   await spawn("hearth", [1, 0, 0]);
   await comp("hearth", FIRE);
   check("the first change speaks at once", events.length === 1);
   for (let i = 0; i < 20; i++) await comp("hearth", { ...FIRE, params: { ...FIRE.params, size: 0.4 + i * 0.01 } });
-  check("twenty tuning entries add NOTHING inside the window", events.length === 1, `got ${events.length}`);
-  await sleep(WINDOW * 2);
+  check("twenty tuning entries add NOTHING inside the window", events.length === 1 && A.emitterNarration.has("hearth"), `got ${events.length}`);
+  await heard(events, 2);
   check("the window closes with one summary of the net result", events.length === 2, `got ${events.length}`);
-  check("...which is a retune, not a second lighting", events[1].text.includes("retunes"));
-  await sleep(WINDOW * 2);
-  check("a settled emitter then goes quiet", events.length === 2);
+  check("...which is a retune, not a second lighting", events[1]?.text.includes("retunes"));
+  // the reopened window closes on no change: the quiet is the outcome, not a guess at a duration
+  const quiet = await tryUntil("the reopened window closes", () => !A.emitterNarration.has("hearth"), { ms: 5000 });
+  check("a settled emitter then goes quiet", quiet && events.length === 2, `got ${events.length}`);
 }
 {
   // A burst that nets out to nothing must not narrate at all.
-  const { events, spawn, comp } = await rig();
+  const { A, events, spawn, comp } = await rig();
   await spawn("hearth", [1, 0, 0]);
   await comp("hearth", FIRE);
   await comp("hearth", SMOKE);
   await comp("hearth", FIRE);              // back to where the first line already said
-  await sleep(WINDOW * 3);
+  await closed(A, "hearth");
   check("a burst that returns to the announced state stays silent", events.length === 1, `got ${events.length}`);
 }
 {
@@ -128,7 +131,7 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
   await spawn("hearth", [1, 0, 0]);
   await comp("hearth", FIRE);
   await comp("hearth", null);
-  await sleep(WINDOW * 3);
+  await heard(events, 2);
   check("an emitter put out inside the window is still reported", events.length === 2 && events[1].text.includes("puts out"));
 }
 
@@ -176,7 +179,7 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
 // that burn together are one effect document's emitters, and one lit and put out on its own is a child thing with its
 // own `particles` (the translator writes particles:<name> that way). Each reads and narrates on its own terms.
 {
-  const { ag, events, spawn, comp, door } = await rig();
+  const { ag, A, events, spawn, comp, door } = await rig();
   await spawn("hearth", [2, 0, 0]);
   await comp("hearth", FIRE, false);
   const child = async (id: string, value: unknown, live = true) => {
@@ -200,11 +203,11 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
     events.length === 2 && events[1].text.includes("retunes the fire on [hearth]"), events.map((e) => e.text).join(" | "));
   await comp("hearth-sparks", { effect: "sparks", params: { count: 30 } });
   check("a burst on one emitter folds inside its own window", events.length === 2, events.map((e) => e.text).join(" | "));
-  await sleep(WINDOW + 80);
+  await heard(events, 3);
   check("...and closes with one net line for that emitter",
     events.length === 3 && events[2].text.includes("retunes the sparks on [hearth-sparks]"), events.map((e) => e.text).join(" | "));
 
-  await sleep(WINDOW + 80);   // past the window the net line reopened, so the ending speaks at once
+  await closed(A, "hearth-sparks");   // past the window the net line reopened, so the ending speaks at once
   const gone = await door.act("delete", { id: "hearth-sparks" }, { who: "antra", at: T0, live: true });
   check("removing the child puts its emitter out, heard once under its own thing, the hearth still burning",
     gone.ok && events.length === 4 && events[3].text.includes("puts out the sparks on [hearth-sparks]") && /\[hearth\] [^\n]*emitting fire/.test(ag.look()),
@@ -214,7 +217,6 @@ const SMOKE = { effect: "smoke", at: [0, 0.25, 0] };
   const keyed = await door.act("set", { id: "hearth", component: "particles:smoke", value: { effect: "smoke" } }, { who: "antra", at: T0, live: false });
   check("particles:<name> is refused (particles isn't keyed), naming the spelling it takes",
     !keyed.ok && keyed.refused?.code === "shape" && /isn't keyed; write 'particles'/.test(keyed.refused.reason), JSON.stringify(keyed.refused));
-  await sleep(WINDOW + 80);
 }
 
 S.done();   // (the agents keep timers alive: leave explicitly)

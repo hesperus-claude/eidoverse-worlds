@@ -3,13 +3,13 @@
 // WHY THIS EXISTS. The round-two reviewer mutated the shipping xr.js so every busy verdict entered
 // the retry branch, including give-up:
 //     if (true) { // MUTANT: every busy verdict retries
-// and xr-entry-policy-test still passed 31/31 — because it drove the pure policy correctly and then
+// and the policy's own test still passed 31/31 — because it drove the pure policy correctly and then
 // checked the WIRING with regexes. Reproduced here before writing a line of this file.
 //
 // This suite imports client/lib/xr_entry_effects.js — the same module xr.js imports — and runs it
 // with fake timers. Breaking the scheduling breaks this.
 import { makeEntryEffects, handleEntryFailure } from '../client/lib/xr_entry_effects.js';
-import { decideEntryFailure, BUSY_RETRY_MS } from '../client/lib/xr_entry_policy.js';
+import { decideEntryFailure, retryIsCurrent, BUSY_RETRY_MS } from '../client/lib/xr_entry_policy.js';
 import { readFileSync } from 'node:fs';
 import { suite } from "./protocol/suite.ts";
 
@@ -34,6 +34,47 @@ const noDev = () => Object.assign(new Error('no XR device found'), { name: 'NotF
 const weird = () => Object.assign(new Error('something else entirely'), { name: 'DataError' });
 // the REAL policy drives the effects, so the two are bound end to end
 const onBusy = (isRetry) => decideEntryFailure(busy(), { isRetry, gpu: false });
+
+// ── 0. the policy's own verdicts (xr_entry_policy.js), the rows §1–4 don't already prove through the effects. Mutations
+// that turn a row red: busy detection drops the message test · absent detection dropped (either arm) · the gpu branch
+// moved AFTER the absent branch · retryIsCurrent `===` → `!==` or ignoring null
+console.log('\n— 0. the policy, on its own —');
+{
+  const notSupported = () => Object.assign(new Error('immersive-vr not supported'), { name: 'NotSupportedError' });
+  const first = decideEntryFailure(busy(), { isRetry: false });
+  check('a busy retry waits 1.5 s, not immediately', first.delayMs === 1500 && BUSY_RETRY_MS === 1500, `delayMs=${first.delayMs}`);
+  check('…and says so', /retrying/i.test(first.toast ?? ''));
+  const second = decideEntryFailure(busy(), { isRetry: true });
+  check('giving up tells the user what to do about it', /another tab|click the visor/i.test(second.toast ?? ''), second.toast ?? 'no toast');
+  check('…and does not mark the headset absent (it is held, not missing)', second.markAbsent === false);
+  // the name alone must not be the busy test: an InvalidStateError for any other reason is not retried
+  const otherInvalid = Object.assign(new Error('The renderer is in an invalid state'), { name: 'InvalidStateError' });
+  const v = decideEntryFailure(otherInvalid, { isRetry: false });
+  check('an InvalidStateError that is not "already an active" is NOT retried', v.action !== 'retry-once' && v.retry === false, `action=${v.action}`);
+  const alreadyOther = Object.assign(new Error('the renderer is already reserved for something else'), { name: 'InvalidStateError' });
+  check('an InvalidStateError that says "already" but not "already an active" is NOT busy',
+    decideEntryFailure(alreadyOther, { isRetry: false }).action === 'surface', decideEntryFailure(alreadyOther, { isRetry: false }).action);
+  const b = decideEntryFailure(notSupported(), { isRetry: false });
+  check('not supported: absent, no retry', b.action === 'absent' && b.retry === false);
+  // each arm of isAbsent on its own (#197 review 09-20): a fixture matching both name and message masks either arm
+  check('an absent-shaped MESSAGE is absent even under a generic error name',
+    decideEntryFailure(Object.assign(new Error('no XR runtime available'), { name: 'Error' }), { isRetry: false }).action === 'absent');
+  for (const name of ['NotSupportedError', 'NotFoundError'])
+    check(`an absent NAME is absent even when the message says nothing (${name})`, decideEntryFailure(Object.assign(new Error('nope'), { name }), { isRetry: false }).action === 'absent');
+  check('an unknown error carries no invented toast', decideEntryFailure(weird(), { isRetry: false }).toast === null);
+  const gBusy = decideEntryFailure(busy(), { isRetry: false, gpu: true });
+  check('a BUSY session on WebGPU still retries — busy outranks the backend', gBusy.action === 'retry-once', `action=${gBusy.action}`);
+  // gpu before absent: 'webgpu' is a REQUIRED feature, refused with NotSupportedError, so absent-first marks a present headset absent
+  for (const [label, err] of [['NotFoundError', noDev()], ['NotSupportedError', notSupported()]]) {
+    const ga = decideEntryFailure(err, { isRetry: false, gpu: true });
+    check(`a WebGPU refusal reloads even when the error is absent-shaped (${label})`, ga.action === 'reload-webgl', `action=${ga.action}`);
+    check(`…and does NOT mark a present headset absent (${label})`, ga.markAbsent === false);
+  }
+  check('a retry armed by this intent is current', retryIsCurrent(4, 4) === true);
+  check('a retry armed by an OLDER intent is stale (a later click supersedes it)', retryIsCurrent(3, 4) === false);
+  check('no pending retry is never current', retryIsCurrent(null, 4) === false);
+  check('…not even against a null intent', retryIsCurrent(null, null) === false);
+}
 
 console.log('\n— 1. exactly one automatic retry per entry intent (the reviewer’s mutation) —');
 {

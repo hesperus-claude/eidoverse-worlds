@@ -1,6 +1,7 @@
 // action bar (client/lib/actionbar.js) — nine tiles, whole-tile snapping, postures that act on the desktop
 // body AND announce themselves to the VR entry, and a fired tile that stays lit after net.js has already
-// cleared myState.anim. Drives the REAL module against tools/actionbar-stub.mjs recorders.
+// cleared myState.anim. Drives the REAL module against tools/actionbar-stub.mjs recorders; the RESTORE rows run
+// the bar against the REAL windows.js in a child sequence (`--restore`: one process can't both stub and load it).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/actionbar-test.ts
 //
@@ -9,41 +10,73 @@
 //   lit tile following only myState.anim (old code)  → "fired tile stays lit after net.js clears" goes red
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+const RESTORE = process.argv.includes('--restore');
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'actionbar-stubs',
   setup(b) {
     for (const m of ['windows', 'avatar', 'animnames', 'controller', 'mybody', 'xrpanels', 'base']) {
+      if (RESTORE && m === 'windows') continue;
       b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('./actionbar-stub.mjs') }));
     }
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { suite } from "./protocol/suite.ts";
-GlobalRegistrator.register();
+import { tryUntil } from "./protocol/wait.ts";
+GlobalRegistrator.register({ width: 1024, height: 768 });
 
 // emojiRenders paints on a scratch canvas: coloured pixels = a real glyph
 HTMLCanvasElement.prototype.getContext = function () {
   return { fillText() {}, getImageData: () => ({ data: new Uint8ClampedArray(24 * 24 * 4).fill(200) }) } as any;
 };
+
+const S = suite("actionbar");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+const TILE = 32, GAP = 6, PAD = 7, ROW_H = 32;
+const widthFor = (c: number) => c * TILE + (c - 1) * GAP + PAD * 2 + 2;
+
+if (RESTORE) {
+  // a bar the viewport auto-restores (no show()) is laid out exactly as show() lays it out: without onShow's snapTo
+  // the restored bar was two columns wide and ONE row tall until the 180 ms onResize snap caught up
+  await import('../client/lib/windows.js');   // stamps the layout version first, so the save below is not purged
+  // last session the viewport auto-hid the bar (never placed by hand); it comes back when the window is wide enough
+  localStorage.setItem('ew-frame-actions', JSON.stringify({ x: 336, y: 10, w: widthFor(9), h: 32, hidden: true, autoHidden: true }));
+  const { initActionBar } = await import('../client/lib/actionbar.js');
+  const f: any = initActionBar();
+  // happy-dom measures nothing: the bar reports its real height, and the dock has laid out. A left-anchored glyph
+  // spans the bar's band, 900 px of it, leaving 1024 - 8 - 908 = 108.
+  Object.defineProperty(f.el, 'offsetHeight', { get: () => f._state.h + 14, configurable: true });
+  const dock = document.createElement('div'); dock.id = 'dock';
+  const dockBtn = document.createElement('button'); dockBtn.dataset.toggles = 'x'; dock.append(dockBtn); document.body.append(dock);
+  const mic = document.createElement('div'); mic.id = 'micbtn'; document.body.append(mic);
+  mic.getBoundingClientRect = () => ({ left: 0, right: 900, top: 10, bottom: 40, width: 900, height: 30, x: 0, y: 10, toJSON() { return this; } }) as any;
+  check('restore setup: the bar comes up auto-hidden, nine across', !f.visible && f._state.w === widthFor(9), JSON.stringify(f._state));
+  window.dispatchEvent(new Event('resize'));
+  check('restore setup: the viewport restores it without show()', f.visible === true);
+  const restored = [f._state.x, f._state.w, f._state.h];
+  check('restored: an unplaced bar steps clear of the glyph, not 352 wide underneath it',
+    f._state.x >= 908 && f._state.x + f._state.w <= innerWidth - 8, `x=${f._state.x} w=${f._state.w}`);
+  f.hide(); f.show();
+  const shown = [f._state.x, f._state.w, f._state.h];
+  check('…exactly as show() lays it out, rows included (x, w, h)', restored.join() === shown.join(), `restore ${restored} vs show ${shown}`);
+  S.done();
+}
+
 // the bar repaints on a 500 ms interval — capture the painter so the test drives it directly
 const intervals: Function[] = [];
 const _setInterval = globalThis.setInterval;
 (globalThis as any).setInterval = (fn: Function, ms: number, ...a: any[]) => { intervals.push(fn); return _setInterval(() => {}, 1e9, ...a); };
-// a controllable clock for the 1.5 s lit window
-let nowMs = 10_000;
-performance.now = () => nowMs;
+// a controllable clock for the 1.5 s lit window (null: the real one, which until() needs for its deadline)
+const realNow = performance.now.bind(performance);
+let nowMs: number | null = null;
+performance.now = () => nowMs ?? realNow();
 
 const stub = await import('./actionbar-stub.mjs');
 const { initActionBar, ringActionEntries } = await import('../client/lib/actionbar.js');
 const { ANIM_ORDER, myState, postureCalls, busLog, played, xrPanels, bus } = stub;
 
-const S = suite("actionbar");
-const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
-const sleep = (ms: number) => new Promise((r) => _setInterval(r, ms));   // one-shot: never cleared, harmless
 // the same column math the bar uses (a mirror, so the expectations are numbers not calls)
-const TILE = 32, GAP = 6, PAD = 7, ROW_H = 32;
-const widthFor = (c: number) => c * TILE + (c - 1) * GAP + PAD * 2 + 2;
 const heightFor = (c: number, n = 9) => Math.ceil(n / c) * ROW_H + (Math.ceil(n / c) - 1) * GAP;
 
 const f = initActionBar();
@@ -295,9 +328,11 @@ console.log('ACTIONBAR — B2: a clamp that cannot help stands down (antra-tess 
 }
 
 console.log('ACTIONBAR — snapTo / widthFor / heightFor');
-f.opts.onResize(200); await sleep(230);
+// a drag settles 180 ms later (onResize's debounce): wait for that snap's repaint, not the clock
+const drag = async (w: number) => { const p = f.paints; f.opts.onResize(w); await tryUntil(`the ${w}px drag's snap repaints`, () => f.paints > p, { ms: 3000 }); };
+await drag(200);
 check('a 200px drag snaps to 5 columns: w=200, h=2 rows', f._state.w === widthFor(5) && f._state.h === heightFor(5) && f.paints > 0, `w=${f._state.w} h=${f._state.h}`);
-f.opts.onResize(10); await sleep(230);
+await drag(10);
 check('a 10px drag floors at ONE column, wrapping to 9 rows', f._state.w === widthFor(1) && f._state.h === heightFor(1), `w=${f._state.w} h=${f._state.h}`);
 // VERTICAL. R, 2026-09-11: "can you also make it arrange vertically? I can't
 // make it stack 1 wide 9 tall, for example." snapTo derived BOTH w and h from
@@ -309,15 +344,15 @@ check('a 10px drag floors at ONE column, wrapping to 9 rows', f._state.w === wid
 // An earlier version took rows from a dragged height and, because windows.js:427
 // always passes one, the bar pinned itself at nine rows and refused to wrap:
 // "forcibly go 9x down and not wrap to the buttons at all."
-f.opts.onResize(48); await sleep(230);
+await drag(48);
 check('a 1-column drag wraps to 9 rows (R: "1 wide 9 tall")',
   f._state.w === widthFor(1) && f._state.h === heightFor(1), `w=${f._state.w} h=${f._state.h}`);
-f.opts.onResize(86); await sleep(230);
+await drag(86);
 check('2 columns wrap to 5 rows', f._state.w === widthFor(2) && f._state.h === heightFor(2), `w=${f._state.w} h=${f._state.h}`);
-f.opts.onResize(162); await sleep(230);
+await drag(162);
 check('4 columns wrap to 3 rows — a narrow drag is never floored at nine',
   f._state.w === widthFor(4) && f._state.h === heightFor(4), `w=${f._state.w} h=${f._state.h}`);
-f.opts.onResize(2000); await sleep(230);
+await drag(2000);
 check('never more columns than tiles: back to 9×1', f._state.w === 352 && f._state.h === 32, `w=${f._state.w} h=${f._state.h}`);
 f.show();
 check('show() refits the saved size (still 9×1)', f.visible && f._state.w === 352 && f._state.h === 32);
@@ -352,7 +387,7 @@ check('the sit tile is lit while the body\'s clip is sit', tile('[data-posture=s
 myState.clip = null; paint();
 
 console.log('ACTIONBAR — the fired tile stays lit ~1.5 s');
-played.length = 0;
+played.length = 0; nowMs = 10_000;
 tile('[data-anim=wave]').onclick!(new Event('click'));
 check('the tile plays the gesture on my body and sets myState.anim', played[0] === 'wave' && myState.anim === 'wave');
 check('the fired tile is lit', tile('[data-anim=wave]').classList.contains('on'));
@@ -367,7 +402,7 @@ check('dark at t+1.6 s', !tile('[data-anim=wave]').classList.contains('on'));
 check('no other tile was ever lit by it', litCount() === 0);
 myState.anim = 'clap'; paint();   // a number key set it elsewhere
 check('a number-key gesture (myState.anim) lights its tile', tile('[data-anim=clap]').classList.contains('on') && !tile('[data-anim=wave]').classList.contains('on'));
-myState.anim = null; paint();
+myState.anim = null; paint(); nowMs = null;
 
 console.log('ACTIONBAR — a defs push rebuilds the lantern\'s gesture actions, not just the tiles');
 {
@@ -385,6 +420,15 @@ console.log('ACTIONBAR — a defs push rebuilds the lantern\'s gesture actions, 
   check('the kept ones are still there with their keys', A.get('bar:wave')?.key === '1' && A.get('bar:cheer')?.key === '2');
   check('posture:stand survives the rebuild', !!A.get('posture:stand'));
   ANIM_ORDER.splice(0, ANIM_ORDER.length, ...saved); bus.emit('animnames-updated');
+}
+
+console.log('ACTIONBAR — a viewport restore clears the chrome, like show() does (real windows.js, child sequence)');
+{
+  const child = Bun.spawnSync([process.execPath, fileURLToPath(import.meta.url), '--restore'], { env: process.env, stdout: 'pipe', stderr: 'pipe' });
+  const lines = child.stdout.toString().split('\n');
+  const rows = lines.filter((l) => /^(ok   |FAIL )/.test(l));
+  for (const l of rows) { const [what, detail] = l.slice(5).split(' — '); check(what, l.startsWith('ok'), detail); }
+  check('the restore sequence ran its 4 rows and exited 0', rows.length === 4 && child.exitCode === 0, `exit ${child.exitCode}, ${rows.length} rows; ${child.stderr.toString().slice(-300)}`);
 }
 
 S.done();

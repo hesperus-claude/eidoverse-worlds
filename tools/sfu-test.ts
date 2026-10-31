@@ -8,6 +8,7 @@ import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, 
 import { Sfu } from "../server/sfu.ts";
 import { installSfuTransportGuard } from "../server/sfuguard.ts";
 import { suite } from "./protocol/suite.ts";
+import { until, tryUntil, pause } from "./protocol/wait.ts";
 
 // Run the ENTIRE suite guarded (review 2026-08-18): the negotiation vectors
 // below are the receipt that the ownership patch is transparent under real
@@ -16,7 +17,6 @@ import { suite } from "./protocol/suite.ts";
 installSfuTransportGuard();
 
 const CODEC = new RTCRtpCodecParameters({ mimeType: "audio/opus", clockRate: 48000, channels: 2, payloadType: 111 });
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const S = suite("sfu");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
@@ -37,7 +37,7 @@ class FakePeer {
         new RtpHeader({ payloadType: 111, sequenceNumber: this.seq++, timestamp: this.seq * 960, ssrc: 42 }),
         Buffer.from([0xf8, 0xff, 0xfe, i & 0xff]),
       ));
-      await sleep(6);
+      await pause("pace the mic like a live stream: a burst overruns the loopback socket", 6);
     }
   }
 }
@@ -68,7 +68,29 @@ async function negotiate(browser: RTCPeerConnection, sfuPc: RTCPeerConnection) {
   const answer = await sfuPc.createAnswer();
   await sfuPc.setLocalDescription(answer);
   await browser.setRemoteDescription(sfuPc.localDescription);
+  await until("both ends connect", () => connected(browser, sfuPc));
 }
+
+/** Speak n packets and wait until the listener heard all of them (resolves either way: the row checks the count). */
+async function heardAll(speaker: FakePeer, listener: FakePeer, n: number) {
+  const before = listener.heard;
+  await speaker.speak(n);
+  await tryUntil(`the listener heard all ${n}`, () => listener.heard >= before + n);
+  return before;
+}
+/** Speak n packets, wait until the SFU has taken in all n, and return how many it forwarded: 0 = policy held. A tap
+ *  subscribed after fanout's runs after it, so once it counts n, fanout has decided every packet. */
+async function forwardedWhile(room: Sfu, legId: string, speaker: FakePeer, n: number) {
+  const ingress = await until(`${legId}'s mic reached the SFU`, () => room.getLeg(legId)?.ingress);
+  let got = 0;
+  const tap = ingress.onReceiveRtp.subscribe(() => { got++; });
+  const f0 = room.diag().forwarded;
+  await speaker.speak(n);
+  await until(`the SFU took in ${legId}'s ${n} packets`, () => got >= n);
+  tap.unSubscribe();
+  return room.diag().forwarded - f0;
+}
+const connected = (...pcs: RTCPeerConnection[]) => pcs.every((pc) => pc.connectionState === "connected");
 
 console.log("\nSFU — policy proof (loopback peers)\n");
 const renegotiations: string[] = [];
@@ -79,13 +101,13 @@ const alice = new FakePeer(), bob = new FakePeer();
 const aLeg = sfu.createLeg("alice", 1), bLeg = sfu.createLeg("bob", 1);
 await negotiate(alice.pc, aLeg.pc);
 await negotiate(bob.pc, bLeg.pc);
-await sleep(900);
 check("both legs negotiated", !!sfu.getLeg("alice") && !!sfu.getLeg("bob"));
 
 // ── FAIL-CLOSED: no consent means no audio, even with a live mic ───────────
-await alice.speak(15);
-await sleep(300);
-check("fail-closed: 0 packets to bob before consent", bob.heard === 0, `heard=${bob.heard}`);
+{
+  const fwd = await forwardedWhile(sfu, "alice", alice, 15);
+  check("fail-closed: 0 packets to bob before consent", fwd === 0 && bob.heard === 0, `forwarded=${fwd} heard=${bob.heard}`);
+}
 // 🔴 E1: the assertion above is satisfied by route ABSENCE, so it survives
 // deleting the consent check entirely (proven by mutation testing in review).
 // This one cannot: the route EXISTS and is negotiated, and only the consent
@@ -96,15 +118,14 @@ check("fail-closed: 0 packets to bob before consent", bob.heard === 0, `heard=${
   await negotiate(a2.pc, armed.createLeg("a", 1).pc);
   await negotiate(b2.pc, armed.createLeg("b", 1).pc);
   armed.setConsent("b", "a", true);                 // build + negotiate the route
-  await sleep(10);
   await armed.negotiate("b", (pc) => negotiate(pc, b2.pc));
-  await sleep(400);
+  const live = await heardAll(a2, b2, 5);
+  check("…the armed route carries audio before the revoke (control)", b2.heard > live, `heard ${live}→${b2.heard}`);
   armed.setConsent("b", "a", false);                // …then withdraw consent only
   const heardAtRevoke = b2.heard;
-  await a2.speak(15);
-  await sleep(300);
+  const fwd = await forwardedWhile(armed, "a", a2, 15);
   check("fail-closed HOLDS with a live negotiated route (kills the mutant)",
-    b2.heard === heardAtRevoke, `heard ${heardAtRevoke}→${b2.heard}`);
+    fwd === 0 && b2.heard === heardAtRevoke, `forwarded=${fwd} heard ${heardAtRevoke}→${b2.heard}`);
   armed.closeAll();
 }
 check("…but the SFU DID receive alice's mic", (sfu.getLeg("alice")?.rxPackets ?? 0) > 0,
@@ -116,7 +137,7 @@ check("consent created a route", (sfu.getLeg("bob")?.outbound.has("alice")) === 
 // Coalesced: the ask lands on the next microtask, so N routes added in one
 // turn produce ONE renegotiation rather than N. (N exchanges also inflates the
 // SDP — werift adds a transceiver per exchange — and double-delivers.)
-await sleep(10);
+await tryUntil("the coalesced ask lands", () => renegotiations.includes("bob"));
 check("consent asked the caller to renegotiate", renegotiations.includes("bob"));
 check("…exactly once, however many routes were added",
   renegotiations.filter((r) => r === "bob").length === 1, `${renegotiations.filter(r=>r==="bob").length}×`);
@@ -125,10 +146,7 @@ check("…exactly once, however many routes were added",
 // Adding a track server-side therefore makes the SERVER the offerer — which is
 // why createLeg's caller gets onNegotiationNeeded rather than a re-answer.
 await negotiate(sfu.getLeg("bob")!.pc, bob.pc);
-await sleep(600);
-const before = bob.heard;
-await alice.speak(20);
-await sleep(400);
+const before = await heardAll(alice, bob, 20);
 check("consent ON → bob hears alice", bob.heard > before, `heard=${bob.heard}`);
 
 // ── consent OFF → audio stops, WITHOUT renegotiating ───────────────────────
@@ -138,43 +156,40 @@ check("consent ON → bob hears alice", bob.heard > before, `heard=${bob.heard}`
 // room; the shared version stays only as the no-renegotiation check.
 const renegCount = renegotiations.length;
 sfu.setConsent("bob", "alice", false);
-await sleep(250);                                    // let in-flight packets land
 const atRevoke = bob.heard;
-await alice.speak(20);
-await sleep(400);
-check("consent OFF → audio stops", bob.heard === atRevoke, `heard ${atRevoke}→${bob.heard}`);
+{
+  const fwd = await forwardedWhile(sfu, "alice", alice, 20);
+  check("consent OFF → audio stops", fwd === 0 && bob.heard === atRevoke, `forwarded=${fwd} heard ${atRevoke}→${bob.heard}`);
+}
 check("…and cost no renegotiation (SDP untouched)", renegotiations.length === renegCount);
 
 // ── moderator mute is enforced at INGRESS: nobody hears, no route survives ─
 sfu.setConsent("bob", "alice", true);
-await sleep(200);
 sfu.setMuted("alice", true);
 const atMute = bob.heard;
-await alice.speak(20);
-await sleep(400);
-check("moderator mute silences alice for everyone", bob.heard === atMute, `heard ${atMute}→${bob.heard}`);
+{
+  const fwd = await forwardedWhile(sfu, "alice", alice, 20);
+  check("moderator mute silences alice for everyone", fwd === 0 && bob.heard === atMute, `forwarded=${fwd} heard ${atMute}→${bob.heard}`);
+}
 sfu.setMuted("alice", false);
 
 // ── a DEAFENED listener (a ghost, R 10-07: "no for a ghost hearing voice chat") hears nobody, whatever its consent ─
 // consent is the listener's own answer (it can turn it back on); deafness is the server's and overrides it
 sfu.setConsent("bob", "alice", true);
-await sleep(200);
 (sfu as any).setDeafened?.("bob", true);
 const atDeaf = bob.heard;
-await alice.speak(20);
-await sleep(400);
-check("a deafened listener hears nothing, consent ON", bob.heard === atDeaf, `heard ${atDeaf}→${bob.heard}`);
+{
+  const fwd = await forwardedWhile(sfu, "alice", alice, 20);
+  check("a deafened listener hears nothing, consent ON", fwd === 0 && bob.heard === atDeaf, `forwarded=${fwd} heard ${atDeaf}→${bob.heard}`);
+}
 sfu.setConsent("bob", "alice", true);                  // the listener re-consents: still deaf
-await sleep(200);
 const atDeaf2 = bob.heard;
-await alice.speak(20);
-await sleep(400);
-check("…and re-consenting doesn't undo it", bob.heard === atDeaf2, `heard ${atDeaf2}→${bob.heard}`);
+{
+  const fwd = await forwardedWhile(sfu, "alice", alice, 20);
+  check("…and re-consenting doesn't undo it", fwd === 0 && bob.heard === atDeaf2, `forwarded=${fwd} heard ${atDeaf2}→${bob.heard}`);
+}
 (sfu as any).setDeafened?.("bob", false);
-await sleep(200);
-const atHear = bob.heard;
-await alice.speak(20);
-await sleep(400);
+const atHear = await heardAll(alice, bob, 20);
 check("undeafened: hears again (the control)", bob.heard > atHear, `heard ${atHear}→${bob.heard}`);
 
 // ── revocation is LOCAL and immediate (no webhook, no TTL) ─────────────────
@@ -196,7 +211,6 @@ check("…and consent to the corpse is wiped (retained route is starved)",
 const bob2 = new FakePeer();
 const bLeg2 = sfu.createLeg("bob", 2);
 await negotiate(bob2.pc, bLeg2.pc);
-await sleep(500);
 check("takeover replaced the leg", sfu.getLeg("bob")?.gen === 2);
 check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bLeg.closed);
 
@@ -216,7 +230,7 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     for (const other of members.keys()) if (other !== id) {
       room.setConsent(other, id, true); room.setConsent(id, other, true);
     }
-    await sleep(10);                                  // let the coalesced asks land
+    await until("the coalesced asks land", () => i === 0 || new Set(pend).size === i + 1);
     const asks = [...new Set(pend)]; pend.length = 0;
     // Drain CONCURRENTLY — this is the glare case, and negotiate() must serialize it.
     const r = await Promise.allSettled(asks.map((legId) =>
@@ -224,11 +238,10 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     check(`join ${i + 1}/5: every renegotiation succeeded (no glare rejection)`,
       r.every((x) => x.status === "fulfilled"), r.map((x) => x.status).join(","));
   }
-  await sleep(800);
   const routes = [...members.keys()].reduce((n, id) => n + (room.getLeg(id)?.outbound.size ?? 0), 0);
   check("incremental joins converge to a full room", routes === 20, `${routes}/20 routes`);
   for (let k = 0; k < 12; k++) { for (const p of members.values()) await p.speak(1); }
-  await sleep(600);
+  await tryUntil("everyone heard all 48", () => [...members.values()].every((p) => p.heard >= 12 * 4));
   const under = [...members.values()].filter((p) => p.heard < 12 * 4 * 0.9).length;
   check("…and everyone actually hears everyone", under === 0, `${under} peers under-hearing`);
   room.closeAll();
@@ -249,14 +262,17 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     await negotiate(p.pc, room.createLeg(`L${i}`, 1).pc);
     room.setConsent(`L${i}`, "spk", true);
   }
-  await sleep(20);
   for (let i = 0; i < 4; i++) await room.negotiate(`L${i}`, (pc) => negotiate(pc, ls[i].pc));
-  await sleep(500);
   const before = transportErrorsSwallowed();
   const pump = (async () => { for (let i = 0; i < 80; i++) { await spk.speak(1); } })();
-  await sleep(80);
-  for (let i = 0; i < 4; i++) { room.closeLeg(`L${i}`); await sleep(40); }
-  await pump; await sleep(300);
+  await tryUntil("fanout reaches every listener", () => ls.every((p) => p.heard > 0));
+  for (let i = 0; i < 4; i++) {
+    room.closeLeg(`L${i}`);
+    const rx = room.getLeg("spk")!.rxPackets;
+    await tryUntil("fanout runs on after the close", () => room.getLeg("spk")!.rxPackets > rx + 2);
+  }
+  await pump;
+  await pause("the dead listeners' ICMP refusals surface asynchronously: the row is that none crashes us", 300);
   check("a listener dying mid-fanout does not crash the process",
     room.getLeg("spk") !== undefined, "process reached this line");
   check("…and the benign transport errors were contained, not ignored globally",
@@ -276,11 +292,8 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
       const p = new FakePeer(); ps.push(p);
       await negotiate(p.pc, room.createLeg(`c${c}p${i}`, 1).pc);
     }
-    await sleep(60);
     for (let i = 0; i < 3; i++) { room.closeLeg(`c${c}p${i}`); ps[i].pc.close(); }
-    await sleep(60);
   }
-  await sleep(200);
   const grewMB = (process.memoryUsage().rss - rss0) / 1048576;
   check("18 legs created+destroyed leaks no legs", room.diag().legs.length === 0);
   check("…and RSS growth stays bounded (<60MB)", grewMB < 60, `grew ${grewMB.toFixed(0)}MB`);
@@ -298,12 +311,12 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   await negotiate(spk.pc, room.createLeg("S", 1).pc);
   await negotiate(lis.pc, room.createLeg("L", 1).pc);
   room.setConsent("L", "S", true);
-  await sleep(10);
+  await tryUntil("the first ask lands", () => asks.includes("L"));
   const afterFirst = asks.filter((a) => a === "L").length;
   // the exchange never happens (simulating a blip) — the route stays pending
   room.setConsent("L", "S", false);
   room.setConsent("L", "S", true);
-  await sleep(10);
+  await tryUntil("the re-ask lands", () => asks.filter((a) => a === "L").length > afterFirst);
   check("an un-negotiated route is re-asked, not silenced forever",
     asks.filter((a) => a === "L").length > afterFirst, `asks ${afterFirst}→${asks.filter(a=>a==="L").length}`);
   check("…and diag does not claim the listener hears them yet",
@@ -311,7 +324,6 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     JSON.stringify(room.diag().legs.find((l) => l.id === "L")));
   // now actually negotiate: the route becomes real and stops being re-asked
   await room.negotiate("L", (pc) => negotiate(pc, lis.pc));
-  await sleep(400);
   check("…and once negotiated, diag reports it as heard",
     room.diag().legs.find((l) => l.id === "L")?.hears.includes("S") === true);
   room.closeAll();
@@ -329,7 +341,6 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   await negotiate(s2.pc, room.createLeg("s2", 1).pc);
   await negotiate(lis.pc, room.createLeg("lis", 1).pc);
   room.setConsent("lis", "s1", true);
-  await sleep(10);
   await room.negotiate("lis", async (pc) => {
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
     room.setConsent("lis", "s2", true);                  // ← after the offer exists
@@ -337,17 +348,14 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
     const ans = await lis.pc.createAnswer(); await lis.pc.setLocalDescription(ans);
     await pc.setRemoteDescription(lis.pc.localDescription!);
   });
-  await sleep(20);
+  await tryUntil("the SFU asks for the latecomer's round", () => asks.filter((a) => a === "lis").length > 1);
   const mid = room.diag().legs.find((l) => l.id === "lis") as any;
   check("a route added mid-exchange is NOT claimed as negotiated",
     mid?.hears.includes("s2") === false && mid?.pendingRoutes.includes("s2") === true,
     JSON.stringify({ hears: mid?.hears, pending: mid?.pendingRoutes }));
   check("…and the SFU asks for another round on its own", asks.filter((a) => a === "lis").length > 1);
   await room.negotiate("lis", (pc) => negotiate(pc, lis.pc));
-  await sleep(500);
-  const before = lis.heard;
-  await s2.speak(12);
-  await sleep(400);
+  const before = await heardAll(s2, lis, 12);
   check("…after which the latecomer is actually heard", lis.heard > before, `heard ${before}→${lis.heard}`);
   room.closeAll();
 }
@@ -375,48 +383,40 @@ check("…and the old PC was closed", bLeg.pc.connectionState === "closed" || bL
   // false). This is the state after closeLeg cleanup, and for any pair policy
   // never spoke about — the "absent" case the allowlist claims to deny.
   room.setConsent("b", "a", true);
-  await sleep(10);
   await room.negotiate("b", (pc) => negotiate(pc, b.pc));
-  await sleep(400);
   // Remove the ENTIRE listener row — the true "absent" state. Deleting only the
   // inner key leaves the row, and `=== false` vs `!== true` behave identically
   // there, which is why the first version of this test did not discriminate.
   (room as unknown as { consent: Map<string, Map<string, boolean>> }).consent.delete("b");
   const atDelete = b.heard;
-  await a.speak(20);
-  await sleep(400);
+  const fwd4 = await forwardedWhile(room, "a", a, 20);
   check("M4: ABSENT consent denies (not merely explicit-false)",
-    b.heard === atDelete, `heard ${atDelete}→${b.heard}`);
+    fwd4 === 0 && b.heard === atDelete, `forwarded=${fwd4} heard ${atDelete}→${b.heard}`);
 
   // M5: a listener with consent but NO route must hear nothing.
   room.setConsent("c", "a", true);
   (room.getLeg("c") as unknown as { outbound: Map<string, unknown> }).outbound.delete("a");
   const cAt = c.heard;
-  await a.speak(15);
-  await sleep(300);
-  check("M5: consent without a route still delivers nothing", c.heard === cAt, `heard ${cAt}→${c.heard}`);
+  const fwd5 = await forwardedWhile(room, "a", a, 15);
+  check("M5: consent without a route still delivers nothing", fwd5 === 0 && c.heard === cAt, `forwarded=${fwd5} heard ${cAt}→${c.heard}`);
 
   // M1: a CLOSED speaker's in-flight packets reach nobody.
   room.setConsent("b", "a", true);
-  await sleep(10);
   await room.negotiate("b", (pc) => negotiate(pc, b.pc));
-  await sleep(300);
-  const beforeClose = b.heard;
+  const beforeClose = b.heard, f1 = room.diag().forwarded;
   room.closeLeg("a");
   await a.speak(15);                                  // the corpse keeps talking
-  await sleep(300);
-  check("M1: a closed speaker's packets reach nobody", b.heard === beforeClose, `heard ${beforeClose}→${b.heard}`);
+  await pause("the corpse's leg is gone, so no arrival to wait on: the row is that nothing lands in this window", 300);
+  check("M1: a closed speaker's packets reach nobody", room.diag().forwarded === f1 && b.heard === beforeClose, `heard ${beforeClose}→${b.heard}`);
 
   // M7: nobody hears their own voice echoed back.
   const solo = new Sfu();
   const s1 = new FakePeer();
   await negotiate(s1.pc, solo.createLeg("s1", 1).pc);
   solo.setConsent("s1", "s1", true);                  // even if policy says yes
-  await sleep(10);
   const selfAt = s1.heard;
-  await s1.speak(15);
-  await sleep(300);
-  check("M7: no self-echo even with self-consent set", s1.heard === selfAt, `heard ${selfAt}→${s1.heard}`);
+  const fwd7 = await forwardedWhile(solo, "s1", s1, 15);
+  check("M7: no self-echo even with self-consent set", fwd7 === 0 && s1.heard === selfAt, `forwarded=${fwd7} heard ${selfAt}→${s1.heard}`);
   solo.closeAll();
   room.closeAll();
 }
@@ -681,5 +681,4 @@ const d = sfu.diag();
 check("diag reports live legs", Array.isArray(d.legs) && typeof d.forwarded === "number");
 
 sfu.closeAll();
-console.log(`\n${S.fail === 0 ? "\x1b[32m" : "\x1b[31m"}${S.pass} passed, ${S.fail} failed\x1b[0m\n`);
-process.exit(S.fail === 0 ? 0 : 1);
+S.done();

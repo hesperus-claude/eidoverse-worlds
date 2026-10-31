@@ -651,15 +651,10 @@ export function initDock(entries) {
   paintDock();
   bus.on('frames', () => paintDock());
   bus.on('build-mode', () => paintDock());   // the wrench's title follows the mode at once, not on the 2 s poll
-  // AUTO-PIN ON THE GRANT, and only on the transition. R asked for the wrench
-  // to "activate and pin to the dock automatically when you do get it", with a
-  // manual unpin still winning — so this fires on closed->open, never on every
-  // repaint, or the next paint would undo her unpin. A builder who was ALREADY
-  // a builder at boot is not pinned over their own earlier choice; only an
-  // actual grant counts. The gate is closed for everyone at initDock (rights
-  // ride the snapshot, which lands later), so the FIRST report is the level we
-  // start from, not an edge — read at initDock, every reload re-pinned a
-  // builder's unpinned wrench (measured 10-01; tools/dock-boot-test.ts).
+  // AUTO-PIN ON THE GRANT, only on the closed->open edge, so a manual unpin still
+  // wins. A builder who was ALREADY one at boot is not re-pinned: rights ride the
+  // snapshot, which lands later, so the FIRST report is the starting level, not
+  // an edge (tools/dock-test.ts).
   bus.on('your-rights', () => {
     for (const e of dockEntries) {
       if (!e.action || !e.gate) continue;

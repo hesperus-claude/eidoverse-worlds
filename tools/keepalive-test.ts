@@ -7,10 +7,11 @@ import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds } from "./harness.ts";
+import { foundWorlds, freePort } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
+import { until, tryUntil, pause } from "./protocol/wait.ts";
 
-const WPORT = 8957, MPORT = 8958;
+const WPORT = freePort(8957), MPORT = freePort(WPORT + 1);
 // MISSES is overridable so the suite can prove this test has teeth: run it
 // with KEEPALIVE_MISSES=1 (the old single-miss behaviour) and the
 // survive-a-miss assertion must FAIL.
@@ -20,7 +21,6 @@ foundWorlds(worldsDir, ["commons"]);   // joining never founds a world
 // a scratch token registry: "dev-token" is in the tracked example, which the registry refuses to honour anywhere
 const tokensPath = join(worldsDir, "tokens.json");
 await Bun.write(tokensPath, JSON.stringify({ "keepalive-labtok": { id: "claude", name: "Claude", world: "commons" } }));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const S = suite("keepalive");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
 
@@ -52,13 +52,13 @@ function textFrame(s: string): Buffer {
   return Buffer.concat([head, mask, masked]);
 }
 
-type Peer = { sock: Socket; openedAt: number; closedAt: number; send(s: string): void };
+type Peer = { sock: Socket; openedAt: number; closedAt: number; heard: string; send(s: string): void };
 /** A peer that upgrades to websocket and then NEVER answers a ping. */
 function deafPeer(): Promise<Peer> {
   return new Promise((res, rej) => {
     const sock = connect(MPORT, "127.0.0.1");
     const peer: Peer = {
-      sock, openedAt: 0, closedAt: 0,
+      sock, openedAt: 0, closedAt: 0, heard: "",
       send: (s) => { try { sock.write(textFrame(s)); } catch { /* closing */ } },
     };
     let upgraded = false;
@@ -73,6 +73,7 @@ function deafPeer(): Promise<Peer> {
     });
     // Server frames (including pings) are read and DELIBERATELY ignored.
     sock.on("data", (d) => {
+      peer.heard += d.toString("latin1");
       if (!upgraded && d.toString("latin1").includes("101")) {
         upgraded = true; peer.openedAt = Date.now(); clearTimeout(t); res(peer);
       }
@@ -87,23 +88,33 @@ const INIT = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize",
   params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "t", version: "0" } } });
 const INITED = JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" });
 
+/** Initialize, wait for the door's answer, then say initialized: a handshaken agent. */
+async function handshake(p: Peer) {
+  p.send(INIT);
+  await until("the door answered initialize", () => p.heard.includes('"result"'));
+  p.send(INITED);
+}
+const listening = (port: number) => new Promise<boolean>((res) => {
+  const s = connect(port, "127.0.0.1"); s.on("connect", () => { s.destroy(); res(true); }); s.on("error", () => res(false));
+});
+
 try {
-  await sleep(2500);
+  await until("the world serves", () => fetch(`http://127.0.0.1:${WPORT}/`).then(() => true, () => false), { ms: 20_000 });
+  await until("the MCPL door listens", () => listening(MPORT), { ms: 20_000 });
 
   // ── a thinking agent: connected, handshaken, then silent ──
   const quiet = await deafPeer();
-  quiet.send(INIT); await sleep(250); quiet.send(INITED);
-  await sleep(500);
+  await handshake(quiet);
   check("a silent agent connects", quiet.closedAt === 0);
 
   // OLD behaviour reaped it here (one missed pong). It must survive.
-  await sleep(PING_SEC * 1000 * 2 + 400);
+  await pause("two missed pings: the single-miss check reaped here, the grace window must not", PING_SEC * 1000 * 2 + 400);
   check("survives missed pongs that the old single-miss check would have killed",
     quiet.closedAt === 0,
     `died after ${((quiet.closedAt - quiet.openedAt) / 1000).toFixed(1)}s`);
 
   // ...but a peer that never answers at all IS still reaped, just later.
-  await sleep(PING_SEC * 1000 * (MISSES + 3));
+  await tryUntil("the deaf peer is reaped", () => quiet.closedAt !== 0, { ms: PING_SEC * 1000 * (MISSES + 3) });
   const lived = (quiet.closedAt - quiet.openedAt) / 1000;
   check("a genuinely unresponsive peer is still terminated", quiet.closedAt !== 0, "never closed");
   check(`reaped only after the full grace window (~${MISSES * PING_SEC}s, lived ${lived.toFixed(1)}s)`,
@@ -113,17 +124,16 @@ try {
 
   // ── an agent that TALKS is alive, pongs or not: inbound traffic is proof ──
   const chatty = await deafPeer();
-  chatty.send(INIT); await sleep(250); chatty.send(INITED);
+  await handshake(chatty);
   const talk = setInterval(() => chatty.send(JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/list" })),
     PING_SEC * 700);
-  await sleep(PING_SEC * 1000 * (MISSES + 3));
+  await pause("longer than the whole grace window: talking must keep it alive that long", PING_SEC * 1000 * (MISSES + 3));
   clearInterval(talk);
   check("an agent that keeps talking is never reaped, pongs or not",
     chatty.closedAt === 0, `died after ${((chatty.closedAt - chatty.openedAt) / 1000).toFixed(1)}s`);
   chatty.sock.destroy();
 } catch (e) {
-  S.fail++;
-  console.log(`\x1b[31mFATAL\x1b[0m ${(e as Error).message}\n${(e as Error).stack}`);
+  check("the suite ran to the end", false, (e as Error).stack);
 } finally {
   world.kill(); mcpl.kill();
 }
