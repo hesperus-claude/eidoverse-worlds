@@ -188,6 +188,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["native-login", "../native-login-test.ts", 1], // the native login HTTP handler, isolated
   ["mkconfig", "../mkconfig-test.ts", 1], // deploy/projector/mkconfig.sh renders mediamtx.template.yml
   ["heightmap-route", "../heightmap-route-test.ts", 1], // GET /heightmap: the export door's budget gates before the work
+  ["harness", "../harness-test.ts", 1], // the bench harness itself: failures keep their evidence, a foreign nonce is refused, a port squatter moves us to a fresh port
   ["config-env", "../config-env-test.ts", 1], // env numbers are validated (limits.ts envNumber): unset, junk and out-of-range fall back
   ["identity", "identity-check.ts", 1], // who a joiner is: C1-C3, H1, H3-H5 (security review 10-06), one identity per account
   ["fork-reset", "fork-reset-check.ts", 1],
@@ -414,7 +415,7 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
 // at a time) once
 // sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
-export const BROWSER = ["browser", "comps-parity", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "xr-desktop-banner", "sky-bake-time", "sky-bakegraph", "xr-quad-softswap", "client-tools"];
+export const BROWSER = ["browser", "comps-parity", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "xr-desktop-banner", "sky-bake-time", "sky-bakegraph", "xr-quad-softswap", "client-tools", "harness"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 // the order the gate runs them: core (in CORE's order), then main, then browser
 export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];

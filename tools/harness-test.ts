@@ -3,13 +3,14 @@
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { scratchBench, scratchSequencer, mkCheck, ROOT, sleep } from './harness.ts';
+import { scratchBench, scratchSequencer, mkCheck, ROOT } from './harness.ts';
+import { until } from './protocol/wait.ts';
 const mode = process.argv[2];
 if (mode === 'assertion') {
-  const { evalJson, cleanup } = await scratchBench('harness-assertion', { portFrom: 9010 });
+  const { evalJson, cleanup, SCRATCH } = await scratchBench('harness-assertion', { portFrom: 9010 });
   const { check } = mkCheck();
   await evalJson(`console.warn('retained-console-sentinel'); setTimeout(() => { throw Error('retained-runtime-sentinel'); }, 0);`);
-  await sleep(100);
+  await until('the runtime sentinel is recorded', () => { try { return readFileSync(join(SCRATCH, 'browser.events.jsonl'), 'utf8').includes('retained-runtime-sentinel'); } catch { return false; } }, { ms: 5000 });
   let caught = false;
   try { await evalJson(`throw Error('retained-eval-sentinel')`); } catch { caught = true; }
   check('evalJson surfaces exceptionDetails', caught);
