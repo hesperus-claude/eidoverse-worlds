@@ -153,7 +153,7 @@ register('grant', (arg) => {
     // an owner's grant never ends: the authority refuses an owner with an end, so none is kept or sent
     if (isOwner(role) && dur) return logChat('*', `ownership never expires — /grant ${id} owner, without a time`);
     const { until: was, ...rest } = cur ?? {};
-    const until = forever || isOwner(role) ? undefined : dur ? serverUntil(dur) : was;
+    const until = forever || isOwner(role) ? undefined : dur ? serverUntil(dur) : was > serverNow() ? was : undefined;
     const exceptions = can || rest.can ? { ...(rest.can ?? {}), ...(can ?? {}) } : null;
     const value = { ...rest, ...(role ? { role } : {}), ...(exceptions ? { can: exceptions } : {}), ...(until !== undefined ? { until } : {}) };
     send({ verb: 'set', args: { id: '@world', component: `roles:${who}`, value } },
@@ -424,7 +424,7 @@ register('letgo', (arg) => {
 register('pushable', (arg) => {
   const v = (arg || '').trim().toLowerCase();
   if (v === 'on' || v === 'off') setPushable(v === 'on');
-  return logChat('*', `Move me is ${pushable() ? 'on: people CAN' : 'off: people can NOT'} shove, blast, drag, carry or seat you${v ? '' : ' — /pushable on|off to change'}`);
+  return logChat('*', `“Allow being moved” is ${pushable() ? 'on: people CAN' : 'off: people can NOT'} shove, blast, drag, carry or seat you${v ? '' : ' — /pushable on|off to change'}`);
 });
 
 register('fork', (arg) => {

@@ -1,13 +1,14 @@
 // Body consent (PROTOCOL §5): two gates per body and two lists of people. PRESENCE ONLY: nothing here is ever
 // appended to a log or written to world state. The authority keeps one table per body in its presence plane, refuses
-// before delivery, and the target's client has the final word.
+// before delivery: the authority alone decides (decide below; no client gate).
 //   gates   move  = where my body is: shoved (a /boom's force too), dragged, carried, seated or occupied (shove, displace)
 //           touch = everything else done to it: touched (intimate points too) and posed (touch, intimate, pose)
 //           each on or off; never chosen = the world's @world.body-default for that gate, else DEFAULT_GATES
 //   lists   allow = these people always may, every class, whatever the gates say; block = these never may. Block beats allow.
-// A stored table in an older shape (cells per tier, or one switch accept|ask|refuse) is read and rewritten
-// (migratePresence, at load).
-// near, follow and voice are named classes no gate covers yet (nothing here enforces them): the lists still answer them.
+// Its history: a table of cells per tier (to 10-20), then one switch accept|ask|refuse (to 10-28); `ask` and its inbox are
+// on branch archive/consent-ask. A stored table in either shape is read and rewritten (migratePresence, at load).
+// near, follow and voice are named classes no gate covers yet (nothing here enforces them): the lists still answer them, and
+// so does an old no kept in the table's `closed` (migratePresence), for the act that will enforce one to read first.
 import { CONTACT_POINTS, canonicalPoint } from "../contact.js";
 export const CLASSES = ["near", "follow", "touch", "intimate", "pose", "shove", "displace", "voice"];
 export const ENFORCED = ["touch", "intimate", "pose", "shove", "displace"];
@@ -75,9 +76,11 @@ export function decide(P, from, to, cls, worldDefault) {
   cls = classOf(cls); const t = P.consent?.[to];
   if (listed(t, "block", from)) return { mode: "deny", gate: null, why: `${to} never allows ${from}` };
   if (listed(t, "allow", from)) return { mode: "allow", listed: true, why: `${to} always allows ${from}` };
-  const gate = GATE_OF[cls]; if (!gate) return { mode: "allow", why: `no gate covers ${cls}` };
+  const gate = GATE_OF[cls], wd = worldDefault ?? P.bodyDefault;   // the authority keeps P.bodyDefault = @world.body-default
+  if (!gate) return t?.closed?.[cls] ? { mode: "deny", why: `${to} said no to ${cls} before the gates (kept: migratePresence)` }
+    : wd === "refuse" || wd === "ask" ? { mode: "deny", why: `this world's old default (${wd}) said no to ${cls}` } : { mode: "allow", why: `no gate covers ${cls}` };
   if (typeof t?.[gate] === "boolean") return { mode: t[gate] ? "allow" : "deny", gate, why: `${to}'s ${gate} gate is ${t[gate] ? "on" : "off"}` };
-  const w = worldGates(worldDefault ?? P.bodyDefault)[gate];   // the authority keeps P.bodyDefault = @world.body-default
+  const w = worldGates(wd)[gate];
   const on = typeof w === "boolean" ? w : DEFAULT_GATES[gate];
   return { mode: on ? "allow" : "deny", gate, why: `this world's default for ${gate} is ${on ? "on" : "off"}` };
 }
@@ -92,6 +95,8 @@ export function forgetIdentity(P, who) { if (!P?.consent) return; delete P.conse
 export const PERSON_OPS = ["allow", "block", "unlist"];
 /** Arguments of earlier shapes, refused with a pointer: the switch and its ask, and the table before it. */
 export const RETIRED_CONSENT = ["switch", "deny", "class", "for", "answer", "yes", "preset", "set", "pause", "friend", "unfriend", "delegate", "undelegate", "of"];
+/** entries per list (allow, block); one naming a thing or sponsor not here yet is kept (it may arrive later: review 1.7) */
+export const LIST_MAX = 1024;
 export const CONSENT_FIX = "consent {move: true|false, touch: true|false}, or {allow|block|unlist: <who>} for one person";
 export function setConsent(P, actor, a) {
   if (a == null || typeof a !== "object") return { ok: false, code: "shape", reason: "consent takes an object" };
@@ -103,33 +108,62 @@ export function setConsent(P, actor, a) {
   if (ops.length > 1) return { ok: false, code: "shape", reason: `one of ${PERSON_OPS.join(", ")} at a time, got ${ops.join(" and ")}`, fix: CONSENT_FIX };
   const op = ops[0], who = op ? a[op] : undefined;
   if (op && !isWho(who)) return { ok: false, code: "shape", reason: `${op}: an identity`, fix: CONSENT_FIX };
+  const t0 = P.consent?.[actor], size = op && op !== "unlist" ? Object.keys(t0?.[op] ?? {}).filter((k) => k !== who).length : 0;
+  if (size >= LIST_MAX) return { ok: false, code: "bounds", reason: `your ${op} list holds ${LIST_MAX} entries, its limit`, fix: `remove one first: consent {unlist: <who>} (Settings ▸ body: remove)` };
   const t = ((P.consent ??= dict())[actor] ??= dict());
   for (const g of GATES) if (a[g] !== undefined) t[g] = a[g];
   if (op) { if (t.allow) delete t.allow[who]; if (t.block) delete t.block[who];
     if (op !== "unlist") (t[op] ??= dict())[who] = true; }
   return { ok: true, target: actor };
 }
-// migratePresence: an older stored table read as today's gates + lists, never wider; in place, idempotent (docs/CONSENT-TABLE-RECORD.md)
+/** The presence plane's consent tables in today's shape (CONSENT_SHAPE), only ever NARROWER than they were. A switch (to
+ *  10-28): refuse or ask → both gates off (ask was no until yes); accept → move on, touch left to the world's default. A table
+ *  before the switch (to 10-20: preset, cells, pause, friends) is read as the switch it became then: paused or any enforced
+ *  class closed for everyone → refuse, else any ask → ask, else accept. Per-person answers become the lists: any class
+ *  denied or asked → block; else every enforced class allowed with no end → allow (fewer, or one with an end, is dropped: the gates answer). A no
+ *  (or ask) to near, follow or voice from the switch, a pause or the everyone row is kept in `closed` (UNGATED); one in the
+ *  friends row of a body with a mutual friend closes that class for everyone (its gate off, or `closed`). The
+ *  asks, their cool-downs and their rate are dropped, silently (R 10-28 13:03: "we're keeping their gates"). Returns how many
+ *  tables changed. In place; idempotent. */
 export const CONSENT_SHAPE = 4;
+/** The classes no gate covers (near, follow, voice): an old no to one is kept in the table's `closed`, which decide reads (#260, Stella item 2). */
+export const UNGATED = Object.freeze(CLASSES.filter((c) => !GATE_OF[c]));
+function closedOf(t, sw) {
+  if (sw === "refuse" || sw === "ask") return UNGATED;   // the switch answered every class; ask was no until yes (F3)
+  if (typeof t.switch === "string" || !isTable(t)) return [];
+  const row = rowOf(t, "everyone"); return UNGATED.filter((c) => row[c] !== "allow");
+}
+/** A table before the switch: its answers for one tier (the preset's, then its cells). */
+function rowOf(t, tier) {
+  const row = { ...(PRESETS[t.preset] ?? PRESETS[DEFAULT_PRESET])[tier] };
+  for (const [k, r] of Object.entries(t.cells ?? {})) if (legacyTier(k) === tier && r && typeof r === "object") for (const [c, m] of Object.entries(r)) row[classOf(c)] = modeOf(m);
+  return row;
+}
+const isTable = (t) => !(t.preset === undefined && t.cells === undefined && !t.paused);
 function switchOf(t) {
   if (typeof t.switch === "string") return t.switch;
-  if (t.preset === undefined && t.cells === undefined && !t.paused) return undefined;
-  const row = { ...(PRESETS[t.preset] ?? PRESETS[DEFAULT_PRESET]).everyone };
-  for (const [tier, r] of Object.entries(t.cells ?? {})) if (legacyTier(tier) === "everyone" && r && typeof r === "object") for (const [c, m] of Object.entries(r)) row[classOf(c)] = modeOf(m);
+  if (!isTable(t)) return undefined;
+  const row = rowOf(t, "everyone");
   const modes = ENFORCED.map((c) => row[c]);
   return t.paused || modes.includes("deny") ? "refuse" : modes.includes("ask") ? "ask" : "accept";
 }
 export function migratePresence(P) {
   if (!P || typeof P !== "object" || P.consentShape === CONSENT_SHAPE) return 0;
   let n = 0;
-  for (const t of Object.values(P.consent ?? {})) { if (!t || typeof t !== "object") continue;
+  const C0 = P.consent ?? {}, friendsOf = (w) => (Array.isArray(C0[w]?.friends) ? C0[w].friends : []);
+  const befriended = new Set(Object.keys(C0).filter((w) => friendsOf(w).some((f) => f !== w && friendsOf(f).includes(w))));   // the old isFriend: mutual
+  for (const [who, t] of Object.entries(C0)) { if (!t || typeof t !== "object") continue;
     const old = ["switch", "over", "preset", "cells", "paused", "friends", "delegates"].filter((k) => Object.hasOwn(t, k)); if (!old.length) continue;
     const sw = switchOf(t);
-    if (sw === "refuse" || sw === "ask") { t.move = false; t.touch = false; } else if (sw === "accept") t.move = true;   // F3: ask was no until yes
+    if (sw === "refuse" || sw === "ask") { t.move = false; t.touch = false; } else if (sw === "accept") t.move = true;   // F3, R 10-28 16:02
+    for (const c of closedOf(t, sw)) (t.closed ??= dict())[c] = true;   // never wider for the ungated three too (UNGATED)
+    // the new table has no per-friend slot: a friends-row no or ask turns that class off for everyone (its gate; F3's ask → off), never refuses the load
+    if (befriended.has(who) && isTable(t)) { const row = rowOf(t, "friends");
+      for (const c of CLASSES) if (row[c] !== "allow") { if (GATE_OF[c]) t[GATE_OF[c]] = false; else (t.closed ??= dict())[c] = true; } }
     for (const [who, row] of Object.entries(t.over ?? {})) { if (!isWho(who) || !row || typeof row !== "object") continue;
       const cells = Object.entries(row).filter(([, c]) => c && typeof c === "object"), yes = new Set(cells.filter(([, c]) => c.mode === "allow" && c.until === undefined).map(([k]) => classOf(k)));
       if (cells.some(([, c]) => c.mode === "deny" || c.mode === "ask")) (t.block ??= dict())[who] = true;   // ask was no until yes (L14, as F3)
-      else if (ENFORCED.every((c) => yes.has(c))) (t.allow ??= dict())[who] = true; }   // allow grants every class: only a row that already did (F1)
+      else if (!t.paused && ENFORCED.every((c) => yes.has(c))) (t.allow ??= dict())[who] = true; }   // allow grants every class: only a row that already did (F1)
     for (const k of old) delete t[k]; n++; }
   for (const k of ["asks", "asked", "askSeq", "cool"]) if (Object.hasOwn(P, k)) { delete P[k]; n++; }
   for (const r of P.ring ?? []) if (r && Object.hasOwn(LEGACY_CLASS, r.cls)) r.cls = classOf(r.cls);

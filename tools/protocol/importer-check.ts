@@ -243,8 +243,8 @@ row("IM-W1", () => {
   const sigma = kid?.water?.attenuationColor?.map((c: number) => -Math.log(c) / kid.water.attenuationDistance);
   ok(TV1.deferredFeatures(L).length === 0 && r.stats.divergences === 0 && !T.pool.water && !T.pool.zone && kid?.parent?.to === "pool" && JSON.stringify(kid.transform.pos) === "[0,-2,0]"
     && JSON.stringify(kid.zone) === JSON.stringify({ shape: "box", size: [10, 4, 10] }) && sigma?.every((x: number, i: number) => Math.abs(x - water.absorption[i]) < 1e-15) && JSON.stringify(kid.water.scatterColor) === JSON.stringify(water.scatter)
-    && JSON.stringify(kid.water.waves) === JSON.stringify(water.waves) && kid["imported:water"] === undefined && kid["physics-area"] === undefined && kid.water.drag === undefined && T.pond["physics-area"] === undefined && JSON.stringify(T.pond.zone) === JSON.stringify({ shape: "box", size: [4, 2, 4] }) && !!T.pond.water,
-    "IM-W1 a water volume on a thing with a model becomes a child at its centre with zone {box, size} + water (σ as attenuationColor e^−σ over 1 m, scatter as scatterColor, waves as they were; main's 2.4 speed is today's stroke there, so no drag is written: @31); on a bare thing at its origin, the thing itself", { pool: T.pool, kid, pond: T.pond, mapped: r.stats.mapped });
+    && JSON.stringify(kid.water.waves) === JSON.stringify(water.waves) && kid["imported:water"] === undefined && kid["physics-area"] === undefined && T.pond["physics-area"] === undefined && JSON.stringify(T.pond.zone) === JSON.stringify({ shape: "box", size: [4, 2, 4] }) && !!T.pond.water,
+    "IM-W1 a water volume on a thing with a model becomes a child at its centre with zone {box, size} + water (σ as attenuationColor e^−σ over 1 m, scatter as scatterColor, waves as they were; main's 2.4 speed is today's stroke there, so no physics-area is written); on a bare thing at its origin, the thing itself", { pool: T.pool, kid, pond: T.pond, mapped: r.stats.mapped });
 });
 row("IM-W2", () => {
   const q = [0, Math.sin(0.3), 0, Math.cos(0.3)];
@@ -275,11 +275,12 @@ row("IM-V1", () => {
     && JSON.stringify(T.sub["imported:vehicle"]) === JSON.stringify({ probes: veh.probes }) && !T.raft["imported:vehicle"]
     && [["floor", -240], ["ceiling", -4]].every(([k, y]) => { const w = T[TV1.wallChildId?.("sub", k)]; return w && w.hidden === true && !w.parent && JSON.stringify(w.collider?.blocks) === '["hulls"]' && w.transform.pos[1] === y && w.transform.pos[0] === 0 && w.transform.pos[2] === 0; })   // at the origin, spanning every x/z (review delta-260 L-C)
     && !T[TV1.wallChildId?.("raft", "floor")]
+    && [["floor"], ["ceiling"]].every(([k]) => JSON.stringify(T[TV1.wallChildId?.("sub", k)]?.collider?.layer) === JSON.stringify([TV1.bandLayerOf?.("sub")])) && JSON.stringify(T.sub.collider?.mask) === JSON.stringify([1, TV1.bandLayerOf?.("sub")]) && T.raft.collider?.mask === undefined   // @32: its own layer (Basil 1.1)
     && h?.parent?.to === "sub" && h.socket?.name === "helm" && JSON.stringify(h.transform?.pos) === JSON.stringify(veh.helm) && h.station?.action === "drive" && JSON.stringify(h.station.input) === JSON.stringify({ move: "drive" }) && h.station.leaveBy === "menu" && JSON.stringify(h.station.exit) === JSON.stringify(veh.exit)
     && JSON.stringify(T.raft?.drive) === JSON.stringify({ maxSpeed: 15, turnRate: 0.1, climbRate: 15 }) && h2 && h2.station.exit === undefined
     && r.stats.mapped?.some((m: any) => m.component === "vehicle" && m.id === "sub" && m.into.length === 4)
     && JSON.stringify(r.stats.unmapped?.find((u: any) => u.component === "vehicle" && u.id === "sub")?.fields) === JSON.stringify(["probes"]),
-    "IM-V1 a vehicle becomes drive on its host (speed → maxSpeed, turnRate, climbRate = speed, main's clamps) + a helm child (a socket at helm, station {action: 'drive', input: {move: 'drive'}, leaveBy: 'menu' (Space rises, as main's), exit}); minY/maxY two hidden hull-only walls at the band (@29: the floor's top at minY, 10 m thick), probes ride imported:vehicle, listed under unmapped",
+    "IM-V1 a vehicle becomes drive on its host (speed → maxSpeed, turnRate, climbRate = speed, main's clamps) + a helm child (a socket at helm, station {action: 'drive', input: {move: 'drive'}, leaveBy: 'menu' (Space rises, as main's), exit}); minY/maxY two hidden hull-only walls at the band (@29: the floor's top at minY, 10 m thick) in the sub's own layer, which only its mask scans (@32), probes ride imported:vehicle, listed under unmapped",
     { sub: T.sub, h, raft: T.raft, h2, mapped: r.stats.mapped, unmapped: r.stats.unmapped });
 });
 // ---- IM-C / IM-E: main #248's collision toggle, climb routes and environment, each to its home ----
@@ -317,11 +318,11 @@ row("IM-E1", () => {
     && near(W.sky?.gradient?.top, lin(0x338ac1)) && near(W.sky?.gradient?.horizon, lin(0xbedce6)) && W.sky.gradient.bottom === undefined
     && JSON.stringify(W.terrain) === JSON.stringify({ kind: "flat", height: -260 }) && floorKid === undefined && !Object.values(T).some((c: any) => c?.label === "floor")
     && sun?.light?.kind === "directional" && sun.light.color === 0xfff4df && sun.light.intensity === 3 && near(toward, [0.4 / d, 0.8 / d, 0.2 / d])
-    && fx?.parent?.to === "land" && JSON.stringify(fx.particles) === JSON.stringify({ effect: "dust", params: { count: 600, size: 0.018, area: 8 } })
+    && fx?.parent?.to === "land" && /^sha256:/.test(fx.particles?.effect) && fx.particles.params === undefined && r.effects.get(fx.particles.effect)?.emitters?.[0]?.spawn?.amount === 1400 && r.effects.get(fx.particles.effect).emitters[0].shape.extents[0] === 16 && r.effects.get(fx.particles.effect).emitters[0].color.base === 0xaec8b4
     && sp2 === undefined && JSON.stringify(T.zz["imported:environment"]) === JSON.stringify({ spawn: [1, 2, 3] }) && !("environment" in T.land) && !Object.keys(T.land).some((k) => /^[^:]*\/environment/.test(k))
-    && JSON.stringify(T.land["imported:environment"]) === JSON.stringify({ sky: { ambient: 1.5 }, particles: { count: 1400, range: 16, color: "#aec8b4" }, fogDensity: 0.2 })
-    && JSON.stringify(r.stats.unmapped?.find((u: any) => u.component === "environment")?.fields) === JSON.stringify(["sky.ambient", "particles.count, particles.range, particles.color", "fogDensity"]),
-    "IM-E1 environment: spawn → @world.spawn (a second environment, which main never read, rides imported: IM-E5), bounds → @world.bounds (its min.y under the floor: IM-E3), floor → @world.terrain {kind: 'flat', height: floor} (no floor thing), sky → @world.sky.gradient (linear) + a directional sun thing (main's defaults), particles → a dust child; ambient, clamped particle values and unknown keys ride imported:environment, each listed in the report",
+    && JSON.stringify(T.land["imported:environment"]) === JSON.stringify({ sky: { ambient: 1.5 }, fogDensity: 0.2 })
+    && JSON.stringify(r.stats.unmapped?.find((u: any) => u.component === "environment")?.fields) === JSON.stringify(["sky.ambient", "fogDensity"]),
+    "IM-E1 environment: spawn → @world.spawn (a second environment, which main never read, rides imported: IM-E5), bounds → @world.bounds (its min.y under the floor: IM-E3), floor → @world.terrain {kind: 'flat', height: floor} (no floor thing), sky → @world.sky.gradient (linear) + a directional sun thing (main's defaults), particles → a child naming a derived dust document (main's range and colour; all 1,400 motes, within the effect limit since @38); ambient and unknown keys ride imported:environment, each listed in the report",
     { W: { spawn: W.spawn, bounds: W.bounds, sky: W.sky, terrain: W.terrain }, floorKid, sun, fx, sp2, land: T.land, unmapped: r.stats.unmapped });
 });
 row("IM-E2", () => {

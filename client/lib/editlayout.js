@@ -1,4 +1,4 @@
-// editlayout — edit mode as a WORKSPACE (Blender's word): the same frames,
+// editlayout — build mode as a WORKSPACE (Blender's word): the same frames,
 // a different arrangement. Nothing is replaced; frames are docked into
 // columns while the mode is on and float again exactly where they were
 // when it ends. The shape is the one every shipping editor converged on:
@@ -18,7 +18,7 @@ import { worldEdgeWanted, setWorldEdgeShown } from './edge.js';
 import { register } from './actions.js';
 import { bus } from './base.js';
 import { getFrame, allFrames } from './windows.js';
-import { setTool, getTool, undo, deselectAll, setEditMode, removeKeyTargets, SPACES, getSpace, setSpace, holdGhost, holdPicture } from './build.js';
+import { setTool, getTool, undo, deselectAll, setBuildMode, removeKeyTargets, SPACES, getSpace, setSpace, holdGhost, holdPicture } from './build.js';
 import { THREE, scene } from './core.js';
 import { svg as iconSvg } from './icons.js';
 import { withKeys, KEYHINTS } from './keyhints.js';
@@ -134,7 +134,7 @@ function build() {
         title: 'The first thing you selected becomes a button. Using it (click, or E) puts every other selected thing back where it stands right now.' },
       { label: 'set home here', run: () => { const sel = selection(); if (!sel.length) return flashHint('select something first', 3000, 'attn'); void Edits.setHomeHere(sel); },
         title: 'Where a reset button sends the selected things back to: where they stand now.' },
-      { label: 'leave builder mode\tB', run: () => setEditMode(false) },
+      { label: 'leave builder mode\tB', run: () => setBuildMode(false) },
     ]),
     // CREATE (Maya's order: File, Edit, Create): empty entity, model primitives, lights, blueprints, the environment
     // suite. Every item opens a path that already exists: the ghost in hand (build.js holdGhost), the Build tab's
@@ -200,7 +200,7 @@ function build() {
   const vbar = el('div', 'edit-viewbar'); vbar.hidden = true; document.body.append(vbar);
   vbar.append(vmenu, camSw, wire, smenu);   // 'Viewport ▾' first, almost a title
   view.append(full);
-  const mode = el('span', 'edit-mode-label');
+  const mode = el('span', 'build-mode-label');
   // the corner: ∃ + mic / ear / goggles. They are fixed elements their own modules place (ui.js's
   // dock, mictoggle.placeMic — which folds them to the ∃'s right, the HUD's own layout); this
   // spacer keeps the bar's menus clear of them, sized to where they actually landed (fitSeat)
@@ -424,7 +424,7 @@ const loosePanels = () => allFrames().filter((f) => f?.id && !WORKSPACE_OWN.has(
 let playPanels = null;
 const PANELS_KEY = 'ew.edit.panels';
 function readPanels() { try { const v = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch { return []; } }
-function savePanels(ids) { try { localStorage.setItem(PANELS_KEY, JSON.stringify(ids)); } catch { /* private window: edit mode starts bare next time */ } }
+function savePanels(ids) { try { localStorage.setItem(PANELS_KEY, JSON.stringify(ids)); } catch { /* private window: build mode starts bare next time */ } }
 function enter() {
   const { top, tools, left, right, lsplit, rsplit, tabs, rtabs } = build();
   on = true;
@@ -440,7 +440,7 @@ function enter() {
   right.prepend(rtabs, ...[i?.el, at?.el, hs?.el].filter(Boolean));   // tabs, then the pages
   if (c) { prevChat = c.visible; c.dock(left); if (!c.visible) c.show(); }
   // each mode keeps its own open panels (Blender's workspaces): play's are put away and remembered, edit's last set
-  // comes back (none, the first time). What you open in edit mode is edit mode's from then on.
+  // comes back (none, the first time). What you open in build mode is build mode's from then on.
   playPanels = loosePanels().filter((f) => f.visible).map((f) => f.id);
   for (const f of loosePanels()) if (f.visible) f.hide();
   for (const id of readPanels()) getFrame(id)?.show();
@@ -451,7 +451,7 @@ function enter() {
   prevWorld = !!w?.visible;
   if (w?.visible) w.hide();
   apply();
-  // the glyphs re-seat on the next frame (mictoggle hears edit-mode too); measure once they have
+  // the glyphs re-seat on the next frame (mictoggle hears build-mode too); measure once they have
   requestAnimationFrame(() => requestAnimationFrame(() => { fitSeat(); placeStatusChips(); }));   // the chips continue past the menus (B1)
   clearInterval(seatTimer); seatTimer = setInterval(() => { fitSeat(); apply(); }, 1000);
 }
@@ -466,7 +466,7 @@ function exit() {
   unfitDock();
   bus.emit('dock-moved');   // …and back beside the HUD's ∃
   setShade('shaded');
-  if (isolating()) setIsolate(null, (id) => replica.st?.entities?.[id]?.c?.parent?.to ?? null, Object.keys(replica.st?.entities ?? {}));   // the view is whole again outside edit mode
+  if (isolating()) setIsolate(null, (id) => replica.st?.entities?.[id]?.c?.parent?.to ?? null, Object.keys(replica.st?.entities ?? {}));   // the view is whole again outside build mode
   const c = getFrame('chat');
   for (const f of [getFrame('build'), getFrame('hierarchy'), getFrame('inspector'), getFrame('attributes'), getFrame('history'), c]) { if (f) { f.el.style.flex = ''; f.undock(); } }
   if (c && prevChat != null) c[prevChat ? 'show' : 'hide']();   // exactly as it was before the workspace
@@ -481,7 +481,7 @@ function exit() {
 }
 
 export function initEditLayout() {
-  bus.on('edit-mode', (v) => (v ? enter() : exit()));
+  bus.on('build-mode', (v) => (v ? enter() : exit()));
   // tool hotkeys live in build.js's key router (Blender's G/R/S/Q/F/X)
   return { apply, isOn: () => on };
 }

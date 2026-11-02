@@ -314,8 +314,8 @@ function governanceTarget(e, op) {
   return !!o && typeof o === "object" && o.verb === "set" && typeof o.comp === "string" && o.comp.startsWith("roles:");
 }
 // The entries the fold reads, in two steps either side of its genesis checks (so its diagnostics keep their order): each line
-// checked alone, then, after genesis, a later genesis and a bad ts nulled. purgesIn reads a log through the same two, so the
-// purges a replay applies are exactly the fold's.
+// checked alone, then, after genesis, a later genesis and a bad ts nulled. acceptedEntries (purgesIn, operator-bind) reads a
+// log through the same two, so the purges a replay applies and the authors a bind counts are exactly the fold's.
 function checkedEntries(entries, d) {
   return entries.map((e, seq) => {
     if (e instanceof Malformed) { d(seq, "malformed:" + e.code, e.detail); return null; }
@@ -419,7 +419,16 @@ export function applyInPlace(s, ops, seq = Infinity, purged = null, batch = fals
 }
 /** every purge in a log, as the strict fold reads them: `${seq}:${op index, or - for a whole entry}` → the purge's seq */
 export function purgesIn(entries) {
+  const none = () => {}, settled = acceptedEntries(entries); return unnamedStubs(settled, purgesOf(settled, none), none);
+}
+/** the entries the strict fold accepts, by seq (null where it rejects one); none where it reads no world (#260 Stella 10-30).
+ *  `ops`: also null a change whose ops the fold skips as malformed (a bind's authors; purgesIn keeps the fold's own input). */
+export function acceptedEntries(entries, { ops = false } = {}) {
   const none = () => {}; const ok = checkedEntries(entries, none); const g = ok[0];
-  if (!g || g.kind !== "genesis") return new Map();   // the fold reads no world here, so nothing is replayed either
-  const settled = settledEntries(ok, worldIdOf(g), none); return unnamedStubs(settled, purgesOf(settled, none), none);
+  if (!g || g.kind !== "genesis" || g.body.dialect !== DIALECT || g.body.v !== VERSION) return [];   // the fold reads no world here
+  try { if (checkGenesis(g.body) === "unknown-minor") return []; } catch (x) { if (x instanceof Malformed) return []; throw x; }
+  const settled = settledEntries(ok, worldIdOf(g), none);
+  if (ops) for (let seq = 1; seq < settled.length; seq++) { const e = settled[seq]; if (e?.kind !== "change") continue;
+    try { opsOf(e); } catch (x) { if (x instanceof Malformed) settled[seq] = null; else throw x; } }
+  return settled;
 }

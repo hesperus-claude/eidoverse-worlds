@@ -118,6 +118,17 @@ export function rebuildAsset(rel: string): { queued: string[]; cooldownS?: numbe
   if (queued.length) { lastRebuild.set(src, Date.now()); pumpOptimize(); }
   return { queued };
 }
+// a child's stderr up to EOF, or up to graceMs once asked: a grandchild that inherited the pipe holds EOF off forever
+const STDERR_GRACE_MS = 2000;
+function drain(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader(), dec = new TextDecoder(); let text = "";
+  const eof = (async () => { for (let r; !(r = await reader.read()).done;) text += dec.decode(r.value, { stream: true }); })().catch(() => {});
+  return async (graceMs: number) => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([eof, new Promise((r) => { t = setTimeout(r, graceMs); })]); clearTimeout(t);
+    reader.cancel().catch(() => {}); return text;
+  };
+}
 let optPump: Promise<void> = Promise.resolve();
 /** Resolves when the pump has drained (a harness awaits this; the server never does). */
 export const optIdle = () => optPump;
@@ -157,7 +168,9 @@ async function pumpOptimize() {
       // failures (126: limit not set; 127: exec failed) never read as a content verdict.
       const capped = OPT_MEM_BUDGET_MB > 0 && process.platform === "linux";
       // OPT_CMD: a harness may own the child (tools/optimize-pump-test.ts) — the real optimizer otherwise (logged at boot)
-      const cmd = [...(process.env.OPT_CMD ? [process.env.OPT_CMD] : [process.execPath, "run", join(ROOT, "server", "optimize.ts")]), ...(mode ? [mode] : []), src, dest];
+      // a .js/.ts OPT_CMD runs under this bun: a shebang script is no executable on Windows (EFTYPE)
+      const opt = process.env.OPT_CMD, viaBun = !!opt && /\.(m?js|ts)$/.test(opt);
+      const cmd = [...(opt && !viaBun ? [opt] : [process.execPath, "run", opt || join(ROOT, "server", "optimize.ts")]), ...(mode ? [mode] : []), src, dest];
       let proc: ReturnType<typeof Bun.spawn>;
       try {
         // /bin/sh by absolute path: PATH may hold no shell (a harness's fake encoder), and a spawn that can't start
@@ -169,14 +182,20 @@ async function pumpOptimize() {
         console.error(`[optimize] cannot spawn the optimizer (${String(e).split("\n")[0]}) — nothing marked; set OPT_MEM_BUDGET_MB=0 if /bin/sh is the problem`);
         optQueue.length = 0; break;
       }
-      const code = await proc.exited;
-      // what a new variant was built FROM (freshOver), recorded before anything else is awaited (until then it reads
-      // stale: the safe direction). A store original's needs none.
+      // never wait forever on a child: one that never answers is killed and deferred (tools/optimize-pump-test.ts 6b)
+      const stderr = drain(proc.stderr as ReadableStream<Uint8Array>), limitMs = Number(process.env.OPT_CHILD_TIMEOUT_MS ?? 1_800_000);
+      let timedOut = false;
+      const killer = limitMs > 0 ? setTimeout(() => { timedOut = true; proc.kill("SIGKILL"); }, limitMs) : null;
+      const code = await proc.exited; if (killer) clearTimeout(killer);
+      if (timedOut) { await stderr(STDERR_GRACE_MS); defer(dest, `no answer in ${Math.round(limitMs / 1000)}s — killed (OPT_CHILD_TIMEOUT_MS)`); continue; }
+      // what a new variant was built FROM (freshOver), recorded the moment the child is gone — before anything else
+      // is awaited: until then the new bytes sit beside the previous build's sidecar and read stale (the safe
+      // direction: provisional, never old bytes answered as fresh). A store original's needs none.
       if (code === 0 && existsSync(dest)) {
         if (srcId) try { writeFileSync(sourceSidecar(dest), JSON.stringify(srcId)); } catch { /* best effort: reads stale until rebuilt */ }
         else if (existsSync(sourceSidecar(dest))) try { rmSync(sourceSidecar(dest)); } catch { /* best effort */ }
       }
-      const err = (await new Response(proc.stderr).text()).trim();
+      const err = (await stderr(STDERR_GRACE_MS)).trim();
       if (capped && (code === 126 || code === 127)) {
         // environmental, like a missing dep: no marker, and no point grinding on
         console.error(`[optimize] cap wrapper failed (exit ${code}: ${err.split("\n").pop() || "sh"}) — set OPT_MEM_BUDGET_MB within this process's hard RLIMIT_DATA, or 0`);
@@ -370,12 +389,10 @@ export function sniffAudio(b: Uint8Array): "mp3" | "ogg" | "wav" | "webm" | "m4a
   return null;
 }
 
-/** POST /upload — live asset ingestion:
- *   - models (default): content-addressed into assets/opt/store/<hash>.glb, immutable, so a `model` can name it forever;
- *   - ?as=avatar&name=foo: named into the overlay vrms dir (the roster is name-keyed; mtime versions the cache);
- *   - ?as=image / heightmap / audio: content-addressed into store/, kind judged from the bytes.
- *  Trust: the door token, a per-agent bearer (mcpl/tokens.json), an aid1 credential, or a signed-in session, plus
- *  per-IP rate limiting. The store is inert: what enters a WORLD is still a door request. `?by=` is attribution. */
+
+/** The 415 for main's `/upload?as=script`: a script is the world authority's `upload {text}` request now. */
+export const SCRIPT_MOVED = "not stored: /upload?as=script went with the old protocol. Send the source as the world's upload {text} request (an agent: act {verb: \"upload\", args: {text}}); its reply's src goes in set {id, component: \"script:<name>\", value: {src, …}} (docs/SCRIPTS.md)";
+
 export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Promise<Response> {
   const upTok = url.searchParams.get("token") ?? "";
   let upAgent = agentTokens().byToken.get(upTok);
@@ -399,6 +416,8 @@ export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Prom
   if (u.n > 4) return new Response("upload rate limit (4/min)", { status: 429 });
   const body = new Uint8Array(await req.arrayBuffer());
   if (body.length > UPLOAD_CAP) return new Response(`too large (${UPLOAD_CAP / 1e6}MB cap)`, { status: 413 });
+  // main's script store left with the old protocol: say where a script goes now (decision table row 12)
+  if (url.searchParams.get("as") === "script") return new Response(SCRIPT_MOVED, { status: 415 });
   if (url.searchParams.get("as") === "image") {
     // Pictures: PNG, JPEG or WebP, content-addressed into store/images/<hash>.<ext>, no optimize pass. The kind is
     // read from the BYTES (the extension is what /library and the picture allow-list key on).

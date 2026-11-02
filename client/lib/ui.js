@@ -117,7 +117,7 @@ export function setHud(parts) { el.hud.innerHTML = parts; }
 //   1 attn      a refusal (attention colour, copy pill, holds while pointed at)
 //   2 keys      the engaged gesture's keys (keyhints `during`)
 //   3 flash     a moment's notice ("panels hidden · Tab", "locked", the authority's warnings on my own edit)
-//   4 selection edit mode's selection line (name · keys · lock)
+//   4 selection build mode's selection line (name · keys · lock)
 //   5 ambient   the standing offer from the world ("X — sit")
 // The lowest number live shows; when it ends, the next live one shows (no stacking, no gaps). The lantern pill is the
 // resting content: it yields while any claim shows and comes back when none does. Content: text (shown as the
@@ -651,7 +651,7 @@ export function initDock(entries) {
   addEventListener('resize', () => applyDockEdge(loadDockEdge()));
   paintDock();
   bus.on('frames', () => paintDock());
-  bus.on('edit-mode', () => paintDock());   // the wrench's title follows the mode at once, not on the 2 s poll
+  bus.on('build-mode', () => paintDock());   // the wrench's title follows the mode at once, not on the 2 s poll
   // AUTO-PIN ON THE GRANT, only on the closed->open edge, so a manual unpin still
   // wins. A builder who was ALREADY one at boot is not re-pinned: rights ride the
   // snapshot, which lands later, so the FIRST report is the starting level, not
@@ -765,7 +765,7 @@ function paintDock() {
       const open = entry.gate ? !!entry.gate() : true;
       b.classList.toggle('dead', !open);
       b.disabled = !open;
-      // an entry may title itself by state (the wrench: "leave edit mode (B)" while it is the way out);
+      // an entry may title itself by state (the wrench: "leave build mode (B)" while it is the way out);
       // otherwise the dock's own name · key. setTitle: write only on change (the tooltip chip borrows it)
       setTitle(b, open ? (entry.title?.(!!entry.active?.()) ?? dockTitle(entry))
         : dockTitle(entry, entry.deadWhy?.() ?? ' — needs build rights in this world'));

@@ -52,10 +52,15 @@ export function whois(w: World, args: Any) {
 /** allow/block naming an identity no one wears now (a departed guest's per-connection id) is refused `gone`; the client
  *  prunes it on this refusal. */
 export function goneListing(w: World, args: Any) {
-  const id = typeof args?.allow === "string" ? args.allow : typeof args?.block === "string" ? args.block : null; if (!id) return null;
+  const op = typeof args?.allow === "string" ? "allow" : typeof args?.block === "string" ? "block" : null;
+  const id: string = op ? args[op] : ""; if (!id) return null;
+  if (id.startsWith("script:") || id.startsWith("scripts-by:")) return null;
   const e = directoryFor(WORLDS_DIR).entry(id);
   if (e && (e.kind !== "anon" || [...w.clients].some((o) => o.actorId === id))) return null;
-  return { code: "gone", reason: e ? "no one wears that identity now: it was a guest's, which ends with their visit" : "this server knows no one by that identity", fix: "close your move or touch gate to keep out someone you can't name" };
+  return { code: "gone", reason: e ? "no one wears that identity now: it was a guest's, which ends with their visit" : "this server knows no one by that identity",
+    fix: op === "block" ? "close your move or touch gate to keep out someone you can't name"
+      : e ? "a guest is named afresh each connection: allow them while they're here, by the identity they have then"
+      : "whois {name} gives the identity of someone who has been in this world" };
 }
 const reads = readMeter(); // per connection: reads and dry runs, by count and authority time (H-A)
 // …and every request by authority time, the only per-connection bound on the shared thread (a guest is a fresh identity

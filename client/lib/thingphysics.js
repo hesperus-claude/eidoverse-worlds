@@ -702,7 +702,7 @@ function tickShove(now) {
   if (!shoveOn || !replica.active || !net.joined || !arrived) return;
   const canon = replica.sim; if (!canon?.sim || canon.foreign) return;
   const st = hooks?.myState?.(), me = hooks?.me?.(); let f = feet();
-  // my own body only, walking: not in edit mode, seated, down or flying
+  // my own body only, walking: not in build mode, seated, down or flying
   if (!st || !me || !f || hooks?.editing?.() || hooks?.seated?.() || hooks?.flying?.() || st.clip === 'ragdoll') { headV.reset(); return; }
   const cap = colliderFor(me.userScale), sp = Number.isFinite(st.speed) ? st.speed : 0;
   let vel = [Math.sin(st.yaw) * sp, Math.cos(st.yaw) * sp];
@@ -738,7 +738,7 @@ async function shove(id, v, now) {
 // ---------------------------------------------------------------- use while held (grabbable.use; research grab §3-4)
 // The use button while you hold a thing: a request per press and per release (use.down, use.up: each one act; a
 // hose turns on, then off), and, while it's pressed, presence (pose.use) every client draws the thing's fx from. Desktop:
-// the left mouse button while holding something usable (outside edit mode); phone: a button that appears while you do;
+// the left mouse button while holding something usable (outside build mode); phone: a button that appears while you do;
 // VR: the trigger (xr.js calls useHeld). Rapid effects are never a stream of acts: the authority rate-limits acts on purpose.
 const usable = () => myHolds().find((id) => grabOf(compsOf(id))?.use) ?? null;
 let pressing = null;   // the id my use is held down on
@@ -876,7 +876,7 @@ bus.on('key', (e) => {
 });
 
 /** The hint bar's line about my hands (localbody.js updateSeatHint): what I hold and how to let go, else what's in reach
- *  to pick up. Null in a headset, in edit mode,
+ *  to pick up. Null in a headset, in build mode,
  *  outside a world. */
 export function handsHint() {
   if (!replica.active || hooks?.editing?.() || xrActive()) return null;
@@ -899,7 +899,7 @@ const inReach = (id) => { const f = feet(), p = whereIs(id); return !!f && !!p &
 /** Where it is and how far along the floor from my feet: {at: [x, y, z], flat} or null. */
 const canPunt = (id) => { const f = feet(), p = whereIs(id); return !!f && !!p && atFeet(p, f) !== null; };
 const whereFromMe = (id) => { const f = feet(), p = whereIs(id); return f && p ? { at: p, flat: Math.hypot(p[0] - f[0], p[2] - f[2]) } : null; };
-export const physicsApi = { grab, put, drop, throw: throwHeld, punt, canPunt, grabNear, release, use: useHeld, xrHand, holds: holdsNow, mine: myHolds, shown: simShown, pending: pendingNow, swaps: () => stats.swaps, predict: (on) => (predictOn = on !== false), lag: (ms) => (lagMs = Math.max(0, ms | 0)), settle: (ms) => (SETTLE_MS = Math.max(0, ms | 0)), settling: () => [...settles.keys()], whereIs, inReach, whereFromMe, canPutAt,
+export const physicsApi = { grab, put, drop, throw: throwHeld, punt, canPunt, grabNear, release, use: useHeld, xrHand, holds: holdsNow, mine: myHolds, shown: simShown, pending: pendingNow, swaps: () => stats.swaps, tracking: () => !!moving, predict: (on) => (predictOn = on !== false), lag: (ms) => (lagMs = Math.max(0, ms | 0)), settle: (ms) => (SETTLE_MS = Math.max(0, ms | 0)), settling: () => [...settles.keys()], whereIs, inReach, whereFromMe, canPutAt,
   /** body shove: the lab knob, the shoves sent (and how each was answered), the things my body is against now */
   shove: { on: (on) => (shoveOn = on !== false), log: () => shoveLog.slice(), touching: () => shover.touching(), feel: () => shover.feel,
     against: () => { const f = feet(), cap = colliderFor(hooks?.me?.()?.userScale); if (!f || !replica.st) return [];

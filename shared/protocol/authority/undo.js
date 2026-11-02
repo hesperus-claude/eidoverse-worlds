@@ -12,6 +12,7 @@ import { obbs, satDepth, worldT } from "./math.js";
 import { isLegacyParent, isSocketC, socketsOf } from "./sockets.js";
 import { RESERVED, admits, may, rankOf, roleOf } from "./rights.js";
 import { reactionCap } from "./use.js";
+import { idOut } from "../view.js";
 // the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
 // authority.js binds at load
 const guess = (...a) => UP.guess(...a);
@@ -148,6 +149,17 @@ function buildUndo(ctx, a, w) {
   // asker's own write in the same batch is theirs, and putting it back meets their rights and the locks now, like any undo.
   const goneHere = new Set(flat.filter((o) => o.verb === "delete" && o.comp === undefined).map((o) => o.id));
   const fuHere = new Set([...followUpsOf(res)].map((k) => flat[k]).filter(Boolean));
+  const leftoverFU = (o) => fuHere.has(o) && typeof o.comp === "string" && o.comp.startsWith("imported:");
+  const ownerOf = new Map(), owned = new Map();
+  flat.forEach((o, i) => { if (!leftoverFU(o)) return; const n = idOut(o.comp.slice("imported:".length));
+    const fills = (x) => x.id === o.id && typeof x.comp === "string" && !fuHere.has(x) && idOut(x.comp) === n;
+    const x = flat.slice(0, i).reverse().find(fills) ?? flat.slice(i + 1).find(fills);
+    if (x) { const k = `${o.id}|${x.comp}`; ownerOf.set(o, k); owned.set(k, [...(owned.get(k) ?? []), o]); } });
+  const leftoversBack = (id, comp) => (owned.get(`${id}|${comp}`) ?? []).flatMap((o) => {
+    const by = touchedBy(o.id, o.comp); if (by) { skipped.push({ id: o.id, component: o.comp, why: `${said(by)} changed it since`, by }); return []; }
+    const old = before(o.id)?.c[o.comp]; if (old === PURGED) return [];
+    const g = old === undefined ? (o.comp in (now.entities[o.id]?.c ?? {}) ? delOp(o.id, o.comp) : null) : setOp(o.id, o.comp, old);
+    if (g) g[FOLLOW_UP] = true; return g ? [g] : []; });
   const refRestore = (o) => { if (!goneHere.size || !fuHere.has(o) || o.comp === undefined || o.verb === "create" || goneHere.has(o.id) || !holdsRefs(o.comp)) return false;
     const old = before(o.id)?.c[o.comp]; return old !== undefined && old !== PURGED && refsOf(o.comp, old).some((r) => goneHere.has(r.id)); };
   for (const o of flat) { if (madeHere.has(o.id) && o.verb !== "create") continue;
@@ -155,7 +167,8 @@ function buildUndo(ctx, a, w) {
   const paired = new Set();
   for (const [, o] of [...keys].reverse()) {
     const { id, comp } = o; const whole = o.verb === "create" || (o.verb === "delete" && comp === undefined);
-    // where a thing sat on a socket before the cut, its transform was in the HOST's frame: its parent
+    if (ownerOf.has(o)) continue;
+    // where a thing sat on a socket before the cut, its transform was in the HOST's frame (review 10-12 S2-1): its parent
     // and its transform go back as one group, so the door lifts the parent and re-expresses the pose in the socket child's
     // frame (liftOps' `via`); a bare transform would be read in the socket's frame and land it elsewhere
     const ob = !whole && (comp === "transform" || comp === "parent") ? before(id) : null;
@@ -179,11 +192,11 @@ function buildUndo(ctx, a, w) {
     else { const old = before(id)?.c[comp];
       if (old === PURGED) { skipped.push({ id, component: comp, why: "its old value was purged" }); continue; }
       // (sockets: a host's socket children stand for the map it held before the cut; their delete is translated at the door)
-      if (old === undefined) { if (now.entities[id] && (comp in now.entities[id].c || (comp === "sockets" && socketsOf(now, id, { off: true }).some((x) => x.id)))) groups.push([delOp(id, comp)]); }
+      if (old === undefined) { if (now.entities[id] && (comp in now.entities[id].c || (comp === "sockets" && socketsOf(now, id, { off: true }).some((x) => x.id)))) { const g = delOp(id, comp); if (leftoverFU(o)) g[FOLLOW_UP] = true; groups.push([...leftoversBack(id, comp), g]); } }
       else if (now.entities[id]) {
-        if (!refRestore(o)) groups.push([setOp(id, comp, old)]);
-        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared (a
-        // second delete doesn't refuse the whole undo)
+        if (!refRestore(o)) { const g = setOp(id, comp, old); if (leftoverFU(o)) g[FOLLOW_UP] = true; groups.push([...leftoversBack(id, comp), g]); }
+        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared (holes r10 L1:
+        // a second delete no longer refuses the whole undo)
         else { const since = new Set(refsOf(comp, old).map((r) => r.id).filter((x) => !now.entities[x] && !goneHere.has(x)));
           const nv = since.size ? withoutRefs(id, comp, old, since) : old;
           if (since.size) (ctx.notes ??= []).push({ id, component: comp, kept: [...since], why: `${[...since].join(", ")} ${since.size > 1 ? "are" : "is"} gone since, so ${since.size > 1 ? "their references stay" : "its reference stays"} cleared` });
@@ -199,6 +212,9 @@ function buildUndo(ctx, a, w) {
     if (hit) { const who = later.find((e) => opsQuiet(e).some((q) => q.id === hit))?.actor;
       skipped.push({ id: o.id, component: o.comp, why: `putting it back would land it on ${hit}, which ${said(who)} has placed since`, by: who }); groups.splice(i, 1); } }
   return { groups, skipped }; };
+  // an act whose result leaves every thing it touched as it was (set then delete of a component it lacked) changed nothing: not undoable (review 2.20)
+  const changedNothing = (seq) => { const r = X.resultOf.get(seq); if (r === undefined) return false;
+    return [...new Set(opsQuiet(E[r]).map((o) => o.id))].every((id) => JSON.stringify(entityBefore(w, id, r, X)) === JSON.stringify(entityBefore(w, id, r + 1, X))); };
   const pick = (pred) => { for (let k = mine.length - 1; k >= 0; k--) if (pred(mine[k])) return E[mine[k]]; return undefined; };
   // an undo's depth along its `undoes` chain: 0 = an ordinary act, 1 = an undo of one, 2 = a redo (an undo of an undo)…
   // A bare undo takes back my latest live act of EVEN depth: an ordinary act or a redo. Skipping only plain undos keeps
@@ -235,7 +251,7 @@ function buildUndo(ctx, a, w) {
     return e; };
   const target = a.act !== undefined ? (mine.includes(a.act) ? E[a.act] : othersAct(a.act))
     : a.label ? pick((q) => readBody(q)?.request?.label === a.label && !X.undone.has(q) && X.resultOf.has(q))
-    : pick((q) => E[q].verb !== "create-world" && depthOf(q) % 2 === 0 && !X.undone.has(q) && X.resultOf.has(q));
+    : pick((q) => E[q].verb !== "create-world" && depthOf(q) % 2 === 0 && !X.undone.has(q) && X.resultOf.has(q) && !changedNothing(q));
   if (!target) { const last = X.lastAct === null ? null : E[X.lastAct];
     refuse("nothing", "nothing of yours to undo" + (last && last.actor !== ctx.actor ? ` (the latest change was ${said(last.actor)}'s; undo only reverts your own)` : ""), "history shows who did what; to change someone else's work, edit it (they'll see it)"); }
   if (target.verb === "create-world") refuse("founding", "founding a world can't be undone", "§2: @world can't be deleted or undone as a whole; to hand it over, give the new owner their role first");
@@ -244,7 +260,7 @@ function buildUndo(ctx, a, w) {
     refuse("nothing", `act ${target.seq} was already undone${chain.length ? ` (by ${chain.map((c) => `${depthOf(c) % 2 ? "undo" : "redo"} ${c}`).join(", then ")})` : ""}`,
       live !== null ? `it's back in force through redo ${live}: undo {act: ${live}} (or a bare undo) takes it back` : "a bare undo takes back your latest change; history shows the chain"); }
   if (["throw", "drop", "leave"].includes(target.verb)) refuse("physical", `that was a ${target.verb}: what it changed is where things came to rest, which physics decided`, "put it back yourself: grab it, then put {id, pos}");
-  const res = result(target.seq); if (!res) refuse("nothing", "that act changed nothing", "");
+  const res = result(target.seq); if (!res || changedNothing(target.seq)) refuse("nothing", "that act changed nothing", "");
   if (target.verb === "sculpt" && TR.ADDITIVE.has(readBody(target.seq)?.request?.brush) && readBody(target.seq)?.clamped !== true) { const inv = sculptInverse(w, ctx, target, res); if (inv) { ctx.actExtra = { undoes: target.seq, inverse: true }; return inv; } }
   const { groups, skipped } = inverseOf(target, res, ctx.st);
   if (!groups.length) refuse("conflict", "everything that act touched has been changed by someone else since", "their later change stands (undo never writes over it); if you still want yours, make the change again yourself, and history shows who did what", { skipped });

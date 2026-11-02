@@ -11,7 +11,7 @@ import { register as registerAction } from './actions.js';
 import { pathData } from './icons.js';
 
 // off = grey + slash · live = brand · hot (voice registering) = yellow glow; one palette for both glyphs
-// inks are read fresh off the button's tokens each paint, so edit mode's re-pointed inks apply
+// inks are read fresh off the button's tokens each paint, so build mode's re-pointed inks apply
 const tok = (n, fb) => (getComputedStyle((micBtn?.isConnected && micBtn) || document.documentElement).getPropertyValue(n) || fb).trim();
 const INK = {
   get off()   { return tok('--dim', '#7d8f8a'); },
@@ -264,8 +264,8 @@ bus.on('audio:receive', paint);
 bus.on('audio:mic', paint);
 bus.on('style', paint);
 bus.on('xr:state', paint);
-// edit mode moves the ∃ into the workspace's corner and re-inks the glyphs: re-seat and repaint once its CSS is on
-bus.on('edit-mode', () => requestAnimationFrame(() => { paint(); placeMic(); }));
+// build mode moves the ∃ into the workspace's corner and re-inks the glyphs: re-seat and repaint once its CSS is on
+bus.on('build-mode', () => requestAnimationFrame(() => { paint(); placeMic(); }));
 setInterval(ensure, 1000);
 ensure();
 

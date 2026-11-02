@@ -193,7 +193,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     call("bob", "create", { id: "hatch6", model: "door", components: { openable: { open: false, locked: true }, reactions: { open: { kind: "toggle", unless: "locked", fix: "ring the bell" } } } });
     call("bob", "create", { id: "hatch7", model: "door", components: { openable: { open: false, locked: true }, reactions: { open: { kind: "toggle", unless: "locked" }, unbolt: { kind: "set", component: "openable", field: "locked", value: false } } } });
     const u8 = call("vic", "use", { id: "hatch6", action: "open" }), u9 = call("vic", "use", { id: "hatch7", action: "open" });
-    ok(code(u8) === "barred" && u8.refused?.fix === "ring the bell" && code(u9) === "barred" && u9.refused?.fix === "someone allowed to may 'use' it with another action first",
+    ok(code(u8) === "barred" && u8.refused?.fix === "ring the bell" && code(u9) === "barred" && u9.refused?.fix === "someone who may use it can 'use' another of its actions first",
       "P37h an authored open handler barred by the lock keeps its own fix, or the general one", { u8: u8.refused?.fix ?? u8.ok, u9: u9.refused?.fix ?? u9.ok });
     // review of #260: a set of locked to true and a whole set that keeps it on don't unlock it, and aren't offered; a whole
     // set that leaves locked off is, and since it also sets whether the door is open, the open step isn't predicted
@@ -671,6 +671,76 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     const del = iw("ann", "delete", { id: "@world", component: "sky" }); const v = vs();
     ok(other.ok && keptByOther && set.ok && goneBySet && del.ok && !("imported:sky" in wc()) && v.sky == null && v.water?.foam === 1,
       "S3f setting or deleting the world's sky deletes its imported:sky with it: a deleted sky leaves the slot empty (other components and imported:water stay)", { other: other.ok, keptByOther, set: set.ok, goneBySet, del: del.ok, keys: Object.keys(wc()), sky: v.sky, water: v.water }); }
+  { const il = callAt("imp-lamp");
+    il("ann", "create-world", { title: "imp-lamp" });
+    const lamp = il("ann", "create", { components: { light: { color: 0xffd9a0, intensity: 2 }, label: "lamp" } }).refs?.[0]?.id;
+    const lc = () => openWorld(root, "imp-lamp").state().entities[lamp]?.c ?? {}; const lv = () => viewState(fold(openWorld(root, "imp-lamp").entries)).entities[dec(lamp) ?? lamp];
+    il("ann", "set", { id: lamp, component: "imported:light", value: { flicker: 1 } }); il("ann", "set", { id: lamp, component: "imported:label", value: { font: "x" } });
+    const other = il("ann", "delete", { id: lamp, component: "label" }); const keptByOther = "imported:light" in lc();
+    const del = il("ann", "delete", { id: lamp, component: "light" }); const v = lv();
+    ok(!!lamp && other.ok && keptByOther && del.ok && !("imported:light" in lc()) && !!v && v.light === undefined,
+      "S3g deleting a thing's light deletes its imported:light with it: a deleted light shows none (deleting another component leaves it)", { other: other.ok, keptByOther, del: del.ok, keys: Object.keys(lc()), light: v?.light });
+    const swing = il("ann", "create", { model: "crate", components: { "motion:plank": { type: "pendulum", amp: 0.4, period: 3 } } }).refs?.[0]?.id;
+    const sc = () => openWorld(root, "imp-lamp").state().entities[swing]?.c ?? {}; const left = `imported:${enc("motion:plank")}`;
+    const put = il("ann", "set", { id: swing, component: left, value: { wobble: 1 } });
+    const delK = il("ann", "delete", { id: swing, component: "motion:plank" }); const sv = viewState(fold(openWorld(root, "imp-lamp").entries)).entities[dec(swing) ?? swing];
+    ok(!!swing && put.ok && delK.ok && !(left in sc()) && !!sv && sv["motion:plank"] === undefined,
+      "S3g …and deleting a keyed component (motion:plank) deletes its imported:<encoded name> with it", { put: put.ok, del: delK.ok, keys: Object.keys(sc()), plank: sv?.["motion:plank"] }); }
+  { const ih = callAt("imp-rule"); const res = (r: any) => (r?.ok ? "ok" : r?.refused?.code ?? r);
+    ih("ann", "create-world", { title: "imp-rule" }); ih("ann", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
+    const C = (id: string) => openWorld(root, "imp-rule").state().entities[id]?.c;
+    const made = (comps: any) => ih("ann", "create", { components: { label: "lamp", ...comps } }).refs?.[0]?.id;
+    const light = { color: 0xffd9a0, intensity: 2 }, leave = (id: string, comp: string, value: any) => ih("ann", "set", { id, component: comp, value });
+    const a = made({ light }); leave(a, "imported:light", { flicker: 1 });
+    const del = ih("bob", "delete", { id: a, component: "light" }); const afterDel = { ...(C(a) ?? {}) };
+    const undo = ih("bob", "undo", {}); const afterUndo = { ...(C(a) ?? {}) };
+    const redo = ih("bob", "undo", { act: undo.act }); const afterRedo = C(a) ?? {};
+    ok(del.ok && !("light" in afterDel) && !("imported:light" in afterDel) && undo.ok && "light" in afterUndo && afterUndo["imported:light"]?.flicker === 1
+      && Number.isInteger(undo.act) && redo.ok && !("light" in afterRedo) && !("imported:light" in afterRedo),
+      "S3h a builder's delete of a translated light takes the leftover the owner made; the builder's undo puts both back, and their redo takes both again", { del: res(del), afterDel: Object.keys(afterDel), undo: res(undo), afterUndo: Object.keys(afterUndo), redo: res(redo), afterRedo: Object.keys(afterRedo) });
+    const b = made({}); leave(b, "imported:light", { flicker: 2 });
+    const add = ih("bob", "set", { id: b, component: "light", value: light }); const undoAdd = ih("bob", "undo", {}); const cb = C(b) ?? {};
+    ok(add.ok && undoAdd.ok && !("light" in cb) && cb["imported:light"]?.flicker === 2,
+      "S3h undoing the addition of a light leaves the thing as it was, its lone leftover kept", { add: res(add), undo: res(undoAdd), keys: Object.keys(cb) });
+    const c = made({ light }); leave(c, "imported:light", { flicker: 3 });
+    const re = ih("ann", "batch", { ops: [{ verb: "delete", args: { id: c, component: "light" } }, { verb: "set", args: { id: c, component: "light", value: light } }] });
+    ok(re.ok && C(c)?.["imported:light"]?.flicker === 3, "S3h a request that deletes the light and sets it again keeps its leftover, as a set does", { re: res(re), keys: Object.keys(C(c) ?? {}) });
+    const d = made({ light }); leave(d, "imported:light", { flicker: 4 });
+    const gone = ih("ann", "batch", { ops: [{ verb: "delete", args: { id: d, component: "light" } }, { verb: "delete", args: { id: d } }] });
+    ok(gone.ok && C(d) === undefined, "S3h a batch that deletes the light and then the thing is taken", { gone: res(gone) });
+    const d2 = made({ light }); leave(d2, "imported:light", { flicker: 5 });
+    const bobGone = ih("bob", "batch", { ops: [{ verb: "delete", args: { id: d2, component: "light" } }, { verb: "delete", args: { id: d2 } }] }); const cd2 = C(d2) ?? {};
+    ok(res(bobGone) === "rights" && "light" in cd2 && cd2["imported:light"]?.flicker === 5,
+      "S3h …but a builder's batch that deletes the light and then the thing is judged on the thing as it stands: the translation's leftover isn't theirs to delete", { bobGone: res(bobGone), keys: Object.keys(cd2) });
+    const e = made({}); const f = ih("ann", "create", { components: { label: "child", parent: { to: e } } }).refs?.find((r: any) => r.id !== e)?.id; leave(f, "imported:parent", { slot: "x" });
+    const unparent = ih("ann", "delete", { id: f, component: "parent" });
+    ok(!!f && unparent.ok && C(f)?.["imported:parent"]?.slot === "x", "S3h deleting a thing's parent keeps imported:parent, which the view never shows in that slot", { f, unparent: res(unparent), keys: Object.keys(C(f) ?? {}) });
+    ih("ann", "set", { id: "@world", component: "roles:carol", value: { role: "builder" } });
+    const g = made({ light }); leave(g, "imported:light", { flicker: 6 });
+    const steps = [ih("bob", "delete", { id: g, component: "light" }), ih("carol", "set", { id: g, component: "light", value: light }), ih("carol", "delete", { id: g, component: "light" })].map(res);
+    const late = ih("bob", "undo", {}); const cg = C(g) ?? {};
+    ok(steps.every((x) => x === "ok") && res(late) === "conflict" && /"component":"light"[^}]*changed it since/.test(JSON.stringify(late)) && !("light" in cg) && !("imported:light" in cg), "S3h a leftover's undo goes with its light's: where someone else has changed the light since, the undo leaves both as they are, and the view shows no light they deleted", { steps, late: res(late), keys: Object.keys(cg) });
+    const h = made({}); leave(h, "imported:light", { flicker: 7 });
+    const setDel = ih("bob", "batch", { ops: [{ verb: "set", args: { id: h, component: "light", value: light } }, { verb: "delete", args: { id: h, component: "light" } }] }); const ch2 = C(h) ?? {};
+    ok(setDel.ok && !("light" in ch2) && ch2["imported:light"]?.flicker === 7,
+      "S3h a batch that sets a light where there was none and then deletes it keeps the lone leftover", { setDel: res(setDel), keys: Object.keys(ch2) });
+    const m = made({ light }); leave(m, "imported:light", { flicker: 8 });
+    const delM = ih("bob", "delete", { id: m, component: "light" }); leave(m, "imported:light", { flicker: 9 });
+    const undoM = ih("bob", "undo", {}); const cm = C(m) ?? {};
+    ok(delM.ok && undoM.ok && "light" in cm && cm["imported:light"]?.flicker === 9 && /imported:light/.test(JSON.stringify(undoM.notes ?? [])),
+      "S3h where the owner has rewritten the leftover since, the undo puts back the light and leaves the owner's leftover, naming it skipped", { del: res(delM), undo: res(undoM), keys: Object.keys(cm), flicker: cm["imported:light"]?.flicker, notes: undoM.notes });
+    const p = made({ light }); leave(p, "imported:light", { flicker: 10 });
+    const mixed = [ih("bob", "batch", { ops: [{ verb: "delete", args: { id: p, component: "light" } }, { verb: "set", args: { id: p, component: "label", value: "new" } }] }),
+      ih("carol", "set", { id: p, component: "light", value: light }), ih("carol", "delete", { id: p, component: "light" })].map(res);
+    const undoP = ih("bob", "undo", {}); const cp = C(p) ?? {};
+    ok(mixed.every((x) => x === "ok") && undoP.ok && cp.label === "lamp" && !("light" in cp) && !("imported:light" in cp),
+      "S3h an undo that puts back some of an act and skips the rest: the label comes back, the light and its leftover stay as someone else left them", { mixed, undo: res(undoP), keys: Object.keys(cp), label: cp.label });
+    const t = ih("ann", "create", { model: "crate", components: { transform: { pos: [6, 0, 6] } } }).refs?.[0]?.id; leave(t, "imported:transform", { roll: 1 });
+    const delT = ih("bob", "delete", { id: t, component: "transform" });
+    const onIt = ih("carol", "create", { model: "crate", components: { transform: { pos: [6, 0, 6] } } });
+    const undoT = ih("bob", "undo", {}); const ct = C(t) ?? {};
+    ok(delT.ok && onIt.ok && res(undoT) === "conflict" && /"component":"transform"[^}]*would land it on/.test(JSON.stringify(undoT)) && !("transform" in ct) && !("imported:transform" in ct),
+      "S3h a transform put back with its leftover is still checked against someone's later work: the undo names it skipped, and the transform and its leftover stay gone", { delT: res(delT), onIt: res(onIt), undo: res(undoT), pos: ct.transform?.pos ?? null, keys: Object.keys(ct), notes: undoT.notes }); }
 }
 
 // ---- P: the pivot component (research 52: Roblox's PivotOffset; where it turns and scales from, never moves it) ----
@@ -756,6 +826,13 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(u3.ok && openWorld(root, "undoredo").state().entities.box === undefined, "UR4 …and the next bare undo walks on back past it (the create), not round the undo/redo loop", u3.undid);
   const again = uw("ann", "undo", { act: mv.act });
   ok(again.refused?.code === "nothing" && /already undone \(by undo \d+, then redo \d+, then undo \d+\)/.test(again.refused.reason), "UR5 undo {act} of something already undone names the chain", again.refused); }
+// UR6 (review 2.20): an act whose ops changed nothing isn't undoable: a bare undo steps over it to the act before, undo {act} of it says so
+{ const nw = callAt("noopundo"); nw("ann", "create-world", { title: "noopundo" });
+  const mk = nw("ann", "create", { id: "box", model: "crate", components: { transform: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] } } });
+  const nop = nw("ann", "batch", { ops: [{ verb: "set", args: { id: "box", component: "label", value: "x" } }, { verb: "delete", args: { id: "box", component: "label" } }] });
+  const u = nw("ann", "undo", {}), direct = nw("ann", "undo", { act: nop.act });
+  ok(mk.ok && nop.ok && u.ok && u.undid?.act === mk.act && openWorld(root, "noopundo").state().entities.box === undefined && direct.refused?.code === "nothing" && /changed nothing/.test(direct.refused.reason),
+    "UR6 a request whose ops changed nothing (set + delete of a component the thing lacked) is stepped over by a bare undo, which undoes the act before; undo {act} of it says it changed nothing", { nop: nop.act, u: u.undid ?? u.refused, direct: direct.refused }); }
 
 // ---- HG: a hung thing swings from the underside of what's above it, and everyone reads the same hinge (Rowan) ----
 { const hw = callAt("hinge");
@@ -789,8 +866,12 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   // shape audit 10-16: `impulse` is a reserved handler kind (a general name with a pendulum-only meaning; it returns with its
   // general one when an engine carries impulses). A new one is refused; the push rows that wrote one (SW1-SW4) are retired
   // with it. A stored one (a translated v1 swing) is carried as it was and its use path is unchanged code.
+  // Mica 10-31 (matrix 8, decision row 19): main let a builder write the script-free push; the engine runs it (use.js), so it's open again
   const p0 = sw("ann", "set", { id: "seat", component: "reactions", value: { push: { kind: "impulse", strength: 0.5 } } });
-  ok(p0.refused?.code === "reserved", "SW1 an impulse handler is refused as a reserved kind, even on a swing (shape audit 10-16)", p0.refused);
+  const u0 = p0.ok ? sw("ann", "use", { id: "seat", action: "push" }) : null, mo = openWorld(root, "swingpush").state().entities.seat?.c?.motion;
+  ok(p0.ok === true && u0?.ok === true && mo?.type === "pendulum" && (mo.amp ?? 0) > 0, "SW1 a builder writes an impulse handler on a swing (main's script-free push), and using it swings the seat", { p0: p0.refused ?? p0.ok, u0: u0?.refused ?? u0?.ok, mo });
+  const p1 = sw("ann", "set", { id: "frame", component: "reactions", value: { push: { kind: "impulse", angular: "fast" } } });
+  ok(p1.refused?.code === "shape", "SW1b an impulse handler's strength and angular are numbers", p1.refused);
   void pendulumTheta;
   const tx = (await import("./import-v1/translate-v1.js")).translate(
     [{ seq: 0, ts: 1, actor: "a", verb: "spawn", args: { id: "s", lib: "swing-seat" } }, { seq: 1, ts: 2, actor: "a", verb: "comp", args: { id: "s", type: "reactions", data: { push: { impulse: 0.35 } } } }], {});
@@ -1770,4 +1851,10 @@ for (const [name, steps] of [
   const bytes = R({ ...P, bytes: 1024 })("ann", "create", { id: "rb", model: "crate", components: { "t/note": "x".repeat(2000) } });
   ok(def.every((x) => x === "ok") && acts.join() === "ok,ok,ok,rate" && says.join() === "ok,ok,rate" && win.join() === "ok,ok,ok,rate,ok" && bytes === "rate",
     "RP1 the host's rate is the one met: its acts, says, window and bytes (8 acts pass on the defaults)", { def, acts, says, win, bytes }); }
+{ const R = (rate) => (actor, verb, args) => { clock.advance(100); const w = openWorld(root, "ratesay"); if (rate) w.rate = rate; const r = request(w, actor, verb, args); return r.ok ? "ok" : r.refused?.code; };
+  const P = { n: 60, says: 20, ms: 10000, bytes: 1024, anonBytes: 1024 };
+  R(null)("ann", "create-world", { title: "ratesay" }); clock.advance(20000);
+  const ascii = R(P)("ann", "say", { text: "a".repeat(400) }); clock.advance(20000);
+  const wide = R(P)("ann", "say", { text: "\u20ac".repeat(400) });
+  ok(ascii === "ok" && wide === "rate", "RP2 a say's bytes are its UTF-8 bytes, as the log stores them: 400 three-byte characters are refused under a 1 KiB window where 400 ASCII fit", { ascii, wide }); }
 done();

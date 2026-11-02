@@ -6,7 +6,7 @@ import { physicsAreasOf, speedFactorAt } from "../../zone.js";
 import { atASpawn, spawnsOf, FELL } from "../../spawn.js";
 import { DEFAULT_WHO, grabOf, offsetOk } from "../../grab.js";
 import { livePoses, ENGINES, carried } from "../simlayer.js";
-import { REACH, HAND_Y, MAX_HELD, KICK, BLAST } from "../physconst.js";
+import { REACH, HAND_Y, MAX_HELD, KICK, BLAST, KILL_MARGIN } from "../physconst.js";
 import { blastArgs, falloff } from "../../blast.js";
 import { r3, noNeg0 } from "../round.js";
 import { unitTransform } from "../componentspec.js";
@@ -46,6 +46,14 @@ const outsideWorld = (...a) => UP.outsideWorld(...a);
 const rateCheck = (...a) => UP.rateCheck(...a);
 const request = (...a) => UP.request(...a);
 const warnings = (...a) => UP.warnings(...a);
+function returnHeld(w, actor, id, why, how, seq) {
+  delete w.presence.holds[id];
+  const st = w.state(); const t = st.entities["@world"]?.c["physics-engine"] ? st.entities[id]?.c.transform : null; let back;
+  if (t) { const p = admit(w, st, { actor: "system", cap: { kind: "system", ids: [id], comps: ["transform"] } }, [setOp(id, "transform", t)]);
+    back = w.append(actEntry(w, "system", "return-held", { id, holder: actor, why })); changeEntry(w, p, back); }
+  const act = seq ?? back;
+  if (st.entities[id]) heldEvent(w, "release", id, { by: actor, how, ...(act !== undefined ? { seq: act } : {}) });
+}
 
 // hand acts (grab, put, drop, throw, punt) record the request about the THING (and who handled it), never
 // the body's position or hand: the put's change carries where the thing went, a launch's sim entry where it left from
@@ -64,14 +72,14 @@ const EMBODIED_VERBS = {
     const fell = a.reason !== undefined;
     if (fell && (a.reason !== FELL || a.teleport !== true)) refuse("shape", `move's reason is '${FELL}', with teleport: true (a body that fell below the world's bounds, sent back to an arrival place)`, `move {to: <a spawn>, teleport: true, reason: '${FELL}'}`);
     if (fell && !B) refuse("out-of-bounds", "this world has no bounds to fall out of", "teleport without a reason");
-    // the authority judges the fall from where it last knew the body (one step's slack: the most a body moves between its moves)
-    if (fell && B && !(me && me.at[1] < B.min[1] + TRACK.cap)) refuse("doesnt-apply", me ? `your body was last at y ${r3(me.at[1])}, which isn't below this world's floor of bounds (y ${B.min[1]}): it hasn't fallen out` : "your body isn't in the world yet: it has nowhere to have fallen from",
-      "arrive or teleport without a reason; below-bounds is for a body that fell under @world.bounds.min.y");
+    // the authority judges the fall against the same kill line as belowWorld, from where it last knew the body (one step's slack)
+    if (fell && B && !(me && me.at[1] < B.min[1] - KILL_MARGIN + TRACK.cap)) refuse("doesnt-apply", me ? `your body was last at y ${r3(me.at[1])}, which isn't below this world's kill line (y ${B.min[1] - KILL_MARGIN}, ${KILL_MARGIN} m under its bounds): it hasn't fallen out` : "your body isn't in the world yet: it has nowhere to have fallen from",
+      "arrive or teleport without a reason; below-bounds is for a body that fell under the kill line (@world.bounds.min.y − KILL_MARGIN)");
     if (fell && occupantOf(w, st, actor)) refuse("doesnt-apply", "a seated body rides its seat: it doesn't fall out of the world", "stand up first");
     if (fell && !atASpawn(st, to)) refuse("spawn", `a body that fell is sent back to an arrival place: [${to.join(", ")}] isn't within one`, `arrive at one of: ${spawnsOf(st).map((s) => `[${s.pos.join(", ")}] (${s.id})`).join("; ") || "(none)"}`);
     if (!me || a.teleport === true) { // a teleport (arriving is one): an act, so the track's reset is on the record
       const mine = Object.entries(w.presence.holds).filter(([, h]) => h.by === actor).map(([id]) => id);
-      if (mine.length) refuse("holding", `you're holding ${mine.join(", ")}; a teleport can't carry things`, "put it down (or walk it there) first", { at: me?.at });
+      if (mine.length && !fell) refuse("holding", `you're holding ${mine.join(", ")}; a teleport can't carry things`, "put it down (or walk it there) first", { at: me?.at });
       const inSolid = solidAt(w, st, to, new Set(), null, arrivalBox(st, to, size)); if (inSolid) refuse("solid", `[${to.join(", ")}] is inside ${inSolid}`, "arrive somewhere a body fits", { at: me?.at });
       // a visitor arrives at an arrival place: @world.spawn or a spawn-point (shared/spawn.js)
       if (!may(st, actor, "build") && !atASpawn(st, to)) { const all = spawnsOf(st);
@@ -80,6 +88,7 @@ const EMBODIED_VERBS = {
       // a body's whereabouts are presence: an ARRIVAL writes nothing to the log. A TELEPORT while present is an act (it
       // resets the speed track): who and when are on the record; never where from, where to, or what client
       const act = me ? w.append(actOf(w, actor, "move", { teleport: true, ...(fell ? { reason: FELL } : {}) })) : undefined;   // a fall is on the record with its reason
+      if (fell) for (const id of mine) returnHeld(w, actor, id, FELL, "fell", act);
       w.presence.bodies[actor] = { at: to, ts: now, tokens: TRACK.cap, ...(size ? { size } : {}) }; leftOccupied(w, st, actor, to); w.savePresence();
       return { ok: true, at: to, ...(act !== undefined ? { recorded: true, act } : {}) };
     }
@@ -386,10 +395,7 @@ const EMBODIED_VERBS = {
     const wasLeaving = w.leaving; w.leaving = actor; let out; try { out = mine.map((id) => ({ id, r: request(w, actor, "drop", { id }) })); } finally { w.leaving = wasLeaving ?? null; }   // a nested request (enter() keeps the outer call's state)
     // L6: a disconnect settles at the last ACCEPTED state. A drop the gate refused (demoted, locked) leaves the thing
     // where the log last had it; if picking it up took it out of the engine, the authority puts it back there, as its own act.
-    for (const { id, r } of out) if (!r.ok && w.presence.holds[id]?.by === actor) { delete w.presence.holds[id];
-      const st = w.state(); if (st.entities[id] && st.entities["@world"]?.c["physics-engine"]) { const t = st.entities[id].c.transform;
-        if (t) { const p = admit(w, st, { actor: "system", cap: { kind: "system", ids: [id], comps: ["transform"] } }, [setOp(id, "transform", t)]);
-          changeEntry(w, p, w.append(actEntry(w, "system", "return-held", { id, holder: actor, why: r.refused?.code }))); } } }
+    for (const { id, r } of out) if (!r.ok && w.presence.holds[id]?.by === actor) returnHeld(w, actor, id, r.refused?.code, "left");
     endDrivesBy(w, w.state(), actor);   // a driver leaving: the lease commits, the helm frees (shared/protocol/authority/drive.js)
     if (CTX.isAnon(actor)) C.forgetIdentity(w.presence, actor);   // a guest never returns
     delete w.presence.bodies[actor]; forgetReaches(w.presence, actor); clearOccupant(w, actor); w.savePresence();   // F3 (b): a yes ends when either person leaves

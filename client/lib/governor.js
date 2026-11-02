@@ -51,7 +51,7 @@ export const REDUCED_CHIP = {
 
 let reducedChipHidden = false;   // the viewer put the chip away (for this visit)
 // builder mode: the governor's frame-rate toasts would land on the selection bar; the work still happens
-const building = () => typeof document !== 'undefined' && document.body?.classList.contains('edit-mode');
+const building = () => typeof document !== 'undefined' && document.body?.classList.contains('build-mode');
 
 // ---- the resident's render-scale dial (§22k) --------------------------------
 // The MANUAL override, a persisted preference like clouds⚙ and grass⚙: 'auto' lets the cruise drive; a pinned factor

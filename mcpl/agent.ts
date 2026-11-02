@@ -116,7 +116,7 @@ import { createShover, shoveable, footprint, obbOf, aabbOfObb, contactOf, massOf
 import { SHOVE } from "../shared/protocol/physconst.js";
 import { worldPose, solidOff } from "../shared/protocol/simlayer.js";
 import { physicsAreasOf, speedFactorAt, foldOfView } from "../shared/zone.js";
-import { spawnOf, belowWorld, FELL } from "../shared/spawn.js";
+import { fallBackOf, belowWorld, FELL } from "../shared/spawn.js";
 /** A record (components flat, view.js) a body doesn't meet: componentspec collider.enabled or .blocks, the authority's own reading. */
 const solidOffRecord = (e: any) => solidOff(e, "bodies");
 import { colliderFor } from "../client/lib/bodyscale.js";
@@ -428,6 +428,7 @@ export class WorldAgent {
    *  hand moves it, so a slumped root still here is canned (rootCanned); any
    *  other has its feet RAGDOLL_ROOT_DROP above its root (feetY). */
   private cannedY: number | null = null;
+  private hipsAboveRoot: number | null = null;
 
   /** The exact pose object granted "hold this while I walk", compared by
    *  identity: any other writer of `heldPose` revokes it just by assigning a
@@ -1497,7 +1498,7 @@ export class WorldAgent {
   foldedIds(): string[] { return Object.keys(this.st.entities); }
   /** × my speed at p: a physics-area {kind: speed} (shared/zone.js, the client's and the authority's reading), once per view */
   private areas: { st: unknown; a: any[] } | null = null;
-  speedAt = (p: number[]): number => { if (this.areas?.st !== this.st) this.areas = { st: this.st, a: physicsAreasOf(foldOfView(this.st)) }; return speedFactorAt(this.areas.a, p); };
+  speedAt = (p: number[], mode?: string): number => { if (this.areas?.st !== this.st) this.areas = { st: this.st, a: physicsAreasOf(foldOfView(this.st)) }; return speedFactorAt(this.areas.a, p, mode); };
   /** The world's half of the fold — state.sky / terrain / grass — which
    *  shared/worldentity.js reads as the world entity `@world`. */
   worldFold(): { sky: unknown; terrain: unknown; grass: unknown } {
@@ -2210,12 +2211,17 @@ export class WorldAgent {
   /** Every collider query a tick makes is about this agent's own world. */
   private tick() { inWorld(this.world, () => this.tickInWorld()); }
   private respawning = false;
-  /** Back to the world's arrival place after a fall out of it (shared/spawn.js spawnOf), the reason on the record (move teleport). */
+  /** Back to fallBackOf's place, if any, after a fall out of the world (shared/spawn.js), the reason on the record (move teleport). */
   async respawnFell() {
-    const sp = spawnOf(this.replica?.st); if (!sp) return;
+    const sp = this.replica?.st ? fallBackOf(this.replica.st) : null; if (!sp) return;
     this.respawning = true;
     try {
       this.target = null; this.flight = null; this.endFloat(); this.vy = 0;
+      if (this.clip === "ragdoll" || (this.heldPose && !this.heldPoseAuthored)) {
+        ++this.bodyEpoch; this.body?.stop(); this.stopSim(); this.pins.clear();
+        if (!this.heldPoseAuthored) this.heldPose = null;
+        this.clip = "idle";
+      }
       this.pos.x = sp.pos[0]; this.pos.y = sp.pos[1]; this.pos.z = sp.pos[2]; this.yaw = sp.yaw;
       const r = await this.request("move", { to: sp.pos, teleport: true, reason: FELL });
       if (r?.ok) { this.trackAt = [...sp.pos]; this.trackArrived = true; }
@@ -2473,8 +2479,8 @@ export class WorldAgent {
     // ONE AUTHOR PER POSITION: once the ragdoll owns the body (simTicker), the
     // flight integrator stops writing pos. The flight state stays alive for recovery.
     if (this.flight && !this.simTicker) this.flightTick(dt);
-    // KILLZ (shared/spawn.js, as the browser's controller): fallen below @world.bounds.min.y, back to an arrival place, on the record
-    if (!this.myOccupancy && !this.draggedBy && !this.respawning && belowWorld(this.replica?.st, [this.pos.x, this.pos.y, this.pos.z])) void this.respawnFell();
+    // KILLZ (shared/spawn.js): fallen below the kill line under @world.bounds.min.y, back to an arrival place, on the record
+    if (!this.myOccupancy && !this.draggedBy && !this.respawning && belowWorld(this.replica?.st, [this.pos.x, this.killzY(), this.pos.z])) void this.respawnFell();
     // keep the `reached` attestation honest at ~2Hz while reaching: the
     // target moves, this body moves, and the far end's touch event fires on
     // the rising edge of what is re-checked here
@@ -2625,6 +2631,7 @@ export class WorldAgent {
       if (!out) return;
       this.heldPose = out.pose; this.heldPoseAuthored = false; // a sim frame is physics even once settled
       this.pos.x = out.p[0]; this.pos.y = out.p[1]; this.pos.z = out.p[2];
+      if (Number.isFinite(out.hipsY)) this.hipsAboveRoot = out.hipsY - out.p[1];
       this.tick();
       // The ragdoll's ground truth flows BACK into the flight state, rather
       // than the flight state overwriting it. Recovery reads this to know
@@ -3944,6 +3951,10 @@ export class WorldAgent {
    *  unless the slump is canned (rootCanned), whose root is at its feet. */
   private feetY(slumped: boolean): number {
     return slumped && !this.rootCanned() ? this.pos.y + RAGDOLL_ROOT_DROP : this.pos.y;
+  }
+
+  private killzY(): number {
+    return this.clip === "ragdoll" && !this.rootCanned() ? this.pos.y + (this.hipsAboveRoot ?? RAGDOLL_ROOT_DROP) : this.pos.y;
   }
 
   /** A canned slump's root: still at the height knockDown found the feet at. */

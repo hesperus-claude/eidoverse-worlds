@@ -266,7 +266,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   map spelling, is reserved and lift-only: the authority lifts it into socket children with their stations
   on write, and the maintenance command's `lift-sockets` step does the same for a stored world (never the load), and a socket's old `body` block into its station),
   `params`, `reactions`, `lock`, `hidden`, `disabled`, `clickthrough`,
-  `collider {shape, enabled?, blocks?}` (mesh, box or sphere; absent, its size decides), `places` (named places to walk to, in the
+  `collider {shape, enabled?, blocks?, layer?, mask?}` (mesh, box or sphere; absent, its size decides), `places` (named places to walk to, in the
   thing's own frame; on `@world`, world coordinates),
   `openable`, `physics`, `grabbable`, `particles`, `script:<name>`, `zone`, `water` (a body),
   `water-exclusion`, `physics-area`,
@@ -316,11 +316,18 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   and `motion` say. `physics.kind: none` means not simulated, and is still
   solid. `enabled: false` with `physics.kind: dynamic` is refused (it would fall
   forever). shared/protocol/simlayer.js `solidOff` is the one reading.
-- **Collision layers are `collider {blocks: [...]}`** (Godot collision layers and masks, Unity's layer matrix): the
-  movers it stops, of `bodies` (anyone walking or swimming: the walkers, the authority's track and index),
+- **Collision layers are `collider {blocks: [...], layer?, mask?}`**. `blocks` names the kinds of
+  mover it stops, of `bodies` (anyone walking or swimming: the walkers, the authority's track and index),
   `hulls` (driven vehicles: the authority's hull sweep) and `things` (loose things: the engine). Absent, it stops all
-  three, as before. `hidden` with `blocks: ['hulls']` is an invisible wall only vehicles meet. A dynamic thing must
-  block `things`. `solidOff(c, layer)` is the one reading.
+  three, as before. `hidden` with `blocks: ['hulls']` is an invisible wall every vehicle meets. A dynamic thing must
+  block `things`. `layer` and `mask` are Godot's (CollisionObject3D `collision_layer`, the layers it is in, and
+  `collision_mask`, the layers it scans; each a list of numbers 1..32 or names, absent `[1]`), with Godot's rule for
+  a mover (`collides_with`: "Object A can detect a contact with object B only if object B is in any of the layers
+  that object A scans"): a mover meets a collider when the collider's `blocks` names the mover's kind **and** the
+  mover's mask holds one of the collider's layers. A hull's mask is its own collider's; bodies and engine things scan
+  `[1]` (eidosim carries no layers between things), so a collider whose layer leaves out 1 is met by hulls alone, and
+  only by those that scan it; a dynamic thing must keep 1 in its layer. A still collider's mask is unread. Every
+  stored world (no layer, no mask) collides as before. `solidOff(c, kind, mask)` is the one reading.
 - **A physics area is `physics-area {kind, factor?}`** on a thing with a box or global `zone` (Godot Area3D's
   overrides, Unreal's Physics Volume): with `kind: speed`, a body inside moves at `factor` × its own speed (walking,
   running, wading, the stroke, the 3D swim; 0.05..10, absent 1). Where areas overlap the zone's priority decides.
@@ -342,7 +349,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   on the seat only; one helm per hull, on a hull with drive). Taking the helm (`use … drive`; `station.who` and the lock
   gate it) leases the hull to its occupant (Roblox network ownership): their client steps it kinematically and sends
   `drive {id, pos, q}` (presence, relayed only from the helm); the authority checks each step against the spec (with
-  slack: a fraction over its rates and a fixed allowance that refills over 1/15 s, so a faster stream gains nothing) and the hull's own collider, swept over the step, against what's solid (an overlap it starts in may only lessen),
+  slack: a fraction over its rates and a fixed allowance that only what a step leaves of its rates unused refills, so a stream gains no speed it can keep) and the hull's own collider, swept over the step, against what's solid (an overlap it starts in may only lessen),
   answering a refusal with the pose that stands. Only the last accepted pose is written, as the system's act
   `drive-commit {id, driver, carried, why}` (`carried`: the passengers' ids): on getting up, every 5 s, when a passenger
   gets up (`alight`) and when the steps stop for 3 s (the lease is lost: passengers stay seated, the helm frees). Sitting
@@ -352,12 +359,18 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   `spawn-point {title?, team?, group?}` on a thing is another arrival place
   (OMI_spawn_point), facing its rotation. The arrival taken: `@world.spawn` when
   declared, else the first spawn-point by id among those of the team or group
-  asked for; a visitor may arrive at any of them. A body below
-  `@world.bounds.min.y` has fallen out (Unreal's KillZ): its own client sends it
-  back with `move {teleport: true, reason: 'below-bounds'}`, an act on the
-  record; the authority takes it only when it last knew the body below
-  `bounds.min.y` (one step's slack, `TRACK.cap`); a seated or climbing body
-  is exempt.
+  asked for; a visitor may arrive at any of them. A body below the kill line,
+  `KILL_MARGIN` (50 m) under `@world.bounds.min.y`, has fallen out (Unreal's
+  KillZ; the floor itself is the terrain's, so water and ground may lie under
+  `@world.bounds.min.y`): its own client sends it back with `move {teleport:
+  true, reason: 'below-bounds'}`, an act on the record; the authority takes it
+  only when it last knew the body below the kill line (one step's slack,
+  `TRACK.cap`); a seated or climbing body is exempt. A person's client judges
+  a body knocked down only once they get up.
+  An agent, which may never press get-up, judges it as it falls and lies: a body
+  its sim lays down by its hips, not by its root, which the sim keeps the rig's hip
+  height below them, and any other body by its root. A body sent back from a fall
+  arrives standing; only a pose it authored stays.
 - **The look**: `@world.sky.gradient {top, horizon, bottom?}` (linear colours;
   OMI_environment_sky, absent bottom = horizon) paints the sky; `rate: 0`
   already pins its clock. A `light {kind: 'directional'}` thing is a sun
@@ -426,7 +439,9 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   which steps it needs, naming the command, and **fails closed** where
   today's readers don't serve the old shape: a world needing `lift-sockets`
   (no reader serves an un-lifted seat), a grabbable rename (`shared/grab.js`
-  reads `anim` and `grasp` only) or `repair-shapes` (a sky's azimuth in
+  reads `anim` and `grasp` only), a picture's or a sound's `alt` or `look`
+  (`shared/picture.js` and `shared/sound.js` read `description` only) or
+  `repair-shapes` (a sky's azimuth in
   degrees would read as radians) loads and reads, but refuses every write
   (not `leave`) with the registered code `repair-needed`, whose text names
   the command. Renames whose old spelling the readers serve (`@world`
@@ -480,7 +495,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   sun/fill/world dropped, the registry's seven defaults written; `terrain`
   layer colours `"#rrggbb"` → ints, the sim's defaults written,
   `terrain.water` → `water`; `grass` in the flora spelling (a preset keeps
-  its name). The translator (`translate-v1@31`, §14) writes its
+  its name). The translator (`translate-v1@39`, §14) writes its
   projection through the same functions, so a translated world needs no
   repair, and the old-world oracle mirrors the repair with them; the sweep's
   declared projection and the oracle's core check are written independently,
@@ -648,7 +663,8 @@ copy that was updated and is published again keeps its parts' keys.
 - **Authored plane**: the log. Low frequency, high value, persisted forever.
 - **Presence plane**: bodies and whatever a hand is holding or dragging —
   poses, gestures (`pose.anim`), reach descriptors — ~15 Hz,
-  interpolated, lossy, **never persisted**. Anything at frame rate belongs
+  interpolated, lossy, **never persisted** (body consent's gates and lists,
+  below, are kept across a restart). Anything at frame rate belongs
   here; writing per-frame values into the log is non-conforming. A reach
   travels as a *declarative relation* (`pose.reach`, shared/reachwire.js) —
   a target, not solved bones — and every client re-solves it locally with
@@ -797,8 +813,16 @@ copy that was updated and is published again keeps its parts' keys.
   part of consent: the relay forwards a knock-over, pose or grab of another
   body from any distance unless the world sets `@world.body-default.range`
   (m). Only
-  the owner changes their own answers. Near, follow and voice are classes
-  no gate covers yet; nothing enforces them. The designs this replaced (the
+  the owner changes their own answers. The gates and lists are the one part of
+  the presence plane a host keeps across a restart (a block is a safety tool:
+  one that lapsed with the process would leave its person unguarded while their
+  panel says it stands); the reference keeps each world's in `consent.json`
+  beside its log, 0600, written whole (server/livehost.ts). They are never
+  logged. Near, follow and voice are classes
+  no gate covers yet; nothing enforces them. "Never wider" covers them too: a
+  no (or an ask) to one of them in an old table, switch or world default is
+  kept (the table's `closed`), the decision answers deny, and an act that
+  enforces one reads that first. The designs this replaced (the
   table of presets, tiers, pause and delegates; then one switch
   `accept|ask|refuse` with live asks) are kept as a record in
   `docs/CONSENT-TABLE-RECORD.md`; a stored table or switch is read once as
@@ -1190,8 +1214,11 @@ is called, and a body effect as `{kind, to}`, never which consent admitted
 it: the log is permanent and public, and the authority's own record of an
 activation never becomes an attendance list (an `enter` / `leave`
 activation, and a grab that isn't itself logged, records no trigger actor
-and no `event.by`; a release always has its own act, so it keeps its
-trigger). What a script writes with the identities it receives live is its
+and no `event.by`; a release keeps its trigger, since it has its own act,
+except a leaving holder's whose drop was refused where the authority doesn't
+put the thing back (no engine, or no stored pose): that one has none and,
+like a departure, records no identity). What a script writes with the
+identities it receives live is its
 own act, signed with its sponsor's rights. An auditor's re-run of a script is a
 check, never the record; its procedure is `docs/SCRIPTS.md` ("Auditing a script"). A sponsor reader skips the authority's follow-ups (§3). The reference API, limits and determinism rules are
 `docs/SCRIPTS.md`.
@@ -1455,16 +1482,17 @@ this protocol. A translated log is an ordinary log of this protocol, and these h
   `collider {enabled: false}`; `environment`'s `spawn` is `@world.spawn` (a later one a `spawn-point` thing), `bounds`
   `@world.bounds`, `floor` `@world.terrain {kind: 'flat', height: floor}` (a world with a terrain keeps it, and the floor
   is listed under `unmapped` as the conflict), `sky` `@world.sky.gradient` (sRGB to linear) and
-  a directional `light` thing (main's sun, defaults included), `particles` a `particles {effect: 'dust'}` child. What has
+  a directional `light` thing (main's sun, defaults included), `particles` a `particles` child naming a
+  derived dust document with main's count, range and colour (within the effect limits). What has
   no home (the sky's `ambient`, a value an effect clamps, an unknown key) rides `imported:<component>` on its thing and
   is listed under the report's `unmapped`.
 - **Main's vehicle is carried**: `vehicle {helm, exit, speed, turnRate, minY?, maxY?, probes}` is `drive {maxSpeed: speed,
   turnRate, climbRate: speed}` on its thing (main's clamps) and a helm child, a socket at `helm` with `station {action:
-  'drive', input: {move: 'drive'}, exit}`; `minY` and `maxY` are two hidden walls only hulls meet (`collider {blocks:
-  ['hulls']}`) set off by the hull's measured box, so its origin keeps main's band (unmeasured: at `minY`/`maxY`, the
+  'drive', input: {move: 'drive'}, exit}`; `minY` and `maxY` are two hidden walls only that vehicle meets (`collider {blocks:
+  ['hulls'], layer: [its own band layer]}`, its thing `collider {mask: [1, that layer]}`: another hull passes) set off by the hull's measured box, so its origin keeps main's band (unmeasured: at `minY`/`maxY`, the
   whole hull in it); `probes` ride `imported:vehicle`, listed under `unmapped` (collision is the hull's own collider). A
-  water volume's `speed` is a `physics-area {kind: 'speed', factor: speed / 2.4}` on its zone (2.4 m/s: the volume
-  stroke here, shared/water.js; it scales walking and wading there too). Driving is not
+  water volume's `speed` is a `physics-area {kind: 'speed', factor: speed / 2.4, modes: ['swim']}` on its zone (2.4 m/s: the volume
+  stroke here, shared/water.js; it scales walking and wading there too); within 5% of 2.4 none is written. Driving is not
   bit-identical to main's (a collider sweep, not ray probes). The translator's DEFERRED table is empty.
 - **A world that uses a deferred feature is refused**, naming each use (component, entity, actor, seq): a water volume
   or air box on `@world`, which has no frame to hold one (`water` on `@world` without one is the world's water level and

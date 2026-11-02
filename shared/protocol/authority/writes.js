@@ -4,6 +4,7 @@
 // lookups they share (needThing, notAThing, offRefuse, the world's bounds). guess is above it, reached through UP.
 import { isEntityId, isComponent, utf8Len } from "../fold.js";
 import { mintId } from "../ids.js";
+import { fillsFromImported, idOut } from "../view.js";
 import { COMPONENTS, defOf, isNamespaced, materialize, unitTransform } from "../componentspec.js";
 import { offChain, carried, ENGINES, ends, endsUnder } from "../simlayer.js";
 import { atWrite } from "../assetref.js";
@@ -22,6 +23,7 @@ import { heldEvent } from "./scriptrun.js";
 import { clearOccupant, occupantOf, vacateAt, vacateWhy } from "./occupants.js";
 import { buildEpoch, refuseForeign } from "./physics.js";
 import { stampHomes, stampResetHomes } from "./manipulate.js";
+import { outsideWorld } from "../../spawn.js";
 import { isLookAt } from "./checks.js";
 import { Admitted, admit, rateCheck, rated } from "./gate.js";
 import { applyResettle, clearRefsTo, lastTouch, planResettle, resettleEntries, stampMedia, stampModelHash, stampShapes, stripDry, touched, warnOrNot, warnings } from "./followups.js";
@@ -61,14 +63,23 @@ const actOf = (w, actor, verb, args, extra) => actEntry(w, actor, verb, { reques
 // own one deletes the leftovers in the same change, so a deleted sky leaves the slot empty instead of showing them. A
 // capability's writes are scoped to what they name, so a reaction's or script's write is left as it is.
 const NATIVE_WORLD = ["sky", "terrain", "grass", "water"];
-function dropImportedShadows(ctx, ops) {
-  if (ctx.cap || !ops.length) return ops; const wc = ctx.st.entities["@world"]?.c; if (!wc) return ops;
-  const add = [];
-  for (const k of NATIVE_WORLD) { const imp = `imported:${k}`;
+function dropImportedShadows(ctx, ops, verb) {
+  if (ctx.cap || !ops.length) return ops;
+  const add = []; const wc = ctx.st.entities["@world"]?.c;
+  if (wc) for (const k of NATIVE_WORLD) { const imp = `imported:${k}`;
     if (!(imp in wc) || ops.some((o) => o.id === "@world" && o.comp === imp)) continue;
     if (!ops.some((o) => o.id === "@world" && o.comp === k && (o.verb === "set" || o.verb === "delete"))) continue;
     add.push(delOp("@world", imp)); ctx.notes.push({ id: "@world", component: imp, why: `the imported world's leftover ${k} goes with the world's own ${k}` }); }
-  return add.length ? [...ops, ...add] : ops;
+  if (verb === "undo") return add.length ? [...ops, ...add] : ops;
+  const out = [];
+  ops.forEach((o, i) => { out.push(o);
+    if (o.verb !== "delete" || o.id === "@world" || o.comp === undefined) return;
+    const n = idOut(o.comp);
+    if (!fillsFromImported(n) || !(o.comp in (ctx.st.entities[o.id]?.c ?? {})) || ops.slice(i + 1).some((x) => x.id === o.id && ((x.comp === o.comp && x.verb === "set") || (x.comp === undefined && x.verb === "delete")))) return;
+    for (const k of Object.keys(ctx.st.entities[o.id]?.c ?? {})) {
+      if (!k.startsWith("imported:") || idOut(k.slice(9)) !== n || ops.some((x) => x.id === o.id && x.comp === k)) continue;
+      out.push(followUp(delOp(o.id, k))); ctx.notes.push({ id: o.id, component: k, why: `the imported thing's leftover ${n} goes with its own ${n}` }); } });
+  return [...out, ...add];
 }
 // A write: build ops against the folded state, admit them, then append the act and its one change entry.
 function commit(w, actor, verb, args, build) {
@@ -78,7 +89,7 @@ function commit(w, actor, verb, args, build) {
   const ctx = { st, actor, w, notes: [], refs: new Set() };
   // the old spelling's writes (a sockets map) are lifted here, before the references are cleared below, so a socket child the
   // lift takes away has the references to it cleared too, as a delete's are; admit then takes the ops as lifted
-  const pre = liftOps(st, stampModelHash(ctx, stampMedia(ctx, stampResetHomes(ctx, stampHomes(ctx, stampShapes(ctx, dropImportedShadows(ctx, build(ctx))))))), w.everIds());
+  const pre = liftOps(st, stampModelHash(ctx, stampMedia(ctx, stampResetHomes(ctx, stampHomes(ctx, stampShapes(ctx, dropImportedShadows(ctx, build(ctx), verb)))))), w.everIds());
   const ops = pre.ops;
   // whatever removes a thing (delete, a batch's delete, an undo of its create) clears the references to it in the same act
   if (ops.some((o) => o.verb === "delete" && o.comp === undefined)) { const after = scratch(st, ops); const gone = new Set(ops.filter((o) => o.verb === "delete" && o.comp === undefined && !after.entities[o.id]).map((o) => o.id));
@@ -168,9 +179,7 @@ function needThing(ctx, id) {
 // Resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied. Shape and rights
 // are admit's; this only turns what was asked into a plain value.
 // @world.bounds as the readers use it: a malformed one already in a log (written before the authority checked it) is
-// treated as no bounds, never a crash in every create's reply
-// x, z and the sky; the floor is the terrain's (bounds.min[1] sits above the default heightfield)
-const outsideWorld = (B, p) => p[0] < B.min[0] || p[0] > B.max[0] || p[2] < B.min[2] || p[2] > B.max[2] || p[1] > B.max[1];
+// treated as no bounds, never a crash in every create's reply (review T0d)
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
 const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };   // motioneval.js AXES

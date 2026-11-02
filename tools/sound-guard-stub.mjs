@@ -2,7 +2,7 @@
 // cover; the audio seams only have to EXIST (a graph call is a test bug and says so). sound-clock-stub builds one.
 export const editors = [];
 export const registerEditor = (fn) => { editors.push(fn); };
-export const registerHandler = () => {};   // the edit-mode gestures (upload); these suites test the html block
+export const registerHandler = () => {};   // the build-mode gestures (upload); these suites test the html block
 export const commitEdit = () => ({ ok: true, errors: [] });
 export const toast = () => {};
 export const flashHint = () => {};

@@ -1,5 +1,5 @@
 // tools/protocol/agenttools-check.ts — the agent's tools (mcpl/tools.ts HANDLERS on a real mcpl/agent.ts WorldAgent) against a
-// real sequencer: scratch port, scratch WORLDS_DIR/OPT_DIR, TRUST_NAMES, never 8968/8970. Edit mode v1's worst tool bugs
+// real sequencer: scratch port, scratch WORLDS_DIR/OPT_DIR, TRUST_NAMES, never 8968/8970. Build mode v1's worst tool bugs
 // (AUDIT-tools-vs-protocol 2026-10-07, AUDIT-human-agent-parity 2026-10-07). usage: bun tools/protocol/agenttools-check.ts
 //   AT1  E1 "two bodies": the agent's move walks the AUTHORITY's body (move steps, as a person's client streams them), so
 //        a wall the authority calls solid stops it, and the hand verbs find it where it stands (grab/put after a walk)
@@ -18,6 +18,9 @@
 //   AT7  an agent is a body under the same consent as a person (its table on join; no `pushable`; say takes `to`)
 //   AT9  an alias runs the new tool with the OLD argument shape (walk_to, spawn, snapshot); world_verb and main's old verbs
 //        are refused as removed, naming the call that does it now (R 10-27); renumbered from a second AT7 (claims r10 O4)
+//   AT10 catch_up says speech is arrival-only (decision table row 11)
+//   AT12 /worlds lists agents apart again; the worlds tool counts humans and agents (decision table row 21)
+//   AT11 a timed grant takes main's for: "2h" again through act set (decision table row 14)
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
@@ -65,6 +68,8 @@ const { HANDLERS, TOOLS, TOOL_RENAMED, toolList, handleTool: handleToolDoor } = 
   // AT3 / AT2 descriptions
   const desc = Object.fromEntries(TOOLS.map((t) => [t.name, t.description]));
   ok(!/default for agent performers/.test(desc.act) && /owner's call \(their move gate/.test(desc.act) && desc.act.includes((await import("../../shared/protocol/physconst.js")).bodyRangeWords()) && !/within 3 m/.test(desc.act) && /shove \{target/.test(desc.act), "AT3 act's shove says the body's owner decides, the same for every body (no agent default)", desc.act.slice(0, 200));
+  // AT10 (decision table row 11): speech is arrival-only (server/world.ts sayFloor), so catch_up promises no backlog
+  ok(/arrival-only/.test(desc.catch_up) && /since you arrived/.test(desc.catch_up) && !/since a point in the world's history/.test(desc.catch_up), "AT10 catch_up's description says speech is arrival-only: chat since you arrived, no backlog", desc.catch_up);
   // ---- AT6: the surface itself ----
   const names = TOOLS.map((t) => t.name);
   const folded = ["take_off", "climb_to", "glide_to", "land_at", "rehearse_down", "rehearse_recover", "fold_wings", "unfold_wings", "flight_status",
@@ -229,6 +234,10 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   ok(chosen.isError && /mint/.test(T(chosen)) && /\$my-mug/.test(T(chosen)), "AT2e an id the agent chooses is refused, and the words name the placeholder", T(chosen)); }
 
 // ---- AT3: a refused shove is an error ----
+// AT12 (decision table row 21): /worlds lists main's agents again (declared, §6a), and the worlds tool counts humans and agents apart
+{ const yard = (await (await fetch(`http://127.0.0.1:${port}/worlds`, { headers: ag.readHeaders })).json()).worlds?.find((w) => w.name === "yard");
+  const line = T(await call("worlds")).split("\n").find((l) => l.startsWith("- yard")) ?? "";
+  ok(JSON.stringify(yard?.agents) === JSON.stringify([ag.name]) && yard.people?.length === 2 && /1 human, 1 agent: /.test(line), "AT12 /worlds' agents lists the declared agent; people is everyone; the worlds tool says 1 human, 1 agent", [yard, line]); }
 { const vic = await sock("Vic"); await sleep(200);
   vic.at(ag.pos.x + 1, ag.pos.z); await sleep(300);   // in reach (shove: 3 m)
   const sw = await vic.req("consent", { move: false }); ok(sw?.ok, "(AT3 setup) Vic turns her move gate off (its default is on)", sw);
@@ -302,6 +311,13 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   ok(!lifted.isError && /done|unban/.test(T(lifted)), "AT6n act unban lifts it", T(lifted));
   const nobody = await call("act", { verb: "ban", args: { who: "Nobody-Here" } });
   ok(nobody.isError && /Nobody-Here/.test(T(nobody)), "AT6o act ban of a name the world never saw is an error naming it", T(nobody));
+  // AT11 (decision table row 14): main's world_access `for: "2h"` again: a timed grant's until is the server's now + 2 h
+  const roleOf = () => ag.replica?.st?.entities?.["@world"]?.c?.[`roles:${vic.actor}`];
+  const t0 = ag.serverNow(), timed = await call("act", { verb: "set", args: { id: "@world", component: `roles:${vic.actor}`, value: { role: "builder", for: "2h" } } });
+  await tryUntil("the agent folds Vic's timed grant", () => Number.isSafeInteger(roleOf()?.until), { ms: 3000, step: 50 });
+  ok(!timed.isError && roleOf()?.role === "builder" && Math.abs(roleOf().until - (t0 + 7_200_000)) < 60_000 && !("for" in roleOf()), "AT11 act set roles:<id> {role, for: \"2h\"} stores until = now + 2 h (epoch ms)", [T(timed).slice(0, 200), roleOf(), t0]);
+  const until0 = roleOf()?.until, badFor = await call("act", { verb: "set", args: { id: "@world", component: `roles:${vic.actor}`, value: { role: "member", for: "2 fortnights" } } });   // refused before sending: nothing to wait for
+  ok(badFor.isError && /not sent/.test(T(badFor)) && /"30m", "2h", "1d" or "1w"/.test(T(badFor)) && roleOf()?.until === until0 && roleOf()?.role === "builder", "AT11 a malformed for is refused before anything is sent, with the durations it takes", [T(badFor), roleOf()]);
   vic.close(); }
 
 // ---- AT5: look points at the real tool ----

@@ -610,10 +610,21 @@ class Session {
     // pending-request routing while the loop pumps. Only to MCPL clients (granted()).
     if (this.granted(CAP.channelsRegister)) this.registerChannels();
 
-    // Missed-mention replay, as tagged channel traffic. Speech is arrival-only: the world reads back earlier says only
-    // to an admin, so for everyone else nothing is replayed. Each replay carries `eidoverse:catchup` beside its
-    // ORIGINAL addressing (event-wire.ts catchupReplayTags). Cursor by seq, asked of the world (the join carries the
-    // folded world, not old history).
+    // Missed-mention replay: anything that addressed you while you slept
+    // greets you as tagged channel traffic — a wake-worthy summary, not
+    // just scrollback. Speech is arrival-only (R 10-18): the world reads back
+    // says from before this body arrived only to the owner, server operators,
+    // and anyone holding readChat, so for everyone else these reads come back empty and nothing
+    // is replayed; the code stays for an admin's door.
+    // Every message replayed below is REPLAY, and says so: `eidoverse:catchup`
+    // rides alongside each message's ORIGINAL addressing (§16, issue #1). Tagged
+    // as bare mentions, a reconnect looked identical to ten people addressing
+    // you at once; a host can now write one rule for "the ones I missed".
+    // Prefer a seq cursor over a timestamp. A join now carries the FOLDED
+    // world plus a tail, so the in-memory inbox no longer contains old history
+    // to filter — and a clock comparison silently degrades to "whatever
+    // happens to still be in memory". A seq is asked of the world directly and
+    // reaches back as far as the log goes.
     const sinceSeq = lastSeenSeq[seqKey(this.auth.id, this.agent.world)] ?? lastSeenSeq[this.auth.id];
     // "Since you last looked" starts where the persisted cursor says this
     // agent last was — not at the dawn of the replayed tail. Mentions from

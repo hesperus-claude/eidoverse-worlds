@@ -17,6 +17,8 @@
 //        their roles); by id too; recorded in world.mod.jsonl as an operator repair, no account printed or logged
 //   OR2  …refuses a target that isn't imported (an account's identity); OR3 a malformed account; OR4 an account already
 //        wearing another id; OR5 an ambiguous or unknown name — each changing nothing
+//   OR7  bind refuses an identity only a third party's entry names (a recipient of translated old speech); OR8 its own entry, role, ban or mute makes it bindable
+//   OR9  …an entry counts only if the reader accepts it: a parseable but invalid row makes nobody bindable
 //   OR6  a directory another process holds (the server, running) takes the bind: its next save keeps it, its next sign-in finds it
 //   UN1  no owner bound to any account: the dry run, the report and the result warn, naming them, and the upgrade still runs
 //   UN2  one owner bound: no warning; UN3 no owner at all and no --claim: refused, naming --claim (every translation ends with an owner)
@@ -187,12 +189,12 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const read0 = fs.readFileSync; let reads = 0; (fs as any).readFileSync = (f: any, ...a: any[]) => { if (path.resolve(String(f)) === logf) reads++; return (read0 as any)(f, ...a); };
   let a: any, b: any, n1 = 0; try { a = ownerRecognised(d, "human:test:x", "Ann"); n1 = reads; b = ownerRecognised(d, "human:test:x", "Ann"); } finally { (fs as any).readFileSync = read0; }
   row("OC1", () => ok(a?.recognised === "name" && same(a, b) && n1 >= 1 && reads === n1, "OC1 an apply asks twice (its report, then the write): the second answer is the first, by the log's head, with no second read and fold", { n1, reads, a }));
-  const q = Bun.spawnSync(["bun", "-e", `const U = await import("./server/upgrade.ts"); const who = (k) => ({ account: "human:test:j" + k, name: "J" + k });
+  const t0 = Date.now(), q = Bun.spawnSync(["bun", "-e", `const U = await import("./server/upgrade.ts"); const who = (k) => ({ account: "human:test:j" + k, name: "J" + k });
     const r = await Promise.all([0, 1, 2, 3, 4].map((k) => U.ownerOf("mews", who(k), { join: true }))); console.log("R " + JSON.stringify(r.map((x) => x === null ? "skipped" : "checked")) + " " + U.JOIN_CHECKS);`],
-    { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BACKUPS_DIR: "", TRUST_NAMES: "", SERVER_OPERATORS: "", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 120_000 });
+    { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BACKUPS_DIR: "", TRUST_NAMES: "", SERVER_OPERATORS: "", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 600_000 });   // two concurrent CLI children, cache off: a Windows runner overran 120 s (#260 run 41014925239)
   const got = /^R (\[.*\]) (\d+)$/m.exec(q.stdout.toString());
   row("OC2", () => ok(got && same(JSON.parse(got[1]), ["checked", "checked", "skipped", "skipped", "skipped"]) && got[2] === "2",
-    "OC2 a burst of refused joins runs at most JOIN_CHECKS owner checks at once (each a CLI read and fold); the rest are skipped (may: false), not queued", { out: q.stdout.toString().slice(-300), err: q.stderr.toString().slice(-300) }));
+    "OC2 a burst of refused joins runs at most JOIN_CHECKS owner checks at once (each a CLI read and fold); the rest are skipped (may: false), not queued", { ms: Date.now() - t0, exit: q.exitCode, signal: q.signalCode ?? null, out: q.stdout.toString().slice(-300), err: q.stderr.toString().slice(-300) }));
 }
 
 // ================= CL: an ownerless world is claimed by whoever upgrades it (R 10-28) =================
@@ -305,6 +307,47 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const e6 = directoryAt(file).entry(fableId) ?? {}, t6 = directoryAt(file).entry(twins[0]) ?? {};
   row("OR6", () => ok(b6.code === 0 && same(e6.subs, ["human:test:fable"]) && same(t6.subs, ["human:test:twin"]) && held.resolve({ sub: "human:test:fable", name: "fable" }) === fableId && held.entry(fableId)?.kind === "account",
     "OR6 a directory another process held from before (a running server) takes the binds: its next save keeps them, and signing in with a bound account there finds the identity; a bind by id works too", { b6: b6.out.slice(0, 200), e6, t6 }));
+}
+
+// OR7/OR8 (#260 Stella q3): only the identity's own record in the world makes it bindable: an entry it wrote, a role, a ban or mute on it
+{ const root = scratch("owners-or7"), W = path.join(root, "worlds"); fs.mkdirSync(path.join(root, "opt"), { recursive: true });
+  v1(W, "yard", [["world", "grant", { id: "fable", role: "owner", sub: "human:test:fable" }], ["fable", "say", { text: "psst", to: "Echo" }],
+    ["Talker", "say", { text: "hi" }], ["fable", "grant", { id: "Roley", role: "builder" }], ["fable", "ban", { id: "Banned" }]]);
+  const u = upgrade(root, "yard"); const file = directoryFileIn(W), d0 = directoryAt(file);
+  const mutey = d0.imported("Mutey"), modf = path.join(W, "yard", "world.mod.jsonl");
+  fs.appendFileSync(modf, JSON.stringify({ ts: T0, actor: u.roles.fable?.[0], verb: "mute", who: mutey }) + "\n");
+  const bind = (...a: string[]) => { const r = Bun.spawnSync(["bun", "tools/operator-repair.ts", "bind", ...a], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
+    return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() }; };
+  const echo = Object.entries<any>(JSON.parse(fs.readFileSync(file, "utf8")).ids).find(([, e]) => e.name === "Echo")?.[0];
+  const before = fs.readFileSync(file, "utf8"), mod0 = fs.readFileSync(modf, "utf8");
+  const r7 = [bind("yard", "Echo", "human:test:echo"), bind("yard", String(echo), "human:test:echo")];
+  const still = fs.readFileSync(file, "utf8") === before && fs.readFileSync(modf, "utf8") === mod0;
+  row("OR7", () => ok(u.up.code === 0 && !!echo && r7.every((r) => r.code === 1 && /nobody called/.test(r.out)) && still,
+    "OR7 bind refuses an identity only another person's entry names (Echo, the recipient of fable's translated old speech), by name and by id, nothing changed", { code: u.up.code, echo, r7 }));
+  const r8 = ["Talker", "Roley", "Banned", "Mutey"].map((n) => bind("yard", n, `human:test:${n.toLowerCase()}`));
+  row("OR8", () => ok(r8.every((r) => r.code === 0 && /^bound /m.test(r.out)), "OR8 …while its own record makes it bindable: an entry it wrote (Talker), a role (Roley), a ban (Banned), a mute (Mutey)", r8.map((r) => r.out.slice(0, 160))));
+  // OR9 (#260 Stella 10-30): an entry counts only if the reader accepts it; Kept's same row, valid, is the control
+  const wl = path.join(W, "yard", "world.jsonl"), rows = fs.readFileSync(wl, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const said = rows.find((e) => e.kind === "say"), ts = Math.max(...rows.map((e) => e.ts ?? 0)), d9 = directoryAt(file);
+  const stray = d9.imported("Stray"), kept = d9.imported("Kept");
+  fs.appendFileSync(wl, JSON.stringify({ ...said, actor: stray, ts: ts + 1, stray: true }) + "\n" + JSON.stringify({ ...said, actor: kept, ts: ts + 2 }) + "\n");
+  const r9 = bind("yard", "Stray", "human:test:stray"), k9 = bind("yard", "Kept", "human:test:kept");
+  row("OR9", () => ok(!!said && r9.code === 1 && /nobody called/.test(r9.out) && k9.code === 0 && /^bound /m.test(k9.out),
+    "OR9 bind refuses an identity whose only entry the reader rejects (Stray: a parseable row with an unknown field); the same row, valid, makes Kept bindable", { said: !!said, r9, k9 }));
+  // OR10/OR11 (#260 Stella 10-30, 3rd): the strict reader's other two stages, a change's ops and the genesis version, each with a control
+  const change = rows.find((e) => e.kind === "change"), opper = d9.imported("Opper"), okop = d9.imported("Okop");
+  fs.appendFileSync(wl, JSON.stringify({ ...change, actor: opper, ts: ts + 3, body: { ...change.body, verb: "explode" } }) + "\n" + JSON.stringify({ ...change, actor: okop, ts: ts + 4 }) + "\n");
+  const r10 = bind("yard", "Opper", "human:test:opper"), k10 = bind("yard", "Okop", "human:test:okop");
+  row("OR10", () => ok(!!change && r10.code === 1 && /nobody called/.test(r10.out) && k10.code === 0 && /^bound /m.test(k10.out),
+    "OR10 bind refuses an identity whose only entry is a change the fold skips (an unknown op); the same change, valid, makes Okop bindable", { change: !!change, r10, k10 }));
+  const lines = fs.readFileSync(wl, "utf8").split("\n").filter(Boolean), g = JSON.parse(lines[0]), late = d9.imported("Late");
+  fs.appendFileSync(wl, JSON.stringify({ ...said, actor: late, ts: ts + 5 }) + "\n");
+  fs.writeFileSync(wl, [JSON.stringify({ ...g, body: { ...g.body, minor: 999 } }), ...fs.readFileSync(wl, "utf8").split("\n").filter(Boolean).slice(1)].join("\n") + "\n");
+  const r11 = bind("yard", "Late", "human:test:late");
+  fs.writeFileSync(wl, [lines[0], ...fs.readFileSync(wl, "utf8").split("\n").filter(Boolean).slice(1)].join("\n") + "\n");
+  const k11 = bind("yard", "Late", "human:test:late");
+  row("OR11", () => ok(r11.code !== 0 && !/^bound /m.test(r11.out) && k11.code === 0 && /^bound /m.test(k11.out),
+    "OR11 under a genesis with an unsupported minor (the fold reads no world) nobody's entry counts; the same log with its own genesis binds Late", { r11, k11 }));
 }
 
 console.log(`[owners-check] ${pass} passed, ${fail} failed`);

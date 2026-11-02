@@ -76,16 +76,18 @@ report lists each one):
 - *Ranges.* A value outside the component registry's ranges is brought inside
   them and listed (`adjusted`), so the world's next edit isn't refused.
 - *Vehicle bands and swim speed* (translate-v1@29, R 10-28 item 50): a
-  vehicle's `minY`/`maxY` are two hidden walls only hulls meet (`collider
-  {blocks: ['hulls']}`, at [0, y, 0], 200 km square: every legal x/z), set off by the hull's box as
+  vehicle's `minY`/`maxY` are two hidden walls only that vehicle meets (`collider
+  {blocks: ['hulls'], layer: [its own band layer]}` and its thing's `collider {mask: [1, that layer]}`,
+  Godot's collision layers, translate-v1@32; at [0, y, 0], 200 km square: every legal x/z), set off by the hull's box as
   this host measures it, so the hull's origin keeps main's band exactly (a hull
   the host can't measure: at `minY`/`maxY` themselves, the whole hull in the
-  band). One hull layer: every vehicle meets every band. Each wall is locked
-  (builder strength, as every translated lock: a builder may lift it knowingly). Water `speed` is the
-  water's own `drag` (translate-v1@31; Godot's `linear_damp`): 5 × 2.4 / speed
-  per second, so a swimmer there strokes at main's pace and walkers on its
-  floor are untouched; a speed within 5% of 2.4 m/s (the stroke here) is
-  dropped, and the report says which.
+  band). Another vehicle passes through the band (@29-@31 stopped every one). Each wall is locked
+  (builder strength, as every translated lock: a builder may lift it knowingly). Water `speed` is
+  `physics-area {kind: 'speed', factor: speed / 2.4, modes: ['swim']}` (main slowed only the swim) on the water's zone
+  (translate-v1@35; 2.4 m/s is the stroke a volume swims at here), so a
+  swimmer there strokes at main's pace; it scales walking and wading on that
+  floor too, where main changed only the swim. A speed within 5% of 2.4 m/s
+  is dropped, and the report says which.
 - *The stage edge* (translate-v1@31): where main had neither bounds nor a
   terrain it kept walkers and swimmers within 78 m of the origin and fliers
   under 60 m. Here `@world.bounds` is the only edge, so such a world gets the
@@ -101,6 +103,10 @@ report lists each one):
 - *Carried, with their fate said:* vehicle `probes` (retired: the authority's
   hull sweep).
 - *Sky audio* (the weather's own sounds) is `@world.sky.audio`, as main's.
+- *A person's own `none` or `spectator`* (translate-v1@36): in an owned
+  world, `none` becomes a ban in `world.mod.jsonl` with the grant's end, so
+  they stay out; a live `spectator` (unless `*` is spectator) refuses the
+  translation by name, since there is no watch-only grant for one person.
 
 A report reviewed under an earlier translator is never approvable: each
 version translates differently, so its hash differs, and the refusal says so.
@@ -192,11 +198,12 @@ opens on the next join; nobody needs to restart the server.
 A server with no operator (`SERVER_OPERATORS` empty, and nobody claimed it yet)
 prints one line at boot (R 10-28):
 
-    No operator yet. Open http://localhost:8940/setup#token=… while signed in (human or agent) to become this server's operator.
+    No operator yet. Open http://localhost:8940/setup#token=… in a signed-in browser (an agent: POST {token} to /setup with Authorization: Bearer) to become this server's operator.
 
 Open it in a browser where you are signed in to this server (behind a proxy,
 the same `/setup#…` on its public address). The page says "You're this server's
-operator." The link works once: the account is stored in
+operator." An agent claims it with `POST /setup`, body `{"token": "…"}`, and
+`Authorization: Bearer <its credential>`. The link works once: the account is stored in
 `<worlds dir>/.operators.json` (0600; read at every boot and merged with
 `SERVER_OPERATORS`), the token is gone, no link is printed again, and `/setup`
 is a missing page. Being the operator takes effect at once, no restart.
@@ -214,7 +221,8 @@ An agent claims it with its own credential, in the header, never the URL:
     curl -X POST http://localhost:8940/setup -H "Authorization: Bearer <agent credential>" -H "content-type: application/json" -d '{"token":"…"}'
 
 It becomes the operator as the same account its join proves (`agent:token:<id>`
-or `aid1:<iss>:<sub>`). A guest (no sign-in) is refused, as is a wrong or used
+or `aid1:<iss>:<sub>`). A Bearer sent beside a session cookie is the claimant, and an
+invalid one is refused, never falling back to the cookie. A guest (no sign-in) is refused, as is a wrong or used
 token, another site's page, and more than a few tries a minute. The token lives
 only in the server's memory: a restart before it is used prints a new one.
 
@@ -278,8 +286,10 @@ the host:
 From then on, signing in with that account *is* that identity, with its roles,
 in every world. The bind is recorded in the world's `world.mod.jsonl` as an
 operator repair (`verb: "bind"`, `operator: true`); the account itself is kept
-only in the server's directory. It refuses an identity that isn't imported
-(one already bound, or a guest), an account that isn't one
+only in the server's directory. The identity must have a record of its own in
+that world: an entry it wrote, a role it holds, or a ban or mute on it. Being
+named in someone else's entry (the recipient of their old speech) isn't one. It
+refuses an identity that isn't imported (one already bound, or a guest), an account that isn't one
 (`human:<provider>:<id>`, `agent:token:<id>`, `aid1:<iss>:<sub>`,
 `local:<name>`), a name two imported people share (name the `u-` id instead),
 and an account that already wears another identity here. The server may keep

@@ -177,6 +177,7 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);
 const F = await import(TREE + "shared/protocol/fold.js");
 const SL = await import(TREE + "shared/protocol/simlayer.js");
+const { KILL_MARGIN = 0 } = await import(TREE + "shared/protocol/physconst.js");
 const G = await import(TREE + "shared/grab.js").catch(() => ({}));   // absent at the base commit (--control)
 const SB = await import(TREE + "shared/protocol/sandbox.js");
 const ST = await import(TREE + "shared/protocol/authority/storage.js");
@@ -611,6 +612,23 @@ const cases: Case[] = [
       D.settleOrphans(w3, []); const again = s.entries().slice(n1).filter((e: any) => e.kind === "act").map((e: any) => `${e.verb}:${e.body?.id}`);
       return { g: show(g), lift, acts, ends, again }; },
     good: (o) => o.g === "ok" && o.lift && o.acts.includes("return-home:cup") && o.ends && !o.again.length },
+  { id: "O5", what: "a hold a world's load settles is a release its watching scripts hear (review 1.10): the orphan's return-held says how: return, caused by that act", run(s) { cast(s, true);
+      s.call("olive", "create", { id: "flag", model: "book", components: { physics: { kind: "dynamic" }, grabbable: { who: "member" } }, place: { at: [1, 0] } });
+      const h = install(s, "olive", "flag", "hear", `world.on("release", (e) => world.set("self", "t/how", e.how));\n`, { scope: { ids: "self", comps: ["t/how"] }, on: ["release"] });
+      s.call("vic", "move", { to: [0.8, 0, 0.6] }); const g = s.call("vic", "grab", { id: "flag" });
+      const w2 = s.reopen({ bodies: {}, holds: {} }); clock.advance(100); D.settleOrphans(w2, []);
+      const ran = s.entries().filter((e: any) => e.kind === "act" && e.verb === "script" && e.body?.on === "release"), back = s.entries().findLastIndex((e: any) => e.kind === "act" && e.verb === "return-held");
+      return { h: show(h), g: show(g), how: comp(s, "flag", "t/how") ?? null, cause: ran.at(-1)?.cause ?? null, back }; },
+    good: (o) => o.h === "ok" && o.g === "ok" && o.how === "return" && o.back > 0 && o.cause === o.back },
+  { id: "O5b", what: "…and a hold that just ends at load (past the holders' cap) is heard as how: drop", run(s) { cast(s);
+      s.call("olive", "create", { id: "flag", model: "book", components: { grabbable: { who: "member" } }, place: { at: [1, 0] } });
+      const h = install(s, "olive", "flag", "hear", `world.on("release", (e) => world.set("self", "t/how", e.how));\n`, { scope: { ids: "self", comps: ["t/how"] }, on: ["release"] });
+      s.call("vic", "move", { to: [0.8, 0, 0.6] }); const g = s.call("vic", "grab", { id: "flag" });
+      const P = JSON.parse(JSON.stringify(s.w().presence)), mine = P.holds.flag;
+      P.holds = { ...Object.fromEntries(Array.from({ length: D.ORPHANS.holders }, (_, i) => [`gone${i}`, { ...mine, by: `h${i}` }])), flag: mine };   // vic is the 17th holder
+      const w2 = s.reopen(P); clock.advance(100); const r = D.settleOrphans(w2, []);
+      return { h: show(h), g: show(g), deferred: r.some((x: any) => x.deferred === 1), held: w2.presence.holds.flag ?? null, how: comp(s, "flag", "t/how") ?? null }; },
+    good: (o) => o.h === "ok" && o.g === "ok" && o.deferred && o.held === null && o.how === "drop" },
   // ---------------- U: use while held, and the grab / release events (slice 5) ----------------
   { id: "U1", what: "use while held: the holder's use with no action fires grabbable.use's down, with phase up its up (each one act, the act saying held/hand/phase); held: true from someone not holding is refused", run(s) { cast(s);
       s.call("olive", "create", { id: "torch", model: "table-lamp", components: { grabbable: { who: "member", use: { down: "on", up: "off" } },
@@ -660,6 +678,47 @@ const cases: Case[] = [
       const sact = s.entries().filter((e: any) => e.kind === "act" && e.actor === "script:ball").at(-1);
       return { how: comp(s, "board", "t/how"), cause: s.entries()[sact?.cause]?.verb, bad: code(bad) }; },
     good: (o) => o.how === "throw" && o.cause === "throw" && o.bad === "shape" },
+  { id: "U3b", what: "a hold that ends with no settlement of the holder's is a release too (review of #260): a fall out of the world says fell, caused by the fall's act, with or without physics; a leave whose drop is refused, with no engine, says left and, like a departure, records no identity", run(s) {
+      const fall = (sim: boolean) => { const t = session({ scripts: SB.SANDBOX }); cast(t, sim);
+        t.call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50, -10, -50], max: [50, 50, 50] } });
+        t.call("olive", "set", { id: "@world", component: "spawn", value: { pos: [0, 0, 8] } });
+        t.call("olive", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "member" } }, place: { at: [0, 8.5] } });
+        t.call("olive", "create", { id: "board", model: "book", place: { at: [3, 3] } });
+        install(t, "olive", "ball", "watch", `world.on("release", (e) => world.set("board", "t/how", e.how));\n`, { scope: { ids: ["self", "board"], comps: ["t/how"] }, on: ["release"] });
+        t.call("vic", "move", { to: [0, 0, 8] }); const grab = t.call("vic", "grab", { id: "ball" });
+        const kz = -10 - KILL_MARGIN;
+        t.call("olive", "set", { id: "@world", component: "terrain", value: { kind: "flat", height: kz - 10 } });
+        for (let y = -3.5; y > kz - 4; y -= 3.5) t.call("vic", "move", { to: [0, y, 8] }, 1000);
+        const back = t.call("vic", "move", { to: [0, 0, 8], teleport: true, reason: "below-bounds" }, 1000);
+        const sact = t.entries().filter((e: any) => e.kind === "act" && e.actor === "script:ball").at(-1);
+        return { grab: show(grab), back: show(back), how: comp(t, "board", "t/how") ?? null, cause: sact ? t.entries()[sact.cause]?.verb ?? t.entries()[sact.cause]?.kind : null, trigger: sact?.body?.trigger?.actor ?? null }; };
+      const plain = fall(false), sim = fall(true);
+      cast(s);
+      s.call("olive", "create", { id: "ball", model: "ball", components: { grabbable: { who: "member" } }, place: { at: [0, 0] } });
+      s.call("olive", "create", { id: "board", model: "book", place: { at: [3, 3] } });
+      install(s, "olive", "ball", "watch", `world.on("release", (e) => world.set("board", "t/how", e.how));\n`, { scope: { ids: ["self", "board"], comps: ["t/how"] }, on: ["release"] });
+      s.call("vic", "move", { to: [0, 0, 0.5] }); const grab = s.call("vic", "grab", { id: "ball" });
+      const lock = s.call("olive", "set", { id: "ball", component: "lock", value: true });
+      const left = s.call("vic", "leave", {});
+      const lact = s.entries().filter((e: any) => e.kind === "act" && e.actor === "script:ball").at(-1);
+      return { plain, sim, left: { grab: show(grab), lock: show(lock), leave: show(left), holds: Object.keys(s.w().presence.holds), how: comp(s, "board", "t/how") ?? null,
+        trigger: lact?.body?.trigger ?? null, by: lact?.body?.event?.by ?? null } }; },
+    good: (o) => o.plain.grab === "ok" && o.plain.back === "ok" && o.plain.how === "fell" && o.plain.cause === "move" && o.plain.trigger === "vic"
+      && o.sim.grab === "ok" && o.sim.back === "ok" && o.sim.how === "fell" && o.sim.cause === "move" && o.sim.trigger === "vic"
+      && o.left.grab === "ok" && o.left.lock === "ok" && !o.left.holds.length && o.left.how === "left" && o.left.trigger === null && o.left.by === null },
+  { id: "U3c", what: "…in a world running physics, a leave whose drop is refused says left too, caused by the authority's return-held act, which names the holder, so its activation keeps the trigger and by (review of #260)", run(s) { cast(s, true);
+      s.call("olive", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "member" } }, place: { at: [0, 0] } });
+      s.call("olive", "create", { id: "board", model: "book", place: { at: [3, 3] } });
+      install(s, "olive", "ball", "watch", `world.on("release", (e) => world.set("board", "t/how", e.how));\n`, { scope: { ids: ["self", "board"], comps: ["t/how"] }, on: ["release"] });
+      s.call("vic", "move", { to: [0, 0, 0.5] }); const grab = s.call("vic", "grab", { id: "ball" });
+      const lock = s.call("olive", "set", { id: "ball", component: "lock", value: true });
+      const left = s.call("vic", "leave", {});
+      const lact = s.entries().filter((e: any) => e.kind === "act" && e.actor === "script:ball").at(-1);
+      const ret = s.entries().filter((e: any) => e.kind === "act" && e.verb === "return-held").map((e: any) => e.body);
+      return { grab: show(grab), lock: show(lock), leave: show(left), holds: Object.keys(s.w().presence.holds), how: comp(s, "board", "t/how") ?? null,
+        cause: lact ? s.entries()[lact.cause]?.verb ?? null : null, trigger: lact?.body?.trigger?.actor ?? null, by: lact?.body?.event?.by ?? null, ret }; },
+    good: (o) => o.grab === "ok" && o.lock === "ok" && o.leave === "ok" && !o.holds.length && o.how === "left" && o.cause === "return-held" && o.trigger === "vic" && o.by === "vic"
+      && o.ret.length === 1 && o.ret[0].holder === "vic" && o.ret[0].why === "locked" },
   { id: "U6", what: "a refused throw leaves the hold where it was: its release point isn't written before the throw is admitted", run(s) { cast(s, true);
       s.call("olive", "create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic", who: "member" } }, place: { at: [0, 0] } });
       s.call("vic", "move", { to: [0, 0, 0.5] }); const g = s.call("vic", "grab", { id: "ball" });
@@ -716,7 +775,7 @@ const cases: Case[] = [
       const plain = s.call("vic", "put", { id: "book2" });
       return { g: show(g), lock: show(lock), p: code(p) ?? show(p), home, held: s.w().presence.holds?.torch?.by ?? null, plain: code(plain) ?? show(plain) }; },
     good: (o) => o.g === "ok" && o.lock === "ok" && o.p === "locked" && !o.home && o.held === "vic" && o.plain === "locked" },
-  { id: "U10", what: "a grab or punt a lock stops says who may lift that lock (review of #260, protocol core I73): an owner's lock says owners only and names its locker, and a builder's says builders and up (recut B2: strength = the setter's rank)", run(s) { cast(s, true);
+  { id: "U10", what: "a grab or punt a lock stops says who may lift that lock (review of #260, protocol core I73): an owner's lock says owners only and names its locker, and a builder's names the Builder role and up (recut B2: strength = the setter's rank)", run(s) { cast(s, true);
       s.call("olive", "create", { id: "tome", model: "book", components: { grabbable: { who: "member" }, physics: { kind: "dynamic" } }, place: { at: [0.3, 0] } });
       s.call("olive", "set", { id: "tome", component: "lock", value: true });
       s.call("bob", "move", { to: [0.3, 0, 0.6] }); const g = s.call("bob", "grab", { id: "tome" }), p = s.call("bob", "punt", { id: "tome", power: 2 });
@@ -726,7 +785,7 @@ const cases: Case[] = [
       return { g: [code(g), g.refused?.fix], p: [code(p), p.refused?.fix], v: [code(v), v.refused?.fix] }; },
     good: (o) => o.g[0] === "locked" && /^owners only \(it was locked by .*olive.*\) can unlock it first/.test(o.g[1] ?? "") && !/builder/.test(o.g[1] ?? "")
       && o.p[0] === "locked" && /^owners only \(it was locked by .*olive.*\) can unlock it first/.test(o.p[1] ?? "")
-      && o.v[0] === "locked" && /^builders and up \(it was locked by .*bob.*\) can unlock it first/.test(o.v[1] ?? "") },
+      && o.v[0] === "locked" && /^Builder and up \(it was locked by .*bob.*\) can unlock it first/.test(o.v[1] ?? "") },
   { id: "U11", what: "a thing that goes home keeps its size: an explicit home.scale is the scale it goes home at, and without one its size in the world is kept (homeScale), not its local scale copied into another frame", run(s) { cast(s);
       // an explicit home.scale
       s.call("olive", "create", { id: "book", model: "book", components: { grabbable: { who: "member", release: "return" } }, place: { at: [0.3, 0] } });

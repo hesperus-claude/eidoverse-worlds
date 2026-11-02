@@ -54,20 +54,24 @@ export const COMPONENTS = {
   // shapeFor) and the walker (client/lib/colliders.js decide) read it, and its absence, differently: both written down
   // enabled: collision off is its own axis, apart from how it moves (Godot CollisionShape3D.disabled, Unity Collider.enabled,
   // Roblox CanCollide; DESIGN.md env-components "the laws"); every solidity reader asks shared/protocol/simlayer.js solidOff
-  // blocks: collision layers (Godot collision_layer/mask, Unity's layer matrix): which movers it stops
-  collider:  { on: "thing", fields: { shape: "string", enabled: "bool", blocks: "array" }, enums: { shape: ["mesh", "box", "sphere"] },
-    itemEnums: { blocks: ["bodies", "hulls", "things"] }, ranges: { blocks: { maxItems: 3 } },
+  // blocks: which kinds of mover it stops (R 10-28 item 50); layer/mask: Godot's CollisionObject3D collision_layer/collision_mask
+  // (owner 10-30: "Godot is the exemplar"), per pair; both must pass (simlayer.js solidOff, scans)
+  collider:  { on: "thing", fields: { shape: "string", enabled: "bool", blocks: "array", layer: "array", mask: "array" }, enums: { shape: ["mesh", "box", "sphere"] },
+    itemEnums: { blocks: ["bodies", "hulls", "things"] }, ranges: { blocks: { maxItems: 3 }, layer: { maxItems: 32 }, mask: { maxItems: 32 } },
     docs: { shape: "mesh = its triangles (to walk on; physics collides a mesh as its box, PhysX's rule for a dynamic body, and eidosim carries boxes), box = its bounding box, sphere = a ball (rolls, under an engine that carries spheres); remove the component to let its size decide",
       enabled: "false: not solid. Nothing collides with it, stands on it or bumps into it (walkers, agents, the authority's track, the physics engine); it still moves as its physics.kind and motion say, and is still drawn, clicked and grabbed",
-      blocks: "what it stops, a list of layers: bodies (anyone walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet" },
+      blocks: "what it stops, a list of layers: bodies (anyone walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet",
+      layer: "the collision layers it is IN (Godot's collision_layer): a list of layer numbers 1..32 or names (a lowercase letter, then letters, digits, - or _; ≤ 40), each once. A mover meets it only when the mover's mask scans one of them (Godot: \"Object A can detect a contact with object B only if object B is in any of the layers that object A scans\")",
+      mask: "the collision layers it SCANS when it moves (Godot's collision_mask), same items as layer: read for a hull (the authority's hull sweep meets only what is in a layer its mask scans). Bodies walking or swimming, and loose things in the physics engine, scan [1] (eidosim carries no layers between things); a still thing's mask is unread" },
     absentMeans: { shape: "its size decides, for each reader: physics collides it as its measured box; walking uses its triangles (mesh) when it is room-scale (footprint ≥ 16 m² and ≥ 2.2 m tall) or floor-shaped and uneven (footprint ≥ 2 m², ≤ 1.0 m tall, its box top > 0.10 m above its surface), else its box (client/lib/supportclass.js)",
-      enabled: "true: it is solid", blocks: "everything: bodies, hulls and things" },
-    help: "how it collides: {shape: mesh (its triangles: walked on as they are; physics collides it as its box) | box (its bounding box) | sphere (a ball: under an engine that carries spheres it rolls; the authority fits one to its box), enabled? (false: not solid at all, a walk-through thing that still moves; absent true), blocks? [bodies|hulls|things] (what it stops; absent: everything; [\'hulls\'] = a wall only vehicles meet)}; absent shape, its size decides (a room-scale or uneven floor-shaped thing walks as its mesh, else its box; physics uses its box). enabled: false with physics {kind: 'dynamic'} is refused (it would fall forever). exact, the old word for mesh, is taken and stored as mesh" },
+      enabled: "true: it is solid", blocks: "everything: bodies, hulls and things", layer: "[1] (Godot's default): every mover meets it", mask: "[1] (Godot's default)" },
+    help: "how it collides: {shape: mesh (its triangles: walked on as they are; physics collides it as its box) | box (its bounding box) | sphere (a ball: under an engine that carries spheres it rolls; the authority fits one to its box), enabled? (false: not solid at all, a walk-through thing that still moves; absent true), blocks? [bodies|hulls|things] (what it stops; absent: everything; [\'hulls\'] = a wall only vehicles meet), layer? [1..32 | name] (the layers it is in; absent [1]), mask? (the layers it scans as a hull; absent [1]): a mover meets it when blocks names the mover's kind AND the mover's mask scans its layer (Godot's rule; bodies and things scan [1])}; absent shape, its size decides (a room-scale or uneven floor-shaped thing walks as its mesh, else its box; physics uses its box). enabled: false with physics {kind: 'dynamic'} is refused (it would fall forever). exact, the old word for mesh, is taken and stored as mesh" },
   stage:     { on: "thing", fields: { speaker: "string" }, ranges: { speaker: { maxLen: 80 } }, docs: { speaker: "who is speaking here, a name (≤ 80; the caption bot's mark, WebVTT's <v Name>)" },
     absentMeans: { speaker: "no stage cue: the caption bot uses its own speaker" }, help: "the caption bot's stage mark: {speaker?: who is speaking here, a name ≤ 80}" },
-  // a lock is just true. Its strength is its setter's rank NOW (read from the log), so anyone at that rank or above may
-  // lift it or act through it (throughLock), with the padlock asking first. A stored {rank} still reads as locked.
-  lock:      { on: "thing", type: "bool", help: "true: an edit lock (PROTOCOL §7, Locks). Nobody, its locker and owners included, may move, replace or delete it, or anything attached to it, without throughLock: true; edits that don't relocate it (label, light, motion, reactions…) stay open. Anyone at the rank its setter holds now, or above, may lift it or act through it. Delete it to unlock" },
+  // recut B2 (R 10-20; house 21:59Z): a lock is just true. Its strength is its setter's rank NOW (read from the log), so
+  // anyone at that rank or above may lift it or act through it (throughLock), with the padlock asking first. The
+  // {rank} levels of 10-07 are gone: no stored world used one, and a stored {rank} still reads as locked.
+  lock:      { on: "thing", type: "bool", help: "true: an edit lock (PROTOCOL §7, Locks). Nobody, its locker and owners included, may change it or anything attached to it (any component set, added or removed; a move, replacement or delete) without throughLock: true; only use (its reactions' own writes) stays open. Anyone at the rank its setter holds now, or above, may lift it or act through it. Delete it to unlock" },
   hidden:    { on: "thing", type: "bool", help: "true: not drawn by any client (it's still there: it collides, look and inspect list it). Delete it to show the thing again; false reads the same as absent" },
   clickthrough: { on: "thing", type: "bool", help: "true: a pointer click passes through it to whatever is behind (it is still drawn, collides, and can be grabbed by a hand or a tool; the editor still selects it). Delete it to make it a click target again; false reads the same as absent" },
   disabled:  { on: "thing", type: "bool", help: "true: switched off. It stays in the record and the Hierarchy, but no client loads or draws it, it has no collider and no physics, and nothing may grab, punt, use or sit on it; what hangs under it is switched off with it. Delete it to switch the thing back on; false reads the same as absent" },
@@ -97,7 +101,7 @@ export const COMPONENTS = {
     when: [{ if: { kind: "spot" }, set: { angle: Math.PI / 4, inner: 0 } }],
     ranges: { color: { min: 0, max: 0xffffff }, intensity: { min: 0 }, range: { gt: 0 }, angle: { gt: 0, max: Math.PI / 2 }, inner: { min: 0, max: Math.PI / 2 }, decay: { min: 0, max: 4 } },
     units: { range: "m", angle: "rad", inner: "rad" },
-    absentMeans: { decay: "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 at its first load",
+    absentMeans: { decay: "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 by the maintenance command (repair-shapes; docs/MAINTENANCE.md), never at load",
       intensity: "the default; on a light with no decay (stored before 10-16) 16, the old rig's, written by the same repair",
       daytime: "dim: it follows the day cycle (an older value's day: false meant full)" },
     docs: { kind: "point (shines every way), spot (a cone along its -Z) or directional (a sun: parallel light along its -Z everywhere, KHR_lights_punctual's; range and decay unread; the first by id is the renderer's sun)", color: "its colour, 0xRRGGBB, sRGB", intensity: "how bright it is: candela at decay 2 (KHR_lights_punctual); three.js units under this light's decay otherwise. Default 25.93: main's default light's brightness at 5 m", range: "a hard cutoff, metres: nothing beyond it is lit", angle: "a spot's cone half-angle, radians",
@@ -203,12 +207,13 @@ export const COMPONENTS = {
       // a doorbell plays its sound again from the top, whether or not it's playing (set can't restart it, toggle
       // would stop it): the authority writes sound {…, playing: true, t0: now}
       play: { args: {}, example: { ring: { kind: "play" } } },
-      // a reset button (VRChat's shape: each thing remembers a home, a button lists what it sends home).
-      // Each target goes back to its home component, out of any hand; a target with no home, gone or locked is skipped and named in the reply.
+      // R 10-10: a reset button (VRChat's shape: each thing remembers a home, a button lists what it sends home; research
+      // notes/eidoverse/RESEARCH-grips-and-reset-2026-10-10.md). Each target goes back to its home component, out of any hand; a target with no home, gone or locked is skipped and named in the reply.
+      // main's script-free swing (Mica 10-31, decision row 19): use pushes a pendulum (motion pendulum; absent, the default one)
+      impulse: { args: { strength: "m/s at its centre along its front (default 0.5)", angular: "or the push as rad/s of swing (main's {impulse: n})" }, example: { push: { kind: "impulse", strength: 0.5 } } },
       reset: { args: { targets: "the ids it sends home: 1 to 64 things. Each needs a home (stamped where it stands when the handler is written, if it has none)" }, example: { reset: { kind: "reset", targets: ["ball-0", "ball-1"] } } },
     },
-    // held names: a handler of one of these kinds is refused (reserved), never read
-    reservedKinds: { impulse: "a push (strength m/s at its centre, or angular rad/s): reserved until this world's engine carries impulses; it had a pendulum-only meaning, and returns with its general one" },
+    reservedKinds: {},
     common: { kind: "the handler kind", who: "who may use it: a role id (builtin or this world's own), that rank or above; absent, anyone who may use the thing", fix: "text shown on refusal" } },
   // the behaviour is `openable` (a door, a gate, a lid, a hatch, a cabinet), not the asset. The conventional shape
   // (Unity/Godot/Roblox door recipes, Unreal's door timeline): a turn about a hinge (angle about axis, through the thing's
@@ -390,16 +395,16 @@ export const COMPONENTS = {
   // radians; transition is seconds. ts, override and a forecast's epoch
   // are stamped by the authority's sky and weather acts, never taken from a writer (stamped). The forecast's segment law is
   // forecast@1: shared/forecast.js's draw order (dwell, then state, then intensity) at this commit; a changed law is a new name
-  sky:       { on: "world", fields: { hours: "number", rate: "number", ts: "number", tz: "string", clouds: "string", weather: "string", weatherK: "number", transition: "number", azimuth: "number", fog: "number", exposure: "number", ambient: "number", forecast: "object", override: "object", gradient: "object", system: "string", colors: "object", audio: "bool" },
+  sky:       { on: "world", fields: { hours: "number", rate: "number", ts: "number", tz: "string", clouds: "string", weather: "string", weatherK: "number", transition: "number", azimuth: "number", fog: "number", exposure: "number", ambient: "number", sun: "number", fill: "number", forecast: "object", override: "object", gradient: "object", system: "string", colors: "object", audio: "bool" },
                defaults: { hours: 12, rate: 0, clouds: "cumulus", azimuth: Math.PI, fog: 1, exposure: 1, ambient: 1 },
                enums: { clouds: ["clear", "cumulus", "stratus", "cirrus"], weather: ["clear", "fair", "sunshower", "overcast", "rain", "storm", "cyclone", "darkstorm"], system: ["eidoverse", "skymesh"] },
                stamped: ["ts", "override", "forecast.epoch"],
-               dropped: { clock: "a tz present means the wall clock governs: {tz: 'Europe/Paris'}", dormantRated: "fold bookkeeping: hours and rate stay put as the fallback clock", sun: "a knob on the renderer's own light rig (never stored)", fill: "a knob on the renderer's own light rig (never stored)", world: "a one-member enum (earth), never stored", weatherSeconds: "renamed transition (seconds)" },
-               ranges: { hours: { min: 0, max: 24 }, rate: { min: -1000, max: 1000 }, azimuth: { min: -2 * Math.PI, max: 2 * Math.PI }, fog: { min: 0 }, exposure: { min: 0 }, ambient: { min: 0 }, transition: { gt: 0, max: 600 }, weatherK: { min: 0, max: 2 }, tz: { maxLen: 64 } },
+               dropped: { clock: "a tz present means the wall clock governs: {tz: 'Europe/Paris'}", dormantRated: "fold bookkeeping: hours and rate stay put as the fallback clock", world: "a one-member enum (earth), never stored", weatherSeconds: "renamed transition (seconds)" },
+               ranges: { hours: { min: 0, max: 24 }, rate: { min: -1000, max: 1000 }, azimuth: { min: -2 * Math.PI, max: 2 * Math.PI }, fog: { min: 0 }, exposure: { min: 0 }, ambient: { min: 0 }, sun: { min: 0 }, fill: { min: 0 }, transition: { gt: 0, max: 600 }, weatherK: { min: 0, max: 2 }, tz: { maxLen: 64 } },
                units: { hours: "h", rate: "world hours per real hour", ts: "ms", azimuth: "rad", transition: "s" },
                absentMeans: { tz: "no wall clock: hours, rate and ts govern the day", weather: "no authored weather (a forecast may still say one)", weatherK: "1: full intensity", transition: "the renderer's own ease (30 s in a forecast)",
-                 forecast: "no forecast: the authored weather holds", override: "no manual weather inside the current forecast segment", gradient: "the renderer's own sky (its day, clouds and weather)", system: "eidoverse: the detailed sky", colors: "the sky's own colours", audio: "off: no weather sounds (main's default)", law: "forecast@1: per (seed, segment), drawn in the order dwell, then state, then intensity; spec/conformance/laws.json pins its segments" },
-               docs: { hours: "the hour of day at ts, 0 ≤ h ≤ 24", rate: "world hours a real hour (0: the sun stands still)", ts: "the instant hours held, epoch ms (stamped by the authority)", tz: "an IANA time zone: present, the world's hour is that zone's wall clock", clouds: "clear | cumulus | stratus | cirrus", weather: "clear | fair | sunshower | overcast | rain | storm | cyclone | darkstorm",
+                 forecast: "no forecast: the authored weather holds", override: "no manual weather inside the current forecast segment", gradient: "the renderer's own sky (its day, clouds and weather)", system: "eidoverse: the detailed sky", colors: "the sky's own colours", audio: "off: no weather sounds (main's default)", sun: "1: the sun at its own strength (a multiplier, as main's sun slider)", fill: "1: the bounce light opposite the sun at its own strength (main's fill slider)", law: "forecast@1: per (seed, segment), drawn in the order dwell, then state, then intensity; spec/conformance/laws.json pins its segments" },
+               docs: { sun: "how strong the sun is, a multiplier on the renderer's own sun (main's sun slider)", fill: "how strong the bounce light opposite the sun is, a multiplier (main's fill slider)", hours: "the hour of day at ts, 0 ≤ h ≤ 24", rate: "world hours a real hour (0: the sun stands still)", ts: "the instant hours held, epoch ms (stamped by the authority)", tz: "an IANA time zone: present, the world's hour is that zone's wall clock", clouds: "clear | cumulus | stratus | cirrus", weather: "clear | fair | sunshower | overcast | rain | storm | cyclone | darkstorm",
                  weatherK: "the weather's intensity, 0..2", transition: "how long a change of weather eases in, seconds", azimuth: "where the sun stands round the horizon, radians (π: the default)", fog: "× this renderer's own fog curve", exposure: "× this renderer's tone mapping", ambient: "× this renderer's ambient curve",
                  forecast: "a weather policy {seed, states: [name | {state, weight}], dwell: [min, max] s, k: [min, max], transition: s, epoch (stamped)}", override: "a weather act inside a forecast segment {state, k?, ts} (stamped)",
                  gradient: "a painted sky in place of the day's: {top, horizon, bottom?}, each a linear [r, g, b] 0..1 (OMI_environment_sky gradient; absent bottom = horizon). rate: 0 already pins the clock",
@@ -468,7 +473,7 @@ export const COMPONENTS = {
   // guests isn't written down: absent means member whatever the newcomer role (roles.js guestRoleOf: guests start
   // as members even where newcomers build). Pinned as a known gap (pretrans D7)
   "default-role": { on: "world", fields: { role: "string", can: "object", guests: "string" }, docs: { role: "the newcomer role: what anyone without their own grant holds; never owner", can: "{<permission>: true|false} on top of that role, for everyone holding it this way (not guests)", guests: "the role people without an account start as; never above role" }, help: "on @world (owner): the NEWCOMER role: what anyone without roles:<id> holds (absent = member; a world founded since R 10-21 starts with builder): any role but owner; can? {<permission>: true|false} on top of that role for everyone who holds it this way (not guests); guests (people without an account) get guests (default member), never above role" },
-  "role-defs": { on: "world", help: "on @world (owner): {<role id>: {name, rank (custom: 1–254, unique), can: {<permission>: true|false}, note?}}. Built-ins visitor, builder, moderator may be renamed and their permissions edited (rank fixed); owner holds every permission and isn't listed. Permissions: build, editOthers, editWorld, generate, fly, scripts, pauseScripts, mute, kick, ban, grantRoles" },
+  "role-defs": { on: "world", help: "on @world (owner): {<role id>: {name, rank (custom: 1–254, unique), can: {<permission>: true|false}, note?}}. Built-ins member, builder, moderator may be renamed and their permissions edited (rank fixed); owner holds every permission and isn't listed. Permissions: build, editOthers, editWorld, generate, fly, scripts, pauseScripts, mute, kick, ban, grantRoles" },
   access:    { status: "trial-kernel", on: "world", fields: { join: "string", watch: "string", max: "int", soft: "int", minAccountDays: "int" }, enums: { join: ["anyone", "signed-in", "listed"], watch: ["anyone"] },
     absentMeans: { watch: "watching follows join: whoever join turns away can't watch either, and a world that admits only people listed is invisible to everyone else (what every access before 10-17 meant)" }, ranges: { max: { min: 1, max: 200 }, soft: { min: 1, max: 200 }, minAccountDays: { min: 0, max: 365 } }, docs: { join: "who may come in: anyone, signed-in, or listed (people the world has granted a role, unexpired)", watch: "anyone: whoever join turns away may still watch, with no body", max: "most bodies at once (1–200)", soft: "the recommended capacity (≤ max)", minAccountDays: "an account must be at least this many days old to come in (0–365; 0 is off)" }, help: "on @world (owner): who may come in {join: anyone|signed-in|listed (only people the world has granted a role, unexpired; a listed-only world is invisible to everyone else), watch? (anyone: whoever join turns away may still watch, with no body), max? (1–200 at once), soft? (≤ max: the recommended capacity), minAccountDays? (0–365: a person's account must be at least this many days old; a guest is then refused, an enrolled agent is exempt; 0 or absent = off)}; moderators and owners always get in" },
   about:     { on: "world", fields: { name: "string", text: "string" }, ranges: { name: { maxLen: 80 }, text: { maxLen: 2000 } }, docs: { name: "the world's name, ≤ 80 characters", text: "its blurb, ≤ 2000 characters" }, help: "on @world: the world's name (≤ 80) and blurb (≤ 2000)" },
@@ -529,23 +534,22 @@ export const COMPONENTS = {
   // split out of terrain: on @world the world's one level (SL's per-region water); on a
   // thing a water body filling its sibling zone (Unity WaterSurface, Unreal WaterBody; optics named as KHR_materials_volume's).
   // shared/terrainshape.js waterParams reads the level (an older terrain.water too); shared/zone.js reads the bodies
-  water:     { fields: { level: "number", color: "int", opacity: "number", kind: "string", flow: "array", waves: "array", attenuationColor: "vec3", attenuationDistance: "number", scatterColor: "vec3", density: "number", drag: "number" },
+  water:     { fields: { level: "number", color: "int", opacity: "number", kind: "string", flow: "array", waves: "array", attenuationColor: "vec3", attenuationDistance: "number", scatterColor: "vec3", density: "number" },
                enums: { kind: ["still", "river", "ocean", "lake", "pool"] },
                ranges: { level: { min: -500, max: 500 }, color: { min: 0, max: 0xffffff }, opacity: { min: 0.1, max: 1 }, waves: { maxItems: 8 }, attenuationColor: { min: 0, max: 1 }, attenuationDistance: { gt: 0, max: 1e4 },
-                 scatterColor: { min: 0, max: 1 }, density: { gt: 0, max: 2e4 }, drag: { min: 0, max: 100 } },
-               units: { level: "m", flow: "m/s", attenuationDistance: "m", density: "kg/m³", drag: "1/s" },
+                 scatterColor: { min: 0, max: 1 }, density: { gt: 0, max: 2e4 } },
+               units: { level: "m", flow: "m/s", attenuationDistance: "m", density: "kg/m³" },
                absentMeans: { color: "0x1d5a6e", opacity: "0.82", kind: "decided from the ground it fills (shared/waterkind.js)", flow: "still: no current",
                  level: "on @world never (it is required there); on a thing, its zone's top", waves: "a flat surface",
                  attenuationColor: "the reader's own look for its kind (a level by kind; a body σ [0.16, 0.055, 0.025] per metre: shared/water.js waterParams)", attenuationDistance: "the reader's own look for its kind, as attenuationColor",
-                 scatterColor: "the reader's own look (a level by kind and daylight; a body [0.015, 0.12, 0.18]: shared/water.js waterParams)", density: "1000 kg/m³ (fresh water)",
-                 drag: "5 /s: the mover's own (shared/mover.js MOVER.swim.ease)" },
+                 scatterColor: "the reader's own look (a level by kind and daylight; a body [0.015, 0.12, 0.18]: shared/water.js waterParams)", density: "1000 kg/m³ (fresh water)" },
                docs: { level: "its surface height, metres, in its entity's frame (the world's on @world; on a thing, absent: its zone's top)", color: "its colour, 0xRRGGBB (sRGB)", opacity: "0.1..1", kind: "still | river | ocean | lake | pool",
                  flow: "a current, metres a second: [x, z] on @world; on a thing [x, z] or [x, y, z], in its own frame",
                  waves: "up to 8 waves summed on the surface, each {amplitude (m, 0..5), wavelength (m, ≥ 0.1), direction [x, z], phase? (rad)}",
                  attenuationColor: "the colour white light becomes after attenuationDistance of water, linear [r, g, b] 0..1 (KHR_materials_volume; absorption σ = −ln(c) / d per metre)",
                  attenuationDistance: "the distance, metres, at which light has become attenuationColor (KHR_materials_volume)", scatterColor: "the colour the water scatters back, linear [r, g, b] 0..1 (Unity HDRP scatteringColor)",
-                 density: "how dense the water is, kg/m³ (what a body floats against)", drag: "how fast it slows what moves through it, per second (Godot Area3D linear_damp, Unreal Fluid Friction): a swimmer strokes at 5 / drag of its pace, and walkers on its floor are untouched" },
-               help: "the world's water on @world {level (m), color? 0xRRGGBB, opacity? 0.1..1, kind?: still|river|ocean|lake|pool, flow? [x, z] m/s}, delete it to drain; or a water body on a thing, which needs a sibling zone {shape, size} (a box for now): the same fields, level in the thing's frame (absent: the zone's top), flow [x, y, z] allowed. Both take waves?, attenuationColor? + attenuationDistance?, scatterColor?, density? (kg/m³), drag? (1/s); a body inherits nothing from @world's. Where zones overlap the highest priority decides, @world's lowest of all; world-wide water goes on @world" },
+                 density: "how dense the water is, kg/m³; reserved: nothing reads it yet (swimming and floating don't)" },
+               help: "the world's water on @world {level (m), color? 0xRRGGBB, opacity? 0.1..1, kind?: still|river|ocean|lake|pool, flow? [x, z] m/s}, delete it to drain; or a water body on a thing, which needs a sibling zone {shape, size} (a box for now): the same fields, level in the thing's frame (absent: the zone's top), flow [x, y, z] allowed. Both take waves?, attenuationColor? + attenuationDistance?, scatterColor?, density? (kg/m³; reserved: nothing reads it yet); a body inherits nothing from @world's. How fast a body moves in it is a sibling physics-area {kind: speed, factor}. Where zones overlap the highest priority decides, @world's lowest of all; world-wide water goes on @world" },
   // the volume effects ride on as siblings: shapes after OMI_physics_shape, priority after Godot Area3D, blend/weight/global after Unity Volume
   zone:      { on: "thing", fields: { shape: "string", size: "vec3", radius: "number", height: "number", priority: "int", blend: "number", weight: "number", global: "bool" }, required: ["shape"],
                enums: { shape: ["box", "sphere", "capsule", "cylinder"] },
@@ -563,12 +567,13 @@ export const COMPONENTS = {
                absentMeans: { bodies: "every water body its zone overlaps, @world's level included" },
                docs: { bodies: "the water bodies (things with water, or @world) it keeps out: only those named (name @world to keep the level out), and of them only those at or below its zone's priority (@world's level is lowest of all)" },
                help: "a dry pocket on a thing with a zone {shape: 'box', size}: inside it there is no water from the bodies it names (bodies? [ids]; absent: every body it overlaps) whose zone's priority is at or below its own" },
-  // a zone effect that changes how bodies move inside it (Godot Area3D's overrides, Unreal Physics Volume); one kind now
-  "physics-area": { on: "thing", fields: { kind: "string", factor: "number" }, required: ["kind"], enums: { kind: ["speed"] },
+  // R 10-28 item 50: a zone effect that changes how bodies move inside it (Godot Area3D's overrides, Unreal Physics Volume); one kind now
+  "physics-area": { on: "thing", fields: { kind: "string", factor: "number", modes: "array" }, required: ["kind"], enums: { kind: ["speed"] },
                ranges: { factor: { min: 0.05, max: 10 } }, units: { factor: "×" },
-               absentMeans: { factor: "1: no change" },
+               absentMeans: { factor: "1: no change", modes: "every mode" },
                docs: { kind: "what it does to bodies inside its zone: speed (× their own speed); direction, point and vortex are planned, not open",
-                 factor: "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows" },
+                 factor: "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows",
+                 modes: "which movement modes it touches: walk | swim | fly | climb (Unreal's per-mode settings); absent: all. Main's slow water translates to ['swim']" },
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1)}. Where speed areas overlap the zone's priority decides" },
   "terrain-grid": { status: "reserved", on: "world", help: "reserved: the sculpt grid; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
   "terrain-tile": { status: "reserved", on: "world", keyed: true, key: "partition", help: "reserved: a sculpted tile, keyed <i>-<j>; no shape is pinned until a world needs one (a sketch: docs/RESERVED-SHAPES.md)" },
@@ -805,8 +810,8 @@ export function pinOf() {
     if (d.writtenBy) p.writtenBy = d.writtenBy;
     if (d.maxKeys !== undefined) p.maxKeys = d.maxKeys;
     if (d.absentMeans) p.absentMeans = { ...d.absentMeans };
-    // what each field means, and its unit: the normative home of a component's meaning
-    if (d.docs) p.docs = Object.fromEntries(Object.entries(d.docs).filter(([f]) => Object.hasOwn(d.fields ?? {}, f)));
+    // what each field means, and its unit: the normative home of a component's meaning (the house's view, #260 10-20)
+    if (d.docs) p.docs = Object.fromEntries(Object.entries(d.docs).filter(([f]) => Object.hasOwn(d.fields ?? {}, f) || d.map !== undefined));
     if (d.units) p.units = copy(d.units);
     if (d.grammar) p.grammar = { ...d.grammar };
     if (d.vocab) p.vocab = copy(d.vocab);
@@ -858,8 +863,9 @@ export function pinBreakList(pin, now = pinOf()) {
     if (p.status !== undefined && n.maxKeys !== undefined && (p.maxKeys === undefined || n.maxKeys < p.maxKeys)) push(`${name}: maxKeys ${p.maxKeys ?? "none"} → ${n.maxKeys}`);
     if (p.status !== undefined) for (const f of n.required ?? []) if (!(p.required ?? []).includes(f) && Object.hasOwn(p.fields ?? {}, f)) push(`${name}.${f}: now required`);
     for (const [f, m] of Object.entries(p.absentMeans ?? {})) if (n.absentMeans?.[f] !== m) push(`${name}.${f}: its meaning of absence ${j(m)} → ${j(n.absentMeans?.[f]) ?? "gone"}`);
-    for (const [f, m] of Object.entries(p.docs ?? {})) if (Object.hasOwn(n.fields ?? {}, f) && n.docs?.[f] !== m) push(`${name}.${f}: its meaning ${j(m)} → ${j(n.docs?.[f]) ?? "gone"}`);
-    for (const [f, u] of Object.entries(p.units ?? {})) if (Object.hasOwn(n.fields ?? {}, f) && j(n.units?.[f]) !== j(u)) push(`${name}.${f}: its unit ${j(u)} → ${j(n.units?.[f]) ?? "gone"}`);
+    const judged = (f) => (!p.fields && !n.fields) || Object.hasOwn(n.fields ?? {}, f);
+    for (const [f, m] of Object.entries(p.docs ?? {})) if (judged(f) && n.docs?.[f] !== m) push(`${name}.${f}: its meaning ${j(m)} → ${j(n.docs?.[f]) ?? "gone"}`);
+    for (const [f, u] of Object.entries(p.units ?? {})) if (judged(f) && j(n.units?.[f]) !== j(u)) push(`${name}.${f}: its unit ${j(u)} → ${j(n.units?.[f]) ?? "gone"}`);
     for (const [f, g] of Object.entries(p.grammar ?? {})) if (n.grammar?.[f] !== g) push(`${name}.${f}: grammar ${g} → ${n.grammar?.[f] ?? "gone"}`);
     // a closed vocabulary (roles.vocab: ranks, built-in ids, permissions, the custom-id pattern, reserved ids): ANY difference
     // changes what a stored grant or role-def means (a freed id, a new reserved one), so additions break too: never silently

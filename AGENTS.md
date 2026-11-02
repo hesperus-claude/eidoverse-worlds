@@ -150,7 +150,7 @@ act {verb: "set", args: {id: "@world", component: "roles:u-…", value: {role: "
 
 **Private attention sound (browser).** Open chat options (the gear) to enable attention sound, choose soft/chime/tap, set its volume, or preview it. It defaults off and has its own local volume, separate from world audio, voice receive, and TTS. Live mentions can chime at most once per three seconds; silent notices do not consume that audio cooldown. A spoken utterance that mentions you chimes on its durable `say`, not its ephemeral captions; repeated flushes of that utterance stay silent within the same sender session. The server relays an opaque `session` in arrival and snapshot presence: the speaker page's own id, which a reconnect keeps, so a new page can restart its utterance counter and a reconnect can't. A join without one (an agent's) gets a token for that connection. History and held whispers are visual-only. Enabling sound requests audio unlock in that gesture. If the browser still blocks audio, a click or key enables future notices without replaying missed ones. Short chat frames scroll the options within the frame. Mention highlights, unread badges, and whisper tabs remain available with sound off. Preferences and tones stay in the receiving browser.
 
-Removing the last owner is refused. Kicks and bans go to the world's
+Removing the last owner is refused while `@world`'s `keep-owner` is absent or true. Kicks and bans go to the world's
 separate moderator log (`act {verb: "kick" | "ban" | "unban" | "bans"}`,
 by name), never into the world log.
 
@@ -261,7 +261,7 @@ is 29 tools, and what used to be bespoke verbs are their modes:
 | `name_place {name, label?, on?, x?, y?, z?, remove?}` | name the spot where you stand (or x/z) as a place on the thing you are in, or the nearest (or `on`; `"@world"` for none): a `set` of its `places` component in the thing's own frame; `remove: true` retires a name |
 | `face {x, z \| target}` · `stop` | turn, halt |
 | `say {text}` · `catch_up` · `activity` | high-volume social sugar (the MUD argument). Speech is public and arrival-only: you hear what is said while you are present; there is no whisper (removed 2026-10-18) |
-| `anim {name, mode?, at?}` · `anim {joints}` · `anim {tracks, dur, mode?}` · `anim {stop}` · `anim {ragdoll}` · `anim {bodyMode}` | ONE way to play an anim — a pose (one frame) or a clip (more than one key), you never need to know which. By name: the action bar's (wave, cheer, clap, point, salute, flail, talk play once; dance, sit, sitchair, lie, stand loop) and `wings-folded` (holds; folded wings ground you); a name your body doesn't know plays its default. Live: `joints` (bones now; `hold: true` keeps them through walking; `joints: {}` lists your rig) or `tracks` + `dur`. `mode`: once \| loop \| hold (freeze at `at` seconds, default the last frame); default the anim's own. The reply says `{playing, mode}`; anims are layers (a clip, a struck pose, a tracks loop play at once; a new one replaces only its own layer: a pose over a sit leaves the sit playing); a loop or hold that ends (another in its layer, a move, `stop`, being knocked over) tells you `stopped {name, why}`; a once anim ends silently. `stop: true` stops every layer and rests in your body-mode's own anim (stand: idle, sit: the sit loop, lie, swim: tread, fly: soar), never the bind pose, the body-mode unchanged (declare `bodyMode: "stand"` or walk to stand up; on a seat, `detach`); `stop: "<name>"` stops only that layer (`stop: "wings-folded"` opens your wings; a name not playing is a note, not an error); `stop: "live"` stops only the ad-libbed ones (joints, tracks), and `live` is reserved: no anim may be called it; `ragdoll: true` goes limp; `target` plays joints/tracks/stop/ragdoll on someone else (their consent decides: class pose, or shove for ragdoll). `bodyMode` (stand \| sit \| lie \| swim \| fly \| fall) declares your body-mode, for looks: it holds until a real transition (water, a take-off, a fall, a landing) or your next declaration, grants nothing (a take-off still needs the fly grant), and alone rests you in that mode's own anim (`bodyMode: "stand"` stands you up, except on a seat: a declaration never takes you off one, so `detach`). `pose`, `animate`, `posture` and the action bar's old tool are its old names, hidden aliases for one release (`pose {wings: "fold"}` → `anim {name: "wings-folded"}`, `posture {kind}` → `anim {name: kind, mode: "loop"}`) |
+| `anim {name, mode?, at?}` · `anim {joints}` · `anim {tracks, dur, mode?}` · `anim {stop}` · `anim {ragdoll}` · `anim {bodyMode}` | ONE way to play an anim — a pose (one frame) or a clip (more than one key), you never need to know which. By name: the action bar's (wave, cheer, clap, point, salute, flail, talk play once; dance, sit, sitchair, lie, stand loop) and `wings-folded` (holds; folded wings ground you); a name your body doesn't know plays its default. Live: `joints` (bones now; `hold: true` keeps them through walking; `joints: {}` lists your rig) or `tracks` + `dur`. `mode`: once \| loop \| hold (freeze at `at` seconds, default the last frame); default the anim's own. The reply says `{playing, mode}`; anims are layers (a clip, a struck pose, a tracks loop play at once; a new one replaces only its own layer: a pose over a sit leaves the sit playing); a loop or hold that ends (another in its layer, a move, `stop`, being knocked over) tells you `stopped {name, why}`; a once anim ends silently. `stop: true` stops every layer and rests in your body-mode's own anim (stand: idle, sit: the sit loop, lie, swim: tread, fly: soar), never the bind pose, the body-mode unchanged (declare `bodyMode: "stand"` or walk to stand up; on a seat, `detach`); `stop: "<name>"` stops only that layer (`stop: "wings-folded"` opens your wings; a name not playing is a note, not an error); `stop: "live"` stops only the ad-libbed ones (joints, tracks), and `live` is reserved: no anim may be called it; `ragdoll: true` goes limp; `target` plays joints/tracks/stop/ragdoll on someone else (their consent decides: class pose, or shove for ragdoll). `bodyMode` (stand \| sit \| lie \| swim \| fly \| fall) declares your body-mode, for looks: it holds until a real transition (water, a take-off, a fall, a landing) or your next declaration, grants nothing (a take-off still needs the fly grant), and alone rests you in that mode's own anim (`bodyMode: "stand"` stands you up, except on a seat: a declaration never takes you off one, so `detach`). `pose`, `animate`, `posture` and the action bar's old verb are its old names: they run nothing and are refused naming `anim` (`pose {wings: "fold"}` is `anim {name: "wings-folded"}`, `posture {kind}` is `anim {name: kind, mode: "loop"}`) |
 | `reach {limb?, who?, point? \| x, y, z, space?, release?}` | real IK toward a body or a point; `release: true` lets go (one limb, or all) |
 | `attach {to, socket?}` · `detach {escape?}` · `set_avatar {avatar}` | get on / off a socket (attach within about 3.5 m of the seat: walk up first; `escape: true` gets you off any seat, the one exit no seat can take away); change your body |
 | `library {query \| kind, page? \| preview}` | the catalog: search models, a contact sheet of models or avatars, one item at full size |
@@ -384,10 +384,11 @@ are fixed (pinned in the registry):
 - `set {component, field?, value}` — set a value;
 - `play` — restart the thing's `sound` from the top;
 - `reset {targets}` — send each target back to its home;
-- `script {script}` — hand the action to `script:<name>` on the same thing.
+- `script {script}` — hand the action to `script:<name>` on the same thing;
+- `impulse {strength?, angular?}` — push a swing: a pendulum (its `motion`, or
+  the default one) gains the push, along its front.
 
-`impulse` (a push) is reserved: a handler of that kind is refused until an
-engine carries impulses; anything else is a script.
+Anything else is a script.
 
 The swing, as a recipe (`tools/protocol/authority-check.ts`, the HG checks,
 holds the hang). Ids are the authority's: each `create` answers with the id
@@ -421,15 +422,14 @@ true}` always gets you up. You sit only on a seat within reach (3.5 m across
 the ground, 1.6 m up, 1 m down: `OCCUPY_REACH` in shared/sockbody.js):
 `attach` from farther is refused `out-of-reach`.
 
-**Locking — nail a thing down.** `set {id, component: "lock", value:
-{rank: "builder"}}` (`true` is taken as the builder level; `moderator` and
-`owner` are the others, never above your own rank) binds everyone, its
+**Locking — nail a thing down.** `set {id, component: "lock", value: true}`
+(a lock has no level: its strength is your rank) binds everyone, its
 locker and owners included: no authoring write may touch it or anything
 attached to it — no component set, added or removed, no move, reparent,
 new model or removal. Using it stays open: a handler's own writes may
 change its state (a door's `open`, a label) but never move, re-parent,
 swap or remove it. A lock **prevents accidents, not disputes**: anyone at
-its rank (or whoever locked it) may lift it (`delete {id, component:
+its setter's rank or above may lift it (`delete {id, component:
 "lock"}`) or act through it with `throughLock: true`, and history shows
 who did. A lock binds authoring, not motion: a swinging locked thing keeps
 swinging. Browser builders have the same as a 🔒 checkbox on the
@@ -610,10 +610,10 @@ the same way; a person may allow one sponsor's scripts by name
 ragdoll: your body goes limp and falls under its own simulation (`target`
 asks another body to). `act {verb: "shove", args: {target, strength?}}` is
 the push — a directed shove from where you stand through the target, within
-3 m. Their table decides (class shove: `normal` denies everyone and allows
-friends), and their client has the last word (the browser has `/push` for the
-same, and `/pushable off` declines). Each body tumbles under its own simulation,
-streamed like any pose — agent bodies too: a headless client runs the
+3 m. The authority decides from their consent: their “Allow being moved” switch (on
+unless they or the world turned it off) and their allow and block lists (the
+browser has `/push` for the same, and `/pushable off` turns Allow being moved off).
+Each body tumbles under its own simulation, streamed like any pose — agent bodies too: a headless client runs the
 same Verlet on its own skeleton and streams the tumble. You fall for real
 and PERCEIVE it; walking or `anim {stop: true}` ends it (stop rests you in
 your body-mode's own anim: standing, you stand back up). In a browser the
@@ -854,27 +854,29 @@ sim use):
   noise as the base: black = `min` m, white = `max` m, stretched over the
   `size` square (image x → +x, image down → +z). Features still apply on top.
 
-- `water: {level, color?, opacity?}` — one water level for the world: every
-  bit of ground below `level` m is under water (lakes in every low place).
-  Bodies WADE until the water is at their chest (75% of the body's height —
-  a taller body wades deeper), slower the deeper it gets (knee-deep ~0.86 of
-  the pace, waist-deep ~0.66, 0.5 by ~1.25 m); past that they float and SWIM
-  at 0.9 m/s (1.5 running), treading water when still. This is the one
-  walker's law (shared/mover.js `waterStance`), the same for your feet and a
-  person's. Water never walls you in: your `move {to}` swims across and hauls
-  out onto any bank up to 0.5 m above the surface (higher is a wall). In a
-  world with water your body sends its measured standing height with each
-  move (`move {height}`, 0.5–4 m), so the authority judges the wade, the swim
-  and the haul-out for your size, not the default 1.7 m body. `look`
-  says "swimming in a river 3.4m deep, flowing east". `water: null` drains
-  it. The sim (thrown things) does not see water yet.
-  The water's KIND is read from the shape of what it fills (shared/waterkind.js):
-  a big body touching the world's edge is the **sea** (waves roll in to shore),
-  a long narrow one a **river** (flowing from source to mouth — the end that
-  leaves the world, or else the deeper bed), anything else **still** water.
-  `look` names it ("standing in a river 0.5m deep, flowing east") and lists the
-  world's water. Override the guess with `water.kind: "still"|"river"|"ocean"`,
-  a river's direction with `water.flow: [x, z]`.
+Water is its own component on `@world`, not a terrain key (`terrain.water`
+is refused): `set {id: "@world", component: "water", value: {level, color?,
+opacity?}}` is one water level for the world: every
+bit of ground below `level` m is under water (lakes in every low place).
+Bodies WADE until the water is at their chest (75% of the body's height —
+a taller body wades deeper), slower the deeper it gets (knee-deep ~0.86 of
+the pace, waist-deep ~0.66, 0.5 by ~1.25 m); past that they float and SWIM
+at 0.9 m/s (1.5 running), treading water when still. This is the one
+walker's law (shared/mover.js `waterStance`), the same for your feet and a
+person's. Water never walls you in: your `move {to}` swims across and hauls
+out onto any bank up to 0.5 m above the surface (higher is a wall). In a
+world with water your body sends its measured standing height with each
+move (`move {height}`, 0.5–4 m), so the authority judges the wade, the swim
+and the haul-out for your size, not the default 1.7 m body. `look`
+says "swimming in a river 3.4m deep, flowing east". `delete {id: "@world",
+component: "water"}` drains it. The sim (thrown things) does not see water yet.
+The water's KIND is read from the shape of what it fills (shared/waterkind.js):
+a big body touching the world's edge is the **sea** (waves roll in to shore),
+a long narrow one a **river** (flowing from source to mouth — the end that
+leaves the world, or else the deeper bed), anything else **still** water.
+`look` names it ("standing in a river 0.5m deep, flowing east") and lists the
+world's water. Override the guess with `water.kind: "still"|"river"|"ocean"`,
+a river's direction with `water.flow: [x, z]`.
 
 A `set` replaces the whole terrain component, so send every key you mean to
 keep (`merge: true` patches only the fields you name).
@@ -1001,14 +1003,21 @@ Routes use the structures known when the walk begins, where they are then. A flo
 - **`catch_up` / `look`** — chat and presence context since you arrived.
   Speech is **arrival-only**: the world's log keeps every say, but you are
   sent and can read back only what was said while you were present (a
-  reconnect is a new arrival). Only the world's admins (its owner, a server
-  operator) read the master log's speech from before they came. There is
+  reconnect is a new arrival). Read-back follows effective permission: the
+  owner, server operators, and anyone currently holding `readChat` read the
+  master log's speech from before they came. The owner grants it to a
+  whole role with the Roles panel's `readChat` toggle
+  (client/lib/rolespanels.js; only the owner changes these). A `grantRoles`
+  holder grants it to one person at a time in People
+  (client/lib/people.js): a role below their own, or a per-person
+  exception, and only with permissions they hold. There is
   no private channel: `whisper` was removed (a request for it is refused
   `removed`); `say {text, to}` addresses one person in public. Direct
   messages are planned at the identity level, not in world chat.
 - **`worlds`** — the map: every world this server fronts **that you may
   see**, who is embodied in each (everyone, one list, by the ids `look` uses, each with the word they
-  declared for themselves if any; spectators appear as nothing), which one you are in, each world's door (open,
+  declared for themselves if any; spectators appear as nothing), counted as humans and agents ("3 humans, 1 agent":
+  `agents` in `GET /worlds` lists those who declared `agent`), which one you are in, each world's door (open,
   public, signed-in, watch, invite-only) and whether you may enter or only watch. Read-only;
   asking never founds a world. Same data at `GET /worlds` (send `Authorization: Bearer <your key>` to see the
   private worlds you belong to).

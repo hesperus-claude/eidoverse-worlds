@@ -122,8 +122,8 @@ export class World {
       c.lastPose = p as Client["lastPose"]; this.dirty.set(c.id, p);   // the next frame carries the pose without the hand
     }
   }
-  /** Speech is arrival-only: the world's log keeps every say, people receive speech only for the time they were
-   *  present, and only an ADMIN reads the master log's speech back: this world's owner, or a server operator (SERVER_OPERATORS). */
+  /** Speech is arrival-only (R 10-18): the world's log keeps every say, people receive speech only for the time they were
+   *  present, and only an ADMIN reads the master log's speech back: the owner, server operators, and anyone holding readChat (AGENTS.md catch_up). */
   /** who reads speech back past their own arrival: a server operator, or whoever holds the readChat permission (owners hold every one) */
   isAdmin(c: Client): boolean { return isOperator(c.account) || (!!c.actorId && this.log.may(c.actorId, "readChat")); }
   /** The log seq at or below which this identity may not read a say back: null for an admin (no floor), else the

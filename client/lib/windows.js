@@ -315,8 +315,8 @@ export function makeFrame(id, opts = {}) {
     w: saved?.w ?? w,
     h: saved?.h ?? h,
     // A saved layout always wins. Only a FIRST load on a viewport that cannot hold the default opens less: chat
-    // alone (it carries the composer). An edit-mode frame (className 'edit') opens only with edit mode: a reload
-    // comes back OUT of edit mode, and its saved 'shown' would float it at its docked size.
+    // alone (it carries the composer). An build-mode frame (className 'edit') opens only with build mode: a reload
+    // comes back OUT of build mode, and its saved 'shown' would float it at its docked size.
     hidden: /\bedit\b/.test(className) ? true : saved?.hidden ?? (hidden || (id !== 'chat' && !fitsDefaults())),
     // MUST be read back, not just written: without it an auto-hidden frame reloads `hidden` without `autoHidden` and
     // is never auto-restored.
@@ -353,7 +353,7 @@ export function makeFrame(id, opts = {}) {
   }
 
   const showHooks = [];
-  // Docked: the frame lives INSIDE a layout container (edit mode's columns)
+  // Docked: the frame lives INSIDE a layout container (build mode's columns)
   // and its floating geometry is suspended, not lost — undock puts it back
   // on the body exactly where it floated. Not persisted: a workspace decides
   // docking, the frame remembers only how it floats.
@@ -803,11 +803,11 @@ export function fitTabStrip(strip) {
 }
 export function allFrames() { return [...frames.values()]; }
 // Tab hides the whole set of open frames and brings exactly that set back, but only when nothing more specific wants
-// the key: an open pop, a focused field, a scrim, edit mode (build.js owns its keys there), a locked pointer. The
+// the key: an open pop, a focused field, a scrim, build mode (build.js owns its keys there), a locked pointer. The
 // remembered set lives only for the session. Esc NEVER hides or restores the set: Esc is the browser's way out of
-// full screen, and closes only transient things (pops, dialogs, the command bar, edit mode's chain).
+// full screen, and closes only transient things (pops, dialogs, the command bar, build mode's chain).
 let panelStash = null;
-// anything that owns the keys registers a claim here (build.js registers edit mode) — frames imports nobody for it,
+// anything that owns the keys registers a claim here (build.js registers build mode) — frames imports nobody for it,
 // so the module graph stays a tree (frames → build → controller → ui → frames was a cycle)
 const escClaims = [];
 export function claimEscape(fn) { escClaims.push(fn); }

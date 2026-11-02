@@ -6,6 +6,7 @@
 //   C3  SERVER_OPERATORS (or legacy WORLD_ADMIN) naming a bare display name is refused loudly, the server boots with the setup link
 //       (C3b: good entries still operate; an unreadable operators file is refused, not fatal); C3m the legacy var merges, warned once
 //   H1  typing someone's name doesn't kick them, take over their session, or show as them; a guest is named a guest
+//   GN  guests typing one name back to back are each their own identity; a guest can't set @world (from the retired security-check)
 //   H3  a world name nobody founded is refused, and nothing appears on disk
 //   H4  a guest is never given the world's default role; a door ban removes the person now; a guest's ban names the
 //       connection, so reconnecting as a fresh guest is refused
@@ -14,7 +15,8 @@
 //   RK  owner seniority by grant: (founder, senior, junior) × (demote, re-affirm, ban), the junior refused every time
 //   M2  joins at once each get their own id, and the directory file keeps every one
 //   ID  one account is the same identity in every world on the authority (per-world ids, review M6, withdrawn: R 10-06)
-//   TV  a tokens.json enrolment id must be ^[a-z0-9][a-z0-9_-]{0,31}$ and unique, lowercased; a refused one proves nobody
+//   TV  a tokens.json enrolment id must be ^[a-z0-9][a-z0-9_-]{0,31}$, and no other id may differ from it only in case (one id
+//       on two tokens is one account); a refused one proves nobody
 //   CS  a collision's tag on a display name carries nothing of the account, and is the same each time
 //   SA  stored accounts (bans, the directory, sessions) outside the account shapes are refused at boot, named, kept on disk
 //   AU  POST /auth makes sessions for people only: an agent kind, a non-human: sub, a login without worlds:join|spectate refused
@@ -59,7 +61,7 @@ const mint = (over = {}) => { const now = Math.floor(Date.now() / 1000);
 
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
 const TOK = path.join(root, "tokens.json");
-fs.writeFileSync(TOK, JSON.stringify({ "tok-rowan": { id: "Rowan" }, "tok-wren": { id: "Wren", subs: ["agent:wren@home.test"] }, "tok-moss": { id: "Moss" }, "tok-fern": { id: "Fern" } }));
+fs.writeFileSync(TOK, JSON.stringify({ "tok-rowan": { id: "Rowan" }, "tok-wren": { id: "Wren", subs: ["agent:wren@home.test"] }, "tok-moss": { id: "Moss" }, "tok-fern": { id: "Fern" }, "tok-sage-old": { id: "Sage" }, "tok-sage-new": { id: "Sage" } }));
 const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
   BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "", WORLD_ADMIN: "", AGENT_TOKENS_PATH: TOK, SESSIONS_PATH: path.join(root, "sessions.json"), HN_ISSUER_KEY: ISSUER, HN_ISS: "id.test", TRUST_NAMES: "1", ...extra });
 const tool = (args) => { const r = Bun.spawnSync(["bun", "tools/protocol/world.ts", ...args], { cwd: ENGINE, env: env() }); return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() }; };
@@ -90,7 +92,7 @@ async function sock(port, headers = undefined) {
 }
 const you = (j) => j.snapshot?.cut?.you;
 
-// ---- C3: a bare name in SERVER_OPERATORS (or the legacy WORLD_ADMIN) refuses to boot (accounts only) ----
+// ---- C3: a bare name in SERVER_OPERATORS (or the legacy WORLD_ADMIN) is refused loudly; the server still boots (accounts only) ----
 const bootErr = (s) => (fs.existsSync(s.log + ".err") ? fs.readFileSync(s.log + ".err", "utf8") : "") + (fs.existsSync(s.log) ? fs.readFileSync(s.log, "utf8") : "");
 const namesBoth = (err) => /SERVER_OPERATORS/.test(err) && /WORLD_ADMIN/.test(err) && /SERVER_OPERATORS=human:discord:/.test(err);
 for (const v of ["SERVER_OPERATORS", "WORLD_ADMIN"]) { const s = await start({ [v]: "Marigold" }); const err = bootErr(s);
@@ -181,9 +183,13 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   const g = await sock(S2.port); const jg = await g.join("garden", "Annbot");
   await sleep(200);
   ok(ann.closed == null && jg.snapshot && /\(guest\)/.test(jg.snapshot.you) && you(jg) !== you(ja), "H1 a guest typing a present agent's name is a separate guest, shown as one; nobody is kicked", [jg.snapshot?.you, ann.closed]);
-  const g2 = await sock(S2.port); const jg2 = await g2.join("garden", "Annbot");
-  ok(!!jg2.snapshot && you(jg2) !== you(jg) && you(jg2) !== you(ja) && g.closed == null, "H1 two guests typing the same name are two identities; neither is kicked", [you(jg), you(jg2), g.closed]);
-  ann.close(); g.close(); g2.close(); }
+  ann.close(); g.close(); }
+// GN (from security-check H1, H2, M2, retired): guests typing one name in quick succession are each their own identity, nobody kicked; a guest can't set @world
+{ const gs = []; for (let i = 0; i < 5; i++) { const g = await sock(S2.port); gs.push([g, await g.join("garden", "Guest")]); }
+  const sky = await gs[0][0].req("set", { id: "@world", component: "sky", value: { hours: 18 } }), ids = gs.map(([, j]) => you(j));   // the reply comes after any kick the joins set off
+  ok(ids.every(Boolean) && new Set(ids).size === 5 && gs.every(([g]) => g.closed == null) && sky.refused?.code === "rights",
+    "GN five guests typing one name back to back: five identities, none kicked; a guest's set of @world is refused (rights)", { ids, closed: gs.map(([g]) => g.closed), sky: sky.refused ?? sky });
+  for (const [g] of gs) g.close(); }
 
 // ---- H4 / H5 on the public door ----
 { // the founder (local:ann) can't reach the public door; make a world whose owner is an agent account we can prove
@@ -470,6 +476,11 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
   const b = await sock(S2.port); const jb = await b.join("orchard", "x", { agentToken: "tok-rowan" });
   ok(you(ja) && you(ja) === you(jb), "ID one account is the same identity in every world on the authority", [you(ja), you(jb)]);
   a.close(); b.close(); }
+// TV5 (review 1.2): one id on two tokens (a key rotation) is one account, whichever key comes
+{ const a = await sock(srv.port); const ja = await a.join("garden", "x", { agentToken: "tok-sage-old" });
+  const b = await sock(srv.port); const jb = await b.join("orchard", "x", { agentToken: "tok-sage-new" });
+  ok(!!ja.snapshot && !!jb.snapshot && you(ja) === you(jb), "TV5 one enrolment id on two tokens (a key rotation): both keys join, as the same account", [you(ja), you(jb), ja.errors, jb.errors]);
+  a.close(); b.close(); }
 
 // ---- M2: joins at once each get their own id, and the directory file keeps every one ----
 { const names = ["Guest0", "Guest1", "Guest2", "Guest3", "Guest4"];
@@ -569,20 +580,27 @@ const postAuth = (port, token) => fetch(`http://127.0.0.1:${port}/auth`, { metho
   const S7 = await start({ SESSIONS_PATH: SF }); const ck = { cookie: `ew_sess=${sid}` }, host = `127.0.0.1:${S7.port}`;
   const opens = async (h) => { try { const s = await sock(S7.port, h); const j = await s.join("garden", `Cs${Math.random().toString(36).slice(2, 6)}`); s.close(); return j.snapshot ? (j.snapshot.cut?.account ?? j.snapshot.account ?? "joined") : "no-snapshot"; } catch { return "refused"; } };
   const got = { evil: await opens({ ...ck, origin: "https://evil.example" }), sibling: await opens({ ...ck, origin: `http://${host}`, "sec-fetch-site": "same-site" }), nul: await opens({ ...ck, origin: "null" }),
-    own: await opens({ ...ck, origin: `http://${host}`, "sec-fetch-site": "same-origin" }), proxied: await opens({ ...ck, origin: "https://public.example", "sec-fetch-site": "same-origin" }), fwd: await opens({ ...ck, origin: "https://public.example", "x-forwarded-host": "public.example" }), native: await opens(ck), guest: await opens({ origin: "https://evil.example", "sec-fetch-site": "cross-site" }) };
+    own: await opens({ ...ck, origin: `http://${host}`, "sec-fetch-site": "same-origin" }), proxied: await opens({ ...ck, origin: "https://public.example", "sec-fetch-site": "same-origin" }), native: await opens(ck), guest: await opens({ origin: "https://evil.example", "sec-fetch-site": "cross-site" }),
+    ownOrigin: await opens({ ...ck, origin: `http://${host}` }), scheme: await opens({ ...ck, origin: `https://${host}` }), fwd: await opens({ ...ck, origin: "https://public.example", "x-forwarded-host": "public.example" }) };
   ok(got.evil === "refused" && got.sibling === "refused" && got.nul === "refused", "CS1 a cookie upgrade from another origin, a sibling site, or an opaque origin is refused", got);
-  ok(["own", "proxied", "fwd", "native", "guest"].every((k) => got[k] !== "refused" && got[k] !== "no-snapshot"), "CS2 …this server's own page (Sec-Fetch-Site same-origin decides, whatever Host a proxy sends; else an Origin matching X-Forwarded-Host), a client with no Origin, and a cookieless guest from anywhere still join", got);
-  S7.proc.kill(); }
+  ok(["own", "proxied", "native", "guest", "ownOrigin"].every((k) => got[k] !== "refused" && got[k] !== "no-snapshot"), "CS2 …this server's own page (Sec-Fetch-Site same-origin decides, whatever Host a proxy sends; else its exact Origin), a client with no Origin, and a cookieless guest from anywhere still join", got);
+  ok(got.scheme === "refused" && got.fwd === "refused", "CS3 no Sec-Fetch-Site and no HN_NATIVE_ORIGIN: the Origin must be the request's own scheme+host exactly (same host over https, or an X-Forwarded-Host match, is refused)", got);
+  S7.proc.kill();
+  const S8 = await start({ SESSIONS_PATH: SF, HN_NATIVE_ORIGIN: "https://public.example" }), h8 = `127.0.0.1:${S8.port}`;
+  const opens8 = async (h) => { try { const s = await sock(S8.port, h); const j = await s.join("garden", `Cp${Math.random().toString(36).slice(2, 6)}`); s.close(); return j.snapshot ? "joined" : "no-snapshot"; } catch { return "refused"; } };
+  const pub = { pub: await opens8({ ...ck, origin: "https://public.example" }), http: await opens8({ ...ck, origin: "http://public.example" }), port: await opens8({ ...ck, origin: "https://public.example:8443" }), local: await opens8({ ...ck, origin: `http://${h8}` }) };
+  ok(pub.pub === "joined" && pub.http === "refused" && pub.port === "refused" && pub.local === "refused", "CS3 HN_NATIVE_ORIGIN set: that one origin is this server's, exactly (http:// on its host, another port, or the request's own Host is refused)", pub);
+  S8.proc.kill(); }
 
-// ---- TV: a tokens.json enrolment id is ^[a-z0-9][a-z0-9_-]{0,31}$ (lowercased) and unique lowercased; a refused one proves
+// ---- TV: a tokens.json enrolment id is ^[a-z0-9][a-z0-9_-]{0,31}$ (lowercased), no other differing only in case; a refused one proves
 // nobody, its name stays reserved, and the load says which (accounts review 10-28) ----
 { const TF = path.join(root, "tv-tokens.json");
-  fs.writeFileSync(TF, JSON.stringify({ t1: { id: "Ok-1" }, t2: { id: "has space" }, t3: { id: "x".repeat(33) }, t4: { id: "Dup" }, t5: { id: "dup" }, t6: { id: "-lead" } }));
+  fs.writeFileSync(TF, JSON.stringify({ t1: { id: "Ok-1" }, t2: { id: "has space" }, t3: { id: "x".repeat(33) }, t4: { id: "Dup" }, t5: { id: "dup" }, t6: { id: "-lead" }, t7: { id: "pair" }, t8: { id: "pair" } }));
   const code = `const { agentTokens } = await import("./server/auth.ts"); const a = agentTokens();
     console.log("RESULT " + JSON.stringify({ proves: [...a.byToken.values()].sort(), reserved: [...a.names].sort() }));`;
   const r = Bun.spawnSync(["bun", "-e", code], { cwd: ENGINE, env: env({ AGENT_TOKENS_PATH: TF }) }); const out = r.stdout.toString() + r.stderr.toString();
   let res = {}; try { res = JSON.parse(out.split("\n").find((l) => l.startsWith("RESULT ")).slice(7)); } catch {}
-  ok(JSON.stringify(res.proves) === JSON.stringify(["Ok-1"]), "TV1 only a well-formed, unique enrolment id proves anyone (spaces, 33 characters, a leading '-', a case-duplicate refused)", { res, out: out.slice(-400) });
+  ok(JSON.stringify(res.proves) === JSON.stringify(["Ok-1", "pair", "pair"]), "TV1 only a well-formed enrolment id with no case-twin proves anyone (spaces, 33 characters, a leading '-', a case-duplicate refused; one id on two tokens proves)", { res, out: out.slice(-400) });
   ok(["has space", "dup", "-lead", "ok-1"].every((n) => res.reserved?.includes(n)), "TV2 …a refused id's name stays reserved (nobody else may wear it)", res.reserved);
   ok(/5 enrolment\(s\) refused/.test(out) && /has space/.test(out) && /Dup/.test(out) && /\^\[a-z0-9\]/.test(out), "TV3 …and the load says how many, which ids, and the rule", out.slice(-400)); }
 
@@ -658,6 +676,14 @@ const postAuth = (port, token) => fetch(`http://127.0.0.1:${port}/auth`, { metho
   ok(!txt.includes("203.0.113.77") && last && !("ip" in last) && /^[0-9a-f]{16,}$/.test(String(last.addr ?? "")), "M3 /perflog stores a hashed address, never the raw IP", last); }
 
 // ---- LC: the world's live state is behind the same door as a join ----
+{ const SF = path.join(root, "nc-sessions.json"), sid = "e".repeat(64);
+  fs.writeFileSync(SF, JSON.stringify({ [sid]: { sub: "human:test:nat", name: "Nat", scopes: ["worlds:join"], exp: Date.now() + 3600_000, native: true } }));
+  const SN = await start({ JOIN_TOKEN: "door-key", SESSIONS_PATH: SF });
+  const get = (h) => fetch(`http://127.0.0.1:${SN.port}/worlds`, { headers: { cookie: `ew_sess=${sid}`, ...h }, signal: AbortSignal.timeout(3000) }).then((r) => r.status).catch(() => -1);
+  const got = { native: await get({}), own: await get({ "sec-fetch-site": "same-origin" }), cross: await get({ "sec-fetch-site": "cross-site" }), none: await fetch(`http://127.0.0.1:${SN.port}/worlds`, { signal: AbortSignal.timeout(3000) }).then((r) => r.status).catch(() => -1) };
+  ok(got.native === 200 && got.own === 200 && got.cross === 401 && got.none === 401,
+    "NC a signed-in native client (a cookie, no fetch metadata) reads gated /worlds on a door-keyed server; the same cookie from another site's page, or no cookie, is 401 (Unreal bridge design §7.1)", got);
+  SN.proc.kill(); }
 { const S4 = await start({ JOIN_TOKEN: "door-key" });
   const get = (p, key) => fetch(`http://127.0.0.1:${S4.port}${p}`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(3000) }).then((r) => r.status).catch(() => -1);
   const noKey = [await get("/worlds"), await get("/geom?world=garden"), await get("/snap?world=garden&follow=x"), await get("/relay-diag?world=garden")];

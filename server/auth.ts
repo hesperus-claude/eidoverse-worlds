@@ -73,14 +73,16 @@ export function sessionOfRequest(req: Request): HnSession | null {
 }
 
 /** A browser upgrade from a page that isn't this server's (cross-site WebSocket hijacking; OWASP, web.dev Fetch Metadata):
- *  Sec-Fetch-Site decides when sent (same-origin only); else an Origin must be this server's (Host, X-Forwarded-Host, or
- *  HN_NATIVE_ORIGIN behind a proxy that rewrites Host). No Origin at all: a native client. */
+ *  Sec-Fetch-Site decides when sent (same-origin only); else the Origin must equal ownOrigin exactly. No Origin: a native client. */
 export function crossSiteUpgrade(req: Request): boolean {
   const site = req.headers.get("sec-fetch-site"); if (site !== null) return site !== "same-origin";
   const origin = req.headers.get("origin"); if (origin === null) return false;
-  let host: string; try { host = new URL(origin).host.toLowerCase(); } catch { return true; }   // "null" (an opaque origin) too
-  const ours = [req.headers.get("host"), req.headers.get("x-forwarded-host"), process.env.HN_NATIVE_ORIGIN ? new URL(process.env.HN_NATIVE_ORIGIN).host : null];
-  return !ours.some((h) => h && h.toLowerCase() === host);
+  try { return new URL(origin).origin !== ownOrigin(req); } catch { return true; }   // "null" (an opaque origin) too
+}
+/** This server's one public origin (scheme, host, port): HN_NATIVE_ORIGIN when set (behind a proxy), else the request's own. */
+export function ownOrigin(req: Request): string {
+  const conf = process.env.HN_NATIVE_ORIGIN, url = new URL(req.url);
+  return new URL(conf || `${url.protocol}//${req.headers.get("host") ?? url.host}`).origin;
 }
 
 // ---- session persistence ----------------------------------------------------
@@ -128,17 +130,17 @@ export function agentTokens() {
         const accepted = readTokenRegistry(AGENT_TOKENS_PATH, AGENT_TOKENS_EXAMPLE);
         const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { id?: string; subs?: string[] }>;
         const entries = Object.entries(raw).filter(([, v]) => typeof v?.id === "string" && v.id);
-        const count = new Map<string, number>(); for (const [, v] of entries) count.set(v.id!.toLowerCase(), (count.get(v.id!.toLowerCase()) ?? 0) + 1);
-        // an id is the account (agent:token:<id>): well-formed and unique lowercased, or it proves nobody (its name stays reserved)
+        const spellings = new Map<string, Set<string>>(); for (const [, v] of entries) { const k = v.id!.toLowerCase(); spellings.set(k, (spellings.get(k) ?? new Set()).add(v.id!)); }
+        // an id is the account (agent:token:<id>): one id on two tokens (a key rotation) is one account; ids differing only in case, or ill-formed, prove nobody (the name stays reserved)
         const refused: string[] = [];
         for (const [tok, v] of entries) {
           const id = v.id!; names.add(id.toLowerCase());
           if (!Object.hasOwn(accepted, tok)) continue;
-          if (!ENROLMENT_ID.test(id.toLowerCase()) || count.get(id.toLowerCase())! > 1) { refused.push(id); continue; }
+          if (!ENROLMENT_ID.test(id.toLowerCase()) || spellings.get(id.toLowerCase())!.size > 1) { refused.push(id); continue; }
           byToken.set(tok, id);
           for (const s of v.subs ?? []) if (typeof s === "string") bySub.set(s, id);
         }
-        if (refused.length) console.error(`[perm] mcpl/tokens.json: ${refused.length} enrolment(s) refused (an id must match ${ENROLMENT_ID.source} lowercased, and be unique lowercased): ${refused.map((i) => JSON.stringify(i)).join(", ")}`);
+        if (refused.length) console.error(`[perm] mcpl/tokens.json: ${refused.length} enrolment(s) refused (an id must match ${ENROLMENT_ID.source} lowercased, and no other id may differ from it only in case): ${refused.map((i) => JSON.stringify(i)).join(", ")}`);
       }
       agentTokCache = { mtime, byToken, names, bySub };
     }

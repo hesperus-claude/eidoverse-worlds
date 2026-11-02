@@ -6,15 +6,19 @@
 //   SU4 then the link is used up: a second claim and GET /setup are a missing page, the token itself is gone; a restart prints no link and keeps the operator
 //   SU5 with SERVER_OPERATORS set, or an operators file, no link is printed and /setup is a missing page
 //   SU6 an agent claims with its Bearer (aid1 and enrolled): the stored account is the one its ws join proves (that join says operator)
+//   SU10 a Bearer and a cookie both sent: the Bearer is the claimant; an invalid Bearer refuses (never the cookie's account)
 //   SU7 more than five tries a minute from one address are refused (429)
 //   SU9 the operators file is written safely: a planted .operators.json.tmp symlink is never followed, and a symlinked .operators.json is refused, unchanged
 //   SU8 the page reads the token from the fragment only: a ?token= link posts nothing and says so (it would sit in proxy logs and history)
+//   SU11 an authenticated valid-token claim accepts 1024 body bytes and refuses 1025, declared or chunked, including before an unfinished sender ends
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
 import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
+import http from "node:http";
 import { ENGINE, scratch, linkFile, canLinkFiles } from "./common.ts";
 import { tryUntil } from "./wait.ts";
+import { freePort } from "../harness.ts";
 
 const root = scratch("setup");
 let pass = 0, fail = 0;
@@ -39,10 +43,8 @@ const worldsDir = (tag) => { const W = path.join(root, tag); const d = path.join
   fs.writeFileSync(path.join(d, "log.jsonl"), fs.readFileSync(V1, "utf8").split("\n").slice(0, 200).filter(Boolean).join("\n") + "\n"); return W; };
 const env = (W, extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BACKUPS_DIR: path.join(root, `${path.basename(W)}-backups`), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
   BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "", AGENT_TOKENS_PATH: TOK, SESSIONS_PATH: SESS, HN_ISSUER_KEY: ISSUER, HN_ISS: "id.test", ...extra });
-let nextPort = 9410;
 async function start(W, extra = {}) {
-  let port = nextPort; for (; port < 9500; port++) { try { const s = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } }); s.stop(true); break; } catch {} }
-  nextPort = port + 1;
+  const port = freePort(9410);   // the shared picker: a fixed 9410++ raced access-check in a parallel shard (Windows, 10-30)
   const logf = path.join(root, `srv-${port}.log`);
   const p = Bun.spawn(["bun", "server/server.ts"], { cwd: ENGINE, env: env(W, { PORT: String(port), ...extra }), stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });
   const s = { port, proc: p, dead: false, log: () => (fs.existsSync(logf) ? fs.readFileSync(logf, "utf8") : "") + (fs.existsSync(logf + ".err") ? fs.readFileSync(logf + ".err", "utf8") : ""), stop: async () => { try { p.kill(); } catch {} await p.exited; } };
@@ -54,6 +56,35 @@ const tokenOf = (log) => /\/setup#token=([A-Za-z0-9_-]+)/.exec(log)?.[1] ?? null
 const setupLines = (log) => log.split("\n").filter((l) => /No operator yet/.test(l));
 const post = (port, body, headers = {}) => fetch(`http://127.0.0.1:${port}/setup`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) })
   .then(async (r) => ({ status: r.status, text: await r.text() }));
+const sizedBody = (token, bytes) => {
+  const blank = JSON.stringify({ token, pad: "" });
+  const padding = bytes - Buffer.byteLength(blank);
+  if (padding < 0) throw new Error("setup body limit test fixture is too small");
+  return JSON.stringify({ token, pad: "x".repeat(padding) });
+};
+const postRaw = (port, body, headers = {}) => fetch("http://127.0.0.1:" + port + "/setup", { method: "POST", headers: { "content-type": "application/json", ...headers }, body })
+  .then(async (r) => ({ status: r.status, text: await r.text() }));
+const postChunked = (port, body, headers = {}, finish = true) => new Promise((resolve, reject) => {
+  const req = http.request({ hostname: "127.0.0.1", port, path: "/setup", method: "POST", agent: false,
+    headers: { "content-type": "application/json", "transfer-encoding": "chunked", connection: "close", ...headers } }, (res) => {
+    let text = "";
+    res.setEncoding("utf8");
+    res.on("data", (chunk) => { text += chunk; });
+    res.on("end", () => {
+      const result = { status: res.statusCode, text };
+      if (finish) return resolve(result);
+      const socket = req.socket;
+      if (socket && !socket.destroyed) socket.once("close", () => resolve(result));
+      else resolve(result);
+      req.destroy();
+    });
+  });
+  req.on("error", reject);
+  req.setTimeout(5000, () => req.destroy(new Error("setup body response timed out")));
+  req.write(body.slice(0, 700));
+  if (finish) req.end(body.slice(700));
+  else req.write(body.slice(700));
+});
 const get = (port, headers = {}) => fetch(`http://127.0.0.1:${port}/setup`, { headers }).then(async (r) => ({ status: r.status, text: await r.text(), csp: r.headers.get("content-security-policy") }));
 const missing = (port) => fetch(`http://127.0.0.1:${port}/no-such-page-here`).then(async (r) => ({ status: r.status, text: await r.text() }));
 const cookie = (sid) => ({ cookie: `ew_sess=${sid}` });
@@ -86,8 +117,8 @@ let s = await start(W1);
 ok(!s.dead, "(setup) the server is up", s.dead ? s.log().slice(-400) : "");
 const t1 = tokenOf(s.log());
 { const lines = setupLines(s.log());
-  ok(lines.length === 1 && t1 && Buffer.from(t1, "base64url").length >= 16 && lines[0].includes(`http://127.0.0.1:${s.port}/setup#token=${t1}`) && /signed in \(human or agent\)/.test(lines[0]) && /become this server's operator/.test(lines[0]),
-    "SU1 no operator: one boot line, '<base>/setup#token=…' with ≥128 bits, signed in (human or agent)", lines); }
+  ok(lines.length === 1 && t1 && Buffer.from(t1, "base64url").length >= 16 && lines[0].includes(`http://127.0.0.1:${s.port}/setup#token=${t1}`) && /in a signed-in browser \(an agent: POST \{token\} to \/setup with Authorization: Bearer\)/.test(lines[0]) && /become this server's operator/.test(lines[0]),
+    "SU1 no operator: one boot line, '<base>/setup#token=…' with ≥128 bits, a signed-in browser or an agent's Bearer POST", lines); }
 { const page = await get(s.port); replies.push(page.text);
   ok(page.status === 200 && /\/setup/.test(page.text) && !page.text.includes(t1) && /sha256-/.test(page.csp ?? ""), "SU1 GET /setup is the page that posts the link's token back (its script hashed in the CSP), without the token", { status: page.status }); }
 { const page = await get(s.port), q = await runPage(page.text, { search: "?token=abc" }), f = await runPage(page.text, { hash: "#token=abc" });
@@ -122,6 +153,37 @@ ok(!s.dead && setupLines(s.log()).length === 0 && !tokenOf(s.log()) && (await ge
   "SU4 a restart: no link printed, /setup missing, and Ann is still the operator (read from the file)", s.log().slice(-300));
 await s.stop();
 
+{
+  const W = worldsDir("w12"), a = await start(W), token = tokenOf(a.log());
+  const over = sizedBody(token, 1025), exact = sizedBody(token, 1024);
+  const declaredOver = await postRaw(a.port, over, cookie(ANN));
+  const chunkedOver = await postChunked(a.port, over, cookie(ANN));
+  ok(!a.dead && Buffer.byteLength(over) === 1025 && declaredOver.status === 413 && chunkedOver.status === 413 && stored(W) === null,
+    "SU11 a valid-token 1025-byte setup body is refused with or without a declared length, leaving no operator", { declaredOver, chunkedOver, stored: stored(W) });
+  const chunkedExact = await postChunked(a.port, exact, cookie(ANN));
+  ok(Buffer.byteLength(exact) === 1024 && chunkedExact.status === 200 && JSON.stringify(stored(W)?.list) === JSON.stringify(["human:test:ann"]),
+    "SU11 a valid-token 1024-byte chunked setup body claims the operator", { chunkedExact, stored: stored(W) });
+  await a.stop();
+}
+{
+  const W = worldsDir("w13"), a = await start(W), token = tokenOf(a.log());
+  const exact = sizedBody(token, 1024), declaredExact = await postRaw(a.port, exact, cookie(ANN));
+  ok(!a.dead && Buffer.byteLength(exact) === 1024 && declaredExact.status === 200 && JSON.stringify(stored(W)?.list) === JSON.stringify(["human:test:ann"]),
+    "SU11 a valid-token 1024-byte declared setup body claims the operator", { declaredExact, stored: stored(W) });
+  await a.stop();
+}
+
+{
+  const W = worldsDir("w14"), a = await start(W), token = tokenOf(a.log());
+  const unfinishedOver = await postChunked(a.port, sizedBody(token, 1025), cookie(ANN), false);
+  ok(!a.dead && unfinishedOver.status === 413 && stored(W) === null,
+    "SU11 a 1025-byte chunked body is refused before the sender finishes it", { unfinishedOver, stored: stored(W) });
+  const claim = await postRaw(a.port, sizedBody(token, 1024), cookie(ANN));
+  ok(claim.status === 200 && JSON.stringify(stored(W)?.list) === JSON.stringify(["human:test:ann"]),
+    "SU11 the setup token still works after an unfinished oversize body was refused", { claim, stored: stored(W) });
+  await a.stop();
+}
+
 // ---- operators already named ----
 { const W2 = worldsDir("w2"); const e = await start(W2, { SERVER_OPERATORS: "human:test:bea" });
   ok(!e.dead && setupLines(e.log()).length === 0 && !/setup#token/.test(e.log()) && (await get(e.port)).status === 404 && (await post(e.port, { token: "x" }, cookie(ANN))).status === 404 && stored(W2) === null,
@@ -146,6 +208,16 @@ for (const [tag, cred, account] of [["w3", mint(), "aid1:id.test:agent:quill@hom
   const after = await operatorAtJoin(a.port, { agentToken: cred === "tok-rowan" ? cred : mint() });
   ok(viaQuery === 403 && claim.status === 200 && j.account === account && JSON.stringify(stored(W)?.list) === JSON.stringify([account]) && before === false && after === true,
     `SU6 an agent (${tag === "w3" ? "aid1" : "enrolled"}) claims with its Bearer: stored as ${account}, the account its ws join proves (operator at that join, no restart)`, { claim, before, after, viaQuery });
+  await a.stop();
+}
+
+// ---- both credentials: the explicit Bearer is the claimant; an invalid one refuses, never falling back to the cookie (SU10) ----
+for (const [tag, bearer] of [["w20", "tok-rowan"], ["w21", "tok-nobody"]]) {   // own dirs: w12–w14 are the size rows' (SU11)
+  const W = worldsDir(tag); const a = await start(W);
+  const r = await post(a.port, { token: tokenOf(a.log()) }, { ...cookie(ANN), authorization: `Bearer ${bearer}` }), j = (() => { try { return JSON.parse(r.text); } catch { return {}; } })();
+  if (bearer === "tok-rowan") ok(r.status === 200 && j.account === "agent:token:rowan" && JSON.stringify(stored(W)?.list) === JSON.stringify(["agent:token:rowan"]),
+    "SU10 a valid explicit Bearer beside a session cookie claims as the Bearer's account (agent:token:rowan), not the cookie's", { r, st: stored(W) });
+  else ok(r.status === 401 && stored(W) === null, "SU10 an invalid explicit Bearer beside a valid session cookie is refused (401): the cookie's account is not used, nothing stored", { r, st: stored(W) });
   await a.stop();
 }
 

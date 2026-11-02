@@ -8,6 +8,8 @@ import { processTable, parsePsTable, parseWinTable, suiteMembers, killSuite } fr
 import * as PG from "./procgroup.ts";
 import { tryUntil } from "./wait.ts";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { suite } from "./suite.ts";
 const { check, done } = suite("procgroup-check", { cap: Infinity });
 const win = process.platform === "win32";
@@ -98,8 +100,21 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   const pg = fs.readFileSync(new URL("./procgroup.ts", import.meta.url), "utf8"), rs = fs.readFileSync(new URL("./run.ts", import.meta.url), "utf8");
   const kc = pg.slice(pg.indexOf("export function killChild")), kcBody = kc.slice(0, kc.indexOf("\n}") + 2);
   check("PG12 the sweep after a suite exits says so (exited), and killChild never blocks or kills an exited child",
-    /killGroup\(child\.pid, "SIGKILL", \{ exited: !stuck \}\)/.test(rs) && !/killSuite\(/.test(kcBody) && /exitCode/.test(kcBody), kcBody);
+    /killGroup\(child\.pid, "SIGKILL", \{ exited: \(\) => !stuck \|\| gone\(\) \}\)/.test(rs) && !/killSuite\(/.test(kcBody) && /exitCode/.test(kcBody), kcBody);
 }
+
+{ let answered = false, readAfter: boolean | null = null;
+  await (PG as any).killSuiteAsync(100, "SIGKILL", "win32", { exited: () => { readAfter = answered; return true; }, query: async () => { answered = true; return "4 0\r\n50 4\r\n100 50\r\n777 100\r\n"; } });
+  const src = (f: string) => fs.readFileSync(new URL(f, import.meta.url), "utf8");
+  const pg = src("./procgroup.ts"), rs = src("./run.ts"), rc = src("../run-client.ts");
+  const kc = pg.slice(pg.indexOf("export function killChild")), kcBody = kc.slice(0, kc.indexOf("\n}") + 2);
+  const live = {
+    killChild: /exited: \(\) => p\.exitCode != null \|\| p\.signalCode != null/.test(kcBody),
+    gate: /const gone = \(\) => child\.exitCode != null \|\| child\.signalCode != null/.test(rs) && (rs.match(/killGroup\(child\.pid!?, "SIG(?:TERM|KILL)", \{ exited: (?:gone|\(\) => !stuck \|\| gone\(\)) \}\)/g) ?? []).length === 3,
+    client: /const gone = \(\) => ch\.exitCode != null \|\| ch\.signalCode != null/.test(rc) && /"SIGTERM", process\.platform, \{ exited: gone \}/.test(rc) && /\(exited: boolean \| \(\(\) => boolean\) = gone\)/.test(rc),
+  };
+  check("PG16 a Windows sweep reads whether its suite has exited once the process table has answered, and each caller hands it a reading of its own child (killChild, the gate's three sweeps, run-client's two)",
+    readAfter === true && Object.values(live).every(Boolean), { readAfter, live }); }
 
 // PG13: the gate keeps what a failed check SAW, not only its name (scripts I2 failed twice in gate logs with no values, 10-22)
 { const { failLines } = await import("./suites.ts");
@@ -107,5 +122,22 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   const kept = failLines(out);
   check("PG13 the gate keeps the evidence line under each FAIL / \u2717 (and not the next ok row or the tally)",
     kept.length === 4 && kept[1].includes('"ms":1400') && kept[3].includes("reading the log") && !kept.some((l) => /^ok|passed,/.test(l.trim())), kept); }
+
+{ const { setAside } = (await import("./suites.ts")) as any;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pg15-")), root = path.join(tmp, "checkout"), base = path.join(tmp, "residue");
+  fs.mkdirSync(path.join(root, "client"), { recursive: true });
+  for (const [f, s] of [["a.txt", "one"], ["client/b.txt", "two"], ["client/c.txt", "three"]]) fs.writeFileSync(path.join(root, f), s);
+  const fd = fs.openSync(path.join(root, "a.txt"), "a");
+  const r = typeof setAside === "function" ? setAside(root, ["a.txt", "client/b.txt", "gone.txt"], base, "suite-") : null;
+  fs.writeSync(fd, " and more"); fs.closeSync(fd);
+  fs.writeFileSync(path.join(tmp, "a-file"), "");
+  const r2 = typeof setAside === "function" ? setAside(root, ["client/c.txt"], path.join(tmp, "a-file", "residue"), "suite-") : null;
+  const read = (d: string, f: string) => { try { return fs.readFileSync(path.join(d, f), "utf8"); } catch { return null; } };
+  const a = r?.moved?.includes("a.txt") ? read(r.dir, "a.txt") : read(root, "a.txt");
+  check("PG15 a suite's leftover files are moved out of the checkout by rename, each keeping its path and what's written to it later; one that can't be moved stays and is named, and one already gone is in neither list",
+    !!r && a === "one and more" && read(r.dir, "client/b.txt") === "two" && read(root, "client/b.txt") === null && !r.moved.includes("gone.txt") && !r.failed.includes("gone.txt")
+      && !!r2 && r2.moved.length === 0 && JSON.stringify(r2.failed) === '["client/c.txt"]' && read(root, "client/c.txt") === "three",
+    { r, r2, a });
+  fs.rmSync(tmp, { recursive: true, force: true }); }
 
 done();

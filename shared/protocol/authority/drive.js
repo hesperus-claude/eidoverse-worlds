@@ -2,13 +2,14 @@
 // occupant streams the hull's pose (presence), the authority checks plausibility and the hull's own collision, and commits only
 // the last accepted pose, as the system's act, on exit, every LEASE.commitMs and when the stream stops (shared/drive.js).
 import { driveOf, helmOf, implausible, LEASE, slackAfter, slackNow, turnBetween } from "../../drive.js";
+import { qNorm } from "../../rot.js";
 import { r3 } from "../round.js";
 import { UP } from "./ctx.js";
 import { Refusal, refuse, said } from "./refuse.js";
 import { holdsCustody, lockedC, qr3, scratch, setOp } from "./storage.js";
 import { ancestors, obbs, satDepth, worldT } from "./math.js";
 import { familyOf, geoOf, groundOf, hitsIx, hullOnly, near, spend } from "./spatial.js";
-import { solidOff } from "../simlayer.js";
+import { maskOf, solidOff } from "../simlayer.js";
 import { clearOccupant, occupantOf } from "./occupants.js";
 import { withAuthority } from "./scriptrun.js";
 const admit = (...a) => UP.admit(...a);
@@ -20,20 +21,25 @@ const outsideWorld = (...a) => UP.outsideWorld(...a);
 const leases = (w) => (w.presence.drives ??= {});
 const paceOf = (w) => (w.pace ? w.pace() : w.now());
 const poseOf = (st, id) => { const t = st.entities[id]?.c.transform ?? {}; return { pos: (t.pos ?? [0, 0, 0]).slice(), q: (t.q ?? [0, 0, 0, 1]).slice() }; };
+const loggedKey = (st, id) => { const t = st.entities[id]?.c.transform; return JSON.stringify([t?.pos ?? null, t?.q ?? null]); };
+function edited(w, st, host, L) {
+  if (L.logged === undefined || loggedKey(st, host) === L.logged) return false;
+  L.pose = poseOf(st, host); L.logged = loggedKey(st, host); w.presenceDirty = true; return true;
+}
 
 /** What the hull runs into sweeping `from` → `pose` (sub-steps ≤ its smallest half-extent): an id, "ground", or null; an
  *  overlap it starts in blocks only a sub-step that deepens it (drive-check D10, D11). */
 export function hullHit(st, id, pose, from) {
-  const e = st.entities[id]; if (!e || solidOff(e.c, "hulls")) return null;
-  const fam = familyOf(st, id), G = groundOf(st);
+  const e = st.entities[id]; if (!e || solidOff(e.c)) return null;   // only enabled: false passes through; its own blocks says what IT stops (review 1.8)
+  const fam = familyOf(st, id), G = groundOf(st), mask = maskOf(e.c);   // what this hull scans (collider.mask; simlayer.js scans)
   const at = (p) => obbs(scratch(st, [setOp(id, "transform", { ...(e.c.transform ?? {}), pos: p.pos, q: p.q })]), id);
   const ext = (o) => { const h = [0, 1, 2].map((i) => o.ax.reduce((a, axv, j) => a + Math.abs(axv[i]) * o.h[j], 0)); return { min: o.c.map((v, i) => v - h[i]), max: o.c.map((v, i) => v + h[i]) }; };
   // each overlapped thing's (and the ground's) penetration depth at the hull's boxes H
   const depths = (H) => { const out = new Map();
     for (const o of H) { const x = ext(o);
-      for (const k of near(st, x.min, x.max)) if (!fam.has(k) && !solidOff(st.entities[k].c, "hulls") && hitsIx(st, null, k, 0.01, o)) { const d = Math.max(...geoOf(st, k).obbs.map((b) => satDepth(o, b))); out.set(k, Math.max(out.get(k) ?? 0, d)); }
+      for (const k of near(st, x.min, x.max)) if (!fam.has(k) && !solidOff(st.entities[k].c, "hulls", mask) && hitsIx(st, null, k, 0.01, o)) { const d = Math.max(...geoOf(st, k).obbs.map((b) => satDepth(o, b))); out.set(k, Math.max(out.get(k) ?? 0, d)); }
       // what only hulls meet (collision layers): outside the bodies' index (spatial.js hullOnly)
-      for (const k of hullOnly(st)) if (!fam.has(k)) { spend(10); const d = Math.max(0, ...(geoOf(st, k)?.obbs ?? []).map((b) => satDepth(o, b))); if (d > 0.01) out.set(k, Math.max(out.get(k) ?? 0, d)); }
+      for (const k of hullOnly(st)) if (!fam.has(k) && !solidOff(st.entities[k].c, "hulls", mask)) { spend(10); const d = Math.max(0, ...(geoOf(st, k)?.obbs ?? []).map((b) => satDepth(o, b))); if (d > 0.01) out.set(k, Math.max(out.get(k) ?? 0, d)); }
       if (G.ready) { const d = G.height(o.c[0], o.c[2]) - x.min[1]; if (d > 0.01) out.set("ground", Math.max(out.get("ground") ?? 0, d)); } }
     return out; };
   const H1 = at(pose); if (!H1.length) return null;
@@ -57,7 +63,7 @@ const dot4 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
 function liveLease(w, st, host) {
   const L = leases(w)[host]; if (!L) return null;
   const helm = helmOf(st, host);
-  if (st.entities[host] && helm && occupantOf(w, st, L.by)?.to === helm) return L;
+  if (st.entities[host] && helm && occupantOf(w, st, L.by)?.to === helm) { edited(w, st, host, L); return L; }
   endLease(w, st, host, "exit"); return null;
 }
 
@@ -68,11 +74,13 @@ const carriedBy = (w, st, host, driver) => { const fam = familyOf(st, host);
 function commitLease(w, st, host, why, free = true) {
   const L = leases(w)[host], e = st.entities[host]; if (!L || !e) return false;
   L.committed = paceOf(w);
+  if (edited(w, st, host, L)) { L.fails = 0; return false; }
   const t = { ...(e.c.transform ?? {}), pos: L.pose.pos.map(r3), q: qr3(L.pose.q) };
   if (JSON.stringify(t.pos) === JSON.stringify(e.c.transform?.pos) && JSON.stringify(t.q) === JSON.stringify(e.c.transform?.q)) { L.fails = 0; return false; }   // nothing to write is not a failure
   try { const plan = admit(w, st, { actor: "system", cap: { kind: "system", ids: [host], comps: ["transform"] } }, [setOp(host, "transform", t)]);
-    changeEntry(w, plan, w.append(actEntry(w, "system", "drive-commit", { id: host, driver: L.by, carried: carriedBy(w, st, host, L.by), why }))); }
-  catch (x) { L.fails = (L.fails ?? 0) + 1;   // bounded: a refusal never lands, a failing disk is tried COMMIT_TRIES times
+    changeEntry(w, plan, w.append(actEntry(w, "system", "drive-commit", { id: host, driver: L.by, carried: carriedBy(w, st, host, L.by), why })));
+    L.logged = loggedKey(w.state(), host); }
+  catch (x) { L.fails = (L.fails ?? 0) + 1;   // bounded: a refusal never lands, a failing disk is tried COMMIT_TRIES times (review delta-260 L-A)
     if (!(x instanceof Refusal) && L.fails < COMMIT_TRIES) throw x;
     console.warn(`[authority] ${host}'s drive-commit failed ${L.fails}× (${String(x?.message ?? x).slice(0, 160)}): its lease is dropped and the helm freed; the hull stays at its logged pose`);
     dropLease(w, st, host, free); return false; }
@@ -120,10 +128,10 @@ const DRIVE_VERBS = {
     const lock = [a.id, ...ancestors(st, a.id)].find((k) => lockedC(st.entities[k]?.c));
     if (lock) refuse("locked", `${lock === a.id ? a.id : `${a.id} hangs from ${lock}, which`} is locked: it can't be driven`, "someone who may lift the lock lifts it");
     const now = paceOf(w); let L = liveLease(w, st, a.id);
-    if (!L) { const sat = occupantOf(w, st, actor).t; L = leases(w)[a.id] = { by: actor, pose: poseOf(st, a.id), at: Number.isFinite(sat) ? sat : now, beat: now, committed: now }; w.presenceDirty = true; }   // paced from taking the helm
+    if (!L) { const sat = occupantOf(w, st, actor).t; L = leases(w)[a.id] = { by: actor, pose: poseOf(st, a.id), logged: loggedKey(st, a.id), at: Number.isFinite(sat) ? sat : now, beat: now, committed: now }; w.presenceDirty = true; }   // paced from taking the helm
     L.beat = now;
-    const next = { pos: a.pos, q: a.q }, stands = { pose: L.pose };
-    const dt = (now - L.at) / 1000, slack = slackNow(L.slack, dt), bad = implausible(L.pose, next, dt, spec, slack);
+    const next = { pos: a.pos, q: qNorm(a.q) ?? a.q }, stands = { pose: L.pose };
+    const dt = (now - L.at) / 1000, slack = slackNow(L.slack), bad = implausible(L.pose, next, dt, spec, slack);
     if (bad) refuse(bad.what === "shape" ? "shape" : "too-fast", bad.what === "shape" ? `drive's ${bad.said}` : `${a.id} can't have gone there: ${bad.said}`, "drive from the pose that stands (the reply's pose)", stands);
     const B = boundsOf(st); if (B && outsideWorld(B, next.pos)) refuse("out-of-bounds", `[${next.pos.map(r3).join(", ")}] is outside this world`, "drive back inside its bounds", stands);
     const hit = hullHit(st, a.id, next, L.pose);

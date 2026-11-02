@@ -19,8 +19,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
-const S = suite("picture-note");
-const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+let pass = 0, fail = 0;
+const check = (name: string, ok: unknown, detail = '') => {
+  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
+  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
+};
 
 plugin({ name: 'picture-note-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'world', 'inspect', 'ui', 'net'])
@@ -28,7 +31,6 @@ plugin({ name: 'picture-note-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub: any = await import('./guard-label-stub.mjs');
@@ -36,7 +38,7 @@ const pics: any = await import('../client/lib/pictures.js');
 const editor = stub.editors[0];
 check('pictures.js registered its editor', typeof editor === 'function');
 
-// a placed, unguarded model with one named part
+// a placed, unguarded model with one named part (the block offers itself only there)
 const part = { isMesh: true, name: 'screenplane', material: {} };
 const model = { userData: {}, traverse(f: (c: unknown) => void) { f(this); f(part); } };
 stub.entities.set('console', model);
@@ -50,18 +52,17 @@ const paint = () => { const r = editor(ctx()); host.innerHTML = r.html; r.wire(h
 const q = (k: string) => host.querySelector(`[data-pe="${k}"]`) as any;
 /** the world moving: comps first, then the echo, as world.js does */
 const echo = (data: unknown) => { const bag = stub.bagOf('console'); if (data == null) delete bag.picture; else bag.picture = data; stub.bus.emit('comp', { id: 'console', type: 'picture', data }); };
-const refuse = () => { q('src').value = 'http://example.com/x.png'; q('hang').click(); return q('msg').textContent; };   // http is refused (only https plays)
-const REFUSED = /http:\/\/ links aren't played/;
+const refuse = () => { q('src').value = 'http://example.com/x.png'; q('hang').click(); return q('msg').textContent; };
 
 console.log('\n1. a line survives a repaint');
 paint();
-check('an http URL is refused in the block', REFUSED.test(refuse()));
-check('…and the line is still there after a repaint', REFUSED.test(paint()));
+check('an http link is refused in the block', /only https/.test(refuse()));
+check('…and the line is still there after a repaint', /only https/.test(paint()));
 
 console.log('\n2. …and a demote/promote (same entity)');
 stub.bus.emit('entity', { id: 'console', kind: 'demote' });
 stub.bus.emit('entity', { id: 'console', kind: 'spawn' });
-check('after demote + promote the line is still there', REFUSED.test(paint()));
+check('after demote + promote the line is still there', /only https/.test(paint()));
 
 console.log('\n3. …but not a remove');
 stub.bus.emit('entity', { id: 'console', kind: 'remove' });
@@ -69,7 +70,7 @@ check('after a remove the next block has no line', paint() === '', JSON.stringif
 
 console.log('\n4. a disagreeing echo retires the line');
 paint(); refuse();
-check('the refusal is back (about: no picture)', REFUSED.test(paint()));
+check('the refusal is back (about: no picture)', /only https/.test(paint()));
 echo({ src: 'store/images/0123456789abcdef.png', description: 'someone else hung this' });
 check('someone else hangs a picture: the line is gone', paint() === '', JSON.stringify(paint()));
 
@@ -80,8 +81,9 @@ check('hang commits one picture and says so', committed.length === 1 && committe
 const mine = committed[0][1];
 echo({ ...mine });
 check('the hang\'s own echo keeps "hung" through the repaint', /^hung$/.test(paint()));
-echo({ ...mine, width: 1, lit: 'scene' });
-check('…a repeat with server-side defaults spelled out still agrees', /^hung$/.test(paint()));
+const { width: _w, lit: _l, ...bare } = mine;
+echo(bare);
+check('…a repeat that leaves the defaults unsaid still agrees', /^hung$/.test(paint()));
 echo({ ...mine, description: 'changed by another hand' });
 check('…an echo that changed the description retires it', paint() === '', JSON.stringify(paint()));
 q('down').click();
@@ -91,4 +93,12 @@ check('the null echo agrees: "taken down" survives the repaint', /taken down/.te
 echo({ src: 'store/images/0123456789abcdef.png' });
 check('a later hang by someone else retires "taken down"', paint() === '', JSON.stringify(paint()));
 
-S.done();
+console.log('\n6. update keeps what the block doesn\'t show');
+echo({ src: 'store/images/0123456789abcdef.png', width: 4, lit: 'scene', description: 'four metres wide' });
+paint(); committed.length = 0;
+q('description').value = 'four metres wide, still'; q('hang').click();
+const kept = committed.at(-1)?.[1];
+check('updating a hung picture keeps its stored width', (kept?.data ?? kept)?.width === 4, JSON.stringify(committed));
+
+console.log(`\n${pass} passed, ${fail} failed\n`);
+process.exit(fail ? 1 : 0);

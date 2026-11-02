@@ -17,6 +17,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["diffcheck", "diffcheck.ts", 1],
   ["hygiene", "hygiene-check.ts", 1],       // patterns that broke the gate site by site (Windows paths, sh -c, symlinks, fixed sleeps), refused as a class; debt only goes down        // review #260 rereview (10-19) blocker 3: the range is clean under `git diff --check`; two documented exemptions only
   ["body-state-bundle", "../body-state-bundle-test.ts", 1], // the built MCP entry points carry body_state and none of the test rig, corpus scanner or fixture paths
+  ["run-client-settle", "run-client-settle-check.ts", 1],   // run-client settles a file on its exit, never on its pipes: a grandchild holding them can't wedge client-tools
   ["procgroup", "procgroup-check.ts", 1],  // review #260 rereview (10-19) blocker 2: the gate finds and kills a suite's processes on Linux, macOS and Windows
   ["shard", "shard-check.ts", 1],        // CI's sharded gate: shards cover SUITES once whatever the timings; a merge passes only every shard, every suite, one head
   ["nov1", "nov1-check.ts", 1],         // R 10-06 "no more v1 anywhere": no runtime file loads the old-world importer or speaks v1
@@ -83,6 +84,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["structure-field", "../structure-field-test.ts", 1], // shared/structure.js: the griddled-building planner
   ["structure-edit", "../structure-edit-test.ts", 1], // shared/structure_edit.js: the structure editor's pure half
   ["structure-collider", "../structure-collider-test.ts", 1], // declared structure colliders (fitStructureBoxes)
+  ["collider-off-bodies", "../collider-off-bodies-test.ts", 1], // review of PR #260: collision off for bodies gives the walker nothing to meet, on a mesh's and a building's every realizing path
   ["lying-support", "../lying-support-test.ts", 1], // an agent's support for a thing lying down: its true top, no phantom deck at its origin (review of b398d7e3 #1)
   ["support-swap", "../support-swap-test.ts", 1], // #260 I81: a model changed while its geometry is in flight registers nothing from the old fetch (syncSupport's re-check)
   ["knockdown", "../knockdown-test.ts", 1], // #260 I8/I147/I148: a headless body takes a shove from a body beside it, refuses one with its move gate off (the relay answers), hangs from a nail
@@ -162,6 +164,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["hierarchy", "../hierarchy-test.ts", 1], // the Hierarchy's tree over 657 door cases: parenting, ordering by name with numbers as numbers, what a drag may do
   ["verbclasses", "verbclasses-check.ts", 1], // one home for READ_ONLY/GHOST_OK/WIRE_READS/PERSON_ACTS; the classes pinned
   ["authority-layers", "authority-layers-check.ts", 1], // the authority split is a DAG: a leaf under shared/protocol/authority/ never imports the gate or a leaf above it
+  ["helm-leave", "../helm-leave-test.ts", 1], // review of PR #260 (vehicles.js:26): getting up from a helm lets its hull go: its relayed moves show, a later seat drives on from where it is
   ["authority", "authority-check.ts", 1],
   ["ids", "ids-check.ts", 1],
   ["scars", "scars-check.ts", 1],       // R 10-17 02:45 engine-scars + consent gaps: refused acts keep names + code, look's own table, an edit that moves a seat unseats its occupants (sitting is consent), READBACK vs purge, the refusal-code registry, a VERBSPEC row per verb, the spec pins           // R 10-17 ID HARDENING: opaque minting, writers never choose ids ($placeholders), delete clears refs, lint finds dangling ones
@@ -172,8 +175,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["names", "names-check.ts", 1],     // R 10-17 14:34–14:41: names carry no body plan and set no kind against another (refusal codes, punt {contact}, trusted-components, consent words + delegates, one people list, the occupy family, stale addresses)
   ["parity", "parity-check.ts", 1],     // research agent/human parity Part B (R 10-17 12:42): one kind of participant — a status is declared at the door, never inferred from the credential or logged; move {client} gone; the spoken trio is anyone's; §6a, §8 by shape
   ["directory", "directory-check.ts", 1],
-  ["keyhints", "../keyhints-check.ts", 1], // R 10-04: no hidden keys in edit mode (every modifier tagged and shown)
-  ["client", "client-check.ts", 1],     // slice 3b: edit mode in headless Chromium against a scratch server (one browser, guarded)
+  ["keyhints", "../keyhints-check.ts", 1], // R 10-04: no hidden keys in build mode (every modifier tagged and shown)
+  ["client", "client-check.ts", 1],     // slice 3b: build mode in headless Chromium against a scratch server (one browser, guarded)
   ["upgrade", "upgrade-check.ts", 1], // an old-format world: the verified backup (CLI and server), the structured join refusal, the operator-only upgrade through the CLI
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
@@ -219,15 +222,18 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["roles", "roles-check.ts", 1],       // roles + moderation (research roles 10-06): ranks, permissions, the grant rule, sanctions, ghost
   ["access", "access-check.ts", 1],     // who may come in (upstream #258/#259 in our terms): @world.access join/watch, per-caller /worlds and /access, the settle (4010), timed grants (expire-roles), reset keeps the door
   ["batch2", "batch2-check.ts", 1],
-  ["describe-particles", "describe-particles-check.ts", 1], // R 10-07: description (the accessibility reading) and particles as effect documents (Godot's CPUParticles3D ported)     // edit mode v1 batch 2: story, text, picture, sound (+ where media may come from), look-at, Credits in History
+  ["describe-particles", "describe-particles-check.ts", 1], // R 10-07: description (the accessibility reading) and particles as effect documents (Godot's CPUParticles3D ported)     // build mode v1 batch 2: story, text, picture, sound (+ where media may come from), look-at, Credits in History
   ["client-b2", "batch2-probe.ts", 1],  // batch 2 in headless Chromium: a stage per component, and an untrusted link never fetched without the viewer's opt-in
   ["picture-note", "../picture-note-test.ts", 1], // the picture block's status line: survives a repaint and a demote/promote, not a remove; an agreeing echo keeps it, a disagreeing one retires it
   ["access-panel", "access-panel-probe.ts", 1], // World Settings › Who may come in › Listed here in headless Chromium: listed rows, add by a name seen here or an exact identity, the authority's refusal in words (R 10-27)
+  ["lock-strength", "../lock-strength-test.ts", 1], // review of PR #260 (editpanels.js:479): the Hierarchy row's padlock word is the lock the thing holds now: a builder's re-lock after an owner's reads as a builder's, and a refused ask is asked again
+  ["swim-lists", "../swim-lists-test.ts", 1], // review of PR #260 (watervolumes.js:123): swimming reads every water body and dry pocket, not only the ones the fog keeps
   ["build", "build-check.ts", 1],       // ship-list group B (10-07): building walls at the authority, nested blueprints, the editor's new script
   ["counter", "counter-check.ts", 1],   // PR #208 review's twelve-line list, as a counter button: publish/attach (§4.1), a script on sponsor rights (§8), the algebra (§7a) — C1…C12; blueprint-test.ts (tools/, run-client) is the pure half it leans on
   ["blueprint", "../blueprint-test.ts", 1], // blueprints: the record, its hash, refusals, expand/overrides/rebase, publish and create {from}
   ["build-client", "build-probe.ts", 1], // …and in a real browser: a building edit and its undo, turn/size before placing, the new-script card (one browser, guarded)
   ["shiplist", "shiplist-check.ts", 1], // ship list group A (audit 10-07): openable, reactions checked at write, motion fields, help text, people's words
+  ["comps-parity", "../comps-parity-test.ts", 1], // the Hierarchy row and the Inspector read one record at the rename's own event (matrix #40/52: lost cover gated again)
   ["shiplist-probe", "shiplist-probe.ts", 1], // …in headless Chromium: E opens a door and it swings; a person's refusal and warning; a moderator's warning in VR
   ["agenttools", "agenttools-check.ts", 1], // the agent's tools on a real server (tools audit 10-07): move walks the authority's body (walls), create {from}, a refused shove is an error, MCP annotations, look points at real tools
   ["look", "../look-test.ts", 1], // look says which way each person faces, from pose.yaw (#225)
@@ -383,6 +389,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["event-wire", "../event-wire-test.ts", 1], // MCPL RFC-001 rev 3 (main, merged 10-27): a world event's tags follow its kind facet; a notice is chat:system, speech never
   ["join-rfc005", "../join-rfc005-test.ts", 1], // the door's travel tool (RFC-005): join policy, founding refused, epoch across transitions, host decline/mute/error, plain-MCP lane, resume after reconnect and door restart
   ["denoise", "../../mcpl/denoise-test.ts", 1], // presence flaps, act refractory, self-echo, activity pulse; approach dwell, re-arm, depart wording, first-sight seeding, the disconnect rule, the knobs' clamp under a hostile env
+  ["killz-slumped", "../killz-slumped-test.ts", 1], // a knocked-down agent body is judged by its hips as it falls and lies: on a floor at or above the kill line (KILL_MARGIN under @world.bounds.min.y) it stays; below it, it is sent back once, and arrives standing
+  ["consent-scripts-list", "../consent-scripts-list-test.ts", 1], // consent {allow|block} naming a script or a sponsor's scripts reaches the authority through the server; an allow naming nobody says how to name someone
+  ["custody-save", "../custody-save-test.ts", 1], // a governance key is handed out only once the keys file holds it: a failed save hands out nothing
   ["client-tools", "../run-client.ts --import-only --skip-suites", 14], // refactor plan 2 D5: every tools/*-{test,check} loads (a stub missing an export, a moved module); the full run is `bun tools/run-client.ts`
 ];
 
@@ -394,7 +403,7 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // refusedjoin (scratchBench) and client-tools (run-client.ts runs every tools/*-test file, browser tests among them, those one
 // at a time) once
 // sat in the non-browser list: a host without Chromium failed them, and this box ran Chromes it didn't budget for.
-export const BROWSER = ["browser", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "xr-desktop-banner", "sky-bake-time", "sky-bakegraph", "xr-quad-softswap", "client-tools"];
+export const BROWSER = ["browser", "comps-parity", "level-dive", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "xr-lifecycle", "xr-res", "xr-debug-live", "xr-eye-binding", "htmlmesh-pick", "vrmic-exec", "xr-nullfb", "xr-desktop-banner", "sky-bake-time", "sky-bakegraph", "xr-quad-softswap", "client-tools"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 // the order the gate runs them: core (in CORE's order), then main, then browser
 export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];
@@ -424,6 +433,19 @@ export function browserLauncher(f: string): string | null {
   return null;
 }
 const SELF = path.resolve(fileURLToPath(import.meta.url));
+
+export function setAside(root: string, files: string[], base: string, prefix: string): { dir: string; moved: string[]; failed: string[] } {
+  const moved: string[] = [], failed: string[] = [];
+  let dir = "";
+  for (const f of files) {
+    try {
+      if (!dir) { fs.mkdirSync(base, { recursive: true }); dir = fs.mkdtempSync(path.join(base, prefix)); }
+      const to = path.join(dir, f);
+      fs.mkdirSync(path.dirname(to), { recursive: true }); fs.renameSync(path.join(root, f), to); moved.push(f);
+    } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") failed.push(f); }
+  }
+  return { dir, moved, failed };
+}
 
 /** The lines the gate keeps from a failed suite's output: every FAIL / ✗ line, plus the indented lines right under it
  *  (where checks print what they saw), at most `per` each. The evidence used to be dropped: a FAIL said WHICH row failed

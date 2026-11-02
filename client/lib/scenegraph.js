@@ -263,12 +263,12 @@ function paintScene(force = false) {
 
 /** World-click → panel: select the entity's row, open the scene section
  *  (and the panel frame, if hidden), and scroll the row into view. Exported
- *  for build.js: clicking a thing in edit mode and clicking its row are the same act. */
+ *  for build.js: clicking a thing in build mode and clicking its row are the same act. */
 export const sceneSelected = () => { const s = Sel.selection(); return s.kind === 'things' ? s.ids[0] ?? null : null; };
-// while the edit-mode frames are up they ARE the inspector: a selection must
+// while the build-mode frames are up they ARE the inspector: a selection must
 // not also yank the World panel open onto the section they retire
 let editUI = false;
-bus.on('edit-mode', (on) => { editUI = !!on; });
+bus.on('build-mode', (on) => { editUI = !!on; });
 /** Clear the inspector's selection (Esc, Edit ▸ deselect) — sceneSelect refuses a null id. */
 export function sceneDeselect() {
   if (sceneSelected() == null) return;

@@ -274,8 +274,8 @@ registerEditor(({ id, obj, meta, bag, commit }) => {
         ev.target.value = '';
       });
       q('hang')?.addEventListener('click', (ev) => {
-        // shared/picture.js keeps src/width/description/lit only, so the block offers no part or flip
-        const data = { src: q('src').value.trim(), lit: q('lit').value };
+        // part and flip went with the shape audit (10-16: shared/picture.js keeps src/width/description/lit), so the block offers neither (I59)
+        const data = { src: q('src').value.trim(), lit: q('lit').value, ...(cur?.width !== undefined ? { width: cur.width } : {}) };
         const said = q('description').value.trim();
         if (said) data.description = said;
         const norm = normalizePicture(data);
@@ -294,7 +294,7 @@ registerEditor(({ id, obj, meta, bag, commit }) => {
   };
 });
 
-// ---- the edit-mode inspector's gestures (the fields themselves are the schema's
+// ---- the build-mode inspector's gestures (the fields themselves are the schema's
 // `picture` group, shared/editschema.js). An upload is a GESTURE, not a value:
 // pick a file, send it through the store door, then commit the path like any edit.
 function pickFile(accept) {

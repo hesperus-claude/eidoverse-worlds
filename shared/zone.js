@@ -44,17 +44,19 @@ export function physicsAreasOf(st, { poseOf = (id) => worldPose(st, id) } = {}) 
     const c = st.entities[id]?.c ?? {}, a = c["physics-area"];
     if (id === "@world" || !a || typeof a !== "object" || !c.zone || offChain(st, id)) continue;
     const priority = Number.isInteger(c.zone.priority) ? c.zone.priority : 0, factor = fin(a.factor) && a.factor > 0 ? a.factor : 1;
-    if (c.zone.global === true) { out.push({ id, global: true, priority, kind: a.kind, factor }); continue; }
+    const modes = Array.isArray(a.modes) && a.modes.length ? a.modes : null;
+    if (c.zone.global === true) { out.push({ id, global: true, priority, kind: a.kind, factor, modes }); continue; }
     if (c.zone.shape !== "box" || !v3(c.zone.size)) continue;
     const pose = poseOf(id); if (!pose) continue;
     const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1], q = pose.q ?? [0, 0, 0, 1], center = [...pose.pos];
-    out.push({ id, global: false, priority, kind: a.kind, factor, size: c.zone.size.map((x, i) => Math.abs(x) * scale[i]), toLocal: (p) => qRotate(qConj(q), [p[0] - center[0], p[1] - center[1], p[2] - center[2]]) });
+    out.push({ id, global: false, priority, kind: a.kind, factor, modes, size: c.zone.size.map((x, i) => Math.abs(x) * scale[i]), toLocal: (p) => qRotate(qConj(q), [p[0] - center[0], p[1] - center[1], p[2] - center[2]]) });
   }
   return out.sort(cmp);
 }
-/** × a body's own speed at p (physics-area kind speed): the highest-priority speed area holding p decides; none: 1. */
-export function speedFactorAt(areas, p) {
-  for (let i = (areas?.length ?? 0) - 1; i >= 0; i--) { const a = areas[i]; if (a.kind !== "speed") continue;
+/** × a body's own speed at p (physics-area kind speed) in movement `mode` (absent: any): the highest-priority speed area
+ *  holding p that touches that mode decides; none: 1. */
+export function speedFactorAt(areas, p, mode) {
+  for (let i = (areas?.length ?? 0) - 1; i >= 0; i--) { const a = areas[i]; if (a.kind !== "speed" || (mode && a.modes && !a.modes.includes(mode))) continue;
     if (a.global) return a.factor; const l = a.toLocal(p); if (l.every((v, k) => Math.abs(v) <= a.size[k] / 2)) return a.factor; }
   return 1;
 }
@@ -67,13 +69,13 @@ export function absorptionOf(w) {
 }
 
 /** The waters and airs shared/water.js reads, from zonesOf: the bodies' (globals left to the level's own readers) as waterParams
- *  plus {toLocal, id, priority, top, bottom, q, color, opacity, kind, flow, density, drag}; the exclusions as boxes with toLocal, priority and bodies. */
+ *  plus {toLocal, id, priority, top, bottom, q, color, opacity, kind, flow, density}; the exclusions as boxes with toLocal, priority and bodies. */
 export function waterVolumes({ bodies = [], exclusions = [] } = {}) {
   const waters = bodies.filter((b) => !b.global).map((b) => {
     const w = b.water, h = b.top - b.bottom;
     const p = waterParams({ center: [b.center[0], b.bottom + h / 2, b.center[2]], size: [b.size[0], h, b.size[2]], waves: w.waves, absorption: absorptionOf(w), scatter: w.scatterColor });
     const c = p.center, qi = qConj(b.q ?? [0, 0, 0, 1]), toLocal = (x) => qRotate(qi, [x[0] - c[0], x[1] - c[1], x[2] - c[2]]);
-    return { ...p, toLocal, id: b.id, priority: b.priority, top: b.top, bottom: b.bottom, q: b.q, color: w.color, opacity: w.opacity, kind: w.kind, flow: w.flow, density: fin(w.density) ? w.density : 1000, drag: w.drag };
+    return { ...p, toLocal, id: b.id, priority: b.priority, top: b.top, bottom: b.bottom, q: b.q, color: w.color, opacity: w.opacity, kind: w.kind, flow: w.flow, density: fin(w.density) ? w.density : 1000 };
   });
   const airs = exclusions.map((x) => ({ id: x.id, priority: x.priority, bodies: x.bodies, center: x.center, size: x.size, q: x.q, toLocal: x.toLocal }));
   return { waters, airs };

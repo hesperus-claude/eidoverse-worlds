@@ -319,9 +319,14 @@ export function fitSupportGrid(id, topGrid, { position, yaw = 0, scale = 1 } = {
 // gets its own footprint entry carrying `mask`, which every query path skips and only flora consumes.
 const structureIds = new Map(); // owner entity id -> synthetic collider ids
 
-/** Register a building's boxes, in grid-LOCAL metres (the entity's own frame; the transform composes at query time).
- *  One entry per box, so the spatial hash still tests only the boxes near a query. */
-export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1 } = {}) {
+/** Register a building's boxes. `boxes` are grid-LOCAL metres (the entity's own
+ *  frame, like every other collider's box); the entity transform composes at
+ *  query time exactly as it does for a fitted mesh. Each box becomes its own
+ *  entry so the spatial hash keeps doing real work — a query at one corner of a
+ *  house tests the few boxes in its 3×3 neighbourhood, not all of them.
+ *  `solid: false` (a building whose collision is off for bodies) registers the
+ *  grass mask alone: no box a walker meets. */
+export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1, solid = true } = {}) {
   removeStructureBoxes(ownerId);
   if (!Array.isArray(boxes) || !boxes.length) return 0;
   if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) return 0;
@@ -340,6 +345,9 @@ export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1
       new THREE.Vector3(Math.max(b.x0, b.x1), Math.max(b.y0, b.y1), Math.max(b.z0, b.z1)),
     );
     if (box.isEmpty()) continue;
+    lo = lo ? lo.min(box.min) : box.min.clone();
+    hi = hi ? hi.max(box.max) : box.max.clone();
+    if (!solid) continue;
     const id = `${ownerId}#s${ids.length}`;
     // `structOwner` keeps the entity recoverable from a synthetic id — anything
     // that needs to know WHOSE wall it hit can ask, without parsing the key.
@@ -350,8 +358,6 @@ export function fitStructureBoxes(ownerId, boxes, { position, yaw = 0, scale = 1
     colliders.set(id, entry);
     bucketAdd(id, entry);
     ids.push(id);
-    lo = lo ? lo.min(box.min) : box.min.clone();
-    hi = hi ? hi.max(box.max) : box.max.clone();
   }
   // The grass mask: one rectangular, non-colliding footprint entry (an L-shaped building clears a little extra meadow).
   if (lo && hi) {

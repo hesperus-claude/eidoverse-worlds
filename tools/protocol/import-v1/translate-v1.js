@@ -16,7 +16,6 @@ import { unNegZero } from "../../../shared/protocol/round.js";
 import { encRaw as enc, encNameRaw as encName, dec, partSlot, motionType } from "../../../shared/protocol/names.js";
 import { qNorm, qRotate } from "../../../shared/rot.js";
 import { waterParams } from "../../../shared/water.js";
-import { MOVER } from "../../../shared/mover.js";
 import { sha256 } from "../../../shared/protocol/hash.js";
 import { COMPONENTS, registered } from "../../../shared/protocol/componentspec.js";
 import { modernize as newParticles, hashSeed, isLegacy, derivedEffect, effectAddress, effectProblem, EFFECT_LIMITS } from "../../../shared/particle_effects.js";
@@ -58,7 +57,7 @@ function splitUnknown(c) {
   }
 }
 // every v1 socket was a seat: {pos, yaw?, pose?, part?} → {pos, q?, part?, body: {pose?}} (a person attaches by
-// using it). A v1 socket key v4 doesn't define rides in imported:sockets {<slot>: {key: value}}.
+// using it; @33: no pos is main's [0, 0.5, 0], client/lib/world.js). A v1 socket key v4 doesn't define rides in imported:sockets {<slot>: {key: value}}.
 function newSockets(S, c) {
   if (!S || typeof S !== "object" || Array.isArray(S)) return S;
   const out = {}, left = {};
@@ -69,7 +68,7 @@ function newSockets(S, c) {
     // v1's renderer turned the seat by `yaw ?? 0` through three.js, which coerces ("1.5" turns it); what can't turn is carried
     const yaw = yaw0 == null ? 0 : Number(yaw0);
     if (!Number.isFinite(yaw)) rest.yaw = yaw0;
-    out[slot] = { ...(pos !== undefined ? { pos } : {}), ...(Number.isFinite(yaw) && yaw !== 0 ? { q: yawQ(yaw) } : {}), ...(part !== undefined ? { part } : {}), body: { ...(pose !== undefined ? { pose } : {}), ...(seatAnchor === "surface" ? { anchor: "surface" } : {}) } };   // @24: main's seatAnchor is body.anchor
+    out[slot] = { pos: pos ?? [0, 0.5, 0], ...(Number.isFinite(yaw) && yaw !== 0 ? { q: yawQ(yaw) } : {}), ...(part !== undefined ? { part } : {}), body: { ...(pose !== undefined ? { pose } : {}), ...(seatAnchor === "surface" ? { anchor: "surface" } : {}) } };   // @24: main's seatAnchor is body.anchor
     if (Object.keys(rest).length) left[slot] = rest;
   }
   if (Object.keys(left).length) c[keyed("imported", "sockets")] = left;
@@ -123,7 +122,19 @@ function newReactions(rx) {
   return out;
 }
 
-export const TRANSLATOR = "eidoverse/translate-v1@31";
+export const TRANSLATOR = "eidoverse/translate-v1@39";
+// @39 (decision table, R 10-30): main's sky sun and fill sliders are kept (shaperepair no longer drops them)
+// @38 (decision table row 7): the particle limits grew (4,000 per emitter, 64 m), so main's motes (≤3,000, ≤60 m) carry over unclamped
+// @37 (Mica 10-31, decision row 27): main's water.speed slowed only the swim; its physics-area now carries modes: ['swim'], so a
+// walk or a wade on the pond floor keeps its own speed. Output differs there.
+// @36 (#260, Stella follow-up): a person's own role none in an owned world is also an imported ban (its until kept), filed in the
+// moderator log, so the door keeps them out as main did; @35 left them a newcomer with a body. Output differs there.
+// @35 (owner 10-30, "despaghettify"): main's water.speed is physics-area {kind: speed, factor: speed / 2.4} on the water's zone again,
+// the one way an area changes how fast a body moves; @31-@34 wrote a water.drag field, which is gone. Output differs there.
+// @34 (decision table row 8): main's ambient motes are a derived dust document carrying its count, range and colour (EFFECT_LIMITS bound them: 600, 32 m), its defaults (16 m, #aec8b4) where unset; @33 named the dust Essential capped at 600 over 8 m. Output differs there.
+// @33 (decision table row 9): a seat with no pos sits at main's [0, 0.5, 0] (newSockets), where @32 wrote none (y 0). Output differs there.
+// @32 (owner 10-30, Basil 1.1; Godot's collision layers): a banded vehicle's two walls are in its own collision layer (collider {layer:
+// [band-<hash of its id>]}) and its host scans it (collider {mask: [1, that layer]}), so only it meets them; @29-@31's walls stopped every hull. Output differs there.
 // @31 (LEGACY-PINS 10-29, items 2, 6, 8, 9): a main world with neither bounds nor terrain gets @world.bounds around main's 78 m stage
 // (stageBoundsOf); main's inferred lamps are light children (lampPartsOf); water.speed is the water's own drag (waterOfOld), not a
 // physics-area; an ownerless world no longer carries imported:ownerless (the upgrader's claim is its owner). Output differs there.
@@ -225,7 +236,7 @@ export const translatorVersion = (name) => { const m = /@(\d+)$/.exec(String(nam
 // came to rest; but a punt stays its imported act (no v4 launch), each rest is a plain change by `sim` caused by that act
 // (no digest), the world's engine is today's eidosim from the epoch on, and (R 2026-10-08) a thing v1 ever punted is a
 // `dynamic` collider, every other one `static`. Nothing in the new log asks a reader to fly her engine.
-export const TRANSLATOR_SIM = "eidoverse/translate-v1@31";
+export const TRANSLATOR_SIM = "eidoverse/translate-v1@39";
 // @9 (2026-10-07, R's particles ruling): a v1 `particles` bag is today's instance: its preset is the effect, its origin is
 // `at`, its seed stays, and its count, size, opacity, speed, lifetime, area, texture and quality are the params of the
 // same names every Essential declares (shared/particle_effects.js modernize; instanceOf reads it back exactly). A key
@@ -308,9 +319,9 @@ export const DEFERRED = {};
 export const CARRIED = {
   traversal: { feature: "climb route", to: "one child per route: climb {points (path), reach (radius), speed} + label (name)" },
   collision: { feature: "collision on/off toggle", to: "collider {enabled}" },
-  vehicle: { feature: "vehicle", to: "drive {maxSpeed: speed, turnRate, climbRate: speed} on the host + a helm child (socket at helm, station {action: 'drive', input: {move: 'drive'}, exit}); minY/maxY → two hidden walls only hulls meet (collider {blocks: ['hulls']}), set off by the hull's measured box so its origin keeps main's band (the floor's top at minY less the hull's reach below its origin, the ceiling's bottom at maxY plus its reach above; a hull this host can't measure: at minY/maxY themselves, the whole hull in the band); walls stand at [0, y, 0] and span 200 km (every legal x/z), so every vehicle meets every band wherever it moves; each is locked (builder strength, as every translated lock: no edit moves or deletes it by accident, a builder may lift it knowingly); probes → imported:vehicle, listed with what becomes of it (FATES)" },
+  vehicle: { feature: "vehicle", to: "drive {maxSpeed: speed, turnRate, climbRate: speed} on the host + a helm child (socket at helm, station {action: 'drive', input: {move: 'drive'}, exit}); minY/maxY → two hidden walls only this vehicle meets (collider {blocks: ['hulls'], layer: [its own band layer]}, its host's collider {mask: [1, that layer]}: Godot's collision layers), set off by the hull's measured box so its origin keeps main's band (the floor's top at minY less the hull's reach below its origin, the ceiling's bottom at maxY plus its reach above; a hull this host can't measure: at minY/maxY themselves, the whole hull in the band); walls stand at [0, y, 0] and span 200 km (every legal x/z), so the vehicle meets its band wherever it moves, and another vehicle passes through it; each is locked (builder strength, as every translated lock: no edit moves or deletes it by accident, a builder may lift it knowingly); probes → imported:vehicle, listed with what becomes of it (FATES)" },
   picture: { feature: "picture on a model's part", to: "material {node: part, texture: src, description: look, lit} (flip: true has no field there: imported:material, listed); with no part: imported:picture, listed" },
-  environment: { feature: "environment", to: "spawn → @world.spawn (else a spawn-point thing), bounds → @world.bounds (its min.y lowered to 2 m below a flat floor under it), floor → @world.terrain {kind: 'flat', height} (unless the world has a terrain: then listed, unmapped), sky → @world.sky.gradient + a directional light thing (the sun), particles → a particles {effect: 'dust'} child; the rest imported:environment, listed" },
+  environment: { feature: "environment", to: "spawn → @world.spawn (else a spawn-point thing), bounds → @world.bounds (its min.y lowered to 2 m below a flat floor under it), floor → @world.terrain {kind: 'flat', height} (unless the world has a terrain: then listed, unmapped), sky → @world.sky.gradient + a directional light thing (the sun), particles → a particles child naming a derived dust document (main's count, range and colour, within the effect limits); the rest imported:environment, listed" },
 };
 /** main's picture (an image on a named part of its model) → {material, left (imported:material), whole (imported:picture,
  *  when there is no part to put it on: main drew nothing then)}. A flip of false is main's default, the material's own. */
@@ -322,22 +333,25 @@ export function materialOf(d) {
 }
 export const climbChildId = (host, i) => `climb-${i}-${sha256(`eido-climb\0${host}\0${i}`).slice(0, 26)}`;
 export const helmChildId = (host) => `helm-${sha256(`eido-helm\0${host}`).slice(0, 26)}`;
-/** main's vehicle {helm, exit, speed, turnRate, minY?, maxY?, probes} → {drive, helm: [id, components] | null, walls: [[id, components]], left (no
- *  home: imported:vehicle)}; main's clamps. The walls stand at [0, y, 0] spanning every legal x/z, so a moved host re-places nothing (review delta-260 L-C) */
+/** main's vehicle {helm, exit, speed, turnRate, minY?, maxY?, probes} → {drive, helm: [id, components] | null, walls: [[id, components]], mask (the
+ *  host's collider.mask, null with no walls), left (no home: imported:vehicle)}; main's clamps. The walls stand at [0, y, 0] spanning every legal x/z, so a
+ *  moved host re-places nothing (review delta-260 L-C); they are on the host's own layer (bandLayerOf), which only its mask scans (Basil 1.1) */
 export function vehiclePartsOf(host, d, hull = null) {
   const v = d && typeof d === "object" && !Array.isArray(d) ? d : {}, v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   const { helm, exit, speed, turnRate, minY, maxY, ...rest } = v, s = clampN(speed, 0.1, 15, 4);
   // main clamped the hull's origin; a wall stops the hull's box, so each wall is set off by the hull's extent (hullExtentOf)
   const below = hull?.below ?? 0, above = hull?.above ?? 0;
   const wall = (y, which, said) => [wallChildId(host, which), { transform: { pos: [0, y, 0], q: [0, 0, 0, 1], scale: [WALL_SPAN / 200, WALL_T, WALL_SPAN / 200] },
-    mesh: { shape: "box", size: [200, 1, 200] }, hidden: true, clickthrough: true, lock: true, collider: { shape: "box", blocks: ["hulls"] }, label: `${said} (main's vehicle ${which === "floor" ? "minY" : "maxY"})` }];
+    mesh: { shape: "box", size: [200, 1, 200] }, hidden: true, clickthrough: true, lock: true, collider: { shape: "box", blocks: ["hulls"], layer: [bandLayerOf(host)] }, label: `${said} (main's vehicle ${which === "floor" ? "minY" : "maxY"})` }];
   const walls = [...(Number.isFinite(minY) ? [wall(minY - below - WALL_T, "floor", "vehicle floor")] : []), ...(Number.isFinite(maxY) ? [wall(maxY + above, "ceiling", "vehicle ceiling")] : [])];
   const drive = { maxSpeed: s, turnRate: clampN(turnRate, 0.1, 2, 0.45), climbRate: s };   // main normalised (0, ½·rise, thrust) × speed: straight up ran at speed
   const kid = v3(helm) ? [helmChildId(host), { transform: ID_POSE([...helm]), parent: { to: host }, socket: { name: "helm" }, label: "helm",
     station: { action: "drive", input: { move: "drive" }, leaveBy: "menu", ...(v3(exit) ? { exit: [...exit] } : {}) } }] : null;   // main left the helm by its E alone: Space rises
   const left = { ...rest, ...(kid ? {} : { helm }), ...(exit !== undefined && !v3(exit) ? { exit } : {}), ...(minY !== undefined && !Number.isFinite(minY) ? { minY } : {}), ...(maxY !== undefined && !Number.isFinite(maxY) ? { maxY } : {}) };
-  return { drive, helm: kid, walls, left };
+  return { drive, helm: kid, walls, mask: walls.length ? [1, bandLayerOf(host)] : null, left };
 }
+/** the collision layer a banded vehicle's walls are in: its own, so no other hull's mask scans it (componentspec collider.layer) */
+export const bandLayerOf = (host) => `band-${sha256(`eido-vehicle-band\0${host}`).slice(0, 26)}`;
 /** How far a hull's measured box (model frame [[min], [max]]) reaches below and above its origin once posed (q, scale): {below, above} m, or null unmeasured */
 export function hullExtentOf(box, q = [0, 0, 0, 1], scale = [1, 1, 1]) {
   if (!Array.isArray(box) || box.length !== 2 || ![...box[0], ...box[1]].every(Number.isFinite)) return null;
@@ -370,7 +384,7 @@ function qZTo(d) { const n = Math.hypot(...d); if (!(n > 0)) return [0, 0, 0, 1]
  *  imported:environment), fields (what went where, for the report)}. `has`: what @world already holds (spawn, bounds, terrain). Main's own
  *  readings (watervolumes.js) are the defaults: a sky lights a sun at [0.4, 0.8, 0.2], #fff4df, 3. */
 export function environmentPartsOf(host, env, has = {}) {
-  const world = {}, things = [], left = {}, fields = [];
+  const world = {}, things = [], left = {}, fields = [], effects = [];
   const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   const { floor, spawn, bounds, sky, particles, ...rest } = env && typeof env === "object" && !Array.isArray(env) ? env : {};
   const B = bounds && v3(bounds.min) && v3(bounds.max) && [0, 1, 2].every((i) => bounds.min[i] < bounds.max[i]) ? bounds : null;
@@ -389,14 +403,16 @@ export function environmentPartsOf(host, env, has = {}) {
     if (Object.keys(skyRest).length) { left.sky = skyRest; fields.push([Object.keys(skyRest).map((k) => `sky.${k}`).join(", "), null]); } }
   else if (sky !== undefined) { left.sky = sky; fields.push(["sky", null]); }
   if (particles && typeof particles === "object" && !Array.isArray(particles)) { const id = envChildId(host, "particles"), p = particles;
-    const count = clampN(Math.floor(p.count), 1, 600, 600), size = clampN(p.size, 0.005, 4, 0.018), area = clampN(p.range, 0, 8, 8);
-    things.push([id, { transform: ID_POSE([0, 0, 0]), parent: { to: host }, label: "particles", particles: { effect: "dust", params: { count, size, area } } }]); fields.push(["particles", id]);
-    const kept = { count: p.count === count, size: p.size === size, range: p.range === area };   // a clamped value, or one the effect has no knob for, rides along
+    // @34 (decision table row 8): main's count, range and colour in a derived dust document (the effect limits bound it), main's defaults
+    const count = clampN(Math.floor(p.count), 1, EFFECT_LIMITS.amount, EFFECT_LIMITS.amount), size = clampN(p.size, 0.005, 4, 0.018), area = clampN(p.range, 2, EFFECT_LIMITS.extent, 16), hc = hexColor(p.color), color = Number.isInteger(hc) && hc >= 0 && hc <= 0xffffff ? hc : 0xaec8b4;
+    const doc = derivedEffect("dust", { count, size, area, color }), effect = effectAddress(doc); effects.push([effect, doc]);
+    things.push([id, { transform: ID_POSE([0, 0, 0]), parent: { to: host }, label: "particles", particles: { effect, seed: hashSeed(`${host}:environment:particles`) } }]); fields.push(["particles", id]);
+    const kept = { count: p.count === count, size: p.size === size, range: p.range === area, color: p.color === undefined || color === hc };   // a clamped value, or one the effect has no knob for, rides along
     const lost = Object.fromEntries(Object.entries(p).filter(([k]) => !kept[k]));
     if (Object.keys(lost).length) { left.particles = lost; fields.push([Object.keys(lost).map((k) => `particles.${k}`).join(", "), null]); } }
   else if (particles !== undefined) { left.particles = particles; fields.push(["particles", null]); }
   if (Object.keys(rest).length) { Object.assign(left, rest); fields.push([Object.keys(rest).join(", "), null]); }
-  return { world, things, left, fields };
+  return { world, things, left, fields, effects };
 }
 /** Every environment in a v1 state, as project() places it: [{id (as written), host, parts}]. Main drew only the first, by id in
  *  localeCompare order (watervolumes.js environmentSettings): it is mapped; any other rides whole as imported:environment, listed. */
@@ -416,7 +432,7 @@ const VOLUME_FIELDS = ["center", "size", "absorption", "scatter", "waves"];
 const ON_WORLD = { water: { feature: "water volume on @world", since: "main #248 (Unreal native client) / #254" }, air: { feature: "air box on @world", since: "main #248" } };
 // main #248's water volume and air boxes as zone + water / water-exclusion things (spec/PROTOCOL.md §14; tools/water/requests.js too)
 export const VOLUMES = {
-  water: { feature: "water volume", to: "zone {shape: 'box', size} + water, on the thing (no model or light, centred) or a child at its centre; main's speed → the water's own drag (1/s, Godot linear_damp: a swimmer there strokes at main's speed, walkers are untouched), drag = 5 × 2.4 / speed; a speed within 5% of 2.4 is dropped" },
+  water: { feature: "water volume", to: "zone {shape: 'box', size} + water, on the thing (no model or light, centred) or a child at its centre; main's speed → physics-area {kind: 'speed', factor: speed / 2.4} on that zone (2.4 m/s: the stroke a volume swims at here), which scales every body's speed inside it (walking and wading too, where main changed only the swim); a speed within 5% of 2.4 is dropped" },
   air:   { feature: "air box (dry interior)", to: "one child per box: zone {shape: 'box', size, priority: 1} + water-exclusion {}, its centre and q its transform" },
 };
 export const AIR_PRIORITY = 1;
@@ -428,15 +444,15 @@ const ID_POSE = (pos, q = [0, 0, 0, 1]) => ({ pos, q, scale: [1, 1, 1] });
 export function waterOfOld(d) {
   const { center, size, absorption, scatter, speed, ...rest } = d;
   const water = { ...rest };
-  // main's stroke in the volume as the water's drag (@31): the stroke reaches ease / drag of itself (shared/mover.js stepSwim)
+  // main's stroke in the volume, as × the one a body swims at here (waterParams' default): a physics-area (@35)
   const f = speed === undefined ? 1 : clampN(waterParams({ speed }).speed / waterParams({}).speed, 0.05, 10, 1);
-  if (Math.abs(f - 1) > SPEED_NEAR) water.drag = MOVER.swim.ease / f;
+  const area = speed !== undefined && Math.abs(f - 1) > SPEED_NEAR ? { kind: "speed", factor: f, modes: ["swim"] } : null;   // main slowed the stroke only (@37)
   if (Array.isArray(absorption)) { water.attenuationColor = vec3(absorption, [0.16, 0.055, 0.025]).map((x) => Math.exp(-Math.max(0, x))); water.attenuationDistance = 1; }
   if (Array.isArray(scatter)) water.scatterColor = vec3(scatter, [0.015, 0.12, 0.18]).map((x) => Math.max(0, x));
-  return { center: vec3(center, [0, 0, 0]), zone: { shape: "box", size: vec3(size, [200, 200, 200]).map((x) => Math.max(0.01, Math.min(1e4, Math.abs(x)))) }, water,
-    ...(speed !== undefined ? { speed: water.drag !== undefined ? { drag: water.drag } : { dropped: `× ${f.toFixed(3)} of the stroke here, within ${SPEED_NEAR * 100}%` } } : {}) };
+  return { center: vec3(center, [0, 0, 0]), zone: { shape: "box", size: vec3(size, [200, 200, 200]).map((x) => Math.max(0.01, Math.min(1e4, Math.abs(x)))) }, water, ...(area ? { area } : {}),
+    ...(speed !== undefined ? { speed: area ? { "physics-area": area } : { dropped: `× ${f.toFixed(3)} of the stroke here, within ${SPEED_NEAR * 100}%` } } : {}) };
 }
-/** A main water speed this close (as × the stroke) to the one a body swims at here is dropped, not written as a drag. */
+/** A main water speed this close (as × the stroke) to the one a body swims at here is dropped, not written as a physics-area. */
 export const SPEED_NEAR = 0.05;
 /** One old thing's water / air as [id, components] parts: `own` is merged into the thing's components, `children` are new
  *  things under it. `c` is the thing's components so far (its model, light). */
@@ -444,9 +460,9 @@ export function volumePartsOf(host, comp, c) {
   const own = {}, children = [];
   const w = comp?.water;
   if (w && typeof w === "object" && !Array.isArray(w)) {
-    const m = waterOfOld(w);
-    if (c.model === undefined && c.light === undefined && m.center.every((x) => x === 0)) Object.assign(own, { zone: m.zone, water: m.water });
-    else children.push([waterChildId(host), { transform: ID_POSE(m.center), parent: { to: host }, label: "water", zone: m.zone, water: m.water }]);
+    const m = waterOfOld(w), a = m.area ? { "physics-area": m.area } : {};
+    if (c.model === undefined && c.light === undefined && m.center.every((x) => x === 0)) Object.assign(own, { zone: m.zone, water: m.water, ...a });
+    else children.push([waterChildId(host), { transform: ID_POSE(m.center), parent: { to: host }, label: "water", zone: m.zone, water: m.water, ...a }]);
   }
   const boxes = Array.isArray(comp?.air?.boxes) ? comp.air.boxes : [];
   boxes.forEach((b, i) => { if (!b || typeof b !== "object" || Array.isArray(b)) return;
@@ -480,7 +496,7 @@ export function volumeMappings(st) {
     if (e?.comp?.[k] == null) continue;
     const c = { ...(e.lib !== undefined ? { model: e.lib } : {}), ...(e.kind === "light" ? { light: {} } : {}) };
     const { own, children } = volumePartsOf(enc(id), { [k]: e.comp[k] }, c);
-    const sp = k === "water" && e.comp.water && typeof e.comp.water === "object" ? waterOfOld(e.comp.water).speed : undefined;   // @31: what main's speed became
+    const sp = k === "water" && e.comp.water && typeof e.comp.water === "object" ? waterOfOld(e.comp.water).speed : undefined;   // @35: what main's speed became
     out.push({ component: k, feature: VOLUMES[k].feature, id, into: [...(Object.keys(own).length ? [enc(id)] : []), ...children.map(([cid]) => cid)], ...(sp ? { speed: sp } : {}) });
   }
   return out;
@@ -547,6 +563,21 @@ export function deferredFeatures(oldEntries) {
     uses.push({ component: t, feature: (onWorld ? ON_WORLD : DEFERRED)[t].feature, id: String(e.args.id), seq: Number.isInteger(e.seq) ? e.seq : k, actor: String(e.actor ?? "?"), ...(Number.isInteger(e.ts) ? { ts: e.ts } : {}), at: k });
   });
   return [...standing.values()].flat().sort((x, y) => x.at - y.at).map(({ at: _a, ...u }) => u);
+}
+/** The people main held to watching on their own grant (owned, a live spectator grant, '*' not spectator): v4 has no watch-only
+ *  grant for one person (access.js entryOf), so the translation is refused naming them (#260, Stella item 1). `st`: the v1 fold. */
+export function watchGrants(st, now = null) {
+  const roles = st?.roles ?? {};
+  if (!ownedIn(st) || roles["*"]?.role === "spectator") return [];   // '*' spectator: everyone watches, so the door says it
+  return Object.keys(roles).filter((k) => k !== "*" && roles[k]?.role === "spectator" && !(now != null && typeof roles[k].until === "number" && roles[k].until <= now)).sort();
+}
+/** watchGrants' refusal in words, with the owner's choices; null when there is none. */
+export function watchRefusal(names, world = "this world") {
+  if (!names.length) return null;
+  const who = names.map((n) => `'${n}'`).join(", ");
+  return `can't translate ${world}: main let ${who} only watch it, on their own spectator grant, and this protocol has no watch-only grant for one person. `
+    + `Translating would either drop that or let them in with a body, wider than it was. Nothing was written. `
+    + `On the old server, choose one and translate again: grant them visitor (they come in with a body), grant '*' spectator (everyone may watch), or revoke their grant (they come in as everyone else does, or not at all where '*' is none).`;
 }
 /** The refusal, in words: which feature, on what, by whom, when (seq). One line per use; null when nothing is deferred. */
 export function deferredRefusal(uses, world = "this world") {
@@ -819,7 +850,8 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
     const climbs = carried.traversal !== undefined ? climbPartsOf(enc(id), carried.traversal) : { children: [], left: [] };
     if (climbs.left.length || (carried.traversal !== undefined && !Array.isArray(carried.traversal?.routes))) c[keyed("imported", "traversal")] = climbs.left.length ? { routes: climbs.left } : carried.traversal;
     const veh = carried.vehicle !== undefined ? vehiclePartsOf(enc(id), carried.vehicle, hullExtentOf(col?.boxOf?.(e.lib), t.q, t.scale)) : null;
-    if (veh) { c.drive = veh.drive; if (Object.keys(veh.left).length) c[keyed("imported", "vehicle")] = veh.left; }
+    if (veh) { c.drive = veh.drive; if (Object.keys(veh.left).length) c[keyed("imported", "vehicle")] = veh.left;
+      if (veh.mask) c.collider = { ...(c.collider && typeof c.collider === "object" ? c.collider : {}), mask: veh.mask }; }   // @32: it scans its band's layer
     const ownDecay = c.light && typeof c.light === "object" && c.light.decay !== undefined;
     out[enc(id)] = shapeRepaired(c); if (!ownDecay) lightParity(enc(id), out[enc(id)], adjust);
     for (const [cid, cc] of [...vol.children, ...climbs.children, ...(veh?.helm ? [veh.helm] : []), ...(veh?.walls ?? [])]) out[cid] = shapeRepaired(cc);
@@ -862,6 +894,7 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
       if (screen && (screen.captioners === undefined || Array.isArray(screen.captioners?.ids))) {
         const ids = screen.captioners?.ids ?? []; screen.captioners = { ids: ids.includes(id) ? ids : [...ids, id] };
         const { caption: _c, ...rest } = r; r = rest; }
+      if (r?.role === "none" && !open) w[`imported-bans:${id}`] ??= { reason: "main's role none kept this person out", ...(Number.isSafeInteger(r.until) ? { until: r.until } : {}) };   // @36: a ban, so the door keeps them out
       if (r && (r.role === "spectator" || r.role === "none")) w[`imported-roles:${id}`] = r;   // no rung below member (@17): carried, not granted
       else w[`roles:${id}`] = r && open && (r.role === undefined || r.role === "visitor" || r.role === "member") ? { ...r, role: "builder" } : r && r.role === "visitor" ? { ...r, role: "member" } : r; }
   }
@@ -885,6 +918,7 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
     if (parts.world.spawn) w.spawn = parts.world.spawn; if (parts.world.bounds) w.bounds = parts.world.bounds; if (parts.world.terrain) w.terrain = parts.world.terrain;
     if (parts.world.sky) w.sky = { ...(w.sky && typeof w.sky === "object" ? w.sky : {}), ...parts.world.sky };
     for (const [cid, cc] of parts.things) out[cid] = shapeRepaired(cc);
+    for (const [a, d] of parts.effects ?? []) effects?.set(a, d);   // @34: the motes' derived dust
     if (Object.keys(parts.left).length && out[host]) out[host][keyed("imported", "environment")] = parts.left; }
   { const sb = stageBoundsOf(st); if (sb) w.bounds = sb; }   // @31: main's 78 m stage island as the world's box (stageBoundsOf)
   // @12, wave 2 (render-media-env): the world's look in today's spelling, as the load repairs a stored one (repairWorld: the sky's

@@ -70,8 +70,9 @@ export function relayLossy(w: Pick<World, "clients">, msg: unknown, except?: Cli
 }
 export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
   "history": ({ c, ws, now, expel }, msg) => {
-    // Speech is arrival-only: a page holds only lines said since this connection arrived, unless it's an admin's
-    // (world.ts sayFloorFor).
+    // Speech is arrival-only (R 10-18): the log keeps every say, but a page holds only the lines said since this
+    // connection arrived, unless it is the owner's, an operator's or a readChat holder's (world.ts isAdmin), who reads the master log.
+    // Spectators page like anyone else: what they were present for.
     if (!c.world) return;
     const r = c.world.readHistory({
       before: typeof msg.before === "number" ? msg.before : Infinity,
@@ -132,7 +133,7 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     if (!c.world || c.spectator) return;
     const to = String(msg.target ?? "").slice(0, LIMITS.ID_LEN);
     const { tc } = presenceTarget(c.world, msg.targetActor, to);   // the identity named, or the name (H2)
-    if (!tc) { ws.send(JSON.stringify({ type: "error", error: `${to || "target"} isn't here to pose` })); return; }
+    if (!tc) { ws.send(JSON.stringify({ type: "error", error: `${to || "target"} isn't here to ${msg.ragdoll ? "shove" : "pose"}` })); return; }
     // ragdoll rides as `true` (undirected knock-over, the old wire) or
     // {lean:[x,y,z]} m/s — which way the shove sends them. Sanitize to
     // exactly those two shapes; the receiver caps magnitude for itself.
@@ -179,26 +180,28 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     const { tc } = presenceTarget(c.world, msg.targetActor, to, false);   // the identity named, or the name (H2)
     if (process.env.BD_DEBUG) console.log(`[bd] ${c.id} -> ${to} (${msg.grab ? "grab" : msg.end ? "end" : "sample"}) ${tc ? "relayed" : `NO TARGET among [${[...c.world.clients].map((o) => o.id).join(",")}]`}`);
     if (!tc) return;                       // dragging the departed: silently moot
-    // a grab takes someone's body (move, L6): their consent and reach, at the server; the stream and release that follow
-    // only ever go to a body that accepted the grab (its client answers with end otherwise)
+    const addressed = { type: "bodydrag", by: c.id, ...(c.actorId ? { byActor: c.actorId } : {}) };
+    // a grab takes someone's body (move, L6): their consent and reach, at the server; the owner decides whether to accept it
     if (msg.grab != null) { const why = bodyRefusal(c, tc, "displace"); if (why) { ws.send(JSON.stringify({ type: "error", error: why })); return; } }
-    // what follows a grab is held to the same table: a nail (unpin, pinAt, pins) needs displace; once refused, nothing
-    // more of the drag reaches them — an end still goes through, stripped of its nails
-    else if ((msg.end == null || msg.unpin != null || msg.pinAt != null || msg.pins != null) && !(c.actorId && c.actorId === tc.actorId)) {
+    // A non-grab release ends the drag even after move consent closes; its final sample and nails need the same live
+    // displace consent as any other effect, so a refused release carries only the end (house 6340433633 Q3).
+    else if (!(c.actorId && c.actorId === tc.actorId)) {
       const nail = msg.unpin != null || msg.pinAt != null || msg.pins != null;
-      const endAlone = () => { if (msg.end == null) return true; delete msg.unpin; delete msg.pinAt; delete msg.pins; return false; };   // refused: an end still goes, bare
+      const endAlone = () => { if (msg.end != null) tc.ws.send(JSON.stringify({ ...addressed, end: true })); };
       // fails closed as bodyRefusal does: with no live log or no identity on either side, nothing can say yes
       const live = c.world.log?.live;
-      if (!live || !c.actorId || !tc.actorId) { if (nail) ws.send(JSON.stringify({ type: "error", error: `${tc.id}'s body isn't taking displace right now` })); if (endAlone()) return; }
-      else {
+      if (!live || !c.actorId || !tc.actorId) {
+        if (nail) ws.send(JSON.stringify({ type: "error", error: `${tc.id}'s body isn't taking displace right now` }));
+        endAlone(); return;
+      }
       const d = consentDecide(live.presence, c.actorId, tc.actorId, "displace", liveBodyDefault(live));
       if (d.mode === "deny") {
         if (nail) ws.send(JSON.stringify({ type: "error", error: refusalWords(tc.id, "displace") }));
-        if (endAlone()) return;
+        endAlone(); return;
       }
-    } }
+    }
     tc.ws.send(JSON.stringify({
-      type: "bodydrag", by: c.id, ...(c.actorId ? { byActor: c.actorId } : {}),
+      ...addressed,
       ...(msg.grab != null ? { grab: msg.grab } : {}),
       ...(msg.end != null ? { end: true } : {}),
       ...(msg.pose != null ? { pose: msg.pose } : {}),

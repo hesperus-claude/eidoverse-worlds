@@ -11,7 +11,7 @@ type Key = { pub: string; priv: string };
 type File = { sequencer?: Key; operator?: Key; holders: Record<string, Key> };
 
 /** How long a mint waits for another process's mint to finish before it gives up. */
-const LOCK_WAIT_MS = 10_000;
+const LOCK_WAIT_MS = Number(process.env.EIDO_CUSTODY_LOCK_WAIT_MS) || 10_000;   // how long a mint waits on a held lock (a slow host may raise it)
 /** Who holds a lock file: the pid and the nonce its taker wrote (`<pid> <nonce>`), or null when it can't be read. */
 function holderOf(f: string): { pid: number; nonce: string } | null {
   let s: string; try { s = fs.readFileSync(f, "utf8"); } catch { return null; }
@@ -87,7 +87,14 @@ function openCustody(file: string) {
       Atomics.wait(wait, 0, 0, 10);
     }
     // only this process removes its own lock: another removes a lock only once its holder has exited
-    try { sync(); if (missing()) { mint(); save(); } } finally { fs.rmSync(lock, { force: true }); }
+    try {
+      sync();
+      if (missing()) {
+        const was = { sequencer: c.sequencer, operator: c.operator, holders: { ...c.holders } };
+        mint();
+        try { save(); } catch (e) { Object.assign(c, was); throw e; }
+      }
+    } finally { fs.rmSync(lock, { force: true }); }
   };
   return {
     sequencer(): string { minting(() => !c.sequencer, () => { c.sequencer = mk(); }); return c.sequencer!.pub; },

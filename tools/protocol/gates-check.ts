@@ -3,6 +3,7 @@
 // that gate > move on, touch off. A stored switch or table becomes gates and lists only ever NARROWER (migratePresence).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/gates-check.ts
 import * as C from "../../shared/protocol/consent.js";
+import * as S from "../../shared/protocol/authority/storage.js";
 let pass = 0, fail = 0;
 const check = (id: string, what: string, ok: boolean, got?: unknown) => { ok ? pass++ : fail++; console.log(`${ok ? "ok  " : "FAIL"} ${id} ${what}${ok ? "" : "  " + JSON.stringify(got)}`); };
 const P = (): any => ({ consent: Object.create(null) });
@@ -57,6 +58,12 @@ const modes = (p: any, wd?: unknown) => Object.fromEntries([...MOVE, ...TOUCH].m
 { const p = P(); const r = set(p, { allow: "pal", block: "kit" }); check("S3", "one list change at a time", !r.ok && !p.consent.me, r); }
 { const p = P(); const r = set(p, { block: "__proto__" }); check("S4", "a list names an identity (never a prototype key)", !r.ok && !(Object.prototype as any).true, r); }
 { const p = P(); const r = C.setConsent(p, "pal", { of: "me", move: false }); check("S5", "only the body's owner sets its gates (of is retired)", !r.ok && d(p, "shove") === "allow", r); }
+// S6 (review 1.7): each list holds 1024 entries; the 1025th is refused with the limit and how to remove one; an entry for a thing or sponsor not here yet is taken
+{ const p = P(); const r1 = Array.from({ length: 1024 }, (_, i) => set(p, { block: `u-${i}` })), over = set(p, { block: "u-1024" }), again = set(p, { block: "u-7" }), other = set(p, { allow: "script:t-later" }), sp = set(p, { allow: "scripts-by:u-later" }), keptOut = !C.tableOf(p, "me").block.includes("u-1024");
+  const fit = (set(p, { unlist: "u-0" }), set(p, { block: "u-1024" }));
+  check("S6", "a list's 1025th entry is refused (bounds, saying the limit and how to remove one), nothing written; re-listing one already there, the other list and a later entry once one is removed are taken; a script: or scripts-by: entry for a target not here yet is taken",
+    r1.every((r) => r.ok) && !over.ok && over.code === "bounds" && /1024/.test(over.reason) && /unlist/.test(over.fix ?? "") && keptOut
+    && again.ok && other.ok && sp.ok && fit.ok && C.tableOf(p, "me").block.length === 1024, { over, again: again.ok, other: other.ok, sp: sp.ok, fit, n: C.tableOf(p, "me").block.length }); }
 // ---- M: a stored switch or table becomes gates and lists, only ever narrower ----
 const mig = (consent: any) => { const p: any = { consent, consentShape: 3, asks: { a: 1 }, asked: { a: 1 }, askSeq: 3, cool: { k: 1 } }; C.migratePresence(p); return p; };
 { const p = mig({ me: { switch: "refuse" } }); check("M1", "a stored switch refuse → both gates off", p.consent.me.move === false && p.consent.me.touch === false && !("switch" in p.consent.me), p.consent.me); }
@@ -70,6 +77,13 @@ const mig = (consent: any) => { const p: any = { consent, consentShape: 3, asks:
   check("M7", "a partial allow (touch only) is not allow-listed: under refuse Bob may not shove, drag, pose or touch", !t.allow.includes("bob") && !t.block.includes("bob") && ["shove", "displace", "pose", "intimate", "touch"].every((c) => d(p, c, undefined, "bob") === "deny"), { t, m: ["shove", "displace", "pose", "touch"].map((c) => d(p, c, undefined, "bob")) }); }
 { const p = mig({ me: { switch: "refuse", over: { bob: { touch: { mode: "allow" }, intimate: { mode: "allow" }, pose: { mode: "allow" }, shove: { mode: "allow" }, displace: { mode: "allow" } } } } }); const t = C.tableOf(p, "me");
   check("M8", "a full allow (every enforced class, no end) is allow-listed", JSON.stringify(t.allow) === '["bob"]' && ["shove", "displace", "pose"].every((c) => d(p, c, undefined, "bob") === "allow"), t); }
+{ const full = Object.fromEntries(["near", "follow", "touch", "intimate", "pose", "shove", "displace", "voice"].map((c) => [c, { mode: "allow" }]));
+  const paused = mig({ me: { preset: "normal", paused: true, over: { pal: full } } });
+  const unpaused = mig({ me: { preset: "normal", paused: false, over: { pal: full } } });
+  check("M11", "a paused stored table denies its standing full allowance; without pause it remains allowed",
+    all(paused, [...MOVE, ...TOUCH], "deny") && !C.tableOf(paused, "me").allow.includes("pal")
+    && all(unpaused, [...MOVE, ...TOUCH], "allow") && C.tableOf(unpaused, "me").allow.includes("pal"),
+    { paused: paused.consent.me, unpaused: unpaused.consent.me }); }
 { const p = mig({ me: { switch: "accept", over: { bob: { touch: { mode: "allow" }, intimate: { mode: "allow" }, pose: { mode: "allow" }, shove: { mode: "allow" }, displace: { mode: "allow" }, voice: { mode: "deny" } } } } }); const t = C.tableOf(p, "me");
   check("M9", "a deny anywhere in the row (voice too) keeps them blocked, whatever else it allowed", JSON.stringify(t.block) === '["bob"]' && !t.allow.includes("bob") && d(p, "shove", undefined, "bob") === "deny", t); }
 { const p = mig({ me: { switch: "accept", over: { bob: { pose: { mode: "ask" } } } } }); const t = C.tableOf(p, "me");   // review full-260 L14
@@ -78,4 +92,27 @@ const mig = (consent: any) => { const p: any = { consent, consentShape: 3, asks:
   check("M5", "a table from before the switch reads as the switch it became, then as gates: Normal's closed cells → both off; a pause → both off", p.consent.me.move === false && p.consent.me.touch === false && p.consent.eve.move === false && p.consent.eve.touch === false && !/cells|friends|preset|paused/.test(JSON.stringify(p.consent)), p.consent); }
 { const p = mig({ me: { switch: "refuse" } }); const once = JSON.stringify(p); C.migratePresence(p); set(p, { move: true });
   check("M6", "the asks, their cool-downs and rate are dropped, the plane is marked, and a second load changes nothing (a gate chosen since stays chosen)", !("asks" in p) && !("cool" in p) && !("asked" in p) && !("askSeq" in p) && p.consentShape === C.CONSENT_SHAPE && C.CONSENT_SHAPE === 4 && (C.migratePresence(p), p.consent.me.move === true) && JSON.parse(once).consent.me.move === false, p); }
+// M12–M13 (#260, Stella item 2): "never wider" covers near, follow and voice too: an old no stays no after the migration
+const UNG = ["near", "follow", "voice"], ung = (p: any, wd?: unknown, from = "pal") => UNG.map((c) => d(p, c, wd, from));
+{ const paused = mig({ me: { preset: "normal", paused: true } }), refuse = mig({ me: { switch: "refuse" } }), ask = mig({ me: { switch: "ask" } }), accept = mig({ me: { switch: "accept" } });
+  const open = mig({ me: { preset: "open", cells: { everyone: { pose: "allow", shove: "allow", displace: "allow", touch: "allow", intimate: "allow" } } } }), fresh = P();
+  check("M12", "a paused table, a refuse or ask switch keep near, follow and voice deny after migration (kept in `closed`); accept, an untouched body and an open row's allows stay allow (open's follow ask → deny)",
+    [paused, refuse, ask].every((p) => ung(p).every((m) => m === "deny") && all(p, [...MOVE, ...TOUCH], "deny")) && JSON.stringify(Object.keys(paused.consent.me.closed ?? {})) === JSON.stringify(UNG)
+    && ung(accept).every((m) => m === "allow") && ung(fresh).every((m) => m === "allow") && JSON.stringify(ung(open)) === '["allow","deny","allow"]',
+    { paused: ung(paused), refuse: ung(refuse), ask: ung(ask), accept: ung(accept), open: ung(open), closed: paused.consent.me.closed }); }
+{ const p = P(); check("M13", "a world's stored body-default refuse or ask (the switch's words) keeps near, follow and voice deny; the gates' {move, touch} default leaves them allow",
+    ung(p, "refuse").every((m) => m === "deny") && ung(p, "ask").every((m) => m === "deny") && ung(p, { move: true, touch: true }).every((m) => m === "allow") && ung(p, "accept").every((m) => m === "allow"),
+    { refuse: ung(p, "refuse"), obj: ung(p, { move: true, touch: true }) }); }
+// M14 (#260, Stella item 3): a friends-row cell the new table can't hold narrows that class off for everyone; the world still loads
+const load = (consent: any) => { const w: any = S.worldOf({ name: "w", entries: [], now: () => 0, presence: { bodies: {}, holds: {}, consent: JSON.parse(JSON.stringify(consent)) } }); return w; };
+{ const pal = { friends: ["me"] }, stella = load({ me: { cells: { friends: { displace: "ask" }, everyone: { displace: "allow" } }, friends: ["pal"] }, pal });
+  const ALL = { pose: "allow", shove: "allow", displace: "allow", touch: "allow", intimate: "allow" };
+  const open = load({ me: { preset: "open", cells: { everyone: ALL, friends: { displace: "ask", intimate: "allow", pose: "allow" } }, friends: ["pal"] }, pal });
+  const oneWay = load({ me: { preset: "open", cells: { everyone: ALL, friends: { displace: "ask", intimate: "allow", pose: "allow" } }, friends: ["pal"] } });
+  const dw = (w: any, from: string) => C.decide(w.presence, from, "me", "displace").mode;
+  check("M14", "friends-row displace:ask + everyone-row displace:allow: the world loads, and displace is refused for a stranger and the friend (move off, touch untouched); a friend who never befriended back changes nothing",
+    stella.presenceDirty && dw(stella, "stan") === "deny" && dw(stella, "pal") === "deny"
+    && open.presenceDirty && dw(open, "stan") === "deny" && dw(open, "pal") === "deny" && open.presence.consent.me.move === false && open.presence.consent.me.touch === undefined
+    && dw(oneWay, "stan") === "allow" && oneWay.presence.consent.me.move === true,
+    { stella: stella.presence.consent.me, open: open.presence.consent.me, oneWay: oneWay.presence.consent.me }); }
 console.log(`[gates-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

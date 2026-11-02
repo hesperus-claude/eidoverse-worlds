@@ -73,7 +73,9 @@
   "fields": {
    "shape": "string",
    "enabled": "bool",
-   "blocks": "array"
+   "blocks": "array",
+   "layer": "array",
+   "mask": "array"
   },
   "enums": {
    "shape": [
@@ -85,6 +87,12 @@
   "ranges": {
    "blocks": {
     "maxItems": 3
+   },
+   "layer": {
+    "maxItems": 32
+   },
+   "mask": {
+    "maxItems": 32
    }
   },
   "itemEnums": {
@@ -97,12 +105,16 @@
   "absentMeans": {
    "shape": "its size decides, for each reader: physics collides it as its measured box; walking uses its triangles (mesh) when it is room-scale (footprint ≥ 16 m² and ≥ 2.2 m tall) or floor-shaped and uneven (footprint ≥ 2 m², ≤ 1.0 m tall, its box top > 0.10 m above its surface), else its box (client/lib/supportclass.js)",
    "enabled": "true: it is solid",
-   "blocks": "everything: bodies, hulls and things"
+   "blocks": "everything: bodies, hulls and things",
+   "layer": "[1] (Godot's default): every mover meets it",
+   "mask": "[1] (Godot's default)"
   },
   "docs": {
    "shape": "mesh = its triangles (to walk on; physics collides a mesh as its box, PhysX's rule for a dynamic body, and eidosim carries boxes), box = its bounding box, sphere = a ball (rolls, under an engine that carries spheres); remove the component to let its size decide",
    "enabled": "false: not solid. Nothing collides with it, stands on it or bumps into it (walkers, agents, the authority's track, the physics engine); it still moves as its physics.kind and motion say, and is still drawn, clicked and grabbed",
-   "blocks": "what it stops, a list of layers: bodies (anyone walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet"
+   "blocks": "what it stops, a list of layers: bodies (anyone walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet",
+   "layer": "the collision layers it is IN (Godot's collision_layer): a list of layer numbers 1..32 or names (a lowercase letter, then letters, digits, - or _; ≤ 40), each once. A mover meets it only when the mover's mask scans one of them (Godot: \"Object A can detect a contact with object B only if object B is in any of the layers that object A scans\")",
+   "mask": "the collision layers it SCANS when it moves (Godot's collision_mask), same items as layer: read for a hull (the authority's hull sweep meets only what is in a layer its mask scans). Bodies walking or swimming, and loose things in the physics engine, scan [1] (eidosim carries no layers between things); a still thing's mask is unread"
   },
   "on": "thing"
  },
@@ -253,7 +265,7 @@
    }
   },
   "absentMeans": {
-   "decay": "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 at its first load",
+   "decay": "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 by the maintenance command (repair-shapes; docs/MAINTENANCE.md), never at load",
    "intensity": "the default; on a light with no decay (stored before 10-16) 16, the old rig's, written by the same repair",
    "daytime": "dim: it follows the day cycle (an older value's day: false meant full)"
   },
@@ -752,7 +764,12 @@
  "places": {
   "status": "trial",
   "keyPattern": "^[A-Za-z0-9_][A-Za-z0-9_ .:'-]{0,47}$",
-  "docs": {},
+  "docs": {
+   "at": "a spot to stand, [x, y, z] in the thing's own frame (its y the floor there)",
+   "min": "a room's low corner (its y the floor)",
+   "max": "a room's high corner",
+   "label": "how it reads, ≤ 80 characters"
+  },
   "units": {
    "at": "m",
    "min": "m",
@@ -782,13 +799,15 @@
     "script"
    ],
    "play": [],
+   "impulse": [
+    "strength",
+    "angular"
+   ],
    "reset": [
     "targets"
    ]
   },
-  "reservedKinds": [
-   "impulse"
-  ]
+  "reservedKinds": []
  },
  "openable": {
   "status": "trial",
@@ -1554,6 +1573,8 @@
    "fog": "number",
    "exposure": "number",
    "ambient": "number",
+   "sun": "number",
+   "fill": "number",
    "forecast": "object",
    "override": "object",
    "gradient": "object",
@@ -1614,6 +1635,12 @@
    "ambient": {
     "min": 0
    },
+   "sun": {
+    "min": 0
+   },
+   "fill": {
+    "min": 0
+   },
    "transition": {
     "gt": 0,
     "max": 600
@@ -1637,9 +1664,13 @@
    "system": "eidoverse: the detailed sky",
    "colors": "the sky's own colours",
    "audio": "off: no weather sounds (main's default)",
+   "sun": "1: the sun at its own strength (a multiplier, as main's sun slider)",
+   "fill": "1: the bounce light opposite the sun at its own strength (main's fill slider)",
    "law": "forecast@1: per (seed, segment), drawn in the order dwell, then state, then intensity; spec/conformance/laws.json pins its segments"
   },
   "docs": {
+   "sun": "how strong the sun is, a multiplier on the renderer's own sun (main's sun slider)",
+   "fill": "how strong the bounce light opposite the sun is, a multiplier (main's fill slider)",
    "hours": "the hour of day at ts, 0 ≤ h ≤ 24",
    "rate": "world hours a real hour (0: the sun stands still)",
    "ts": "the instant hours held, epoch ms (stamped by the authority)",
@@ -2419,8 +2450,7 @@
    "attenuationColor": "vec3",
    "attenuationDistance": "number",
    "scatterColor": "vec3",
-   "density": "number",
-   "drag": "number"
+   "density": "number"
   },
   "enums": {
    "kind": [
@@ -2462,10 +2492,6 @@
    "density": {
     "gt": 0,
     "max": 20000
-   },
-   "drag": {
-    "min": 0,
-    "max": 100
    }
   },
   "absentMeans": {
@@ -2478,8 +2504,7 @@
    "attenuationColor": "the reader's own look for its kind (a level by kind; a body σ [0.16, 0.055, 0.025] per metre: shared/water.js waterParams)",
    "attenuationDistance": "the reader's own look for its kind, as attenuationColor",
    "scatterColor": "the reader's own look (a level by kind and daylight; a body [0.015, 0.12, 0.18]: shared/water.js waterParams)",
-   "density": "1000 kg/m³ (fresh water)",
-   "drag": "5 /s: the mover's own (shared/mover.js MOVER.swim.ease)"
+   "density": "1000 kg/m³ (fresh water)"
   },
   "docs": {
    "level": "its surface height, metres, in its entity's frame (the world's on @world; on a thing, absent: its zone's top)",
@@ -2491,15 +2516,13 @@
    "attenuationColor": "the colour white light becomes after attenuationDistance of water, linear [r, g, b] 0..1 (KHR_materials_volume; absorption σ = −ln(c) / d per metre)",
    "attenuationDistance": "the distance, metres, at which light has become attenuationColor (KHR_materials_volume)",
    "scatterColor": "the colour the water scatters back, linear [r, g, b] 0..1 (Unity HDRP scatteringColor)",
-   "density": "how dense the water is, kg/m³ (what a body floats against)",
-   "drag": "how fast it slows what moves through it, per second (Godot Area3D linear_damp, Unreal Fluid Friction): a swimmer strokes at 5 / drag of its pace, and walkers on its floor are untouched"
+   "density": "how dense the water is, kg/m³; reserved: nothing reads it yet (swimming and floating don't)"
   },
   "units": {
    "level": "m",
    "flow": "m/s",
    "attenuationDistance": "m",
-   "density": "kg/m³",
-   "drag": "1/s"
+   "density": "kg/m³"
   }
  },
  "zone": {
@@ -2601,7 +2624,8 @@
   "status": "trial",
   "fields": {
    "kind": "string",
-   "factor": "number"
+   "factor": "number",
+   "modes": "array"
   },
   "enums": {
    "kind": [
@@ -2618,11 +2642,13 @@
    "kind"
   ],
   "absentMeans": {
-   "factor": "1: no change"
+   "factor": "1: no change",
+   "modes": "every mode"
   },
   "docs": {
    "kind": "what it does to bodies inside its zone: speed (× their own speed); direction, point and vortex are planned, not open",
-   "factor": "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows"
+   "factor": "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows",
+   "modes": "which movement modes it touches: walk | swim | fly | climb (Unreal's per-mode settings); absent: all. Main's slow water translates to ['swim']"
   },
   "units": {
    "factor": "×"

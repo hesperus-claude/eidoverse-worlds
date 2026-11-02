@@ -289,7 +289,7 @@ function hierarchyFields() {
     // the row says the name; the rest is on hover (and in the row with 'show ids' / 'show kinds')
     const title = [nameOnly(id) ? `${nameOnly(id)}  (id ${id})` : `id ${id}`, sub].filter(Boolean).join(' — ');
     return { id, label: labelOf(id), ...(hopts.kinds ? { sub } : {}), title, depth: t.depth, active: id === sel, multi: id !== sel && Sel.isSelected(id), badges, locked: !!bag.lock, mine: isMineHidden(id),
-      ...(bag.lock ? { lockLevel: lockWord(lockStrengthOf(id)) } : {}), ...(heldBy && !bag.lock ? { heldBy, heldByLabel: labelOf(heldBy) } : {}),
+      ...(bag.lock ? { lockLevel: lockWord(lockStrengthOf(id), bagOf('@world') ?? {}) } : {}), ...(heldBy && !bag.lock ? { heldBy, heldByLabel: labelOf(heldBy) } : {}),
       lockable: Edits.mayLift() && (!bag.lock || mayLiftLevel(id)),   // §5: only builders and owners lock and unlock; a lock above your rank isn't yours to lift
       enabled: !selfOff, ...(off ? { off: true } : {}),
       kids: t.kids, open: t.open, ...(t.dim ? { dim: true } : {}) };   // a filter looks inside folded nodes, so the glyph says open
@@ -421,14 +421,19 @@ function duplicate(id) {
     const out = Edits.idOut(nid); flashHint(html`<b>${called(out)}</b> — a copy of ${called(id)}${nudge}`, nudge ? 8000 : 4000); setTimeout(() => { if (entities.has(out) && Sel.mark() === since) sceneSelect(out); }, 400); });
 }
 
-// A lock's strength (lock.rank) is asked ONCE per lock, not per component change, or a dragged locked thing trips
-// the rate limit. It can go stale; fine, since the authority decides and the padlock only shows.
-const lockStrength = new Map();
+// a lock's strength is its setter's rank now (recut B2): the authority's inspect says it (lock.rank); this only keeps
+// the padlock honest, the authority decides
+// asked ONCE per lock (a refused ask again after a backoff), not per component change: authorityInspect keys on the whole
+// bag, so a dragged locked thing re-asked every frame and tripped the rate limit (client-check D1, 10-20). Dropped when the
+// lock changes or goes; a demotion after that can leave it stale, which is fine: the authority decides, the padlock only asks.
+const lockStrength = new Map(), lockAsk = backoff();
 const lockStrengthOf = (id) => {
-  if (!bagOf(id)?.lock) { lockStrength.delete(id); return RANK.builder; }
-  if (!lockStrength.has(id)) { lockStrength.set(id, null);
-    sendRequest('inspect', { id }).then((r) => { const k = r?.lock?.rank; if (r?.ok && Number.isFinite(k) && lockStrength.has(id)) { lockStrength.set(id, k); repaintAll(); } }).catch(() => lockStrength.delete(id)); }
-  return lockStrength.get(id) ?? RANK.builder; };
+  if (!bagOf(id)?.lock) return RANK.builder;
+  if (!lockStrength.has(id)) { const ask = {}; lockStrength.set(id, ask);
+    const again = () => setTimeout(() => { if (lockStrength.get(id) === ask) { lockStrength.delete(id); repaintAll(); } }, lockAsk.next());
+    sendRequest('inspect', { id }).then((r) => { if (lockStrength.get(id) !== ask) return; if (!r?.ok) return again();
+      const k = r.lock?.rank; lockAsk.reset(); lockStrength.set(id, Number.isFinite(k) ? k : RANK.builder); repaintAll(); }).catch(again); }
+  const k = lockStrength.get(id); return Number.isFinite(k) ? k : RANK.builder; };
 const myRank = () => (Number.isFinite(net.myRights?.rank) ? net.myRights.rank : RANK[net.myRights?.role] ?? RANK.builder);
 const lockerOf = (id) => authorityInspect(id)?.touched?.lock?.by ?? null;
 const mayLiftLevel = (id) => myRank() >= lockStrengthOf(id);
@@ -437,7 +442,7 @@ async function toggleLock(id) {
   if (!Edits.mayLift()) { flashHint('only builders and owners can lock or unlock things here'); return; }
   if (!lk) { Edits.lock(id, true); return; }
   // unlocking someone else's lock is a click-through, as moving a locked thing is: say whose it is and at what level
-  const by = lockerOf(id), word = lockWord(lockStrengthOf(id));
+  const by = lockerOf(id), word = lockWord(lockStrengthOf(id), bagOf('@world') ?? {});
   if (by && by !== net.you) {
     const yes = await confirmCenter({ title: 'Unlock it?', body: `${Edits.nameOf(by)} locked this (${word} may lift it). Unlocking lets anyone who may build here move or remove it; History shows who unlocked it.`, ok: 'Unlock', cancel: 'Keep it locked' });
     if (!yes) return;
@@ -1224,7 +1229,7 @@ const PANELS = [
   { id: 'history', title: 'History', theme: 'edit', fields: historyFields, dispatch: historyDispatch, frame: { x: -330, y: 60, w: 320, h: 520, minW: 250, minH: 160 } },
   // docked as a third tab (Inspector | Attributes | History): Maya's Attribute Editor to the Inspector's channel box
   { id: 'attributes', title: 'Attributes', theme: 'edit', fields: attributesFields, dispatch: attributesDispatch, frame: { x: -330, y: 60, w: 320, h: 520, minW: 250, minH: 160 } },
-  // optional: never auto-shown on entering edit mode (View ▸ console, or a script row in the inspector)
+  // optional: never auto-shown on entering build mode (View ▸ console, or a script row in the inspector)
   { id: 'console', title: 'Console', theme: 'edit', fields: consoleFields, dispatch: consoleDispatch, optional: true, frame: { x: 'center', y: -24, w: 560, h: 240, minW: 320, minH: 120 } },
 ];
 const frames = new Map();
@@ -1268,11 +1273,12 @@ export function initEditPanels() {
   setInterval(() => { if (!lastAway || document.hidden || !frames.get('inspector')?.frame?.el?.getClientRects().length) return; const id = sceneSelected(); const o = id === lastAway.id ? entities.get(id) : null;
     if (!o) { lastAway = null; return; } if (Math.round(o.getWorldPosition(_wp).distanceTo(myState.pos)) !== lastAway.m) repaintAll(); }, 500);
   bus.on('selection', () => { const id = sceneSelected(); if (id) revealPath(id); });   // before the paint: a selected child shows, its ancestors unfold (design §5)
-  for (const ev of ['entity', 'comp', 'mount', 'edit-mode', 'selection', 'structure-tool', 'tool', 'your-rights', 'log-applied', 'view-prefs']) bus.on(ev, repaintAll);   // view-prefs: this viewer's rotate order   // log-applied: a world's library lives on @world, which the realizers never touch
+  for (const ev of ['entity', 'comp', 'mount', 'build-mode', 'selection', 'structure-tool', 'tool', 'your-rights', 'log-applied', 'view-prefs']) bus.on(ev, repaintAll);   // view-prefs: this viewer's rotate order   // log-applied: a world's library lives on @world, which the realizers never touch
   // the world entity's components are the fold's sky / terrain / grass: repaint when a world verb folds
   // …and the Build panel's saved blueprints when a record is published
   const WORLD_KEYS = new Set(['sky', 'terrain', 'grass', 'blueprints'])
   onWorldChange((ev) => { if (ev.type !== 'change' && (ev.type !== 'world' || WORLD_KEYS.has(ev.key))) repaintAll(); });
+  onWorldChange(({ type, id, what, comp }) => { if (type === 'reset' || type === 'hydrated') lockStrength.clear(); else if (type === 'change' && (what === 'gone' || comp === 'lock')) lockStrength.delete(id); });
   loadWorldDefs(); bus.on('defs-updated', loadWorldDefs);
   // a drag's `before` never outlives its primary; the extras' outlines follow the set
   let lastPrimary = null;
@@ -1295,8 +1301,8 @@ export function initEditPanels() {
   });
   bus.on('entity', () => { if (outlines.size) syncOutlines(); });
   bus.on('disabled-changed', () => repaintAll());   // switched off or on: the Inspector and the Hierarchy say so at once
-  // leaving edit mode keeps the primary thing (the look-mode scene panel shows it) and drops the rest
-  bus.on('edit-mode', (on) => { if (!on) { armingRef = null; const p = sceneSelected(); if (p) Sel.set([p]); else Sel.clear(); } });
+  // leaving build mode keeps the primary thing (the look-mode scene panel shows it) and drops the rest
+  bus.on('build-mode', (on) => { if (!on) { armingRef = null; const p = sceneSelected(); if (p) Sel.set([p]); else Sel.clear(); } });
   setEditHooks({ casting: lightCasting });
   // Del / Backspace / X act on what the inspector shows — every selected thing, one undo
   setRemoveHook(() => removeMany(removable()));

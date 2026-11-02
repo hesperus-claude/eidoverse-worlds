@@ -1,4 +1,4 @@
-// keyhints — every modifier key and hidden gesture in edit mode, said where the hand is. Two tiers:
+// keyhints — every modifier key and hidden gesture in build mode, said where the hand is. Two tiers:
 //   before: in the control's tooltip (what you COULD do, on hover)
 //   during: on the status line at the bottom while you're engaged (what the keys do RIGHT NOW)
 // tools/keyhints-check.ts fails the build when code reads a modifier without a `// keys: <id>` tag naming an entry here,

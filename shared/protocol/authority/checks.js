@@ -13,7 +13,7 @@ import * as R from "../roles.js";
 import { graphemes, cleanText } from "../../text.js";
 import { mediaTier } from "../../mediasrc.js";
 import { instanceProblem, ESSENTIAL_NAMES, LEGACY_FIELDS } from "../../particle_effects.js";
-import { worldPose } from "../simlayer.js";
+import { LAYER_DEFAULT, scans, worldPose } from "../simlayer.js";
 import { trustRefusal } from "../../drafts.js";
 import { shapeError } from "../shapes.js";
 import { CTX, UP } from "./ctx.js";
@@ -24,6 +24,7 @@ import { toggleOf } from "./use.js";
 import { scriptCeiling } from "./scripts.js";
 import { CAPACITY_CEILING } from "./capacity.js";
 import { isNum } from "../is.js";
+const AREA_MODES = ["walk", "swim", "fly", "climb"];   // physics-area.modes (componentspec)
 // the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
 // authority.js binds at load
 const guess = (...a) => UP.guess(...a);
@@ -144,6 +145,7 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
       if (h.kind === "reset" && !(Array.isArray(h.targets) && h.targets.length >= 1 && h.targets.length <= 64 && h.targets.every((t) => typeof t === "string")))
         refuse("shape", `reactions.${act} (reset) names what it sends home: targets [1 to 64 ids]`, "e.g. {reset: {kind: 'reset', targets: ['ball-0', 'ball-1']}}");
       if (h.kind === "reset") { const gone = h.targets.filter((t) => !s.entities[t]); if (gone.length) refuse("not-found", `reactions.${act} (reset) names ${gone.join(", ")}, which ${gone.length > 1 ? "aren't" : "isn't"} here`, "", { didYouMean: guess(gone[0], Object.keys(s.entities)) }); }
+      if (h.kind === "impulse") for (const f of ["strength", "angular"]) if (h[f] !== undefined && !(typeof h[f] === "number" && Number.isFinite(h[f]))) refuse("shape", `reactions.${act}.${f} is a number`, "e.g. {push: {kind: 'impulse', strength: 0.5}}");
       if (h.kind === "script" && !(typeof h.script === "string" && isComponent(`script:${h.script}`))) refuse("shape", `reactions.${act} (script) names the script: {kind: 'script', script: '<name>'} for the script:<name> on this thing`, "e.g. {ring: {kind: 'script', script: 'bell'}}");
       handlerCheck(at, act, h); effectCheck(s, id, act, h); } }
   mediaCheck(s, id, comp, v, at, obj);
@@ -432,6 +434,8 @@ const globalWater = (id, c) => c.water !== undefined && c.zone?.global === true
 export function zoneRules(s, ids) {
   for (const id of ids) { const c = s.entities[id]?.c; if (!c || id === "@world") continue;
     // physics-area reads a box zone or a global one (shared/zone.js physicsAreasOf)
+    { const pa = c["physics-area"];
+      if (pa?.modes !== undefined && !(Array.isArray(pa.modes) && pa.modes.length && pa.modes.every((m) => AREA_MODES.includes(m)))) return { code: "shape", reason: `${id}.physics-area.modes: a non-empty list of ${AREA_MODES.join(" | ")}` }; }
     if (c["physics-area"] !== undefined && !(c.zone?.shape === "box" || c.zone?.global === true)) return { code: c.zone === undefined ? "needs" : "shape", reason: `${id}.physics-area: ${c.zone === undefined ? "a physics-area on a thing needs a sibling zone {shape, size} (its extent)" : `it reads a box zone or a global one (shape '${c.zone.shape}' isn't read yet)`}`, fix: `set {id: '${id}', component: 'zone', value: {shape: 'box', size: [x, y, z]}}` };
     const has = ZONED.filter((k) => c[k] !== undefined); if (!has.length) continue;
     if (has.length > 1) return { code: "shape", reason: `${id} has both water and water-exclusion: a thing is a water body or a dry pocket, not both`, fix: "put the dry pocket on a child thing with its own zone" };
@@ -440,11 +444,16 @@ export function zoneRules(s, ids) {
     if (c.zone.shape !== "box" && c.zone.global !== true) return { code: "shape", reason: `${id}.${has[0]} reads a box zone (shape '${c.zone.shape}' isn't read by water yet)`, fix: `set {id: '${id}', component: 'zone', value: {shape: 'box', size: [x, y, z]}}` }; }
   return null;
 }
+// a collision layer (componentspec collider.layer, Godot's 32 numbered layers plus names)
+const LAYER_ITEM = (x) => (Number.isInteger(x) && x >= 1 && x <= 32) || (typeof x === "string" && /^[a-z][a-z0-9_-]{0,39}$/.test(x));
 // collision off with dynamics on: it would fall through everything, forever (componentspec collider.enabled)
 export function colliderRules(s, ids) {
   for (const id of ids) { const c = s.entities[id]?.c; if (!c || id === "@world") continue;
     if (c.collider?.enabled === false && c.physics?.kind === "dynamic") return { code: "shape", reason: `${id} has collider {enabled: false} and physics {kind: 'dynamic'}: a dynamic thing that collides with nothing would fall forever`,
       fix: `keep it solid (delete collider.enabled), or don't let the engine move it: physics {kind: 'kinematic'} (moved by its motion or edits) or {kind: 'none'}` };
+    for (const f of ["layer", "mask"]) { const v = c.collider?.[f]; if (v === undefined) continue;
+      const odd = v.find((x) => !LAYER_ITEM(x)); if (odd !== undefined || new Set(v).size !== v.length) return { code: "shape", reason: `${id}.collider.${f}: ${odd !== undefined ? `${JSON.stringify(odd)} isn't a layer` : "a layer is named twice"} (a layer is a number 1..32 or a name: a lowercase letter, then letters, digits, - or _, ≤ 40)`, fix: `a list of layers, each once: e.g. ${f}: [1, 'boat-band']` }; }
+    if (c.physics?.kind === "dynamic" && !scans(LAYER_DEFAULT, c)) return { code: "shape", reason: `${id}'s collider.layer leaves out 1, the layer loose things scan, and it has physics {kind: 'dynamic'}: the engine would not carry it`, fix: "keep 1 in its layer, or make it kinematic or none" };
     const b = c.collider?.blocks, L = COMPONENTS.collider.itemEnums.blocks; if (b === undefined) continue;
     const odd = b.find((x) => !L.includes(x)); if (odd !== undefined || new Set(b).size !== b.length) return { code: "shape", reason: `${id}.collider.blocks: ${odd !== undefined ? `${JSON.stringify(odd)} isn't a layer` : "a layer is named twice"} (layers: ${L.join(", ")})`, fix: `a list of layers, each once: e.g. blocks: ['hulls'] for a wall only vehicles meet` };
     if (!b.includes("things") && c.physics?.kind === "dynamic") return { code: "shape", reason: `${id}'s collider.blocks leaves out things, and it has physics {kind: 'dynamic'}: the engine would not carry it`, fix: "add 'things' to blocks, or make it kinematic or none" }; }

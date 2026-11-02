@@ -27,9 +27,9 @@ const ops = dry.requests[0].args.ops, creates = ops.filter((o) => o.verb === "cr
 const bodies = creates.filter((a) => a.components.water), pockets = creates.filter((a) => a.components["water-exclusion"]);
 const by = (host) => pockets.filter((a) => a.components.parent?.to === `$${host}`);
 const b = bodies[0]?.components;
-C("G1", "one water body: a child of water-terrain at main's centre, zone {box, 2000 × 250 × 2000} at priority 0, σ as attenuation, main's four waves; main's swim speed 2.4 is the stroke here, so no drag is written (translate-v1@31)",
+C("G1", "one water body: a child of water-terrain at main's centre, zone {box, 2000 × 250 × 2000} at priority 0, σ as attenuation, main's four waves; main's swim speed 2.4 is the stroke here, so no physics-area is written",
   bodies.length === 1 && b.parent?.to === "$water-terrain" && JSON.stringify(b.transform.pos) === "[0,-125,0]" && JSON.stringify(b.zone) === JSON.stringify({ shape: "box", size: [2000, 250, 2000] })
-  && b.water.attenuationDistance === 1 && b.water.attenuationColor.every((c, i) => Math.abs(-Math.log(c) - [0.1, 0.036, 0.018][i]) < 1e-15) && b.water.waves.length === 4 && b["imported:water"] === undefined && b["physics-area"] === undefined && b.water.drag === undefined, b);
+  && b.water.attenuationDistance === 1 && b.water.attenuationColor.every((c, i) => Math.abs(-Math.log(c) - [0.1, 0.036, 0.018][i]) < 1e-15) && b.water.waves.length === 4 && b["imported:water"] === undefined && b["physics-area"] === undefined, b);
 const main = Object.fromEntries(manifest.verbs.filter((v) => v.verb === "comp" && v.args.type === "air").map((v) => [v.args.id, v.args.data.boxes]));
 const sameBoxes = (host) => by(host).length === main[host].length && by(host).every((a, i) => JSON.stringify(a.components.zone.size) === JSON.stringify(main[host][i].size) && JSON.stringify(a.components.transform.pos) === JSON.stringify(main[host][i].center));
 C("G2", "fifteen pockets, one per main air box: 8 under water-habitat, 7 under water-submarine, each zone {box, main's size} + water-exclusion {} at main's centre, priority 1 (above the body's 0)",
@@ -46,10 +46,10 @@ C("G3c", "each of main's three routes is a climb child of its host: main's path 
     return a && JSON.stringify(a.components.climb) === JSON.stringify({ points: m.path, reach: m.radius, speed: m.speed }) && a.components.label === m.name; })
   && JSON.stringify(creates.find((a) => a.id === "$water-scenery")?.components.collider) === JSON.stringify({ shape: "mesh", enabled: false }), climbs);
 const envMain = manifest.verbs.find((v) => v.verb === "comp" && v.args.type === "environment").args.data, setOf = (k) => ops.find((o) => o.verb === "set" && o.args.id === "@world" && o.args.component === k)?.args.value;
-C("G3e", "main's environment: @world.spawn and bounds as main's (min.y 2 m under the floor when the floor lies below it: #248), @world.sky.gradient, @world.terrain flat at main's floor (no floor thing), a directional sun and a dust child; ambient and the particles' count and range (clamped) listed as unmapped; vehicle probes listed with what becomes of them (FATES; minY/maxY and water speed are mapped since translate-v1@29, R 10-28 item 50)",
+C("G3e", "main's environment: @world.spawn and bounds as main's (min.y 2 m under the floor when the floor lies below it: #248), @world.sky.gradient, @world.terrain flat at main's floor (no floor thing), a directional sun and a child naming a derived dust document, uploaded with the batch (translate-v1@34); ambient listed as unmapped (the motes fit the effect limits since translate-v1@38); vehicle probes listed with what becomes of them (FATES; minY/maxY and water speed are mapped since translate-v1@29, R 10-28 item 50)",
   JSON.stringify(setOf("spawn")) === JSON.stringify({ pos: envMain.spawn }) && JSON.stringify(setOf("bounds")) === JSON.stringify({ min: [envMain.bounds.min[0], Math.min(envMain.bounds.min[1], envMain.floor - 2), envMain.bounds.min[2]], max: envMain.bounds.max }) && !!setOf("sky")?.gradient
-  && JSON.stringify(setOf("terrain")) === JSON.stringify({ kind: "flat", height: envMain.floor }) && !creates.some((a) => a.components.hidden === true && a.components.mesh?.shape === "box" && !a.components.collider?.blocks) && creates.some((a) => a.components.light?.kind === "directional") && creates.some((a) => a.components.particles?.effect === "dust" && a.components.parent?.to === "$water-terrain")
-  && JSON.stringify(dry.unmapped.map(({ becomes, ...u }) => u)) === JSON.stringify([{ component: "environment", id: "water-terrain", fields: ["sky.ambient", "particles.count, particles.range"], as: "water-terrain imported:environment" },
+  && JSON.stringify(setOf("terrain")) === JSON.stringify({ kind: "flat", height: envMain.floor }) && !creates.some((a) => a.components.hidden === true && a.components.mesh?.shape === "box" && !a.components.collider?.blocks) && creates.some((a) => a.components.light?.kind === "directional") && creates.some((a) => /^sha256:/.test(a.components.particles?.effect) && a.components.parent?.to === "$water-terrain") && dry.uploads?.length === 1
+  && JSON.stringify(dry.unmapped.map(({ becomes, ...u }) => u)) === JSON.stringify([{ component: "environment", id: "water-terrain", fields: ["sky.ambient"], as: "water-terrain imported:environment" },
     { component: "vehicle", id: "water-submarine", fields: ["probes"], as: "water-submarine imported:vehicle" }])
   && dry.unmapped[0].becomes === undefined && /retired: the authority's hull sweep/.test(dry.unmapped[1].becomes?.probes) && dry.unmapped[1].becomes?.minY === undefined,
   { unmapped: dry.unmapped, sets: ops.filter((o) => o.verb === "set").map((o) => o.args.component) });
@@ -68,11 +68,12 @@ const w = openWorld("water"); const call = (verb, args) => { clock.advance(1000)
 call("create-world", { title: "water" });
 // the models as --apply sends them: the library path each upload became (here a stock model; the bundle's GLBs aren't in the repo)
 const CRATE = "crate", swap = (v) => (typeof v === "string" && /^store\/models\//.test(v) ? CRATE : Array.isArray(v) ? v.map(swap) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)])) : v);
+const ups = (dry.uploads ?? []).map((u) => call("upload", u.args));   // the derived effects the batch names (translate-v1 @34)
 const r = call("batch", swap(dry.requests[0].args));
 const st = w.state(), id = (name) => r.ids?.[`$${name}`];
 C("G4", "a real authority takes the whole batch: every create and set, its placeholders minted, each pocket and the body under its minted host",
-  r.ok && Object.keys(r.ids ?? {}).length === creates.length && st.entities[id(bodies[0].id.slice(1))]?.c.parent?.to === id("water-terrain") && by("water-submarine").every((a) => st.entities[id(a.id.slice(1))]?.c.parent?.to === id("water-submarine")),
-  { refused: r.refused, ids: Object.keys(r.ids ?? {}).length });
+  ups.length === 1 && ups.every((u) => u.ok) && r.ok && Object.keys(r.ids ?? {}).length === creates.length && st.entities[id(bodies[0].id.slice(1))]?.c.parent?.to === id("water-terrain") && by("water-submarine").every((a) => st.entities[id(a.id.slice(1))]?.c.parent?.to === id("water-submarine")),
+  { refused: r.refused, ups: ups.map((u) => u.refused ?? u.ok), ids: Object.keys(r.ids ?? {}).length });
 { const DRV = await import(ENGINE + "shared/drive.js"), sub = id("water-submarine"), helm = DRV.helmOf?.(st, sub), m = manifest.verbs.find((v) => v.verb === "comp" && v.args.type === "vehicle").args.data;
   C("G4v", "main's vehicle drives here: the authority took drive on the submarine (maxSpeed main's speed, climbRate the same) and its helm child where main's helm was, exit as main's",
     !!helm && JSON.stringify(DRV.driveOf(st.entities[sub]?.c)) === JSON.stringify({ maxSpeed: m.speed, turnRate: m.turnRate, climbRate: m.speed, response: 1 / 1.5, throttle: false })
@@ -111,7 +112,7 @@ C("G4", "a real authority takes the whole batch: every create and set, its place
   const band = (q) => { const o = openWorld(`water-o${q[0] ? "f" : "u"}`), go = (verb, args) => { clock.advance(1000); return D.request(o, "olive", verb, args); };
     go("create-world", { title: "o" }); const pos = [26, -100, 60];
     go("set", { id: "@world", component: "terrain", value: { kind: "flat", height: -300 } }); go("set", { id: "@world", component: "bounds", value: { min: [-100, -290, -100], max: [100, 50, 150] } });
-    const made = go("batch", { ops: [{ verb: "create", args: { id: "$sub", components: { transform: { pos, q, scale: [1, 1, 1] }, model: CRATE, drive: { maxSpeed: 4, turnRate: 0.4, climbRate: 4 } } } },
+    const made = go("batch", { ops: [{ verb: "create", args: { id: "$sub", components: { transform: { pos, q, scale: [1, 1, 1] }, model: CRATE, drive: { maxSpeed: 4, turnRate: 0.4, climbRate: 4 }, collider: { mask: TV1.vehiclePartsOf("sub", m).mask } } } },   // it scans its band's layer (@32)
       { verb: "create", args: { id: "$helm", components: { transform: { pos: [0, 0.3, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, parent: { to: "$sub" }, socket: { name: "helm" }, station: { action: "drive", input: { move: "drive" } } } } }] });
     if (!made.ok) return { hull: null, said: { made: `${made.refused?.code}: ${made.refused?.reason}` }, good: false };
     const sub = made.ids.$sub, helm = made.ids.$helm;
@@ -132,14 +133,18 @@ let mainWaterP: Promise<any> | undefined;
 const mainWater = () => mainWaterP ??= (async () => { const ref = path.join(root, "main-water.js"), g = spawnSync("git", ["-C", ENGINE, "show", `${MAIN}:shared/water.js`], { encoding: "utf8" });
   if (g.status !== 0) { C("G5", `main's shared/water.js at ${MAIN} (git show)`, false, g.stderr); console.log(`[import-golden-check] ${pass} passed, ${fail} failed`); process.exit(1); }
   fs.writeFileSync(ref, g.stdout); return import(ref); })();
-// main's swim speed: a stroke in the volume (zone.js, the area's factor, the mover) is main's swimStep at that speed, for main's 2.4 and another
+// main's swim speed: a translated pond (volumePartsOf) swum as the client swims it (zone.js's water, physics-area's factor at the swimmer, the mover) vs main's swimStep
 { const TV1 = await import(ENGINE + "tools/protocol/import-v1/translate-v1.js"), WJ = await import(ENGINE + "shared/water.js"), Mw = await mainWater();
-  const stroke = (step, water, input) => { let p = [0, -50, 0], v = [0, 0, 0]; for (let i = 0; i < 400; i++) { const n = step(p, v, input, water, 0.05, 0); p = n.pos; v = n.velocity; } return Math.hypot(...v); };
-  const vol = Z.waterVolumes(Z.zonesOf(st)).waters[0];
-  const rows = [2.4, 1.2, 6].map((speed) => { const drag = speed === 2.4 ? vol.drag : TV1.waterOfOld({ center: [0, 0, 0], size: [9, 9, 9], speed }).water.drag;
-    return { speed, drag, ours: stroke(WJ.swimStep, { ...vol, drag }, { direction: [1, 0, 0], dive: true }), main: stroke(Mw.swimStep, Mw.waterParams({ speed }), { direction: [1, 0, 0], dive: true }) }; });
-  C("G4s", "main's water.speed is the swim speed here: the volume's stroke against the water's drag (the translator's, 5 × 2.4 / speed) is main's swimStep at that speed (2.4 with no drag written, 1.2 and 6), walkers untouched",
-    rows.every((r) => Math.abs(r.ours - r.main) < 1e-9 && Math.abs(r.main - r.speed) < 1e-3), rows); }
+  const stroke = (step, water, input, factorAt = null) => { let p = [-150, 0, 0], v = [0, 0, 0];
+    for (let i = 0; i < 400; i++) { const n = step(p, v, factorAt ? { ...input, factor: factorAt(p) } : input, water, 0.05, 0); p = n.pos; v = n.velocity; } return Math.hypot(...v); };
+  const rows = [2.4, 2.45, 1.2, 6, 0.5].flatMap((speed) => [false, true].map((fast) => {
+    const own = TV1.volumePartsOf("pond", { water: { center: [0, 0, 0], size: [400, 20, 400], speed } }, {}).own, pst = { entities: { pond: { c: { transform: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, ...own } } } };
+    const areas = Z.physicsAreasOf(pst), input = { direction: [1, 0, 0], dive: true, fast };
+    return { speed, fast, area: own["physics-area"] ?? null, water: own.water, ours: stroke(WJ.swimStep, Z.waterVolumes(Z.zonesOf(pst)).waters[0], input, (p) => Z.speedFactorAt(areas, p)), main: stroke(Mw.swimStep, Mw.waterParams({ speed }), input) }; }));
+  const good = (r) => !("drag" in r.water) && Math.abs(r.main - r.speed * (r.fast ? 1.65 : 1)) < 1e-3 && (Math.abs(r.speed / 2.4 - 1) > 0.05
+    ? r.area?.kind === "speed" && Math.abs(r.area.factor - r.speed / 2.4) < 1e-12 && Math.abs(r.ours - r.main) < 1e-9 : r.area === null && Math.abs(r.ours / r.main - 1) <= 0.05);
+  C("G4s", "main's water.speed is the swim speed here: a translated pond's stroke (physics-area {kind: speed, factor: speed / 2.4} read at the swimmer, the mover's stepSwim) is main's swimStep at that speed to 1e-9 m/s (1.2, 6, 0.5; Shift too); 2.4 and 2.45 write no area and swim within 5%; no drag field",
+    rows.every(good), rows.map((r) => ({ ...r, ok: good(r) }))); }
 // main's reading of the same records (its client's watervolumes: entity matrix × comp centre; air box = matrix × (centre, q))
 const M = await mainWater();
 const { qRotate, qConj, qMul, qFromYaw } = await import(ENGINE + "shared/rot.js");

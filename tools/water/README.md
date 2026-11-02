@@ -15,7 +15,7 @@ is the one reader (`mediumOf` → `{medium, level, flow, body, priority}`).
 | Component | Parameters and behavior |
 | --- | --- |
 | `zone` | `{shape, size, priority?, blend?, weight?, global?}` on a thing, centred on its origin. Water reads a `box` zone for now (a sphere, capsule or cylinder under water or water-exclusion is refused). Where zones overlap the higher `priority` decides; a tie goes to the later id. |
-| `water` | On a thing with a sibling zone: a body filling it (`level` absent = the zone's top; `waves`, `attenuationColor` + `attenuationDistance`, `scatterColor`, `flow` [x, y, z], `density`, `drag`). On `@world`: the world's level (lowest priority of all). A body stays horizontal and axis-aligned; its thing's rotation turns only its centre. |
+| `water` | On a thing with a sibling zone: a body filling it (`level` absent = the zone's top; `waves`, `attenuationColor` + `attenuationDistance`, `scatterColor`, `flow` [x, y, z], and `density`, which is reserved: nothing reads it yet; how fast a body moves in it is a sibling `physics-area {kind: speed}`). On `@world`: the world's level (lowest priority of all). A body stays horizontal and axis-aligned; its thing's rotation turns only its centre. |
 | `water-exclusion` | `{bodies?}` on a thing with a sibling zone: a dry pocket. It keeps out every body at or below its zone's priority (only `bodies` when named), `@world`'s level included. It follows its thing (and any carrier) through the parent chain, so a moving vessel carries its dry interior. |
 
 Upstream's components map as follows (translate-v1 `VOLUMES`): `water {center, size,
@@ -29,8 +29,10 @@ to `@world.spawn`, `@world.bounds`, `@world.sky.gradient`, `@world.terrain {kind
 directional sun thing and a dust `particles` child, and what has no home (the sky's
 `ambient`, the particles' clamped count and range) rides `imported:environment`, listed
 under `unmapped`. The `vehicle` is `drive` on the submarine and a helm child
-(`station {action: 'drive', input: {move: 'drive'}, exit}`); `minY`, `maxY` and `probes`
-ride `imported:vehicle`, listed under `unmapped`. Nothing is deferred.
+(`station {action: 'drive', input: {move: 'drive'}, exit}`); its `minY` (-230) and `maxY` (-4)
+are two hidden walls in the submarine's own collision layer, which only its collider's
+`mask` scans, so it still can't surface while another vehicle passes them; `probes` ride
+`imported:vehicle`, listed under `unmapped`. Nothing is deferred.
 
 The renderer supports four water bodies, sixteen pockets, and eight waves per body.
 Excess bodies and pockets produce a diagnostic and are inactive (the highest-priority
@@ -92,7 +94,8 @@ bun tools/water/preview.ts /path/bundle 19347
 The preparation script contains this world's authoring choices, such as group
 origins, optics, helm locations, and spawn. Adjust these here or author a different
 manifest; general rendering belongs in the client. The preview script creates
-isolated temporary world, optimized-asset, and relay directories and binds loopback.
+isolated temporary world, optimized-asset, and relay directories, binds loopback, founds a
+scratch world and sends the manifest's `requests` to it as its owner.
 
 `import.ts --dry` prints the requests (one `batch` of `create`/`set`, every new thing a
 `$<id>` placeholder the authority mints), what it maps and what it holds back; it needs
@@ -158,7 +161,6 @@ WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`):
 bun tools/protocol/zone-water-check.ts
 bun tools/water/import-golden-check.ts
 bun tools/water/fog-mask-check.ts
-bun tools/foldfix-test.ts
 bun tools/models-field-test.ts
 bun tools/underwater-presence-test.ts
 UNDERWATER_TEST_PORT=19348 bun tools/underwater-wire-test.ts

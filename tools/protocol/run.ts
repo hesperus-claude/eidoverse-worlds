@@ -33,7 +33,7 @@ import fs from "node:fs"; import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { ENGINE, controlNote } from "./common.ts";
-import { failLines, type Lane, SUITES, CORE, BROWSER, ORDER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
+import { failLines, setAside, type Lane, SUITES, CORE, BROWSER, ORDER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
 import { loadTimes, parseShard, partition, partitionHash } from "./shard.ts";
 
 
@@ -46,10 +46,14 @@ for (const n of BROWSER) NEEDS[n] = "Chromium";
 const EXPECT: Record<string, number> = {
   "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "shard": 1, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
-  "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2, "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "lying-support": 1.5, "replay": 0.4,
+  "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2,
+  "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "lying-support": 1.5, "replay": 0.4, "collider-off-bodies": 2,
   "conformance": 2.9, "sweep": 0.3, "oracle": 0.4, "importer": 1.2, "translate": 6, "eidosim-v1": 0.2, "inplace": 15, "migrate-identities": 1.7, "oldworlds": 1.2, "browser": 1.5, "descriptors": 0.1,
-  "light-readers": 0.4, "ghost-mesh-size": 0.5, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3,
-  "role-grammar": 0.3, "rot": 0.1, "onepose": 0.3, "msgrate": 0.1, "dismount-height": 0.2, "build-gate": 0.3,
+  "light-readers": 0.4, "ghost-mesh-size": 0.5, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5,
+  "grant-command": 0.3, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1,
+  "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3, "role-grammar": 0.3,
+  "rot": 0.1, "onepose": 0.3, "msgrate": 0.1, "dismount-height": 0.2, "build-gate": 0.3, "custody-save": 0.1, "consent-scripts-list": 2,
+  "killz-slumped": 32, "helm-leave": 0.2,
   "capsule-recovery": 10, "debug-tabs": 0.3, "governor-xr": 0.2, "unknown-comp": 1.1, "reach-order": 1.5,
   "editcommit": 0.8, "hierarchy-commit": 0.6, "verbclasses": 0.0, "authority-layers": 0.0, "authority": 9.0,
   "ids": 1.4, "scars": 1.0, "r8": 0.9, "r9": 1.5, "r10": 1.7, "r11": 0.6, "names": 2.1, "parity": 5.4,
@@ -59,31 +63,37 @@ const EXPECT: Record<string, number> = {
   "consent": 0.0, "gates": 0.1, "consent-client": 0.2, "history-rows": 0.6, "scale": 125, "roles": 3.1, "access": 8.3, "batch2": 1.9,
   "describe-particles": 1.1, "client-b2": 19, "build": 1.5, "counter": 2.2, "build-client": 8.1, "shiplist": 1.7,
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
-  "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "alias": 0.4, "navgrid": 64,
-  "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
-  "remotes-lifecycle": 1, "bodygate": 0.5, "anim-wire": 6, "lod-policy": 0.3, "lod-client": 20, "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5, "selfpose": 0.2,
-  "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5, "flight": 0.5,
-  "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "reach": 0.2, "reachwire": 0.2, "glbperf-file": 0.3,
-  "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2, "chat-resync-wire": 0.2, "components-inspector": 0.8,
-  "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2,
-  "body-state": 8, "kind": 2, "replica-freeze": 0.5, "transmission": 0.5, "actions": 0.2, "audioctx": 0.2, "author-wire": 0.2, "backend-choice": 0.2, "blank-part-uvs": 0.3,
-  "blueprint": 1.2, "buoyancy": 0.2, "bus-events": 0.2, "component-needs": 0.6, "components-corpus": 0.2, "config-env": 0.2, "door-bone-list": 0.3, "door-media-whitelist": 0.2,
-  "drag-q": 0.2, "dwell": 0.2, "fetchbytes": 0.5, "finger-curl": 0.2, "flora": 0.2, "fp-view": 0.2, "frames-resize": 0.2, "full-detail": 0.2, "headset-seen": 0.2,
-  "heightmap-route": 1.2, "icons": 0.2, "idle-stall": 22.8, "lamp-skin": 0.3, "lamp-slot-policy": 0.5, "library-decode": 2.6, "lite-choice": 0.2, "locomotion-clip": 0.2,
-  "look": 0.2, "mention-regex": 0.2, "mkconfig": 0.3, "motioneval": 0.2, "namereveal": 0.2, "native-login": 0.2, "particles-host": 0.2, "parts": 0.2, "put-settle": 0.2,
-  "quadcolour": 1.1, "render-aside": 0.3, "render-health": 0.2, "renderer-join": 0.2, "selection": 0.2, "server-clock-readers": 0.2, "splash-lifecycle": 0.5, "structure-collider": 0.2,
-  "structure-edit": 0.2, "structure-field": 0.2, "structure-route": 0.3, "structure-threshold": 0.3, "support": 0.3, "supportclass": 0.2, "terrainshape": 0.2, "token-registry": 0.2,
-  "track-teleport": 0.2, "underwater-presence": 0.2, "sfu-adapter": 0.5, "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3,
-  "seatcore": 0.3, "sfu-mic-intent-race": 0.3, "dock": 2.5, "dropdown": 0.3, "settings-panels": 0.5, "bodies-wear": 1, "clickuse": 0.3, "perfscope": 0.5, "served-routes": 2.5,
-  "tick": 1, "framebudget": 1, "draw-batches": 0.3, "bodysim": 0.5, "ttsrow": 0.5, "scheduler": 0.3, "server-clock": 1.5, "route-shape": 1.2, "clientlog": 3.5, "lantern": 1,
-  "gputime": 2.6, "mic-ptt": 7.2, "euler": 0.3, "layers": 0.2, "relay-decision": 0.2, "spoken-form": 0.2, "other-body-pose": 6, "voice-wire": 2, "presence-session": 1.5,
-  "chat-scrollback": 10.5, "sky-lifecycle": 5.2, "xr-entry-effects": 0.2, "xr-session-lifecycle": 0.2, "xrpanels": 0.3, "xrpass": 0.3, "xrpixelratio": 0.2, "xrpointer": 0.2,
-  "xrshadow": 0.2, "voice-wire-mutation": 10.5, "voicesource-real": 0.2, "vrmheight": 0.6, "waterkind": 0.5, "wiring": 0.2, "worldentity": 1.4, "manifest": 0.2, "hierarchy": 17,
-  "worn-name": 0.1, "voicebot": 3, "water-lifecycle": 1.8, "walk-support-lifecycle": 0.8, "worlds-route": 2.8, "xr-lifecycle": 60, "xr-res": 70, "xr-debug-live": 60,
-  "xr-eye-binding": 10, "htmlmesh-pick": 6, "vrmic-exec": 0.5, "xr-nullfb": 0.3, "reexport-binding": 0.3, "schema-layers": 0.3, "picture-note": 0.3, "realized-lifecycle": 0.7,
-  "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1, "skywatch": 1.3, "stdio-door": 14, "xr-desktop-banner": 80, "sky-bake-time": 75, "sky-bakegraph": 95,
-  "micstate": 0.6, "panels-schema": 0.3, "xr-quad-softswap": 60, "join-rfc005": 20, "denoise": 6
+  "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "alias": 0.4, "navgrid": 64, "places": 130, "storey-walk": 1.5,
+  "shape-attach": 0.7, "shape-physics": 0.7, "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22,
+  "client-tools": 202, "door-is-error": 11, "history-request": 0.3, "named-pose": 2.6, "skystamp": 0.5, "normative": 0.2, "last-world": 0.6,
+  "event-wire": 0.1, "setup": 3, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110,
+  "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3, "remotes-lifecycle": 1,
+  "bodygate": 0.5, "anim-wire": 6, "lod-policy": 0.3, "lod-client": 20, "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5, "selfpose": 0.2,
+  "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5,
+  "flight": 0.5, "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "reach": 0.2, "reachwire": 0.2,
+  "glbperf-file": 0.3, "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2,
+  "chat-resync-wire": 0.2, "components-inspector": 0.8, "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2, "body-state": 8,
+  "kind": 2, "replica-freeze": 0.5, "transmission": 0.5, "actions": 0.2, "audioctx": 0.2, "author-wire": 0.2, "backend-choice": 0.2,
+  "blank-part-uvs": 0.3, "blueprint": 1.2, "buoyancy": 0.2, "bus-events": 0.2, "component-needs": 0.6, "components-corpus": 0.2, "config-env": 0.2,
+  "door-bone-list": 0.3, "door-media-whitelist": 0.2, "drag-q": 0.2, "dwell": 0.2, "fetchbytes": 0.5, "finger-curl": 0.2, "flora": 0.2, "fp-view": 0.2,
+  "frames-resize": 0.2, "full-detail": 0.2, "headset-seen": 0.2, "heightmap-route": 1.2, "icons": 0.2, "idle-stall": 22.8, "lamp-skin": 0.3,
+  "lamp-slot-policy": 0.5, "library-decode": 2.6, "lite-choice": 0.2, "locomotion-clip": 0.2, "look": 0.2, "mention-regex": 0.2, "mkconfig": 0.3,
+  "motioneval": 0.2, "namereveal": 0.2, "native-login": 0.2, "particles-host": 0.2, "parts": 0.2, "put-settle": 0.2, "quadcolour": 1.1,
+  "render-aside": 0.3, "render-health": 0.2, "renderer-join": 0.2, "selection": 0.2, "server-clock-readers": 0.2, "splash-lifecycle": 0.5,
+  "structure-collider": 0.2, "structure-edit": 0.2, "structure-field": 0.2, "structure-route": 0.3, "structure-threshold": 0.3, "support": 0.3,
+  "supportclass": 0.2, "terrainshape": 0.2, "token-registry": 0.2, "track-teleport": 0.2, "underwater-presence": 0.2, "sfu-adapter": 0.5,
+  "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3, "seatcore": 0.3, "sfu-mic-intent-race": 0.3,
+  "dock": 2.5, "dropdown": 0.3, "settings-panels": 0.5, "bodies-wear": 1, "clickuse": 0.3, "perfscope": 0.5, "served-routes": 2.5, "tick": 1,
+  "framebudget": 1, "draw-batches": 0.3, "bodysim": 0.5, "ttsrow": 0.5, "scheduler": 0.3, "server-clock": 1.5, "route-shape": 1.2, "clientlog": 3.5,
+  "lantern": 1, "gputime": 2.6, "mic-ptt": 7.2, "euler": 0.3, "layers": 0.2, "relay-decision": 0.2, "spoken-form": 0.2, "other-body-pose": 6,
+  "voice-wire": 2, "presence-session": 1.5, "chat-scrollback": 10.5, "sky-lifecycle": 5.2, "xr-entry-effects": 0.2, "xr-session-lifecycle": 0.2,
+  "xrpanels": 0.3, "xrpass": 0.3, "xrpixelratio": 0.2, "xrpointer": 0.2, "xrshadow": 0.2, "voice-wire-mutation": 10.5, "voicesource-real": 0.2,
+  "vrmheight": 0.6, "waterkind": 0.5, "wiring": 0.2, "worldentity": 1.4, "manifest": 0.2, "hierarchy": 17, "worn-name": 0.1, "voicebot": 3,
+  "water-lifecycle": 1.8, "walk-support-lifecycle": 0.8, "worlds-route": 2.8, "xr-lifecycle": 60, "xr-res": 70, "xr-debug-live": 60,
+  "xr-eye-binding": 10, "htmlmesh-pick": 6, "vrmic-exec": 0.5, "xr-nullfb": 0.3, "reexport-binding": 0.3, "schema-layers": 0.3, "picture-note": 0.3,
+  "realized-lifecycle": 0.7, "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1, "skywatch": 1.3, "stdio-door": 14, "xr-desktop-banner": 80,
+  "sky-bake-time": 75, "sky-bakegraph": 95, "micstate": 0.6, "panels-schema": 0.3, "xr-quad-softswap": 60, "join-rfc005": 20, "denoise": 6,
+  "lock-strength": 10, "swim-lists": 10
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
@@ -231,8 +241,11 @@ let CHROME: string | null = null;
 if (SUITES.some(([n]) => selected(n) && laneOf(n) === "browser")) {
   CHROME = findChrome();
   if (CHROME && !fs.existsSync(CHROME)) CHROME = null;
-  let v = CHROME ? spawnSync(CHROME, ["--version"], { encoding: "utf8", timeout: 20000 }).stdout?.trim() ?? "" : "";
+  let v = CHROME && process.platform !== "win32" ? spawnSync(CHROME, ["--version"], { encoding: "utf8", timeout: 20000 }).stdout?.trim() ?? "" : "";
   // Chrome on Windows writes nothing to a console for --version; its version is in the executable's file properties
+  // Chrome for Testing keeps a "<version>.manifest" beside the exe: read it before spawning anything (parallel probes outran the spawn timeouts)
+  if (CHROME && !v && process.platform === "win32")
+    v = fs.readdirSync(path.dirname(CHROME)).find((n) => /^\d+\.\d+\.\d+\.\d+\.manifest$/.test(n))?.replace(/\.manifest$/, "") ?? "";
   if (CHROME && !v && process.platform === "win32")
     v = spawnSync("powershell.exe", ["-NoProfile", "-Command", `(Get-Item -LiteralPath '${CHROME.replace(/'/g, "''")}').VersionInfo.ProductVersion`],
       { encoding: "utf8", timeout: 20000 }).stdout?.trim() ?? "";
@@ -272,7 +285,7 @@ if (scratchOut) fs.appendFileSync(scratchOut, `scratch=${SCRATCH_ROOT.split(path
 let current: { pid: number; exitCode: number | null; signalCode: string | null } | null = null;
 // Linux, macOS and Windows alike (tools/protocol/procgroup.ts): a POSIX process group, or the process tree on Windows
 // the kill path never blocks (CI 10-21: a synchronous WMI query froze the gate for two hours on Windows, past every timer)
-const killGroup = (pid: number, sig: NodeJS.Signals, o?: { exited?: boolean }) => killSuiteAsync(pid, sig, process.platform, o);
+const killGroup = (pid: number, sig: NodeJS.Signals, o?: { exited?: boolean | (() => boolean) }) => killSuiteAsync(pid, sig, process.platform, o);
 const groupMembers = async (pgid: number) => (await suiteMembersAsync(pgid)).length;
 // a suite that dies mid-test can leave a read-only dir behind (clientlog-test's unwritable case did): give every dir its write bit back, then remove
 const unlock = (d: string) => { try { fs.chmodSync(d, 0o700); for (const e of fs.readdirSync(d, { withFileTypes: true })) if (e.isDirectory()) unlock(path.join(d, e.name)); } catch { /* gone */ } };
@@ -306,14 +319,15 @@ async function run(name: string, file: string): Promise<{ code: number | null; s
   current = child as unknown as { pid: number; exitCode: number | null; signalCode: string | null };
   let out = "", timedOut = false; const keep = (b: Buffer) => { out += b.toString(); if (out.length > 4e6) out = out.slice(-2e6); };
   child.stdout!.on("data", keep); child.stderr!.on("data", keep);
-  const timer = setTimeout(() => { timedOut = true; void killGroup(child.pid!, "SIGTERM"); setTimeout(() => void killGroup(child.pid!, "SIGKILL"), 5000).unref(); }, timeoutOf(name) * 1000);
+  const gone = () => child.exitCode != null || child.signalCode != null;
+  const timer = setTimeout(() => { timedOut = true; void killGroup(child.pid!, "SIGTERM", { exited: gone }); setTimeout(() => void killGroup(child.pid!, "SIGKILL", { exited: gone }), 5000).unref(); }, timeoutOf(name) * 1000);
   // the watchdog: a suite still alive a minute past its timeout (its kill didn't land) is left behind and named, never waited on
   let stuck = false; let watchdog: ReturnType<typeof setTimeout> | undefined;
   const [code, signal] = await new Promise<[number | null, string | null]>((res) => { child.on("exit", (c, s) => res([c, s])); child.on("error", (e) => { out += `\nspawn failed: ${e.message}`; res([null, null]); });
     watchdog = setTimeout(() => { stuck = true; timedOut = true; res([null, null]); }, (timeoutOf(name) + 60) * 1000); });
   clearTimeout(timer); clearTimeout(watchdog);
   const leftovers = child.pid ? await groupMembers(child.pid) : 0;   // anything the suite started and left running
-  if (child.pid) await killGroup(child.pid, "SIGKILL", { exited: !stuck });
+  if (child.pid) await killGroup(child.pid, "SIGKILL", { exited: () => !stuck || gone() });
   await new Promise((r) => { if (child.stdout!.readableEnded) return r(null); child.stdout!.once("end", r); setTimeout(r, 3000); });   // the last output, once the group is gone
   current = null;
   if (!process.env.PROTOCOL_KEEP) fs.rmSync(dir, { recursive: true, force: true });
@@ -333,7 +347,7 @@ for (const name of order) {
   const before = untracked();
   const r = await run(name, file);
   const residue = [...untracked()].filter((f) => !before.has(f));
-  for (const f of residue) fs.rmSync(path.join(ENGINE, f), { force: true });
+  const set = residue.length ? setAside(ENGINE, residue, path.resolve(ENGINE, spawnSync("git", ["-C", ENGINE, "rev-parse", "--git-path", "gate-residue"], { encoding: "utf8" }).stdout.trim()), `${name}-`) : { dir: "", moved: [], failed: [] };
   const lines = r.out.trimEnd().split("\n");
   const fails = lines.filter((l) => /^\s*FAIL\b|✗/.test(l));   // the browser probes mark a failed check with ✗, not FAIL
   const rowSkips = lines.filter((l) => /^\s*SKIP\b/.test(l)).map((l) => l.trim());
@@ -343,7 +357,9 @@ for (const name of order) {
   let why = r.stuck ? `timed out after ${timeoutOf(name)} s, and it wouldn't die: left behind after a minute more (its kill didn't land)` : r.timedOut ? `timed out after ${timeoutOf(name)} s (process group killed)` : r.code === 77 ? (rowSkips.at(-1) ?? lines.at(-1)) : r.code === 0 ? undefined : `exit ${r.code ?? r.signal}`;
   if (status === "pass" && rowSkips.length) { status = "skip"; why = `${rowSkips.length} check(s) skipped`; }
   if (r.timedOut) status = "fail";
-  if (residue.length) { status = "fail"; why = `${why ? why + "; " : ""}left ${residue.length} file(s) in the checkout (removed): ${residue.slice(0, 5).join(", ")}`; }
+  if (residue.length) { status = "fail";
+    const where = [set.moved.length ? `${set.moved.length} moved to ${set.dir}` : "", set.failed.length ? `${set.failed.length} couldn't be moved and stayed: ${set.failed.slice(0, 5).join(", ")}` : ""].filter(Boolean).join("; ");
+    why = `${why ? why + "; " : ""}left ${residue.length} file(s) in the checkout${where ? ` (${where})` : ""}: ${residue.slice(0, 5).join(", ")}`; }
   results.push({ name, lane, status, why, ms, rowSkips, optional, leftovers: r.leftovers, outSha256: createHash("sha256").update(r.out).digest("hex") });
   console.log(`\n== ${name} [${lane}] (${file}) ${status.toUpperCase()}${why ? ` (${why})` : ""} ${(ms / 1000).toFixed(1)} s${r.leftovers ? (r.stuck ? ` · ${r.leftovers} process(es) may still be running (the kill didn't land)` : ` · killed ${r.leftovers} leftover process(es)`) : ""}`);
   const evidence = failLines(lines); for (const l of evidence.slice(0, 60)) console.log(l);   // each FAIL with what it saw (10-23)

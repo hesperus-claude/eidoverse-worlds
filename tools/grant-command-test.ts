@@ -41,6 +41,12 @@ check('…and a new exception joins the old ones', r?.args?.value?.can?.fly === 
 r = await run('wren builder for 2h');
 const until = r?.args?.value?.until;
 check('…a new duration replaces the end', typeof until === 'number' && until < 9_000_000_000_000 && r.args.value.can?.fly === true, JSON.stringify(r?.args));
+world.c = { 'roles:u-wren': { role: 'member', can: { fly: true }, until: 1_000 } };
+r = await run('wren builder');
+check('/grant <name> <role> on a grant whose end has passed sends no end (the authority refuses a past one)', r?.args?.value?.role === 'builder' && r.args.value.can?.fly === true && !('until' in r.args.value), JSON.stringify(r?.args));
+r = await run('wren +gen');
+check('…as do exceptions alone', r?.args?.value?.can?.generate === true && !('until' in r.args.value), JSON.stringify(r?.args));
+world.c = { 'roles:u-wren': { role: 'member', can: { fly: true }, until: 9_000_000_000_000 } };
 r = await run('wren forever');
 check('…and forever clears it', r?.args?.value && !('until' in r.args.value) && r.args.value.role === 'member' && r.args.value.can?.fly === true, JSON.stringify(r?.args));
 // I42: exceptions (or a time) for someone with no grant: refused here, with what to do, never a role-less record
@@ -76,7 +82,7 @@ check('/epoch still sends the physics-engine set the help teaches', sent.at(-1)?
     const m = messages.join(' ');
     check(`/access ${w} sends nothing and teaches the four doors`, sent.length === 0 && new RegExp(`'${w}' isn't one of the doors`).test(m) && ['invite-only', 'watch', 'public', 'open'].every((d) => m.includes(`${d} (`)), m); }
   const m = messages.join(' ');
-  check('…naming the newcomer roles from the registry (a renamed member reads as its name)', /newcomers get the Regular role/.test(m) && /newcomers get the Builder role/.test(m), m);
+  check('…naming the newcomer roles from the registry (a renamed member reads as its name)', /newcomers get the Regular role/.test(m) && /newcomers with an account get the Builder role; guests start as Regular/.test(m), m);
   await cmd('access', 'public');
   check('…and a real door still sets it', sent.length === 1 && JSON.stringify(sent[0]).includes('"join":"anyone"'), JSON.stringify(sent));
   // R 10-28 (item 4): /boom [power] [radius] and /blast are a force request at my feet
