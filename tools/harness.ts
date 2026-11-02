@@ -1,5 +1,5 @@
 // Shared scratch sequencer/browser ownership and failure evidence for benches.
-import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync, renameSync } from "node:fs";
 import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
@@ -104,7 +104,7 @@ type ScratchOptions = {
   serverEnv?: Record<string, string>;
   portFrom?: number;
   // Tests may seed a log before boot or instrument asset I/O in the child.
-  prepare?: (scratch: string) => void | Promise<void>;
+  prepare?: (scratch: string, port: number) => void | Promise<void>;
   preload?: string;
   /** worlds to found before boot (joining never founds one); `owner` founds them (default "owner"). */
   worlds?: string[];
@@ -115,8 +115,8 @@ type ScratchOptions = {
 
 /** Own the child and prove its identity before opening any product door. */
 export async function scratchSequencer(name: string, opts: ScratchOptions = {}) {
-  const PORT = freePort(opts.portFrom ?? 8950);
-  const BASE = `http://127.0.0.1:${PORT}`;
+  let PORT = freePort(opts.portFrom ?? 8950);
+  let BASE = `http://127.0.0.1:${PORT}`;
   // under the gate's per-suite dir when there is one: on Windows tmpdir() is TEMP, which run.ts leaves alone (setting it hung
   // suites, 10-23), so a failure's [bench] logs would land where CI never uploads them
   const SCRATCH = mkdtempSync(join(process.env.PROTOCOL_SCRATCH || tmpdir(), `ew-${name}-`));
@@ -159,32 +159,52 @@ export async function scratchSequencer(name: string, opts: ScratchOptions = {}) 
   process.once("unhandledRejection", (err) => { void die(1, err instanceof Error ? err.stack ?? String(err) : String(err)); });
   for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => { void die(130, `interrupted: ${sig}`); });
   const track = (p: Bun.Subprocess) => { procs.push(p); return p; };
-  await opts.prepare?.(SCRATCH);
+  await opts.prepare?.(SCRATCH, PORT);
   if (opts.worlds?.length) foundWorlds(join(SCRATCH, "worlds"), opts.worlds, opts.owner);
   const EIDOVERSE_DIR = opts.serverEnv?.EIDOVERSE_DIR ?? process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video");
-  const seq = track(Bun.spawn([process.execPath, ...(opts.preload ? ["--preload", opts.preload] : []), join(ROOT, "server", "server.ts")], {
-    cwd: ROOT,
-    env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
-      PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
-    stdout: opts.onLine ? "pipe" : Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
-  }));
-  if (opts.onLine) void (async () => { const d = new TextDecoder(); let buf = "";
-    for await (const c of seq.stdout as ReadableStream<Uint8Array>) { const t = d.decode(c); buf += t; try { appendFileSync(join(SCRATCH, "sequencer.log"), t); } catch { /* evidence only */ }
-      let nl; while ((nl = buf.indexOf("\n")) >= 0) { opts.onLine!(buf.slice(0, nl)); buf = buf.slice(nl + 1); } } })();
-  let up = false;
-  for (let i = 0; i < 80 && !up; i++) {
-    if (seq.exitCode !== null) await die(2, `sequencer exited ${seq.exitCode} before readiness`);
-    try {
-      const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(1000) });
-      if (r.ok) {
-        const j = await r.json() as { nonce?: string };
-        if (j.nonce !== NONCE) await die(2, `:${PORT} answered with another sequencer's nonce`);
-        up = true;
+  // freePort probes then releases, so another suite can take the port before our child binds it: that is the runner, not
+  // the product, so a squatter (a responder that isn't our child) or our child's failed bind moves us to a fresh port, at most 3 times
+  let seq!: Bun.Subprocess;
+  for (let attempt = 1; ; attempt++) {
+    if (attempt > 1) {
+      for (const f of ["sequencer.log", "sequencer.stderr.log"]) { try { renameSync(join(SCRATCH, f), join(SCRATCH, `attempt${attempt - 1}.${f}`)); } catch { /* never written */ } }
+      PORT = freePort(opts.portFrom ?? 8950); BASE = `http://127.0.0.1:${PORT}`;
+    }
+    seq = track(Bun.spawn([process.execPath, ...(opts.preload ? ["--preload", opts.preload] : []), join(ROOT, "server", "server.ts")], {
+      cwd: ROOT,
+      env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
+        PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
+      stdout: opts.onLine ? "pipe" : Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
+    }));
+    if (opts.onLine) { const out = seq.stdout as ReadableStream<Uint8Array>; void (async () => { const d = new TextDecoder(); let buf = "";
+      for await (const c of out) { const t = d.decode(c); buf += t; try { appendFileSync(join(SCRATCH, "sequencer.log"), t); } catch { /* evidence only */ }
+        let nl; while ((nl = buf.indexOf("\n")) >= 0) { opts.onLine!(buf.slice(0, nl)); buf = buf.slice(nl + 1); } } })(); }
+    let up = false, taken = "";
+    for (let i = 0; i < 80 && !up && !taken; i++) {
+      if (seq.exitCode !== null) {
+        await sleep(50);
+        let err = ""; try { err = readFileSync(join(SCRATCH, "sequencer.stderr.log"), "utf8"); } catch { /* none */ }
+        if (/EADDRINUSE|address already in use|port \d+ in use/i.test(err)) { taken = `our child could not bind :${PORT}`; break; }
+        await die(2, `sequencer exited ${seq.exitCode} before readiness`);
       }
-    } catch { /* not listening yet */ }
-    if (!up) await sleep(250);
+      try {
+        const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(1000) });
+        if (r.ok) {
+          const j = await r.json() as { nonce?: string; pid?: number };
+          if (j.nonce === NONCE) up = true;
+          else if (j.pid !== seq.pid) taken = `:${PORT} is held by another process (pid ${j.pid})`;
+          else await die(2, `:${PORT} answered with another sequencer's nonce`);   // our own child, wrong identity: a real bug
+        }
+      } catch { /* not listening yet */ }
+      if (!up && !taken) await sleep(250);
+    }
+    if (up) break;
+    if (!taken) await die(2, `sequencer never came up on :${PORT}`);
+    try { seq.kill(); } catch { /* exited */ }
+    await Promise.race([seq.exited, sleep(2000)]);
+    if (attempt >= 3) await die(2, `${taken}, and on 2 fresh ports before it`);
+    console.error(`[bench] ${taken}; retrying on a fresh port`);
   }
-  if (!up) await die(2, `sequencer never came up on :${PORT}`);
   return { PORT, BASE, SCRATCH, NONCE, EIDOVERSE_DIR, seq, track, record, cleanup, die, sleep };
 }
 
