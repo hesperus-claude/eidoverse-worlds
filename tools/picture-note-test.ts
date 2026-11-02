@@ -17,6 +17,7 @@
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { suite } from './protocol/suite.ts';
 
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
 const S = suite("picture-note");

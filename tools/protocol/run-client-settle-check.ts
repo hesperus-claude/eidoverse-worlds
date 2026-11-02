@@ -5,9 +5,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { ENGINE, scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (c: unknown, n: string, d: unknown = "") => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FAIL ${n}  ${JSON.stringify(d)}`); } };
+const { ok, done } = suite("run-client-settle");
 const root = scratch("rcsettle"), dir = path.join(root, "tests"); fs.mkdirSync(dir);
 const pids = path.join(root, "grandchildren.txt"); fs.writeFileSync(pids, "");
 // a grandchild in its own process group (beyond the runner's group kill) that inherits the test's stdout and stderr
@@ -55,4 +55,4 @@ fs.writeFileSync(path.join(dir3, "e-slow-test.ts"), `await new Promise(() => {})
 const rc3 = Bun.spawnSync([process.execPath, path.join(ENGINE, "tools/run-client.ts"), "--dir", dir3, "--jobs", "1", "--timeout", "3", "--import-only", "--strict-env"],
   { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 45_000 });
 ok(rc3.exitCode === 0 && /^SLOW\s+\S*e-slow-test\.ts/m.test(rc3.stdout.toString()), "--import-only: a file still running is reported SLOW but doesn't fail the run (it can't tell a long test from a hang)", { code: rc3.exitCode });
-console.log(`[run-client-settle] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();
