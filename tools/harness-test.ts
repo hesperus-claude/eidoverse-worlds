@@ -21,11 +21,28 @@ if (mode === 'nonce') {
   await scratchSequencer('harness-nonce', { portFrom: 9010, preload: process.argv[3] });
   throw Error('accepted a foreign nonce');
 }
+if (mode === 'collision') {
+  // another process takes our port between the probe and the child's bind (two suites on one runner): readiness must move to a fresh port
+  let squatted = 0, squatter: any;
+  const run = await scratchSequencer('harness-collision', { portFrom: 9010, prepare: (_s, port) => {
+    squatted = port;
+    squatter = Bun.serve({ port, hostname: '127.0.0.1', fetch: () => Response.json({ ok: true, nonce: 'squatter', pid: -1 }) });
+  } });
+  squatter?.stop(true);
+  if (!squatted || run.PORT === squatted) { console.error(`stayed on the squatted port ${squatted}`); process.exit(1); }
+  await run.cleanup(0);
+  process.exit(0);
+}
 const { check, tally } = mkCheck();
 const scratch = mkdtempSync(join(tmpdir(), 'ew-harness-test-'));
 try {
   const preload = join(scratch, 'foreign.ts');
   writeFileSync(preload, `process.env.BENCH_NONCE = 'another-child';\n`);
+  {
+    const p = Bun.spawn([process.execPath, import.meta.path, 'collision'], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' });
+    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+    check('a squatter on our port moves readiness to a fresh port', code === 0, code === 0 ? '' : out + err);
+  }
   for (const scenario of ['nonce', 'assertion']) {
     const p = Bun.spawn([process.execPath, import.meta.path, scenario, preload], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' });
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
