@@ -75,10 +75,10 @@ check('multi-word: "list every" → cmd:who via every word starting a word', A.s
 console.log('when / merge / run');
 let gate = false, ran = 0;
 A.register({ id: 'panel:edit', title: 'build mode', group: 'panels', when: () => gate, run: () => ran++ });
-check('when() false hides it from list', !ids('edit').includes('panel:edit'));
+check('when() false hides it from list', !ids('build').includes('panel:edit'));
 check('when() false: run() refuses', A.run('panel:edit') === false && ran === 0);
 gate = true;
-check('when() true lists it', ids('edit')[0] === 'panel:edit');
+check('when() true lists it', ids('build')[0] === 'panel:edit');
 A.register({ id: 'panel:edit', key: 'B', keywords: ['build'] });
 const merged = A.get('panel:edit');
 check('re-register MERGES: key added, title + run kept', merged.key === 'B' && merged.title === 'build mode' && A.run('panel:edit') && ran === 1);
