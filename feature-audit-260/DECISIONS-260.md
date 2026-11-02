@@ -21,3 +21,4 @@ Each row is a place where #260 deliberately behaves differently from main. Antra
 | 15 | Lights from glowing models | A glowing model made a light by itself (main placed an invisible point light at the centre of each glowing part, up to 2 per model, from a pool of 8) | Glow is only glow; lights are light components (as in Godot/Unity/Unreal). Upgrades turn main's inferred lamps into real lights. | |
 | 16 | Throw key | C sank *and* threw | Q throws, the same key as Minecraft's drop; C/Ctrl only sink. | |
 | 17 | Ownerless worlds | Could exist | Every upgraded world ends with an owner. | |
+| 18 | Size of one component's data | Refused above 8,192 characters of JSON | Refused above 64 KiB (the general value cap, `too-big`): looser, so bigger components fit. Revert = restore main's 8,192 cap. | |
