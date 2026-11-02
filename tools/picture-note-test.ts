@@ -17,13 +17,11 @@
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { suite } from './protocol/suite.ts';
 
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
-let pass = 0, fail = 0;
-const check = (name: string, ok: unknown, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("picture-note");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 plugin({ name: 'picture-note-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'world', 'inspect', 'ui', 'net'])
@@ -100,5 +98,4 @@ q('description').value = 'four metres wide, still'; q('hang').click();
 const kept = committed.at(-1)?.[1];
 check('updating a hung picture keeps its stored width', (kept?.data ?? kept)?.width === 4, JSON.stringify(committed));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

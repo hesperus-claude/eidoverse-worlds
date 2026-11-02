@@ -5,9 +5,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { ENGINE, scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const ok = (c: unknown, n: string, d: unknown = "") => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FAIL ${n}  ${JSON.stringify(d)}`); } };
+const { ok, done } = suite("run-client-settle");
 const root = scratch("rcsettle"), dir = path.join(root, "tests"); fs.mkdirSync(dir);
 const pids = path.join(root, "grandchildren.txt"); fs.writeFileSync(pids, "");
 // a grandchild in its own process group (beyond the runner's group kill) that inherits the test's stdout and stderr
@@ -33,4 +33,4 @@ for (const p of fs.readFileSync(pids, "utf8").split("\n").filter(Boolean)) try {
 ok(finished, `run-client finished while both grandchildren still held the pipes (${s.toFixed(1)} s; they live 90 s)`, out.slice(-400));
 ok(/^ok\s+\S*a-holds-pipes-passes-test\.ts/m.test(out), "the file that exited 0 is a pass", out.slice(-400));
 ok(/^SLOW\s+\S*b-holds-pipes-hangs-test\.ts/m.test(out), "the file that hung is a timeout", out.slice(-400));
-console.log(`[run-client-settle] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

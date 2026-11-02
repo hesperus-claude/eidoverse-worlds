@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { suite } from './protocol/suite.ts';
 
 const STUB = fileURLToPath(new URL('./collider-off-stub.mjs', import.meta.url));
 plugin({
@@ -39,11 +40,7 @@ plugin({
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-collider-off-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
-};
+const { check, done } = suite("collider-off-bodies");
 
 const stub: any = await import('./collider-off-stub.mjs');
 const C: any = await import('../client/lib/colliders.js');
@@ -173,5 +170,4 @@ check('a building with collider {shape: "mesh"}: its structure removed, its anch
   C.colliders.get('houseexact')?.pref === 'exact', JSON.stringify(C.colliders.get('houseexact')?.pref ?? null));
 
 rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+done();
