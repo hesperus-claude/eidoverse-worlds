@@ -74,10 +74,12 @@ function inline(run) {
   if (i < run.length) frag.append(document.createTextNode(run.slice(i)));
   return frag;
 }
-function renderBody(text, names) {
+// a moderator's notice wears this first, fixed: their words can read like the house's, the header says they aren't (spoofing item 1)
+export const moderatorHeader = (world) => `From a moderator of world ‹${world}›, not from Eidoverse`;
+function renderBody(text, names, { links = true } = {}) {
   const frag = document.createDocumentFragment();
   const pattern = new RegExp(
-    `(https?://[^\\s]+)|(@?\\b(?:${names.map(escapeRx).join('|') || '\\u0000'})\\b)`,
+    `(${links ? 'https?://[^\\s]+' : '\\u0000'})|(@?\\b(?:${names.map(escapeRx).join('|') || '\\u0000'})\\b)`,
     'gi',
   );
   let i = 0;
@@ -394,7 +396,7 @@ function account(line, { who, text, merged, newlyPinged, wasAtBottom }) {
   if (newlyPinged) bus.emit('pinged', { who, text });
 }
 
-function buildLine(who, text, { kind = '', ts = Date.now(), historical = false } = {}) {
+function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, links = true } = {}) {
   const sys = who === '*';
   const mine = who === CONFIG.name;
   const pinged = !sys && !mine && mentionsMe(text);
@@ -439,7 +441,7 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false }
 
   const b = document.createElement('span');
   b.className = 'body';
-  b.append(renderBody(text, namesForHighlight()));
+  b.append(renderBody(text, namesForHighlight(), { links }));
 
   line.append(t, w, b);
   applyFilter(line);

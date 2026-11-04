@@ -18,6 +18,7 @@ import { contextMenu, closeContextMenu } from './panels.js';
 import * as R from '../../shared/protocol/roles.js';
 import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
 import { listOf, setListed, BLOCK_FOLLOW_WORDS } from './consent.js';
+import { moderatorHeader } from './chat.js';
 
 let deps = { mentionPerson: () => {}, presenting: () => false, openModLog: () => {}, toast: () => {} };
 export function initPeople(d) { deps = { ...deps, ...d }; }
@@ -241,6 +242,6 @@ function openCanForm(display, surface) {
 // a warning is a notice you dismiss; the house centred card, kept until pressed. A DOM card isn't drawn in a
 // headset: in VR the same notice rides the XR quad (xrask.js), until pressed
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
-  ? chooseXR({ title: `${m.by} warned you`, body: String(m.reason ?? ''), choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
-  : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: `${m.by} warned you`, body: String(m.reason ?? ''), ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
+  ? chooseXR({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
+  : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
 export { closeContextMenu };

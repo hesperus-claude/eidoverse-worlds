@@ -166,7 +166,7 @@ try {
   // the input emulated at its seam: renderer.xr says it's presenting (xrask.js xrActive reads exactly this)
   await page(`const c = await import('/lib/core.js'); Object.defineProperty(c.renderer.xr, 'isPresenting', { get: () => true, configurable: true }); return true;`);
   await page(`const b = await import('/lib/base.js'); b.bus.emit('warned', { by: 'Mod Rowan', reason: 'please keep the music down' }); return true;`);
-  check("V1 in a headset, a moderator's warning rides the XR quad (title and reason), with its button", await waitFor(`import('/lib/xrask.js').then((m) => { const s = m.xrAskState(); return !!s && /Mod Rowan warned you/.test(s.title) && /music down/.test(s.body) && s.choices.includes('ok'); })`, 4000),
+  check("V1 in a headset, a moderator's warning rides the XR quad (title and reason), with its button", await waitFor(`import('/lib/xrask.js').then((m) => { const s = m.xrAskState(); return !!s && /^From a moderator of world ‹.+›, not from Eidoverse$/.test(s.title) && /Mod Rowan warned you: please keep the music down/.test(s.body) && s.choices.includes('ok'); })`, 4000),
     await evalJson(`import('/lib/xrask.js').then((m) => m.xrAskState())`));
   check("V2 …and not the DOM card nobody could see", !(await evalJson(`!!document.querySelector('#confirm-center') && getComputedStyle(document.querySelector('#confirm-center')).display !== 'none' && /warned you/.test(document.querySelector('#confirm-center').textContent)`)));
   await page(`const m = await import('/lib/xrask.js'); m.xrAnswer('ok'); const c = await import('/lib/core.js'); delete c.renderer.xr.isPresenting; return true;`);

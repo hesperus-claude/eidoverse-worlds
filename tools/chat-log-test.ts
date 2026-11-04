@@ -535,6 +535,15 @@ console.log('CHAT — People Here swaps sides');
   dLog.remove();
   decoy.remove(); }
 
+console.log('MODERATOR NOTICE — a warning says where it came from, and its text is never a link (TEACHING-FINDINGS spoofing item 1)');
+{ const { moderatorHeader } = await import('../client/lib/chat.js') as any;
+  check('the header names the world and disowns Eidoverse, fixed words', typeof moderatorHeader === 'function' && moderatorHeader('garden') === 'From a moderator of world ‹garden›, not from Eidoverse', String(moderatorHeader?.('garden')));
+  const sysRows = () => [...log().children].filter((c) => c.classList.contains('sys')) as HTMLElement[];
+  logChat('*', `${moderatorHeader?.('garden') ?? ''} — mod warned you: sign in again at https://eidoverse.example.evil/login`, '', { seq: seq++, ts: Date.now(), links: false });
+  const b = sysRows().at(-1)!.querySelector('.body')!;
+  check('a system line with links:false auto-links nothing; the address stays literal text', b.querySelector('a') === null && b.textContent!.includes('https://eidoverse.example.evil/login'), b.innerHTML);
+  logChat('*', 'the house says https://eidoverse.example/docs', '', { seq: seq++, ts: Date.now() });
+  check('…and an ordinary system line still links (the flag, not the kind, decides)', sysRows().at(-1)!.querySelector('a.lnk') !== null); }
 }
 
 S.done();

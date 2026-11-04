@@ -18,7 +18,7 @@ import { wingFoldPresence } from '../../shared/wingpresence.js';
 import { presenceWire, voiceWire, bodyWire } from '../../shared/presencewire.js';
 import { serverNow, localNow, noteRoundTrip, clockRtt, noteServerFloor, onClockDoubt } from './serverclock.js';
 import { presence } from './presence.js';
-import { logChat, noteTyping, noteHistoryContext, resyncChatAfter } from './chat.js';
+import { logChat, noteTyping, noteHistoryContext, resyncChatAfter, moderatorHeader } from './chat.js';
 import { markPhase, refuseBoot, waitBoot } from './boot.js';
 import { showOldFormat } from './upgradeview.js';
 import { OLD_FORMAT_SPLASH } from '../../shared/oldformat.js';
@@ -1066,7 +1066,7 @@ async function handle(msg, at) {
       break;
     case 'warned':
       // a warning (research roles §5): a notice you dismiss, and a line in chat to keep
-      logChat('*', `${msg.by} warned you: ${String(msg.reason ?? '')}`);
+      logChat('*', `${moderatorHeader(CONFIG.world)} — ${msg.by} warned you: ${String(msg.reason ?? '')}`, '', { links: false });   // their text is never a link
       bus.emit('warned', msg);
       break;
     case 'mod-state':

@@ -37,7 +37,7 @@ function pageLoad(search: string, wire: "none" | "snapshot" | "other-hooks", joi
     const { mock } = await import("bun:test");
     const L = ${JSON.stringify(L)};
     mock.module(L + "presence.js", () => ({ presence: {} }));
-    mock.module(L + "chat.js", () => ({ logChat() {}, logWhisper() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {} }));
+    mock.module(L + "chat.js", () => ({ logChat() {}, logWhisper() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {}, moderatorHeader: (w) => "From a moderator of world ‹" + w + "›, not from Eidoverse" }));
     mock.module(L + "boot.js", () => ({ markPhase() {}, refuseBoot() {}, waitBoot: async () => {} }));
     const net = await import(L + "net.js");
     const wire = ${JSON.stringify(wire)};

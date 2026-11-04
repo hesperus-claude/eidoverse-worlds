@@ -55,6 +55,7 @@ export const noteTyping = () => {};
 export const noteHistoryContext = () => {};
 export const resyncCalls = [];   // chat-resync-wire-test reads what net.js asked for
 export const resyncChatAfter = async (seq) => { resyncCalls.push(seq); };
+export const moderatorHeader = (w) => `From a moderator of world ‹${w}›, not from Eidoverse`;
 export const composeFirstPerson = () => {};
 export const markPhase = () => {};
 export const refuseBoot = () => {};

@@ -75,7 +75,7 @@ console.log("builtIn");
     const { mock } = await import("bun:test");
     const L = ${JSON.stringify(L)};
     mock.module(L + "presence.js", () => ({ presence: {} }));
-    mock.module(L + "chat.js", () => ({ logChat() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {} }));
+    mock.module(L + "chat.js", () => ({ logChat() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {}, moderatorHeader: (w) => "From a moderator of world ‹" + w + "›, not from Eidoverse" }));
     mock.module(L + "boot.js", () => ({ markPhase() {}, refuseBoot() {}, waitBoot() { return false; } }));
     const { builtIn } = await import(L + "net.js");
     console.log(JSON.stringify([{}, { entities: {} }, { entities: { a: {} } }, { terrain: { seed: 1 } }, { grass: { density: 1 } }, { sky: { hours: 8 } }, { water: { level: 0 } }, null].map(builtIn)));`],
@@ -238,7 +238,7 @@ function pageLoad(search: string, stored: string | null, steps: Step[], tab: str
     const { mock } = await import("bun:test");
     const L = ${JSON.stringify(L)};
     mock.module(L + "presence.js", () => ({ presence: {} }));
-    mock.module(L + "chat.js", () => ({ logChat() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {} }));
+    mock.module(L + "chat.js", () => ({ logChat() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {}, moderatorHeader: (w) => "From a moderator of world ‹" + w + "›, not from Eidoverse" }));
     const toasts = [];
     mock.module(L + "boot.js", () => ({ markPhase() {}, refuseBoot: (m) => toasts.push(m), waitBoot() { return false; } }));
     const net = await import(L + "net.js");
