@@ -210,6 +210,8 @@ export const COMPONENTS = {
       // batch 2: a doorbell plays its sound again from the top, whether or not it's playing (set can't restart it, toggle
       // would stop it): the authority writes sound {…, playing: true, t0: now}
       play: { args: {}, example: { ring: { kind: "play" } } },
+      // main's script-free swing (Mica 10-31, decision row 19): use pushes a pendulum (motion pendulum; absent, the default one)
+      impulse: { args: { strength: "m/s at its centre along its front (default 0.5)", angular: "or the push as rad/s of swing (main's {impulse: n})" }, example: { push: { kind: "impulse", strength: 0.5 } } },
       // a reset button (VRChat's shape: each thing remembers a home, a button lists what it sends home).
       // Each target goes back to its home component, out of any hand; a target with no home, gone or locked is skipped and named in the reply.
       reset: { args: { targets: "the ids it sends home: 1 to 64 things. Each needs a home (stamped where it stands when the handler is written, if it has none)" }, example: { reset: { kind: "reset", targets: ["ball-0", "ball-1"] } } },

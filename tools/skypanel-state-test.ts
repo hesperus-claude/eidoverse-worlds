@@ -96,6 +96,15 @@ console.log("SKY PANEL — every shared select commits what it shows");
   check("(setup) the clock select offers the stub's clock and the authored option, among ≥ 6 options tried", tried.includes("clock=Europe/Paris") && tried.includes("clock=") && tried.length >= 6, tried.join(", "));
   check("no select whose choice the commit drops (the world select is gone: earth is the only sky world, and it isn't stored)", dead.length === 0, dead.join(", ")); }
 
+// sun and fill are registered sky fields; their sliders commit what they show
+console.log("SKY PANEL — the sun and fill sliders commit");
+{ const got: Record<string, unknown> = {};
+  for (const key of ["sun", "fill"]) { const row = [...body.querySelectorAll(".row")].find((r) => r.querySelector(".nm")?.textContent === key);
+    const inp = row?.querySelector('input[type="range"]') as HTMLInputElement | null; if (!inp) { got[key] = "no slider"; continue; }
+    inp.value = "1.5"; inp.dispatchEvent(new Event("input")); (body.querySelector("button.dirty") as HTMLButtonElement | null)?.click(); got[key] = S.sent.at(-1)?.[1]?.[key]; }
+  check("sun 1.5 and fill 1.5 are in what ✓ sends", got.sun === 1.5 && got.fill === 1.5, JSON.stringify(got)); }
+
+
 console.log("SKY PANEL — each you: cause, on each sky, says itself only while it applies");
 const fresh = () => { const b = document.createElement("div"); document.body.append(b); paintSky(b); return b; };
 const youOf = (b: HTMLElement) => { const y = b.querySelector(".state-you") as HTMLElement | null; return y && !y.hidden ? y.textContent ?? "" : ""; };

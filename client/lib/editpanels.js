@@ -967,6 +967,7 @@ function removeMany(ids) {
 // ---------------------------------------------------------------- build
 // Build tab (design §5): re-hosts of existing paths, never second implementations: Blueprints via build.js
 // holdGhost, Tools via build.js / structure_ui.js / socketedit.js, World via shared/worldentity.js worldPick.
+// Saved blueprints: the world's store (state.blueprints); Save as Blueprint = the authority's publish (editwrites).
 // VR has no mouse ray yet, so its quad offers Library (worldquad.js spawnAhead) and World only.
 const buildFolds = {};
 let libQ = '';            // the Library search box
