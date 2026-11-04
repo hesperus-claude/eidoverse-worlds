@@ -948,7 +948,7 @@ const EW = globalThis.EW = {
   physics: physicsApi, // grab/put/throw/drop/punt as door requests (thingphysics.js): what runtime mods script against
   mods: modsApi,     // list/put/run/stop your local runtime client scripts (🧩); put and run need your click
   bodysim: { engine: bodyEngine, setEngine: setBodyEngine, list: listBodyEngines },  // swappable body physics
-  foldParity,        // shadow-mode drift probe (TEL0S_NOTES §11.6)
+  foldParity,        // fold-vs-scene drift probe (client/lib/parity.js)
   reconcileModels,   // force a full realizer pass (idempotent — §11.4)
   materials: materialsDebug,   // factory counters + live weather uniforms (§12.3)
   lightrig: rigDebug,          // slot pool + request table (§12.4)
