@@ -143,6 +143,30 @@ for (const rel of PERSON_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSy
 { const bad = ["a person or agent", "people and agents", "agent or person", "person (or agent)"], good = ["People Here", "a person may", "refuses \"person or agent\" and its kin", "a human or agent"];
   const wrong = [...bad.filter((t) => !PERSON.test(t)), ...good.filter((t) => PERSON.test(t))]; if (wrong.length) offences.push(`PERSON self-test misreads: ${wrong.join(" | ")}`); }
 
+// What a participant IS is "AI"; "agent" is how one connects (R 11-03: "ruthless consistency is good so people aren't confused
+// about which to do"). The MCP door, mcpl/agent.ts, agent tokens and AGENTS.md keep "agent". The declared word on the wire
+// (`declares: "agent"`, PROTOCOL §6a; the ◈ marker's CSS key) is data and stays until a refuse-and-point alias retires it.
+// A sentence the browser shows a person may not call them or their neighbour an agent: a string in client/ saying
+// "agent speech", "nearby agents", "an agent listening/speaking/here" or "AI agent" is refused. AI_OK lists exceptions.
+const WHAT_YOU_ARE = /\bagents? speech\b|\bnearby agents?\b|\ban agent (listening|speaking|talking|here)\b|\bAI agents?\b/i;
+const AI_OK: [string, RegExp, string][] = [];
+const aiScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
+  if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+  const code = line.replace(/\s\/\/\s.*$/, "");
+  const strings = code.match(/"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'/g) ?? (/\.html$/.test(rel) ? [code] : []);
+  if (strings.some((t) => WHAT_YOU_ARE.test(t)) && !AI_OK.some(([f, re]) => rel === f && re.test(line)))
+    offences.push(`${rel}:${i + 1}  calls a participant an agent (what you are is AI; agent is how you connect): ${line.trim().slice(0, 100)}`);
+});
+const aiWalk = (dir: string) => {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (SKIP_DIR.has(name)) continue;
+    const p = path.join(dir, name);
+    if (fs.statSync(p).isDirectory()) { aiWalk(p); continue; }
+    if (EXT.test(name) || /\.html$/.test(name)) aiScan(path.relative(ROOT, p).split(path.sep).join("/"), fs.readFileSync(p, "utf8"));
+  }
+};
+aiWalk(path.join(ROOT, "client"));
 for (const o of offences) console.log("  " + o);
 console.log(`[vocab-check] ${offences.length ? `${offences.length} old-spelling read(s)` : "one vocabulary: every runtime reader speaks the record in the protocol's names"}`);
 process.exit(offences.length ? 1 : 0);

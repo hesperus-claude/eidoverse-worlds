@@ -42,7 +42,7 @@ function ensureCss() { /* house sheet — index.html owns .row and .row.wide */ 
 
 // Labels say what they CONTROL ("voice volume"), not what they are about ("voices").
 const ROWS = [
-  ['voices', 'voice volume', 'other people speaking, and agent speech'],
+  ['voices', 'voice volume', 'other people speaking, and AI speech'],
   ['world', 'world volume', 'ambience and place-sound — the 🎧 toggle never touches this'],
   // "self-TTS volume": synthesized speech already rides the 'voices' lane (voicesource.js), so
   // this slider scales only the SIDETONE — what you hear of your own synthesized voice — never
@@ -95,7 +95,7 @@ function micFloorRow() {
   const row = document.createElement('div');
   row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (tools/xr-quad-colour-probe.mjs selects by it)
   const hint = 'mic level below the marker is treated as room noise, not speech — ' +
-    'raise it if typing pings nearby agents; the bar shows your live mic level';
+    'raise it if typing pings nearby AIs; the bar shows your live mic level';
   const FS = 0.2;  // full-scale mic level = right edge of the meter
   row.innerHTML =
     `<span class="nm" title="${hint}">mic sensitivity</span>` +
@@ -223,7 +223,7 @@ function paint(body) {
   bus.on('audio:ptt', dimFloor);
 
   const hearRow = checkRow('hear voices',
-    'peers and agent speech — the 🎧 glyph is this same switch',
+    'peers and AI speech — the 🎧 glyph is this same switch',
     receivingVoice() && !isHushed(), (on) => {
       if (on) { if (!receivingVoice()) setReceiveVoice(true); setHush(false); }
       else setHush(true);

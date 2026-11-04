@@ -614,7 +614,7 @@ a:hover { color: var(--fg); text-decoration-color: var(--brand); }
    a faint wash instead. .ping's background is declared later and still wins. */
 .chat-log .line.me { background: rgba(255,255,255,.04); border-radius: 3px; }
 .chat-log .line.declared .who[data-declares]::after { content: ' · ' attr(data-declares); color: var(--dim); font-size: var(--fs-xs); font-weight: normal; }
-/* an agent is marked as on main: a small ◈ before the name, not a word after it (decision row 10, R 10-30) */
+/* an AI is marked as on main: a small ◈ before the name, not a word after it (decision row 10, R 10-30); `agent` is the word declared on the wire (PROTOCOL §6a) */
 .chat-log .line.declared .who[data-declares="agent"]::before { content: '◈ '; color: var(--warn); font-size: var(--fs-xs); }
 .chat-log .line.declared .who[data-declares="agent"]::after { content: none; }
 .chat-log .line.sys { color: var(--dim); font-style: italic; }
