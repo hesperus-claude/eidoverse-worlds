@@ -1350,7 +1350,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
 // ---------------- anim: ONE tool for a pose or a clip, by name or live ----------------
 // The old pose / animate handlers are its live and by-name halves now (LEGACY below): they keep their words; the old
-// tool names are unknown naming anim until TOOL_RENAMED's date.
+// tool names are unknown tools (Mica 11-05).
 const LEGACY: Record<string, ToolHandler> = { pose: HANDLERS.pose, animate: HANDLERS.animate };
 delete HANDLERS.pose; delete HANDLERS.animate;
 /** Each built-in anim's own mode (R 15:32): what plays when the call says none. A one-frame pose holds. A name not

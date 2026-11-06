@@ -1,12 +1,7 @@
-// tools/protocol/import-v1/shapes.js — a v1 value stored before the shape audit, in today's spelling, with the meaning its
-// readers gave it: the shape
+// tools/protocol/import-v1/shapes.js — a v1 value in today's spelling, with the meaning its readers gave it: the shape
 // audit's rules (10-16), and a stored socket map lifted into socket children. Their one user is the v1 importer
 // (translate-v1.js, and the oracle that mirrors it): a world the server founds is written in today's spelling from its
-// first entry, so no runtime reader or command repairs one. Pure: components in, the (or ops) out. Three callers, one rule set: the explicit
-// repair command (authority repairShapes — never a load: one system act, `repair-shapes`, ONCE per world: shapesMarked
-// below), translate-v1@12's projection (so a translated world needs no repair, and is marked), and the old-world oracle's
-// mirror of the load. The rules that read an absent field may only ever see values stored before the audit: that is the
-// marker's job, not these functions'.
+// first entry, so no runtime reader or command repairs one. Pure: components in, components (or ops) out.
 //
 // The rules:
 //   motion   a bare motion naming a `part` is that node's motion: motion:<partSlot(part)> {node: part} (a motion already on

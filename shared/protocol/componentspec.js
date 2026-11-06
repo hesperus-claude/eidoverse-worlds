@@ -28,8 +28,8 @@ export const COMPONENTS = {
     help: "where it is, glTF's node TRS: pos (m), q (unit quaternion [x, y, z, w]), scale [x, y, z], all in its parent's frame. Composed as glTF composes a node: local = T · R · S, world = parent's world × local (PROTOCOL §9.3)" },
   // a model is its LIBRARY PATH, stored as written: the portable reference (a world loads anywhere the library exists).
   // Its bytes' identity rides beside it, optionally, as model-hash (below), never instead. An older stored content address
-  // (eido:sha256/<64 hex>) still loads where this host's index knows it, and the maintenance command's repair writes its
-  // path back (shaperepair.js); one no file here names reads as "thing"
+  // (eido:sha256/<64 hex>) still loads where this host's index knows it; one no file
+  // here names reads as "thing"
   model:     { status: "trial", on: "thing", type: "string", help: "which model it shows: its library path (eidoverse/assets/models/…glb, store/<hash>.glb; a name from find {kind: 'model'} gives one), stored as written. The server stamps model-hash beside it when it knows the file's bytes. An older eido:sha256/<64 hex> address still loads where this host can find its bytes" },
   // the bytes a model's path named when it was written: Godot's ext_resource {path, uid}, an npm lock's {resolved, integrity},
   // a web page's <script src integrity>. Optional (a host that can't hash, or hasn't yet, writes none; nothing breaks without

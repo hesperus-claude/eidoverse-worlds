@@ -317,9 +317,6 @@
  "tools/shape-render-test.ts": {
   "own-ok": 1
  },
- "tools/shape-repair-test.ts": {
-  "own-ok": 1
- },
  "tools/shove-test.ts": {
   "own-ok": 1
  },
