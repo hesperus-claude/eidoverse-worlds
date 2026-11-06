@@ -6,7 +6,7 @@ import fs from "node:fs"; import path from "node:path"; import os from "node:os"
 import { jcs, readLog } from "../../shared/protocol/fold.js"; import { sha256, sha256Bytes, hexBytes } from "../../shared/protocol/hash.js";
 import { openLive } from "./labhost.ts";
 import { suite } from "./suite.ts";
-const ENGINE = path.resolve(import.meta.dir, "./.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
+const ENGINE = path.resolve(import.meta.dir, "../.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
 const W = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "gov-"));
 const found = (name: string) => { const r = spawnSync(process.execPath, ["tools/protocol/world.ts", "found", name, "--owner", "u-aaaaaaaaaaaaaaaaaaaaaa", "--title", name], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W }, encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return path.join(W, name); };
 const step = (prev: string, e: Record<string, unknown>) => { const { head, sig, ...s } = e as any; const b = new Uint8Array(64); b.set(hexBytes(prev), 0); b.set(hexBytes(sha256(jcs(s))), 32); return sha256Bytes(b); };

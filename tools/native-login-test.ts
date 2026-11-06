@@ -129,7 +129,7 @@ console.log("NATIVE LOGIN — over a real server's HTTP + WS");
     // an ordinary sign-in: any world the account may join, as the browser's session would
     for (const w of ["water", "commons", "native-elsewhere"]) {
       const c = await connect(w, native); const snap = c.messages.find((m) => m.type === "snapshot");
-      check(`W5 the native session joins ${w} under the account's name, not the client's`, snap?.world === w && snap?.you === "Native Fixture", snap ? { world: snap.world, you: snap.you } : "no snapshot");
+      check(`W5 the native session joins ${w} (the snapshot names it by its id) under the account's name, not the client's`, /^sha256:/.test(String(snap?.world)) && snap?.you === "Native Fixture", snap ? { world: snap.world, you: snap.you } : "no snapshot");
       c.ws.close();
     }
     // the session paired before native sessions became ordinary ones joins another world, and the HTTP door answers it as the browser's

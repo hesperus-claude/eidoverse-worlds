@@ -473,7 +473,7 @@ async function shut(h: { ws: WebSocket }) {
   const nofound = await connectHost("nofound-token");
   const wouldFound = await nofound.request("tools/call", { name: "travel", arguments: { world: "brand-new-place" } });
   check("create:false CANNOT found a world",
-    wouldFound.result?.isError === true && /^travel refused, so you're still in "commons": no world named "brand-new-place" exists, and this credential may not found one/.test(txt(wouldFound)), txt(wouldFound));
+    wouldFound.result?.isError === true && /^travel refused, so you're still in "commons": no accessible world is named "brand-new-place", and this credential may not found one/.test(txt(wouldFound)), txt(wouldFound));
   // (act forwarding an unknown verb to the authority: door-wording-test "act passes a verb…", directory-check B5)
   // …and prove it wasn't created as a side effect anyway (review F)
   // 🔴 PAIRED WITH ITS POSITIVE CONTROL (adversarial review, 2026-08-17).
@@ -489,8 +489,8 @@ async function shut(h: { ws: WebSocket }) {
   // (ported 10-17) joining never founds a world on this server, whatever the credential: the door asks the world
   // (/access) and refuses before anything moves, saying so
   const founded = await founder.request("tools/call", { name: "travel", arguments: { world: "founded-place" } });
-  check("create:true doesn't found by travelling either: joining never founds, and the reply says so",
-    founded.result?.isError === true && /joining never founds/.test(txt(founded)), txt(founded));
+  check("create:true doesn't found by travelling either: the reply says no accessible world has that name",
+    founded.result?.isError === true && /no accessible world is named "founded-place"/.test(txt(founded)), txt(founded));
   check("…and that refusal left nothing on disk", !existsSync(join(worldsDir, "founded-place")));
   // 🔴 THE POSITIVE CONTROL FOR THE on-disk CHECK ABOVE (adversarial review,
   // 2026-08-17). `!existsSync(brand-new-place)` alone also passes for a build
@@ -621,9 +621,9 @@ async function shut(h: { ws: WebSocket }) {
   check("worlds is advertised as a tool", listed.result?.tools?.some((t: any) => t.name === "worlds"), "no worlds tool");
   const map = await tv.request("tools/call", { name: "worlds", arguments: {} });
   const mapText = txt(map);
-  check("worlds marks the current world", /^- annex ←: .*you are here/m.test(mapText), mapText);
-  check("worlds lists the world you came from as travelable (worlds:[\"*\"])", /^- commons: .*may travel/m.test(mapText), mapText);
-  check("worlds shows the body in its row", /^- annex ←: .*roamer \(agent\)/m.test(mapText), mapText);
+  check("worlds marks the current world", /^- annex ←[^:\n]*: .*you are here/m.test(mapText), mapText);
+  check("worlds lists the world you came from as travelable (worlds:[\"*\"])", /^- commons[^:\n]*: .*may travel/m.test(mapText), mapText);
+  check("worlds shows the body in its row", /^- annex ←[^:\n]*: .*roamer \(agent\)/m.test(mapText), mapText);
   check("worlds says joining never founds a world here", /joining never founds one here/.test(mapText), mapText);
 
   const noop = await tv.request("tools/call", { name: "travel", arguments: { world: "annex" } });
@@ -640,7 +640,7 @@ async function shut(h: { ws: WebSocket }) {
   const toolRefusal = await bound2.request("tools/call", { name: "travel", arguments: { world: "annex" } });
   check("travel tool honours join policy", toolRefusal.result?.isError === true, JSON.stringify(toolRefusal.result));
   const boundMap = txt(await bound2.request("tools/call", { name: "worlds", arguments: {} }));
-  check("worlds tells a narrowed credential it may not travel", /^- annex: .*outside the worlds your credential is limited to/m.test(boundMap), boundMap);
+  check("worlds tells a narrowed credential it may not travel", /^- annex[^:\n]*: .*outside the worlds your credential is limited to/m.test(boundMap), boundMap);
   // channels/open cannot travel AT ALL any more, so the "one policy" property
   // is now stronger than matching codes: there is no second lane to disagree
   // with the first. Prove the door is shut rather than merely equally guarded.
@@ -691,7 +691,7 @@ async function shut(h: { ws: WebSocket }) {
     // (ported 10-17: no founding by travel; an owner changes who may come in with ordinary requests on @world —
     // access, roles:<id> — the tool is act; whois finds the identity a role names)
     const fm = txt(await free.request("tools/call", { name: "travel", arguments: { world: "free-place" } }));
-    check("a credential with no list still can't found by travelling", /joining never founds/.test(fm), fm);
+    check("a credential with no list still can't found by travelling", /no accessible world is named "free-place"/.test(fm), fm);
     const there = txt(await free.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
     check("…and travels to an open world it was never listed for", /Arrived in "keep"/.test(there), there);
     // says hello while there: a world's lookup (whois) knows the people it has seen act or be remembered, never everyone

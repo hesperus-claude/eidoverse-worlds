@@ -65,7 +65,8 @@ try {
     const c = await open(`j${++n}`, { ...flags, token });
     const watches = cred === "renderers' credential" && flags.renderer === true;
     if (watches) check(`${shape} + ${cred}: watches the invite-only world`, !!c.snap() && c.closedWith == null, `code=${c.closedWith}`);
-    else check(`${shape} + ${cred}: refused ${refusal}`, c.closedWith === refusal && !c.snap(), `code=${c.closedWith}`);
+    else { const want = cred === "door key" && !flags.renderer && !flags.spectate ? 4005 : refusal;   // a person refused by an invite-only door is 4005; a watcher world-unavailable
+      check(`${shape} + ${cred}: refused ${want}`, c.closedWith === want && !c.snap(), `code=${c.closedWith}`); }
     if (watches && !real) real = c; else if (c.closedWith == null) c.ws.close();
   }
   if (!real) throw new Error("no renderer was admitted");

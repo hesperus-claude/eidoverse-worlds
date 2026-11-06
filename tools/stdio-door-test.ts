@@ -126,7 +126,7 @@ try {
   const bad = await rpc('tools/call', { name: 'edit', arguments: { id: LAMP, set: { 'light.flicker': 2 } } });
   check('a field a light does not have is refused by name, nothing sent, marked isError', /refused: light\.flicker/.test(toolText(bad)) && !/sent/.test(toolText(bad)) && bad.result?.isError === true, toolText(bad));
   const hier = await rpc('tools/call', { name: 'hierarchy', arguments: {} });
-  check('hierarchy lists the lamp with its label (an Empty with a light component)', new RegExp(`\\[${LAMP.slice(0, 4)}[^\\]]*\\] "the porch lamp" (empty · )?light`).test(toolText(hier)), toolText(hier).slice(0, 300));
+  check('hierarchy lists the lamp with its label (an Empty with a light component)', new RegExp(`\\[${LAMP.slice(0, 4)}[^\\]]*\\] "the porch lamp" (model · )?(empty · )?light`).test(toolText(hier)), toolText(hier).slice(0, 300));
   const hf = await rpc('tools/call', { name: 'hierarchy', arguments: { filter: 'nothing-like-this' } });
   check('a filter with no match says so', /no placed thing matches/.test(toolText(hf)), toolText(hf));
   const lk = await rpc('tools/call', { name: 'look', arguments: {} });
