@@ -23,6 +23,8 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 import { until, pause } from "./wait.ts";
+import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -119,14 +121,14 @@ function openWorld(name: string) {
   return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
-    now: () => Number(process.env.PROTOCOL_NOW), writeLine: (line: string) => appendDurable(logPath, line),
+    now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
     presence: { bodies: {}, holds: {} }, savePresence: () => {}, scripts: SB.SANDBOX,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
 }
-let T = 1800000000000, N = 0;
+const clock = labClock(); let N = 0;
 function session() {
   const name = `w${++N}`; let w: any = null; const W = () => (w ??= openWorld(name));
-  const call = (actor: string, verb: string, args: any = {}, step = 100) => { T += step; process.env.PROTOCOL_NOW = String(T);
+  const call = (actor: string, verb: string, args: any = {}, step = 100) => { clock.advance(step);
     try { return D.request(W(), actor, verb, args); } catch (e) { return { crashed: `${e?.constructor?.name}: ${e?.message}`.slice(0, 200) }; } };
   return { name, call, w: W };
 }
@@ -316,14 +318,12 @@ const cases: Case[] = [
 function await_sound() { return SOUND; }
 const SOUND = await import(TREE + "shared/sound.js");
 
-let pass = 0, fail = 0;
+const SUITE = suite("video-check", { cap: 600 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, ok = false;
   try { o = await c.run(session()); ok = !!c.good(o); } catch (e) { o = { threw: String(e?.message ?? e).slice(0, 200) }; }
-  ok ? pass++ : fail++;
-  console.log(`${ok ? "ok  " : "FAIL"} ${c.id} ${c.what}${ok ? "" : `\n     ${JSON.stringify(o).slice(0, 600)}`}`);
+  SUITE.ok(ok, `${c.id} ${c.what}`, ok ? undefined : o);
 }
 fake.stop(true);
-console.log(`[video-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();
