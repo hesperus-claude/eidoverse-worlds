@@ -90,7 +90,10 @@ async function join_(br: any, name: string) {
   pg.on('pageerror', (e: any) => errs.push(`${name}: ${e.message}`));
   pg.on('console', (m: any) => { const x = m.text(); if (/\[gpu\]|\[renderer\]|context lost|reloading/i.test(x)) console.log(`   ${name} console: ${x.slice(0, 200)}`); });
   pg.on('framenavigated', (f: any) => { if (f === pg.mainFrame()) console.log(`   ${name} navigated: ${f.url().slice(0, 120)}`); });
-  pg.on('websocket', (ws: any) => ws.on('framereceived', (f: any) => { if (typeof f.payload === 'string' && f.payload.includes('video')) wsIn.push(f.payload); }));
+  // every text frame the page's sockets receive that mentions video, recorded in the page: the CDP driver (cdp-pw.mjs) has
+  // no websocket event, and an on() it doesn't know records nothing
+  await pg.addInitScript(() => { const W = window.WebSocket; (window as any).__wsIn = [];
+    (window as any).WebSocket = class extends W { constructor(...a: any[]) { super(...(a as [any])); this.addEventListener('message', (e: any) => { if (typeof e.data === 'string' && e.data.includes('video')) (window as any).__wsIn.push(e.data); }); } }; });
   pg.on('dialog', (d: any) => d.dismiss().catch(() => {}));
   await pg.goto(`${world.origin}/?world=vprobe&key=${world.key}&name=${name}`, { waitUntil: 'domcontentloaded' });
   // Joined, not just open: sendRequest refuses until the snapshot has landed (net.joined). Polled with evaluate, which
@@ -144,6 +147,7 @@ try {
   check('C. look says what the appliance observed: live, with its age', /^a video screen: «the probe stage»; its source is live \(as of \d+ s ago\)$/.test(line), line || JSON.stringify(look).slice(0, 300));
 
   // D. no endpoint, port or key reached a browser
+  for (const pg of [pa, pb]) wsIn.push(...((await pg.evaluate(() => (window as any).__wsIn ?? []).catch(() => [])) as string[]));
   const all = wsIn.join('\n');
   const leaks = [`:${ports.WEBRTC}/`, `${ports.WEBRTC}/${PATH_}`, '/whep', READKEY, `127.0.0.1:${ports.API}`].filter((x) => all.includes(x));
   check('D. no websocket frame names the WHEP endpoint, its port, the API or the read key', all.length > 0 && leaks.length === 0, leaks.join(', ') || `${wsIn.length} video frames read`);
