@@ -6,6 +6,7 @@
 import { classifyVariant, variantStatus, lodVariantPath, ktx2VariantPath, lodRecipeFor, LOD_RECIPE, LOD_MIN_VERTS, KTX2_RECIPE, recipeStamp, sourceSidecar, sourceToken, freshOver, variantSource, verdictMarker, verdictLine, readVerdict, lodVerdictKind, lodVerdictFinal, verdictStands } from "../server/store-variants.ts";
 import { toolsStamp, toolsDigest, toolVersions } from "../server/tools-stamp.ts";
 import { suite } from "./protocol/suite.ts";
+import { join, resolve } from "node:path";
 
 const T = suite("variant-status");
 const check = (name: string, ok: unknown, got?: unknown) => T.check(name, ok, got);
@@ -59,7 +60,8 @@ for (const [name, files, state, reason] of cases) {
 }
 // the three variants resolve their OWN paths and recipes
 {
-  const { exists, read } = fs({ [K]: "", "/opt/min/abc.glb.failed": "[optimize] not smaller (10 -> 12, 1ms) — keeping original",
+  // the min variant's path is the product's join (native separators): the fake disk is keyed the same way
+  const { exists, read } = fs({ [K]: "", [`${join("/opt/min", "abc.glb")}.failed`]: "[optimize] not smaller (10 -> 12, 1ms) — keeping original",
     [`${L}.failed`]: `[optimize] not smaller (10 -> 40, 1ms) recipe=${KTX2_RECIPE} — keeping original` });
   const v = variantStatus(O, "/opt/min", { exists, read });
   check("variantStatus: ktx2 built, min refused (unstamped min verdicts stand), lod stamped with the KTX2 recipe → stale", v.ktx2.state === "built" && v.min.state === "refused" && v.lod.state === "stale", v);
@@ -140,10 +142,11 @@ for (const [name, files, state, reason] of cases) {
 }
 // which file a verdict is ABOUT: the one the sweep builds from — never the /library route's OPT mirror or PATCH copy
 {
-  const dirs = { opt: "/nonexistent-opt", library: "/lib" };
-  check("variantSource: a library GLB → the LIBRARY file", variantSource("eidoverse/assets/models/a.glb", dirs) === "/lib/eidoverse/assets/models/a.glb", variantSource("eidoverse/assets/models/a.glb", dirs));
+  // native absolute dirs, as config.ts resolves OPT_DIR and LIBRARY_DIR (a `/lib` literal is no absolute path on Windows)
+  const dirs = { opt: resolve("/nonexistent-opt"), library: resolve("/lib") };
+  check("variantSource: a library GLB → the LIBRARY file", variantSource("eidoverse/assets/models/a.glb", dirs) === join(dirs.library, "eidoverse/assets/models/a.glb"), variantSource("eidoverse/assets/models/a.glb", dirs));
   check("variantSource: a store hash → null (content-addressed)", variantSource("store/abc.glb", dirs) === null, variantSource("store/abc.glb", dirs));
-  check("variantSource: a VRM with no overlay copy → the library file", variantSource("eidoverse/assets/vrms/b.vrm", dirs) === "/lib/eidoverse/assets/vrms/b.vrm", null);
+  check("variantSource: a VRM with no overlay copy → the library file", variantSource("eidoverse/assets/vrms/b.vrm", dirs) === join(dirs.library, "eidoverse/assets/vrms/b.vrm"), variantSource("eidoverse/assets/vrms/b.vrm", dirs));
   check("variantSource: a rel escaping the tree names no file", variantSource("../../etc/passwd.glb", dirs) === "", variantSource("../../etc/passwd.glb", dirs));
 }
 // STRUCTURED records (store-variants.ts verdictMarker / readVerdict): the kind is a closed enum named by the CLI where it
