@@ -14,18 +14,20 @@ try {
   await pg.evaluate(async () => {
     const { sys } = (await import('./lib/sky.js')).skyForProbe(); const r = globalThis.EW.renderer;
     const W = sys._envTarget?.width; globalThis.__bt = [];
+    // "separate frames" is counted in animation frames, not ms: a fast host draws consecutive strips 16 ms apart (macOS CI)
+    globalThis.__frame = 0; const tick = () => { globalThis.__frame++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
     const orig = r.render.bind(r);
-    r.render = (sc, cam) => { const t = r.getRenderTarget(); if (t && t.width === W && sc?.children?.[0]?.material === sys._envBake?.scene?.children?.[0]?.material) { const d = sys.uniforms.sunDir.value; globalThis.__bt.push([performance.now(), sys.uniforms.time.value, `${d.x.toFixed(5)},${d.y.toFixed(5)}`]); queueMicrotask(() => { sys.uniforms.sunDir.value.x += 0.001; }); } return orig(sc, cam); };
+    r.render = (sc, cam) => { const t = r.getRenderTarget(); if (t && t.width === W && sc?.children?.[0]?.material === sys._envBake?.scene?.children?.[0]?.material) { const d = sys.uniforms.sunDir.value; globalThis.__bt.push([performance.now(), sys.uniforms.time.value, `${d.x.toFixed(5)},${d.y.toFixed(5)}`, globalThis.__frame]); queueMicrotask(() => { sys.uniforms.sunDir.value.x += 0.001; }); } return orig(sc, cam); };
   });
   // until two multi-strip bakes are recorded (cadence bakes; the probe's verdicts read the same cycles)
-  await pg.waitForFunction(() => { let n = 0, cur = null; for (const [ms] of globalThis.__bt) { if (!cur || ms - cur.last > 1500) { if (cur && cur.n > 1 && cur.last - cur.first > 20) n++; cur = { n: 0, first: ms, last: ms }; } cur.n++; cur.last = ms; } return n >= 2; }, null, { timeout: 120000, polling: 1000 }).catch(() => {});
+  await pg.waitForFunction(() => { let n = 0, cur = null; for (const [ms, , , f] of globalThis.__bt) { if (!cur || ms - cur.last > 1500) { if (cur && cur.n > 1 && cur.frames.size > 1) n++; cur = { n: 0, last: ms, frames: new Set() }; } cur.n++; cur.last = ms; cur.frames.add(f); } return n >= 2; }, null, { timeout: 120000, polling: 1000 }).catch(() => {});
   const r = await pg.evaluate(() => {
     const v = globalThis.__bt; const cycles = []; let cur = null;
-    for (const [ms, t, sd] of v) { if (!cur || ms - cur.last > 1500) { cur = { times: new Set(), suns: new Set(), n: 0, first: ms, last: ms }; cycles.push(cur); } cur.times.add(t.toFixed(4)); cur.suns.add(sd); cur.n++; cur.last = ms; }
-    return cycles.map((c) => ({ strips: c.n, distinctTimes: c.times.size, distinctSuns: c.suns.size, spanMs: Math.round(c.last - c.first) }));
+    for (const [ms, t, sd, f] of v) { if (!cur || ms - cur.last > 1500) { cur = { times: new Set(), suns: new Set(), frames: new Set(), n: 0, first: ms, last: ms }; cycles.push(cur); } cur.times.add(t.toFixed(4)); cur.suns.add(sd); cur.frames.add(f); cur.n++; cur.last = ms; }
+    return cycles.map((c) => ({ strips: c.n, frames: c.frames.size, distinctTimes: c.times.size, distinctSuns: c.suns.size, spanMs: Math.round(c.last - c.first) }));
   });
   console.log('   ', JSON.stringify(r));
-  const multi = r.filter((c) => c.strips > 1 && c.spanMs > 20);
+  const multi = r.filter((c) => c.strips > 1 && c.frames > 1);
   check('cadence bakes ran with strips on separate frames', multi.length >= 2, JSON.stringify(r));
   check('every strip of a bake is drawn at one sky time', multi.length >= 2 && multi.every((c) => c.distinctTimes === 1), JSON.stringify(multi));
   check('…and one sun position, with the day running fast (the atmosphere bands)', multi.length >= 2 && multi.every((c) => c.distinctSuns === 1), JSON.stringify(multi));
